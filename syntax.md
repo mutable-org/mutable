@@ -32,32 +32,32 @@ select-statement ::= select-clause
 
 ##### Select Clause
 ```ebnf
-select-clause ::= "SELECT" ( '*' | expression [ "AS" identifier ] ) { ',' expression [ "AS" identifier ] } ;
+select-clause ::= 'SELECT' ( '*' | expression [ 'AS' identifier ] ) { ',' expression [ 'AS' identifier ] } ;
 ```
 
 ##### From Clause
 ```ebnf
-from-clause ::= "FROM" identifier [ "AS" identifier ] { ',' identifier [ "AS" identifier ] } ;
+from-clause ::= 'FROM' identifier [ 'AS' identifier ] { ',' identifier [ 'AS' identifier ] } ;
 ```
 
 ##### Where Clause
 ```ebnf
-where-clause ::= "WHERE" expression ;
+where-clause ::= 'WHERE' expression ;
 ```
 
 ##### Group By Clause
 ```ebnf
-group_by-clause ::= "GROUP" "BY" designator { ',' designator } ;
+group_by-clause ::= 'GROUP' 'BY' designator { ',' designator } ;
 ```
 
 ##### Order By Clause
 ```ebnf
-order_by-clause ::= "ORDER" "BY" designator [ "ASC" | "DESC" ] { ',' designator [ "ASC" | "DESC" ] } ;
+order_by-clause ::= 'ORDER' 'BY' designator [ 'ASC' | 'DESC' ] { ',' designator [ 'ASC' | 'DESC' ] } ;
 ```
 
 ##### Limit Clause
 ```ebnf
-limit-clause ::= "LIMIT" integer-constant [ "OFFSET" integer-constant ] ;
+limit-clause ::= 'LIMIT' integer-constant [ 'OFFSET' integer-constant ] ;
 ```
 
 ### Expressions
@@ -80,7 +80,7 @@ hexadecimal-digit ::= digit | 'A' | 'B' | 'C' | 'D' | 'E' ;
 ```ebnf
 string-literal ::= '"' { any character except double quotes, backslash, and newline | escape-sequence } '"' ;
 
-escape-sequence ::= "\\" | "\n" | "\""
+escape-sequence ::= '\\' | '\n' | '\"'
 ```
 
 #### Numeric Constants
@@ -93,20 +93,42 @@ decimal-constant ::= (digit - '0') { digit } ;
 
 octal-constant ::= '0' { octal-digit } ;
 
-hexadecimal-constant ::= "0x" hexadecimal-digit { hexadecimal-digit } ;
+hexadecimal-constant ::= '0x' hexadecimal-digit { hexadecimal-digit } ;
 ```
 
 #### Unary Expressions
 ```ebnf
-unary-expression ::= '+' expression |
-                     '-' expression |
-                     '!' expression |
-                     '~' expression ;
+primary-expression::= designator | constant | '(' expression ')' ;
+
+postfix-expression ::= postfix-expression '(' [ expression { ',' expression } ] ')' | (* function call *)
+                       primary-expression ;
+
+unary-expression ::= [ '+' | '-' ] postfix-expression ;
 ```
 
 #### Binary Expressions
-
-#### Function Application
 ```ebnf
-function-application ::= identifier '(' { expression } ')' ;
+multiplicative-expression ::= multiplicative-expression '*' unary-expression |
+                              multiplicative-expression '/' unary-expression |
+                              multiplicative-expression '%' unary-expression |
+                              unary-expression ;
+
+additive-expression ::= additive-expression '+' multiplicative-expression |
+                        additive-expression '-' multiplicative-expression |
+                        multiplicative-expression ;
+
+comparative-expression ::= additive-expression comparison-operator additive-expression ;
+
+comparison-operator ::= '==' | '!=' | '<' | '>' | '<=' | '>=' ;
+```
+
+##### Logical Expressions
+```ebnf
+logical-not-expression ::= [ 'NOT' ] comparative-expression ;
+
+logical-and-expression ::= logical-and-expression 'AND' logical-not-expression |
+                           logical-not-expression ;
+
+logical-or-expression ::= logical-or-expression 'OR' logical-and-expression |
+                          logical-and-expression ;
 ```

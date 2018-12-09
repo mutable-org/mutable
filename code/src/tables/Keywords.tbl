@@ -1,0 +1,8 @@
+/* vim: set filetype=cpp: */
+
+#ifndef DB_KEYWORD
+#error "define DB_KEYWORD(TokenType, Text) before including this file"
+#endif
+
+/*               TokenType       |   Text       */
+DB_KEYWORD   (   Select          ,   SELECT      )

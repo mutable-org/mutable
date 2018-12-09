@@ -1,0 +1,21 @@
+/* vim: set filetype=cpp: */
+
+DB_TOKENTYPE(ERROR)
+DB_TOKENTYPE(EOF)
+
+DB_TOKENTYPE(BACKSLASH)
+
+DB_TOKENTYPE(IDENTIFIER)
+DB_TOKENTYPE(STRING_LITERAL)
+
+DB_TOKENTYPE(OCT_INT)
+DB_TOKENTYPE(HEX_INT)
+DB_TOKENTYPE(DEC_INT)
+
+#define DB_KEYWORD(a,b) DB_TOKENTYPE(a)
+#include "tables/Keywords.tbl"
+#undef DB_KEYWORD
+
+#define DB_OPERATOR(a) DB_TOKENTYPE(a)
+#include "tables/Operators.tbl"
+#undef DB_OPERATOR

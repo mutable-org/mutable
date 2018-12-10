@@ -69,12 +69,12 @@ int main(int argc, const char **argv)
         std::cerr << strerror(errno) << std::endl;
     }
 
-    Diagnostic diag(false, std::cout, std::cerr);
+    Diagnostic diag(color, std::cout, std::cerr);
     Lexer lexer(diag, filename, *in);
 
     for (;;) {
         auto tok = lexer.next();
-        if (tok.type == TK_EOF) break;
+        if (not tok) break;
         diag(tok.pos) << tok.text << ' ' << tok.type << std::endl;
     }
 

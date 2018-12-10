@@ -17,7 +17,7 @@ using namespace db;
 void usage(std::ostream &out, const char *name)
 {
     out << "USAGE:\n\t" << name << " <FILE>"
-        << "\n\t" << name << " --"
+        << "\n\t" << name << " -"
         << std::endl;
 }
 
@@ -53,7 +53,7 @@ int main(int argc, const char **argv)
 
     const char *filename = AP.args()[0];
     std::istream *in;
-    if (streq(filename, "--")) {
+    if (streq(filename, "-")) {
         /* read from stdin */
         in = &std::cin;
     } else {

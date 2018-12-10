@@ -25,6 +25,8 @@ inline char const * get_name(const TokenType tt)
         case TK_OCT_INT:
         case TK_DEC_INT:
         case TK_HEX_INT:
+        case TK_DEC_FLOAT:
+        case TK_HEX_FLOAT:
             return "constant";
 
 #define DB_KEYWORD(tt, name) case TK_ ## tt:

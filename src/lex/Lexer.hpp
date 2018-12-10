@@ -9,15 +9,6 @@
 #include "util/StringPool.hpp"
 
 
-
-static inline bool isOct  (int c) { return '0' <= c && c <= '7'; }
-static inline bool isDec  (int c) { return '0' <= c && c <= '9'; }
-static inline bool isHex  (int c) { return isDec(c) || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F'); }
-static inline bool isLower(int c) { return ('a' <= c && c <= 'z'); }
-static inline bool isUpper(int c) { return ('A' <= c && c <= 'Z'); }
-static inline bool isAlpha(int c) { return isLower(c) || isUpper(c); }
-static inline bool isAlNum(int c) { return isDec(c) || isAlpha(c); }
-
 namespace db {
 
 struct Lexer
@@ -86,9 +77,12 @@ struct Lexer
 
     const char * internalize() {
         buf_.push_back('\0');
-        return pool_(&buf_[-1]);
-        /* TODO: after internalizing the string, clear the buffer? */
+        return pool_(buf_.data());
     }
+
+    /* Lexer routines. */
+    Token read_keyword_or_identifier();
+    Token read_number(bool has_dot = false);
 };
 
 }

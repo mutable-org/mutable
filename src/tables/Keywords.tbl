@@ -4,5 +4,18 @@
 #error "define DB_KEYWORD(TokenType, Text) before including this file"
 #endif
 
-/*               TokenType       |   Text       */
-DB_KEYWORD   (   Select          ,   SELECT      )
+/*          TokenType       |   Text       */
+DB_KEYWORD( And             ,   AND         )
+DB_KEYWORD( As              ,   AS          )
+DB_KEYWORD( Ascending       ,   ASC         )
+DB_KEYWORD( By              ,   BY          )
+DB_KEYWORD( Descending      ,   DESC        )
+DB_KEYWORD( From            ,   FROM        )
+DB_KEYWORD( Group           ,   GROUP       )
+DB_KEYWORD( Limit           ,   LIMIT       )
+DB_KEYWORD( Not             ,   NOT         )
+DB_KEYWORD( Offset          ,   OFFSET      )
+DB_KEYWORD( Or              ,   OR          )
+DB_KEYWORD( Order           ,   ORDER       )
+DB_KEYWORD( Select          ,   SELECT      )
+DB_KEYWORD( Where           ,   WHERE       )

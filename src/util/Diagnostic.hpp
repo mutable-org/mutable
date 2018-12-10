@@ -22,6 +22,11 @@ struct Diagnostic
         , err_(err)
     { }
 
+    std::ostream & operator()(const Position pos) {
+        print_pos(out_, pos, K_None);
+        return out_;
+    }
+
     std::ostream & n(const Position pos) {
         print_pos(out_, pos, K_Note);
         return out_;
@@ -44,6 +49,9 @@ struct Diagnostic
         return tmp;
     }
 
+    std::ostream & out() const { return out_; }
+    std::ostream & err() const { return err_; }
+
     private:
     const bool color_;
     std::ostream &out_;
@@ -51,6 +59,7 @@ struct Diagnostic
     unsigned numErrors_ = 0;
 
     enum Kind {
+        K_None,
         K_Note,
         K_Warning,
         K_Error
@@ -58,12 +67,13 @@ struct Diagnostic
 
     void print_pos(std::ostream &out, const Position pos, const Kind kind) {
         if (color_) out << BOLD;
-        out << pos.name << ':' << pos.line << ':' << pos.column << ':';
+        out << pos.name << ':' << pos.line << ':' << pos.column << ": ";
         if (color_) out << RESET;
         switch (kind) {
-            case K_Note:    if (color_) { out << NOTE;    } out << " note: ";    break;
-            case K_Warning: if (color_) { out << WARNING; } out << " warning: "; break;
-            case K_Error:   if (color_) { out << ERROR;   } out << " error: ";   break;
+            case K_None:    break;
+            case K_Note:    if (color_) { out << NOTE;    } out << "note: ";    break;
+            case K_Warning: if (color_) { out << WARNING; } out << "warning: "; break;
+            case K_Error:   if (color_) { out << ERROR;   } out << "error: ";   break;
         }
         if (color_) out << RESET;
     }

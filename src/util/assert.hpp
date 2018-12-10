@@ -9,6 +9,7 @@ inline void _assert(const bool pred, const char *filename, const unsigned line, 
 {
     if (pred) return;
 
+    /* TODO: Use __FUNCTION__ ??? */
     std::cout.flush();
     std::cerr << filename << ':' << line << ": Assertion '" << predstr << "' failed.";
     if (msg)
@@ -40,6 +41,7 @@ inline void _assert(const bool pred, const char *filename, const unsigned line, 
 }
 
 #define unreachable(MSG) _abort(__FILE__, __LINE__, (MSG))
+/* TODO: What to do in release build? */
 
 
 template<typename T>
@@ -53,3 +55,4 @@ T * _nonnull(T *arg, const char *filename, const unsigned line, const char *args
     return arg;
 }
 #define nonnull(ARG) _nonnull((ARG), __FILE__, __LINE__, #ARG)
+/* TODO: What to do in release build? */

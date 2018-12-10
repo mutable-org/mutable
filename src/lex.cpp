@@ -34,6 +34,10 @@ int main(int argc, const char **argv)
         "-h", "--help",                     /* Short, Long      */
         "prints this help message",         /* Description      */
         [&](bool) { show_help = true; });   /* Callback         */
+    ADD(bool, color, false,                 /* Type, Var, Init  */
+        nullptr, "--color",                 /* Short, Long      */
+        "use colors",                       /* Description      */
+        [&](bool) { color = true; });       /* Callback         */
 #undef ADD
     AP.parse_args(argc, argv);
 

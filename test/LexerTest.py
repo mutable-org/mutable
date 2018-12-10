@@ -76,13 +76,13 @@ if __name__ == '__main__':
 
         n_passed += 1
 
-    print('Passed {} out of {} tests ({} tests failed).'.format(
-        termcolor.tc(n_passed, TermColor.BOLD, TermColor.FG_GREEN),
-        termcolor.tc(n_tests, TermColor.BOLD),
-        termcolor.tc(n_tests - n_passed, TermColor.BOLD, TermColor.FG_RED)))
-
-
     # Sanity tests
     print('\nRun sanity tests')
     for sql_file in sorted(glob.glob(GLOB_SANITY, recursive=True)):
         print('` {}'.format(sql_file))
+
+    # Show summary
+    print('\nPassed {} out of {} tests ({} tests failed).'.format(
+        termcolor.tc(n_passed, TermColor.BOLD, TermColor.FG_GREEN),
+        termcolor.tc(n_tests, TermColor.BOLD),
+        termcolor.tc(n_tests - n_passed, TermColor.BOLD, TermColor.FG_RED)))

@@ -38,7 +38,7 @@ class TermColor(enum.Enum):
     @staticmethod
     def show():
         for e in TermColor:
-            print(tc(e.name, e))
+            print('{} ({})'.format(tc(e.name, e), e.value))
 
 
 def tc(obj, *args):

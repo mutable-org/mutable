@@ -73,10 +73,18 @@ void ArgParser::print_args(FILE *out) const
 
 void ArgParser::parse_args(int, const char **argv) {
     for (++argv; *argv; ++argv) {
+        if (streq(*argv, "--"))
+            goto positional;
         auto it = key_map.find(StringPool::Global(*argv));
         if (it != key_map.end())
             it->second->parse(argv);
         else
             args_.push_back(*argv);
     }
+    return;
+
+    /* Read all following arguments as positional arguments. */
+positional:
+    for (++argv; *argv; ++argv)
+        args_.push_back(*argv);
 }

@@ -83,6 +83,6 @@ if __name__ == '__main__':
 
     # Show summary
     print('\nPassed {} out of {} tests ({} tests failed).'.format(
-        termcolor.tc(n_passed, TermColor.BOLD, TermColor.FG_GREEN),
+        termcolor.ok(n_passed),
         termcolor.tc(n_tests, TermColor.BOLD),
-        termcolor.tc(n_tests - n_passed, TermColor.BOLD, TermColor.FG_RED)))
+        termcolor.err(n_tests - n_passed)))

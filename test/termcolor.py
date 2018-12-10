@@ -56,7 +56,7 @@ def err(obj):
     return tc(obj, TermColor.FG_RED, TermColor.BOLD)
 
 def ok(obj):
-    return tc(obj, TermColor.BOLD, TermColor.FG_GREEN)
+    return tc(obj, TermColor.FG_GREEN)
 
 FAILURE = err('FAILURE')
 ERROR   = err('ERROR')

@@ -1,6 +1,7 @@
 #pragma once
 
 
+#include "util/fn.hpp"
 #include "util/macro.hpp"
 #include <iostream>
 #include <sstream>
@@ -25,6 +26,11 @@ struct Position
         , line(line)
         , column(column)
     { }
+
+    bool operator==(Position other) const {
+        return streq(this->name, other.name) and this->line == other.line and this->column == other.column;
+    }
+    bool operator!=(Position other) const { return not operator==(other); }
 
     friend std::string to_string(const Position &pos) {
         std::ostringstream os;

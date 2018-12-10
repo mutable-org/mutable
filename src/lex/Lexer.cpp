@@ -89,9 +89,9 @@ after:
     if (is_alpha(c_)) return read_keyword_or_identifier();
 
     push();
-    const char *sym = internalize();
-    diag.e(start_) << "illegal character '" << sym << "'\n";
-    return Token(start_, sym, TK_ERROR);
+    const char *str = internalize();
+    diag.e(start_) << "illegal character '" << str << "'\n";
+    return Token(start_, str, TK_ERROR);
 }
 
 

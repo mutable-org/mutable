@@ -4,9 +4,12 @@ add_executable(
     unittest
     main.cpp
 
-    # Util
+    # util
     util/FnTest.cpp
     util/PositionTest.cpp
     util/StringPoolTest.cpp
+
+    # lex
+    lex/TokenTest.cpp
     )
 target_link_libraries(unittest lex util)

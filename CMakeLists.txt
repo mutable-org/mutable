@@ -34,4 +34,4 @@ SET(CMAKE_CXX_FLAGS             "-std=c++14 ${CMAKE_CXX_FLAGS} ${CMAKE_COMPILE_F
 # Directories
 include_directories(src/)
 add_subdirectory(src/)
-#add_subdirectory(test/)
+add_subdirectory(unittest/)

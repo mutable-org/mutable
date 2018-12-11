@@ -62,6 +62,7 @@ after:
 #define GUESS(first, SUB) case first: step(); switch (c_) { SUB } UNDO(first); break;
         LEX('(', "(", TK_LPAR, );
         LEX(')', ")", TK_RPAR, );
+        LEX('~', "~", TK_TILDE, );
         LEX('+', "+", TK_PLUS, );
         LEX('-', "-", TK_MINUS, );
         LEX('*', "*", TK_ASTERISK, );

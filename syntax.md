@@ -132,7 +132,7 @@ comparison-operator ::= '==' | '!=' | '<' | '>' | '<=' | '>=' ;
 
 ##### Logical Expressions
 ```ebnf
-logical-not-expression ::= [ 'NOT' ] comparative-expression ;
+logical-not-expression ::= 'NOT' logical-not-expression | comparative-expression ;
 
 logical-and-expression ::= logical-and-expression 'AND' logical-not-expression |
                            logical-not-expression ;

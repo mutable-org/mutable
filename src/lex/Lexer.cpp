@@ -118,6 +118,7 @@ Token Lexer::read_number(bool has_dot)
     enum { Oct, Dec, Hex, Err } is, has;
 
     if (has_dot) {
+        buf_.push_back('.');
         is = has = Dec;
         is_float = true;
         goto HasDot;

@@ -21,15 +21,17 @@ SANITY_FILENAME     = os.path.join(TEST_DIR, 'sanity.sql')
 
 
 def colordiff(actual, expected):
-    res = ''
+    c_actual = c_expected = ''
     for delta in difflib.ndiff(actual, expected):
         if delta[0] == '+':
-            continue
-        if delta[0] == '-':
-            res += termcolor.tc(delta[-1], TermColor.BOLD, TermColor.BG_RED, TermColor.FG_WHITE)
+                c_expected += termcolor.tc(delta[-1], TermColor.BOLD, TermColor.BG_BLUE, TermColor.FG_WHITE)
+        elif delta[0] == '-':
+                c_actual += termcolor.tc(delta[-1], TermColor.BOLD, TermColor.BG_RED, TermColor.FG_WHITE)
         else:
-            res += termcolor.tc(delta[-1], TermColor.BOLD, TermColor.BG_WHITE, TermColor.FG_BLACK)
-    return res
+            char = termcolor.tc(delta[-1], TermColor.BOLD, TermColor.BG_WHITE, TermColor.FG_BLACK)
+            c_actual += char
+            c_expected += char
+    return c_actual, c_expected
 
 if __name__ == '__main__':
     n_tests = n_passed = 0
@@ -76,10 +78,11 @@ if __name__ == '__main__':
                 for actual, expected in zip(out, tokens):
                     if actual != expected:
                         fail()
+                        c_actual, c_expected = colordiff(actual, expected)
                         print('    {}: got {}, expected {}'.format(
                             termcolor.FAILURE,
-                            colordiff(actual, expected),
-                            termcolor.tc(expected, TermColor.BOLD, TermColor.BG_WHITE, TermColor.FG_BLACK)),
+                            c_actual,
+                            c_expected),
                             file=sys.stderr)
 
                 if not fail.flag:

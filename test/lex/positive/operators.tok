@@ -1,0 +1,16 @@
+-:1:1: ( TK_LPAR
+-:2:1: ) TK_RPAR
+-:3:1: + TK_PLUS
+-:4:1: - TK_MINUS
+-:5:1: * TK_ASTERISK
+-:6:1: / TK_SLASH
+-:7:1: % TK_PERCENT
+-:8:1: = TK_EQUAL
+-:9:1: != TK_BANG_EQUAL
+-:10:1: < TK_LESS
+-:11:1: > TK_GREATER
+-:12:1: <= TK_LESS_EQUAL
+-:13:1: >= TK_GREATER_EQUAL
+-:14:1: , TK_COMMA
+-:15:1: . TK_DOT
+-:16:1: ; TK_SEMICOL

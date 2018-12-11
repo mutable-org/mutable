@@ -43,7 +43,7 @@ struct Diagnostic
         return err_;
     }
 
-    unsigned hasError() {
+    unsigned num_errors() {
         auto tmp = numErrors_;
         numErrors_ = 0;
         return tmp;

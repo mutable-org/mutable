@@ -29,12 +29,12 @@ struct Parser
 
     Token token() const { return tok_; }
 
-    bool no(const TokenType tt) { return token().type != tt; }
+    bool no(const TokenType tt) { return not token() != tt; }
 
     void consume() { tok_ = lexer.next(); }
 
     bool accept(const TokenType tt) {
-        if (tt == token().type or TK_ERROR == token().type) {
+        if (token() == tt or token() == TK_ERROR) {
             consume();
             return true;
         }
@@ -43,7 +43,7 @@ struct Parser
 
     bool expect(const TokenType tt) {
         if (accept(tt)) return true;
-        diag.e(tok_.pos) << "expected " << tt << ", but got " << tok_.text << "\n";
+        diag.e(token().pos) << "expected " << tt << ", but got " << token().text << '\n';
         return false;
     }
 
@@ -56,15 +56,30 @@ struct Parser
     void parse();
 
     /* Statements */
-    void parseStmt();
-    void parseSelectStmt();
-    void parseUpdateStmt();
-    void parseDeleteStmt();
+    void parse_Stmt();
+    void parse_SelectStmt();
+    void parse_UpdateStmt();
+    void parse_DeleteStmt();
+
+    /* Clauses */
+    void parse_select_clause();
+    void parse_from_clause();
+    void parse_where_clause();
+    void parse_group_by_clause();
+    void parse_order_by_clause();
+    void parse_limit_clause();
 
     /* Expressions */
-    void parseExpr();
-    void parseBinaryExpr();
-    void parseBinaryExpr(void *lhs, int const p_lhs = 0 );
+    void parse_PrimaryExpr();
+    void parse_PostfixExpr();
+    void parse_UnaryExpr();
+    void parse_BinaryExpr();
+    void parse_BinaryExpr(void *lhs, int const p_lhs = 0 );
+    void parse_Expr();
+
+    /* Miscellaneous */
+    void parse_designator();
+    void expect_integer();
 };
 
 }

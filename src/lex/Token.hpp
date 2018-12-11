@@ -21,6 +21,7 @@ struct Token
     { }
 
     operator bool() const { return type != TK_EOF; }
+    operator TokenType() const { return type; }
 
     friend std::string to_string(const Token &tok) {
         std::ostringstream os;

@@ -1,6 +1,6 @@
 add_subdirectory(util)
 add_subdirectory(lex)
-#add_subdirectory(parse)
+add_subdirectory(parse)
 
 add_executable(
     demo

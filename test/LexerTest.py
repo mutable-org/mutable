@@ -89,8 +89,7 @@ if __name__ == '__main__':
                     n_passed += 1
                     print(termcolor.ok(' ✓'))
         except TestException as e:
-            print(termcolor.err(' ✘'))
-            print('    -> {}'.format(e))
+            print(' {}  -->  {}'.format(termcolor.err('✘'), e))
 
     # Sanity tests
     print('\nRun sanity tests')
@@ -113,8 +112,7 @@ if __name__ == '__main__':
                 if not err:
                     raise TestException('expected an error message')
             except TestException as e:
-                print(termcolor.err(' ✘'))
-                print('    -> {}'.format(e))
+                print(' {}  -->  {}'.format(termcolor.err('✘'), e))
             else:
                 n_passed += 1
                 print(termcolor.ok(' ✓'))

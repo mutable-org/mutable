@@ -29,7 +29,7 @@ struct Parser
 
     const Token & token() const { return tok_; }
 
-    bool no(const TokenType tt) { return not token() != tt; }
+    bool no(const TokenType tt) { return token() != tt; }
 
     void consume() { tok_ = lexer.next(); }
 

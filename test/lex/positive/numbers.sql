@@ -20,6 +20,7 @@
 42E5
 42e+5
 42e-5
+.123e5
 -- Hexadecimal floats
 0x0.
 0x1.23

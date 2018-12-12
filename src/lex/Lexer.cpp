@@ -165,7 +165,8 @@ HasDot:
         if (has == Oct) has = Dec;
         if ('-' == c_ || '+' == c_) push();
         /* TODO what if exponent part has no digit??? */
-        while (is_dec(c_)) push();
+        empty = true;
+        while (is_dec(c_)) { empty = false; push(); }
     }
 
     if (empty or is != has) {

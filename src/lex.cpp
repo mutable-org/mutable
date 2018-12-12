@@ -76,11 +76,8 @@ int main(int argc, const char **argv)
     Diagnostic diag(color, std::cout, std::cerr);
     Lexer lexer(diag, filename, *in);
 
-    for (;;) {
-        auto tok = lexer.next();
-        if (not tok) break;
+    while (auto tok = lexer.next())
         diag(tok.pos) << tok.text << ' ' << tok.type << std::endl;
-    }
 
     if (in != &std::cin)
         delete in;

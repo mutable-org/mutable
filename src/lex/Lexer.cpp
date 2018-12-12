@@ -36,7 +36,7 @@ Token Lexer::next()
                 step();
                 if (c_ == '-') {
                     /* read comment */
-                    do step(); while (c_ != '\n');
+                    do step(); while (c_ != EOF and c_ != '\n');
                     continue;
                 } else {
                     /* TK_MINUS */

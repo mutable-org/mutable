@@ -15,4 +15,4 @@ add_executable(
     # parse
     parse/ParserTest.cpp
     )
-target_link_libraries(unittest lex util)
+target_link_libraries(unittest db)

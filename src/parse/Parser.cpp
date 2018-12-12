@@ -177,6 +177,11 @@ void Parser::parse_Expr()
             break;
 
         case TK_STRING_LITERAL:
+        case TK_OCT_INT:
+        case TK_DEC_INT:
+        case TK_HEX_INT:
+        case TK_DEC_FLOAT:
+        case TK_HEX_FLOAT:
             consume();
             break;
 

@@ -27,7 +27,7 @@ struct Parser
         consume();
     }
 
-    Token token() const { return tok_; }
+    const Token & token() const { return tok_; }
 
     bool no(const TokenType tt) { return not token() != tt; }
 

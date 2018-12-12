@@ -11,5 +11,8 @@ add_executable(
 
     # lex
     lex/TokenTest.cpp
+
+    # parse
+    parse/ParserTest.cpp
     )
 target_link_libraries(unittest lex util)

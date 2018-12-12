@@ -111,7 +111,7 @@ primary-expression::= designator | constant | '(' expression ')' ;
 postfix-expression ::= postfix-expression '(' [ expression { ',' expression } ] ')' | (* function call *)
                        primary-expression ;
 
-unary-expression ::= [ '+' | '-' ] postfix-expression ;
+unary-expression ::= [ '+' | '-' | '~' ] postfix-expression ;
 ```
 
 #### Binary Expressions

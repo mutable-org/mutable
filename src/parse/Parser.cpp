@@ -11,6 +11,8 @@ int get_precedence(const TokenType tt)
     /* List all binary operators.  The higher up an operator is in the switch statement, the higher its precedence. */
     switch (tt) {
         default:                    return -1;
+        /* bitwise NOT */
+        case TK_TILDE:              ++p;
         /* multiplicative */
         case TK_ASTERISK:
         case TK_SLASH:
@@ -25,6 +27,12 @@ int get_precedence(const TokenType tt)
         case TK_GREATER_EQUAL:
         case TK_EQUAL:
         case TK_BANG_EQUAL:         ++p;
+        /* logical NOT */
+        case TK_Not:                ++p;
+        /* logical AND */
+        case TK_And:                ++p;
+        /* logical OR */
+        case TK_Or:                 ++p;
     }
     return p;
 }
@@ -147,76 +155,52 @@ void Parser::parse_limit_clause()
  * Expressions
  *====================================================================================================================*/
 
-void Parser::parse_PrimaryExpr()
+void Parser::parse_Expr()
 {
-    /* designator | constant | '(' expression ')' */
-    switch (token().type) {
-        case TK_IDENTIFIER:
-            return parse_designator();
+    int p = 0;
 
-        case TK_True:
-        case TK_False:
+    /* logical-not-expression ::= 'NOT' logical-not-expression | comparative-expression */
+    while (accept(TK_Not))
+        p = get_precedence(TK_Not);
+
+    /* unary-expression ::= [ '+' | '-' | '~' ] postfix-expression */
+    while (accept(TK_PLUS) or accept(TK_MINUS) or accept(TK_TILDE));
+
+    /* primary-expression::= designator | constant | '(' expression ')' */
+    switch (token().type) {
+        default:
+            diag.e(token().pos) << "expected expression, got " << token().text << '\n';
+            break;
+
+        case TK_IDENTIFIER:
+            parse_designator();
+            break;
+
         case TK_STRING_LITERAL:
-        case TK_OCT_INT:
-        case TK_DEC_INT:
-        case TK_HEX_INT:
-        case TK_DEC_FLOAT:
-        case TK_HEX_FLOAT:
             consume();
-            return;
+            break;
 
         case TK_LPAR:
             consume();
             parse_Expr();
-            expect(TK_LPAR);
-            return;
-
-        default:
-            /* TODO: careful when not consuming a token, this can lead to unexpected divergence */
-            diag.e(token().pos) << "expected an expression, got " << token().text << '\n';
-            return;
+            expect(TK_RPAR);
+            break;
     }
-}
 
-void Parser::parse_PostfixExpr()
-{
-    /* postfix-expression '(' [ expression { ',' expression } ] ')' | (* function call *)
-     * primary-expression
-     */
-    parse_PrimaryExpr();
-
-    for (;;) {
-        switch (token().type) {
-            default: return;
-
-            case TK_LPAR: {
-                consume();
-                if (token() != TK_LPAR) {
-                    do
-                        parse_Expr();
-                    while (accept(TK_COMMA));
-                }
-                expect(TK_RPAR);
-                break;
-            }
+    /* postfix-expression ::= postfix-expression '(' [ expression { ',' expression } ] ')' | primary-expression */
+    while (accept(TK_LPAR)) {
+        if (token().type != TK_RPAR) {
+            parse_Expr();
+            while (accept(TK_COMMA))
+                parse_Expr();
         }
+        expect(TK_RPAR);
     }
+
+    parse_Expr(nullptr, p);
 }
 
-void Parser::parse_UnaryExpr()
-{
-    /* [ '+' | '-' ] postfix-expression */
-    accept(TK_PLUS) or accept(TK_MINUS);
-    parse_PostfixExpr();
-}
-
-void Parser::parse_BinaryExpr()
-{
-    parse_UnaryExpr();
-    parse_BinaryExpr(nullptr);
-}
-
-void Parser::parse_BinaryExpr(void *lhs, const int precedence_lhs)
+void Parser::parse_Expr(void *lhs, const int precedence_lhs)
 {
     for (;;) {
         Token op = token();
@@ -229,15 +213,10 @@ void Parser::parse_BinaryExpr(void *lhs, const int precedence_lhs)
          * unique) to `get_precedence()`. */
 
         void *rhs = nullptr;
-        parse_UnaryExpr();
-        parse_BinaryExpr(rhs, p + 1);
+        parse_Expr();
+        parse_Expr(rhs, p + 1);
         /* TODO merge lhs/rhs */
     }
-}
-
-void Parser::parse_Expr()
-{
-    unreachable("TODO: not implemented");
 }
 
 /*======================================================================================================================

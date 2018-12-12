@@ -70,12 +70,8 @@ struct Parser
     void parse_limit_clause();
 
     /* Expressions */
-    void parse_PrimaryExpr();
-    void parse_PostfixExpr();
-    void parse_UnaryExpr();
-    void parse_BinaryExpr();
-    void parse_BinaryExpr(void *lhs, int const p_lhs = 0 );
     void parse_Expr();
+    void parse_Expr(void *lhs, const int precedence_lhs);
 
     /* Miscellaneous */
     void parse_designator();

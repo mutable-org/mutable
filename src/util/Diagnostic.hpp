@@ -38,16 +38,13 @@ struct Diagnostic
     }
 
     std::ostream & e(const Position pos) {
-        ++numErrors_;
+        ++num_errors_;
         print_pos(err_, pos, K_Error);
         return err_;
     }
 
-    unsigned num_errors() {
-        auto tmp = numErrors_;
-        numErrors_ = 0;
-        return tmp;
-    }
+    unsigned num_errors() const { return num_errors_; }
+    void clear() { num_errors_ = 0; }
 
     std::ostream & out() const { return out_; }
     std::ostream & err() const { return err_; }
@@ -56,7 +53,7 @@ struct Diagnostic
     const bool color_;
     std::ostream &out_;
     std::ostream &err_;
-    unsigned numErrors_ = 0;
+    unsigned num_errors_ = 0;
 
     enum Kind {
         K_None,

@@ -66,6 +66,7 @@ TEST_CASE("Parser::expect()", "[unit][util]")
     REQUIRE(not err.str().empty());
 
     /* Clear the errors for the next test case. */
+    diag.clear();
     err.str("");
     REQUIRE(diag.num_errors() == 0);
     REQUIRE(err.str().empty());
@@ -90,9 +91,8 @@ TEST_CASE("Parser::expect_consume()", "[unit][util]")
     REQUIRE(parser.token() == TK_ASTERISK);
 
     /* Clear the errors for the next test case. */
+    diag.clear();
     err.str("");
-    REQUIRE(diag.num_errors() == 0);
-    REQUIRE(err.str().empty());
 
     /* Expect the correct token. */
     parser.expect_consume(TK_ASTERISK);
@@ -142,4 +142,72 @@ TEST_CASE("Parser::expect_integer()", "[unit][util]")
     REQUIRE(diag.num_errors() > 0);
     REQUIRE(not err.str().empty());
     REQUIRE(parser.token() == TK_IDENTIFIER);
+}
+
+TEST_CASE("Parser::parse_Expr()", "[unit][util]")
+{
+    const char *exprs[] = {
+        /* primary expression */
+        "id", "42", "(id)",
+        /* postfix expression */
+        "id()", "id()", "id(42)", "id(42, 13, 1337)", "id(x)(y)(z)",
+        /* unary expression */
+        "+id", "-id", "~id", "+-~-+id", "+id()",
+        /* multiplicative expression */
+        "a*b", "a/b", "a%b", "a*b*c", "a*(b*c)", "-a*+b",
+        /* additive expression */
+        "a+b", "a-b", "a+b+c", "a+(b+c)", "a++b", "a- -b",
+        /* comparative expression */
+        "a=b", "a!=b", "a>b", "a<b", "a<=b", "a>=b", "a<b<c", "a<(b<c)",
+        /* logical NOT expression */
+        "NOT a", "NOT NOT a", "NOT NOT a=b",
+        /* logical AND expression */
+        "a AND b", "a AND b AND c", "a AND (b AND c)", "NOT a AND NOT NOT b AND NOT c",
+        /* logical OR expression */
+        "a OR b", "a OR b OR c", "a OR (b OR c)", "a AND b OR c AND d OR e AND f",
+    };
+
+    for (auto expr : exprs) {
+        LEXER(expr);
+        Parser parser(lexer);
+        parser.parse_Expr();
+        if (diag.num_errors())
+            std::cerr << "ERROR for input \"" << expr << "\": " << err.str() << std::endl;
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+    }
+}
+
+TEST_CASE("Parser::parse_Expr() sanity tests", "[unit][util]")
+{
+    const char *exprs[] = {
+        /* primary expression */
+        "(", "(id", "()",
+        /* postfix expression */
+        "id(", "id(42,", "id(42 13)", "id(42,,13)",
+        /* unary expression */
+        "+", "+(", "+(id",
+        /* multiplicative expression */
+        "*", "a*", "*a", "a**b", "a*(",
+        /* additive expression */
+        "+", "a+", "a+(",
+        /* comparative expression */
+        "=", "a=", "a=(", "a==b", "a!", "a=<b",
+        /* logical NOT expression */
+        "NOT", "NOT NOT", "NOT NOT (", "NOT +",
+        /* logical AND expression */
+        "AND", "a AND", "AND a", "a AND AND b",
+        /* logical OR expression */
+        "OR", "a OR", "OR a", "a OR OR b",
+    };
+
+    for (auto expr : exprs) {
+        LEXER(expr);
+        Parser parser(lexer);
+        parser.parse_Expr();
+        if (not diag.num_errors())
+            std::cerr << "UNEXPECTED PASS for input \"" << expr << '"' << std::endl;
+        CHECK(diag.num_errors() > 0);
+        CHECK(not err.str().empty());
+    }
 }

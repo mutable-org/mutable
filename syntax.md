@@ -127,7 +127,7 @@ additive-expression ::= additive-expression '+' multiplicative-expression |
 
 comparative-expression ::= additive-expression comparison-operator additive-expression ;
 
-comparison-operator ::= '==' | '!=' | '<' | '>' | '<=' | '>=' ;
+comparison-operator ::= '=' | '!=' | '<' | '>' | '<=' | '>=' ;
 ```
 
 ##### Logical Expressions

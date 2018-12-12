@@ -92,13 +92,19 @@ if __name__ == '__main__':
             print(' {}  -->  {}'.format(termcolor.err('✘'), e))
 
     # Sanity tests
-    print('\nRun sanity tests')
+    print('\nRun sanity tests', end='')
     with open(SANITY_FILENAME, 'r') as sanity_file:
+        i = 0
         for line in sanity_file:
+            line = line.strip()
             n_tests += 1
-            try:
-                print('` input "{}"'.format(line.strip()), end='')
 
+            if i % 5 == 0:
+                i = 0
+                print('\n    ', end='')
+            i += 1
+
+            try:
                 process = subprocess.Popen([LEXER_BIN, '-'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE , cwd=CWD)
                 try:
@@ -112,15 +118,16 @@ if __name__ == '__main__':
                 if not err:
                     raise TestException('expected an error message')
             except TestException as e:
-                print(' {}  -->  {}'.format(termcolor.err('✘'), e))
+                print('"{}" {}  -->  {}'.format(line, termcolor.err('✘'), e), end='')
+                i = 0
             else:
                 n_passed += 1
-                print(termcolor.ok(' ✓'))
+                print('"{}" {}  '.format(line, termcolor.ok('✓')), end='')
 
 
 
     # Show summary
-    print('\nPassed {} out of {} tests ({} tests failed).'.format(
+    print('\n\nPassed {} out of {} tests ({} tests failed).'.format(
         termcolor.ok(n_passed),
         termcolor.tc(n_tests, TermColor.BOLD),
         termcolor.err(n_tests - n_passed)))

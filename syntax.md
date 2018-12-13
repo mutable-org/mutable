@@ -28,6 +28,22 @@ select-statement ::= select-clause
                      [limit-clause] ;
 ```
 
+##### Update Statement
+```ebnf
+update-statement ::= update-clause
+                     set-clause
+                     [where-clause]
+                     [returning-clause] ;
+```
+
+##### Delete Statement
+```ebnf
+delete-statement ::= delete-clause
+                     [using-clause] (* TODO: remove this? *)
+                     [where-clause]
+                     [returning-clause] ;
+```
+
 ### Clauses
 
 ##### Select Clause
@@ -59,6 +75,32 @@ order_by-clause ::= 'ORDER' 'BY' designator [ 'ASC' | 'DESC' ] { ',' designator 
 ```ebnf
 limit-clause ::= 'LIMIT' integer-constant [ 'OFFSET' integer-constant ] ;
 ```
+
+##### Update Clause
+```ebnf
+update-clause ::= 'UPDATE' identifier
+```
+
+##### Set Clause
+```ebnf
+set-clause ::= 'SET' identifier '=' expression { ',' identifier '=' expression } ;
+```
+
+##### Returning Clause
+```ebnf
+returning-clause ::= 'RETURNING' '*' | expression [ 'AS' identifier ] { ',' expression [ 'AS' identifier ] } ;
+```
+
+##### Delete Clause
+```ebnf
+delete-clause ::= 'DELETE FROM' identifier
+```
+
+##### Using Clause
+```ebnf
+using-clause ::= 'USING' identifier [ 'AS' identifier ] { ',' identifier [ 'AS' identifier ] } ;
+```
+
 
 ### Expressions
 

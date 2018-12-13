@@ -22,7 +22,7 @@
         * [ ] `INSERT`
         * [ ] `UPDATE`
         * [ ] `DELETE`
-* [ ] implemtent *abstract syntax tree* (AST)
+* [ ] implement *abstract syntax tree* (AST)
 * [ ] provide parser tests
     * [x] unit tests tests
     * [ ] integration tests

@@ -45,7 +45,7 @@ inline void _assert(const bool pred, const char *filename, const unsigned line, 
 
 
 template<typename T>
-T * _nonnull(T *arg, const char *filename, const unsigned line, const char *argstr)
+T * _notnull(T *arg, const char *filename, const unsigned line, const char *argstr)
 {
     if (not arg) {
         std::cout.flush();
@@ -54,5 +54,5 @@ T * _nonnull(T *arg, const char *filename, const unsigned line, const char *args
     }
     return arg;
 }
-#define nonnull(ARG) _nonnull((ARG), __FILE__, __LINE__, #ARG)
+#define notnull(ARG) _notnull((ARG), __FILE__, __LINE__, #ARG)
 /* TODO: What to do in release build? */

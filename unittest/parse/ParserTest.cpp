@@ -147,11 +147,15 @@ TEST_CASE("Parser::parse_Expr()", "[unit][util]")
     for (auto expr : exprs) {
         LEXER(expr);
         Parser parser(lexer);
-        parser.parse_Expr();
+        auto e = parser.parse_Expr();
         if (diag.num_errors())
             std::cerr << "ERROR for input \"" << expr << "\": " << err.str() << std::endl;
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
+
+        std::cerr << "INPUT: " << expr << "\nOUTPUT: ";
+        e->print(std::cerr);
+        std::cerr << std::endl;
     }
 }
 

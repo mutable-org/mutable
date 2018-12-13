@@ -27,3 +27,11 @@
 #define DECLARE_DUMP_VIRTUAL \
     virtual void dump(std::ostream &out) const __attribute__((noinline)) { out << *this << std::endl; } \
     virtual void dump() const __attribute__((noinline)) { dump(std::cerr); }
+
+#ifndef NDEBUG
+#define DEBUG(MSG) \
+    std::cout.flush(); \
+    std::cerr << __FILE__ << ':' << __LINE__ << ": " << __FUNCTION__ << ' ' << MSG << std::endl
+#else
+#define DEBUG
+#endif

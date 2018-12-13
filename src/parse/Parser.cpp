@@ -1,5 +1,9 @@
 #include "parse/Parser.hpp"
 
+#include "util/macro.hpp"
+
+#undef DEBUG
+#define DEBUG(X)
 
 using namespace db;
 
@@ -160,57 +164,79 @@ void Parser::parse_limit_clause()
  * Expressions
  *====================================================================================================================*/
 
-void Parser::parse_Expr()
+Expr * Parser::parse_Expr(int precedence_lhs, Expr *lhs)
 {
-    int p = 0;
+    DEBUG('(' << precedence_lhs << ", " << (lhs ? "expr" : "NULL") << ')');
 
-    /* logical-not-expression ::= 'NOT' logical-not-expression | comparative-expression */
-    while (accept(TK_Not))
-        p = get_precedence(TK_Not);
-
-    /* unary-expression ::= [ '+' | '-' | '~' ] postfix-expression */
-    while (accept(TK_PLUS) or accept(TK_MINUS) or accept(TK_TILDE));
-
-    /* primary-expression::= designator | constant | '(' expression ')' */
+    /*
+     * primary-expression::= designator | constant | '(' expression ')' ;
+     * unary-expression ::= [ '+' | '-' | '~' ] postfix-expression ;
+     * logical-not-expression ::= 'NOT' logical-not-expression | comparative-expression ;
+     */
     switch (token().type) {
-        default:
-            diag.e(token().pos) << "expected expression, got " << token().text << '\n';
-            break;
-
+        /* primary-expression */
         case TK_IDENTIFIER:
-            parse_designator();
+            lhs = parse_designator();
             break;
-
         case TK_STRING_LITERAL:
         case TK_OCT_INT:
         case TK_DEC_INT:
         case TK_HEX_INT:
         case TK_DEC_FLOAT:
         case TK_HEX_FLOAT:
-            consume();
+            lhs = new Constant(consume());
             break;
-
         case TK_LPAR:
             consume();
-            parse_Expr();
+            lhs = parse_Expr();
             expect(TK_RPAR);
             break;
+
+        /* logical-NOT-expression */
+        case TK_Not:
+        /* unary-expression */
+        case TK_PLUS:
+        case TK_MINUS:
+        case TK_TILDE: {
+            auto tok = consume();
+            precedence_lhs = get_precedence(tok.type);
+            lhs = new UnaryExpr(tok, parse_Expr(precedence_lhs));
+            break;
+        }
+
+        default:
+            diag.e(token().pos) << "expected expression, got " << token().text << '\n';
+            lhs = new ErrorExpr(token());
     }
 
     /* postfix-expression ::= postfix-expression '(' [ expression { ',' expression } ] ')' | primary-expression */
     while (accept(TK_LPAR)) {
+        std::vector<Expr*> args;
         if (token().type != TK_RPAR) {
-            parse_Expr();
-            while (accept(TK_COMMA))
-                parse_Expr();
+            do
+                args.push_back(parse_Expr());
+            while (accept(TK_COMMA));
         }
         expect(TK_RPAR);
+        lhs = new FnApplicationExpr(lhs, args);
     }
 
-    parse_Expr(nullptr, p);
+    for (;;) {
+        Token op = token();
+        int p = get_precedence(op);
+        DEBUG("potential binary operator " << token().text << " with precedence " << p);
+        if (precedence_lhs > p) return lhs; // left operator has higher precedence_lhs
+        DEBUG("binary operator with higher precedence " << token());
+        consume();
+
+        DEBUG("recursive call to parse_Expr(" << p+1 << ')');
+        Expr *rhs = parse_Expr(p + 1);
+        lhs = new BinaryExpr(op, lhs, rhs);
+    }
 }
 
-void Parser::parse_Expr(void *lhs, const int precedence_lhs)
+#if 0
+Expr * Parser::parse_Expr(void *lhs, const int precedence_lhs)
 {
     for (;;) {
         Token op = token();
@@ -228,29 +254,32 @@ void Parser::parse_Expr(void *lhs, const int precedence_lhs)
         /* TODO merge lhs/rhs */
     }
 }
+#endif
 
-/*======================================================================================================================
- * Miscellaneous
- *====================================================================================================================*/
-
-void Parser::parse_designator()
+Expr * Parser::parse_designator()
 {
-    expect(TK_IDENTIFIER);
-    if (accept(TK_DOT))
-        expect(TK_IDENTIFIER);
+    Token lhs = token();
+    if (not expect(TK_IDENTIFIER))
+        return new ErrorExpr(lhs);
+    if (accept(TK_DOT)) {
+        Token rhs = token();
+        if (not expect(TK_IDENTIFIER))
+            return new ErrorExpr(rhs);
+        return new Designator(lhs, rhs); // tbl.attr
+    }
+    return new Designator(lhs); // attr
 }
 
-void Parser::expect_integer()
+Expr * Parser::expect_integer()
 {
     switch (token().type) {
         case TK_OCT_INT:
         case TK_DEC_INT:
         case TK_HEX_INT:
-            consume();
-            break;
+            return new Constant(consume());
 
         default:
             diag.e(token().pos) << "expected integer constant, got " << token().text << '\n';
-            break;
+            return new ErrorExpr(token());
     }
 }

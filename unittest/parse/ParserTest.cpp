@@ -77,29 +77,6 @@ TEST_CASE("Parser::expect()", "[unit][util]")
     REQUIRE(err.str().empty());
 }
 
-TEST_CASE("Parser::expect_consume()", "[unit][util]")
-{
-    LEXER("SELECT * FROM Tbl WHERE x=42;");
-    Parser parser(lexer);
-
-    /* Trigger an error by expecting the wrong token. */
-    parser.expect_consume(TK_And);
-    REQUIRE(diag.num_errors() > 0);
-    REQUIRE(not err.str().empty());
-
-    /* Verify that the token has been consumed. */
-    REQUIRE(parser.token() == TK_ASTERISK);
-
-    /* Clear the errors for the next test case. */
-    diag.clear();
-    err.str("");
-
-    /* Expect the correct token. */
-    parser.expect_consume(TK_ASTERISK);
-    REQUIRE(diag.num_errors() == 0);
-    REQUIRE(err.str().empty());
-}
-
 /*======================================================================================================================
  * Test miscellaneous parser routines.
  *====================================================================================================================*/

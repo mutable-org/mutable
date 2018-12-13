@@ -47,12 +47,6 @@ struct Parser
         return false;
     }
 
-    bool expect_consume(TokenType const tt) {
-        if (expect(tt)) return true;
-        consume();
-        return false;
-    }
-
     void parse();
 
     /* Statements */

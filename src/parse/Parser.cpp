@@ -65,6 +65,11 @@ void Parser::parse_SelectStmt()
     if (token() == TK_Limit) parse_limit_clause();
 }
 
+void Parser::parse_InsertStmt()
+{
+    unreachable("TODO: not implemented");
+}
+
 void Parser::parse_UpdateStmt()
 {
     unreachable("TODO: not implemented");

@@ -58,6 +58,7 @@ struct Parser
     /* Statements */
     void parse_Stmt();
     void parse_SelectStmt();
+    void parse_InsertStmt();
     void parse_UpdateStmt();
     void parse_DeleteStmt();
 

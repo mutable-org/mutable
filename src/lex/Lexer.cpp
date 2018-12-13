@@ -57,6 +57,9 @@ after:
         case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
             return read_number();
 
+        case '"':
+            return read_string_literal();
+
         /* Punctuators */
 #define LEX(chr, text, tt, SUB) case chr: step(); switch (c_) { SUB } return Token(start_, text, tt);
 #define GUESS(first, SUB) case first: step(); switch (c_) { SUB } UNDO(first); break;
@@ -182,4 +185,14 @@ HasDot:
         default: unreachable("invalid numeric type");
     }
     return Token(start_, internalize(), tt);
+}
+
+Token Lexer::read_string_literal()
+{
+    /* XXX Escape sequences and proper handling of newline missing. */
+    push(); // initial '"'
+    while (EOF != c_ and '"' != c_)
+        push();
+    push(); // terminal '"'
+    return Token(start_, internalize(), TK_STRING_LITERAL);
 }

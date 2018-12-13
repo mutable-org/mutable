@@ -20,6 +20,8 @@ struct Token
         , type(type)
     { }
 
+    Token() : pos(nullptr), text(nullptr), type(TK_EOF) { }
+
     operator bool() const { return type != TK_EOF; }
     operator TokenType() const { return type; }
 

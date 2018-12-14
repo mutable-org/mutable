@@ -63,7 +63,6 @@ struct Parser
 
     /* Clauses */
     void parse_select_clause();
-    void parse_from_clause();
     void parse_where_clause();
     void parse_group_by_clause();
     void parse_order_by_clause();

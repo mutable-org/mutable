@@ -61,9 +61,8 @@ void Parser::parse()
 
 void Parser::parse_SelectStmt()
 {
-    /* select-clause from-clause [where-clause] [group_by-clause] [order_by-clause] [limit-clause] */
+    /* select-clause [where-clause] [group_by-clause] [order_by-clause] [limit-clause] */
     parse_select_clause();
-    parse_from_clause();
     if (token() == TK_Where) parse_where_clause();
     if (token() == TK_Group) parse_group_by_clause();
     if (token() == TK_Order) parse_order_by_clause();
@@ -110,10 +109,7 @@ void Parser::parse_select_clause()
         if (accept(TK_As))
             expect(TK_IDENTIFIER);
     }
-}
 
-void Parser::parse_from_clause()
-{
     /* 'FROM' identifier [ 'AS' identifier ] { ',' identifier [ 'AS' identifier ] } */
     expect(TK_From);
     do {

@@ -164,7 +164,7 @@ void Parser::parse_limit_clause()
  * Expressions
  *====================================================================================================================*/
 
-Expr * Parser::parse_Expr(int precedence_lhs, Expr *lhs)
+Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
 {
     DEBUG('(' << precedence_lhs << ", " << (lhs ? "expr" : "NULL") << ')');
 
@@ -199,8 +199,8 @@ Expr * Parser::parse_Expr(int precedence_lhs, Expr *lhs)
         case TK_MINUS:
         case TK_TILDE: {
             auto tok = consume();
-            precedence_lhs = get_precedence(tok.type);
-            lhs = new UnaryExpr(tok, parse_Expr(precedence_lhs));
+            int p = get_precedence(tok.type);
+            lhs = new UnaryExpr(tok, parse_Expr(p));
             break;
         }
 

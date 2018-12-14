@@ -52,21 +52,18 @@ struct Parser
         return false;
     }
 
-    void parse();
+    Stmt * parse();
 
     /* Statements */
-    void parse_Stmt();
-    void parse_SelectStmt();
-    void parse_InsertStmt();
-    void parse_UpdateStmt();
-    void parse_DeleteStmt();
+    SelectStmt * parse_SelectStmt();
+    Stmt * parse_InsertStmt();
+    Stmt * parse_UpdateStmt();
+    Stmt * parse_DeleteStmt();
 
     /* Clauses */
-    void parse_select_clause();
-    void parse_where_clause();
-    void parse_group_by_clause();
-    void parse_order_by_clause();
-    void parse_limit_clause();
+    std::vector<Expr*> parse_group_by_clause();
+    std::vector<std::pair<Expr*, bool>> parse_order_by_clause();
+    std::pair<Expr*, Expr*> parse_limit_clause();
 
     /* Expressions */
     Expr * parse_Expr(int precedence_lhs = 0, Expr *lhs = nullptr);

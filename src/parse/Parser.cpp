@@ -1,6 +1,7 @@
 #include "parse/Parser.hpp"
 
 #include "util/macro.hpp"
+#include <utility>
 
 #undef DEBUG
 #define DEBUG(X)
@@ -42,44 +43,91 @@ int get_precedence(const TokenType tt)
     return p;
 }
 
-void Parser::parse()
+Stmt * Parser::parse()
 {
+    Stmt *stmt = nullptr;
     switch (token().type) {
-        case TK_Select: return parse_SelectStmt();
-        case TK_Update: return parse_UpdateStmt();
-        case TK_Delete: return parse_DeleteStmt();
-
         default:
             diag.e(token().pos) << "expected a statement, got " << token().text << '\n';
             consume();
+            return nullptr;
+
+        case TK_Select: stmt = parse_SelectStmt(); break;
+        case TK_Update: stmt = parse_UpdateStmt(); break;
+        case TK_Delete: stmt = parse_DeleteStmt(); break;
     }
+    expect(TK_SEMICOL);
+    return stmt;
 }
 
 /*======================================================================================================================
  * Statements
  *====================================================================================================================*/
 
-void Parser::parse_SelectStmt()
+SelectStmt * Parser::parse_SelectStmt()
 {
-    /* select-clause [where-clause] [group_by-clause] [order_by-clause] [limit-clause] */
-    parse_select_clause();
-    if (token() == TK_Where) parse_where_clause();
-    if (token() == TK_Group) parse_group_by_clause();
-    if (token() == TK_Order) parse_order_by_clause();
-    if (token() == TK_Limit) parse_limit_clause();
+    /* 'SELECT' */
+    expect(TK_Select);
+
+    SelectStmt *stmt = new SelectStmt();
+
+    /* ( '*' | expression [ 'AS' identifier ] ) */
+    if (token() == TK_ASTERISK) {
+        consume();
+        stmt->select_all = true;
+    } else {
+        auto e = parse_Expr();
+        Token tok;
+        if (accept(TK_As)) {
+            tok = token();
+            expect(TK_IDENTIFIER);
+        }
+        stmt->select.push_back(std::make_pair(e, tok));
+    }
+
+    /* { ',' expression [ 'AS' identifier ] } */
+    while (accept(TK_COMMA)) {
+        auto e = parse_Expr();
+        Token tok;
+        if (accept(TK_As)) {
+            tok = token();
+            expect(TK_IDENTIFIER);
+        }
+        stmt->select.push_back(std::make_pair(e, tok));
+    }
+
+    /* 'FROM' identifier [ 'AS' identifier ] { ',' identifier [ 'AS' identifier ] } */
+    expect(TK_From);
+    do {
+        Token table = token();
+        Token as;
+        expect(TK_IDENTIFIER);
+        if (accept(TK_As)) {
+            as = token();
+            expect(TK_IDENTIFIER);
+        }
+        stmt->from.push_back(std::make_pair(table, as));
+    } while (accept(TK_COMMA));
+
+    if (accept(TK_Where)) stmt->where = parse_Expr();
+    if (token() == TK_Group) stmt->group_by = parse_group_by_clause();
+    if (token() == TK_Order) stmt->order_by = parse_order_by_clause();
+    if (token() == TK_Limit) stmt->limit = parse_limit_clause();
+
+    return stmt;
 }
 
-void Parser::parse_InsertStmt()
+Stmt * Parser::parse_InsertStmt()
 {
     unreachable("TODO: not implemented");
 }
 
-void Parser::parse_UpdateStmt()
+Stmt * Parser::parse_UpdateStmt()
 {
     unreachable("TODO: not implemented");
 }
 
-void Parser::parse_DeleteStmt()
+Stmt * Parser::parse_DeleteStmt()
 {
     unreachable("TODO: not implemented");
 }
@@ -88,73 +136,47 @@ void Parser::parse_DeleteStmt()
  * Clauses
  *====================================================================================================================*/
 
-void Parser::parse_select_clause()
-{
-    /* 'SELECT' */
-    expect(TK_Select);
-
-    /* ( '*' | expression [ 'AS' identifier ] ) */
-    if (token() == TK_ASTERISK)
-        consume();
-    else {
-        parse_Expr();
-        if (accept(TK_As))
-            expect(TK_IDENTIFIER);
-    }
-
-    /* { ',' expression [ 'AS' identifier ] } */
-    while (token() == TK_COMMA) {
-        consume();
-        parse_Expr();
-        if (accept(TK_As))
-            expect(TK_IDENTIFIER);
-    }
-
-    /* 'FROM' identifier [ 'AS' identifier ] { ',' identifier [ 'AS' identifier ] } */
-    expect(TK_From);
-    do {
-        expect(TK_IDENTIFIER);
-        if (accept(TK_As))
-            expect(TK_IDENTIFIER);
-    } while (accept(TK_COMMA));
-}
-
-void Parser::parse_where_clause()
-{
-    /* 'WHERE' expression */
-    expect(TK_Where);
-    parse_Expr();
-}
-
-void Parser::parse_group_by_clause()
+std::vector<Expr*> Parser::parse_group_by_clause()
 {
     /* 'GROUP' 'BY' designator { ',' designator } */
+    std::vector<Expr*> group_by;
     expect(TK_Group);
     expect(TK_By);
     do
-        parse_designator();
+        group_by.push_back(parse_designator());
     while (accept(TK_COMMA));
+    return group_by;
 }
 
-void Parser::parse_order_by_clause()
+std::vector<std::pair<Expr*, bool>> Parser::parse_order_by_clause()
 {
     /* 'ORDER' 'BY' designator [ 'ASC' | 'DESC' ] { ',' designator [ 'ASC' | 'DESC' ] } */
+    std::vector<std::pair<Expr*, bool>> order_by;
     expect(TK_Order);
     expect(TK_By);
 
     do {
-        parse_designator();
-        accept(TK_Ascending) or accept(TK_Descending);
+        auto d = parse_designator();
+        if (accept(TK_Descending)) {
+            order_by.push_back(std::make_pair(d, false));
+        } else {
+            accept(TK_Ascending);
+            order_by.push_back(std::make_pair(d, true));
+        }
     } while (accept(TK_COMMA));
+
+    return order_by;
 }
 
-void Parser::parse_limit_clause()
+std::pair<Expr*, Expr*> Parser::parse_limit_clause()
 {
     /* 'LIMIT' integer-constant [ 'OFFSET' integer-constant ] */
     expect(TK_Limit);
-    expect_integer();
+    Expr *limit = expect_integer();
+    Expr *offset = nullptr;
     if (accept(TK_Offset))
-        expect_integer();
+        offset = expect_integer();
+    return {limit, offset};
 }
 
 /*======================================================================================================================
@@ -173,7 +195,7 @@ Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
     switch (token().type) {
         /* primary-expression */
         case TK_IDENTIFIER:
-            lhs = parse_designator();
+            lhs = parse_designator(); // XXX For SUM(x), 'SUM' is parsed as designator; should be identifier.
             break;
         case TK_STRING_LITERAL:
         case TK_OCT_INT:

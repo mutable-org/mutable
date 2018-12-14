@@ -18,6 +18,8 @@ struct Expr
     virtual ~Expr() { }
 
     virtual void print(std::ostream &out) const = 0;
+    virtual void dump(std::ostream &out, int indent = 0) const = 0;
+    void dump() const __attribute__((noinline)) { dump(std::cerr); }
 };
 
 /** The error expression.  Used when the parser encountered a syntactical error. */
@@ -28,6 +30,7 @@ struct ErrorExpr : Expr
     explicit ErrorExpr(Token tok) : tok(tok) { }
 
     void print(std::ostream &out) const;
+    void dump(std::ostream &out, int indent) const;
 };
 
 /** A designator.  Identifies an attribute, optionally preceeded by a table name. */
@@ -43,6 +46,7 @@ struct Designator : Expr
     bool has_table_name() const { return bool(table_name); }
 
     void print(std::ostream &out) const;
+    void dump(std::ostream &out, int indent) const;
 };
 
 /** A constant: a string literal or a numeric constant. */
@@ -58,6 +62,7 @@ struct Constant : Expr
     bool is_string() const;
 
     void print(std::ostream &out) const;
+    void dump(std::ostream &out, int indent) const;
 };
 
 /** A postfix expression. */
@@ -74,6 +79,7 @@ struct FnApplicationExpr : PostfixExpr
     FnApplicationExpr(Expr *fn, std::vector<Expr*> args);
 
     void print(std::ostream &out) const;
+    void dump(std::ostream &out, int indent) const;
 };
 
 /** A unary expression: "+e", "-e", "~e", "NOT e". */
@@ -85,6 +91,7 @@ struct UnaryExpr : Expr
     UnaryExpr(Token op, Expr *expr) : op(op), expr(notnull(expr)) { }
 
     void print(std::ostream &out) const;
+    void dump(std::ostream &out, int indent) const;
 };
 
 /** A binary expression.  This includes all arithmetic and logical binary operations. */
@@ -97,40 +104,7 @@ struct BinaryExpr : Expr
     BinaryExpr(Token op, Expr *lhs, Expr *rhs) : op(op), lhs(notnull(lhs)), rhs(notnull(rhs)) { }
 
     void print(std::ostream &out) const;
-};
-
-/*======================================================================================================================
- * Clauses
- *====================================================================================================================*/
-
-/** A select clause. */
-struct SelectClause
-{
-};
-
-/** A from clause. */
-struct FromClause
-{
-};
-
-/** A where clause. */
-struct WhereClause
-{
-};
-
-/** A group-by clause. */
-struct GroupByClause
-{
-};
-
-/** A order-by clause. */
-struct OrderByClause
-{
-};
-
-/** A limit clause. */
-struct LimitClause
-{
+    void dump(std::ostream &out, int indent) const;
 };
 
 /*======================================================================================================================
@@ -140,11 +114,26 @@ struct LimitClause
 /** A SQL statement. */
 struct Stmt
 {
+    virtual ~Stmt() { }
+
+    virtual void print(std::ostream &out) const = 0;
+    virtual void dump(std::ostream &out, int indent = 0) const = 0;
+    void dump() const __attribute__((noinline)) { dump(std::cerr); }
 };
 
 /** A SQL select statement. */
 struct SelectStmt : Stmt
 {
+    bool select_all; ///> for SELECT *
+    std::vector<std::pair<Expr*, Token>> select; ///> the list of selections
+    std::vector<std::pair<Token, Token>> from; ///> the list of data sources
+    Expr *where; ///> the where condition
+    std::vector<Expr*> group_by; ///> a list of what to group by
+    std::vector<std::pair<Expr*, bool>> order_by; ///> true means ascending, false means descending
+    std::pair<Expr*, Expr*> limit; ///> limit and offset
+
+    void print(std::ostream &out) const;
+    void dump(std::ostream &out, int indent) const;
 };
 
 /** A SQL insert statement. */

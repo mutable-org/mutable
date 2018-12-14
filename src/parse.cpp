@@ -78,9 +78,12 @@ int main(int argc, const char **argv)
     Lexer lexer(diag, filename, *in);
     Parser parser(lexer);
 
-    auto e = parser.parse_Expr();
-    e->print(std::cout);
-    std::cout << std::endl;
+    while (parser.token()) {
+        auto stmt = parser.parse();
+        stmt->print(std::cout);
+        std::cout << std::endl;
+        stmt->dump();
+    }
 
     if (in != &std::cin)
         delete in;

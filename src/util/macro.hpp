@@ -26,7 +26,7 @@
     void dump() const __attribute__((noinline)) { dump(std::cerr); }
 #define DECLARE_DUMP_VIRTUAL \
     virtual void dump(std::ostream &out) const __attribute__((noinline)) { out << *this << std::endl; } \
-    virtual void dump() const __attribute__((noinline)) { dump(std::cerr); }
+    void dump() const __attribute__((noinline)) { dump(std::cerr); }
 
 #ifndef NDEBUG
 #define DEBUG(MSG) \

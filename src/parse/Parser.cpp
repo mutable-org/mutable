@@ -5,6 +5,7 @@
 #undef DEBUG
 #define DEBUG(X)
 
+
 using namespace db;
 
 
@@ -192,12 +193,18 @@ Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
             expect(TK_RPAR);
             break;
 
-        /* logical-NOT-expression */
-        case TK_Not:
         /* unary-expression */
         case TK_PLUS:
         case TK_MINUS:
         case TK_TILDE: {
+            auto tok = consume();
+            int p = get_precedence(TK_TILDE); // the precedence of TK_TILDE equals that of unary plus and minus
+            lhs = new UnaryExpr(tok, parse_Expr(p));
+            break;
+        }
+
+        /* logical-NOT-expression */
+        case TK_Not: {
             auto tok = consume();
             int p = get_precedence(tok.type);
             lhs = new UnaryExpr(tok, parse_Expr(p));

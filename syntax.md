@@ -21,7 +21,6 @@ statement ::= [
 ##### Select Statement
 ```ebnf
 select-statement ::= select-clause
-                     from-clause
                      [where-clause]
                      [group_by-clause]
                      [order_by-clause]
@@ -48,12 +47,8 @@ delete-statement ::= delete-clause
 
 ##### Select Clause
 ```ebnf
-select-clause ::= 'SELECT' ( '*' | expression [ 'AS' identifier ] ) { ',' expression [ 'AS' identifier ] } ;
-```
-
-##### From Clause
-```ebnf
-from-clause ::= 'FROM' identifier [ 'AS' identifier ] { ',' identifier [ 'AS' identifier ] } ;
+select-clause ::= 'SELECT' ( '*' | expression [ 'AS' identifier ] ) { ',' expression [ 'AS' identifier ] }
+                  'FROM' identifier [ 'AS' identifier ] { ',' identifier [ 'AS' identifier ] } ;
 ```
 
 ##### Where Clause
@@ -78,12 +73,7 @@ limit-clause ::= 'LIMIT' integer-constant [ 'OFFSET' integer-constant ] ;
 
 ##### Update Clause
 ```ebnf
-update-clause ::= 'UPDATE' identifier
-```
-
-##### Set Clause
-```ebnf
-set-clause ::= 'SET' identifier '=' expression { ',' identifier '=' expression } ;
+update-clause ::= 'UPDATE' identifier 'SET' identifier '=' expression { ',' identifier '=' expression } ;
 ```
 
 ##### Returning Clause

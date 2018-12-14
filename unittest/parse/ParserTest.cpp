@@ -123,39 +123,76 @@ TEST_CASE("Parser::expect_integer()", "[unit][util]")
 
 TEST_CASE("Parser::parse_Expr()", "[unit][util]")
 {
-    const char *exprs[] = {
+    std::pair<const char*, const char*> exprs[] = {
+        /* { expression , fully-parenthesized-expression } */
         /* primary expression */
-        "id", "42", "(id)",
+        { "id", "id" },
+        { "42", "42" },
+        { "(id)", "id" },
+        { "(((id)))", "id" },
         /* postfix expression */
-        "id()", "id()", "id(42)", "id(42, 13, 1337)", "id(x)(y)(z)",
+        { "id()", "id()" },
+        { "id()", "id()" },
+        { "id(42)", "id(42)" },
+        { "id(42, 13, 1337)", "id(42, 13, 1337)" },
+        { "id(x)(y)(z)", "id(x)(y)(z)" },
         /* unary expression */
-        "+id", "-id", "~id", "+-~-+id", "+id()",
+        { "+id", "(+id)" },
+        { "-id", "(-id)" },
+        { "~id", "(~id)" },
+        { "+-~-+id", "(+(-(~(-(+id)))))" },
+        { "+id()", "(+id())" },
         /* multiplicative expression */
-        "a*b", "a/b", "a%b", "a*b*c", "a*(b*c)", "-a*+b",
+        { "a*b", "(a * b)" },
+        { "a/b", "(a / b)" },
+        { "a%b", "(a % b)" },
+        { "a*b*c", "((a * b) * c)" },
+        { "a*(b*c)", "(a * (b * c))" },
+        { "-a*+b", "((-a) * (+b))" },
         /* additive expression */
-        "a+b", "a-b", "a+b+c", "a+(b+c)", "a++b", "a- -b",
+        { "a+b", "(a + b)" },
+        { "a-b", "(a - b)" },
+        { "a+b+c", "((a + b) + c)" },
+        { "a+(b+c)", "(a + (b + c))" },
+        { "a++b", "(a + (+b))" },
+        { "a- -b", "(a - (-b))" },
         /* comparative expression */
-        "a=b", "a!=b", "a>b", "a<b", "a<=b", "a>=b", "a<b<c", "a<(b<c)",
+        { "a=b", "(a = b)" },
+        { "a!=b", "(a != b)" },
+        { "a>b", "(a > b)" },
+        { "a<b", "(a < b)" },
+        { "a<=b", "(a <= b)" },
+        { "a>=b", "(a >= b)" },
+        { "a<b<c", "((a < b) < c)" },
+        { "a<(b<c)", "(a < (b < c))" },
         /* logical NOT expression */
-        "NOT a", "NOT NOT a", "NOT NOT a=b",
+        { "NOT a", "(NOT a)" },
+        { "NOT NOT a", "(NOT (NOT a))" },
+        { "NOT NOT a=b", "(NOT (NOT (a = b)))" },
         /* logical AND expression */
-        "a AND b", "a AND b AND c", "a AND (b AND c)", "NOT a AND NOT NOT b AND NOT c",
-        /* logical OR expression */
-        "a OR b", "a OR b OR c", "a OR (b OR c)", "a AND b OR c AND d OR e AND f",
+        { "a AND b", "(a AND b)" },
+        { "a AND b AND c", "((a AND b) AND c)" },
+        { "a AND (b AND c)", "(a AND (b AND c))" },
+        { "NOT a AND NOT NOT b AND NOT c", "(((NOT a) AND (NOT (NOT b))) AND (NOT c))" },
+        /* logical OR expression */ /* logical OR expression */
+        { "a OR b", "(a OR b)" },
+        { "a OR b OR c", "((a OR b) OR c)" },
+        { "a OR (b OR c)", "(a OR (b OR c))" },
+        { "a AND b OR c AND d OR e AND f", "(((a AND b) OR (c AND d)) OR (e AND f))" },
     };
 
-    for (auto expr : exprs) {
-        LEXER(expr);
+    for (auto e : exprs) {
+        LEXER(e.first);
         Parser parser(lexer);
-        auto e = parser.parse_Expr();
+        auto ast = parser.parse_Expr();
         if (diag.num_errors())
-            std::cerr << "ERROR for input \"" << expr << "\": " << err.str() << std::endl;
+            std::cerr << "ERROR for input \"" << e.first << "\": " << err.str() << std::endl;
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
 
-        std::cerr << "INPUT: " << expr << "\nOUTPUT: ";
-        e->print(std::cerr);
-        std::cerr << std::endl;
+        std::ostringstream actual;
+        ast->print(actual);
+        CHECK(actual.str() == e.second);
     }
 }
 

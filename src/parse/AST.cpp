@@ -111,6 +111,52 @@ void SelectStmt::dump(std::ostream &out, int i) const
     }
 }
 
+void InsertStmt::dump(std::ostream &out, int i) const
+{
+    indent(out, i) << "InsertStmt: table " << table_name.text << " (" << table_name.pos << ')' << std::endl;
+    indent(out, i + 1) << "values" << std::endl;
+    for (auto v : values) {
+        switch (v.kind) {
+            case I_Default:
+                indent(out, i + 2) << "DEFAULT";
+                break;
+
+            case I_Null:
+                indent(out, i + 2) << "DEFAULT";
+                break;
+
+            case I_Expr:
+                v.expr->dump(out, i + 2);
+                break;
+        }
+    }
+}
+
+void UpdateStmt::dump(std::ostream &out, int i) const
+{
+    indent(out, i) << "UpdateStmt: table " << table_name.text << " (" << table_name.pos << ')' << std::endl;
+    indent(out, i + 1) << "set" << std::endl;
+    for (auto s : set) {
+        indent(out, i + 2) << s.first.text << " (" << s.first.pos << ')' << std::endl;
+        s.second->dump(out, i + 3);
+    }
+
+    if (where) {
+        indent(out, i + 1) << "where" << std::endl;
+        where->dump(out, i + 2);
+    }
+}
+
+void DeleteStmt::dump(std::ostream &out, int i) const
+{
+    indent(out, i) << "DeleteStmt: table " << table_name.text << " (" << table_name.pos << ')' << std::endl;
+
+    if (where) {
+        indent(out, i + 1) << "where" << std::endl;
+        where->dump(out, i + 2);
+    }
+}
+
 /*======================================================================================================================
  * AST Pretty Printing
  *====================================================================================================================*/
@@ -202,6 +248,45 @@ void SelectStmt::print(std::ostream &out) const
             out << " OFFSET ";
             limit.second->print(out);
         }
+    }
+    out << ';';
+}
+
+void InsertStmt::print(std::ostream &out) const
+{
+    out << "INSERT INTO " << table_name.text << "\nVALUES";
+    for (auto v : values) {
+        out << "\n    ";
+        switch (v.kind) {
+            case I_Default: out << "DEFAULT";   break;
+            case I_Null:    out << "NULL";      break;
+            case I_Expr:    v.expr->print(out); break;
+        }
+    }
+    out << ';';
+}
+
+void UpdateStmt::print(std::ostream &out) const
+{
+    out << "UPDATE " << table_name.text << " SET\n";
+    for (auto it = set.cbegin(), end = set.cend(); it != end; ++it) {
+        if (it != set.cbegin()) out << ",\n";
+        out << "    " << it->first.text << " = ";
+        it->second->print(out);
+    }
+    if (where) {
+        out << "WHERE ";
+        where->print(out);
+    }
+    out << ';';
+}
+
+void DeleteStmt::print(std::ostream &out) const
+{
+    out << "DELETE FROM " << table_name.text;
+    if (where) {
+        out << " WHERE ";
+        where->print(out);
     }
     out << ';';
 }

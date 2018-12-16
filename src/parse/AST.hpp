@@ -127,7 +127,7 @@ struct SelectStmt : Stmt
     bool select_all; ///> for SELECT *
     std::vector<std::pair<Expr*, Token>> select; ///> the list of selections
     std::vector<std::pair<Token, Token>> from; ///> the list of data sources
-    Expr *where; ///> the where condition
+    Expr *where = nullptr; ///> the where condition
     std::vector<Expr*> group_by; ///> a list of what to group by
     std::vector<std::pair<Expr*, bool>> order_by; ///> true means ascending, false means descending
     std::pair<Expr*, Expr*> limit; ///> limit and offset
@@ -139,16 +139,38 @@ struct SelectStmt : Stmt
 /** A SQL insert statement. */
 struct InsertStmt : Stmt
 {
+    enum kind_t { I_Default, I_Null, I_Expr };
+    struct value_type {
+        kind_t kind;
+        Expr *expr = nullptr;
+    };
+
+    Token table_name;
+    std::vector<value_type> values;
+
+    void print(std::ostream &out) const;
+    void dump(std::ostream &out, int indent) const;
 };
 
 /** A SQL update statement. */
 struct UpdateStmt : Stmt
 {
+    Token table_name;
+    std::vector<std::pair<Token, Expr*>> set;
+    Expr *where = nullptr;
+
+    void print(std::ostream &out) const;
+    void dump(std::ostream &out, int indent) const;
 };
 
 /** A SQL delete statement. */
 struct DeleteStmt : Stmt
 {
+    Token table_name;
+    Expr *where = nullptr;
+
+    void print(std::ostream &out) const;
+    void dump(std::ostream &out, int indent) const;
 };
 
 }

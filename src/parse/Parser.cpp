@@ -66,10 +66,10 @@ Stmt * Parser::parse()
 
 SelectStmt * Parser::parse_SelectStmt()
 {
+    SelectStmt *stmt = new SelectStmt();
+
     /* 'SELECT' */
     expect(TK_Select);
-
-    SelectStmt *stmt = new SelectStmt();
 
     /* ( '*' | expression [ 'AS' identifier ] ) */
     if (token() == TK_ASTERISK) {
@@ -119,17 +119,77 @@ SelectStmt * Parser::parse_SelectStmt()
 
 Stmt * Parser::parse_InsertStmt()
 {
-    unreachable("TODO: not implemented");
+    InsertStmt *stmt = new InsertStmt();
+
+    /* 'INSERT' 'INTO' identifier 'VALUES' */
+    expect(TK_Insert);
+    expect(TK_Into);
+    stmt->table_name = token();
+    expect(TK_IDENTIFIER);
+    expect(TK_Values);
+
+    /* ( 'DEFAULT' | 'NULL' | expression ) { ',' ( 'DEFAULT' | 'NULL' | expression ) } */
+    do {
+        switch (token().type) {
+            case TK_Default:
+                consume();
+                stmt->values.push_back({InsertStmt::I_Default});
+                break;
+
+            case TK_Null:
+                consume();
+                stmt->values.push_back({InsertStmt::I_Null});
+                break;
+
+            default: {
+                auto e = parse_Expr();
+                stmt->values.push_back({InsertStmt::I_Expr, e});
+                break;
+            }
+        }
+    } while (accept(TK_COMMA));
+
+    return stmt;
 }
 
 Stmt * Parser::parse_UpdateStmt()
 {
-    unreachable("TODO: not implemented");
+    UpdateStmt *stmt = new UpdateStmt();
+
+    /* update-clause ::= 'UPDATE' identifier 'SET' identifier '=' expression { ',' identifier '=' expression } ; */
+    expect(TK_Update);
+    stmt->table_name = token();
+    expect(TK_IDENTIFIER);
+    expect(TK_Set);
+
+    do {
+        auto id = token();
+        expect(TK_IDENTIFIER);
+        expect(TK_EQUAL);
+        auto e = parse_Expr();
+        stmt->set.push_back(std::make_pair(id, e));
+    } while (accept(TK_COMMA));
+
+    if (accept(TK_Where))
+        parse_Expr();
+
+    return stmt;
 }
 
 Stmt * Parser::parse_DeleteStmt()
 {
-    unreachable("TODO: not implemented");
+    DeleteStmt *stmt = new DeleteStmt();
+
+    /* delete-statement ::= 'DELETE' 'FROM' identifier [ where-clause ] ; */
+    expect(TK_Delete);
+    expect(TK_From);
+    stmt->table_name = token();
+    expect(TK_IDENTIFIER);
+
+    if (accept(TK_Where))
+        stmt->where = parse_Expr();
+
+    return stmt;
 }
 
 /*======================================================================================================================

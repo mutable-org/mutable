@@ -13,6 +13,7 @@ form](https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form).
 ```ebnf
 statement ::= [
                 select-statement |
+                insert-statement |
                 update-statement |
                 delete-statement
               ] ';' ;
@@ -25,6 +26,11 @@ select-statement ::= select-clause
                      [group_by-clause]
                      [order_by-clause]
                      [limit-clause] ;
+```
+
+##### Insert Statement
+```ebnf
+insert-statement ::= 'INSERT' 'INTO' identifier 'VALUES' ( 'DEFAULT' | 'NULL' | expression ) { ',' ( 'DEFAULT' | 'NULL' | expression ) }
 ```
 
 ##### Update Statement

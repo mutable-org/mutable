@@ -3,7 +3,7 @@
 
 from termcolor import TermColor
 from testexception import *
-import difflib
+from testutil import *
 import glob
 import os
 import re
@@ -19,19 +19,6 @@ POSITIVE_TEST_DIR   = os.path.join(TEST_DIR, 'positive')
 GLOB_POSITIVE       = os.path.join(POSITIVE_TEST_DIR, '**', '*.sql')
 SANITY_FILENAME     = os.path.join(TEST_DIR, 'sanity.sql')
 
-
-def colordiff(actual, expected):
-    c_actual = c_expected = ''
-    for delta in difflib.ndiff(actual, expected):
-        if delta[0] == '+':
-                c_expected += termcolor.tc(delta[-1], TermColor.BOLD, TermColor.BG_BLUE, TermColor.FG_WHITE)
-        elif delta[0] == '-':
-                c_actual += termcolor.tc(delta[-1], TermColor.BOLD, TermColor.BG_RED, TermColor.FG_WHITE)
-        else:
-            char = termcolor.tc(delta[-1], TermColor.BOLD, TermColor.BG_WHITE, TermColor.FG_BLACK)
-            c_actual += char
-            c_expected += char
-    return c_actual, c_expected
 
 if __name__ == '__main__':
     n_tests = n_passed = 0
@@ -56,7 +43,7 @@ if __name__ == '__main__':
 
             if err:
                 err = str(err, 'utf-8')
-                raise TestException('test failed with errors:\n{}'.format(err))
+                raise TestException('test failed with errors:\n{}'.format(str(err, 'utf-8')))
 
             with open(tok_filename, 'r') as tok_file:
                 out = str(out, 'utf-8').splitlines()
@@ -114,7 +101,6 @@ if __name__ == '__main__':
 
                 if process.returncode != 1:
                     raise TestException('unexpected return code {}'.format(process.returncode))
-
                 if not err:
                     raise TestException('expected an error message')
             except TestException as e:

@@ -82,7 +82,5 @@ int main(int argc, const char **argv)
     if (in != &std::cin)
         delete in;
 
-    if (diag.num_errors())
-        std::exit(EXIT_FAILURE);
-    std::exit(EXIT_SUCCESS);
+    std::exit(diag.num_errors() ? EXIT_FAILURE : EXIT_SUCCESS);
 }

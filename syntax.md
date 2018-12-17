@@ -22,10 +22,11 @@ statement ::= [
 ##### Select Statement
 ```ebnf
 select-statement ::= select-clause
-                     [where-clause]
-                     [group_by-clause]
-                     [order_by-clause]
-                     [limit-clause] ;
+                     [ where-clause ]
+                     [ group_by-clause ]
+                     [ having-clause ]
+                     [ order_by-clause ]
+                     [ limit-clause ] ;
 ```
 
 ##### Insert Statement
@@ -59,6 +60,11 @@ where-clause ::= 'WHERE' expression ;
 ##### Group By Clause
 ```ebnf
 group_by-clause ::= 'GROUP' 'BY' designator { ',' designator } ;
+```
+
+##### Having Clause
+```ebnf
+having-clause ::= 'HAVING' expression ;
 ```
 
 ##### Order By Clause

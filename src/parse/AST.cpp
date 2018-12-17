@@ -67,6 +67,11 @@ void BinaryExpr::dump(std::ostream &out, int i) const
     rhs->dump(out, i + 1);
 }
 
+void ErrorStmt::dump(std::ostream &out, int i) const
+{
+    indent(out, i) << "ErrorStmt: '" << tok.text << "' (" << tok.pos << ')' << std::endl;
+}
+
 void SelectStmt::dump(std::ostream &out, int i) const
 {
     indent(out, i) << "SelectStmt" << std::endl;
@@ -208,6 +213,11 @@ void BinaryExpr::print(std::ostream &out) const
     out << ' ' << op.text << ' ';
     rhs->print(out);
     out << ')';
+}
+
+void ErrorStmt::print(std::ostream &out) const
+{
+    out << "[Error];";
 }
 
 void SelectStmt::print(std::ostream &out) const

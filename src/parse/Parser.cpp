@@ -48,9 +48,10 @@ Stmt * Parser::parse()
     Stmt *stmt = nullptr;
     switch (token().type) {
         default:
+            stmt = new ErrorStmt(token());
             diag.e(token().pos) << "expected a statement, got " << token().text << '\n';
             consume();
-            return nullptr;
+            break;
 
         case TK_Select: stmt = parse_SelectStmt(); break;
         case TK_Update: stmt = parse_UpdateStmt(); break;

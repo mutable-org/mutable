@@ -121,6 +121,17 @@ struct Stmt
     void dump() const __attribute__((noinline)) { dump(std::cerr); }
 };
 
+/** The error statement.  Used when the parser encountered a syntactical error. */
+struct ErrorStmt : Stmt
+{
+    Token tok;
+
+    explicit ErrorStmt(Token tok) : tok(tok) { }
+
+    void print(std::ostream &out) const;
+    void dump(std::ostream &out, int indent) const;
+};
+
 /** A SQL select statement. */
 struct SelectStmt : Stmt
 {

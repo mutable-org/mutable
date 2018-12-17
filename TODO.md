@@ -13,16 +13,16 @@
 
 ### Parser
 
-* [ ] define grammar (create table, insert, update, delete)
+* [x] define grammar
     * [x] expressions
-    * [ ] clauses
-    * [ ] statements
-        * [ ] `CREATE`
+    * [x] clauses
+    * [x] statements
+        * [x] `CREATE`
         * [x] `SELECT`
-        * [ ] `INSERT`
-        * [ ] `UPDATE`
-        * [ ] `DELETE`
-* [ ] implement *abstract syntax tree* (AST)
+        * [x] `INSERT`
+        * [x] `UPDATE`
+        * [x] `DELETE`
+* [x] implement *abstract syntax tree* (AST)
 * [ ] provide parser tests
     * [x] unit tests tests
     * [ ] integration tests

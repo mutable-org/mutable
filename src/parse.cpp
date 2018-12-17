@@ -39,6 +39,10 @@ int main(int argc, const char **argv)
         nullptr, "--color",                 /* Short, Long      */
         "use colors",                       /* Description      */
         [&](bool) { color = true; });       /* Callback         */
+    ADD(bool, ast, false,                   /* Type, Var, Init  */
+        nullptr, "--ast",                   /* Short, Long      */
+        "dump the abstract syntax tree",    /* Description      */
+        [&](bool) { ast = true; });       /* Callback         */
 #undef ADD
     AP.parse_args(argc, argv);
 
@@ -80,9 +84,12 @@ int main(int argc, const char **argv)
 
     while (parser.token()) {
         auto stmt = parser.parse();
-        stmt->print(std::cout);
-        std::cout << std::endl;
-        stmt->dump();
+        if (ast) {
+            stmt->dump(std::cout);
+        } else {
+            stmt->print(std::cout);
+            std::cout << std::endl;
+        }
     }
 
     if (in != &std::cin)

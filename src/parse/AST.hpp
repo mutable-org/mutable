@@ -129,6 +129,7 @@ struct SelectStmt : Stmt
     std::vector<std::pair<Token, Token>> from; ///> the list of data sources
     Expr *where = nullptr; ///> the where condition
     std::vector<Expr*> group_by; ///> a list of what to group by
+    Expr *having = nullptr; ///> the having condition
     std::vector<std::pair<Expr*, bool>> order_by; ///> true means ascending, false means descending
     std::pair<Expr*, Expr*> limit; ///> limit and offset
 

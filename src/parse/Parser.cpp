@@ -111,6 +111,7 @@ SelectStmt * Parser::parse_SelectStmt()
 
     if (accept(TK_Where)) stmt->where = parse_Expr();
     if (token() == TK_Group) stmt->group_by = parse_group_by_clause();
+    if (accept(TK_Having)) stmt->having = parse_Expr();
     if (token() == TK_Order) stmt->order_by = parse_order_by_clause();
     if (token() == TK_Limit) stmt->limit = parse_limit_clause();
 

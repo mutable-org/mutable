@@ -94,6 +94,10 @@ void SelectStmt::dump(std::ostream &out, int i) const
         for (auto g : group_by)
             g->dump(out, i + 2);
     }
+    if (having) {
+        indent(out, i + 1) << "HAVING" << std::endl;
+        having->dump(out, i + 2);
+    }
     if (not order_by.empty()) {
         indent(out, i + 1) << "ORDER BY" << std::endl;
         for (auto o : order_by) {
@@ -231,6 +235,10 @@ void SelectStmt::print(std::ostream &out) const
             if (it != group_by.cbegin()) out << ", ";
             (*it)->print(out);
         }
+    }
+    if (having) {
+        out << "\nHAVING ";
+        having->print(out);
     }
     if (not order_by.empty()) {
         out << "\nORDER BY ";

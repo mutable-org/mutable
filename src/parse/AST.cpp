@@ -189,11 +189,10 @@ void Constant::print(std::ostream &out) const
 
 void FnApplicationExpr::print(std::ostream &out) const
 {
-    fn->print(out);
-    out << '(';
+    out << *fn << '(';
     for (auto it = args.cbegin(), end = args.cend(); it != end; ++it) {
         if (it != args.cbegin()) out << ", ";
-        (*it)->print(out);
+        out << **it;
     }
     out << ')';
 }
@@ -202,17 +201,12 @@ void UnaryExpr::print(std::ostream &out) const
 {
     out << '(' << op.text;
     if (op == TK_Not) out << ' ';
-    expr->print(out);
-    out << ')';
+    out << *expr << ')';
 }
 
 void BinaryExpr::print(std::ostream &out) const
 {
-    out << '(';
-    lhs->print(out);
-    out << ' ' << op.text << ' ';
-    rhs->print(out);
-    out << ')';
+    out << '(' << *lhs << ' ' << op.text << ' ' << *rhs << ')';
 }
 
 void ErrorStmt::print(std::ostream &out) const
@@ -235,10 +229,7 @@ void SelectStmt::print(std::ostream &out) const
         out << it->first.text;
         if (it->second) out << " AS " << it->second.text;
     }
-    if (where) {
-        out << "\nWHERE ";
-        where->print(out);
-    }
+    if (where) out << "\nWHERE " << *where;
     if (not group_by.empty()) {
         out << "\nGROUP BY ";
         for (auto it = group_by.cbegin(), end = group_by.cend(); it != end; ++it) {
@@ -246,10 +237,7 @@ void SelectStmt::print(std::ostream &out) const
             (*it)->print(out);
         }
     }
-    if (having) {
-        out << "\nHAVING ";
-        having->print(out);
-    }
+    if (having) out << "\nHAVING " << *having;
     if (not order_by.empty()) {
         out << "\nORDER BY ";
         for (auto it = order_by.cbegin(), end = order_by.cend(); it != end; ++it) {
@@ -260,12 +248,8 @@ void SelectStmt::print(std::ostream &out) const
         }
     }
     if (limit.first) {
-        out << "\nLIMIT ";
-        limit.first->print(out);
-        if (limit.second) {
-            out << " OFFSET ";
-            limit.second->print(out);
-        }
+        out << "\nLIMIT " << *limit.first;
+        if (limit.second) out << " OFFSET " << *limit.second;
     }
     out << ';';
 }
@@ -278,7 +262,7 @@ void InsertStmt::print(std::ostream &out) const
         switch (v.kind) {
             case I_Default: out << "DEFAULT";   break;
             case I_Null:    out << "NULL";      break;
-            case I_Expr:    v.expr->print(out); break;
+            case I_Expr:    out << *v.expr;     break;
         }
     }
     out << ';';
@@ -289,22 +273,15 @@ void UpdateStmt::print(std::ostream &out) const
     out << "UPDATE " << table_name.text << " SET\n";
     for (auto it = set.cbegin(), end = set.cend(); it != end; ++it) {
         if (it != set.cbegin()) out << ",\n";
-        out << "    " << it->first.text << " = ";
-        it->second->print(out);
+        out << "    " << it->first.text << " = " << *it->second;
     }
-    if (where) {
-        out << "WHERE ";
-        where->print(out);
-    }
+    if (where) out << "WHERE " << *where;
     out << ';';
 }
 
 void DeleteStmt::print(std::ostream &out) const
 {
     out << "DELETE FROM " << table_name.text;
-    if (where) {
-        out << " WHERE ";
-        where->print(out);
-    }
+    if (where) out << " WHERE " << *where;
     out << ';';
 }

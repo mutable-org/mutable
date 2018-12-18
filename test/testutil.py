@@ -1,4 +1,6 @@
+from termcolor import TermColor
 import difflib
+import termcolor
 
 def colordiff(actual, expected):
     c_actual = c_expected = ''

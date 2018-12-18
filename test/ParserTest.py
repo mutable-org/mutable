@@ -70,8 +70,16 @@ if __name__ == '__main__':
                 if err:
                     raise TestException('test failed with error:\n{}'.format(str(err, 'utf-8')))
 
+                without_comments = re.sub(r'^--.*', '', s)
+                in_original = re.sub(r'\s+', '', without_comments)
+                in_pretty = re.sub(r'\s+', '', str(pretty, 'latin-1'))
                 ast_original = re.sub(r' *\(.*\)', '', str(ast_original, 'latin-1'))
                 ast_pretty =  re.sub(r' *\(.*\)', '', str(ast_pretty, 'latin-1'))
+
+                if in_original != in_pretty:
+                    fail()
+                    actual, expected = colordiff(in_pretty, in_original)
+                    print('    {}: statements differ: got {}, expected {}'.format(termcolor.FAILURE, actual, expected))
 
                 if (ast_original != ast_pretty):
                     fail()

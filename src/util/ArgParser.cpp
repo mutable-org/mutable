@@ -75,7 +75,7 @@ void ArgParser::parse_args(int, const char **argv) {
     for (++argv; *argv; ++argv) {
         if (streq(*argv, "--"))
             goto positional;
-        auto it = key_map.find(StringPool::Global(*argv));
+        auto it = key_map.find(pool_(*argv));
         if (it != key_map.end())
             it->second->parse(argv);
         else

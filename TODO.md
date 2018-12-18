@@ -17,7 +17,7 @@
     * [x] expressions
     * [x] clauses
     * [x] statements
-        * [x] `CREATE`
+        * [ ] `CREATE`
         * [x] `SELECT`
         * [x] `INSERT`
         * [x] `UPDATE`
@@ -29,6 +29,13 @@
 
 ### Semantic Analysis
 
+* [x] SQL types
+    * boolean type `BOOL`
+    * character strings `CHAR(N)` and `VARCHAR(N)`
+    * numeric types
+        * integers `INT(1)` to `INT(8)`
+        * floating point `FLOAT` (32 bit) and `DOUBLE` (64 bit)
+        * `DECIMAL(p, s)` type with *p* decimal digits and a decimal dot left of the *s* leftmost digits
 * [ ] define rules of the SQL type system
 * [ ] implement SQL type system
 * [ ] implement semantic analysis

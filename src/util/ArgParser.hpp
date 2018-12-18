@@ -47,9 +47,10 @@ class ArgParser
     };
 
     private:
+    StringPool pool_;
     std::vector<const Option*> opts_; ///< options
     std::vector<const char*> args_; ///< positional arguments
-    std::unordered_map<const char*, const Option*> key_map;
+    std::unordered_map<const char*, const Option*> key_map; ///< maps the option name to the option object
     std::size_t short_len_ = 0;
     std::size_t long_len_  = 0;
     const char *filename_ = nullptr;
@@ -60,8 +61,8 @@ class ArgParser
 
     template<typename T>
     void add(const char *shortName, const char *longName, T &var, const char *descr, std::function<void(T)> callback) {
-        if (shortName) shortName = StringPool::Global(shortName);
-        if (longName)  longName  = StringPool::Global(longName);
+        if (shortName) shortName = pool_(shortName);
+        if (longName)  longName  = pool_(longName);
         auto opt = new OptionImpl<T>(shortName, longName, var, descr, callback);
         opts_.push_back(opt);
 

@@ -33,9 +33,6 @@ struct StringPool
     private:
     using table_t = std::unordered_set<const char *, StrHash, StrEqual>;
     table_t table_;
-
-    public:
-    static StringPool Global;
 };
 
 }

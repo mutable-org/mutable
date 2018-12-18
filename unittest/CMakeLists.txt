@@ -6,6 +6,7 @@ add_executable(
 
     # util
     util/FnTest.cpp
+    util/PoolTest.cpp
     util/PositionTest.cpp
     util/StringPoolTest.cpp
 
@@ -14,5 +15,8 @@ add_executable(
 
     # parse
     parse/ParserTest.cpp
+
+    # catalog
+    catalog/SchemaTest.cpp
     )
 target_link_libraries(unittest db)

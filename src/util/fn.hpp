@@ -1,5 +1,6 @@
 #pragma once
 
+#include "util/assert.hpp"
 #include <cstring>
 
 
@@ -25,3 +26,10 @@ struct StrEqual
     bool operator()(const char *first, const char *second) const { return streq(first, second); }
 };
 
+inline unsigned ceil_to_pow_2(unsigned n)
+{
+    unsigned ceiled = 1U << (32 - __builtin_clz(n));
+    assert(n <= ceiled);
+    assert((n << 1) == 0 or ceiled < (n << 1));
+    return ceiled;
+}

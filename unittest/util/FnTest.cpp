@@ -25,3 +25,19 @@ TEST_CASE("streq", "[unit][util]")
 
     free((void*) s1);
 }
+
+TEST_CASE("ceil_to_pow_2", "[unit][util]")
+{
+    uint32_t u31 = 1U << 31;
+    uint64_t u63 = 1UL << 63;
+
+    REQUIRE(1 == ceil_to_pow_2(1U));
+    REQUIRE(2 == ceil_to_pow_2(2U));
+    REQUIRE(4 == ceil_to_pow_2(3U));
+    REQUIRE(4 == ceil_to_pow_2(4U));
+    REQUIRE(8 == ceil_to_pow_2(5U));
+    REQUIRE(u31 == ceil_to_pow_2(u31 - 1U));
+    REQUIRE(u31 == ceil_to_pow_2(u31));
+    REQUIRE(u63 == ceil_to_pow_2(u63 - 1UL));
+    REQUIRE(u63 == ceil_to_pow_2(u63));
+}

@@ -1,7 +1,9 @@
 #pragma once
 
 #include "util/assert.hpp"
+#include <cmath>
 #include <cstring>
+#include <type_traits>
 
 
 inline bool streq(const char *first, const char *second) { return 0 == strcmp(first, second); }
@@ -26,10 +28,31 @@ struct StrEqual
     bool operator()(const char *first, const char *second) const { return streq(first, second); }
 };
 
-inline unsigned ceil_to_pow_2(unsigned n)
+template<typename T>
+inline
+typename std::enable_if<std::is_integral<T>::value and std::is_unsigned<T>::value and
+                        sizeof(T) <= sizeof(unsigned long long), T>::type
+ceil_to_pow_2(T n)
 {
-    unsigned ceiled = 1U << (32 - __builtin_clz(n));
+    /* Count leading zeros. */
+    int lz;
+    if (sizeof(T) <= sizeof(unsigned)) {
+        lz = __builtin_clz(n - 1U);
+    } else if (sizeof(T) <= sizeof(unsigned long)) {
+        lz = __builtin_clzl(n - 1UL);
+    } else if (sizeof(T) <= sizeof(unsigned long long)) {
+        lz = __builtin_clzll(n - 1ULL);
+    }
+
+    T ceiled = T(1) << (8 * sizeof(T) - lz);
     assert(n <= ceiled);
     assert((n << 1) == 0 or ceiled < (n << 1));
     return ceiled;
+}
+template<typename T>
+inline
+typename std::enable_if<std::is_floating_point<T>::value, T>::type
+ceil_to_pow_2(T f)
+{
+    return ceil_to_pow_2((unsigned long) std::ceil(f));
 }

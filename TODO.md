@@ -35,7 +35,7 @@
     * numeric types
         * integers `INT(1)` to `INT(8)`
         * floating point `FLOAT` (32 bit) and `DOUBLE` (64 bit)
-        * `DECIMAL(p, s)` type with *p* decimal digits and a decimal dot left of the *s* leftmost digits
+        * `DECIMAL(p, s)` type with *p* decimal digits and a decimal dot left of the *s* rightmost digits
 * [ ] define rules of the SQL type system
 * [ ] implement SQL type system
 * [ ] implement semantic analysis

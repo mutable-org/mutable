@@ -26,6 +26,9 @@ struct Type
     static Pool<Type> types_; ///< a pool of parameterized types
 
     public:
+    Type() = default;
+    Type(const Type&) = delete;
+    Type(Type&&) = default;
     virtual ~Type() { }
 
     virtual bool operator==(const Type &other) const = 0;
@@ -76,6 +79,8 @@ struct ErrorType: Type
     ErrorType() { }
 
     public:
+    ErrorType(ErrorType&&) = default;
+
     bool operator==(const Type &other) const;
 
     uint64_t hash() const;
@@ -93,6 +98,8 @@ struct Boolean : Type
     Boolean() { }
 
     public:
+    Boolean(Boolean&&) = default;
+
     bool operator==(const Type &other) const;
 
     uint64_t hash() const;
@@ -113,6 +120,8 @@ struct CharacterSequence : Type
     CharacterSequence(std::size_t length, bool is_varying) : length(length), is_varying(is_varying) { }
 
     public:
+    CharacterSequence(CharacterSequence&&) = default;
+
     bool operator==(const Type &other) const;
 
     uint64_t hash() const;
@@ -145,6 +154,8 @@ struct Numeric : Type
     { }
 
     public:
+    Numeric(Numeric&&) = default;
+
     bool operator==(const Type &other) const;
 
     uint64_t hash() const;

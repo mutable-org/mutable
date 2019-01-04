@@ -46,7 +46,7 @@ struct Pool
     const T * operator()(U t) {
         auto it = table_.find(&t);
         if (it == table_.end())
-            it = table_.emplace_hint(it, new U(t));
+            it = table_.emplace_hint(it, new U(std::move(t)));
         return *it;
     }
 

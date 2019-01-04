@@ -36,26 +36,22 @@ const Boolean * Type::Get_Boolean()
 
 const CharacterSequence * Type::Get_Char(std::size_t length)
 {
-    CharacterSequence cs(length, false);
-    return static_cast<const CharacterSequence*>(types_(cs));
+    return static_cast<const CharacterSequence*>(types_(CharacterSequence(length, false)));
 }
 
 const CharacterSequence * Type::Get_Varchar(std::size_t length)
 {
-    CharacterSequence cs(length, true);
-    return static_cast<const CharacterSequence*>(types_(cs));
+    return static_cast<const CharacterSequence*>(types_(CharacterSequence(length, true)));
 }
 
 const Numeric * Type::Get_Decimal(unsigned digits, unsigned scale)
 {
-    Numeric n(Numeric::N_Decimal, digits, scale);
-    return static_cast<const Numeric*>(types_(n));
+    return static_cast<const Numeric*>(types_(Numeric(Numeric::N_Decimal, digits, scale)));
 }
 
 const Numeric * Type::Get_Integer(unsigned num_bytes)
 {
-    Numeric i(Numeric::N_Int, num_bytes, 0);
-    return static_cast<const Numeric*>(types_(i));
+    return static_cast<const Numeric*>(types_(Numeric(Numeric::N_Int, num_bytes, 0)));
 }
 
 const Numeric * Type::Get_Float()

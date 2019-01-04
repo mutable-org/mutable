@@ -39,7 +39,7 @@ TEST_CASE("Pool internalize object", "[unit][util]")
         Object(const Object &other) : p(new int(*other.p)) { }
         Object(Object &&other) { std::swap(this->p, other.p); }
         ~Object() { delete p; }
-        int *p;
+        int *p = nullptr;
 
         bool operator==(const Object &other) const { return *this->p == *other.p; }
     };
@@ -50,19 +50,18 @@ TEST_CASE("Pool internalize object", "[unit][util]")
 
     Object o42(42);
     Object o13(13);
-    Object o42_(42);
 
     Pool<Object, hash> pool;
 
-    auto i0 = pool(o42);
+    auto i0 = pool(Object(42));
     REQUIRE(pool.size() == 1);
     REQUIRE(*i0->p == 42);
 
-    auto i1 = pool(o13);
+    auto i1 = pool(Object(13));
     REQUIRE(pool.size() == 2);
     REQUIRE(*i1->p == 13);
 
-    auto i2 = pool(o42_);
+    auto i2 = pool(Object(42));
     REQUIRE(pool.size() == 2);
     REQUIRE(*i2->p == 42);
     REQUIRE(i0 == i2);

@@ -70,6 +70,12 @@ namespace db {
 /** The error type.  Used when parsing of a data type fails or when semantic analysis detects a type error. */
 struct ErrorType: Type
 {
+    friend struct Type;
+
+    private:
+    ErrorType() { }
+
+    public:
     bool operator==(const Type &other) const;
 
     uint64_t hash() const;
@@ -83,6 +89,10 @@ struct Boolean : Type
 {
     friend struct Type;
 
+    private:
+    Boolean() { }
+
+    public:
     bool operator==(const Type &other) const;
 
     uint64_t hash() const;
@@ -99,14 +109,14 @@ struct CharacterSequence : Type
     std::size_t length; ///> the maximum length of the string in bytes
     bool is_varying; ///> true if varying, false otherwise; corresponds to Char(N) and Varchar(N)
 
-    bool operator==(const Type &other) const;
-
-    uint64_t hash() const;
-
     private:
     CharacterSequence(std::size_t length, bool is_varying) : length(length), is_varying(is_varying) { }
 
     public:
+    bool operator==(const Type &other) const;
+
+    uint64_t hash() const;
+
     void print(std::ostream &out) const;
     void dump(std::ostream &out) const;
 };

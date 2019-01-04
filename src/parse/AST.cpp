@@ -182,7 +182,7 @@ void DeleteStmt::dump(std::ostream &out, int i) const
 
 void ErrorExpr::print(std::ostream &out) const
 {
-    out << "[error]";
+    out << "[error-expression]";
 }
 
 void Designator::print(std::ostream &out) const
@@ -221,7 +221,7 @@ void BinaryExpr::print(std::ostream &out) const
 
 void ErrorStmt::print(std::ostream &out) const
 {
-    out << "[Error];";
+    out << "[error-statement];";
 }
 
 void CreateTableStmt::print(std::ostream &out) const

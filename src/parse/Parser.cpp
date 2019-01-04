@@ -84,7 +84,7 @@ Stmt * Parser::parse_CreateTableStmt()
         Token id = token();
         ok = ok and expect(TK_IDENTIFIER);
         const Type *type = parse_data_type();
-        insist(type, "must never be NULL");
+        insist(type, "Must never be NULL");
         attrs.emplace_back(id, type);
     } while (accept(TK_COMMA));
 
@@ -386,7 +386,7 @@ const Type * Parser::parse_data_type()
     switch (token().type) {
         default:
             diag.e(token().pos) << "expected data-type, got " << token().text << '\n';
-            return nullptr;
+            return Type::Get_Error();
 
         /* BOOL */
         case TK_Bool:

@@ -12,11 +12,17 @@ form](https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form).
 ##### Statement
 ```ebnf
 statement ::= [
+                create_table-statement |
                 select-statement |
                 insert-statement |
                 update-statement |
                 delete-statement
               ] ';' ;
+```
+
+##### Create Table Statement
+```ebnf
+create_table-statement ::= 'CREATE' 'TABLE' identifier '(' identifier data-type [ ',' identifier data-type ] ')'
 ```
 
 ##### Select Statement
@@ -161,4 +167,17 @@ logical-and-expression ::= logical-and-expression 'AND' logical-not-expression |
 
 logical-or-expression ::= logical-or-expression 'OR' logical-and-expression |
                           logical-and-expression ;
+```
+
+### Types
+
+##### Data Types
+```ebnf
+data-type ::= 'BOOL' |
+              'CHAR' '(' decimal-constant ')' |
+              'VARCHAR' '(' decimal-constant ')' |
+              'INT' '(' decimal-constant ')' |
+              'FLOAT' |
+              'DOUBLE' |
+              'DECIMAL' '(' decimal-constant [ ',' decimal-constant ] ')' ;
 ```

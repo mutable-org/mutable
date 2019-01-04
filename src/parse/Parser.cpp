@@ -1,10 +1,11 @@
 #include "parse/Parser.hpp"
 
+#include "catalog/Schema.hpp"
+#include "util/assert.hpp"
 #include "util/macro.hpp"
+#include <cerrno>
+#include <cstdlib>
 #include <utility>
-
-#undef DEBUG
-#define DEBUG(X)
 
 
 using namespace db;
@@ -53,6 +54,7 @@ Stmt * Parser::parse()
             consume();
             break;
 
+        case TK_Create: stmt = parse_CreateTableStmt(); break;
         case TK_Select: stmt = parse_SelectStmt(); break;
         case TK_Update: stmt = parse_UpdateStmt(); break;
         case TK_Delete: stmt = parse_DeleteStmt(); break;
@@ -65,7 +67,39 @@ Stmt * Parser::parse()
  * Statements
  *====================================================================================================================*/
 
-SelectStmt * Parser::parse_SelectStmt()
+Stmt * Parser::parse_CreateTableStmt()
+{
+    bool ok = true;
+    Token start = token();
+
+    /* 'CREATE' 'TABLE' identifier '(' */
+    expect(TK_Create);
+    expect(TK_Table);
+    Token table_name = token();
+    ok = ok and expect(TK_IDENTIFIER);
+    expect(TK_LPAR);
+
+    std::vector<CreateTableStmt::attribute_type> attrs;
+
+    /* identifier data-type [ ',' identifier data-type ] */
+    do {
+        Token id = token();
+        ok = ok and expect(TK_IDENTIFIER);
+        const Type *type = parse_data_type();
+        insist(type, "must never be NULL");
+        attrs.emplace_back(id, type);
+    } while (accept(TK_COMMA));
+
+    /* ')' */
+    expect(TK_RPAR);
+
+    if (not ok)
+        return new ErrorStmt(start);
+
+    return new CreateTableStmt(table_name, attrs);
+}
+
+Stmt * Parser::parse_SelectStmt()
 {
     SelectStmt *stmt = new SelectStmt();
 
@@ -247,8 +281,6 @@ std::pair<Expr*, Expr*> Parser::parse_limit_clause()
 
 Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
 {
-    DEBUG('(' << precedence_lhs << ", " << (lhs ? "expr" : "NULL") << ')');
-
     /*
      * primary-expression::= designator | constant | '(' expression ')' ;
      * unary-expression ::= [ '+' | '-' | '~' ] postfix-expression ;
@@ -311,37 +343,13 @@ Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
     for (;;) {
         Token op = token();
         int p = get_precedence(op);
-        DEBUG("potential binary operator " << token().text << " with precedence " << p);
         if (precedence_lhs > p) return lhs; // left operator has higher precedence_lhs
-        DEBUG("binary operator with higher precedence " << token());
         consume();
 
-        DEBUG("recursive call to parse_Expr(" << p+1 << ')');
         Expr *rhs = parse_Expr(p + 1);
         lhs = new BinaryExpr(op, lhs, rhs);
     }
 }
-
-#if 0
-Expr * Parser::parse_Expr(void *lhs, const int precedence_lhs)
-{
-    for (;;) {
-        Token op = token();
-        int p = get_precedence(op);
-        if (p < precedence_lhs) return;
-        consume();
-
-        /* TODO what to do about NOT, which has lower precedence than some binary operators?
-         * Maybe we should do LR parsing for all expressions, and add a respective entry for each operator (binary and
-         * unique) to `get_precedence()`. */
-
-        void *rhs = nullptr;
-        parse_Expr();
-        parse_Expr(rhs, p + 1);
-        /* TODO merge lhs/rhs */
-    }
-}
-#endif
 
 Expr * Parser::parse_designator()
 {
@@ -368,5 +376,99 @@ Expr * Parser::expect_integer()
         default:
             diag.e(token().pos) << "expected integer constant, got " << token().text << '\n';
             return new ErrorExpr(token());
+    }
+}
+
+/*======================================================================================================================
+ * Types
+ *====================================================================================================================*/
+
+const Type * Parser::parse_data_type()
+{
+    switch (token().type) {
+        default:
+            diag.e(token().pos) << "expected data-type, got " << token().text << '\n';
+            return nullptr;
+
+        /* BOOL */
+        case TK_Bool:
+            consume();
+            return Type::Get_Boolean();
+
+        /* 'CHAR' '(' decimal-constant ')' */
+        case TK_Char:
+        /* 'VARCHAR' '(' decimal-constant ')' */
+        case TK_Varchar: {
+            bool is_varying = token().type == TK_Varchar;
+            consume();
+            expect(TK_LPAR);
+            Token tok = token();
+            bool ok = expect(TK_DEC_INT);
+            expect(TK_RPAR);
+            if (not ok) return Type::Get_Error();
+            errno = 0;
+            std::size_t length = strtoul(tok.text, nullptr, 10);
+            if (errno) {
+                diag.e(tok.pos) << tok.text << " is not a valid length\n";
+                return Type::Get_Error();
+            }
+            return is_varying ? Type::Get_Varchar(length) : Type::Get_Char(length);
+        }
+
+        /* 'INT' '(' decimal-constant ')' */
+        case TK_Int: {
+            consume();
+            expect(TK_LPAR);
+            Token tok = token();
+            bool ok = expect(TK_DEC_INT);
+            expect(TK_RPAR);
+            if (not ok) return Type::Get_Error();
+            errno = 0;
+            std::size_t bytes = strtoul(tok.text, nullptr, 10);
+            if (errno) {
+                diag.e(tok.pos) << tok.text << " is not a valid size for an INT\n";
+                return Type::Get_Error();
+            }
+            return Type::Get_Integer(bytes);
+        }
+
+        /* 'FLOAT' */
+        case TK_Float:
+            consume();
+            return Type::Get_Float();
+
+        /* 'DOUBLE' */
+        case TK_Double:
+            consume();
+            return Type::Get_Double();
+
+        /* 'DECIMAL' '(' decimal-constant [ ',' decimal-constant ] ')' */
+        case TK_Decimal: {
+            consume();
+            expect(TK_LPAR);
+            Token precision = token();
+            Token scale;
+            bool ok = expect(TK_DEC_INT);
+            if (accept(TK_COMMA)) {
+                scale = token();
+                ok = ok and expect(TK_DEC_INT);
+            }
+            expect(TK_RPAR);
+            if (not ok) return Type::Get_Error();
+            errno = 0;
+            std::size_t p = strtoul(precision.text, nullptr, 10);
+            if (errno) {
+                diag.e(precision.pos) << precision.text << " is not a valid precision for a DECIMAL\n";
+                ok = false;
+            }
+            errno = 0;
+            std::size_t s = strtoul(scale.text, nullptr, 10);
+            if (errno) {
+                diag.e(scale.pos) << scale.text << " is not a valid scale for a DECIMAL\n";
+                ok = false;
+            }
+            if (not ok) return Type::Get_Error();
+            return Type::Get_Decimal(p, s);
+        }
     }
 }

@@ -1,5 +1,7 @@
 #include "parse/AST.hpp"
 
+#include "catalog/Schema.hpp"
+
 
 using namespace db;
 
@@ -70,6 +72,14 @@ void BinaryExpr::dump(std::ostream &out, int i) const
 void ErrorStmt::dump(std::ostream &out, int i) const
 {
     indent(out, i) << "ErrorStmt: '" << tok.text << "' (" << tok.pos << ')' << std::endl;
+}
+
+void CreateTableStmt::dump(std::ostream &out, int i) const
+{
+    indent(out, i) << "CreateTableStmt: table " << table_name.text << " (" << table_name.pos << ')' << std::endl;
+    indent(out, i + 1) << "attributes" << std::endl;
+    for (auto &attr : attributes)
+        indent(out, i + 2) << attr.first.text << " : " << *attr.second << " (" << attr.first.pos << ")" << std::endl;
 }
 
 void SelectStmt::dump(std::ostream &out, int i) const
@@ -212,6 +222,16 @@ void BinaryExpr::print(std::ostream &out) const
 void ErrorStmt::print(std::ostream &out) const
 {
     out << "[Error];";
+}
+
+void CreateTableStmt::print(std::ostream &out) const
+{
+    out << "CREATE TABLE " << table_name.text << "\n(";
+    for (auto it = attributes.cbegin(), end = attributes.cend(); it != end; ++it) {
+        if (it != attributes.cbegin()) out << ',';
+        out << "\n    " << it->first.text << ' ' << *it->second;
+    }
+    out << "\n);";
 }
 
 void SelectStmt::print(std::ostream &out) const

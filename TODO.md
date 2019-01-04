@@ -17,7 +17,7 @@
     * [x] expressions
     * [x] clauses
     * [x] statements
-        * [ ] `CREATE`
+        * [x] `CREATE`
         * [x] `SELECT`
         * [x] `INSERT`
         * [x] `UPDATE`

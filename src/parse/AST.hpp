@@ -8,6 +8,8 @@
 
 namespace db {
 
+struct Type;
+
 /*======================================================================================================================
  * Expressions
  *====================================================================================================================*/
@@ -137,6 +139,22 @@ struct ErrorStmt : Stmt
     Token tok;
 
     explicit ErrorStmt(Token tok) : tok(tok) { }
+
+    void print(std::ostream &out) const;
+    void dump(std::ostream &out, int indent) const;
+};
+
+struct CreateTableStmt : Stmt
+{
+    using attribute_type = std::pair<Token, const Type*>;
+
+    Token table_name;
+    std::vector<attribute_type> attributes;
+
+    CreateTableStmt(Token table_name, std::vector<attribute_type> attributes)
+        : table_name(table_name)
+        , attributes(attributes)
+    { }
 
     void print(std::ostream &out) const;
     void dump(std::ostream &out, int indent) const;

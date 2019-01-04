@@ -55,7 +55,8 @@ struct Parser
     Stmt * parse();
 
     /* Statements */
-    SelectStmt * parse_SelectStmt();
+    Stmt * parse_CreateTableStmt();
+    Stmt * parse_SelectStmt();
     Stmt * parse_InsertStmt();
     Stmt * parse_UpdateStmt();
     Stmt * parse_DeleteStmt();
@@ -69,6 +70,9 @@ struct Parser
     Expr * parse_Expr(int precedence_lhs = 0, Expr *lhs = nullptr);
     Expr * parse_designator();
     Expr * expect_integer();
+
+    /* Types */
+    const Type * parse_data_type();
 };
 
 }

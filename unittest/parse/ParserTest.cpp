@@ -1,5 +1,6 @@
 #include "catch.hpp"
 
+#include "catalog/Schema.hpp"
 #include "parse/Parser.hpp"
 #include "testutil.hpp"
 #include "util/fn.hpp"
@@ -12,7 +13,7 @@ using namespace db;
  * Test parser utility methods.
  *====================================================================================================================*/
 
-TEST_CASE("Parser c'tor", "[unit][util]")
+TEST_CASE("Parser c'tor", "[unit]")
 {
     LEXER("SELECT * FROM Tbl WHERE x=42;");
     Parser parser(lexer);
@@ -29,7 +30,7 @@ TEST_CASE("Parser c'tor", "[unit][util]")
     REQUIRE(streq(tok.text, "SELECT"));
 }
 
-TEST_CASE("Parser::no()", "[unit][util]")
+TEST_CASE("Parser::no()", "[unit]")
 {
     LEXER("SELECT * FROM Tbl WHERE x=42;");
     Parser parser(lexer);
@@ -37,7 +38,7 @@ TEST_CASE("Parser::no()", "[unit][util]")
     REQUIRE(not parser.no(TK_Select));
 }
 
-TEST_CASE("Parser::consume()", "[unit][util]")
+TEST_CASE("Parser::consume()", "[unit]")
 {
     LEXER("SELECT * FROM Tbl WHERE x=42;");
     Parser parser(lexer);
@@ -46,7 +47,7 @@ TEST_CASE("Parser::consume()", "[unit][util]")
     REQUIRE(parser.token() == TK_ASTERISK);
 }
 
-TEST_CASE("Parser::accept()", "[unit][util]")
+TEST_CASE("Parser::accept()", "[unit]")
 {
     LEXER("SELECT * FROM Tbl WHERE x=42;");
     Parser parser(lexer);
@@ -55,7 +56,7 @@ TEST_CASE("Parser::accept()", "[unit][util]")
     REQUIRE(parser.token() == TK_ASTERISK);
 }
 
-TEST_CASE("Parser::expect()", "[unit][util]")
+TEST_CASE("Parser::expect()", "[unit]")
 {
     LEXER("SELECT * FROM Tbl WHERE x=42;");
     Parser parser(lexer);
@@ -81,7 +82,7 @@ TEST_CASE("Parser::expect()", "[unit][util]")
  * Test miscellaneous parser routines.
  *====================================================================================================================*/
 
-TEST_CASE("Parser::parse_designator()", "[unit][util]")
+TEST_CASE("Parser::parse_designator()", "[unit]")
 {
     LEXER("a.b");
     Parser parser(lexer);
@@ -91,7 +92,7 @@ TEST_CASE("Parser::parse_designator()", "[unit][util]")
     REQUIRE(parser.token() == TK_EOF);
 }
 
-TEST_CASE("Parser::expect_integer()", "[unit][util]")
+TEST_CASE("Parser::expect_integer()", "[unit]")
 {
     LEXER("07 19 0xC0d3 abc");
     Parser parser(lexer);
@@ -121,7 +122,7 @@ TEST_CASE("Parser::expect_integer()", "[unit][util]")
     REQUIRE(parser.token() == TK_IDENTIFIER);
 }
 
-TEST_CASE("Parser::parse_Expr()", "[unit][util]")
+TEST_CASE("Parser::parse_Expr()", "[unit]")
 {
     std::pair<const char*, const char*> exprs[] = {
         /* { expression , fully-parenthesized-expression } */
@@ -196,7 +197,7 @@ TEST_CASE("Parser::parse_Expr()", "[unit][util]")
     }
 }
 
-TEST_CASE("Parser::parse_Expr() sanity tests", "[unit][util]")
+TEST_CASE("Parser::parse_Expr() sanity tests", "[unit]")
 {
     const char *exprs[] = {
         /* primary expression */
@@ -227,5 +228,78 @@ TEST_CASE("Parser::parse_Expr() sanity tests", "[unit][util]")
             std::cerr << "UNEXPECTED PASS for input \"" << expr << '"' << std::endl;
         CHECK(diag.num_errors() > 0);
         CHECK(not err.str().empty());
+    }
+}
+
+TEST_CASE("Parser::parse_data_type()", "[unit]")
+{
+    SECTION("Boolean")
+    {
+        LEXER("BOOL");
+        Parser parser(lexer);
+        const Type *type = parser.parse_data_type();
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        REQUIRE(type == Type::Get_Boolean());
+    }
+
+    SECTION("Char(N)")
+    {
+        LEXER("CHAR(42)");
+        Parser parser(lexer);
+        const Type *type = parser.parse_data_type();
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        REQUIRE(type == Type::Get_Char(42));
+    }
+
+    SECTION("Varchar(N)")
+    {
+        LEXER("VARCHAR(42)");
+        Parser parser(lexer);
+        const Type *type = parser.parse_data_type();
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        REQUIRE(type == Type::Get_Varchar(42));
+    }
+
+    SECTION("Int(N)")
+    {
+        LEXER("INT(4)");
+        Parser parser(lexer);
+        const Type *type = parser.parse_data_type();
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        REQUIRE(type == Type::Get_Integer(4));
+    }
+
+    SECTION("Float")
+    {
+        LEXER("FLOAT");
+        Parser parser(lexer);
+        const Type *type = parser.parse_data_type();
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        REQUIRE(type == Type::Get_Float());
+    }
+
+    SECTION("Double")
+    {
+        LEXER("DOUBLE");
+        Parser parser(lexer);
+        const Type *type = parser.parse_data_type();
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        REQUIRE(type == Type::Get_Double());
+    }
+
+    SECTION("Decimal(p,s)")
+    {
+        LEXER("DECIMAL(10, 2)");
+        Parser parser(lexer);
+        const Type *type = parser.parse_data_type();
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        REQUIRE(type == Type::Get_Decimal(10, 2));
     }
 }

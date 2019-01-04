@@ -1,7 +1,6 @@
 #pragma once
 
 #include "lex/Token.hpp"
-#include "util/assert.hpp"
 #include <iostream>
 #include <vector>
 

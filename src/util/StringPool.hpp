@@ -1,8 +1,7 @@
 #pragma once
 
-#include "util/assert.hpp"
+#include "util/macro.hpp"
 #include "util/fn.hpp"
-#include <cassert>
 #include <unordered_set>
 
 
@@ -23,9 +22,9 @@ struct StringPool
         auto it = table_.find(str);
         if (table_.end() == it) {
             auto copy = strdup(str);
-            assert(copy);
+            insist(copy, "strdup(str) failed and returned NULL");
             it = table_.emplace_hint(it, copy);
-            assert(streq(*it, str));
+            insist(streq(*it, str), "the pooled string differs from the original");
         }
         return *it;
     }

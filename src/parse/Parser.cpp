@@ -1,8 +1,6 @@
 #include "parse/Parser.hpp"
 
 #include "catalog/Schema.hpp"
-#include "util/assert.hpp"
-#include "util/macro.hpp"
 #include <cerrno>
 #include <cstdlib>
 #include <utility>

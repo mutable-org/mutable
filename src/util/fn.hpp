@@ -1,6 +1,6 @@
 #pragma once
 
-#include "util/assert.hpp"
+#include "util/macro.hpp"
 #include <cmath>
 #include <cstring>
 #include <type_traits>
@@ -45,8 +45,8 @@ ceil_to_pow_2(T n)
     }
 
     T ceiled = T(1) << (8 * sizeof(T) - lz);
-    assert(n <= ceiled);
-    assert((n << 1) == 0 or ceiled < (n << 1));
+    insist(n <= ceiled, "the ceiled value must be greater or equal to the original value");
+    insist((n << 1) == 0 or ceiled < (n << 1), "the ceiled value must be smaller than twice the original value");
     return ceiled;
 }
 template<typename T>

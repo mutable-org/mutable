@@ -1,6 +1,5 @@
 #pragma once
 
-#include "util/assert.hpp"
 #include "util/macro.hpp"
 #include "util/Pool.hpp"
 #include <functional>

@@ -2,8 +2,8 @@
 
 
 #include "util/Diagnostic.hpp"
+#include "util/macro.hpp"
 #include "util/StringPool.hpp"
-#include <cassert>
 #include <functional>
 #include <unordered_map>
 #include <vector>
@@ -67,20 +67,14 @@ class ArgParser
         opts_.push_back(opt);
 
         if (shortName) {
-#ifndef NDEBUG
-            auto it =
-#endif
-                key_map.emplace(shortName, opt);
-            assert(it.second && "name already in list");
+            auto it = key_map.emplace(shortName, opt);
+            insist(it.second, "name already in list");
             short_len_ = std::max(short_len_, std::string(shortName).length());
         }
 
         if (longName) {
-#ifndef NDEBUG
-            auto it =
-#endif
-                key_map.emplace(longName, opt);
-            assert(it.second && "name already in list");
+            auto it = key_map.emplace(longName, opt);
+            insist(it.second, "name already in list");
             long_len_ = std::max(long_len_, std::string(longName).length());
         }
     }

@@ -69,15 +69,14 @@ Stmt * Parser::parse_CreateTableStmt()
 {
     bool ok = true;
     Token start = token();
+    CreateTableStmt stmt;
 
     /* 'CREATE' 'TABLE' identifier '(' */
     expect(TK_Create);
     expect(TK_Table);
-    Token table_name = token();
+    stmt.table_name = token();
     ok = ok and expect(TK_IDENTIFIER);
     expect(TK_LPAR);
-
-    std::vector<CreateTableStmt::attribute_type> attrs;
 
     /* identifier data-type [ ',' identifier data-type ] */
     do {
@@ -85,7 +84,7 @@ Stmt * Parser::parse_CreateTableStmt()
         ok = ok and expect(TK_IDENTIFIER);
         const Type *type = parse_data_type();
         insist(type, "Must never be NULL");
-        attrs.emplace_back(id, type);
+        stmt.attributes.emplace_back(id, type);
     } while (accept(TK_COMMA));
 
     /* ')' */
@@ -94,12 +93,15 @@ Stmt * Parser::parse_CreateTableStmt()
     if (not ok)
         return new ErrorStmt(start);
 
-    return new CreateTableStmt(table_name, attrs);
+    return new CreateTableStmt(std::move(stmt));
 }
 
 Stmt * Parser::parse_SelectStmt()
 {
-    SelectStmt *stmt = new SelectStmt();
+    bool ok = true;
+    Token start = token();
+
+    SelectStmt stmt;
 
     /* 'SELECT' */
     expect(TK_Select);
@@ -107,15 +109,15 @@ Stmt * Parser::parse_SelectStmt()
     /* ( '*' | expression [ 'AS' identifier ] ) */
     if (token() == TK_ASTERISK) {
         consume();
-        stmt->select_all = true;
+        stmt.select_all = true;
     } else {
         auto e = parse_Expr();
         Token tok;
         if (accept(TK_As)) {
             tok = token();
-            expect(TK_IDENTIFIER);
+            ok = ok and expect(TK_IDENTIFIER);
         }
-        stmt->select.push_back(std::make_pair(e, tok));
+        stmt.select.push_back(std::make_pair(e, tok));
     }
 
     /* { ',' expression [ 'AS' identifier ] } */
@@ -124,9 +126,9 @@ Stmt * Parser::parse_SelectStmt()
         Token tok;
         if (accept(TK_As)) {
             tok = token();
-            expect(TK_IDENTIFIER);
+            ok = ok and expect(TK_IDENTIFIER);
         }
-        stmt->select.push_back(std::make_pair(e, tok));
+        stmt.select.push_back(std::make_pair(e, tok));
     }
 
     /* 'FROM' identifier [ 'AS' identifier ] { ',' identifier [ 'AS' identifier ] } */
@@ -134,21 +136,24 @@ Stmt * Parser::parse_SelectStmt()
     do {
         Token table = token();
         Token as;
-        expect(TK_IDENTIFIER);
+        ok = ok and expect(TK_IDENTIFIER);
         if (accept(TK_As)) {
             as = token();
-            expect(TK_IDENTIFIER);
+            ok = ok and expect(TK_IDENTIFIER);
         }
-        stmt->from.push_back(std::make_pair(table, as));
+        stmt.from.push_back(std::make_pair(table, as));
     } while (accept(TK_COMMA));
 
-    if (accept(TK_Where)) stmt->where = parse_Expr();
-    if (token() == TK_Group) stmt->group_by = parse_group_by_clause();
-    if (accept(TK_Having)) stmt->having = parse_Expr();
-    if (token() == TK_Order) stmt->order_by = parse_order_by_clause();
-    if (token() == TK_Limit) stmt->limit = parse_limit_clause();
+    if (accept(TK_Where)) stmt.where = parse_Expr();
+    if (token() == TK_Group) stmt.group_by = parse_group_by_clause();
+    if (accept(TK_Having)) stmt.having = parse_Expr();
+    if (token() == TK_Order) stmt.order_by = parse_order_by_clause();
+    if (token() == TK_Limit) stmt.limit = parse_limit_clause();
 
-    return stmt;
+    if (not ok)
+        return new ErrorStmt(start);
+
+    return new SelectStmt(std::move(stmt));
 }
 
 Stmt * Parser::parse_InsertStmt()

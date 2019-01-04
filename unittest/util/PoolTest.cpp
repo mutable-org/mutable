@@ -36,7 +36,7 @@ TEST_CASE("Pool internalize object", "[unit][util]")
     {
         Object() : p(nullptr) { }
         Object(int n) : p(new int(n)) { }
-        Object(const Object &other) : p(new int(*other.p)) { }
+        Object(const Object &other) = delete;
         Object(Object &&other) { std::swap(this->p, other.p); }
         ~Object() { delete p; }
         int *p = nullptr;

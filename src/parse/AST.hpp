@@ -150,11 +150,6 @@ struct CreateTableStmt : Stmt
     Token table_name;
     std::vector<attribute_type> attributes;
 
-    CreateTableStmt(Token table_name, std::vector<attribute_type> attributes)
-        : table_name(table_name)
-        , attributes(attributes)
-    { }
-
     void print(std::ostream &out) const;
     void dump(std::ostream &out, int indent) const;
 };
@@ -162,14 +157,19 @@ struct CreateTableStmt : Stmt
 /** A SQL select statement. */
 struct SelectStmt : Stmt
 {
-    bool select_all; ///> for SELECT *
-    std::vector<std::pair<Expr*, Token>> select; ///> the list of selections
-    std::vector<std::pair<Token, Token>> from; ///> the list of data sources
+    using selection_type = std::pair<Expr*, Token>;
+    using source_type = std::pair<Token, Token>;
+    using order_type = std::pair<Expr*, bool>; ///> true means ascending, false means descending
+    using limit_type = std::pair<Expr*, Expr*>; ///> limit and offset
+
+    bool select_all = false; ///> for SELECT *
+    std::vector<selection_type> select; ///> the list of selections
+    std::vector<source_type> from; ///> the list of data sources
     Expr *where = nullptr; ///> the where condition
     std::vector<Expr*> group_by; ///> a list of what to group by
     Expr *having = nullptr; ///> the having condition
-    std::vector<std::pair<Expr*, bool>> order_by; ///> true means ascending, false means descending
-    std::pair<Expr*, Expr*> limit; ///> limit and offset
+    std::vector<order_type> order_by; ///> the ordering
+    limit_type limit; ///> limit and offset
 
     void print(std::ostream &out) const;
     void dump(std::ostream &out, int indent) const;

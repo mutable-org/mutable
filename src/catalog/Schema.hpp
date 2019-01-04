@@ -16,6 +16,7 @@ namespace db {
  * SQL Types
  *====================================================================================================================*/
 
+struct ErrorType;
 struct Boolean;
 struct CharacterSequence;
 struct Numeric;
@@ -43,6 +44,7 @@ struct Type
     }
 
     /* Type factory methods */
+    static const ErrorType * Get_Error();
     static const Boolean * Get_Boolean();
     static const CharacterSequence * Get_Char(std::size_t length);
     static const CharacterSequence * Get_Varchar(std::size_t length);
@@ -65,6 +67,17 @@ struct hash<db::Type>
 }
 
 namespace db {
+
+/** The error type.  Used when parsing of a data type fails or when semantic analysis detects a type error. */
+struct ErrorType: Type
+{
+    bool operator==(const Type &other) const;
+
+    uint64_t hash() const;
+
+    void print(std::ostream &out) const;
+    void dump(std::ostream &out) const;
+};
 
 /** The boolean type. */
 struct Boolean : Type

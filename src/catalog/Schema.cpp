@@ -22,6 +22,12 @@ Pool<Type> Type::types_;
 
 /*===== Factory Methods ==============================================================================================*/
 
+const ErrorType * Type::Get_Error()
+{
+    static ErrorType err;
+    return &err;
+}
+
 const Boolean * Type::Get_Boolean()
 {
     static Boolean b;
@@ -66,6 +72,11 @@ const Numeric * Type::Get_Double()
 
 /*===== Comparison ===================================================================================================*/
 
+bool ErrorType::operator==(const Type &other) const
+{
+    return dynamic_cast<const ErrorType*>(&other) != nullptr;
+}
+
 bool Boolean::operator==(const Type &other) const
 {
     return dynamic_cast<const Boolean*>(&other) != nullptr;
@@ -90,6 +101,8 @@ bool Numeric::operator==(const Type &other) const
 
 /*===== Hash =========================================================================================================*/
 
+uint64_t ErrorType::hash() const { return 0; }
+
 uint64_t Boolean::hash() const { return 0; }
 
 uint64_t CharacterSequence::hash() const { return uint64_t(is_varying) | uint64_t(length) << 1; }
@@ -97,6 +110,8 @@ uint64_t CharacterSequence::hash() const { return uint64_t(is_varying) | uint64_
 uint64_t Numeric::hash() const { return (uint64_t(precision) << 32 | scale) * uint64_t(kind); }
 
 /*===== Pretty Printing ==============================================================================================*/
+
+void ErrorType::print(std::ostream &out) const { out << "[ErrorType]"; }
 
 void Boolean::print(std::ostream &out) const { out << "BOOL"; }
 
@@ -127,6 +142,8 @@ void Numeric::print(std::ostream &out) const
 
 
 /*===== Dump =========================================================================================================*/
+
+void ErrorType::dump(std::ostream &out) const { out << "[ErrorType]" << std::endl; }
 
 void Boolean::dump(std::ostream &out) const { out << "Boolean" << std::endl; }
 

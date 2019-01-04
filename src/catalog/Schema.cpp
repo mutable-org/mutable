@@ -42,14 +42,13 @@ const CharacterSequence * Type::Get_Varchar(std::size_t length)
 
 const Numeric * Type::Get_Decimal(unsigned digits, unsigned scale)
 {
-    unsigned precision = ceil_to_pow_2(std::ceil(digits * LOG_2_OF_10));
-    Numeric n(Numeric::N_Decimal, precision, scale);
+    Numeric n(Numeric::N_Decimal, digits, scale);
     return static_cast<const Numeric*>(types_(n));
 }
 
 const Numeric * Type::Get_Integer(unsigned num_bytes)
 {
-    Numeric i(Numeric::N_Int, 8 * num_bytes, 0);
+    Numeric i(Numeric::N_Int, num_bytes, 0);
     return static_cast<const Numeric*>(types_(i));
 }
 
@@ -110,16 +109,7 @@ void Numeric::print(std::ostream &out) const
 {
     switch (kind) {
         case N_Int:
-            switch (precision) {
-                default:
-                    out << "[IllegalInteger]";
-                    break;
-
-                case  8: out << "INT(1)"; break;
-                case 16: out << "INT(2)"; break;
-                case 32: out << "INT(4)"; break;
-                case 64: out << "INT(8)"; break;
-            }
+            out << "INT(" << precision << ')';
             break;
 
         case N_Float:
@@ -129,8 +119,7 @@ void Numeric::print(std::ostream &out) const
             break;
 
         case N_Decimal: {
-            unsigned decimal_precision = precision / LOG_2_OF_10;
-            out << "DECIMAL(" << decimal_precision << ", " << scale << ')';
+            out << "DECIMAL(" << precision << ", " << scale << ')';
             break;
         }
     }

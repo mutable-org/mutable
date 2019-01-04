@@ -36,7 +36,7 @@ TEST_CASE("Type/Numeric c'tor", "[unit]")
     {
         const Numeric *i8 = Type::Get_Integer(8);
         CHECK(i8->kind == Numeric::N_Int);
-        CHECK(i8->precision == 8*8);
+        CHECK(i8->precision == 8);
         CHECK(i8->scale == 0);
     }
 
@@ -58,44 +58,44 @@ TEST_CASE("Type/Numeric c'tor", "[unit]")
     {
         unsigned decimal_precision;
 
-        SECTION("2 byte decimal: log₂(10^4) = 13.3")
+        SECTION("4 digits: log₂(10^4) = 13.3")
         {
             decimal_precision = 4;
         }
 
-        SECTION("4 byte decimal: log₂(10^5) = 16.6")
+        SECTION("5 digits: log₂(10^5) = 16.6")
         {
             decimal_precision = 5;
         }
 
-        SECTION("4 byte decimal: log₂(10^9) = 29.8")
+        SECTION("9 digits: log₂(10^9) = 29.8")
         {
             decimal_precision = 9;
         }
 
-        SECTION("8 byte decimal: log₂(10^10) = 33.2")
+        SECTION("10 digits: log₂(10^10) = 33.2")
         {
             decimal_precision = 10;
         }
 
-        SECTION("8 byte decimal: log₂(10^19) = 29.9")
+        SECTION("19 digits: log₂(10^19) = 29.9")
         {
             decimal_precision = 19;
         }
 
-        SECTION("16 byte decimal: log₂(10^20) = 33.2")
+        SECTION("20 digits: log₂(10^20) = 33.2")
         {
             decimal_precision = 20;
         }
 
-        SECTION("16 byte decimal: log₂(10^38) = 122.9")
+        SECTION("38 digits: log₂(10^38) = 122.9")
         {
             decimal_precision = 38;
         }
 
         const Numeric *dec = Type::Get_Decimal(decimal_precision, 2);
         CHECK(dec->kind == Numeric::N_Decimal);
-        CHECK(dec->precision == ceil_to_pow_2(ceil(log2(pow(10, decimal_precision))))); // ⌈log₂ 10ⁿ⌉
+        CHECK(dec->precision == decimal_precision);
         CHECK(dec->scale == 2);
     }
 }
@@ -128,10 +128,10 @@ TEST_CASE("Type/Numeric print()", "[unit]")
     CHECK(oss.str() == "DECIMAL(9, 2)");
     oss.str("");
 
-    /* 8 byte decimal: log2(10^10) = 33.2 -> 64 bit */
+    /* 10 digits: log2(10^10) = 33.2 -> 64 bit */
     const Numeric *dec_10_0 = Type::Get_Decimal(10, 0);
     oss << *dec_10_0;
-    CHECK(oss.str() == "DECIMAL(19, 0)");
+    CHECK(oss.str() == "DECIMAL(10, 0)");
     oss.str("");
 
     /* 16 byte decimal: log2(10^38) - 122.9 */

@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include "util/assert.hpp"
 #include "util/macro.hpp"
 #include "util/Pool.hpp"
@@ -107,6 +106,12 @@ struct Numeric : Type
 
 #define kind_t(X) X(N_Int), X(N_Float), X(N_Decimal)
     DECLARE_ENUM(kind_t) kind; ///> the kind of numeric type
+    /** The precision gives the maximum number of digits that can be represented by that type.  Its interpretation
+     * depends on the kind:
+     *  For INT, precision is the number of bytes.
+     *  For FLOAT and DOUBLE, precision is the size of the type in bits, i.e. 32 and 64, respectively.
+     *  For DECIMAL, precision is the number of decimal digits that can be represented.
+     */
     unsigned precision; ///> the number of bits used to represent the number
     unsigned scale; ///> the number of decimal digits right of the decimal point
     private:

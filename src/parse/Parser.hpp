@@ -48,7 +48,7 @@ struct Parser
 
     bool expect(const TokenType tt) {
         if (accept(tt)) return true;
-        diag.e(token().pos) << "expected " << tt << ", but got " << token().text << '\n';
+        diag.e(token().pos) << "expected " << tt << ", got " << token().text << '\n';
         return false;
     }
 

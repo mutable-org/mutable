@@ -84,6 +84,8 @@ struct FnApplicationExpr : PostfixExpr
 
     FnApplicationExpr(Expr *fn, std::vector<Expr*> args);
 
+    ~FnApplicationExpr();
+
     void print(std::ostream &out) const;
     void dump(std::ostream &out, int indent) const;
 };
@@ -95,6 +97,8 @@ struct UnaryExpr : Expr
     Expr *expr;
 
     UnaryExpr(Token op, Expr *expr) : op(op), expr(notnull(expr)) { }
+
+    ~UnaryExpr() { delete expr; }
 
     void print(std::ostream &out) const;
     void dump(std::ostream &out, int indent) const;
@@ -108,6 +112,8 @@ struct BinaryExpr : Expr
     Expr *rhs;
 
     BinaryExpr(Token op, Expr *lhs, Expr *rhs) : op(op), lhs(notnull(lhs)), rhs(notnull(rhs)) { }
+
+    ~BinaryExpr() { delete lhs; delete rhs; }
 
     void print(std::ostream &out) const;
     void dump(std::ostream &out, int indent) const;
@@ -150,6 +156,11 @@ struct CreateTableStmt : Stmt
     Token table_name;
     std::vector<attribute_type> attributes;
 
+    CreateTableStmt(Token table_name, std::vector<attribute_type> attributes)
+        : table_name(table_name)
+        , attributes(attributes)
+    { }
+
     void print(std::ostream &out) const;
     void dump(std::ostream &out, int indent) const;
 };
@@ -170,6 +181,26 @@ struct SelectStmt : Stmt
     Expr *having = nullptr; ///> the having condition
     std::vector<order_type> order_by; ///> the ordering
     limit_type limit; ///> limit and offset
+
+    SelectStmt(bool select_all,
+               std::vector<selection_type> select,
+               std::vector<source_type> from,
+               Expr *where,
+               std::vector<Expr*> group_by,
+               Expr *having,
+               std::vector<order_type> order_by,
+               limit_type limit)
+        : select_all(select_all)
+        , select(select)
+        , from(from)
+        , where(where)
+        , group_by(group_by)
+        , having(having)
+        , order_by(order_by)
+        , limit(limit)
+    { }
+
+    ~SelectStmt();
 
     void print(std::ostream &out) const;
     void dump(std::ostream &out, int indent) const;

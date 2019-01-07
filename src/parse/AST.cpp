@@ -22,6 +22,30 @@ FnApplicationExpr::FnApplicationExpr(Expr *fn, std::vector<Expr*> args)
         notnull(e);
 }
 
+FnApplicationExpr::~FnApplicationExpr()
+{
+    delete fn;
+    for (auto arg : args)
+        delete arg;
+}
+
+SelectStmt::~SelectStmt()
+{
+    for (auto &s : select)
+        delete s.first;
+
+    delete where;
+
+    for (auto g : group_by)
+        delete g;
+
+    for (auto &o : order_by)
+        delete o.first;
+
+    delete limit.first;
+    delete limit.second;
+}
+
 /*======================================================================================================================
  * AST Dump
  *====================================================================================================================*/

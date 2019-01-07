@@ -46,6 +46,24 @@ SelectStmt::~SelectStmt()
     delete limit.second;
 }
 
+InsertStmt::~InsertStmt()
+{
+    for (auto &v : values)
+        delete v.second;
+}
+
+UpdateStmt::~UpdateStmt()
+{
+    for (auto &s : set)
+        delete s.second;
+    delete where;
+}
+
+DeleteStmt::~DeleteStmt()
+{
+    delete where;
+}
+
 /*======================================================================================================================
  * AST Dump
  *====================================================================================================================*/
@@ -167,7 +185,7 @@ void InsertStmt::dump(std::ostream &out, int i) const
     indent(out, i) << "InsertStmt: table " << table_name.text << " (" << table_name.pos << ')' << std::endl;
     indent(out, i + 1) << "values" << std::endl;
     for (auto v : values) {
-        switch (v.kind) {
+        switch (v.first) {
             case I_Default:
                 indent(out, i + 2) << "DEFAULT";
                 break;
@@ -177,7 +195,7 @@ void InsertStmt::dump(std::ostream &out, int i) const
                 break;
 
             case I_Expr:
-                v.expr->dump(out, i + 2);
+                v.second->dump(out, i + 2);
                 break;
         }
     }
@@ -211,6 +229,8 @@ void DeleteStmt::dump(std::ostream &out, int i) const
 /*======================================================================================================================
  * AST Pretty Printing
  *====================================================================================================================*/
+
+/*===== Expr =========================================================================================================*/
 
 void ErrorExpr::print(std::ostream &out) const
 {
@@ -255,6 +275,8 @@ void ErrorStmt::print(std::ostream &out) const
 {
     out << "[error-statement];";
 }
+
+/*===== Stmt =========================================================================================================*/
 
 void CreateTableStmt::print(std::ostream &out) const
 {
@@ -311,10 +333,10 @@ void InsertStmt::print(std::ostream &out) const
     out << "INSERT INTO " << table_name.text << "\nVALUES";
     for (auto v : values) {
         out << "\n    ";
-        switch (v.kind) {
+        switch (v.first) {
             case I_Default: out << "DEFAULT";   break;
             case I_Null:    out << "NULL";      break;
-            case I_Expr:    out << *v.expr;     break;
+            case I_Expr:    out << *v.second;     break;
         }
     }
     out << ';';

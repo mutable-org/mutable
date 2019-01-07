@@ -210,13 +210,13 @@ struct SelectStmt : Stmt
 struct InsertStmt : Stmt
 {
     enum kind_t { I_Default, I_Null, I_Expr };
-    struct value_type {
-        kind_t kind;
-        Expr *expr = nullptr;
-    };
+    using value_type = std::pair<kind_t, Expr*>;
 
     Token table_name;
     std::vector<value_type> values;
+
+    InsertStmt(Token table_name, std::vector<value_type> values) : table_name(table_name), values(values) { }
+    ~InsertStmt();
 
     void print(std::ostream &out) const;
     void dump(std::ostream &out, int indent) const;
@@ -225,9 +225,19 @@ struct InsertStmt : Stmt
 /** A SQL update statement. */
 struct UpdateStmt : Stmt
 {
+    using set_type = std::pair<Token, Expr*>;
+
     Token table_name;
-    std::vector<std::pair<Token, Expr*>> set;
+    std::vector<set_type> set;
     Expr *where = nullptr;
+
+    UpdateStmt(Token table_name, std::vector<set_type> set, Expr *where)
+        : table_name(table_name)
+        , set(set)
+        , where(where)
+    { }
+
+    ~UpdateStmt();
 
     void print(std::ostream &out) const;
     void dump(std::ostream &out, int indent) const;
@@ -238,6 +248,9 @@ struct DeleteStmt : Stmt
 {
     Token table_name;
     Expr *where = nullptr;
+
+    DeleteStmt(Token table_name, Expr *where) : table_name(table_name), where(where) { }
+    ~DeleteStmt();
 
     void print(std::ostream &out) const;
     void dump(std::ostream &out, int indent) const;

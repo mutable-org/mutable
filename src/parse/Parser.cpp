@@ -164,13 +164,15 @@ Stmt * Parser::parse_SelectStmt()
 
 Stmt * Parser::parse_InsertStmt()
 {
-    InsertStmt *stmt = new InsertStmt();
+    bool ok = true;
+    Token start = token();
+    std::vector<InsertStmt::value_type> values;
 
     /* 'INSERT' 'INTO' identifier 'VALUES' */
     expect(TK_Insert);
     expect(TK_Into);
-    stmt->table_name = token();
-    expect(TK_IDENTIFIER);
+    Token table_name = token();
+    ok = ok and expect(TK_IDENTIFIER);
     expect(TK_Values);
 
     /* ( 'DEFAULT' | 'NULL' | expression ) { ',' ( 'DEFAULT' | 'NULL' | expression ) } */
@@ -178,63 +180,77 @@ Stmt * Parser::parse_InsertStmt()
         switch (token().type) {
             case TK_Default:
                 consume();
-                stmt->values.push_back({InsertStmt::I_Default});
+                values.emplace_back(InsertStmt::I_Default, nullptr);
                 break;
 
             case TK_Null:
                 consume();
-                stmt->values.push_back({InsertStmt::I_Null});
+                values.emplace_back(InsertStmt::I_Null, nullptr);
                 break;
 
             default: {
                 auto e = parse_Expr();
-                stmt->values.push_back({InsertStmt::I_Expr, e});
+                values.emplace_back(InsertStmt::I_Expr, e);
                 break;
             }
         }
     } while (accept(TK_COMMA));
 
-    return stmt;
+    if (not ok)
+        return new ErrorStmt(start);
+
+    return new InsertStmt(table_name, values);
 }
 
 Stmt * Parser::parse_UpdateStmt()
 {
-    UpdateStmt *stmt = new UpdateStmt();
+    bool ok = true;
+    Token start = token();
+    std::vector<UpdateStmt::set_type> set;
+    Expr *where = nullptr;
 
     /* update-clause ::= 'UPDATE' identifier 'SET' identifier '=' expression { ',' identifier '=' expression } ; */
     expect(TK_Update);
-    stmt->table_name = token();
-    expect(TK_IDENTIFIER);
+    Token table_name = token();
+    ok = ok and expect(TK_IDENTIFIER);
     expect(TK_Set);
 
     do {
         auto id = token();
-        expect(TK_IDENTIFIER);
+        ok = ok and expect(TK_IDENTIFIER);
         expect(TK_EQUAL);
         auto e = parse_Expr();
-        stmt->set.push_back(std::make_pair(id, e));
+        set.emplace_back(id, e);
     } while (accept(TK_COMMA));
 
     if (accept(TK_Where))
-        parse_Expr();
+        where = parse_Expr();
 
-    return stmt;
+    if (not ok)
+        return new ErrorStmt(start);
+
+    return new UpdateStmt(table_name, set, where);
 }
 
 Stmt * Parser::parse_DeleteStmt()
 {
-    DeleteStmt *stmt = new DeleteStmt();
+    bool ok = true;
+    Token start = token();
+    Expr *where = nullptr;
 
     /* delete-statement ::= 'DELETE' 'FROM' identifier [ where-clause ] ; */
     expect(TK_Delete);
     expect(TK_From);
-    stmt->table_name = token();
-    expect(TK_IDENTIFIER);
+    Token table_name = token();
+    ok = ok and expect(TK_IDENTIFIER);
 
     if (accept(TK_Where))
-        stmt->where = parse_Expr();
+        where = parse_Expr();
 
-    return stmt;
+    if (not ok)
+        return new ErrorStmt(start);
+
+    return new DeleteStmt(table_name, where);
 }
 
 /*======================================================================================================================

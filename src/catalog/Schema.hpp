@@ -38,7 +38,7 @@ struct Type
 
     virtual void print(std::ostream &out) const = 0;
     virtual void dump(std::ostream &out) const = 0;
-    void dump() const __attribute__((noinline)) { dump(std::cerr); }
+    void dump() const;
 
     friend std::ostream & operator<<(std::ostream &out, const Type &t) {
         t.print(out);
@@ -198,7 +198,7 @@ struct Attribute
     }
 
     void dump(std::ostream &out) const;
-    void dump() const __attribute__((noinline)) { dump(std::cerr); }
+    void dump() const;
 };
 
 /** A relation is a sorted set of attributes. */
@@ -229,7 +229,7 @@ struct Relation
     const Attribute & push_back(const Type *type, const char *name);
 
     void dump(std::ostream &out) const;
-    void dump() const __attribute__((noinline)) { dump(std::cerr); }
+    void dump() const;
 };
 
 }

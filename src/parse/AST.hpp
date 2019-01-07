@@ -20,7 +20,7 @@ struct Expr
 
     virtual void print(std::ostream &out) const = 0;
     virtual void dump(std::ostream &out, int indent = 0) const = 0;
-    void dump() const __attribute__((noinline)) { dump(std::cerr); }
+    void dump() const;
 
     friend std::ostream & operator<<(std::ostream &out, const Expr &e) {
         e.print(out);
@@ -130,7 +130,7 @@ struct Stmt
 
     virtual void print(std::ostream &out) const = 0;
     virtual void dump(std::ostream &out, int indent = 0) const = 0;
-    void dump() const __attribute__((noinline)) { dump(std::cerr); }
+    void dump() const;
 
     friend std::ostream & operator<<(std::ostream &out, const Stmt &s) {
         s.print(out);

@@ -20,6 +20,8 @@ constexpr const char * Numeric::KIND_TO_STR_[]; ///> declaration for constexpr s
 
 Pool<Type> Type::types_;
 
+void Type::dump() const { dump(std::cerr); }
+
 /*===== Factory Methods ==============================================================================================*/
 
 const ErrorType * Type::Get_Error()
@@ -167,6 +169,8 @@ void Attribute::dump(std::ostream &out) const
         << std::endl;
 }
 
+void Attribute::dump() const { dump(std::cerr); }
+
 /*======================================================================================================================
  * Relation
  *====================================================================================================================*/
@@ -198,3 +202,5 @@ void Relation::dump(std::ostream &out) const
         out << "\n` " << attr.id << ": `" << attr.name << "` " << *attr.type;
     out << std::endl;
 }
+
+void Relation::dump() const { dump(std::cerr); }

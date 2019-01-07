@@ -42,7 +42,8 @@ struct Position
         return os << pos.name << ":" << pos.line << ":" << pos.column;
     }
 
-    DECLARE_DUMP
+    void dump(std::ostream &out) const { out << *this << std::endl; }
+    void dump() const;
 };
 
 }

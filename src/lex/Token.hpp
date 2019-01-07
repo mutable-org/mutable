@@ -35,7 +35,8 @@ struct Token
         return os << tok.pos << ", '" << tok.text << "', " << tok.type;
     }
 
-    DECLARE_DUMP
+    void dump(std::ostream &out) const { out << *this << std::endl; }
+    void dump() const;
 };
 
 }

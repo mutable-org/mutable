@@ -28,14 +28,6 @@ namespace {
 /*===== Number of elements in an array ===============================================================================*/
 #define ARR_SIZE(ARR) (sizeof(ARR) / sizeof(*(ARR)))
 
-/*===== `dump`: prints a human-readable description of the object at hand; useful when debugging =====================*/
-#define DECLARE_DUMP \
-    void dump(std::ostream &out) const __attribute__((noinline)) { out << *this << std::endl; } \
-    void dump() const __attribute__((noinline)) { dump(std::cerr); }
-#define DECLARE_DUMP_VIRTUAL \
-    virtual void dump(std::ostream &out) const __attribute__((noinline)) { out << *this << std::endl; } \
-    void dump() const __attribute__((noinline)) { dump(std::cerr); }
-
 /*===== DEBUG(MSG): Print a message in debug build with location information. ========================================*/
 #ifndef NDEBUG
 #define DEBUG(MSG) \

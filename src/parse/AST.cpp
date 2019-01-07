@@ -50,6 +50,10 @@ SelectStmt::~SelectStmt()
  * AST Dump
  *====================================================================================================================*/
 
+/*===== Expr =========================================================================================================*/
+
+void Expr::dump() const { dump(std::cerr); }
+
 void ErrorExpr::dump(std::ostream &out, int i) const
 {
     indent(out, i) << "ErrorExpr '" << tok.text << "' (" << tok.pos << ')' << std::endl;
@@ -92,6 +96,10 @@ void BinaryExpr::dump(std::ostream &out, int i) const
     lhs->dump(out, i + 1);
     rhs->dump(out, i + 1);
 }
+
+/*===== Stmt =========================================================================================================*/
+
+void Stmt::dump() const { dump(std::cerr); }
 
 void ErrorStmt::dump(std::ostream &out, int i) const
 {

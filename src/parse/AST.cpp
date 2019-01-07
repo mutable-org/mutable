@@ -355,12 +355,12 @@ void InsertStmt::print(std::ostream &out) const
 
 void UpdateStmt::print(std::ostream &out) const
 {
-    out << "UPDATE " << table_name.text << " SET\n";
+    out << "UPDATE " << table_name.text << "\nSET\n";
     for (auto it = set.cbegin(), end = set.cend(); it != end; ++it) {
         if (it != set.cbegin()) out << ",\n";
         out << "    " << it->first.text << " = " << *it->second;
     }
-    if (where) out << "WHERE " << *where;
+    if (where) out << "\nWHERE " << *where;
     out << ';';
 }
 

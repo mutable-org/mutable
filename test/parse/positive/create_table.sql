@@ -2,5 +2,7 @@ CREATE TABLE my_table (
     x INT(4),
     y FLOAT,
     z DECIMAL(10, 2),
-    comment VARCHAR(42)
+    vc VARCHAR(42),
+    c CHAR(13),
+    b BOOL
 );

@@ -48,8 +48,10 @@ SelectStmt::~SelectStmt()
 
 InsertStmt::~InsertStmt()
 {
-    for (auto &v : values)
-        delete v.second;
+    for (value_type &v : values) {
+        for (element_type &e : v)
+            delete e.second;
+    }
 }
 
 UpdateStmt::~UpdateStmt()
@@ -184,19 +186,23 @@ void InsertStmt::dump(std::ostream &out, int i) const
 {
     indent(out, i) << "InsertStmt: table " << table_name.text << " (" << table_name.pos << ')' << std::endl;
     indent(out, i + 1) << "values" << std::endl;
-    for (auto v : values) {
-        switch (v.first) {
-            case I_Default:
-                indent(out, i + 2) << "DEFAULT";
-                break;
+    for (std::size_t idx = 0, end = values.size(); idx != end; ++idx) {
+        indent(out, i + 2) << '[' << idx << ']' << std::endl;
+        const value_type &v = values[idx];
+        for (auto &e : v) {
+            switch (e.first) {
+                case I_Default:
+                    indent(out, i + 3) << "DEFAULT" << std::endl;
+                    break;
 
-            case I_Null:
-                indent(out, i + 2) << "DEFAULT";
-                break;
+                case I_Null:
+                    indent(out, i + 3) << "NULL" << std::endl;
+                    break;
 
-            case I_Expr:
-                v.second->dump(out, i + 2);
-                break;
+                case I_Expr:
+                    e.second->dump(out, i + 3);
+                    break;
+            }
         }
     }
 }
@@ -330,14 +336,19 @@ void SelectStmt::print(std::ostream &out) const
 
 void InsertStmt::print(std::ostream &out) const
 {
-    out << "INSERT INTO " << table_name.text << "\nVALUES";
-    for (auto v : values) {
-        out << "\n    ";
-        switch (v.first) {
-            case I_Default: out << "DEFAULT";   break;
-            case I_Null:    out << "NULL";      break;
-            case I_Expr:    out << *v.second;     break;
+    out << "INSERT INTO " << table_name.text << "\nVALUES\n    ";
+    for (auto value_it = values.cbegin(), end = values.cend(); value_it != end; ++value_it) {
+        if (value_it != values.cbegin()) out << ",\n    ";
+        out << '(';
+        for (auto elem_it = value_it->cbegin(), elem_end = value_it->cend(); elem_it != elem_end; ++elem_it) {
+            if (elem_it != value_it->cbegin()) out << ", ";
+            switch (elem_it->first) {
+                case I_Default: out << "DEFAULT";   break;
+                case I_Null:    out << "NULL";      break;
+                case I_Expr:    out << *elem_it->second;     break;
+            }
         }
+        out << ')';
     }
     out << ';';
 }

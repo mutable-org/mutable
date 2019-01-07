@@ -54,6 +54,7 @@ Stmt * Parser::parse()
 
         case TK_Create: stmt = parse_CreateTableStmt(); break;
         case TK_Select: stmt = parse_SelectStmt(); break;
+        case TK_Insert: stmt = parse_InsertStmt(); break;
         case TK_Update: stmt = parse_UpdateStmt(); break;
         case TK_Delete: stmt = parse_DeleteStmt(); break;
     }
@@ -175,25 +176,32 @@ Stmt * Parser::parse_InsertStmt()
     ok = ok and expect(TK_IDENTIFIER);
     expect(TK_Values);
 
-    /* ( 'DEFAULT' | 'NULL' | expression ) { ',' ( 'DEFAULT' | 'NULL' | expression ) } */
+    /* tuple { ',' tuple } */
     do {
-        switch (token().type) {
-            case TK_Default:
-                consume();
-                values.emplace_back(InsertStmt::I_Default, nullptr);
-                break;
+        /* '(' ( 'DEFAULT' | 'NULL' | expression ) { ',' ( 'DEFAULT' | 'NULL' | expression ) } ')' */
+        InsertStmt::value_type value;
+        expect(TK_LPAR);
+        do {
+            switch (token().type) {
+                case TK_Default:
+                    consume();
+                    value.emplace_back(InsertStmt::I_Default, nullptr);
+                    break;
 
-            case TK_Null:
-                consume();
-                values.emplace_back(InsertStmt::I_Null, nullptr);
-                break;
+                case TK_Null:
+                    consume();
+                    value.emplace_back(InsertStmt::I_Null, nullptr);
+                    break;
 
-            default: {
-                auto e = parse_Expr();
-                values.emplace_back(InsertStmt::I_Expr, e);
-                break;
+                default: {
+                    auto e = parse_Expr();
+                    value.emplace_back(InsertStmt::I_Expr, e);
+                    break;
+                }
             }
-        }
+        } while (accept(TK_COMMA));
+        expect(TK_RPAR);
+        values.emplace_back(value);
     } while (accept(TK_COMMA));
 
     if (not ok)

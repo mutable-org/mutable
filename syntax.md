@@ -37,7 +37,9 @@ select-statement ::= select-clause
 
 ##### Insert Statement
 ```ebnf
-insert-statement ::= 'INSERT' 'INTO' identifier 'VALUES' ( 'DEFAULT' | 'NULL' | expression ) { ',' ( 'DEFAULT' | 'NULL' | expression ) } ;
+insert-statement ::= 'INSERT' 'INTO' identifier 'VALUES' tuple { ',' tuple } ;
+
+tuple ::= '(' ( 'DEFAULT' | 'NULL' | expression ) { ',' ( 'DEFAULT' | 'NULL' | expression ) } ')' ;
 ```
 
 ##### Update Statement

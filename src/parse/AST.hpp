@@ -210,7 +210,8 @@ struct SelectStmt : Stmt
 struct InsertStmt : Stmt
 {
     enum kind_t { I_Default, I_Null, I_Expr };
-    using value_type = std::pair<kind_t, Expr*>;
+    using element_type = std::pair<kind_t, Expr*>;
+    using value_type = std::vector<element_type>;
 
     Token table_name;
     std::vector<value_type> values;

@@ -153,8 +153,8 @@ void CharacterSequence::dump(std::ostream &out) const
 
 void Numeric::dump(std::ostream &out) const
 {
-    out << "Numeric{ kind = " << Numeric::KIND_TO_STR_[kind] << ", precision = " << precision << ", scale = " << scale << " }"
-        << std::endl;
+    out << "Numeric{ kind = " << Numeric::KIND_TO_STR_[kind] << ", precision = " << precision << ", scale = " << scale
+        << " }" << std::endl;
 }
 
 /*======================================================================================================================
@@ -163,9 +163,9 @@ void Numeric::dump(std::ostream &out) const
 
 void Attribute::dump(std::ostream &out) const
 {
-    out << "Attribute `" << relation.name << "`.`" << name << "`\n"
-        << "` id " << id << "\n"
-        << "` type " << *type
+    out << "Attribute `" << relation.name << "`.`" << name << "`, "
+        << "id " << id << ", "
+        << "type " << *type
         << std::endl;
 }
 

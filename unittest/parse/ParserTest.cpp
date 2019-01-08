@@ -1,6 +1,7 @@
 #include "catch.hpp"
 
 #include "catalog/Schema.hpp"
+#include "parse/ASTPrinter.hpp"
 #include "parse/Parser.hpp"
 #include "testutil.hpp"
 #include "util/fn.hpp"
@@ -192,7 +193,8 @@ TEST_CASE("Parser::parse_Expr()", "[unit]")
         REQUIRE(err.str().empty());
 
         std::ostringstream actual;
-        ast->print(actual);
+        ASTPrinter p(actual);
+        p(*ast);
         CHECK(actual.str() == e.second);
     }
 }

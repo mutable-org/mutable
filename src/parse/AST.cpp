@@ -1,10 +1,13 @@
 #include "parse/AST.hpp"
 
 #include "catalog/Schema.hpp"
+#include "parse/ASTPrinter.hpp"
 
 
 using namespace db;
 
+
+namespace {
 
 std::ostream & indent(std::ostream &out, int i)
 {
@@ -13,6 +16,7 @@ std::ostream & indent(std::ostream &out, int i)
     return out;
 }
 
+}
 
 FnApplicationExpr::FnApplicationExpr(Expr *fn, std::vector<Expr*> args)
     : fn(notnull(fn))
@@ -64,6 +68,19 @@ UpdateStmt::~UpdateStmt()
 DeleteStmt::~DeleteStmt()
 {
     delete where;
+}
+
+
+std::ostream & db::operator<<(std::ostream &out, const Expr &e) {
+    ASTPrinter p(out);
+    p(e);
+    return out;
+}
+
+std::ostream & db::operator<<(std::ostream &out, const Stmt &s) {
+    ASTPrinter p(out);
+    p(s);
+    return out;
 }
 
 /*======================================================================================================================
@@ -230,143 +247,4 @@ void DeleteStmt::dump(std::ostream &out, int i) const
         indent(out, i + 1) << "where" << std::endl;
         where->dump(out, i + 2);
     }
-}
-
-/*======================================================================================================================
- * AST Pretty Printing
- *====================================================================================================================*/
-
-/*===== Expr =========================================================================================================*/
-
-void ErrorExpr::print(std::ostream &out) const
-{
-    out << "[error-expression]";
-}
-
-void Designator::print(std::ostream &out) const
-{
-    if (table_name)
-        out << table_name.text << '.';
-    out << attr_name.text;
-}
-
-void Constant::print(std::ostream &out) const
-{
-    out << tok.text;
-}
-
-void FnApplicationExpr::print(std::ostream &out) const
-{
-    out << *fn << '(';
-    for (auto it = args.cbegin(), end = args.cend(); it != end; ++it) {
-        if (it != args.cbegin()) out << ", ";
-        out << **it;
-    }
-    out << ')';
-}
-
-void UnaryExpr::print(std::ostream &out) const
-{
-    out << '(' << op.text;
-    if (op == TK_Not) out << ' ';
-    out << *expr << ')';
-}
-
-void BinaryExpr::print(std::ostream &out) const
-{
-    out << '(' << *lhs << ' ' << op.text << ' ' << *rhs << ')';
-}
-
-void ErrorStmt::print(std::ostream &out) const
-{
-    out << "[error-statement];";
-}
-
-/*===== Stmt =========================================================================================================*/
-
-void CreateTableStmt::print(std::ostream &out) const
-{
-    out << "CREATE TABLE " << table_name.text << "\n(";
-    for (auto it = attributes.cbegin(), end = attributes.cend(); it != end; ++it) {
-        if (it != attributes.cbegin()) out << ',';
-        out << "\n    " << it->first.text << ' ' << *it->second;
-    }
-    out << "\n);";
-}
-
-void SelectStmt::print(std::ostream &out) const
-{
-    out << "SELECT ";
-    if (select_all) out << '*';
-    for (auto it = select.cbegin(), end = select.cend(); it != end; ++it) {
-        if (select_all or it != select.cbegin()) out << ", ";
-        it->first->print(out);
-        if (it->second) out << " AS " << it->second.text;
-    }
-    out << "\nFROM ";
-    for (auto it = from.cbegin(), end = from.cend(); it != end; ++it) {
-        if (it != from.cbegin()) out << ", ";
-        out << it->first.text;
-        if (it->second) out << " AS " << it->second.text;
-    }
-    if (where) out << "\nWHERE " << *where;
-    if (not group_by.empty()) {
-        out << "\nGROUP BY ";
-        for (auto it = group_by.cbegin(), end = group_by.cend(); it != end; ++it) {
-            if (it != group_by.cbegin()) out << ", ";
-            (*it)->print(out);
-        }
-    }
-    if (having) out << "\nHAVING " << *having;
-    if (not order_by.empty()) {
-        out << "\nORDER BY ";
-        for (auto it = order_by.cbegin(), end = order_by.cend(); it != end; ++it) {
-            if (it != order_by.cbegin()) out << ", ";
-            it->first->print(out);
-            if (it->second) out << " ASC";
-            else            out << " DESC";
-        }
-    }
-    if (limit.first) {
-        out << "\nLIMIT " << *limit.first;
-        if (limit.second) out << " OFFSET " << *limit.second;
-    }
-    out << ';';
-}
-
-void InsertStmt::print(std::ostream &out) const
-{
-    out << "INSERT INTO " << table_name.text << "\nVALUES\n    ";
-    for (auto value_it = values.cbegin(), end = values.cend(); value_it != end; ++value_it) {
-        if (value_it != values.cbegin()) out << ",\n    ";
-        out << '(';
-        for (auto elem_it = value_it->cbegin(), elem_end = value_it->cend(); elem_it != elem_end; ++elem_it) {
-            if (elem_it != value_it->cbegin()) out << ", ";
-            switch (elem_it->first) {
-                case I_Default: out << "DEFAULT";   break;
-                case I_Null:    out << "NULL";      break;
-                case I_Expr:    out << *elem_it->second;     break;
-            }
-        }
-        out << ')';
-    }
-    out << ';';
-}
-
-void UpdateStmt::print(std::ostream &out) const
-{
-    out << "UPDATE " << table_name.text << "\nSET\n";
-    for (auto it = set.cbegin(), end = set.cend(); it != end; ++it) {
-        if (it != set.cbegin()) out << ",\n";
-        out << "    " << it->first.text << " = " << *it->second;
-    }
-    if (where) out << "\nWHERE " << *where;
-    out << ';';
-}
-
-void DeleteStmt::print(std::ostream &out) const
-{
-    out << "DELETE FROM " << table_name.text;
-    if (where) out << " WHERE " << *where;
-    out << ';';
 }

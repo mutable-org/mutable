@@ -7,6 +7,12 @@
 
 namespace db {
 
+// forward declare the AST visitor
+template<bool C>
+struct TheASTVisitor;
+using ASTVisitor = TheASTVisitor<false>;
+using ConstASTVisitor = TheASTVisitor<true>;
+
 struct Type;
 
 /*======================================================================================================================
@@ -18,14 +24,13 @@ struct Expr
 {
     virtual ~Expr() { }
 
-    virtual void print(std::ostream &out) const = 0;
+    virtual void accept(ASTVisitor &v) = 0;
+    virtual void accept(ConstASTVisitor &v) const = 0;
+
     virtual void dump(std::ostream &out, int indent = 0) const = 0;
     void dump() const;
 
-    friend std::ostream & operator<<(std::ostream &out, const Expr &e) {
-        e.print(out);
-        return out;
-    }
+    friend std::ostream & operator<<(std::ostream &out, const Expr &e);
 };
 
 /** The error expression.  Used when the parser encountered a syntactical error. */
@@ -35,7 +40,9 @@ struct ErrorExpr : Expr
 
     explicit ErrorExpr(Token tok) : tok(tok) { }
 
-    void print(std::ostream &out) const;
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+
     void dump(std::ostream &out, int indent) const;
 };
 
@@ -49,9 +56,11 @@ struct Designator : Expr
 
     Designator(Token table_name, Token attr_name) : table_name(table_name), attr_name(attr_name) { }
 
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+
     bool has_table_name() const { return bool(table_name); }
 
-    void print(std::ostream &out) const;
     void dump(std::ostream &out, int indent) const;
 };
 
@@ -62,12 +71,14 @@ struct Constant : Expr
 
     Constant(Token tok) : tok(tok) { }
 
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+
     bool is_number() const;
     bool is_integer() const;
     bool is_float() const;
     bool is_string() const;
 
-    void print(std::ostream &out) const;
     void dump(std::ostream &out, int indent) const;
 };
 
@@ -83,10 +94,11 @@ struct FnApplicationExpr : PostfixExpr
     std::vector<Expr*> args;
 
     FnApplicationExpr(Expr *fn, std::vector<Expr*> args);
-
     ~FnApplicationExpr();
 
-    void print(std::ostream &out) const;
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+
     void dump(std::ostream &out, int indent) const;
 };
 
@@ -97,10 +109,11 @@ struct UnaryExpr : Expr
     Expr *expr;
 
     UnaryExpr(Token op, Expr *expr) : op(op), expr(notnull(expr)) { }
-
     ~UnaryExpr() { delete expr; }
 
-    void print(std::ostream &out) const;
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+
     void dump(std::ostream &out, int indent) const;
 };
 
@@ -112,10 +125,11 @@ struct BinaryExpr : Expr
     Expr *rhs;
 
     BinaryExpr(Token op, Expr *lhs, Expr *rhs) : op(op), lhs(notnull(lhs)), rhs(notnull(rhs)) { }
-
     ~BinaryExpr() { delete lhs; delete rhs; }
 
-    void print(std::ostream &out) const;
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+
     void dump(std::ostream &out, int indent) const;
 };
 
@@ -128,14 +142,13 @@ struct Stmt
 {
     virtual ~Stmt() { }
 
-    virtual void print(std::ostream &out) const = 0;
+    virtual void accept(ASTVisitor &v) = 0;
+    virtual void accept(ConstASTVisitor &v) const = 0;
+
     virtual void dump(std::ostream &out, int indent = 0) const = 0;
     void dump() const;
 
-    friend std::ostream & operator<<(std::ostream &out, const Stmt &s) {
-        s.print(out);
-        return out;
-    }
+    friend std::ostream & operator<<(std::ostream &out, const Stmt &s);
 };
 
 /** The error statement.  Used when the parser encountered a syntactical error. */
@@ -145,7 +158,9 @@ struct ErrorStmt : Stmt
 
     explicit ErrorStmt(Token tok) : tok(tok) { }
 
-    void print(std::ostream &out) const;
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+
     void dump(std::ostream &out, int indent) const;
 };
 
@@ -161,7 +176,9 @@ struct CreateTableStmt : Stmt
         , attributes(attributes)
     { }
 
-    void print(std::ostream &out) const;
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+
     void dump(std::ostream &out, int indent) const;
 };
 
@@ -200,9 +217,11 @@ struct SelectStmt : Stmt
         , limit(limit)
     { }
 
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+
     ~SelectStmt();
 
-    void print(std::ostream &out) const;
     void dump(std::ostream &out, int indent) const;
 };
 
@@ -219,7 +238,9 @@ struct InsertStmt : Stmt
     InsertStmt(Token table_name, std::vector<value_type> values) : table_name(table_name), values(values) { }
     ~InsertStmt();
 
-    void print(std::ostream &out) const;
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+
     void dump(std::ostream &out, int indent) const;
 };
 
@@ -240,7 +261,9 @@ struct UpdateStmt : Stmt
 
     ~UpdateStmt();
 
-    void print(std::ostream &out) const;
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+
     void dump(std::ostream &out, int indent) const;
 };
 
@@ -253,7 +276,9 @@ struct DeleteStmt : Stmt
     DeleteStmt(Token table_name, Expr *where) : table_name(table_name), where(where) { }
     ~DeleteStmt();
 
-    void print(std::ostream &out) const;
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+
     void dump(std::ostream &out, int indent) const;
 };
 

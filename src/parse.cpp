@@ -1,6 +1,7 @@
 #include "lex/Lexer.hpp"
 #include "lex/Token.hpp"
 #include "lex/TokenType.hpp"
+#include "parse/ASTPrinter.hpp"
 #include "parse/Parser.hpp"
 #include "util/ArgParser.hpp"
 #include "util/Diagnostic.hpp"
@@ -81,13 +82,14 @@ int main(int argc, const char **argv)
     Diagnostic diag(color, std::cout, std::cerr);
     Lexer lexer(diag, filename, *in);
     Parser parser(lexer);
+    ASTPrinter printer(std::cout);
 
     while (parser.token()) {
         auto stmt = parser.parse();
         if (ast) {
             stmt->dump(std::cout);
         } else {
-            stmt->print(std::cout);
+            printer(*stmt);
             std::cout << std::endl;
         }
     }

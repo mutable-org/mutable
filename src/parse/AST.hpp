@@ -87,7 +87,7 @@ struct FnApplicationExpr : PostfixExpr
     Expr *fn;
     std::vector<Expr*> args;
 
-    FnApplicationExpr(Expr *fn, std::vector<Expr*> args);
+    FnApplicationExpr(Expr *fn, std::vector<Expr*> args) : fn(fn), args(args) { }
     ~FnApplicationExpr();
 
     void accept(ASTVisitor &v);

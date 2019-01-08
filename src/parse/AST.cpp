@@ -8,14 +8,6 @@
 using namespace db;
 
 
-FnApplicationExpr::FnApplicationExpr(Expr *fn, std::vector<Expr*> args)
-    : fn(notnull(fn))
-    , args(args)
-{
-    for (Expr *e : args)
-        notnull(e);
-}
-
 FnApplicationExpr::~FnApplicationExpr()
 {
     delete fn;

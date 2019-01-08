@@ -5,4 +5,5 @@ add_library(
     ASTPrinter.cpp
     ASTVisitor.cpp
     Parser.cpp
+    Sema.cpp
     )

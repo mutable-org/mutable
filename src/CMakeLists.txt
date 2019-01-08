@@ -13,3 +13,7 @@ set_target_properties(lex-bin PROPERTIES OUTPUT_NAME lex)
 add_executable(parse-bin parse.cpp)
 target_link_libraries(parse-bin parse lex catalog util)
 set_target_properties(parse-bin PROPERTIES OUTPUT_NAME parse)
+
+add_executable(check-bin check.cpp)
+target_link_libraries(check-bin parse lex catalog util)
+set_target_properties(check-bin PROPERTIES OUTPUT_NAME check)

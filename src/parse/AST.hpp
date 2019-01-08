@@ -27,7 +27,7 @@ struct Expr
     virtual void accept(ASTVisitor &v) = 0;
     virtual void accept(ConstASTVisitor &v) const = 0;
 
-    virtual void dump(std::ostream &out, int indent = 0) const = 0;
+    void dump(std::ostream &out) const;
     void dump() const;
 
     friend std::ostream & operator<<(std::ostream &out, const Expr &e);
@@ -42,8 +42,6 @@ struct ErrorExpr : Expr
 
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;
-
-    void dump(std::ostream &out, int indent) const;
 };
 
 /** A designator.  Identifies an attribute, optionally preceeded by a table name. */
@@ -60,8 +58,6 @@ struct Designator : Expr
     void accept(ConstASTVisitor &v) const;
 
     bool has_table_name() const { return bool(table_name); }
-
-    void dump(std::ostream &out, int indent) const;
 };
 
 /** A constant: a string literal or a numeric constant. */
@@ -78,8 +74,6 @@ struct Constant : Expr
     bool is_integer() const;
     bool is_float() const;
     bool is_string() const;
-
-    void dump(std::ostream &out, int indent) const;
 };
 
 /** A postfix expression. */
@@ -98,8 +92,6 @@ struct FnApplicationExpr : PostfixExpr
 
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;
-
-    void dump(std::ostream &out, int indent) const;
 };
 
 /** A unary expression: "+e", "-e", "~e", "NOT e". */
@@ -113,8 +105,6 @@ struct UnaryExpr : Expr
 
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;
-
-    void dump(std::ostream &out, int indent) const;
 };
 
 /** A binary expression.  This includes all arithmetic and logical binary operations. */
@@ -129,8 +119,6 @@ struct BinaryExpr : Expr
 
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;
-
-    void dump(std::ostream &out, int indent) const;
 };
 
 /*======================================================================================================================
@@ -145,7 +133,7 @@ struct Stmt
     virtual void accept(ASTVisitor &v) = 0;
     virtual void accept(ConstASTVisitor &v) const = 0;
 
-    virtual void dump(std::ostream &out, int indent = 0) const = 0;
+    void dump(std::ostream &out) const;
     void dump() const;
 
     friend std::ostream & operator<<(std::ostream &out, const Stmt &s);
@@ -160,8 +148,6 @@ struct ErrorStmt : Stmt
 
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;
-
-    void dump(std::ostream &out, int indent) const;
 };
 
 struct CreateTableStmt : Stmt
@@ -178,8 +164,6 @@ struct CreateTableStmt : Stmt
 
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;
-
-    void dump(std::ostream &out, int indent) const;
 };
 
 /** A SQL select statement. */
@@ -221,8 +205,6 @@ struct SelectStmt : Stmt
     void accept(ConstASTVisitor &v) const;
 
     ~SelectStmt();
-
-    void dump(std::ostream &out, int indent) const;
 };
 
 /** A SQL insert statement. */
@@ -240,8 +222,6 @@ struct InsertStmt : Stmt
 
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;
-
-    void dump(std::ostream &out, int indent) const;
 };
 
 /** A SQL update statement. */
@@ -263,8 +243,6 @@ struct UpdateStmt : Stmt
 
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;
-
-    void dump(std::ostream &out, int indent) const;
 };
 
 /** A SQL delete statement. */
@@ -278,8 +256,6 @@ struct DeleteStmt : Stmt
 
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;
-
-    void dump(std::ostream &out, int indent) const;
 };
 
 }

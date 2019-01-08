@@ -4,6 +4,7 @@
 #include "util/fn.hpp"
 #include <cmath>
 #include <sstream>
+#include <stdexcept>
 
 
 using namespace db;
@@ -181,4 +182,97 @@ TEST_CASE("Type internalize", "[unit]")
         REQUIRE(dec_9_2 == dec_9_2_);
         REQUIRE(dec_9_2 != dec_10_0);
     }
+}
+
+TEST_CASE("Relation c'tor")
+{
+    Relation r("myrelation");
+
+    CHECK(streq(r.name, "myrelation"));
+    CHECK(r.size() == 0);
+}
+
+TEST_CASE("Relation empty access")
+{
+    Relation r("myrelation");
+
+    REQUIRE_THROWS_AS(r[42].id, std::out_of_range);
+    REQUIRE_THROWS_AS(r["attribute"].id, std::out_of_range);
+
+    for (auto it = r.cbegin(), end = r.cend(); it != end; ++it)
+        REQUIRE(((void) "this code must be dead or the relation is not empty", false));
+}
+
+TEST_CASE("Relation::push_back()")
+{
+    Relation r("myrelation");
+
+    const Type *i4 = Type::Get_Integer(4);
+    const Type *vc = Type::Get_Varchar(42);
+    const Type *b = Type::Get_Boolean();
+
+    r.push_back(i4, "n");
+    r.push_back(vc, "comment");
+    r.push_back(b, "condition");
+
+    REQUIRE(r.size() == 3);
+
+    auto &attr = r[1];
+    REQUIRE(&attr == &r[attr.id]);
+    REQUIRE(&attr.relation == &r);
+    REQUIRE(attr.type == vc);
+    REQUIRE(streq(attr.name, "comment"));
+}
+
+TEST_CASE("Relation iterators")
+{
+    Relation r("myrelation");
+    const Type *i4 = Type::Get_Integer(4);
+
+    r.push_back(i4, "a");
+    r.push_back(i4, "b");
+    r.push_back(i4, "c");
+    REQUIRE(r.size() == 3);
+
+    auto it = r.cbegin();
+    REQUIRE(streq(it->name, "a"));
+    ++it;
+    REQUIRE(streq(it->name, "b"));
+    ++it;
+    REQUIRE(streq(it->name, "c"));
+    ++it;
+    REQUIRE(it == r.cend());
+}
+
+TEST_CASE("Relation get attribute by name")
+{
+    Relation r("myrelation");
+    const Type *i4 = Type::Get_Integer(4);
+
+    r.push_back(i4, "a");
+    r.push_back(i4, "b");
+    r.push_back(i4, "c");
+    REQUIRE(r.size() == 3);
+
+    {
+        auto &attr = r["a"];
+        REQUIRE(streq(attr.name, "a"));
+    {
+        auto &attr = r["b"];
+        REQUIRE(streq(attr.name, "b"));
+    }
+    {
+        auto &attr = r["c"];
+        REQUIRE(streq(attr.name, "c"));
+    }
+    }
+}
+
+TEST_CASE("Relation::push_back() error if name alreay taken")
+{
+    Relation r("myrelation");
+    const Type *i4 = Type::Get_Integer(4);
+
+    r.push_back(i4, "a");
+    REQUIRE_THROWS_AS(r.push_back(i4, "a"), std::invalid_argument);
 }

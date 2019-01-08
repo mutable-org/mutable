@@ -166,10 +166,12 @@ struct Numeric : Type
 };
 
 /*======================================================================================================================
- * Relation
+ * Attribute, Relation, Schema
  *====================================================================================================================*/
 
 struct Relation;
+struct Schema;
+struct Catalog;
 
 /** An attribute of a relation.  Every attribute belongs to exactly one relation.  */
 struct Attribute
@@ -230,6 +232,61 @@ struct Relation
 
     void dump(std::ostream &out) const;
     void dump() const;
+};
+
+/** A schema is a description of a database.  It is a set of relations. */
+struct Schema
+{
+    friend struct Catalog;
+
+    public:
+    const char *name;
+    private:
+    std::unordered_map<const char*, Relation*> relations_;
+
+    private:
+    Schema(const char *name) : name(name) { }
+
+    public:
+    ~Schema();
+
+    std::size_t size() const { return relations_.size(); }
+
+    Relation & add(Relation *r) {
+        auto it = relations_.find(r->name);
+        if (it != relations_.end()) throw std::invalid_argument("relation with that name already exists");
+        it = relations_.emplace_hint(it, r->name, r);
+        return *it->second;
+    }
+};
+
+/** The catalog keeps track of all meta information of the database system.  There is always exactly one catalog. */
+struct Catalog
+{
+    private:
+    std::unordered_map<const char*, Schema*> schemas_;
+
+    private:
+    Catalog() { }
+    Catalog(const Catalog&) = delete;
+
+    public:
+    static Catalog & Get() {
+        static Catalog the_catalog_;
+        return the_catalog_;
+    }
+
+    std::size_t num_schemas() const { return schemas_.size(); }
+
+    Schema & get_or_add_database(const char *name) {
+        auto it = schemas_.find(name);
+        if (it == schemas_.end()) {
+            it = schemas_.emplace_hint(it, name, new Schema(name));
+        }
+        return *it->second;
+    }
+    Schema & operator[](const char *name) { return get_or_add_database(name); }
+    Schema & operator[](const char *name) const { return *schemas_.at(name); }
 };
 
 }

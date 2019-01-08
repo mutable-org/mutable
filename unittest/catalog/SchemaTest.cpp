@@ -276,3 +276,30 @@ TEST_CASE("Relation::push_back() error if name alreay taken")
     r.push_back(i4, "a");
     REQUIRE_THROWS_AS(r.push_back(i4, "a"), std::invalid_argument);
 }
+
+TEST_CASE("Catalog singleton c'tor")
+{
+    Catalog &C = Catalog::Get();
+    Catalog &C2 = Catalog::Get();
+    REQUIRE(&C == &C2);
+    REQUIRE(C.num_schemas() == 0);
+}
+
+TEST_CASE("Catalog Schema creation")
+{
+    Catalog &C = Catalog::Get();
+    Schema &S = C.get_or_add_database("myschema");
+    Schema &S2 = C.get_or_add_database("myschema");
+    Schema &S3 = C["myschema"];
+    REQUIRE(&S == &S2);
+    REQUIRE(&S == &S3);
+    REQUIRE(streq(S.name, "myschema"));
+}
+
+TEST_CASE("Schema c'tor")
+{
+    Catalog &C = Catalog::Get();
+    Schema &S = C.get_or_add_database("myschema");
+
+    REQUIRE(S.size() == 0);
+}

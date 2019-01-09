@@ -55,6 +55,7 @@ struct Parser
     Stmt * parse();
 
     /* Statements */
+    Stmt * parse_CreateDatabaseStmt();
     Stmt * parse_UseDatabaseStmt();
     Stmt * parse_CreateTableStmt();
     Stmt * parse_SelectStmt();

@@ -52,8 +52,23 @@ Stmt * Parser::parse()
             consume();
             break;
 
+        case TK_Create: {
+            consume();
+            switch (token().type) {
+                default:
+                    stmt = new ErrorStmt(token());
+                    diag.e(token().pos) << "expecte a create database statement or a create table statement, got "
+                                        << token().text << '\n';
+                    consume();
+                    break;
+
+                case TK_Database: stmt = parse_CreateDatabaseStmt(); break;
+                case TK_Table:    stmt = parse_CreateTableStmt(); break;
+            }
+            break;
+        }
+
         case TK_Use:    stmt = parse_UseDatabaseStmt(); break;
-        case TK_Create: stmt = parse_CreateTableStmt(); break;
         case TK_Select: stmt = parse_SelectStmt(); break;
         case TK_Insert: stmt = parse_InsertStmt(); break;
         case TK_Update: stmt = parse_UpdateStmt(); break;
@@ -66,6 +81,21 @@ Stmt * Parser::parse()
 /*======================================================================================================================
  * Statements
  *====================================================================================================================*/
+
+Stmt * Parser::parse_CreateDatabaseStmt()
+{
+    bool ok = true;
+    Token start = token();
+
+    expect(TK_Database);
+    Token database_name = token();
+    ok = ok and expect(TK_IDENTIFIER);
+
+    if (not ok)
+        return new ErrorStmt(start);
+
+    return new CreateDatabaseStmt(database_name);
+}
 
 Stmt * Parser::parse_UseDatabaseStmt()
 {
@@ -88,8 +118,7 @@ Stmt * Parser::parse_CreateTableStmt()
     Token start = token();
     std::vector<CreateTableStmt::attribute_type> attrs;
 
-    /* 'CREATE' 'TABLE' identifier '(' */
-    expect(TK_Create);
+    /* 'TABLE' identifier '(' */
     expect(TK_Table);
     Token table_name = token();
     ok = ok and expect(TK_IDENTIFIER);

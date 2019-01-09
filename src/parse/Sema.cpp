@@ -45,6 +45,10 @@ void Sema::operator()(Const<ErrorStmt>&)
     /* nothing to be done */
 }
 
+void Sema::operator()(Const<CreateDatabaseStmt> &s)
+{
+}
+
 void Sema::operator()(Const<UseDatabaseStmt> &s)
 {
 }

@@ -25,6 +25,7 @@ struct ASTPrinter : ConstASTVisitor
 
     /* Statements */
     virtual void operator()(Const<ErrorStmt> &s);
+    virtual void operator()(Const<CreateDatabaseStmt> &s);
     virtual void operator()(Const<UseDatabaseStmt> &s);
     virtual void operator()(Const<CreateTableStmt> &s);
     virtual void operator()(Const<SelectStmt> &s);

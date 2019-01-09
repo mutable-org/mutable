@@ -24,6 +24,7 @@ ACCEPT(BinaryExpr);
 /*===== Statements ===================================================================================================*/
 
 ACCEPT(ErrorStmt);
+ACCEPT(CreateDatabaseStmt);
 ACCEPT(UseDatabaseStmt);
 ACCEPT(CreateTableStmt);
 ACCEPT(SelectStmt);

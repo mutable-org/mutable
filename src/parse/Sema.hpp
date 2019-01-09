@@ -1,6 +1,7 @@
 #pragma once
 
 #include "parse/ASTVisitor.hpp"
+#include "util/Diagnostic.hpp"
 
 
 namespace db {
@@ -10,7 +11,10 @@ struct Sema : ConstASTVisitor
     using ConstASTVisitor::operator();
 
     public:
-    Sema() { }
+    Diagnostic &diag;
+
+    public:
+    Sema(Diagnostic &diag) : diag(diag) { }
 
     /* Expressions */
     void operator()(Const<ErrorExpr> &e);

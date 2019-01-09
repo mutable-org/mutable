@@ -79,17 +79,19 @@ int main(int argc, const char **argv)
     Diagnostic diag(color, std::cout, std::cerr);
     Lexer lexer(diag, filename, *in);
     Parser parser(lexer);
-    Sema sema;
+    Sema sema(diag);
 
     while (parser.token()) {
         auto stmt = parser.parse();
-        if (diag.num_errors())
-            break;
+        if (diag.num_errors()) {
+            diag.clear();
+            continue;
+        }
         sema(*stmt);
     }
 
     if (in != &std::cin)
         delete in;
 
-    std::exit(diag.num_errors() ? EXIT_FAILURE : EXIT_SUCCESS);
+    std::exit(EXIT_SUCCESS);
 }

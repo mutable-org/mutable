@@ -191,7 +191,7 @@ struct CreateTableStmt : Stmt
 struct SelectStmt : Stmt
 {
     using selection_type = std::pair<Expr*, Token>;
-    using source_type = std::pair<Token, Token>;
+    using source_type = std::pair<Token, Token>; ///> first is the table name, second is the alias
     using order_type = std::pair<Expr*, bool>; ///> true means ascending, false means descending
     using limit_type = std::pair<Expr*, Expr*>; ///> limit and offset
 

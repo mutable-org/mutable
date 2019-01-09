@@ -52,6 +52,7 @@ Stmt * Parser::parse()
             consume();
             break;
 
+        case TK_Use:    stmt = parse_UseDatabaseStmt(); break;
         case TK_Create: stmt = parse_CreateTableStmt(); break;
         case TK_Select: stmt = parse_SelectStmt(); break;
         case TK_Insert: stmt = parse_InsertStmt(); break;
@@ -65,6 +66,21 @@ Stmt * Parser::parse()
 /*======================================================================================================================
  * Statements
  *====================================================================================================================*/
+
+Stmt * Parser::parse_UseDatabaseStmt()
+{
+    bool ok = true;
+    Token start = token();
+
+    expect(TK_Use);
+    Token database_name = token();
+    ok = ok and expect(TK_IDENTIFIER);
+
+    if (not ok)
+        return new ErrorStmt(start);
+
+    return new UseDatabaseStmt(database_name);
+}
 
 Stmt * Parser::parse_CreateTableStmt()
 {

@@ -150,6 +150,16 @@ struct ErrorStmt : Stmt
     void accept(ConstASTVisitor &v) const;
 };
 
+struct UseDatabaseStmt : Stmt
+{
+    Token database_name;
+
+    explicit UseDatabaseStmt(Token database_name) : database_name(database_name) { }
+
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+};
+
 struct CreateTableStmt : Stmt
 {
     using attribute_type = std::pair<Token, const Type*>;

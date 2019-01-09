@@ -27,6 +27,7 @@ struct TheASTVisitor
     /* Statements */
     void operator()(Const<Stmt> &s) { s.accept(*this); }
     virtual void operator()(Const<ErrorStmt> &s) = 0;
+    virtual void operator()(Const<UseDatabaseStmt> &s) = 0;
     virtual void operator()(Const<CreateTableStmt> &s) = 0;
     virtual void operator()(Const<SelectStmt> &s) = 0;
     virtual void operator()(Const<InsertStmt> &s) = 0;

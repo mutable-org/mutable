@@ -31,6 +31,8 @@ void Sema::operator()(Const<BinaryExpr> &e)
 
 /*===== Statements ===================================================================================================*/
 void Sema::operator()(Const<ErrorStmt> &s)
+
+void Sema::operator()(Const<UseDatabaseStmt> &s)
 {
 }
 

@@ -12,12 +12,18 @@ form](https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form).
 ##### Statement
 ```ebnf
 statement ::= [
+                use_database-statement |
                 create_table-statement |
                 select-statement |
                 insert-statement |
                 update-statement |
                 delete-statement
               ] ';' ;
+```
+
+##### Use Database Statement
+```ebnf
+use_database-statement ::= 'USE' identifier
 ```
 
 ##### Create Table Statement

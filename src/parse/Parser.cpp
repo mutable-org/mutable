@@ -52,6 +52,8 @@ Stmt * Parser::parse()
             consume();
             break;
 
+        case TK_SEMICOL: return new EmptyStmt(consume());
+
         case TK_Create: {
             consume();
             switch (token().type) {

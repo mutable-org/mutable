@@ -54,6 +54,11 @@ void ASTPrinter::operator()(Const<ErrorStmt>&)
     out << "[error-statement];";
 }
 
+void ASTPrinter::operator()(Const<EmptyStmt>&)
+{
+    out << ';';
+}
+
 void ASTPrinter::operator()(Const<CreateDatabaseStmt> &s)
 {
     out << "CREATE DATABASE " << s.database_name.text << ';';

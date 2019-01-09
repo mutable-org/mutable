@@ -150,6 +150,16 @@ struct ErrorStmt : Stmt
     void accept(ConstASTVisitor &v) const;
 };
 
+struct EmptyStmt : Stmt
+{
+    Token tok;
+
+    explicit EmptyStmt(Token tok) : tok(tok) { }
+
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+};
+
 struct CreateDatabaseStmt : Stmt
 {
     Token database_name;

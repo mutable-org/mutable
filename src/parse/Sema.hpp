@@ -26,6 +26,7 @@ struct Sema : ConstASTVisitor
 
     /* Statements */
     void operator()(Const<ErrorStmt> &s);
+    void operator()(Const<EmptyStmt> &s);
     void operator()(Const<CreateDatabaseStmt> &s);
     void operator()(Const<UseDatabaseStmt> &s);
     void operator()(Const<CreateTableStmt> &s);

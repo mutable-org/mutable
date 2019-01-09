@@ -64,6 +64,11 @@ void ASTDumper::operator()(Const<ErrorStmt> &s)
     indent() << "ErrorStmt: '" << s.tok.text << "' (" << s.tok.pos << ')' << std::endl;
 }
 
+void ASTDumper::operator()(Const<EmptyStmt> &s)
+{
+    indent() << "EmptyStmt: '" << s.tok.text << "' (" << s.tok.pos << ')' << std::endl;
+}
+
 void ASTDumper::operator()(Const<CreateDatabaseStmt> &s)
 {
     indent() << "CreateDatabaseStmt: '" << s.database_name.text << "' (" << s.database_name.pos << ')' << std::endl;

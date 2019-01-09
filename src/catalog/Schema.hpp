@@ -252,6 +252,13 @@ struct Schema
 
     std::size_t size() const { return relations_.size(); }
 
+    Relation & add_relation(const char *name) {
+        auto it = relations_.find(name);
+        if (it != relations_.end()) throw std::invalid_argument("relation with that name already exists");
+        it = relations_.emplace_hint(it, name, new Relation(name));
+        return *it->second;
+    }
+
     Relation & add(Relation *r) {
         auto it = relations_.find(r->name);
         if (it != relations_.end()) throw std::invalid_argument("relation with that name already exists");
@@ -276,6 +283,7 @@ struct Catalog
 {
     private:
     std::unordered_map<const char*, Schema*> schemas_;
+    Schema *database_in_use_ = nullptr;
 
     private:
     Catalog() { }
@@ -291,6 +299,15 @@ struct Catalog
 
     std::size_t num_schemas() const { return schemas_.size(); }
 
+    Schema & add_database(const char *name) {
+        auto it = schemas_.find(name);
+        if (it != schemas_.end()) throw std::invalid_argument("database with that name already exist");
+        it = schemas_.emplace_hint(it, name, new Schema(name));
+        return *it->second;
+    }
+
+    Schema & get_database(const char *name) const { return *schemas_.at(name); }
+
     Schema & get_or_add_database(const char *name) {
         auto it = schemas_.find(name);
         if (it == schemas_.end()) {
@@ -298,8 +315,21 @@ struct Catalog
         }
         return *it->second;
     }
-    Schema & operator[](const char *name) { return get_or_add_database(name); }
-    Schema & operator[](const char *name) const { return *schemas_.at(name); }
+
+    bool has_database_in_use() const { return database_in_use_ != nullptr; }
+
+    Schema & get_database_in_use() {
+        if (not has_database_in_use())
+            throw std::logic_error("no database currently in use");
+        return *database_in_use_;
+    }
+    const Schema & get_database_in_use() const {
+        if (not has_database_in_use())
+            throw std::logic_error("no database currently in use");
+        return *database_in_use_;
+    }
+    void set_database_in_use(Schema &s) { database_in_use_ = &s; }
+    void unset_database_in_use() { database_in_use_ = nullptr; }
 };
 
 }

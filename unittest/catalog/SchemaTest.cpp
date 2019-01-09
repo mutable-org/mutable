@@ -283,6 +283,7 @@ TEST_CASE("Catalog singleton c'tor")
     Catalog &C2 = Catalog::Get();
     REQUIRE(&C == &C2);
     REQUIRE(C.num_schemas() == 0);
+    REQUIRE(not C.has_database_in_use());
 }
 
 TEST_CASE("Catalog Schema creation")
@@ -290,10 +291,21 @@ TEST_CASE("Catalog Schema creation")
     Catalog &C = Catalog::Get();
     Schema &S = C.get_or_add_database("myschema");
     Schema &S2 = C.get_or_add_database("myschema");
-    Schema &S3 = C["myschema"];
     REQUIRE(&S == &S2);
-    REQUIRE(&S == &S3);
     REQUIRE(streq(S.name, "myschema"));
+}
+
+TEST_CASE("Catalog use database")
+{
+    Catalog &C = Catalog::Get();
+    Schema &S1 = C.get_or_add_database("myschema");
+    REQUIRE(not C.has_database_in_use());
+    C.set_database_in_use(S1);
+    REQUIRE(C.has_database_in_use());
+    auto &in_use = C.get_database_in_use();
+    REQUIRE(&S1 == &in_use);
+    C.unset_database_in_use();
+    REQUIRE(not C.has_database_in_use());
 }
 
 TEST_CASE("Schema c'tor")
@@ -309,8 +321,8 @@ TEST_CASE("Schema/add relation error if name already taken")
     const char *name = "myrelation";
     Schema &S = C.get_or_add_database("myschema");
 
-    Relation &R_origin = S[name];
-    Relation *R_duplicate = new Relation(name);
-    REQUIRE_THROWS_AS(S.add(R_duplicate), std::invalid_argument);
-    delete R_duplicate;
+    S.get_or_add_relation(name);
+    Relation *R = new Relation(name);
+    REQUIRE_THROWS_AS(S.add(R), std::invalid_argument);
+    delete R;
 }

@@ -300,6 +300,17 @@ TEST_CASE("Schema c'tor")
 {
     Catalog &C = Catalog::Get();
     Schema &S = C.get_or_add_database("myschema");
-
     REQUIRE(S.size() == 0);
+}
+
+TEST_CASE("Schema/add relation error if name already taken")
+{
+    Catalog &C = Catalog::Get();
+    const char *name = "myrelation";
+    Schema &S = C.get_or_add_database("myschema");
+
+    Relation &R_origin = S[name];
+    Relation *R_duplicate = new Relation(name);
+    REQUIRE_THROWS_AS(S.add(R_duplicate), std::invalid_argument);
+    delete R_duplicate;
 }

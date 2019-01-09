@@ -258,6 +258,17 @@ struct Schema
         it = relations_.emplace_hint(it, r->name, r);
         return *it->second;
     }
+
+    Relation & get_or_add_relation(const char *name) {
+        auto it = relations_.find(name);
+        if (it == relations_.end()) {
+            Relation *R = new Relation(name);
+            it = relations_.emplace_hint(it, name, R);
+        }
+        return *it->second;
+    }
+    Relation & operator[](const char *name) { return get_or_add_relation(name); }
+    const Relation & operator[](const char *name) const { return *relations_.at(name); }
 };
 
 /** The catalog keeps track of all meta information of the database system.  There is always exactly one catalog. */
@@ -271,6 +282,8 @@ struct Catalog
     Catalog(const Catalog&) = delete;
 
     public:
+    ~Catalog();
+
     static Catalog & Get() {
         static Catalog the_catalog_;
         return the_catalog_;

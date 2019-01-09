@@ -85,6 +85,7 @@ int main(int argc, const char **argv)
         auto stmt = parser.parse();
         if (diag.num_errors())
             break;
+        sema(*stmt);
     }
 
     if (in != &std::cin)

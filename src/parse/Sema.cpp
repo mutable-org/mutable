@@ -47,13 +47,18 @@ void Sema::operator()(Const<ErrorStmt>&)
     /* nothing to be done */
 }
 
+void Sema::operator()(Const<EmptyStmt>&)
+{
+    /* nothing to be done */
+}
+
 void Sema::operator()(Const<CreateDatabaseStmt> &s)
 {
     Catalog &C = Catalog::Get();
     const char *db_name = s.database_name.text;
 
     try {
-        auto &DB = C.add_database(db_name);
+        C.add_database(db_name);
         diag.out() << "Created database " << db_name << ".\n";
     } catch (std::invalid_argument) {
         diag.e(s.database_name.pos) << "Database " << db_name << " already exists.\n";

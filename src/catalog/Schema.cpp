@@ -177,21 +177,11 @@ void Attribute::dump() const { dump(std::cerr); }
 
 Relation::~Relation() { }
 
-const Attribute & Relation::operator[](std::size_t i) const
-{
-    return attrs_.at(i);
-}
-
-const Attribute & Relation::operator[](const char *name) const
-{
-    return *name_to_attr_.at(name);
-}
-
 const Attribute & Relation::push_back(const Type *type, const char *name)
 {
     if (name_to_attr_.count(name)) throw std::invalid_argument("attribute with that name already exists");
+    name_to_attr_.emplace(name, attrs_.size());
     attrs_.emplace_back(Attribute(attrs_.size(), *this, type, name));
-    name_to_attr_.emplace(name, std::prev(attrs_.end()));
     return attrs_.back();
 }
 

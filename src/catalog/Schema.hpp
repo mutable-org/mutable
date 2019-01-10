@@ -212,7 +212,7 @@ struct Relation
     /** the attributes of this relation */
     table_type attrs_;
     /** maps attribute names to their position within the relation */
-    std::unordered_map<const char*, table_type::iterator> name_to_attr_;
+    std::unordered_map<const char*, table_type::size_type> name_to_attr_;
 
     public:
     Relation(const char *name) : name(name) { }
@@ -225,8 +225,10 @@ struct Relation
     table_type::const_iterator cbegin() { return attrs_.cbegin(); }
     table_type::const_iterator cend()   { return attrs_.cend(); }
 
-    const Attribute & operator[](std::size_t i) const;
-    const Attribute & operator[](const char *name) const;
+    const Attribute & at(std::size_t i) const { return attrs_.at(i); }
+    const Attribute & at(const char *name) const { return attrs_[name_to_attr_.at(name)]; }
+    const Attribute & operator[](std::size_t i) const { return at(i); }
+    const Attribute & operator[](const char *name) const { return at(name); }
 
     const Attribute & push_back(const Type *type, const char *name);
 

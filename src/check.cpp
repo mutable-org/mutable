@@ -1,7 +1,7 @@
 #include "lex/Lexer.hpp"
 #include "lex/Token.hpp"
 #include "lex/TokenType.hpp"
-#include "parse/ASTPrinter.hpp"
+#include "parse/ASTDumper.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "util/ArgParser.hpp"
@@ -41,6 +41,10 @@ int main(int argc, const char **argv)
         nullptr, "--color",                 /* Short, Long      */
         "use colors",                       /* Description      */
         [&](bool) { color = true; });       /* Callback         */
+    ADD(bool, ast, false,                   /* Type, Var, Init  */
+        nullptr, "--ast",                   /* Short, Long      */
+        "print AST",                        /* Description      */
+        [&](bool) { ast = true; });         /* Callback         */
 #undef ADD
     AP.parse_args(argc, argv);
 
@@ -79,6 +83,7 @@ int main(int argc, const char **argv)
     Diagnostic diag(color, std::cout, std::cerr);
     Lexer lexer(diag, filename, *in);
     Parser parser(lexer);
+    ASTDumper dump(std::cerr);
     Sema sema(diag);
 
     while (parser.token()) {
@@ -87,6 +92,7 @@ int main(int argc, const char **argv)
             diag.clear();
             continue;
         }
+        if (ast) dump(*stmt);
         sema(*stmt);
         diag.clear(); // clear sema errors
     }

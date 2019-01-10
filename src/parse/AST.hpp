@@ -14,6 +14,7 @@ using ASTVisitor = TheASTVisitor<false>;
 using ConstASTVisitor = TheASTVisitor<true>;
 
 struct Type;
+struct Sema;
 
 /*======================================================================================================================
  * Expressions
@@ -22,7 +23,15 @@ struct Type;
 /** An expression. */
 struct Expr
 {
+    friend struct Sema;
+
+    private:
+    const Type *type_ = nullptr; ///> the type of an expression, determined by the semantic analysis
+
+    public:
     virtual ~Expr() { }
+
+    const Type *type() const { return notnull(type_); }
 
     virtual void accept(ASTVisitor &v) = 0;
     virtual void accept(ConstASTVisitor &v) const = 0;

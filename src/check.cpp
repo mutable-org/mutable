@@ -88,6 +88,7 @@ int main(int argc, const char **argv)
             continue;
         }
         sema(*stmt);
+        diag.clear(); // clear sema errors
     }
 
     if (in != &std::cin)

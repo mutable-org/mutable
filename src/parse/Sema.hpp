@@ -1,17 +1,28 @@
 #pragma once
 
+#include "catalog/Schema.hpp"
 #include "parse/ASTVisitor.hpp"
 #include "util/Diagnostic.hpp"
+#include <unordered_map>
+#include <vector>
 
 
 namespace db {
 
-struct Sema : ConstASTVisitor
+struct Sema : ASTVisitor
 {
-    using ConstASTVisitor::operator();
+    using ASTVisitor::operator();
+
+    /** Holds context information used by semantic analysis of a single statement. */
+    struct SemaContext
+    {
+        std::unordered_map<const char*, const Relation*> sources; ///> lists all data sources of a statement
+    };
 
     public:
     Diagnostic &diag;
+    private:
+    std::vector<SemaContext> contexts_; ///> a stack of sema contexts; one per statement; grows by nesting statements
 
     public:
     Sema(Diagnostic &diag) : diag(diag) { }

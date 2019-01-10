@@ -95,6 +95,7 @@ void ASTDumper::operator()(Const<SelectStmt> &s)
 {
     indent() << "SelectStmt" << std::endl;
     ++indent_;
+
     indent() << "SELECT: select_all=" << (s.select_all ? "true" : "false") << std::endl;
     ++indent_;
     for (auto select : s.select) {
@@ -107,6 +108,7 @@ void ASTDumper::operator()(Const<SelectStmt> &s)
             (*this)(*select.first);
     }
     --indent_;
+
     indent() << "FROM" << std::endl;
     ++indent_;
     for (auto f : s.from) {
@@ -116,12 +118,14 @@ void ASTDumper::operator()(Const<SelectStmt> &s)
         out << " (" << f.first.pos << ')' << std::endl;
     }
     --indent_;
+
     if (s.where) {
         indent() << "WHERE" << std::endl;
         ++indent_;
         (*this)(*s.where);
         --indent_;
     }
+
     if (not s.group_by.empty()) {
         indent() << "GROUP BY" << std::endl;
         ++indent_;
@@ -129,12 +133,14 @@ void ASTDumper::operator()(Const<SelectStmt> &s)
             (*this)(*g);
         --indent_;
     }
+
     if (s.having) {
         indent() << "HAVING" << std::endl;
         ++indent_;
         (*this)(*s.having);
         --indent_;
     }
+
     if (not s.order_by.empty()) {
         indent() << "ORDER BY" << std::endl;
         ++indent_;
@@ -146,6 +152,7 @@ void ASTDumper::operator()(Const<SelectStmt> &s)
         }
         --indent_;
     }
+
     if (s.limit.first) {
         indent() << "LIMIT" << std::endl;
         ++indent_;
@@ -158,6 +165,8 @@ void ASTDumper::operator()(Const<SelectStmt> &s)
         }
         --indent_;
     }
+
+    --indent_;
 }
 
 void ASTDumper::operator()(Const<InsertStmt> &s)

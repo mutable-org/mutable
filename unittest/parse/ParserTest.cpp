@@ -87,10 +87,11 @@ TEST_CASE("Parser::parse_designator()", "[unit]")
 {
     LEXER("a.b");
     Parser parser(lexer);
-    parser.parse_designator();
+    auto ast = parser.parse_designator();
     REQUIRE(diag.num_errors() == 0);
     REQUIRE(err.str().empty());
     REQUIRE(parser.token() == TK_EOF);
+    delete ast;
 }
 
 TEST_CASE("Parser::expect_integer()", "[unit]")
@@ -196,6 +197,7 @@ TEST_CASE("Parser::parse_Expr()", "[unit]")
         ASTPrinter p(actual);
         p(*ast);
         CHECK(actual.str() == e.second);
+        delete ast;
     }
 }
 
@@ -225,11 +227,12 @@ TEST_CASE("Parser::parse_Expr() sanity tests", "[unit]")
     for (auto expr : exprs) {
         LEXER(expr);
         Parser parser(lexer);
-        parser.parse_Expr();
+        auto ast = parser.parse_Expr();
         if (not diag.num_errors())
             std::cerr << "UNEXPECTED PASS for input \"" << expr << '"' << std::endl;
         CHECK(diag.num_errors() > 0);
         CHECK(not err.str().empty());
+        delete ast;
     }
 }
 

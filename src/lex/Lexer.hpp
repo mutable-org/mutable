@@ -82,7 +82,7 @@ struct Lexer
 
     /* Lexer routines. */
     Token read_keyword_or_identifier();
-    Token read_number(bool has_dot = false);
+    Token read_number();
     Token read_string_literal();
 };
 

@@ -82,7 +82,8 @@ after:
         LEX(';', ";", TK_SEMICOL, );
         LEX('.', ".", TK_DOT,
             case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
-                return read_number(true););
+                UNDO('.');
+                return read_number(););
 
 #undef LEX
 #undef GUESS
@@ -115,18 +116,11 @@ Token Lexer::read_keyword_or_identifier()
     else return Token(start_, str, it->second);
 }
 
-Token Lexer::read_number(bool has_dot)
+Token Lexer::read_number()
 {
     bool is_float = false;
     bool empty = true;
     enum { Oct, Dec, Hex, Err } is, has;
-
-    if (has_dot) {
-        buf_.push_back('.');
-        is = has = Dec;
-        is_float = true;
-        goto HasDot;
-    };
 
     /*-- Prefix ----------------------*/
     is = Dec;
@@ -152,7 +146,6 @@ Token Lexer::read_number(bool has_dot)
         if (is  == Oct) is  = Dec; // there are no octal floating point constants
         if (has == Oct) has = Dec;
 
-HasDot:
         /*-- sequence after dot ------*/
         if      (is == Dec) { if (is_dec(c_)) empty = false; while (is_dec(c_)) push(); }
         else if (is == Hex) { if (is_hex(c_)) empty = false; while (is_hex(c_)) push(); }

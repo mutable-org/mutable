@@ -56,3 +56,16 @@ ceil_to_pow_2(T f)
 {
     return ceil_to_pow_2((unsigned long) std::ceil(f));
 }
+
+/** Short version of dynamic_cast that works for pointers and references. */
+template<typename T, typename U>
+T * cast(U *u) { return dynamic_cast<T*>(u); }
+
+/** Short version of static_cast that works for pointers and references.  In debug build, check that the cast is legit.
+ */
+template<typename T, typename U>
+T * as(U *u) { insist(cast<T>(u)); return static_cast<T*>(u); }
+
+/** Simple test whether expression u is of type T.  Works with pointers and references. */
+template<typename T, typename U>
+bool is(U *u) { return cast<T>(u) != nullptr; }

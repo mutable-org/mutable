@@ -45,6 +45,12 @@ struct Sema : ASTVisitor
     void operator()(Const<InsertStmt> &s);
     void operator()(Const<UpdateStmt> &s);
     void operator()(Const<DeleteStmt> &s);
+
+    private:
+    SemaContext & push_context() { contexts_.emplace_back(); return contexts_.back(); }
+    void pop_context() { contexts_.pop_back(); }
+    SemaContext & get_context() { insist(not contexts_.empty()); return contexts_.back(); }
+    const SemaContext & get_context() const { insist(not contexts_.empty()); return contexts_.back(); }
 };
 
 }

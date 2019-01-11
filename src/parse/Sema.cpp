@@ -15,7 +15,7 @@ void Sema::operator()(Const<ErrorExpr> &e)
 
 void Sema::operator()(Const<Designator> &e)
 {
-    SemaContext &Ctx = contexts_.back();
+    SemaContext &Ctx = get_context();
 
     if (e.table_name) {
         /* Find the relation first and then locate the attribute inside this relation. */
@@ -198,7 +198,7 @@ void Sema::operator()(Const<CreateTableStmt> &s)
 void Sema::operator()(Const<SelectStmt> &s)
 {
     Catalog &C = Catalog::Get();
-    SemaContext &Ctx = (contexts_.emplace_back(), contexts_.back());
+    SemaContext &Ctx = push_context();
 
     if (not C.has_database_in_use()) {
         diag.err() << "No database selected.\n";
@@ -222,7 +222,7 @@ void Sema::operator()(Const<SelectStmt> &s)
     if (s.where) (*this)(*s.where);
 
     /* Pop context from stack. */
-    contexts_.pop_back();
+    pop_context();
 }
 
 void Sema::operator()(Const<InsertStmt> &s)

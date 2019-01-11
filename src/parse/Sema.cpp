@@ -158,13 +158,13 @@ void Sema::operator()(Const<UnaryExpr> &e)
     (*this)(*e.expr);
 
     /* If the sub-expression is erroneous, so is this expression. */
-    if (e.expr->type() == Type::Get_Error()) {
+    if (e.expr->type()->is_error()) {
         e.type_ = Type::Get_Error();
         return;
     }
 
     /* Valid unary expressions are +e, -e, and ~e, where e has numeric type. */
-    if (not dynamic_cast<const Numeric*>(e.expr->type())) {
+    if (not e.expr->type()->is_numeric()) {
         diag.e(e.op.pos) << "Invalid expression " << e << ".\n";
         e.type_ = Type::Get_Error();
         return;
@@ -180,7 +180,7 @@ void Sema::operator()(Const<BinaryExpr> &e)
     (*this)(*e.rhs);
 
     /* If at least one of the sub-expressions is erroneous, so is this expression. */
-    if (e.lhs->type() == Type::Get_Error() or e.rhs->type() == Type::Get_Error()) {
+    if (e.lhs->type()->is_error() or e.rhs->type()->is_error()) {
         e.type_ = Type::Get_Error();
         return;
     }
@@ -218,7 +218,7 @@ void Sema::operator()(Const<BinaryExpr> &e)
         case TK_GREATER:
         case TK_GREATER_EQUAL: {
             /* Verify that both operands are of numeric type. */
-            if (not is<const Numeric>(e.lhs->type()) or not is<const Numeric>(e.rhs->type())) {
+            if (not e.lhs->type()->is_numeric() or not e.rhs->type()->is_numeric()) {
                 diag.e(e.op.pos) << "Invalid expression " << e << ", operands must be of numeric type.\n";
                 e.type_ = Type::Get_Error();
                 return;
@@ -231,9 +231,9 @@ void Sema::operator()(Const<BinaryExpr> &e)
 
         case TK_EQUAL:
         case TK_BANG_EQUAL: {
-            if (is<const Boolean>(e.lhs->type()) and is<const Boolean>(e.rhs->type())) goto ok;
-            if (is<const CharacterSequence>(e.lhs->type()) and is<const CharacterSequence>(e.rhs->type())) goto ok;
-            if (is<const Numeric>(e.lhs->type()) and is<const Numeric>(e.rhs->type())) goto ok;
+            if (e.lhs->type()->is_boolean() and e.rhs->type()->is_boolean()) goto ok;
+            if (e.lhs->type()->is_character_sequence() and e.rhs->type()->is_character_sequence()) goto ok;
+            if (e.lhs->type()->is_numeric() and e.rhs->type()->is_numeric()) goto ok;
 
             /* All other operand types are incomparable. */
             diag.e(e.op.pos) << "Invalid expression " << e << ", operands are incomparable.\n";

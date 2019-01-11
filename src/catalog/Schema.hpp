@@ -1,5 +1,6 @@
 #pragma once
 
+#include "util/fn.hpp"
 #include "util/macro.hpp"
 #include "util/Pool.hpp"
 #include <functional>
@@ -33,6 +34,11 @@ struct Type
 
     virtual bool operator==(const Type &other) const = 0;
     bool operator!=(const Type &other) const { return not operator==(other); }
+
+    bool is_error() const { return (void*) this == Get_Error(); }
+    bool is_boolean() const { return (void*) this == Get_Boolean(); }
+    bool is_character_sequence() const { return is<const CharacterSequence>(this); }
+    bool is_numeric() const { return is<const Numeric>(this); }
 
     virtual uint64_t hash() const = 0;
 

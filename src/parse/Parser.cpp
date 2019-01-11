@@ -44,19 +44,6 @@ int get_precedence(const TokenType tt)
     return p;
 }
 
-bool is_numeric(TokenType tt)
-{
-    switch (tt) {
-        case TK_OCT_INT:
-        case TK_DEC_INT:
-        case TK_HEX_INT:
-            return true;
-
-        default:
-            return false;
-    }
-}
-
 bool is_integer(TokenType tt)
 {
     switch (tt) {

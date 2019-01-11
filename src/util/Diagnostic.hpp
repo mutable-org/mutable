@@ -47,7 +47,11 @@ struct Diagnostic
     void clear() { num_errors_ = 0; }
 
     std::ostream & out() const { return out_; }
-    std::ostream & err() { ++num_errors_; return err_; }
+    std::ostream & err() {
+        ++num_errors_;
+        err_ << ERROR << "error: " << RESET;
+        return err_;
+    }
 
     private:
     const bool color_;

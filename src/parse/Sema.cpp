@@ -7,6 +7,45 @@
 using namespace db;
 
 
+namespace {
+
+/* Given two numeric types, compute the numeric type that is as least as precise as either of them. */
+const Type * arithmetic_join(const Numeric *lhs, const Numeric *rhs)
+{
+    static constexpr double LOG_2_OF_10 = 3.321928094887362; ///> factor to convert count of decimal digits to binary digits
+
+    /* N_Decimal is always "more precise" than N_Float.  N_Float is always more precise than N_Int.  */
+    Numeric::kind_t kind = std::max(lhs->kind, rhs->kind);
+
+    /* Compute the precision in bits. */
+    unsigned precision_lhs, precision_rhs;
+    switch (lhs->kind) {
+        case Numeric::N_Int:     precision_lhs = 8 * lhs->precision; break;
+        case Numeric::N_Float:   precision_lhs = lhs->precision; break;
+        case Numeric::N_Decimal: precision_lhs = std::ceil(LOG_2_OF_10 * lhs->precision); break;
+    }
+    switch (rhs->kind) {
+        case Numeric::N_Int:     precision_rhs = 8 * rhs->precision; break;
+        case Numeric::N_Float:   precision_rhs = rhs->precision; break;
+        case Numeric::N_Decimal: precision_rhs = std::ceil(LOG_2_OF_10 * rhs->precision); break;
+    }
+    int precision = std::max(precision_lhs, precision_rhs);
+    int scale = std::max(lhs->scale, rhs->scale);
+
+    switch (kind) {
+        case Numeric::N_Int: return Type::Get_Integer(precision / 8);
+        case Numeric::N_Float: {
+            if (precision == 32) return Type::Get_Float();
+            insist(precision == 64, "Illegal floating-point precision");
+            return Type::Get_Double();
+        }
+
+        case Numeric::N_Decimal: return Type::Get_Decimal(precision / LOG_2_OF_10, scale);
+    }
+}
+
+}
+
 /*===== Expressions ==================================================================================================*/
 void Sema::operator()(Const<ErrorExpr> &e)
 {
@@ -117,8 +156,21 @@ void Sema::operator()(Const<UnaryExpr> &e)
 {
     /* Analyze sub-expression. */
     (*this)(*e.expr);
-    /* TODO Check if unary expression is compatible with sub-expression type. */
-    unreachable("Not implemented.");
+
+    /* If the sub-expression is erroneous, so is this expression. */
+    if (e.expr->type() == Type::Get_Error()) {
+        e.type_ = Type::Get_Error();
+        return;
+    }
+
+    /* Valid unary expressions are +e, -e, and ~e, where e has numeric type. */
+    if (not dynamic_cast<const Numeric*>(e.expr->type())) {
+        diag.e(e.op.pos) << "Invalid expression " << e << ".\n";
+        e.type_ = Type::Get_Error();
+        return;
+    }
+
+    e.type_ = e.expr->type();
 }
 
 void Sema::operator()(Const<BinaryExpr> &e)
@@ -126,8 +178,75 @@ void Sema::operator()(Const<BinaryExpr> &e)
     /* Analyze sub-expressions. */
     (*this)(*e.lhs);
     (*this)(*e.rhs);
+
+    /* If at least one of the sub-expressions is erroneous, so is this expression. */
+    if (e.lhs->type() == Type::Get_Error() or e.rhs->type() == Type::Get_Error()) {
+        e.type_ = Type::Get_Error();
+        return;
+    }
+
+    /* Validate that lhs and rhs are compatible with binary operator. */
+    switch (e.op.type) {
+        default:
+            unreachable("Invalid binary operator.");
+
+        /* Arithmetic operations are only valid for numeric types.  Compute the type of the binary expression that is
+         * precise enough.  */
+        case TK_PLUS:
+        case TK_MINUS:
+        case TK_ASTERISK:
+        case TK_SLASH:
+        case TK_PERCENT: {
+            /* Verify that both operands are of numeric type. */
+            const Numeric *ty_lhs = cast<const Numeric>(e.lhs->type());
+            const Numeric *ty_rhs = cast<const Numeric>(e.rhs->type());
+            if (not ty_lhs or not ty_rhs) {
+                diag.e(e.op.pos) << "Invalid expression " << e << ", operands must be of numeric type.\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
+            insist(ty_lhs);
+            insist(ty_rhs);
+
+            /* Compute type of the binary expression. */
+            e.type_ = arithmetic_join(ty_lhs, ty_rhs);
+            break;
+        }
+
+        case TK_LESS:
+        case TK_LESS_EQUAL:
+        case TK_GREATER:
+        case TK_GREATER_EQUAL: {
+            /* Verify that both operands are of numeric type. */
+            if (not is<const Numeric>(e.lhs->type()) or not is<const Numeric>(e.rhs->type())) {
+                diag.e(e.op.pos) << "Invalid expression " << e << ", operands must be of numeric type.\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
+
+            /* Comparisons always have boolean type. */
+            e.type_ = Type::Get_Boolean();
+            break;
+        }
+
+        case TK_EQUAL:
+        case TK_BANG_EQUAL: {
+            if (is<const Boolean>(e.lhs->type()) and is<const Boolean>(e.rhs->type())) goto ok;
+            if (is<const CharacterSequence>(e.lhs->type()) and is<const CharacterSequence>(e.rhs->type())) goto ok;
+            if (is<const Numeric>(e.lhs->type()) and is<const Numeric>(e.rhs->type())) goto ok;
+
+            /* All other operand types are incomparable. */
+            diag.e(e.op.pos) << "Invalid expression " << e << ", operands are incomparable.\n";
+            return;
+
+ok:
+            /* Comparisons always have boolean type. */
+            e.type_ = Type::Get_Boolean();
+            break;
+        }
+    }
+
     /* TODO Check if both binary operator is compatible with sub-expression types. */
-    unreachable("Not implemented.");
 }
 
 /*===== Statements ===================================================================================================*/

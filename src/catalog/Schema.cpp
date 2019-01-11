@@ -10,8 +10,6 @@
 using namespace db;
 
 
-static constexpr double LOG_2_OF_10 = 3.321928094887362; ///> factor to convert count of decimal digits to binary digits
-
 constexpr const char * Numeric::KIND_TO_STR_[]; ///> declaration for constexpr static field, see C++17 inline variables
 
 /*======================================================================================================================

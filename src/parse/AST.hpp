@@ -31,7 +31,7 @@ struct Expr
     public:
     virtual ~Expr() { }
 
-    const Type *type() const { return notnull(type_); }
+    const Type * type() const { return notnull(type_); }
 
     virtual void accept(ASTVisitor &v) = 0;
     virtual void accept(ConstASTVisitor &v) const = 0;

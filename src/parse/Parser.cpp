@@ -9,6 +9,8 @@
 using namespace db;
 
 
+namespace {
+
 /** Returns the precedence of an operator.  A higher value means the operator has higher precedence. */
 int get_precedence(const TokenType tt)
 {
@@ -40,6 +42,34 @@ int get_precedence(const TokenType tt)
         case TK_Or:                 ++p;
     }
     return p;
+}
+
+bool is_numeric(TokenType tt)
+{
+    switch (tt) {
+        case TK_OCT_INT:
+        case TK_DEC_INT:
+        case TK_HEX_INT:
+            return true;
+
+        default:
+            return false;
+    }
+}
+
+bool is_integer(TokenType tt)
+{
+    switch (tt) {
+        case TK_OCT_INT:
+        case TK_DEC_INT:
+        case TK_HEX_INT:
+            return true;
+
+        default:
+            return false;
+    }
+}
+
 }
 
 Stmt * Parser::parse()
@@ -449,15 +479,11 @@ Expr * Parser::parse_designator()
 
 Expr * Parser::expect_integer()
 {
-    switch (token().type) {
-        case TK_OCT_INT:
-        case TK_DEC_INT:
-        case TK_HEX_INT:
-            return new Constant(consume());
-
-        default:
-            diag.e(token().pos) << "expected integer constant, got " << token().text << '\n';
-            return new ErrorExpr(token());
+    if (is_integer(token().type)) {
+        return new Constant(consume());
+    } else {
+        diag.e(token().pos) << "expected integer constant, got " << token().text << '\n';
+        return new ErrorExpr(token());
     }
 }
 

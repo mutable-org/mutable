@@ -245,8 +245,6 @@ ok:
             break;
         }
     }
-
-    /* TODO Check if both binary operator is compatible with sub-expression types. */
 }
 
 /*===== Statements ===================================================================================================*/

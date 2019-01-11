@@ -323,7 +323,8 @@ void Sema::operator()(Const<SelectStmt> &s)
     }
     const auto &DB = C.get_database_in_use();
 
-    /* Check whether the source tables in the FROM clause exist in the database. */
+    /* Check whether the source tables in the FROM clause exist in the database.  Add the source tables to the current
+     * context, using their alias if provided (e.g. FROM src AS alias). */
     for (auto &table: s.from) {
         try {
             const Relation &R = DB[table.first.text];
@@ -336,7 +337,11 @@ void Sema::operator()(Const<SelectStmt> &s)
     }
 
     /* Analyze WHERE predicate. */
-    if (s.where) (*this)(*s.where);
+    if (s.where) {
+        (*this)(*s.where);
+        if (not s.where->type()->is_error() and not s.where->type()->is_boolean())
+            diag.err() << "The expression in the WHERE clause must be of boolean type.\n"; // TODO position
+    }
 
     /* Pop context from stack. */
     pop_context();

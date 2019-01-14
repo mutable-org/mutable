@@ -1,0 +1,1 @@
+USE nonexistent_db;

@@ -85,6 +85,7 @@ int main(int argc, const char **argv)
     Parser parser(lexer);
     ASTDumper dump(std::cerr);
     Sema sema(diag);
+    bool sema_error = false;
 
     while (parser.token()) {
         auto stmt = parser.parse();
@@ -94,11 +95,12 @@ int main(int argc, const char **argv)
         }
         if (ast) dump(*stmt);
         sema(*stmt);
+        sema_error = sema_error or diag.num_errors();
         diag.clear(); // clear sema errors
     }
 
     if (in != &std::cin)
         delete in;
 
-    std::exit(EXIT_SUCCESS);
+    std::exit(sema_error ? EXIT_FAILURE : EXIT_SUCCESS);
 }

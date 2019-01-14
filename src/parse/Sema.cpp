@@ -240,10 +240,20 @@ void Sema::operator()(Const<BinaryExpr> &e)
             diag.e(e.op.pos) << "Invalid expression " << e << ", operands are incomparable.\n";
             e.type_ = Type::Get_Error();
             return;
-
 ok:
             /* Comparisons always have boolean type. */
             e.type_ = Type::Get_Boolean();
+            break;
+        }
+
+        case TK_And:
+        case TK_Or: {
+            if (e.lhs->type()->is_boolean() and e.rhs->type()->is_boolean()) {
+                e.type_ = Type::Get_Boolean();
+            } else {
+                diag.e(e.op.pos) << "Invalid expression " << e << ", operands must be of boolean type.\n";
+                e.type_ = Type::Get_Error();
+            }
             break;
         }
     }
@@ -259,7 +269,6 @@ void Sema::operator()(Const<ErrorClause>&)
 void Sema::operator()(Const<SelectClause> &c)
 {
     Catalog &C = Catalog::Get();
-    SemaContext &Ctx = push_context();
     const auto &DB = C.get_database_in_use();
     /* TODO check whether expressions can be computed */
 }
@@ -267,7 +276,7 @@ void Sema::operator()(Const<SelectClause> &c)
 void Sema::operator()(Const<FromClause> &c)
 {
     Catalog &C = Catalog::Get();
-    SemaContext &Ctx = push_context();
+    SemaContext &Ctx = get_context();
     const auto &DB = C.get_database_in_use();
 
     /* Check whether the source tables in the FROM clause exist in the database.  Add the source tables to the current
@@ -369,20 +378,27 @@ void Sema::operator()(Const<CreateTableStmt> &s)
         return;
     }
     auto &DB = C.get_database_in_use();
-
     const char *table_name = s.table_name.text;
-    Relation *R;
+    Relation *R = new Relation(table_name);
+
+    /* At this point we know that the create table statement is syntactically correct.  Hence, we can expect valid
+     * attribute names and types. */
+    for (auto &A : s.attributes) {
+        try {
+            R->push_back(A.second, A.first.text);
+        } catch (std::invalid_argument) {
+            diag.e(A.first.pos) << "Attribute " << A.first.text << " occurs multiple times in defintion of table "
+                                << table_name << ".\n";
+            return;
+        }
+    }
+
     try {
-        R = &DB.add_relation(table_name);
+        DB.add(R);
     } catch (std::invalid_argument) {
         diag.e(s.table_name.pos) << "Table " << table_name << " already exists in database " << DB.name << ".\n";
         return;
     }
-
-    /* At this point we know that the create table statement is syntactically correct.  Hence, we can expect valid
-     * attribute names and types. */
-    for (auto &A : s.attributes)
-        R->push_back(A.second, A.first.text);
 
     diag.out() << "Created table " << table_name << " in database " << DB.name << ".\n";
 }

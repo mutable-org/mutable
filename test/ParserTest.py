@@ -93,8 +93,8 @@ if __name__ == '__main__':
             if not fail.flag:
                 print(termcolor.ok(' ✓'))
 
-    # Positive tests
-    print('Run sanity tests')
+    # Sanity tests
+    print('\nRun sanity tests')
     for sql_filename in sorted(glob.glob(GLOB_SANITY, recursive=True)):
         print('` {}'.format(sql_filename), end='')
         with open(sql_filename, 'r') as sql_file:

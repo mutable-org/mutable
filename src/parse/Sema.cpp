@@ -336,11 +336,38 @@ void Sema::operator()(Const<SelectStmt> &s)
         }
     }
 
-    /* Analyze WHERE predicate. */
+    /* Analyze WHERE clause. */
     if (s.where) {
         (*this)(*s.where);
         if (not s.where->type()->is_error() and not s.where->type()->is_boolean())
             diag.err() << "The expression in the WHERE clause must be of boolean type.\n"; // TODO position
+    }
+
+    /* Analyze GROUP BY clause. */
+    if (not s.group_by.empty()) {
+        /* Analyze all grouping expressions. */
+        for (auto expr : s.group_by)
+            (*this)(*expr);
+    }
+
+    /* Analyze HAVING clause. */
+    if (s.having) {
+        (*this)(*s.having);
+        /* TODO The HAVING clause must be a conjunction or disjunction of aggregates or comparisons of grouping keys. */
+    }
+
+    /* Analyze ORDER BY clause. */
+    if (not s.order_by.empty()) {
+        /* Analyze all ordering expressions. */
+        /* TODO If we grouped before, the ordering expressions must depend on a group key or an aggregate. */
+        for (auto o : s.order_by)
+            (*this)(*o.first);
+    }
+
+    if (s.limit.first) {
+        (*this)(*s.limit.first);
+        if (s.limit.second)
+            (*this)(*s.limit.second);
     }
 
     /* Pop context from stack. */

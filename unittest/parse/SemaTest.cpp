@@ -122,6 +122,13 @@ TEST_CASE("Sema/expressions", "[unit][parse]")
         { "TRUE != FALSE", Type::Get_Boolean() },
 
         { "\"verylongtext\" = \"shorty\"", Type::Get_Boolean() },
+
+        { "TRUE = 42", Type::Get_Error() },
+        { "42 = TRUE", Type::Get_Error() },
+        { "TRUE = \"text\"", Type::Get_Error() },
+        { "\"text\" = TRUE", Type::Get_Error() },
+        { "42 = \"text\"", Type::Get_Error() },
+        { "\"text\" = 42", Type::Get_Error() },
     };
 
     for (auto e : exprs) {

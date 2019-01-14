@@ -238,6 +238,7 @@ void Sema::operator()(Const<BinaryExpr> &e)
 
             /* All other operand types are incomparable. */
             diag.e(e.op.pos) << "Invalid expression " << e << ", operands are incomparable.\n";
+            e.type_ = Type::Get_Error();
             return;
 
 ok:

@@ -270,7 +270,12 @@ void Sema::operator()(Const<SelectClause> &c)
 {
     Catalog &C = Catalog::Get();
     const auto &DB = C.get_database_in_use();
+
+    for (auto s : c.select)
+        (*this)(*s.first);
+
     /* TODO check whether expressions can be computed */
+    /* TODO add (renamed) expressions to result relation. */
 }
 
 void Sema::operator()(Const<FromClause> &c)

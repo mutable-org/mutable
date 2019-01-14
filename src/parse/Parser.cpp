@@ -98,7 +98,7 @@ Stmt * Parser::parse()
 }
 
 /*======================================================================================================================
- * Statements
+ * statements
  *====================================================================================================================*/
 
 Stmt * Parser::parse_CreateDatabaseStmt()
@@ -163,68 +163,26 @@ Stmt * Parser::parse_CreateTableStmt()
 
 Stmt * Parser::parse_SelectStmt()
 {
-    bool ok = true;
-    Token start = token();
-    bool select_all = false;
-    std::vector<SelectStmt::selection_type> select;
-    std::vector<SelectStmt::source_type> from;
-    Expr *where = nullptr;
-    std::vector<Expr*> group_by;
-    Expr *having = nullptr;
-    std::vector<SelectStmt::order_type> order_by;
-    SelectStmt::limit_type limit;
+    Clause *select = parse_SelectClause();
+    Clause *from = parse_FromClause();
+    Clause *where = nullptr;
+    Clause *group_by = nullptr;
+    Clause *having = nullptr;
+    Clause *order_by = nullptr;
+    Clause *limit = nullptr;
 
-    /* 'SELECT' */
-    expect(TK_Select);
+    if (token() == TK_Where)
+        where = parse_WhereClause();
+    if (token() == TK_Group)
+        group_by = parse_GroupByClause();
+    if (token() == TK_Having)
+        having = parse_HavingClause();
+    if (token() == TK_Order)
+        order_by = parse_OrderByClause();
+    if (token() == TK_Limit)
+        limit = parse_LimitClause();
 
-    /* ( '*' | expression [ 'AS' identifier ] ) */
-    if (token() == TK_ASTERISK) {
-        consume();
-        select_all = true;
-    } else {
-        auto e = parse_Expr();
-        Token tok;
-        if (accept(TK_As)) {
-            tok = token();
-            ok = ok and expect(TK_IDENTIFIER);
-        }
-        select.push_back(std::make_pair(e, tok));
-    }
-
-    /* { ',' expression [ 'AS' identifier ] } */
-    while (accept(TK_COMMA)) {
-        auto e = parse_Expr();
-        Token tok;
-        if (accept(TK_As)) {
-            tok = token();
-            ok = ok and expect(TK_IDENTIFIER);
-        }
-        select.push_back(std::make_pair(e, tok));
-    }
-
-    /* 'FROM' identifier [ 'AS' identifier ] { ',' identifier [ 'AS' identifier ] } */
-    expect(TK_From);
-    do {
-        Token table = token();
-        Token as;
-        ok = ok and expect(TK_IDENTIFIER);
-        if (accept(TK_As)) {
-            as = token();
-            ok = ok and expect(TK_IDENTIFIER);
-        }
-        from.push_back(std::make_pair(table, as));
-    } while (accept(TK_COMMA));
-
-    if (accept(TK_Where)) where = parse_Expr();
-    if (token() == TK_Group) group_by = parse_group_by_clause();
-    if (accept(TK_Having)) having = parse_Expr();
-    if (token() == TK_Order) order_by = parse_order_by_clause();
-    if (token() == TK_Limit) limit = parse_limit_clause();
-
-    if (not ok)
-        return new ErrorStmt(start);
-
-    return new SelectStmt(select_all, select, from, where, group_by, having, order_by, limit);
+    return new SelectStmt(select, from, where, group_by, having, order_by, limit);
 }
 
 Stmt * Parser::parse_InsertStmt()
@@ -279,7 +237,7 @@ Stmt * Parser::parse_UpdateStmt()
     bool ok = true;
     Token start = token();
     std::vector<UpdateStmt::set_type> set;
-    Expr *where = nullptr;
+    Clause *where = nullptr;
 
     /* update-clause ::= 'UPDATE' identifier 'SET' identifier '=' expression { ',' identifier '=' expression } ; */
     expect(TK_Update);
@@ -295,8 +253,8 @@ Stmt * Parser::parse_UpdateStmt()
         set.emplace_back(id, e);
     } while (accept(TK_COMMA));
 
-    if (accept(TK_Where))
-        where = parse_Expr();
+    if (token() == TK_Where)
+        where = parse_WhereClause();
 
     if (not ok)
         return new ErrorStmt(start);
@@ -308,7 +266,7 @@ Stmt * Parser::parse_DeleteStmt()
 {
     bool ok = true;
     Token start = token();
-    Expr *where = nullptr;
+    Clause *where = nullptr;
 
     /* delete-statement ::= 'DELETE' 'FROM' identifier [ where-clause ] ; */
     expect(TK_Delete);
@@ -316,8 +274,8 @@ Stmt * Parser::parse_DeleteStmt()
     Token table_name = token();
     ok = ok and expect(TK_IDENTIFIER);
 
-    if (accept(TK_Where))
-        where = parse_Expr();
+    if (token() == TK_Where)
+        where = parse_WhereClause();
 
     if (not ok)
         return new ErrorStmt(start);
@@ -329,22 +287,117 @@ Stmt * Parser::parse_DeleteStmt()
  * Clauses
  *====================================================================================================================*/
 
-std::vector<Expr*> Parser::parse_group_by_clause()
+Clause * Parser::parse_SelectClause()
 {
-    /* 'GROUP' 'BY' designator { ',' designator } */
+    Token start = token();
+    bool ok = true;
+    bool select_all = false;
+    std::vector<SelectClause::select_type> select;
+
+    /* 'SELECT' */
+    expect(TK_Select);
+
+    /* ( '*' | expression [ 'AS' identifier ] ) */
+    if (token() == TK_ASTERISK) {
+        consume();
+        select_all = true;
+    } else {
+        auto e = parse_Expr();
+        Token tok;
+        if (accept(TK_As)) {
+            tok = token();
+            ok = ok and expect(TK_IDENTIFIER);
+        }
+        select.push_back(std::make_pair(e, tok));
+    }
+
+    /* { ',' expression [ 'AS' identifier ] } */
+    while (accept(TK_COMMA)) {
+        auto e = parse_Expr();
+        Token tok;
+        if (accept(TK_As)) {
+            tok = token();
+            ok = ok and expect(TK_IDENTIFIER);
+        }
+        select.push_back(std::make_pair(e, tok));
+    }
+
+    if (not ok) {
+        for (auto s : select)
+            delete s.first;
+        return new ErrorClause(start);
+    }
+
+    return new SelectClause(start, select, select_all);
+}
+
+Clause * Parser::parse_FromClause()
+{
+    Token start = token();
+    bool ok = true;
+    std::vector<FromClause::from_type> from;
+
+    /* 'FROM' identifier [ 'AS' identifier ] { ',' identifier [ 'AS' identifier ] } */
+    expect(TK_From);
+    do {
+        Token table = token();
+        Token as;
+        ok = ok and expect(TK_IDENTIFIER);
+        if (accept(TK_As)) {
+            as = token();
+            ok = ok and expect(TK_IDENTIFIER);
+        }
+        from.push_back(std::make_pair(table, as));
+    } while (accept(TK_COMMA));
+
+    if (not ok)
+        return new ErrorClause(start);
+
+    return new FromClause(start, from);
+}
+
+Clause * Parser::parse_WhereClause()
+{
+    Token start = token();
+
+    /* 'WHERE' expression */
+    expect(TK_Where);
+    Expr *where = parse_Expr();
+
+    return new WhereClause(start, where);
+}
+
+Clause * Parser::parse_GroupByClause()
+{
+    Token start = token();
     std::vector<Expr*> group_by;
+
+    /* 'GROUP' 'BY' designator { ',' designator } */
     expect(TK_Group);
     expect(TK_By);
     do
         group_by.push_back(parse_designator());
     while (accept(TK_COMMA));
-    return group_by;
+    return new GroupByClause(start, group_by);
 }
 
-std::vector<std::pair<Expr*, bool>> Parser::parse_order_by_clause()
+Clause * Parser::parse_HavingClause()
 {
+    Token start = token();
+
+    /* 'HAVING' expression */
+    expect(TK_Having);
+    Expr *having = parse_Expr();
+
+    return new HavingClause(start, having);
+}
+
+Clause * Parser::parse_OrderByClause()
+{
+    Token start = token();
+    std::vector<OrderByClause::order_type> order_by;
+
     /* 'ORDER' 'BY' designator [ 'ASC' | 'DESC' ] { ',' designator [ 'ASC' | 'DESC' ] } */
-    std::vector<std::pair<Expr*, bool>> order_by;
     expect(TK_Order);
     expect(TK_By);
 
@@ -358,18 +411,30 @@ std::vector<std::pair<Expr*, bool>> Parser::parse_order_by_clause()
         }
     } while (accept(TK_COMMA));
 
-    return order_by;
+    return new OrderByClause(start, order_by);
 }
 
-std::pair<Expr*, Expr*> Parser::parse_limit_clause()
+Clause * Parser::parse_LimitClause()
 {
-    /* 'LIMIT' integer-constant [ 'OFFSET' integer-constant ] */
+    Token start = token();
+    bool ok = true;
+
+    /* 'LIMIT' integer-constant */
     expect(TK_Limit);
-    Expr *limit = expect_integer();
-    Expr *offset = nullptr;
-    if (accept(TK_Offset))
-        offset = expect_integer();
-    return {limit, offset};
+    Token limit = token();
+    Token offset;
+    ok = ok and expect(TK_DEC_INT);
+
+    /* 'OFFSET' integer-constant */
+    if (accept(TK_Offset)) {
+        offset = token();
+        ok = ok and expect(TK_DEC_INT);
+    }
+
+    if (not ok)
+        return new ErrorClause(start);
+
+    return new LimitClause(start, limit, offset);
 }
 
 /*======================================================================================================================

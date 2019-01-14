@@ -35,6 +35,16 @@ struct Sema : ASTVisitor
     void operator()(Const<UnaryExpr> &e);
     void operator()(Const<BinaryExpr> &e);
 
+    /* Clauses */
+    void operator()(Const<ErrorClause> &c);
+    void operator()(Const<SelectClause> &c);
+    void operator()(Const<FromClause> &c);
+    void operator()(Const<WhereClause> &c);
+    void operator()(Const<GroupByClause> &c);
+    void operator()(Const<HavingClause> &c);
+    void operator()(Const<OrderByClause> &c);
+    void operator()(Const<LimitClause> &c);
+
     /* Statements */
     void operator()(Const<ErrorStmt> &s);
     void operator()(Const<EmptyStmt> &s);

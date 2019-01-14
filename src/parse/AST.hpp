@@ -131,6 +131,121 @@ struct BinaryExpr : Expr
 };
 
 /*======================================================================================================================
+ * Clauses
+ *====================================================================================================================*/
+
+struct Clause
+{
+    Token tok;
+
+    Clause(Token tok) : tok(tok) { }
+    virtual ~Clause() { }
+
+    virtual void accept(ASTVisitor &v) = 0;
+    virtual void accept(ConstASTVisitor &v) const = 0;
+
+    void dump(std::ostream &out) const;
+    void dump() const;
+
+    friend std::ostream & operator<<(std::ostream &out, const Clause &c);
+};
+
+struct ErrorClause : Clause
+{
+    ErrorClause(Token tok) : Clause(tok) { }
+
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+};
+
+struct SelectClause : Clause
+{
+    using select_type = std::pair<Expr*, Token>; ///> list of selected elements; expr AS name
+
+    std::vector<select_type> select;
+    bool select_all;
+
+    SelectClause(Token tok, std::vector<select_type> select, bool select_all)
+        : Clause(tok)
+        , select(select)
+        , select_all(select_all)
+    { }
+    ~SelectClause();
+
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+};
+
+struct FromClause : Clause
+{
+    using from_type = std::pair<Token, Token>; ///> first is the table name, second is the alias
+
+    std::vector<from_type> from;
+
+    FromClause(Token tok, std::vector<from_type> from) : Clause(tok), from(from) { }
+
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+};
+
+struct WhereClause : Clause
+{
+    Expr *where;
+
+    WhereClause(Token tok, Expr *where) : Clause(tok), where(notnull(where)) { }
+    ~WhereClause();
+
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+};
+
+struct GroupByClause : Clause
+{
+    std::vector<Expr*> group_by;
+
+    GroupByClause(Token tok, std::vector<Expr*> group_by) : Clause(tok), group_by(group_by) { }
+    ~GroupByClause();
+
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+};
+
+struct HavingClause : Clause
+{
+    Expr *having;
+
+    HavingClause(Token tok, Expr *having) : Clause(tok), having(having) { }
+    ~HavingClause();
+
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+};
+
+struct OrderByClause : Clause
+{
+    using order_type = std::pair<Expr*, bool>; ///> true means ascending, false means descending
+
+    std::vector<order_type> order_by;
+
+    OrderByClause(Token tok, std::vector<order_type> order_by) : Clause(tok), order_by(order_by) { }
+    ~OrderByClause();
+
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+};
+
+struct LimitClause : Clause
+{
+    Token limit;
+    Token offset;
+
+    LimitClause(Token tok, Token limit, Token offset) : Clause(tok), limit(limit), offset(offset) { }
+
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+};
+
+/*======================================================================================================================
  * Statements
  *====================================================================================================================*/
 
@@ -209,31 +324,23 @@ struct CreateTableStmt : Stmt
 /** A SQL select statement. */
 struct SelectStmt : Stmt
 {
-    using selection_type = std::pair<Expr*, Token>;
-    using source_type = std::pair<Token, Token>; ///> first is the table name, second is the alias
-    using order_type = std::pair<Expr*, bool>; ///> true means ascending, false means descending
-    using limit_type = std::pair<Expr*, Expr*>; ///> limit and offset
+    Clause *select;
+    Clause *from;
+    Clause *where;
+    Clause *group_by;
+    Clause *having;
+    Clause *order_by;
+    Clause *limit;
 
-    bool select_all = false; ///> for SELECT *
-    std::vector<selection_type> select; ///> the list of selections
-    std::vector<source_type> from; ///> the list of data sources
-    Expr *where = nullptr; ///> the where condition
-    std::vector<Expr*> group_by; ///> a list of what to group by
-    Expr *having = nullptr; ///> the having condition
-    std::vector<order_type> order_by; ///> the ordering
-    limit_type limit; ///> limit and offset
-
-    SelectStmt(bool select_all,
-               std::vector<selection_type> select,
-               std::vector<source_type> from,
-               Expr *where,
-               std::vector<Expr*> group_by,
-               Expr *having,
-               std::vector<order_type> order_by,
-               limit_type limit)
-        : select_all(select_all)
-        , select(select)
-        , from(from)
+    SelectStmt(Clause *select,
+               Clause *from,
+               Clause *where,
+               Clause *group_by,
+               Clause *having,
+               Clause *order_by,
+               Clause *limit)
+        : select(notnull(select))
+        , from(notnull(from))
         , where(where)
         , group_by(group_by)
         , having(having)
@@ -271,9 +378,9 @@ struct UpdateStmt : Stmt
 
     Token table_name;
     std::vector<set_type> set;
-    Expr *where = nullptr;
+    Clause *where = nullptr;
 
-    UpdateStmt(Token table_name, std::vector<set_type> set, Expr *where)
+    UpdateStmt(Token table_name, std::vector<set_type> set, Clause *where)
         : table_name(table_name)
         , set(set)
         , where(where)
@@ -289,9 +396,9 @@ struct UpdateStmt : Stmt
 struct DeleteStmt : Stmt
 {
     Token table_name;
-    Expr *where = nullptr;
+    Clause *where = nullptr;
 
-    DeleteStmt(Token table_name, Expr *where) : table_name(table_name), where(where) { }
+    DeleteStmt(Token table_name, Clause *where) : table_name(table_name), where(where) { }
     ~DeleteStmt();
 
     void accept(ASTVisitor &v);

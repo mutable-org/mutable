@@ -21,6 +21,17 @@ ACCEPT(FnApplicationExpr);
 ACCEPT(UnaryExpr);
 ACCEPT(BinaryExpr);
 
+/*===== Clauses ======================================================================================================*/
+
+ACCEPT(ErrorClause);
+ACCEPT(SelectClause);
+ACCEPT(FromClause);
+ACCEPT(WhereClause);
+ACCEPT(GroupByClause);
+ACCEPT(HavingClause);
+ACCEPT(OrderByClause);
+ACCEPT(LimitClause);
+
 /*===== Statements ===================================================================================================*/
 
 ACCEPT(ErrorStmt);

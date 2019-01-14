@@ -24,6 +24,17 @@ struct TheASTVisitor
     virtual void operator()(Const<UnaryExpr> &e) = 0;
     virtual void operator()(Const<BinaryExpr> &e) = 0;
 
+    /* Clauses */
+    void operator()(Const<Clause> &c) { c.accept(*this); }
+    virtual void operator()(Const<ErrorClause> &c) = 0;
+    virtual void operator()(Const<SelectClause> &c) = 0;
+    virtual void operator()(Const<FromClause> &c) = 0;
+    virtual void operator()(Const<WhereClause> &c) = 0;
+    virtual void operator()(Const<GroupByClause> &c) = 0;
+    virtual void operator()(Const<HavingClause> &c) = 0;
+    virtual void operator()(Const<OrderByClause> &c) = 0;
+    virtual void operator()(Const<LimitClause> &c) = 0;
+
     /* Statements */
     void operator()(Const<Stmt> &s) { s.accept(*this); }
     virtual void operator()(Const<ErrorStmt> &s) = 0;

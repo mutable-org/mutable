@@ -64,9 +64,13 @@ struct Parser
     Stmt * parse_DeleteStmt();
 
     /* Clauses */
-    std::vector<Expr*> parse_group_by_clause();
-    std::vector<std::pair<Expr*, bool>> parse_order_by_clause();
-    std::pair<Expr*, Expr*> parse_limit_clause();
+    Clause * parse_SelectClause();
+    Clause * parse_FromClause();
+    Clause * parse_WhereClause();
+    Clause * parse_GroupByClause();
+    Clause * parse_HavingClause();
+    Clause * parse_OrderByClause();
+    Clause * parse_LimitClause();
 
     /* Expressions */
     Expr * parse_Expr(int precedence_lhs = 0, Expr *lhs = nullptr);

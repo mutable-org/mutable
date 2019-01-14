@@ -46,7 +46,8 @@ const Type * arithmetic_join(const Numeric *lhs, const Numeric *rhs)
 
 }
 
-/*===== Expressions ==================================================================================================*/
+/*===== Expr =========================================================================================================*/
+
 void Sema::operator()(Const<ErrorExpr> &e)
 {
     e.type_ = Type::Get_Error();
@@ -247,7 +248,80 @@ ok:
     }
 }
 
-/*===== Statements ===================================================================================================*/
+/*===== Clause =======================================================================================================*/
+
+void Sema::operator()(Const<ErrorClause>&)
+{
+    /* nothing to be done */
+}
+
+void Sema::operator()(Const<SelectClause> &c)
+{
+    Catalog &C = Catalog::Get();
+    SemaContext &Ctx = push_context();
+    const auto &DB = C.get_database_in_use();
+    /* TODO check whether expressions can be computed */
+}
+
+void Sema::operator()(Const<FromClause> &c)
+{
+    Catalog &C = Catalog::Get();
+    SemaContext &Ctx = push_context();
+    const auto &DB = C.get_database_in_use();
+
+    /* Check whether the source tables in the FROM clause exist in the database.  Add the source tables to the current
+     * context, using their alias if provided (e.g. FROM src AS alias). */
+    for (auto &table: c.from) {
+        try {
+            const Relation &R = DB[table.first.text];
+            const char *table_name = table.second ? table.second.text : R.name;
+            Ctx.sources.emplace(table_name, &R);
+        } catch (std::out_of_range) {
+            diag.e(table.first.pos) << "No table " << table.first.text << " in database " << DB.name << ".\n";
+            return;
+        }
+    }
+}
+
+void Sema::operator()(Const<WhereClause> &c)
+{
+    /* Analyze expression. */
+    (*this)(*c.where);
+
+    /* WHERE condition must be of boolean type. */
+    if (not c.where->type()->is_error() and not c.where->type()->is_boolean())
+        diag.e(c.tok.pos) << "The expression in the WHERE clause must be of boolean type.\n";
+}
+
+void Sema::operator()(Const<GroupByClause> &c)
+{
+    for (auto expr : c.group_by)
+        (*this)(*expr);
+}
+
+void Sema::operator()(Const<HavingClause> &c)
+{
+    (*this)(*c.having);
+    /* TODO The HAVING clause must be a conjunction or disjunction of aggregates or comparisons of grouping keys. */
+}
+
+void Sema::operator()(Const<OrderByClause> &c)
+{
+    if (not c.order_by.empty()) {
+        /* Analyze all ordering expressions. */
+        /* TODO If we grouped before, the ordering expressions must depend on a group key or an aggregate. */
+        for (auto o : c.order_by)
+            (*this)(*o.first);
+    }
+}
+
+void Sema::operator()(Const<LimitClause>&)
+{
+    /* nothing to be done */
+}
+
+/*===== Stmt =========================================================================================================*/
+
 void Sema::operator()(Const<ErrorStmt>&)
 {
     /* nothing to be done */
@@ -323,52 +397,14 @@ void Sema::operator()(Const<SelectStmt> &s)
     }
     const auto &DB = C.get_database_in_use();
 
-    /* Check whether the source tables in the FROM clause exist in the database.  Add the source tables to the current
-     * context, using their alias if provided (e.g. FROM src AS alias). */
-    for (auto &table: s.from) {
-        try {
-            const Relation &R = DB[table.first.text];
-            const char *table_name = table.second ? table.second.text : R.name;
-            Ctx.sources.emplace(table_name, &R);
-        } catch (std::out_of_range) {
-            diag.e(table.first.pos) << "No table " << table.first.text << " in database " << DB.name << ".\n";
-            return;
-        }
-    }
+    (*this)(*s.from);
+    (*this)(*s.select);
 
-    /* Analyze WHERE clause. */
-    if (s.where) {
-        (*this)(*s.where);
-        if (not s.where->type()->is_error() and not s.where->type()->is_boolean())
-            diag.err() << "The expression in the WHERE clause must be of boolean type.\n"; // TODO position
-    }
-
-    /* Analyze GROUP BY clause. */
-    if (not s.group_by.empty()) {
-        /* Analyze all grouping expressions. */
-        for (auto expr : s.group_by)
-            (*this)(*expr);
-    }
-
-    /* Analyze HAVING clause. */
-    if (s.having) {
-        (*this)(*s.having);
-        /* TODO The HAVING clause must be a conjunction or disjunction of aggregates or comparisons of grouping keys. */
-    }
-
-    /* Analyze ORDER BY clause. */
-    if (not s.order_by.empty()) {
-        /* Analyze all ordering expressions. */
-        /* TODO If we grouped before, the ordering expressions must depend on a group key or an aggregate. */
-        for (auto o : s.order_by)
-            (*this)(*o.first);
-    }
-
-    if (s.limit.first) {
-        (*this)(*s.limit.first);
-        if (s.limit.second)
-            (*this)(*s.limit.second);
-    }
+    if (s.where) (*this)(*s.where);
+    if (s.group_by) (*this)(*s.group_by);
+    if (s.having) (*this)(*s.having);
+    if (s.order_by) (*this)(*s.order_by);
+    if (s.limit) (*this)(*s.limit);
 
     /* Pop context from stack. */
     pop_context();

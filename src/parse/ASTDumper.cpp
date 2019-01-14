@@ -6,6 +6,8 @@
 using namespace db;
 
 
+/*===== Expr =========================================================================================================*/
+
 void ASTDumper::operator()(Const<ErrorExpr> &e)
 {
     indent() << "ErrorExpr '" << e.tok.text << "' (" << e.tok.pos << ')' << std::endl;
@@ -59,6 +61,101 @@ void ASTDumper::operator()(Const<BinaryExpr> &e)
     --indent_;
 }
 
+/*===== Clause =======================================================================================================*/
+
+void ASTDumper::operator()(Const<ErrorClause> &c)
+{
+    indent() << "ErrorClause: '" << c.tok.text << "' (" << c.tok.pos << ')' << std::endl;
+}
+
+void ASTDumper::operator()(Const<SelectClause> &c)
+{
+    indent() << "SelectClause (" << c.tok.pos << ')' << std::endl;
+    ++indent_;
+    for (auto s : c.select) {
+        if (s.second) {
+            indent() << "AS '" << s.second.text << "' (" << s.second.pos << ')' << std::endl;
+            ++indent_;
+            (*this)(*s.first);
+            --indent_;
+        } else {
+            (*this)(*s.first);
+        }
+    }
+    --indent_;
+}
+
+void ASTDumper::operator()(Const<FromClause> &c)
+{
+    indent() << "FromClause (" << c.tok.pos << ')' << std::endl;
+    ++indent_;
+    for (auto f : c.from) {
+        if (f.second) {
+            indent() << "AS '" << f.second.text << "' (" << f.second.pos << ')' << std::endl;
+            ++indent_;
+            indent() << f.first.text << " (" << f.first.pos << ')' << std::endl;
+            --indent_;
+        } else {
+            indent() << f.first.text << " (" << f.first.pos << ')' << std::endl;
+        }
+    }
+    --indent_;
+}
+
+void ASTDumper::operator()(Const<WhereClause> &c)
+{
+    indent() << "WhereClause (" << c.tok.pos << ')' << std::endl;
+    ++indent_;
+    (*this)(*c.where);
+    --indent_;
+}
+
+
+void ASTDumper::operator()(Const<GroupByClause> &c)
+{
+    indent() << "GroupByClause (" << c.tok.pos << ')' << std::endl;
+    ++indent_;
+    for (auto g : c.group_by)
+        (*this)(*g);
+    --indent_;
+}
+
+void ASTDumper::operator()(Const<HavingClause> &c)
+{
+    indent() << "HavingClause (" << c.tok.pos << ')' << std::endl;
+    ++indent_;
+    (*this)(*c.having);
+    --indent_;
+}
+
+void ASTDumper::operator()(Const<OrderByClause> &c)
+{
+    indent() << "OrderByClause (" << c.tok.pos << ')' << std::endl;
+    ++indent_;
+    for (auto o : c.order_by) {
+        indent() << (o.second ? "ASC" : "DESC") << std::endl;
+        ++indent_;
+        (*this)(*o.first);
+        --indent_;
+    }
+    --indent_;
+}
+
+void ASTDumper::operator()(Const<LimitClause> &c)
+{
+    indent() << "LimitClause (" << c.tok.pos << ')' << std::endl;
+    ++indent_;
+
+    indent() << "LIMIT " << c.limit.text << " (" << c.limit.pos << ')' << std::endl;
+
+    if (c.offset)
+        indent() << "OFFSET " << c.offset.text << " (" << c.offset.pos << ')' << std::endl;
+
+    --indent_;
+}
+
+/*===== Stmt =========================================================================================================*/
+
 void ASTDumper::operator()(Const<ErrorStmt> &s)
 {
     indent() << "ErrorStmt: '" << s.tok.text << "' (" << s.tok.pos << ')' << std::endl;
@@ -96,75 +193,14 @@ void ASTDumper::operator()(Const<SelectStmt> &s)
     indent() << "SelectStmt" << std::endl;
     ++indent_;
 
-    indent() << "SELECT: select_all=" << (s.select_all ? "true" : "false") << std::endl;
-    ++indent_;
-    for (auto select : s.select) {
-        if (select.second) {
-            indent() << "AS '" << select.second.text << "' (" << select.second.pos << ')' << std::endl;
-            ++indent_;
-            (*this)(*select.first);
-            --indent_;
-        } else
-            (*this)(*select.first);
-    }
-    --indent_;
+    (*this)(*s.select);
+    (*this)(*s.from);
 
-    indent() << "FROM" << std::endl;
-    ++indent_;
-    for (auto f : s.from) {
-        indent() << '\'' << f.first.text << '\'';
-        if (f.second)
-            out << " AS '" << f.second.text << '\'';
-        out << " (" << f.first.pos << ')' << std::endl;
-    }
-    --indent_;
-
-    if (s.where) {
-        indent() << "WHERE" << std::endl;
-        ++indent_;
-        (*this)(*s.where);
-        --indent_;
-    }
-
-    if (not s.group_by.empty()) {
-        indent() << "GROUP BY" << std::endl;
-        ++indent_;
-        for (auto g : s.group_by)
-            (*this)(*g);
-        --indent_;
-    }
-
-    if (s.having) {
-        indent() << "HAVING" << std::endl;
-        ++indent_;
-        (*this)(*s.having);
-        --indent_;
-    }
-
-    if (not s.order_by.empty()) {
-        indent() << "ORDER BY" << std::endl;
-        ++indent_;
-        for (auto o : s.order_by) {
-            indent() << (o.second ? "ASC" : "DESC") << std::endl;
-            ++indent_;
-            (*this)(*o.first);
-            --indent_;
-        }
-        --indent_;
-    }
-
-    if (s.limit.first) {
-        indent() << "LIMIT" << std::endl;
-        ++indent_;
-        (*this)(*s.limit.first);
-        if (s.limit.second) {
-            indent() << "OFFSET" << std::endl;
-            ++indent_;
-            (*this)(*s.limit.second);
-            --indent_;
-        }
-        --indent_;
-    }
+    if (s.where) (*this)(*s.where);
+    if (s.group_by) (*this)(*s.group_by);
+    if (s.having) (*this)(*s.having);
+    if (s.order_by) (*this)(*s.order_by);
+    if (s.limit) (*this)(*s.limit);
 
     --indent_;
 }
@@ -213,16 +249,9 @@ void ASTDumper::operator()(Const<UpdateStmt> &s)
         --indent_;
     }
     --indent_;
-    --indent_;
 
-    if (s.where) {
-        ++indent_;
-        indent() << "where" << std::endl;
-        ++indent_;
-        (*this)(*s.where);
-        --indent_;
-        --indent_;
-    }
+    if (s.where) (*this)(*s.where);
+
     --indent_;
 }
 
@@ -232,10 +261,7 @@ void ASTDumper::operator()(Const<DeleteStmt> &s)
 
     if (s.where) {
         ++indent_;
-        indent() << "where" << std::endl;
-        ++indent_;
         (*this)(*s.where);
-        --indent_;
         --indent_;
     }
 }

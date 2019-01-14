@@ -47,6 +47,71 @@ void ASTPrinter::operator()(Const<BinaryExpr> &e)
     out << '(' << *e.lhs << ' ' << e.op.text << ' ' << *e.rhs << ')';
 }
 
+/*===== Clause =======================================================================================================*/
+
+void ASTPrinter::operator()(Const<ErrorClause>&)
+{
+    out << "[error-clause]";
+}
+
+void ASTPrinter::operator()(Const<SelectClause> &c)
+{
+    out << "SELECT ";
+    if (c.select_all) out << '*';
+    for (auto it = c.select.cbegin(), end = c.select.cend(); it != end; ++it) {
+        if (c.select_all or it != c.select.cbegin()) out << ", ";
+        (*this)(*it->first);
+        if (it->second) out << " AS " << it->second.text;
+    }
+}
+
+void ASTPrinter::operator()(Const<FromClause> &c)
+{
+    out << "FROM ";
+    for (auto it = c.from.cbegin(), end = c.from.cend(); it != end; ++it) {
+        if (it != c.from.cbegin()) out << ", ";
+        out << it->first.text;
+        if (it->second) out << " AS " << it->second.text;
+    }
+}
+
+void ASTPrinter::operator()(Const<WhereClause> &c)
+{
+    out << "WHERE " << *c.where;
+}
+
+void ASTPrinter::operator()(Const<GroupByClause> &c)
+{
+    out << "GROUP BY ";
+    for (auto it = c.group_by.cbegin(), end = c.group_by.cend(); it != end; ++it) {
+        if (it != c.group_by.cbegin()) out << ", ";
+        (*this)(**it);
+    }
+}
+
+void ASTPrinter::operator()(Const<HavingClause> &c)
+{
+    out << "HAVING " << *c.having;
+}
+
+void ASTPrinter::operator()(Const<OrderByClause> &c)
+{
+    out << "ORDER BY ";
+    for (auto it = c.order_by.cbegin(), end = c.order_by.cend(); it != end; ++it) {
+        if (it != c.order_by.cbegin()) out << ", ";
+        (*this)(*it->first);
+        if (it->second) out << " ASC";
+        else            out << " DESC";
+    }
+}
+
+void ASTPrinter::operator()(Const<LimitClause> &c)
+{
+    out << "LIMIT " << c.limit.text;
+    if (c.offset)
+        out << " OFFSET " << c.offset.text;
+}
+
 /*===== Stmt =========================================================================================================*/
 
 void ASTPrinter::operator()(Const<ErrorStmt>&)
@@ -81,41 +146,31 @@ void ASTPrinter::operator()(Const<CreateTableStmt> &s)
 
 void ASTPrinter::operator()(Const<SelectStmt> &s)
 {
-    out << "SELECT ";
-    if (s.select_all) out << '*';
-    for (auto it = s.select.cbegin(), end = s.select.cend(); it != end; ++it) {
-        if (s.select_all or it != s.select.cbegin()) out << ", ";
-        (*this)(*it->first);
-        if (it->second) out << " AS " << it->second.text;
+    (*this)(*s.select);
+    out << '\n';
+    (*this)(*s.from);
+
+    if (s.where) {
+        out << '\n';
+        (*this)(*s.where);
     }
-    out << "\nFROM ";
-    for (auto it = s.from.cbegin(), end = s.from.cend(); it != end; ++it) {
-        if (it != s.from.cbegin()) out << ", ";
-        out << it->first.text;
-        if (it->second) out << " AS " << it->second.text;
+    if (s.group_by) {
+        out << '\n';
+        (*this)(*s.group_by);
     }
-    if (s.where) out << "\nWHERE " << *s.where;
-    if (not s.group_by.empty()) {
-        out << "\nGROUP BY ";
-        for (auto it = s.group_by.cbegin(), end = s.group_by.cend(); it != end; ++it) {
-            if (it != s.group_by.cbegin()) out << ", ";
-            (*this)(**it);
-        }
+    if (s.having) {
+        out << '\n';
+        (*this)(*s.having);
     }
-    if (s.having) out << "\nHAVING " << *s.having;
-    if (not s.order_by.empty()) {
-        out << "\nORDER BY ";
-        for (auto it = s.order_by.cbegin(), end = s.order_by.cend(); it != end; ++it) {
-            if (it != s.order_by.cbegin()) out << ", ";
-            (*this)(*it->first);
-            if (it->second) out << " ASC";
-            else            out << " DESC";
-        }
+    if (s.order_by) {
+        out << '\n';
+        (*this)(*s.order_by);
     }
-    if (s.limit.first) {
-        out << "\nLIMIT " << *s.limit.first;
-        if (s.limit.second) out << " OFFSET " << *s.limit.second;
+    if (s.limit) {
+        out << '\n';
+        (*this)(*s.limit);
     }
+
     out << ';';
 }
 
@@ -145,13 +200,13 @@ void ASTPrinter::operator()(Const<UpdateStmt> &s)
         if (it != s.set.cbegin()) out << ",\n";
         out << "    " << it->first.text << " = " << *it->second;
     }
-    if (s.where) out << "\nWHERE " << *s.where;
+    if (s.where) out << '\n' << *s.where;
     out << ';';
 }
 
 void ASTPrinter::operator()(Const<DeleteStmt> &s)
 {
     out << "DELETE FROM " << s.table_name.text;
-    if (s.where) out << " WHERE " << *s.where;
+    if (s.where) out << '\n' << *s.where;
     out << ';';
 }

@@ -23,6 +23,16 @@ struct ASTPrinter : ConstASTVisitor
     virtual void operator()(Const<UnaryExpr> &e);
     virtual void operator()(Const<BinaryExpr> &e);
 
+    /* Clauses */
+    virtual void operator()(Const<ErrorClause> &c);
+    virtual void operator()(Const<SelectClause> &c);
+    virtual void operator()(Const<FromClause> &c);
+    virtual void operator()(Const<WhereClause> &c);
+    virtual void operator()(Const<GroupByClause> &c);
+    virtual void operator()(Const<HavingClause> &c);
+    virtual void operator()(Const<OrderByClause> &c);
+    virtual void operator()(Const<LimitClause> &c);
+
     /* Statements */
     virtual void operator()(Const<ErrorStmt> &s);
     virtual void operator()(Const<EmptyStmt> &s);

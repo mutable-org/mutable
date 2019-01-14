@@ -8,6 +8,12 @@
 using namespace db;
 
 
+/*======================================================================================================================
+ * Destructors
+ *====================================================================================================================*/
+
+/*===== Expr =========================================================================================================*/
+
 FnApplicationExpr::~FnApplicationExpr()
 {
     delete fn;
@@ -15,21 +21,47 @@ FnApplicationExpr::~FnApplicationExpr()
         delete arg;
 }
 
+/*===== Clause =======================================================================================================*/
+
+SelectClause::~SelectClause()
+{
+    for (auto s : select)
+        delete s.first;
+}
+
+WhereClause::~WhereClause()
+{
+    delete where;
+}
+
+GroupByClause::~GroupByClause()
+{
+    for (auto e : group_by)
+        delete e;
+}
+
+HavingClause::~HavingClause()
+{
+    delete having;
+}
+
+OrderByClause::~OrderByClause()
+{
+    for (auto o : order_by)
+        delete o.first;
+}
+
+/*===== Stmt =========================================================================================================*/
+
 SelectStmt::~SelectStmt()
 {
-    for (auto &s : select)
-        delete s.first;
-
+    delete select;
+    delete from;
     delete where;
-
-    for (auto g : group_by)
-        delete g;
-
-    for (auto &o : order_by)
-        delete o.first;
-
-    delete limit.first;
-    delete limit.second;
+    delete group_by;
+    delete having;
+    delete order_by;
+    delete limit;
 }
 
 InsertStmt::~InsertStmt()
@@ -62,6 +94,12 @@ std::ostream & db::operator<<(std::ostream &out, const Expr &e) {
     return out;
 }
 
+std::ostream & db::operator<<(std::ostream &out, const Clause &c) {
+    ASTPrinter p(out);
+    p(c);
+    return out;
+}
+
 std::ostream & db::operator<<(std::ostream &out, const Stmt &s) {
     ASTPrinter p(out);
     p(s);
@@ -77,13 +115,18 @@ void Expr::dump(std::ostream &out) const
     ASTDumper dumper(out);
     dumper(*this);
 }
-
 void Expr::dump() const { dump(std::cerr); }
+
+void Clause::dump(std::ostream &out) const
+{
+    ASTDumper dumper(out);
+    dumper(*this);
+}
+void Clause::dump() const { dump(std::cerr); }
 
 void Stmt::dump(std::ostream &out) const
 {
     ASTDumper dumper(out);
     dumper(*this);
 }
-
 void Stmt::dump() const { dump(std::cerr); }

@@ -32,7 +32,7 @@ def run(filename, is_positive):
     else:
         if is_positive:
             if err:
-                print(' {}  -->  unexpected error:\n{}'.format(termcolor.err('✘'), err))
+                print(' {}  -->  unexpected error:\n{}'.format(termcolor.err('✘'), str(err, 'utf-8')))
                 return False
             if process.returncode != 0:
                 print(' {}  -->  unexpected return code {}'.format(termcolor.err('✘'), process.returncode))

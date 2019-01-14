@@ -312,6 +312,13 @@ void Sema::operator()(Const<GroupByClause> &c)
 void Sema::operator()(Const<HavingClause> &c)
 {
     (*this)(*c.having);
+
+    /* HAVING condition must be of boolean type. */
+    if (not c.having->type()->is_error() and not c.having->type()->is_boolean()) {
+        diag.e(c.tok.pos) << "The expression in the HAVING clause must be of boolean type.\n";
+        return;
+    }
+
     /* TODO The HAVING clause must be a conjunction or disjunction of aggregates or comparisons of grouping keys. */
 }
 

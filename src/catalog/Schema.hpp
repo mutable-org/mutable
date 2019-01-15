@@ -250,7 +250,7 @@ struct Schema
     public:
     const char *name;
     private:
-    std::unordered_map<const char*, Relation*> relations_;
+    std::unordered_map<const char*, Relation*> relations_; ///> the relations of this schema
 
     private:
     Schema(const char *name) : name(name) { }
@@ -290,8 +290,8 @@ struct Schema
 struct Catalog
 {
     private:
-    std::unordered_map<const char*, Schema*> schemas_;
-    Schema *database_in_use_ = nullptr;
+    std::unordered_map<const char*, Schema*> schemas_; ///> the schemas; one per database
+    Schema *database_in_use_ = nullptr; ///> the currently used database
 
     private:
     Catalog() { }

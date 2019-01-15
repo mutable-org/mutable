@@ -67,6 +67,7 @@ struct Designator : Expr
     void accept(ConstASTVisitor &v) const;
 
     bool has_table_name() const { return bool(table_name); }
+    bool is_identifier() const { return not has_table_name(); }
 };
 
 /** A constant: a string literal or a numeric constant. */

@@ -260,13 +260,13 @@ struct Schema
 
     std::size_t size() const { return relations_.size(); }
 
+    Relation & get_relation(const char *name) const { return *relations_.at(name); }
     Relation & add_relation(const char *name) {
         auto it = relations_.find(name);
         if (it != relations_.end()) throw std::invalid_argument("relation with that name already exists");
         it = relations_.emplace_hint(it, name, new Relation(name));
         return *it->second;
     }
-
     Relation & add(Relation *r) {
         auto it = relations_.find(r->name);
         if (it != relations_.end()) throw std::invalid_argument("relation with that name already exists");
@@ -274,16 +274,6 @@ struct Schema
         return *it->second;
     }
 
-    Relation & get_or_add_relation(const char *name) {
-        auto it = relations_.find(name);
-        if (it == relations_.end()) {
-            Relation *R = new Relation(name);
-            it = relations_.emplace_hint(it, name, R);
-        }
-        return *it->second;
-    }
-    Relation & operator[](const char *name) { return get_or_add_relation(name); }
-    const Relation & operator[](const char *name) const { return *relations_.at(name); }
 };
 
 /** The catalog keeps track of all meta information of the database system.  There is always exactly one catalog. */
@@ -313,19 +303,11 @@ struct Catalog
         it = schemas_.emplace_hint(it, name, new Schema(name));
         return *it->second;
     }
-
     Schema & get_database(const char *name) const { return *schemas_.at(name); }
-
-    Schema & get_or_add_database(const char *name) {
-        auto it = schemas_.find(name);
-        if (it == schemas_.end()) {
-            it = schemas_.emplace_hint(it, name, new Schema(name));
-        }
-        return *it->second;
-    }
+    bool drop_database(const char *name) { return schemas_.erase(name) != 0; }
+    bool drop_database(const Schema &S) { return drop_database(S.name); }
 
     bool has_database_in_use() const { return database_in_use_ != nullptr; }
-
     Schema & get_database_in_use() {
         if (not has_database_in_use())
             throw std::logic_error("no database currently in use");

@@ -288,7 +288,7 @@ void Sema::operator()(Const<FromClause> &c)
      * context, using their alias if provided (e.g. FROM src AS alias). */
     for (auto &table: c.from) {
         try {
-            const Relation &R = DB[table.first.text];
+            const Relation &R = DB.get_relation(table.first.text);
             const char *table_name = table.second ? table.second.text : R.name;
             auto res = Ctx.sources.emplace(table_name, &R);
             if (not res.second) {

@@ -3,12 +3,24 @@
 #include "catalog/Schema.hpp"
 #include "util/fn.hpp"
 #include <cmath>
+#include <cstring>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 
 
 using namespace db;
 
+
+namespace {
+
+const char * get_unique_id()
+{
+    static unsigned id = 0;
+    return strdup(std::to_string(id++).c_str());
+}
+
+}
 
 TEST_CASE("Type/CharacterSequence", "[unit]")
 {
@@ -289,21 +301,46 @@ TEST_CASE("Catalog singleton c'tor")
 TEST_CASE("Catalog Schema creation")
 {
     Catalog &C = Catalog::Get();
-    Schema &S = C.get_or_add_database("myschema");
-    Schema &S2 = C.get_or_add_database("myschema");
+    const char *db_name = get_unique_id();
+    Schema &S = C.add_database(db_name);
+    Schema &S2 = C.get_database(db_name);
     REQUIRE(&S == &S2);
-    REQUIRE(streq(S.name, "myschema"));
+    REQUIRE(streq(S.name, db_name));
+}
+
+TEST_CASE("Catalog::drop_database() by name")
+{
+    Catalog &C = Catalog::Get();
+    const char *db_name = get_unique_id();
+    C.add_database(db_name);
+
+    REQUIRE_NOTHROW(C.get_database(db_name));
+    REQUIRE(C.drop_database(db_name));
+    CHECK_THROWS_AS(C.get_database(db_name), std::out_of_range);
+}
+
+TEST_CASE("Catalog::drop_database() by reference")
+{
+    Catalog &C = Catalog::Get();
+    const char *db_name = get_unique_id();
+    Schema &S = C.add_database(db_name);
+
+    REQUIRE_NOTHROW(C.get_database(db_name));
+    REQUIRE(C.drop_database(S));
+    CHECK_THROWS_AS(C.get_database(db_name), std::out_of_range);
 }
 
 TEST_CASE("Catalog use database")
 {
     Catalog &C = Catalog::Get();
-    Schema &S1 = C.get_or_add_database("myschema");
+    const char *db_name = get_unique_id();
+
+    Schema &S = C.add_database(db_name);
     REQUIRE(not C.has_database_in_use());
-    C.set_database_in_use(S1);
+    C.set_database_in_use(S);
     REQUIRE(C.has_database_in_use());
     auto &in_use = C.get_database_in_use();
-    REQUIRE(&S1 == &in_use);
+    REQUIRE(&S == &in_use);
     C.unset_database_in_use();
     REQUIRE(not C.has_database_in_use());
 }
@@ -311,18 +348,20 @@ TEST_CASE("Catalog use database")
 TEST_CASE("Schema c'tor")
 {
     Catalog &C = Catalog::Get();
-    Schema &S = C.get_or_add_database("myschema");
+    const char *db_name = get_unique_id();
+    Schema &S = C.add_database(db_name);
     REQUIRE(S.size() == 0);
 }
 
 TEST_CASE("Schema/add relation error if name already taken")
 {
     Catalog &C = Catalog::Get();
-    const char *name = "myrelation";
-    Schema &S = C.get_or_add_database("myschema");
+    const char *db_name = get_unique_id();
+    Schema &S = C.add_database(db_name);
 
-    S.get_or_add_relation(name);
-    Relation *R = new Relation(name);
+    const char *rel_name = "myrelation";
+    S.add_relation(rel_name);
+    Relation *R = new Relation(rel_name);
     REQUIRE_THROWS_AS(S.add(R), std::invalid_argument);
     delete R;
 }

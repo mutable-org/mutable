@@ -397,17 +397,17 @@ Clause * Parser::parse_OrderByClause()
     Token start = token();
     std::vector<OrderByClause::order_type> order_by;
 
-    /* 'ORDER' 'BY' designator [ 'ASC' | 'DESC' ] { ',' designator [ 'ASC' | 'DESC' ] } */
+    /* 'ORDER' 'BY' expression [ 'ASC' | 'DESC' ] { ',' expression [ 'ASC' | 'DESC' ] } */
     expect(TK_Order);
     expect(TK_By);
 
     do {
-        auto d = parse_designator();
+        auto e = parse_Expr();
         if (accept(TK_Descending)) {
-            order_by.push_back(std::make_pair(d, false));
+            order_by.push_back(std::make_pair(e, false));
         } else {
             accept(TK_Ascending);
-            order_by.push_back(std::make_pair(d, true));
+            order_by.push_back(std::make_pair(e, true));
         }
     } while (accept(TK_COMMA));
 

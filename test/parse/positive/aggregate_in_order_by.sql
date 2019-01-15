@@ -1,0 +1,3 @@
+SELECT *
+FROM mytable
+ORDER BY MAX(x) DESC, AVG(y) ASC;

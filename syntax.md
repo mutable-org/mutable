@@ -89,7 +89,7 @@ having-clause ::= 'HAVING' expression ;
 
 ##### Order By Clause
 ```ebnf
-order_by-clause ::= 'ORDER' 'BY' designator [ 'ASC' | 'DESC' ] { ',' designator [ 'ASC' | 'DESC' ] } ;
+order_by-clause ::= 'ORDER' 'BY' expression [ 'ASC' | 'DESC' ] { ',' expression [ 'ASC' | 'DESC' ] } ;
 ```
 
 ##### Limit Clause

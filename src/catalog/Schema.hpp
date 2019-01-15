@@ -3,6 +3,7 @@
 #include "util/fn.hpp"
 #include "util/macro.hpp"
 #include "util/Pool.hpp"
+#include "util/StringPool.hpp"
 #include <functional>
 #include <iostream>
 #include <unordered_map>
@@ -280,6 +281,7 @@ struct Schema
 struct Catalog
 {
     private:
+    StringPool pool; ///> pool of strings
     std::unordered_map<const char*, Schema*> schemas_; ///> the schemas; one per database
     Schema *database_in_use_ = nullptr; ///> the currently used database
 
@@ -297,6 +299,10 @@ struct Catalog
 
     std::size_t num_schemas() const { return schemas_.size(); }
 
+    StringPool & get_pool() { return pool; }
+    const StringPool & get_pool() const { return pool; }
+
+    /*===== Database =================================================================================================*/
     Schema & add_database(const char *name) {
         auto it = schemas_.find(name);
         if (it != schemas_.end()) throw std::invalid_argument("database with that name already exist");

@@ -80,7 +80,8 @@ int main(int argc, const char **argv)
     }
 
     Diagnostic diag(color, std::cout, std::cerr);
-    Lexer lexer(diag, filename, *in);
+    StringPool pool;
+    Lexer lexer(diag, pool, filename, *in);
     Parser parser(lexer);
     ASTPrinter printer(std::cout);
 

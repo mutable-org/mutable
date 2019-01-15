@@ -19,7 +19,7 @@ inline bool is_alnum(int c) { return is_dec(c) || is_alpha(c); }
 
 void Lexer::initialize_keywords()
 {
-#define DB_KEYWORD(tok, text) keywords_.emplace(pool_(#text), TK_##tok);
+#define DB_KEYWORD(tok, text) keywords_.emplace(pool(#text), TK_##tok);
 #include "tables/Keywords.tbl"
 #undef DB_KEYWORD
 }

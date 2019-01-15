@@ -74,7 +74,8 @@ int main(int argc, const char **argv)
     }
 
     Diagnostic diag(color, std::cout, std::cerr);
-    Lexer lexer(diag, filename, *in);
+    StringPool pool;
+    Lexer lexer(diag, pool, filename, *in);
 
     while (auto tok = lexer.next())
         diag(tok.pos) << tok.text << ' ' << tok.type << std::endl;

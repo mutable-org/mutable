@@ -80,8 +80,9 @@ int main(int argc, const char **argv)
         std::cerr << strerror(errno) << std::endl;
     }
 
+    Catalog &C = Catalog::Get();
     Diagnostic diag(color, std::cout, std::cerr);
-    Lexer lexer(diag, filename, *in);
+    Lexer lexer(diag, C.get_pool(), filename, *in);
     Parser parser(lexer);
     ASTDumper dump(std::cerr);
     Sema sema(diag);

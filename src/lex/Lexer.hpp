@@ -15,6 +15,7 @@ struct Lexer
 {
     public:
     Diagnostic &diag;
+    StringPool &pool;
     const char *filename;
     std::istream &in;
 
@@ -22,14 +23,14 @@ struct Lexer
     using Keywords_t = std::unordered_map<const char*, TokenType>;
     using buf_t = std::vector<char>;
     Keywords_t keywords_;
-    StringPool pool_;
     int c_;
     Position pos_, start_;
     buf_t buf_;
 
     public:
-    explicit Lexer(Diagnostic &diag, const char *filename, std::istream &in)
+    explicit Lexer(Diagnostic &diag, StringPool &pool, const char *filename, std::istream &in)
         : diag(diag)
+        , pool(pool)
         , filename(filename)
         , in(in)
         , pos_(filename)
@@ -77,7 +78,7 @@ struct Lexer
 
     const char * internalize() {
         buf_.push_back('\0');
-        return pool_(buf_.data());
+        return pool(buf_.data());
     }
 
     /* Lexer routines. */

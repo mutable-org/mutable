@@ -42,6 +42,10 @@ FROM lineitem;
 SELECT O_ORDERKEY, O_TOTALPRICE
 FROM orders;
 
+-- Simple SELECT with qualified attribute
+SELECT l.L_ORDERKEY
+FROM lineitem AS l;
+
 -- SELECT with WHERE clause
 SELECT *
 FROM lineitem

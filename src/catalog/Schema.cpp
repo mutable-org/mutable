@@ -66,6 +66,11 @@ const Numeric * Type::Get_Double()
     return &d;
 }
 
+const FnType * Type::Get_Function(const Type *return_type, std::vector<const Type*> parameter_types)
+{
+    return static_cast<const FnType*>(types_(FnType(return_type, parameter_types)));
+}
+
 /*===== Comparison ===================================================================================================*/
 
 bool ErrorType::operator==(const Type &other) const
@@ -95,6 +100,17 @@ bool Numeric::operator==(const Type &other) const
     return false;
 }
 
+bool FnType::operator==(const Type &other) const
+{
+    if (auto o = dynamic_cast<const FnType*>(&other)) {
+        if (this->return_type != o->return_type) return false; // return types must match
+        if (this->parameter_types.size() != o->parameter_types.size()) return false; // parameter count must match
+        for (std::size_t i = 0, end = parameter_types.size(); i != end; ++i)
+            if (this->parameter_types[i] != o->parameter_types[i]) return false; // parameters must have same type
+    }
+    return true;
+}
+
 /*===== Hash =========================================================================================================*/
 
 uint64_t ErrorType::hash() const { return 0; }
@@ -104,6 +120,14 @@ uint64_t Boolean::hash() const { return 0; }
 uint64_t CharacterSequence::hash() const { return uint64_t(is_varying) | uint64_t(length) << 1; }
 
 uint64_t Numeric::hash() const { return (uint64_t(precision) << 32 | scale) * uint64_t(kind); }
+
+uint64_t FnType::hash() const
+{
+    auto h = return_type->hash();
+    for (auto p : parameter_types)
+        h = (h << 7) ^ p->hash();
+    return h;
+}
 
 /*===== Pretty Printing ==============================================================================================*/
 
@@ -136,6 +160,14 @@ void Numeric::print(std::ostream &out) const
     }
 }
 
+void FnType::print(std::ostream &out) const
+{
+    out << *return_type << '(';
+    for (auto it = parameter_types.cbegin(), end = parameter_types.cend(); it != end; ++it) {
+        if (it != parameter_types.cbegin()) out << ", ";
+        out << **it;
+    }
+}
 
 /*===== Dump =========================================================================================================*/
 
@@ -153,6 +185,18 @@ void Numeric::dump(std::ostream &out) const
 {
     out << "Numeric{ kind = " << Numeric::KIND_TO_STR_[kind] << ", precision = " << precision << ", scale = " << scale
         << " }" << std::endl;
+}
+
+void FnType::dump(std::ostream &out) const
+{
+    out << "FnType{\n    return_type: ";
+    return_type->dump(out);
+    out << "    parameter_types: {\n";
+    for (auto p :parameter_types) {
+        out << "        ";
+        p->dump(out);
+    }
+    out << '}' << std::endl;
 }
 
 /*======================================================================================================================

@@ -21,6 +21,7 @@ struct ErrorType;
 struct Boolean;
 struct CharacterSequence;
 struct Numeric;
+struct FnType;
 
 struct Type
 {
@@ -61,6 +62,7 @@ struct Type
     static const Numeric * Get_Integer(unsigned num_bytes);
     static const Numeric * Get_Float();
     static const Numeric * Get_Double();
+    static const FnType * Get_Function(const Type *return_type, std::vector<const Type*> parameter_types);
 };
 
 }
@@ -170,6 +172,31 @@ struct Numeric : Type
     void print(std::ostream &out) const;
     void dump(std::ostream &out) const;
 #undef kind_t
+};
+
+/** The function type defines the type and count of the arguments and the type of the return value of a SQL function. */
+struct FnType : Type
+{
+    friend struct Type;
+
+    const Type *return_type; ///> the type of the return value
+    std::vector<const Type *> parameter_types; ///> the types of the parameters
+
+    private:
+    FnType(const Type *return_type, std::vector<const Type*> parameter_types)
+        : return_type(notnull(return_type))
+        , parameter_types(parameter_types)
+    { }
+
+    public:
+    FnType(FnType&&) = default;
+
+    bool operator==(const Type &other) const;
+
+    uint64_t hash() const;
+
+    void print(std::ostream &out) const;
+    void dump(std::ostream &out) const;
 };
 
 /*======================================================================================================================

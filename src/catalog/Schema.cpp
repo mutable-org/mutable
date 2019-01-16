@@ -259,9 +259,9 @@ Schema::~Schema()
 Catalog::Catalog()
 {
     /* Initialize standard functions. */
-#define DB_FUNCTION(NAME, KIND) { \
+#define DB_FUNCTION(NAME) { \
     auto name = pool(#NAME); \
-    auto res = standard_functions_.emplace(name, new Function(name, Function::KIND, false)); \
+    auto res = standard_functions_.emplace(name, new Function(name, Function::FN_ ## NAME)); \
     insist(res.second, "function already defined"); \
 }
 #include "tables/Functions.tbl"

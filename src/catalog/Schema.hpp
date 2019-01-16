@@ -144,6 +144,9 @@ struct Numeric : Type
 {
     friend struct Type;
 
+    /** The maximal number of decimal digits that can be accurately represented by DECIMAL(p,s). */
+    static constexpr std::size_t MAX_DECIMAL_PRECISION = 19;
+
 #define kind_t(X) X(N_Int), X(N_Float), X(N_Decimal)
     DECLARE_ENUM(kind_t) kind; ///> the kind of numeric type
     /** The precision gives the maximum number of digits that can be represented by that type.  Its interpretation
@@ -273,18 +276,19 @@ struct Relation
 /** Defines a function.  There are functions pre-defined in the SQL standard and user-defined functions. */
 struct Function
 {
-#define kind_t(X) \
-    X(FN_Aggregate), \
-    X(FN_Scalar)
+    enum kind_t {
+#define DB_FUNCTION(NAME) FN_ ## NAME,
+#include "tables/Functions.tbl"
+#undef DB_FUNCTION
+        FN_UDF, // for all user-defined functions
+    };
 
     const char *name; ///> the name of the function
-    DECLARE_ENUM(kind_t) kind; ///> the kind of function
-    bool is_UDF; ///> is user-defined
+    kind_t kind; ///> the kind of function
 
-    Function(const char *name, kind_t kind, bool is_UDF) : name(name), kind(kind), is_UDF(is_UDF) { }
+    Function(const char *name, kind_t kind) : name(name), kind(kind) { }
 
-    bool is_aggregate() const { return kind == FN_Aggregate; }
-    bool is_scalar() const { return kind == FN_Scalar; }
+    bool is_UDF() const { return kind == FN_UDF; }
 };
 
 /** A schema is a description of a database.  It is a set of relations. */

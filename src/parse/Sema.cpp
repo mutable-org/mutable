@@ -160,6 +160,7 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
         return;
     }
     insist(d);
+    insist(not d->type_, "This identifier has already been analyzed.");
 
     /* Analyze arguments. */
     for (auto arg : e.args)
@@ -182,16 +183,111 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
     }
     insist(fn);
 
-    if (fn->is_UDF) {
-        diag.e(d->attr_name.pos) << "User-defined functions are not yet supported.\n";
-        e.type_ = Type::Get_Error();
-        return;
+    /* Infer the type of the function.  Functions are defined in an abstract way, where the type of the parameters is
+     * not specified.  We must infer the parameter types and the return type of the function. */
+    switch (fn->kind) {
+        default:
+            unreachable("Function kind not implemented");
+
+        case Function::FN_UDF:
+            diag.e(d->attr_name.pos) << "User-defined functions are not yet supported.\n";
+            d->type_ = e.type_ = Type::Get_Error();
+            return;
+
+        case Function::FN_MIN:
+        case Function::FN_MAX:
+        case Function::FN_SUM:
+        case Function::FN_AVG: {
+            if (e.args.size() == 0) {
+                diag.e(d->attr_name.pos) << "Missing argument for aggregate " << d << ".\n";
+                d->type_ = e.type_ = Type::Get_Error();
+                return;
+            }
+            if (e.args.size() > 1) {
+                diag.e(d->attr_name.pos) << "Too many arguments for aggregate " << d << ".\n";
+                d->type_ = e.type_ = Type::Get_Error();
+                return;
+            }
+            insist(e.args.size() == 1);
+            const Expr *arg = e.args[0];
+            if (arg->type()->is_error()) {
+                /* skip argument of error type */
+                d->type_ = e.type_ = Type::Get_Error();
+                return;
+            }
+            if (not arg->type()->is_numeric()) {
+                /* invalid argument type */
+                diag.e(d->attr_name.pos) << "Argument of aggregate function must be of numeric type.\n";
+                d->type_ = e.type_ = Type::Get_Error();
+                return;
+            }
+            insist(arg->type()->is_numeric());
+
+            switch (fn->kind) {
+                default:
+                    unreachable("Invalid function kind");
+
+                case Function::FN_MIN:
+                case Function::FN_MAX:
+                case Function::FN_AVG:
+                    /* MIN/MAX/AVG maintain type */
+                    d->type_ = Type::Get_Function(arg->type(), { arg->type() });
+                    e.type_ = arg->type();
+                    break;
+
+                case Function::FN_SUM: {
+                    /* SUM can overflow.  Always assume type of highest precision. */
+                    const Numeric *arg_type = cast<const Numeric>(arg->type());
+                    switch (arg_type->kind) {
+                        case Numeric::N_Int:
+                            e.type_ = Type::Get_Integer(8);
+                            break;
+
+                        case Numeric::N_Float:
+                            e.type_ = Type::Get_Double();
+                            break;
+
+                        case Numeric::N_Decimal:
+                            e.type_ = Type::Get_Decimal(Numeric::MAX_DECIMAL_PRECISION, arg_type->scale);
+                            break;
+                    }
+                    d->type_ = Type::Get_Function(e.type(), { e.type() });
+                }
+            }
+            break;
+        }
+
+        case Function::FN_COUNT:
+            unreachable("Not implemented.");
+
+        case Function::FN_ISNULL: {
+            if (e.args.size() == 0) {
+                diag.e(d->attr_name.pos) << "Missing argument for aggregate " << d << ".\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
+            if (e.args.size() > 1) {
+                diag.e(d->attr_name.pos) << "Too many arguments for aggregate " << d << ".\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
+            insist(e.args.size() == 1);
+            const Expr *arg = e.args[0];
+
+            if (arg->type()->is_error()) {
+                e.type_ = Type::Get_Error();
+                return;
+            }
+
+            d->type_ = Type::Get_Function(Type::Get_Boolean(), { arg->type() });
+            e.type_= Type::Get_Boolean();
+            break;
+        }
+
     }
 
-    /* This is a standard function.  Infer function type. */
-    /* TODO */
-    diag.w(d->attr_name.pos) << "Type inference for functions not yet implemented.\n";
-    e.type_ = Type::Get_Error();
+    insist(d->type_);
+    insist(e.type_);
 }
 
 void Sema::operator()(Const<UnaryExpr> &e)

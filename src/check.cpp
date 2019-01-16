@@ -84,7 +84,6 @@ int main(int argc, const char **argv)
     Diagnostic diag(color, std::cout, std::cerr);
     Lexer lexer(diag, C.get_pool(), filename, *in);
     Parser parser(lexer);
-    ASTDumper dump(std::cerr);
     Sema sema(diag);
     bool sema_error = false;
 
@@ -94,8 +93,8 @@ int main(int argc, const char **argv)
             diag.clear();
             continue;
         }
-        if (ast) dump(*stmt);
         sema(*stmt);
+        if (ast) stmt->dump(std::cout);
         sema_error = sema_error or diag.num_errors();
         diag.clear(); // clear sema errors
     }

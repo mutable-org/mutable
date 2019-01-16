@@ -32,6 +32,7 @@ struct Expr
     virtual ~Expr() { }
 
     const Type * type() const { return notnull(type_); }
+    bool has_type() const { return type_ != nullptr; }
 
     virtual void accept(ASTVisitor &v) = 0;
     virtual void accept(ConstASTVisitor &v) const = 0;

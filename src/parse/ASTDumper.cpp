@@ -17,23 +17,30 @@ void ASTDumper::operator()(Const<Designator> &e)
 {
     if (e.has_table_name()) {
         indent() << "Designator";
+        if (e.has_type())
+            out << " of type " << *e.type();
         ++indent_;
-        indent() << "table name: '" << e.table_name.text << "' (" << e.table_name.pos << ')';
-        indent() << "attribute name: '" << e.attr_name.text << "' (" << e.attr_name.pos << ')';
+        indent() << "table name '" << e.table_name.text << "' (" << e.table_name.pos << ')';
+        indent() << "attribute name '" << e.attr_name.text << "' (" << e.attr_name.pos << ')';
         --indent_;
     } else {
-        indent() << "identifier: '" << e.attr_name.text << "' (" << e.attr_name.pos << ')';
+        indent() << "Identifier '" << e.attr_name.text << '\'';
+        if (e.has_type()) out << " of type " << *e.type();
+        out << " (" << e.attr_name.pos << ')';
     }
 }
 
 void ASTDumper::operator()(Const<Constant> &e)
 {
-    indent() << "Constant: " << e.tok.text << " (" << e.tok.pos << ')';
+    indent() << "Constant " << e.tok.text;
+    if (e.has_type()) out << " of type " << *e.type();
+    out << " (" << e.tok.pos << ')';
 }
 
 void ASTDumper::operator()(Const<FnApplicationExpr> &e)
 {
     indent() << "FnApplicationExpr";
+    if (e.has_type()) out << " of type " << *e.type();
     ++indent_;
     (*this)(*e.fn);
     indent() << "args";
@@ -46,7 +53,9 @@ void ASTDumper::operator()(Const<FnApplicationExpr> &e)
 
 void ASTDumper::operator()(Const<UnaryExpr> &e)
 {
-    indent() << "UnaryExpr: '" << e.op.text << "' (" << e.op.pos << ')';
+    indent() << "UnaryExpr '" << e.op.text << "'";
+    if (e.has_type()) out << " of type " << *e.type();
+    out << " (" << e.op.pos << ')';
     ++indent_;
     (*this)(*e.expr);
     --indent_;
@@ -54,7 +63,9 @@ void ASTDumper::operator()(Const<UnaryExpr> &e)
 
 void ASTDumper::operator()(Const<BinaryExpr> &e)
 {
-    indent() << "BinaryExpr: '" << e.op.text << "' (" << e.op.pos << ')';
+    indent() << "BinaryExpr '" << e.op.text << "'";
+    if (e.has_type()) out << " of type " << *e.type();
+    out << " (" << e.op.pos << ')';
     ++indent_;
     (*this)(*e.lhs);
     (*this)(*e.rhs);
@@ -65,7 +76,7 @@ void ASTDumper::operator()(Const<BinaryExpr> &e)
 
 void ASTDumper::operator()(Const<ErrorClause> &c)
 {
-    indent() << "ErrorClause: '" << c.tok.text << "' (" << c.tok.pos << ')';
+    indent() << "ErrorClause '" << c.tok.text << "' (" << c.tok.pos << ')';
 }
 
 void ASTDumper::operator()(Const<SelectClause> &c)

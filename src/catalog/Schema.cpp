@@ -163,11 +163,11 @@ void Numeric::print(std::ostream &out) const
 
 void FnType::print(std::ostream &out) const
 {
-    out << *return_type << '(';
     for (auto it = parameter_types.cbegin(), end = parameter_types.cend(); it != end; ++it) {
         if (it != parameter_types.cbegin()) out << ", ";
         out << **it;
     }
+    out << " -> " << *return_type;
 }
 
 /*===== Dump =========================================================================================================*/

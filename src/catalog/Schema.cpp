@@ -107,8 +107,9 @@ bool FnType::operator==(const Type &other) const
         if (this->parameter_types.size() != o->parameter_types.size()) return false; // parameter count must match
         for (std::size_t i = 0, end = parameter_types.size(); i != end; ++i)
             if (this->parameter_types[i] != o->parameter_types[i]) return false; // parameters must have same type
+        return true;
     }
-    return true;
+    return false;
 }
 
 /*===== Hash =========================================================================================================*/

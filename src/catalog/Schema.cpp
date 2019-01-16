@@ -241,6 +241,11 @@ void Relation::dump() const { dump(std::cerr); }
  * Schema
  *====================================================================================================================*/
 
+Schema::Schema(const char *name)
+    : name(name)
+{
+}
+
 Schema::~Schema()
 {
     for (auto &r : relations_)
@@ -250,6 +255,18 @@ Schema::~Schema()
 /*======================================================================================================================
  * Catalog
  *====================================================================================================================*/
+
+Catalog::Catalog()
+{
+    /* Initialize standard functions. */
+#define DB_FUNCTION(NAME, KIND) { \
+    auto name = pool(#NAME); \
+    auto res = standard_functions_.emplace(name, new Function(name, Function::KIND, false)); \
+    insist(res.second, "function already defined"); \
+}
+#include "tables/Functions.tbl"
+#undef DB_FUNCTION
+}
 
 Catalog::~Catalog()
 {

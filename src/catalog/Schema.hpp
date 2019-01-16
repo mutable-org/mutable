@@ -270,6 +270,23 @@ struct Relation
     void dump() const;
 };
 
+/** Defines a function.  There are functions pre-defined in the SQL standard and user-defined functions. */
+struct Function
+{
+#define kind_t(X) \
+    X(FN_Aggregate), \
+    X(FN_Scalar)
+
+    const char *name; ///> the name of the function
+    DECLARE_ENUM(kind_t) kind; ///> the kind of function
+    bool is_UDF; ///> is user-defined
+
+    Function(const char *name, kind_t kind, bool is_UDF) : name(name), kind(kind), is_UDF(is_UDF) { }
+
+    bool is_aggregate() const { return kind == FN_Aggregate; }
+    bool is_scalar() const { return kind == FN_Scalar; }
+};
+
 /** A schema is a description of a database.  It is a set of relations. */
 struct Schema
 {
@@ -279,15 +296,17 @@ struct Schema
     const char *name;
     private:
     std::unordered_map<const char*, Relation*> relations_; ///> the relations of this schema
+    std::unordered_map<const char*, Function*> functions_; ///> functions defined in this schema
 
     private:
-    Schema(const char *name) : name(name) { }
+    Schema(const char *name);
 
     public:
     ~Schema();
 
     std::size_t size() const { return relations_.size(); }
 
+    /*===== Relations ================================================================================================*/
     Relation & get_relation(const char *name) const { return *relations_.at(name); }
     Relation & add_relation(const char *name) {
         auto it = relations_.find(name);
@@ -302,6 +321,8 @@ struct Schema
         return *it->second;
     }
 
+    /*===== Functions ================================================================================================*/
+    const Function * get_function(const char *name) const { return functions_.at(name); }
 };
 
 /** The catalog keeps track of all meta information of the database system.  There is always exactly one catalog. */
@@ -311,9 +332,10 @@ struct Catalog
     StringPool pool; ///> pool of strings
     std::unordered_map<const char*, Schema*> schemas_; ///> the schemas; one per database
     Schema *database_in_use_ = nullptr; ///> the currently used database
+    std::unordered_map<const char*, Function*> standard_functions_; ///> functions defined by the SQL standard
 
     private:
-    Catalog() { }
+    Catalog();
     Catalog(const Catalog&) = delete;
 
     public:
@@ -353,6 +375,9 @@ struct Catalog
     }
     void set_database_in_use(Schema &s) { database_in_use_ = &s; }
     void unset_database_in_use() { database_in_use_ = nullptr; }
+
+    /*===== Functions ================================================================================================*/
+    const Function * get_function(const char *name) const { return standard_functions_.at(name); }
 };
 
 }

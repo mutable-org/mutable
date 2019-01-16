@@ -1,0 +1,15 @@
+/* vim: set filetype=cpp: */
+
+#ifndef DB_FUNCTION
+#error "define DB_FUNCTION(NAME, KIND) before including this file"
+#endif
+
+/* Aggregate functions. */
+DB_FUNCTION(COUNT,  FN_Aggregate)
+DB_FUNCTION(SUM,    FN_Aggregate)
+DB_FUNCTION(AVG,    FN_Aggregate)
+DB_FUNCTION(MIN,    FN_Aggregate)
+DB_FUNCTION(MAX,    FN_Aggregate)
+
+/* Scalar functions. */
+DB_FUNCTION(ISNULL, FN_Scalar)

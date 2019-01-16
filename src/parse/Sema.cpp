@@ -149,8 +149,49 @@ void Sema::operator()(Const<Constant> &e)
 
 void Sema::operator()(Const<FnApplicationExpr> &e)
 {
+    Catalog &C = Catalog::Get();
+    const auto &DB = C.get_database_in_use(); // XXX can we assume a DB is selected?
+
+    /* Analyze function name. */
+    Designator *d = cast<Designator>(e.fn);
+    if (not d or not d->is_identifier()) {
+        diag.e(d->attr_name.pos) << *d << " is not a valid function.\n";
+        e.type_ = Type::Get_Error();
+        return;
+    }
+    insist(d);
+
+    /* Analyze arguments. */
+    for (auto arg : e.args)
+        (*this)(*arg);
+
+    const Function *fn = nullptr;
+    /* Test whether function is a standard function. */
+    try {
+        fn = C.get_function(d->attr_name.text);
+    } catch (std::out_of_range) {
+        /* If function is not a standard function, test whether it is a user-defined function. */
+        try {
+            fn = DB.get_function(d->attr_name.text);
+        } catch (std::out_of_range) {
+            diag.e(d->attr_name.pos) << "Function " << d->attr_name.text << " is not defined in database " << DB.name
+                << ".\n";
+            e.type_ = Type::Get_Error();
+            return;
+        }
+    }
+    insist(fn);
+
+    if (fn->is_UDF) {
+        diag.e(d->attr_name.pos) << "User-defined functions are not yet supported.\n";
+        e.type_ = Type::Get_Error();
+        return;
+    }
+
+    /* This is a standard function.  Infer function type. */
     /* TODO */
-    unreachable("Not implemented.");
+    diag.w(d->attr_name.pos) << "Type inference for functions not yet implemented.\n";
+    e.type_ = Type::Get_Error();
 }
 
 void Sema::operator()(Const<UnaryExpr> &e)

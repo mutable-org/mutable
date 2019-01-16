@@ -50,7 +50,7 @@ struct ASTDumper : ConstASTVisitor
     std::ostream & indent() const {
         insist(indent_ >= 0, "Indent must not be negative!  Missing increment or superfluous decrement?");
         if (indent_)
-            out << std::string(2 * indent_ - 2, ' ') << "` ";
+            out << '\n' << std::string(2 * indent_ - 2, ' ') << "` ";
         return out;
     }
 };

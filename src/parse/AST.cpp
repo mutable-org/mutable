@@ -114,6 +114,7 @@ void Expr::dump(std::ostream &out) const
 {
     ASTDumper dumper(out);
     dumper(*this);
+    out << std::endl;
 }
 void Expr::dump() const { dump(std::cerr); }
 
@@ -121,6 +122,7 @@ void Clause::dump(std::ostream &out) const
 {
     ASTDumper dumper(out);
     dumper(*this);
+    out << std::endl;
 }
 void Clause::dump() const { dump(std::cerr); }
 
@@ -128,5 +130,6 @@ void Stmt::dump(std::ostream &out) const
 {
     ASTDumper dumper(out);
     dumper(*this);
+    out << std::endl;
 }
 void Stmt::dump() const { dump(std::cerr); }

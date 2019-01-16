@@ -16,7 +16,7 @@ void ASTDumper::operator()(Const<ErrorExpr> &e)
 void ASTDumper::operator()(Const<Designator> &e)
 {
     if (e.has_table_name()) {
-        indent() << "Designator\n";
+        indent() << "Designator";
         ++indent_;
         indent() << "table name: '" << e.table_name.text << "' (" << e.table_name.pos << ')';
         indent() << "attribute name: '" << e.attr_name.text << "' (" << e.attr_name.pos << ')';

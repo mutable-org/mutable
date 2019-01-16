@@ -4,6 +4,9 @@ SELECT * FROM tbl;
 -- Simple select without asterisk.
 SELECT x FROM tbl;
 
+-- Simple select by qualified attribute
+SELECT tbl.x FROM tbl;
+
 -- Select with constants and expressions.
 SELECT 42, "string", AVG(x) FROM tbl;
 

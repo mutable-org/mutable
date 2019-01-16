@@ -276,19 +276,40 @@ struct Relation
 /** Defines a function.  There are functions pre-defined in the SQL standard and user-defined functions. */
 struct Function
 {
-    enum kind_t {
-#define DB_FUNCTION(NAME) FN_ ## NAME,
+#define kind_t(X) \
+    X(FN_Scalar), \
+    X(FN_Aggregate)
+
+    enum fnid_t {
+#define DB_FUNCTION(NAME, KIND) FN_ ## NAME,
 #include "tables/Functions.tbl"
 #undef DB_FUNCTION
         FN_UDF, // for all user-defined functions
     };
 
     const char *name; ///> the name of the function
-    kind_t kind; ///> the kind of function
+    fnid_t fnid; ///> the function id
+    DECLARE_ENUM(kind_t) kind; ///< the function kind: Scalar, Aggregate, etc.
 
-    Function(const char *name, kind_t kind) : name(name), kind(kind) { }
+    Function(const char *name, fnid_t fnid, kind_t kind) : name(name), fnid(fnid), kind(kind) { }
 
-    bool is_UDF() const { return kind == FN_UDF; }
+    bool is_UDF() const { return fnid == FN_UDF; }
+
+    bool is_scalar() const { return kind == FN_Scalar; }
+    bool is_aggregate() const { return kind == FN_Aggregate; }
+
+    void dump(std::ostream &out) const;
+    void dump() const;
+
+    private:
+    static constexpr const char *FNID_TO_STR_[] = {
+#define DB_FUNCTION(NAME, KIND) "FN_" #NAME,
+#include "tables/Functions.tbl"
+#undef DB_FUNCTION
+        "FN_UDF",
+    };
+    static constexpr const char *KIND_TO_STR_[] = { ENUM_TO_STR(kind_t) };
+#undef kind_t
 };
 
 /** A schema is a description of a database.  It is a set of relations. */

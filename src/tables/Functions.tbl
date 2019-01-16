@@ -5,14 +5,14 @@
 #endif
 
 /* Aggregate functions */
-DB_FUNCTION(COUNT)
-DB_FUNCTION(SUM)
-DB_FUNCTION(AVG)
-DB_FUNCTION(MIN)
-DB_FUNCTION(MAX)
+DB_FUNCTION(COUNT,  FN_Aggregate)
+DB_FUNCTION(SUM,    FN_Aggregate)
+DB_FUNCTION(AVG,    FN_Aggregate)
+DB_FUNCTION(MIN,    FN_Aggregate)
+DB_FUNCTION(MAX,    FN_Aggregate)
 
 /* Tests */
-DB_FUNCTION(ISNULL)
+DB_FUNCTION(ISNULL, FN_Scalar)
 
 /* Casts */
-DB_FUNCTION(INT)
+DB_FUNCTION(INT,    FN_Scalar)

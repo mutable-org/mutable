@@ -239,6 +239,19 @@ void Relation::dump(std::ostream &out) const
 void Relation::dump() const { dump(std::cerr); }
 
 /*======================================================================================================================
+ * Function
+ *====================================================================================================================*/
+
+constexpr const char * Function::FNID_TO_STR_[];
+constexpr const char * Function::KIND_TO_STR_[];
+
+void Function::dump(std::ostream &out) const
+{
+    out << "Function{ name = \"" << name << "\", fnid = " << FNID_TO_STR_[fnid] << ", kind = " << KIND_TO_STR_[kind]
+        << "}" << std::endl;
+}
+
+/*======================================================================================================================
  * Schema
  *====================================================================================================================*/
 
@@ -260,9 +273,9 @@ Schema::~Schema()
 Catalog::Catalog()
 {
     /* Initialize standard functions. */
-#define DB_FUNCTION(NAME) { \
+#define DB_FUNCTION(NAME, KIND) { \
     auto name = pool(#NAME); \
-    auto res = standard_functions_.emplace(name, new Function(name, Function::FN_ ## NAME)); \
+    auto res = standard_functions_.emplace(name, new Function(name, Function::FN_ ## NAME, Function::KIND)); \
     insist(res.second, "function already defined"); \
 }
 #include "tables/Functions.tbl"

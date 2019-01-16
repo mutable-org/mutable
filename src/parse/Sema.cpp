@@ -185,9 +185,9 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
 
     /* Infer the type of the function.  Functions are defined in an abstract way, where the type of the parameters is
      * not specified.  We must infer the parameter types and the return type of the function. */
-    switch (fn->kind) {
+    switch (fn->fnid) {
         default:
-            unreachable("Function kind not implemented");
+            unreachable("Function not implemented");
 
         case Function::FN_UDF:
             diag.e(d->attr_name.pos) << "User-defined functions are not yet supported.\n";
@@ -223,9 +223,9 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
             }
             insist(arg->type()->is_numeric());
 
-            switch (fn->kind) {
+            switch (fn->fnid) {
                 default:
-                    unreachable("Invalid function kind");
+                    unreachable("Invalid function");
 
                 case Function::FN_MIN:
                 case Function::FN_MAX:

@@ -156,7 +156,7 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
     Designator *d = cast<Designator>(e.fn);
     if (not d or not d->is_identifier()) {
         diag.e(d->attr_name.pos) << *d << " is not a valid function.\n";
-        e.type_ = Type::Get_Error();
+        d->type_ = e.type_ = Type::Get_Error();
         return;
     }
     insist(d);
@@ -252,6 +252,7 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
                             break;
                     }
                     d->type_ = Type::Get_Function(e.type(), { e.type() });
+                    break;
                 }
             }
             break;
@@ -287,6 +288,7 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
     }
 
     insist(d->type_);
+    insist(d->type()->is_error() or cast<const FnType>(d->type()));
     insist(e.type_);
 }
 

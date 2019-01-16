@@ -72,6 +72,8 @@ void ASTDumper::operator()(Const<SelectClause> &c)
 {
     indent() << "SelectClause (" << c.tok.pos << ')';
     ++indent_;
+    if (c.select_all)
+        indent() << "select_all = TRUE";
     for (auto s : c.select) {
         if (s.second) {
             indent() << "AS '" << s.second.text << "' (" << s.second.pos << ')';

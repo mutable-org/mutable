@@ -26,7 +26,11 @@ struct FnType;
 
 struct Type
 {
-    enum category_t { TY_Scalar, TY_Vector }; ///< a category for whether this type is scalar or vector
+#define category_t(X) X(TY_Scalar), X(TY_Vector)
+    DECLARE_ENUM(category_t); ///< a category for whether this type is scalar or vector
+    protected:
+    static constexpr const char *CATEGORY_TO_STR_[] = { ENUM_TO_STR(category_t) };
+#undef category_t
 
     protected:
     static Pool<Type> types_; ///< a pool of parameterized types

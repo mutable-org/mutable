@@ -16,6 +16,8 @@ constexpr const char * Numeric::KIND_TO_STR_[]; ///> declaration for constexpr s
  * SQL Types
  *====================================================================================================================*/
 
+constexpr const char *Type::CATEGORY_TO_STR_[];
+
 Pool<Type> Type::types_;
 
 void Type::dump() const { dump(std::cerr); }
@@ -217,18 +219,21 @@ void FnType::print(std::ostream &out) const
 
 void ErrorType::dump(std::ostream &out) const { out << "[ErrorType]" << std::endl; }
 
-void Boolean::dump(std::ostream &out) const { out << "Boolean" << std::endl; }
+void Boolean::dump(std::ostream &out) const
+{
+    out << "Boolean{ category = " << CATEGORY_TO_STR_[category] << " }" << std::endl;
+}
 
 void CharacterSequence::dump(std::ostream &out) const
 {
-    out << "CharacterSequence{ is_varying = " << (is_varying ? "true" : "false") << ", length = " << length << " }"
-        << std::endl;
+    out << "CharacterSequence{ category = " << CATEGORY_TO_STR_[category] << ", is_varying = "
+        << (is_varying ? "true" : "false") << ", length = " << length << " }" << std::endl;
 }
 
 void Numeric::dump(std::ostream &out) const
 {
-    out << "Numeric{ kind = " << Numeric::KIND_TO_STR_[kind] << ", precision = " << precision << ", scale = " << scale
-        << " }" << std::endl;
+    out << "Numeric{ category = " << CATEGORY_TO_STR_[category] << ", kind = " << Numeric::KIND_TO_STR_[kind]
+        << ", precision = " << precision << ", scale = " << scale << " }" << std::endl;
 }
 
 void FnType::dump(std::ostream &out) const

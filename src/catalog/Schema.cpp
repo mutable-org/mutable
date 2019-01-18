@@ -120,11 +120,17 @@ bool FnType::operator==(const Type &other) const
 
 uint64_t ErrorType::hash() const { return 0; }
 
-uint64_t Boolean::hash() const { return 0; }
+uint64_t Boolean::hash() const { return uint64_t(category); }
 
-uint64_t CharacterSequence::hash() const { return uint64_t(is_varying) | uint64_t(length) << 1; }
+uint64_t CharacterSequence::hash() const
+{
+    return uint64_t(length) << 2 | uint64_t(is_varying) << 1 | uint64_t(category);
+}
 
-uint64_t Numeric::hash() const { return (uint64_t(precision) << 32 | scale) * uint64_t(kind); }
+uint64_t Numeric::hash() const
+{
+    return ((uint64_t(precision) << 32) ^ (uint64_t(scale) << 3) ^ (uint64_t(kind) << 1) << uint64_t(category));
+}
 
 uint64_t FnType::hash() const
 {

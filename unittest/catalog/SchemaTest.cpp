@@ -22,6 +22,25 @@ const char * get_unique_id()
 
 }
 
+TEST_CASE("Type/PrimitiveType c'tor", "[unit]")
+{
+    const Boolean *scalar = Type::Get_Boolean(Type::TY_Scalar);
+    const Boolean *vectorial = Type::Get_Boolean(Type::TY_Vector);
+
+    CHECK(scalar->is_scalar());
+    CHECK(not scalar->is_vectorial());
+
+    CHECK(not vectorial->is_scalar());
+    CHECK(vectorial->is_vectorial());
+}
+
+TEST_CASE("Type/Boolean", "[unit]")
+{
+    const Boolean *b_scalar = Type::Get_Boolean(Type::TY_Scalar);
+    const Boolean *b_vectorial = Type::Get_Boolean(Type::TY_Vector);
+    REQUIRE(b_scalar != b_vectorial);
+}
+
 TEST_CASE("Type/CharacterSequence", "[unit]")
 {
     SECTION("CHAR(N)")
@@ -112,6 +131,48 @@ TEST_CASE("Type/Numeric c'tor", "[unit]")
         CHECK(dec->scale == 2);
     }
 }
+
+TEST_CASE("Type convert to scalar/vectorial", "[unit]")
+{
+    const PrimitiveType *scalar;
+    const PrimitiveType *vectorial;
+
+    SECTION("Boolean")
+    {
+        scalar = Type::Get_Boolean(Type::TY_Scalar);
+        vectorial = Type::Get_Boolean(Type::TY_Vector);
+    }
+
+    SECTION("CharacterSequence")
+    {
+        scalar = Type::Get_Char(Type::TY_Scalar, 42);
+        vectorial = Type::Get_Char(Type::TY_Vector, 42);
+    }
+
+    SECTION("Numeric")
+    {
+        scalar = Type::Get_Integer(Type::TY_Scalar, 4);
+        vectorial = Type::Get_Integer(Type::TY_Vector, 4);
+    }
+
+    REQUIRE(scalar->is_scalar());
+    REQUIRE(vectorial->is_vectorial());
+
+    const PrimitiveType *scalar_to_scalar = scalar->as_scalar();
+    REQUIRE(scalar == scalar_to_scalar);
+
+    const PrimitiveType *vec_to_vec = vectorial->as_vectorial();
+    REQUIRE(vectorial == vec_to_vec);
+
+    const PrimitiveType *scalar_to_vec = scalar->as_vectorial();
+    CHECK(scalar_to_vec->is_vectorial());
+    REQUIRE(scalar_to_vec == vectorial);
+
+    const PrimitiveType *vec_to_scalar = vectorial->as_scalar();
+    CHECK(vec_to_scalar->is_scalar());
+    REQUIRE(vec_to_scalar == scalar);
+}
+
 
 TEST_CASE("Type/Numeric print()", "[unit]")
 {

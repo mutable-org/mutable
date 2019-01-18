@@ -149,13 +149,7 @@ Stmt * Parser::parse_CreateTableStmt()
         ok = ok and expect(TK_IDENTIFIER);
         const Type *type = parse_data_type();
         insist(type, "Must never be NULL");
-        if (type->is_error()) {
-            attrs.emplace_back(id, type);
-            continue;
-        }
-        insist(type->is_primitive(), "If this type is not primitive, either parse_data_type() is faulty or we need an additional check here");
-        const PrimitiveType *pt = as<const PrimitiveType>(type);
-        attrs.emplace_back(id, pt->as_vectorial());
+        attrs.emplace_back(id, type);
     } while (accept(TK_COMMA));
 
     /* ')' */

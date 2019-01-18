@@ -572,13 +572,19 @@ void Sema::operator()(Const<CreateTableStmt> &s)
     }
     auto &DB = C.get_database_in_use();
     const char *table_name = s.table_name.text;
-    Relation *R = new Relation(table_name);
+    Relation *R = new Relation(table_name); // ownership of this relation is transferred to the schema
 
-    /* At this point we know that the create table statement is syntactically correct.  Hence, we can expect valid
-     * attribute names and types. */
+    /* Analyze attributes and add them to the new relation. */
     for (auto &A : s.attributes) {
+        const PrimitiveType *ty = cast<const PrimitiveType>(A.second);
+        if (not ty) {
+            diag.e(A.first.pos) << "Attribute " << A.first.text << " cannot be defined with type " << *A.second
+                                << ".\n";
+            return;
+        }
+
         try {
-            R->push_back(A.second, A.first.text);
+            R->push_back(ty->as_vectorial(), A.first.text);
         } catch (std::invalid_argument) {
             diag.e(A.first.pos) << "Attribute " << A.first.text << " occurs multiple times in defintion of table "
                                 << table_name << ".\n";

@@ -3,7 +3,7 @@ USE mydb;
 CREATE TABLE mytable (
     a INT(4),
     b INT(4),
-    c INT(4),
+    c INT(4)
 );
 
 SELECT a, AVG(b)

@@ -149,7 +149,13 @@ Stmt * Parser::parse_CreateTableStmt()
         ok = ok and expect(TK_IDENTIFIER);
         const Type *type = parse_data_type();
         insist(type, "Must never be NULL");
-        attrs.emplace_back(id, type);
+        if (type->is_error()) {
+            attrs.emplace_back(id, type);
+            continue;
+        }
+        insist(type->is_primitive(), "If this type is not primitive, either parse_data_type() is faulty or we need an additional check here");
+        const PrimitiveType *pt = as<const PrimitiveType>(type);
+        attrs.emplace_back(id, pt->as_vectorial());
     } while (accept(TK_COMMA));
 
     /* ')' */
@@ -553,7 +559,7 @@ const Type * Parser::parse_data_type()
         /* BOOL */
         case TK_Bool:
             consume();
-            return Type::Get_Boolean();
+            return Type::Get_Boolean(Type::TY_Scalar);
 
         /* 'CHAR' '(' decimal-constant ')' */
         case TK_Char:
@@ -572,7 +578,7 @@ const Type * Parser::parse_data_type()
                 diag.e(tok.pos) << tok.text << " is not a valid length\n";
                 return Type::Get_Error();
             }
-            return is_varying ? Type::Get_Varchar(length) : Type::Get_Char(length);
+            return is_varying ? Type::Get_Varchar(Type::TY_Scalar, length) : Type::Get_Char(Type::TY_Scalar, length);
         }
 
         /* 'INT' '(' decimal-constant ')' */
@@ -589,18 +595,18 @@ const Type * Parser::parse_data_type()
                 diag.e(tok.pos) << tok.text << " is not a valid size for an INT\n";
                 return Type::Get_Error();
             }
-            return Type::Get_Integer(bytes);
+            return Type::Get_Integer(Type::TY_Scalar, bytes);
         }
 
         /* 'FLOAT' */
         case TK_Float:
             consume();
-            return Type::Get_Float();
+            return Type::Get_Float(Type::TY_Scalar);
 
         /* 'DOUBLE' */
         case TK_Double:
             consume();
-            return Type::Get_Double();
+            return Type::Get_Double(Type::TY_Scalar);
 
         /* 'DECIMAL' '(' decimal-constant [ ',' decimal-constant ] ')' */
         case TK_Decimal: {
@@ -628,7 +634,7 @@ const Type * Parser::parse_data_type()
                 ok = false;
             }
             if (not ok) return Type::Get_Error();
-            return Type::Get_Decimal(p, s);
+            return Type::Get_Decimal(Type::TY_Scalar, p, s);
         }
     }
 }

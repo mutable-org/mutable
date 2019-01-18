@@ -245,7 +245,7 @@ TEST_CASE("Parser::parse_data_type()", "[unit]")
         const Type *type = parser.parse_data_type();
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
-        REQUIRE(type == Type::Get_Boolean());
+        REQUIRE(type == Type::Get_Boolean(Type::TY_Scalar));
     }
 
     SECTION("Char(N)")
@@ -255,7 +255,7 @@ TEST_CASE("Parser::parse_data_type()", "[unit]")
         const Type *type = parser.parse_data_type();
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
-        REQUIRE(type == Type::Get_Char(42));
+        REQUIRE(type == Type::Get_Char(Type::TY_Scalar, 42));
     }
 
     SECTION("Varchar(N)")
@@ -265,7 +265,7 @@ TEST_CASE("Parser::parse_data_type()", "[unit]")
         const Type *type = parser.parse_data_type();
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
-        REQUIRE(type == Type::Get_Varchar(42));
+        REQUIRE(type == Type::Get_Varchar(Type::TY_Scalar, 42));
     }
 
     SECTION("Int(N)")
@@ -275,7 +275,7 @@ TEST_CASE("Parser::parse_data_type()", "[unit]")
         const Type *type = parser.parse_data_type();
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
-        REQUIRE(type == Type::Get_Integer(4));
+        REQUIRE(type == Type::Get_Integer(Type::TY_Scalar, 4));
     }
 
     SECTION("Float")
@@ -285,7 +285,7 @@ TEST_CASE("Parser::parse_data_type()", "[unit]")
         const Type *type = parser.parse_data_type();
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
-        REQUIRE(type == Type::Get_Float());
+        REQUIRE(type == Type::Get_Float(Type::TY_Scalar));
     }
 
     SECTION("Double")
@@ -295,7 +295,7 @@ TEST_CASE("Parser::parse_data_type()", "[unit]")
         const Type *type = parser.parse_data_type();
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
-        REQUIRE(type == Type::Get_Double());
+        REQUIRE(type == Type::Get_Double(Type::TY_Scalar));
     }
 
     SECTION("Decimal(p,s)")
@@ -305,6 +305,6 @@ TEST_CASE("Parser::parse_data_type()", "[unit]")
         const Type *type = parser.parse_data_type();
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
-        REQUIRE(type == Type::Get_Decimal(10, 2));
+        REQUIRE(type == Type::Get_Decimal(Type::TY_Scalar, 10, 2));
     }
 }

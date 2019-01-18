@@ -26,14 +26,14 @@ TEST_CASE("Type/CharacterSequence", "[unit]")
 {
     SECTION("CHAR(N)")
     {
-        const CharacterSequence *chr42 = Type::Get_Char(42);
+        const CharacterSequence *chr42 = Type::Get_Char(Type::TY_Scalar, 42);
         CHECK(not chr42->is_varying);
         CHECK(chr42->length == 42);
     }
 
     SECTION("VARCHAR(N)")
     {
-        const CharacterSequence *chr42 = Type::Get_Varchar(42);
+        const CharacterSequence *chr42 = Type::Get_Varchar(Type::TY_Scalar, 42);
         CHECK(chr42->is_varying);
         CHECK(chr42->length == 42);
     }
@@ -47,7 +47,7 @@ TEST_CASE("Type/Numeric c'tor", "[unit]")
 
     SECTION("8 byte integer")
     {
-        const Numeric *i8 = Type::Get_Integer(8);
+        const Numeric *i8 = Type::Get_Integer(Type::TY_Scalar, 8);
         CHECK(i8->kind == Numeric::N_Int);
         CHECK(i8->precision == 8);
         CHECK(i8->scale == 0);
@@ -55,14 +55,14 @@ TEST_CASE("Type/Numeric c'tor", "[unit]")
 
     SECTION("32 bit floating-point")
     {
-        const Numeric *f = Type::Get_Float();
+        const Numeric *f = Type::Get_Float(Type::TY_Scalar);
         CHECK(f->kind == Numeric::N_Float);
         CHECK(f->precision == 32);
     }
 
     SECTION("64 bit floating-point")
     {
-        const Numeric *d = Type::Get_Double();
+        const Numeric *d = Type::Get_Double(Type::TY_Scalar);
         CHECK(d->kind == Numeric::N_Float);
         CHECK(d->precision == 64);
     }
@@ -106,7 +106,7 @@ TEST_CASE("Type/Numeric c'tor", "[unit]")
             decimal_precision = 38;
         }
 
-        const Numeric *dec = Type::Get_Decimal(decimal_precision, 2);
+        const Numeric *dec = Type::Get_Decimal(Type::TY_Scalar, decimal_precision, 2);
         CHECK(dec->kind == Numeric::N_Decimal);
         CHECK(dec->precision == decimal_precision);
         CHECK(dec->scale == 2);
@@ -118,37 +118,37 @@ TEST_CASE("Type/Numeric print()", "[unit]")
     std::ostringstream oss;
 
     /* 8 byte integer */
-    const Numeric *i8 = Type::Get_Integer(8);
+    const Numeric *i8 = Type::Get_Integer(Type::TY_Scalar, 8);
     oss << *i8;
     CHECK(oss.str() == "INT(8)");
     oss.str("");
 
     /* 32 bit floating-point */
-    const Numeric *f = Type::Get_Float();
+    const Numeric *f = Type::Get_Float(Type::TY_Scalar);
     oss << *f;
     CHECK(oss.str() == "FLOAT");
     oss.str("");
 
     /* 64 bit floating-point */
-    const Numeric *d = Type::Get_Double();
+    const Numeric *d = Type::Get_Double(Type::TY_Scalar);
     oss << *d;
     CHECK(oss.str() == "DOUBLE");
     oss.str("");
 
     /* 4 byte decimal: log2(10^9) = 29.8 */
-    const Numeric *dec_9_2 = Type::Get_Decimal(9, 2);
+    const Numeric *dec_9_2 = Type::Get_Decimal(Type::TY_Scalar, 9, 2);
     oss << *dec_9_2;
     CHECK(oss.str() == "DECIMAL(9, 2)");
     oss.str("");
 
     /* 10 digits: log2(10^10) = 33.2 -> 64 bit */
-    const Numeric *dec_10_0 = Type::Get_Decimal(10, 0);
+    const Numeric *dec_10_0 = Type::Get_Decimal(Type::TY_Scalar, 10, 0);
     oss << *dec_10_0;
     CHECK(oss.str() == "DECIMAL(10, 0)");
     oss.str("");
 
     /* 16 byte decimal: log2(10^38) - 122.9 */
-    const Numeric *dec_38_20 = Type::Get_Decimal(38, 20);
+    const Numeric *dec_38_20 = Type::Get_Decimal(Type::TY_Scalar, 38, 20);
     oss << *dec_38_20;
     CHECK(oss.str() == "DECIMAL(38, 20)");
     oss.str("");
@@ -158,16 +158,16 @@ TEST_CASE("Type internalize", "[unit]")
 {
     SECTION("Boolean")
     {
-        auto b = Type::Get_Boolean();
-        auto b_ = Type::Get_Boolean();
+        auto b = Type::Get_Boolean(Type::TY_Scalar);
+        auto b_ = Type::Get_Boolean(Type::TY_Scalar);
         REQUIRE(b == b_);
     }
 
     SECTION("CharacterSequence")
     {
-        auto vc42 = Type::Get_Varchar(42);
-        auto vc42_ = Type::Get_Varchar(42);
-        auto c42 = Type::Get_Char(42);
+        auto vc42 = Type::Get_Varchar(Type::TY_Scalar, 42);
+        auto vc42_ = Type::Get_Varchar(Type::TY_Scalar, 42);
+        auto c42 = Type::Get_Char(Type::TY_Scalar, 42);
 
         REQUIRE(vc42 == vc42_);
         REQUIRE(vc42 != c42);
@@ -175,16 +175,16 @@ TEST_CASE("Type internalize", "[unit]")
 
     SECTION("Numeric")
     {
-        auto i4 = Type::Get_Integer(4);
-        auto i4_ = Type::Get_Integer(4);
-        auto i8 = Type::Get_Integer(8);
-        auto f = Type::Get_Float();
-        auto f_ = Type::Get_Float();
-        auto d = Type::Get_Double();
-        auto d_ = Type::Get_Double();
-        auto dec_9_2 = Type::Get_Decimal(9, 2);
-        auto dec_9_2_ = Type::Get_Decimal(9, 2);
-        auto dec_10_0 = Type::Get_Decimal(10, 0);
+        auto i4 = Type::Get_Integer(Type::TY_Scalar, 4);
+        auto i4_ = Type::Get_Integer(Type::TY_Scalar, 4);
+        auto i8 = Type::Get_Integer(Type::TY_Scalar, 8);
+        auto f = Type::Get_Float(Type::TY_Scalar);
+        auto f_ = Type::Get_Float(Type::TY_Scalar);
+        auto d = Type::Get_Double(Type::TY_Scalar);
+        auto d_ = Type::Get_Double(Type::TY_Scalar);
+        auto dec_9_2 = Type::Get_Decimal(Type::TY_Scalar, 9, 2);
+        auto dec_9_2_ = Type::Get_Decimal(Type::TY_Scalar, 9, 2);
+        auto dec_10_0 = Type::Get_Decimal(Type::TY_Scalar, 10, 0);
 
         REQUIRE(i4 == i4_);
         REQUIRE(i4 != i8);
@@ -219,9 +219,9 @@ TEST_CASE("Relation::push_back()")
 {
     Relation r("myrelation");
 
-    const Type *i4 = Type::Get_Integer(4);
-    const Type *vc = Type::Get_Varchar(42);
-    const Type *b = Type::Get_Boolean();
+    const Type *i4 = Type::Get_Integer(Type::TY_Scalar, 4);
+    const Type *vc = Type::Get_Varchar(Type::TY_Scalar, 42);
+    const Type *b = Type::Get_Boolean(Type::TY_Scalar);
 
     r.push_back(i4, "n");
     r.push_back(vc, "comment");
@@ -239,7 +239,7 @@ TEST_CASE("Relation::push_back()")
 TEST_CASE("Relation iterators")
 {
     Relation r("myrelation");
-    const Type *i4 = Type::Get_Integer(4);
+    const Type *i4 = Type::Get_Integer(Type::TY_Scalar, 4);
 
     r.push_back(i4, "a");
     r.push_back(i4, "b");
@@ -259,7 +259,7 @@ TEST_CASE("Relation iterators")
 TEST_CASE("Relation get attribute by name")
 {
     Relation r("myrelation");
-    const Type *i4 = Type::Get_Integer(4);
+    const Type *i4 = Type::Get_Integer(Type::TY_Scalar, 4);
 
     r.push_back(i4, "a");
     r.push_back(i4, "b");
@@ -283,7 +283,7 @@ TEST_CASE("Relation get attribute by name")
 TEST_CASE("Relation::push_back() error if name alreay taken")
 {
     Relation r("myrelation");
-    const Type *i4 = Type::Get_Integer(4);
+    const Type *i4 = Type::Get_Integer(Type::TY_Scalar, 4);
 
     r.push_back(i4, "a");
     REQUIRE_THROWS_AS(r.push_back(i4, "a"), std::invalid_argument);

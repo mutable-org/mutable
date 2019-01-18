@@ -28,41 +28,42 @@ const ErrorType * Type::Get_Error()
     return &err;
 }
 
-const Boolean * Type::Get_Boolean()
+const Boolean * Type::Get_Boolean(category_t category)
 {
-    static Boolean b;
-    return &b;
+    static Boolean b_scalar(Type::TY_Scalar);
+    static Boolean b_vector(Type::TY_Vector);
+    return category == TY_Scalar ? &b_scalar : &b_vector;
 }
 
-const CharacterSequence * Type::Get_Char(std::size_t length)
+const CharacterSequence * Type::Get_Char(category_t category, std::size_t length)
 {
-    return static_cast<const CharacterSequence*>(types_(CharacterSequence(length, false)));
+    return static_cast<const CharacterSequence*>(types_(CharacterSequence(category, length, false)));
 }
 
-const CharacterSequence * Type::Get_Varchar(std::size_t length)
+const CharacterSequence * Type::Get_Varchar(category_t category, std::size_t length)
 {
-    return static_cast<const CharacterSequence*>(types_(CharacterSequence(length, true)));
+    return static_cast<const CharacterSequence*>(types_(CharacterSequence(category, length, true)));
 }
 
-const Numeric * Type::Get_Decimal(unsigned digits, unsigned scale)
+const Numeric * Type::Get_Decimal(category_t category, unsigned digits, unsigned scale)
 {
-    return static_cast<const Numeric*>(types_(Numeric(Numeric::N_Decimal, digits, scale)));
+    return static_cast<const Numeric*>(types_(Numeric(category, Numeric::N_Decimal, digits, scale)));
 }
 
-const Numeric * Type::Get_Integer(unsigned num_bytes)
+const Numeric * Type::Get_Integer(category_t category, unsigned num_bytes)
 {
-    return static_cast<const Numeric*>(types_(Numeric(Numeric::N_Int, num_bytes, 0)));
+    return static_cast<const Numeric*>(types_(Numeric(category, Numeric::N_Int, num_bytes, 0)));
 }
 
-const Numeric * Type::Get_Float()
+const Numeric * Type::Get_Float(category_t category)
 {
-    static Numeric f(Numeric::N_Float, 32, 0);
+    static Numeric f(category, Numeric::N_Float, 32, 0);
     return &f;
 }
 
-const Numeric * Type::Get_Double()
+const Numeric * Type::Get_Double(category_t category)
 {
-    static Numeric d(Numeric::N_Float, 64, 0);
+    static Numeric d(category, Numeric::N_Float, 64, 0);
     return &d;
 }
 
@@ -80,20 +81,23 @@ bool ErrorType::operator==(const Type &other) const
 
 bool Boolean::operator==(const Type &other) const
 {
-    return dynamic_cast<const Boolean*>(&other) != nullptr;
+    if (auto o = dynamic_cast<const Boolean*>(&other))
+        return this->category == o->category;
+    return false;
 }
 
 bool CharacterSequence::operator==(const Type &other) const
 {
     if (auto o = dynamic_cast<const CharacterSequence*>(&other))
-        return this->is_varying == o->is_varying and this->length == o->length;
+        return this->category == o->category and this->is_varying == o->is_varying and this->length == o->length;
     return false;
 }
 
 bool Numeric::operator==(const Type &other) const
 {
     if (auto o = dynamic_cast<const Numeric*>(&other)) {
-        return this->kind == o->kind and
+        return this->category == o->category and
+               this->kind == o->kind and
                this->precision == o->precision and
                this->scale == o->scale;
     }
@@ -128,6 +132,39 @@ uint64_t FnType::hash() const
     for (auto p : parameter_types)
         h = (h << 7) ^ p->hash();
     return h;
+}
+
+/*===== Scalar & Vector Conversion ===================================================================================*/
+
+const PrimitiveType * Boolean::as_scalar() const
+{
+    if (is_scalar()) return this;
+    return Type::Get_Boolean(TY_Scalar);
+}
+const PrimitiveType * Boolean::as_vectorial() const
+{
+    if (is_vectorial()) return this;
+    return Type::Get_Boolean(TY_Vector);
+}
+
+const PrimitiveType * CharacterSequence::as_scalar() const
+{
+    if (is_scalar()) return this;
+    return static_cast<const CharacterSequence*>(types_(CharacterSequence(TY_Scalar, length, is_varying)));
+}
+const PrimitiveType * CharacterSequence::as_vectorial() const
+{
+    if (is_vectorial()) return this;
+    return static_cast<const CharacterSequence*>(types_(CharacterSequence(TY_Vector, length, is_varying)));
+}
+
+const PrimitiveType * Numeric::as_scalar() const
+{
+    return static_cast<const Numeric*>(types_(Numeric(TY_Scalar, kind, precision, scale)));
+}
+const PrimitiveType * Numeric::as_vectorial() const
+{
+    return static_cast<const Numeric*>(types_(Numeric(TY_Vector, kind, precision, scale)));
 }
 
 /*===== Pretty Printing ==============================================================================================*/

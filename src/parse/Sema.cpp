@@ -14,6 +14,9 @@ const Type * arithmetic_join(const Numeric *lhs, const Numeric *rhs)
 {
     static constexpr double LOG_2_OF_10 = 3.321928094887362; ///> factor to convert count of decimal digits to binary digits
 
+    /* Combining a vector with a scalar yields a vector. */
+    Type::category_t category = std::max(lhs->category, rhs->category);
+
     /* N_Decimal is always "more precise" than N_Float.  N_Float is always more precise than N_Int.  */
     Numeric::kind_t kind = std::max(lhs->kind, rhs->kind);
 
@@ -33,14 +36,14 @@ const Type * arithmetic_join(const Numeric *lhs, const Numeric *rhs)
     int scale = std::max(lhs->scale, rhs->scale);
 
     switch (kind) {
-        case Numeric::N_Int: return Type::Get_Integer(precision / 8);
+        case Numeric::N_Int: return Type::Get_Integer(category, precision / 8);
         case Numeric::N_Float: {
-            if (precision == 32) return Type::Get_Float();
+            if (precision == 32) return Type::Get_Float(category);
             insist(precision == 64, "Illegal floating-point precision");
-            return Type::Get_Double();
+            return Type::Get_Double(category);
         }
 
-        case Numeric::N_Decimal: return Type::Get_Decimal(precision / LOG_2_OF_10, scale);
+        case Numeric::N_Decimal: return Type::Get_Decimal(category, precision / LOG_2_OF_10, scale);
     }
 }
 
@@ -119,12 +122,12 @@ void Sema::operator()(Const<Constant> &e)
             unreachable("a constant must be one of the types below");
 
         case TK_STRING_LITERAL:
-            e.type_ = Type::Get_Char(strlen(e.tok.text) - 2); // without quotes
+            e.type_ = Type::Get_Char(Type::TY_Scalar, strlen(e.tok.text) - 2); // without quotes
             break;
 
         case TK_True:
         case TK_False:
-            e.type_ = Type::Get_Boolean();
+            e.type_ = Type::Get_Boolean(Type::TY_Scalar);
             break;
 
         case TK_HEX_INT:
@@ -134,15 +137,15 @@ void Sema::operator()(Const<Constant> &e)
         case TK_OCT_INT: {
             int64_t value = strtol(e.tok.text, nullptr, base);
             if (value == int32_t(value))
-                e.type_ = Type::Get_Integer(4);
+                e.type_ = Type::Get_Integer(Type::TY_Scalar, 4);
             else
-                e.type_ = Type::Get_Integer(8);
+                e.type_ = Type::Get_Integer(Type::TY_Scalar, 8);
             break;
         }
 
         case TK_DEC_FLOAT:
         case TK_HEX_FLOAT:
-            e.type_ = Type::Get_Float(); // XXX: Is it safe to always assume 32-bit floats?
+            e.type_ = Type::Get_Float(Type::TY_Scalar); // XXX: Is it safe to always assume 32-bit floats?
             break;
     }
 }
@@ -222,6 +225,11 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
                 return;
             }
             insist(arg->type()->is_numeric());
+            const Numeric *arg_type = cast<const Numeric>(arg->type());
+            if (not arg_type->is_vectorial()) {
+                diag.w(d->attr_name.pos) << "Argument of aggregate is not of vectorial type.  "
+                                            "(Aggregates over scalars are discouraged.)\n";
+            }
 
             switch (fn->fnid) {
                 default:
@@ -231,24 +239,25 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
                 case Function::FN_MAX:
                 case Function::FN_AVG:
                     /* MIN/MAX/AVG maintain type */
+                    /* TODO convert result type to scalar */
                     d->type_ = Type::Get_Function(arg->type(), { arg->type() });
                     e.type_ = arg->type();
                     break;
 
                 case Function::FN_SUM: {
                     /* SUM can overflow.  Always assume type of highest precision. */
-                    const Numeric *arg_type = cast<const Numeric>(arg->type());
                     switch (arg_type->kind) {
                         case Numeric::N_Int:
-                            e.type_ = Type::Get_Integer(8);
+                            e.type_ = Type::Get_Integer(Type::TY_Scalar, 8);
                             break;
 
                         case Numeric::N_Float:
-                            e.type_ = Type::Get_Double();
+                            e.type_ = Type::Get_Double(Type::TY_Scalar);
                             break;
 
                         case Numeric::N_Decimal:
-                            e.type_ = Type::Get_Decimal(Numeric::MAX_DECIMAL_PRECISION, arg_type->scale);
+                            e.type_ = Type::Get_Decimal(Type::TY_Scalar, Numeric::MAX_DECIMAL_PRECISION,
+                                                        arg_type->scale);
                             break;
                     }
                     d->type_ = Type::Get_Function(e.type(), { e.type() });
@@ -279,9 +288,15 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
                 e.type_ = Type::Get_Error();
                 return;
             }
+            const PrimitiveType *arg_type = cast<const PrimitiveType>(arg_type);
+            if (not arg_type) {
+                diag.e(d->attr_name.pos) << "Function ISNULL can only be applied to expressions of primitive type.\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
 
-            d->type_ = Type::Get_Function(Type::Get_Boolean(), { arg->type() });
-            e.type_= Type::Get_Boolean();
+            d->type_ = Type::Get_Function(Type::Get_Boolean(Type::TY_Vector), { arg->type() });
+            e.type_= Type::Get_Boolean(Type::TY_Vector);
             break;
         }
 
@@ -358,14 +373,21 @@ void Sema::operator()(Const<BinaryExpr> &e)
         case TK_GREATER:
         case TK_GREATER_EQUAL: {
             /* Verify that both operands are of numeric type. */
-            if (not e.lhs->type()->is_numeric() or not e.rhs->type()->is_numeric()) {
+            const Numeric *ty_lhs = cast<const Numeric>(e.lhs->type());
+            const Numeric *ty_rhs = cast<const Numeric>(e.rhs->type());
+            if (not ty_lhs or not ty_rhs) {
                 diag.e(e.op.pos) << "Invalid expression " << e << ", operands must be of numeric type.\n";
                 e.type_ = Type::Get_Error();
                 return;
             }
+            insist(ty_lhs);
+            insist(ty_rhs);
+
+            /* Scalar and scalar yeild a scalar.  Otherwise, expression yields a vectorial. */
+            Type::category_t c = std::max(ty_lhs->category, ty_rhs->category);
 
             /* Comparisons always have boolean type. */
-            e.type_ = Type::Get_Boolean();
+            e.type_ = Type::Get_Boolean(c);
             break;
         }
 
@@ -380,19 +402,34 @@ void Sema::operator()(Const<BinaryExpr> &e)
             e.type_ = Type::Get_Error();
             return;
 ok:
+            const PrimitiveType *ty_lhs = as<const PrimitiveType>(e.lhs->type());
+            const PrimitiveType *ty_rhs = as<const PrimitiveType>(e.rhs->type());
+
+            /* Scalar and scalar yeild a scalar.  Otherwise, expression yields a vectorial. */
+            Type::category_t c = std::max(ty_lhs->category, ty_rhs->category);
+
             /* Comparisons always have boolean type. */
-            e.type_ = Type::Get_Boolean();
+            e.type_ = Type::Get_Boolean(c);
             break;
         }
 
         case TK_And:
         case TK_Or: {
-            if (e.lhs->type()->is_boolean() and e.rhs->type()->is_boolean()) {
-                e.type_ = Type::Get_Boolean();
-            } else {
+            const Boolean *ty_lhs = cast<const Boolean>(e.lhs->type());
+            const Boolean *ty_rhs = cast<const Boolean>(e.rhs->type());
+
+            /* Both operands must be of boolean type. */
+            if (not ty_lhs or not ty_rhs) {
                 diag.e(e.op.pos) << "Invalid expression " << e << ", operands must be of boolean type.\n";
                 e.type_ = Type::Get_Error();
+                return;
             }
+
+            /* Scalar and scalar yeild a scalar.  Otherwise, expression yields a vectorial. */
+            Type::category_t c = std::max(ty_lhs->category, ty_rhs->category);
+
+            /* Logical operators always have boolean type. */
+            e.type_ = Type::Get_Boolean(c);
             break;
         }
     }
@@ -409,6 +446,7 @@ void Sema::operator()(Const<SelectClause> &c)
 {
     Catalog &C = Catalog::Get();
     const auto &DB = C.get_database_in_use();
+    (void) DB;
 
     for (auto s : c.select)
         (*this)(*s.first);
@@ -560,14 +598,14 @@ void Sema::operator()(Const<CreateTableStmt> &s)
 
 void Sema::operator()(Const<SelectStmt> &s)
 {
+    push_context();
+
     Catalog &C = Catalog::Get();
-    SemaContext &Ctx = push_context();
 
     if (not C.has_database_in_use()) {
         diag.err() << "No database selected.\n";
         return;
     }
-    const auto &DB = C.get_database_in_use();
 
     (*this)(*s.from);
     (*this)(*s.select);
@@ -585,17 +623,20 @@ void Sema::operator()(Const<SelectStmt> &s)
 void Sema::operator()(Const<InsertStmt> &s)
 {
     /* TODO */
+    (void) s;
     unreachable("Not implemented.");
 }
 
 void Sema::operator()(Const<UpdateStmt> &s)
 {
     /* TODO */
+    (void) s;
     unreachable("Not implemented.");
 }
 
 void Sema::operator()(Const<DeleteStmt> &s)
 {
     /* TODO */
+    (void) s;
     unreachable("Not implemented.");
 }

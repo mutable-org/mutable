@@ -18,6 +18,7 @@ namespace db {
  *====================================================================================================================*/
 
 struct ErrorType;
+struct PrimitiveType;
 struct Boolean;
 struct CharacterSequence;
 struct Numeric;
@@ -25,7 +26,9 @@ struct FnType;
 
 struct Type
 {
-    private:
+    enum category_t { TY_Scalar, TY_Vector }; ///< a category for whether this type is scalar or vector
+
+    protected:
     static Pool<Type> types_; ///< a pool of parameterized types
 
     public:
@@ -38,7 +41,8 @@ struct Type
     bool operator!=(const Type &other) const { return not operator==(other); }
 
     bool is_error() const { return (void*) this == Get_Error(); }
-    bool is_boolean() const { return (void*) this == Get_Boolean(); }
+    bool is_primitive() const { return is<const PrimitiveType>(this); }
+    bool is_boolean() const { return is<const Boolean>(this); }
     bool is_character_sequence() const { return is<const CharacterSequence>(this); }
     bool is_numeric() const { return is<const Numeric>(this); }
 
@@ -55,13 +59,13 @@ struct Type
 
     /* Type factory methods */
     static const ErrorType * Get_Error();
-    static const Boolean * Get_Boolean();
-    static const CharacterSequence * Get_Char(std::size_t length);
-    static const CharacterSequence * Get_Varchar(std::size_t length);
-    static const Numeric * Get_Decimal(unsigned digits, unsigned scale);
-    static const Numeric * Get_Integer(unsigned num_bytes);
-    static const Numeric * Get_Float();
-    static const Numeric * Get_Double();
+    static const Boolean * Get_Boolean(category_t category);
+    static const CharacterSequence * Get_Char(category_t category, std::size_t length);
+    static const CharacterSequence * Get_Varchar(category_t category, std::size_t length);
+    static const Numeric * Get_Decimal(category_t category, unsigned digits, unsigned scale);
+    static const Numeric * Get_Integer(category_t category, unsigned num_bytes);
+    static const Numeric * Get_Float(category_t category);
+    static const Numeric * Get_Double(category_t category);
     static const FnType * Get_Function(const Type *return_type, std::vector<const Type*> parameter_types);
 };
 
@@ -78,6 +82,26 @@ struct hash<db::Type>
 }
 
 namespace db {
+
+/** Primitive types are used for values. */
+struct PrimitiveType : Type
+{
+    category_t category; ///< whether this type is scalar or vector
+
+    PrimitiveType(category_t category) : category(category) { }
+    PrimitiveType(const PrimitiveType&) = delete;
+    PrimitiveType(PrimitiveType&&) = default;
+    virtual ~PrimitiveType() { }
+
+    bool is_scalar() const { return category == TY_Scalar; }
+    bool is_vectorial() const { return category == TY_Vector; }
+
+    /** Convert this type to a scalar. */
+    virtual const PrimitiveType *as_scalar() const = 0;
+
+    /** Convert this type to a vectorial. */
+    virtual const PrimitiveType *as_vectorial() const = 0;
+};
 
 /** The error type.  Used when parsing of a data type fails or when semantic analysis detects a type error. */
 struct ErrorType: Type
@@ -99,12 +123,12 @@ struct ErrorType: Type
 };
 
 /** The boolean type. */
-struct Boolean : Type
+struct Boolean : PrimitiveType
 {
     friend struct Type;
 
     private:
-    Boolean() { }
+    Boolean(category_t category) : PrimitiveType(category) { }
 
     public:
     Boolean(Boolean&&) = default;
@@ -115,10 +139,13 @@ struct Boolean : Type
 
     void print(std::ostream &out) const;
     void dump(std::ostream &out) const;
+
+    virtual const PrimitiveType *as_scalar() const;
+    virtual const PrimitiveType *as_vectorial() const;
 };
 
 /** The type of character strings, both fixed length and varying. */
-struct CharacterSequence : Type
+struct CharacterSequence : PrimitiveType
 {
     friend struct Type;
 
@@ -126,7 +153,11 @@ struct CharacterSequence : Type
     bool is_varying; ///> true if varying, false otherwise; corresponds to Char(N) and Varchar(N)
 
     private:
-    CharacterSequence(std::size_t length, bool is_varying) : length(length), is_varying(is_varying) { }
+    CharacterSequence(category_t category, std::size_t length, bool is_varying)
+        : PrimitiveType(category)
+        , length(length)
+        , is_varying(is_varying)
+    { }
 
     public:
     CharacterSequence(CharacterSequence&&) = default;
@@ -137,10 +168,13 @@ struct CharacterSequence : Type
 
     void print(std::ostream &out) const;
     void dump(std::ostream &out) const;
+
+    virtual const PrimitiveType *as_scalar() const;
+    virtual const PrimitiveType *as_vectorial() const;
 };
 
 /** The numeric type represents integer and floating-point types of different precision, scale, and exactness. */
-struct Numeric : Type
+struct Numeric : PrimitiveType
 {
     friend struct Type;
 
@@ -149,6 +183,10 @@ struct Numeric : Type
 
 #define kind_t(X) X(N_Int), X(N_Float), X(N_Decimal)
     DECLARE_ENUM(kind_t) kind; ///> the kind of numeric type
+    private:
+    static constexpr const char *KIND_TO_STR_[] = { ENUM_TO_STR(kind_t) };
+#undef kind_t
+    public:
     /** The precision gives the maximum number of digits that can be represented by that type.  Its interpretation
      * depends on the kind:
      *  For INT, precision is the number of bytes.
@@ -157,12 +195,13 @@ struct Numeric : Type
      */
     unsigned precision; ///> the number of bits used to represent the number
     unsigned scale; ///> the number of decimal digits right of the decimal point
-    private:
-    static constexpr const char *KIND_TO_STR_[] = { ENUM_TO_STR(kind_t) };
 
     private:
-    Numeric(kind_t kind, unsigned precision, unsigned scale)
-        : kind(kind), precision(precision), scale(scale)
+    Numeric(category_t category, kind_t kind, unsigned precision, unsigned scale)
+        : PrimitiveType(category)
+        , kind(kind)
+        , precision(precision)
+        , scale(scale)
     { }
 
     public:
@@ -174,7 +213,9 @@ struct Numeric : Type
 
     void print(std::ostream &out) const;
     void dump(std::ostream &out) const;
-#undef kind_t
+
+    virtual const PrimitiveType *as_scalar() const;
+    virtual const PrimitiveType *as_vectorial() const;
 };
 
 /** The function type defines the type and count of the arguments and the type of the return value of a SQL function. */

@@ -590,6 +590,7 @@ void Sema::operator()(Const<CreateTableStmt> &s)
         DB.add(R);
     } catch (std::invalid_argument) {
         diag.e(s.table_name.pos) << "Table " << table_name << " already exists in database " << DB.name << ".\n";
+        delete R; // if table name is already used and transfer of ownership failed, clean up
         return;
     }
 

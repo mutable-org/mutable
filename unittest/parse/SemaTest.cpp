@@ -12,7 +12,7 @@
 using namespace db;
 
 
-TEST_CASE("Sema c'tor", "[unit][parse]")
+TEST_CASE("Sema c'tor", "[unit][sema]")
 {
     LEXER("SELECT * FROM test;");
     Sema sema(diag);
@@ -21,7 +21,7 @@ TEST_CASE("Sema c'tor", "[unit][parse]")
     REQUIRE(err.str().empty());
 }
 
-TEST_CASE("Sema/expressions", "[unit][parse]")
+TEST_CASE("Sema/Expressions", "[unit][sema]")
 {
     std::pair<const char*, const Type*> exprs[] = {
         /* { expression , type } */
@@ -150,5 +150,87 @@ TEST_CASE("Sema/expressions", "[unit][parse]")
             CHECK(diag.num_errors() == 0);
             CHECK(err.str().empty());
         }
+    }
+}
+
+TEST_CASE("Sema/Expressions/Functions", "[sema]")
+{
+    /* Create a dummy DB and a dummy table with a scalar and a vector attribute. */
+    Catalog &C = Catalog::Get();
+    auto &DB = C.add_database("mydb");
+    C.set_database_in_use(DB);
+    auto &table = DB.add_relation(C.get_pool()("mytable"));
+    table.push_back(Type::Get_Integer(Type::TY_Scalar, 4), C.get_pool()("s"));
+    table.push_back(Type::Get_Integer(Type::TY_Vector, 4), C.get_pool()("v"));
+
+    {
+        /* Vectorial WHERE condition is ok. */
+        LEXER("SELECT * FROM mytable WHERE v > 42;");
+        Parser parser(lexer);
+        SelectStmt *stmt = as<SelectStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+
+        WhereClause *where = as<WhereClause>(stmt->where);
+        const PrimitiveType *pt = as<const PrimitiveType>(where->where->type());
+        CHECK(pt->is_vectorial());
+    }
+    {
+        /* Vectorial WHERE condition is ok. */
+        LEXER("SELECT * FROM mytable WHERE v > AVG(v);");
+        Parser parser(lexer);
+        SelectStmt *stmt = as<SelectStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+
+        WhereClause *where = as<WhereClause>(stmt->where);
+        const PrimitiveType *pt = as<const PrimitiveType>(where->where->type());
+        CHECK(pt->is_vectorial());
+    }
+
+    {
+        /* Vectorial WHERE condition is ok.  WARN: Aggregate of scalar is discouraged. */
+        LEXER("SELECT * FROM mytable WHERE v > AVG(s);");
+        Parser parser(lexer);
+        SelectStmt *stmt = as<SelectStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 0); // no error
+        REQUIRE(not err.str().empty()); // but warning
+
+        WhereClause *where = as<WhereClause>(stmt->where);
+        const PrimitiveType *pt = as<const PrimitiveType>(where->where->type());
+        CHECK(pt->is_vectorial());
+    }
+
+    {
+        /* ERR: WHERE condition must be vectorial. */
+        LEXER("SELECT * FROM mytable WHERE AVG(v) > 42;");
+        Parser parser(lexer);
+        SelectStmt *stmt = as<SelectStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        REQUIRE(diag.num_errors() == 1);
+        REQUIRE(not err.str().empty());
+
+        WhereClause *where = as<WhereClause>(stmt->where);
+        const PrimitiveType *pt = as<const PrimitiveType>(where->where->type());
+        CHECK(not pt->is_vectorial());
     }
 }

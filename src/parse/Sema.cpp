@@ -237,12 +237,12 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
 
                 case Function::FN_MIN:
                 case Function::FN_MAX:
-                case Function::FN_AVG:
+                case Function::FN_AVG: {
                     /* MIN/MAX/AVG maintain type */
-                    /* TODO convert result type to scalar */
-                    d->type_ = Type::Get_Function(arg->type(), { arg->type() });
-                    e.type_ = arg->type();
+                    e.type_ = arg_type->as_scalar();
+                    d->type_ = Type::Get_Function(e.type_, { arg->type() });
                     break;
+                }
 
                 case Function::FN_SUM: {
                     /* SUM can overflow.  Always assume type of highest precision. */
@@ -484,9 +484,23 @@ void Sema::operator()(Const<WhereClause> &c)
     /* Analyze expression. */
     (*this)(*c.where);
 
+    if (c.where->type()->is_error())
+        return; /* nothing to be done */
+
+    const Boolean *ty = cast<const Boolean>(c.where->type());
+
     /* WHERE condition must be of boolean type. */
-    if (not c.where->type()->is_error() and not c.where->type()->is_boolean())
+    if (not ty) {
         diag.e(c.tok.pos) << "The expression in the WHERE clause must be of boolean type.\n";
+        return;
+    }
+
+    /* The expression must also be of vectorial type. */
+    if (not ty->is_vectorial()) {
+        diag.e(c.tok.pos) << "The expression in the WHERE clause must be vectorial, "
+                             "i.e. it must depend on each row separately.\n";
+        return;
+    }
 }
 
 void Sema::operator()(Const<GroupByClause> &c)

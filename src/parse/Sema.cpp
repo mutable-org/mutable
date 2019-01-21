@@ -505,17 +505,54 @@ void Sema::operator()(Const<WhereClause> &c)
 
 void Sema::operator()(Const<GroupByClause> &c)
 {
-    for (auto expr : c.group_by)
+    SemaContext &Ctx = get_context();
+
+    for (auto expr : c.group_by) {
         (*this)(*expr);
+
+        /* Skip errors. */
+        if (expr->type()->is_error())
+            continue;
+
+        const PrimitiveType *pt = cast<const PrimitiveType>(expr->type());
+
+        /* Can only group by expressions of primitive type. */
+        if (not pt) {
+            diag.e(c.tok.pos) << "Cannot group by " << *expr << ", has invalid type.\n";
+            continue;
+        }
+
+        /* Can only group by vectorials.  The expression in the GROUP BY clause must be evaluated per tuple. */
+        if (not pt->is_vectorial()) {
+            diag.e(c.tok.pos) << "Cannot group by " << *expr << ".  Expressions in the GROUP BY clause must be "
+                                 "vectorial, i.e. they must depend on each row separately.\n";
+            continue;
+        }
+
+        /* Add expression to list of grouping keys. */
+        Designator *d = as<Designator>(expr);
+        Ctx.group_keys.push_back(d);
+    }
 }
 
 void Sema::operator()(Const<HavingClause> &c)
 {
     (*this)(*c.having);
 
+    /* Skip errors. */
+    if (c.having->type()->is_error())
+        return;
+
+    const Boolean *ty = cast<const Boolean>(c.having->type());
+
     /* HAVING condition must be of boolean type. */
-    if (not c.having->type()->is_error() and not c.having->type()->is_boolean()) {
+    if (not ty) {
         diag.e(c.tok.pos) << "The expression in the HAVING clause must be of boolean type.\n";
+        return;
+    }
+
+    if (not ty->is_scalar()) {
+        diag.e(c.tok.pos) << "The expression in the HAVING clause must be scalar.\n";
         return;
     }
 
@@ -524,11 +561,16 @@ void Sema::operator()(Const<HavingClause> &c)
 
 void Sema::operator()(Const<OrderByClause> &c)
 {
+    SemaContext &Ctx = get_context();
+
     if (not c.order_by.empty()) {
         /* Analyze all ordering expressions. */
-        /* TODO If we grouped before, the ordering expressions must depend on a group key or an aggregate. */
-        for (auto o : c.order_by)
+        for (auto o : c.order_by) {
             (*this)(*o.first);
+            if (not Ctx.group_keys.empty()) {
+                /* TODO If we grouped before, the ordering expressions must depend on a group key or an aggregate. */
+            }
+        }
     }
 }
 

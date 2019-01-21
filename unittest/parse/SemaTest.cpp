@@ -153,18 +153,19 @@ TEST_CASE("Sema/Expressions", "[unit][sema]")
     }
 }
 
-TEST_CASE("Sema/Expressions/Functions", "[sema]")
+TEST_CASE("Sema/Expressions scalar-vector inference", "[sema]")
 {
     /* Create a dummy DB and a dummy table with a scalar and a vector attribute. */
     Catalog &C = Catalog::Get();
-    auto &DB = C.add_database("mydb");
+    const char *db_name = "mydb";
+    auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
     auto &table = DB.add_relation(C.get_pool()("mytable"));
     table.push_back(Type::Get_Integer(Type::TY_Scalar, 4), C.get_pool()("s"));
     table.push_back(Type::Get_Integer(Type::TY_Vector, 4), C.get_pool()("v"));
 
     {
-        /* Vectorial WHERE condition is ok. */
+        /* Vector compared to scalar yields vector. */
         LEXER("SELECT * FROM mytable WHERE v > 42;");
         Parser parser(lexer);
         SelectStmt *stmt = as<SelectStmt>(parser.parse());
@@ -173,13 +174,57 @@ TEST_CASE("Sema/Expressions/Functions", "[sema]")
         Sema sema(diag);
         sema(*stmt);
 
+        WhereClause *where = as<WhereClause>(stmt->where);
+        const Boolean *ty = cast<const Boolean>(where->where->type());
+        REQUIRE(ty);
+        CHECK(ty->is_vectorial());
+    }
+    {
+        /* Vector compared to vector yields vector. */
+        LEXER("SELECT * FROM mytable WHERE v > v;");
+        Parser parser(lexer);
+        SelectStmt *stmt = as<SelectStmt>(parser.parse());
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
 
         WhereClause *where = as<WhereClause>(stmt->where);
-        const PrimitiveType *pt = as<const PrimitiveType>(where->where->type());
-        CHECK(pt->is_vectorial());
+        const Boolean *ty = cast<const Boolean>(where->where->type());
+        REQUIRE(ty);
+        CHECK(ty->is_vectorial());
     }
+    {
+        /* Scalar and scalar yields scalar. */
+        LEXER("SELECT * FROM mytable WHERE s > 42;");
+        Parser parser(lexer);
+        SelectStmt *stmt = as<SelectStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        WhereClause *where = as<WhereClause>(stmt->where);
+        const Boolean *ty = cast<const Boolean>(where->where->type());
+        REQUIRE(ty);
+        CHECK(ty->is_scalar());
+    }
+
+    C.unset_database_in_use();
+    C.drop_database(db_name);
+}
+
+TEST_CASE("Sema/Expressions/Functions", "[sema]")
+{
+    /* Create a dummy DB and a dummy table with a scalar and a vector attribute. */
+    Catalog &C = Catalog::Get();
+    const char *db_name = "mydb";
+    auto &DB = C.add_database(db_name);
+    C.set_database_in_use(DB);
+    auto &table = DB.add_relation(C.get_pool()("mytable"));
+    table.push_back(Type::Get_Integer(Type::TY_Scalar, 4), C.get_pool()("s"));
+    table.push_back(Type::Get_Integer(Type::TY_Vector, 4), C.get_pool()("v"));
+
     {
         /* Vectorial WHERE condition is ok. */
         LEXER("SELECT * FROM mytable WHERE v > AVG(v);");
@@ -233,4 +278,7 @@ TEST_CASE("Sema/Expressions/Functions", "[sema]")
         const PrimitiveType *pt = as<const PrimitiveType>(where->where->type());
         CHECK(not pt->is_vectorial());
     }
+
+    C.unset_database_in_use();
+    C.drop_database(db_name);
 }

@@ -429,7 +429,11 @@ struct Catalog
         return *it->second;
     }
     Schema & get_database(const char *name) const { return *schemas_.at(name); }
-    bool drop_database(const char *name) { return schemas_.erase(name) != 0; }
+    bool drop_database(const char *name) {
+        if (has_database_in_use() and get_database_in_use().name == name)
+            throw std::invalid_argument("Cannot drop database; currently in use.");
+        return schemas_.erase(name) != 0;
+    }
     bool drop_database(const Schema &S) { return drop_database(S.name); }
 
     bool has_database_in_use() const { return database_in_use_ != nullptr; }

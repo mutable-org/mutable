@@ -92,7 +92,7 @@ void Sema::operator()(Const<Designator> &e)
                 if (the_attribute != nullptr) {
                     /* ambiguous attribute name */
                     diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text << " is ambiguous; "
-                                               "found in tables " << src.name << " and "
+                                               "exists in tables " << src.name << " and "
                                             << the_attribute->relation.name << ".\n";
                     e.type_ = Type::Get_Error();
                     return;

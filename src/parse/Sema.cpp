@@ -466,12 +466,10 @@ void Sema::operator()(Const<FromClause> &c)
     for (auto &table: c.from) {
         try {
             const Relation &R = DB.get_relation(table.first.text);
-            const char *table_name = table.second ? table.second.text : R.name;
-            auto res = Ctx.sources.emplace(table_name, &R);
-            if (not res.second) {
-                Token tok = table.second ? table.second : table.first;
-                diag.e(tok.pos) << "Table name " << table_name << " already in use.\n";
-            }
+            Token table_name = table.second ? table.second : table.first; // FROM first AS second ?
+            auto res = Ctx.sources.emplace(table_name.text, &R);
+            if (not res.second)
+                diag.e(table_name.pos) << "Table name " << table_name.text << " already in use.\n";
         } catch (std::out_of_range) {
             diag.e(table.first.pos) << "No table " << table.first.text << " in database " << DB.name << ".\n";
             return;

@@ -1,11 +1,5 @@
-CREATE DATABASE mydb;
-USE mydb;
-CREATE TABLE mytable (
-    n INT(1)
-);
+SELECT MIN(linenumber), MAX(linenumber), AVG(linenumber), SUM(linenumber)
+FROM LINEITEM;
 
-SELECT MIN(n), MAX(n), AVG(n), SUM(n)
-FROM mytable;
-
-SELECT ISNULL(n)
-FROM mytable;
+SELECT ISNULL(linenumber)
+FROM LINEITEM;

@@ -1,6 +1,3 @@
-CREATE DATABASE mydb;
-USE mydb;
-
 CREATE TABLE all_types (
     a INT(1),
     b INT(2),

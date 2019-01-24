@@ -1,78 +1,46 @@
-CREATE DATABASE mydb;
-USE mydb;
-
--- TPC-H lineitem table
-CREATE TABLE lineitem (
-    L_ORDERKEY      INT(4),
-    L_PARTKEY       INT(4),
-    L_SUPPKEY       INT(4),
-    L_LINENUMBER    INT(4),
-    L_QUANTITY      DECIMAL(10,2),
-    L_EXTENDEDPRICE DECIMAL(10,2),
-    L_DISCOUNT      DECIMAL(2,2),
-    L_TAX           DECIMAL(2,2),
-    L_RETURNFLAG    CHAR(1),
-    L_LINESTATUS    CHAR(1),
-    L_SHIPDATE      INT(4),
-    L_COMMITDATE    INT(4),
-    L_RECEIPTDATE   INT(4),
-    L_SHIPINSTRUCT  VARCHAR(25),
-    L_SHIPMODE      VARCHAR(10),
-    L_COMMENT       VARCHAR(44)
-);
-
--- TPC-H orders table
-CREATE TABLE orders (
-    O_ORDERKEY      INT(4),
-    O_CUSTKEY       INT(4),
-    O_ORDERSTATUS   CHAR(1),
-    O_TOTALPRICE    DECIMAL(10,2),
-    O_ORDERDATE     INT(4),
-    O_ORDERPRIORITY VARCHAR(15),
-    O_CLERK         CHAR(15),
-    O_SHIPPRIORITY  INT(4),
-    O_COMMENT       VARCHAR(79)
-);
-
 -- Simple SELECT FROM
 SELECT *
-FROM lineitem;
-SELECT *, L_DISCOUNT
-FROM lineitem;
-SELECT O_ORDERKEY, O_TOTALPRICE
-FROM orders;
+FROM LINEITEM;
+
+SELECT *, discount
+FROM LINEITEM;
+
+SELECT orderkey, totalprice
+FROM ORDERS;
 
 -- Simple SELECT with qualified attribute
-SELECT l.L_ORDERKEY
-FROM lineitem AS l;
+SELECT l.orderkey
+FROM LINEITEM AS l;
 
 -- SELECT with WHERE clause
 SELECT *
-FROM lineitem
-WHERE L_TAX < 0.05 AND L_DISCOUNT > 0.20;
-SELECT O_ORDERKEY
-FROM orders
-WHERE O_CLERK = "#Clerk_0000001";
+FROM LINEITEM
+WHERE tax < 0.05 AND discount > 0.20;
+
+SELECT orderkey
+FROM ORDERS
+WHERE clerk = "#Clerk_0000001";
 
 -- SELECT with GROUP BY
-SELECT L_ORDERKEY, L_LINENUMBER
-FROM lineitem
-GROUP BY L_ORDERKEY, L_LINENUMBER;
+SELECT orderkey, linenumber
+FROM LINEITEM
+GROUP BY orderkey, linenumber;
 
 -- SELECT with HAVING
 SELECT "OK"
-FROM lineitem
-HAVING AVG(L_EXTENDEDPRICE) >= 1337.42;
+FROM LINEITEM
+HAVING AVG(extendedprice) >= 1337.42;
 
 -- SELECT with ORDER BY
 SELECT *
-FROM lineitem
-ORDER BY L_ORDERKEY, L_LINENUMBER DESC;
+FROM LINEITEM
+ORDER BY orderkey, linenumber DESC;
 
 -- SELECT with LIMIT
 SELECT *
-FROM lineitem
+FROM LINEITEM
 LIMIT 42;
+
 SELECT *
-FROM lineitem
+FROM LINEITEM
 LIMIT 42 OFFSET 1337;

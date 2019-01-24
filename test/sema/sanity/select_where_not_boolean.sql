@@ -1,10 +1,3 @@
-CREATE DATABASE mydb;
-USE mydb;
-
-CREATE TABLE mytable (
-    n INT(4)
-);
-
 SELECT *
-FROM mytable
-WHERE n;
+FROM LINEITEM
+WHERE linenumber;

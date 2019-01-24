@@ -1,4 +1,4 @@
-CREATE DATABASE mydb;
+CREATE DATABASE somedb;
 
-USE mydb;
-USE mydb; -- can be done multiple times
+USE somedb;
+USE somedb; -- can be done multiple times

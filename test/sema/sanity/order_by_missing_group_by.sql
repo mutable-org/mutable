@@ -1,12 +1,4 @@
-CREATE DATABASE mydb;
-USE mydb;
-CREATE TABLE mytable (
-    a INT(4),
-    b INT(4),
-    c INT(4)
-);
-
-SELECT a, AVG(b)
-FROM mytable
-GROUP BY a
-ORDER BY c; -- to order by c one must group by c
+SELECT returnflag
+FROM LINEITEM
+GROUP BY returnflag
+ORDER BY linestatus; -- to order by linestatus one must group by linestatus

@@ -1,10 +1,3 @@
-CREATE DATABASE mydb;
-USE mydb;
-CREATE TABLE mytable (
-    a INT(4),
-    b INT(4)
-);
-
-SELECT a, b
-FROM mytable
-GROUP BY a;
+SELECT returnflag, linestatus
+FROM LINEITEM
+GROUP BY returnflag;

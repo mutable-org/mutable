@@ -1,10 +1,3 @@
-CREATE DATABASE mydb;
-USE mydb;
-CREATE TABLE mytable (
-    a INT(4),
-    b INT(4)
-);
-
-SELECT *
-FROM mytable
-HAVING AVG(a) < 42;
+SELECT 1
+FROM LINEITEM
+HAVING AVG(discount) < 42;

@@ -305,6 +305,8 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
     insist(d->type_);
     insist(d->type()->is_error() or cast<const FnType>(d->type()));
     insist(e.type_);
+    insist(not e.type()->is_error());
+    insist(e.type()->is_primitive());
 }
 
 void Sema::operator()(Const<UnaryExpr> &e)

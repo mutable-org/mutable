@@ -295,8 +295,8 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
                 return;
             }
 
-            d->type_ = Type::Get_Function(Type::Get_Boolean(Type::TY_Vector), { arg->type() });
-            e.type_= Type::Get_Boolean(Type::TY_Vector);
+            d->type_ = Type::Get_Function(Type::Get_Boolean(arg_type->category), { arg->type() });
+            e.type_= Type::Get_Boolean(arg_type->category);
             break;
         }
 

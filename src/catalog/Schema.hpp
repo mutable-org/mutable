@@ -262,16 +262,18 @@ struct Attribute
 
     std::size_t id; ///> the internal identifier of the attribute, unique within its relation
     const Relation &relation; ///> the relation the attribute belongs to
-    const Type *type; ///> the type of the attribute
+    const PrimitiveType *type; ///> the type of the attribute
     const char *name; ///> the name of the attribute
 
     private:
-    explicit Attribute(std::size_t id, const Relation &relation, const Type *type, const char *name)
+    explicit Attribute(std::size_t id, const Relation &relation, const PrimitiveType *type, const char *name)
         : id(id)
         , relation(relation)
         , type(notnull(type))
         , name(notnull(name))
-    { }
+    {
+        insist(type->is_vectorial()); // attributes are always of vectorial type
+    }
 
     public:
     Attribute(const Attribute&) = delete;
@@ -312,7 +314,7 @@ struct Relation
     const Attribute & operator[](std::size_t i) const { return at(i); }
     const Attribute & operator[](const char *name) const { return at(name); }
 
-    const Attribute & push_back(const Type *type, const char *name);
+    const Attribute & push_back(const PrimitiveType *type, const char *name);
 
     void dump(std::ostream &out) const;
     void dump() const;

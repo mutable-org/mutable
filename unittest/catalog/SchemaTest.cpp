@@ -280,9 +280,9 @@ TEST_CASE("Relation::push_back()")
 {
     Relation r("myrelation");
 
-    const Type *i4 = Type::Get_Integer(Type::TY_Scalar, 4);
-    const Type *vc = Type::Get_Varchar(Type::TY_Scalar, 42);
-    const Type *b = Type::Get_Boolean(Type::TY_Scalar);
+    const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Scalar, 4);
+    const PrimitiveType *vc = Type::Get_Varchar(Type::TY_Scalar, 42);
+    const PrimitiveType *b = Type::Get_Boolean(Type::TY_Scalar);
 
     r.push_back(i4, "n");
     r.push_back(vc, "comment");
@@ -300,7 +300,7 @@ TEST_CASE("Relation::push_back()")
 TEST_CASE("Relation iterators")
 {
     Relation r("myrelation");
-    const Type *i4 = Type::Get_Integer(Type::TY_Scalar, 4);
+    const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Scalar, 4);
 
     r.push_back(i4, "a");
     r.push_back(i4, "b");
@@ -320,7 +320,7 @@ TEST_CASE("Relation iterators")
 TEST_CASE("Relation get attribute by name")
 {
     Relation r("myrelation");
-    const Type *i4 = Type::Get_Integer(Type::TY_Scalar, 4);
+    const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Scalar, 4);
 
     r.push_back(i4, "a");
     r.push_back(i4, "b");
@@ -344,7 +344,7 @@ TEST_CASE("Relation get attribute by name")
 TEST_CASE("Relation::push_back() error if name alreay taken")
 {
     Relation r("myrelation");
-    const Type *i4 = Type::Get_Integer(Type::TY_Scalar, 4);
+    const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Scalar, 4);
 
     r.push_back(i4, "a");
     REQUIRE_THROWS_AS(r.push_back(i4, "a"), std::invalid_argument);

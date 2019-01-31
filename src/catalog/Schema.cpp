@@ -268,7 +268,7 @@ void Attribute::dump() const { dump(std::cerr); }
 
 Relation::~Relation() { }
 
-const Attribute & Relation::push_back(const Type *type, const char *name)
+const Attribute & Relation::push_back(const PrimitiveType *type, const char *name)
 {
     if (name_to_attr_.count(name)) throw std::invalid_argument("attribute with that name already exists");
     name_to_attr_.emplace(name, attrs_.size());

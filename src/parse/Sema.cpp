@@ -665,16 +665,19 @@ void Sema::operator()(Const<OrderByClause> &c)
             if (not pt->is_vectorial())
                 diag.e(c.tok.pos) << "Cannot order by " << *e << ", expression must be vectorial.\n";
         } else {
-            /* TODO If we grouped before, the ordering expressions must depend on a group key or an aggregate.
-             * Do we need sema stages for that?  From this point on, it is tough to get the attributes that are
-             * accessed.  An alternative approach is to set the stage to ORDER BY and in the sema of the expression
-             * check whether the value may be accessed.
-             * */
+            /* If we grouped, the grouping keys now have scalar type.  First check that the ordering expressions is of
+             * scalar type. */
+            if (pt->is_scalar()) continue;
 
-            /* TODO Test: If we grouped, the grouping keys now have scalar type.  Is it enough to check that all
-             * ordering expressions are of scalar type? */
-            if (not pt->is_scalar())
-                diag.e(c.tok.pos) << "Cannot order by " << *e << ", expression must be scalar.\n";
+            /* If the expression is not of scalar type, check whether it is a grouping expression. */
+            for (auto grp : Ctx.group_keys) {
+                if (*grp == *e)
+                    goto ok;
+            }
+
+            /* The expression is neither scalar nor a grouping expression. */
+            diag.e(c.tok.pos) << "Cannot order by " << *e << ", expression must be scalar.\n";
+ok:;
         }
     }
 }

@@ -35,6 +35,9 @@ struct Expr
     const Type * type() const { return notnull(type_); }
     bool has_type() const { return type_ != nullptr; }
 
+    virtual bool operator==(const Expr &other) const = 0;
+    bool operator!=(const Expr &other) const { return not operator==(other); }
+
     virtual void accept(ASTVisitor &v) = 0;
     virtual void accept(ConstASTVisitor &v) const = 0;
 
@@ -50,6 +53,8 @@ struct ErrorExpr : Expr
     Token tok;
 
     explicit ErrorExpr(Token tok) : tok(tok) { }
+
+    bool operator==(const Expr &other) const;
 
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;
@@ -70,6 +75,8 @@ struct Designator : Expr
 
     Designator(Token table_name, Token attr_name) : table_name(table_name), attr_name(attr_name) { }
 
+    bool operator==(const Expr &other) const;
+
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;
 
@@ -85,6 +92,8 @@ struct Constant : Expr
     Token tok;
 
     Constant(Token tok) : tok(tok) { }
+
+    bool operator==(const Expr &other) const;
 
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;
@@ -109,6 +118,8 @@ struct FnApplicationExpr : PostfixExpr
     FnApplicationExpr(Expr *fn, std::vector<Expr*> args) : fn(fn), args(args) { }
     ~FnApplicationExpr();
 
+    bool operator==(const Expr &other) const;
+
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;
 };
@@ -121,6 +132,8 @@ struct UnaryExpr : Expr
 
     UnaryExpr(Token op, Expr *expr) : op(op), expr(notnull(expr)) { }
     ~UnaryExpr() { delete expr; }
+
+    bool operator==(const Expr &other) const;
 
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;
@@ -135,6 +148,8 @@ struct BinaryExpr : Expr
 
     BinaryExpr(Token op, Expr *lhs, Expr *rhs) : op(op), lhs(notnull(lhs)), rhs(notnull(rhs)) { }
     ~BinaryExpr() { delete lhs; delete rhs; }
+
+    bool operator==(const Expr &other) const;
 
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;

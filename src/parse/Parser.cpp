@@ -376,7 +376,7 @@ Clause * Parser::parse_GroupByClause()
     expect(TK_Group);
     expect(TK_By);
     do
-        group_by.push_back(parse_designator());
+        group_by.push_back(parse_Expr());
     while (accept(TK_COMMA));
     return new GroupByClause(start, group_by);
 }

@@ -530,8 +530,7 @@ void Sema::operator()(Const<GroupByClause> &c)
         }
 
         /* Add expression to list of grouping keys. */
-        Designator *d = as<Designator>(expr);
-        Ctx.group_keys.push_back(d);
+        Ctx.group_keys.push_back(expr);
     }
 }
 

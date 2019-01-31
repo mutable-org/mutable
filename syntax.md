@@ -79,7 +79,7 @@ where-clause ::= 'WHERE' expression ;
 
 ##### Group By Clause
 ```ebnf
-group_by-clause ::= 'GROUP' 'BY' designator { ',' designator } ;
+group_by-clause ::= 'GROUP' 'BY' expression { ',' expression } ;
 ```
 
 ##### Having Clause

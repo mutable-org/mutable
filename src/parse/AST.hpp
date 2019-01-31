@@ -203,7 +203,7 @@ struct WhereClause : Clause
 
 struct GroupByClause : Clause
 {
-    std::vector<Expr*> group_by;
+    std::vector<Expr*> group_by; ///> a list of expressions to group by
 
     GroupByClause(Token tok, std::vector<Expr*> group_by) : Clause(tok), group_by(group_by) { }
     ~GroupByClause();

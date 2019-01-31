@@ -74,8 +74,7 @@ void Sema::operator()(Const<Designator> &e)
 
         /* Find the attribute inside the relation. */
         try {
-            const Attribute &A = R->at(e.attr_name.text);
-            e.type_ = A.type;
+            e.attr_ = &R->at(e.attr_name.text);
         } catch (std::out_of_range) {
             diag.e(e.attr_name.pos) << "Table " << e.table_name.text << " has no attribute " << e.attr_name.text
                                     << ".\n";
@@ -110,8 +109,12 @@ void Sema::operator()(Const<Designator> &e)
             return;
         }
 
-        e.type_ = the_attribute->type;
+        e.attr_ = the_attribute;
     }
+
+    insist(e.attr_);
+    const PrimitiveType *pt = e.attr().type;
+    e.type_ = pt;
 }
 
 void Sema::operator()(Const<Constant> &e)

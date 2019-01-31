@@ -15,6 +15,7 @@ using ConstASTVisitor = TheASTVisitor<true>;
 
 struct Type;
 struct Sema;
+struct Attribute;
 
 /*======================================================================================================================
  * Expressions
@@ -57,9 +58,14 @@ struct ErrorExpr : Expr
 /** A designator.  Identifies an attribute, optionally preceeded by a table name. */
 struct Designator : Expr
 {
+    friend struct Sema;
+
     Token table_name;
     Token attr_name;
+    private:
+    const Attribute *attr_ = nullptr; ///< the attribute that is references by this designator
 
+    public:
     explicit Designator(Token attr_name) : attr_name(attr_name) { }
 
     Designator(Token table_name, Token attr_name) : table_name(table_name), attr_name(attr_name) { }
@@ -69,6 +75,8 @@ struct Designator : Expr
 
     bool has_table_name() const { return bool(table_name); }
     bool is_identifier() const { return not has_table_name(); }
+
+    const Attribute & attr() const { return *notnull(attr_); }
 };
 
 /** A constant: a string literal or a numeric constant. */

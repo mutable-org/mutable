@@ -115,6 +115,30 @@ void Sema::operator()(Const<Designator> &e)
     insist(e.attr_);
     const PrimitiveType *pt = e.attr().type;
     e.type_ = pt;
+
+    switch (Ctx.stage) {
+        default:
+            unreachable("designator not allowed in this stage");
+
+        case SemaContext::S_Where:
+        case SemaContext::S_GroupBy:
+            /* The type of the attribute remains unchanged.  Nothing to be done. */
+            break;
+
+        case SemaContext::S_Having:
+        case SemaContext::S_OrderBy:
+        case SemaContext::S_Select:
+            /* Detect whether we grouped by this designator.  In that case, convert the type to scalar. */
+            for (auto grp : Ctx.group_keys) {
+                Designator *d = cast<Designator>(grp);
+                if (d and &d->attr() == &e.attr()) {
+                    /* The grouping key and this designator reference the same attribute. */
+                    e.type_ = pt->as_scalar();
+                    break;
+                }
+            }
+            break;
+    }
 }
 
 void Sema::operator()(Const<Constant> &e)
@@ -155,6 +179,7 @@ void Sema::operator()(Const<Constant> &e)
 
 void Sema::operator()(Const<FnApplicationExpr> &e)
 {
+    SemaContext &Ctx = get_context();
     Catalog &C = Catalog::Get();
     const auto &DB = C.get_database_in_use(); // XXX can we assume a DB is selected?
 
@@ -291,7 +316,7 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
                 e.type_ = Type::Get_Error();
                 return;
             }
-            const PrimitiveType *arg_type = cast<const PrimitiveType>(arg_type);
+            const PrimitiveType *arg_type = cast<const PrimitiveType>(arg->type());
             if (not arg_type) {
                 diag.e(d->attr_name.pos) << "Function ISNULL can only be applied to expressions of primitive type.\n";
                 e.type_ = Type::Get_Error();
@@ -302,7 +327,6 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
             e.type_= Type::Get_Boolean(arg_type->category);
             break;
         }
-
     }
 
     insist(d->type_);
@@ -310,6 +334,43 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
     insist(e.type_);
     insist(not e.type()->is_error());
     insist(e.type()->is_primitive());
+
+    const PrimitiveType *ty = as<const PrimitiveType>(e.type());
+
+    switch (Ctx.stage) {
+        case SemaContext::S_From:
+            unreachable("Function application in FROM clause is impossible");
+
+        case SemaContext::S_Where:
+            if (ty->is_scalar()) {
+                diag.e(d->attr_name.pos) << "Aggregate functions are not allowed in WHERE clause.\n";
+                return;
+            }
+            break;
+
+        case SemaContext::S_GroupBy:
+            if (ty->is_scalar()) {
+                diag.e(d->attr_name.pos) << "Aggregate functions are not allowed in GROUP BY clause.\n";
+                return;
+            }
+            break;
+
+        case SemaContext::S_Having:
+            /* nothing to be done */
+            break;
+
+        case SemaContext::S_OrderBy:
+            /* TODO */
+            break;
+
+        case SemaContext::S_Select:
+            /* TODO */
+            break;
+
+        case SemaContext::S_Limit:
+            /* TODO */
+            break;
+    }
 }
 
 void Sema::operator()(Const<UnaryExpr> &e)
@@ -449,21 +510,39 @@ void Sema::operator()(Const<ErrorClause>&)
 
 void Sema::operator()(Const<SelectClause> &c)
 {
+    SemaContext &Ctx = get_context();
+    Ctx.stage = SemaContext::S_Select;
+
     Catalog &C = Catalog::Get();
     const auto &DB = C.get_database_in_use();
     (void) DB;
 
-    for (auto s : c.select)
-        (*this)(*s.first);
+    bool has_vector = false;
+    bool has_scalar = false;
 
-    /* TODO check whether expressions can be computed */
+    for (auto s : c.select) {
+        auto &e = *s.first;
+        (*this)(e);
+
+        if (e.type()->is_error()) continue;
+        auto pt = as<const PrimitiveType>(e.type());
+        has_vector = has_vector or pt->is_vectorial();
+        has_scalar = has_scalar or pt->is_scalar();
+    }
+
+    if (has_vector and has_scalar) {
+        diag.e(c.tok.pos) << "SELECT clause with mixed scalar and vectorial values is forbidden.\n";
+    }
+
     /* TODO add (renamed) expressions to result relation. */
 }
 
 void Sema::operator()(Const<FromClause> &c)
 {
-    Catalog &C = Catalog::Get();
     SemaContext &Ctx = get_context();
+    Ctx.stage = SemaContext::S_From;
+
+    Catalog &C = Catalog::Get();
     const auto &DB = C.get_database_in_use();
 
     /* Check whether the source tables in the FROM clause exist in the database.  Add the source tables to the current
@@ -484,6 +563,9 @@ void Sema::operator()(Const<FromClause> &c)
 
 void Sema::operator()(Const<WhereClause> &c)
 {
+    SemaContext &Ctx = get_context();
+    Ctx.stage = SemaContext::S_Where;
+
     /* Analyze expression. */
     (*this)(*c.where);
 
@@ -509,6 +591,7 @@ void Sema::operator()(Const<WhereClause> &c)
 void Sema::operator()(Const<GroupByClause> &c)
 {
     SemaContext &Ctx = get_context();
+    Ctx.stage = SemaContext::S_GroupBy;
 
     for (auto expr : c.group_by) {
         (*this)(*expr);
@@ -539,6 +622,9 @@ void Sema::operator()(Const<GroupByClause> &c)
 
 void Sema::operator()(Const<HavingClause> &c)
 {
+    SemaContext &Ctx = get_context();
+    Ctx.stage = SemaContext::S_Having;
+
     (*this)(*c.having);
 
     /* Skip errors. */
@@ -564,21 +650,41 @@ void Sema::operator()(Const<HavingClause> &c)
 void Sema::operator()(Const<OrderByClause> &c)
 {
     SemaContext &Ctx = get_context();
+    Ctx.stage = SemaContext::S_OrderBy;
 
-    if (not c.order_by.empty()) {
-        /* Analyze all ordering expressions. */
-        for (auto o : c.order_by) {
-            (*this)(*o.first);
-            if (not Ctx.group_keys.empty()) {
-                /* TODO If we grouped before, the ordering expressions must depend on a group key or an aggregate. */
-            }
+    /* Analyze all ordering expressions. */
+    for (auto o : c.order_by) {
+        Expr *e = o.first;
+        (*this)(*e);
+
+        if (e->type()->is_error()) continue;
+        auto pt = as<const PrimitiveType>(e->type());
+
+        if (Ctx.group_keys.empty()) {
+            /* TODO Test: If we did not group, the ordering expressions must be vectorial. */
+            if (not pt->is_vectorial())
+                diag.e(c.tok.pos) << "Cannot order by " << *e << ", expression must be vectorial.\n";
+        } else {
+            /* TODO If we grouped before, the ordering expressions must depend on a group key or an aggregate.
+             * Do we need sema stages for that?  From this point on, it is tough to get the attributes that are
+             * accessed.  An alternative approach is to set the stage to ORDER BY and in the sema of the expression
+             * check whether the value may be accessed.
+             * */
+
+            /* TODO Test: If we grouped, the grouping keys now have scalar type.  Is it enough to check that all
+             * ordering expressions are of scalar type? */
+            if (not pt->is_scalar())
+                diag.e(c.tok.pos) << "Cannot order by " << *e << ", expression must be scalar.\n";
         }
     }
 }
 
 void Sema::operator()(Const<LimitClause>&)
 {
-    /* nothing to be done */
+    SemaContext &Ctx = get_context();
+    Ctx.stage = SemaContext::S_Limit;
+
+    /* TODO limit only makes sense when SELECT is vectorial and not scalar */
 }
 
 /*===== Stmt =========================================================================================================*/
@@ -673,12 +779,11 @@ void Sema::operator()(Const<SelectStmt> &s)
     }
 
     (*this)(*s.from);
-    (*this)(*s.select);
-
     if (s.where) (*this)(*s.where);
     if (s.group_by) (*this)(*s.group_by);
     if (s.having) (*this)(*s.having);
     if (s.order_by) (*this)(*s.order_by);
+    (*this)(*s.select);
     if (s.limit) (*this)(*s.limit);
 
     /* Pop context from stack. */

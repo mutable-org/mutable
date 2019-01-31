@@ -16,6 +16,16 @@ struct Sema : ASTVisitor
     /** Holds context information used by semantic analysis of a single statement. */
     struct SemaContext
     {
+        enum stage_t {
+            S_From,
+            S_Where,
+            S_GroupBy,
+            S_Having,
+            S_OrderBy,
+            S_Select,
+            S_Limit,
+        } stage = S_From;
+
         std::unordered_map<const char*, const Relation*> sources; ///> lists all data sources of a statement
 
         std::vector<Expr*> group_keys; ///> list of group keys

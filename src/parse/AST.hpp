@@ -98,10 +98,14 @@ struct Constant : Expr
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;
 
-    bool is_number() const;
-    bool is_integer() const;
-    bool is_float() const;
-    bool is_string() const;
+    bool is_number() const { return is_integer() or is_float(); }
+    bool is_integer() const {
+        return tok.type == TK_OCT_INT or
+               tok.type == TK_DEC_INT or
+               tok.type == TK_HEX_FLOAT;
+    }
+    bool is_float() const { return tok.type == TK_DEC_FLOAT or tok.type == TK_HEX_FLOAT; }
+    bool is_string() const { return tok.type == TK_STRING_LITERAL; }
 };
 
 /** A postfix expression. */

@@ -14,6 +14,9 @@ add_executable(parse-bin parse.cpp)
 target_link_libraries(parse-bin parse lex catalog util)
 set_target_properties(parse-bin PROPERTIES OUTPUT_NAME parse)
 
+add_executable(astdot astdot.cpp)
+target_link_libraries(astdot parse lex catalog util)
+
 add_executable(check-bin check.cpp)
 target_link_libraries(check-bin parse lex catalog util)
 set_target_properties(check-bin PROPERTIES OUTPUT_NAME check)

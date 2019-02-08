@@ -1,6 +1,7 @@
 add_library(
     parse
     AST.cpp
+    ASTDot.cpp
     ASTDumper.cpp
     ASTPrinter.cpp
     ASTVisitor.cpp

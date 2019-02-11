@@ -41,9 +41,9 @@ void ASTDot::operator()(Const<Constant> &e)
     out << id(e);
 
     if (e.is_string()) {
-        std::string s(e.tok.text);
-        auto sub = s.substr(1, s.length() - 2);
-        out << " [label=\"\\\"" << sub.c_str() << "\\\"\"];\n";
+        std::cerr << "string is:\n" << e.tok.text << std::endl;
+        std::cerr << "escaped string is:\n" << escape_string(e.tok.text) << std::endl;
+        out << " [label=\"" << escape_string(e.tok.text) << "\"];\n";
     } else {
         out << " [label=\"" << e.tok.text << "\"];\n";
     }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "util/macro.hpp"
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <type_traits>
@@ -8,6 +9,16 @@
 
 inline bool streq(const char *first, const char *second) { return 0 == strcmp(first, second); }
 inline bool strneq(const char *first, const char *second, std::size_t n) { return 0 == strncmp(first, second, n); }
+
+inline std::string replace_all(std::string str, const std::string &from, const std::string &to)
+{
+    std::string::size_type pos = 0;
+    while ((pos = str.find(from, pos)) != std::string::npos) {
+        str.replace(pos, from.length(), to);
+        pos += to.length();
+    }
+    return str;
+}
 
 struct StrHash
 {
@@ -69,3 +80,11 @@ T * as(U *u) { insist(cast<T>(u)); return static_cast<T*>(u); }
 /** Simple test whether expression u is of type T.  Works with pointers and references. */
 template<typename T, typename U>
 bool is(U *u) { return cast<T>(u) != nullptr; }
+
+inline std::string escape_string(std::string str)
+{
+    str = replace_all(str, "\\", "\\\\"); // escape \.
+    str = replace_all(str, "\"", "\\\""); // escape "
+    str = replace_all(str, "\n", "\\n");  // escape newline
+    return str;
+}

@@ -1,3 +1,4 @@
+#include "catalog/Schema.hpp"
 #include "lex/Lexer.hpp"
 #include "lex/Token.hpp"
 #include "lex/TokenType.hpp"
@@ -8,6 +9,7 @@
 #include "util/ArgParser.hpp"
 #include "util/Diagnostic.hpp"
 #include "util/fn.hpp"
+#include "util/stream.hpp"
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
@@ -81,9 +83,10 @@ int main(int argc, const char **argv)
         std::cerr << strerror(errno) << std::endl;
     }
 
-    Diagnostic diag(color, std::cout, std::cerr);
-    StringPool pool;
-    Lexer lexer(diag, pool, filename, *in);
+    Catalog &C = Catalog::Get();
+    NullStream null;
+    Diagnostic diag(color, null, std::cerr);
+    Lexer lexer(diag, C.get_pool(), filename, *in);
     Parser parser(lexer);
     Sema sema(diag);
 

@@ -91,7 +91,7 @@ void ASTDot::operator()(Const<SelectClause> &c)
         out << q(std::hex << c << '*') << "[label=\"*\"];\n"
             << id(c) << EDGE << q(std::hex << c << '*') << ";\n";
     }
-    for (auto s : c.select) {
+    for (auto &s : c.select) {
         (*this)(*s.first);
         if (s.second) {
             out << id(s.second) << " [label=\"AS " << s.second.text << "\"];\n"
@@ -106,31 +106,70 @@ void ASTDot::operator()(Const<SelectClause> &c)
 void ASTDot::operator()(Const<FromClause> &c)
 {
     out << id(c) << " [label=\"FROM\"];\n";
+
+    for (auto &t : c.from) {
+        if (t.second) {
+            out << id(t.second) << " [label=\"AS " << t.second.text << "\"];\n"
+                << id (t.first) << " [label=\"" << t.first.text << "\"];\n"
+                << id(c) << EDGE << id(t.second) << EDGE << id(t.first) << ";\n";
+        } else {
+            out << id(t.first) << " [label=\"" << t.first.text << "\"];\n"
+                << id(c) << EDGE << id(t.first) << ";\n";
+        }
+    }
 }
 
 void ASTDot::operator()(Const<WhereClause> &c)
 {
     out << id(c) << " [label=\"WHERE\"];\n";
+
+    (*this)(*c.where);
+    out << id(c) << EDGE << id(*c.where) << ";\n";
 }
 
 void ASTDot::operator()(Const<GroupByClause> &c)
 {
     out << id(c) << " [label=\"GROUP BY\"];\n";
+
+    for (auto &g : c.group_by) {
+        (*this)(*g);
+        out << id(c) << EDGE << id(*g) << ";\n";
+    }
 }
 
 void ASTDot::operator()(Const<HavingClause> &c)
 {
     out << id(c) << " [label=\"HAVING\"];\n";
+    (*this)(*c.having);
+    out << id(c) << EDGE << id(*c.having) << ";\n";
 }
 
 void ASTDot::operator()(Const<OrderByClause> &c)
 {
     out << id(c) << " [label=\"ORDER BY\"];\n";
+
+    for (auto &o : c.order_by) {
+        if (o.second)
+            out << id(o.second) << " [label=\"ASC\"];\n";
+        else
+            out << id(o.second) << " [label=\"DESC\"];\n";
+        out << id(c) << EDGE << id(o.second) << ";\n";
+
+        (*this)(*o.first);
+        out << id(o.second) << EDGE << id(*o.first) << ";\n";
+    }
 }
 
 void ASTDot::operator()(Const<LimitClause> &c)
 {
     out << id(c) << " [label=\"LIMIT\"];\n";
+    out << id(c.limit) << " [label=\"" << c.limit.text << "\"];\n";
+    out << id(c) << EDGE << id(c.limit) << ";\n";
+
+    if (c.offset) {
+        out << id(c.offset) << " [label=\"OFFSET " << c.offset.text << "\"];\n";
+        out << id(c) << EDGE << id(c.offset) << ";\n";
+    }
 }
 
 /*--- Statements -----------------------------------------------------------------------------------------------------*/
@@ -157,9 +196,41 @@ void ASTDot::operator()(Const<CreateTableStmt> &s)
 
 void ASTDot::operator()(Const<SelectStmt> &s)
 {
-    (*this)(*s.select);
-
     out << id(s) << " [label=\"SelectStmt\"];\n";
+
+    (*this)(*s.select);
+    out << id(s) << EDGE << id(*s.select) << ";\n";
+
+    if (s.from) {
+        (*this)(*s.from);
+        out << id(s) << EDGE << id(*s.from) << ";\n";
+    }
+
+    if (s.where) {
+        (*this)(*s.where);
+        out << id(s) << EDGE << id(*s.where) << ";\n";
+    }
+
+    if (s.group_by) {
+        (*this)(*s.group_by);
+        out << id(s) << EDGE << id(*s.group_by) << ";\n";
+    }
+
+    if (s.having) {
+        (*this)(*s.having);
+        out << id(s) << EDGE << id(*s.having) << ";\n";
+    }
+
+    if (s.order_by) {
+        (*this)(*s.order_by);
+        out << id(s) << EDGE << id(*s.order_by) << ";\n";
+    }
+
+    if (s.limit) {
+        (*this)(*s.limit);
+        out << id(s) << EDGE << id(*s.limit) << ";\n";
+    }
+
 }
 
 void ASTDot::operator()(Const<InsertStmt> &s)

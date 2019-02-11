@@ -295,8 +295,19 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
             break;
         }
 
-        case Function::FN_COUNT:
-            unreachable("Not implemented.");
+        case Function::FN_COUNT: {
+            if (e.args.size() > 1) {
+                diag.e(d->attr_name.pos) << "Too many arguments for aggregate " << d << ".\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
+
+            /* TODO If argument is given, check whether it can be NULL.  If not, COUNT(arg) == COUNT(*) */
+
+            e.type_ = Type::Get_Integer(Type::TY_Scalar, 8);
+            d->type_ = Type::Get_Function(e.type_, {});
+            break;
+        }
 
         case Function::FN_ISNULL: {
             if (e.args.size() == 0) {

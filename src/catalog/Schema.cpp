@@ -208,11 +208,12 @@ void Numeric::print(std::ostream &out) const
 
 void FnType::print(std::ostream &out) const
 {
+    out << '(';
     for (auto it = parameter_types.cbegin(), end = parameter_types.cend(); it != end; ++it) {
         if (it != parameter_types.cbegin()) out << ", ";
         out << **it;
     }
-    out << " -> " << *return_type;
+    out << ") -> " << *return_type;
 }
 
 /*===== Dump =========================================================================================================*/

@@ -285,27 +285,31 @@ void ASTDot::operator()(Const<SelectStmt> &s)
     out << id(s) << " [label=\"SelectStmt\"];\n";
 
     /* Dot the accessed relations first. */
+    out << "subgraph {\n";
     if (auto f = cast<FromClause>(s.from)) {
         for (auto &t : f->from) {
             if (t.has_relation()) {
                 auto &R = t.relation();
 
-                out << "subgraph {\n"
-                    << "node [shape=none,style=filled,fillcolor=white];\n"
-                    << R.name << " [label=<\n<TABLE>\n<TR><TD BORDER=\"0\"><B>" << R.name << "</B></TD></TR>\n";
+                out << R.name << " [shape=none,style=filled,fillcolor=white,label=<\n<TABLE>\n<TR><TD BORDER=\"0\"><B>"
+                    << R.name << "</B></TD></TR>\n";
 
                 for (auto &A : R) {
-                std::ostringstream oss;
-                oss << *A.type;
-                out << "<TR><TD PORT=\"" << A.name << "\">" << A.name
-                    << "<FONT POINT-SIZE=\"11\"><I> : " << html_escape(oss.str()) << "</I></FONT>"
-                    << "</TD></TR>\n";
+                    std::ostringstream oss;
+                    oss << *A.type;
+                    out << "<TR><TD PORT=\"" << A.name << "\">" << A.name
+                        << "<FONT POINT-SIZE=\"11\"><I> : " << html_escape(oss.str()) << "</I></FONT>"
+                        << "</TD></TR>\n";
                 }
 
-                out << "</TABLE>\n>];\n}\n";
+                out << "</TABLE>\n>];\n";
+#if 0
+                out << id(s) << EDGE << R.name << " [style=invis];\n";
+#endif
             }
         }
     }
+    out << "}\n";
 
     (*this)(*s.select);
     out << id(s) << EDGE << id(*s.select) << ";\n";
@@ -340,6 +344,19 @@ void ASTDot::operator()(Const<SelectStmt> &s)
         out << id(s) << EDGE << id(*s.limit) << ";\n";
     }
 
+#if 0
+    /* Order the nodes. */
+    out << "{\nrank = same;\nrankdir = LR;\n"
+        << id(*s.select);
+    if (s.from) out << EDGE << id(*s.from);
+    if (s.where) out << EDGE << id(*s.where);
+    if (s.group_by) out << EDGE << id(*s.group_by);
+    if (s.having) out << EDGE << id(*s.having);
+    if (s.order_by) out << EDGE << id(*s.order_by);
+    if (s.limit) out << EDGE << id(*s.limit);
+    out << " [style=\"invis\"];\n"
+        << "}\n";
+#endif
 }
 
 void ASTDot::operator()(Const<InsertStmt> &s)

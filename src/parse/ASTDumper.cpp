@@ -103,13 +103,13 @@ void ASTDumper::operator()(Const<FromClause> &c)
     indent() << "FromClause (" << c.tok.pos << ')';
     ++indent_;
     for (auto f : c.from) {
-        if (f.second) {
-            indent() << "AS '" << f.second.text << "' (" << f.second.pos << ')';
+        if (f.alias) {
+            indent() << "AS '" << f.alias.text << "' (" << f.alias.pos << ')';
             ++indent_;
-            indent() << f.first.text << " (" << f.first.pos << ')';
+            indent() << f.name.text << " (" << f.name.pos << ')';
             --indent_;
         } else {
-            indent() << f.first.text << " (" << f.first.pos << ')';
+            indent() << f.name.text << " (" << f.name.pos << ')';
         }
     }
     --indent_;

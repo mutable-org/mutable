@@ -16,6 +16,7 @@ using ConstASTVisitor = TheASTVisitor<true>;
 struct Type;
 struct Sema;
 struct Attribute;
+struct Relation;
 
 /*======================================================================================================================
  * Expressions
@@ -84,6 +85,7 @@ struct Designator : Expr
     bool is_identifier() const { return not has_table_name(); }
 
     const Attribute & attr() const { return *notnull(attr_); }
+    bool has_attr() const { return attr_ != nullptr; }
 };
 
 /** A constant: a string literal or a numeric constant. */
@@ -207,7 +209,21 @@ struct SelectClause : Clause
 
 struct FromClause : Clause
 {
-    using from_type = std::pair<Token, Token>; ///> first is the table name, second is the alias
+    struct from_type
+    {
+        friend struct Sema;
+
+        Token name;
+        Token alias;
+
+        from_type(Token name, Token alias) : name(name), alias(alias) { }
+
+        const Relation & relation() const { return *notnull(relation_); }
+        bool has_relation() const { return relation_ != nullptr; }
+
+        private:
+        const Relation *relation_ = nullptr; ///< the referenced relation
+    };
 
     std::vector<from_type> from;
 

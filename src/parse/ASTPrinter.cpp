@@ -70,8 +70,8 @@ void ASTPrinter::operator()(Const<FromClause> &c)
     out << "FROM ";
     for (auto it = c.from.cbegin(), end = c.from.cend(); it != end; ++it) {
         if (it != c.from.cbegin()) out << ", ";
-        out << it->first.text;
-        if (it->second) out << " AS " << it->second.text;
+        out << it->name.text;
+        if (it->alias) out << " AS " << it->alias.text;
     }
 }
 

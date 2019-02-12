@@ -48,14 +48,19 @@ void ASTDot::operator()(Const<Designator> &e)
 
     if (e.has_table_name()) out << e.table_name.text << ".";
     out << e.attr_name.text << "</B>";
-
     if (e.has_type()) {
         std::ostringstream oss;
         oss << *e.type();
         out << "<FONT POINT-SIZE=\"11\"><I> : " << html_escape(oss.str()) << "</I></FONT>";
     }
-
     out << ">];\n";
+
+    /* Dot edge to relation. */
+    if (e.has_attr()) {
+        auto &A = e.attr();
+        out << id(e) << EDGE << A.relation.name << ':' << A.name
+            << " [style=\"dashed\",dir=\"forward\",color=\"#404040\"];\n";
+    }
 }
 
 void ASTDot::operator()(Const<Constant> &e)
@@ -139,7 +144,7 @@ void ASTDot::operator()(Const<ErrorClause> &c)
 
 void ASTDot::operator()(Const<SelectClause> &c)
 {
-    out << "subgraph cluster_select {\nstyle=\"rounded,filled\";\ncolor=\"#e6194B40\";penwidth=\"4\";\n"
+    out << "subgraph cluster_select {\nstyle=\"rounded,filled\";\ncolor=\"#e6194B20\";penwidth=\"4\";\n"
         << id(c) << " [label=\"SELECT\"];\n";
 
     if (c.select_all) {
@@ -162,17 +167,21 @@ void ASTDot::operator()(Const<SelectClause> &c)
 
 void ASTDot::operator()(Const<FromClause> &c)
 {
-    out << "subgraph cluster_from {\nstyle=\"rounded,filled\";\ncolor=\"#bfef4570\";penwidth=\"4\";\n"
+    out << "subgraph cluster_from {\nstyle=\"rounded,filled\";\ncolor=\"#bfef4550\";penwidth=\"4\";\n"
         << id(c) << " [label=\"FROM\"];\n";
 
     for (auto &t : c.from) {
-        if (t.second) {
-            out << id(t.second) << " [label=\"AS " << t.second.text << "\"];\n"
-                << id (t.first) << " [label=\"" << t.first.text << "\"];\n"
-                << id(c) << EDGE << id(t.second) << EDGE << id(t.first) << ";\n";
+        if (t.alias) {
+            out << id(t.alias) << " [label=\"AS " << t.alias.text << "\"];\n"
+                << id (t.name) << " [label=\"" << t.name.text << "\"];\n"
+                << id(c) << EDGE << id(t.alias) << EDGE << id(t.name) << ";\n";
         } else {
-            out << id(t.first) << " [label=\"" << t.first.text << "\"];\n"
-                << id(c) << EDGE << id(t.first) << ";\n";
+            out << id(t.name) << " [label=\"" << t.name.text << "\"];\n"
+                << id(c) << EDGE << id(t.name) << ";\n";
+        }
+        if (t.has_relation()) {
+            auto &R = t.relation();
+            out << id(t.name) << EDGE << R.name << ":n [dir=\"forward\",color=\"#404040\"];\n";
         }
     }
 
@@ -181,7 +190,7 @@ void ASTDot::operator()(Const<FromClause> &c)
 
 void ASTDot::operator()(Const<WhereClause> &c)
 {
-    out << "subgraph cluster_where {\nstyle=\"rounded,filled\";\ncolor=\"#42d4f440\";penwidth=\"4\";\n"
+    out << "subgraph cluster_where {\nstyle=\"rounded,filled\";\ncolor=\"#42d4f430\";penwidth=\"4\";\n"
         << id(c) << " [label=\"WHERE\"];\n";
 
     (*this)(*c.where);
@@ -192,7 +201,7 @@ void ASTDot::operator()(Const<WhereClause> &c)
 
 void ASTDot::operator()(Const<GroupByClause> &c)
 {
-    out << "subgraph cluster_groupby {\nstyle=\"rounded,filled\";\ncolor=\"#3cb44b40\";penwidth=\"4\";\n"
+    out << "subgraph cluster_groupby {\nstyle=\"rounded,filled\";\ncolor=\"#3cb44b30\";penwidth=\"4\";\n"
         << id(c) << " [label=\"GROUP BY\"];\n";
 
     for (auto &g : c.group_by) {
@@ -205,7 +214,7 @@ void ASTDot::operator()(Const<GroupByClause> &c)
 
 void ASTDot::operator()(Const<HavingClause> &c)
 {
-    out << "subgraph cluster_having {\nstyle=\"rounded,filled\";\ncolor=\"#aaffc360\";penwidth=\"4\";\n"
+    out << "subgraph cluster_having {\nstyle=\"rounded,filled\";\ncolor=\"#aaffc350\";penwidth=\"4\";\n"
         << id(c) << " [label=\"HAVING\"];\n";
 
     (*this)(*c.having);
@@ -274,6 +283,29 @@ void ASTDot::operator()(Const<CreateTableStmt> &s)
 void ASTDot::operator()(Const<SelectStmt> &s)
 {
     out << id(s) << " [label=\"SelectStmt\"];\n";
+
+    /* Dot the accessed relations first. */
+    if (auto f = cast<FromClause>(s.from)) {
+        for (auto &t : f->from) {
+            if (t.has_relation()) {
+                auto &R = t.relation();
+
+                out << "subgraph {\n"
+                    << "node [shape=none,style=filled,fillcolor=white];\n"
+                    << R.name << " [label=<\n<TABLE>\n<TR><TD BORDER=\"0\"><B>" << R.name << "</B></TD></TR>\n";
+
+                for (auto &A : R) {
+                std::ostringstream oss;
+                oss << *A.type;
+                out << "<TR><TD PORT=\"" << A.name << "\">" << A.name
+                    << "<FONT POINT-SIZE=\"11\"><I> : " << html_escape(oss.str()) << "</I></FONT>"
+                    << "</TD></TR>\n";
+                }
+
+                out << "</TABLE>\n>];\n}\n";
+            }
+        }
+    }
 
     (*this)(*s.select);
     out << id(s) << EDGE << id(*s.select) << ";\n";

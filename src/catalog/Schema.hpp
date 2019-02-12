@@ -304,10 +304,10 @@ struct Relation
 
     std::size_t size() const { return attrs_.size(); }
 
-    table_type::const_iterator begin()  { return attrs_.cbegin(); }
-    table_type::const_iterator end()    { return attrs_.cend(); }
-    table_type::const_iterator cbegin() { return attrs_.cbegin(); }
-    table_type::const_iterator cend()   { return attrs_.cend(); }
+    table_type::const_iterator begin()  const { return attrs_.cbegin(); }
+    table_type::const_iterator end()    const { return attrs_.cend(); }
+    table_type::const_iterator cbegin() const { return attrs_.cbegin(); }
+    table_type::const_iterator cend()   const { return attrs_.cend(); }
 
     const Attribute & at(std::size_t i) const { return attrs_.at(i); }
     const Attribute & at(const char *name) const { return attrs_[name_to_attr_.at(name)]; }

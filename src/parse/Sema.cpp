@@ -560,13 +560,14 @@ void Sema::operator()(Const<FromClause> &c)
      * context, using their alias if provided (e.g. FROM src AS alias). */
     for (auto &table: c.from) {
         try {
-            const Relation &R = DB.get_relation(table.first.text);
-            Token table_name = table.second ? table.second : table.first; // FROM first AS second ?
+            const Relation &R = DB.get_relation(table.name.text);
+            Token table_name = table.alias ? table.alias : table.name; // FROM name AS alias ?
             auto res = Ctx.sources.emplace(table_name.text, &R);
             if (not res.second)
                 diag.e(table_name.pos) << "Table name " << table_name.text << " already in use.\n";
+            table.relation_ = &R;
         } catch (std::out_of_range) {
-            diag.e(table.first.pos) << "No table " << table.first.text << " in database " << DB.name << ".\n";
+            diag.e(table.name.pos) << "No table " << table.name.text << " in database " << DB.name << ".\n";
             return;
         }
     }

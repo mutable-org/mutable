@@ -341,13 +341,13 @@ Clause * Parser::parse_FromClause()
     expect(TK_From);
     do {
         Token table = token();
-        Token as;
+        Token alias;
         ok = ok and expect(TK_IDENTIFIER);
         if (accept(TK_As)) {
-            as = token();
+            alias = token();
             ok = ok and expect(TK_IDENTIFIER);
         }
-        from.push_back(std::make_pair(table, as));
+        from.emplace_back(table, alias);
     } while (accept(TK_COMMA));
 
     if (not ok)

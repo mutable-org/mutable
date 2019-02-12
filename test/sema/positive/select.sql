@@ -2,39 +2,39 @@
 SELECT *
 FROM LINEITEM;
 
-SELECT *, discount
+SELECT *, l_discount
 FROM LINEITEM;
 
-SELECT orderkey, totalprice
+SELECT o_orderkey, o_totalprice
 FROM ORDERS;
 
 -- Simple SELECT with qualified attribute
-SELECT l.orderkey
+SELECT l.l_orderkey
 FROM LINEITEM AS l;
 
 -- SELECT with WHERE clause
 SELECT *
 FROM LINEITEM
-WHERE tax < 0.05 AND discount > 0.20;
+WHERE l_tax < 0.05 AND l_discount > 0.20;
 
-SELECT orderkey
+SELECT o_orderkey
 FROM ORDERS
-WHERE clerk = "#Clerk_0000001";
+WHERE o_clerk = "#Clerk_0000001";
 
 -- SELECT with GROUP BY
-SELECT orderkey, linenumber
+SELECT l_orderkey, l_linenumber
 FROM LINEITEM
-GROUP BY orderkey, linenumber;
+GROUP BY l_orderkey, l_linenumber;
 
 -- SELECT with HAVING
 SELECT "OK"
 FROM LINEITEM
-HAVING AVG(extendedprice) >= 1337.42;
+HAVING AVG(l_extendedprice) >= 1337.42;
 
 -- SELECT with ORDER BY
 SELECT *
 FROM LINEITEM
-ORDER BY orderkey, linenumber DESC;
+ORDER BY l_orderkey, l_linenumber DESC;
 
 -- SELECT with LIMIT
 SELECT *

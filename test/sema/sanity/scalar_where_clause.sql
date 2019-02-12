@@ -1,3 +1,3 @@
 SELECT *
 FROM LINEITEM
-WHERE AVG(discount) > 42;
+WHERE AVG(l_discount) > 42;

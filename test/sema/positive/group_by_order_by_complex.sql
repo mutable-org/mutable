@@ -1,8 +1,15 @@
-SELECT orderkey + partkey
-FROM LINEITEM
-GROUP BY orderkey + partkey;
+SELECT
+    l_orderkey + l_partkey
+FROM
+    LINEITEM
+GROUP BY
+    l_orderkey + l_partkey;
 
-SELECT orderkey + partkey
-FROM LINEITEM
-GROUP BY orderkey + partkey
-ORDER BY orderkey + partkey;
+SELECT
+    l_orderkey + l_partkey
+FROM
+    LINEITEM
+GROUP BY
+    l_orderkey + l_partkey
+ORDER BY
+    l_orderkey + l_partkey;

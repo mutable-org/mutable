@@ -1,3 +1,3 @@
-SELECT returnflag, linestatus
+SELECT l_returnflag, l_linestatus
 FROM LINEITEM
-GROUP BY returnflag;
+GROUP BY l_returnflag;

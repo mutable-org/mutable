@@ -1,5 +1,5 @@
-SELECT l.orderkey
+SELECT l.l_orderkey
 FROM LINEITEM AS l;
 
-SELECT orderkey
+SELECT l_orderkey
 FROM LINEITEM AS l;

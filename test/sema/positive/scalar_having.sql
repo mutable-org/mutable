@@ -1,3 +1,6 @@
-SELECT 1
-FROM LINEITEM
-HAVING AVG(discount) < 42;
+SELECT
+    1
+FROM
+    LINEITEM
+HAVING
+    AVG(l_discount) < 42;

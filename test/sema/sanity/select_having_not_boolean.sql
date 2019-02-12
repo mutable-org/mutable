@@ -1,3 +1,3 @@
 SELECT 1
 FROM LINEITEM
-HAVING AVG(linenumber);
+HAVING AVG(l_linenumber);

@@ -1,3 +1,3 @@
 SELECT *
 FROM LINEITEM
-GROUP BY SUM(orderkey); -- cannot group by scalar
+GROUP BY SUM(l_orderkey); -- cannot group by scalar

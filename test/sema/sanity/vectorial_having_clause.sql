@@ -1,3 +1,3 @@
 SELECT 1
 FROM LINEITEM
-HAVING linenumber;
+HAVING l_linenumber;

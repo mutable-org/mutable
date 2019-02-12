@@ -1,3 +1,3 @@
 SELECT *
 FROM LINEITEM
-WHERE linenumber;
+WHERE l_linenumber;

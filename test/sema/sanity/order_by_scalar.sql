@@ -1,3 +1,3 @@
 SELECT *
 FROM LINEITEM
-ORDER BY AVG(tax); -- not vectorial
+ORDER BY AVG(l_tax); -- not vectorial

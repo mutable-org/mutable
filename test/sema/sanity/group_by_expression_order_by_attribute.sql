@@ -1,4 +1,4 @@
-SELECT orderkey + partkey
+SELECT l_orderkey + l_partkey
 FROM LINEITEM
-GROUP BY orderkey + partkey
-ORDER BY orderkey; -- not scalar
+GROUP BY l_orderkey + l_partkey
+ORDER BY l_orderkey; -- not scalar

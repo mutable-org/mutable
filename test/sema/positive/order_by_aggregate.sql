@@ -1,4 +1,9 @@
-SELECT returnflag, AVG(linenumber)
-FROM LINEITEM
-GROUP BY returnflag
-ORDER BY MAX(quantity);
+SELECT
+    l_returnflag,
+    AVG(l_linenumber)
+FROM
+    LINEITEM
+GROUP BY
+    l_returnflag
+ORDER BY
+    MAX(l_quantity);

@@ -21,8 +21,8 @@ struct Sema : ASTVisitor
             S_Where,
             S_GroupBy,
             S_Having,
-            S_OrderBy,
             S_Select,
+            S_OrderBy,
             S_Limit,
         } stage = S_From;
 

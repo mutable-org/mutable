@@ -2,6 +2,8 @@
 
 #include "catalog/Schema.hpp"
 #include <cstdint>
+#include <sstream>
+#include <unordered_map>
 
 
 using namespace db;
@@ -539,6 +541,19 @@ void Sema::operator()(Const<SelectClause> &c)
         auto pt = as<const PrimitiveType>(e.type());
         has_vector = has_vector or pt->is_vectorial();
         has_scalar = has_scalar or pt->is_scalar();
+
+        std::pair<decltype(SemaContext::selection)::iterator, bool> res;
+        if (s.second) {
+            /* With alias. */
+            res = Ctx.selection.emplace(s.second.text, s.first);
+        } else {
+            /* Without alias.  Print expression as string to get a name. */
+            std::ostringstream oss;
+            oss << *s.first;
+            res = Ctx.selection.emplace(C.get_pool()(oss.str().c_str()), s.first);
+        }
+        if (not res.second)
+            diag.e(s.second.pos) << "Attribute name " << s.second.text << " already used.\n";
     }
 
     if (has_vector and has_scalar) {
@@ -793,15 +808,14 @@ void Sema::operator()(Const<SelectStmt> &s)
         return;
     }
 
-    (*this)(*s.from);
+    if (s.from) (*this)(*s.from);
     if (s.where) (*this)(*s.where);
     if (s.group_by) (*this)(*s.group_by);
     if (s.having) (*this)(*s.having);
-    if (s.order_by) (*this)(*s.order_by);
     (*this)(*s.select);
+    if (s.order_by) (*this)(*s.order_by);
     if (s.limit) (*this)(*s.limit);
 
-    /* Pop context from stack. */
     pop_context();
 }
 

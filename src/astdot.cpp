@@ -22,7 +22,8 @@ using namespace db;
 
 void usage(std::ostream &out, const char *name)
 {
-    out << "USAGE:\n\t" << name << " <FILE>"
+    out << "Prints the AST in DOT language.\n"
+        << "USAGE:\n\t" << name << " <FILE>"
         << "\n\t" << name << " -"
         << std::endl;
 }

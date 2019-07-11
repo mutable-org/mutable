@@ -16,7 +16,8 @@ using namespace db;
 
 void usage(std::ostream &out, const char *name)
 {
-    out << "USAGE:\n\t" << name << " <FILE>"
+    out << "Performs lexicographic analysis of the input.\n"
+        << "USAGE:\n\t" << name << " <FILE>"
         << "\n\t" << name << " -"
         << std::endl;
 }

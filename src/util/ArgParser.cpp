@@ -77,9 +77,9 @@ void ArgParser::parse_args(int, const char **argv) {
             goto positional;
         auto it = key_map.find(pool_(*argv));
         if (it != key_map.end())
-            it->second->parse(argv);
+            it->second->parse(argv); // option
         else
-            args_.push_back(*argv);
+            args_.push_back(*argv); // positional argument
     }
     return;
 

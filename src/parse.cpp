@@ -44,7 +44,7 @@ int main(int argc, const char **argv)
     ADD(bool, ast, false,                   /* Type, Var, Init  */
         nullptr, "--ast",                   /* Short, Long      */
         "dump the abstract syntax tree",    /* Description      */
-        [&](bool) { ast = true; });       /* Callback         */
+        [&](bool) { ast = true; });         /* Callback         */
 #undef ADD
     AP.parse_args(argc, argv);
 

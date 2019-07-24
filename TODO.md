@@ -23,9 +23,9 @@
         * [x] `UPDATE`
         * [x] `DELETE`
 * [x] implement *abstract syntax tree* (AST)
-* [ ] provide parser tests
+* [x] provide parser tests
     * [x] unit tests tests
-    * [ ] integration tests
+    * [x] integration tests
 
 ### Semantic Analysis
 

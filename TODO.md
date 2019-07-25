@@ -36,17 +36,23 @@
         * integers `INT(1)` to `INT(8)`
         * floating point `FLOAT` (32 bit) and `DOUBLE` (64 bit)
         * `DECIMAL(p, s)` type with *p* decimal digits and a decimal dot left of the *s* rightmost digits
-* [ ] define rules of the SQL type system
-* [ ] implement SQL type system
-* [ ] implement semantic analysis
+* [x] define rules of the SQL type system
+* [x] implement SQL type system
+* [x] implement semantic analysis
+
+### Intermediate Representation
+
+* [ ] design IR
+* [ ] translate AST to IR
+    * [ ] transform predicates to CNF
 
 ### Catalog
 
-* [ ] define internal type system
-* [ ] define and implement Schema
+* [x] define internal type system
+* [x] define and implement Schema
 * [ ] define core components of a catalog
-    * [ ] schema
-    * [ ] tables
+    * [x] schema
+    * [x] tables
     * [ ] index structures
     * [ ] statistics
         * [ ] workload

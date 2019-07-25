@@ -2,6 +2,7 @@
 
 #include "lex/Token.hpp"
 #include <iostream>
+#include <variant>
 #include <vector>
 
 
@@ -69,7 +70,8 @@ struct Designator : Expr
     Token table_name;
     Token attr_name;
     private:
-    const Attribute *attr_ = nullptr; ///< the attribute that is references by this designator
+    using target_type = std::variant<std::monostate, const Expr*, const Attribute*>;
+    target_type target_; ///< the target that is referenced by this designator
 
     public:
     explicit Designator(Token attr_name) : attr_name(attr_name) { }
@@ -84,8 +86,7 @@ struct Designator : Expr
     bool has_table_name() const { return bool(table_name); }
     bool is_identifier() const { return not has_table_name(); }
 
-    const Attribute & attr() const { return *notnull(attr_); }
-    bool has_attr() const { return attr_ != nullptr; }
+    target_type target() const { return target_; }
 };
 
 /** A constant: a string literal or a numeric constant. */

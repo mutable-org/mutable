@@ -62,6 +62,7 @@ void Sema::operator()(Const<Designator> &e)
 {
     SemaContext &Ctx = get_context();
 
+    /* If the designator references an attribute of a table, search for it. */
     if (e.table_name) {
         /* Find the relation first and then locate the attribute inside this relation. */
         const Relation *R;
@@ -75,47 +76,62 @@ void Sema::operator()(Const<Designator> &e)
         }
 
         /* Find the attribute inside the relation. */
+        const Attribute *the_attr = nullptr;
         try {
-            e.attr_ = &R->at(e.attr_name.text);
+            the_attr = &R->at(e.attr_name.text);
         } catch (std::out_of_range) {
             diag.e(e.attr_name.pos) << "Table " << e.table_name.text << " has no attribute " << e.attr_name.text
                                     << ".\n";
             e.type_ = Type::Get_Error();
             return;
         }
+        e.target_ = the_attr;
     } else {
-        /* Since no relation was explicitly specified, we must search *all* source relations for the attribute. */
-        const Attribute *the_attribute = nullptr;
-        for (auto &entry : Ctx.sources) {
-            const Relation &src = *entry.second;
-            try {
-                const Attribute &A = src[e.attr_name.text];
-                if (the_attribute != nullptr) {
-                    /* ambiguous attribute name */
-                    diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text << " is ambiguous; "
-                                               "exists in tables " << src.name << " and "
-                                            << the_attribute->relation.name << ".\n";
-                    e.type_ = Type::Get_Error();
-                    return;
-                } else {
-                    the_attribute = &A; // we found an attribute of that name in the source relations
+        /* No relation name was specified.  The designator references either a named expression or an attribute of a
+         * source table.  Search the named expressions first, because they overrule attribute names. */
+        if (auto it = Ctx.named_expr.find(e.attr_name.text); it != Ctx.named_expr.end()) {
+            /* Found a named expression. */
+            e.target_ = it->second;
+        } else {
+            /* Since no relation was explicitly specified, we must search *all* source relations for the attribute. */
+            const Attribute *the_attribute = nullptr;
+            for (auto &entry : Ctx.sources) {
+                const Relation &src = *entry.second;
+                try {
+                    const Attribute &A = src[e.attr_name.text];
+                    if (the_attribute != nullptr) {
+                        /* ambiguous attribute name */
+                        diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text << " is ambiguous; "
+                                                   "exists in tables " << src.name << " and "
+                                                << the_attribute->relation.name << ".\n";
+                        e.type_ = Type::Get_Error();
+                        return;
+                    } else {
+                        the_attribute = &A; // we found an attribute of that name in the source relations
+                    }
+                } catch (std::out_of_range) {
+                    /* This source relation has no attribute of that name.  OK, continue. */
                 }
-            } catch (std::out_of_range) {
-                /* This source relation has no attribute of that name.  OK, continue. */
             }
-        }
 
-        if (not the_attribute) {
-            diag.e(e.attr_name.pos) << "Attribute " << e.attr_name.text << " not found.\n";
-            e.type_ = Type::Get_Error();
-            return;
-        }
+            if (not the_attribute) {
+                diag.e(e.attr_name.pos) << "Attribute " << e.attr_name.text << " not found.\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
 
-        e.attr_ = the_attribute;
+            e.target_ = the_attribute;
+        }
     }
 
-    insist(e.attr_);
-    const PrimitiveType *pt = e.attr().type;
+    /* Compute the type of this designator based on the referenced source. */
+    insist(e.target_.index() != 0);
+    struct get_type {
+        const Type * operator()(std::monostate&) const { unreachable("target not set"); }
+        const Type * operator()(const Attribute *attr) const { return attr->type; }
+        const Type * operator()(const Expr *expr) const { return expr->type_; }
+    };
+    const PrimitiveType *pt = cast<const PrimitiveType>(std::visit(get_type(), e.target_));
     e.type_ = pt;
 
     switch (Ctx.stage) {
@@ -133,7 +149,7 @@ void Sema::operator()(Const<Designator> &e)
             /* Detect whether we grouped by this designator.  In that case, convert the type to scalar. */
             for (auto grp : Ctx.group_keys) {
                 Designator *d = cast<Designator>(grp);
-                if (d and &d->attr() == &e.attr()) {
+                if (d and d->target() == e.target()) {
                     /* The grouping key and this designator reference the same attribute. */
                     e.type_ = pt->as_scalar();
                     break;
@@ -484,7 +500,7 @@ ok:
             const PrimitiveType *ty_lhs = as<const PrimitiveType>(e.lhs->type());
             const PrimitiveType *ty_rhs = as<const PrimitiveType>(e.rhs->type());
 
-            /* Scalar and scalar yeild a scalar.  Otherwise, expression yields a vectorial. */
+            /* Scalar and scalar yield a scalar.  Otherwise, expression yields a vectorial. */
             Type::category_t c = std::max(ty_lhs->category, ty_rhs->category);
 
             /* Comparisons always have boolean type. */
@@ -542,15 +558,15 @@ void Sema::operator()(Const<SelectClause> &c)
         has_vector = has_vector or pt->is_vectorial();
         has_scalar = has_scalar or pt->is_scalar();
 
-        std::pair<decltype(SemaContext::selection)::iterator, bool> res;
+        std::pair<decltype(SemaContext::named_expr)::iterator, bool> res;
         if (s.second) {
             /* With alias. */
-            res = Ctx.selection.emplace(s.second.text, s.first);
+            res = Ctx.named_expr.emplace(s.second.text, s.first);
         } else {
             /* Without alias.  Print expression as string to get a name. */
             std::ostringstream oss;
             oss << *s.first;
-            res = Ctx.selection.emplace(C.get_pool()(oss.str().c_str()), s.first);
+            res = Ctx.named_expr.emplace(C.get_pool()(oss.str().c_str()), s.first);
         }
         if (not res.second)
             diag.e(s.second.pos) << "Attribute name " << s.second.text << " already used.\n";

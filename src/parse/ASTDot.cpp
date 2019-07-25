@@ -56,10 +56,14 @@ void ASTDot::operator()(Const<Designator> &e)
     out << ">];\n";
 
     /* Dot edge to relation. */
-    if (e.has_attr()) {
-        auto &A = e.attr();
+    const auto &t = e.target();
+    if (auto val = std::get_if<const Attribute*>(&t)) {
+        const Attribute &A = **val;
         out << id(e) << EDGE << A.relation.name << ':' << A.name
             << " [style=\"dashed\",dir=\"forward\",color=\"#404040\"];\n";
+    } else if (auto val = std::get_if<const Expr*>(&t)) {
+        const Expr *expr = *val;
+        out << id(e) << EDGE << id(*expr) << " [style=\"dashed\",dir=\"forward\",color=\"#404040\"];\n";
     }
 }
 

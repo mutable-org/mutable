@@ -29,7 +29,7 @@ struct Sema : ASTVisitor
         std::unordered_map<const char*, const Relation*> sources; ///> lists all data sources of a statement
 
         std::vector<Expr*> group_keys; ///> list of group keys
-        std::unordered_map<const char*, Expr*> selection; ///> a map of elements occuring in the select clause
+        std::unordered_map<const char*, Expr*> named_expr; ///> named expressions
     };
 
     public:

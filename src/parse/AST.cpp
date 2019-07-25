@@ -94,12 +94,8 @@ bool Designator::operator==(const Expr &o) const
 {
     auto other = cast<const Designator>(&o);
     if (not other) return false;
-    /* If sema connected the designator with an attribute, use this for equality testing. */
-    if (this->attr_ or other->attr_)
-        return this->attr_ == other->attr_;
-    else
-        return this->table_name.text == other->table_name.text and
-               this->attr_name.text == other->attr_name.text;
+    return this->table_name.text == other->table_name.text and
+           this->attr_name.text == other->attr_name.text;
 }
 
 bool Constant::operator==(const Expr &o) const

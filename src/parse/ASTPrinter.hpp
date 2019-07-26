@@ -11,6 +11,7 @@ struct ASTPrinter : ConstASTVisitor
     std::ostream &out;
     private:
     unsigned indent;
+    bool is_nested = false; // is the statement nested?
 
     public:
     ASTPrinter(std::ostream &out, unsigned indent = 0) : out(out), indent(indent) { (void)(this->indent); }

@@ -70,7 +70,15 @@ void ASTPrinter::operator()(Const<FromClause> &c)
     out << "FROM ";
     for (auto it = c.from.cbegin(), end = c.from.cend(); it != end; ++it) {
         if (it != c.from.cbegin()) out << ", ";
-        out << it->name.text;
+        if (auto tok = std::get_if<Token>(&it->source)) {
+            out << tok->text;
+        } else if (auto stmt = std::get_if<Stmt*>(&it->source)) {
+            out << '(';
+            (*this)(**stmt);
+            out << ')';
+        } else {
+            unreachable("illegal variant");
+        }
         if (it->alias) out << " AS " << it->alias.text;
     }
 }
@@ -146,6 +154,9 @@ void ASTPrinter::operator()(Const<CreateTableStmt> &s)
 
 void ASTPrinter::operator()(Const<SelectStmt> &s)
 {
+    bool was_nested = is_nested;
+    is_nested = true;
+
     (*this)(*s.select);
     out << '\n';
     (*this)(*s.from);
@@ -171,7 +182,9 @@ void ASTPrinter::operator()(Const<SelectStmt> &s)
         (*this)(*s.limit);
     }
 
-    out << ';';
+    is_nested = was_nested;
+    if (not is_nested)
+        out << ';';
 }
 
 void ASTPrinter::operator()(Const<InsertStmt> &s)

@@ -89,56 +89,6 @@ int main(int argc, const char **argv)
     Parser parser(lexer);
     Sema sema(diag);
 
-#if 0
-    Position pos("test");
-    Expr *c0 = new Constant(Token(pos, "0", TK_DEC_INT));
-    Expr *c1 = new Constant(Token(pos, "1", TK_DEC_INT));
-    Expr *c2 = new Constant(Token(pos, "2", TK_DEC_INT));
-    Expr *d0 = new Designator(Token(pos, "a", TK_IDENTIFIER));
-    Expr *d1 = new Designator(Token(pos, "b", TK_IDENTIFIER));
-    Expr *d2 = new Designator(Token(pos, "c", TK_IDENTIFIER));
-    Expr *b0 = new BinaryExpr(Token(pos, "<", TK_LESS), d0, c0);
-    Expr *b1 = new BinaryExpr(Token(pos, "<", TK_LESS), d1, c1);
-    Expr *b2 = new BinaryExpr(Token(pos, "<", TK_LESS), d2, c2);
-
-    cnf::Predicate P0 = cnf::Predicate::Positive(b0);
-    cnf::Predicate P1 = cnf::Predicate::Positive(b1);
-    cnf::Predicate P2 = cnf::Predicate::Positive(b2);
-    cnf::Predicate N0 = cnf::Predicate::Negative(b0);
-    cnf::Predicate N1 = cnf::Predicate::Negative(b1);
-    cnf::Predicate N2 = cnf::Predicate::Negative(b2);
-
-    cnf::Clause C0({P0, P2});
-    C0.dump();
-
-    cnf::Clause C1({P1, N0});
-    C1.dump();
-
-    cnf::Clause C0_or_C1 = C0 or C1;
-    C0_or_C1.dump();
-
-    cnf::CNF cnf0({C0, C1});
-    cnf0.dump();
-
-    cnf::CNF cnf1 = C0 and C1;
-    cnf1.dump();
-
-    cnf::CNF cnf2({
-        cnf::Clause({P0}),
-        cnf::Clause({N1})
-    });
-    cnf2.dump();
-
-    cnf::CNF cnf3({
-        cnf::Clause({N0}),
-        cnf::Clause({P2})
-    });
-    cnf3.dump();
-
-    cnf::CNF cnf2_or_cnf3 = cnf2 or cnf3;
-    cnf2_or_cnf3.dump();
-#endif
-
     while (parser.token()) {
         auto stmt = parser.parse();
         if (diag.num_errors()) {

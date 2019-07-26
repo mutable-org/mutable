@@ -17,6 +17,9 @@ add_executable(
     parse/ParserTest.cpp
     parse/SemaTest.cpp
 
+    # IR
+    IR/CNFTest.cpp
+
     # catalog
     catalog/SchemaTest.cpp
     )

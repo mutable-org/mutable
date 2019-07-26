@@ -18,6 +18,7 @@ struct Type;
 struct Sema;
 struct Attribute;
 struct Relation;
+struct Stmt;
 
 /*======================================================================================================================
  * Expressions
@@ -214,10 +215,12 @@ struct FromClause : Clause
     {
         friend struct Sema;
 
+        std::variant<Token, Stmt*> source;
         Token name;
         Token alias;
 
-        from_type(Token name, Token alias) : name(name), alias(alias) { }
+        from_type(Token name, Token alias) : source(name), name(name), alias(alias) { }
+        from_type(Stmt *S, Token alias) : source(S), alias(alias) { }
 
         const Relation & relation() const { return *notnull(relation_); }
         bool has_relation() const { return relation_ != nullptr; }

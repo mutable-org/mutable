@@ -106,10 +106,18 @@ void ASTDumper::operator()(Const<FromClause> &c)
         if (f.alias) {
             indent() << "AS '" << f.alias.text << "' (" << f.alias.pos << ')';
             ++indent_;
-            indent() << f.name.text << " (" << f.name.pos << ')';
+            if (auto tok = std::get_if<Token>(&f.source)) {
+                indent() << tok->text << " (" << tok->pos << ')';
+            } else if (auto stmt = std::get_if<Stmt*>(&f.source)) {
+                (*this)(**stmt);
+            } else {
+                unreachable("illegal variant");
+            }
             --indent_;
         } else {
-            indent() << f.name.text << " (" << f.name.pos << ')';
+            insist(std::holds_alternative<Token>(f.source), "nested statements require an alias");
+            Token &tok = std::get<Token>(f.source);
+            indent() << tok.text << " (" << tok.pos << ')';
         }
     }
     --indent_;

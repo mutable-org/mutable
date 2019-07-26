@@ -337,17 +337,26 @@ Clause * Parser::parse_FromClause()
     bool ok = true;
     std::vector<FromClause::from_type> from;
 
-    /* 'FROM' identifier [ 'AS' identifier ] { ',' identifier [ 'AS' identifier ] } */
+    /* 'FROM' table-or-select-statement { ',' table-or-select-statement } */
     expect(TK_From);
     do {
-        Token table = token();
         Token alias;
-        ok = ok and expect(TK_IDENTIFIER);
-        if (accept(TK_As)) {
+        if (accept(TK_LPAR)) {
+            Stmt *S = parse_SelectStmt();
+            expect(TK_RPAR);
+            expect(TK_As);
             alias = token();
             ok = ok and expect(TK_IDENTIFIER);
+            from.emplace_back(S, alias);
+        } else {
+            Token table = token();
+            ok = ok and expect(TK_IDENTIFIER);
+            if (accept(TK_As)) {
+                alias = token();
+                ok = ok and expect(TK_IDENTIFIER);
+            }
+            from.emplace_back(table, alias);
         }
-        from.emplace_back(table, alias);
     } while (accept(TK_COMMA));
 
     if (not ok)

@@ -30,6 +30,9 @@ struct Predicate
     const Expr * operator*() const { return expr(); }
     const Expr * operator->() const { return expr(); }
 
+    bool operator==(Predicate other) const { return this->literal_ == other.literal_; }
+    bool operator!=(Predicate other) const { return not operator==(other); }
+
     friend std::ostream & operator<<(std::ostream &out, const Predicate &pred);
 
     void dump(std::ostream &out) const;
@@ -39,6 +42,11 @@ struct Predicate
 struct Clause : public std::vector<Predicate>
 {
     using std::vector<Predicate>::vector;
+
+    bool operator<=(const Clause &other) const;
+    bool operator>=(const Clause &other) const;
+    bool operator==(const Clause &other) const;
+    bool operator!=(const Clause &other) const { return not operator==(other); }
 
     friend std::ostream & operator<<(std::ostream &out, const Clause &clause);
 

@@ -1,5 +1,6 @@
 #include "IR/CNF.hpp"
 
+#include "parse/AST.hpp"
 #include "parse/ASTPrinter.hpp"
 
 
@@ -98,6 +99,80 @@ void CNF::dump(std::ostream &out) const
     out << *this << std::endl;
 }
 void CNF::dump() const { dump(std::cerr); }
+
+/*======================================================================================================================
+ * CNF Generator
+ *====================================================================================================================*/
+
+void CNFGenerator::operator()(Const<SelectStmt> &s)
+{
+    if (s.where)
+        (*this)(*s.where);
+}
+
+void CNFGenerator::operator()(Const<WhereClause> &s)
+{
+    (*this)(*s.where);
+}
+
+void CNFGenerator::operator()(Const<ErrorExpr> &e)
+{
+    result_ = CNF({Clause({Predicate::Create(&e, is_negative_)})});
+}
+
+void CNFGenerator::operator()(Const<Designator> &e)
+{
+    result_ = CNF({Clause({Predicate::Create(&e, is_negative_)})});
+}
+
+void CNFGenerator::operator()(Const<Constant> &e)
+{
+    result_ = CNF({Clause({Predicate::Create(&e, is_negative_)})});
+}
+
+void CNFGenerator::operator()(Const<FnApplicationExpr> &e)
+{
+    result_ = CNF({Clause({Predicate::Create(&e, is_negative_)})});
+}
+
+void CNFGenerator::operator()(Const<UnaryExpr> &e)
+{
+    switch (e.op.type) {
+        case TK_Not:
+            is_negative_ = not is_negative_;
+            (*this)(*e.expr);
+            break;
+
+        default:
+            result_ = CNF({Clause({Predicate::Create(&e, is_negative_)})});
+            break;
+
+    }
+}
+
+void CNFGenerator::operator()(Const<BinaryExpr> &e)
+{
+    if ((not is_negative_ and e.op == TK_And) or
+        (is_negative_ and e.op == TK_Or))
+    {
+        (*this)(*e.lhs);
+        auto cnf_lhs = result_;
+        (*this)(*e.rhs);
+        auto cnf_rhs = result_;
+        result_ = cnf_lhs and cnf_rhs;
+    } else if ((not is_negative_ and e.op == TK_Or) or
+               (is_negative_ and e.op == TK_And))
+    {
+        (*this)(*e.lhs);
+        auto cnf_lhs = result_;
+        (*this)(*e.rhs);
+        auto cnf_rhs = result_;
+        result_ = cnf_lhs or cnf_rhs;
+    } else {
+        result_ = CNF({Clause({Predicate::Create(&e, is_negative_)})});
+    }
+}
+
 }
 
 }

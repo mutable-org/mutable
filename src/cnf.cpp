@@ -89,6 +89,7 @@ int main(int argc, const char **argv)
     Parser parser(lexer);
     Sema sema(diag);
 
+#if 0
     Position pos("test");
     Expr *c0 = new Constant(Token(pos, "0", TK_DEC_INT));
     Expr *c1 = new Constant(Token(pos, "1", TK_DEC_INT));
@@ -136,8 +137,8 @@ int main(int argc, const char **argv)
 
     cnf::CNF cnf2_or_cnf3 = cnf2 or cnf3;
     cnf2_or_cnf3.dump();
+#endif
 
-#if 0
     while (parser.token()) {
         auto stmt = parser.parse();
         if (diag.num_errors()) {
@@ -149,10 +150,13 @@ int main(int argc, const char **argv)
             diag.clear();
             continue;
         }
-        if (ast) stmt->dump(std::cout);
-        // TODO: compute CNF
+        if (is<SelectStmt>(stmt)) {
+            if (ast) stmt->dump(std::cout);
+            cnf::CNFGenerator cnf_gen;
+            cnf_gen(*stmt);
+            cnf_gen.get().dump();
+        }
     }
-#endif
 
     if (in != &std::cin)
         delete in;

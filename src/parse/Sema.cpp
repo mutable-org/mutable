@@ -413,11 +413,27 @@ void Sema::operator()(Const<UnaryExpr> &e)
         return;
     }
 
-    /* Valid unary expressions are +e, -e, and ~e, where e has numeric type. */
-    if (not e.expr->type()->is_numeric()) {
-        diag.e(e.op.pos) << "Invalid expression " << e << ".\n";
-        e.type_ = Type::Get_Error();
-        return;
+    switch (e.op.type) {
+        default:
+            unreachable("invalid unary expression");
+
+        case TK_Not:
+            if (not e.expr->type()->is_boolean()) {
+                diag.e(e.op.pos) << "Invalid expression " << e << " must be boolean.\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
+            break;
+
+        case TK_PLUS:
+        case TK_MINUS:
+        case TK_TILDE:
+            if (not e.expr->type()->is_numeric()) {
+                diag.e(e.op.pos) << "Invalid expression " << e << " must be numeric.\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
+            break;
     }
 
     e.type_ = e.expr->type();

@@ -88,3 +88,11 @@ inline std::string escape_string(std::string str)
     str = replace_all(str, "\n", "\\n");  // escape newline
     return str;
 }
+
+/** Checks whether haystack contains needle. */
+template<typename H, typename N>
+bool contains(const H &haystack, const N &needle)
+{
+    using std::find, std::begin, std::end;
+    return find(begin(haystack), end(haystack), needle) != end(haystack);
+}

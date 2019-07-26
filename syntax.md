@@ -68,8 +68,10 @@ delete-statement ::= 'DELETE' 'FROM' identifier [ where-clause ] ;
 
 ##### Select Clause
 ```ebnf
+table-or-select-statement ::= identifier [ 'AS' identifier ] | '(' select-statement ')' 'AS' identifier
+
 select-clause ::= 'SELECT' ( '*' | expression [ 'AS' identifier ] ) { ',' expression [ 'AS' identifier ] }
-                  'FROM' identifier [ 'AS' identifier ] { ',' identifier [ 'AS' identifier ] } ;
+                  'FROM' table-or-select-statement { ',' table-or-select-statement } ;
 ```
 
 ##### Where Clause

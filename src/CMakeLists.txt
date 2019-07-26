@@ -5,7 +5,7 @@ add_subdirectory(IR)
 add_subdirectory(catalog)
 
 add_library(db INTERFACE)
-target_link_libraries(db INTERFACE parse lex catalog util)
+target_link_libraries(db INTERFACE IR parse lex catalog util)
 
 add_executable(lex-bin lex.cpp)
 target_link_libraries(lex-bin lex util)

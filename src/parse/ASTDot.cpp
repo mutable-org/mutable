@@ -148,7 +148,7 @@ void ASTDot::operator()(Const<ErrorClause> &c)
 
 void ASTDot::operator()(Const<SelectClause> &c)
 {
-    out << "subgraph cluster_select {\nstyle=\"rounded,filled\";\ncolor=\"#e6194B20\";penwidth=\"4\";\n"
+    out << "subgraph cluster_select_" << &c << " {\nstyle=\"rounded,filled\";\ncolor=\"#e6194B20\";penwidth=\"4\";\n"
         << id(c) << " [label=\"SELECT\"];\n";
 
     if (c.select_all) {
@@ -171,7 +171,7 @@ void ASTDot::operator()(Const<SelectClause> &c)
 
 void ASTDot::operator()(Const<FromClause> &c)
 {
-    out << "subgraph cluster_from {\nstyle=\"rounded,filled\";\ncolor=\"#bfef4550\";penwidth=\"4\";\n"
+    out << "subgraph cluster_from_" << (&c) << " {\nstyle=\"rounded,filled\";\ncolor=\"#bfef4550\";penwidth=\"4\";\n"
         << id(c) << " [label=\"FROM\"];\n";
 
     for (auto &t : c.from) {
@@ -205,7 +205,7 @@ void ASTDot::operator()(Const<FromClause> &c)
 
 void ASTDot::operator()(Const<WhereClause> &c)
 {
-    out << "subgraph cluster_where {\nstyle=\"rounded,filled\";\ncolor=\"#42d4f430\";penwidth=\"4\";\n"
+    out << "subgraph cluster_where_" << (&c) << " {\nstyle=\"rounded,filled\";\ncolor=\"#42d4f430\";penwidth=\"4\";\n"
         << id(c) << " [label=\"WHERE\"];\n";
 
     (*this)(*c.where);
@@ -216,7 +216,7 @@ void ASTDot::operator()(Const<WhereClause> &c)
 
 void ASTDot::operator()(Const<GroupByClause> &c)
 {
-    out << "subgraph cluster_groupby {\nstyle=\"rounded,filled\";\ncolor=\"#3cb44b30\";penwidth=\"4\";\n"
+    out << "subgraph cluster_groupby_" << (&c) << " {\nstyle=\"rounded,filled\";\ncolor=\"#3cb44b30\";penwidth=\"4\";\n"
         << id(c) << " [label=\"GROUP BY\"];\n";
 
     for (auto &g : c.group_by) {
@@ -229,7 +229,7 @@ void ASTDot::operator()(Const<GroupByClause> &c)
 
 void ASTDot::operator()(Const<HavingClause> &c)
 {
-    out << "subgraph cluster_having {\nstyle=\"rounded,filled\";\ncolor=\"#aaffc350\";penwidth=\"4\";\n"
+    out << "subgraph cluster_having_" << (&c) << " {\nstyle=\"rounded,filled\";\ncolor=\"#aaffc350\";penwidth=\"4\";\n"
         << id(c) << " [label=\"HAVING\"];\n";
 
     (*this)(*c.having);
@@ -240,7 +240,7 @@ void ASTDot::operator()(Const<HavingClause> &c)
 
 void ASTDot::operator()(Const<OrderByClause> &c)
 {
-    out << "subgraph cluster_orderby {\nstyle=\"rounded,filled\";\ncolor=\"#ffe11950\";penwidth=\"4\";\n"
+    out << "subgraph cluster_orderby" << (&c) << " {\nstyle=\"rounded,filled\";\ncolor=\"#ffe11950\";penwidth=\"4\";\n"
         << id(c) << " [label=\"ORDER BY\"];\n";
 
     for (auto &o : c.order_by) {
@@ -259,7 +259,7 @@ void ASTDot::operator()(Const<OrderByClause> &c)
 
 void ASTDot::operator()(Const<LimitClause> &c)
 {
-    out << "subgraph cluster_limit {\nstyle=\"rounded,filled\";\ncolor=\"#80800040\";penwidth=\"4\";\n";
+    out << "subgraph cluster_limit_" << (&c) << " {\nstyle=\"rounded,filled\";\ncolor=\"#80800040\";penwidth=\"4\";\n";
 
     out << id(c) << " [label=\"LIMIT\"];\n";
     out << id(c.limit) << " [label=<<B>" << c.limit.text << "</B>>];\n";

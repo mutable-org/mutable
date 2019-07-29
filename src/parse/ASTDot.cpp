@@ -175,17 +175,28 @@ void ASTDot::operator()(Const<FromClause> &c)
         << id(c) << " [label=\"FROM\"];\n";
 
     for (auto &t : c.from) {
-        if (t.alias) {
-            out << id(t.alias) << " [label=\"AS " << t.alias.text << "\"];\n"
-                << id (t.name) << " [label=\"" << t.name.text << "\"];\n"
-                << id(c) << EDGE << id(t.alias) << EDGE << id(t.name) << ";\n";
+        if (auto name = std::get_if<Token>(&t.source)) {
+            if (t.alias) {
+                out << id(t.alias) << " [label=\"AS " << t.alias.text << "\"];\n"
+                    << id (*name) << " [label=\"" << name->text << "\"];\n"
+                    << id(c) << EDGE << id(t.alias) << EDGE << id(*name) << ";\n";
+            } else {
+                out << id(*name) << " [label=\"" << name->text << "\"];\n"
+                    << id(c) << EDGE << id(*name) << ";\n";
+            }
+        } else if (auto stmt = std::get_if<Stmt*>(&t.source)) {
+            insist(t.alias, "nested statements must have an alias");
+            out << id(t.alias) << " [label=\"AS " << t.alias.text << "\"];\n";
+            (*this)(**stmt);
+            out << id(c) << EDGE << id(t.alias) << EDGE << id(**stmt) << ";\n";
         } else {
-            out << id(t.name) << " [label=\"" << t.name.text << "\"];\n"
-                << id(c) << EDGE << id(t.name) << ";\n";
+            unreachable("invalid variant");
         }
         if (t.has_relation()) {
+            insist(std::holds_alternative<Token>(t.source));
+            auto &name = std::get<Token>(t.source);
             auto &R = t.relation();
-            out << id(t.name) << EDGE << R.name << ":n [dir=\"forward\",color=\"#404040\"];\n";
+            out << id(name) << EDGE << R.name << ":n [dir=\"forward\",color=\"#404040\"];\n";
         }
     }
 

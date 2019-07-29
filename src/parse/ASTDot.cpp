@@ -318,9 +318,6 @@ void ASTDot::operator()(Const<SelectStmt> &s)
                 }
 
                 out << "</TABLE>\n>];\n";
-#if 0
-                out << id(s) << EDGE << R.name << " [style=invis];\n";
-#endif
             }
         }
     }

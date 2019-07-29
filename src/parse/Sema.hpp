@@ -26,16 +26,19 @@ struct Sema : ASTVisitor
             S_Limit,
         } stage = S_From;
 
-        std::unordered_map<const char*, const Relation*> sources; ///> lists all data sources of a statement
+        using named_expr_table = std::unordered_map<const char*, Expr*>;
+        using source_type = std::variant<const Relation*, named_expr_table>;
+        using source_table = std::unordered_map<const char*, source_type>;
+        source_table sources; ///> list of all sources
+        std::unordered_map<const char*, Expr*> results; ///> list of all results computed by this statement
 
         std::vector<Expr*> group_keys; ///> list of group keys
-        std::unordered_map<const char*, Expr*> named_expr; ///> named expressions
     };
 
     public:
     Diagnostic &diag;
     private:
-    std::vector<SemaContext> contexts_; ///> a stack of sema contexts; one per statement; grows by nesting statements
+    std::vector<SemaContext*> contexts_; ///> a stack of sema contexts; one per statement; grows by nesting statements
 
     public:
     Sema(Diagnostic &diag) : diag(diag) { }
@@ -70,10 +73,24 @@ struct Sema : ASTVisitor
     void operator()(Const<DeleteStmt> &s);
 
     private:
-    SemaContext & push_context() { contexts_.emplace_back(); return contexts_.back(); }
-    void pop_context() { contexts_.pop_back(); }
-    SemaContext & get_context() { insist(not contexts_.empty()); return contexts_.back(); }
-    const SemaContext & get_context() const { insist(not contexts_.empty()); return contexts_.back(); }
+    SemaContext & push_context() {
+        contexts_.emplace_back(new SemaContext());
+        return *contexts_.back();
+    }
+    SemaContext pop_context() {
+        auto ctx = *contexts_.back();
+        delete contexts_.back();
+        contexts_.pop_back();
+        return ctx;
+    }
+    SemaContext & get_context() {
+        insist(not contexts_.empty());
+        return *contexts_.back();
+    }
+    const SemaContext & get_context() const {
+        insist(not contexts_.empty());
+        return *contexts_.back();
+    }
 };
 
 }

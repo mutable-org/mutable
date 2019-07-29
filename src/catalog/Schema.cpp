@@ -335,4 +335,6 @@ Catalog::~Catalog()
 {
     for (auto &s : schemas_)
         delete s.second;
+    for (auto fn : standard_functions_)
+        delete fn.second;
 }

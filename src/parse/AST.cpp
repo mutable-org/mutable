@@ -29,6 +29,14 @@ SelectClause::~SelectClause()
         delete s.first;
 }
 
+FromClause::~FromClause()
+{
+    for (auto &f : from) {
+        if (Stmt **stmt = std::get_if<Stmt*>(&f.source))
+            delete (*stmt);
+    }
+}
+
 WhereClause::~WhereClause()
 {
     delete where;

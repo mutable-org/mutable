@@ -216,10 +216,9 @@ struct FromClause : Clause
         friend struct Sema;
 
         std::variant<Token, Stmt*> source;
-        Token name;
         Token alias;
 
-        from_type(Token name, Token alias) : source(name), name(name), alias(alias) { }
+        from_type(Token name, Token alias) : source(name), alias(alias) { }
         from_type(Stmt *S, Token alias) : source(S), alias(alias) { }
 
         const Relation & relation() const { return *notnull(relation_); }
@@ -232,6 +231,7 @@ struct FromClause : Clause
     std::vector<from_type> from;
 
     FromClause(Token tok, std::vector<from_type> from) : Clause(tok), from(from) { }
+    ~FromClause();
 
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;

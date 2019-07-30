@@ -78,7 +78,11 @@ CNF operator&&(const CNF &lhs, const CNF &rhs);
 /** The logical or of two CNFs is computed using the distributive law of propositional logic. */
 CNF operator||(const CNF &lhs, const CNF &rhs);
 
+/** The logical not of a clause. */
+CNF operator!(const Clause &clause);
 
+/** The logical not of a clause. */
+CNF operator!(const CNF &cnf);
 
 struct CNFGenerator : ConstASTVisitor
 {

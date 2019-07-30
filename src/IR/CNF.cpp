@@ -78,6 +78,22 @@ CNF operator||(const CNF &lhs, const CNF &rhs)
     return res;
 }
 
+CNF operator!(const Clause &clause)
+{
+    CNF res;
+    for (auto &p : clause)
+        res.emplace_back(Clause({not p}));
+    return res;
+}
+
+CNF operator!(const CNF &cnf)
+{
+    CNF res;
+    for (auto &clause : cnf)
+        res = res or not clause;
+    return res;
+}
+
 /*======================================================================================================================
  * Dump
  *====================================================================================================================*/

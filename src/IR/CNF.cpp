@@ -1,8 +1,10 @@
 #include "IR/CNF.hpp"
 
+#include "catalog/Schema.hpp"
 #include "parse/AST.hpp"
 #include "parse/ASTPrinter.hpp"
 #include "util/fn.hpp"
+#include "util/macro.hpp"
 
 
 namespace db {
@@ -198,23 +200,29 @@ void CNFGenerator::operator()(Const<UnaryExpr> &e)
 
 void CNFGenerator::operator()(Const<BinaryExpr> &e)
 {
-    if ((not is_negative_ and e.op == TK_And) or
-        (is_negative_ and e.op == TK_Or))
-    {
+    if (e.lhs->type()->is_boolean() and e.rhs->type()->is_boolean()) {
+        /* This is an expression in predicate logic.  Convert to CNF. */
         (*this)(*e.lhs);
         auto cnf_lhs = result_;
         (*this)(*e.rhs);
         auto cnf_rhs = result_;
-        result_ = cnf_lhs and cnf_rhs;
-    } else if ((not is_negative_ and e.op == TK_Or) or
-               (is_negative_ and e.op == TK_And))
-    {
-        (*this)(*e.lhs);
-        auto cnf_lhs = result_;
-        (*this)(*e.rhs);
-        auto cnf_rhs = result_;
-        result_ = cnf_lhs or cnf_rhs;
+
+        if ((not is_negative_ and e.op == TK_And) or (is_negative_ and e.op == TK_Or)) {
+            result_ = cnf_lhs and cnf_rhs;
+        } else if ((not is_negative_ and e.op == TK_Or) or (is_negative_ and e.op == TK_And)) {
+            result_ = cnf_lhs or cnf_rhs;
+        } else if (e.op == TK_EQUAL or e.op == TK_BANG_EQUAL) {
+            /* A ↔ B ⇔ (A → B) ^ (B → A) ⇔ (¬A v B) ^ (¬B v A) */
+            auto equiv = ((not cnf_lhs) or cnf_rhs) and ((not cnf_rhs) or cnf_lhs);
+            if ((not is_negative_ and e.op == TK_BANG_EQUAL) or (is_negative_ and e.op == TK_EQUAL))
+                result_ = not equiv; // A ↮ B ⇔ ¬(A ↔ B)
+            else
+                result_ = equiv;
+        } else {
+            unreachable("unsupported boolean expression");
+        }
     } else {
+        /* This expression is a literal. */
         result_ = CNF({Clause({Predicate::Create(&e, is_negative_)})});
     }
 }

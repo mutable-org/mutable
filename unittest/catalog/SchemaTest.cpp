@@ -355,8 +355,6 @@ TEST_CASE("Catalog singleton c'tor")
     Catalog &C = Catalog::Get();
     Catalog &C2 = Catalog::Get();
     REQUIRE(&C == &C2);
-    REQUIRE(C.num_schemas() == 0);
-    REQUIRE(not C.has_database_in_use());
 }
 
 TEST_CASE("Catalog Schema creation")
@@ -396,6 +394,7 @@ TEST_CASE("Catalog use database")
     Catalog &C = Catalog::Get();
     const char *db_name = get_unique_id();
 
+    C.unset_database_in_use();
     Schema &S = C.add_database(db_name);
     REQUIRE(not C.has_database_in_use());
     C.set_database_in_use(S);

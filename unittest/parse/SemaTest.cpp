@@ -252,7 +252,7 @@ TEST_CASE("Sema/Expressions/Functions", "[sema]")
         sema(*stmt);
 
         REQUIRE(diag.num_errors() == 0); // no error
-        REQUIRE(not err.str().empty()); // but warning
+        REQUIRE(err.str().empty());
 
         WhereClause *where = as<WhereClause>(stmt->where);
         const PrimitiveType *pt = as<const PrimitiveType>(where->where->type());
@@ -260,7 +260,7 @@ TEST_CASE("Sema/Expressions/Functions", "[sema]")
     }
 
     {
-        /* ERR: WHERE condition must be vectorial. */
+        /* Scalar WHERE condition is ok. */
         LEXER("SELECT * FROM mytable WHERE 13 < 42;");
         Parser parser(lexer);
         SelectStmt *stmt = as<SelectStmt>(parser.parse());
@@ -269,8 +269,8 @@ TEST_CASE("Sema/Expressions/Functions", "[sema]")
         Sema sema(diag);
         sema(*stmt);
 
-        REQUIRE(diag.num_errors() == 1);
-        REQUIRE(not err.str().empty());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
 
         WhereClause *where = as<WhereClause>(stmt->where);
         const PrimitiveType *pt = as<const PrimitiveType>(where->where->type());

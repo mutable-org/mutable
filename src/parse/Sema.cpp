@@ -698,13 +698,6 @@ void Sema::operator()(Const<WhereClause> &c)
         diag.e(c.tok.pos) << "The expression in the WHERE clause must be of boolean type.\n";
         return;
     }
-
-    /* The expression must also be of vectorial type. */
-    if (not ty->is_vectorial()) {
-        diag.e(c.tok.pos) << "The expression in the WHERE clause must be vectorial, "
-                             "i.e. it must depend on each row separately.\n";
-        return;
-    }
 }
 
 void Sema::operator()(Const<GroupByClause> &c)

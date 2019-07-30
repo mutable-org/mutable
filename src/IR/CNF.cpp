@@ -13,6 +13,29 @@ namespace cnf {
  * CNF Operations
  *====================================================================================================================*/
 
+bool Clause::operator<=(const Clause &other) const
+{
+    for (auto it : *this) {
+        if (not contains(other, it))
+            return false;
+    }
+    return true;
+}
+
+bool Clause::operator>=(const Clause &other) const
+{
+    for (auto it : other) {
+        if (not contains(*this, it))
+            return false;
+    }
+    return true;
+}
+
+bool Clause::operator==(const Clause &other) const
+{
+    return *this >= other and *this <= other;
+}
+
 Clause operator||(Clause &lhs, Clause &rhs)
 {
     Clause res;
@@ -53,29 +76,6 @@ CNF operator||(CNF &lhs, CNF &rhs)
             res.push_back(clause_left or clause_right);
     }
     return res;
-}
-
-bool Clause::operator<=(const Clause &other) const
-{
-    for (auto it : *this) {
-        if (not contains(other, it))
-            return false;
-    }
-    return true;
-}
-
-bool Clause::operator>=(const Clause &other) const
-{
-    for (auto it : other) {
-        if (not contains(*this, it))
-            return false;
-    }
-    return true;
-}
-
-bool Clause::operator==(const Clause &other) const
-{
-    return *this >= other and *this <= other;
 }
 
 /*======================================================================================================================

@@ -65,16 +65,18 @@ struct CNF : public std::vector<Clause>
 };
 
 /** The logical or of two clauses is the concatenation of the predicates. */
-Clause operator||(Clause &lhs, Clause &rhs);
+Clause operator||(const Clause &lhs, const Clause &rhs);
 
 /** The logical and of two clauses is a CNF with the clauses. */
-CNF operator&&(Clause &lhs, Clause &rhs);
+CNF operator&&(const Clause &lhs, const Clause &rhs);
 
-/* The logical and of two CNFs is the concatenation of the clauses. */
-CNF operator&&(CNF &lhs, CNF &rhs);
+/** The logical and of two CNFs is the concatenation of the clauses. */
+CNF operator&&(const CNF &lhs, const CNF &rhs);
 
-/* The logical or of two CNFs is computed using the distributive law of propositional logic. */
-CNF operator||(CNF &lhs, CNF &rhs);
+/** The logical or of two CNFs is computed using the distributive law of propositional logic. */
+CNF operator||(const CNF &lhs, const CNF &rhs);
+
+
 
 struct CNFGenerator : ConstASTVisitor
 {

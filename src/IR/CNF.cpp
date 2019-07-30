@@ -36,7 +36,7 @@ bool Clause::operator==(const Clause &other) const
     return *this >= other and *this <= other;
 }
 
-Clause operator||(Clause &lhs, Clause &rhs)
+Clause operator||(const Clause &lhs, const Clause &rhs)
 {
     Clause res;
     res.reserve(lhs.size() + rhs.size());
@@ -45,7 +45,7 @@ Clause operator||(Clause &lhs, Clause &rhs)
     return res;
 }
 
-CNF operator&&(Clause &lhs, Clause &rhs)
+CNF operator&&(const Clause &lhs, const Clause &rhs)
 {
     CNF res;
     res.push_back(lhs);
@@ -53,7 +53,7 @@ CNF operator&&(Clause &lhs, Clause &rhs)
     return res;
 }
 
-CNF operator&&(CNF &lhs, CNF &rhs)
+CNF operator&&(const CNF &lhs, const CNF &rhs)
 {
     CNF res;
     res.reserve(lhs.size() + rhs.size());
@@ -62,7 +62,7 @@ CNF operator&&(CNF &lhs, CNF &rhs)
     return res;
 }
 
-CNF operator||(CNF &lhs, CNF &rhs)
+CNF operator||(const CNF &lhs, const CNF &rhs)
 {
     CNF res;
     if (lhs.size() == 0)

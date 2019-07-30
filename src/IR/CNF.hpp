@@ -30,6 +30,8 @@ struct Predicate
     const Expr * operator*() const { return expr(); }
     const Expr * operator->() const { return expr(); }
 
+    Predicate operator!() const { return Predicate(literal_ ^ 0x1UL); }
+
     bool operator==(Predicate other) const { return this->literal_ == other.literal_; }
     bool operator!=(Predicate other) const { return not operator==(other); }
 

@@ -42,6 +42,11 @@ CNF operator&&(CNF &lhs, CNF &rhs)
 CNF operator||(CNF &lhs, CNF &rhs)
 {
     CNF res;
+    if (lhs.size() == 0)
+        return rhs;
+    else if (rhs.size() == 0)
+        return lhs;
+
     res.reserve(lhs.size() * rhs.size());
     for (auto &clause_left : lhs) {
         for (auto &clause_right : rhs)

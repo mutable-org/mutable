@@ -161,7 +161,6 @@ TEST_CASE("Sema/Expressions scalar-vector inference", "[sema]")
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
     auto &table = DB.add_relation(C.get_pool()("mytable"));
-    table.push_back(Type::Get_Integer(Type::TY_Scalar, 4), C.get_pool()("s"));
     table.push_back(Type::Get_Integer(Type::TY_Vector, 4), C.get_pool()("v"));
 
     {
@@ -196,7 +195,7 @@ TEST_CASE("Sema/Expressions scalar-vector inference", "[sema]")
     }
     {
         /* Scalar and scalar yields scalar. */
-        LEXER("SELECT * FROM mytable WHERE s > 42;");
+        LEXER("SELECT * FROM mytable WHERE 13 < 42;");
         Parser parser(lexer);
         SelectStmt *stmt = as<SelectStmt>(parser.parse());
         REQUIRE(diag.num_errors() == 0);
@@ -222,12 +221,11 @@ TEST_CASE("Sema/Expressions/Functions", "[sema]")
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
     auto &table = DB.add_relation(C.get_pool()("mytable"));
-    table.push_back(Type::Get_Integer(Type::TY_Scalar, 4), C.get_pool()("s"));
     table.push_back(Type::Get_Integer(Type::TY_Vector, 4), C.get_pool()("v"));
 
     {
         /* Vectorial WHERE condition is ok. */
-        LEXER("SELECT * FROM mytable WHERE v > AVG(v);");
+        LEXER("SELECT * FROM mytable WHERE v = v;");
         Parser parser(lexer);
         SelectStmt *stmt = as<SelectStmt>(parser.parse());
         REQUIRE(diag.num_errors() == 0);
@@ -244,8 +242,8 @@ TEST_CASE("Sema/Expressions/Functions", "[sema]")
     }
 
     {
-        /* Vectorial WHERE condition is ok.  WARN: Aggregate of scalar is discouraged. */
-        LEXER("SELECT * FROM mytable WHERE v > AVG(s);");
+        /* Vectorial WHERE condition is ok.  */
+        LEXER("SELECT * FROM mytable WHERE v > 42;");
         Parser parser(lexer);
         SelectStmt *stmt = as<SelectStmt>(parser.parse());
         REQUIRE(diag.num_errors() == 0);
@@ -263,7 +261,7 @@ TEST_CASE("Sema/Expressions/Functions", "[sema]")
 
     {
         /* ERR: WHERE condition must be vectorial. */
-        LEXER("SELECT * FROM mytable WHERE AVG(v) > 42;");
+        LEXER("SELECT * FROM mytable WHERE 13 < 42;");
         Parser parser(lexer);
         SelectStmt *stmt = as<SelectStmt>(parser.parse());
         REQUIRE(diag.num_errors() == 0);

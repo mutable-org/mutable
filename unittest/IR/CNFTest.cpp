@@ -28,6 +28,7 @@ TEST_CASE("CNF/Clause operators", "[unit]")
     cnf::Clause AB({PA, PB});
     cnf::Clause CD({PC, PD});
 
+    /* (A v B) v (C v D) ⇔ (A v B v C v D) */
     SECTION("Logical or")
     {
         auto result = AB or CD;
@@ -38,6 +39,7 @@ TEST_CASE("CNF/Clause operators", "[unit]")
         REQUIRE(contains(result, PD));
     }
 
+    /* (A v B) ^ (C v D) is already in CNF. */
     SECTION("Logical and")
     {
         auto result = AB and CD;
@@ -65,13 +67,14 @@ TEST_CASE("CNF/CNF operators", "[unit]")
     cnf::Clause AC({PA, PC});
     cnf::Clause BD({PB, PD});
 
-    CNF ABCD({AB, CD});
-    CNF ACBD({AC, BD});
+    CNF AB_CD({AB, CD}); // (A v B) ^ (C v D)
+    CNF AC_BD({AC, BD}); // (A v C) ^ (B v D)
 
+    /* [(A v B) ^ (C v D)] v [(A v C) ^ (B v D)]
+     * ⇔ (A v B v A v C) ^ (A v B v B v D) ^ (C v D v A v C) ^ (C v D v B v D) */
     SECTION("Logical or")
     {
-        auto result = ABCD or ACBD;
-        result.dump();
+        auto result = AB_CD or AC_BD;
         REQUIRE(result.size() == 4);
 
         cnf::Clause ABAC({PA, PB, PA, PC});
@@ -85,10 +88,10 @@ TEST_CASE("CNF/CNF operators", "[unit]")
         REQUIRE(contains(result, CDBD));
     }
 
+    /* [(A v B) ^ (C v D)] ^ [(A v C) ^ (B v D)] ⇔ (A v B) ^ (C v D) ^ (A v C) ^ (B v D) */
     SECTION("Logical and")
     {
-        auto result = ABCD and ACBD;
-        result.dump();
+        auto result = AB_CD and AC_BD;
         REQUIRE(result.size() == 4);
 
         REQUIRE(contains(result, AB));

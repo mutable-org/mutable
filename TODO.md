@@ -42,9 +42,13 @@
 
 ### Intermediate Representation
 
+* [x] conjunctive normal form
+    * [x] implement CNF representation and operations
+    * [x] CNF unit tests
 * [ ] design IR
-* [ ] translate AST to IR
-    * [ ] transform predicates to CNF
+* [ ] implement IR
+    * [X] translate expression AST to CNF
+    * [ ] test IR
 
 ### Catalog
 

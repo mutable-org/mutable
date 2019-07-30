@@ -165,6 +165,7 @@ void CNFGenerator::operator()(Const<UnaryExpr> &e)
         case TK_Not:
             is_negative_ = not is_negative_;
             (*this)(*e.expr);
+            is_negative_ = not is_negative_;
             break;
 
         default:

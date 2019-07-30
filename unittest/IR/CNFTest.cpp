@@ -47,6 +47,15 @@ TEST_CASE("CNF/Clause operators", "[unit]")
         REQUIRE(contains(result, AB));
         REQUIRE(contains(result, CD));
     }
+
+    /* ¬(A v B) ⇔ (¬A) ^ (¬B) */
+    SECTION("Logical not")
+    {
+        auto result = not AB;
+        REQUIRE(result.size() == 2);
+        REQUIRE(contains(result, cnf::Clause({not PA})));
+        REQUIRE(contains(result, cnf::Clause({not PB})));
+    }
 }
 
 TEST_CASE("CNF/CNF operators", "[unit]")
@@ -98,5 +107,19 @@ TEST_CASE("CNF/CNF operators", "[unit]")
         REQUIRE(contains(result, CD));
         REQUIRE(contains(result, AC));
         REQUIRE(contains(result, BD));
+    }
+
+    /* ¬[(A v B) ^ (C v D)]
+     * ⇔ ¬(A v B) v ¬(C v D)
+     * ⇔ (¬A ^ ¬B) v (¬C ^ ¬D)
+     * ⇔ (¬A v ¬C) ^ (¬A v ¬D) ^ (¬B v ¬C) ^ (¬B v ¬D) */
+    SECTION("Logical not")
+    {
+        auto result = not AB_CD;
+        REQUIRE(result.size() == 4);
+        REQUIRE(contains(result, cnf::Clause({not PA, not PC})));
+        REQUIRE(contains(result, cnf::Clause({not PA, not PD})));
+        REQUIRE(contains(result, cnf::Clause({not PB, not PC})));
+        REQUIRE(contains(result, cnf::Clause({not PB, not PD})));
     }
 }

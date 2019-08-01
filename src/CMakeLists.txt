@@ -24,3 +24,6 @@ set_target_properties(check-bin PROPERTIES OUTPUT_NAME check)
 
 add_executable(cnf cnf.cpp)
 target_link_libraries(cnf IR parse lex catalog util)
+
+add_executable(ir ir.cpp)
+target_link_libraries(ir IR parse lex catalog util)

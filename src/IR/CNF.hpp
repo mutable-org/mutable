@@ -65,6 +65,11 @@ struct CNF : public std::vector<Clause>
     using std::vector<Clause>::vector;
 
     friend std::ostream & operator<<(std::ostream &out, const CNF &cnf);
+    friend std::string to_string(const CNF &cnf) {
+        std::ostringstream oss;
+        oss << cnf;
+        return oss.str();
+    }
 
     void dump(std::ostream &out) const;
     void dump() const;

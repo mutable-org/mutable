@@ -24,20 +24,6 @@ bool Clause::operator<=(const Clause &other) const
     return true;
 }
 
-bool Clause::operator>=(const Clause &other) const
-{
-    for (auto it : other) {
-        if (not contains(*this, it))
-            return false;
-    }
-    return true;
-}
-
-bool Clause::operator==(const Clause &other) const
-{
-    return *this >= other and *this <= other;
-}
-
 Clause operator||(const Clause &lhs, const Clause &rhs)
 {
     Clause res;

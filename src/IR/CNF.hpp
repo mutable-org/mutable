@@ -46,8 +46,8 @@ struct Clause : public std::vector<Predicate>
     using std::vector<Predicate>::vector;
 
     bool operator<=(const Clause &other) const;
-    bool operator>=(const Clause &other) const;
-    bool operator==(const Clause &other) const;
+    bool operator>=(const Clause &other) const { return other <= *this; }
+    bool operator==(const Clause &other) const { return *this >= other and *this <= other; }
     bool operator!=(const Clause &other) const { return not operator==(other); }
 
     friend std::ostream & operator<<(std::ostream &out, const Clause &clause);

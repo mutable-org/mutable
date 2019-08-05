@@ -15,7 +15,7 @@ void ASTDumper::operator()(Const<ErrorExpr> &e)
 
 void ASTDumper::operator()(Const<Designator> &e)
 {
-    if (e.has_table_name()) {
+    if (e.has_explicit_table_name()) {
         indent() << "Designator";
         if (e.has_type())
             out << " of type " << *e.type();

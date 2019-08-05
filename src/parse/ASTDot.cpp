@@ -46,7 +46,7 @@ void ASTDot::operator()(Const<Designator> &e)
 {
     out << std::hex << id(e) << " [label=<<B>";
 
-    if (e.has_table_name()) out << e.table_name.text << ".";
+    if (e.has_explicit_table_name()) out << e.table_name.text << ".";
     out << e.attr_name.text << "</B>";
     if (e.has_type()) {
         std::ostringstream oss;

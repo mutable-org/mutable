@@ -87,6 +87,13 @@ struct Designator : Expr
     bool has_explicit_table_name() const { return bool(table_name); }
     bool is_identifier() const { return not has_explicit_table_name(); }
 
+    bool has_table_name() const { return table_name.text != nullptr; }
+    const char * get_table_name() const {
+        insist(table_name.text != nullptr,
+               "if the table name was not explicitly provided, semantic analysis must deduce it first");
+        return table_name.text;
+    }
+
     target_type target() const { return target_; }
 };
 

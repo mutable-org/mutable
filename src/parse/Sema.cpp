@@ -113,6 +113,7 @@ void Sema::operator()(Const<Designator> &e)
         } else {
             /* Since no relation was explicitly specified, we must search *all* source relations for the attribute. */
             Designator::target_type target;
+            const char *alias = nullptr;
             for (auto &src : Ctx.sources) {
                 if (auto R = std::get_if<const Relation*>(&src.second)) {
                     const Relation &rel = **R;
@@ -126,6 +127,7 @@ void Sema::operator()(Const<Designator> &e)
                             return;
                         } else {
                             target = &A; // we found an attribute of that name in the source relations
+                            alias = src.first;
                         }
                     } catch (std::out_of_range) {
                         /* This source relation has no attribute of that name.  OK, continue. */
@@ -142,6 +144,7 @@ void Sema::operator()(Const<Designator> &e)
                             return;
                         } else {
                             target = E; // we found an attribute of that name in the source relations
+                            alias = src.first;
                         }
                     } catch (std::out_of_range) {
                         /* This source relation has no attribute of that name.  OK, continue. */
@@ -159,6 +162,7 @@ void Sema::operator()(Const<Designator> &e)
             }
 
             e.target_ = target;
+            e.table_name.text = alias; // set the deduced table name of this designator
         }
     }
 

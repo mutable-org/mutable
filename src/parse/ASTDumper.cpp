@@ -25,6 +25,7 @@ void ASTDumper::operator()(Const<Designator> &e)
         --indent_;
     } else {
         indent() << "Identifier '" << e.attr_name.text << '\'';
+        if (e.has_table_name()) out << " deduced to table '" << e.get_table_name() << '\'';
         if (e.has_type()) out << " of type " << *e.type();
         out << " (" << e.attr_name.pos << ')';
     }

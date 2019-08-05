@@ -97,22 +97,20 @@ std::ostream & operator<<(std::ostream &out, const Predicate &pred)
 
 std::ostream & operator<<(std::ostream &out, const Clause &clause)
 {
-    out << '(';
     for (auto it = clause.begin(); it != clause.end(); ++it) {
         if (it != clause.begin()) out << " v ";
         out << *it;
     }
-    return out << ')';
+    return out;
 }
 
 std::ostream & operator<<(std::ostream &out, const CNF &cnf)
 {
-    out << '(';
     for (auto it = cnf.begin(); it != cnf.end(); ++it) {
         if (it != cnf.begin()) out << " ^ ";
-        out << *it;
+        out << '(' << *it << ')';
     }
-    return out << ')';
+    return out;
 }
 
 void Predicate::dump(std::ostream &out) const

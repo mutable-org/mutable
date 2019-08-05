@@ -35,6 +35,10 @@ struct Predicate
     bool operator==(Predicate other) const { return this->literal_ == other.literal_; }
     bool operator!=(Predicate other) const { return not operator==(other); }
 
+    /** Compare predicates by the location of the referenced expression in memory.  Negative predicates are one larger
+     * than positive predicates of the same expression. */
+    bool operator<(Predicate other) const { return this->literal_ < other.literal_; }
+
     friend std::ostream & operator<<(std::ostream &out, const Predicate &pred);
 
     void dump(std::ostream &out) const;

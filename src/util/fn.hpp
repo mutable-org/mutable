@@ -96,3 +96,7 @@ bool contains(const H &haystack, const N &needle)
     using std::find, std::begin, std::end;
     return find(begin(haystack), end(haystack), needle) != end(haystack);
 }
+
+/** Escapes special characters in a string to be printable in HTML documents.  Primarily used for DOT. */
+std::string html_escape(std::string str);
+

@@ -11,18 +11,6 @@
 using namespace db;
 
 
-namespace {
-
-std::string html_escape(std::string str)
-{
-    str = replace_all(str, "&", "&amp;");
-    str = replace_all(str, "<", "&lt;");
-    str = replace_all(str, ">", "&gt;");
-    return str;
-}
-
-}
-
 ASTDot::ASTDot(std::ostream &out)
     : out(out)
 {

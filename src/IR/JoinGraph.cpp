@@ -246,7 +246,9 @@ void JoinGraph::dot(std::ostream &out) const
 {
 #define q(X) '"' << X << '"' // quote
 #define id(X) q(std::hex << &X) // convert virtual address to identifier
-    out << "graph join_graph\n{\n    forcelabels=true;\n";
+    out << "graph join_graph\n{\n"
+        << "    forcelabels=true;\n"
+        << "    overlap=false;\n";
 
     for (auto ds : sources) {
         out << "    " << id(*ds) << " [label=<<B>" << ds->alias() << "</B>";

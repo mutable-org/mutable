@@ -146,8 +146,26 @@ void ASTPrinter::operator()(Const<CreateTableStmt> &s)
 {
     out << "CREATE TABLE " << s.table_name.text << "\n(";
     for (auto it = s.attributes.cbegin(), end = s.attributes.cend(); it != end; ++it) {
+        auto attr = *it;
         if (it != s.attributes.cbegin()) out << ',';
-        out << "\n    " << it->first.text << ' ' << *it->second;
+        out << "\n    " << attr->name.text << ' ' << *attr->type;
+        for (auto c : attr->constraints) {
+            if (is<PrimaryKeyConstraint>(c)) {
+                out << " PRIMARY KEY";
+            } else if (is<UniqueConstraint>(c)) {
+                out << " UNIQUE";
+            } else if (is<NotNullConstraint>(c)) {
+                out << " NOT NULL";
+            } else if (auto check = cast<CheckConditionConstraint>(c)) {
+                out << " CHECK (";
+                (*this)(*check->cond);
+                out << ')';
+            } else if (auto ref = cast<ReferenceConstraint>(c)) {
+                out << " REFERENCES " << ref->table_name.text << '(' << ref->attr_name.text << ')';
+            } else {
+                unreachable("invalid constraint");
+            }
+        }
     }
     out << "\n);";
 }

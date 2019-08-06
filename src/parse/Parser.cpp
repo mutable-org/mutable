@@ -135,7 +135,7 @@ Stmt * Parser::parse_CreateTableStmt()
 {
     bool ok = true;
     Token start = token();
-    std::vector<CreateTableStmt::attribute_type> attrs;
+    std::vector<CreateTableStmt::attribute_definition*> attrs;
 
     /* 'TABLE' identifier '(' */
     expect(TK_Table);
@@ -143,13 +143,72 @@ Stmt * Parser::parse_CreateTableStmt()
     ok = ok and expect(TK_IDENTIFIER);
     expect(TK_LPAR);
 
-    /* identifier data-type [ ',' identifier data-type ] */
+    /* identifier data-type { constraint } [ ',' identifier data-type { constraint } ] */
     do {
         Token id = token();
         ok = ok and expect(TK_IDENTIFIER);
         const Type *type = parse_data_type();
         insist(type, "Must never be NULL");
-        attrs.emplace_back(id, type);
+
+        /* Parse the list of constraints. */
+        std::vector<Constraint*> constraints;
+        for (;;) {
+            switch (token().type) {
+                /* 'PRIMARY' 'KEY' */
+                case TK_Primary: {
+                    Token tok = consume();
+                    expect(TK_Key);
+                    constraints.push_back(new PrimaryKeyConstraint(tok));
+                    break;
+                }
+
+                /* 'NOT' 'NULL' */
+                case TK_Not: {
+                    Token tok = consume();
+                    expect(TK_Null);
+                    constraints.push_back(new NotNullConstraint(tok));
+                    break;
+                }
+
+                /* 'UNIQUE' */
+                case TK_Unique: {
+                    Token tok = consume();
+                    constraints.push_back(new UniqueConstraint(tok));
+                    break;
+                }
+
+                /* 'CHECK' '(' expression ')' */
+                case TK_Check: {
+                    Token tok = consume();
+                    expect(TK_LPAR);
+                    Expr *cond = parse_Expr();
+                    expect(TK_RPAR);
+                    constraints.push_back(new CheckConditionConstraint(tok, cond));
+                    break;
+                }
+
+                /* 'REFERENCES' identifier '(' identifier ')' */
+                case TK_References: {
+                    Token tok = consume();
+                    Token table_name = token();
+                    expect(TK_IDENTIFIER);
+                    expect(TK_LPAR);
+                    Token attr_name = token();
+                    expect(TK_IDENTIFIER);
+                    expect(TK_RPAR);
+                    constraints.push_back(new ReferenceConstraint(tok,
+                                                                  table_name,
+                                                                  attr_name,
+                                                                  ReferenceConstraint::ON_DELETE_RESTRICT));
+                    break;
+                }
+
+                default:
+                    goto exit_constraints;
+            }
+        }
+exit_constraints:
+        attrs.push_back(new CreateTableStmt::attribute_definition(id, type, constraints));
     } while (accept(TK_COMMA));
 
     /* ')' */
@@ -158,7 +217,7 @@ Stmt * Parser::parse_CreateTableStmt()
     if (not ok)
         return new ErrorStmt(start);
 
-    return new CreateTableStmt(table_name, attrs);
+    return new CreateTableStmt(table_name, std::move(attrs));
 }
 
 Stmt * Parser::parse_SelectStmt()

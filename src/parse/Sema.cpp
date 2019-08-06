@@ -858,31 +858,110 @@ void Sema::operator()(Const<CreateTableStmt> &s)
     }
     auto &DB = C.get_database_in_use();
     const char *table_name = s.table_name.text;
-    Relation *R = new Relation(table_name); // ownership of this relation is transferred to the schema
+    Relation *R = new Relation(table_name);
+
+    /* Add the newly declared table to the list of sources of the sema context. */
+    get_context().sources.emplace(table_name, R);
 
     /* Analyze attributes and add them to the new relation. */
-    for (auto &A : s.attributes) {
-        const PrimitiveType *ty = cast<const PrimitiveType>(A.second);
+    bool error = false;
+    bool has_primary_key = false;
+    for (auto attr : s.attributes) {
+        const PrimitiveType *ty = cast<const PrimitiveType>(attr->type);
         if (not ty) {
-            diag.e(A.first.pos) << "Attribute " << A.first.text << " cannot be defined with type " << *A.second
-                                << ".\n";
-            return;
+            diag.e(attr->name.pos) << "Attribute " << attr->name.text << " cannot be defined with type " << *attr->type
+                               << ".\n";
+            error = true;
+        }
+        attr->type = ty->as_vectorial(); // convert potentially scalar type to vectorial
+
+        /* Before we check the constraints, we must add this newly declared attribute to its relation, and hence to the
+         * sema context. */
+        try {
+            R->push_back(ty->as_vectorial(), attr->name.text);
+        } catch (std::invalid_argument) {
+            diag.e(attr->name.pos) << "Attribute " << attr->name.text << " occurs multiple times in defintion of table "
+                               << table_name << ".\n";
+            error = true;
         }
 
-        try {
-            R->push_back(ty->as_vectorial(), A.first.text);
-        } catch (std::invalid_argument) {
-            diag.e(A.first.pos) << "Attribute " << A.first.text << " occurs multiple times in defintion of table "
-                                << table_name << ".\n";
-            return;
+        /* Check constraint definitions. */
+        bool has_reference = false; ///< at most one reference allowed per attribute
+        bool is_unique = false, is_not_null = false;
+        get_context().stage = SemaContext::S_Where;
+        for (auto c : attr->constraints) {
+            if (is<PrimaryKeyConstraint>(c)) {
+                if (has_primary_key) {
+                    diag.e(attr->name.pos) << "Duplicate definition of primary key as attribute " << attr->name.text
+                                          << ".\n";
+                    error = true;
+                }
+                has_primary_key = true;
+            }
+
+            if (is<UniqueConstraint>(c)) {
+                if (is_unique)
+                    diag.w(c->tok.pos) << "Duplicate definition of attribute " << attr->name.text << " as UNIQUE.\n";
+                is_unique = true;
+            }
+
+            if (is<NotNullConstraint>(c)) {
+                if (is_not_null)
+                    diag.w(c->tok.pos) << "Duplicate definition of attribute " << attr->name.text << " as UNIQUE.\n";
+                is_not_null = true;
+            }
+
+            if (auto check = cast<CheckConditionConstraint>(c)) {
+                /* Verify that the type of the condition is boolean. */
+                /* TODO if the condition uses already mentioned attributes, we must add them to the sema context before
+                 * invoking semantic analysis of the condition! */
+                (*this)(*check->cond);
+                auto ty = check->cond->type();
+                if (not ty->is_boolean()) {
+                    diag.e(c->tok.pos) << "Condition " << *check->cond << " is an invalid CHECK constraint.\n";
+                    error = true;
+                }
+            }
+
+            if (auto ref = cast<ReferenceConstraint>(c)) {
+                if (has_reference) {
+                    diag.e(c->tok.pos) << "Attribute " << attr->name.text << " must not have multiple references.\n";
+                    error = true;
+                }
+                has_reference = true;
+
+                /* Check that the referenced attribute exists. */
+                try {
+                    auto &ref_table = DB.get_relation(ref->table_name.text);
+                    try {
+                        auto &ref_attr = ref_table.at(ref->attr_name.text);
+                        if (attr->type != ref_attr.type) {
+                            diag.e(ref->attr_name.pos) << "Referenced attribute has different type.\n";
+                        }
+                    } catch (std::out_of_range) {
+                        diag.e(ref->attr_name.pos) << "Invalid reference, attribute " << ref->attr_name.text
+                                                  << " not found in table " << ref->table_name.text << ".\n";
+                        error = true;
+                    }
+                } catch (std::out_of_range) {
+                    diag.e(ref->table_name.pos) << "Invalid reference, table " << ref->table_name.text
+                                                << " not found.\n";
+                        error = true;
+                }
+            }
         }
+    }
+
+    if (error) {
+        delete R;
+        return;
     }
 
     try {
         DB.add(R);
     } catch (std::invalid_argument) {
         diag.e(s.table_name.pos) << "Table " << table_name << " already exists in database " << DB.name << ".\n";
-        delete R; // if table name is already used and transfer of ownership failed, clean up
+        delete R;
         return;
     }
 

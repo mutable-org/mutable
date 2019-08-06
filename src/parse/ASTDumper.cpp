@@ -204,8 +204,30 @@ void ASTDumper::operator()(Const<CreateTableStmt> &s)
     ++indent_;
     indent() << "attributes";
     ++indent_;
-    for (auto &attr : s.attributes)
-        indent() << attr.first.text << " : " << *attr.second << " (" << attr.first.pos << ")";
+    for (auto attr : s.attributes) {
+        indent() << attr->name.text << " : " << *attr->type << " (" << attr->name.pos << ')';
+        ++indent_;
+        for (auto c : attr->constraints) {
+            if (is<PrimaryKeyConstraint>(c)) {
+                indent() << "PRIMARY KEY (" << c->tok.pos << ')';
+            } else if (is<UniqueConstraint>(c)) {
+                indent() << "UNIQUE (" << c->tok.pos << ')';
+            } else if (is<NotNullConstraint>(c)) {
+                indent() << "NOT NULL (" << c->tok.pos << ')';
+            } else if (auto check = cast<CheckConditionConstraint>(c)) {
+                indent() << "CHECK (" << c->tok.pos << ')';
+                ++indent_;
+                (*this)(*check->cond);
+                --indent_;
+            } else if (auto ref = cast<ReferenceConstraint>(c)) {
+                indent() << "REFERENCES " << ref->table_name.text << '(' << ref->attr_name.text << ") (" << c->tok.pos
+                         << ')';
+            } else {
+                unreachable("invalid constraint");
+            }
+        }
+        --indent_;
+    }
     --indent_;
     --indent_;
 }

@@ -57,6 +57,9 @@ def run(filename, is_positive, setup=None):
             if not err:
                 print(' {}  -->  expected error message'.format(termcolor.err('✘')))
                 return False
+            if err and process.returncode != 1:
+                print(' {}  -->  unexpected error:\n{}'.format(termcolor.err('✘'), str(err, 'utf-8')))
+                return False
             if process.returncode != 1:
                 print(' {}  -->  unexpected return code {}'.format(termcolor.err('✘'), process.returncode))
                 return False

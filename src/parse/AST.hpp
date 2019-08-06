@@ -302,6 +302,64 @@ struct LimitClause : Clause
 };
 
 /*======================================================================================================================
+ * Constraints
+ *====================================================================================================================*/
+
+/** Abstract class to represent constraints attached to attributes of a table. */
+struct Constraint
+{
+    Token tok;
+
+    Constraint(Token tok) : tok(tok) { }
+
+    virtual ~Constraint() { }
+};
+
+struct PrimaryKeyConstraint : Constraint
+{
+    PrimaryKeyConstraint(Token tok) : Constraint(tok) { }
+};
+
+struct UniqueConstraint : Constraint
+{
+    UniqueConstraint(Token tok) : Constraint(tok) { }
+};
+
+struct NotNullConstraint : Constraint
+{
+    NotNullConstraint(Token tok) : Constraint(tok) { }
+};
+
+struct CheckConditionConstraint : Constraint
+{
+    Expr *cond;
+
+    CheckConditionConstraint(Token tok, Expr *cond) : Constraint(tok), cond(notnull(cond)) { }
+
+    ~CheckConditionConstraint() { delete cond; }
+};
+
+struct ReferenceConstraint : Constraint
+{
+    enum OnDeleteAction
+    {
+        ON_DELETE_RESTRICT,
+        ON_DELETE_CASCADE,
+    };
+
+    Token table_name;
+    Token attr_name;
+    OnDeleteAction on_delete;
+
+    ReferenceConstraint(Token tok, Token table_name, Token attr_name, OnDeleteAction action)
+        : Constraint(tok)
+        , table_name(table_name)
+        , attr_name(attr_name)
+        , on_delete(action)
+    { }
+};
+
+/*======================================================================================================================
  * Statements
  *====================================================================================================================*/
 
@@ -350,7 +408,6 @@ struct CreateDatabaseStmt : Stmt
     void accept(ConstASTVisitor &v) const;
 };
 
-
 struct UseDatabaseStmt : Stmt
 {
     Token database_name;
@@ -363,15 +420,36 @@ struct UseDatabaseStmt : Stmt
 
 struct CreateTableStmt : Stmt
 {
-    using attribute_type = std::pair<Token, const Type*>;
+    struct attribute_definition
+    {
+        Token name;
+        const Type *type;
+        std::vector<Constraint*> constraints;
+
+        attribute_definition(Token name, const Type *type, std::vector<Constraint*> constraints)
+            : name(name)
+            , type(type)
+            , constraints(constraints)
+        { }
+
+        ~attribute_definition() {
+            for (auto c : constraints)
+                delete c;
+        }
+    };
 
     Token table_name;
-    std::vector<attribute_type> attributes;
+    std::vector<attribute_definition*> attributes;
 
-    CreateTableStmt(Token table_name, std::vector<attribute_type> attributes)
+    CreateTableStmt(Token table_name, std::vector<attribute_definition*> attributes)
         : table_name(table_name)
         , attributes(attributes)
     { }
+
+    ~CreateTableStmt() {
+        for (auto a : attributes)
+            delete a;
+    }
 
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;

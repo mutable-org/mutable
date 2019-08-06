@@ -34,7 +34,13 @@ use_database-statement ::= 'USE' identifier ;
 
 ##### Create Table Statement
 ```ebnf
-create_table-statement ::= 'CREATE' 'TABLE' identifier '(' identifier data-type [ ',' identifier data-type ] ')'
+create_table-statement ::= 'CREATE' 'TABLE' identifier '(' identifier data-type { constraint } { ',' identifier data-type { constraint } } ')' ;
+
+constraint ::= 'PRIMARY' 'KEY' |
+               'NOT' 'NULL' |
+               'UNIQUE' |
+               'CHECK' '(' expression ')' |
+               'REFERENCES' identifier '(' identifier ')' ;
 ```
 
 ##### Select Statement

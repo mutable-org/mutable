@@ -24,12 +24,12 @@ statement ::= [
 
 ##### Create Database Statement
 ```ebnf
-create_database-statement ::= 'CREATE' 'DATABASE' identifier
+create_database-statement ::= 'CREATE' 'DATABASE' identifier ;
 ```
 
 ##### Use Database Statement
 ```ebnf
-use_database-statement ::= 'USE' identifier
+use_database-statement ::= 'USE' identifier ;
 ```
 
 ##### Create Table Statement

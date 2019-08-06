@@ -160,7 +160,6 @@ Token Lexer::read_number()
         if (is  == Oct) is  = Dec; // there are no octal floating point constants
         if (has == Oct) has = Dec;
         if ('-' == c_ || '+' == c_) push();
-        /* TODO what if exponent part has no digit??? */
         empty = true;
         while (is_dec(c_)) { empty = false; push(); }
     }

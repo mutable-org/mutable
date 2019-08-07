@@ -35,6 +35,27 @@ struct Sema : ASTVisitor
         std::vector<Expr*> group_keys; ///> list of group keys
     };
 
+    private:
+    /** Helper class to create a context when one is required but does not yet exist.  Automatically disposes of the
+     * context when the instance goes out of scope. */
+    struct RequireContext
+    {
+        private:
+        Sema &sema_;
+        bool needs_context_ = false;
+
+        public:
+        RequireContext(Sema *sema) : sema_(*notnull(sema)), needs_context_(sema_.contexts_.empty()) {
+            if (needs_context_)
+                sema_.push_context();
+        }
+
+        ~RequireContext() {
+            if (needs_context_)
+                sema_.pop_context();
+        }
+    };
+
     public:
     Diagnostic &diag;
     private:

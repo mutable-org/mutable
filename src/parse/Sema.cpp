@@ -820,6 +820,7 @@ void Sema::operator()(Const<EmptyStmt>&)
 
 void Sema::operator()(Const<CreateDatabaseStmt> &s)
 {
+    RequireContext RCtx(this);
     Catalog &C = Catalog::Get();
     const char *db_name = s.database_name.text;
 
@@ -833,6 +834,7 @@ void Sema::operator()(Const<CreateDatabaseStmt> &s)
 
 void Sema::operator()(Const<UseDatabaseStmt> &s)
 {
+    RequireContext RCtx(this);
     Catalog &C = Catalog::Get();
     const char *db_name = s.database_name.text;
 
@@ -847,6 +849,7 @@ void Sema::operator()(Const<UseDatabaseStmt> &s)
 
 void Sema::operator()(Const<CreateTableStmt> &s)
 {
+    RequireContext RCtx(this);
     Catalog &C = Catalog::Get();
 
     if (not C.has_database_in_use()) {
@@ -888,9 +891,7 @@ void Sema::operator()(Const<CreateTableStmt> &s)
 
 void Sema::operator()(Const<SelectStmt> &s)
 {
-    bool needs_context = contexts_.empty();
-    if (needs_context) push_context();
-
+    RequireContext RCtx(this);
     Catalog &C = Catalog::Get();
 
     if (not C.has_database_in_use()) {
@@ -905,12 +906,11 @@ void Sema::operator()(Const<SelectStmt> &s)
     (*this)(*s.select);
     if (s.order_by) (*this)(*s.order_by);
     if (s.limit) (*this)(*s.limit);
-
-    if (needs_context) pop_context();
 }
 
 void Sema::operator()(Const<InsertStmt> &s)
 {
+    RequireContext RCtx(this);
     /* TODO */
     (void) s;
     unreachable("Not implemented.");
@@ -918,6 +918,7 @@ void Sema::operator()(Const<InsertStmt> &s)
 
 void Sema::operator()(Const<UpdateStmt> &s)
 {
+    RequireContext RCtx(this);
     /* TODO */
     (void) s;
     unreachable("Not implemented.");
@@ -925,6 +926,7 @@ void Sema::operator()(Const<UpdateStmt> &s)
 
 void Sema::operator()(Const<DeleteStmt> &s)
 {
+    RequireContext RCtx(this);
     /* TODO */
     (void) s;
     unreachable("Not implemented.");

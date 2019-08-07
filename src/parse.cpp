@@ -94,6 +94,7 @@ int main(int argc, const char **argv)
             printer(*stmt);
             std::cout << std::endl;
         }
+        delete stmt;
     }
 
     if (in != &std::cin)

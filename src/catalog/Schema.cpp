@@ -301,15 +301,15 @@ void Function::dump(std::ostream &out) const
 }
 
 /*======================================================================================================================
- * Schema
+ * Database
  *====================================================================================================================*/
 
-Schema::Schema(const char *name)
+Database::Database(const char *name)
     : name(name)
 {
 }
 
-Schema::~Schema()
+Database::~Database()
 {
     for (auto &r : relations_)
         delete r.second;
@@ -333,7 +333,7 @@ Catalog::Catalog()
 
 Catalog::~Catalog()
 {
-    for (auto &s : schemas_)
+    for (auto &s : databases_)
         delete s.second;
     for (auto fn : standard_functions_)
         delete fn.second;

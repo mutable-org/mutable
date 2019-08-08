@@ -357,14 +357,14 @@ TEST_CASE("Catalog singleton c'tor")
     REQUIRE(&C == &C2);
 }
 
-TEST_CASE("Catalog Schema creation")
+TEST_CASE("Catalog Database creation")
 {
     Catalog &C = Catalog::Get();
     const char *db_name = get_unique_id();
-    Schema &S = C.add_database(db_name);
-    Schema &S2 = C.get_database(db_name);
-    REQUIRE(&S == &S2);
-    REQUIRE(streq(S.name, db_name));
+    Database &D = C.add_database(db_name);
+    Database &D2 = C.get_database(db_name);
+    REQUIRE(&D == &D2);
+    REQUIRE(streq(D.name, db_name));
 }
 
 TEST_CASE("Catalog::drop_database() by name")
@@ -382,10 +382,10 @@ TEST_CASE("Catalog::drop_database() by reference")
 {
     Catalog &C = Catalog::Get();
     const char *db_name = get_unique_id();
-    Schema &S = C.add_database(db_name);
+    Database &D = C.add_database(db_name);
 
     REQUIRE_NOTHROW(C.get_database(db_name));
-    REQUIRE(C.drop_database(S));
+    REQUIRE(C.drop_database(D));
     CHECK_THROWS_AS(C.get_database(db_name), std::out_of_range);
 }
 
@@ -395,33 +395,33 @@ TEST_CASE("Catalog use database")
     const char *db_name = get_unique_id();
 
     C.unset_database_in_use();
-    Schema &S = C.add_database(db_name);
+    Database &D = C.add_database(db_name);
     REQUIRE(not C.has_database_in_use());
-    C.set_database_in_use(S);
+    C.set_database_in_use(D);
     REQUIRE(C.has_database_in_use());
     auto &in_use = C.get_database_in_use();
-    REQUIRE(&S == &in_use);
+    REQUIRE(&D == &in_use);
     C.unset_database_in_use();
     REQUIRE(not C.has_database_in_use());
 }
 
-TEST_CASE("Schema c'tor")
+TEST_CASE("Database c'tor")
 {
     Catalog &C = Catalog::Get();
     const char *db_name = get_unique_id();
-    Schema &S = C.add_database(db_name);
-    REQUIRE(S.size() == 0);
+    Database &D = C.add_database(db_name);
+    REQUIRE(D.size() == 0);
 }
 
-TEST_CASE("Schema/add relation error if name already taken")
+TEST_CASE("Database/add relation error if name already taken")
 {
     Catalog &C = Catalog::Get();
     const char *db_name = get_unique_id();
-    Schema &S = C.add_database(db_name);
+    Database &D = C.add_database(db_name);
 
     const char *rel_name = "myrelation";
-    S.add_relation(rel_name);
+    D.add_relation(rel_name);
     Relation *R = new Relation(rel_name);
-    REQUIRE_THROWS_AS(S.add(R), std::invalid_argument);
+    REQUIRE_THROWS_AS(D.add(R), std::invalid_argument);
     delete R;
 }

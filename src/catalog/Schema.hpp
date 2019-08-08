@@ -248,11 +248,11 @@ struct FnType : Type
 };
 
 /*======================================================================================================================
- * Attribute, Relation, Schema
+ * Attribute, Relation, Database
  *====================================================================================================================*/
 
 struct Relation;
-struct Schema;
+struct Database;
 struct Catalog;
 
 /** An attribute of a relation.  Every attribute belongs to exactly one relation.  */
@@ -359,22 +359,22 @@ struct Function
 #undef kind_t
 };
 
-/** A schema is a description of a database.  It is a set of relations. */
-struct Schema
+/** A description of a database.  It is a set of relations, functions, and statistics. */
+struct Database
 {
     friend struct Catalog;
 
     public:
     const char *name;
     private:
-    std::unordered_map<const char*, Relation*> relations_; ///> the relations of this schema
-    std::unordered_map<const char*, Function*> functions_; ///> functions defined in this schema
+    std::unordered_map<const char*, Relation*> relations_; ///> the relations of this database
+    std::unordered_map<const char*, Function*> functions_; ///> functions defined in this database
 
     private:
-    Schema(const char *name);
+    Database(const char *name);
 
     public:
-    ~Schema();
+    ~Database();
 
     std::size_t size() const { return relations_.size(); }
 
@@ -402,8 +402,8 @@ struct Catalog
 {
     private:
     StringPool pool; ///> pool of strings
-    std::unordered_map<const char*, Schema*> schemas_; ///> the schemas; one per database
-    Schema *database_in_use_ = nullptr; ///> the currently used database
+    std::unordered_map<const char*, Database*> databases_; ///> the databases
+    Database *database_in_use_ = nullptr; ///> the currently used database
     std::unordered_map<const char*, Function*> standard_functions_; ///> functions defined by the SQL standard
 
     private:
@@ -418,38 +418,38 @@ struct Catalog
         return the_catalog_;
     }
 
-    std::size_t num_schemas() const { return schemas_.size(); }
+    std::size_t num_databases() const { return databases_.size(); }
 
     StringPool & get_pool() { return pool; }
     const StringPool & get_pool() const { return pool; }
 
     /*===== Database =================================================================================================*/
-    Schema & add_database(const char *name) {
-        auto it = schemas_.find(name);
-        if (it != schemas_.end()) throw std::invalid_argument("database with that name already exist");
-        it = schemas_.emplace_hint(it, name, new Schema(name));
+    Database & add_database(const char *name) {
+        auto it = databases_.find(name);
+        if (it != databases_.end()) throw std::invalid_argument("database with that name already exist");
+        it = databases_.emplace_hint(it, name, new Database(name));
         return *it->second;
     }
-    Schema & get_database(const char *name) const { return *schemas_.at(name); }
+    Database & get_database(const char *name) const { return *databases_.at(name); }
     bool drop_database(const char *name) {
         if (has_database_in_use() and get_database_in_use().name == name)
             throw std::invalid_argument("Cannot drop database; currently in use.");
-        return schemas_.erase(name) != 0;
+        return databases_.erase(name) != 0;
     }
-    bool drop_database(const Schema &S) { return drop_database(S.name); }
+    bool drop_database(const Database &S) { return drop_database(S.name); }
 
     bool has_database_in_use() const { return database_in_use_ != nullptr; }
-    Schema & get_database_in_use() {
+    Database & get_database_in_use() {
         if (not has_database_in_use())
             throw std::logic_error("no database currently in use");
         return *database_in_use_;
     }
-    const Schema & get_database_in_use() const {
+    const Database & get_database_in_use() const {
         if (not has_database_in_use())
             throw std::logic_error("no database currently in use");
         return *database_in_use_;
     }
-    void set_database_in_use(Schema &s) { database_in_use_ = &s; }
+    void set_database_in_use(Database &s) { database_in_use_ = &s; }
     void unset_database_in_use() { database_in_use_ = nullptr; }
 
     /*===== Functions ================================================================================================*/

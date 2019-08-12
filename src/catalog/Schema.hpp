@@ -5,6 +5,8 @@
 #include "util/macro.hpp"
 #include "util/Pool.hpp"
 #include "util/StringPool.hpp"
+#include <cmath>
+#include <exception>
 #include <functional>
 #include <iostream>
 #include <unordered_map>

@@ -43,11 +43,11 @@ void ASTDot::operator()(Const<Designator> &e)
     }
     out << ">];\n";
 
-    /* Dot edge to relation. */
+    /* Dot edge to table. */
     const auto &t = e.target();
     if (auto val = std::get_if<const Attribute*>(&t)) {
         const Attribute &A = **val;
-        out << id(e) << EDGE << A.relation.name << ':' << A.name
+        out << id(e) << EDGE << A.table.name << ':' << A.name
             << " [style=\"dashed\",dir=\"forward\",color=\"#404040\"];\n";
     } else if (auto val = std::get_if<const Expr*>(&t)) {
         const Expr *expr = *val;
@@ -180,10 +180,10 @@ void ASTDot::operator()(Const<FromClause> &c)
         } else {
             unreachable("invalid variant");
         }
-        if (t.has_relation()) {
+        if (t.has_table()) {
             insist(std::holds_alternative<Token>(t.source));
             auto &name = std::get<Token>(t.source);
-            auto &R = t.relation();
+            auto &R = t.table();
             out << id(name) << EDGE << R.name << ":n [dir=\"forward\",color=\"#404040\"];\n";
         }
     }
@@ -287,12 +287,12 @@ void ASTDot::operator()(Const<SelectStmt> &s)
 {
     out << id(s) << " [label=\"SelectStmt\"];\n";
 
-    /* Dot the accessed relations first. */
+    /* Dot the accessed tables first. */
     out << "subgraph {\n";
     if (auto f = cast<FromClause>(s.from)) {
         for (auto &t : f->from) {
-            if (t.has_relation()) {
-                auto &R = t.relation();
+            if (t.has_table()) {
+                auto &R = t.table();
 
                 out << R.name << " [shape=none,style=filled,fillcolor=white,label=<\n<TABLE>\n<TR><TD BORDER=\"0\"><B>"
                     << R.name << "</B></TD></TR>\n";

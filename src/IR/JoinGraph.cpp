@@ -142,9 +142,9 @@ struct db::GraphBuilder : ConstASTVisitor
         for (auto &tbl : c.from) {
             if (auto tok = std::get_if<Token>(&tbl.source)) {
                 /* Create a new base table. */
-                insist(tbl.has_relation());
+                insist(tbl.has_table());
                 Token alias = tbl.alias ? tbl.alias : *tok;
-                auto base = new BaseTable(tbl.relation(), alias.text);
+                auto base = new BaseTable(tbl.table(), alias.text);
                 aliases.emplace(alias.text, base);
                 graph_->sources.emplace_back(base);
             } else if (auto stmt = std::get_if<Stmt*>(&tbl.source)) {
@@ -277,7 +277,7 @@ void JoinGraph::dump(std::ostream &out) const
             out << "(Q)";
         else {
             auto bt = as<BaseTable>(src);
-            out << bt->relation().name;
+            out << bt->table().name;
         }
         out << ' ' << src->alias() << "  " << src->filter();
     }

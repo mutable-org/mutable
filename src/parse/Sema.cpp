@@ -65,24 +65,24 @@ void Sema::operator()(Const<Designator> &e)
 
     /* If the designator references an attribute of a table, search for it. */
     if (e.table_name) {
-        /* Find the source relation first and then locate the target inside this relation. */
+        /* Find the source table first and then locate the target inside this table. */
         SemaContext::source_type src;
         try {
             src = Ctx.sources.at(e.table_name.text);
         } catch (std::out_of_range) {
-            diag.e(e.table_name.pos) << "Source relation " << e.table_name.text << " not found. "
+            diag.e(e.table_name.pos) << "Source table " << e.table_name.text << " not found. "
                                         "Maybe you forgot to specify it in the FROM clause?\n";
             e.type_ = Type::Get_Error();
             return;
         }
 
-        /* Find the target inside the source relation. */
+        /* Find the target inside the source table. */
         Designator::target_type target;
-        if (auto R = std::get_if<const Relation*>(&src)) {
-            const Relation &rel = **R;
-            /* Find the attribute inside the relation. */
+        if (auto T = std::get_if<const Table*>(&src)) {
+            const Table &tbl = **T;
+            /* Find the attribute inside the table. */
             try {
-                target = &rel.at(e.attr_name.text); // we found an attribute of that name in the source relations
+                target = &tbl.at(e.attr_name.text); // we found an attribute of that name in the source tables
             } catch (std::out_of_range) {
                 diag.e(e.attr_name.pos) << "Table " << e.table_name.text << " has no attribute " << e.attr_name.text
                                         << ".\n";
@@ -105,32 +105,33 @@ void Sema::operator()(Const<Designator> &e)
         }
         e.target_ = target;
     } else {
-        /* No relation name was specified.  The designator references either a result or a named expression.  Search the named expressions first, because they overrule attribute names. */
+        /* No table name was specified.  The designator references either a result or a named expression.  Search the
+         * named expressions first, because they overrule attribute names. */
         if (auto it = Ctx.results.find(e.attr_name.text); it != Ctx.results.end()) {
             /* Found a named expression. */
             e.target_ = it->second;
             is_result = true;
         } else {
-            /* Since no relation was explicitly specified, we must search *all* source relations for the attribute. */
+            /* Since no table was explicitly specified, we must search *all* source tables for the attribute. */
             Designator::target_type target;
             const char *alias = nullptr;
             for (auto &src : Ctx.sources) {
-                if (auto R = std::get_if<const Relation*>(&src.second)) {
-                    const Relation &rel = **R;
+                if (auto T = std::get_if<const Table*>(&src.second)) {
+                    const Table &tbl = **T;
                     try {
-                        const Attribute &A = rel[e.attr_name.text];
+                        const Attribute &A = tbl[e.attr_name.text];
                         if (not std::holds_alternative<std::monostate>(target)) {
                             /* ambiguous attribute name */
                             diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text << " is ambiguous.\n";
-                            // TODO print names of conflicting relations
+                            // TODO print names of conflicting tables
                             e.type_ = Type::Get_Error();
                             return;
                         } else {
-                            target = &A; // we found an attribute of that name in the source relations
+                            target = &A; // we found an attribute of that name in the source tables
                             alias = src.first;
                         }
                     } catch (std::out_of_range) {
-                        /* This source relation has no attribute of that name.  OK, continue. */
+                        /* This source table has no attribute of that name.  OK, continue. */
                     }
                 } else if (auto T = std::get_if<SemaContext::named_expr_table>(&src.second)) {
                     const SemaContext::named_expr_table &tbl = *T;
@@ -139,15 +140,15 @@ void Sema::operator()(Const<Designator> &e)
                         if (not std::holds_alternative<std::monostate>(target)) {
                             /* ambiguous attribute name */
                             diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text << " is ambiguous.\n";
-                            // TODO print names of conflicting relations
+                            // TODO print names of conflicting tables
                             e.type_ = Type::Get_Error();
                             return;
                         } else {
-                            target = E; // we found an attribute of that name in the source relations
+                            target = E; // we found an attribute of that name in the source tables
                             alias = src.first;
                         }
                     } catch (std::out_of_range) {
-                        /* This source relation has no attribute of that name.  OK, continue. */
+                        /* This source table has no attribute of that name.  OK, continue. */
                     }
                 } else {
                     unreachable("invalid variant");
@@ -636,8 +637,6 @@ void Sema::operator()(Const<SelectClause> &c)
     if (has_vector and has_scalar) {
         diag.e(c.tok.pos) << "SELECT clause with mixed scalar and vectorial values is forbidden.\n";
     }
-
-    /* TODO add (renamed) expressions to result relation. */
 }
 
 void Sema::operator()(Const<FromClause> &c)
@@ -653,12 +652,12 @@ void Sema::operator()(Const<FromClause> &c)
     for (auto &table: c.from) {
         if (auto name = std::get_if<Token>(&table.source)) {
             try {
-                const Relation &R = DB.get_relation(name->text);
+                const Table &T = DB.get_table(name->text);
                 Token table_name = table.alias ? table.alias : *name; // FROM name AS alias ?
-                auto res = Ctx.sources.emplace(table_name.text, &R);
+                auto res = Ctx.sources.emplace(table_name.text, &T);
                 if (not res.second)
                     diag.e(table_name.pos) << "Table name " << table_name.text << " already in use.\n";
-                table.relation_ = &R;
+                table.table_ = &T;
             } catch (std::out_of_range) {
                 diag.e(name->pos) << "No table " << name->text << " in database " << DB.name << ".\n";
                 return;
@@ -858,12 +857,12 @@ void Sema::operator()(Const<CreateTableStmt> &s)
     }
     auto &DB = C.get_database_in_use();
     const char *table_name = s.table_name.text;
-    Relation *R = new Relation(table_name);
+    Table *T = new Table(table_name);
 
     /* Add the newly declared table to the list of sources of the sema context. */
-    get_context().sources.emplace(table_name, R);
+    get_context().sources.emplace(table_name, T);
 
-    /* Analyze attributes and add them to the new relation. */
+    /* Analyze attributes and add them to the new table. */
     bool error = false;
     bool has_primary_key = false;
     for (auto attr : s.attributes) {
@@ -875,10 +874,10 @@ void Sema::operator()(Const<CreateTableStmt> &s)
         }
         attr->type = ty->as_vectorial(); // convert potentially scalar type to vectorial
 
-        /* Before we check the constraints, we must add this newly declared attribute to its relation, and hence to the
+        /* Before we check the constraints, we must add this newly declared attribute to its table, and hence to the
          * sema context. */
         try {
-            R->push_back(ty->as_vectorial(), attr->name.text);
+            T->push_back(ty->as_vectorial(), attr->name.text);
         } catch (std::invalid_argument) {
             diag.e(attr->name.pos) << "Attribute " << attr->name.text << " occurs multiple times in defintion of table "
                                << table_name << ".\n";
@@ -932,7 +931,7 @@ void Sema::operator()(Const<CreateTableStmt> &s)
 
                 /* Check that the referenced attribute exists. */
                 try {
-                    auto &ref_table = DB.get_relation(ref->table_name.text);
+                    auto &ref_table = DB.get_table(ref->table_name.text);
                     try {
                         auto &ref_attr = ref_table.at(ref->attr_name.text);
                         if (attr->type != ref_attr.type) {
@@ -953,15 +952,15 @@ void Sema::operator()(Const<CreateTableStmt> &s)
     }
 
     if (error) {
-        delete R;
+        delete T;
         return;
     }
 
     try {
-        DB.add(R);
+        DB.add(T);
     } catch (std::invalid_argument) {
         diag.e(s.table_name.pos) << "Table " << table_name << " already exists in database " << DB.name << ".\n";
-        delete R;
+        delete T;
         return;
     }
 

@@ -257,28 +257,28 @@ TEST_CASE("Type internalize", "[unit]")
     }
 }
 
-TEST_CASE("Relation c'tor")
+TEST_CASE("Table c'tor")
 {
-    Relation r("myrelation");
+    Table r("mytable");
 
-    CHECK(streq(r.name, "myrelation"));
+    CHECK(streq(r.name, "mytable"));
     CHECK(r.size() == 0);
 }
 
-TEST_CASE("Relation empty access")
+TEST_CASE("Table empty access")
 {
-    Relation r("myrelation");
+    Table r("mytable");
 
     REQUIRE_THROWS_AS(r[42].id, std::out_of_range);
     REQUIRE_THROWS_AS(r["attribute"].id, std::out_of_range);
 
     for (auto it = r.cbegin(), end = r.cend(); it != end; ++it)
-        REQUIRE(((void) "this code must be dead or the relation is not empty", false));
+        REQUIRE(((void) "this code must be dead or the table is not empty", false));
 }
 
-TEST_CASE("Relation::push_back()")
+TEST_CASE("Table::push_back()")
 {
-    Relation r("myrelation");
+    Table r("mytable");
 
     const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Vector, 4);
     const PrimitiveType *vc = Type::Get_Varchar(Type::TY_Vector, 42);
@@ -292,14 +292,14 @@ TEST_CASE("Relation::push_back()")
 
     auto &attr = r[1];
     REQUIRE(&attr == &r[attr.id]);
-    REQUIRE(&attr.relation == &r);
+    REQUIRE(&attr.table == &r);
     REQUIRE(attr.type == vc);
     REQUIRE(streq(attr.name, "comment"));
 }
 
-TEST_CASE("Relation iterators")
+TEST_CASE("Table iterators")
 {
-    Relation r("myrelation");
+    Table r("mytable");
     const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Vector, 4);
 
     r.push_back(i4, "a");
@@ -317,9 +317,9 @@ TEST_CASE("Relation iterators")
     REQUIRE(it == r.cend());
 }
 
-TEST_CASE("Relation get attribute by name")
+TEST_CASE("Table get attribute by name")
 {
-    Relation r("myrelation");
+    Table r("mytable");
     const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Vector, 4);
 
     r.push_back(i4, "a");
@@ -341,9 +341,9 @@ TEST_CASE("Relation get attribute by name")
     }
 }
 
-TEST_CASE("Relation::push_back() error if name alreay taken")
+TEST_CASE("Table::push_back() error if name alreay taken")
 {
-    Relation r("myrelation");
+    Table r("mytable");
     const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Vector, 4);
 
     r.push_back(i4, "a");
@@ -413,15 +413,15 @@ TEST_CASE("Database c'tor")
     REQUIRE(D.size() == 0);
 }
 
-TEST_CASE("Database/add relation error if name already taken")
+TEST_CASE("Database/add table error if name already taken")
 {
     Catalog &C = Catalog::Get();
     const char *db_name = get_unique_id();
     Database &D = C.add_database(db_name);
 
-    const char *rel_name = "myrelation";
-    D.add_relation(rel_name);
-    Relation *R = new Relation(rel_name);
+    const char *tbl_name = "mytable";
+    D.add_table(tbl_name);
+    Table *R = new Table(tbl_name);
     REQUIRE_THROWS_AS(D.add(R), std::invalid_argument);
     delete R;
 }

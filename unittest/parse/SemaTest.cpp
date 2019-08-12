@@ -160,7 +160,7 @@ TEST_CASE("Sema/Expressions scalar-vector inference", "[sema]")
     const char *db_name = "mydb";
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
-    auto &table = DB.add_relation(C.get_pool()("mytable"));
+    auto &table = DB.add_table(C.get_pool()("mytable"));
     table.push_back(Type::Get_Integer(Type::TY_Vector, 4), C.get_pool()("v"));
 
     {
@@ -220,7 +220,7 @@ TEST_CASE("Sema/Expressions/Functions", "[sema]")
     const char *db_name = "mydb";
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
-    auto &table = DB.add_relation(C.get_pool()("mytable"));
+    auto &table = DB.add_table(C.get_pool()("mytable"));
     table.push_back(Type::Get_Integer(Type::TY_Vector, 4), C.get_pool()("v"));
 
     {

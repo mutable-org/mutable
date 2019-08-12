@@ -27,7 +27,7 @@ struct Sema : ASTVisitor
         } stage = S_From;
 
         using named_expr_table = std::unordered_map<const char*, Expr*>;
-        using source_type = std::variant<const Relation*, named_expr_table>;
+        using source_type = std::variant<const Table*, named_expr_table>;
         using source_table = std::unordered_map<const char*, source_type>;
         source_table sources; ///> list of all sources
         std::unordered_map<const char*, Expr*> results; ///> list of all results computed by this statement

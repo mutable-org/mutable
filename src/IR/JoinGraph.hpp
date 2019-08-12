@@ -34,12 +34,12 @@ struct DataSource
 struct BaseTable : DataSource
 {
     private:
-    const Relation &relation_;
+    const Table &table_;
 
     public:
-    BaseTable(const Relation &relation, const char *alias) : DataSource(alias), relation_(relation) { }
+    BaseTable(const Table &table, const char *alias) : DataSource(alias), table_(table) { }
 
-    const Relation & relation() const { return relation_; }
+    const Table & table() const { return table_; }
 };
 
 /** A (nested) query is a data source that must be computed. */
@@ -48,7 +48,7 @@ struct Query : DataSource
     Query(const char *alias) : DataSource(alias) { }
 };
 
-/** A join combines source relations by a join condition. */
+/** A join combines source tables by a join condition. */
 struct Join
 {
     using sources_t = std::vector<DataSource*>;

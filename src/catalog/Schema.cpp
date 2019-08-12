@@ -255,7 +255,7 @@ void FnType::dump(std::ostream &out) const
 
 void Attribute::dump(std::ostream &out) const
 {
-    out << "Attribute `" << relation.name << "`.`" << name << "`, "
+    out << "Attribute `" << table.name << "`.`" << name << "`, "
         << "id " << id << ", "
         << "type " << *type
         << std::endl;
@@ -264,12 +264,12 @@ void Attribute::dump(std::ostream &out) const
 void Attribute::dump() const { dump(std::cerr); }
 
 /*======================================================================================================================
- * Relation
+ * Table
  *====================================================================================================================*/
 
-Relation::~Relation() { }
+Table::~Table() { }
 
-const Attribute & Relation::push_back(const PrimitiveType *type, const char *name)
+const Attribute & Table::push_back(const PrimitiveType *type, const char *name)
 {
     if (name_to_attr_.count(name)) throw std::invalid_argument("attribute with that name already exists");
     name_to_attr_.emplace(name, attrs_.size());
@@ -277,15 +277,15 @@ const Attribute & Relation::push_back(const PrimitiveType *type, const char *nam
     return attrs_.back();
 }
 
-void Relation::dump(std::ostream &out) const
+void Table::dump(std::ostream &out) const
 {
-    out << "Relation `" << name << '`';
+    out << "Table `" << name << '`';
     for (const auto &attr : attrs_)
         out << "\n` " << attr.id << ": `" << attr.name << "` " << *attr.type;
     out << std::endl;
 }
 
-void Relation::dump() const { dump(std::cerr); }
+void Table::dump() const { dump(std::cerr); }
 
 /*======================================================================================================================
  * Function
@@ -311,7 +311,7 @@ Database::Database(const char *name)
 
 Database::~Database()
 {
-    for (auto &r : relations_)
+    for (auto &r : tables_)
         delete r.second;
 }
 

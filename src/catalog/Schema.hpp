@@ -248,27 +248,27 @@ struct FnType : Type
 };
 
 /*======================================================================================================================
- * Attribute, Relation, Database
+ * Attribute, Table, Database
  *====================================================================================================================*/
 
-struct Relation;
+struct Table;
 struct Database;
 struct Catalog;
 
-/** An attribute of a relation.  Every attribute belongs to exactly one relation.  */
+/** An attribute of a table.  Every attribute belongs to exactly one table.  */
 struct Attribute
 {
-    friend struct Relation;
+    friend struct Table;
 
-    std::size_t id; ///> the internal identifier of the attribute, unique within its relation
-    const Relation &relation; ///> the relation the attribute belongs to
+    std::size_t id; ///> the internal identifier of the attribute, unique within its table
+    const Table &table; ///> the table the attribute belongs to
     const PrimitiveType *type; ///> the type of the attribute
     const char *name; ///> the name of the attribute
 
     private:
-    explicit Attribute(std::size_t id, const Relation &relation, const PrimitiveType *type, const char *name)
+    explicit Attribute(std::size_t id, const Table &table, const PrimitiveType *type, const char *name)
         : id(id)
-        , relation(relation)
+        , table(table)
         , type(notnull(type))
         , name(notnull(name))
     {
@@ -287,20 +287,20 @@ struct Attribute
     void dump() const;
 };
 
-/** A relation is a sorted set of attributes. */
-struct Relation
+/** A table is a sorted set of attributes. */
+struct Table
 {
     const char *name;
     private:
     using table_type = std::vector<Attribute>;
-    /** the attributes of this relation */
+    /** the attributes of this table */
     table_type attrs_;
-    /** maps attribute names to their position within the relation */
+    /** maps attribute names to their position within the table */
     std::unordered_map<const char*, table_type::size_type> name_to_attr_;
 
     public:
-    Relation(const char *name) : name(name) { }
-    ~Relation();
+    Table(const char *name) : name(name) { }
+    ~Table();
 
     std::size_t size() const { return attrs_.size(); }
 
@@ -359,7 +359,7 @@ struct Function
 #undef kind_t
 };
 
-/** A description of a database.  It is a set of relations, functions, and statistics. */
+/** A description of a database.  It is a set of tables, functions, and statistics. */
 struct Database
 {
     friend struct Catalog;
@@ -367,7 +367,7 @@ struct Database
     public:
     const char *name;
     private:
-    std::unordered_map<const char*, Relation*> relations_; ///> the relations of this database
+    std::unordered_map<const char*, Table*> tables_; ///> the tables of this database
     std::unordered_map<const char*, Function*> functions_; ///> functions defined in this database
 
     private:
@@ -376,20 +376,20 @@ struct Database
     public:
     ~Database();
 
-    std::size_t size() const { return relations_.size(); }
+    std::size_t size() const { return tables_.size(); }
 
-    /*===== Relations ================================================================================================*/
-    Relation & get_relation(const char *name) const { return *relations_.at(name); }
-    Relation & add_relation(const char *name) {
-        auto it = relations_.find(name);
-        if (it != relations_.end()) throw std::invalid_argument("relation with that name already exists");
-        it = relations_.emplace_hint(it, name, new Relation(name));
+    /*===== Tables ===================================================================================================*/
+    Table & get_table(const char *name) const { return *tables_.at(name); }
+    Table & add_table(const char *name) {
+        auto it = tables_.find(name);
+        if (it != tables_.end()) throw std::invalid_argument("table with that name already exists");
+        it = tables_.emplace_hint(it, name, new Table(name));
         return *it->second;
     }
-    Relation & add(Relation *r) {
-        auto it = relations_.find(r->name);
-        if (it != relations_.end()) throw std::invalid_argument("relation with that name already exists");
-        it = relations_.emplace_hint(it, r->name, r);
+    Table & add(Table *r) {
+        auto it = tables_.find(r->name);
+        if (it != tables_.end()) throw std::invalid_argument("table with that name already exists");
+        it = tables_.emplace_hint(it, r->name, r);
         return *it->second;
     }
 

@@ -17,7 +17,7 @@ using ConstASTVisitor = TheASTVisitor<true>;
 struct Type;
 struct Sema;
 struct Attribute;
-struct Relation;
+struct Table;
 struct Stmt;
 
 /*======================================================================================================================
@@ -222,17 +222,19 @@ struct FromClause : Clause
     {
         friend struct Sema;
 
+        public:
         std::variant<Token, Stmt*> source;
         Token alias;
 
+        private:
+        const Table *table_ = nullptr; ///< the referenced table
+
+        public:
         from_type(Token name, Token alias) : source(name), alias(alias) { }
         from_type(Stmt *S, Token alias) : source(S), alias(alias) { }
 
-        const Relation & relation() const { return *notnull(relation_); }
-        bool has_relation() const { return relation_ != nullptr; }
-
-        private:
-        const Relation *relation_ = nullptr; ///< the referenced relation
+        const Table & table() const { return *notnull(table_); }
+        bool has_table() const { return table_ != nullptr; }
     };
 
     std::vector<from_type> from;

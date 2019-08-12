@@ -83,7 +83,7 @@ struct Table
     const Attribute & operator[](std::size_t i) const { return at(i); }
     const Attribute & operator[](const char *name) const { return at(name); }
 
-    const Attribute & push_back(const PrimitiveType *type, const char *name);
+    void push_back(const PrimitiveType *type, const char *name);
 
     void dump(std::ostream &out) const;
     void dump() const;

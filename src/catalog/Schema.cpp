@@ -30,12 +30,11 @@ void Attribute::dump() const { dump(std::cerr); }
 
 Table::~Table() { }
 
-const Attribute & Table::push_back(const PrimitiveType *type, const char *name)
+void Table::push_back(const PrimitiveType *type, const char *name)
 {
     if (name_to_attr_.count(name)) throw std::invalid_argument("attribute with that name already exists");
     name_to_attr_.emplace(name, attrs_.size());
     attrs_.emplace_back(Attribute(attrs_.size(), *this, type, name));
-    return attrs_.back();
 }
 
 void Table::dump(std::ostream &out) const

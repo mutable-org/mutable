@@ -9,6 +9,8 @@
 #include <exception>
 #include <functional>
 #include <iostream>
+#include <sstream>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -55,6 +57,10 @@ struct Attribute
     void dump(std::ostream &out) const;
     void dump() const;
 };
+
+/** Checks that the type of the `attr` matches the template type `T`.  Throws `std::logic_error` on error. */
+template<typename T>
+void type_check(const Attribute &attr);
 
 /** A table is a sorted set of attributes. */
 struct Table
@@ -222,4 +228,55 @@ struct Catalog
     const Function * get_function(const char *name) const { return standard_functions_.at(name); }
 };
 
+}
+
+template<typename T>
+void db::type_check(const Attribute &attr) {
+    auto ty = attr.type;
+
+    /* Boolean */
+    if constexpr (std::is_same_v<T, bool>) {
+        if (is<const Boolean>(ty)) return;
+    }
+
+    /* CharacterSequence */
+    if constexpr (std::is_same_v<T, std::string>) {
+        if (auto s = cast<const CharacterSequence>(ty)) {
+            if (not s->is_varying)
+                return;
+        }
+    }
+    if constexpr (std::is_same_v<T, const char*>) {
+        if (auto s = cast<const CharacterSequence>(ty)) {
+            if (not s->is_varying)
+                return;
+        }
+    }
+
+    /* Numeric */
+    if constexpr (std::is_arithmetic_v<T>) {
+        if (auto n = cast<const Numeric>(ty)) {
+            switch (n->kind) {
+                case Numeric::N_Int:
+                    if (std::is_integral_v<T> and sizeof(T) * 8 == ty->size())
+                        return;
+                    break;
+
+                case Numeric::N_Float:
+                    if (std::is_floating_point_v<T> and sizeof(T) * 8 == ty->size())
+                        return;
+                    break;
+
+                case Numeric::N_Decimal:
+                    if (std::is_integral_v<T> and ceil_to_pow_2(ty->size()) == 8 * sizeof(T))
+                        return;
+                    break;
+            }
+        }
+    }
+
+    /* Types don't match; throw an error. */
+    std::ostringstream oss;
+    oss << "Type mismatch: Attribute type " << *attr.type << " does not match value type " << typeid(T).name();
+    throw std::logic_error(oss.str());
 }

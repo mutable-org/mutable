@@ -125,3 +125,9 @@ pow(const T base, const T exp)
         return tmp * tmp;
     }
 }
+
+template<typename T>
+void setbit(T *bytes, bool value, uint32_t n)
+{
+    *bytes ^= (-T(value) ^ *bytes) & (T(1) << n); // set n-th bit to `value`
+}

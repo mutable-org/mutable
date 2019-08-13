@@ -41,3 +41,13 @@ TEST_CASE("ceil_to_pow_2", "[unit][util]")
     REQUIRE(u63 == ceil_to_pow_2(u63 - 1UL));
     REQUIRE(u63 == ceil_to_pow_2(u63));
 }
+
+TEST_CASE("pow", "[unit][util]")
+{
+    REQUIRE(pow(4, 0) == 1);
+    REQUIRE(pow(4, 1) == 4);
+    REQUIRE(pow(4, 2) == 16);
+    REQUIRE(pow(4, 3) == 64);
+    REQUIRE(pow(4, 4) == 256);
+    REQUIRE(pow(4, 5) == 1024);
+}

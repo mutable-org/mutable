@@ -100,3 +100,18 @@ bool contains(const H &haystack, const N &needle)
 /** Escapes special characters in a string to be printable in HTML documents.  Primarily used for DOT. */
 std::string html_escape(std::string str);
 
+/** Power function for integral types. */
+template<typename T>
+inline
+typename std::enable_if<std::is_integral<T>::value, T>::type
+pow(const T base, const T exp)
+{
+    if (exp == 0)
+        return 1;
+    else if (exp & 0x1)
+        return base * pow(base, exp - 1);
+    else {
+        T tmp = pow(base, exp/2);
+        return tmp * tmp;
+    }
+}

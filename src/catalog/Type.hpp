@@ -17,6 +17,7 @@ struct CharacterSequence;
 struct Numeric;
 struct FnType;
 
+/** This class represents types in the SQL type system. */
 struct Type
 {
 #define category_t(X) X(TY_Scalar), X(TY_Vector)
@@ -182,7 +183,7 @@ struct CharacterSequence : PrimitiveType
     virtual const PrimitiveType *as_vectorial() const;
 };
 
-/** The numeric type represents integer and floating-point types of different precision, scale, and exactness. */
+/** The numeric type represents integer and floating-point types of different precision, and scale. */
 struct Numeric : PrimitiveType
 {
     friend struct Type;

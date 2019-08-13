@@ -22,5 +22,6 @@ add_executable(
 
     # catalog
     catalog/SchemaTest.cpp
+    catalog/TypeTest.cpp
     )
 target_link_libraries(unittest db)

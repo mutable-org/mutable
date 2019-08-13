@@ -191,7 +191,7 @@ struct Numeric : PrimitiveType
     /** The maximal number of decimal digits that can be accurately represented by DECIMAL(p,s). */
     static constexpr std::size_t MAX_DECIMAL_PRECISION = 19;
 
-    static constexpr float DECIMAL_TO_BIANRY_DIGITS = 3.32192f;
+    static constexpr float DECIMAL_TO_BINARY_DIGITS = 3.32192f;
 
 #define kind_t(X) X(N_Int), X(N_Float), X(N_Decimal)
     DECLARE_ENUM(kind_t) kind; ///> the kind of numeric type
@@ -225,7 +225,7 @@ struct Numeric : PrimitiveType
         switch (kind) {
             case N_Int: return 8 * precision;
             case N_Float: return precision;
-            case N_Decimal: return std::ceil(DECIMAL_TO_BIANRY_DIGITS * precision);
+            case N_Decimal: return std::ceil(DECIMAL_TO_BINARY_DIGITS * precision);
         }
         unreachable("illegal kind");
     }

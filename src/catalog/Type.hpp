@@ -225,7 +225,7 @@ struct Numeric : PrimitiveType
         switch (kind) {
             case N_Int: return 8 * precision;
             case N_Float: return precision;
-            case N_Decimal: return std::ceil(DECIMAL_TO_BINARY_DIGITS * precision);
+            case N_Decimal: return ceil_to_pow_2(uint32_t(std::ceil(DECIMAL_TO_BINARY_DIGITS * precision)));
         }
         unreachable("illegal kind");
     }

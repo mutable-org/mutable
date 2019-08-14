@@ -47,6 +47,9 @@ struct Type
     /** Compute the size in bits of an instance of this type. */
     virtual uint32_t size() const { throw std::logic_error("the size of this type is not defined"); }
 
+    /** Compute the alignment requirement in bits of an instance of this type. */
+    virtual uint32_t alignment() const { throw std::logic_error("the size of this type is not defined"); }
+
     virtual uint64_t hash() const = 0;
 
     virtual void print(std::ostream &out) const = 0;
@@ -137,6 +140,7 @@ struct Boolean : PrimitiveType
     bool operator==(const Type &other) const;
 
     uint32_t size() const { return 1; }
+    uint32_t alignment() const { return 1; }
 
     uint64_t hash() const;
 
@@ -173,6 +177,8 @@ struct CharacterSequence : PrimitiveType
         else
             return 8 * length;
     }
+
+    uint32_t alignment() const { return is_varying ? 8 * sizeof(const char*) : 8 * sizeof(char); }
 
     uint64_t hash() const;
 
@@ -229,6 +235,8 @@ struct Numeric : PrimitiveType
         }
         unreachable("illegal kind");
     }
+
+    uint32_t alignment() const { return size(); }
 
     uint64_t hash() const;
 

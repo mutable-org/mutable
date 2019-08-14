@@ -41,6 +41,14 @@ struct StrEqual
     bool operator()(const char *first, const char *second) const { return streq(first, second); }
 };
 
+/** Compares two cstrings for equality.  Allows `nullptr`. */
+struct StrEqualWithNull
+{
+    bool operator()(const char *first, const char *second) const {
+        return first == second or (first != nullptr and second != nullptr and streq(first, second));
+    }
+};
+
 template<typename T>
 inline
 typename std::enable_if<std::is_integral<T>::value and std::is_unsigned<T>::value and

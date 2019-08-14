@@ -20,6 +20,7 @@ inline std::string replace_all(std::string str, const std::string &from, const s
     return str;
 }
 
+/** Computes the FNV-1a 64-bit hash of a cstring. */
 struct StrHash
 {
     std::size_t operator()(const char *c_str) const {
@@ -34,6 +35,7 @@ struct StrHash
     }
 };
 
+/** Compares two cstrings for equality. */
 struct StrEqual
 {
     bool operator()(const char *first, const char *second) const { return streq(first, second); }

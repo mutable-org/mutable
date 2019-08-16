@@ -100,25 +100,25 @@ TEST_CASE("Parser::expect_integer()", "[unit]")
     Parser parser(lexer);
 
     /* 07 TK_OCT_INT */
-    parser.expect_integer();
+    delete parser.expect_integer();
     REQUIRE(diag.num_errors() == 0);
     REQUIRE(err.str().empty());
     REQUIRE(parser.token() != TK_EOF);
 
     /* 19 TK_DEC_INT */
-    parser.expect_integer();
+    delete parser.expect_integer();
     REQUIRE(diag.num_errors() == 0);
     REQUIRE(err.str().empty());
     REQUIRE(parser.token() != TK_EOF);
 
     /* 0xC0d3 TK_HEX_INT */
-    parser.expect_integer();
+    delete parser.expect_integer();
     REQUIRE(diag.num_errors() == 0);
     REQUIRE(err.str().empty());
     REQUIRE(parser.token() != TK_EOF);
 
     /* abc - unexpected token */
-    parser.expect_integer();
+    delete parser.expect_integer();
     REQUIRE(diag.num_errors() > 0);
     REQUIRE(not err.str().empty());
     REQUIRE(parser.token() == TK_IDENTIFIER);

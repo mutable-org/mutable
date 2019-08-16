@@ -145,6 +145,7 @@ TEST_CASE("Sema/Expressions", "[unit][sema]")
             std::cerr << "expected " << *e.second << ", got " << *ast->type() << " for expression " << e.first
                       << std::endl;
         REQUIRE(ast->type() == e.second);
+        delete ast;
         if (e.second != Type::Get_Error()) {
             /* We do not expect an error for this input. */
             CHECK(diag.num_errors() == 0);
@@ -177,6 +178,7 @@ TEST_CASE("Sema/Expressions scalar-vector inference", "[sema]")
         const Boolean *ty = cast<const Boolean>(where->where->type());
         REQUIRE(ty);
         CHECK(ty->is_vectorial());
+        delete stmt;
     }
     {
         /* Vector compared to vector yields vector. */
@@ -192,6 +194,7 @@ TEST_CASE("Sema/Expressions scalar-vector inference", "[sema]")
         const Boolean *ty = cast<const Boolean>(where->where->type());
         REQUIRE(ty);
         CHECK(ty->is_vectorial());
+        delete stmt;
     }
     {
         /* Scalar and scalar yields scalar. */
@@ -207,10 +210,10 @@ TEST_CASE("Sema/Expressions scalar-vector inference", "[sema]")
         const Boolean *ty = cast<const Boolean>(where->where->type());
         REQUIRE(ty);
         CHECK(ty->is_scalar());
+        delete stmt;
     }
 
-    C.unset_database_in_use();
-    C.drop_database(db_name);
+    Catalog::Clear();
 }
 
 TEST_CASE("Sema/Expressions/Functions", "[sema]")
@@ -239,6 +242,7 @@ TEST_CASE("Sema/Expressions/Functions", "[sema]")
         WhereClause *where = as<WhereClause>(stmt->where);
         const PrimitiveType *pt = as<const PrimitiveType>(where->where->type());
         CHECK(pt->is_vectorial());
+        delete stmt;
     }
 
     {
@@ -257,6 +261,7 @@ TEST_CASE("Sema/Expressions/Functions", "[sema]")
         WhereClause *where = as<WhereClause>(stmt->where);
         const PrimitiveType *pt = as<const PrimitiveType>(where->where->type());
         CHECK(pt->is_vectorial());
+        delete stmt;
     }
 
     {
@@ -275,8 +280,8 @@ TEST_CASE("Sema/Expressions/Functions", "[sema]")
         WhereClause *where = as<WhereClause>(stmt->where);
         const PrimitiveType *pt = as<const PrimitiveType>(where->where->type());
         CHECK(not pt->is_vectorial());
+        delete stmt;
     }
 
-    C.unset_database_in_use();
-    C.drop_database(db_name);
+    Catalog::Clear();
 }

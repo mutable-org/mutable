@@ -14,10 +14,10 @@ using namespace db;
 
 namespace {
 
-const char * get_unique_id()
+std::string get_unique_id()
 {
     static unsigned id = 0;
-    return strdup(std::to_string(id++).c_str());
+    return std::to_string(id++);
 }
 
 }
@@ -125,42 +125,50 @@ TEST_CASE("Catalog singleton c'tor")
 TEST_CASE("Catalog Database creation")
 {
     Catalog &C = Catalog::Get();
-    const char *db_name = get_unique_id();
-    Database &D = C.add_database(db_name);
-    Database &D2 = C.get_database(db_name);
+    std::string db_name = get_unique_id();
+    Database &D = C.add_database(db_name.c_str());
+    Database &D2 = C.get_database(db_name.c_str());
     REQUIRE(&D == &D2);
-    REQUIRE(streq(D.name, db_name));
+    REQUIRE(streq(D.name, db_name.c_str()));
+    Catalog::Clear();
 }
 
 TEST_CASE("Catalog::drop_database() by name")
 {
     Catalog &C = Catalog::Get();
-    const char *db_name = get_unique_id();
-    C.add_database(db_name);
+    std::string db_name = get_unique_id();
+    C.add_database(db_name.c_str());
 
-    REQUIRE_NOTHROW(C.get_database(db_name));
-    REQUIRE(C.drop_database(db_name));
-    CHECK_THROWS_AS(C.get_database(db_name), std::out_of_range);
+    REQUIRE_NOTHROW(C.get_database(db_name.c_str()));
+    REQUIRE_NOTHROW(C.drop_database(db_name.c_str())); // ok
+    CHECK_THROWS_AS(C.get_database(db_name.c_str()), std::out_of_range); // already deleted
+    REQUIRE_THROWS_AS(C.drop_database("nodb"), std::invalid_argument); // does not exist
+    Catalog::Clear();
 }
 
 TEST_CASE("Catalog::drop_database() by reference")
 {
     Catalog &C = Catalog::Get();
-    const char *db_name = get_unique_id();
-    Database &D = C.add_database(db_name);
+    std::string db_name = get_unique_id();
+    Database &D = C.add_database(db_name.c_str());
 
-    REQUIRE_NOTHROW(C.get_database(db_name));
-    REQUIRE(C.drop_database(D));
-    CHECK_THROWS_AS(C.get_database(db_name), std::out_of_range);
+    C.set_database_in_use(D);
+    REQUIRE_THROWS_AS(C.drop_database(db_name.c_str()), std::invalid_argument); // db in use
+
+    C.unset_database_in_use();
+    REQUIRE_NOTHROW(C.get_database(db_name.c_str())); // ok
+    REQUIRE_NOTHROW(C.drop_database(D)); // ok
+    CHECK_THROWS_AS(C.get_database(db_name.c_str()), std::out_of_range); // not found
+    Catalog::Clear();
 }
 
 TEST_CASE("Catalog use database")
 {
     Catalog &C = Catalog::Get();
-    const char *db_name = get_unique_id();
+    std::string db_name = get_unique_id();
 
     C.unset_database_in_use();
-    Database &D = C.add_database(db_name);
+    Database &D = C.add_database(db_name.c_str());
     REQUIRE(not C.has_database_in_use());
     C.set_database_in_use(D);
     REQUIRE(C.has_database_in_use());
@@ -168,25 +176,28 @@ TEST_CASE("Catalog use database")
     REQUIRE(&D == &in_use);
     C.unset_database_in_use();
     REQUIRE(not C.has_database_in_use());
+    Catalog::Clear();
 }
 
 TEST_CASE("Database c'tor")
 {
     Catalog &C = Catalog::Get();
-    const char *db_name = get_unique_id();
-    Database &D = C.add_database(db_name);
+    std::string db_name = get_unique_id();
+    Database &D = C.add_database(db_name.c_str());
     REQUIRE(D.size() == 0);
+    Catalog::Clear();
 }
 
 TEST_CASE("Database/add table error if name already taken")
 {
     Catalog &C = Catalog::Get();
-    const char *db_name = get_unique_id();
-    Database &D = C.add_database(db_name);
+    std::string db_name = get_unique_id();
+    Database &D = C.add_database(db_name.c_str());
 
     const char *tbl_name = "mytable";
     D.add_table(tbl_name);
     Table *R = new Table(tbl_name);
     REQUIRE_THROWS_AS(D.add(R), std::invalid_argument);
     delete R;
+    Catalog::Clear();
 }

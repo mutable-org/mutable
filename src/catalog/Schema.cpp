@@ -73,6 +73,8 @@ Database::~Database()
 {
     for (auto &r : tables_)
         delete r.second;
+    for (auto &f : functions_)
+        delete f.second;
 }
 
 /*======================================================================================================================
@@ -93,8 +95,27 @@ Catalog::Catalog()
 
 Catalog::~Catalog()
 {
-    for (auto &s : databases_)
+    for (auto s : databases_)
         delete s.second;
     for (auto fn : standard_functions_)
         delete fn.second;
+}
+
+Catalog Catalog::the_catalog_;
+
+Database & Catalog::add_database(const char *name) {
+    auto it = databases_.find(name);
+    if (it != databases_.end()) throw std::invalid_argument("database with that name already exist");
+    it = databases_.emplace_hint(it, name, new Database(name));
+    return *it->second;
+}
+
+void Catalog::drop_database(const char *name) {
+    if (has_database_in_use() and get_database_in_use().name == name)
+        throw std::invalid_argument("Cannot drop database; currently in use.");
+    auto it = databases_.find(name);
+    if (it == databases_.end())
+        throw std::invalid_argument("Database of that name does not exist.");
+    delete it->second;
+    databases_.erase(it);
 }

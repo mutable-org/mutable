@@ -179,12 +179,18 @@ struct Catalog
     Catalog();
     Catalog(const Catalog&) = delete;
 
+    static Catalog the_catalog_;
+
     public:
     ~Catalog();
 
-    static Catalog & Get() {
-        static Catalog the_catalog_;
-        return the_catalog_;
+    /** Return a reference to the catalog. */
+    static Catalog & Get() { return the_catalog_; }
+
+    /** Destroys the current catalog and immediately creates a new catalog instance. */
+    static void Clear() {
+        the_catalog_.~Catalog();
+        new (&the_catalog_) Catalog();
     }
 
     std::size_t num_databases() const { return databases_.size(); }
@@ -193,19 +199,10 @@ struct Catalog
     const StringPool & get_pool() const { return pool; }
 
     /*===== Database =================================================================================================*/
-    Database & add_database(const char *name) {
-        auto it = databases_.find(name);
-        if (it != databases_.end()) throw std::invalid_argument("database with that name already exist");
-        it = databases_.emplace_hint(it, name, new Database(name));
-        return *it->second;
-    }
+    Database & add_database(const char *name);
     Database & get_database(const char *name) const { return *databases_.at(name); }
-    bool drop_database(const char *name) {
-        if (has_database_in_use() and get_database_in_use().name == name)
-            throw std::invalid_argument("Cannot drop database; currently in use.");
-        return databases_.erase(name) != 0;
-    }
-    bool drop_database(const Database &S) { return drop_database(S.name); }
+    void drop_database(const char *name);
+    void drop_database(const Database &S) { return drop_database(S.name); }
 
     bool has_database_in_use() const { return database_in_use_ != nullptr; }
     Database & get_database_in_use() {

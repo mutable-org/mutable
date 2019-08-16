@@ -54,14 +54,12 @@ const Numeric * Type::Get_Integer(category_t category, unsigned num_bytes)
 
 const Numeric * Type::Get_Float(category_t category)
 {
-    static Numeric f(category, Numeric::N_Float, 32, 0);
-    return &f;
+    return static_cast<const Numeric*>(types_(Numeric(category, Numeric::N_Float, 32, 0)));
 }
 
 const Numeric * Type::Get_Double(category_t category)
 {
-    static Numeric d(category, Numeric::N_Float, 64, 0);
-    return &d;
+    return static_cast<const Numeric*>(types_(Numeric(category, Numeric::N_Float, 64, 0)));
 }
 
 const FnType * Type::Get_Function(const Type *return_type, std::vector<const Type*> parameter_types)

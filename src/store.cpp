@@ -69,7 +69,6 @@ int main(int argc, const char **argv)
     tbl.push_back(Type::Get_Char(Type::TY_Vector, 3), "g");
 
     RowStore store(tbl);
-    store.dump();
 
     auto &a = tbl["a"];
     auto &b = tbl["b"];
@@ -93,7 +92,13 @@ int main(int argc, const char **argv)
             r.set(g, i % 2 ? "YES" : "NO");
         }
 
-        std::cout << "Dummy entries:\n";
+        {
+            auto it = store.append(1);
+            auto row = *it;
+            row.set(a, 99);
+            row.set(g, "Bot");
+        }
+
         for (auto r : store)
             std::cout << r << '\n';
 

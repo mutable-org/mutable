@@ -267,6 +267,11 @@ void RowStore::the_row<C>::dispatch(const Attribute &attr, Callable fn)
 {
     auto ty = attr.type;
 
+    if (isnull(attr)) {
+        fn.null(attr);
+        return;
+    }
+
     if (ty->is_boolean()) {
         bool value;
         get(attr, value);

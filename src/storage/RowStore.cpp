@@ -142,6 +142,7 @@ std::ostream & db::operator<<(std::ostream &out, RowStore::the_row<C> row)
         void operator()(int64_t pre, int64_t post) const { out << pre << '.' << post; }
         void operator()(const char *str) const { out << '"' << escape_string(str) << '"'; }
         void operator()(std::string str) const { out << '"' << str << '"'; }
+        void null(const Attribute&) const { out << "NULL"; }
     } printer{out};
 
     auto &T = row.store.table();

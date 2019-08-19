@@ -86,6 +86,7 @@ struct RowStore : Store
         }
 
         public:
+        /** Set the attribute to NULL. */
         void setnull(const Attribute &attr) { null(attr, true); }
 
         /** Retrieve the value of the attribute in this row. */

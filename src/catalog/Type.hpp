@@ -73,6 +73,9 @@ struct Type
     static const FnType * Get_Function(const Type *return_type, std::vector<const Type*> parameter_types);
 };
 
+template<typename T>
+bool is_convertible(const Type *attr);
+
 }
 
 namespace std {
@@ -272,4 +275,21 @@ struct FnType : Type
     void dump(std::ostream &out) const;
 };
 
+}
+
+template<typename T>
+bool db::is_convertible(const Type *ty) {
+    /* Boolean */
+    if constexpr (std::is_same_v<T, bool>)
+        return is<const Boolean>(ty);
+
+    /* CharacterSequence */
+    if constexpr (std::is_same_v<T, std::string>)
+        return is<const CharacterSequence>(ty);
+
+    /* Numeric */
+    if constexpr (std::is_integral_v<T>)
+        return is<const Numeric>(ty);
+
+    return false;
 }

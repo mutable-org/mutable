@@ -1,3 +1,4 @@
+#include "storage/RowStore.hpp"
 #include "storage/Store.hpp"
 #include "util/ArgParser.hpp"
 #include "util/Diagnostic.hpp"
@@ -68,7 +69,7 @@ int main(int argc, const char **argv)
     tbl.push_back(Type::Get_Boolean(Type::TY_Vector), "f");
     tbl.push_back(Type::Get_Char(Type::TY_Vector, 3), "g");
 
-    RowStore store(tbl);
+    Store *store = new RowStore(tbl);
 
     auto &a = tbl["a"];
     auto &b = tbl["b"];
@@ -80,44 +81,57 @@ int main(int argc, const char **argv)
 
     if (AP.args().size() == 0) {
         std::cerr << "Fill store with dummy entries.\n";
-        int32_t i = 0;
-        for (auto it = store.append(5), end = store.end(); it != end; ++it, ++i) {
-            auto r = *it;
-            r.set(a, i);
-            r.set(b, i % 3 == 1);
-            r.set(c, 42l + i);
-            r.set(d, 1337 + i);
-            r.set(e, int8_t(127));
-            r.set(f, i % 3 == 0);
-            r.set(g, i % 2 ? "YES" : "NO");
+        for (std::size_t i = 0; i != 5; ++i) {
+            auto r = store->append();
+            const auto v = int32_t(i);
+            r->set(a, v);
+            r->set(b, v % 3 == 1);
+            r->set(c, 42 + v);
+            r->set(d, 1337 + v);
+            r->set(e, 127);
+            r->set(f, v % 3 == 0);
+            r->set(g, std::string(v % 2 ? "YES" : "NO"));
         }
 
         {
-            auto it = store.append(1);
-            auto row = *it;
-            row.set(a, 99);
-            row.set(g, "Bot");
+            auto row = store->append();
+            row->set(a, 99);
+            row->set(g, std::string("Bot"));
         }
 
-        for (auto r : store)
+        store->for_each([&](const Store::Row &r) {
             std::cout << r << '\n';
+        });
 
-        store.dump();
+        int64_t sum = 0;
+        store->for_each([&](const Store::Row &r) {
+            sum += r.get<int64_t>(a);
+        });
+        std::cerr << "SUM(a) = " << sum << '\n';
 
-        store.save("rowstore.bin");
+        std::string least;
+        store->for_each([&](const Store::Row &r) {
+            std::string str = r.get<std::string>(g);
+            if (least.empty()) {
+                least = str;
+            } else {
+                if (str < least) least = str;
+            }
+        });
+        std::cerr << "MIN(g) = \"" << least << "\"\n";
+
+        store->dump();
+        store->save("rowstore->bin");
     } else {
         const char *path = AP.args()[0];
-        const auto num_rows = store.load(path);
+        const auto num_rows = store->load(path);
         std::cout << "Loaded " << num_rows << " rows from file \"" << path << "\" into row store of table "
-                  << store.table().name << std::endl;
+                  << store->table().name << std::endl;
 
-        for (auto row : store)
-            std::cout << row << '\n';
+        store->for_each([&](const Store::Row &r) {
+            std::cout << r << '\n';
+        });
     }
 
-    {
-        auto it = store.append(1);
-        auto row = *it;
-        //row.set(b, 32);
-    }
+    delete store;
 }

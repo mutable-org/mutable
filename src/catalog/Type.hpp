@@ -288,7 +288,7 @@ bool db::is_convertible(const Type *ty) {
         return is<const CharacterSequence>(ty);
 
     /* Numeric */
-    if constexpr (std::is_integral_v<T>)
+    if constexpr (std::is_arithmetic_v<T>)
         return is<const Numeric>(ty);
 
     return false;

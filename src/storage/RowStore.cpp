@@ -1,4 +1,4 @@
-#include "storage/Store.hpp"
+#include "storage/RowStore.hpp"
 
 #include "catalog/Type.hpp"
 #include "util/fn.hpp"
@@ -12,12 +12,6 @@
 
 using namespace db;
 
-
-/*======================================================================================================================
- * Store
- *====================================================================================================================*/
-
-void Store::dump() const { dump(std::cerr); }
 
 /*======================================================================================================================
  * RowStore
@@ -126,15 +120,15 @@ void RowStore::dump(std::ostream &out) const
 }
 
 /*======================================================================================================================
- * Row
+ * RowStore::Row
  *====================================================================================================================*/
 
-template<bool C>
-std::ostream & db::operator<<(std::ostream &out, RowStore::the_row<C> row)
+void RowStore::Row::print(std::ostream &out) const
 {
     struct {
         std::ostream &out;
 
+        void null(const Attribute&) const { out << "NULL"; }
         void operator()(bool b) const { out << (b ? "TRUE" : "FALSE"); }
         void operator()(int64_t i) const { out << i; }
         void operator()(float f) const { out << f; }
@@ -142,16 +136,11 @@ std::ostream & db::operator<<(std::ostream &out, RowStore::the_row<C> row)
         void operator()(int64_t pre, int64_t post) const { out << pre << '.' << post; }
         void operator()(const char *str) const { out << '"' << escape_string(str) << '"'; }
         void operator()(std::string str) const { out << '"' << str << '"'; }
-        void null(const Attribute&) const { out << "NULL"; }
     } printer{out};
 
-    auto &T = row.store.table();
+    auto &T = store.table();
     for (auto it = T.begin(), end = T.end(); it != end; ++it) {
         if (it != T.begin()) out << ", ";
-        row.dispatch(*it, printer);
+        dispatch(*it, printer);
     }
-
-    return out;
 }
-template std::ostream & db::operator<<(std::ostream &out, RowStore::the_row<false> row);
-template std::ostream & db::operator<<(std::ostream &out, RowStore::the_row<true> row);

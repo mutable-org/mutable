@@ -31,3 +31,6 @@ target_link_libraries(ir IR parse lex catalog util)
 
 add_executable(store store.cpp)
 target_link_libraries(store storage IR parse lex catalog util)
+
+add_executable(operator operator.cpp)
+target_link_libraries(operator storage IR parse lex catalog util)

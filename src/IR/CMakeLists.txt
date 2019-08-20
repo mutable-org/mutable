@@ -2,5 +2,8 @@ add_library(
     IR
     STATIC
     CNF.cpp
+    Interpreter.cpp
     JoinGraph.cpp
+    Operator.cpp
+    OperatorVisitor.cpp
     )

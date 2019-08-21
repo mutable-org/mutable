@@ -26,11 +26,6 @@ struct RowStore : Store
         Row(const RowStore &store, uintptr_t addr) : store(store), addr_(addr) { }
 
         public:
-        /** Invoke a callable with the value of `attr` in this row.  An example of how that callable should look like
-         * can be found in the implementation of `operator<<`. */
-        template<typename Callable>
-        void dispatch(const Attribute &attr, Callable fn) const;
-
         /** Check whether the value of the attribute is NULL. */
         bool isnull(const Attribute &attr) const override {
             const std::size_t off = store.offset(store.table().size()) + attr.id;
@@ -53,9 +48,10 @@ struct RowStore : Store
         /** Set the attribute to NULL. */
         void setnull(const Attribute &attr) override { null(attr, true); }
 
-        private:
-        void print(std::ostream &out) const override;
+        /** Invoke a callable for each attribute in the row and pass the attribute and its value. */
+        void dispatch(std::function<void(const Attribute&, value_type)> callback) const override;
 
+        private:
         /** Retrieve the value of the attribute in this row.  `T` is the exact type of the attribute as stored in the
          * row. */
         template<typename T>
@@ -359,46 +355,6 @@ T RowStore::Row::set_generic(const Attribute &attr, T value)
                         case 64: return set_exact<int64_t>(attr, value);
                     }
                 }
-            }
-        }
-    }
-
-    unreachable("invalid type");
-}
-
-template<typename Callable>
-void RowStore::Row::dispatch(const Attribute &attr, Callable fn) const
-{
-    auto ty = attr.type;
-
-    if (isnull(attr))
-        return fn.null(attr);
-
-    if (ty->is_boolean()) {
-        return fn(get_generic<bool>(attr));
-    } else if (auto cs = cast<const CharacterSequence>(ty)) {
-        if (cs->is_varying) {
-            unreachable("varying length character sequences are not supported by this store");
-        } else {
-            return fn(get_generic<std::string>(attr));
-        }
-    } else if (auto n = cast<const Numeric>(ty)) {
-        switch (n->kind) {
-            case Numeric::N_Int:
-                return fn(get_generic<int64_t>(attr));
-
-            case Numeric::N_Float:
-                if (n->precision == 32)
-                    return fn(get_generic<float>(attr));
-                else
-                    return fn(get_generic<double>(attr));
-
-            case Numeric::N_Decimal: {
-                int64_t integral = get_generic<int64_t>(attr);
-                int64_t shift = pow(10, n->scale);
-                int64_t pre = integral / shift;
-                int64_t post = integral % shift;
-                return fn(pre, post);
             }
         }
     }

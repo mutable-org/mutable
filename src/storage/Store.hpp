@@ -9,6 +9,7 @@
 #include <iostream>
 #include <memory>
 #include <type_traits>
+#include <variant>
 
 
 namespace db {
@@ -19,6 +20,25 @@ struct null_error : std::logic_error
     null_error(const std::string &str) : logic_error(str) { }
     null_error(const char *str) : logic_error(str) { }
 };
+
+/** The type of "NULL". */
+struct null_type
+{
+    friend std::ostream & operator<<(std::ostream &out, null_type) { return out << "NULL"; }
+};
+
+/** A polymorphic type to hold a value of an attribute. */
+using value_type = std::variant<
+    null_type,
+    int64_t,
+    float,
+    double,
+    std::string,
+    bool
+>;
+
+/** Prints an attribute's value to an output stream. */
+void print(std::ostream &out, const Attribute &attr, value_type value);
 
 /** Defines a generic store interface. */
 struct Store
@@ -44,6 +64,9 @@ struct Store
         template<typename T>
         void set(const Attribute &attr, T value) { set_(attr, value); }
 
+        /** Invokes a callback function for each attribute of the row, passing the attribute and its value. */
+        virtual void dispatch(std::function<void(const Attribute &attr, value_type)> callback) const = 0;
+
         /** Output a human-readable representation of this row. */
         friend std::ostream & operator<<(std::ostream &out, const Row &row) {
             row.print(out);
@@ -52,7 +75,7 @@ struct Store
 
         protected:
         /** Helper function to make operator<< virtual. */
-        virtual void print(std::ostream &out) const = 0;
+        void print(std::ostream &out) const;
 
         /*==============================================================================================================
          * Virtual Getters

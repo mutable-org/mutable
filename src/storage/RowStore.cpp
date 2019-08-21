@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <exception>
 #include <fstream>
+#include <iomanip>
 #include <typeinfo>
 
 #include <sys/mman.h>
@@ -123,24 +124,45 @@ void RowStore::dump(std::ostream &out) const
  * RowStore::Row
  *====================================================================================================================*/
 
-void RowStore::Row::print(std::ostream &out) const
+void RowStore::Row::dispatch(std::function<void(const Attribute&, value_type)> callback) const
 {
-    struct {
-        std::ostream &out;
+    for (auto &attr : store.table()) {
+        auto ty = attr.type;
 
-        void null(const Attribute&) const { out << "NULL"; }
-        void operator()(bool b) const { out << (b ? "TRUE" : "FALSE"); }
-        void operator()(int64_t i) const { out << i; }
-        void operator()(float f) const { out << f; }
-        void operator()(double d) const { out << d; }
-        void operator()(int64_t pre, int64_t post) const { out << pre << '.' << post; }
-        void operator()(const char *str) const { out << '"' << escape_string(str) << '"'; }
-        void operator()(std::string str) const { out << '"' << str << '"'; }
-    } printer{out};
+        if (isnull(attr)) {
+            callback(attr, value_type());
+            continue;
+        }
 
-    auto &T = store.table();
-    for (auto it = T.begin(), end = T.end(); it != end; ++it) {
-        if (it != T.begin()) out << ", ";
-        dispatch(*it, printer);
+        if (ty->is_boolean()) {
+            callback(attr, get_generic<bool>(attr));
+            continue;
+        } else if (auto cs = cast<const CharacterSequence>(ty)) {
+            if (cs->is_varying) {
+                unreachable("varying length character sequences are not supported by this store");
+            } else {
+                callback(attr, get_generic<std::string>(attr));
+                continue;
+            }
+        } else if (auto n = cast<const Numeric>(ty)) {
+            switch (n->kind) {
+                case Numeric::N_Int:
+                    callback(attr, get_generic<int64_t>(attr));
+                    continue;
+
+                case Numeric::N_Float:
+                    if (n->precision == 32)
+                        callback(attr, get_generic<float>(attr));
+                    else
+                        callback(attr, get_generic<double>(attr));
+                    continue;
+
+                case Numeric::N_Decimal:
+                    callback(attr, get_generic<int64_t>(attr));
+                    continue;
+            }
+        }
+
+        unreachable("invalid type");
     }
 }

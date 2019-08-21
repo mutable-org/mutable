@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstring>
 #include <type_traits>
+#include <variant>
 
 
 inline bool streq(const char *first, const char *second) { return 0 == strcmp(first, second); }
@@ -130,4 +131,11 @@ template<typename T>
 void setbit(T *bytes, bool value, uint32_t n)
 {
     *bytes ^= (-T(value) ^ *bytes) & (T(1) << n); // set n-th bit to `value`
+}
+
+template<typename T, typename... Args>
+std::ostream & operator<<(std::ostream &out, const std::variant<T, Args...> value)
+{
+    std::visit([&](auto &&arg) { out << arg; }, value);
+    return out;
 }

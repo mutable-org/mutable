@@ -43,6 +43,7 @@ struct Type
     bool is_boolean() const { return is<const Boolean>(this); }
     bool is_character_sequence() const { return is<const CharacterSequence>(this); }
     bool is_numeric() const { return is<const Numeric>(this); }
+    bool is_floating_point() const;
 
     /** Compute the size in bits of an instance of this type. */
     virtual uint32_t size() const { throw std::logic_error("the size of this type is not defined"); }
@@ -275,6 +276,12 @@ struct FnType : Type
     void dump(std::ostream &out) const;
 };
 
+}
+
+inline bool db::Type::is_floating_point() const {
+    if (auto n = cast<const Numeric>(this))
+        return n->kind == Numeric::N_Float;
+    return false;
 }
 
 template<typename T>

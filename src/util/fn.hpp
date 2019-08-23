@@ -139,3 +139,7 @@ std::ostream & operator<<(std::ostream &out, const std::variant<T, Args...> valu
     std::visit([&](auto &&arg) { out << arg; }, value);
     return out;
 }
+
+/* Helper type to define visitors of std::variant */
+template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
+template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;

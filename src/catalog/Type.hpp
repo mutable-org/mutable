@@ -1,11 +1,11 @@
 #pragma once
 
-
 #include "util/fn.hpp"
 #include "util/macro.hpp"
 #include "util/Pool.hpp"
 #include <exception>
 #include <functional>
+#include <vector>
 
 
 namespace db {

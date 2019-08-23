@@ -176,7 +176,7 @@ struct Database
 struct Catalog
 {
     private:
-    StringPool pool; ///> pool of strings
+    StringPool pool_; ///> pool of strings
     std::unordered_map<const char*, Database*> databases_; ///> the databases
     Database *database_in_use_ = nullptr; ///> the currently used database
     std::unordered_map<const char*, Function*> standard_functions_; ///> functions defined by the SQL standard
@@ -201,8 +201,9 @@ struct Catalog
 
     std::size_t num_databases() const { return databases_.size(); }
 
-    StringPool & get_pool() { return pool; }
-    const StringPool & get_pool() const { return pool; }
+    StringPool & get_pool() { return pool_; }
+    const StringPool & get_pool() const { return pool_; }
+    const char * pool(const char *str) { return pool_(str); }
 
     /*===== Database =================================================================================================*/
     Database & add_database(const char *name);

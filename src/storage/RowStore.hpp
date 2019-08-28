@@ -7,7 +7,11 @@ namespace db {
 
 struct RowStore : Store
 {
+#ifndef NDEBUG
+    static constexpr std::size_t ALLOCATION_SIZE = 1UL << 30; ///< 1 GB
+#else
     static constexpr std::size_t ALLOCATION_SIZE = 1UL << 40; ///< 1 TB
+#endif
 
     public:
     /** This class acts as an interface to a row of a row store.  Physically, a row is just a byte array of a fixed

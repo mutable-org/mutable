@@ -43,6 +43,8 @@ struct Type
     bool is_boolean() const { return is<const Boolean>(this); }
     bool is_character_sequence() const { return is<const CharacterSequence>(this); }
     bool is_numeric() const { return is<const Numeric>(this); }
+    bool is_integral() const;
+    bool is_decimal() const;
     bool is_floating_point() const;
 
     /** Compute the size in bits of an instance of this type. */
@@ -276,6 +278,18 @@ struct FnType : Type
     void dump(std::ostream &out) const;
 };
 
+}
+
+inline bool db::Type::is_integral() const {
+    if (auto n = cast<const Numeric>(this))
+        return n->kind == Numeric::N_Int;
+    return false;
+}
+
+inline bool db::Type::is_decimal() const {
+    if (auto n = cast<const Numeric>(this))
+        return n->kind == Numeric::N_Decimal;
+    return false;
 }
 
 inline bool db::Type::is_floating_point() const {

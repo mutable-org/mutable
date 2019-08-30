@@ -205,7 +205,7 @@ struct Numeric : PrimitiveType
 
     static constexpr float DECIMAL_TO_BINARY_DIGITS = 3.32192f;
 
-#define kind_t(X) X(N_Int), X(N_Float), X(N_Decimal)
+#define kind_t(X) X(N_Int), X(N_Decimal), X(N_Float)
     DECLARE_ENUM(kind_t) kind; ///> the kind of numeric type
     private:
     static constexpr const char *KIND_TO_STR_[] = { ENUM_TO_STR(kind_t) };

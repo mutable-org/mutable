@@ -4,7 +4,7 @@
 using namespace db;
 
 
-void print(std::ostream &out, const Attribute &attr, value_type value)
+void db::print(std::ostream &out, const Type *type, value_type value)
 {
     /* Check if NULL. */
     if (std::holds_alternative<null_type>(value)) {
@@ -12,19 +12,19 @@ void print(std::ostream &out, const Attribute &attr, value_type value)
         return;
     }
 
-    if (attr.type->is_boolean()) {
+    if (type->is_boolean()) {
         out << (std::get<bool>(value) ? "TRUE" : "FALSE");
         return;
     }
 
     /* Put character sequences in quotes. */
-    if (attr.type->is_character_sequence()) {
+    if (type->is_character_sequence()) {
         out << '"' << value << '"';
         return;
     }
 
     /* Print decimals with decimal places. */
-    if (auto n = cast<const Numeric>(attr.type); n and n->kind == Numeric::N_Decimal) {
+    if (auto n = cast<const Numeric>(type); n and n->kind == Numeric::N_Decimal) {
         using std::setw, std::setfill;
         int64_t v = std::get<int64_t>(value);
         int64_t shift = pow(10, n->scale);
@@ -48,6 +48,6 @@ void Store::Row::print(std::ostream &out) const
 {
     dispatch([&](const Attribute &attr, value_type value) {
         if (attr.id != 0) out << ", "; // preceeded by comma, if not the first attribute
-        ::print(out, attr, value);
+        db::print(out, attr.type, value);
     });
 }

@@ -38,7 +38,7 @@ using value_type = std::variant<
 >;
 
 /** Prints an attribute's value to an output stream. */
-void print(std::ostream &out, const Attribute &attr, value_type value);
+void print(std::ostream &out, const Type *type, value_type value);
 
 /** Defines a generic store interface. */
 struct Store

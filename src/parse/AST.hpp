@@ -63,7 +63,7 @@ struct ErrorExpr : Expr
     void accept(ConstASTVisitor &v) const;
 };
 
-/** A designator.  Identifies an attribute, optionally preceeded by a table name. */
+/** A designator.  Identifies an attribute, optionally preceeded by a table name, a named expression, or a function. */
 struct Designator : Expr
 {
     friend struct Sema;

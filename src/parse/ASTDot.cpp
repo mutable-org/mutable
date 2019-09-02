@@ -263,24 +263,29 @@ void ASTDot::operator()(Const<LimitClause> &c)
 
 /*--- Statements -----------------------------------------------------------------------------------------------------*/
 
-void ASTDot::operator()(Const<ErrorStmt> &s)
+void ASTDot::operator()(Const<ErrorStmt>&)
 {
+    unreachable("not implemented");
 }
 
-void ASTDot::operator()(Const<EmptyStmt> &s)
+void ASTDot::operator()(Const<EmptyStmt>&)
 {
+    unreachable("not implemented");
 }
 
-void ASTDot::operator()(Const<CreateDatabaseStmt> &s)
+void ASTDot::operator()(Const<CreateDatabaseStmt>&)
 {
+    unreachable("not implemented");
 }
 
-void ASTDot::operator()(Const<UseDatabaseStmt> &s)
+void ASTDot::operator()(Const<UseDatabaseStmt>&)
 {
+    unreachable("not implemented");
 }
 
-void ASTDot::operator()(Const<CreateTableStmt> &s)
+void ASTDot::operator()(Const<CreateTableStmt>&)
 {
+    unreachable("not implemented");
 }
 
 void ASTDot::operator()(Const<SelectStmt> &s)
@@ -359,15 +364,18 @@ void ASTDot::operator()(Const<SelectStmt> &s)
 #endif
 }
 
-void ASTDot::operator()(Const<InsertStmt> &s)
+void ASTDot::operator()(Const<InsertStmt>&)
 {
+    unreachable("not implemented");
 }
 
-void ASTDot::operator()(Const<UpdateStmt> &s)
+void ASTDot::operator()(Const<UpdateStmt>&)
 {
+    unreachable("not implemented");
 }
 
-void ASTDot::operator()(Const<DeleteStmt> &s)
+void ASTDot::operator()(Const<DeleteStmt>&)
 {
+    unreachable("not implemented");
 }
 

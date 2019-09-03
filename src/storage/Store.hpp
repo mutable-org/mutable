@@ -119,7 +119,7 @@ struct Store
 
         /** Set the value of the attribute in this row. */
         int8_t get_(const Attribute &attr, int8_t) const { return int8_t(get_(attr, int64_t())); }
-        //* Set the value of the attribute in this row. 
+        //* Set the value of the attribute in this row. */
         int16_t get_(const Attribute &attr, int16_t) const { return int16_t(get_(attr, int64_t())); }
         /** Set the value of the attribute in this row. */
         int32_t get_(const Attribute &attr, int32_t) const { return int32_t(get_(attr, int64_t())); }

@@ -47,7 +47,7 @@ struct hash<db::value_type>
 {
     uint64_t operator()(const db::value_type &value) const {
         return std::visit(overloaded {
-            [](auto v) -> uint64_t { return Murmur3()(std::hash<decltype(v)>()(v)); },
+            [](auto v) -> uint64_t { return murmur3_64(std::hash<decltype(v)>()(v)); },
             [](db::null_type) -> uint64_t { return 0; },
             [](const std::string &v) -> uint64_t { return StrHash()(v.c_str()); },
         }, value);

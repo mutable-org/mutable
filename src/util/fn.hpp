@@ -144,23 +144,12 @@ std::ostream & operator<<(std::ostream &out, const std::variant<T, Args...> valu
 template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
-struct Murmur3
+inline uint64_t murmur3_64(uint64_t v)
 {
-    uint32_t operator()(uint32_t v) const {
-        v ^= v >> 16;
-        v *= 0x85ebca6b;
-        v ^= v >> 13;
-        v *= 0xc2b2ae35;
-        v ^= v >> 16;
-        return v;
-    }
-
-    uint64_t operator()(uint64_t v) const {
-        v ^= v >> 33;
-        v *= 0xff51afd7ed558ccd;
-        v ^= v >> 33;
-        v *= 0xc4ceb9fe1a85ec53;
-        v ^= v >> 33;
-        return v;
-    }
-};
+    v ^= v >> 33;
+    v *= 0xff51afd7ed558ccd;
+    v ^= v >> 33;
+    v *= 0xc4ceb9fe1a85ec53;
+    v ^= v >> 33;
+    return v;
+}

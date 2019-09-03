@@ -24,9 +24,9 @@ inline std::string replace_all(std::string str, const std::string &from, const s
 /** Computes the FNV-1a 64-bit hash of a cstring. */
 struct StrHash
 {
-    std::size_t operator()(const char *c_str) const {
+    uint64_t operator()(const char *c_str) const {
         /* FNV-1a 64 bit */
-        std::size_t hash = 0xcbf29ce484222325;
+        uint64_t hash = 0xcbf29ce484222325;
         char c;
         while ((c = *c_str++)) {
             hash = hash ^ c;
@@ -143,3 +143,24 @@ std::ostream & operator<<(std::ostream &out, const std::variant<T, Args...> valu
 /* Helper type to define visitors of std::variant */
 template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
+
+struct Murmur3
+{
+    uint32_t operator()(uint32_t v) const {
+        v ^= v >> 16;
+        v *= 0x85ebca6b;
+        v ^= v >> 13;
+        v *= 0xc2b2ae35;
+        v ^= v >> 16;
+        return v;
+    }
+
+    uint64_t operator()(uint64_t v) const {
+        v ^= v >> 33;
+        v *= 0xff51afd7ed558ccd;
+        v ^= v >> 33;
+        v *= 0xc4ceb9fe1a85ec53;
+        v ^= v >> 33;
+        return v;
+    }
+};

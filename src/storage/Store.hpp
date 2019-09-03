@@ -25,6 +25,7 @@ struct null_error : std::logic_error
 struct null_type
 {
     friend std::ostream & operator<<(std::ostream &out, null_type) { return out << "NULL"; }
+    bool operator==(null_type) const { return true; }
 };
 
 /** A polymorphic type to hold a value of an attribute. */

@@ -265,15 +265,10 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
     try {
         e.func_ = DB.get_function(d->attr_name.text);
     } catch (std::out_of_range) {
-        /* If function is not a standard function, test whether it is a user-defined function. */
-        try {
-            e.func_ = DB.get_function(d->attr_name.text);
-        } catch (std::out_of_range) {
-            diag.e(d->attr_name.pos) << "Function " << d->attr_name.text << " is not defined in database " << DB.name
-                << ".\n";
-            e.type_ = Type::Get_Error();
-            return;
-        }
+        diag.e(d->attr_name.pos) << "Function " << d->attr_name.text << " is not defined in database " << DB.name
+            << ".\n";
+        e.type_ = Type::Get_Error();
+        return;
     }
     insist(e.func_);
 

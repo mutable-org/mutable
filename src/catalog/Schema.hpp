@@ -169,7 +169,7 @@ struct Database
     }
 
     /*===== Functions ================================================================================================*/
-    const Function * get_function(const char *name) const { return functions_.at(name); }
+    const Function * get_function(const char *name) const;
 };
 
 /** The catalog keeps track of all meta information of the database system.  There is always exactly one catalog. */

@@ -77,6 +77,16 @@ Database::~Database()
         delete f.second;
 }
 
+const Function * Database::get_function(const char *name) const
+{
+    try {
+        return functions_.at(name);
+    } catch (std::out_of_range) {
+        /* not defined within the database; search the global catalog */
+        return Catalog::Get().get_function(name);
+    }
+}
+
 /*======================================================================================================================
  * Catalog
  *====================================================================================================================*/

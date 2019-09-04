@@ -261,14 +261,13 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
     for (auto arg : e.args)
         (*this)(*arg);
 
-    const Function *fn = nullptr;
-    /* Test whether function is a standard function. */
+    /* Lookup the function. */
     try {
-        fn = C.get_function(d->attr_name.text);
+        e.func_ = DB.get_function(d->attr_name.text);
     } catch (std::out_of_range) {
         /* If function is not a standard function, test whether it is a user-defined function. */
         try {
-            fn = DB.get_function(d->attr_name.text);
+            e.func_ = DB.get_function(d->attr_name.text);
         } catch (std::out_of_range) {
             diag.e(d->attr_name.pos) << "Function " << d->attr_name.text << " is not defined in database " << DB.name
                 << ".\n";
@@ -276,11 +275,11 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
             return;
         }
     }
-    insist(fn);
+    insist(e.func_);
 
     /* Infer the type of the function.  Functions are defined in an abstract way, where the type of the parameters is
      * not specified.  We must infer the parameter types and the return type of the function. */
-    switch (fn->fnid) {
+    switch (e.func_->fnid) {
         default:
             unreachable("Function not implemented");
 
@@ -323,7 +322,7 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
                                             "(Aggregates over scalars are discouraged.)\n";
             }
 
-            switch (fn->fnid) {
+            switch (e.func_->fnid) {
                 default:
                     unreachable("Invalid function");
 

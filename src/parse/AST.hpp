@@ -15,6 +15,7 @@ using ASTVisitor = TheASTVisitor<false>;
 using ConstASTVisitor = TheASTVisitor<true>;
 
 struct Type;
+struct Function;
 struct Sema;
 struct Attribute;
 struct Table;
@@ -127,13 +128,21 @@ struct PostfixExpr : Expr
 /** A function application. */
 struct FnApplicationExpr : PostfixExpr
 {
+    friend struct Sema;
+
     Expr *fn;
     std::vector<Expr*> args;
+    private:
+    const Function *func_ = nullptr;
 
+    public:
     FnApplicationExpr(Expr *fn, std::vector<Expr*> args) : fn(fn), args(args) { }
     ~FnApplicationExpr();
 
     bool operator==(const Expr &other) const;
+
+    bool has_function() const { return func_; }
+    const Function & get_function() const { insist(func_); return *func_; }
 
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;

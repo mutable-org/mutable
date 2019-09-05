@@ -618,14 +618,16 @@ void Sema::operator()(Const<SelectClause> &c)
         if (s.second) {
             /* With alias. */
             res = Ctx.results.emplace(s.second.text, s.first);
+            if (not res.second)
+                diag.e(s.second.pos) << "Attribute name " << s.second.text << " already used.\n";
         } else {
             /* Without alias.  Print expression as string to get a name. */
             std::ostringstream oss;
             oss << *s.first;
             res = Ctx.results.emplace(C.get_pool()(oss.str().c_str()), s.first);
+            if (not res.second)
+                diag.e(c.tok.pos) << "Attribute name " << oss.str() << " already used.\n";
         }
-        if (not res.second)
-            diag.e(s.second.pos) << "Attribute name " << s.second.text << " already used.\n";
     }
 
     if (has_vector and has_scalar) {

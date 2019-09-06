@@ -344,6 +344,14 @@ void ExpressionEvaluator::operator()(Const<BinaryExpr> &e)
             result_ = v_lhs or v_rhs;
             break;
         }
+
+        /*----- Concatenation operator -------------------------------------------------------------------------------*/
+        case TK_DOTDOT: {
+            auto v_lhs = std::get<std::string>(res_lhs);
+            auto v_rhs = std::get<std::string>(res_rhs);
+            result_ = v_lhs + v_rhs;
+            break;
+        }
     }
 
 #undef EVAL_ARITHMETIC

@@ -27,6 +27,8 @@ int get_precedence(const TokenType tt)
         /* additive */
         case TK_PLUS:
         case TK_MINUS:              ++p;
+        /* string concat */
+        case TK_DOTDOT:             ++p;
         /* comparison */
         case TK_LESS:
         case TK_GREATER:

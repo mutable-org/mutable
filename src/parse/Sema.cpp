@@ -597,7 +597,7 @@ ok:
                 return;
             }
 
-            /* Scalar and scalar yeild a scalar.  Otherwise, expression yields a vectorial. */
+            /* Scalar and scalar yield a scalar.  Otherwise, expression yields a vectorial. */
             Type::category_t c = std::max(ty_lhs->category, ty_rhs->category);
 
             /* Logical operators always have boolean type. */

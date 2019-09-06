@@ -311,7 +311,7 @@ void ExpressionEvaluator::operator()(Const<BinaryExpr> &e)
     switch (e.op.type) {
         default: unreachable("illegal operator");
 
-        /*----- Arithmetic operations --------------------------------------------------------------------------------*/
+        /*----- Arithmetic operators ---------------------------------------------------------------------------------*/
         case TK_PLUS:           EVAL_ARITHMETIC(+);  break;
         case TK_MINUS:          EVAL_ARITHMETIC(-);  break;
         case TK_ASTERISK:       EVAL_ARITHMETIC(*);  break;
@@ -323,7 +323,7 @@ void ExpressionEvaluator::operator()(Const<BinaryExpr> &e)
             break;
         }
 
-        /*----- Comparison operations -----------------------------------------------------------------------------------*/
+        /*----- Comparison operators ---------------------------------------------------------------------------------*/
         case TK_LESS:           EVAL_COMPARISON(<);  break;
         case TK_GREATER:        EVAL_COMPARISON(>);  break;
         case TK_LESS_EQUAL:     EVAL_COMPARISON(<=); break;

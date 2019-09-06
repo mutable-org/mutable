@@ -132,7 +132,7 @@ void ExpressionEvaluator::operator()(Const<Constant> &e)
 
         /* String */
         case TK_STRING_LITERAL:
-            result_ = std::string(e.tok.text); /// XXX: do we have to "un-escape" the string?
+            result_ = std::string(e.tok.text, 1, strlen(e.tok.text) - 2); // strip the surrounding quotes XXX: do we have to "un-escape" the string?
             break;
 
         /* Boolean */

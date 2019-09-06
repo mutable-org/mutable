@@ -330,6 +330,20 @@ void ExpressionEvaluator::operator()(Const<BinaryExpr> &e)
         case TK_GREATER_EQUAL:  EVAL_COMPARISON(>=); break;
         case TK_EQUAL:          EVAL_COMPARISON(==);  break;
         case TK_BANG_EQUAL:     EVAL_COMPARISON(!=); break;
+
+        /*----- Logical operators ------------------------------------------------------------------------------------*/
+        case TK_And: {
+            bool v_lhs = std::get<bool>(res_lhs);
+            bool v_rhs = std::get<bool>(res_rhs);
+            result_ = v_lhs and v_rhs;
+            break;
+        }
+        case TK_Or: {
+            bool v_lhs = std::get<bool>(res_lhs);
+            bool v_rhs = std::get<bool>(res_rhs);
+            result_ = v_lhs or v_rhs;
+            break;
+        }
     }
 
 #undef EVAL_ARITHMETIC

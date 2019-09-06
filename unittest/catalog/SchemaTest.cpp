@@ -120,6 +120,7 @@ TEST_CASE("Catalog singleton c'tor")
     Catalog &C = Catalog::Get();
     Catalog &C2 = Catalog::Get();
     REQUIRE(&C == &C2);
+    Catalog::Clear();
 }
 
 TEST_CASE("Catalog Database creation")

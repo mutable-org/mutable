@@ -187,7 +187,6 @@ TEST_CASE("ExpressionEvaluator", "[unit]")
 
     /* Constants */
     TEST_EXPR("42", "constant", int64_t, 42);
-    TEST_EXPR("13.37f", "constant", float, 13.37f);
     TEST_EXPR("13.37", "constant", double, 13.37);
     TEST_EXPR("TRUE", "constant", bool, true);
     TEST_EXPR("\"Hello, World!\"", "constant", std::string, "Hello, World!");

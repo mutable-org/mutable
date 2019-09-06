@@ -273,7 +273,7 @@ TEST_CASE("ExpressionEvaluator", "[unit]")
     TEST_EXPR("col_bool AND TRUE", "binary/logical/and", bool, col_bool_val and true);
     TEST_EXPR("col_bool OR FALSE", "binary/logical/or",  bool, col_bool_val or false);
 
-    TEST_EXPR("col_char .. col_int64_t", "binary/string/..", std::string, col_char_val + to_string(col_int64_t_val));
+    TEST_EXPR("col_char .. \"test\"", "binary/string/..", std::string, col_char_val + "test");
 
     /* Unary operators */
     TEST_EXPR("+col_int64_t", "unary/arithmetic/+", int64_t, +col_int64_t_val);

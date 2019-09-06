@@ -101,15 +101,6 @@ Stmt * get_statement(const char *sql)
     return stmt;
 }
 
-template<typename T>
-bool equals(T a, T b) { return a == b; }
-
-template<>
-bool equals<float>(float a, float b) { return std::abs(a - b) < .001f; }
-
-template<>
-bool equals<double>(double a, double b) { return std::abs(a - b) < .00001; }
-
 /*======================================================================================================================
  * Test ExressionEvaluator.
  *====================================================================================================================*/

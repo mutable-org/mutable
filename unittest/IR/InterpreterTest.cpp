@@ -95,6 +95,7 @@ Stmt * get_statement(const char *sql)
     if (diag.num_errors() != 0) {
         std::cout << out.str() << std::endl;
         std::cerr << err.str() << std::endl;
+        delete stmt;
         REQUIRE(false); // abort test
     }
     return stmt;
@@ -185,6 +186,7 @@ TEST_CASE("ExpressionEvaluator", "[unit]")
         auto expr = select->select[0].first; \
         eval(*expr); \
         auto r = eval.result(); \
+        delete stmt; \
         REQUIRE(std::holds_alternative<TYPE>(r)); \
         REQUIRE(std::get<TYPE>(r) == (VALUE)); \
     } \

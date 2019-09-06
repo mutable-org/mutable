@@ -19,6 +19,7 @@ add_executable(
 
     # IR
     IR/CNFTest.cpp
+    IR/InterpreterTest.cpp
 
     # catalog
     catalog/SchemaTest.cpp

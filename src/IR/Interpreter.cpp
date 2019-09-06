@@ -249,6 +249,7 @@ void ExpressionEvaluator::operator()(Const<BinaryExpr> &e)
     const Type *ty_lhs = e.lhs->type();
     const Type *ty_rhs = e.rhs->type();
 
+    /* If either side is NULL, the result is NULL. */
     if (std::holds_alternative<null_type>(res_lhs)) {
         result_ = res_lhs;
         return;

@@ -523,22 +523,43 @@ void Sema::operator()(Const<BinaryExpr> &e)
         case TK_LESS_EQUAL:
         case TK_GREATER:
         case TK_GREATER_EQUAL: {
-            /* Verify that both operands are of numeric type. */
-            const Numeric *ty_lhs = cast<const Numeric>(e.lhs->type());
-            const Numeric *ty_rhs = cast<const Numeric>(e.rhs->type());
-            if (not ty_lhs or not ty_rhs) {
-                diag.e(e.op.pos) << "Invalid expression " << e << ", operands must be of numeric type.\n";
+            if (auto ty_lhs = cast<const Numeric>(e.lhs->type())) {
+                /* Verify that both operands are of numeric type. */
+                auto ty_rhs = cast<const Numeric>(e.rhs->type());
+                if (not ty_lhs or not ty_rhs) {
+                    diag.e(e.op.pos) << "Invalid expression " << e << ", both operands must be of numeric type.\n";
+                    e.type_ = Type::Get_Error();
+                    return;
+                }
+                insist(ty_lhs);
+                insist(ty_rhs);
+
+                /* Scalar and scalar yield a scalar.  Otherwise, expression yields a vectorial. */
+                Type::category_t c = std::max(ty_lhs->category, ty_rhs->category);
+
+                /* Comparisons always have boolean type. */
+                e.type_ = Type::Get_Boolean(c);
+            } else if (auto ty_lhs = cast<const CharacterSequence>(e.lhs->type())) {
+                /* Verify that both operands are character sequences. */
+                auto ty_rhs = cast<const CharacterSequence>(e.rhs->type());
+                if (not ty_lhs or not ty_rhs) {
+                    diag.e(e.op.pos) << "Invalid expression " << e << ", both operands must be strings.\n";
+                    e.type_ = Type::Get_Error();
+                    return;
+                }
+                insist(ty_lhs);
+                insist(ty_rhs);
+
+                /* Scalar and scalar yield a scalar.  Otherwise, expression yields a vectorial. */
+                Type::category_t c = std::max(ty_lhs->category, ty_rhs->category);
+
+                /* Comparisons always have boolean type. */
+                e.type_ = Type::Get_Boolean(c);
+            } else {
+                diag.e(e.op.pos) << "Invalid expression " << e << ", operator not supported for given operands.\n";
                 e.type_ = Type::Get_Error();
                 return;
             }
-            insist(ty_lhs);
-            insist(ty_rhs);
-
-            /* Scalar and scalar yeild a scalar.  Otherwise, expression yields a vectorial. */
-            Type::category_t c = std::max(ty_lhs->category, ty_rhs->category);
-
-            /* Comparisons always have boolean type. */
-            e.type_ = Type::Get_Boolean(c);
             break;
         }
 

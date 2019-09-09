@@ -10,8 +10,6 @@
 #include "util/Diagnostic.hpp"
 #include <cmath>
 #include <string>
-//#include "util/fn.hpp"
-//#include <algorithm>
 
 using namespace db;
 
@@ -169,130 +167,126 @@ TEST_CASE("ExpressionEvaluator", "[unit]")
 
     ExpressionEvaluator eval(schema, tup);
 
-#define TEST(SQL, NAME, TYPE, VALUE) { \
-    DYNAMIC_SECTION(NAME "/" << #TYPE) \
+#define TEST(EXPR, NAME, TYPE, VALUE) { \
+    DYNAMIC_SECTION(NAME) \
     { \
-        auto stmt = as<const SelectStmt>(get_statement(SQL)); \
+        auto stmt = as<const SelectStmt>(get_statement("SELECT " EXPR " FROM tbl1;")); \
         auto select = as<const SelectClause>(stmt->select); \
         auto expr = select->select[0].first; \
         eval(*expr); \
         auto r = eval.result(); \
-        delete stmt; \
-        REQUIRE(std::holds_alternative<TYPE>(r)); \
+        CHECK(std::holds_alternative<TYPE>(r)); \
         REQUIRE(std::get<TYPE>(r) == (VALUE)); \
     } \
 }
-#define TEST_EXPR(EXPR, NAME, TYPE, VALUE) \
-        TEST("SELECT " EXPR " FROM tbl1;", NAME, TYPE, VALUE)
 
     /* Constants */
-    TEST_EXPR("42", "constant", int64_t, 42);
-    TEST_EXPR("13.37", "constant", double, 13.37);
-    TEST_EXPR("TRUE", "constant", bool, true);
-    TEST_EXPR("\"Hello, World!\"", "constant", std::string, "Hello, World!");
+    TEST("42", "constant/int64_t", int64_t, 42);
+    TEST("13.37", "constant/double", double, 13.37);
+    TEST("TRUE", "constant/bool", bool, true);
+    TEST("\"Hello, World!\"", "constant/char", std::string, "Hello, World!");
 
     /* Designators */
-    TEST_EXPR("col_int64_t", "designator/attr", int64_t, col_int64_t_val);
-    TEST_EXPR("tbl1.col_int64_t", "designator/tbl", int64_t, col_int64_t_val);
+    TEST("col_int64_t", "designator/attr/int64_t", int64_t, col_int64_t_val);
+    TEST("tbl1.col_int64_t", "designator/tbl/int64_t", int64_t, col_int64_t_val);
 
-    TEST_EXPR("col_float", "designator/attr", float, col_float_val);
-    TEST_EXPR("tbl1.col_float", "designator/tbl", float, col_float_val);
+    TEST("col_float", "designator/attr/float", float, col_float_val);
+    TEST("tbl1.col_float", "designator/tbl/float", float, col_float_val);
 
-    TEST_EXPR("col_double", "designator/attr", double, col_double_val);
-    TEST_EXPR("tbl1.col_double", "designator/tbl", double, col_double_val);
+    TEST("col_double", "designator/attr/double", double, col_double_val);
+    TEST("tbl1.col_double", "designator/tbl/double", double, col_double_val);
 
-    TEST_EXPR("col_decimal", "designator/attr", int64_t, col_decimal_val);
-    TEST_EXPR("tbl1.col_decimal", "designator/tbl", int64_t, col_decimal_val);
+    TEST("col_decimal", "designator/attr/decimal", decimal, col_decimal_val);
+    TEST("tbl1.col_decimal", "designator/tbl/decimal", decimal, col_decimal_val);
 
-    TEST_EXPR("col_bool", "designator/attr", bool, col_bool_val);
-    TEST_EXPR("tbl1.col_bool", "designator/tbl", bool, col_bool_val);
+    TEST("col_bool", "designator/attr/bool", bool, col_bool_val);
+    TEST("tbl1.col_bool", "designator/tbl/bool", bool, col_bool_val);
 
-    TEST_EXPR("col_char", "designator/attr", std::string, col_char_val);
-    TEST_EXPR("tbl1.col_char", "designator/tbl", std::string, col_char_val);
+    TEST("col_char", "designator/attr/char", std::string, col_char_val);
+    TEST("tbl1.col_char", "designator/tbl/char", std::string, col_char_val);
 
     /* Binary operators */
-    TEST_EXPR("col_int64_t + 13", "binary/arithmetic/+", int64_t, col_int64_t_val + 13);
-    TEST_EXPR("col_int64_t - 13", "binary/arithmetic/-", int64_t, col_int64_t_val - 13);
-    TEST_EXPR("col_int64_t * 13", "binary/arithmetic/*", int64_t, col_int64_t_val * 13);
-    TEST_EXPR("col_int64_t / 13", "binary/arithmetic//", int64_t, col_int64_t_val / 13);
-    TEST_EXPR("col_int64_t % 13", "binary/arithmetic/%", int64_t, col_int64_t_val % 13);
+    TEST("col_int64_t + 13", "binary/arithmetic/+/int64_t", int64_t, col_int64_t_val + 13);
+    TEST("col_int64_t - 13", "binary/arithmetic/-/int64_t", int64_t, col_int64_t_val - 13);
+    TEST("col_int64_t * 13", "binary/arithmetic/*/int64_t", int64_t, col_int64_t_val * 13);
+    TEST("col_int64_t / 13", "binary/arithmetic///int64_t", int64_t, col_int64_t_val / 13);
+    TEST("col_int64_t % 13", "binary/arithmetic/%/int64_t", int64_t, col_int64_t_val % 13);
 
-    TEST_EXPR("col_float + 13", "binary/arithmetic/+", double, Approx(col_float_val + 13));
-    TEST_EXPR("col_float - 13", "binary/arithmetic/-", double, Approx(col_float_val - 13));
-    TEST_EXPR("col_float * 13", "binary/arithmetic/*", double, Approx(col_float_val * 13));
-    TEST_EXPR("col_float / 13", "binary/arithmetic//", double, Approx(col_float_val / 13));
+    TEST("col_float + 13", "binary/arithmetic/+/float", double, Approx(col_float_val + 13));
+    TEST("col_float - 13", "binary/arithmetic/-/float", double, Approx(col_float_val - 13));
+    TEST("col_float * 13", "binary/arithmetic/*/float", double, Approx(col_float_val * 13));
+    TEST("col_float / 13", "binary/arithmetic///float", double, Approx(col_float_val / 13));
 
-    TEST_EXPR("col_double + 13", "binary/arithmetic/+", double, Approx(col_double_val + 13));
-    TEST_EXPR("col_double - 13", "binary/arithmetic/-", double, Approx(col_double_val - 13));
-    TEST_EXPR("col_double * 13", "binary/arithmetic/*", double, Approx(col_double_val * 13));
-    TEST_EXPR("col_double / 13", "binary/arithmetic//", double, Approx(col_double_val / 13));
+    TEST("col_double + 13", "binary/arithmetic/+/double", double, Approx(col_double_val + 13));
+    TEST("col_double - 13", "binary/arithmetic/-/double", double, Approx(col_double_val - 13));
+    TEST("col_double * 13", "binary/arithmetic/*/double", double, Approx(col_double_val * 13));
+    TEST("col_double / 13", "binary/arithmetic///double", double, Approx(col_double_val / 13));
 
-    TEST_EXPR("col_decimal + col_decimal", "binary/arithmetic/+", decimal, col_decimal_val + col_decimal_val);
-    TEST_EXPR("col_decimal - col_decimal", "binary/arithmetic/-", decimal, col_decimal_val - col_decimal_val);
-    TEST_EXPR("col_decimal * col_decimal", "binary/arithmetic/*", decimal, col_decimal_val * col_decimal_val / 100);
-    TEST_EXPR("col_decimal / col_decimal", "binary/arithmetic//", decimal, col_decimal_val / col_decimal_val / 100);
+    TEST("col_decimal + col_decimal", "binary/arithmetic/+/decimal", decimal, col_decimal_val + col_decimal_val);
+    TEST("col_decimal - col_decimal", "binary/arithmetic/-/decimal", decimal, col_decimal_val - col_decimal_val);
+    TEST("col_decimal * col_decimal", "binary/arithmetic/*/decimal", decimal, col_decimal_val * col_decimal_val / 100);
+    TEST("col_decimal / col_decimal", "binary/arithmetic///decimal", decimal, col_decimal_val / col_decimal_val / 100);
 
-    TEST_EXPR("col_int64_t <  13", "binary/comparison/<",  bool, col_int64_t_val <  13);
-    TEST_EXPR("col_int64_t <= 13", "binary/comparison/<=", bool, col_int64_t_val <= 13);
-    TEST_EXPR("col_int64_t >  13", "binary/comparison/>",  bool, col_int64_t_val >  13);
-    TEST_EXPR("col_int64_t >= 13", "binary/comparison/>=", bool, col_int64_t_val >= 13);
-    TEST_EXPR("col_int64_t != 13", "binary/comparison/!=", bool, col_int64_t_val != 13);
-    TEST_EXPR("col_int64_t =  13", "binary/comparison/=",  bool, col_int64_t_val == 13);
+    TEST("col_int64_t <  13", "binary/comparison/</int64_t",  bool, col_int64_t_val <  13);
+    TEST("col_int64_t <= 13", "binary/comparison/<=/int64_t", bool, col_int64_t_val <= 13);
+    TEST("col_int64_t >  13", "binary/comparison/>/int64_t",  bool, col_int64_t_val >  13);
+    TEST("col_int64_t >= 13", "binary/comparison/>=/int64_t", bool, col_int64_t_val >= 13);
+    TEST("col_int64_t != 13", "binary/comparison/!=/int64_t", bool, col_int64_t_val != 13);
+    TEST("col_int64_t =  13", "binary/comparison/=/int64_t",  bool, col_int64_t_val == 13);
 
-    TEST_EXPR("col_float <  13", "binary/comparison/<",  bool, col_float_val <  13);
-    TEST_EXPR("col_float <= 13", "binary/comparison/<=", bool, col_float_val <= 13);
-    TEST_EXPR("col_float >  13", "binary/comparison/>",  bool, col_float_val >  13);
-    TEST_EXPR("col_float >= 13", "binary/comparison/>=", bool, col_float_val >= 13);
-    TEST_EXPR("col_float != 13", "binary/comparison/!=", bool, col_float_val != 13);
-    TEST_EXPR("col_float =  13", "binary/comparison/=",  bool, col_float_val == 13);
+    TEST("col_float <  13", "binary/comparison/</float",  bool, col_float_val <  13);
+    TEST("col_float <= 13", "binary/comparison/<=/float", bool, col_float_val <= 13);
+    TEST("col_float >  13", "binary/comparison/>/float",  bool, col_float_val >  13);
+    TEST("col_float >= 13", "binary/comparison/>=/float", bool, col_float_val >= 13);
+    TEST("col_float != 13", "binary/comparison/!=/float", bool, col_float_val != 13);
+    TEST("col_float =  13", "binary/comparison/=/float",  bool, col_float_val == 13);
 
-    TEST_EXPR("col_double <  13", "binary/comparison/<",  bool, col_double_val <  13);
-    TEST_EXPR("col_double <= 13", "binary/comparison/<=", bool, col_double_val <= 13);
-    TEST_EXPR("col_double >  13", "binary/comparison/>",  bool, col_double_val >  13);
-    TEST_EXPR("col_double >= 13", "binary/comparison/>=", bool, col_double_val >= 13);
-    TEST_EXPR("col_double != 13", "binary/comparison/!=", bool, col_double_val != 13);
-    TEST_EXPR("col_double =  13", "binary/comparison/=",  bool, col_double_val == 13);
+    TEST("col_double <  13", "binary/comparison/</double",  bool, col_double_val <  13);
+    TEST("col_double <= 13", "binary/comparison/<=/double", bool, col_double_val <= 13);
+    TEST("col_double >  13", "binary/comparison/>/double",  bool, col_double_val >  13);
+    TEST("col_double >= 13", "binary/comparison/>=/double", bool, col_double_val >= 13);
+    TEST("col_double != 13", "binary/comparison/!=/double", bool, col_double_val != 13);
+    TEST("col_double =  13", "binary/comparison/=/double",  bool, col_double_val == 13);
 
-    TEST_EXPR("col_decimal <  13", "binary/comparison/<",  bool, col_decimal_val <  13);
-    TEST_EXPR("col_decimal <= 13", "binary/comparison/<=", bool, col_decimal_val <= 13);
-    TEST_EXPR("col_decimal >  13", "binary/comparison/>",  bool, col_decimal_val >  13);
-    TEST_EXPR("col_decimal >= 13", "binary/comparison/>=", bool, col_decimal_val >= 13);
-    TEST_EXPR("col_decimal != 13", "binary/comparison/!=", bool, col_decimal_val != 13);
-    TEST_EXPR("col_decimal =  13", "binary/comparison/=",  bool, col_decimal_val == 13);
+    TEST("col_decimal <  13", "binary/comparison/</decimal",  bool, col_decimal_val <  13);
+    TEST("col_decimal <= 13", "binary/comparison/<=/decimal", bool, col_decimal_val <= 13);
+    TEST("col_decimal >  13", "binary/comparison/>/decimal",  bool, col_decimal_val >  13);
+    TEST("col_decimal >= 13", "binary/comparison/>=/decimal", bool, col_decimal_val >= 13);
+    TEST("col_decimal != 13", "binary/comparison/!=/decimal", bool, col_decimal_val != 13);
+    TEST("col_decimal =  13", "binary/comparison/=/decimal",  bool, col_decimal_val == 13);
 
-    TEST_EXPR("col_bool != TRUE", "binary/comparison/!=", bool, col_bool_val != true);
-    TEST_EXPR("col_bool =  TRUE", "binary/comparison/=",  bool, col_bool_val == true);
+    TEST("col_bool != TRUE", "binary/comparison/!=/bool", bool, col_bool_val != true);
+    TEST("col_bool =  TRUE", "binary/comparison/=/bool",  bool, col_bool_val == true);
 
-    TEST_EXPR("col_char <  \"Hello, World!\"", "binary/comparison/<",  bool, col_char_val <  "Hello, World!");
-    TEST_EXPR("col_char <= \"Hello, World!\"", "binary/comparison/<=", bool, col_char_val <= "Hello, World!");
-    TEST_EXPR("col_char >  \"Hello, World!\"", "binary/comparison/>",  bool, col_char_val >  "Hello, World!");
-    TEST_EXPR("col_char >= \"Hello, World!\"", "binary/comparison/>=", bool, col_char_val >= "Hello, World!");
-    TEST_EXPR("col_char != \"Hello, World!\"", "binary/comparison/!=", bool, col_char_val != "Hello, World!");
-    TEST_EXPR("col_char =  \"Hello, World!\"", "binary/comparison/=",  bool, col_char_val == "Hello, World!");
+    TEST("col_char <  \"Hello, World!\"", "binary/comparison/</char",  bool, col_char_val <  "Hello, World!");
+    TEST("col_char <= \"Hello, World!\"", "binary/comparison/<=/char", bool, col_char_val <= "Hello, World!");
+    TEST("col_char >  \"Hello, World!\"", "binary/comparison/>/char",  bool, col_char_val >  "Hello, World!");
+    TEST("col_char >= \"Hello, World!\"", "binary/comparison/>=/char", bool, col_char_val >= "Hello, World!");
+    TEST("col_char != \"Hello, World!\"", "binary/comparison/!=/char", bool, col_char_val != "Hello, World!");
+    TEST("col_char =  \"Hello, World!\"", "binary/comparison/=/char",  bool, col_char_val == "Hello, World!");
 
-    TEST_EXPR("col_bool AND TRUE", "binary/logical/and", bool, col_bool_val and true);
-    TEST_EXPR("col_bool OR FALSE", "binary/logical/or",  bool, col_bool_val or false);
+    TEST("col_bool AND TRUE", "binary/logical/and/bool", bool, col_bool_val and true);
+    TEST("col_bool OR FALSE", "binary/logical/or/bool",  bool, col_bool_val or false);
 
-    TEST_EXPR("col_char .. \"test\"", "binary/string/..", std::string, col_char_val + "test");
+    TEST("col_char .. \"test\"", "binary/string/../char", std::string, col_char_val + "test");
 
     /* Unary operators */
-    TEST_EXPR("+col_int64_t", "unary/arithmetic/+", int64_t, +col_int64_t_val);
-    TEST_EXPR("-col_int64_t", "unary/arithmetic/-", int64_t, -col_int64_t_val);
+    TEST("+col_int64_t", "unary/arithmetic/+/int64_t", int64_t, +col_int64_t_val);
+    TEST("-col_int64_t", "unary/arithmetic/-/int64_t", int64_t, -col_int64_t_val);
 
-    TEST_EXPR("+col_float", "unary/arithmetic/+", float, +col_float_val); // TODO returns double?
-    TEST_EXPR("-col_float", "unary/arithmetic/-", float, -col_float_val); // TODO returns double?
+    TEST("+col_float", "unary/arithmetic/+/float", float, +col_float_val); // TODO returns double?
+    TEST("-col_float", "unary/arithmetic/-/float", float, -col_float_val); // TODO returns double?
 
-    TEST_EXPR("+col_double", "unary/arithmetic/+", double, +col_double_val);
-    TEST_EXPR("-col_double", "unary/arithmetic/-", double, -col_double_val);
+    TEST("+col_double", "unary/arithmetic/+/double", double, +col_double_val);
+    TEST("-col_double", "unary/arithmetic/-/double", double, -col_double_val);
 
-    TEST_EXPR("+col_decimal", "unary/arithmetic/+", decimal, +col_decimal_val);
-    TEST_EXPR("-col_decimal", "unary/arithmetic/-", decimal, -col_decimal_val);
+    TEST("+col_decimal", "unary/arithmetic/+/decimal", decimal, +col_decimal_val);
+    TEST("-col_decimal", "unary/arithmetic/-/decimal", decimal, -col_decimal_val);
 
-    TEST_EXPR("NOT col_bool", "unary/logical/not", bool, not col_bool_val);
+    TEST("NOT col_bool", "unary/logical/not/bool", bool, not col_bool_val);
 
     /* Function application */
     // TODO
 
-#undef TEST_EXPR
 #undef TEST
 }

@@ -115,14 +115,14 @@ std::string html_escape(std::string str);
 template<typename T>
 inline
 typename std::enable_if<std::is_integral<T>::value, T>::type
-pow(const T base, const T exp)
+powi(const T base, const T exp)
 {
     if (exp == 0)
         return 1;
     else if (exp & 0x1)
-        return base * pow(base, exp - 1);
+        return base * powi(base, exp - 1);
     else {
-        T tmp = pow(base, exp/2);
+        T tmp = powi(base, exp/2);
         return tmp * tmp;
     }
 }

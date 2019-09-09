@@ -279,12 +279,12 @@ void ExpressionEvaluator::operator()(Const<BinaryExpr> &e)
             scale_rhs = as<const Numeric>(ty_rhs)->scale; \
         if ((1 OP 1) == 1) { \
             /* multiplicative operation */ \
-            result_ = (v_lhs OP v_rhs) / pow<int64_t>(10, scale_lhs + scale_rhs - n->scale); \
+            result_ = (v_lhs OP v_rhs) / powi<int64_t>(10, scale_lhs + scale_rhs - n->scale); \
         } else { \
             /* additive operation */ \
             /* Scale values to the scale of the result. */ \
-            v_lhs *= pow<int64_t>(10, n->scale - scale_lhs); \
-            v_rhs *= pow<int64_t>(10, n->scale - scale_rhs); \
+            v_lhs *= powi<int64_t>(10, n->scale - scale_lhs); \
+            v_rhs *= powi<int64_t>(10, n->scale - scale_rhs); \
             result_ = v_lhs OP v_rhs; \
         } \
     } else { \

@@ -298,13 +298,17 @@ void ExpressionEvaluator::operator()(Const<BinaryExpr> &e)
         std::string v_lhs = to<std::string>(res_lhs); \
         std::string v_rhs = to<std::string>(res_rhs); \
         result_ = bool(v_lhs OP v_rhs); \
-    } else if (ty_lhs->is_floating_point()) { \
-        double v_lhs = to<double>(res_lhs); \
-        double v_rhs = to<double>(res_rhs); \
-        result_ = bool(v_lhs OP v_rhs); \
-    } else { \
+    } else if (ty_lhs->is_integral() and ty_rhs->is_integral()) { \
         int64_t v_lhs = to<int64_t>(res_lhs); \
         int64_t v_rhs = to<int64_t>(res_rhs); \
+        result_ = bool(v_lhs OP v_rhs); \
+    } else { \
+        double v_lhs = to<double>(res_lhs); \
+        double v_rhs = to<double>(res_rhs); \
+        if (ty_lhs->is_decimal()) \
+            v_lhs /= pow(10, as<const Numeric>(ty_lhs)->scale); /* scale decimal */ \
+        if (ty_rhs->is_decimal()) \
+            v_rhs /= pow(10, as<const Numeric>(ty_rhs)->scale); /* scale decimal */ \
         result_ = bool(v_lhs OP v_rhs); \
     }
 

@@ -248,12 +248,12 @@ TEST_CASE("ExpressionEvaluator", "[unit]")
     TEST("col_double != 13", "binary/comparison/!=/double", bool, col_double_val != 13);
     TEST("col_double =  13", "binary/comparison/=/double",  bool, col_double_val == 13);
 
-    TEST("col_decimal <  13", "binary/comparison/</decimal",  bool, col_decimal_val <  13);
-    TEST("col_decimal <= 13", "binary/comparison/<=/decimal", bool, col_decimal_val <= 13);
-    TEST("col_decimal >  13", "binary/comparison/>/decimal",  bool, col_decimal_val >  13);
-    TEST("col_decimal >= 13", "binary/comparison/>=/decimal", bool, col_decimal_val >= 13);
-    TEST("col_decimal != 13", "binary/comparison/!=/decimal", bool, col_decimal_val != 13);
-    TEST("col_decimal =  13", "binary/comparison/=/decimal",  bool, col_decimal_val == 13);
+    TEST("col_decimal <  13", "binary/comparison/</decimal",  bool, col_decimal_val / 100.0 <  13);
+    TEST("col_decimal <= 13", "binary/comparison/<=/decimal", bool, col_decimal_val / 100.0 <= 13);
+    TEST("col_decimal >  13", "binary/comparison/>/decimal",  bool, col_decimal_val / 100.0 >  13);
+    TEST("col_decimal >= 13", "binary/comparison/>=/decimal", bool, col_decimal_val / 100.0 >= 13);
+    TEST("col_decimal != 13", "binary/comparison/!=/decimal", bool, col_decimal_val / 100.0 != 13);
+    TEST("col_decimal =  13", "binary/comparison/=/decimal",  bool, col_decimal_val / 100.0 == 13);
 
     TEST("col_bool != TRUE", "binary/comparison/!=/bool", bool, col_bool_val != true);
     TEST("col_bool =  TRUE", "binary/comparison/=/bool",  bool, col_bool_val == true);
@@ -274,8 +274,8 @@ TEST_CASE("ExpressionEvaluator", "[unit]")
     TEST("+col_int64_t", "unary/arithmetic/+/int64_t", int64_t, +col_int64_t_val);
     TEST("-col_int64_t", "unary/arithmetic/-/int64_t", int64_t, -col_int64_t_val);
 
-    TEST("+col_float", "unary/arithmetic/+/float", float, +col_float_val); // TODO returns double?
-    TEST("-col_float", "unary/arithmetic/-/float", float, -col_float_val); // TODO returns double?
+    TEST("+col_float", "unary/arithmetic/+/float", float, +col_float_val);
+    TEST("-col_float", "unary/arithmetic/-/float", float, -col_float_val);
 
     TEST("+col_double", "unary/arithmetic/+/double", double, +col_double_val);
     TEST("-col_double", "unary/arithmetic/-/double", double, -col_double_val);
@@ -288,5 +288,53 @@ TEST_CASE("ExpressionEvaluator", "[unit]")
     /* Function application */
     // TODO
 
+    /* Mixed datatypes */
+    TEST("col_int64_t + col_float",   "binary/arithmetic/+/int64_t,float",   double,  Approx(col_int64_t_val + col_float_val));
+    TEST("col_int64_t + col_double",  "binary/arithmetic/+/int64_t,double",  double,  Approx(col_int64_t_val + col_double_val));
+    TEST("col_int64_t + col_decimal", "binary/arithmetic/+/int64_t,decimal", decimal, col_int64_t_val * 100 + col_decimal_val);
+
+    TEST("col_int64_t * col_float",   "binary/arithmetic/*/int64_t,float",   double,  Approx(col_int64_t_val * col_float_val));
+    TEST("col_int64_t * col_double",  "binary/arithmetic/*/int64_t,double",  double,  Approx(col_int64_t_val * col_double_val));
+    TEST("col_int64_t * col_decimal", "binary/arithmetic/*/int64_t,decimal", decimal, col_int64_t_val * col_decimal_val);
+
+    TEST("col_float + col_int64_t", "binary/arithmetic/+/float,int64_t", double, Approx(col_float_val + col_int64_t_val));
+    TEST("col_float + col_double",  "binary/arithmetic/+/float,double",  double, Approx(col_float_val + col_double_val));
+    TEST("col_float + col_decimal", "binary/arithmetic/+/float,decimal", double, Approx(col_float_val + col_decimal_val / 100.0));
+
+    TEST("col_float * col_int64_t", "binary/arithmetic/*/float,int64_t", double, Approx(col_float_val * col_int64_t_val));
+    TEST("col_float * col_double",  "binary/arithmetic/*/float,double",  double, Approx(col_float_val * col_double_val));
+    TEST("col_float * col_decimal", "binary/arithmetic/*/float,decimal", double, Approx(col_float_val * col_decimal_val / 100.0));
+
+    TEST("col_double + col_int64_t", "binary/arithmetic/+/double,int64_t", double, Approx(col_double_val + col_int64_t_val));
+    TEST("col_double + col_float",   "binary/arithmetic/+/double,float",   double, Approx(col_double_val + col_float_val));
+    TEST("col_double + col_decimal", "binary/arithmetic/+/double,decimal", double, Approx(col_double_val + col_decimal_val / 100.0));
+
+    TEST("col_double * col_int64_t", "binary/arithmetic/*/double,int64_t", double, Approx(col_double_val * col_int64_t_val));
+    TEST("col_double * col_float",   "binary/arithmetic/*/double,float",   double, Approx(col_double_val * col_float_val));
+    TEST("col_double * col_decimal", "binary/arithmetic/*/double,decimal", double, Approx(col_double_val * col_decimal_val / 100.0));
+
+    TEST("col_decimal + col_int64_t", "binary/arithmetic/+/decimal,int64_t", decimal, col_decimal_val + col_int64_t_val * 100);
+    TEST("col_decimal + col_float",   "binary/arithmetic/+/decimal,float",   double,  Approx(col_decimal_val / 100.0 + col_float_val));
+    TEST("col_decimal + col_double",  "binary/arithmetic/+/decimal,double",  double,  Approx(col_decimal_val / 100.0 + col_double_val));
+
+    TEST("col_decimal * col_int64_t", "binary/arithmetic/*/decimal,int64_t", decimal, col_decimal_val * col_int64_t_val);
+    TEST("col_decimal * col_float",   "binary/arithmetic/*/decimal,float",   double,  Approx(col_decimal_val / 100.0 * col_float_val));
+    TEST("col_decimal * col_double",  "binary/arithmetic/*/decimal,double",  double,  Approx(col_decimal_val / 100.0 * col_double_val));
+
+    TEST("col_int64_t < col_float",   "binary/logical/</int64_t,float",   bool, col_int64_t_val < col_float_val);
+    TEST("col_int64_t < col_double",  "binary/logical/</int64_t,double",  bool, col_int64_t_val < col_double_val);
+    TEST("col_int64_t < col_decimal", "binary/logical/</int64_t,decimal", bool, col_int64_t_val < col_decimal_val / 100.0);
+
+    TEST("col_float < col_int64_t", "binary/logical/</float,int64_t", bool, col_float_val < col_int64_t_val);
+    TEST("col_float < col_double",  "binary/logical/</float,double",  bool, col_float_val < col_double_val);
+    TEST("col_float < col_decimal", "binary/logical/</float,decimal", bool, col_float_val < col_decimal_val / 100.0);
+
+    TEST("col_double < col_int64_t", "binary/logical/</double,int64_t", bool, col_double_val < col_int64_t_val);
+    TEST("col_double < col_float",   "binary/logical/</double,float",   bool, col_double_val < col_float_val);
+    TEST("col_double < col_decimal", "binary/logical/</double,decimal", bool, col_double_val < col_decimal_val / 100.0);
+
+    TEST("col_decimal < col_int64_t", "binary/logical/</decimal,int64_t", bool, col_decimal_val / 100.0 < col_int64_t_val);
+    TEST("col_decimal < col_float",   "binary/logical/</decimal,float",   bool, col_decimal_val / 100.0 < col_float_val);
+    TEST("col_decimal < col_double",  "binary/logical/</decimal,double",  bool, col_decimal_val / 100.0 < col_double_val);
 #undef TEST
 }

@@ -302,13 +302,24 @@ void ExpressionEvaluator::operator()(Const<BinaryExpr> &e)
         int64_t v_lhs = to<int64_t>(res_lhs); \
         int64_t v_rhs = to<int64_t>(res_rhs); \
         result_ = bool(v_lhs OP v_rhs); \
+    } else if (ty_lhs->is_decimal() and ty_rhs->is_decimal()) { \
+        int64_t v_lhs = to<int64_t>(res_lhs); \
+        int64_t v_rhs = to<int64_t>(res_rhs); \
+        int scale_lhs = as<const Numeric>(ty_lhs)->scale; \
+        int scale_rhs = as<const Numeric>(ty_rhs)->scale; \
+        if (scale_lhs < scale_rhs) { \
+            std::swap(v_lhs, v_rhs); \
+            std::swap(scale_lhs, scale_rhs); \
+        } \
+        v_rhs *= powi<int64_t>(10, scale_lhs - scale_rhs); \
+        result_ = bool(v_lhs OP v_rhs); \
     } else { \
         double v_lhs = to<double>(res_lhs); \
         double v_rhs = to<double>(res_rhs); \
         if (ty_lhs->is_decimal()) \
-            v_lhs /= pow(10, as<const Numeric>(ty_lhs)->scale); /* scale decimal */ \
+            v_lhs /= powi<int64_t>(10, as<const Numeric>(ty_lhs)->scale); /* scale decimal */ \
         if (ty_rhs->is_decimal()) \
-            v_rhs /= pow(10, as<const Numeric>(ty_rhs)->scale); /* scale decimal */ \
+            v_rhs /= powi<int64_t>(10, as<const Numeric>(ty_rhs)->scale); /* scale decimal */ \
         result_ = bool(v_lhs OP v_rhs); \
     }
 

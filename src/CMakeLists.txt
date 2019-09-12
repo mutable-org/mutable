@@ -34,3 +34,6 @@ target_link_libraries(store storage IR parse lex catalog util)
 
 add_executable(operator operator.cpp)
 target_link_libraries(operator storage IR parse lex catalog util)
+
+add_executable(sorting sorting.cpp)
+target_link_libraries(sorting storage IR parse lex catalog util)

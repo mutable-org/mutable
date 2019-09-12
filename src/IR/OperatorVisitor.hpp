@@ -32,6 +32,7 @@ struct TheOperatorVisitor
     DECLARE_CONSUMER(ProjectionOperator);
     DECLARE_CONSUMER(LimitOperator);
     DECLARE_CONSUMER(GroupingOperator);
+    DECLARE_CONSUMER(SortingOperator);
 
 #undef DECLARE_CONSUMER
 #undef DECLARE

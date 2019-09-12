@@ -130,7 +130,7 @@ void JoinOperator::print(std::ostream &out) const
 
 void ProjectionOperator::print(std::ostream &out) const
 {
-    out << "ProjectionOperator";
+    out << "ProjectionOperator"; // TODO improve
 }
 
 void LimitOperator::print(std::ostream &out) const
@@ -140,5 +140,10 @@ void LimitOperator::print(std::ostream &out) const
 
 void GroupingOperator::print(std::ostream &out) const
 {
-    out << "GroupingOperator";
+    out << "GroupingOperator"; // TODO improve
+}
+
+void SortingOperator::print(std::ostream &out) const
+{
+    out << "SortingOperator"; // TODO improve
 }

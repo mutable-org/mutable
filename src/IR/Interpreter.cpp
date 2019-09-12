@@ -429,6 +429,13 @@ struct HashBasedGroupingData : OperatorData
     std::unordered_map<tuple_type, tuple_type> groups;
 };
 
+struct SortingData : OperatorData
+{
+    using buffer_type = std::vector<tuple_type>;
+
+    buffer_type buffer;
+};
+
 /*======================================================================================================================
  * Recursive descent
  *====================================================================================================================*/
@@ -512,6 +519,51 @@ void Interpreter::operator()(const GroupingOperator &op)
             }
             break;
         }
+    }
+}
+
+void Interpreter::operator()(const SortingOperator &op)
+{
+    auto data = new SortingData();
+    op.data(data);
+    op.child(0)->accept(*this);
+    auto orderings = op.order_by();
+    auto schema = op.schema();
+    std::sort(data->buffer.begin(), data->buffer.end(),
+            [orderings, schema](tuple_type t1, tuple_type t2) {
+                ExpressionEvaluator eval1(schema, t1);
+                ExpressionEvaluator eval2(schema, t2);
+                for (auto o : orderings) {
+                    /* o.fist: expression to test, o.second: true is ascending, false otherwise */
+                    eval1(*o.first);
+                    eval2(*o.first);
+                    if (o.first->type()->is_character_sequence()) {
+                        std::string v_t1 = to<std::string>(eval1.result());
+                        std::string v_t2 = to<std::string>(eval2.result());
+                        if (v_t1 < v_t2) { return o.second ? true : false; }
+                        else if (v_t1 > v_t2) { return o.second ? false : true; }
+                    } else if (o.first->type()->is_integral()) {
+                        int64_t v_t1 = to<int64_t>(eval1.result());
+                        int64_t v_t2 = to<int64_t>(eval2.result());
+                        if (v_t1 < v_t2) { return o.second ? true : false; }
+                        else if (v_t1 > v_t2) { return o.second ? false : true; }
+                    } else if (o.first->type()->is_decimal()) {
+                        int scale = as<const Numeric>(o.first->type())->scale;
+                        int64_t v_t1 = to<int64_t>(eval1.result()) * powi(10, scale);
+                        int64_t v_t2 = to<int64_t>(eval2.result()) * powi(10, scale);
+                        if (v_t1 < v_t2) { return o.second ? true : false; }
+                        else if (v_t1 > v_t2) { return o.second ? false : true; }
+                    } else {
+                        double v_t1 = to<double>(eval1.result());
+                        double v_t2 = to<double>(eval2.result());
+                        if (v_t1 < v_t2) { return o.second ? true : false; }
+                        else if (v_t1 > v_t2) { return o.second ? false : true; }
+                    }
+                }
+                return false;
+            });
+    for (auto t : data->buffer) {
+        op.parent()->accept(*this, t);
     }
 }
 
@@ -748,3 +800,11 @@ void Interpreter::operator()(const GroupingOperator &op, tuple_type &t)
         }
     }
 }
+
+void Interpreter::operator()(const SortingOperator &op, tuple_type &t)
+{
+    /* cache all tuples for sorting */
+    auto data = as<SortingData>(op.data());
+    data->buffer.emplace_back(t);
+}
+

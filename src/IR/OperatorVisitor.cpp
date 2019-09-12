@@ -25,3 +25,4 @@ ACCEPT_CONSUMER(JoinOperator);
 ACCEPT_CONSUMER(ProjectionOperator);
 ACCEPT_CONSUMER(LimitOperator);
 ACCEPT_CONSUMER(GroupingOperator);
+ACCEPT_CONSUMER(SortingOperator);

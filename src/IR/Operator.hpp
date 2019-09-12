@@ -461,4 +461,26 @@ struct GroupingOperator : Producer, Consumer
 #undef algorithm
 };
 
+struct SortingOperator : Producer, Consumer
+{
+    using order_type = std::pair<Expr*, bool>; ///> true means ascending, false means descending
+    // TODO maybe constant here or below, not constant in AST though
+
+    private:
+    std::vector<order_type> order_by_;
+
+    public:
+    SortingOperator(std::vector<order_type> order_by) : order_by_(order_by) { }
+
+    const auto & order_by() const { return order_by_; }
+
+    void accept(OperatorVisitor &v) override;
+    void accept(ConstOperatorVisitor &v) const override;
+    void accept(OperatorVisitor &v, tuple_type &t) override;
+    void accept(ConstOperatorVisitor &v, tuple_type &t) const override;
+
+    private:
+    void print(std::ostream &out) const override;
+};
+
 }

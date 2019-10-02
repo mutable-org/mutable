@@ -99,7 +99,6 @@ ORDER BY c ASC, d + h DESC \n\
     }
 
     auto &select = as<const SelectClause>(stmt->select)->select;
-    auto &from = as<const FromClause>(stmt->from)->from;
     auto &order_by = as<const OrderByClause>(stmt->order_by)->order_by;
 
     /* Scan table "mytable" as "T". */
@@ -114,8 +113,11 @@ ORDER BY c ASC, d + h DESC \n\
     proj->add_child(scan);
 
     /* Order by */
-    auto order = new SortingOperator(order_by);
-    order->add_child(proj);
+    std::vector<std::pair<const Expr*, bool>> order;
+    for (auto &o : order_by)
+        order.emplace_back(o.first, o.second);
+    auto sort = new SortingOperator(order);
+    sort->add_child(proj);
 
     /* Print tuples. */
     auto print = [](const OperatorSchema &schema, const tuple_type &t) {
@@ -123,7 +125,7 @@ ORDER BY c ASC, d + h DESC \n\
         std::cout << '\n';
     };
     auto callback = new CallbackOperator(print);
-    callback->add_child(order);
+    callback->add_child(sort);
 
     callback->dump();
     std::cout << '\n';

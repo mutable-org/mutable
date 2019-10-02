@@ -463,14 +463,14 @@ struct GroupingOperator : Producer, Consumer
 
 struct SortingOperator : Producer, Consumer
 {
-    using order_type = std::pair<Expr*, bool>; ///> true means ascending, false means descending
-    // TODO maybe constant here or below, not constant in AST though
+    /** A list of expressions to sort by.  True means ascending, false means descending. */
+    using order_type = std::pair<const Expr*, bool>;
 
     private:
-    std::vector<order_type> order_by_;
+    std::vector<order_type> order_by_; ///< the order to sort by
 
     public:
-    SortingOperator(std::vector<order_type> order_by) : order_by_(order_by) { }
+    SortingOperator(const std::vector<order_type> &order_by) : order_by_(order_by) { }
 
     const auto & order_by() const { return order_by_; }
 

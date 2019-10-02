@@ -529,39 +529,39 @@ void Interpreter::operator()(const SortingOperator &op)
     op.child(0)->accept(*this);
     auto orderings = op.order_by();
     auto schema = op.schema();
-    std::sort(data->buffer.begin(), data->buffer.end(),
-            [orderings, schema](tuple_type t1, tuple_type t2) {
-                ExpressionEvaluator eval1(schema, t1);
-                ExpressionEvaluator eval2(schema, t2);
-                for (auto o : orderings) {
-                    /* o.fist: expression to test, o.second: true is ascending, false otherwise */
-                    eval1(*o.first);
-                    eval2(*o.first);
-                    if (o.first->type()->is_character_sequence()) {
-                        std::string v_t1 = to<std::string>(eval1.result());
-                        std::string v_t2 = to<std::string>(eval2.result());
-                        if (v_t1 < v_t2) { return o.second ? true : false; }
-                        else if (v_t1 > v_t2) { return o.second ? false : true; }
-                    } else if (o.first->type()->is_integral()) {
-                        int64_t v_t1 = to<int64_t>(eval1.result());
-                        int64_t v_t2 = to<int64_t>(eval2.result());
-                        if (v_t1 < v_t2) { return o.second ? true : false; }
-                        else if (v_t1 > v_t2) { return o.second ? false : true; }
-                    } else if (o.first->type()->is_decimal()) {
-                        int scale = as<const Numeric>(o.first->type())->scale;
-                        int64_t v_t1 = to<int64_t>(eval1.result()) * powi(10, scale);
-                        int64_t v_t2 = to<int64_t>(eval2.result()) * powi(10, scale);
-                        if (v_t1 < v_t2) { return o.second ? true : false; }
-                        else if (v_t1 > v_t2) { return o.second ? false : true; }
-                    } else {
-                        double v_t1 = to<double>(eval1.result());
-                        double v_t2 = to<double>(eval2.result());
-                        if (v_t1 < v_t2) { return o.second ? true : false; }
-                        else if (v_t1 > v_t2) { return o.second ? false : true; }
-                    }
-                }
-                return false;
-            });
+    std::sort(data->buffer.begin(), data->buffer.end(), [&](const tuple_type &first, const tuple_type &second) {
+        ExpressionEvaluator eval_first(schema, first);
+        ExpressionEvaluator eval_second(schema, second);
+
+        for (auto o : orderings) {
+            const Expr *orderby = o.first;
+            bool is_ascending = o.second;
+
+            eval_first(*orderby);
+            auto r_first = eval_first.result();
+            eval_second(*orderby);
+            auto r_second = eval_second.result();
+
+            if (orderby->type()->is_character_sequence()) {
+                std::string v_first = to<std::string>(r_first);
+                std::string v_second = to<std::string>(r_second);
+                if (v_first != v_second) return v_first < v_second == is_ascending;
+            } else if (orderby->type()->is_integral()) {
+                int64_t v_first = to<int64_t>(r_first);
+                int64_t v_second = to<int64_t>(r_second);
+                if (v_first != v_second) return v_first < v_second == is_ascending;
+            } else if (orderby->type()->is_decimal()) {
+                int64_t v_first = to<int64_t>(r_first);
+                int64_t v_second = to<int64_t>(r_second);
+                if (v_first != v_second) return v_first < v_second == is_ascending;
+            } else {
+                double v_first = to<double>(r_first);
+                double v_second = to<double>(r_second);
+                if (v_first != v_second) return v_first < v_second == is_ascending;
+            }
+        }
+        return false;
+    });
     for (auto t : data->buffer) {
         op.parent()->accept(*this, t);
     }

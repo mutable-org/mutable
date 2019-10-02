@@ -130,7 +130,7 @@ void JoinOperator::print(std::ostream &out) const
 
 void ProjectionOperator::print(std::ostream &out) const
 {
-    out << "ProjectionOperator"; // TODO improve
+    out << "ProjectionOperator"; // TODO improve(?)
 }
 
 void LimitOperator::print(std::ostream &out) const
@@ -140,10 +140,25 @@ void LimitOperator::print(std::ostream &out) const
 
 void GroupingOperator::print(std::ostream &out) const
 {
-    out << "GroupingOperator"; // TODO improve
+    out << "GroupingOperator [";
+    for (auto it = group_by_.begin(), end = group_by_.end(); it != end; ++it) {
+        if (it != group_by_.begin()) out << ", ";
+        out << **it;
+    }
+    out << "] [";
+    for (auto it = aggregates_.begin(), end = aggregates_.end(); it != end; ++it) {
+        if (it != aggregates_.begin()) out << ", ";
+        out << **it;
+    }
+    out << ']';
 }
 
 void SortingOperator::print(std::ostream &out) const
 {
-    out << "SortingOperator"; // TODO improve
+    out << "SortingOperator [";
+    for (auto it = order_by_.begin(), end = order_by_.end(); it != end; ++it) {
+        if (it != order_by_.begin()) out << ", ";
+        out << *it->first << ' ' << (it->second ? "ASC" : "DESC");
+    }
+    out << ']';
 }

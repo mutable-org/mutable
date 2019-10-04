@@ -538,28 +538,23 @@ void Interpreter::operator()(const SortingOperator &op)
             bool is_ascending = o.second;
 
             eval_first(*orderby);
-            auto r_first = eval_first.result();
             eval_second(*orderby);
-            auto r_second = eval_second.result();
 
-            if (orderby->type()->is_character_sequence()) {
-                std::string v_first = to<std::string>(r_first);
-                std::string v_second = to<std::string>(r_second);
-                if (v_first != v_second) return v_first < v_second == is_ascending;
-            } else if (orderby->type()->is_integral()) {
-                int64_t v_first = to<int64_t>(r_first);
-                int64_t v_second = to<int64_t>(r_second);
-                if (v_first != v_second) return v_first < v_second == is_ascending;
-            } else if (orderby->type()->is_decimal()) {
-                int64_t v_first = to<int64_t>(r_first);
-                int64_t v_second = to<int64_t>(r_second);
-                if (v_first != v_second) return v_first < v_second == is_ascending;
-            } else {
-                double v_first = to<double>(r_first);
-                double v_second = to<double>(r_second);
-                if (v_first != v_second) return v_first < v_second == is_ascending;
-            }
+#define COMPARE(TYPE) { \
+    auto v_first = to<TYPE>(eval_first.result()); \
+    auto v_second = to<TYPE>(eval_second.result()); \
+    if (v_first != v_second) return v_first < v_second == is_ascending; \
+}
+            if (orderby->type()->is_character_sequence())
+                COMPARE(std::string)
+            else if (orderby->type()->is_integral())
+                COMPARE(int64_t)
+            else if (orderby->type()->is_decimal())
+                COMPARE(int64_t)
+            else
+                COMPARE(double)
         }
+#undef COMPARE
         return false;
     });
     for (auto t : data->buffer) {

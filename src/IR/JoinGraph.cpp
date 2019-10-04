@@ -146,14 +146,14 @@ struct db::GraphBuilder : ConstASTVisitor
                 Token alias = tbl.alias ? tbl.alias : *tok;
                 auto base = new BaseTable(tbl.table(), alias.text);
                 aliases.emplace(alias.text, base);
-                graph_->sources.emplace_back(base);
+                graph_->sources_.emplace_back(base);
             } else if (auto stmt = std::get_if<Stmt*>(&tbl.source)) {
                 /* TODO Create a join graph for the nested statement. */
                 insist(tbl.alias.text, "every nested statement requires an alias");
                 auto q = new Query(tbl.alias.text);
                 insist(tbl.alias);
                 aliases.emplace(tbl.alias.text, q);
-                graph_->sources.emplace_back(q);
+                graph_->sources_.emplace_back(q);
             } else {
                 unreachable("invalid variant");
             }
@@ -200,7 +200,7 @@ struct db::GraphBuilder : ConstASTVisitor
                 Join::sources_t sources;
                 for (auto t : tables)
                     sources.emplace_back(aliases.at(t));
-                auto J = graph_->joins.emplace_back(new Join(cnf::CNF({clause}), sources));
+                auto J = graph_->joins_.emplace_back(new Join(cnf::CNF({clause}), sources));
                 for (auto ds : J->sources())
                     ds->add_join(J);
             }
@@ -229,9 +229,9 @@ struct db::GraphBuilder : ConstASTVisitor
 
 JoinGraph::~JoinGraph()
 {
-    for (auto src : sources)
+    for (auto src : sources_)
         delete src;
-    for (auto j : joins)
+    for (auto j : joins_)
         delete j;
 }
 
@@ -250,14 +250,14 @@ void JoinGraph::dot(std::ostream &out) const
         << "    forcelabels=true;\n"
         << "    overlap=false;\n";
 
-    for (auto ds : sources) {
+    for (auto ds : sources_) {
         out << "    " << id(*ds) << " [label=<<B>" << ds->alias() << "</B>";
         if (ds->filter().size())
             out << "<BR/><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">" << ds->filter() << "</FONT>";
         out << ">,style=filled,fillcolor=\"0.0 0.0 0.8\"];\n";
     }
 
-    for (auto j : joins) {
+    for (auto j : joins_) {
         out << "    " << id(*j) << " [label=<" << html_escape(to_string(j->condition())) << ">,style=filled,fillcolor=\"0.0 0.0 0.95\"];\n";
         for (auto ds : j->sources())
             out << "    " << id(*j) << " -- " << id(*ds) << ";\n";
@@ -271,7 +271,7 @@ void JoinGraph::dot(std::ostream &out) const
 void JoinGraph::dump(std::ostream &out) const
 {
     out << "JoinGraph {\n  sources:";
-    for (auto src : sources) {
+    for (auto src : sources_) {
         out << "\n    ";
         if (auto q = cast<Query>(src))
             out << "(Q)";
@@ -282,7 +282,7 @@ void JoinGraph::dump(std::ostream &out) const
         out << ' ' << src->alias() << "  " << src->filter();
     }
     out << "\n  joins:";
-    for (auto j : joins) {
+    for (auto j : joins_) {
         out << "\n    {";
         auto &srcs = j->sources();
         for (auto it = srcs.begin(), end = srcs.end(); it != end; ++it) {

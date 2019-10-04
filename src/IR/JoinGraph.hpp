@@ -72,8 +72,8 @@ struct JoinGraph
 
     private:
     const Stmt *stmt_; ///< the original statement the join graph was constructed from
-    std::vector<DataSource*> sources; ///< collection of all data sources in this join graph
-    std::vector<Join*> joins; ///< collection of all joins in this join graph
+    std::vector<DataSource*> sources_; ///< collection of all data sources in this join graph
+    std::vector<Join*> joins_; ///< collection of all joins in this join graph
 
     public:
     ~JoinGraph();

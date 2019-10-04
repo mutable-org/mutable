@@ -82,6 +82,84 @@ auto get_tables(const cnf::Clause &clause)
     return GT.get();
 }
 
+/** Helper structure to extract the aggregate functions. */
+struct GetAggregates : ConstASTVisitor
+{
+    using ConstASTVisitor::operator();
+
+    private:
+    std::vector<const Expr*> aggregates_;
+
+    public:
+    GetAggregates() { }
+
+    auto get() { return std::move(aggregates_); }
+
+    /* Expr */
+    void operator()(Const<Expr> &e) { e.accept(*this); }
+    void operator()(Const<ErrorExpr>&) { unreachable("graph must not contain errors"); }
+
+    void operator()(Const<Designator>&) { /* nothing to be done */ }
+    void operator()(Const<Constant>&) { /* nothing to be done */ }
+    void operator()(Const<UnaryExpr> &e) { (*this)(*e.expr); }
+    void operator()(Const<BinaryExpr> &e) { (*this)(*e.lhs); (*this)(*e.rhs); }
+
+    void operator()(Const<FnApplicationExpr> &e) {
+        insist(e.has_function());
+        if (e.get_function().is_aggregate()) { // test that this is an aggregation
+            using std::find_if, std::to_string;
+            std::string str = to_string(e);
+            auto exists = [&](const Expr *agg) { return to_string(*agg) == str; };
+            if (find_if(aggregates_.begin(), aggregates_.end(), exists) == aggregates_.end()) // test if already present
+                aggregates_.push_back(&e);
+        }
+    }
+
+    /* Clauses */
+    void operator()(Const<ErrorClause>&) { unreachable("not implemented"); }
+    void operator()(Const<FromClause>&) { unreachable("not implemented"); }
+    void operator()(Const<WhereClause>&) { unreachable("not implemented"); }
+    void operator()(Const<GroupByClause>&) { unreachable("not implemented"); }
+    void operator()(Const<LimitClause>&) { unreachable("not implemented"); }
+
+
+    void operator()(Const<SelectClause> &c) {
+        for (auto s : c.select)
+            (*this)(*s.first);
+    }
+
+    void operator()(Const<HavingClause> &c) { (*this)(*c.having); }
+
+    void operator()(Const<OrderByClause> &c) {
+        for (auto o : c.order_by)
+            (*this)(*o.first);
+    }
+
+    /* Statements */
+    void operator()(Const<ErrorStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<EmptyStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<CreateDatabaseStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<UseDatabaseStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<CreateTableStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<InsertStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<UpdateStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<DeleteStmt>&) { unreachable("not implemented"); }
+
+    void operator()(Const<SelectStmt> &s) {
+        if (s.having) (*this)(*s.having);
+        (*this)(*s.select);
+        if (s.order_by) (*this)(*s.order_by);
+    }
+};
+
+/** Given a select statement, extract the aggregates to compute while grouping. */
+auto get_aggregates(const Stmt &stmt)
+{
+    GetAggregates GA;
+    GA(stmt);
+    return GA.get();
+}
+
 /*======================================================================================================================
  * GraphBuilder
  *
@@ -206,8 +284,40 @@ struct db::GraphBuilder : ConstASTVisitor
             }
         }
 
-        /* TODO Create joins in the join graph. */
-        /* TODO Add filters to data sources. */
+        /* Add groups. */
+        if (s.group_by) {
+            auto G = as<GroupByClause>(s.group_by);
+            graph_->group_by_.insert(graph_->group_by_.begin(), G->group_by.begin(), G->group_by.end());
+        }
+
+        /* Add aggregates. */
+        graph_->aggregates_ = get_aggregates(s);
+
+        /* Add projections */
+        {
+            auto S = as<SelectClause>(s.select);
+            for (auto s : S->select)
+                graph_->projections_.emplace_back(s.first, s.second.text);
+        }
+
+        /* Add order by. */
+        if (s.order_by) {
+            auto O = as<OrderByClause>(s.order_by);
+            for (auto o : O->order_by)
+                graph_->order_by_.emplace_back(o.first, o.second);
+        }
+
+        /* Add limit. */
+        if (s.limit) {
+            auto L = as<LimitClause>(s.limit);
+            errno = 0;
+            graph_->limit_.limit = strtoull(L->limit.text, nullptr, 10);
+            insist(errno == 0);
+            if (L->offset) {
+                graph_->limit_.offset = strtoull(L->offset.text, nullptr, 10);
+                insist(errno == 0);
+            }
+        }
     }
 
     void operator()(Const<InsertStmt> &s) {
@@ -245,16 +355,20 @@ std::unique_ptr<JoinGraph> JoinGraph::Build(const Stmt *stmt)
 void JoinGraph::dot(std::ostream &out) const
 {
 #define q(X) '"' << X << '"' // quote
-#define id(X) q(std::hex << &X) // convert virtual address to identifier
+#define id(X) q(std::hex << &X << std::dec) // convert virtual address to identifier
     out << "graph join_graph\n{\n"
-        << "    forcelabels=true;\n"
-        << "    overlap=false;\n";
+        << "  forcelabels=true;\n"
+        << "  overlap=false;\n"
+        << "  graph [compound=true];\n";
+
+    out << "  subgraph cluster_" << this << " {\n";
 
     for (auto ds : sources_) {
         out << "    " << id(*ds) << " [label=<<B>" << ds->alias() << "</B>";
         if (ds->filter().size())
-            out << "<BR/><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">" << ds->filter() << "</FONT>";
-        out << ">,style=filled,fillcolor=\"0.0 0.0 0.8\"];\n";
+            out << "<BR/><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">"
+                << html_escape(to_string(ds->filter()))
+                << "</FONT>>,style=filled,fillcolor=\"0.0 0.0 0.8\"];\n";
     }
 
     for (auto j : joins_) {
@@ -262,6 +376,67 @@ void JoinGraph::dot(std::ostream &out) const
         for (auto ds : j->sources())
             out << "    " << id(*j) << " -- " << id(*ds) << ";\n";
     }
+
+    out << "    label=<"
+        << "<TABLE BORDER=\"0\" CELLPADDING=\"0\" CELLSPACING=\"0\">\n";
+
+    /* Limit */
+    if (limit_.limit != 0 or limit_.offset != 0) {
+        out << "<TR><TD ALIGN=\"LEFT\">\n"
+            << "<B>λ</B><FONT POINT-SIZE=\"9\">"
+            << limit_.limit << ", " << limit_.offset
+            << "</FONT>\n"
+            << "</TD></TR>\n";
+    }
+
+    /* Order by */
+    if (order_by_.size()) {
+        out << "<TR><TD ALIGN=\"LEFT\">\n"
+            << "<B>τ</B><FONT POINT-SIZE=\"9\">";
+        for (auto it = order_by_.begin(), end = order_by_.end(); it != end; ++it) {
+            if (it != order_by_.begin()) out << ", ";
+            out << html_escape(to_string(*it->first));
+            out << ' ' << (it->second ? "ASC" : "DESC");
+        }
+        out << "</FONT>\n"
+            << "</TD></TR>\n";
+    }
+
+    /* Projections */
+    out << "<TR><TD ALIGN=\"LEFT\">\n"
+        << "<B>π</B><FONT POINT-SIZE=\"9\">";
+    for (auto it = projections_.begin(), end = projections_.end(); it != end; ++it) {
+        if (it != projections_.begin()) out << ", ";
+        out << html_escape(to_string(*it->first));
+        if (it->second)
+            out << " AS " << html_escape(it->second);
+    }
+    out << "</FONT>\n"
+        << "</TD></TR>\n";
+
+    /* Group by and aggregates */
+    if (not group_by_.empty() or not aggregates_.empty()) {
+        out << "<TR><TD ALIGN=\"LEFT\">\n"
+            << "<B>γ</B><FONT POINT-SIZE=\"9\">";
+        for (auto it = group_by_.begin(), end = group_by_.end(); it != end; ++it) {
+            if (it != group_by_.begin()) out << ", ";
+            out << html_escape(to_string(**it));
+        }
+        if (not group_by_.empty() and not aggregates_.empty())
+            out << ", ";
+        for (auto it = aggregates_.begin(), end = aggregates_.end(); it != end; ++it) {
+            if (it != aggregates_.begin()) out << ", ";
+            out << html_escape(to_string(**it));
+        }
+        out << "</FONT>\n"
+            << "</TD></TR>\n";
+    }
+
+    out << "</TABLE>\n"
+        << ">;\n"
+        << "labeljust=\"l\";\n";
+
+    out << "  }\n";
 
     out << '}' << std::endl;
 #undef id

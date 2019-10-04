@@ -34,7 +34,7 @@ struct DataSource
 struct BaseTable : DataSource
 {
     private:
-    const Table &table_;
+    const Table &table_; ///< the table providing the tuples
 
     public:
     BaseTable(const Table &table, const char *alias) : DataSource(alias), table_(table) { }
@@ -71,16 +71,27 @@ struct JoinGraph
     friend struct GraphBuilder;
 
     private:
-    const Stmt *stmt_; ///< the original statement the join graph was constructed from
+    using projection_type = std::pair<const Expr*, const char*>;
+    using order_type = std::pair<const Expr*, bool>; ///> true means ascending, false means descending
+
     std::vector<DataSource*> sources_; ///< collection of all data sources in this join graph
     std::vector<Join*> joins_; ///< collection of all joins in this join graph
+    std::vector<const Expr*> group_by_; ///< the grouping keys
+    std::vector<const Expr*> aggregates_; ///< the aggregates to compute
+    std::vector<projection_type> projections_; ///< the data to compute
+    std::vector<order_type> order_by_; ///< the order
+    struct { uint64_t limit = 0, offset; } limit_; ///< limit: limit and offset
 
     public:
     ~JoinGraph();
 
     static std::unique_ptr<JoinGraph> Build(const Stmt *stmt);
 
-    const Stmt * get_stmt() const { return stmt_; }
+    const auto & group_by() const { return group_by_; }
+    const auto & aggregates() const { return aggregates_; }
+    const auto & projections() const { return projections_; }
+    const auto & order_by() const { return order_by_; }
+    auto limit() const { return limit_; }
 
     /** Translates the join graph to dot. */
     void dot(std::ostream &out) const;

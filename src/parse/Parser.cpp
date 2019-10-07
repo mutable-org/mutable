@@ -216,8 +216,11 @@ exit_constraints:
     /* ')' */
     expect(TK_RPAR);
 
-    if (not ok)
+    if (not ok) {
+        for (auto attr : attrs)
+            delete attr;
         return new ErrorStmt(start);
+    }
 
     return new CreateTableStmt(table_name, std::move(attrs));
 }

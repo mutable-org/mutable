@@ -98,11 +98,13 @@ int main(int argc, const char **argv)
         auto stmt = parser.parse();
         if (diag.num_errors()) {
             diag.clear();
+            delete stmt;
             continue;
         }
         sema(*stmt);
         if (diag.num_errors()) {
             diag.clear();
+            delete stmt;
             continue;
         }
         if (is<SelectStmt>(stmt)) {
@@ -113,6 +115,7 @@ int main(int argc, const char **argv)
             else
                 graph->dump(std::cout);
         }
+        delete stmt;
     }
 
     if (in != &std::cin)

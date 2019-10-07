@@ -49,6 +49,11 @@ struct Expr
     void dump() const;
 
     friend std::ostream & operator<<(std::ostream &out, const Expr &e);
+    friend std::string to_string(const Expr &e) {
+        std::ostringstream oss;
+        oss << e;
+        return oss.str();
+    }
 };
 
 /** The error expression.  Used when the parser encountered a syntactical error. */

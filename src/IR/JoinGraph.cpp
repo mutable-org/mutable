@@ -22,6 +22,8 @@ cnf::CNF get_cnf(const Stmt &stmt)
 /** Helper structure to extract the tables required by an expression. */
 struct GetTables : ConstASTVisitor
 {
+    using ConstASTVisitor::operator();
+
     private:
     std::set<const char*> tables_;
 
@@ -49,7 +51,6 @@ struct GetTables : ConstASTVisitor
     void operator()(Const<BinaryExpr> &e) { (*this)(*e.lhs); (*this)(*e.rhs); }
 
     /* Clauses */
-    void operator()(Const<Clause>&) { unreachable("not implemented"); }
     void operator()(Const<ErrorClause>&) { unreachable("not implemented"); }
     void operator()(Const<SelectClause>&) { unreachable("not implemented"); }
     void operator()(Const<FromClause>&) { unreachable("not implemented"); }
@@ -60,7 +61,6 @@ struct GetTables : ConstASTVisitor
     void operator()(Const<LimitClause>&) { unreachable("not implemented"); }
 
     /* Statements */
-    void operator()(Const<Stmt>&) { unreachable("no implemented"); }
     void operator()(Const<ErrorStmt>&) { unreachable("not implemented"); }
     void operator()(Const<EmptyStmt>&) { unreachable("not implemented"); }
     void operator()(Const<CreateDatabaseStmt>&) { unreachable("not implemented"); }

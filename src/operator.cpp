@@ -122,6 +122,7 @@ SELECT T.f, T.g, COUNT(), COUNT(T.h), SUM(T.a), SUM(T.d), SUM(T.h), MIN(T.a), MA
 FROM mytable AS T, mytable AS S \n\
 WHERE T.c >= 44 AND T.a = S.a \n\
 GROUP BY T.f, T.g \n\
+HAVING COUNT() > 1 \n\
 ;";
     Diagnostic diag(false, std::cout, std::cerr);
     std::istringstream in(sql);
@@ -138,27 +139,29 @@ GROUP BY T.f, T.g \n\
         std::exit(EXIT_FAILURE);
     }
 
-    auto where = as<WhereClause>(stmt->where);
+    auto where = as<WhereClause>(stmt->where)->where;
     auto &select = as<const SelectClause>(stmt->select)->select;
     auto &group_by = as<const GroupByClause>(stmt->group_by)->group_by;
-    auto cond = where->where;
+    auto having = as<const HavingClause>(stmt->having)->having;
 
     cnf::CNFGenerator cnfGen;
-    cnfGen(*cond);
-    auto cnf = cnfGen.get();
+    cnfGen(*where);
+    auto where_cnf = cnfGen.get();
+    cnfGen(*having);
+    auto having_cnf = cnfGen.get();
 
     /* Scan table "mytable" as "T". */
     auto scan = new ScanOperator(*store, T);
 
     /* Filter tuples. */
-    auto filter = new FilterOperator(cnf::CNF{cnf[0]});
+    auto filter = new FilterOperator(cnf::CNF{where_cnf[0]});
     filter->add_child(scan);
 
     /* Scan table "mytable" as "S". */
     auto scan2 = new ScanOperator(*store, S);
 
     /* Join the filtered table "S" with "T". */
-    auto join = new JoinOperator(cnf::CNF{cnf[1]}, JoinOperator::J_Undefined);
+    auto join = new JoinOperator(cnf::CNF{where_cnf[1]}, JoinOperator::J_Undefined);
     join->add_child(filter);
     join->add_child(scan2);
 
@@ -169,13 +172,17 @@ GROUP BY T.f, T.g \n\
     auto grouping = new GroupingOperator({group_by.begin(), group_by.end()}, aggregates, GroupingOperator::G_Hashing);
     grouping->add_child(join);
 
+    /* Having */
+    auto having_filter = new FilterOperator(having_cnf);
+    having_filter->add_child(grouping);
+
     /* Construct a projection operator. */
     std::vector<ProjectionOperator::projection_type> projections;
     for (auto &S : select) {
         projections.emplace_back(S.first, S.second.text);
     }
     auto proj = new ProjectionOperator(projections);
-    proj->add_child(grouping);
+    proj->add_child(having_filter);
 
     /* Print tuples. */
     auto print = [](const OperatorSchema &schema, const tuple_type &t) {

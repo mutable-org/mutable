@@ -107,7 +107,7 @@ void Sema::operator()(Const<Designator> &e)
     } else {
         /* No table name was specified.  The designator references either a result or a named expression.  Search the
          * named expressions first, because they overrule attribute names. */
-        if (auto it = Ctx.results.find(e.attr_name.text); it != Ctx.results.end()) {
+        if (auto it = Ctx.results.find(e.attr_name.text); Ctx.stage > SemaContext::S_Select and it != Ctx.results.end()) {
             /* Found a named expression. */
             e.target_ = it->second;
             is_result = true;

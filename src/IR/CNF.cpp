@@ -83,7 +83,7 @@ CNF operator!(const CNF &cnf)
 }
 
 /*======================================================================================================================
- * Dump
+ * Print/Dump
  *====================================================================================================================*/
 
 std::ostream & operator<<(std::ostream &out, const Predicate &pred)
@@ -106,9 +106,13 @@ std::ostream & operator<<(std::ostream &out, const Clause &clause)
 
 std::ostream & operator<<(std::ostream &out, const CNF &cnf)
 {
-    for (auto it = cnf.begin(); it != cnf.end(); ++it) {
-        if (it != cnf.begin()) out << " ^ ";
-        out << '(' << *it << ')';
+    if (cnf.size() == 1)
+        out << cnf[0];
+    else {
+        for (auto it = cnf.begin(); it != cnf.end(); ++it) {
+            if (it != cnf.begin()) out << " ^ ";
+            out << '(' << *it << ')';
+        }
     }
     return out;
 }

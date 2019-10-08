@@ -833,12 +833,32 @@ ok:;
     }
 }
 
-void Sema::operator()(Const<LimitClause>&)
+void Sema::operator()(Const<LimitClause> &c)
 {
     SemaContext &Ctx = get_context();
     Ctx.stage = SemaContext::S_Limit;
 
     /* TODO limit only makes sense when SELECT is vectorial and not scalar */
+
+    errno = 0;
+    strtoull(c.limit.text, nullptr, 10);
+    if (errno == EINVAL)
+        diag.e(c.limit.pos) << "Invalid value for LIMIT.\n";
+    else if (errno == ERANGE)
+        diag.e(c.limit.pos) << "Value of LIMIT out of range.\n";
+    else if (errno != 0)
+        diag.e(c.limit.pos) << "Invalid LIMIT.\n";
+
+    if (c.offset) {
+        errno = 0;
+        strtoull(c.offset.text, nullptr, 10);
+        if (errno == EINVAL)
+            diag.e(c.offset.pos) << "Invalid value for OFFSET.\n";
+        else if (errno == ERANGE)
+            diag.e(c.offset.pos) << "Value of OFFSET out of range.\n";
+        else if (errno != 0)
+            diag.e(c.offset.pos) << "Invalid OFFSET.\n";
+    }
 }
 
 /*===== Stmt =========================================================================================================*/

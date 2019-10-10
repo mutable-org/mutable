@@ -45,10 +45,15 @@
 * [x] conjunctive normal form
     * [x] implement CNF representation and operations
     * [x] CNF unit tests
-* [ ] design IR
-* [ ] implement IR
-    * [X] translate expression AST to CNF
+* [x] design IR
+* [x] implement IR
+    * [x] translate expression AST to CNF
     * [ ] test IR
+* [x] implement join graph representation
+* [ ] rewrite rules on the join graph
+    * [ ] push-down rules
+    * [ ] de-correlation
+    * [ ] unnesting
 
 ### Catalog
 
@@ -66,13 +71,15 @@
 
 * which kind of storage to provide
     * [ ] memory-only non-persistent storage
+        * [x] in-memory row store
+        * [ ] in-memory columnar store
     * [ ] disk-based persistent storage
 * which data layouts to provide
-    * [ ] row-major layout
+    * [x] row-major layout
     * [ ] column-major layout
     * [ ] *partition across* (PAX)
 * [ ] define interface for access
-    * [ ] by query interpreter
+    * [x] by query interpreter
     * [ ] by query compiler
 
 ### Query Planner

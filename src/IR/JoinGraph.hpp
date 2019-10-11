@@ -76,6 +76,7 @@ struct JoinGraph
 
     std::vector<DataSource*> sources_; ///< collection of all data sources in this join graph
     std::vector<Join*> joins_; ///< collection of all joins in this join graph
+
     std::vector<const Expr*> group_by_; ///< the grouping keys
     std::vector<const Expr*> aggregates_; ///< the aggregates to compute
     std::vector<projection_type> projections_; ///< the data to compute

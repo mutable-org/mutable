@@ -4,6 +4,7 @@ add_library(
     CNF.cpp
     Interpreter.cpp
     JoinGraph.cpp
+    JoinOrderer.cpp
     Operator.cpp
     OperatorVisitor.cpp
     )

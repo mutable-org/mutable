@@ -88,6 +88,8 @@ struct JoinGraph
 
     static std::unique_ptr<JoinGraph> Build(const Stmt *stmt);
 
+    const auto & sources() const { return sources_; }
+    const auto & joins() const { return joins_; }
     const auto & group_by() const { return group_by_; }
     const auto & aggregates() const { return aggregates_; }
     const auto & projections() const { return projections_; }

@@ -1,5 +1,6 @@
 #include "IR/JoinGraph.hpp"
 #include "IR/JoinOrderer.hpp"
+#include "IR/Optimizer.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "util/ArgParser.hpp"
@@ -107,12 +108,13 @@ WHERE R.a = S.a AND R.c = T.c AND S.g = T.g \n\
     }
 
     auto G = JoinGraph::Build(stmt);
-    JoinOrderer *orderer = new DummyJoinOrderer();
-    auto order = (*orderer)(*G.get());
+    DummyJoinOrderer orderer;
+    DummyCostModel cm;
+    Optimizer O(orderer, cm);
+    auto order = O(*G.get());
 
     for (auto g : order)
         std::cout << g.second << '\n';
 
     delete stmt;
-    delete orderer;
 }

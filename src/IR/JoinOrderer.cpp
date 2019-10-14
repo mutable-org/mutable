@@ -7,7 +7,7 @@
 using namespace db;
 
 
-DummyJoinOrderer::mapping_type DummyJoinOrderer::operator()(const JoinGraph &G) const
+DummyJoinOrderer::mapping_type DummyJoinOrderer::operator()(const JoinGraph &G, const CostModel&) const
 {
     mapping_type map;
     std::vector<const JoinGraph*> worklist;

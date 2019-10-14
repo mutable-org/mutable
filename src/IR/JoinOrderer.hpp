@@ -1,5 +1,6 @@
 #pragma once
 
+#include "IR/CostModel.hpp"
 #include "IR/JoinGraph.hpp"
 #include "util/macro.hpp"
 #include <cstdint>
@@ -54,8 +55,8 @@ struct JoinOrderer
 
     virtual ~JoinOrderer() { }
 
-    /** Compute a join order for the given join graph. */
-    virtual mapping_type operator()(const JoinGraph &G) const = 0;
+    /** Compute a join order for the given join graph that minimizes the cost under the given cost model. */
+    virtual mapping_type operator()(const JoinGraph &G, const CostModel &cm) const = 0;
 };
 
 inline std::ostream & operator<<(std::ostream &out, const JoinOrderer::order_type &order) {
@@ -69,7 +70,7 @@ inline std::ostream & operator<<(std::ostream &out, const JoinOrderer::order_typ
 /** Computes an arbitrary join order (deterministically). */
 struct DummyJoinOrderer : JoinOrderer
 {
-    mapping_type operator()(const JoinGraph &G) const override;
+    mapping_type operator()(const JoinGraph &G, const CostModel &cm) const override;
 };
 
 }

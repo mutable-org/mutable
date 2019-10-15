@@ -65,32 +65,21 @@ int main(int argc, const char **argv)
 
     /* Create pooled strings. */
     const char *a = C.pool("a");
-    const char *b = C.pool("b");
-    const char *c = C.pool("c");
-    const char *d = C.pool("d");
-    const char *e = C.pool("e");
-    const char *f = C.pool("f");
-    const char *g = C.pool("g");
-    const char *h = C.pool("h");
-    const char *mytable = C.pool("mytable");
-    const char *T = C.pool("T");
-    const char *S = C.pool("S");
 
     /* Create a table. */
-    Table &tbl = db.add_table(mytable);
+    Table &tbl = db.add_table(C.pool("tbl"));
     tbl.push_back(Type::Get_Integer(Type::TY_Vector, 4), a);
-    tbl.push_back(Type::Get_Boolean(Type::TY_Vector), b);
-    tbl.push_back(Type::Get_Integer(Type::TY_Vector, 8), c);
-    tbl.push_back(Type::Get_Decimal(Type::TY_Vector, 8, 2), d);
-    tbl.push_back(Type::Get_Integer(Type::TY_Vector, 1), e);
-    tbl.push_back(Type::Get_Boolean(Type::TY_Vector), f);
-    tbl.push_back(Type::Get_Char(Type::TY_Vector, 3), g);
-    tbl.push_back(Type::Get_Double(Type::TY_Vector), h);
 
     const char *sql = "\
 SELECT * \n\
-FROM mytable AS R, mytable AS S, mytable AS T \n\
-WHERE R.a = S.a AND R.c = T.c AND S.g = T.g \n\
+FROM tbl AS R, tbl AS S, tbl AS T, tbl AS U, tbl AS V \n\
+WHERE R.a = V.a AND \n\
+      R.a = S.a AND \n\
+      S.a = V.a AND \n\
+      V.a = T.a AND \n\
+      V.a = U.a AND \n\
+      T.a = U.a AND \n\
+      S.a + T.a >= 2 * V.a \n\
 ;";
     Diagnostic diag(false, std::cout, std::cerr);
     std::istringstream in(sql);

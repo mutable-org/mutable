@@ -36,7 +36,8 @@ struct JoinOrderer
 
         friend std::ostream & operator<<(std::ostream &out, const entry_type &e) {
             if (e.is_join()) {
-                out << "⋈";
+                auto j = e.as_join();
+                out << "⋈ " << j->condition();
             } else {
                 auto ds = e.as_datasource();
                 out << ds->alias();

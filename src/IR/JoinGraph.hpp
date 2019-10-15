@@ -28,6 +28,7 @@ struct DataSource
     cnf::CNF filter() const { return filter_; }
     void update_filter(cnf::CNF filter) { filter_ = filter_ and filter; }
     void add_join(Join *join) { joins_.emplace_back(join); }
+    const auto & joins() const { return joins_; }
 };
 
 /** A base table is a data source that is materialized and stored persistently. */

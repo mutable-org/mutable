@@ -108,6 +108,17 @@ bool contains(const H &haystack, const N &needle)
     return find(begin(haystack), end(haystack), needle) != end(haystack);
 }
 
+/** Checks whether `subset` is a subset of `set`. */
+template<typename Container, typename Set>
+bool subset(const Container &subset, const Set &set)
+{
+    for (auto t : subset) {
+        if (set.count(t) == 0)
+            return false;
+    }
+    return true;
+}
+
 /** Escapes special characters in a string to be printable in HTML documents.  Primarily used for DOT. */
 std::string html_escape(std::string str);
 

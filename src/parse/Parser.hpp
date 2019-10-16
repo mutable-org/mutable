@@ -30,11 +30,21 @@ struct Parser
 
     const Token & token() const { return tok_; }
 
+    const Token & token() {
+        if (not tok_)
+            tok_ = lexer.next();
+        return tok_;
+    }
+
+    public:
     bool no(const TokenType tt) { return token() != tt; }
 
     Token consume() {
         auto old = tok_;
-        tok_ = lexer.next();
+        if (lexer.has_next())
+            tok_ = lexer.next();
+        else
+            tok_ = Token();
         return old;
     }
 

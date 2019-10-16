@@ -44,6 +44,9 @@ struct Lexer
     /** Initializes the set of all keywords. */
     void initialize_keywords();
 
+    /** Returns true iff the input stream provides a token. */
+    bool has_next() { return true; } // TODO implement this in a portable way that supports std::cin
+
     /** Obtains the next token from the input stream. */
     Token next();
 

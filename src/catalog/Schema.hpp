@@ -163,6 +163,8 @@ struct Database
     ~Database();
 
     std::size_t size() const { return tables_.size(); }
+    auto begin_tables() const { return tables_.cbegin(); }
+    auto end_tables() const { return tables_.cend(); }
 
     /*===== Tables ===================================================================================================*/
     Table & get_table(const char *name) const { return *tables_.at(name); }

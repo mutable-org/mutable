@@ -6,6 +6,8 @@
 
 namespace db {
 
+struct Producer;
+
 /** The optimizer interface.
  *
  * The optimizer applies a join ordering algorithm to a join graph to compute a join order that minimizes the costs
@@ -26,7 +28,10 @@ struct Optimizer
     auto & cost_model() const { return cm_; }
 
     /** Apply this optimizer to the given join graph to compute an operator tree. */
-    auto operator()(const JoinGraph &G) const { return join_orderer()(G, cost_model()); }
+    std::unique_ptr<Producer> operator()(const JoinGraph &G) const;
+
+    private:
+    std::unique_ptr<Producer> build_operator_tree(const JoinGraph &G, const JoinOrderer::mapping_type &orders) const;
 };
 
 }

@@ -1,5 +1,6 @@
 #include "IR/JoinGraph.hpp"
 #include "IR/JoinOrderer.hpp"
+#include "IR/Operator.hpp"
 #include "IR/Optimizer.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
@@ -100,10 +101,8 @@ WHERE R.a = V.a AND \n\
     DummyJoinOrderer orderer;
     DummyCostModel cm;
     Optimizer O(orderer, cm);
-    auto order = O(*G.get());
-
-    for (auto g : order)
-        std::cout << g.second << '\n';
+    auto optree = O(*G.get());
+    optree->dump(std::cout);
 
     delete stmt;
 }

@@ -7,4 +7,5 @@ add_library(
     JoinOrderer.cpp
     Operator.cpp
     OperatorVisitor.cpp
+    Optimizer.cpp
     )

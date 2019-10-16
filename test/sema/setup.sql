@@ -1,5 +1,5 @@
-CREATE DATABASE mydb;
-USE mydb;
+CREATE DATABASE tpc_h;
+USE tpc_h;
 
 CREATE TABLE PART (
     p_partkey       INT(4),

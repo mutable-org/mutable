@@ -23,6 +23,7 @@ namespace db {
  *====================================================================================================================*/
 
 struct Table;
+struct Store;
 struct Database;
 struct Catalog;
 
@@ -72,6 +73,8 @@ struct Table
     table_type attrs_;
     /** maps attribute names to their position within the table */
     std::unordered_map<const char*, table_type::size_type> name_to_attr_;
+    /** the store backing this table */
+    Store *store_ = nullptr;
 
     public:
     Table(const char *name) : name(name) { }
@@ -88,6 +91,14 @@ struct Table
     const Attribute & at(const char *name) const { return attrs_[name_to_attr_.at(name)]; }
     const Attribute & operator[](std::size_t i) const { return at(i); }
     const Attribute & operator[](const char *name) const { return at(name); }
+
+    Store * store() { return notnull(store_); }
+    const Store * store() const { return notnull(store_); }
+    Store * store(Store *new_store) {
+        notnull(new_store);
+        std::swap(store_, new_store);
+        return new_store;
+    }
 
     void push_back(const PrimitiveType *type, const char *name);
 

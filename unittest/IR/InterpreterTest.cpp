@@ -175,6 +175,7 @@ TEST_CASE("ExpressionEvaluator", "[unit]")
         auto expr = select->select[0].first; \
         eval(*expr); \
         auto r = eval.result(); \
+        delete stmt; \
         CHECK(std::holds_alternative<TYPE>(r)); \
         REQUIRE(std::get<TYPE>(r) == (VALUE)); \
     } \

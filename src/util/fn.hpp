@@ -119,6 +119,17 @@ bool subset(const Container &subset, const Set &set)
     return true;
 }
 
+/** Checks whether `first` and `second` intersect. */
+template<typename Container, typename Set>
+bool intersect(const Container &first, const Set &second)
+{
+    for (auto t : first) {
+        if (second.count(t))
+            return true;
+    }
+    return false;
+}
+
 /** Escapes special characters in a string to be printable in HTML documents.  Primarily used for DOT. */
 std::string html_escape(std::string str);
 

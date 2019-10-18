@@ -38,6 +38,19 @@ using value_type = std::variant<
     bool
 >;
 
+template<typename To>
+To to(const value_type &value)
+{
+    return std::visit(
+        [](auto value) -> To {
+            if constexpr (std::is_convertible_v<decltype(value), To>) {
+                return value;
+            } else {
+                unreachable("value cannot be converted to target type");
+            }
+        }, value);
+}
+
 }
 
 namespace std {

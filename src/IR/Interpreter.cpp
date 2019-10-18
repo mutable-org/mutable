@@ -17,19 +17,6 @@ using namespace db;
 
 namespace db {
 
-template<typename To>
-To to(const value_type &value)
-{
-    return std::visit(
-        [](auto value) -> To {
-            if constexpr (std::is_convertible_v<decltype(value), To>) {
-                return value;
-            } else {
-                unreachable("value cannot be converted to target type");
-            }
-        }, value);
-}
-
 value_type operator+(const value_type &value)
 {
     value_type result;

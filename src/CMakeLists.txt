@@ -4,6 +4,7 @@ add_subdirectory(parse)
 add_subdirectory(IR)
 add_subdirectory(catalog)
 add_subdirectory(storage)
+add_subdirectory(io)
 
 add_library(db INTERFACE)
 target_link_libraries(db INTERFACE storage IR parse lex catalog util)
@@ -37,3 +38,6 @@ target_link_libraries(operator storage IR parse lex catalog util)
 
 add_executable(sorting sorting.cpp)
 target_link_libraries(sorting storage IR parse lex catalog util)
+
+add_executable(dsv dsv.cpp)
+target_link_libraries(dsv io storage IR parse lex catalog util)

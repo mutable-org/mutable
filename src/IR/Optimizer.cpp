@@ -79,7 +79,35 @@ std::unique_ptr<Producer> Optimizer::build_operator_tree(const JoinGraph &G,
         }
     }
 
-    // TODO implement projection, group by, order by
+    auto e = stack.back();
+    auto result = e.second;
+    stack.pop_back();
+
+    /* Perform grouping */
+    if (not G.group_by().empty()) {
+        // TODO pick "best" algorithm
+        auto group_by = new GroupingOperator(G.group_by(), G.aggregates(), GroupingOperator::G_Hashing);
+        group_by->add_child(result);
+        result = group_by;
+    }
+
+     /* Perform ordering */
+    if (not G.order_by().empty()) {
+        auto order_by = new SortingOperator(G.order_by());
+        order_by->add_child(result);
+        result = order_by;
+    }
+
+    //TODO if expression requires computation, replace expression in final projection
+
+    /* Perform projection */
+    if (not G.projections().empty()) {
+        auto projection = new ProjectionOperator(G.projections());
+        projection->add_child(result);
+        result = projection;
+    }
+
+    stack.emplace_back(e.first, result);
 
 #ifndef NDEBUG
     std::cerr << "Optimizer constructed the following operator tree(s):\n";

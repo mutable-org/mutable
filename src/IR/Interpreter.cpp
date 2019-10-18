@@ -71,6 +71,44 @@ value_type operator!(const value_type &value)
  * Expression Evaluator
  *====================================================================================================================*/
 
+value_type ExpressionEvaluator::eval(const Constant &c)
+{
+    errno = 0;
+    switch (c.tok.type) {
+        default: unreachable("illegal token");
+
+        /* Integer */
+        case TK_OCT_INT:
+            return int64_t(strtoll(c.tok.text, nullptr, 8));
+
+        case TK_DEC_INT:
+            return int64_t(strtoll(c.tok.text, nullptr, 10));
+
+        case TK_HEX_INT:
+            return int64_t(strtoll(c.tok.text, nullptr, 16));
+
+        /* Float */
+        case TK_DEC_FLOAT:
+            return strtod(c.tok.text, nullptr);
+
+        case TK_HEX_FLOAT:
+            unreachable("not implemented");
+
+        /* String */
+        case TK_STRING_LITERAL:
+            return std::string(c.tok.text, 1, strlen(c.tok.text) - 2); // strip the surrounding quotes XXX: do we have to "un-escape" the string?
+
+        /* Boolean */
+        case TK_True:
+            return true;
+
+        case TK_False:
+            return false;
+    }
+    if (errno)
+        throw std::invalid_argument("constant could not be parsed");
+}
+
 void ExpressionEvaluator::operator()(Const<Designator> &e)
 {
     /* Given the designator, identify the position of its value in the tuple.  */
@@ -92,47 +130,7 @@ void ExpressionEvaluator::operator()(Const<Designator> &e)
 
 void ExpressionEvaluator::operator()(Const<Constant> &e)
 {
-    errno = 0;
-    switch (e.tok.type) {
-        default: unreachable("illegal token");
-
-        /* Integer */
-        case TK_OCT_INT:
-            result_ = int64_t(strtoll(e.tok.text, nullptr, 8));
-            break;
-
-        case TK_DEC_INT:
-            result_ = int64_t(strtoll(e.tok.text, nullptr, 10));
-            break;
-
-        case TK_HEX_INT:
-            result_ = int64_t(strtoll(e.tok.text, nullptr, 16));
-            break;
-
-        /* Float */
-        case TK_DEC_FLOAT:
-            result_ = strtod(e.tok.text, nullptr);
-            break;
-
-        case TK_HEX_FLOAT:
-            unreachable("not implemented");
-
-        /* String */
-        case TK_STRING_LITERAL:
-            result_ = std::string(e.tok.text, 1, strlen(e.tok.text) - 2); // strip the surrounding quotes XXX: do we have to "un-escape" the string?
-            break;
-
-        /* Boolean */
-        case TK_True:
-            result_ = true;
-            break;
-
-        case TK_False:
-            result_ = false;
-            break;
-    }
-    if (errno)
-        unreachable("constant could not be parsed");
+    result_ = eval(e);
 }
 
 void ExpressionEvaluator::operator()(Const<FnApplicationExpr> &e)

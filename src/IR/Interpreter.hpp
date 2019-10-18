@@ -26,6 +26,8 @@ struct ExpressionEvaluator : ConstASTVisitor
 
     value_type result() const { return result_; }
 
+    static value_type eval(const Constant &c);
+
     /* Expressions */
     void operator()(Const<ErrorExpr>&) override { unreachable("invalid expression"); }
     void operator()(Const<Designator> &e) override;

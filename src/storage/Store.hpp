@@ -141,7 +141,7 @@ struct Store
          * Virtual Setters
          *
          * These protected member functions  must be implemented by any store implementation.  To hide the cluttered
-         * function name, a templated `get` method is exposed to the interface.
+         * function name, a templated `set` method is exposed to the interface.
          *============================================================================================================*/
 
         /** Set the value of the attribute in this row. */

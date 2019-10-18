@@ -1,5 +1,6 @@
 #include "IR/CNF.hpp"
 #include "IR/Interpreter.hpp"
+#include "IR/JoinGraph.hpp"
 #include "IR/Operator.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
@@ -118,12 +119,12 @@ int main(int argc, const char **argv)
     std::cerr << '\n';
 
     const char *sql = "\
-SELECT T.f, T.g, COUNT(), COUNT(T.h), SUM(T.a), SUM(T.d), SUM(T.h), MIN(T.a), MAX(T.d), MAX(T.h) \n\
+SELECT T.f AS new_f, T.g, COUNT() + 42 AS num \n\
 FROM mytable AS T, mytable AS S \n\
 WHERE T.c >= 44 AND T.a = S.a \n\
 GROUP BY T.f, T.g \n\
 HAVING COUNT() > 1 \n\
-;";
+ORDER BY new_f ASC, 2 * num DESC;\n\"";
     Diagnostic diag(false, std::cout, std::cerr);
     std::istringstream in(sql);
     Lexer lexer(diag, C.get_pool(), "-", in);
@@ -139,10 +140,12 @@ HAVING COUNT() > 1 \n\
         std::exit(EXIT_FAILURE);
     }
 
+    auto JG = JoinGraph::Build(stmt);
+
     auto where = as<WhereClause>(stmt->where)->where;
     auto &select = as<const SelectClause>(stmt->select)->select;
-    auto &group_by = as<const GroupByClause>(stmt->group_by)->group_by;
     auto having = as<const HavingClause>(stmt->having)->having;
+    auto &order_by = as<const OrderByClause>(stmt->order_by)->order_by;
 
     cnf::CNFGenerator cnfGen;
     cnfGen(*where);
@@ -166,15 +169,19 @@ HAVING COUNT() > 1 \n\
     join->add_child(scan2);
 
     /* Group by */
-    std::vector<const Expr*> aggregates;
-    for (auto it = select.begin() + 2, end = select.end(); it != end; ++it)
-        aggregates.push_back(it->first);
-    auto grouping = new GroupingOperator({group_by.begin(), group_by.end()}, aggregates, GroupingOperator::G_Hashing);
+    auto grouping = new GroupingOperator(JG->group_by(), JG->aggregates(), GroupingOperator::G_Hashing);
     grouping->add_child(join);
 
     /* Having */
     auto having_filter = new FilterOperator(having_cnf);
     having_filter->add_child(grouping);
+
+    /* Order by */
+    std::vector<std::pair<const Expr*, bool>> order;
+    for (auto &o : order_by)
+        order.emplace_back(o.first, o.second);
+    auto sorting = new SortingOperator(order);
+    sorting->add_child(having_filter);
 
     /* Construct a projection operator. */
     std::vector<ProjectionOperator::projection_type> projections;
@@ -182,7 +189,7 @@ HAVING COUNT() > 1 \n\
         projections.emplace_back(S.first, S.second.text);
     }
     auto proj = new ProjectionOperator(projections);
-    proj->add_child(having_filter);
+    proj->add_child(sorting);
 
     /* Print tuples. */
     auto print = [](const OperatorSchema &schema, const tuple_type &t) {

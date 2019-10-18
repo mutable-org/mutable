@@ -92,13 +92,8 @@ struct Table
     const Attribute & operator[](std::size_t i) const { return at(i); }
     const Attribute & operator[](const char *name) const { return at(name); }
 
-    Store * store() { return notnull(store_); }
-    const Store * store() const { return notnull(store_); }
-    Store * store(Store *new_store) {
-        notnull(new_store);
-        std::swap(store_, new_store);
-        return new_store;
-    }
+    Store & store() const { return *store_; }
+    void store(Store *new_store) { store_ = notnull(new_store); }
 
     void push_back(const PrimitiveType *type, const char *name);
 

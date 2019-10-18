@@ -92,6 +92,16 @@ T * as(U *u) { insist(cast<T>(u)); return static_cast<T*>(u); }
 template<typename T, typename U>
 bool is(U *u) { return cast<T>(u) != nullptr; }
 
+inline std::string escape(char c)
+{
+    switch (c) {
+        default: return std::string(1, c);
+        case '\\': return "\\\\";
+        case '\"': return "\\\"";
+        case '\n': return "\\n";
+    }
+}
+
 inline std::string escape_string(std::string str)
 {
     str = replace_all(str, "\\", "\\\\"); // escape \.

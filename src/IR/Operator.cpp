@@ -130,7 +130,7 @@ void JoinOperator::print(std::ostream &out) const
 
 void ProjectionOperator::print(std::ostream &out) const
 {
-    out << "ProjectionOperator"; // TODO improve(?)
+    out << "ProjectionOperator";
 }
 
 void LimitOperator::print(std::ostream &out) const

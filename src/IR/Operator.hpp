@@ -353,27 +353,43 @@ struct ProjectionOperator : Producer, Consumer
     using projection_type = std::pair<const Expr*, const char*>; // a named expression
 
     private:
+    bool is_anti_ = false;
     std::vector<projection_type> projections_;
 
     public:
     ProjectionOperator(std::vector<projection_type> projections);
 
+    static ProjectionOperator Anti(std::vector<projection_type> projections) {
+        ProjectionOperator P(projections);
+        P.is_anti_ = true;
+        return P;
+    }
+
     /*----- Override child setters to *NOT* modify the computed schema! ----------------------------------------------*/
     virtual void add_child(Producer *child) override {
-        insist(child);
-        children().push_back(child);
-        child->parent(this);
+        if (is_anti()) {
+            Consumer::add_child(child);
+        } else {
+            insist(child);
+            children().push_back(child);
+            child->parent(this);
+        }
     }
     virtual Producer * set_child(Producer *child, std::size_t i) override {
-        insist(child);
-        insist(i < children().size());
-        auto old = children()[i];
-        children()[i] = child;
-        child->parent(this);
-        return old;
+        if (is_anti()) {
+            return Consumer::set_child(child, i);
+        } else {
+            insist(child);
+            insist(i < children().size());
+            auto old = children()[i];
+            children()[i] = child;
+            child->parent(this);
+            return old;
+        }
     }
 
     const auto & projections() const { return projections_; }
+    bool is_anti() const { return is_anti_; }
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;

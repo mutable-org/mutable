@@ -635,6 +635,9 @@ void Interpreter::operator()(const ProjectionOperator &op, tuple_type &t)
         result.push_back(eval.result());
     }
 
+    if (op.is_anti())
+        result.insert(result.end(), t.begin(), t.end());
+
     op.parent()->accept(*this, result);
 }
 

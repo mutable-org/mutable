@@ -555,4 +555,28 @@ struct DeleteStmt : Stmt
     void accept(ConstASTVisitor &v) const;
 };
 
+/** A SQL import statement. */
+struct ImportStmt : Stmt
+{
+    Token table_name;
+
+    ImportStmt(Token table_name) : table_name(table_name) { }
+};
+
+/** An import statement for a delimiter separated values (DSV) file. */
+struct DSVImportStmt : ImportStmt
+{
+    Token path;
+    Token delimiter;
+    bool has_header;
+    bool skip_header;
+
+    DSVImportStmt(Token table_name, Token path, Token delimiter, bool has_header, bool skip_header)
+        : ImportStmt(table_name), path(path), delimiter(delimiter), has_header(has_header), skip_header(skip_header)
+    { }
+
+    void accept(ASTVisitor &v);
+    void accept(ConstASTVisitor &v) const;
+};
+
 }

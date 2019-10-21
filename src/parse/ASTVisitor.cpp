@@ -43,3 +43,4 @@ ACCEPT(SelectStmt);
 ACCEPT(InsertStmt);
 ACCEPT(UpdateStmt);
 ACCEPT(DeleteStmt);
+ACCEPT(DSVImportStmt);

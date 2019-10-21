@@ -1065,3 +1065,17 @@ void Sema::operator()(Const<DeleteStmt> &s)
     (void) s;
     unreachable("Not implemented.");
 }
+
+void Sema::operator()(Const<DSVImportStmt> &s)
+{
+    RequireContext RCtx(this);
+
+    if (s.delimiter) {
+        auto str = unescape(s.delimiter.text);
+        if (str.length() - 2 != 1)
+            diag.e(s.delimiter.pos) << "Invalid delimiter " << s.delimiter.text << ".  Must have length 1.\n";
+    }
+
+    if (s.skip_header and not s.has_header)
+        diag.n(s.path.pos) << "I will assume the existence of a header so I can skip it.\n";
+}

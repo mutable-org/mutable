@@ -382,3 +382,7 @@ void ASTDot::operator()(Const<DeleteStmt>&)
     unreachable("not implemented");
 }
 
+void ASTDot::operator()(Const<DSVImportStmt>&)
+{
+    unreachable("not implemented");
+}

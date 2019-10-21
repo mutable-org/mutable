@@ -44,6 +44,7 @@ struct ASTPrinter : ConstASTVisitor
     virtual void operator()(Const<InsertStmt> &s);
     virtual void operator()(Const<UpdateStmt> &s);
     virtual void operator()(Const<DeleteStmt> &s);
+    virtual void operator()(Const<DSVImportStmt> &s);
 };
 
 }

@@ -45,6 +45,7 @@ struct ASTDumper : ConstASTVisitor
     void operator()(Const<InsertStmt> &s);
     void operator()(Const<UpdateStmt> &s);
     void operator()(Const<DeleteStmt> &s);
+    void operator()(Const<DSVImportStmt> &s);
 
     private:
     std::ostream & indent() const {

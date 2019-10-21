@@ -94,6 +94,7 @@ Stmt * Parser::parse()
         case TK_Insert: stmt = parse_InsertStmt(); break;
         case TK_Update: stmt = parse_UpdateStmt(); break;
         case TK_Delete: stmt = parse_DeleteStmt(); break;
+        case TK_Import: stmt = parse_ImportStmt(); break;
     }
     expect(TK_SEMICOL);
     return stmt;
@@ -345,6 +346,50 @@ Stmt * Parser::parse_DeleteStmt()
         return new ErrorStmt(start);
 
     return new DeleteStmt(table_name, where);
+}
+
+Stmt * Parser::parse_ImportStmt()
+{
+    bool ok = true;
+    Token start = token();
+    expect(TK_Import);
+    expect(TK_Into);
+    Token table_name = token();
+    ok = ok and expect(TK_IDENTIFIER);
+
+    switch (token().type) {
+        case TK_Dsv: {
+            consume();
+
+            Token path = token();
+            ok = ok and expect(TK_STRING_LITERAL);
+
+            Token delimiter;
+            bool has_header = false;
+            bool skip_header = false;
+
+            if (accept(TK_Delimiter)) {
+                delimiter = token();
+                ok = ok and expect(TK_STRING_LITERAL);
+            }
+
+            if (accept(TK_Has) and expect(TK_Header))
+                has_header = true;
+
+            if (accept(TK_Skip) and expect(TK_Header))
+                skip_header = true;
+
+            if (not ok)
+                return new ErrorStmt(start);
+
+            return new DSVImportStmt(table_name, path, delimiter, has_header, skip_header);
+        }
+
+        default:
+            diag.e(token().pos) << "Unrecognized input format \"" << token().text << "\".\n";
+            consume();
+            return new ErrorStmt(start);
+    }
 }
 
 /*======================================================================================================================

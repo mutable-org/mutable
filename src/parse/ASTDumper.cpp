@@ -309,3 +309,18 @@ void ASTDumper::operator()(Const<DeleteStmt> &s)
         --indent_;
     }
 }
+
+void ASTDumper::operator()(Const<DSVImportStmt> &s)
+{
+    indent() << "ImportStmt (DSV): table " << s.table_name.text << " (" << s.table_name.pos << ')';
+
+    ++indent_;
+    indent() << s.path.text << " (" << s.path.pos << ')';
+    if (s.delimiter)
+        indent() << "delimiter " << s.delimiter.text << " (" << s.delimiter.pos << ')';
+    if (s.has_header)
+        indent() << "HAS HEADER";
+    if (s.skip_header)
+        indent() << "SKIP HEADER";
+    --indent_;
+}

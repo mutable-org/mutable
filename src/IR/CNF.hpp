@@ -134,6 +134,7 @@ struct CNFGenerator : ConstASTVisitor
     void operator()(Const<InsertStmt>&) { }
     void operator()(Const<UpdateStmt>&) { }
     void operator()(Const<DeleteStmt>&) { }
+    void operator()(Const<DSVImportStmt>&) { }
 };
 
 }

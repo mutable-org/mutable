@@ -241,3 +241,15 @@ void ASTPrinter::operator()(Const<DeleteStmt> &s)
     if (s.where) out << '\n' << *s.where;
     out << ';';
 }
+
+void ASTPrinter::operator()(Const<DSVImportStmt> &s)
+{
+    out << "IMPORT INTO " << s.table_name.text << " DSV " << s.path.text;
+    if (s.delimiter)
+        out << " DELIMITER " << s.delimiter.text;
+    if (s.has_header)
+        out << " HAS HEADER";
+    if (s.skip_header)
+        out << " SKIP HEADER";
+    out << ';';
+}

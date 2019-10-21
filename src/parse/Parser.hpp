@@ -37,6 +37,7 @@ struct Parser
     }
 
     public:
+    bool is(const TokenType tt) { return token() == tt; }
     bool no(const TokenType tt) { return token() != tt; }
 
     Token consume() {
@@ -72,6 +73,7 @@ struct Parser
     Stmt * parse_InsertStmt();
     Stmt * parse_UpdateStmt();
     Stmt * parse_DeleteStmt();
+    Stmt * parse_ImportStmt();
 
     /* Clauses */
     Clause * parse_SelectClause();

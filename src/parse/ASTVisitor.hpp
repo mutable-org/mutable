@@ -46,6 +46,7 @@ struct TheASTVisitor
     virtual void operator()(Const<InsertStmt> &s) = 0;
     virtual void operator()(Const<UpdateStmt> &s) = 0;
     virtual void operator()(Const<DeleteStmt> &s) = 0;
+    virtual void operator()(Const<DSVImportStmt> &s) = 0;
 };
 
 using ASTVisitor = TheASTVisitor<false>;

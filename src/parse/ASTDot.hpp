@@ -47,6 +47,7 @@ struct ASTDot : ConstASTVisitor
     void operator()(Const<InsertStmt> &s);
     void operator()(Const<UpdateStmt> &s);
     void operator()(Const<DeleteStmt> &s);
+    void operator()(Const<DSVImportStmt> &s);
 };
 
 }

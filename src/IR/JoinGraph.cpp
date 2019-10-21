@@ -70,6 +70,7 @@ struct GetTables : ConstASTVisitor
     void operator()(Const<InsertStmt>&) { unreachable("not implemented"); }
     void operator()(Const<UpdateStmt>&) { unreachable("not implemented"); }
     void operator()(Const<DeleteStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<DSVImportStmt>&) { }
 };
 
 /** Given a clause of a CNF formula, compute the tables that are required by this clause. */
@@ -144,6 +145,7 @@ struct GetAggregates : ConstASTVisitor
     void operator()(Const<InsertStmt>&) { unreachable("not implemented"); }
     void operator()(Const<UpdateStmt>&) { unreachable("not implemented"); }
     void operator()(Const<DeleteStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<DSVImportStmt>&) { }
 
     void operator()(Const<SelectStmt> &s) {
         if (s.having) (*this)(*s.having);
@@ -331,6 +333,8 @@ struct db::GraphBuilder : ConstASTVisitor
     void operator()(Const<DeleteStmt> &s) {
         /* TODO: implement */
     }
+
+    void operator()(Const<DSVImportStmt>&) { }
 };
 
 /*======================================================================================================================

@@ -18,7 +18,8 @@ statement ::= [
                 select-statement |
                 insert-statement |
                 update-statement |
-                delete-statement
+                delete-statement |
+                import-statement
               ] ';' ;
 ```
 
@@ -68,6 +69,14 @@ update-statement ::= update-clause [ where-clause ] ;
 ##### Delete Statement
 ```ebnf
 delete-statement ::= 'DELETE' 'FROM' identifier [ where-clause ] ;
+```
+
+##### Import Statement
+```ebnf
+import-statement ::= 'IMPORT' 'INTO' identifier (
+                         'DSV' string-literal [ 'DELIMITER' string-literal ] [ 'HAS' 'HEADER' ] [ 'SKIP' 'HEADER' ] |
+                         TODO...
+                     )
 ```
 
 ### Clauses

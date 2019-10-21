@@ -102,21 +102,9 @@ inline std::string escape(char c)
     }
 }
 
-inline std::string escape_string(std::string str)
-{
-    str = replace_all(str, "\\", "\\\\"); // escape \.
-    str = replace_all(str, "\"", "\\\""); // escape "
-    str = replace_all(str, "\n", "\\n");  // escape newline
-    return str;
-}
+std::string escape_string(const std::string &str);
 
-inline std::string unescape(std::string str)
-{
-    str = replace_all(str, "\\\\", "\\"); // unescape \\.
-    str = replace_all(str, "\\\"", "\""); // unescape "
-    str = replace_all(str, "\\n", "\n"); // unescape newline
-    return str;
-}
+std::string unescape(const std::string &str);
 
 /** Escapes special characters in a string to be printable in HTML documents.  Primarily used for DOT. */
 std::string html_escape(std::string str);

@@ -56,6 +56,7 @@ struct ExpressionEvaluator : ConstASTVisitor
     void operator()(Const<InsertStmt>&) override { unreachable("not supported"); }
     void operator()(Const<UpdateStmt>&) override { unreachable("not supported"); }
     void operator()(Const<DeleteStmt>&) override { unreachable("not supported"); }
+    void operator()(Const<DSVImportStmt>&) override { unreachable("not supported"); }
 };
 
 bool eval(const OperatorSchema &schema, const cnf::CNF &cnf, const tuple_type &tuple);

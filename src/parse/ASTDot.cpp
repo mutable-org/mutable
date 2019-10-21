@@ -5,7 +5,7 @@
 #include <sstream>
 
 #define q(X) '"' << X << '"' // quote
-#define id(X) q(std::hex << &X) // convert virtual address to identifier
+#define id(X) q(std::hex << &X << std::dec) // convert virtual address to identifier
 
 
 using namespace db;
@@ -27,12 +27,12 @@ ASTDot::~ASTDot()
 
 void ASTDot::operator()(Const<ErrorExpr> &e)
 {
-    out << std::hex << id(e) << " [label=<<FONT COLOR=\"red\"><B>ErrorExpr</B></FONT>>];\n";
+    out << id(e) << " [label=<<FONT COLOR=\"red\"><B>ErrorExpr</B></FONT>>];\n";
 }
 
 void ASTDot::operator()(Const<Designator> &e)
 {
-    out << std::hex << id(e) << " [label=<<B>";
+    out << id(e) << " [label=<<B>";
 
     if (e.has_explicit_table_name()) out << e.table_name.text << ".";
     out << e.attr_name.text << "</B>";

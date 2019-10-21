@@ -392,7 +392,7 @@ void JoinGraph::dot(std::ostream &out) const
     /* Order by */
     if (order_by_.size()) {
         out << "<TR><TD ALIGN=\"LEFT\">\n"
-            << "<B>τ</B><FONT POINT-SIZE=\"9\">";
+            << "<B>ω</B><FONT POINT-SIZE=\"9\">";
         for (auto it = order_by_.begin(), end = order_by_.end(); it != end; ++it) {
             if (it != order_by_.begin()) out << ", ";
             out << html_escape(to_string(*it->first));

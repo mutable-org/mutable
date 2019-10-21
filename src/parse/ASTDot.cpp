@@ -15,7 +15,10 @@ ASTDot::ASTDot(std::ostream &out)
     : out(out)
 {
     out << GRAPH_TYPE << " ast\n{\n"
-        << "forcelabels=true;\n";
+        << "  forcelabels=true;\n"
+        << "  graph [fontname = \"DejaVu Sans\"];\n"
+        << "  node [fontname = \"DejaVu Sans\"];\n"
+        << "  edge [fontname = \"DejaVu Sans\"];\n";
 }
 
 ASTDot::~ASTDot()

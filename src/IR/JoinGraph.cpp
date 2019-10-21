@@ -359,7 +359,10 @@ void JoinGraph::dot(std::ostream &out) const
     out << "graph join_graph\n{\n"
         << "  forcelabels=true;\n"
         << "  overlap=false;\n"
-        << "  graph [compound=true];\n";
+        << "  graph [compound=true];\n"
+        << "  graph [fontname = \"DejaVu Sans\"];\n"
+        << "  node [fontname = \"DejaVu Sans\"];\n"
+        << "  edge [fontname = \"DejaVu Sans\"];\n";
 
     out << "  subgraph cluster_" << this << " {\n";
 

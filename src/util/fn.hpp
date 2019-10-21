@@ -110,6 +110,9 @@ inline std::string escape_string(std::string str)
     return str;
 }
 
+/** Escapes special characters in a string to be printable in HTML documents.  Primarily used for DOT. */
+std::string html_escape(std::string str);
+
 /** Checks whether haystack contains needle. */
 template<typename H, typename N>
 bool contains(const H &haystack, const N &needle)
@@ -139,9 +142,6 @@ bool intersect(const Container &first, const Set &second)
     }
     return false;
 }
-
-/** Escapes special characters in a string to be printable in HTML documents.  Primarily used for DOT. */
-std::string html_escape(std::string str);
 
 /** Power function for integral types. */
 template<typename T>

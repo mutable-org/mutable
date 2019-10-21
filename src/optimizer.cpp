@@ -47,6 +47,10 @@ int main(int argc, const char **argv)
         nullptr, "--color",                 /* Short, Long      */
         "use colors",                       /* Description      */
         [&](bool) { color = true; });       /* Callback         */
+    ADD(bool, opdot, false,                 /* Type, Var, Init  */
+        nullptr, "--opdot",                 /* Short, Long      */
+        "dot the operator tree",            /* Description      */
+        [&](bool) { opdot = true; });       /* Callback         */
 #undef ADD
     AP.parse_args(argc, argv);
 
@@ -115,6 +119,9 @@ int main(int argc, const char **argv)
             if (auto select = cast<SelectStmt>(stmt)) {
                 auto JG = JoinGraph::Build(select);
                 auto plan = O(*JG.get());
+
+                if (opdot)
+                    plan->dot(std::cout);
             }
 
             delete stmt;

@@ -1,5 +1,7 @@
 #include "IR/Operator.hpp"
 
+#include "OperatorDot.hpp"
+
 
 using namespace db;
 
@@ -21,6 +23,12 @@ void OperatorSchema::dump(std::ostream &out) const { out << *this << std::endl; 
 void OperatorSchema::dump() const { dump(std::cerr); }
 
 OperatorData::~OperatorData() { }
+
+void Operator::dot(std::ostream &out) const
+{
+    OperatorDot D(out);
+    D(*this);
+}
 
 void Operator::dump(std::ostream &out) const { print_recursive(out); out << std::endl; }
 void Operator::dump() const { dump(std::cerr); }

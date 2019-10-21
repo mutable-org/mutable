@@ -190,6 +190,8 @@ struct Operator
     virtual void print(std::ostream &out) const = 0;
     virtual void print_recursive(std::ostream &out, unsigned depth = 0) const;
 
+    void dot(std::ostream &out) const;
+
     void dump(std::ostream &out) const;
     void dump() const;
 };

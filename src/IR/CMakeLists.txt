@@ -6,6 +6,7 @@ add_library(
     JoinGraph.cpp
     JoinOrderer.cpp
     Operator.cpp
+    OperatorDot.cpp
     OperatorVisitor.cpp
     Optimizer.cpp
     )

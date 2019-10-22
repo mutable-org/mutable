@@ -96,7 +96,7 @@ value_type ExpressionEvaluator::eval(const Constant &c)
 
         /* String */
         case TK_STRING_LITERAL:
-            return std::string(c.tok.text, 1, strlen(c.tok.text) - 2); // strip the surrounding quotes XXX: do we have to "un-escape" the string?
+            return unescape(std::string(c.tok.text, 1, strlen(c.tok.text) - 2)); // strip the surrounding quotes
 
         /* Boolean */
         case TK_True:

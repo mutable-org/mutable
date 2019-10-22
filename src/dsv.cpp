@@ -97,7 +97,6 @@ int main(int argc, const char **argv)
     store->for_each([](auto &row) { std::cout << row << '\n'; });
 
     delete reader;
-    delete store;
     if (in != &std::cin)
         delete in;
 }

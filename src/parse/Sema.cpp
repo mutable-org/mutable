@@ -1070,12 +1070,40 @@ void Sema::operator()(Const<DSVImportStmt> &s)
 {
     RequireContext RCtx(this);
 
+    /* Check that delimiter, escape character, and row separator have length 1. */
     if (s.delimiter) {
         auto str = unescape(s.delimiter.text);
         if (str.length() - 2 != 1)
             diag.e(s.delimiter.pos) << "Invalid delimiter " << s.delimiter.text << ".  Must have length 1.\n";
     }
+    if (s.escape) {
+        auto str = unescape(s.escape.text);
+        if (str.length() - 2 != 1)
+            diag.e(s.escape.pos) << "Invalid escape character " << s.escape.text << ".  Must have length 1.\n";
+    }
+    if (s.quote) {
+        auto str = unescape(s.quote.text);
+        if (str.length() - 2 != 1)
+            diag.e(s.quote.pos) << "Invalid quote character " << s.quote.text << ".  Must have length 1.\n";
+    }
 
+    /* Sanity check for skip header. */
     if (s.skip_header and not s.has_header)
         diag.n(s.path.pos) << "I will assume the existence of a header so I can skip it.\n";
+
+    /* Duplicate check. */
+    std::pair<Token*, const char*> symbols[] = {
+        { &s.delimiter, "delimiter" },
+        { &s.escape,    "escape character" },
+        { &s.quote,     "quote character" },
+    };
+    std::unordered_map<const char*, const char*> duplicates;
+    for (auto s : symbols) {
+        auto tok = *s.first;
+        auto res = duplicates.emplace(tok.text, s.second);
+        if (not res.second) {
+            diag.e(tok.pos) << "The " << s.second << " (" << tok.text << ") must differ from the " << res.first->second
+                            << ".\n";
+        }
+    }
 }

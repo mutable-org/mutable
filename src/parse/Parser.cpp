@@ -361,28 +361,34 @@ Stmt * Parser::parse_ImportStmt()
         case TK_Dsv: {
             consume();
 
-            Token path = token();
+            DSVImportStmt stmt;
+
+            stmt.path = token();
             ok = ok and expect(TK_STRING_LITERAL);
 
-            Token delimiter;
-            bool has_header = false;
-            bool skip_header = false;
-
+            /* Read the delimiter, escape character, and quote character. */
             if (accept(TK_Delimiter)) {
-                delimiter = token();
+                stmt.delimiter = token();
+                ok = ok and expect(TK_STRING_LITERAL);
+            }
+            if (accept(TK_Escape)) {
+                stmt.escape = token();
+                ok = ok and expect(TK_STRING_LITERAL);
+            }
+            if (accept(TK_Quote)) {
+                stmt.quote = token();
                 ok = ok and expect(TK_STRING_LITERAL);
             }
 
             if (accept(TK_Has) and expect(TK_Header))
-                has_header = true;
-
+                stmt.has_header = true;
             if (accept(TK_Skip) and expect(TK_Header))
-                skip_header = true;
+                stmt.skip_header = true;
 
             if (not ok)
                 return new ErrorStmt(start);
 
-            return new DSVImportStmt(table_name, path, delimiter, has_header, skip_header);
+            return new DSVImportStmt(stmt);
         }
 
         default:

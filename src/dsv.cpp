@@ -91,7 +91,11 @@ int main(int argc, const char **argv)
     auto store = new RowStore(tbl);
     tbl.store(store);
 
-    Reader *reader = new DSVReader(tbl, diag, true);
+    Reader *reader = new DSVReader(tbl, diag,
+                                   /* delimiter=   */ ',',
+                                   /* escape=      */ '\\',
+                                   /* quote=       */ '\"',
+                                   /* has_header=  */ true);
     (*reader)(*in, filename);
 
     store->for_each([](auto &row) { std::cout << row << '\n'; });

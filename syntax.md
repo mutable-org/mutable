@@ -74,7 +74,7 @@ delete-statement ::= 'DELETE' 'FROM' identifier [ where-clause ] ;
 ##### Import Statement
 ```ebnf
 import-statement ::= 'IMPORT' 'INTO' identifier (
-                         'DSV' string-literal [ 'DELIMITER' string-literal ] [ 'HAS' 'HEADER' ] [ 'SKIP' 'HEADER' ] |
+                         'DSV' string-literal [ 'DELIMITER' string-literal ] [ 'ESCAPE' string-literal ] [ 'QUOTE' string-literal ] [ 'HAS' 'HEADER' ] [ 'SKIP' 'HEADER' ] |
                          TODO...
                      )
 ```

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "catalog/Schema.hpp"
+#include "storage/Store.hpp"
 #include "util/Diagnostic.hpp"
 #include <iostream>
 
@@ -18,22 +19,30 @@ struct Reader
     Reader(const Table &table, Diagnostic &diag) : table(table), diag(diag) { }
     virtual ~Reader() { }
 
-    virtual void operator()(std::istream &in, const char *name = "-") const = 0;
+    virtual void operator()(std::istream &in, const char *name = "-") = 0;
 };
 
 /** A reader for delimiter separated value (DSV) files. */
 struct DSVReader : Reader
 {
-    const bool has_header;
-    const bool skip_header;
-    const char delimiter;
+    char delimiter;
+    char escape;
+    char quote;
+    bool has_header;
+    bool skip_header;
 
+    public:
     DSVReader(const Table &table, Diagnostic &diag,
+              char delimiter = ',',
+              char escape = '\\',
+              char quote = '\"',
               bool has_header = false,
-              bool skip_header = false,
-              char delimiter = ',');
+              bool skip_header = false);
 
-    void operator()(std::istream &in, const char *name) const override;
+    void operator()(std::istream &in, const char *name) override;
+
+    private:
+    bool parse_value(std::string str, const Attribute &attr, value_type &value);
 };
 
 }

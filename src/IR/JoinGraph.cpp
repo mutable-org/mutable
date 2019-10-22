@@ -246,15 +246,15 @@ struct db::GraphBuilder : ConstASTVisitor
 
     void operator()(Const<EmptyStmt>&) { /* nothing to be done */ }
 
-    void operator()(Const<CreateDatabaseStmt> &s) {
+    void operator()(Const<CreateDatabaseStmt>&) {
         /* TODO: implement */
     }
 
-    void operator()(Const<UseDatabaseStmt> &s) {
+    void operator()(Const<UseDatabaseStmt>&) {
         /* TODO: implement */
     }
 
-    void operator()(Const<CreateTableStmt> &s) {
+    void operator()(Const<CreateTableStmt>&) {
         /* TODO: implement */
     }
 
@@ -322,15 +322,15 @@ struct db::GraphBuilder : ConstASTVisitor
         }
     }
 
-    void operator()(Const<InsertStmt> &s) {
+    void operator()(Const<InsertStmt>&) {
         /* TODO: implement */
     }
 
-    void operator()(Const<UpdateStmt> &s) {
+    void operator()(Const<UpdateStmt>&) {
         /* TODO: implement */
     }
 
-    void operator()(Const<DeleteStmt> &s) {
+    void operator()(Const<DeleteStmt>&) {
         /* TODO: implement */
     }
 

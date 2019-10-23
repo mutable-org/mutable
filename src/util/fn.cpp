@@ -1,61 +1,45 @@
 #include "util/fn.hpp"
 
 
-std::string escape_string(const std::string &str)
+std::string escape(const std::string &str, char esc, char quote)
 {
     std::string res;
     res.reserve(str.length());
 
     for (auto c : str) {
-        switch (c) {
-            default:
-                res += c;
-                break;
-
-            case '\\':
-                res += "\\\\";
-                break;
-
-            case '\n':
-                res += "\\n";
-                break;
-
-            case '\"':
-                res += "\\";
-                break;
+        if (c == esc or c == quote) {
+            res += esc;
+            res += c;
+        } else if (c == '\n') {
+            res += esc;
+            res += 'n';
+        } else {
+            res += c;
         }
     }
 
     return res;
 }
 
-std::string unescape(const std::string &str)
+std::string unescape(const std::string &str, char esc, char quote)
 {
     std::string res;
     res.reserve(str.length());
 
     for (auto it = str.begin(), end = str.end(); it != end; ++it) {
-        switch (*it) {
-            default:
+        if (*it == esc) {
+            ++it;
+            if (*it == esc or *it == quote) {
                 res += *it;
-                break;
-
-            case '\\':
-                ++it;
-                switch (*it) {
-                    default:
-                        /* invalid escape sequence; print as is */
-                        res += '\\';
-                        res += *it;
-                        break;
-
-                    case '\\':
-                    case 'n':
-                    case '\"':
-                        res += *it;
-                        break;
-                }
-                break;
+            } else if (*it == 'n') {
+                res += '\n';
+            } else {
+                /* invalid escape sequence; do not unescape */
+                res += esc;
+                res += *it;
+            }
+        } else {
+            res += *it;
         }
     }
 

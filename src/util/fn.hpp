@@ -106,6 +106,22 @@ std::string escape(const std::string &str, char esc = '\\', char quote = '"');
 
 std::string unescape(const std::string &str, char esc = '\\', char quote = '"');
 
+inline std::string quote(const std::string &str) { return std::string("\"") + str + '"'; }
+
+inline std::string unquote(const std::string &str, char quote = '"')
+{
+    using std::next, std::prev;
+    insist(str.length() >= 2); // two quotes
+    if (str[0] != quote) return str; // nothing to do
+    insist(*str.rbegin() == quote, "unmatched opening quote");
+    return std::string(next(str.begin()), prev(str.end())); // return substring str[1:-1]
+}
+
+inline std::string interpret(const std::string &str, char esc = '\\', char quote = '"')
+{
+    return unescape(unquote(str, quote), esc, quote);
+}
+
 /** Escapes special characters in a string to be printable in HTML documents.  Primarily used for DOT. */
 std::string html_escape(std::string str);
 

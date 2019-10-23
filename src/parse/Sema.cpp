@@ -1100,18 +1100,19 @@ void Sema::operator()(Const<DSVImportStmt> &s)
         diag.n(s.path.pos) << "I will assume the existence of a header so I can skip it.\n";
 
     /* Duplicate check. */
-    std::pair<Token*, const char*> symbols[] = {
-        { &s.delimiter, "delimiter" },
-        { &s.escape,    "escape character" },
-        { &s.quote,     "quote character" },
-    };
     std::unordered_map<const char*, const char*> duplicates;
-    for (auto s : symbols) {
-        auto tok = *s.first;
-        auto res = duplicates.emplace(tok.text, s.second);
-        if (not res.second) {
-            diag.e(tok.pos) << "The " << s.second << " (" << tok.text << ") must differ from the " << res.first->second
-                            << ".\n";
-        }
+#define DUPLICATE(NAME, SYMBOL, DESCRIPTION) \
+    { \
+        const char *sym = C.pool(s.NAME ? interpret(s.NAME.text).c_str() : SYMBOL); \
+        auto res = duplicates.emplace(sym, DESCRIPTION); \
+        if (not res.second) { \
+            auto &pos = s.NAME ? s.NAME.pos : s.path.pos; \
+            diag.e(pos) << "The " DESCRIPTION " (" << sym << ") must differ from the " << res.first->second \
+                                    << ".\n"; \
+        } \
     }
+    DUPLICATE(delimiter, ",",   "delimiter");
+    DUPLICATE(quote,     "\"",  "quote character");
+    DUPLICATE(escape,    "\\",  "escape character");
+#undef DUPLICATE
 }

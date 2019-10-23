@@ -1069,6 +1069,14 @@ void Sema::operator()(Const<DeleteStmt> &s)
 void Sema::operator()(Const<DSVImportStmt> &s)
 {
     RequireContext RCtx(this);
+    auto &C = Catalog::Get();
+    auto &DB = C.get_database_in_use();
+
+    try {
+        DB.get_table(s.table_name.text);
+    } catch (std::out_of_range) {
+        diag.e(s.table_name.pos) << "Table " << s.table_name.text << " does not exist in database " << DB.name << ".\n";
+    }
 
     /* Check that delimiter, escape character, and row separator have length 1. */
     if (s.delimiter) {

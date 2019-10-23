@@ -1,6 +1,7 @@
 #include "parse/AST.hpp"
 
 #include "catalog/Schema.hpp"
+#include "parse/ASTDot.hpp"
 #include "parse/ASTDumper.hpp"
 #include "parse/ASTPrinter.hpp"
 
@@ -162,6 +163,28 @@ std::ostream & db::operator<<(std::ostream &out, const Stmt &s) {
     ASTPrinter p(out);
     p(s);
     return out;
+}
+
+/*======================================================================================================================
+ * AST Dot
+ *====================================================================================================================*/
+
+void Expr::dot(std::ostream &out) const
+{
+    ASTDot dot(out);
+    dot(*this);
+}
+
+void Clause::dot(std::ostream &out) const
+{
+    ASTDot dot(out);
+    dot(*this);
+}
+
+void Stmt::dot(std::ostream &out) const
+{
+    ASTDot dot(out);
+    dot(*this);
 }
 
 /*======================================================================================================================

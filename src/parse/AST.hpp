@@ -45,6 +45,8 @@ struct Expr
     virtual void accept(ASTVisitor &v) = 0;
     virtual void accept(ConstASTVisitor &v) const = 0;
 
+    void dot(std::ostream &out) const;
+
     void dump(std::ostream &out) const;
     void dump() const;
 
@@ -197,6 +199,8 @@ struct Clause
 
     virtual void accept(ASTVisitor &v) = 0;
     virtual void accept(ConstASTVisitor &v) const = 0;
+
+    void dot(std::ostream &out) const;
 
     void dump(std::ostream &out) const;
     void dump() const;
@@ -386,6 +390,8 @@ struct Stmt
 
     virtual void accept(ASTVisitor &v) = 0;
     virtual void accept(ConstASTVisitor &v) const = 0;
+
+    void dot(std::ostream &out) const;
 
     void dump(std::ostream &out) const;
     void dump() const;

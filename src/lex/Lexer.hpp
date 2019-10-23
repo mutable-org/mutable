@@ -45,7 +45,26 @@ struct Lexer
     void initialize_keywords();
 
     /** Returns true iff the input stream provides a token. */
-    bool has_next() { return true; } // TODO implement this in a portable way that supports std::cin
+    bool has_next() {
+        /* Use std::basic_istream::readsome() tp extract the next character if available.  Note that the behavior of
+         * this function is highly implementation-specific.  However, we believe that it is safe to use here.
+         * The reasoning is as follows:
+         * (*) If characters are available in the buffer, readsome() returns 1 and this functions returns true.
+         * (*) If characters are available in the file, yet the buffer is empty, readsome() returns 0 and this function
+         *     returns false.  This is ok, as the next call to Lexer::next() or Parser::parse() will force reading the
+         *     next character.
+         * (*) If no more characers are in the buffer and the file was read entirely, readsome() returns 0 and this
+         *     function returns false.  This is correct, since there is no next token available.
+         *
+         * see https://en.cppreference.com/w/cpp/io/basic_istream/readsome
+         */
+        char buf;
+        if (in.readsome(&buf, 1)) {
+            in.unget();
+            return true;
+        }
+        return false;
+    }
 
     /** Obtains the next token from the input stream. */
     Token next();

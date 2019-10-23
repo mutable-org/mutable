@@ -44,3 +44,6 @@ target_link_libraries(order IR parse lex catalog util)
 
 add_executable(optimizer optimizer.cpp)
 target_link_libraries(optimizer storage IR parse lex catalog util)
+
+add_executable(shell shell.cpp)
+target_link_libraries(shell db)

@@ -363,6 +363,7 @@ Stmt * Parser::parse_ImportStmt()
 
             DSVImportStmt stmt;
 
+            stmt.table_name = table_name;
             stmt.path = token();
             ok = ok and expect(TK_STRING_LITERAL);
 

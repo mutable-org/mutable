@@ -12,10 +12,6 @@ std::unique_ptr<Producer> Optimizer::operator()(const JoinGraph &G) const
 {
     /* Compute join order. */
     auto order = join_orderer()(G, cost_model());
-#ifndef NDEBUG
-    for (auto g : order)
-        std::cout << g.second << '\n';
-#endif
 
     /* Construct operator tree from join order. */
     return build_operator_tree(G, order);
@@ -108,20 +104,5 @@ std::unique_ptr<Producer> Optimizer::build_operator_tree(const JoinGraph &G,
     }
 
     stack.emplace_back(e.first, result);
-
-#ifndef NDEBUG
-    std::cerr << "Optimizer constructed the following operator tree(s):\n";
-    for (auto it = stack.cbegin(); it != stack.cend(); ++it) {
-        if (it != stack.cbegin()) std::cerr << "\n====================\n";
-        std::cerr << '{';
-        for (auto ds = it->first.cbegin(); ds != it->first.cend(); ++ds) {
-            if (ds != it->first.cbegin()) std::cerr << ", ";
-            std::cerr << (*ds)->alias();
-        }
-        std::cerr << "}:\n";
-        it->second->dump(std::cerr);
-    }
-#endif
-
     return std::unique_ptr<Producer>(stack[0].second);
 }

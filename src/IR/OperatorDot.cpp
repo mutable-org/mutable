@@ -10,7 +10,7 @@ using namespace db;
 OperatorDot::OperatorDot(std::ostream &out)
     : out(out)
 {
-    out << GRAPH_TYPE << " ast\n{\n"
+    out << GRAPH_TYPE << " plan\n{\n"
         << "  forcelabels=true;\n"
         << "  overlap=false;\n"
         << "  rankdir=BT;\n"

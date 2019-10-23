@@ -2,11 +2,10 @@
 
 #include "IR/CostModel.hpp"
 #include "IR/JoinOrderer.hpp"
+#include "IR/Operator.hpp"
 
 
 namespace db {
-
-struct Producer;
 
 /** The optimizer interface.
  *

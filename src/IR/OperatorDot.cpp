@@ -59,7 +59,9 @@ void OperatorDot::operator()(Const<JoinOperator> &op)
 
 void OperatorDot::operator()(Const<ProjectionOperator> &op)
 {
-    (*this)(*op.child(0));
+    bool has_child = op.children().size();
+    if (has_child)
+        (*this)(*op.child(0));
     out << id(op) << " [label=<<B>π</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">";
     if (op.is_anti()) out << '+';
 
@@ -71,8 +73,9 @@ void OperatorDot::operator()(Const<ProjectionOperator> &op)
             out << " AS " << it->second;
     }
 
-    out << "</FONT></SUB>>];\n"
-        << id(*op.child(0)) << EDGE << id(op) << ";\n";
+    out << "</FONT></SUB>>];\n";
+    if (has_child)
+        out << id(*op.child(0)) << EDGE << id(op) << ";\n";
 }
 
 void OperatorDot::operator()(Const<LimitOperator> &op)

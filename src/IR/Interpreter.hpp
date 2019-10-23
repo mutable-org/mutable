@@ -66,6 +66,7 @@ struct Interpreter : ConstOperatorVisitor
 {
     public:
     Interpreter() = default;
+    using ConstOperatorVisitor::operator();
 
 #define DECLARE(CLASS) \
     void operator()(Const<CLASS> &op) override

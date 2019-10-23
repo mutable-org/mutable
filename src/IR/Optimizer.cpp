@@ -75,6 +75,9 @@ std::unique_ptr<Producer> Optimizer::build_operator_tree(const JoinGraph &G,
         }
     }
 
+    if (stack.empty())
+        return std::make_unique<ProjectionOperator>(G.projections());
+
     auto e = stack.back();
     auto result = e.second;
     stack.pop_back();

@@ -375,7 +375,8 @@ void JoinGraph::dot(std::ostream &out) const
         if (ds->filter().size())
             out << "<BR/><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">"
                 << html_escape(to_string(ds->filter()))
-                << "</FONT>>,style=filled,fillcolor=\"0.0 0.0 0.8\"];\n";
+                << "</FONT>";
+        out << ">,style=filled,fillcolor=\"0.0 0.0 0.8\"];\n";
     }
 
     for (auto j : joins_) {

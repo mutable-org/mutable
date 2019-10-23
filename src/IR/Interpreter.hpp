@@ -14,7 +14,7 @@ struct ExpressionEvaluator : ConstASTVisitor
     using ConstASTVisitor::operator();
 
     private:
-    const OperatorSchema schema_;
+    const OperatorSchema &schema_;
     const tuple_type &tuple_;
     value_type result_;
 

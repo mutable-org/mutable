@@ -474,7 +474,13 @@ void Interpreter::operator()(const JoinOperator &op)
 
 void Interpreter::operator()(const ProjectionOperator &op)
 {
-    op.child(0)->accept(*this);
+    bool has_child = op.children().size();
+    if (has_child)
+        op.child(0)->accept(*this);
+    else {
+        tuple_type t;
+        (*this)(op, t); // evaluate the projection EXACTLY ONCE on an empty tuple
+    }
 }
 
 void Interpreter::operator()(const LimitOperator &op)
@@ -628,7 +634,9 @@ void Interpreter::operator()(const ProjectionOperator &op, tuple_type &t)
 {
     tuple_type result;
     result.reserve(op.projections().size());
-    ExpressionEvaluator eval(op.child(0)->schema(), t);
+    const OperatorSchema empty_schema;
+    bool has_child = op.children().size();
+    ExpressionEvaluator eval(has_child ? op.child(0)->schema() : empty_schema, t);
 
     for (auto &P : op.projections()) {
         eval(*P.first);

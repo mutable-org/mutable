@@ -182,10 +182,15 @@ Token Lexer::read_number()
 
 Token Lexer::read_string_literal()
 {
-    /* XXX Escape sequences and proper handling of newline missing. */
     push(); // initial '"'
-    while (EOF != c_ and '"' != c_)
-        push();
+    while (EOF != c_ and '"' != c_) {
+        if (c_ == '\\') { // escape character
+            push();
+            if (c_ == '"') // valid escape sequence
+                push();
+        } else
+            push();
+    }
     push(); // terminal '"'
     return Token(start_, internalize(), TK_STRING_LITERAL);
 }

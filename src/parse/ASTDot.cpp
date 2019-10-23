@@ -268,27 +268,27 @@ void ASTDot::operator()(Const<LimitClause> &c)
 
 void ASTDot::operator()(Const<ErrorStmt>&)
 {
-    unreachable("not implemented");
+    // TODO implement
 }
 
 void ASTDot::operator()(Const<EmptyStmt>&)
 {
-    unreachable("not implemented");
+    // TODO implement
 }
 
 void ASTDot::operator()(Const<CreateDatabaseStmt>&)
 {
-    unreachable("not implemented");
+    // TODO implement
 }
 
 void ASTDot::operator()(Const<UseDatabaseStmt>&)
 {
-    unreachable("not implemented");
+    // TODO implement
 }
 
 void ASTDot::operator()(Const<CreateTableStmt>&)
 {
-    unreachable("not implemented");
+    // TODO implement
 }
 
 void ASTDot::operator()(Const<SelectStmt> &s)
@@ -369,20 +369,20 @@ void ASTDot::operator()(Const<SelectStmt> &s)
 
 void ASTDot::operator()(Const<InsertStmt>&)
 {
-    unreachable("not implemented");
+    // TODO implement
 }
 
 void ASTDot::operator()(Const<UpdateStmt>&)
 {
-    unreachable("not implemented");
+    // TODO implement
 }
 
 void ASTDot::operator()(Const<DeleteStmt>&)
 {
-    unreachable("not implemented");
+    // TODO implement
 }
 
 void ASTDot::operator()(Const<DSVImportStmt>&)
 {
-    unreachable("not implemented");
+    // TODO implement
 }

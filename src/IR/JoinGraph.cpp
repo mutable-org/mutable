@@ -263,7 +263,8 @@ struct db::GraphBuilder : ConstASTVisitor
         auto cnf = get_cnf(s);
 
         /* Create data sources. */
-        (*this)(*s.from);
+        if (s.from)
+            (*this)(*s.from);
 
         /* Dissect CNF into joins and filters. */
         for (auto &clause : cnf) {

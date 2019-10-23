@@ -19,7 +19,8 @@ DummyJoinOrderer::mapping_type DummyJoinOrderer::operator()(const JoinGraph &G, 
         auto &order = map[G];
 
         std::unordered_set<const DataSource*> frontier;
-        frontier.insert(*G->sources().begin());
+        if (not G->sources().empty())
+            frontier.insert(*G->sources().begin());
         std::unordered_set<const Join*> joins(G->joins().begin(), G->joins().end()); ///< set of available joins
         std::unordered_set<const DataSource*> used; ///< set of already joined data sources
 

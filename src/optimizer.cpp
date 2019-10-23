@@ -117,7 +117,7 @@ int main(int argc, const char **argv)
                 std::exit(EXIT_FAILURE);
 
             if (auto select = cast<SelectStmt>(stmt)) {
-                auto JG = JoinGraph::Build(select);
+                auto JG = JoinGraph::Build(*select);
                 auto plan = O(*JG.get());
 
                 if (opdot)

@@ -109,7 +109,7 @@ int main(int argc, const char **argv)
         }
         if (is<SelectStmt>(stmt)) {
             if (ast) stmt->dump(std::cout);
-            auto graph = JoinGraph::Build(stmt);
+            auto graph = JoinGraph::Build(*stmt);
             if (dot)
                 graph->dot(std::cout);
             else

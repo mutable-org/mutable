@@ -87,7 +87,7 @@ struct JoinGraph
     public:
     ~JoinGraph();
 
-    static std::unique_ptr<JoinGraph> Build(const Stmt *stmt);
+    static std::unique_ptr<JoinGraph> Build(const Stmt &stmt);
 
     const auto & sources() const { return sources_; }
     const auto & joins() const { return joins_; }

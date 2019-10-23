@@ -349,10 +349,10 @@ JoinGraph::~JoinGraph()
         delete j;
 }
 
-std::unique_ptr<JoinGraph> JoinGraph::Build(const Stmt *stmt)
+std::unique_ptr<JoinGraph> JoinGraph::Build(const Stmt &stmt)
 {
     GraphBuilder builder;
-    builder(*stmt);
+    builder(stmt);
     return builder.get();
 }
 

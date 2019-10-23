@@ -97,7 +97,7 @@ WHERE R.a = V.a AND \n\
         std::exit(EXIT_FAILURE);
     }
 
-    auto G = JoinGraph::Build(stmt);
+    auto G = JoinGraph::Build(*stmt);
     DummyJoinOrderer orderer;
     DummyCostModel cm;
     Optimizer O(orderer, cm);

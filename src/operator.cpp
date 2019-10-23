@@ -140,7 +140,7 @@ ORDER BY new_f ASC, 2 * num DESC;\n\"";
         std::exit(EXIT_FAILURE);
     }
 
-    auto JG = JoinGraph::Build(stmt);
+    auto JG = JoinGraph::Build(*stmt);
 
     auto where = as<WhereClause>(stmt->where)->where;
     auto &select = as<const SelectClause>(stmt->select)->select;

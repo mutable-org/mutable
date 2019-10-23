@@ -28,8 +28,6 @@ struct Parser
         consume();
     }
 
-    const Token & token() const { return tok_; }
-
     const Token & token() {
         if (not tok_)
             tok_ = lexer.next();

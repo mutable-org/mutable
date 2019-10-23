@@ -113,6 +113,10 @@ int main(int argc, const char **argv)
         Lexer lexer(diag, C.get_pool(), filename, *in);
         Parser parser(lexer);
 
+        if (in == &std::cin) {
+            std::cout << "db> ";
+            std::cout.flush();
+        }
         while (parser.token()) {
             auto stmt = parser.parse();
             if (diag.num_errors()) goto next;
@@ -166,6 +170,11 @@ next:
             num_errors += diag.num_errors();
             diag.clear();
             delete stmt;
+
+            if (in == &std::cin) {
+                std::cout << "db> ";
+                std::cout.flush();
+            }
         }
 
         /*----- Clean up the input stream. ---------------------------------------------------------------------------*/

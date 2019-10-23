@@ -1080,18 +1080,18 @@ void Sema::operator()(Const<DSVImportStmt> &s)
 
     /* Check that delimiter, escape character, and row separator have length 1. */
     if (s.delimiter) {
-        auto str = unescape(s.delimiter.text);
-        if (str.length() - 2 != 1)
+        auto str = interpret(s.delimiter.text);
+        if (str.length() != 1)
             diag.e(s.delimiter.pos) << "Invalid delimiter " << s.delimiter.text << ".  Must have length 1.\n";
     }
     if (s.escape) {
-        auto str = unescape(s.escape.text);
-        if (str.length() - 2 != 1)
+        auto str = interpret(s.escape.text);
+        if (str.length() != 1)
             diag.e(s.escape.pos) << "Invalid escape character " << s.escape.text << ".  Must have length 1.\n";
     }
     if (s.quote) {
-        auto str = unescape(s.quote.text);
-        if (str.length() - 2 != 1)
+        auto str = interpret(s.quote.text);
+        if (str.length() != 1)
             diag.e(s.quote.pos) << "Invalid quote character " << s.quote.text << ".  Must have length 1.\n";
     }
 

@@ -496,7 +496,7 @@ struct SelectStmt : Stmt
                Clause *order_by,
                Clause *limit)
         : select(notnull(select))
-        , from(notnull(from))
+        , from(from)
         , where(where)
         , group_by(group_by)
         , having(having)

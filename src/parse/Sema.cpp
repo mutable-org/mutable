@@ -637,10 +637,7 @@ void Sema::operator()(Const<SelectClause> &c)
 {
     SemaContext &Ctx = get_context();
     Ctx.stage = SemaContext::S_Select;
-
     Catalog &C = Catalog::Get();
-    const auto &DB = C.get_database_in_use();
-    (void) DB;
 
     bool has_vector = false;
     bool has_scalar = false;
@@ -664,7 +661,7 @@ void Sema::operator()(Const<SelectClause> &c)
             /* Without alias.  Print expression as string to get a name. */
             std::ostringstream oss;
             oss << *s.first;
-            res = Ctx.results.emplace(C.get_pool()(oss.str().c_str()), s.first);
+            res = Ctx.results.emplace(C.pool(oss.str().c_str()), s.first);
             if (not res.second)
                 diag.e(c.tok.pos) << "Attribute name " << oss.str() << " already used.\n";
         }
@@ -1028,12 +1025,13 @@ void Sema::operator()(Const<SelectStmt> &s)
     RequireContext RCtx(this);
     Catalog &C = Catalog::Get();
 
-    if (not C.has_database_in_use()) {
-        diag.err() << "No database selected.\n";
-        return;
+    if (s.from) {
+        if (not C.has_database_in_use()) {
+            diag.err() << "No database selected.\n";
+            return;
+        }
+        (*this)(*s.from);
     }
-
-    if (s.from) (*this)(*s.from);
     if (s.where) (*this)(*s.where);
     if (s.group_by) (*this)(*s.group_by);
     if (s.having) (*this)(*s.having);

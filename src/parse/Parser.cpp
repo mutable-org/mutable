@@ -229,13 +229,15 @@ exit_constraints:
 Stmt * Parser::parse_SelectStmt()
 {
     Clause *select = parse_SelectClause();
-    Clause *from = parse_FromClause();
+    Clause *from = nullptr;
     Clause *where = nullptr;
     Clause *group_by = nullptr;
     Clause *having = nullptr;
     Clause *order_by = nullptr;
     Clause *limit = nullptr;
 
+    if (token() == TK_From)
+        from = parse_FromClause();
     if (token() == TK_Where)
         where = parse_WhereClause();
     if (token() == TK_Group)

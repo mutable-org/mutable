@@ -7,7 +7,7 @@ add_subdirectory(storage)
 add_subdirectory(io)
 
 add_library(db INTERFACE)
-target_link_libraries(db INTERFACE storage IR parse lex catalog util)
+target_link_libraries(db INTERFACE io storage IR parse lex catalog util)
 
 add_executable(lex-bin lex.cpp)
 target_link_libraries(lex-bin lex util)

@@ -11,13 +11,13 @@ OperatorDot::OperatorDot(std::ostream &out)
     : out(out)
 {
     out << GRAPH_TYPE << " plan\n{\n"
-        << "  forcelabels=true;\n"
-        << "  overlap=false;\n"
-        << "  rankdir=BT;\n"
-        << "  graph [compound=true];\n"
-        << "  graph [fontname = \"DejaVu Sans\"];\n"
-        << "  node [fontname = \"DejaVu Sans\"];\n"
-        << "  edge [fontname = \"DejaVu Sans\"];\n";
+        << "    forcelabels=true;\n"
+        << "    overlap=false;\n"
+        << "    rankdir=BT;\n"
+        << "    graph [compound=true];\n"
+        << "    graph [fontname = \"DejaVu Sans\"];\n"
+        << "    node [fontname = \"DejaVu Sans\"];\n"
+        << "    edge [fontname = \"DejaVu Sans\"];\n";
 }
 
 OperatorDot::~OperatorDot()
@@ -27,7 +27,7 @@ OperatorDot::~OperatorDot()
 
 void OperatorDot::operator()(Const<ScanOperator> &op)
 {
-    out << id(op) << " [label=<<B>" << html_escape(op.store().table().name) << "</B>>];\n";
+    out << "    " << id(op) << " [label=<<B>" << html_escape(op.store().table().name) << "</B>>];\n";
 }
 
 void OperatorDot::operator()(Const<CallbackOperator> &op)
@@ -38,10 +38,10 @@ void OperatorDot::operator()(Const<CallbackOperator> &op)
 void OperatorDot::operator()(Const<FilterOperator> &op)
 {
     (*this)(*op.child(0));
-    out << id(op) << " [label=<<B>σ</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">"
+    out << "    " << id(op) << " [label=<<B>σ</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">"
         << html_escape(to_string(op.filter()))
         << "</FONT></SUB>>];\n"
-        << id(*op.child(0)) << EDGE << id(op) << ";\n";
+        << "    " << id(*op.child(0)) << EDGE << id(op) << ";\n";
 }
 
 void OperatorDot::operator()(Const<JoinOperator> &op)
@@ -49,12 +49,12 @@ void OperatorDot::operator()(Const<JoinOperator> &op)
     for (auto c : op.children())
         (*this)(*c);
 
-    out << id(op) << " [label=<<B>⋈</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">"
+    out << "    " << id(op) << " [label=<<B>⋈</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">"
         << html_escape(to_string(op.predicate()))
         << "</FONT></SUB>>];\n";
 
     for (auto c : op.children())
-        out << id(*c) << EDGE << id(op) << ";\n";
+        out << "    " << id(*c) << EDGE << id(op) << ";\n";
 }
 
 void OperatorDot::operator()(Const<ProjectionOperator> &op)
@@ -81,17 +81,17 @@ void OperatorDot::operator()(Const<ProjectionOperator> &op)
 void OperatorDot::operator()(Const<LimitOperator> &op)
 {
     (*this)(*op.child(0));
-    out << id(op) << " [label=<<B>λ</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">" << op.limit();
+    out << "    " << id(op) << " [label=<<B>λ</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">" << op.limit();
     if (op.offset())
         out << ", " << op.offset();
     out << "</FONT></SUB>>];\n"
-        << id(*op.child(0)) << EDGE << id(op) << ";\n";
+        << "    " << id(*op.child(0)) << EDGE << id(op) << ";\n";
 }
 
 void OperatorDot::operator()(Const<GroupingOperator> &op)
 {
     (*this)(*op.child(0));
-    out << id(op) << " [label=<<B>γ</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">";
+    out << "    " << id(op) << " [label=<<B>γ</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">";
 
     const auto &G = op.group_by();
     const auto &A = op.aggregates();
@@ -109,13 +109,13 @@ void OperatorDot::operator()(Const<GroupingOperator> &op)
     }
 
     out << "</FONT></SUB>>];\n"
-        << id(*op.child(0)) << EDGE << id(op) << ";\n";
+        << "    " << id(*op.child(0)) << EDGE << id(op) << ";\n";
 }
 
 void OperatorDot::operator()(Const<SortingOperator> &op)
 {
     (*this)(*op.child(0));
-    out << id(op) << " [label=<<B>Ω</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">";
+    out << "    " << id(op) << " [label=<<B>Ω</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">";
 
     const auto &O = op.order_by();
     for (auto it = O.begin(); it != O.end(); ++it) {
@@ -124,5 +124,5 @@ void OperatorDot::operator()(Const<SortingOperator> &op)
     }
 
     out << "</FONT></SUB>>];\n"
-        << id(*op.child(0)) << EDGE << id(op) << ";\n";
+        << "    " << id(*op.child(0)) << EDGE << id(op) << ";\n";
 }

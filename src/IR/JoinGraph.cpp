@@ -362,12 +362,13 @@ void JoinGraph::dot(std::ostream &out) const
 #define q(X) '"' << X << '"' // quote
 #define id(X) q(std::hex << &X << std::dec) // convert virtual address to identifier
     out << "graph join_graph\n{\n"
-        << "  forcelabels=true;\n"
-        << "  overlap=false;\n"
-        << "  graph [compound=true];\n"
-        << "  graph [fontname = \"DejaVu Sans\"];\n"
-        << "  node [fontname = \"DejaVu Sans\"];\n"
-        << "  edge [fontname = \"DejaVu Sans\"];\n";
+        << "    forcelabels=true;\n"
+        << "    overlap=false;\n"
+        << "    labeljust=\"l\";\n"
+        << "    graph [compound=true];\n"
+        << "    graph [fontname = \"DejaVu Sans\"];\n"
+        << "    node [fontname = \"DejaVu Sans\"];\n"
+        << "    edge [fontname = \"DejaVu Sans\"];\n";
 
     out << "  subgraph cluster_" << this << " {\n";
 
@@ -391,29 +392,29 @@ void JoinGraph::dot(std::ostream &out) const
 
     /* Limit */
     if (limit_.limit != 0 or limit_.offset != 0) {
-        out << "<TR><TD ALIGN=\"LEFT\">\n"
-            << "<B>λ</B><FONT POINT-SIZE=\"9\">"
+        out << "             <TR><TD ALIGN=\"LEFT\">\n"
+            << "               <B>λ</B><FONT POINT-SIZE=\"9\">"
             << limit_.limit << ", " << limit_.offset
             << "</FONT>\n"
-            << "</TD></TR>\n";
+            << "             </TD></TR>\n";
     }
 
     /* Order by */
     if (order_by_.size()) {
-        out << "<TR><TD ALIGN=\"LEFT\">\n"
-            << "<B>ω</B><FONT POINT-SIZE=\"9\">";
+        out << "             <TR><TD ALIGN=\"LEFT\">\n"
+            << "               <B>ω</B><FONT POINT-SIZE=\"9\">";
         for (auto it = order_by_.begin(), end = order_by_.end(); it != end; ++it) {
             if (it != order_by_.begin()) out << ", ";
             out << html_escape(to_string(*it->first));
             out << ' ' << (it->second ? "ASC" : "DESC");
         }
         out << "</FONT>\n"
-            << "</TD></TR>\n";
+            << "             </TD></TR>\n";
     }
 
     /* Projections */
-    out << "<TR><TD ALIGN=\"LEFT\">\n"
-        << "<B>π</B><FONT POINT-SIZE=\"9\">";
+    out << "             <TR><TD ALIGN=\"LEFT\">\n"
+        << "               <B>π</B><FONT POINT-SIZE=\"9\">";
     for (auto it = projections_.begin(), end = projections_.end(); it != end; ++it) {
         if (it != projections_.begin()) out << ", ";
         out << html_escape(to_string(*it->first));
@@ -421,12 +422,12 @@ void JoinGraph::dot(std::ostream &out) const
             out << " AS " << html_escape(it->second);
     }
     out << "</FONT>\n"
-        << "</TD></TR>\n";
+        << "             </TD></TR>\n";
 
     /* Group by and aggregates */
     if (not group_by_.empty() or not aggregates_.empty()) {
-        out << "<TR><TD ALIGN=\"LEFT\">\n"
-            << "<B>γ</B><FONT POINT-SIZE=\"9\">";
+        out << "             <TR><TD ALIGN=\"LEFT\">\n"
+            << "               <B>γ</B><FONT POINT-SIZE=\"9\">";
         for (auto it = group_by_.begin(), end = group_by_.end(); it != end; ++it) {
             if (it != group_by_.begin()) out << ", ";
             out << html_escape(to_string(**it));
@@ -438,16 +439,13 @@ void JoinGraph::dot(std::ostream &out) const
             out << html_escape(to_string(**it));
         }
         out << "</FONT>\n"
-            << "</TD></TR>\n";
+            << "             </TD></TR>\n";
     }
 
-    out << "</TABLE>\n"
-        << ">;\n"
-        << "labeljust=\"l\";\n";
-
-    out << "  }\n";
-
-    out << '}' << std::endl;
+    out << "           </TABLE>\n"
+        << "          >;\n"
+        << "  }\n"
+        << '}' << std::endl;
 #undef id
 #undef q
 }

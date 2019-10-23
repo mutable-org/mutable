@@ -370,7 +370,8 @@ void JoinGraph::dot(std::ostream &out) const
         << "    node [fontname = \"DejaVu Sans\"];\n"
         << "    edge [fontname = \"DejaVu Sans\"];\n";
 
-    out << "  subgraph cluster_" << this << " {\n";
+    out << "  subgraph cluster_" << this << " {\n"
+        << "    hideous [label=\"\",style=\"invis\"];\n";
 
     for (auto ds : sources_) {
         out << "    " << id(*ds) << " [label=<<B>" << ds->alias() << "</B>";

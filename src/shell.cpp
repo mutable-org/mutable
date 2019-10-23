@@ -114,7 +114,7 @@ int main(int argc, const char **argv)
         Parser parser(lexer);
 
         if (in == &std::cin) {
-            std::cout << "db> ";
+            std::cout << u8"db \uf6b7> ";
             std::cout.flush();
         }
         while (parser.token()) {
@@ -172,7 +172,7 @@ next:
             delete stmt;
 
             if (in == &std::cin) {
-                std::cout << "db> ";
+                std::cout << u8"db \uf6b7> ";
                 std::cout.flush();
             }
         }

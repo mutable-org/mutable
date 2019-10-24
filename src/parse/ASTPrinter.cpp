@@ -176,8 +176,11 @@ void ASTPrinter::operator()(Const<SelectStmt> &s)
     is_nested = true;
 
     (*this)(*s.select);
-    out << '\n';
-    (*this)(*s.from);
+
+    if (s.from) {
+        out << '\n';
+        (*this)(*s.from);
+    }
 
     if (s.where) {
         out << '\n';

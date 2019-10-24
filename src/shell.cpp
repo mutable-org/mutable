@@ -6,6 +6,8 @@
 #include "parse/Sema.hpp"
 #include "storage/RowStore.hpp"
 #include "util/ArgParser.hpp"
+#include "util/glyphs.hpp"
+#include "util/terminal.hpp"
 #include <cerrno>
 #include <cstdlib>
 #include <fstream>
@@ -23,8 +25,28 @@ void usage(std::ostream &out, const char *name)
         << std::endl;
 }
 
+void prompt(std::ostream &out) {
+    unsigned bg = 238;
+    static auto &C = Catalog::Get();
+    out << term::bg(bg) << term::FG_WHITE << " TheDB ";
+    if (C.has_database_in_use()) {
+        auto &DB = C.get_database_in_use();
+        out << term::fg(bg);
+        bg = 242;
+        out << term::bg(bg) << glyphs::RIGHT << term::FG_WHITE
+            << ' ' << glyphs::DATABASE << ' ' << DB.name << ' ';
+    }
+    out << term::BG_DEFAULT << term::fg(bg) << glyphs::RIGHT << term::RESET << ' ';
+}
+
 int main(int argc, const char **argv)
 {
+    /* Identify whether the terminal supports colors. */
+    const bool term_has_color = term::has_color();
+    /* TODO Identify whether the terminal uses a unicode character encoding. */
+    (void) term_has_color;
+
+    /*----- Parse command line arguments. ----------------------------------------------------------------------------*/
     ArgParser AP;
 #define ADD(TYPE, VAR, INIT, SHORT, LONG, DESCR, CALLBACK)\
     TYPE VAR = INIT;\
@@ -113,10 +135,8 @@ int main(int argc, const char **argv)
         Lexer lexer(diag, C.get_pool(), filename, *in);
         Parser parser(lexer);
 
-        if (in == &std::cin) {
-            std::cout << u8"db \uf6b7> ";
-            std::cout.flush();
-        }
+        if (in == &std::cin)
+            prompt(std::cout);
         while (parser.token()) {
             auto stmt = parser.parse();
             if (diag.num_errors()) goto next;
@@ -171,10 +191,8 @@ next:
             diag.clear();
             delete stmt;
 
-            if (in == &std::cin) {
-                std::cout << u8"db \uf6b7> ";
-                std::cout.flush();
-            }
+            if (in == &std::cin)
+                prompt(std::cout);
         }
 
         /*----- Clean up the input stream. ---------------------------------------------------------------------------*/

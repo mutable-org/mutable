@@ -1,10 +1,10 @@
-#include "util/terminal.cpp"
+#include "util/terminal.hpp"
 
 #include "util/fn.hpp"
 #include <cstdlib>
 
 
-bool has_color()
+bool term::has_color()
 {
     constexpr const char *SUPPORTED_TERMS[] = {
         "ansi",
@@ -23,6 +23,4 @@ bool has_color()
             return true;
     }
     return false;
-}
-
 }

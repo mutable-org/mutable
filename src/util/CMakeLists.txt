@@ -4,4 +4,5 @@ add_library(
     Diagnostic.cpp
     fn.cpp
     Position.cpp
+    terminal.cpp
     )

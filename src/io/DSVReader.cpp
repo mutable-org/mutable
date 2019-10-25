@@ -114,7 +114,8 @@ void DSVReader::operator()(std::istream &in, const char *name)
             columns.push_back(&attr);
         if (skip_header) {
             in.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // skip entire line
-            step(); // skip initially read symbol
+            c = '\n';
+            step(); // skip newline
         }
     }
 

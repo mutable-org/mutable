@@ -96,9 +96,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
     step(); // initialize the variable `c` by reading the first character from the input stream
 
     /*----- Handle header information. -------------------------------------------------------------------------------*/
-    if (skip_header) {
-        in.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // skip entire line
-    } else if (has_header) {
+    if (has_header) {
         while (c != EOF and c != '\n') {
             auto name = read_cell();
             const Attribute *attr = nullptr;
@@ -111,6 +109,13 @@ void DSVReader::operator()(std::istream &in, const char *name)
         }
         insist(c == EOF or c == '\n');
         step();
+    } else {
+        for (auto &attr : table)
+            columns.push_back(&attr);
+        if (skip_header) {
+            in.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // skip entire line
+            step(); // skip initially read symbol
+        }
     }
 
     /*----- Read data row wise. --------------------------------------------------------------------------------------*/

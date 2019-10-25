@@ -5,4 +5,5 @@ add_library(
     fn.cpp
     Position.cpp
     terminal.cpp
+    Timer.cpp
     )

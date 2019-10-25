@@ -36,7 +36,7 @@ std::string unescape(const std::string &str, char esc, char quote)
             } else {
                 /* invalid escape sequence; do not unescape */
                 res += esc;
-                res += *it;
+                --it;
             }
         } else {
             res += *it;

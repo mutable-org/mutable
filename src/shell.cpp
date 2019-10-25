@@ -8,9 +8,11 @@
 #include "util/ArgParser.hpp"
 #include "util/glyphs.hpp"
 #include "util/terminal.hpp"
+#include "util/Timer.hpp"
 #include <cerrno>
 #include <cstdlib>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <vector>
 
@@ -25,8 +27,20 @@ void usage(std::ostream &out, const char *name)
         << std::endl;
 }
 
-void prompt(std::ostream &out) {
-    unsigned bg = 238;
+void prompt(std::ostream &out, Timer::duration dur = Timer::duration()) {
+    unsigned bg;
+
+    if (dur != Timer::duration()) {
+        const auto ms = std::chrono::duration_cast<std::chrono::microseconds>(dur).count() / 1e3;
+        bg = 242;
+        out << term::fg(220) << term::bg(bg) << ' ' << term::BOLD << glyphs::CLOCK_FAST << term::RESET
+            << term::fg(220) << term::bg(bg) << ' '
+            << std::fixed << std::setprecision(2) <<  ms << " ms ";
+        bg = 238;
+        out << term::bg(bg) << term::fg(242) << glyphs::RIGHT << ' ';
+    }
+
+    bg = 238;
     static auto &C = Catalog::Get();
     out << term::bg(bg) << term::FG_WHITE << " TheDB ";
     if (C.has_database_in_use()) {
@@ -62,6 +76,14 @@ int main(int argc, const char **argv)
         nullptr, "--color",                 /* Short, Long      */
         "use colors",                       /* Description      */
         [&](bool) { color = true; });       /* Callback         */
+    ADD(bool, times, false,                 /* Type, Var, Init  */
+        "-t", "--times",                    /* Short, Long      */
+        "report exact timings",             /* Description      */
+        [&](bool) { times = true; });       /* Callback         */
+    ADD(bool, echo, false,                  /* Type, Var, Init  */
+        nullptr, "--echo",                  /* Short, Long      */
+        "echo statements",                  /* Description      */
+        [&](bool) { echo = true; });        /* Callback         */
     ADD(bool, ast, false,                   /* Type, Var, Init  */
         nullptr, "--ast",                   /* Short, Long      */
         "dot the AST of statements",        /* Description      */
@@ -138,25 +160,36 @@ int main(int argc, const char **argv)
         if (in == &std::cin)
             prompt(std::cout);
         while (parser.token()) {
+            Timer timer;
             auto stmt = parser.parse();
+            if (echo)
+                std::cout << *stmt << std::endl;
             if (diag.num_errors()) goto next;
+            timer.start("Semantic Analysis");
             sema(*stmt);
+            timer.stop();
             if (ast) stmt->dump(std::cout);
             if (astdot) stmt->dot(std::cout);
             if (diag.num_errors()) goto next;
 
             if (is<SelectStmt>(stmt)) {
+                timer.start("Construct the Join Graph");
                 auto joingraph = JoinGraph::Build(*stmt);
+                timer.stop();
                 if (graphdot) joingraph->dot(std::cout);
 
+                timer.start("Compute an optimized Query Plan");
                 auto optree = Opt(*joingraph.get()).release();
+                timer.stop();
                 if (plan) optree->dump(std::cout);
                 if (plandot) optree->dot(std::cout);
 
                 if (not dryrun) {
                     auto callback = new CallbackOperator(print);
                     callback->add_child(optree);
+                    timer.start("Interpret the Query Plan");
                     I(*callback);
+                    timer.stop();
                     delete callback;
                 }
             } else if (auto S = cast<CreateTableStmt>(stmt)) {
@@ -183,7 +216,9 @@ int main(int argc, const char **argv)
                         diag.err() << ": " << strerror(errno);
                     diag.err() << std::endl;
                 } else {
+                    timer.start("Read DSV file");
                     R(file, S->path.text);
+                    timer.stop();
                 }
             }
 next:
@@ -191,8 +226,11 @@ next:
             diag.clear();
             delete stmt;
 
+            if (times)
+                std::cout << timer;
+
             if (in == &std::cin)
-                prompt(std::cout);
+                prompt(std::cout, timer.total());
         }
 
         /*----- Clean up the input stream. ---------------------------------------------------------------------------*/

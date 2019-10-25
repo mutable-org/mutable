@@ -10,5 +10,6 @@ constexpr auto LIGHTNING        = u8"\ue00a"; // 
 constexpr auto ELECTRON         = u8"\ue62e"; // 
 constexpr auto RIGHT            = u8"";      // 
 //  ﱦ  
+constexpr auto CLOCK_FAST       = u8"\uf651"; // 
 
 }

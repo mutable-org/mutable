@@ -37,7 +37,7 @@ constexpr const char *FG_RED             = "\033[31m";
 /* 32      set green foreground */
 constexpr const char *FG_GREEN           = "\033[32m";
 /* 33      set brown foreground */
-constexpr const char *FG_BROWN           = "\033[33m";
+constexpr const char *FG_YELLOW          = "\033[33m";
 /* 34      set blue foreground */
 constexpr const char *FG_BLUE            = "\033[34m";
 /* 35      set magenta foreground */
@@ -53,7 +53,7 @@ constexpr const char *BG_RED             = "\033[41m";
 /* 42      set green background */
 constexpr const char *BG_GREEN           = "\033[42m";
 /* 43      set brown background */
-constexpr const char *BG_BROWN           = "\033[43m";
+constexpr const char *BG_YELLOW          = "\033[43m";
 /* 44      set blue background */
 constexpr const char *BG_BLUE            = "\033[44m";
 /* 45      set magenta background */

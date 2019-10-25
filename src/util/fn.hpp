@@ -2,8 +2,12 @@
 
 #include "util/macro.hpp"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstring>
+#include <ctime>
+#include <iomanip>
+#include <iostream>
 #include <type_traits>
 #include <variant>
 
@@ -196,4 +200,12 @@ inline uint64_t murmur3_64(uint64_t v)
     v *= 0xc4ceb9fe1a85ec53;
     v ^= v >> 33;
     return v;
+}
+
+template<typename Clock, typename Duration>
+std::ostream & operator<<(std::ostream &out, std::chrono::time_point<Clock, Duration> tp)
+{
+    const time_t time = Clock::to_time_t(tp); // convert the clock's time_point to std::time_t
+    auto tm = std::localtime(&time); // convert the given time since epoch to local calendar time
+    return out << std::put_time(tm, "%T (%Z)");
 }

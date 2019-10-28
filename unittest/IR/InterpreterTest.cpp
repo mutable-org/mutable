@@ -103,7 +103,7 @@ Stmt * get_statement(const char *sql)
  * Test ExressionEvaluator.
  *====================================================================================================================*/
 
-TEST_CASE("ExpressionEvaluator", "[unit]")
+TEST_CASE("StackMachine", "[unit]")
 {
     using std::to_string;
     using decimal = int64_t;
@@ -122,11 +122,9 @@ TEST_CASE("ExpressionEvaluator", "[unit]")
     const char *col_bool    = C.pool("col_bool");
     const char *col_char    = C.pool("col_char");
     const char *tbl_tbl1    = C.pool("tbl1");
-    //const char *tbl_tbl2    = C.pool("tbl2");
 
     /* Create tables. */
     Table &tbl1 = db.add_table(tbl_tbl1);
-    //Table &tbl2 = db.add_table(tbl_tbl2);
 
     /* Add columns to tables. */
     tbl1.push_back(Type::Get_Integer(Type::TY_Vector, 4), col_int64_t);
@@ -135,11 +133,6 @@ TEST_CASE("ExpressionEvaluator", "[unit]")
     tbl1.push_back(Type::Get_Decimal(Type::TY_Vector, 8, 2), col_decimal);
     tbl1.push_back(Type::Get_Boolean(Type::TY_Vector), col_bool);
     tbl1.push_back(Type::Get_Char(Type::TY_Vector, 4), col_char);
-    //tbl2.push_back(Type::Get_Float(Type::TY_Vector), col_float);
-    //tbl2.push_back(Type::Get_Double(Type::TY_Vector), col_double);
-    //tbl2.push_back(Type::Get_Decimal(Type::TY_Vector, 8, 2), col_decimal);
-    //tbl2.push_back(Type::Get_Boolean(Type::TY_Vector), col_bool);
-    //tbl2.push_back(Type::Get_Char(Type::TY_Vector, 7), col_char);
 
     /* Create tuple schema. */
     OperatorSchema schema;
@@ -165,16 +158,14 @@ TEST_CASE("ExpressionEvaluator", "[unit]")
     tup.emplace_back(col_bool_val);
     tup.emplace_back(col_char_val);
 
-    ExpressionEvaluator eval(schema, tup);
-
 #define TEST(EXPR, NAME, TYPE, VALUE) { \
     DYNAMIC_SECTION(NAME) \
     { \
         auto stmt = as<const SelectStmt>(get_statement("SELECT " EXPR " FROM tbl1;")); \
         auto select = as<const SelectClause>(stmt->select); \
         auto expr = select->select[0].first; \
-        eval(*expr); \
-        auto r = eval.result(); \
+        StackMachine eval(schema, *expr); \
+        auto r = eval(tup); \
         delete stmt; \
         CHECK(std::holds_alternative<TYPE>(r)); \
         REQUIRE(std::get<TYPE>(r) == (VALUE)); \
@@ -213,10 +204,10 @@ TEST_CASE("ExpressionEvaluator", "[unit]")
     TEST("col_int64_t / 13", "binary/arithmetic///int64_t", int64_t, col_int64_t_val / 13);
     TEST("col_int64_t % 13", "binary/arithmetic/%/int64_t", int64_t, col_int64_t_val % 13);
 
-    TEST("col_float + 13", "binary/arithmetic/+/float", double, Approx(col_float_val + 13));
-    TEST("col_float - 13", "binary/arithmetic/-/float", double, Approx(col_float_val - 13));
-    TEST("col_float * 13", "binary/arithmetic/*/float", double, Approx(col_float_val * 13));
-    TEST("col_float / 13", "binary/arithmetic///float", double, Approx(col_float_val / 13));
+    TEST("col_float + 13", "binary/arithmetic/+/float", float, Approx(col_float_val + 13));
+    TEST("col_float - 13", "binary/arithmetic/-/float", float, Approx(col_float_val - 13));
+    TEST("col_float * 13", "binary/arithmetic/*/float", float, Approx(col_float_val * 13));
+    TEST("col_float / 13", "binary/arithmetic///float", float, Approx(col_float_val / 13));
 
     TEST("col_double + 13", "binary/arithmetic/+/double", double, Approx(col_double_val + 13));
     TEST("col_double - 13", "binary/arithmetic/-/double", double, Approx(col_double_val - 13));
@@ -291,38 +282,38 @@ TEST_CASE("ExpressionEvaluator", "[unit]")
 
     /*----- Mixed datatypes ------------------------------------------------------------------------------------------*/
     /* LHS int64 */
-    TEST("col_int64_t + col_float",   "binary/arithmetic/+/int64_t,float",   double,  Approx(col_int64_t_val + col_float_val));
+    TEST("col_int64_t + col_float",   "binary/arithmetic/+/int64_t,float",   float,   Approx(col_int64_t_val + col_float_val));
     TEST("col_int64_t + col_double",  "binary/arithmetic/+/int64_t,double",  double,  Approx(col_int64_t_val + col_double_val));
     TEST("col_int64_t + col_decimal", "binary/arithmetic/+/int64_t,decimal", decimal, col_int64_t_val * 100  + col_decimal_val);
 
-    TEST("col_int64_t - col_float",   "binary/arithmetic/-/int64_t,float",   double,  Approx(col_int64_t_val - col_float_val));
+    TEST("col_int64_t - col_float",   "binary/arithmetic/-/int64_t,float",   float,   Approx(col_int64_t_val - col_float_val));
     TEST("col_int64_t - col_double",  "binary/arithmetic/-/int64_t,double",  double,  Approx(col_int64_t_val - col_double_val));
     TEST("col_int64_t - col_decimal", "binary/arithmetic/-/int64_t,decimal", decimal, col_int64_t_val * 100  - col_decimal_val);
 
-    TEST("col_int64_t * col_float",   "binary/arithmetic/*/int64_t,float",   double,  Approx(col_int64_t_val * col_float_val));
+    TEST("col_int64_t * col_float",   "binary/arithmetic/*/int64_t,float",   float,   Approx(col_int64_t_val * col_float_val));
     TEST("col_int64_t * col_double",  "binary/arithmetic/*/int64_t,double",  double,  Approx(col_int64_t_val * col_double_val));
     TEST("col_int64_t * col_decimal", "binary/arithmetic/*/int64_t,decimal", decimal, col_int64_t_val * col_decimal_val);
 
-    TEST("col_int64_t / col_float",   "binary/arithmetic///int64_t,float",   double,  Approx(col_int64_t_val / col_float_val));
+    TEST("col_int64_t / col_float",   "binary/arithmetic///int64_t,float",   float,   Approx(col_int64_t_val / col_float_val));
     TEST("col_int64_t / col_double",  "binary/arithmetic///int64_t,double",  double,  Approx(col_int64_t_val / col_double_val));
-    TEST("col_int64_t / col_decimal", "binary/arithmetic///int64_t,decimal", decimal, (col_int64_t_val * 100) / col_decimal_val * 100);
+    TEST("col_int64_t / col_decimal", "binary/arithmetic///int64_t,decimal", decimal, (col_int64_t_val * 100 * 100) / col_decimal_val);
 
     /* LHS float */
-    TEST("col_float + col_int64_t", "binary/arithmetic/+/float,int64_t", double, Approx(col_float_val + col_int64_t_val));
+    TEST("col_float + col_int64_t", "binary/arithmetic/+/float,int64_t", float,  Approx(col_float_val + col_int64_t_val));
     TEST("col_float + col_double",  "binary/arithmetic/+/float,double",  double, Approx(col_float_val + col_double_val));
-    TEST("col_float + col_decimal", "binary/arithmetic/+/float,decimal", double, Approx(col_float_val + (col_decimal_val / 100.f)));
+    TEST("col_float + col_decimal", "binary/arithmetic/+/float,decimal", float,  Approx(col_float_val + (col_decimal_val / 100.f)));
 
-    TEST("col_float - col_int64_t", "binary/arithmetic/-/float,int64_t", double, Approx(col_float_val - col_int64_t_val));
+    TEST("col_float - col_int64_t", "binary/arithmetic/-/float,int64_t", float,  Approx(col_float_val - col_int64_t_val));
     TEST("col_float - col_double",  "binary/arithmetic/-/float,double",  double, Approx(col_float_val - col_double_val));
-    TEST("col_float - col_decimal", "binary/arithmetic/-/float,decimal", double, Approx(col_float_val - (col_decimal_val / 100.f)));
+    TEST("col_float - col_decimal", "binary/arithmetic/-/float,decimal", float,  Approx(col_float_val - (col_decimal_val / 100.f)));
 
-    TEST("col_float * col_int64_t", "binary/arithmetic/*/float,int64_t", double, Approx(col_float_val * col_int64_t_val));
+    TEST("col_float * col_int64_t", "binary/arithmetic/*/float,int64_t", float,  Approx(col_float_val * col_int64_t_val));
     TEST("col_float * col_double",  "binary/arithmetic/*/float,double",  double, Approx(col_float_val * col_double_val));
-    TEST("col_float * col_decimal", "binary/arithmetic/*/float,decimal", double, Approx(col_float_val * (col_decimal_val / 100.f)));
+    TEST("col_float * col_decimal", "binary/arithmetic/*/float,decimal", float,  Approx(col_float_val * (col_decimal_val / 100.f)));
 
-    TEST("col_float / col_int64_t", "binary/arithmetic///float,int64_t", double, Approx(col_float_val / col_int64_t_val));
+    TEST("col_float / col_int64_t", "binary/arithmetic///float,int64_t", float,  Approx(col_float_val / col_int64_t_val));
     TEST("col_float / col_double",  "binary/arithmetic///float,double",  double, Approx(col_float_val / col_double_val));
-    TEST("col_float / col_decimal", "binary/arithmetic///float,decimal", double, Approx(col_float_val / (col_decimal_val / 100.f)));
+    TEST("col_float / col_decimal", "binary/arithmetic///float,decimal", float,  Approx(col_float_val / (col_decimal_val / 100.f)));
 
     /* LHS double */
     TEST("col_double + col_int64_t", "binary/arithmetic/+/double,int64_t", double, Approx(col_double_val + col_int64_t_val));
@@ -335,11 +326,11 @@ TEST_CASE("ExpressionEvaluator", "[unit]")
 
     /* LHS decimal */
     TEST("col_decimal + col_int64_t", "binary/arithmetic/+/decimal,int64_t", decimal, col_decimal_val + col_int64_t_val * 100);
-    TEST("col_decimal + col_float",   "binary/arithmetic/+/decimal,float",   double,  Approx(col_decimal_val / 100.0 + col_float_val));
+    TEST("col_decimal + col_float",   "binary/arithmetic/+/decimal,float",   float,   Approx(col_decimal_val / 100.0 + col_float_val));
     TEST("col_decimal + col_double",  "binary/arithmetic/+/decimal,double",  double,  Approx(col_decimal_val / 100.0 + col_double_val));
 
     TEST("col_decimal * col_int64_t", "binary/arithmetic/*/decimal,int64_t", decimal, col_decimal_val * col_int64_t_val);
-    TEST("col_decimal * col_float",   "binary/arithmetic/*/decimal,float",   double,  Approx(col_decimal_val / 100.0 * col_float_val));
+    TEST("col_decimal * col_float",   "binary/arithmetic/*/decimal,float",   float,   Approx(col_decimal_val / 100.0 * col_float_val));
     TEST("col_decimal * col_double",  "binary/arithmetic/*/decimal,double",  double,  Approx(col_decimal_val / 100.0 * col_double_val));
 
     TEST("col_int64_t < col_float",   "binary/logical/</int64_t,float",   bool, col_int64_t_val < col_float_val);
@@ -357,5 +348,6 @@ TEST_CASE("ExpressionEvaluator", "[unit]")
     TEST("col_decimal < col_int64_t", "binary/logical/</decimal,int64_t", bool, col_decimal_val / 100.0 < col_int64_t_val);
     TEST("col_decimal < col_float",   "binary/logical/</decimal,float",   bool, col_decimal_val / 100.0 < col_float_val);
     TEST("col_decimal < col_double",  "binary/logical/</decimal,double",  bool, col_decimal_val / 100.0 < col_double_val);
+
 #undef TEST
 }

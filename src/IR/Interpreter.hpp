@@ -8,55 +8,40 @@
 
 namespace db {
 
-/** Evaluator of AST expressions in the context of a tuple and its schema. */
-struct ExpressionEvaluator : ConstASTVisitor
+struct StackMachineBuilder;
+
+/** A stack machine that evaluates an expression. */
+struct StackMachine
 {
-    using ConstASTVisitor::operator();
+    friend struct StackMachineBuilder;
+
+    enum class Opcode : uint8_t
+    {
+#define DB_OPCODE(CODE) CODE,
+#include "tables/Opcodes.tbl"
+#undef DB_OPCODE
+    };
+
+    using index_t = std::size_t;
+    using Command = Concat<value_type, index_t, const Expr*>::type;
 
     private:
-    const OperatorSchema &schema_;
-    const tuple_type &tuple_;
-    value_type result_;
+    static constexpr const char *OPCODE_TO_STR[] = {
+#define DB_OPCODE(CODE) #CODE,
+#include "tables/Opcodes.tbl"
+#undef DB_OPCODE
+    };
+
+    static const std::unordered_map<std::string, Opcode> STR_TO_OPCODE;
+
+    std::vector<value_type> constants_; ///< the constants used by the expression
+    std::vector<Opcode> ops_; ///< a sequence of operations to perform
+    std::vector<value_type> stack_; ///< the stack of current values
 
     public:
-    ExpressionEvaluator(const OperatorSchema &schema, const tuple_type &tuple)
-        : schema_(schema)
-        , tuple_(tuple)
-    { }
+    StackMachine(const OperatorSchema &schema, const Expr &expr);
 
-    value_type result() const { return result_; }
-
-    static value_type eval(const Constant &c);
-
-    /* Expressions */
-    void operator()(Const<ErrorExpr>&) override { unreachable("invalid expression"); }
-    void operator()(Const<Designator> &e) override;
-    void operator()(Const<Constant> &e) override;
-    void operator()(Const<FnApplicationExpr> &e) override;
-    void operator()(Const<UnaryExpr> &e) override;
-    void operator()(Const<BinaryExpr> &e) override;
-
-    /* Clauses */
-    void operator()(Const<ErrorClause>&) override { unreachable("not supported"); }
-    void operator()(Const<SelectClause>&) override { unreachable("not supported"); }
-    void operator()(Const<FromClause>&) override { unreachable("not supported"); }
-    void operator()(Const<WhereClause>&) override { unreachable("not supported"); }
-    void operator()(Const<GroupByClause>&) override { unreachable("not supported"); }
-    void operator()(Const<HavingClause>&) override { unreachable("not supported"); }
-    void operator()(Const<OrderByClause>&) override { unreachable("not supported"); }
-    void operator()(Const<LimitClause>&) override { unreachable("not supported"); }
-
-    /* Statements */
-    void operator()(Const<ErrorStmt>&) override { unreachable("not supported"); }
-    void operator()(Const<EmptyStmt>&) override { unreachable("not supported"); }
-    void operator()(Const<CreateDatabaseStmt>&) override { unreachable("not supported"); }
-    void operator()(Const<UseDatabaseStmt>&) override { unreachable("not supported"); }
-    void operator()(Const<CreateTableStmt>&) override { unreachable("not supported"); }
-    void operator()(Const<SelectStmt>&) override { unreachable("not supported"); }
-    void operator()(Const<InsertStmt>&) override { unreachable("not supported"); }
-    void operator()(Const<UpdateStmt>&) override { unreachable("not supported"); }
-    void operator()(Const<DeleteStmt>&) override { unreachable("not supported"); }
-    void operator()(Const<DSVImportStmt>&) override { unreachable("not supported"); }
+    value_type operator()(const tuple_type &t);
 };
 
 bool eval(const OperatorSchema &schema, const cnf::CNF &cnf, const tuple_type &tuple);

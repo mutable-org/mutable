@@ -1,0 +1,121 @@
+/* vim: set filetype=cpp: */
+
+#ifndef DB_OPCODE
+#error "define DB_OPCODE(Opcode) before including this file"
+#endif
+
+/*======================================================================================================================
+ * Load operations
+ *====================================================================================================================*/
+
+/* Load a value from the array of constants to the top of the stack. */
+DB_OPCODE(Ld_Const)
+
+/* Load a value from the tuple to the top of the stack. */
+DB_OPCODE(Ld_Idx)
+
+/*======================================================================================================================
+ * Arithmetical operations
+ *====================================================================================================================*/
+
+/* Bitwise negation */
+DB_OPCODE(Neg_i)
+
+/* Arithmetic negation */
+DB_OPCODE(Minus_i)
+DB_OPCODE(Minus_f)
+DB_OPCODE(Minus_d)
+
+/* Add two values. */
+DB_OPCODE(Add_i)
+DB_OPCODE(Add_f)
+DB_OPCODE(Add_d)
+
+/* Subtract two values. */
+DB_OPCODE(Sub_i)
+DB_OPCODE(Sub_f)
+DB_OPCODE(Sub_d)
+
+/* Multiply two values. */
+DB_OPCODE(Mul_i)
+DB_OPCODE(Mul_f)
+DB_OPCODE(Mul_d)
+
+/* Divide two values. */
+DB_OPCODE(Div_i)
+DB_OPCODE(Div_f)
+DB_OPCODE(Div_d)
+
+/* Modulo divide two values. */
+DB_OPCODE(Mod_i)
+
+/* Concatenate two strings. */
+DB_OPCODE(Cat_s)
+
+/*======================================================================================================================
+ * Logical operations
+ *====================================================================================================================*/
+
+/* Logical not */
+DB_OPCODE(Not_b)
+
+/* Logical and. */
+DB_OPCODE(And_b)
+
+/* Logical or. */
+DB_OPCODE(Or_b)
+
+/*======================================================================================================================
+ * Logical operations
+ *====================================================================================================================*/
+
+DB_OPCODE(Eq_i)
+DB_OPCODE(Eq_f)
+DB_OPCODE(Eq_d)
+DB_OPCODE(Eq_b)
+DB_OPCODE(Eq_s)
+
+DB_OPCODE(NE_i)
+DB_OPCODE(NE_f)
+DB_OPCODE(NE_d)
+DB_OPCODE(NE_b)
+DB_OPCODE(NE_s)
+
+DB_OPCODE(LT_i)
+DB_OPCODE(LT_f)
+DB_OPCODE(LT_d)
+DB_OPCODE(LT_s)
+
+DB_OPCODE(GT_i)
+DB_OPCODE(GT_f)
+DB_OPCODE(GT_d)
+DB_OPCODE(GT_s)
+
+DB_OPCODE(LE_i)
+DB_OPCODE(LE_f)
+DB_OPCODE(LE_d)
+DB_OPCODE(LE_s)
+
+DB_OPCODE(GE_i)
+DB_OPCODE(GE_f)
+DB_OPCODE(GE_d)
+DB_OPCODE(GE_s)
+
+/*======================================================================================================================
+ * Intrinsic functions
+ *====================================================================================================================*/
+
+DB_OPCODE(Is_Null)
+
+/* Cast to int. */
+DB_OPCODE(Cast_i_f)
+DB_OPCODE(Cast_i_d)
+DB_OPCODE(Cast_i_b)
+
+/* Cast to float. */
+DB_OPCODE(Cast_f_i)
+DB_OPCODE(Cast_f_d)
+
+/* Cast to double. */
+DB_OPCODE(Cast_d_i)
+DB_OPCODE(Cast_d_f)

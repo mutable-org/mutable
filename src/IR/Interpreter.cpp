@@ -68,10 +68,60 @@ value_type operator!(const value_type &value)
 }
 
 /*======================================================================================================================
- * Expression Evaluator
+ * StackMachineBuilder
  *====================================================================================================================*/
 
-value_type ExpressionEvaluator::eval(const Constant &c)
+struct db::StackMachineBuilder : ConstASTVisitor
+{
+    private:
+    StackMachine &stack_machine_;
+    const OperatorSchema &schema_;
+
+    public:
+    StackMachineBuilder(StackMachine &stack_machine, const OperatorSchema &schema, const Expr &expr)
+        : stack_machine_(stack_machine)
+        , schema_(schema)
+    {
+        (*this)(expr); // compute the command sequence
+    }
+
+    static value_type eval(const Constant &c);
+
+    private:
+    using ConstASTVisitor::operator();
+
+    /* Expressions */
+    void operator()(Const<ErrorExpr>&) override { unreachable("invalid expression"); }
+    void operator()(Const<Designator> &e) override;
+    void operator()(Const<Constant> &e) override;
+    void operator()(Const<FnApplicationExpr> &e) override;
+    void operator()(Const<UnaryExpr> &e) override;
+    void operator()(Const<BinaryExpr> &e) override;
+
+    /* Clauses */
+    void operator()(Const<ErrorClause>&) override { unreachable("not supported"); }
+    void operator()(Const<SelectClause>&) override { unreachable("not supported"); }
+    void operator()(Const<FromClause>&) override { unreachable("not supported"); }
+    void operator()(Const<WhereClause>&) override { unreachable("not supported"); }
+    void operator()(Const<GroupByClause>&) override { unreachable("not supported"); }
+    void operator()(Const<HavingClause>&) override { unreachable("not supported"); }
+    void operator()(Const<OrderByClause>&) override { unreachable("not supported"); }
+    void operator()(Const<LimitClause>&) override { unreachable("not supported"); }
+
+    /* Statements */
+    void operator()(Const<ErrorStmt>&) override { unreachable("not supported"); }
+    void operator()(Const<EmptyStmt>&) override { unreachable("not supported"); }
+    void operator()(Const<CreateDatabaseStmt>&) override { unreachable("not supported"); }
+    void operator()(Const<UseDatabaseStmt>&) override { unreachable("not supported"); }
+    void operator()(Const<CreateTableStmt>&) override { unreachable("not supported"); }
+    void operator()(Const<SelectStmt>&) override { unreachable("not supported"); }
+    void operator()(Const<InsertStmt>&) override { unreachable("not supported"); }
+    void operator()(Const<UpdateStmt>&) override { unreachable("not supported"); }
+    void operator()(Const<DeleteStmt>&) override { unreachable("not supported"); }
+    void operator()(Const<DSVImportStmt>&) override { unreachable("not supported"); }
+};
+
+value_type StackMachineBuilder::eval(const Constant &c)
 {
     errno = 0;
     switch (c.tok.type) {
@@ -96,7 +146,7 @@ value_type ExpressionEvaluator::eval(const Constant &c)
 
         /* String */
         case TK_STRING_LITERAL:
-            return unescape(std::string(c.tok.text, 1, strlen(c.tok.text) - 2)); // strip the surrounding quotes
+            return interpret(c.tok.text);
 
         /* Boolean */
         case TK_True:
@@ -109,35 +159,40 @@ value_type ExpressionEvaluator::eval(const Constant &c)
         throw std::invalid_argument("constant could not be parsed");
 }
 
-void ExpressionEvaluator::operator()(Const<Designator> &e)
+void StackMachineBuilder::operator()(Const<Designator> &e)
 {
     /* Given the designator, identify the position of its value in the tuple.  */
     auto target = e.target();
     if (auto p = std::get_if<const Expr*>(&target)) {
         /* This designator references another expression.  Evaluate it. */
-        auto expr = *p;
-        (*this)(*expr);
+        (*this)(**p);
     } else if (auto p = std::get_if<const Attribute*>(&target)) {
         insist(e.table_name.text, "must have been set by sema");
         /* Lookup tuple element type by attribute identifier. */
-        auto idx = schema_[{e.table_name.text, e.attr_name.text}].first;
-        insist(idx < tuple_.size(), "index out of bounds");
-        result_ = tuple_[idx];
+        std::size_t idx = schema_[{e.table_name.text, e.attr_name.text}].first;
+        insist(idx < schema_.size(), "index out of bounds");
+        stack_machine_.ops_.push_back(StackMachine::Opcode::Ld_Idx);
+        stack_machine_.ops_.push_back(static_cast<StackMachine::Opcode>(idx));
     } else {
         unreachable("designator has no target");
     }
 }
 
-void ExpressionEvaluator::operator()(Const<Constant> &e)
+void StackMachineBuilder::operator()(Const<Constant> &e)
 {
-    result_ = eval(e);
+    auto value = StackMachineBuilder::eval(e);
+    const auto idx = stack_machine_.constants_.size();
+    stack_machine_.constants_.emplace_back(value); // put the constant into the vector of constants
+    stack_machine_.ops_.push_back(StackMachine::Opcode::Ld_Const); // load a constant
+    stack_machine_.ops_.push_back(static_cast<StackMachine::Opcode>(idx)); // from index `idx`
 }
 
-void ExpressionEvaluator::operator()(Const<FnApplicationExpr> &e)
+void StackMachineBuilder::operator()(Const<FnApplicationExpr> &e)
 {
     auto &C = Catalog::Get();
     auto &fn = e.get_function();
 
+    /* Load the arguments for the function call. */
     switch (fn.fnid) {
         default:
             unreachable("function kind not implemented");
@@ -148,35 +203,24 @@ void ExpressionEvaluator::operator()(Const<FnApplicationExpr> &e)
         case Function::FN_ISNULL:
             insist(e.args.size() == 1);
             (*this)(*e.args[0]);
-            result_ = std::holds_alternative<null_type>(result_);
+            stack_machine_.ops_.push_back(StackMachine::Opcode::Is_Null);
             break;
 
         /*----- Type casts -------------------------------------------------------------------------------------------*/
         case Function::FN_INT: {
             insist(e.args.size() == 1);
             (*this)(*e.args[0]);
-
-            if (std::holds_alternative<null_type>(result_))
-                break; // nothing to do for NULL
-
-            auto ty = as<const Numeric>(e.args[0]->type());
-            switch (ty->kind) {
-                case Numeric::N_Int:
-                    break; // nothing to do
-
-                case Numeric::N_Decimal: {
-                    auto v = std::get<int64_t>(result_);
-                    result_ = v / pow(10, ty->scale);
-                    break;
-                }
-
-                case Numeric::N_Float: {
-                    if (ty->precision == 32)
-                        result_ = int64_t(std::get<float>(result_));
-                    else
-                        result_ = int64_t(std::get<double>(result_));
-                    break;
-                }
+            auto ty = e.args[0]->type();
+            if (ty->is_float())
+                stack_machine_.ops_.push_back(StackMachine::Opcode::Cast_i_f);
+            else if (ty->is_double())
+                stack_machine_.ops_.push_back(StackMachine::Opcode::Cast_i_d);
+            else if (ty->is_decimal()) {
+                unreachable("not implemented");
+            } else if (ty->is_boolean()) {
+                stack_machine_.ops_.push_back(StackMachine::Opcode::Cast_i_b);
+            } else {
+                /* nothing to be done */
             }
             break;
         }
@@ -191,171 +235,397 @@ void ExpressionEvaluator::operator()(Const<FnApplicationExpr> &e)
             oss << e;
             auto name = C.pool(oss.str().c_str());
             auto idx = schema_[{name}].first;
-            insist(idx < tuple_.size(), "index out of bounds");
-            result_ = tuple_[idx];
-            break;
+            insist(idx < schema_.size(), "index out of bounds");
+            stack_machine_.ops_.push_back(StackMachine::Opcode::Ld_Idx);
+            stack_machine_.ops_.push_back(static_cast<StackMachine::Opcode>(idx));
+            return;
         }
     }
 }
 
-void ExpressionEvaluator::operator()(Const<UnaryExpr> &e)
+void StackMachineBuilder::operator()(Const<UnaryExpr> &e)
 {
     (*this)(*e.expr);
-    auto res = result_;
+    auto ty = e.expr->type();
 
     switch (e.op.type) {
-        default: unreachable("illegal operator");
+        default:
+            unreachable("illegal token type");
 
         case TK_PLUS:
-            result_ = +result_;
+            /* nothing to be done */
             break;
 
-        case TK_MINUS:
-            result_ = -result_;
+        case TK_MINUS: {
+            auto n = as<const Numeric>(ty);
+            switch (n->kind) {
+                case Numeric::N_Int:
+                case Numeric::N_Decimal:
+                    stack_machine_.ops_.push_back(StackMachine::Opcode::Minus_i);
+                    break;
+
+                case Numeric::N_Float:
+                    if (n->precision == 32)
+                        stack_machine_.ops_.push_back(StackMachine::Opcode::Minus_f);
+                    else
+                        stack_machine_.ops_.push_back(StackMachine::Opcode::Minus_d);
+            }
             break;
+        }
 
         case TK_TILDE:
-            result_ = ~result_;
+            if (ty->is_integral())
+                stack_machine_.ops_.push_back(StackMachine::Opcode::Neg_i);
+            else if (ty->is_boolean())
+                stack_machine_.ops_.push_back(StackMachine::Opcode::Not_b); // negation of bool is always logical
+            else
+                unreachable("illegal type");
             break;
 
         case TK_Not:
-            result_ = not result_;
+            insist(ty->is_boolean(), "illegal type");
+            stack_machine_.ops_.push_back(StackMachine::Opcode::Not_b);
             break;
     }
 }
 
-void ExpressionEvaluator::operator()(Const<BinaryExpr> &e)
+void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
 {
-    (*this)(*e.lhs);
-    auto res_lhs = result_;
-    (*this)(*e.rhs);
-    auto res_rhs = result_;
+    auto tystr = [](const PrimitiveType *ty) -> std::string {
+        if (ty->is_boolean())
+            return "_b";
+        if (ty->is_character_sequence())
+            return "_s";
+        auto n = as<const Numeric>(ty);
+        switch (n->kind) {
+            case Numeric::N_Int:
+            case Numeric::N_Decimal:
+                return "_i";
+            case Numeric::N_Float:
+                return n->precision == 32 ? "_f" : "_d";
+        }
+    };
 
-    const Type *ty_lhs = e.lhs->type();
-    const Type *ty_rhs = e.rhs->type();
+    auto ty = as<const PrimitiveType>(e.type());
+    auto ty_lhs = as<const PrimitiveType>(e.lhs->type());
+    auto ty_rhs = as<const PrimitiveType>(e.rhs->type());
+    auto tystr_to   = tystr(ty);
 
-    /* If either side is NULL, the result is NULL. */
-    if (std::holds_alternative<null_type>(res_lhs)) {
-        result_ = res_lhs;
-        return;
-    }
-    if (std::holds_alternative<null_type>(res_rhs)) {
-        result_ = res_rhs;
-        return;
-    }
+    auto emit_cast = [&](const PrimitiveType *from_ty, const PrimitiveType *to_ty) {
+        auto tystr_to = tystr(to_ty);
+        auto tystr_from = tystr(from_ty);
+        /* Cast LHS if necessary. */
+        if (tystr_from != tystr_to) {
+            std::string opstr = "Cast" + tystr_to + tystr_from;
+            auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
+            stack_machine_.ops_.push_back(opcode);
+        }
+    };
 
-#define EVAL_ARITHMETIC(OP) \
-    if (e.type()->is_floating_point()) { \
-        double v_lhs = to<double>(res_lhs); \
-        double v_rhs = to<double>(res_rhs); \
-        if (ty_lhs->is_decimal()) \
-            v_lhs /= pow(10, as<const Numeric>(ty_lhs)->scale); /* scale decimal */ \
-        if (ty_rhs->is_decimal()) \
-            v_rhs /= pow(10, as<const Numeric>(ty_rhs)->scale); /* scale decimal */ \
-        result_ = v_lhs OP v_rhs; \
-    } else if (auto n = as<const Numeric>(e.type()); n->kind == Numeric::N_Decimal) { \
-        int64_t v_lhs = to<int64_t>(res_lhs); \
-        int64_t v_rhs = to<int64_t>(res_rhs); \
-        int scale_lhs = 0; \
-        int scale_rhs = 0; \
-        if (ty_lhs->is_decimal()) \
-            scale_lhs = as<const Numeric>(ty_lhs)->scale; \
-        if (ty_rhs->is_decimal()) \
-            scale_rhs = as<const Numeric>(ty_rhs)->scale; \
-        if ((1 OP 1) == 1) { \
-            /* multiplicative operation */ \
-            result_ = (v_lhs OP v_rhs) / powi<int64_t>(10, scale_lhs + scale_rhs - n->scale); \
-        } else { \
-            /* additive operation */ \
-            /* Scale values to the scale of the result. */ \
-            v_lhs *= powi<int64_t>(10, n->scale - scale_lhs); \
-            v_rhs *= powi<int64_t>(10, n->scale - scale_rhs); \
-            result_ = v_lhs OP v_rhs; \
-        } \
-    } else { \
-        int64_t v_lhs = to<int64_t>(res_lhs); \
-        int64_t v_rhs = to<int64_t>(res_rhs); \
-        result_ = v_lhs OP v_rhs; \
-    }
+    auto scale = [&](const PrimitiveType *from_ty, const PrimitiveType *to_ty) {
+        auto n_from = as<const Numeric>(from_ty);
+        auto n_to = as<const Numeric>(to_ty);
+        if (n_from->scale < n_to->scale) {
+            insist(n_to->is_decimal(), "only decimals have a scale");
+            /* Scale up. */
+            auto delta = n_to->scale - n_from->scale;
+            const int64_t factor = powi<int64_t>(10, delta);
+            auto cidx = stack_machine_.constants_.size();
+            stack_machine_.constants_.push_back(factor);
+            stack_machine_.ops_.push_back(StackMachine::Opcode::Ld_Const);
+            stack_machine_.ops_.push_back(static_cast<StackMachine::Opcode>(cidx));
+            stack_machine_.ops_.push_back(StackMachine::Opcode::Mul_i); // multiply by scale factor
+        } else if (n_from->scale > n_to->scale) {
+            insist(n_from->is_decimal(), "only decimals have a scale");
+            insist(n_to->is_floating_point(), "only floating points are more precise than decimals");
+            /* Scale down. */
+            auto delta = n_from->scale - n_to->scale;
+            const int64_t factor = powi<int64_t>(10, delta);
+            auto cidx = stack_machine_.constants_.size();
+            stack_machine_.ops_.push_back(StackMachine::Opcode::Ld_Const);
+            stack_machine_.ops_.push_back(static_cast<StackMachine::Opcode>(cidx));
+            if (n_to->is_float()) {
+                stack_machine_.constants_.push_back(float(1.f / factor));
+                stack_machine_.ops_.push_back(StackMachine::Opcode::Mul_f); // multiply by inverse scale factor
+            } else {
+                stack_machine_.constants_.push_back(double(1. / factor));
+                stack_machine_.ops_.push_back(StackMachine::Opcode::Mul_d); // multiply by inverse scale factor
+            }
+        }
+    };
 
-#define EVAL_COMPARISON(OP) \
-    if (ty_lhs->is_character_sequence()) { \
-        std::string v_lhs = to<std::string>(res_lhs); \
-        std::string v_rhs = to<std::string>(res_rhs); \
-        result_ = bool(v_lhs OP v_rhs); \
-    } else if (ty_lhs->is_integral() and ty_rhs->is_integral()) { \
-        int64_t v_lhs = to<int64_t>(res_lhs); \
-        int64_t v_rhs = to<int64_t>(res_rhs); \
-        result_ = bool(v_lhs OP v_rhs); \
-    } else if (ty_lhs->is_decimal() and ty_rhs->is_decimal()) { \
-        int64_t v_lhs = to<int64_t>(res_lhs); \
-        int64_t v_rhs = to<int64_t>(res_rhs); \
-        int scale_lhs = as<const Numeric>(ty_lhs)->scale; \
-        int scale_rhs = as<const Numeric>(ty_rhs)->scale; \
-        if (scale_lhs < scale_rhs) { \
-            std::swap(v_lhs, v_rhs); \
-            std::swap(scale_lhs, scale_rhs); \
-        } \
-        v_rhs *= powi<int64_t>(10, scale_lhs - scale_rhs); \
-        result_ = bool(v_lhs OP v_rhs); \
-    } else { \
-        double v_lhs = to<double>(res_lhs); \
-        double v_rhs = to<double>(res_rhs); \
-        if (ty_lhs->is_decimal()) \
-            v_lhs /= powi<int64_t>(10, as<const Numeric>(ty_lhs)->scale); /* scale decimal */ \
-        if (ty_rhs->is_decimal()) \
-            v_rhs /= powi<int64_t>(10, as<const Numeric>(ty_rhs)->scale); /* scale decimal */ \
-        result_ = bool(v_lhs OP v_rhs); \
+    auto put_numeric = [&](auto val, const Numeric *n) {
+        switch (n->kind) {
+            case Numeric::N_Int:
+            case Numeric::N_Decimal:
+                stack_machine_.constants_.push_back(int64_t(val));
+                break;
+
+            case Numeric::N_Float:
+                if (n->precision == 32)
+                    stack_machine_.constants_.push_back(float(val));
+                else
+                    stack_machine_.constants_.push_back(double(val));
+                break;
+        }
+    };
+
+    std::string opname;
+    switch (e.op.type) {
+        default: unreachable("illegal operator");
+
+        /*----- Arithmetic operators ---------------------------------------------------------------------------------*/
+        case TK_PLUS:           opname = "Add"; break;
+        case TK_MINUS:          opname = "Sub"; break;
+        case TK_ASTERISK:       opname = "Mul"; break;
+        case TK_SLASH:          opname = "Div"; break;
+        case TK_PERCENT:        opname = "Mod"; break;
+
+        /*----- Concatenation operator -------------------------------------------------------------------------------*/
+        case TK_DOTDOT:         opname = "Cat"; break;
+
+        /*----- Comparison operators ---------------------------------------------------------------------------------*/
+        case TK_LESS:           opname = "LT";  break;
+        case TK_GREATER:        opname = "GT";  break;
+        case TK_LESS_EQUAL:     opname = "LE";  break;
+        case TK_GREATER_EQUAL:  opname = "GE";  break;
+        case TK_EQUAL:          opname = "Eq";  break;
+        case TK_BANG_EQUAL:     opname = "NE";  break;
+
+        /*----- Logical operators ------------------------------------------------------------------------------------*/
+        case TK_And:            opname = "And"; break;
+        case TK_Or:             opname = "Or";  break;
     }
 
     switch (e.op.type) {
         default: unreachable("illegal operator");
 
         /*----- Arithmetic operators ---------------------------------------------------------------------------------*/
-        case TK_PLUS:           EVAL_ARITHMETIC(+);  break;
-        case TK_MINUS:          EVAL_ARITHMETIC(-);  break;
-        case TK_ASTERISK:       EVAL_ARITHMETIC(*);  break;
-        case TK_SLASH:          EVAL_ARITHMETIC(/);  break;
-        case TK_PERCENT: {
-            int64_t v_lhs = to<int64_t>(res_lhs);
-            int64_t v_rhs = to<int64_t>(res_rhs);
-            result_ = v_lhs % v_rhs;
+        case TK_PLUS:
+        case TK_MINUS: {
+            (*this)(*e.lhs);
+            emit_cast(ty_lhs, ty);
+            scale(ty_lhs, ty);
+
+            (*this)(*e.rhs);
+            emit_cast(ty_rhs, ty);
+            scale(ty_rhs, ty);
+
+            std::string opstr = e.op.type == TK_PLUS ? "Add" : "Sub";
+            opstr += tystr_to;
+            auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
+            stack_machine_.ops_.push_back(opcode);
             break;
         }
 
-        /*----- Comparison operators ---------------------------------------------------------------------------------*/
-        case TK_LESS:           EVAL_COMPARISON(<);  break;
-        case TK_GREATER:        EVAL_COMPARISON(>);  break;
-        case TK_LESS_EQUAL:     EVAL_COMPARISON(<=); break;
-        case TK_GREATER_EQUAL:  EVAL_COMPARISON(>=); break;
-        case TK_EQUAL:          EVAL_COMPARISON(==);  break;
-        case TK_BANG_EQUAL:     EVAL_COMPARISON(!=); break;
+        case TK_ASTERISK: {
+            auto n_lhs = as<const Numeric>(ty_lhs);
+            auto n_rhs = as<const Numeric>(ty_rhs);
+            auto n_res = as<const Numeric>(ty);
 
-        /*----- Logical operators ------------------------------------------------------------------------------------*/
-        case TK_And: {
-            bool v_lhs = std::get<bool>(res_lhs);
-            bool v_rhs = std::get<bool>(res_rhs);
-            result_ = v_lhs and v_rhs;
+            (*this)(*e.lhs);
+            emit_cast(ty_lhs, ty);
+
+            (*this)(*e.rhs);
+            emit_cast(ty_rhs, ty);
+
+            std::string opstr = "Mul";
+            opstr += tystr_to;
+            auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
+            stack_machine_.ops_.push_back(opcode); // Mul_x
+
+            const int64_t scale = n_lhs->scale + n_rhs->scale - n_res->scale;
+            insist(scale >= 0);
+            if (scale != 0) {
+                const int64_t factor = powi<int64_t>(10, scale);
+                const auto cidx = stack_machine_.constants_.size();
+                put_numeric(factor, n_res);
+                stack_machine_.ops_.push_back(StackMachine::Opcode::Ld_Const);
+                stack_machine_.ops_.push_back(static_cast<StackMachine::Opcode>(cidx));
+
+                opstr = "Div";
+                opstr += tystr_to;
+                opcode = StackMachine::STR_TO_OPCODE.at(opstr);
+                stack_machine_.ops_.push_back(opcode); // Div_x
+            }
+
             break;
         }
-        case TK_Or: {
-            bool v_lhs = std::get<bool>(res_lhs);
-            bool v_rhs = std::get<bool>(res_rhs);
-            result_ = v_lhs or v_rhs;
+
+        case TK_SLASH: {
+            /* Division with potentially different numeric types is a tricky thing.  Not only must we convert the values
+             * from their original data type to the type of the result, but we also must scale them correctly.  Below is
+             * a list with examples of the different cases.  From this list we derive the formula:
+             *
+             *      scale = scale_rhs + (scale_res - scale_lhs)
+             *
+             *
+             *  INT / DECIMAL(2) -> DECIMAL(2)
+             *
+             *      42 / 2.37
+             *  ->  42 / 237
+             *  ->  42 * 10^2 * 10^2 // 237
+             *   =  420,000 // 237
+             *   =  1772
+             *  ->  17.72
+             *
+             *  DECIMAL(2) / INT -> DECIMAL(2)
+             *
+             *      42.00 / 2
+             *  ->  4200 / 2
+             *  ->  4200 * 10^0 * 10^0 // 2
+             *   =  4200 // 2
+             *   =  2100
+             *  ->  21.00
+             *
+             *  FLOAT / DECIMAL(2) -> FLOAT
+             *
+             *      42.f / 2.37
+             *  ->  42.f / 237
+             *  ->  42.f * 10^2 * 10^0 / 237
+             *   =  4200.f / 237
+             *   =  17.72f
+             *  ->  17.72f
+             *
+             *  DECIMAL(2) / FLOAT -> FLOAT
+             *
+             *      42.00 / 2.37f
+             *  ->  4200 / 2.37f
+             *  ->  4200 * 10^0 * 10^-2 / 2.37f
+             *   =  42.f / 2.37f
+             *   =  17.72f
+             *  ->  17.72f
+             *
+             *  DECIMAL(2) / DECIMAL(2) -> DECIMAL(2)
+             *
+             *      42.00 / 2.37
+             *  ->  4200 / 237
+             *  ->  4200 * 10^2 * 10^0 // 237
+             *  ->  420,000 // 237
+             *   =  1772
+             *  ->  17.72
+             *
+             *  DECIMAL(3) / DECIMAL(2) -> DECIMAL(3)
+             *
+             *      42.000 / 2.37
+             *  ->  42,000 / 237
+             *  ->  42,000 * 10^2 * 10^0 // 237
+             *   =  4,200,000 // 237
+             *   =  17721
+             *  ->  17.721
+             *
+             *  DECIMAL(2) / DECIMAL(3) -> DECIMAL(3)
+             *
+             *      42.00 / 2.370
+             *  ->  4200 / 2370
+             *  ->  4200 * 10^3 * 10^1 // 2370
+             *  ->  4,200,000 // 2370
+             *   =  17721
+             *  ->  17.721
+             */
+
+            auto n_lhs = as<const Numeric>(ty_lhs);
+            auto n_rhs = as<const Numeric>(ty_rhs);
+            auto n_res = as<const Numeric>(ty);
+
+            (*this)(*e.lhs);
+            emit_cast(ty_lhs, ty);
+
+            const auto scale = n_rhs->scale + (n_res->scale - n_lhs->scale);
+            if (scale > 0) {
+                const int64_t factor = powi<int64_t>(10, scale); // scale up by rhs
+                const auto cidx = stack_machine_.constants_.size();
+                put_numeric(factor, n_res);
+                stack_machine_.ops_.push_back(StackMachine::Opcode::Ld_Const);
+                stack_machine_.ops_.push_back(static_cast<StackMachine::Opcode>(cidx));
+
+                std::string opstr = "Mul";
+                opstr += tystr_to;
+                auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
+                stack_machine_.ops_.push_back(opcode); // Mul_x
+            } else if (scale < 0) {
+                const int64_t factor = powi<int64_t>(10, -scale); // scale up by rhs
+                const auto cidx = stack_machine_.constants_.size();
+                put_numeric(factor, n_res);
+                stack_machine_.ops_.push_back(StackMachine::Opcode::Ld_Const);
+                stack_machine_.ops_.push_back(static_cast<StackMachine::Opcode>(cidx));
+
+                std::string opstr = "Div";
+                opstr += tystr_to;
+                auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
+                stack_machine_.ops_.push_back(opcode); // Div_x
+            }
+
+            (*this)(*e.rhs);
+            emit_cast(ty_rhs, ty);
+
+            std::string opstr = "Div";
+            opstr += tystr_to;
+            auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
+            stack_machine_.ops_.push_back(opcode); // Div_x
+
             break;
         }
+
+        case TK_PERCENT:
+            (*this)(*e.lhs);
+            (*this)(*e.rhs);
+            stack_machine_.ops_.push_back(StackMachine::Opcode::Mod_i);
+            break;
 
         /*----- Concatenation operator -------------------------------------------------------------------------------*/
-        case TK_DOTDOT: {
-            auto v_lhs = std::get<std::string>(res_lhs);
-            auto v_rhs = std::get<std::string>(res_rhs);
-            result_ = v_lhs + v_rhs;
+        case TK_DOTDOT:
+            (*this)(*e.lhs);
+            (*this)(*e.rhs);
+            stack_machine_.ops_.push_back(StackMachine::Opcode::Cat_s);
             break;
-        }
-    }
 
-#undef EVAL_ARITHMETIC
-#undef EVAL_COMPARISON
+        /*----- Comparison operators ---------------------------------------------------------------------------------*/
+        case TK_LESS:
+        case TK_GREATER:
+        case TK_LESS_EQUAL:
+        case TK_GREATER_EQUAL:
+        case TK_EQUAL:
+        case TK_BANG_EQUAL:
+            if (ty_lhs->is_numeric()) {
+                insist(ty_rhs->is_numeric());
+                auto n_lhs = as<const Numeric>(ty_lhs);
+                auto n_rhs = as<const Numeric>(ty_rhs);
+                auto n_res = arithmetic_join(n_lhs, n_rhs);
+
+                (*this)(*e.lhs);
+                emit_cast(n_lhs, n_res);
+                scale(n_lhs, n_res);
+
+                (*this)(*e.rhs);
+                emit_cast(n_rhs, n_res);
+                scale(n_rhs, n_res);
+
+                std::string opstr = opname + tystr(n_res);
+                auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
+                stack_machine_.ops_.push_back(opcode);
+            } else {
+                (*this)(*e.lhs);
+                (*this)(*e.rhs);
+                std::string opstr = opname + tystr(ty_lhs);
+                auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
+                stack_machine_.ops_.push_back(opcode);
+            }
+            break;
+
+        /*----- Logical operators ------------------------------------------------------------------------------------*/
+        case TK_And:
+            (*this)(*e.lhs);
+            (*this)(*e.rhs);
+            stack_machine_.ops_.push_back(StackMachine::Opcode::And_b);
+            break;
+
+        case TK_Or:
+            (*this)(*e.lhs);
+            (*this)(*e.rhs);
+            stack_machine_.ops_.push_back(StackMachine::Opcode::Or_b);
+            break;
+    }
 }
 
 /*======================================================================================================================
@@ -364,11 +634,10 @@ void ExpressionEvaluator::operator()(Const<BinaryExpr> &e)
 
 bool db::eval(const OperatorSchema &schema, const cnf::CNF &cnf, const tuple_type &tuple)
 {
-    ExpressionEvaluator eval(schema, tuple);
     for (auto &clause : cnf) {
         for (auto pred : clause) {
-            eval(*pred.expr());
-            auto result = eval.result();
+            StackMachine eval(schema, *pred.expr());
+            auto result = eval(tuple);
             if (std::holds_alternative<null_type>(result))
                 break; // skip NULL; NULL is never TRUE
             insist(std::holds_alternative<bool>(result), "literal must evaluate to bool");
@@ -387,8 +656,198 @@ clause_is_sat:
 }
 
 /*======================================================================================================================
+ * Stack Machine
+ *====================================================================================================================*/
+
+const std::unordered_map<std::string, StackMachine::Opcode> StackMachine::STR_TO_OPCODE = {
+#define DB_OPCODE(CODE) { #CODE, StackMachine::Opcode:: CODE },
+#include "tables/Opcodes.tbl"
+#undef DB_OPCODE
+};
+
+StackMachine::StackMachine(const OperatorSchema &schema, const Expr &expr)
+{
+    StackMachineBuilder Builder(*this, schema, expr); // compute the command sequence for this stack machine
+}
+
+value_type StackMachine::operator()(const tuple_type &t)
+{
+#define UNARY(OP, TYPE) { \
+    insist(stack_.size() >= 1); \
+    auto &v = stack_.back(); \
+    auto pv = std::get_if<TYPE>(&v); \
+    insist(pv, "invalid type of variant"); \
+    stack_.back() = OP (*pv); \
+    break; \
+}
+
+#define BINARY(OP, TYPE) { \
+    insist(stack_.size() >= 2); \
+    auto &v_rhs = stack_.back(); \
+    auto pv_rhs = std::get_if<TYPE>(&v_rhs); \
+    insist(pv_rhs, "invalid type of rhs"); \
+    stack_.pop_back(); \
+    auto &v_lhs = stack_.back(); \
+    auto pv_lhs = std::get_if<TYPE>(&v_lhs); \
+    insist(pv_lhs, "invalid type of lhs"); \
+    stack_.back() = *pv_lhs OP *pv_rhs; \
+    break; \
+}
+
+    stack_.clear();
+    for (std::size_t i = 0; i != ops_.size(); ++i) {
+        auto opcode = ops_[i];
+
+        switch (opcode) {
+            default:
+                break;
+                unreachable("illegal opcode");
+
+            /*==========================================================================================================
+             * Load operations
+             *========================================================================================================*/
+
+            /* Load a value from the array of constants to the top of the stack. */
+            case Opcode::Ld_Const: {
+                std::size_t idx = static_cast<std::size_t>(ops_[++i]);
+                insist(idx < constants_.size(), "index out of bounds");
+                stack_.push_back(constants_[idx]);
+                break;
+            }
+
+            /* Load a value from the tuple to the top of the stack. */
+            case Opcode::Ld_Idx: {
+                std::size_t idx = static_cast<std::size_t>(ops_[++i]);
+                insist(idx < t.size(), "index out of bounds");
+                stack_.push_back(t[idx]);
+                break;
+            }
+
+            /*======================================================================================================================
+             * Arithmetical operations
+             *====================================================================================================================*/
+
+            /* Bitwise negation */
+            case Opcode::Neg_i: UNARY(~, int64_t);
+
+            /* Arithmetic negation */
+            case Opcode::Minus_i: UNARY(-, int64_t);
+            case Opcode::Minus_f: UNARY(-, float);
+            case Opcode::Minus_d: UNARY(-, double);
+
+            /* Add two values. */
+            case Opcode::Add_i: BINARY(+, int64_t);
+            case Opcode::Add_f: BINARY(+, float);
+            case Opcode::Add_d: BINARY(+, double);
+
+            /* Subtract two values. */
+            case Opcode::Sub_i: BINARY(-, int64_t);
+            case Opcode::Sub_f: BINARY(-, float);
+            case Opcode::Sub_d: BINARY(-, double);
+
+            /* Multiply two values. */
+            case Opcode::Mul_i: BINARY(*, int64_t);
+            case Opcode::Mul_f: BINARY(*, float);
+            case Opcode::Mul_d: BINARY(*, double);
+
+            /* Divide two values. */
+            case Opcode::Div_i: BINARY(/, int64_t);
+            case Opcode::Div_f: BINARY(/, float);
+            case Opcode::Div_d: BINARY(/, double);
+
+            /* Modulo divide two values. */
+            case Opcode::Mod_i: BINARY(%, int64_t);
+
+            /* Concatenate two strings. */
+            case Opcode::Cat_s: BINARY(+, std::string);
+
+            /*======================================================================================================================
+             * Logical operations
+             *====================================================================================================================*/
+
+            /* Logical not */
+            case Opcode::Not_b: UNARY(not, bool);
+
+            /* Logical and. */
+            case Opcode::And_b: BINARY(and, bool);
+
+            /* Logical or. */
+            case Opcode::Or_b: BINARY(or, bool);
+
+            /*======================================================================================================================
+             * Logical operations
+             *====================================================================================================================*/
+
+            case Opcode::Eq_i: BINARY(==, int64_t);
+            case Opcode::Eq_f: BINARY(==, float);
+            case Opcode::Eq_d: BINARY(==, double);
+            case Opcode::Eq_b: BINARY(==, bool);
+            case Opcode::Eq_s: BINARY(==, std::string);
+
+            case Opcode::NE_i: BINARY(!=, int64_t);
+            case Opcode::NE_f: BINARY(!=, float);
+            case Opcode::NE_d: BINARY(!=, double);
+            case Opcode::NE_b: BINARY(!=, bool);
+            case Opcode::NE_s: BINARY(!=, std::string);
+
+            case Opcode::LT_i: BINARY(<, int64_t);
+            case Opcode::LT_f: BINARY(<, float);
+            case Opcode::LT_d: BINARY(<, double);
+            case Opcode::LT_s: BINARY(<, std::string);
+
+            case Opcode::GT_i: BINARY(>, int64_t);
+            case Opcode::GT_f: BINARY(>, float);
+            case Opcode::GT_d: BINARY(>, double);
+            case Opcode::GT_s: BINARY(>, std::string);
+
+            case Opcode::LE_i: BINARY(<=, int64_t);
+            case Opcode::LE_f: BINARY(<=, float);
+            case Opcode::LE_d: BINARY(<=, double);
+            case Opcode::LE_s: BINARY(<=, std::string);
+
+            case Opcode::GE_i: BINARY(>=, int64_t);
+            case Opcode::GE_f: BINARY(>=, float);
+            case Opcode::GE_d: BINARY(>=, double);
+            case Opcode::GE_s: BINARY(>=, std::string);
+
+            /*======================================================================================================================
+             * Intrinsic functions
+             *====================================================================================================================*/
+
+            case Opcode::Is_Null:
+                stack_.back() = std::holds_alternative<null_type>(stack_.back());
+                break;
+
+            /* Cast to int. */
+            case Opcode::Cast_i_f: UNARY((int64_t), float);
+            case Opcode::Cast_i_d: UNARY((int64_t), double);
+            case Opcode::Cast_i_b: UNARY((int64_t), bool);
+
+            /* Cast to float. */
+            case Opcode::Cast_f_i: UNARY((float), int64_t);
+            case Opcode::Cast_f_d: UNARY((float), float);
+
+            /* Cast to double. */
+            case Opcode::Cast_d_i: UNARY((double), int64_t);
+            case Opcode::Cast_d_f: UNARY((double), float);
+        }
+    }
+
+#undef BINARY
+#undef UNARY
+
+    insist(stack_.size() == 1);
+    return stack_[0];
+}
+
+/*======================================================================================================================
  * Declaration of operator data.
  *====================================================================================================================*/
+
+struct ProjectionData : OperatorData
+{
+    std::vector<StackMachine> projections;
+};
 
 struct NestedLoopsJoinData : OperatorData
 {
@@ -409,7 +868,12 @@ struct LimitData : OperatorData
     std::size_t num_tuples = 0;
 };
 
-struct HashBasedGroupingData : OperatorData
+struct GroupingData : OperatorData
+{
+    std::vector<StackMachine> keys;
+};
+
+struct HashBasedGroupingData : GroupingData
 {
     std::unordered_map<tuple_type, tuple_type> groups;
 };
@@ -436,7 +900,7 @@ void Interpreter::operator()(const ScanOperator &op)
     tuple.resize(op.store().table().size());
     op.store().for_each([&](const Store::Row &row) {
         tuple.clear();
-        row.dispatch([&](const Attribute &, value_type value) {
+        row.dispatch([&](const Attribute&, value_type value) {
             tuple.push_back(value);
         });
         op.parent()->accept(*this, tuple);
@@ -475,9 +939,18 @@ void Interpreter::operator()(const JoinOperator &op)
 void Interpreter::operator()(const ProjectionOperator &op)
 {
     bool has_child = op.children().size();
-    if (has_child)
+    OperatorSchema empty_schema;
+    auto &S = has_child ? op.child(0)->schema() : empty_schema;
+    auto data = new ProjectionData();
+    op.data(data);
+    for (auto &p : op.projections()) {
+        data->projections.emplace_back(S, *p.first);
+    }
+
+    /* Evaluate the projection. */
+    if (has_child) {
         op.child(0)->accept(*this);
-    else {
+    } else {
         tuple_type t;
         (*this)(op, t); // evaluate the projection EXACTLY ONCE on an empty tuple
     }
@@ -495,6 +968,7 @@ void Interpreter::operator()(const LimitOperator &op)
 
 void Interpreter::operator()(const GroupingOperator &op)
 {
+    auto &S = op.child(0)->schema();
     switch (op.algo()) {
         case GroupingOperator::G_Undefined:
         case GroupingOperator::G_Ordered:
@@ -503,6 +977,8 @@ void Interpreter::operator()(const GroupingOperator &op)
         case GroupingOperator::G_Hashing: {
             auto data = new HashBasedGroupingData();
             op.data(data);
+            for (auto e : op.group_by())
+                data->keys.emplace_back(S, *e);
             op.child(0)->accept(*this);
             for (auto g : data->groups) {
                 auto t = g.first + g.second;
@@ -518,22 +994,23 @@ void Interpreter::operator()(const SortingOperator &op)
     auto data = new SortingData();
     op.data(data);
     op.child(0)->accept(*this);
-    auto orderings = op.order_by();
-    auto schema = op.schema();
-    std::sort(data->buffer.begin(), data->buffer.end(), [&](const tuple_type &first, const tuple_type &second) {
-        ExpressionEvaluator eval_first(schema, first);
-        ExpressionEvaluator eval_second(schema, second);
+    const auto &orderings = op.order_by();
+    auto &S = op.schema();
 
-        for (auto o : orderings) {
+    std::vector<StackMachine> stack_machines;
+    for (auto &o : orderings)
+        stack_machines.emplace_back(S, *o.first);
+
+    std::sort(data->buffer.begin(), data->buffer.end(), [&](const tuple_type &first, const tuple_type &second) {
+        for (std::size_t i = 0; i != orderings.size(); ++i) {
+            auto &o = orderings[i];
+            auto &eval = stack_machines[i];
             const Expr *orderby = o.first;
             bool is_ascending = o.second;
 
-            eval_first(*orderby);
-            eval_second(*orderby);
-
 #define COMPARE(TYPE) { \
-    auto v_first = to<TYPE>(eval_first.result()); \
-    auto v_second = to<TYPE>(eval_second.result()); \
+    auto v_first = to<TYPE>(eval(first)); \
+    auto v_second = to<TYPE>(eval(second)); \
     if (v_first != v_second) return v_first < v_second == is_ascending; \
 }
             if (orderby->type()->is_character_sequence())
@@ -634,14 +1111,10 @@ void Interpreter::operator()(const ProjectionOperator &op, tuple_type &t)
 {
     tuple_type result;
     result.reserve(op.projections().size());
-    const OperatorSchema empty_schema;
-    bool has_child = op.children().size();
-    ExpressionEvaluator eval(has_child ? op.child(0)->schema() : empty_schema, t);
+    auto data = as<ProjectionData>(op.data());
 
-    for (auto &P : op.projections()) {
-        eval(*P.first);
-        result.push_back(eval.result());
-    }
+    for (auto &e : data->projections)
+        result.push_back(e(t));
 
     if (op.is_anti())
         result.insert(result.end(), t.begin(), t.end());
@@ -675,11 +1148,9 @@ void Interpreter::operator()(const GroupingOperator &op, tuple_type &t)
             auto data = as<HashBasedGroupingData>(op.data());
             auto &groups = data->groups;
             tuple_type key;
-            ExpressionEvaluator eval(op.child(0)->schema(), t);
-            for (auto expr : op.group_by()) {
-                eval(*expr);
-                key.push_back(eval.result());
-            }
+            for (auto &k : data->keys)
+                key.push_back(k(t));
+            // TODO do the same for aggregates
             auto it = groups.find(key);
             if (it == groups.end()) {
                 /* Initialize the group's aggregate to NULL.  This will be overwritten by the neutral element w.r.t. the
@@ -693,7 +1164,6 @@ void Interpreter::operator()(const GroupingOperator &op, tuple_type &t)
     insist(aggregates, "must have found the group's aggregate");
 
     /* Add this tuple to its group by computing the aggregates. */
-    ExpressionEvaluator eval(op.child(0)->schema(), t);
     for (std::size_t i = 0, end = op.aggregates().size(); i != end; ++i) {
         auto fe = as<const FnApplicationExpr>(op.aggregates()[i]);
         auto ty = fe->type();
@@ -713,8 +1183,8 @@ void Interpreter::operator()(const GroupingOperator &op, tuple_type &t)
                 if (fe->args.size() == 0) {
                     agg = std::get<int64_t>(agg) + 1;
                 } else {
-                    eval(*fe->args[0]);
-                    if (not std::holds_alternative<null_type>(eval.result()))
+                    StackMachine eval(op.child(0)->schema(), *fe->args[0]);
+                    if (not std::holds_alternative<null_type>(eval(t)))
                         agg = std::get<int64_t>(agg) + 1;
                 }
                 break;
@@ -723,14 +1193,15 @@ void Interpreter::operator()(const GroupingOperator &op, tuple_type &t)
                 if (std::holds_alternative<null_type>(agg))
                     agg = int64_t(0); // initialize
                 auto arg = fe->args[0];
-                eval(*arg);
-                if (std::holds_alternative<null_type>(eval.result()))
+                StackMachine eval(op.child(0)->schema(), *arg);
+                auto res = eval(t);
+                if (std::holds_alternative<null_type>(res))
                     continue; // skip NULL
                 auto n = as<const Numeric>(ty);
                 if (n->kind == Numeric::N_Float) {
-                    agg = to<double>(agg) + to<double>(eval.result());
+                    agg = to<double>(agg) + to<double>(res);
                 } else {
-                    agg = to<int64_t>(agg) + to<int64_t>(eval.result());
+                    agg = to<int64_t>(agg) + to<int64_t>(res);
                 }
                 break;
             }
@@ -738,26 +1209,27 @@ void Interpreter::operator()(const GroupingOperator &op, tuple_type &t)
             case Function::FN_MIN: {
                 using std::min;
                 auto arg = fe->args[0];
-                eval(*arg);
-                if (std::holds_alternative<null_type>(eval.result()))
+                StackMachine eval(op.child(0)->schema(), *arg);
+                auto res = eval(t);
+                if (std::holds_alternative<null_type>(res))
                     continue; // skip NULL
 
                 auto n = as<const Numeric>(ty);
                 if (n->kind == Numeric::N_Float and n->precision == 32) {
                     if (std::holds_alternative<null_type>(agg))
-                        agg = to<float>(eval.result());
+                        agg = to<float>(res);
                     else
-                        agg = min(to<float>(agg), to<float>(eval.result()));
+                        agg = min(to<float>(agg), to<float>(res));
                 } else if (n->kind == Numeric::N_Float and n->precision == 64) {
                     if (std::holds_alternative<null_type>(agg))
-                        agg = to<double>(eval.result());
+                        agg = to<double>(res);
                     else
-                        agg = min(to<double>(agg), to<double>(eval.result()));
+                        agg = min(to<double>(agg), to<double>(res));
                 } else {
                     if (std::holds_alternative<null_type>(agg))
-                        agg = to<int64_t>(eval.result());
+                        agg = to<int64_t>(res);
                     else
-                        agg = min(to<int64_t>(agg), to<int64_t>(eval.result()));
+                        agg = min(to<int64_t>(agg), to<int64_t>(res));
                 }
                 break;
             }
@@ -765,26 +1237,27 @@ void Interpreter::operator()(const GroupingOperator &op, tuple_type &t)
             case Function::FN_MAX: {
                 using std::max;
                 auto arg = fe->args[0];
-                eval(*arg);
-                if (std::holds_alternative<null_type>(eval.result()))
+                StackMachine eval(op.child(0)->schema(), *arg);
+                auto res = eval(t);
+                if (std::holds_alternative<null_type>(res))
                     continue; // skip NULL
 
                 auto n = as<const Numeric>(ty);
                 if (n->kind == Numeric::N_Float and n->precision == 32) {
                     if (std::holds_alternative<null_type>(agg))
-                        agg = to<float>(eval.result());
+                        agg = to<float>(res);
                     else
-                        agg = max(to<float>(agg), to<float>(eval.result()));
+                        agg = max(to<float>(agg), to<float>(res));
                 } else if (n->kind == Numeric::N_Float and n->precision == 64) {
                     if (std::holds_alternative<null_type>(agg))
-                        agg = to<double>(eval.result());
+                        agg = to<double>(res);
                     else
-                        agg = max(to<double>(agg), to<double>(eval.result()));
+                        agg = max(to<double>(agg), to<double>(res));
                 } else {
                     if (std::holds_alternative<null_type>(agg))
-                        agg = to<int64_t>(eval.result());
+                        agg = to<int64_t>(res);
                     else
-                        agg = max(to<int64_t>(agg), to<int64_t>(eval.result()));
+                        agg = max(to<int64_t>(agg), to<int64_t>(res));
                 }
                 break;
             }

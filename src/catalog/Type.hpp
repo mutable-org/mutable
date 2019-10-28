@@ -305,7 +305,7 @@ struct FnType : Type
 };
 
 /* Given two numeric types, compute the numeric type that is as least as precise as either of them. */
-const Type * arithmetic_join(const Numeric *lhs, const Numeric *rhs);
+const Numeric * arithmetic_join(const Numeric *lhs, const Numeric *rhs);
 
 }
 

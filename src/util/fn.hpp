@@ -202,6 +202,8 @@ inline uint64_t murmur3_64(uint64_t v)
     return v;
 }
 
+#if 0
+// TODO implement printing time points in a portable way (macOS vs Linux) for all clock types
 template<typename Clock, typename Duration>
 std::ostream & operator<<(std::ostream &out, std::chrono::time_point<Clock, Duration> tp)
 {
@@ -209,3 +211,4 @@ std::ostream & operator<<(std::ostream &out, std::chrono::time_point<Clock, Dura
     auto tm = std::localtime(&time); // convert the given time since epoch to local calendar time
     return out << std::put_time(tm, "%T (%Z)");
 }
+#endif

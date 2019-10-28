@@ -77,13 +77,12 @@ struct Timer
 
     friend std::ostream & operator<<(std::ostream &out, const Timer &timer) {
         using std::chrono::duration_cast;
-        using std::chrono::time_point_cast;
         using std::chrono::microseconds;
 
-        for (auto &m : timer) {
-            out << m.first << ": " << m.second.begin << " - " << m.second.end << " ("
-                << duration_cast<microseconds>(m.second.end - m.second.begin).count() / 1e3 << " ms)\n";
-        }
+        for (auto &m : timer)
+            out << m.first << ": "
+                << duration_cast<microseconds>(m.second.end - m.second.begin).count() / 1e3 << " ms\n";
+
         return out;
     }
 

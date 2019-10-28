@@ -212,3 +212,11 @@ std::ostream & operator<<(std::ostream &out, std::chrono::time_point<Clock, Dura
     return out << std::put_time(tm, "%T (%Z)");
 }
 #endif
+
+/* Template class definition to concatenate more types to std::variant. */
+template <typename T, typename... Args> struct Concat;
+
+template <typename... Args0, typename... Args1>
+struct Concat<std::variant<Args0...>, Args1...> {
+    using type = std::variant<Args0..., Args1...>;
+};

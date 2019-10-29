@@ -106,6 +106,13 @@ std::unique_ptr<Producer> Optimizer::build_operator_tree(const JoinGraph &G,
         result = projection;
     }
 
+    if (G.limit().limit or G.limit().offset) {
+        auto limit = new LimitOperator(G.limit().limit, G.limit().offset);
+        limit->add_child(result);
+        result = limit;
+    }
+
+
     stack.emplace_back(e.first, result);
     return std::unique_ptr<Producer>(stack[0].second);
 }

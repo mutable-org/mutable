@@ -238,8 +238,8 @@ void ASTDumper::operator()(Const<SelectStmt> &s)
     ++indent_;
 
     (*this)(*s.select);
-    (*this)(*s.from);
 
+    if (s.from) (*this)(*s.from);
     if (s.where) (*this)(*s.where);
     if (s.group_by) (*this)(*s.group_by);
     if (s.having) (*this)(*s.having);

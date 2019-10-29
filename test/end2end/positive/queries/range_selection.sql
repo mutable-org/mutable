@@ -1,0 +1,1 @@
+SELECT * FROM R WHERE key < 10 ORDER BY key;

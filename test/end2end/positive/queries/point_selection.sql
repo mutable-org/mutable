@@ -1,0 +1,1 @@
+SELECT * FROM T WHERE key = 42;

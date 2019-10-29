@@ -1,4 +1,13 @@
--- Simple select with asterisk.
+-- Simple select.
+SELECT 42;
+
+SELECT *;
+
+SELECT 42, "abc";
+
+SELECT *, "abc", 42;
+
+-- Simple select from table.
 SELECT * FROM tbl;
 
 -- Simple select without asterisk.

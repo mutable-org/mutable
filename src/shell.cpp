@@ -76,6 +76,10 @@ int main(int argc, const char **argv)
         nullptr, "--color",                 /* Short, Long      */
         "use colors",                       /* Description      */
         [&](bool) { color = true; });       /* Callback         */
+    ADD(bool, show_prompt, true,            /* Type, Var, Init  */
+        nullptr, "--noprompt",              /* Short, Long      */
+        "disable prompt",                   /* Description      */
+        [&](bool) { show_prompt = false; });/* Callback         */
     ADD(bool, times, false,                 /* Type, Var, Init  */
         "-t", "--times",                    /* Short, Long      */
         "report exact timings",             /* Description      */
@@ -157,7 +161,7 @@ int main(int argc, const char **argv)
         Lexer lexer(diag, C.get_pool(), filename, *in);
         Parser parser(lexer);
 
-        if (in == &std::cin)
+        if (show_prompt and in == &std::cin)
             prompt(std::cout);
         while (parser.token()) {
             Timer timer;
@@ -229,7 +233,7 @@ next:
             if (times)
                 std::cout << timer;
 
-            if (in == &std::cin)
+            if (show_prompt and in == &std::cin)
                 prompt(std::cout, timer.total());
         }
 

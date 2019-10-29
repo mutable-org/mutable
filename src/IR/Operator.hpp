@@ -153,7 +153,7 @@ inline void print(std::ostream &out, const OperatorSchema &schema, const tuple_t
     auto t = tuple.begin();
     auto s = schema.begin();
     for (auto end = tuple.end(); t != end; ++t, ++s) {
-        if (t != tuple.begin()) out << ", ";
+        if (t != tuple.begin()) out << ',';
         print(out, s->second, *t);
     }
 }

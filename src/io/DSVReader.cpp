@@ -120,15 +120,16 @@ void DSVReader::operator()(std::istream &in, const char *name)
     }
 
     /*----- Read data row wise. --------------------------------------------------------------------------------------*/
-    std::vector<std::string> row;
+    std::vector<std::string> tuple;
+    tuple.reserve(columns.size());
     for (;;) {
-        row.push_back(read_cell());
+        tuple.emplace_back(read_cell());
         if (c == delimiter) {
             step();
         } else {
             insist(c == EOF or c == '\n', "expected the end of a row");
-            /* check row length */
-            if (row.size() != table.size()) {
+            /* check tuple length */
+            if (tuple.size() != table.size()) {
                 diag.e(pos) << "Row of incorrect size.\n";
                 goto next;
             }
@@ -137,7 +138,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
             {
                 std::vector<value_type> values(table.size());
                 for (std::size_t i = 0; i != table.size(); ++i) {
-                    auto &cell = row[i];
+                    auto &cell = tuple[i];
                     auto &attr = *columns[i];
                     auto &value = values[i];
                     if (not parse_value(cell, attr, value)) {
@@ -146,7 +147,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
                     }
                 }
 
-                /* Append a new row and set its values. */
+                /* Append a new row to the store and set its values. */
                 auto row = store.append();
                 for (std::size_t i = 0; i != table.size(); ++i) {
                     auto &attr = *columns[i];
@@ -166,7 +167,7 @@ next:
             step();
             if (c == EOF)
                 break;
-            row.clear();
+            tuple.clear();
         }
     }
 }

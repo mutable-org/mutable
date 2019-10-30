@@ -42,7 +42,7 @@ struct DSVReader : Reader
     void operator()(std::istream &in, const char *name) override;
 
     private:
-    bool parse_value(std::string str, const Attribute &attr, value_type &value);
+    bool parse_value(const std::string &str, const Attribute &attr, value_type &value);
 };
 
 }

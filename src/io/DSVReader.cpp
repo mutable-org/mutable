@@ -41,7 +41,6 @@ void DSVReader::operator()(std::istream &in, const char *name)
     /* Parsing data. */
     int c = '\n';
     Position start(name), pos(name);
-    std::string buf;
 
     /*----- Helper functions. ----------------------------------------------------------------------------------------*/
     auto step = [&]() -> int {
@@ -58,37 +57,38 @@ void DSVReader::operator()(std::istream &in, const char *name)
         return c = in.get();
     };
 
-    auto push = [&]() {
+    auto push = [&](std::string &buf) {
         buf += char(c);
         step();
     };
 
-    auto read_quoted = [&]() -> void {
+    auto read_quoted = [&](std::string &buf) -> void {
         insist(c == quote, "quoted strings must begin with the quote character");
-        push(); // opening quote
+        push(buf); // opening quote
         while (c != quote) {
             if (c == EOF or c == '\n') {
                 diag.e(pos) << "Unexpected end of quoted string.\n";
                 return; // unexpected end
             }
-            push();
+            push(buf);
         }
         insist(c == quote);
-        push(); // closing quote
+        push(buf); // closing quote
     };
 
-    auto read_cell = [&]() -> std::string&& {
+    auto read_cell = [&]() -> std::string {
+        std::string buf;
         if (c == quote) {
-            read_quoted();
+            read_quoted(buf);
             if (c != EOF and c != '\n' and c != delimiter) {
                 /* superfluous characters */
                 diag.e(pos) << "Unexpected characters after a quoted string.\n";
                 while (c != EOF and c != '\n' and c != delimiter) step();
             }
         } else {
-            while (c != EOF and c != '\n' and c != delimiter) push();
+            while (c != EOF and c != '\n' and c != delimiter) push(buf);
         }
-        return std::move(buf);
+        return buf;
     };
 
     step(); // initialize the variable `c` by reading the first character from the input stream
@@ -170,7 +170,7 @@ next:
     }
 }
 
-bool DSVReader::parse_value(std::string str, const Attribute &attr, value_type &value)
+bool DSVReader::parse_value(const std::string &str, const Attribute &attr, value_type &value)
 {
     using std::begin, std::end, std::next, std::prev;
 
@@ -185,11 +185,7 @@ bool DSVReader::parse_value(std::string str, const Attribute &attr, value_type &
     }
 
     if (ty->is_character_sequence()) {
-        if (str[0] == quote) {
-            std::string unquoted(next(begin(str)), prev(end(str)));
-            str = unquoted;
-        }
-        value = unescape(str);
+        value = interpret(str);
         return true;
     }
 

@@ -39,10 +39,9 @@ void DSVReader::operator()(std::istream &in, const char *name)
     std::vector<const Attribute*> columns; ///< maps column offset to attribute
 
     /* Parsing data. */
-    using buf_t = std::vector<char>;
-    char c = '\n';
+    int c = '\n';
     Position start(name), pos(name);
-    buf_t buf;
+    std::string buf;
 
     /*----- Helper functions. ----------------------------------------------------------------------------------------*/
     auto step = [&]() -> int {
@@ -60,7 +59,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
     };
 
     auto push = [&]() {
-        buf.push_back(c);
+        buf += char(c);
         step();
     };
 
@@ -78,8 +77,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
         push(); // closing quote
     };
 
-    auto read_cell = [&]() -> std::string {
-        buf.clear();
+    auto read_cell = [&]() -> std::string&& {
         if (c == quote) {
             read_quoted();
             if (c != EOF and c != '\n' and c != delimiter) {
@@ -90,7 +88,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
         } else {
             while (c != EOF and c != '\n' and c != delimiter) push();
         }
-        return std::string(buf.begin(), buf.end());
+        return std::move(buf);
     };
 
     step(); // initialize the variable `c` by reading the first character from the input stream

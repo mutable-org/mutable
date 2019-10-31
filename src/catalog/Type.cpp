@@ -17,6 +17,43 @@ Pool<Type> Type::types_;
 
 void Type::dump() const { dump(std::cerr); }
 
+const Type * db::arithmetic_join(const Numeric *lhs, const Numeric *rhs)
+{
+    static constexpr double LOG_2_OF_10 = 3.321928094887362; ///> factor to convert count of decimal digits to binary digits
+
+    /* Combining a vector with a scalar yields a vector. */
+    Type::category_t category = std::max(lhs->category, rhs->category);
+
+    /* N_Decimal is always "more precise" than N_Float.  N_Float is always more precise than N_Int.  */
+    Numeric::kind_t kind = std::max(lhs->kind, rhs->kind);
+
+    /* Compute the precision in bits. */
+    unsigned precision_lhs, precision_rhs;
+    switch (lhs->kind) {
+        case Numeric::N_Int:     precision_lhs = 8 * lhs->precision; break;
+        case Numeric::N_Float:   precision_lhs = lhs->precision; break;
+        case Numeric::N_Decimal: precision_lhs = std::ceil(LOG_2_OF_10 * lhs->precision); break;
+    }
+    switch (rhs->kind) {
+        case Numeric::N_Int:     precision_rhs = 8 * rhs->precision; break;
+        case Numeric::N_Float:   precision_rhs = rhs->precision; break;
+        case Numeric::N_Decimal: precision_rhs = std::ceil(LOG_2_OF_10 * rhs->precision); break;
+    }
+    int precision = std::max(precision_lhs, precision_rhs);
+    int scale = std::max(lhs->scale, rhs->scale);
+
+    switch (kind) {
+        case Numeric::N_Int: return Type::Get_Integer(category, precision / 8);
+        case Numeric::N_Float: {
+            if (precision == 32) return Type::Get_Float(category);
+            insist(precision == 64, "Illegal floating-point precision");
+            return Type::Get_Double(category);
+        }
+
+        case Numeric::N_Decimal: return Type::Get_Decimal(category, precision / LOG_2_OF_10, scale);
+    }
+}
+
 /*===== Factory Methods ==============================================================================================*/
 
 const ErrorType * Type::Get_Error()

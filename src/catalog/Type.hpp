@@ -278,6 +278,9 @@ struct FnType : Type
     void dump(std::ostream &out) const;
 };
 
+/* Given two numeric types, compute the numeric type that is as least as precise as either of them. */
+const Type * arithmetic_join(const Numeric *lhs, const Numeric *rhs);
+
 }
 
 inline bool db::Type::is_integral() const {

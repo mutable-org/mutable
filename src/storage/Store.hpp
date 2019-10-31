@@ -71,6 +71,19 @@ struct hash<db::value_type>
 
 namespace db {
 
+inline std::ostream & operator<<(std::ostream &out, const value_type &value)
+{
+    std::visit(overloaded {
+        [&] (null_type) { out << "NULL"; },
+        [&] (int64_t v) { out << v; },
+        [&] (float v) { out << v << ".f"; },
+        [&] (double v) { out << v << '.'; },
+        [&] (std::string v) { out << '"' << v << '"'; },
+        [&] (bool v) { out << (v ? "TRUE" : "FALSE"); },
+    }, value);
+    return out;
+}
+
 /** Prints an attribute's value to an output stream. */
 void print(std::ostream &out, const Type *type, value_type value);
 

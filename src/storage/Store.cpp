@@ -1,5 +1,7 @@
 #include "storage/Store.hpp"
 
+#include <cmath>
+
 
 using namespace db;
 
@@ -29,7 +31,7 @@ void db::print(std::ostream &out, const Type *type, value_type value)
         int64_t v = std::get<int64_t>(value);
         int64_t shift = pow(10, n->scale);
         int64_t pre = v / shift;
-        int64_t post = v % shift;
+        int64_t post = std::abs(v) % shift;
         out << pre << '.' << setw(n->scale) << setfill('0') << post;
         return;
     }

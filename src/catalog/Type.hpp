@@ -46,6 +46,8 @@ struct Type
     bool is_integral() const;
     bool is_decimal() const;
     bool is_floating_point() const;
+    bool is_float() const;
+    bool is_double() const;
 
     /** Compute the size in bits of an instance of this type. */
     virtual uint32_t size() const { throw std::logic_error("the size of this type is not defined"); }
@@ -298,6 +300,18 @@ inline bool db::Type::is_decimal() const {
 inline bool db::Type::is_floating_point() const {
     if (auto n = cast<const Numeric>(this))
         return n->kind == Numeric::N_Float;
+    return false;
+}
+
+inline bool db::Type::is_float() const {
+    if (auto n = cast<const Numeric>(this))
+        return n->kind == Numeric::N_Float and n->precision == 32;
+    return false;
+}
+
+inline bool db::Type::is_double() const {
+    if (auto n = cast<const Numeric>(this))
+        return n->kind == Numeric::N_Float and n->precision == 64;
     return false;
 }
 

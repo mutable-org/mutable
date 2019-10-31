@@ -226,7 +226,7 @@ TEST_CASE("ExpressionEvaluator", "[unit]")
     TEST("col_decimal + col_decimal", "binary/arithmetic/+/decimal", decimal, col_decimal_val + col_decimal_val);
     TEST("col_decimal - col_decimal", "binary/arithmetic/-/decimal", decimal, col_decimal_val - col_decimal_val);
     TEST("col_decimal * col_decimal", "binary/arithmetic/*/decimal", decimal, col_decimal_val * col_decimal_val / 100);
-    TEST("col_decimal / col_decimal", "binary/arithmetic///decimal", decimal, col_decimal_val / col_decimal_val / 100);
+    TEST("col_decimal / col_decimal", "binary/arithmetic///decimal", decimal, (col_decimal_val / col_decimal_val) * 100);
 
     TEST("col_int64_t <  13", "binary/comparison/</int64_t",  bool, col_int64_t_val <  13);
     TEST("col_int64_t <= 13", "binary/comparison/<=/int64_t", bool, col_int64_t_val <= 13);
@@ -289,31 +289,51 @@ TEST_CASE("ExpressionEvaluator", "[unit]")
     /* Function application */
     // TODO
 
-    /* Mixed datatypes */
+    /*----- Mixed datatypes ------------------------------------------------------------------------------------------*/
+    /* LHS int64 */
     TEST("col_int64_t + col_float",   "binary/arithmetic/+/int64_t,float",   double,  Approx(col_int64_t_val + col_float_val));
     TEST("col_int64_t + col_double",  "binary/arithmetic/+/int64_t,double",  double,  Approx(col_int64_t_val + col_double_val));
-    TEST("col_int64_t + col_decimal", "binary/arithmetic/+/int64_t,decimal", decimal, col_int64_t_val * 100 + col_decimal_val);
+    TEST("col_int64_t + col_decimal", "binary/arithmetic/+/int64_t,decimal", decimal, col_int64_t_val * 100  + col_decimal_val);
+
+    TEST("col_int64_t - col_float",   "binary/arithmetic/-/int64_t,float",   double,  Approx(col_int64_t_val - col_float_val));
+    TEST("col_int64_t - col_double",  "binary/arithmetic/-/int64_t,double",  double,  Approx(col_int64_t_val - col_double_val));
+    TEST("col_int64_t - col_decimal", "binary/arithmetic/-/int64_t,decimal", decimal, col_int64_t_val * 100  - col_decimal_val);
 
     TEST("col_int64_t * col_float",   "binary/arithmetic/*/int64_t,float",   double,  Approx(col_int64_t_val * col_float_val));
     TEST("col_int64_t * col_double",  "binary/arithmetic/*/int64_t,double",  double,  Approx(col_int64_t_val * col_double_val));
     TEST("col_int64_t * col_decimal", "binary/arithmetic/*/int64_t,decimal", decimal, col_int64_t_val * col_decimal_val);
 
+    TEST("col_int64_t / col_float",   "binary/arithmetic///int64_t,float",   double,  Approx(col_int64_t_val / col_float_val));
+    TEST("col_int64_t / col_double",  "binary/arithmetic///int64_t,double",  double,  Approx(col_int64_t_val / col_double_val));
+    TEST("col_int64_t / col_decimal", "binary/arithmetic///int64_t,decimal", decimal, (col_int64_t_val * 100) / col_decimal_val * 100);
+
+    /* LHS float */
     TEST("col_float + col_int64_t", "binary/arithmetic/+/float,int64_t", double, Approx(col_float_val + col_int64_t_val));
     TEST("col_float + col_double",  "binary/arithmetic/+/float,double",  double, Approx(col_float_val + col_double_val));
-    TEST("col_float + col_decimal", "binary/arithmetic/+/float,decimal", double, Approx(col_float_val + col_decimal_val / 100.0));
+    TEST("col_float + col_decimal", "binary/arithmetic/+/float,decimal", double, Approx(col_float_val + (col_decimal_val / 100.f)));
+
+    TEST("col_float - col_int64_t", "binary/arithmetic/-/float,int64_t", double, Approx(col_float_val - col_int64_t_val));
+    TEST("col_float - col_double",  "binary/arithmetic/-/float,double",  double, Approx(col_float_val - col_double_val));
+    TEST("col_float - col_decimal", "binary/arithmetic/-/float,decimal", double, Approx(col_float_val - (col_decimal_val / 100.f)));
 
     TEST("col_float * col_int64_t", "binary/arithmetic/*/float,int64_t", double, Approx(col_float_val * col_int64_t_val));
     TEST("col_float * col_double",  "binary/arithmetic/*/float,double",  double, Approx(col_float_val * col_double_val));
-    TEST("col_float * col_decimal", "binary/arithmetic/*/float,decimal", double, Approx(col_float_val * col_decimal_val / 100.0));
+    TEST("col_float * col_decimal", "binary/arithmetic/*/float,decimal", double, Approx(col_float_val * (col_decimal_val / 100.f)));
 
+    TEST("col_float / col_int64_t", "binary/arithmetic///float,int64_t", double, Approx(col_float_val / col_int64_t_val));
+    TEST("col_float / col_double",  "binary/arithmetic///float,double",  double, Approx(col_float_val / col_double_val));
+    TEST("col_float / col_decimal", "binary/arithmetic///float,decimal", double, Approx(col_float_val / (col_decimal_val / 100.f)));
+
+    /* LHS double */
     TEST("col_double + col_int64_t", "binary/arithmetic/+/double,int64_t", double, Approx(col_double_val + col_int64_t_val));
     TEST("col_double + col_float",   "binary/arithmetic/+/double,float",   double, Approx(col_double_val + col_float_val));
-    TEST("col_double + col_decimal", "binary/arithmetic/+/double,decimal", double, Approx(col_double_val + col_decimal_val / 100.0));
+    TEST("col_double + col_decimal", "binary/arithmetic/+/double,decimal", double, Approx(col_double_val + (col_decimal_val / 100.)));
 
     TEST("col_double * col_int64_t", "binary/arithmetic/*/double,int64_t", double, Approx(col_double_val * col_int64_t_val));
     TEST("col_double * col_float",   "binary/arithmetic/*/double,float",   double, Approx(col_double_val * col_float_val));
-    TEST("col_double * col_decimal", "binary/arithmetic/*/double,decimal", double, Approx(col_double_val * col_decimal_val / 100.0));
+    TEST("col_double * col_decimal", "binary/arithmetic/*/double,decimal", double, Approx(col_double_val * (col_decimal_val / 100.)));
 
+    /* LHS decimal */
     TEST("col_decimal + col_int64_t", "binary/arithmetic/+/decimal,int64_t", decimal, col_decimal_val + col_int64_t_val * 100);
     TEST("col_decimal + col_float",   "binary/arithmetic/+/decimal,float",   double,  Approx(col_decimal_val / 100.0 + col_float_val));
     TEST("col_decimal + col_double",  "binary/arithmetic/+/decimal,double",  double,  Approx(col_decimal_val / 100.0 + col_double_val));

@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
+#include <ios>
 #include <iostream>
 #include <vector>
 
@@ -121,6 +122,9 @@ int main(int argc, const char **argv)
         AP.print_args(stdout);
         std::exit(EXIT_SUCCESS);
     }
+
+    /* Disable synchronisation between C and C++ I/O (e.g. stdin vs std::cin). */
+    std::ios_base::sync_with_stdio(false);
 
     Catalog &C = Catalog::Get();
     Diagnostic diag(color, std::cout, std::cerr);

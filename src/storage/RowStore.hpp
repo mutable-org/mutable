@@ -250,49 +250,46 @@ T RowStore::Row::get_generic(const Attribute &attr) const
 
     if constexpr (std::is_same_v<T, bool>)
     {
-        if (ty->is_boolean())
-            return get_exact<bool>(attr);
+        insist(ty->is_boolean());
+        return get_exact<bool>(attr);
     }
     else if constexpr (std::is_same_v<T, std::string>)
     {
-        if (auto cs = cast<const CharacterSequence>(ty)) {
-            if (cs->is_varying) {
-                unreachable("varying length character sequences are not supported by this store");
-            } else {
-                return get_exact<std::string>(attr);
-            }
-        }
+        auto cs = as<const CharacterSequence>(ty);
+        if (cs->is_varying)
+            unreachable("varying length character sequences are not supported by this store");
+        else
+            return get_exact<std::string>(attr);
     }
     else if constexpr (std::is_arithmetic_v<T>)
     {
-        if (auto n = cast<const Numeric>(ty)) {
-            switch (n->kind) {
-                case Numeric::N_Int: {
-                    switch (n->precision) {
-                        default: unreachable("illegal integer type");
-                        case 1: return get_exact<int8_t>(attr);
-                        case 2: return get_exact<int16_t>(attr);
-                        case 4: return get_exact<int32_t>(attr);
-                        case 8: return get_exact<int64_t>(attr);
-                    }
+        auto n = as<const Numeric>(ty);
+        switch (n->kind) {
+            case Numeric::N_Int: {
+                switch (n->precision) {
+                    default: unreachable("illegal integer type");
+                    case 1: return get_exact<int8_t>(attr);
+                    case 2: return get_exact<int16_t>(attr);
+                    case 4: return get_exact<int32_t>(attr);
+                    case 8: return get_exact<int64_t>(attr);
                 }
+            }
 
-                case Numeric::N_Float: {
-                    if (n->precision == 32)
-                        return get_exact<float>(attr);
-                    else
-                        return get_exact<double>(attr);
-                }
+            case Numeric::N_Float: {
+                if (n->precision == 32)
+                    return get_exact<float>(attr);
+                else
+                    return get_exact<double>(attr);
+            }
 
-                case Numeric::N_Decimal: {
-                    const auto p = ceil_to_pow_2(n->size());
-                    switch (p) {
-                        default: unreachable("illegal precision of decimal type");
-                        case 8: return get_exact<int8_t>(attr);
-                        case 16: return get_exact<int16_t>(attr);
-                        case 32: return get_exact<int32_t>(attr);
-                        case 64: return get_exact<int64_t>(attr);
-                    }
+            case Numeric::N_Decimal: {
+                const auto p = ceil_to_pow_2(n->size());
+                switch (p) {
+                    default: unreachable("illegal precision of decimal type");
+                    case 8: return get_exact<int8_t>(attr);
+                    case 16: return get_exact<int16_t>(attr);
+                    case 32: return get_exact<int32_t>(attr);
+                    case 64: return get_exact<int64_t>(attr);
                 }
             }
         }
@@ -315,49 +312,46 @@ T RowStore::Row::set_generic(const Attribute &attr, T value)
 
     if constexpr (std::is_same_v<T, bool>)
     {
-        if (ty->is_boolean())
-            return set_exact<bool>(attr, value);
+        insist(ty->is_boolean());
+        return set_exact<bool>(attr, value);
     }
     else if constexpr (std::is_same_v<T, std::string>)
     {
-        if (auto cs = cast<const CharacterSequence>(ty)) {
-            if (cs->is_varying) {
-                unreachable("varying length character sequences are not supported by this store");
-            } else {
-                return set_exact<std::string>(attr, value);
-            }
-        }
+        auto cs = as<const CharacterSequence>(ty);
+        if (cs->is_varying)
+            unreachable("varying length character sequences are not supported by this store");
+        else
+            return set_exact<std::string>(attr, value);
     }
     else if constexpr (std::is_arithmetic_v<T>)
     {
-        if (auto n = cast<const Numeric>(ty)) {
-            switch (n->kind) {
-                case Numeric::N_Int: {
-                    switch (n->precision) {
-                        default: unreachable("illegal integer type");
-                        case 1: return set_exact<int8_t>(attr, value);
-                        case 2: return set_exact<int16_t>(attr, value);
-                        case 4: return set_exact<int32_t>(attr, value);
-                        case 8: return set_exact<int64_t>(attr, value);
-                    }
+        auto n = as<const Numeric>(ty);
+        switch (n->kind) {
+            case Numeric::N_Int: {
+                switch (n->precision) {
+                    default: unreachable("illegal integer type");
+                    case 1: return set_exact<int8_t>(attr, value);
+                    case 2: return set_exact<int16_t>(attr, value);
+                    case 4: return set_exact<int32_t>(attr, value);
+                    case 8: return set_exact<int64_t>(attr, value);
                 }
+            }
 
-                case Numeric::N_Float: {
-                    if (n->precision == 32)
-                        return set_exact<float>(attr, value);
-                    else
-                        return set_exact<double>(attr, value);
-                }
+            case Numeric::N_Float: {
+                if (n->precision == 32)
+                    return set_exact<float>(attr, value);
+                else
+                    return set_exact<double>(attr, value);
+            }
 
-                case Numeric::N_Decimal: {
-                    const auto p = ceil_to_pow_2(n->size());
-                    switch (p) {
-                        default: unreachable("illegal precision of decimal type");
-                        case 8: return set_exact<int8_t>(attr, value);
-                        case 16: return set_exact<int16_t>(attr, value);
-                        case 32: return set_exact<int32_t>(attr, value);
-                        case 64: return set_exact<int64_t>(attr, value);
-                    }
+            case Numeric::N_Decimal: {
+                const auto p = ceil_to_pow_2(n->size());
+                switch (p) {
+                    default: unreachable("illegal precision of decimal type");
+                    case 8: return set_exact<int8_t>(attr, value);
+                    case 16: return set_exact<int16_t>(attr, value);
+                    case 32: return set_exact<int32_t>(attr, value);
+                    case 64: return set_exact<int64_t>(attr, value);
                 }
             }
         }

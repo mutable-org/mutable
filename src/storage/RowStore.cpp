@@ -126,43 +126,50 @@ void RowStore::dump(std::ostream &out) const
 
 void RowStore::Row::dispatch(callback_t callback) const
 {
-    for (auto &attr : store.table()) {
-        auto ty = attr.type;
+    struct TypeDispatch : ConstTypeVisitor
+    {
+        callback_t callback;
+        const Attribute &attr;
+        const RowStore::Row &row;
 
+        TypeDispatch(callback_t callback, const Attribute &attr, const RowStore::Row &row)
+            : callback(callback)
+            , attr(attr)
+            , row(row)
+        { }
+
+        using ConstTypeVisitor::operator();
+        void operator()(Const<ErrorType>&) { unreachable("error type"); }
+        void operator()(Const<Boolean>&) { callback(attr, row.get_generic<bool>(attr)); }
+        void operator()(Const<CharacterSequence> &ty) {
+            insist(not ty.is_varying, "varying length character sequences are not supported by this store");
+            callback(attr, row.get_generic<std::string>(attr));
+        }
+        void operator()(Const<Numeric> &ty) {
+            switch (ty.kind) {
+                case Numeric::N_Int:
+                case Numeric::N_Decimal:
+                    callback(attr, row.get_generic<int64_t>(attr));
+                    return;
+
+                case Numeric::N_Float:
+                    if (ty.precision == 32)
+                        callback(attr, row.get_generic<float>(attr));
+                    else
+                        callback(attr, row.get_generic<double>(attr));
+                    return;
+            }
+        }
+        void operator()(Const<FnType>&) { unreachable("fn type"); }
+    };
+
+    for (auto &attr : store.table()) {
         if (isnull(attr)) {
             callback(attr, value_type());
             continue;
         }
 
-        if (ty->is_boolean()) {
-            callback(attr, get_generic<bool>(attr));
-            continue;
-        } else if (auto cs = cast<const CharacterSequence>(ty)) {
-            if (cs->is_varying) {
-                unreachable("varying length character sequences are not supported by this store");
-            } else {
-                callback(attr, get_generic<std::string>(attr));
-                continue;
-            }
-        } else if (auto n = cast<const Numeric>(ty)) {
-            switch (n->kind) {
-                case Numeric::N_Int:
-                    callback(attr, get_generic<int64_t>(attr));
-                    continue;
-
-                case Numeric::N_Float:
-                    if (n->precision == 32)
-                        callback(attr, get_generic<float>(attr));
-                    else
-                        callback(attr, get_generic<double>(attr));
-                    continue;
-
-                case Numeric::N_Decimal:
-                    callback(attr, get_generic<int64_t>(attr));
-                    continue;
-            }
-        }
-
-        unreachable("invalid type");
+        TypeDispatch dispatcher(callback, attr, *this);
+        dispatcher(*attr.type);
     }
 }

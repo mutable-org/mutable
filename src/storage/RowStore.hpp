@@ -53,7 +53,7 @@ struct RowStore : Store
         void setnull(const Attribute &attr) override { null(attr, true); }
 
         /** Invoke a callable for each attribute in the row and pass the attribute and its value. */
-        void dispatch(std::function<void(const Attribute&, value_type)> callback) const override;
+        void dispatch(callback_t callback) const override;
 
         private:
         /** Retrieve the value of the attribute in this row.  `T` is the exact type of the attribute as stored in the

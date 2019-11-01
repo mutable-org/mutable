@@ -124,7 +124,7 @@ void RowStore::dump(std::ostream &out) const
  * RowStore::Row
  *====================================================================================================================*/
 
-void RowStore::Row::dispatch(std::function<void(const Attribute&, value_type)> callback) const
+void RowStore::Row::dispatch(callback_t callback) const
 {
     for (auto &attr : store.table()) {
         auto ty = attr.type;

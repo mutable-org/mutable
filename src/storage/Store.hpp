@@ -113,6 +113,8 @@ struct Store
 {
     struct Row
     {
+        using callback_t = std::function<void(const Attribute&, value_type)>;
+
         virtual ~Row() { }
 
         /** Check whether the value of the attribute is NULL. */
@@ -133,7 +135,7 @@ struct Store
         void set(const Attribute &attr, T value) { set_(attr, value); }
 
         /** Invokes a callback function for each attribute of the row, passing the attribute and its value. */
-        virtual void dispatch(std::function<void(const Attribute &attr, value_type)> callback) const = 0;
+        virtual void dispatch(callback_t callback) const = 0;
 
         /** Output a human-readable representation of this row. */
         friend std::ostream & operator<<(std::ostream &out, const Row &row) {

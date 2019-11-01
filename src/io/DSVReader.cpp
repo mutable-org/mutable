@@ -173,36 +173,55 @@ bool DSVReader::parse_value(const std::string &str, const Attribute &attr, value
 
     if (str.empty()) { value = null_type(); return true; }
 
-    auto ty = attr.type;
+    struct TypeDispatch : ConstTypeVisitor
+    {
+        const std::string &str;
+        value_type &value;
+        bool success = false;
 
-    if (ty->is_boolean()) {
-        if (str == "TRUE")  { value = true;  return true; }
-        if (str == "FALSE") { value = false; return true; }
-        return false;
-    }
+        TypeDispatch(const std::string &str, value_type &value)
+            : str(str)
+            , value(value)
+        { }
 
-    if (ty->is_character_sequence()) {
-        value = interpret(str);
-        return true;
-    }
+        using ConstTypeVisitor::operator();
+        void operator()(Const<ErrorType>&) { unreachable("error type"); }
+        void operator()(Const<Boolean>&) {
+            if (str == "TRUE")  { value = true;  success = true; }
+            if (str == "FALSE") { value = false; success = true; }
+        }
+        void operator()(Const<CharacterSequence>&) {
+            value = interpret(str);
+            success = true;
+        }
+        void operator()(Const<Numeric> &ty) {
+            switch (ty.kind) {
+                case Numeric::N_Int: {
+                    char *end;
+                    int64_t i = strtoll(str.c_str(), &end, 10);
+                    if (end != &*str.end())
+                        break;
+                    value = i;
+                    success = true;
+                    break;
+                }
 
-    if (ty->is_floating_point() or ty->is_decimal()) {
-        std::size_t pos;
-        double d = stod(str, &pos);
-        if (pos != str.length())
-            return false;
-        value = d;
-        return true;
-    }
+                case Numeric::N_Decimal:
+                case Numeric::N_Float: {
+                    std::size_t pos;
+                    double d = stod(str, &pos);
+                    if (pos != str.length())
+                        break;
+                    value = d;
+                    success = true;
+                    break;
+                }
+            }
+        }
+        void operator()(Const<FnType>&) { unreachable("fn type"); }
+    };
 
-    if (ty->is_integral()) {
-        char *end;
-        int64_t i = strtoll(str.c_str(), &end, 10);
-        if (end != &*str.end())
-            return false;
-        value = i;
-        return true;
-    }
-
-    unreachable("unsupported type");
+    TypeDispatch dispatcher(str, value);
+    dispatcher(*attr.type);
+    return dispatcher.success;
 }

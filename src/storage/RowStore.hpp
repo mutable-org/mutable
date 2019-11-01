@@ -242,11 +242,7 @@ T RowStore::Row::get_generic(const Attribute &attr) const
 {
     auto ty = attr.type;
 
-    if (not is_convertible<T>(ty)) {
-        std::ostringstream oss;
-        oss << "Attribute " << attr.name << " of type " << *ty << " is not convertible to " << typeid(T).name();
-        throw std::logic_error(oss.str());
-    }
+    insist(is_convertible<T>(ty), "Attribute not convertible to specified type");
 
     if constexpr (std::is_same_v<T, bool>)
     {
@@ -303,12 +299,7 @@ T RowStore::Row::set_generic(const Attribute &attr, T value)
 {
     auto ty = attr.type;
 
-    if (not is_convertible<T>(ty)) {
-        std::ostringstream oss;
-        oss << "Value of type " << typeid(T).name() << " is not convertible to attribute " << attr.name << " of type "
-            << *ty;
-        throw std::logic_error(oss.str());
-    }
+    insist(is_convertible<T>(ty), "Attribute not convertible to specified type");
 
     if constexpr (std::is_same_v<T, bool>)
     {

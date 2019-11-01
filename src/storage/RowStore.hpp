@@ -165,7 +165,7 @@ T RowStore::Row::get_exact(const Attribute &attr) const
         throw null_error("Attribute is NULL, cannot get value");
 
     const auto off = store.offset(attr);
-    type_check<T>(attr);
+    insist(type_check<T>(attr));
     const auto bytes = off / 8;
 
     if constexpr (std::is_same_v<T, bool>) {
@@ -197,7 +197,7 @@ T RowStore::Row::set_exact(const Attribute &attr, T value)
 {
     null(attr, false);
     const auto off = store.offset(attr);
-    type_check<T>(attr);
+    insist(type_check<T>(attr));
     const auto bytes = off / 8;
 
     if constexpr (std::is_same_v<T, bool>) {

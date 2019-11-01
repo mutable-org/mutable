@@ -85,7 +85,28 @@ inline std::ostream & operator<<(std::ostream &out, const value_type &value)
 }
 
 /** Prints an attribute's value to an output stream. */
-void print(std::ostream &out, const Type *type, value_type value);
+inline void print(std::ostream &out, const Type *type, value_type value)
+{
+    std::visit(overloaded {
+        [&] (null_type) { out << "NULL"; },
+        [&] (float v) { out << v; },
+        [&] (double v) { out << v; },
+        [&] (std::string v) { out << '"' << escape(v) << '"'; },
+        [&] (bool v) { out << (v ? "TRUE" : "FALSE"); },
+        [&] (int64_t v) {
+            if (auto n = as<const Numeric>(type); n->kind == Numeric::N_Decimal) {
+                using std::setw, std::setfill;
+                int64_t shift = pow(10, n->scale);
+                int64_t pre = v / shift;
+                int64_t post = std::abs(v) % shift;
+                out << pre << '.' << setw(n->scale) << setfill('0') << post;
+                return;
+            } else {
+                out << v;
+            }
+        },
+    }, value);
+}
 
 /** Defines a generic store interface. */
 struct Store

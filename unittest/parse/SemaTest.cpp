@@ -46,17 +46,17 @@ TEST_CASE("Sema/Expressions", "[unit][sema]")
         { "2147483648", Type::Get_Integer(Type::TY_Scalar, 8) }, // 2^31, decimal
         { "0x80000000", Type::Get_Integer(Type::TY_Scalar, 8) }, // 2^31, hexadecimal
 
-        { ".1", Type::Get_Float(Type::TY_Scalar) },
-        { "0xC0F.F33", Type::Get_Float(Type::TY_Scalar) },
+        { ".1", Type::Get_Double(Type::TY_Scalar) },
+        { "0xC0F.F33", Type::Get_Double(Type::TY_Scalar) },
 
         /* unary expressions */
         { "~42", Type::Get_Integer(Type::TY_Scalar, 4) },
         { "+42", Type::Get_Integer(Type::TY_Scalar, 4) },
         { "-42", Type::Get_Integer(Type::TY_Scalar, 4) },
 
-        { "~42.", Type::Get_Float(Type::TY_Scalar) },
-        { "+42.", Type::Get_Float(Type::TY_Scalar) },
-        { "-42.", Type::Get_Float(Type::TY_Scalar) },
+        { "~42.", Type::Get_Double(Type::TY_Scalar) },
+        { "+42.", Type::Get_Double(Type::TY_Scalar) },
+        { "-42.", Type::Get_Double(Type::TY_Scalar) },
 
         { "~ TRUE", Type::Get_Error() },
         { "+ TRUE", Type::Get_Error() },
@@ -93,9 +93,9 @@ TEST_CASE("Sema/Expressions", "[unit][sema]")
         { "1 % 2", Type::Get_Integer(Type::TY_Scalar, 4) },
         { "0x80000000 + 42", Type::Get_Integer(Type::TY_Scalar, 8) },
 
-        { "2.718 + 3.14", Type::Get_Float(Type::TY_Scalar) },
-        { "42 + 3.14", Type::Get_Float(Type::TY_Scalar) },
-        { "3.14 + 42", Type::Get_Float(Type::TY_Scalar) },
+        { "2.718 + 3.14", Type::Get_Double(Type::TY_Scalar) },
+        { "42 + 3.14", Type::Get_Double(Type::TY_Scalar) },
+        { "3.14 + 42", Type::Get_Double(Type::TY_Scalar) },
 
         { "TRUE + FALSE", Type::Get_Error() },
         { "TRUE + 42", Type::Get_Error() },

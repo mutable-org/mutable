@@ -236,7 +236,7 @@ void Sema::operator()(Const<Constant> &e)
 
         case TK_DEC_FLOAT:
         case TK_HEX_FLOAT:
-            e.type_ = Type::Get_Float(Type::TY_Scalar); // XXX: Is it safe to always assume 32-bit floats?
+            e.type_ = Type::Get_Double(Type::TY_Scalar); // XXX: Is it safe to always assume 32-bit floats?
             break;
     }
 }

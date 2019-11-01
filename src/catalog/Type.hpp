@@ -17,6 +17,12 @@ struct CharacterSequence;
 struct Numeric;
 struct FnType;
 
+// forward declare the Type visitor
+template<bool C>
+struct TheTypeVisitor;
+using TypeVisitor = TheTypeVisitor<false>;
+using ConstTypeVisitor = TheTypeVisitor<true>;
+
 /** This class represents types in the SQL type system. */
 struct Type
 {
@@ -34,6 +40,9 @@ struct Type
     Type(const Type&) = delete;
     Type(Type&&) = default;
     virtual ~Type() { }
+
+    virtual void accept(TypeVisitor &v) = 0;
+    virtual void accept(ConstTypeVisitor &v) const = 0;
 
     virtual bool operator==(const Type &other) const = 0;
     bool operator!=(const Type &other) const { return not operator==(other); }
@@ -126,12 +135,15 @@ struct ErrorType: Type
     public:
     ErrorType(ErrorType&&) = default;
 
-    bool operator==(const Type &other) const;
+    void accept(TypeVisitor &v) override;
+    void accept(ConstTypeVisitor &v) const override;
 
-    uint64_t hash() const;
+    bool operator==(const Type &other) const override;
 
-    void print(std::ostream &out) const;
-    void dump(std::ostream &out) const;
+    uint64_t hash() const override;
+
+    void print(std::ostream &out) const override;
+    void dump(std::ostream &out) const override;
 };
 
 /** The boolean type. */
@@ -145,18 +157,21 @@ struct Boolean : PrimitiveType
     public:
     Boolean(Boolean&&) = default;
 
-    bool operator==(const Type &other) const;
+    void accept(TypeVisitor &v) override;
+    void accept(ConstTypeVisitor &v) const override;
 
-    uint32_t size() const { return 1; }
-    uint32_t alignment() const { return 1; }
+    bool operator==(const Type &other) const override;
 
-    uint64_t hash() const;
+    uint32_t size() const override { return 1; }
+    uint32_t alignment() const override { return 1; }
 
-    void print(std::ostream &out) const;
-    void dump(std::ostream &out) const;
+    uint64_t hash() const override;
 
-    virtual const PrimitiveType *as_scalar() const;
-    virtual const PrimitiveType *as_vectorial() const;
+    void print(std::ostream &out) const override;
+    void dump(std::ostream &out) const override;
+
+    virtual const PrimitiveType *as_scalar() const override;
+    virtual const PrimitiveType *as_vectorial() const override;
 };
 
 /** The type of character strings, both fixed length and varying. */
@@ -177,24 +192,27 @@ struct CharacterSequence : PrimitiveType
     public:
     CharacterSequence(CharacterSequence&&) = default;
 
-    bool operator==(const Type &other) const;
+    void accept(TypeVisitor &v) override;
+    void accept(ConstTypeVisitor &v) const override;
 
-    uint32_t size() const {
+    bool operator==(const Type &other) const override;
+
+    uint32_t size() const override {
         if (is_varying)
             return 8 * sizeof(char*);
         else
             return 8 * length;
     }
 
-    uint32_t alignment() const { return is_varying ? 8 * sizeof(const char*) : 8 * sizeof(char); }
+    uint32_t alignment() const override { return is_varying ? 8 * sizeof(const char*) : 8 * sizeof(char); }
 
-    uint64_t hash() const;
+    uint64_t hash() const override;
 
-    void print(std::ostream &out) const;
-    void dump(std::ostream &out) const;
+    void print(std::ostream &out) const override;
+    void dump(std::ostream &out) const override;
 
-    virtual const PrimitiveType *as_scalar() const;
-    virtual const PrimitiveType *as_vectorial() const;
+    virtual const PrimitiveType *as_scalar() const override;
+    virtual const PrimitiveType *as_vectorial() const override;
 };
 
 /** The numeric type represents integer and floating-point types of different precision, and scale. */
@@ -233,9 +251,12 @@ struct Numeric : PrimitiveType
     public:
     Numeric(Numeric&&) = default;
 
-    bool operator==(const Type &other) const;
+    void accept(TypeVisitor &v) override;
+    void accept(ConstTypeVisitor &v) const override;
 
-    uint32_t size() const {
+    bool operator==(const Type &other) const override;
+
+    uint32_t size() const override {
         switch (kind) {
             case N_Int: return 8 * precision;
             case N_Float: return precision;
@@ -244,15 +265,15 @@ struct Numeric : PrimitiveType
         unreachable("illegal kind");
     }
 
-    uint32_t alignment() const { return size(); }
+    uint32_t alignment() const override { return size(); }
 
-    uint64_t hash() const;
+    uint64_t hash() const override;
 
-    void print(std::ostream &out) const;
-    void dump(std::ostream &out) const;
+    void print(std::ostream &out) const override;
+    void dump(std::ostream &out) const override;
 
-    virtual const PrimitiveType *as_scalar() const;
-    virtual const PrimitiveType *as_vectorial() const;
+    virtual const PrimitiveType *as_scalar() const override;
+    virtual const PrimitiveType *as_vectorial() const override;
 };
 
 /** The function type defines the type and count of the arguments and the type of the return value of a SQL function. */
@@ -272,12 +293,15 @@ struct FnType : Type
     public:
     FnType(FnType&&) = default;
 
-    bool operator==(const Type &other) const;
+    void accept(TypeVisitor &v) override;
+    void accept(ConstTypeVisitor &v) const override;
 
-    uint64_t hash() const;
+    bool operator==(const Type &other) const override;
 
-    void print(std::ostream &out) const;
-    void dump(std::ostream &out) const;
+    uint64_t hash() const override;
+
+    void print(std::ostream &out) const override;
+    void dump(std::ostream &out) const override;
 };
 
 /* Given two numeric types, compute the numeric type that is as least as precise as either of them. */
@@ -330,4 +354,27 @@ bool db::is_convertible(const Type *ty) {
         return is<const Numeric>(ty);
 
     return false;
+}
+
+namespace db {
+
+template<bool C>
+struct TheTypeVisitor
+{
+    static constexpr bool is_constant = C;
+
+    template<typename T>
+    using Const = std::conditional_t<is_constant, const T, T>;
+
+    virtual ~TheTypeVisitor() { }
+
+    /* Expressions */
+    void operator()(Const<Type> &ty) { ty.accept(*this); }
+    virtual void operator()(Const<ErrorType> &ty) = 0;
+    virtual void operator()(Const<Boolean> &ty) = 0;
+    virtual void operator()(Const<CharacterSequence> &ty) = 0;
+    virtual void operator()(Const<Numeric> &ty) = 0;
+    virtual void operator()(Const<FnType> &ty) = 0;
+};
+
 }

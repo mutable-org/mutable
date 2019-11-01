@@ -104,6 +104,19 @@ const FnType * Type::Get_Function(const Type *return_type, std::vector<const Typ
     return static_cast<const FnType*>(types_(FnType(return_type, parameter_types)));
 }
 
+/*===== Type visitor =================================================================================================*/
+
+void ErrorType::accept(TypeVisitor &v) { v(*this); }
+void ErrorType::accept(ConstTypeVisitor &v) const { v(*this); }
+void Boolean::accept(TypeVisitor &v) { v(*this); }
+void Boolean::accept(ConstTypeVisitor &v) const { v(*this); }
+void CharacterSequence::accept(TypeVisitor &v) { v(*this); }
+void CharacterSequence::accept(ConstTypeVisitor &v) const { v(*this); }
+void Numeric::accept(TypeVisitor &v) { v(*this); }
+void Numeric::accept(ConstTypeVisitor &v) const { v(*this); }
+void FnType::accept(TypeVisitor &v) { v(*this); }
+void FnType::accept(ConstTypeVisitor &v) const { v(*this); }
+
 /*===== Comparison ===================================================================================================*/
 
 bool ErrorType::operator==(const Type &other) const

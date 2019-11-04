@@ -51,6 +51,9 @@ struct StackMachine
     void add(const Expr &expr);
 
     tuple_type && operator()(const tuple_type &t);
+
+    void dump(std::ostream &out) const;
+    void dump() const;
 };
 
 bool eval(const OperatorSchema &schema, const cnf::CNF &cnf, const tuple_type &tuple);

@@ -905,6 +905,32 @@ exit:
     return std::move(stack_);
 }
 
+void StackMachine::dump(std::ostream &out) const
+{
+    out << "StackMachine\n    Constants: [";
+    for (auto it = constants.cbegin(); it != constants.cend(); ++it) {
+        if (it != constants.cbegin()) out << ", ";
+        out << *it;
+    }
+    out << "]\n    Tuple Schema: " << schema << "\n    Opcode Sequence:\n";
+    for (std::size_t i = 0; i != ops.size(); ++i) {
+        auto opc = ops[i];
+        out << "        [0x" << std::hex << std::setfill('0') << std::setw(4) << i << std::dec << "]: "
+            << StackMachine::OPCODE_TO_STR[static_cast<std::size_t>(opc)];
+        switch (opc) {
+            case Opcode::Ld_Const:
+            case Opcode::Ld_Idx:
+                ++i;
+                out << ' ' << static_cast<int64_t>(ops[i]);
+            default:;
+        }
+        out << '\n';
+    }
+    out.flush();
+}
+
+void StackMachine::dump() const { dump(std::cerr); }
+
 /*======================================================================================================================
  * Declaration of operator data.
  *====================================================================================================================*/

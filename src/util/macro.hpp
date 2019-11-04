@@ -62,8 +62,8 @@ inline void _insist(const bool cond, const char *filename, const unsigned line, 
 #define _INSIST1(COND) _INSIST2(COND, nullptr)
 
 #else
-#define _INSIST2(COND, MSG) ((void) (COND), (void) (MSG))
-#define _INSIST1(COND) ((void) (COND))
+#define _INSIST2(COND, MSG) while (0) { ((void) (COND), (void) (MSG)); }
+#define _INSIST1(COND) while (0) { ((void) (COND)); }
 
 #endif
 

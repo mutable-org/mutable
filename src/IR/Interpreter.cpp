@@ -686,11 +686,12 @@ value_type StackMachine::operator()(const tuple_type &t)
     auto &v_rhs = stack_.back(); \
     auto pv_rhs = std::get_if<TYPE>(&v_rhs); \
     insist(pv_rhs, "invalid type of rhs"); \
+    auto rhs = *pv_rhs; \
     stack_.pop_back(); \
     auto &v_lhs = stack_.back(); \
     auto pv_lhs = std::get_if<TYPE>(&v_lhs); \
     insist(pv_lhs, "invalid type of lhs"); \
-    stack_.back() = *pv_lhs OP *pv_rhs; \
+    stack_.back() = *pv_lhs OP rhs; \
     break; \
 }
 

@@ -886,7 +886,7 @@ struct SortingData : OperatorData
 };
 
 /*======================================================================================================================
- * Recursive descent
+ * Interpreter - Recursive descent
  *====================================================================================================================*/
 
 void Interpreter::operator()(const CallbackOperator &op)
@@ -1031,7 +1031,7 @@ void Interpreter::operator()(const SortingOperator &op)
 }
 
 /*======================================================================================================================
- * Recursive ascent
+ * Interpreter - Recursive ascent
  *====================================================================================================================*/
 
 void Interpreter::operator()(const CallbackOperator &op, tuple_type &t)

@@ -49,6 +49,7 @@ struct StackMachine
     StackMachine(StackMachine&&) = default;
 
     void add(const Expr &expr);
+    void add(const cnf::CNF &cnf);
 
     tuple_type && operator()(const tuple_type &t);
 

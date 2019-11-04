@@ -682,6 +682,25 @@ void StackMachine::add(const Expr &expr)
     StackMachineBuilder Builder(*this, schema, expr); // compute the command sequence for this stack machine
 }
 
+void StackMachine::add(const cnf::CNF &cnf)
+{
+    /* Compile filter into stack machine.  TODO: short-circuit evaluation. */
+    for (auto clause_it = cnf.cbegin(); clause_it != cnf.cend(); ++clause_it) {
+        auto &C = *clause_it;
+        for (auto pred_it = C.cbegin(); pred_it != C.cend(); ++pred_it) {
+            auto &P = *pred_it;
+            add(*P.expr()); // emit code for predicate
+            if (P.negative())
+                ops.push_back(StackMachine::Opcode::Not_b); // negate if negative
+            if (pred_it != C.cbegin())
+                ops.push_back(StackMachine::Opcode::Or_b);
+        }
+        ops.push_back(StackMachine::Opcode::Stop_False); // a single false clause renders the CNF false
+        if (clause_it != cnf.cbegin())
+            ops.push_back(StackMachine::Opcode::And_b);
+    }
+}
+
 tuple_type && StackMachine::operator()(const tuple_type &t)
 {
 #define UNARY(OP, TYPE) { \

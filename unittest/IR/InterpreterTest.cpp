@@ -165,7 +165,9 @@ TEST_CASE("StackMachine", "[unit]")
         auto select = as<const SelectClause>(stmt->select); \
         auto expr = select->select[0].first; \
         StackMachine eval(schema, *expr); \
-        auto r = eval(tup); \
+        auto t = eval(tup); \
+        REQUIRE(t.size() == 1); \
+        auto r = t[0]; \
         delete stmt; \
         CHECK(std::holds_alternative<TYPE>(r)); \
         REQUIRE(std::get<TYPE>(r) == (VALUE)); \

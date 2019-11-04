@@ -637,7 +637,9 @@ bool db::eval(const OperatorSchema &schema, const cnf::CNF &cnf, const tuple_typ
     for (auto &clause : cnf) {
         for (auto pred : clause) {
             StackMachine eval(schema, *pred.expr());
-            auto result = eval(tuple);
+            auto t = eval(tuple);
+            insist(t.size() == 1);
+            auto result = t[0];
             if (std::holds_alternative<null_type>(result))
                 break; // skip NULL; NULL is never TRUE
             insist(std::holds_alternative<bool>(result), "literal must evaluate to bool");
@@ -666,11 +668,21 @@ const std::unordered_map<std::string, StackMachine::Opcode> StackMachine::STR_TO
 };
 
 StackMachine::StackMachine(const OperatorSchema &schema, const Expr &expr)
+    : schema(schema)
 {
     StackMachineBuilder Builder(*this, schema, expr); // compute the command sequence for this stack machine
 }
 
-value_type StackMachine::operator()(const tuple_type &t)
+StackMachine::StackMachine(const OperatorSchema &schema)
+    : schema(schema)
+{ }
+
+void StackMachine::add(const Expr &expr)
+{
+    StackMachineBuilder Builder(*this, schema, expr); // compute the command sequence for this stack machine
+}
+
+tuple_type && StackMachine::operator()(const tuple_type &t)
 {
 #define UNARY(OP, TYPE) { \
     insist(stack_.size() >= 1); \
@@ -836,11 +848,12 @@ value_type StackMachine::operator()(const tuple_type &t)
     auto &v_rhs = stack_.back(); \
     auto pv_rhs = std::get_if<TYPE>(&v_rhs); \
     insist(pv_rhs, "invalid type of rhs"); \
+    auto rhs = *pv_rhs; \
     stack_.pop_back(); \
     auto &v_lhs = stack_.back(); \
     auto pv_lhs = std::get_if<TYPE>(&v_lhs); \
     insist(pv_lhs, "invalid type of lhs"); \
-    stack_.back() = *pv_lhs == *pv_rhs ? int64_t(0) : (*pv_lhs < *pv_rhs ? int64_t(-1) : int64_t(1)); \
+    stack_.back() = *pv_lhs == rhs ? int64_t(0) : (*pv_lhs < rhs ? int64_t(-1) : int64_t(1)); \
     break; \
 }
             case Opcode::Cmp_i: CMP(int64_t);
@@ -852,11 +865,12 @@ value_type StackMachine::operator()(const tuple_type &t)
                 auto &v_rhs = stack_.back();
                 auto pv_rhs = std::get_if<std::string>(&v_rhs);
                 insist(pv_rhs, "invalid type of rhs");
+                auto rhs = *pv_rhs;
                 stack_.pop_back();
                 auto &v_lhs = stack_.back();
                 auto pv_lhs = std::get_if<std::string>(&v_lhs);
                 insist(pv_lhs, "invalid type of lhs");
-                stack_.back() = int64_t(pv_lhs->compare(*pv_rhs));
+                stack_.back() = int64_t(pv_lhs->compare(rhs));
                 break;
             }
 #undef CMP
@@ -888,8 +902,7 @@ exit:
 #undef BINARY
 #undef UNARY
 
-    insist(stack_.size() == 1);
-    return stack_[0];
+    return std::move(stack_);
 }
 
 /*======================================================================================================================
@@ -898,7 +911,9 @@ exit:
 
 struct ProjectionData : OperatorData
 {
-    std::vector<StackMachine> projections;
+    StackMachine projections;
+
+    ProjectionData(StackMachine &&P) : projections(std::move(P)) { }
 };
 
 struct NestedLoopsJoinData : OperatorData
@@ -922,12 +937,16 @@ struct LimitData : OperatorData
 
 struct GroupingData : OperatorData
 {
-    std::vector<StackMachine> keys;
+    StackMachine keys;
+
+    GroupingData(StackMachine &&keys) : keys(std::move(keys)) { }
 };
 
 struct HashBasedGroupingData : GroupingData
 {
     std::unordered_map<tuple_type, tuple_type> groups;
+
+    HashBasedGroupingData(StackMachine &&keys) : GroupingData(std::move(keys)) { }
 };
 
 struct SortingData : OperatorData
@@ -993,11 +1012,10 @@ void Interpreter::operator()(const ProjectionOperator &op)
     bool has_child = op.children().size();
     OperatorSchema empty_schema;
     auto &S = has_child ? op.child(0)->schema() : empty_schema;
-    auto data = new ProjectionData();
+    auto data = new ProjectionData(StackMachine(S));
     op.data(data);
-    for (auto &p : op.projections()) {
-        data->projections.emplace_back(S, *p.first);
-    }
+    for (auto &p : op.projections())
+        data->projections.add(*p.first);
 
     /* Evaluate the projection. */
     if (has_child) {
@@ -1027,10 +1045,10 @@ void Interpreter::operator()(const GroupingOperator &op)
             unreachable("not implemented");
 
         case GroupingOperator::G_Hashing: {
-            auto data = new HashBasedGroupingData();
+            auto data = new HashBasedGroupingData(StackMachine(S));
             op.data(data);
             for (auto e : op.group_by())
-                data->keys.emplace_back(S, *e);
+                data->keys.add(*e);
             op.child(0)->accept(*this);
             for (auto g : data->groups) {
                 auto t = g.first + g.second;
@@ -1061,8 +1079,8 @@ void Interpreter::operator()(const SortingOperator &op)
             bool is_ascending = o.second;
 
 #define COMPARE(TYPE) { \
-    auto v_first = to<TYPE>(eval(first)); \
-    auto v_second = to<TYPE>(eval(second)); \
+    auto v_first = to<TYPE>(eval(first)[0]); \
+    auto v_second = to<TYPE>(eval(second)[0]); \
     if (v_first != v_second) return v_first < v_second == is_ascending; \
 }
             if (orderby->type()->is_character_sequence())
@@ -1161,12 +1179,8 @@ void Interpreter::operator()(const JoinOperator &op, tuple_type &t)
 
 void Interpreter::operator()(const ProjectionOperator &op, tuple_type &t)
 {
-    tuple_type result;
-    result.reserve(op.projections().size());
     auto data = as<ProjectionData>(op.data());
-
-    for (auto &e : data->projections)
-        result.push_back(e(t));
+    auto result = data->projections(t);
 
     if (op.is_anti())
         result.insert(result.end(), t.begin(), t.end());
@@ -1199,10 +1213,7 @@ void Interpreter::operator()(const GroupingOperator &op, tuple_type &t)
         case GroupingOperator::G_Hashing: {
             auto data = as<HashBasedGroupingData>(op.data());
             auto &groups = data->groups;
-            tuple_type key;
-            for (auto &k : data->keys)
-                key.push_back(k(t));
-            // TODO do the same for aggregates
+            tuple_type key = data->keys(t); // TODO do the same for aggregates
             auto it = groups.find(key);
             if (it == groups.end()) {
                 /* Initialize the group's aggregate to NULL.  This will be overwritten by the neutral element w.r.t. the
@@ -1236,7 +1247,7 @@ void Interpreter::operator()(const GroupingOperator &op, tuple_type &t)
                     agg = std::get<int64_t>(agg) + 1;
                 } else {
                     StackMachine eval(op.child(0)->schema(), *fe->args[0]);
-                    if (not std::holds_alternative<null_type>(eval(t)))
+                    if (not std::holds_alternative<null_type>(eval(t)[0]))
                         agg = std::get<int64_t>(agg) + 1;
                 }
                 break;
@@ -1246,7 +1257,7 @@ void Interpreter::operator()(const GroupingOperator &op, tuple_type &t)
                     agg = int64_t(0); // initialize
                 auto arg = fe->args[0];
                 StackMachine eval(op.child(0)->schema(), *arg);
-                auto res = eval(t);
+                auto res = eval(t)[0];
                 if (std::holds_alternative<null_type>(res))
                     continue; // skip NULL
                 auto n = as<const Numeric>(ty);
@@ -1262,7 +1273,7 @@ void Interpreter::operator()(const GroupingOperator &op, tuple_type &t)
                 using std::min;
                 auto arg = fe->args[0];
                 StackMachine eval(op.child(0)->schema(), *arg);
-                auto res = eval(t);
+                auto res = eval(t)[0];
                 if (std::holds_alternative<null_type>(res))
                     continue; // skip NULL
 
@@ -1290,7 +1301,7 @@ void Interpreter::operator()(const GroupingOperator &op, tuple_type &t)
                 using std::max;
                 auto arg = fe->args[0];
                 StackMachine eval(op.child(0)->schema(), *arg);
-                auto res = eval(t);
+                auto res = eval(t)[0];
                 if (std::holds_alternative<null_type>(res))
                     continue; // skip NULL
 

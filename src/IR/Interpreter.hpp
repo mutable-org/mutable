@@ -25,6 +25,8 @@ struct StackMachine
     using index_t = std::size_t;
     using Command = Concat<value_type, index_t, const Expr*>::type;
 
+    const OperatorSchema &schema;
+
     static constexpr const char *OPCODE_TO_STR[] = {
 #define DB_OPCODE(CODE) #CODE,
 #include "tables/Opcodes.tbl"
@@ -41,8 +43,14 @@ struct StackMachine
 
     public:
     StackMachine(const OperatorSchema &schema, const Expr &expr);
+    StackMachine(const OperatorSchema &schema);
 
-    value_type operator()(const tuple_type &t);
+    StackMachine(const StackMachine&) = delete;
+    StackMachine(StackMachine&&) = default;
+
+    void add(const Expr &expr);
+
+    tuple_type && operator()(const tuple_type &t);
 };
 
 bool eval(const OperatorSchema &schema, const cnf::CNF &cnf, const tuple_type &tuple);

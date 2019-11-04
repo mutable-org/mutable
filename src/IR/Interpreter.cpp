@@ -952,11 +952,13 @@ struct NestedLoopsJoinData : OperatorData
 {
     using buffer_type = std::vector<tuple_type>;
 
+    StackMachine predicate;
     buffer_type *buffers;
     std::size_t active_child;
 
-    NestedLoopsJoinData(std::size_t num_children)
-        : buffers(new buffer_type[num_children - 1])
+    NestedLoopsJoinData(StackMachine &&predicate, std::size_t num_children)
+        : predicate(std::move(predicate))
+        , buffers(new buffer_type[num_children - 1])
     { }
 
     ~NestedLoopsJoinData() { delete[] buffers; }
@@ -1033,8 +1035,9 @@ void Interpreter::operator()(const JoinOperator &op)
 
         case JoinOperator::J_Undefined:
         case JoinOperator::J_NestedLoops: {
-            auto data = new NestedLoopsJoinData(op.children().size());
+            auto data = new NestedLoopsJoinData(StackMachine(op.schema()), op.children().size());
             op.data(data);
+            data->predicate.add(op.predicate());
             for (std::size_t i = 0, end = op.children().size(); i != end; ++i) {
                 data->active_child = i;
                 auto c = op.child(i);
@@ -1218,9 +1221,7 @@ void Interpreter::operator()(const JoinOperator &op, tuple_type &t)
                         joined += t; // append the tuple just produced by the right-most child
 
                         /* Evaluate the join predicate on the joined tuple. */
-                        StackMachine eval(op.schema());
-                        eval.add(op.predicate());
-                        auto res = eval(joined);
+                        auto res = data->predicate(joined);
                         insist(res.size() == 1);
                         auto pv = std::get_if<bool>(&res[0]);
                         insist(pv, "invalid type of variant");

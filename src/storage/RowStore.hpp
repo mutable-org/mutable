@@ -161,8 +161,7 @@ struct RowStore : Store
 template<typename T>
 T RowStore::Row::get_exact(const Attribute &attr) const
 {
-    if (isnull(attr))
-        throw null_error("Attribute is NULL, cannot get value");
+    insist(not isnull(attr));
 
     const auto off = store.offset(attr);
     insist(type_check<T>(attr));

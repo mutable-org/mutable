@@ -11,6 +11,8 @@
 /* Stop on condition. */
 DB_OPCODE(Stop_Z)
 DB_OPCODE(Stop_NZ)
+DB_OPCODE(Stop_False)
+DB_OPCODE(Stop_True)
 
 /*======================================================================================================================
  * Load operations

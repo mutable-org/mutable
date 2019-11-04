@@ -736,6 +736,22 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
                 break;
             }
 
+            case Opcode::Stop_False: {
+                insist(stack_.size() >= 1);
+                auto pv = std::get_if<bool>(&stack_.back());
+                insist(pv, "invalid type of variant");
+                if (not *pv) goto exit; // stop evaluation on NOT ZERO
+                break;
+            }
+
+            case Opcode::Stop_True: {
+                insist(stack_.size() >= 1);
+                auto pv = std::get_if<bool>(&stack_.back());
+                insist(pv, "invalid type of variant");
+                if (*pv) goto exit; // stop evaluation on NOT ZERO
+                break;
+            }
+
             /*==========================================================================================================
              * Load operations
              *========================================================================================================*/

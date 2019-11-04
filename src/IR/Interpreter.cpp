@@ -1050,22 +1050,7 @@ void Interpreter::operator()(const FilterOperator &op)
 {
     auto data = new FilterData(StackMachine(op.child(0)->schema()));
     op.data(data);
-    auto &F = op.filter();
-    /* Compile filter into stack machine.  TODO: short-circuit evaluation. */
-    for (auto clause_it = F.cbegin(); clause_it != F.cend(); ++clause_it) {
-        auto &C = *clause_it;
-        for (auto pred_it = C.cbegin(); pred_it != C.cend(); ++pred_it) {
-            auto &P = *pred_it;
-            data->filter.add(*P.expr()); // emit code for predicate
-            if (P.negative())
-                data->filter.ops.push_back(StackMachine::Opcode::Not_b); // negate if negative
-            if (pred_it != C.cbegin())
-                data->filter.ops.push_back(StackMachine::Opcode::Or_b);
-        }
-        data->filter.ops.push_back(StackMachine::Opcode::Stop_False); // a single false clause renders the CNF false
-        if (clause_it != F.cbegin())
-            data->filter.ops.push_back(StackMachine::Opcode::And_b);
-    }
+    data->filter.add(op.filter());
     op.child(0)->accept(*this);
 }
 

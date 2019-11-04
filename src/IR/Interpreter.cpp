@@ -705,6 +705,26 @@ value_type StackMachine::operator()(const tuple_type &t)
                 unreachable("illegal opcode");
 
             /*==========================================================================================================
+             * Control flow operations
+             *========================================================================================================*/
+
+            case Opcode::Stop_Z: {
+                insist(stack_.size() >= 1);
+                auto pv = std::get_if<int64_t>(&stack_.back());
+                insist(pv, "invalid type of variant");
+                if (*pv == 0) goto exit; // stop evaluation on ZERO
+                break;
+            }
+
+            case Opcode::Stop_NZ: {
+                insist(stack_.size() >= 1);
+                auto pv = std::get_if<int64_t>(&stack_.back());
+                insist(pv, "invalid type of variant");
+                if (*pv != 0) goto exit; // stop evaluation on NOT ZERO
+                break;
+            }
+
+            /*==========================================================================================================
              * Load operations
              *========================================================================================================*/
 
@@ -776,7 +796,7 @@ value_type StackMachine::operator()(const tuple_type &t)
             case Opcode::Or_b: BINARY(or, bool);
 
             /*======================================================================================================================
-             * Logical operations
+             * Comparison operations
              *====================================================================================================================*/
 
             case Opcode::Eq_i: BINARY(==, int64_t);
@@ -811,6 +831,36 @@ value_type StackMachine::operator()(const tuple_type &t)
             case Opcode::GE_d: BINARY(>=, double);
             case Opcode::GE_s: BINARY(>=, std::string);
 
+#define CMP(TYPE) { \
+    insist(stack_.size() >= 2); \
+    auto &v_rhs = stack_.back(); \
+    auto pv_rhs = std::get_if<TYPE>(&v_rhs); \
+    insist(pv_rhs, "invalid type of rhs"); \
+    stack_.pop_back(); \
+    auto &v_lhs = stack_.back(); \
+    auto pv_lhs = std::get_if<TYPE>(&v_lhs); \
+    insist(pv_lhs, "invalid type of lhs"); \
+    stack_.back() = *pv_lhs == *pv_rhs ? int64_t(0) : (*pv_lhs < *pv_rhs ? int64_t(-1) : int64_t(1)); \
+    break; \
+}
+            case Opcode::Cmp_i: CMP(int64_t);
+            case Opcode::Cmp_f: CMP(float);
+            case Opcode::Cmp_d: CMP(double);
+            case Opcode::Cmp_b: CMP(bool);
+            case Opcode::Cmp_s: {
+                insist(stack_.size() >= 2);
+                auto &v_rhs = stack_.back();
+                auto pv_rhs = std::get_if<std::string>(&v_rhs);
+                insist(pv_rhs, "invalid type of rhs");
+                stack_.pop_back();
+                auto &v_lhs = stack_.back();
+                auto pv_lhs = std::get_if<std::string>(&v_lhs);
+                insist(pv_lhs, "invalid type of lhs");
+                stack_.back() = int64_t(pv_lhs->compare(*pv_rhs));
+                break;
+            }
+#undef CMP
+
             /*======================================================================================================================
              * Intrinsic functions
              *====================================================================================================================*/
@@ -833,6 +883,7 @@ value_type StackMachine::operator()(const tuple_type &t)
             case Opcode::Cast_d_f: UNARY((double), float);
         }
     }
+exit:
 
 #undef BINARY
 #undef UNARY

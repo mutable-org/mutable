@@ -25,7 +25,6 @@ struct StackMachine
     using index_t = std::size_t;
     using Command = Concat<value_type, index_t, const Expr*>::type;
 
-    private:
     static constexpr const char *OPCODE_TO_STR[] = {
 #define DB_OPCODE(CODE) #CODE,
 #include "tables/Opcodes.tbl"
@@ -34,8 +33,10 @@ struct StackMachine
 
     static const std::unordered_map<std::string, Opcode> STR_TO_OPCODE;
 
-    std::vector<value_type> constants_; ///< the constants used by the expression
-    std::vector<Opcode> ops_; ///< a sequence of operations to perform
+    std::vector<value_type> constants; ///< the constants used by the expression
+    std::vector<Opcode> ops; ///< a sequence of operations to perform
+
+    private:
     std::vector<value_type> stack_; ///< the stack of current values
 
     public:

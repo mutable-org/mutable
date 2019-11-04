@@ -171,8 +171,8 @@ void StackMachineBuilder::operator()(Const<Designator> &e)
         /* Lookup tuple element type by attribute identifier. */
         std::size_t idx = schema_[{e.table_name.text, e.attr_name.text}].first;
         insist(idx < schema_.size(), "index out of bounds");
-        stack_machine_.ops_.push_back(StackMachine::Opcode::Ld_Idx);
-        stack_machine_.ops_.push_back(static_cast<StackMachine::Opcode>(idx));
+        stack_machine_.ops.push_back(StackMachine::Opcode::Ld_Idx);
+        stack_machine_.ops.push_back(static_cast<StackMachine::Opcode>(idx));
     } else {
         unreachable("designator has no target");
     }
@@ -181,10 +181,10 @@ void StackMachineBuilder::operator()(Const<Designator> &e)
 void StackMachineBuilder::operator()(Const<Constant> &e)
 {
     auto value = StackMachineBuilder::eval(e);
-    const auto idx = stack_machine_.constants_.size();
-    stack_machine_.constants_.emplace_back(value); // put the constant into the vector of constants
-    stack_machine_.ops_.push_back(StackMachine::Opcode::Ld_Const); // load a constant
-    stack_machine_.ops_.push_back(static_cast<StackMachine::Opcode>(idx)); // from index `idx`
+    const auto idx = stack_machine_.constants.size();
+    stack_machine_.constants.emplace_back(value); // put the constant into the vector of constants
+    stack_machine_.ops.push_back(StackMachine::Opcode::Ld_Const); // load a constant
+    stack_machine_.ops.push_back(static_cast<StackMachine::Opcode>(idx)); // from index `idx`
 }
 
 void StackMachineBuilder::operator()(Const<FnApplicationExpr> &e)
@@ -203,7 +203,7 @@ void StackMachineBuilder::operator()(Const<FnApplicationExpr> &e)
         case Function::FN_ISNULL:
             insist(e.args.size() == 1);
             (*this)(*e.args[0]);
-            stack_machine_.ops_.push_back(StackMachine::Opcode::Is_Null);
+            stack_machine_.ops.push_back(StackMachine::Opcode::Is_Null);
             break;
 
         /*----- Type casts -------------------------------------------------------------------------------------------*/
@@ -212,13 +212,13 @@ void StackMachineBuilder::operator()(Const<FnApplicationExpr> &e)
             (*this)(*e.args[0]);
             auto ty = e.args[0]->type();
             if (ty->is_float())
-                stack_machine_.ops_.push_back(StackMachine::Opcode::Cast_i_f);
+                stack_machine_.ops.push_back(StackMachine::Opcode::Cast_i_f);
             else if (ty->is_double())
-                stack_machine_.ops_.push_back(StackMachine::Opcode::Cast_i_d);
+                stack_machine_.ops.push_back(StackMachine::Opcode::Cast_i_d);
             else if (ty->is_decimal()) {
                 unreachable("not implemented");
             } else if (ty->is_boolean()) {
-                stack_machine_.ops_.push_back(StackMachine::Opcode::Cast_i_b);
+                stack_machine_.ops.push_back(StackMachine::Opcode::Cast_i_b);
             } else {
                 /* nothing to be done */
             }
@@ -236,8 +236,8 @@ void StackMachineBuilder::operator()(Const<FnApplicationExpr> &e)
             auto name = C.pool(oss.str().c_str());
             auto idx = schema_[{name}].first;
             insist(idx < schema_.size(), "index out of bounds");
-            stack_machine_.ops_.push_back(StackMachine::Opcode::Ld_Idx);
-            stack_machine_.ops_.push_back(static_cast<StackMachine::Opcode>(idx));
+            stack_machine_.ops.push_back(StackMachine::Opcode::Ld_Idx);
+            stack_machine_.ops.push_back(static_cast<StackMachine::Opcode>(idx));
             return;
         }
     }
@@ -261,30 +261,30 @@ void StackMachineBuilder::operator()(Const<UnaryExpr> &e)
             switch (n->kind) {
                 case Numeric::N_Int:
                 case Numeric::N_Decimal:
-                    stack_machine_.ops_.push_back(StackMachine::Opcode::Minus_i);
+                    stack_machine_.ops.push_back(StackMachine::Opcode::Minus_i);
                     break;
 
                 case Numeric::N_Float:
                     if (n->precision == 32)
-                        stack_machine_.ops_.push_back(StackMachine::Opcode::Minus_f);
+                        stack_machine_.ops.push_back(StackMachine::Opcode::Minus_f);
                     else
-                        stack_machine_.ops_.push_back(StackMachine::Opcode::Minus_d);
+                        stack_machine_.ops.push_back(StackMachine::Opcode::Minus_d);
             }
             break;
         }
 
         case TK_TILDE:
             if (ty->is_integral())
-                stack_machine_.ops_.push_back(StackMachine::Opcode::Neg_i);
+                stack_machine_.ops.push_back(StackMachine::Opcode::Neg_i);
             else if (ty->is_boolean())
-                stack_machine_.ops_.push_back(StackMachine::Opcode::Not_b); // negation of bool is always logical
+                stack_machine_.ops.push_back(StackMachine::Opcode::Not_b); // negation of bool is always logical
             else
                 unreachable("illegal type");
             break;
 
         case TK_Not:
             insist(ty->is_boolean(), "illegal type");
-            stack_machine_.ops_.push_back(StackMachine::Opcode::Not_b);
+            stack_machine_.ops.push_back(StackMachine::Opcode::Not_b);
             break;
     }
 }
@@ -318,7 +318,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
         if (tystr_from != tystr_to) {
             std::string opstr = "Cast" + tystr_to + tystr_from;
             auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
-            stack_machine_.ops_.push_back(opcode);
+            stack_machine_.ops.push_back(opcode);
         }
     };
 
@@ -330,26 +330,26 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
             /* Scale up. */
             auto delta = n_to->scale - n_from->scale;
             const int64_t factor = powi<int64_t>(10, delta);
-            auto cidx = stack_machine_.constants_.size();
-            stack_machine_.constants_.push_back(factor);
-            stack_machine_.ops_.push_back(StackMachine::Opcode::Ld_Const);
-            stack_machine_.ops_.push_back(static_cast<StackMachine::Opcode>(cidx));
-            stack_machine_.ops_.push_back(StackMachine::Opcode::Mul_i); // multiply by scale factor
+            auto cidx = stack_machine_.constants.size();
+            stack_machine_.constants.push_back(factor);
+            stack_machine_.ops.push_back(StackMachine::Opcode::Ld_Const);
+            stack_machine_.ops.push_back(static_cast<StackMachine::Opcode>(cidx));
+            stack_machine_.ops.push_back(StackMachine::Opcode::Mul_i); // multiply by scale factor
         } else if (n_from->scale > n_to->scale) {
             insist(n_from->is_decimal(), "only decimals have a scale");
             insist(n_to->is_floating_point(), "only floating points are more precise than decimals");
             /* Scale down. */
             auto delta = n_from->scale - n_to->scale;
             const int64_t factor = powi<int64_t>(10, delta);
-            auto cidx = stack_machine_.constants_.size();
-            stack_machine_.ops_.push_back(StackMachine::Opcode::Ld_Const);
-            stack_machine_.ops_.push_back(static_cast<StackMachine::Opcode>(cidx));
+            auto cidx = stack_machine_.constants.size();
+            stack_machine_.ops.push_back(StackMachine::Opcode::Ld_Const);
+            stack_machine_.ops.push_back(static_cast<StackMachine::Opcode>(cidx));
             if (n_to->is_float()) {
-                stack_machine_.constants_.push_back(float(1.f / factor));
-                stack_machine_.ops_.push_back(StackMachine::Opcode::Mul_f); // multiply by inverse scale factor
+                stack_machine_.constants.push_back(float(1.f / factor));
+                stack_machine_.ops.push_back(StackMachine::Opcode::Mul_f); // multiply by inverse scale factor
             } else {
-                stack_machine_.constants_.push_back(double(1. / factor));
-                stack_machine_.ops_.push_back(StackMachine::Opcode::Mul_d); // multiply by inverse scale factor
+                stack_machine_.constants.push_back(double(1. / factor));
+                stack_machine_.ops.push_back(StackMachine::Opcode::Mul_d); // multiply by inverse scale factor
             }
         }
     };
@@ -358,14 +358,14 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
         switch (n->kind) {
             case Numeric::N_Int:
             case Numeric::N_Decimal:
-                stack_machine_.constants_.push_back(int64_t(val));
+                stack_machine_.constants.push_back(int64_t(val));
                 break;
 
             case Numeric::N_Float:
                 if (n->precision == 32)
-                    stack_machine_.constants_.push_back(float(val));
+                    stack_machine_.constants.push_back(float(val));
                 else
-                    stack_machine_.constants_.push_back(double(val));
+                    stack_machine_.constants.push_back(double(val));
                 break;
         }
     };
@@ -414,7 +414,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
             std::string opstr = e.op.type == TK_PLUS ? "Add" : "Sub";
             opstr += tystr_to;
             auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
-            stack_machine_.ops_.push_back(opcode);
+            stack_machine_.ops.push_back(opcode);
             break;
         }
 
@@ -432,21 +432,21 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
             std::string opstr = "Mul";
             opstr += tystr_to;
             auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
-            stack_machine_.ops_.push_back(opcode); // Mul_x
+            stack_machine_.ops.push_back(opcode); // Mul_x
 
             const int64_t scale = n_lhs->scale + n_rhs->scale - n_res->scale;
             insist(scale >= 0);
             if (scale != 0) {
                 const int64_t factor = powi<int64_t>(10, scale);
-                const auto cidx = stack_machine_.constants_.size();
+                const auto cidx = stack_machine_.constants.size();
                 put_numeric(factor, n_res);
-                stack_machine_.ops_.push_back(StackMachine::Opcode::Ld_Const);
-                stack_machine_.ops_.push_back(static_cast<StackMachine::Opcode>(cidx));
+                stack_machine_.ops.push_back(StackMachine::Opcode::Ld_Const);
+                stack_machine_.ops.push_back(static_cast<StackMachine::Opcode>(cidx));
 
                 opstr = "Div";
                 opstr += tystr_to;
                 opcode = StackMachine::STR_TO_OPCODE.at(opstr);
-                stack_machine_.ops_.push_back(opcode); // Div_x
+                stack_machine_.ops.push_back(opcode); // Div_x
             }
 
             break;
@@ -534,26 +534,26 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
             const auto scale = n_rhs->scale + (n_res->scale - n_lhs->scale);
             if (scale > 0) {
                 const int64_t factor = powi<int64_t>(10, scale); // scale up by rhs
-                const auto cidx = stack_machine_.constants_.size();
+                const auto cidx = stack_machine_.constants.size();
                 put_numeric(factor, n_res);
-                stack_machine_.ops_.push_back(StackMachine::Opcode::Ld_Const);
-                stack_machine_.ops_.push_back(static_cast<StackMachine::Opcode>(cidx));
+                stack_machine_.ops.push_back(StackMachine::Opcode::Ld_Const);
+                stack_machine_.ops.push_back(static_cast<StackMachine::Opcode>(cidx));
 
                 std::string opstr = "Mul";
                 opstr += tystr_to;
                 auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
-                stack_machine_.ops_.push_back(opcode); // Mul_x
+                stack_machine_.ops.push_back(opcode); // Mul_x
             } else if (scale < 0) {
                 const int64_t factor = powi<int64_t>(10, -scale); // scale up by rhs
-                const auto cidx = stack_machine_.constants_.size();
+                const auto cidx = stack_machine_.constants.size();
                 put_numeric(factor, n_res);
-                stack_machine_.ops_.push_back(StackMachine::Opcode::Ld_Const);
-                stack_machine_.ops_.push_back(static_cast<StackMachine::Opcode>(cidx));
+                stack_machine_.ops.push_back(StackMachine::Opcode::Ld_Const);
+                stack_machine_.ops.push_back(static_cast<StackMachine::Opcode>(cidx));
 
                 std::string opstr = "Div";
                 opstr += tystr_to;
                 auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
-                stack_machine_.ops_.push_back(opcode); // Div_x
+                stack_machine_.ops.push_back(opcode); // Div_x
             }
 
             (*this)(*e.rhs);
@@ -562,7 +562,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
             std::string opstr = "Div";
             opstr += tystr_to;
             auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
-            stack_machine_.ops_.push_back(opcode); // Div_x
+            stack_machine_.ops.push_back(opcode); // Div_x
 
             break;
         }
@@ -570,14 +570,14 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
         case TK_PERCENT:
             (*this)(*e.lhs);
             (*this)(*e.rhs);
-            stack_machine_.ops_.push_back(StackMachine::Opcode::Mod_i);
+            stack_machine_.ops.push_back(StackMachine::Opcode::Mod_i);
             break;
 
         /*----- Concatenation operator -------------------------------------------------------------------------------*/
         case TK_DOTDOT:
             (*this)(*e.lhs);
             (*this)(*e.rhs);
-            stack_machine_.ops_.push_back(StackMachine::Opcode::Cat_s);
+            stack_machine_.ops.push_back(StackMachine::Opcode::Cat_s);
             break;
 
         /*----- Comparison operators ---------------------------------------------------------------------------------*/
@@ -603,13 +603,13 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
 
                 std::string opstr = opname + tystr(n_res);
                 auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
-                stack_machine_.ops_.push_back(opcode);
+                stack_machine_.ops.push_back(opcode);
             } else {
                 (*this)(*e.lhs);
                 (*this)(*e.rhs);
                 std::string opstr = opname + tystr(ty_lhs);
                 auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
-                stack_machine_.ops_.push_back(opcode);
+                stack_machine_.ops.push_back(opcode);
             }
             break;
 
@@ -617,13 +617,13 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
         case TK_And:
             (*this)(*e.lhs);
             (*this)(*e.rhs);
-            stack_machine_.ops_.push_back(StackMachine::Opcode::And_b);
+            stack_machine_.ops.push_back(StackMachine::Opcode::And_b);
             break;
 
         case TK_Or:
             (*this)(*e.lhs);
             (*this)(*e.rhs);
-            stack_machine_.ops_.push_back(StackMachine::Opcode::Or_b);
+            stack_machine_.ops.push_back(StackMachine::Opcode::Or_b);
             break;
     }
 }
@@ -696,8 +696,8 @@ value_type StackMachine::operator()(const tuple_type &t)
 }
 
     stack_.clear();
-    for (std::size_t i = 0; i != ops_.size(); ++i) {
-        auto opcode = ops_[i];
+    for (std::size_t i = 0; i != ops.size(); ++i) {
+        auto opcode = ops[i];
 
         switch (opcode) {
             default:
@@ -710,15 +710,15 @@ value_type StackMachine::operator()(const tuple_type &t)
 
             /* Load a value from the array of constants to the top of the stack. */
             case Opcode::Ld_Const: {
-                std::size_t idx = static_cast<std::size_t>(ops_[++i]);
-                insist(idx < constants_.size(), "index out of bounds");
-                stack_.push_back(constants_[idx]);
+                std::size_t idx = static_cast<std::size_t>(ops[++i]);
+                insist(idx < constants.size(), "index out of bounds");
+                stack_.push_back(constants[idx]);
                 break;
             }
 
             /* Load a value from the tuple to the top of the stack. */
             case Opcode::Ld_Idx: {
-                std::size_t idx = static_cast<std::size_t>(ops_[++i]);
+                std::size_t idx = static_cast<std::size_t>(ops[++i]);
                 insist(idx < t.size(), "index out of bounds");
                 stack_.push_back(t[idx]);
                 break;

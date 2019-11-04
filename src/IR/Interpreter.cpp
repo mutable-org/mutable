@@ -1090,40 +1090,66 @@ void Interpreter::operator()(const SortingOperator &op)
     auto data = new SortingData();
     op.data(data);
     op.child(0)->accept(*this);
+
     const auto &orderings = op.order_by();
     auto &S = op.schema();
+
+    StackMachine comparator(S);
+    for (auto o : orderings) {
+        comparator.add(*o.first); // LHS
+        auto num_ops = comparator.ops.size();
+        comparator.add(*o.first); // RHS
+        /* Patch indices of RHS. */
+        for (std::size_t i = num_ops; i != comparator.ops.size(); ++i) {
+            auto opc = comparator.ops[i];
+            switch (opc) {
+                case StackMachine::Opcode::Ld_Const:
+                    ++i;
+                default:
+                    break;
+
+                case StackMachine::Opcode::Ld_Idx:
+                    /* Add offset equal to size of LHS. */
+                    ++i;
+                    comparator.ops[i] =
+                        static_cast<StackMachine::Opcode>(static_cast<uint8_t>(comparator.ops[i]) + S.size());
+                    break;
+            }
+        }
+
+        /* Emit comparison. */
+        auto ty = o.first->type();
+        if (ty->is_boolean())
+            comparator.ops.push_back(StackMachine::Opcode::Cmp_b);
+        else if (ty->is_character_sequence())
+            comparator.ops.push_back(StackMachine::Opcode::Cmp_s);
+        else if (ty->is_integral() or ty->is_decimal())
+            comparator.ops.push_back(StackMachine::Opcode::Cmp_i);
+        else if (ty->is_float())
+            comparator.ops.push_back(StackMachine::Opcode::Cmp_f);
+        else if (ty->is_double())
+            comparator.ops.push_back(StackMachine::Opcode::Cmp_d);
+        else
+            unreachable("invalid type");
+
+        if (not o.second)
+            comparator.ops.push_back(StackMachine::Opcode::Minus_i); // sort descending
+
+        comparator.ops.push_back(StackMachine::Opcode::Stop_NZ);
+    }
 
     std::vector<StackMachine> stack_machines;
     for (auto &o : orderings)
         stack_machines.emplace_back(S, *o.first);
 
     std::sort(data->buffer.begin(), data->buffer.end(), [&](const tuple_type &first, const tuple_type &second) {
-        for (std::size_t i = 0; i != orderings.size(); ++i) {
-            auto &o = orderings[i];
-            auto &eval = stack_machines[i];
-            const Expr *orderby = o.first;
-            bool is_ascending = o.second;
-
-#define COMPARE(TYPE) { \
-    auto v_first = to<TYPE>(eval(first)[0]); \
-    auto v_second = to<TYPE>(eval(second)[0]); \
-    if (v_first != v_second) return v_first < v_second == is_ascending; \
-}
-            if (orderby->type()->is_character_sequence())
-                COMPARE(std::string)
-            else if (orderby->type()->is_integral())
-                COMPARE(int64_t)
-            else if (orderby->type()->is_decimal())
-                COMPARE(int64_t)
-            else
-                COMPARE(double)
-        }
-#undef COMPARE
-        return false;
+        auto res = comparator(first + second);
+        auto pv = std::get_if<int64_t>(&res.back());
+        insist(pv, "invalid type of variant");
+        return *pv < 0;
     });
-    for (auto t : data->buffer) {
+    for (auto t : data->buffer)
         op.parent()->accept(*this, t);
-    }
 }
 
 /*======================================================================================================================

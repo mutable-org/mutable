@@ -23,7 +23,6 @@ struct StackMachine
     };
 
     using index_t = std::size_t;
-    using Command = Concat<value_type, index_t, const Expr*>::type;
 
     const OperatorSchema &schema;
 

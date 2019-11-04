@@ -1247,7 +1247,13 @@ void Interpreter::operator()(const JoinOperator &op, tuple_type &t)
                         joined += t; // append the tuple just produced by the right-most child
 
                         /* Evaluate the join predicate on the joined tuple. */
-                        if (eval(op.schema(), op.predicate(), joined))
+                        StackMachine eval(op.schema());
+                        eval.add(op.predicate());
+                        auto res = eval(joined);
+                        insist(res.size() == 1);
+                        auto pv = std::get_if<bool>(&res[0]);
+                        insist(pv, "invalid type of variant");
+                        if (*pv)
                             op.parent()->accept(*this, joined);
 
                         --child_id;

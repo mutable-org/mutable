@@ -1043,6 +1043,7 @@ void Interpreter::operator()(const FilterOperator &op)
             if (pred_it != C.cbegin())
                 data->filter.ops.push_back(StackMachine::Opcode::Or_b);
         }
+        data->filter.ops.push_back(StackMachine::Opcode::Stop_False); // a single false clause renders the CNF false
         if (clause_it != F.cbegin())
             data->filter.ops.push_back(StackMachine::Opcode::And_b);
     }

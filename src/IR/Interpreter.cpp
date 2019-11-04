@@ -629,35 +629,6 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
 }
 
 /*======================================================================================================================
- * Helper method to evaluate a CNF.
- *====================================================================================================================*/
-
-bool db::eval(const OperatorSchema &schema, const cnf::CNF &cnf, const tuple_type &tuple)
-{
-    for (auto &clause : cnf) {
-        for (auto pred : clause) {
-            StackMachine eval(schema, *pred.expr());
-            auto t = eval(tuple);
-            insist(t.size() == 1);
-            auto result = t[0];
-            if (std::holds_alternative<null_type>(result))
-                break; // skip NULL; NULL is never TRUE
-            insist(std::holds_alternative<bool>(result), "literal must evaluate to bool");
-            bool value = std::get<bool>(result);
-            bool satisfied = value != pred.negative();
-            if (satisfied)
-                goto clause_is_sat;
-        }
-        /* Clause is unsatisfied and hence the CNF is unsatisfied. */
-        return false;
-
-clause_is_sat:
-        /* proceed with next clause in CNF */ ;
-    }
-    return true;
-}
-
-/*======================================================================================================================
  * Stack Machine
  *====================================================================================================================*/
 

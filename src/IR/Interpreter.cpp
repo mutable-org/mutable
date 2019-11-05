@@ -1126,9 +1126,7 @@ void Interpreter::operator()(const CallbackOperator &op)
 
 void Interpreter::operator()(const ScanOperator &op)
 {
-    OperatorSchema empty_schema;
-    auto loader = op.store().loader(empty_schema);
-
+    auto loader = op.store().loader(op.schema());
     for (auto i = op.store().num_rows(); i; --i) {
         auto &&tuple = loader(tuple_type());
         op.parent()->accept(*this, tuple);

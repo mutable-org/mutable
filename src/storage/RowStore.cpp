@@ -90,7 +90,9 @@ StackMachine RowStore::loader(const OperatorSchema &schema) const
     auto row_size_idx = sm.constants.size();
     sm.constants.push_back(int64_t(row_size_/8));
 
-    for (auto &attr : table()) {
+    for (auto &attr_ident : schema) {
+        auto &attr = table().at(attr_ident.first.attr_name);
+
         /* Load row address to stack. */
         sm.ops.push_back(StackMachine::Opcode::Ld_Const);
         sm.ops.push_back(static_cast<StackMachine::Opcode>(addr_idx));

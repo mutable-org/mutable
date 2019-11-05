@@ -1298,6 +1298,7 @@ void Interpreter::operator()(const FilterOperator &op, tuple_type &t)
 {
     auto data = as<FilterData>(op.data());
     auto res = data->filter(t);
+    insist(res.size() == 1);
     auto pv = std::get_if<bool>(&res[0]);
     insist(pv, "invalid type of variant");
     if (*pv)

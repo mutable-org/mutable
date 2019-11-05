@@ -30,6 +30,8 @@ struct RowStore : Store
         Row(const RowStore &store, uintptr_t addr) : store(store), addr_(addr) { }
 
         public:
+        uintptr_t addr() const { return addr_; }
+
         /** Check whether the value of the attribute is NULL. */
         bool isnull(const Attribute &attr) const override {
             const std::size_t off = store.offset(store.table().size()) + attr.id;

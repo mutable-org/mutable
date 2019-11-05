@@ -103,12 +103,10 @@ TEST_CASE("RowStore", "[unit]")
         auto row = store.append();
 
         REQUIRE(row->isnull(i4));
-        REQUIRE_THROWS_AS(row->get<int32_t>(i4), null_error);
         row->set(i4, 42);
         REQUIRE(not row->isnull(i4));
         REQUIRE(row->get<int32_t>(i4) == 42);
         row->setnull(i4);
         REQUIRE(row->isnull(i4));
-        REQUIRE_THROWS_AS(row->get<int32_t>(i4), null_error);
     }
 }

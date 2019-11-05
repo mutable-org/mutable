@@ -107,13 +107,13 @@ struct RowStore : Store
     RowStore(const Table &table);
     ~RowStore();
 
+    virtual std::size_t num_rows() const override { return num_rows_; }
+
     int offset(uint32_t idx) const {
         insist(idx <= table().size(), "index out of range");
         return offsets_[idx];
     }
     int offset(const Attribute &attr) const { return offset(attr.id); }
-
-    std::size_t num_rows() const { return num_rows_; }
 
     /** Returns the effective size of a row, in bits. */
     std::size_t row_size() const { return row_size_; }

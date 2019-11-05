@@ -208,6 +208,9 @@ struct Store
 
     const Table & table() const { return table_; }
 
+    /** Return the number of rows in this store. */
+    virtual std::size_t num_rows() const = 0;
+
     /** Saves the contents of the store to the file at `path`. */
     virtual void save(std::filesystem::path path) const = 0;
 

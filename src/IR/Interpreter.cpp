@@ -781,6 +781,7 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
             case Opcode::Upd_Const: {
                 std::size_t idx = static_cast<std::size_t>(*++it);
                 insist(idx < constants.size(), "index out of bounds");
+                insist(stack_.back().index() == constants[idx].index());
                 constants[idx] = stack_.back();
                 break;
             }

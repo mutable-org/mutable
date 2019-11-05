@@ -43,17 +43,20 @@ ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
         auto alias = P.second;
         if (alias) { // alias was given
             OperatorSchema::AttributeIdentifier id(P.second);
-            S.add_element(id, ty);
+            auto success = S.add_element(id, ty);
+            insist(success);
         } else if (auto D = cast<const Designator>(P.first)) { // no alias, but designator -> keep name
             OperatorSchema::AttributeIdentifier id(D->table_name.text, D->attr_name.text);
-            S.add_element(id, ty);
+            auto success = S.add_element(id, ty);
+            insist(success);
         } else { // no designator, no alias -> derive name
             std::ostringstream oss;
             oss << *P.first;
             auto &C = Catalog::Get();
             auto alias = C.pool(oss.str().c_str());
             OperatorSchema::AttributeIdentifier id(alias);
-            S.add_element(id, ty);
+            auto success = S.add_element(id, ty);
+            insist(success);
         }
     }
 }
@@ -70,12 +73,14 @@ GroupingOperator::GroupingOperator(std::vector<const Expr*> group_by,
     for (auto e : group_by) {
         auto ty = e->type();
         if (auto D = cast<const Designator>(e)) {
-            S.add_element({D->table_name.text, D->attr_name.text}, ty);
+            auto success = S.add_element({D->table_name.text, D->attr_name.text}, ty);
+            insist(success);
         } else {
             std::ostringstream oss;
             oss << *e;
             auto alias = C.pool(oss.str().c_str());
-            S.add_element(alias, ty);
+            auto success = S.add_element(alias, ty);
+            insist(success);
         }
     }
 
@@ -84,7 +89,8 @@ GroupingOperator::GroupingOperator(std::vector<const Expr*> group_by,
         std::ostringstream oss;
         oss << *e;
         auto alias = C.pool(oss.str().c_str());
-        S.add_element(alias, ty);
+        auto success = S.add_element(alias, ty);
+        insist(success);
     }
 }
 

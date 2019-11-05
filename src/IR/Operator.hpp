@@ -112,12 +112,12 @@ struct OperatorSchema
     auto cbegin() const { return elements_.cbegin(); }
     auto cend()   const { return elements_.cend(); }
 
-    void add_element(AttributeIdentifier attr, const Type *type) {
+    bool add_element(AttributeIdentifier attr, const Type *type) {
         auto pos = elements_.size();
         auto res = id_to_elem_.emplace(attr, pos);
-        if (not res.second)
-            throw std::logic_error("attribute identifier already exists in this schema");
-        elements_.push_back({attr, type});
+        if (res.second)
+            elements_.push_back({attr, type});
+        return res.second;
     }
 
     const entry_type & operator[](std::size_t idx) const { insist(idx < elements_.size()); return elements_[idx]; }
@@ -285,8 +285,10 @@ struct ScanOperator : Producer
         : store_(store)
     {
         auto &S = schema();
-        for (auto &attr : store.table())
-            S.add_element({alias, attr.name}, attr.type);
+        for (auto &attr : store.table()) {
+            auto success = S.add_element({alias, attr.name}, attr.type);
+            insist(success, "duplicate attribute in table");
+        }
     }
 
     const Store & store() const { return store_; }

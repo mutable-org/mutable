@@ -698,8 +698,8 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
 }
 
     stack_.clear();
-    for (std::size_t i = 0; i != ops.size(); ++i) {
-        auto opcode = ops[i];
+    for (auto it = ops.cbegin(); it != ops.cend(); ++it) {
+        auto opcode = *it;
 
         switch (opcode) {
             default:
@@ -743,24 +743,131 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
             }
 
             /*==========================================================================================================
-             * Load operations
+             * Stack manipulation operations
              *========================================================================================================*/
+
+            case Opcode::Pop:
+                stack_.pop_back();
+                break;
+
+            /*==========================================================================================================
+             * Load / Update operations
+             *========================================================================================================*/
+
+            /* Load a value from the tuple to the top of the stack. */
+            case Opcode::Ld_Idx: {
+                std::size_t idx = static_cast<std::size_t>(*++it);
+                insist(idx < t.size(), "index out of bounds");
+                stack_.push_back(t[idx]);
+                break;
+            }
 
             /* Load a value from the array of constants to the top of the stack. */
             case Opcode::Ld_Const: {
-                std::size_t idx = static_cast<std::size_t>(ops[++i]);
+                std::size_t idx = static_cast<std::size_t>(*++it);
                 insist(idx < constants.size(), "index out of bounds");
                 stack_.push_back(constants[idx]);
                 break;
             }
 
-            /* Load a value from the tuple to the top of the stack. */
-            case Opcode::Ld_Idx: {
-                std::size_t idx = static_cast<std::size_t>(ops[++i]);
-                insist(idx < t.size(), "index out of bounds");
-                stack_.push_back(t[idx]);
+            case Opcode::Upd_Const: {
+                std::size_t idx = static_cast<std::size_t>(*++it);
+                insist(idx < constants.size(), "index out of bounds");
+                constants[idx] = stack_.back();
                 break;
             }
+
+            /*----- Load from row store ------------------------------------------------------------------------------*/
+#define PREPARE_LOAD \
+    insist(stack_.size() >= 3); \
+    /* Get value bit offset. */ \
+    auto pv_value_off = std::get_if<int64_t>(&stack_.back()); \
+    insist(pv_value_off, "invalid type of variant"); \
+    auto value_off = std::size_t(*pv_value_off); \
+    stack_.pop_back(); \
+\
+    /* Get null bit offset. */ \
+    auto pv_null_off = std::get_if<int64_t>(&stack_.back()); \
+    insist(pv_null_off, "invalid type of variant"); \
+    auto null_off = std::size_t(*pv_null_off); \
+    stack_.pop_back(); \
+\
+    /* Row address. */ \
+    auto pv_addr = std::get_if<int64_t>(&stack_.back()); \
+    insist(pv_addr, "invalid type of variant"); \
+    auto addr = reinterpret_cast<uint8_t*>(*pv_addr); \
+\
+    /* Check if null. */ \
+    { \
+        const std::size_t bytes = null_off / 8; \
+        const std::size_t bits = null_off % 8; \
+        bool is_null = not bool((*(addr + bytes) >> bits) & 0x1); \
+        if (is_null) { \
+            stack_.back() = null_type(); \
+            break; \
+        } \
+    } \
+\
+    const std::size_t bytes = value_off / 8;
+
+            case Opcode::Ld_RS_i8: {
+                PREPARE_LOAD;
+                stack_.back() = int64_t(*reinterpret_cast<int8_t*>(addr + bytes));
+                break;
+            }
+
+            case Opcode::Ld_RS_i16: {
+                PREPARE_LOAD;
+                stack_.back() = int64_t(*reinterpret_cast<int16_t*>(addr + bytes));
+                break;
+            }
+
+            case Opcode::Ld_RS_i32: {
+                PREPARE_LOAD;
+                stack_.back() = int64_t(*reinterpret_cast<int32_t*>(addr + bytes));
+                break;
+            }
+
+            case Opcode::Ld_RS_i64: {
+                PREPARE_LOAD;
+                stack_.back() = *reinterpret_cast<int64_t*>(addr + bytes);
+                break;
+            }
+
+            case Opcode::Ld_RS_f: {
+                PREPARE_LOAD;
+                stack_.back() = *reinterpret_cast<float*>(addr + bytes);
+                break;
+            }
+
+            case Opcode::Ld_RS_d: {
+                PREPARE_LOAD;
+                stack_.back() = *reinterpret_cast<double*>(addr + bytes);
+                break;
+            }
+
+            case Opcode::Ld_RS_s: {
+                /* Get string length. */
+                auto pv_len = std::get_if<int64_t>(&stack_.back());
+                insist(pv_len, "invalid type of variant");
+                auto len = std::size_t(*pv_len);
+                stack_.pop_back();
+
+                PREPARE_LOAD;
+
+                auto first = reinterpret_cast<char*>(addr + bytes);
+                stack_.back() = std::string(first, first + len);
+                break;
+            }
+
+            case Opcode::Ld_RS_b: {
+                PREPARE_LOAD;
+                const std::size_t bits = value_off % 8;
+                stack_.back() = bool((*reinterpret_cast<uint8_t*>(addr + bytes) >> bits) & 0x1);
+                break;
+            }
+
+#undef PREPARE_LOAD
 
             /*======================================================================================================================
              * Arithmetical operations
@@ -918,14 +1025,16 @@ void StackMachine::dump(std::ostream &out) const
         if (it != constants.cbegin()) out << ", ";
         out << *it;
     }
-    out << "]\n    Tuple Schema: " << schema << "\n    Opcode Sequence:\n";
+    out << "]\n    Tuple Schema: " << schema
+        << "]\n    Opcode Sequence:\n";
     for (std::size_t i = 0; i != ops.size(); ++i) {
         auto opc = ops[i];
         out << "        [0x" << std::hex << std::setfill('0') << std::setw(4) << i << std::dec << "]: "
             << StackMachine::OPCODE_TO_STR[static_cast<std::size_t>(opc)];
         switch (opc) {
-            case Opcode::Ld_Const:
             case Opcode::Ld_Idx:
+            case Opcode::Ld_Const:
+            case Opcode::Upd_Const:
                 ++i;
                 out << ' ' << static_cast<int64_t>(ops[i]);
             default:;
@@ -1008,15 +1117,13 @@ void Interpreter::operator()(const CallbackOperator &op)
 
 void Interpreter::operator()(const ScanOperator &op)
 {
-    tuple_type tuple;
-    tuple.resize(op.store().table().size());
-    op.store().for_each([&](const Store::Row &row) {
-        tuple.clear();
-        row.dispatch([&](const Attribute&, value_type value) {
-            tuple.push_back(value);
-        });
+    OperatorSchema empty_schema;
+    auto loader = op.store().loader(empty_schema);
+
+    for (auto i = op.store().num_rows(); i; --i) {
+        auto &&tuple = loader(tuple_type());
         op.parent()->accept(*this, tuple);
-    });
+    }
 }
 
 void Interpreter::operator()(const FilterOperator &op)

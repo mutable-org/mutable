@@ -15,14 +15,34 @@ DB_OPCODE(Stop_False)
 DB_OPCODE(Stop_True)
 
 /*======================================================================================================================
- * Load operations
+ * Stack manipulation operations
  *====================================================================================================================*/
+
+DB_OPCODE(Pop)
+
+/*======================================================================================================================
+ * Load / Update operations
+ *====================================================================================================================*/
+
+/* Load a value from the tuple to the top of the stack. */
+DB_OPCODE(Ld_Idx)
 
 /* Load a value from the array of constants to the top of the stack. */
 DB_OPCODE(Ld_Const)
 
-/* Load a value from the tuple to the top of the stack. */
-DB_OPCODE(Ld_Idx)
+/* Update a constant with the value on top of the stack. */
+DB_OPCODE(Upd_Const)
+
+/*----- Load from row store ------------------------------------------------------------------------------------------*/
+
+DB_OPCODE(Ld_RS_i8)
+DB_OPCODE(Ld_RS_i16)
+DB_OPCODE(Ld_RS_i32)
+DB_OPCODE(Ld_RS_i64)
+DB_OPCODE(Ld_RS_f)
+DB_OPCODE(Ld_RS_d)
+DB_OPCODE(Ld_RS_s)
+DB_OPCODE(Ld_RS_b)
 
 /*======================================================================================================================
  * Arithmetical operations

@@ -14,6 +14,9 @@
 
 namespace db {
 
+struct OperatorSchema;
+struct StackMachine;
+
 /** Reports an erroneous access to an attribute's value that is set to NULL. */
 struct null_error : std::logic_error
 {
@@ -223,6 +226,9 @@ struct Store
 
     /** Append a row to the store. */
     virtual std::unique_ptr<Row> append() = 0;
+
+    /** Return a stack machine to load values row-wise directly from this store. */
+    virtual StackMachine loader(const OperatorSchema &schema) const = 0;
 
     virtual void dump(std::ostream &out) const = 0;
     void dump() const;

@@ -1,6 +1,7 @@
 #include "storage/RowStore.hpp"
 
 #include "catalog/Type.hpp"
+#include "IR/Interpreter.hpp"
 #include "util/fn.hpp"
 #include <algorithm>
 #include <exception>
@@ -74,6 +75,100 @@ std::size_t RowStore::load(std::filesystem::path path)
     in.read(reinterpret_cast<char*>(data_) + num_rows_ * row_size_/8, num_bytes);
     num_rows_ += num_fresh_rows;
     return num_fresh_rows;
+}
+
+StackMachine RowStore::loader(const OperatorSchema &schema) const
+{
+    StackMachine sm(schema);
+
+    /* Add address of store to initial state.  Start at row -1 because we increase the address at the start of each
+     * stack machine invocation. */
+    auto addr_idx = sm.constants.size();
+    sm.constants.push_back(int64_t(reinterpret_cast<uintptr_t>(data_)));
+
+    /* Add row size to constants. */
+    auto row_size_idx = sm.constants.size();
+    sm.constants.push_back(int64_t(row_size_/8));
+
+    for (auto &attr : table()) {
+        /* Load row address to stack. */
+        sm.ops.push_back(StackMachine::Opcode::Ld_Const);
+        sm.ops.push_back(static_cast<StackMachine::Opcode>(addr_idx));
+
+        /* Load null bit offset to stack. */
+        const std::size_t null_off = offset(table().size()) + attr.id;
+        auto null_off_idx = sm.constants.size();
+        sm.constants.push_back(int64_t(null_off));
+        sm.ops.push_back(StackMachine::Opcode::Ld_Const);
+        sm.ops.push_back(static_cast<StackMachine::Opcode>(null_off_idx));
+
+        /* Load value bit offset to stack. */
+        const std::size_t value_off = offset(attr.id);
+        auto value_off_idx = sm.constants.size();
+        sm.constants.push_back(int64_t(value_off));
+        sm.ops.push_back(StackMachine::Opcode::Ld_Const);
+        sm.ops.push_back(static_cast<StackMachine::Opcode>(value_off_idx));
+
+        /* Emit load from store instruction. */
+        auto ty = attr.type;
+        if (ty->is_boolean()) {
+            sm.ops.push_back(StackMachine::Opcode::Ld_RS_b);
+        } else if (auto n = cast<const Numeric>(ty)) {
+            switch (n->kind) {
+                case Numeric::N_Int: {
+                    switch (n->precision) {
+                        default: unreachable("illegal integer type");
+                        case 1: sm.ops.push_back(StackMachine::Opcode::Ld_RS_i8);  break;
+                        case 2: sm.ops.push_back(StackMachine::Opcode::Ld_RS_i16); break;
+                        case 4: sm.ops.push_back(StackMachine::Opcode::Ld_RS_i32); break;
+                        case 8: sm.ops.push_back(StackMachine::Opcode::Ld_RS_i64); break;
+                    }
+                    break;
+                }
+
+                case Numeric::N_Float: {
+                    if (n->precision == 32)
+                        sm.ops.push_back(StackMachine::Opcode::Ld_RS_f);
+                    else
+                        sm.ops.push_back(StackMachine::Opcode::Ld_RS_d);
+                    break;
+                }
+
+                case Numeric::N_Decimal: {
+                    const auto p = ceil_to_pow_2(n->size());
+                    switch (p) {
+                        default: unreachable("illegal precision of decimal type");
+                        case 1: sm.ops.push_back(StackMachine::Opcode::Ld_RS_i8);  break;
+                        case 2: sm.ops.push_back(StackMachine::Opcode::Ld_RS_i16); break;
+                        case 4: sm.ops.push_back(StackMachine::Opcode::Ld_RS_i32); break;
+                        case 8: sm.ops.push_back(StackMachine::Opcode::Ld_RS_i64); break;
+                    }
+                    break;
+                }
+            }
+        } else if (auto cs = cast<const CharacterSequence>(ty)) {
+            auto len_idx = sm.constants.size();
+            sm.constants.push_back(int64_t(cs->length));
+            sm.ops.push_back(StackMachine::Opcode::Ld_Const);
+            sm.ops.push_back(static_cast<StackMachine::Opcode>(len_idx));
+            sm.ops.push_back(StackMachine::Opcode::Ld_RS_s);
+        } else {
+            unreachable("illegal type");
+        }
+    }
+
+    /* Update row address. */
+    sm.ops.push_back(StackMachine::Opcode::Ld_Const);
+    sm.ops.push_back(static_cast<StackMachine::Opcode>(addr_idx));
+    sm.ops.push_back(StackMachine::Opcode::Ld_Const);
+    sm.ops.push_back(static_cast<StackMachine::Opcode>(row_size_idx));
+    sm.ops.push_back(StackMachine::Opcode::Add_i);
+    sm.ops.push_back(StackMachine::Opcode::Upd_Const);
+    sm.ops.push_back(static_cast<StackMachine::Opcode>(addr_idx));
+    sm.ops.push_back(StackMachine::Opcode::Pop);
+
+    //sm.dump();
+    return sm;
 }
 
 void RowStore::compute_offsets()

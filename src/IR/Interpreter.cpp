@@ -766,7 +766,7 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
             case Opcode::Ld_Idx: {
                 std::size_t idx = static_cast<std::size_t>(*++it);
                 insist(idx < t.size(), "index out of bounds");
-                stack_.push_back(t[idx]);
+                stack_.emplace_back(t[idx]);
                 break;
             }
 
@@ -774,7 +774,7 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
             case Opcode::Ld_Const: {
                 std::size_t idx = static_cast<std::size_t>(*++it);
                 insist(idx < constants.size(), "index out of bounds");
-                stack_.push_back(constants[idx]);
+                stack_.emplace_back(constants[idx]);
                 break;
             }
 

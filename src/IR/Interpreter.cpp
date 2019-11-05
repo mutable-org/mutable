@@ -679,7 +679,11 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
     auto &v = stack_.back(); \
     auto pv = std::get_if<TYPE>(&v); \
     insist(pv, "invalid type of variant"); \
-    stack_.back() = OP (*pv); \
+    auto res = OP (*pv); \
+    if constexpr (std::is_same_v<decltype(res), TYPE>) \
+        *pv = res; \
+    else \
+        stack_.back() = res; \
     break; \
 }
 
@@ -693,7 +697,11 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
     auto &v_lhs = stack_.back(); \
     auto pv_lhs = std::get_if<TYPE>(&v_lhs); \
     insist(pv_lhs, "invalid type of lhs"); \
-    stack_.back() = *pv_lhs OP rhs; \
+    auto res = *pv_lhs OP rhs; \
+    if constexpr (std::is_same_v<decltype(res), TYPE>) \
+        *pv_lhs = res; \
+    else \
+        stack_.back() = res; \
     break; \
 }
 

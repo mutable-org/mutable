@@ -812,7 +812,7 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
         const std::size_t bits = null_off % 8; \
         bool is_null = not bool((*(addr + bytes) >> bits) & 0x1); \
         if (is_null) { \
-            stack_.back() = null_type(); \
+            stack_.back() = value_type(null_type()); \
             break; \
         } \
     } \

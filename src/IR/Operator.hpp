@@ -393,7 +393,7 @@ struct ProjectionOperator : Producer, Consumer
     public:
     ProjectionOperator(std::vector<projection_type> projections);
 
-    static ProjectionOperator Anti(std::vector<projection_type> projections) {
+    static ProjectionOperator Anti(std::vector<projection_type> projections = {}) {
         ProjectionOperator P(projections);
         P.is_anti_ = true;
         return P;

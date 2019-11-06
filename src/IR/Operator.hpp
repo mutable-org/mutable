@@ -135,9 +135,33 @@ struct OperatorSchema
     }
 
     OperatorSchema & operator+=(const OperatorSchema &other) {
+        for (auto &e : other) {
+            auto success = this->add_element(e.first, e.second);
+            insist(success, "duplicate entry");
+        }
+        return *this;
+    }
+
+    /** Union of two schemas. */
+    OperatorSchema & operator|=(const OperatorSchema &other) {
         for (auto &e : other)
             this->add_element(e.first, e.second);
         return *this;
+    }
+
+    /** Intersection of two schemas. */
+    friend OperatorSchema operator&(const OperatorSchema &first, const OperatorSchema &second) {
+        OperatorSchema res;
+        for (auto &elem : first) {
+            try {
+                auto other = second[elem.first];
+                insist(elem.second == other.second.second, "type mismatch");
+                res.add_element(elem.first, elem.second);
+            } catch (std::logic_error) {
+                /* not in both schemas, continue. */
+            }
+        }
+        return res;
     }
 
     friend std::ostream & operator<<(std::ostream &out, const OperatorSchema &schema);

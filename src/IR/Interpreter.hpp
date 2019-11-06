@@ -52,6 +52,33 @@ struct StackMachine
 
     tuple_type && operator()(const tuple_type &t);
 
+    /** Append the given opcode to the opcode sequence. */
+    void emit(Opcode opc) { ops.push_back(opc); }
+
+    void emit_load_from_context(std::size_t idx) {
+        ops.push_back(StackMachine::Opcode::Ld_Const);
+        ops.push_back(static_cast<StackMachine::Opcode>(idx));
+    }
+
+    void emit_load_from_tuple(std::size_t idx) {
+        ops.push_back(StackMachine::Opcode::Ld_Idx);
+        ops.push_back(static_cast<StackMachine::Opcode>(idx));
+    }
+
+    /** Adds a value to the context and returns its assigned index. */
+    std::size_t add(value_type value) {
+        auto idx = context.size();
+        context.push_back(value);
+        return idx;
+    }
+
+    /** Adds a value to the context and emits a load instruction to load this value to the top of the stack. */
+    std::size_t add_and_emit_load(value_type value) {
+        auto idx = add(value);
+        emit_load_from_context(idx);
+        return idx;
+    }
+
     void dump(std::ostream &out) const;
     void dump() const;
 };

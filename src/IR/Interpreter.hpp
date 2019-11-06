@@ -34,7 +34,7 @@ struct StackMachine
 
     static const std::unordered_map<std::string, Opcode> STR_TO_OPCODE;
 
-    std::vector<value_type> constants; ///< the constants used by the expression
+    std::vector<value_type> context; ///< the context of the stack machine, e.g. constants or global variables
     std::vector<Opcode> ops; ///< a sequence of operations to perform
 
     private:

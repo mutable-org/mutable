@@ -181,8 +181,8 @@ void StackMachineBuilder::operator()(Const<Designator> &e)
 void StackMachineBuilder::operator()(Const<Constant> &e)
 {
     auto value = StackMachineBuilder::eval(e);
-    const auto idx = stack_machine_.constants.size();
-    stack_machine_.constants.emplace_back(value); // put the constant into the vector of constants
+    const auto idx = stack_machine_.context.size();
+    stack_machine_.context.emplace_back(value); // put the constant into the context
     stack_machine_.ops.push_back(StackMachine::Opcode::Ld_Const); // load a constant
     stack_machine_.ops.push_back(static_cast<StackMachine::Opcode>(idx)); // from index `idx`
 }
@@ -330,8 +330,8 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
             /* Scale up. */
             auto delta = n_to->scale - n_from->scale;
             const int64_t factor = powi<int64_t>(10, delta);
-            auto cidx = stack_machine_.constants.size();
-            stack_machine_.constants.push_back(factor);
+            auto cidx = stack_machine_.context.size();
+            stack_machine_.context.push_back(factor);
             stack_machine_.ops.push_back(StackMachine::Opcode::Ld_Const);
             stack_machine_.ops.push_back(static_cast<StackMachine::Opcode>(cidx));
             stack_machine_.ops.push_back(StackMachine::Opcode::Mul_i); // multiply by scale factor
@@ -341,14 +341,14 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
             /* Scale down. */
             auto delta = n_from->scale - n_to->scale;
             const int64_t factor = powi<int64_t>(10, delta);
-            auto cidx = stack_machine_.constants.size();
+            auto cidx = stack_machine_.context.size();
             stack_machine_.ops.push_back(StackMachine::Opcode::Ld_Const);
             stack_machine_.ops.push_back(static_cast<StackMachine::Opcode>(cidx));
             if (n_to->is_float()) {
-                stack_machine_.constants.push_back(float(1.f / factor));
+                stack_machine_.context.push_back(float(1.f / factor));
                 stack_machine_.ops.push_back(StackMachine::Opcode::Mul_f); // multiply by inverse scale factor
             } else {
-                stack_machine_.constants.push_back(double(1. / factor));
+                stack_machine_.context.push_back(double(1. / factor));
                 stack_machine_.ops.push_back(StackMachine::Opcode::Mul_d); // multiply by inverse scale factor
             }
         }
@@ -358,14 +358,14 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
         switch (n->kind) {
             case Numeric::N_Int:
             case Numeric::N_Decimal:
-                stack_machine_.constants.push_back(int64_t(val));
+                stack_machine_.context.push_back(int64_t(val));
                 break;
 
             case Numeric::N_Float:
                 if (n->precision == 32)
-                    stack_machine_.constants.push_back(float(val));
+                    stack_machine_.context.push_back(float(val));
                 else
-                    stack_machine_.constants.push_back(double(val));
+                    stack_machine_.context.push_back(double(val));
                 break;
         }
     };
@@ -438,7 +438,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
             insist(scale >= 0);
             if (scale != 0) {
                 const int64_t factor = powi<int64_t>(10, scale);
-                const auto cidx = stack_machine_.constants.size();
+                const auto cidx = stack_machine_.context.size();
                 put_numeric(factor, n_res);
                 stack_machine_.ops.push_back(StackMachine::Opcode::Ld_Const);
                 stack_machine_.ops.push_back(static_cast<StackMachine::Opcode>(cidx));
@@ -534,7 +534,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
             const auto scale = n_rhs->scale + (n_res->scale - n_lhs->scale);
             if (scale > 0) {
                 const int64_t factor = powi<int64_t>(10, scale); // scale up by rhs
-                const auto cidx = stack_machine_.constants.size();
+                const auto cidx = stack_machine_.context.size();
                 put_numeric(factor, n_res);
                 stack_machine_.ops.push_back(StackMachine::Opcode::Ld_Const);
                 stack_machine_.ops.push_back(static_cast<StackMachine::Opcode>(cidx));
@@ -545,7 +545,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
                 stack_machine_.ops.push_back(opcode); // Mul_x
             } else if (scale < 0) {
                 const int64_t factor = powi<int64_t>(10, -scale); // scale up by rhs
-                const auto cidx = stack_machine_.constants.size();
+                const auto cidx = stack_machine_.context.size();
                 put_numeric(factor, n_res);
                 stack_machine_.ops.push_back(StackMachine::Opcode::Ld_Const);
                 stack_machine_.ops.push_back(static_cast<StackMachine::Opcode>(cidx));
@@ -770,19 +770,19 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
                 break;
             }
 
-            /* Load a value from the array of constants to the top of the stack. */
+            /* Load a value from the context to the top of the stack. */
             case Opcode::Ld_Const: {
                 std::size_t idx = static_cast<std::size_t>(*++it);
-                insist(idx < constants.size(), "index out of bounds");
-                stack_.emplace_back(constants[idx]);
+                insist(idx < context.size(), "index out of bounds");
+                stack_.emplace_back(context[idx]);
                 break;
             }
 
             case Opcode::Upd_Const: {
                 std::size_t idx = static_cast<std::size_t>(*++it);
-                insist(idx < constants.size(), "index out of bounds");
-                insist(stack_.back().index() == constants[idx].index());
-                constants[idx] = stack_.back();
+                insist(idx < context.size(), "index out of bounds");
+                insist(stack_.back().index() == context[idx].index());
+                context[idx] = stack_.back();
                 break;
             }
 
@@ -1029,9 +1029,9 @@ exit:
 
 void StackMachine::dump(std::ostream &out) const
 {
-    out << "StackMachine\n    Constants: [";
-    for (auto it = constants.cbegin(); it != constants.cend(); ++it) {
-        if (it != constants.cbegin()) out << ", ";
+    out << "StackMachine\n    Context: [";
+    for (auto it = context.cbegin(); it != context.cend(); ++it) {
+        if (it != context.cbegin()) out << ", ";
         out << *it;
     }
     out << "]\n    Tuple Schema: " << schema

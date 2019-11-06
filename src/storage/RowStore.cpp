@@ -83,12 +83,12 @@ StackMachine RowStore::loader(const OperatorSchema &schema) const
 
     /* Add address of store to initial state.  Start at row -1 because we increase the address at the start of each
      * stack machine invocation. */
-    auto addr_idx = sm.constants.size();
-    sm.constants.push_back(int64_t(reinterpret_cast<uintptr_t>(data_)));
+    auto addr_idx = sm.context.size();
+    sm.context.push_back(int64_t(reinterpret_cast<uintptr_t>(data_)));
 
-    /* Add row size to constants. */
-    auto row_size_idx = sm.constants.size();
-    sm.constants.push_back(int64_t(row_size_/8));
+    /* Add row size to context. */
+    auto row_size_idx = sm.context.size();
+    sm.context.push_back(int64_t(row_size_/8));
 
     for (auto &attr_ident : schema) {
         auto &attr = table().at(attr_ident.first.attr_name);
@@ -99,15 +99,15 @@ StackMachine RowStore::loader(const OperatorSchema &schema) const
 
         /* Load null bit offset to stack. */
         const std::size_t null_off = offset(table().size()) + attr.id;
-        auto null_off_idx = sm.constants.size();
-        sm.constants.push_back(int64_t(null_off));
+        auto null_off_idx = sm.context.size();
+        sm.context.push_back(int64_t(null_off));
         sm.ops.push_back(StackMachine::Opcode::Ld_Const);
         sm.ops.push_back(static_cast<StackMachine::Opcode>(null_off_idx));
 
         /* Load value bit offset to stack. */
         const std::size_t value_off = offset(attr.id);
-        auto value_off_idx = sm.constants.size();
-        sm.constants.push_back(int64_t(value_off));
+        auto value_off_idx = sm.context.size();
+        sm.context.push_back(int64_t(value_off));
         sm.ops.push_back(StackMachine::Opcode::Ld_Const);
         sm.ops.push_back(static_cast<StackMachine::Opcode>(value_off_idx));
 
@@ -149,8 +149,8 @@ StackMachine RowStore::loader(const OperatorSchema &schema) const
                 }
             }
         } else if (auto cs = cast<const CharacterSequence>(ty)) {
-            auto len_idx = sm.constants.size();
-            sm.constants.push_back(int64_t(cs->length));
+            auto len_idx = sm.context.size();
+            sm.context.push_back(int64_t(cs->length));
             sm.ops.push_back(StackMachine::Opcode::Ld_Const);
             sm.ops.push_back(static_cast<StackMachine::Opcode>(len_idx));
             sm.ops.push_back(StackMachine::Opcode::Ld_RS_s);

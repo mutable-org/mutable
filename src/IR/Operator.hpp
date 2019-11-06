@@ -84,6 +84,12 @@ struct OperatorSchema
         bool operator==(AttributeIdentifier other) const {
             return this->table_name == other.table_name and this->attr_name == other.attr_name;
         }
+
+        friend std::ostream & operator<<(std::ostream &out, AttributeIdentifier id) {
+            if (id.table_name)
+                out << id.table_name << '.';
+            return out << id.attr_name;
+        }
     };
 
     using entry_type = std::pair<AttributeIdentifier, const Type*>;

@@ -100,7 +100,11 @@ std::unique_ptr<Producer> Optimizer::build_operator_tree(const JoinGraph &G,
     //TODO if expression requires computation, replace expression in final projection
 
     /* Perform projection */
-    if (not G.projections().empty()) {
+    if (G.projections().empty()) {
+        auto projection = new ProjectionOperator(ProjectionOperator::Anti());
+        projection->add_child(result);
+        result = projection;
+    } else {
         auto projection = new ProjectionOperator(G.projections());
         projection->add_child(result);
         result = projection;

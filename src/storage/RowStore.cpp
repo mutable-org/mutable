@@ -151,7 +151,7 @@ StackMachine RowStore::loader(const OperatorSchema &schema) const
     sm.emit_load_from_context(addr_idx);
     sm.emit_load_from_context(row_size_idx);
     sm.emit(StackMachine::Opcode::Add_i);
-    sm.emit(StackMachine::Opcode::Upd_Const);
+    sm.emit(StackMachine::Opcode::Upd_Ctx);
     sm.emit(static_cast<StackMachine::Opcode>(addr_idx));
     sm.emit(StackMachine::Opcode::Pop);
 

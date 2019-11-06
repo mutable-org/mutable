@@ -745,7 +745,7 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
              *========================================================================================================*/
 
             /* Load a value from the tuple to the top of the stack. */
-            case Opcode::Ld_Idx: {
+            case Opcode::Ld_Tup: {
                 std::size_t idx = static_cast<std::size_t>(*++it);
                 insist(idx < t.size(), "index out of bounds");
                 stack_.emplace_back(t[idx]);
@@ -753,14 +753,14 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
             }
 
             /* Load a value from the context to the top of the stack. */
-            case Opcode::Ld_Const: {
+            case Opcode::Ld_Ctx: {
                 std::size_t idx = static_cast<std::size_t>(*++it);
                 insist(idx < context.size(), "index out of bounds");
                 stack_.emplace_back(context[idx]);
                 break;
             }
 
-            case Opcode::Upd_Const: {
+            case Opcode::Upd_Ctx: {
                 std::size_t idx = static_cast<std::size_t>(*++it);
                 insist(idx < context.size(), "index out of bounds");
                 insist(stack_.back().index() == context[idx].index());
@@ -1023,9 +1023,9 @@ void StackMachine::dump(std::ostream &out) const
         out << "        [0x" << std::hex << std::setfill('0') << std::setw(4) << i << std::dec << "]: "
             << StackMachine::OPCODE_TO_STR[static_cast<std::size_t>(opc)];
         switch (opc) {
-            case Opcode::Ld_Idx:
-            case Opcode::Ld_Const:
-            case Opcode::Upd_Const:
+            case Opcode::Ld_Tup:
+            case Opcode::Ld_Ctx:
+            case Opcode::Upd_Ctx:
                 ++i;
                 out << ' ' << static_cast<int64_t>(ops[i]);
             default:;
@@ -1218,12 +1218,12 @@ void Interpreter::operator()(const SortingOperator &op)
         for (std::size_t i = num_ops; i != comparator.ops.size(); ++i) {
             auto opc = comparator.ops[i];
             switch (opc) {
-                case StackMachine::Opcode::Ld_Const:
+                case StackMachine::Opcode::Ld_Ctx:
                     ++i;
                 default:
                     break;
 
-                case StackMachine::Opcode::Ld_Idx:
+                case StackMachine::Opcode::Ld_Tup:
                     /* Add offset equal to size of LHS. */
                     ++i;
                     comparator.ops[i] =

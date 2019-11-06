@@ -25,13 +25,13 @@ DB_OPCODE(Pop)
  *====================================================================================================================*/
 
 /* Load a value from the tuple to the top of the stack. */
-DB_OPCODE(Ld_Idx)
+DB_OPCODE(Ld_Tup)
 
-/* Load a value from the array of constants to the top of the stack. */
-DB_OPCODE(Ld_Const)
+/* Load a value from the context to the top of the stack. */
+DB_OPCODE(Ld_Ctx)
 
-/* Update a constant with the value on top of the stack. */
-DB_OPCODE(Upd_Const)
+/* Update a value in the context with the value on top of the stack. */
+DB_OPCODE(Upd_Ctx)
 
 /*----- Load from row store ------------------------------------------------------------------------------------------*/
 

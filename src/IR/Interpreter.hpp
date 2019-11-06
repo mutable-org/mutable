@@ -56,12 +56,12 @@ struct StackMachine
     void emit(Opcode opc) { ops.push_back(opc); }
 
     void emit_load_from_context(std::size_t idx) {
-        ops.push_back(StackMachine::Opcode::Ld_Const);
+        ops.push_back(StackMachine::Opcode::Ld_Ctx);
         ops.push_back(static_cast<StackMachine::Opcode>(idx));
     }
 
     void emit_load_from_tuple(std::size_t idx) {
-        ops.push_back(StackMachine::Opcode::Ld_Idx);
+        ops.push_back(StackMachine::Opcode::Ld_Tup);
         ops.push_back(static_cast<StackMachine::Opcode>(idx));
     }
 

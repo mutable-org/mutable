@@ -116,7 +116,10 @@ std::unique_ptr<Producer> Optimizer::build_operator_tree(const JoinGraph &G,
         result = limit;
     }
 
-
     stack.emplace_back(e.first, result);
-    return std::unique_ptr<Producer>(stack[0].second);
+
+    insist(stack.size() == 1);
+    auto optree = stack[0].second;
+    optree->minimize_schema();
+    return std::unique_ptr<Producer>(optree);
 }

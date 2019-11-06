@@ -217,6 +217,8 @@ struct Operator
         return out;
     }
 
+    void minimize_schema();
+
     virtual void print(std::ostream &out) const = 0;
     virtual void print_recursive(std::ostream &out, unsigned depth = 0) const;
 

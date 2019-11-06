@@ -176,3 +176,191 @@ void SortingOperator::print(std::ostream &out) const
     }
     out << ']';
 }
+
+/*======================================================================================================================
+ * minimize_schema
+ *====================================================================================================================*/
+
+struct GetAttributeIds : ConstASTVisitor
+{
+    using ConstASTVisitor::operator();
+
+    private:
+    OperatorSchema schema;
+
+    public:
+    GetAttributeIds() { }
+
+    auto & get() { return schema; }
+
+    /* Expr */
+    void operator()(Const<Expr> &e) { e.accept(*this); }
+    void operator()(Const<ErrorExpr>&) { unreachable("graph must not contain errors"); }
+
+    void operator()(Const<Designator> &e) {
+        auto target = e.target();
+        if (auto p = std::get_if<const Expr*>(&target)) {
+            (*this)(**p);
+        } else if (std::holds_alternative<const Attribute*>(target)) {
+            schema.add_element({e.table_name.text, e.attr_name.text}, e.type());
+        } else {
+            unreachable("designator has no target");
+        }
+    }
+
+    void operator()(Const<Constant>&) { /* nothing to be done */ }
+
+    void operator()(Const<FnApplicationExpr> &e) {
+        //(*this)(*e.fn);
+        for (auto arg : e.args)
+            (*this)(*arg);
+    }
+
+    void operator()(Const<UnaryExpr> &e) { (*this)(*e.expr); }
+
+    void operator()(Const<BinaryExpr> &e) { (*this)(*e.lhs); (*this)(*e.rhs); }
+
+    /* Clauses */
+    void operator()(Const<ErrorClause>&) { unreachable("not implemented"); }
+    void operator()(Const<SelectClause>&) { unreachable("not implemented"); }
+    void operator()(Const<FromClause>&) { unreachable("not implemented"); }
+    void operator()(Const<WhereClause>&) { unreachable("not implemented"); }
+    void operator()(Const<GroupByClause>&) { unreachable("not implemented"); }
+    void operator()(Const<HavingClause>&) { unreachable("not implemented"); }
+    void operator()(Const<OrderByClause>&) { unreachable("not implemented"); }
+    void operator()(Const<LimitClause>&) { unreachable("not implemented"); }
+
+    /* Statements */
+    void operator()(Const<ErrorStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<EmptyStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<CreateDatabaseStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<UseDatabaseStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<CreateTableStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<SelectStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<InsertStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<UpdateStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<DeleteStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<DSVImportStmt>&) { }
+};
+
+/** Given a clause of a CNF formula, compute the tables that are required by this clause. */
+auto get_attr_ids(const cnf::CNF &cnf)
+{
+    using std::begin, std::end;
+    GetAttributeIds G;
+    for (auto &clause : cnf) {
+        for (auto p : clause)
+            G(*p.expr());
+    }
+    return G.get();
+}
+
+struct SchemaMinimizer : OperatorVisitor
+{
+    private:
+    OperatorSchema required;
+
+    public:
+    using OperatorVisitor::operator();
+
+#define DECLARE(CLASS) \
+    void operator()(Const<CLASS> &op) override
+#define DECLARE_CONSUMER(CLASS) \
+    void operator()(Const<CLASS>&, tuple_type&) override { } \
+    DECLARE(CLASS)
+
+    DECLARE(ScanOperator);
+    DECLARE_CONSUMER(CallbackOperator);
+    DECLARE_CONSUMER(FilterOperator);
+    DECLARE_CONSUMER(JoinOperator);
+    DECLARE_CONSUMER(ProjectionOperator);
+    DECLARE_CONSUMER(LimitOperator);
+    DECLARE_CONSUMER(GroupingOperator);
+    DECLARE_CONSUMER(SortingOperator);
+
+#undef DECLARE_CONSUMER
+#undef DECLARE
+};
+
+void SchemaMinimizer::operator()(Const<ScanOperator> &op)
+{
+    op.schema() = required;
+}
+
+void SchemaMinimizer::operator()(Const<CallbackOperator> &op)
+{
+    /* nothing to be done */
+    (*this)(*op.child(0));
+}
+
+void SchemaMinimizer::operator()(Const<FilterOperator> &op)
+{
+    auto ours = get_attr_ids(op.filter());
+    required |= ours;
+
+    (*this)(*op.child(0));
+    op.schema() = op.child(0)->schema();
+}
+
+void SchemaMinimizer::operator()(Const<JoinOperator> &op)
+{
+    auto ours = get_attr_ids(op.predicate());
+    ours |= required; // what we need and all operators above us
+
+    op.schema() = OperatorSchema();
+    for (auto c : const_cast<const JoinOperator&>(op).children()) {
+        required = ours & c->schema(); // what we need from this child
+        (*this)(*c);
+        op.schema() += c->schema();
+    }
+}
+
+void SchemaMinimizer::operator()(Const<ProjectionOperator> &op)
+{
+    if (op.is_anti()) {
+        required = op.schema();
+    } else {
+        GetAttributeIds IDs;
+        for (auto &p : op.projections())
+            IDs(*p.first);
+        required = IDs.get();
+    }
+
+    (*this)(*op.child(0));
+}
+
+void SchemaMinimizer::operator()(Const<LimitOperator> &op)
+{
+    (*this)(*op.child(0));
+    op.schema() = op.child(0)->schema();
+}
+
+void SchemaMinimizer::operator()(Const<GroupingOperator> &op)
+{
+    GetAttributeIds IDs;
+    for (auto &Grp : op.group_by())
+        IDs(*Grp);
+    for (auto &Agg : op.aggregates())
+        IDs(*Agg);
+    required |= IDs.get();
+
+    (*this)(*op.child(0));
+    /* Schema of grouping operator does not change. */
+}
+
+void SchemaMinimizer::operator()(Const<SortingOperator> &op)
+{
+    GetAttributeIds IDs;
+    for (auto &Ord : op.order_by())
+        IDs(*Ord.first);
+    required |= IDs.get();
+
+    (*this)(*op.child(0));
+    op.schema() = op.child(0)->schema();
+}
+
+void Operator::minimize_schema()
+{
+    SchemaMinimizer M;
+    M(*this);
+}

@@ -47,8 +47,8 @@ struct StackMachine
     StackMachine(const StackMachine&) = delete;
     StackMachine(StackMachine&&) = default;
 
-    void add(const Expr &expr);
-    void add(const cnf::CNF &cnf);
+    void emit(const Expr &expr);
+    void emit(const cnf::CNF &cnf);
 
     tuple_type && operator()(const tuple_type &t);
 

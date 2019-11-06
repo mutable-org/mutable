@@ -648,19 +648,19 @@ StackMachine::StackMachine(const OperatorSchema &schema)
     : schema(schema)
 { }
 
-void StackMachine::add(const Expr &expr)
+void StackMachine::emit(const Expr &expr)
 {
     StackMachineBuilder Builder(*this, schema, expr); // compute the command sequence for this stack machine
 }
 
-void StackMachine::add(const cnf::CNF &cnf)
+void StackMachine::emit(const cnf::CNF &cnf)
 {
     /* Compile filter into stack machine.  TODO: short-circuit evaluation. */
     for (auto clause_it = cnf.cbegin(); clause_it != cnf.cend(); ++clause_it) {
         auto &C = *clause_it;
         for (auto pred_it = C.cbegin(); pred_it != C.cend(); ++pred_it) {
             auto &P = *pred_it;
-            add(*P.expr()); // emit code for predicate
+            emit(*P.expr()); // emit code for predicate
             if (P.negative())
                 ops.push_back(StackMachine::Opcode::Not_b); // negate if negative
             if (pred_it != C.cbegin())
@@ -1137,7 +1137,7 @@ void Interpreter::operator()(const FilterOperator &op)
 {
     auto data = new FilterData(StackMachine(op.child(0)->schema()));
     op.data(data);
-    data->filter.add(op.filter());
+    data->filter.emit(op.filter());
     op.child(0)->accept(*this);
 }
 
@@ -1151,7 +1151,7 @@ void Interpreter::operator()(const JoinOperator &op)
         case JoinOperator::J_NestedLoops: {
             auto data = new NestedLoopsJoinData(StackMachine(op.schema()), op.children().size());
             op.data(data);
-            data->predicate.add(op.predicate());
+            data->predicate.emit(op.predicate());
             for (std::size_t i = 0, end = op.children().size(); i != end; ++i) {
                 data->active_child = i;
                 auto c = op.child(i);
@@ -1174,7 +1174,7 @@ void Interpreter::operator()(const ProjectionOperator &op)
     auto data = new ProjectionData(StackMachine(S));
     op.data(data);
     for (auto &p : op.projections())
-        data->projections.add(*p.first);
+        data->projections.emit(*p.first);
 
     /* Evaluate the projection. */
     if (has_child) {
@@ -1207,7 +1207,7 @@ void Interpreter::operator()(const GroupingOperator &op)
             auto data = new HashBasedGroupingData(StackMachine(S));
             op.data(data);
             for (auto e : op.group_by())
-                data->keys.add(*e);
+                data->keys.emit(*e);
             op.child(0)->accept(*this);
             for (auto g : data->groups) {
                 auto t = g.first + g.second;
@@ -1229,9 +1229,9 @@ void Interpreter::operator()(const SortingOperator &op)
 
     StackMachine comparator(S);
     for (auto o : orderings) {
-        comparator.add(*o.first); // LHS
+        comparator.emit(*o.first); // LHS
         auto num_ops = comparator.ops.size();
-        comparator.add(*o.first); // RHS
+        comparator.emit(*o.first); // RHS
         /* Patch indices of RHS. */
         for (std::size_t i = num_ops; i != comparator.ops.size(); ++i) {
             auto opc = comparator.ops[i];

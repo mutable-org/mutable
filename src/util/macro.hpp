@@ -11,11 +11,28 @@
 
 namespace {
 
+/*===== Macro utilities ==============================================================================================*/
 #define ID(X) X
+#define CAT(X, Y) _CAT(X, Y)
+#define _CAT(X, Y) X ## Y
+#define EMPTY()
+#define DEFER1(X) X EMPTY()
+
+#define EVAL(...)  EVAL1(EVAL1(EVAL1(__VA_ARGS__)))
+#define EVAL1(...) EVAL2(EVAL2(EVAL2(__VA_ARGS__)))
+#define EVAL2(...) EVAL3(EVAL3(EVAL3(__VA_ARGS__)))
+#define EVAL3(...) EVAL4(EVAL4(EVAL4(__VA_ARGS__)))
+#define EVAL4(...) EVAL5(EVAL5(EVAL5(__VA_ARGS__)))
+#define EVAL5(...) __VA_ARGS__
+
 
 /*===== Stringify (useful when #X is too eager) ======================================================================*/
 #define STR_(X) #X
 #define STR(X) STR_(X)
+
+/*===== First element of list. =======================================================================================*/
+#define FIRST(X, ...) X
+#define TAIL(X, ...) __VA_ARGS__
 
 /*===== Define enum ==================================================================================================*/
 #define DECLARE_ENUM(LIST) \

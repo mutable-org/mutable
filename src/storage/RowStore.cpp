@@ -92,7 +92,7 @@ StackMachine RowStore::loader(const OperatorSchema &schema) const
         auto &attr = table().at(attr_ident.first.attr_name);
 
         /* Load row address to stack. */
-        sm.emit_load_from_context(addr_idx);
+        sm.emit_Ld_Ctx(addr_idx);
 
         /* Load null bit offset to stack. */
         const std::size_t null_off = offset(table().size()) + attr.id;
@@ -105,25 +105,25 @@ StackMachine RowStore::loader(const OperatorSchema &schema) const
         /* Emit load from store instruction. */
         auto ty = attr.type;
         if (ty->is_boolean()) {
-            sm.emit(StackMachine::Opcode::Ld_RS_b);
+            sm.emit_Ld_RS_b();
         } else if (auto n = cast<const Numeric>(ty)) {
             switch (n->kind) {
                 case Numeric::N_Int: {
                     switch (n->precision) {
                         default: unreachable("illegal integer type");
-                        case 1: sm.emit(StackMachine::Opcode::Ld_RS_i8);  break;
-                        case 2: sm.emit(StackMachine::Opcode::Ld_RS_i16); break;
-                        case 4: sm.emit(StackMachine::Opcode::Ld_RS_i32); break;
-                        case 8: sm.emit(StackMachine::Opcode::Ld_RS_i64); break;
+                        case 1: sm.emit_Ld_RS_i8();  break;
+                        case 2: sm.emit_Ld_RS_i16(); break;
+                        case 4: sm.emit_Ld_RS_i32(); break;
+                        case 8: sm.emit_Ld_RS_i64(); break;
                     }
                     break;
                 }
 
                 case Numeric::N_Float: {
                     if (n->precision == 32)
-                        sm.emit(StackMachine::Opcode::Ld_RS_f);
+                        sm.emit_Ld_RS_f();
                     else
-                        sm.emit(StackMachine::Opcode::Ld_RS_d);
+                        sm.emit_Ld_RS_d();
                     break;
                 }
 
@@ -131,29 +131,28 @@ StackMachine RowStore::loader(const OperatorSchema &schema) const
                     const auto p = ceil_to_pow_2(n->size());
                     switch (p) {
                         default: unreachable("illegal precision of decimal type");
-                        case 1: sm.emit(StackMachine::Opcode::Ld_RS_i8);  break;
-                        case 2: sm.emit(StackMachine::Opcode::Ld_RS_i16); break;
-                        case 4: sm.emit(StackMachine::Opcode::Ld_RS_i32); break;
-                        case 8: sm.emit(StackMachine::Opcode::Ld_RS_i64); break;
+                        case 1: sm.emit_Ld_RS_i8();  break;
+                        case 2: sm.emit_Ld_RS_i16(); break;
+                        case 4: sm.emit_Ld_RS_i32(); break;
+                        case 8: sm.emit_Ld_RS_i64(); break;
                     }
                     break;
                 }
             }
         } else if (auto cs = cast<const CharacterSequence>(ty)) {
             sm.add_and_emit_load(int64_t(cs->length));
-            sm.emit(StackMachine::Opcode::Ld_RS_s);
+            sm.emit_Ld_RS_s();
         } else {
             unreachable("illegal type");
         }
     }
 
     /* Update row address. */
-    sm.emit_load_from_context(addr_idx);
-    sm.emit_load_from_context(row_size_idx);
-    sm.emit(StackMachine::Opcode::Add_i);
-    sm.emit(StackMachine::Opcode::Upd_Ctx);
-    sm.emit(static_cast<StackMachine::Opcode>(addr_idx));
-    sm.emit(StackMachine::Opcode::Pop);
+    sm.emit_Ld_Ctx(addr_idx);
+    sm.emit_Ld_Ctx(row_size_idx);
+    sm.emit_Add_i();
+    sm.emit_Upd_Ctx(addr_idx);
+    sm.emit_Pop();
 
     return sm;
 }

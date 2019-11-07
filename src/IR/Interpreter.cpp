@@ -171,7 +171,7 @@ void StackMachineBuilder::operator()(Const<Designator> &e)
         /* Lookup tuple element type by attribute identifier. */
         std::size_t idx = schema_[{e.table_name.text, e.attr_name.text}].first;
         insist(idx < schema_.size(), "index out of bounds");
-        stack_machine_.emit_load_from_tuple(idx);
+        stack_machine_.emit_Ld_Tup(idx);
     } else {
         unreachable("designator has no target");
     }
@@ -195,7 +195,7 @@ void StackMachineBuilder::operator()(Const<FnApplicationExpr> &e)
         case Function::FN_ISNULL:
             insist(e.args.size() == 1);
             (*this)(*e.args[0]);
-            stack_machine_.emit(StackMachine::Opcode::Is_Null);
+            stack_machine_.emit_Is_Null();
             break;
 
         /*----- Type casts -------------------------------------------------------------------------------------------*/
@@ -204,13 +204,13 @@ void StackMachineBuilder::operator()(Const<FnApplicationExpr> &e)
             (*this)(*e.args[0]);
             auto ty = e.args[0]->type();
             if (ty->is_float())
-                stack_machine_.emit(StackMachine::Opcode::Cast_i_f);
+                stack_machine_.emit_Cast_i_f();
             else if (ty->is_double())
-                stack_machine_.emit(StackMachine::Opcode::Cast_i_d);
+                stack_machine_.emit_Cast_i_d();
             else if (ty->is_decimal()) {
                 unreachable("not implemented");
             } else if (ty->is_boolean()) {
-                stack_machine_.emit(StackMachine::Opcode::Cast_i_b);
+                stack_machine_.emit_Cast_i_b();
             } else {
                 /* nothing to be done */
             }
@@ -228,7 +228,7 @@ void StackMachineBuilder::operator()(Const<FnApplicationExpr> &e)
             auto name = C.pool(oss.str().c_str());
             auto idx = schema_[{name}].first;
             insist(idx < schema_.size(), "index out of bounds");
-            stack_machine_.emit_load_from_tuple(idx);
+            stack_machine_.emit_Ld_Tup(idx);
             return;
         }
     }
@@ -252,30 +252,30 @@ void StackMachineBuilder::operator()(Const<UnaryExpr> &e)
             switch (n->kind) {
                 case Numeric::N_Int:
                 case Numeric::N_Decimal:
-                    stack_machine_.emit(StackMachine::Opcode::Minus_i);
+                    stack_machine_.emit_Minus_i();
                     break;
 
                 case Numeric::N_Float:
                     if (n->precision == 32)
-                        stack_machine_.emit(StackMachine::Opcode::Minus_f);
+                        stack_machine_.emit_Minus_f();
                     else
-                        stack_machine_.emit(StackMachine::Opcode::Minus_d);
+                        stack_machine_.emit_Minus_d();
             }
             break;
         }
 
         case TK_TILDE:
             if (ty->is_integral())
-                stack_machine_.emit(StackMachine::Opcode::Neg_i);
+                stack_machine_.emit_Neg_i();
             else if (ty->is_boolean())
-                stack_machine_.emit(StackMachine::Opcode::Not_b); // negation of bool is always logical
+                stack_machine_.emit_Not_b(); // negation of bool is always logical
             else
                 unreachable("illegal type");
             break;
 
         case TK_Not:
             insist(ty->is_boolean(), "illegal type");
-            stack_machine_.emit(StackMachine::Opcode::Not_b);
+            stack_machine_.emit_Not_b();
             break;
     }
 }
@@ -322,7 +322,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
             auto delta = n_to->scale - n_from->scale;
             const int64_t factor = powi<int64_t>(10, delta);
             stack_machine_.add_and_emit_load(factor);
-            stack_machine_.emit(StackMachine::Opcode::Mul_i); // multiply by scale factor
+            stack_machine_.emit_Mul_i(); // multiply by scale factor
         } else if (n_from->scale > n_to->scale) {
             insist(n_from->is_decimal(), "only decimals have a scale");
             insist(n_to->is_floating_point(), "only floating points are more precise than decimals");
@@ -331,26 +331,25 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
             const int64_t factor = powi<int64_t>(10, delta);
             if (n_to->is_float()) {
                 stack_machine_.add_and_emit_load(float(1.f / factor));
-                stack_machine_.emit(StackMachine::Opcode::Mul_f); // multiply by inverse scale factor
+                stack_machine_.emit_Mul_f(); // multiply by inverse scale factor
             } else {
                 stack_machine_.add_and_emit_load(double(1. / factor));
-                stack_machine_.emit(StackMachine::Opcode::Mul_d); // multiply by inverse scale factor
+                stack_machine_.emit_Mul_d(); // multiply by inverse scale factor
             }
         }
     };
 
-    auto put_numeric = [&](auto val, const Numeric *n) {
+    auto load_numeric = [&](auto val, const Numeric *n) {
         switch (n->kind) {
             case Numeric::N_Int:
             case Numeric::N_Decimal:
-                stack_machine_.context.push_back(int64_t(val));
-                break;
+                return stack_machine_.add_and_emit_load(int64_t(val));
 
             case Numeric::N_Float:
                 if (n->precision == 32)
-                    stack_machine_.context.push_back(float(val));
+                    return stack_machine_.add_and_emit_load(float(val));
                 else
-                    stack_machine_.context.push_back(double(val));
+                    return stack_machine_.add_and_emit_load(double(val));
                 break;
         }
     };
@@ -423,9 +422,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
             insist(scale >= 0);
             if (scale != 0) {
                 const int64_t factor = powi<int64_t>(10, scale);
-                const auto cidx = stack_machine_.context.size();
-                put_numeric(factor, n_res);
-                stack_machine_.emit_load_from_context(cidx);
+                load_numeric(factor, n_res);
 
                 opstr = "Div";
                 opstr += tystr_to;
@@ -518,9 +515,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
             const auto scale = n_rhs->scale + (n_res->scale - n_lhs->scale);
             if (scale > 0) {
                 const int64_t factor = powi<int64_t>(10, scale); // scale up by rhs
-                const auto cidx = stack_machine_.context.size();
-                put_numeric(factor, n_res);
-                stack_machine_.emit_load_from_context(cidx);
+                load_numeric(factor, n_res);
 
                 std::string opstr = "Mul";
                 opstr += tystr_to;
@@ -528,9 +523,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
                 stack_machine_.emit(opcode); // Mul_x
             } else if (scale < 0) {
                 const int64_t factor = powi<int64_t>(10, -scale); // scale up by rhs
-                const auto cidx = stack_machine_.context.size();
-                put_numeric(factor, n_res);
-                stack_machine_.emit_load_from_context(cidx);
+                load_numeric(factor, n_res);
 
                 std::string opstr = "Div";
                 opstr += tystr_to;
@@ -552,14 +545,14 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
         case TK_PERCENT:
             (*this)(*e.lhs);
             (*this)(*e.rhs);
-            stack_machine_.emit(StackMachine::Opcode::Mod_i);
+            stack_machine_.emit_Mod_i();
             break;
 
         /*----- Concatenation operator -------------------------------------------------------------------------------*/
         case TK_DOTDOT:
             (*this)(*e.lhs);
             (*this)(*e.rhs);
-            stack_machine_.emit(StackMachine::Opcode::Cat_s);
+            stack_machine_.emit_Cat_s();
             break;
 
         /*----- Comparison operators ---------------------------------------------------------------------------------*/
@@ -599,13 +592,13 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
         case TK_And:
             (*this)(*e.lhs);
             (*this)(*e.rhs);
-            stack_machine_.emit(StackMachine::Opcode::And_b);
+            stack_machine_.emit_And_b();
             break;
 
         case TK_Or:
             (*this)(*e.lhs);
             (*this)(*e.rhs);
-            stack_machine_.emit(StackMachine::Opcode::Or_b);
+            stack_machine_.emit_Or_b();
             break;
     }
 }
@@ -615,7 +608,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
  *====================================================================================================================*/
 
 const std::unordered_map<std::string, StackMachine::Opcode> StackMachine::STR_TO_OPCODE = {
-#define DB_OPCODE(CODE) { #CODE, StackMachine::Opcode:: CODE },
+#define DB_OPCODE(CODE, ...) { #CODE, StackMachine::Opcode:: CODE },
 #include "tables/Opcodes.tbl"
 #undef DB_OPCODE
 };
@@ -755,16 +748,16 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
             /* Load a value from the context to the top of the stack. */
             case Opcode::Ld_Ctx: {
                 std::size_t idx = static_cast<std::size_t>(*++it);
-                insist(idx < context.size(), "index out of bounds");
-                stack_.emplace_back(context[idx]);
+                insist(idx < context_.size(), "index out of bounds");
+                stack_.emplace_back(context_[idx]);
                 break;
             }
 
             case Opcode::Upd_Ctx: {
                 std::size_t idx = static_cast<std::size_t>(*++it);
-                insist(idx < context.size(), "index out of bounds");
-                insist(stack_.back().index() == context[idx].index());
-                context[idx] = stack_.back();
+                insist(idx < context_.size(), "index out of bounds");
+                insist(stack_.back().index() == context_[idx].index());
+                context_[idx] = stack_.back();
                 break;
             }
 
@@ -1012,8 +1005,8 @@ exit:
 void StackMachine::dump(std::ostream &out) const
 {
     out << "StackMachine\n    Context: [";
-    for (auto it = context.cbegin(); it != context.cend(); ++it) {
-        if (it != context.cbegin()) out << ", ";
+    for (auto it = context_.cbegin(); it != context_.cend(); ++it) {
+        if (it != context_.cbegin()) out << ", ";
         out << *it;
     }
     out << "]\n    Tuple Schema: " << schema
@@ -1235,22 +1228,22 @@ void Interpreter::operator()(const SortingOperator &op)
         /* Emit comparison. */
         auto ty = o.first->type();
         if (ty->is_boolean())
-            comparator.emit(StackMachine::Opcode::Cmp_b);
+            comparator.emit_Cmp_b();
         else if (ty->is_character_sequence())
-            comparator.emit(StackMachine::Opcode::Cmp_s);
+            comparator.emit_Cmp_s();
         else if (ty->is_integral() or ty->is_decimal())
-            comparator.emit(StackMachine::Opcode::Cmp_i);
+            comparator.emit_Cmp_i();
         else if (ty->is_float())
-            comparator.emit(StackMachine::Opcode::Cmp_f);
+            comparator.emit_Cmp_f();
         else if (ty->is_double())
-            comparator.emit(StackMachine::Opcode::Cmp_d);
+            comparator.emit_Cmp_d();
         else
             unreachable("invalid type");
 
         if (not o.second)
-            comparator.emit(StackMachine::Opcode::Minus_i); // sort descending
+            comparator.emit_Minus_i(); // sort descending
 
-        comparator.emit(StackMachine::Opcode::Stop_NZ);
+        comparator.emit_Stop_NZ();
     }
 
     std::vector<StackMachine> stack_machines;

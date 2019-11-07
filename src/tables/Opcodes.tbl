@@ -1,7 +1,7 @@
 /* vim: set filetype=cpp: */
 
 #ifndef DB_OPCODE
-#error "define DB_OPCODE(Opcode) before including this file"
+#error "define DB_OPCODE(Opcode, __VA_ARGS__) before including this file"
 #endif
 
 /*======================================================================================================================
@@ -25,13 +25,13 @@ DB_OPCODE(Pop)
  *====================================================================================================================*/
 
 /* Load a value from the tuple to the top of the stack. */
-DB_OPCODE(Ld_Tup)
+DB_OPCODE(Ld_Tup, idx)
 
 /* Load a value from the context to the top of the stack. */
-DB_OPCODE(Ld_Ctx)
+DB_OPCODE(Ld_Ctx, idx)
 
 /* Update a value in the context with the value on top of the stack. */
-DB_OPCODE(Upd_Ctx)
+DB_OPCODE(Upd_Ctx, idx)
 
 /*----- Load from row store ------------------------------------------------------------------------------------------*/
 

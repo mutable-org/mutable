@@ -17,7 +17,7 @@ struct StackMachine
 
     enum class Opcode : uint8_t
     {
-#define DB_OPCODE(CODE) CODE,
+#define DB_OPCODE(CODE, ...) CODE,
 #include "tables/Opcodes.tbl"
 #undef DB_OPCODE
     };
@@ -27,17 +27,16 @@ struct StackMachine
     const OperatorSchema &schema;
 
     static constexpr const char *OPCODE_TO_STR[] = {
-#define DB_OPCODE(CODE) #CODE,
+#define DB_OPCODE(CODE, ...) #CODE,
 #include "tables/Opcodes.tbl"
 #undef DB_OPCODE
     };
 
     static const std::unordered_map<std::string, Opcode> STR_TO_OPCODE;
 
-    std::vector<value_type> context; ///< the context of the stack machine, e.g. constants or global variables
     std::vector<Opcode> ops; ///< a sequence of operations to perform
-
     private:
+    std::vector<value_type> context_; ///< the context of the stack machine, e.g. constants or global variables
     std::vector<value_type> stack_; ///< the stack of current values
 
     public:
@@ -52,30 +51,59 @@ struct StackMachine
 
     tuple_type && operator()(const tuple_type &t);
 
+    /* The following macros are used to automatically generate methods to emit a particular opcode.  For example, for
+     * the opcode `Pop`, we will define a function `emit_Pop()`, that appends the `Pop` opcode to the current opcode
+     * sequence.  For opcodes that require an argument, a function with the respective parameter is defined and that
+     * parameter is inserted into the opcode sequence.  For example, the opcode `Ld_Ctx` requires a single parameter
+     * with the index of the context value.  The macro will expand to the method `emit_Ld_Ctx(uint8_t idx)`, that first
+     * appends the `Ld_Ctx` opcode to the opcode sequence and then appends the `idx` parameter to the opcode sequence.
+     */
+#define SELECT(XXX, _1, _2, FN, ...) FN(__VA_ARGS__)
+#define ARGS_0(I, ...)
+#define ARGS_1(I, II, ARG0, ...) uint8_t ARG0
+#define ARGS_2(I, II, III, ARG0, ARG1, ...) uint8_t ARG0, uint8_t ARG1
+#define ARGS(...) SELECT(__VA_ARGS__, ARGS_2, ARGS_1, ARGS_0, __VA_ARGS__)
+#define PUSH_0(I, ...)
+#define PUSH_1(I, II, ARG0, ...) \
+    ops.push_back(static_cast<Opcode>((ARG0)));
+#define PUSH_2(I, II, III, ARG0, ARG1, ...) \
+    ops.push_back(static_cast<Opcode>((ARG0))); \
+    ops.push_back(static_cast<Opcode>((ARG1)));
+#define PUSH(...) SELECT(__VA_ARGS__, PUSH_2, PUSH_1, PUSH_0, __VA_ARGS__)
+
+#define DB_OPCODE(...) \
+    void CAT(emit_, FIRST(__VA_ARGS__)) ( ARGS(__VA_ARGS__) ) { \
+        ops.push_back(StackMachine::Opcode:: FIRST(__VA_ARGS__) ); \
+        PUSH(__VA_ARGS__) \
+    }
+
+#include "tables/Opcodes.tbl"
+
+#undef DB_OPCODE
+#undef SELECT
+#undef ARGS_0
+#undef ARGS_1
+#undef ARGS_2
+#undef ARGS
+#undef PUSH_0
+#undef PUSH_1
+#undef PUSH_2
+#undef PUSH
+
     /** Append the given opcode to the opcode sequence. */
     void emit(Opcode opc) { ops.push_back(opc); }
 
-    void emit_load_from_context(std::size_t idx) {
-        ops.push_back(StackMachine::Opcode::Ld_Ctx);
-        ops.push_back(static_cast<StackMachine::Opcode>(idx));
-    }
-
-    void emit_load_from_tuple(std::size_t idx) {
-        ops.push_back(StackMachine::Opcode::Ld_Tup);
-        ops.push_back(static_cast<StackMachine::Opcode>(idx));
-    }
-
     /** Adds a value to the context and returns its assigned index. */
     std::size_t add(value_type value) {
-        auto idx = context.size();
-        context.push_back(value);
+        auto idx = context_.size();
+        context_.push_back(value);
         return idx;
     }
 
     /** Adds a value to the context and emits a load instruction to load this value to the top of the stack. */
     std::size_t add_and_emit_load(value_type value) {
         auto idx = add(value);
-        emit_load_from_context(idx);
+        emit_Ld_Ctx(idx);
         return idx;
     }
 

@@ -25,7 +25,7 @@ struct StackMachine
 
     using index_t = std::size_t;
 
-    const OperatorSchema &schema;
+    const OperatorSchema schema;
 
     static constexpr const char *OPCODE_TO_STR[] = {
 #define DB_OPCODE(CODE, ...) #CODE,

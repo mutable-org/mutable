@@ -210,13 +210,25 @@ bool DSVReader::parse_value(const std::string &str, const Attribute &attr, value
                     break;
                 }
 
-                case Numeric::N_Decimal:
-                case Numeric::N_Float: {
+                case Numeric::N_Decimal: { // TODO more precise way to read decimal
                     std::size_t pos;
                     double d = stod(str, &pos);
                     if (pos != str.length())
                         break;
                     value = d;
+                    success = true;
+                    break;
+                }
+
+                case Numeric::N_Float: {
+                    std::size_t pos;
+                    double d = stod(str, &pos);
+                    if (pos != str.length())
+                        break;
+                    if (ty.precision == 32)
+                        value = float(d);
+                    else
+                        value = d;
                     success = true;
                     break;
                 }

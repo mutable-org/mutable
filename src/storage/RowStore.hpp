@@ -212,7 +212,6 @@ T RowStore::Row::set_exact(const Attribute &attr, T value)
         if (cs->is_varying) {
             unreachable("varying length character sequences are not supported by this store");
         } else {
-            using std::min;
             const auto len = attr.type->size() / 8;
             auto p = reinterpret_cast<char*>(addr_ + bytes);
             strncpy(p, value, len);
@@ -222,7 +221,6 @@ T RowStore::Row::set_exact(const Attribute &attr, T value)
         if (cs->is_varying) {
             unreachable("varying length character sequences are not supported by this store");
         } else {
-            using std::min;
             const auto len = attr.type->size() / 8;
             auto p = reinterpret_cast<char*>(addr_ + bytes);
             strncpy(p, value.c_str(), len);

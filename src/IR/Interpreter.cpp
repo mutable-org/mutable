@@ -855,6 +855,92 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
 
 #undef PREPARE_LOAD
 
+#define PREPARE_STORE(TYPE) \
+    PREPARE \
+    stack_.pop_back(); \
+\
+    auto pv_value = std::get_if<TYPE>(&stack_.back()); \
+    insist(pv_value or std::holds_alternative<null_type>(stack_.back()), "invalid type of variant"); \
+\
+    /* Set not null. */ \
+    { \
+        const std::size_t bytes = null_off / 8; \
+        const std::size_t bits = null_off % 8; \
+        setbit(addr + bytes, bool(pv_value), bits); \
+        if (not pv_value) { \
+            stack_.pop_back(); \
+            break; \
+        } \
+    } \
+\
+    auto value = *pv_value; \
+    stack_.pop_back();
+
+
+            case Opcode::St_RS_i8: {
+                PREPARE_STORE(int64_t);
+                auto p = reinterpret_cast<int8_t*>(addr + bytes);
+                *p = value;
+                break;
+            }
+
+            case Opcode::St_RS_i16: {
+                PREPARE_STORE(int64_t);
+                auto p = reinterpret_cast<int16_t*>(addr + bytes);
+                *p = value;
+                break;
+            }
+
+            case Opcode::St_RS_i32: {
+                PREPARE_STORE(int64_t);
+                auto p = reinterpret_cast<int32_t*>(addr + bytes);
+                *p = value;
+                break;
+            }
+
+            case Opcode::St_RS_i64: {
+                PREPARE_STORE(int64_t);
+                auto p = reinterpret_cast<int64_t*>(addr + bytes);
+                *p = value;
+                break;
+            }
+
+            case Opcode::St_RS_f: {
+                PREPARE_STORE(float);
+                auto p = reinterpret_cast<float*>(addr + bytes);
+                *p = value;
+                break;
+            }
+
+            case Opcode::St_RS_d: {
+                PREPARE_STORE(double);
+                auto p = reinterpret_cast<double*>(addr + bytes);
+                *p = value;
+                break;
+            }
+
+            case Opcode::St_RS_s: {
+                auto pv_len = std::get_if<int64_t>(&stack_.back());
+                insist(pv_len, "invalid type of variant");
+                auto len = *pv_len;
+                stack_.pop_back();
+                PREPARE_STORE(std::string);
+                auto p = reinterpret_cast<char*>(addr + bytes);
+                strncpy(p, value.c_str(), len);
+                break;
+            }
+
+            case Opcode::St_RS_b: {
+                PREPARE_STORE(bool);
+                const auto bits = value_off % 8;
+                setbit(addr + bytes, value, bits);
+                break;
+            }
+
+#undef PREPARE_STORE
+
+#undef PREPARE
+
             /*==========================================================================================================
              * Arithmetical operations
              *========================================================================================================*/

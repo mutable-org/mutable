@@ -24,14 +24,14 @@ DB_OPCODE(Pop)
  * Load / Update operations
  *====================================================================================================================*/
 
-/* Load a value from the tuple to the top of the stack. */
-DB_OPCODE(Ld_Tup, idx)
+/** Load a value from the tuple to the top of the stack. */
+DB_OPCODE(Ld_Tup, index)
 
-/* Load a value from the context to the top of the stack. */
-DB_OPCODE(Ld_Ctx, idx)
+/** Load a value from the context to the top of the stack. */
+DB_OPCODE(Ld_Ctx, index)
 
-/* Update a value in the context with the value on top of the stack. */
-DB_OPCODE(Upd_Ctx, idx)
+/** Update a value in the context with the value on top of the stack. */
+DB_OPCODE(Upd_Ctx, index)
 
 /*----- Load from row store ------------------------------------------------------------------------------------------*/
 

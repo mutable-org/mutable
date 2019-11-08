@@ -3,6 +3,7 @@
 #include "catalog/Schema.hpp"
 #include "IR/Operator.hpp"
 #include "IR/OperatorVisitor.hpp"
+#include "util/macro.hpp"
 #include <unordered_map>
 
 

@@ -762,12 +762,13 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
             }
 
             /*----- Load from row store ------------------------------------------------------------------------------*/
-#define PREPARE_LOAD \
+#define PREPARE \
     insist(stack_.size() >= 3); \
     /* Get value bit offset. */ \
     auto pv_value_off = std::get_if<int64_t>(&stack_.back()); \
     insist(pv_value_off, "invalid type of variant"); \
     auto value_off = std::size_t(*pv_value_off); \
+    const std::size_t bytes = value_off / 8; \
     stack_.pop_back(); \
 \
     /* Get null bit offset. */ \
@@ -779,7 +780,10 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
     /* Row address. */ \
     auto pv_addr = std::get_if<int64_t>(&stack_.back()); \
     insist(pv_addr, "invalid type of variant"); \
-    auto addr = reinterpret_cast<uint8_t*>(*pv_addr); \
+    auto addr = reinterpret_cast<uint8_t*>(*pv_addr);
+
+#define PREPARE_LOAD \
+    PREPARE \
 \
     /* Check if null. */ \
     { \
@@ -791,8 +795,6 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
             break; \
         } \
     } \
-\
-    const std::size_t bytes = value_off / 8;
 
             case Opcode::Ld_RS_i8: {
                 PREPARE_LOAD;

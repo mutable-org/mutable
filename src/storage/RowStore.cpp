@@ -81,8 +81,7 @@ StackMachine RowStore::loader(const OperatorSchema &schema) const
 {
     StackMachine sm(schema);
 
-    /* Add address of store to initial state.  Start at row -1 because we increase the address at the start of each
-     * stack machine invocation. */
+    /* Add address of store to initial state. */
     auto addr_idx = sm.add(int64_t(reinterpret_cast<uintptr_t>(data_)));
 
     /* Add row size to context. */

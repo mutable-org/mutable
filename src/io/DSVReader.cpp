@@ -171,73 +171,71 @@ next:
     }
 }
 
-bool DSVReader::parse_value(const std::string &str, const Attribute &attr, value_type &value)
+struct Parse2Value : ConstTypeVisitor
 {
-    using std::begin, std::end, std::next, std::prev;
+    const std::string &str;
+    value_type &value;
+    bool success = false;
 
-    if (str.empty()) { value = null_type(); return true; }
+    Parse2Value(const std::string &str, value_type &value)
+        : str(str)
+        , value(value)
+    { }
 
-    struct TypeDispatch : ConstTypeVisitor
-    {
-        const std::string &str;
-        value_type &value;
-        bool success = false;
-
-        TypeDispatch(const std::string &str, value_type &value)
-            : str(str)
-            , value(value)
-        { }
-
-        using ConstTypeVisitor::operator();
-        void operator()(Const<ErrorType>&) { unreachable("error type"); }
-        void operator()(Const<Boolean>&) {
-            if (str == "TRUE")  { value = true;  success = true; }
-            if (str == "FALSE") { value = false; success = true; }
-        }
-        void operator()(Const<CharacterSequence>&) {
-            value = interpret(str);
-            success = true;
-        }
-        void operator()(Const<Numeric> &ty) {
-            switch (ty.kind) {
-                case Numeric::N_Int: {
-                    char *end;
-                    int64_t i = strtoll(str.c_str(), &end, 10);
-                    if (end != &*str.end())
-                        break;
-                    value = i;
-                    success = true;
+    using ConstTypeVisitor::operator();
+    void operator()(Const<ErrorType>&) { unreachable("error type"); }
+    void operator()(Const<Boolean>&) {
+        if (str == "TRUE")  { value = true;  success = true; }
+        if (str == "FALSE") { value = false; success = true; }
+    }
+    void operator()(Const<CharacterSequence>&) {
+        value = interpret(str);
+        success = true;
+    }
+    void operator()(Const<Numeric> &ty) {
+        switch (ty.kind) {
+            case Numeric::N_Int: {
+                char *end;
+                int64_t i = strtoll(str.c_str(), &end, 10);
+                if (end != &*str.end())
                     break;
-                }
+                value = i;
+                success = true;
+                break;
+            }
 
-                case Numeric::N_Decimal: { // TODO more precise way to read decimal
-                    std::size_t pos;
-                    double d = stod(str, &pos);
-                    if (pos != str.length())
-                        break;
+            case Numeric::N_Decimal: { // TODO more precise way to read decimal
+                std::size_t pos;
+                double d = stod(str, &pos);
+                if (pos != str.length())
+                    break;
+                value = d;
+                success = true;
+                break;
+            }
+
+            case Numeric::N_Float: {
+                std::size_t pos;
+                double d = stod(str, &pos);
+                if (pos != str.length())
+                    break;
+                if (ty.precision == 32)
+                    value = float(d);
+                else
                     value = d;
-                    success = true;
-                    break;
-                }
-
-                case Numeric::N_Float: {
-                    std::size_t pos;
-                    double d = stod(str, &pos);
-                    if (pos != str.length())
-                        break;
-                    if (ty.precision == 32)
-                        value = float(d);
-                    else
-                        value = d;
-                    success = true;
-                    break;
-                }
+                success = true;
+                break;
             }
         }
-        void operator()(Const<FnType>&) { unreachable("fn type"); }
-    };
+    }
+    void operator()(Const<FnType>&) { unreachable("fn type"); }
+};
 
-    TypeDispatch dispatcher(str, value);
-    dispatcher(*attr.type);
-    return dispatcher.success;
+bool DSVReader::parse_value(const std::string &str, const Attribute &attr, value_type &value)
+{
+    if (str.empty()) { value = null_type(); return true; }
+
+    Parse2Value parse(str, value);
+    parse(*attr.type);
+    return parse.success;
 }

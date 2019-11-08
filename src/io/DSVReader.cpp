@@ -116,7 +116,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
 
     /*----- Read data row wise. --------------------------------------------------------------------------------------*/
     std::vector<std::string> tuple;
-    tuple.reserve(columns.size());
+    tuple.reserve(table.size());
     for (;;) {
         tuple.emplace_back(read_cell());
         if (c == delimiter) {
@@ -124,18 +124,20 @@ void DSVReader::operator()(std::istream &in, const char *name)
         } else {
             insist(c == EOF or c == '\n', "expected the end of a row");
             /* check tuple length */
-            if (tuple.size() != table.size()) {
+            if (tuple.size() != columns.size()) {
                 diag.e(pos) << "Row of incorrect size.\n";
                 goto next;
             }
 
             /* Parse strings into values. */
             {
-                std::vector<value_type> values(table.size());
-                for (std::size_t i = 0; i != table.size(); ++i) {
-                    auto &cell = tuple[i];
+                std::vector<value_type> values;
+                values.reserve(table.size());
+                for (std::size_t i = 0; i != columns.size(); ++i) {
+                    if (not columns[i]) continue;
                     auto &attr = *columns[i];
-                    auto &value = values[i];
+                    auto &cell = tuple[i];
+                    auto &value = values.emplace_back();
                     if (not parse_value(cell, attr, value)) {
                         diag.e(pos) << "Could not parse the row.\n";
                         goto next;
@@ -144,9 +146,11 @@ void DSVReader::operator()(std::istream &in, const char *name)
 
                 /* Append a new row to the store and set its values. */
                 auto row = store.append();
-                for (std::size_t i = 0; i != table.size(); ++i) {
+                auto value_it = values.begin();
+                for (std::size_t i = 0; i != columns.size(); ++i) {
+                    if (not columns[i]) continue;
                     auto &attr = *columns[i];
-                    auto &value = values[i];
+                    auto value = *value_it++;
 
                     std::visit(overloaded {
                         [&](null_type)     { row->setnull(attr); },

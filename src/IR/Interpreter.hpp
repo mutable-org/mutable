@@ -101,6 +101,11 @@ struct StackMachine
         return idx;
     }
 
+    void set(std::size_t idx, value_type value) {
+        insist(idx < context_.size(), "index out of bounds");
+        context_[idx] = value;
+    }
+
     /** Adds a value to the context and emits a load instruction to load this value to the top of the stack. */
     std::size_t add_and_emit_load(value_type value) {
         auto idx = add(value);

@@ -1010,7 +1010,7 @@ void StackMachine::dump(std::ostream &out) const
         out << *it;
     }
     out << "]\n    Tuple Schema: " << schema
-        << "]\n    Opcode Sequence:\n";
+        << "\n    Opcode Sequence:\n";
     for (std::size_t i = 0; i != ops.size(); ++i) {
         auto opc = ops[i];
         out << "        [0x" << std::hex << std::setfill('0') << std::setw(4) << i << std::dec << "]: "

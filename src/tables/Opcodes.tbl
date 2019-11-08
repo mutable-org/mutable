@@ -8,6 +8,9 @@
  * Control flow operations
  *====================================================================================================================*/
 
+/* Stop the machine. */
+DB_OPCODE(Stop)
+
 /* Stop on condition. */
 DB_OPCODE(Stop_Z)
 DB_OPCODE(Stop_NZ)

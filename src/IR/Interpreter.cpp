@@ -649,6 +649,18 @@ void StackMachine::emit(const cnf::CNF &cnf)
 
 tuple_type && StackMachine::operator()(const tuple_type &t)
 {
+    static const void *labels[] = {
+#define DB_OPCODE(CODE, ...) && CODE,
+#include "tables/Opcodes.tbl"
+#undef DB_OPCODE
+    };
+
+    emit_Stop();
+    stack_.clear();
+    auto op = ops.cbegin();
+#define NEXT goto *labels[std::size_t(*op++)]
+    NEXT;
+
 #define UNARY(OP, TYPE) { \
     insist(stack_.size() >= 1); \
     auto &v = stack_.back(); \
@@ -659,8 +671,8 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
         *pv = res; \
     else \
         stack_.back() = res; \
-    break; \
-}
+} \
+NEXT;
 
 #define BINARY(OP, TYPE) { \
     insist(stack_.size() >= 2); \
@@ -677,91 +689,82 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
         *pv_lhs = res; \
     else \
         stack_.back() = res; \
-    break; \
+} \
+NEXT;
+
+/*======================================================================================================================
+ * Control flow operations
+ *====================================================================================================================*/
+
+Stop_Z: {
+    insist(stack_.size() >= 1);
+    auto pv = std::get_if<int64_t>(&stack_.back());
+    insist(pv, "invalid type of variant");
+    if (*pv == 0) goto Stop; // stop evaluation on ZERO
 }
+NEXT;
 
-    stack_.clear();
-    for (auto it = ops.cbegin(); it != ops.cend(); ++it) {
-        auto opcode = *it;
+Stop_NZ: {
+    insist(stack_.size() >= 1);
+    auto pv = std::get_if<int64_t>(&stack_.back());
+    insist(pv, "invalid type of variant");
+    if (*pv != 0) goto Stop; // stop evaluation on NOT ZERO
+}
+NEXT;
 
-        switch (opcode) {
-            default:
-                break;
-                unreachable("illegal opcode");
+Stop_False: {
+    insist(stack_.size() >= 1);
+    auto pv = std::get_if<bool>(&stack_.back());
+    insist(pv, "invalid type of variant");
+    if (not *pv) goto Stop; // stop evaluation on NOT ZERO
+}
+NEXT;
 
-            /*==========================================================================================================
-             * Control flow operations
-             *========================================================================================================*/
+Stop_True: {
+    insist(stack_.size() >= 1);
+    auto pv = std::get_if<bool>(&stack_.back());
+    insist(pv, "invalid type of variant");
+    if (*pv) goto Stop; // stop evaluation on NOT ZERO
+}
+NEXT;
 
-            case Opcode::Stop_Z: {
-                insist(stack_.size() >= 1);
-                auto pv = std::get_if<int64_t>(&stack_.back());
-                insist(pv, "invalid type of variant");
-                if (*pv == 0) goto exit; // stop evaluation on ZERO
-                break;
-            }
+/*======================================================================================================================
+ * Stack manipulation operations
+ *====================================================================================================================*/
 
-            case Opcode::Stop_NZ: {
-                insist(stack_.size() >= 1);
-                auto pv = std::get_if<int64_t>(&stack_.back());
-                insist(pv, "invalid type of variant");
-                if (*pv != 0) goto exit; // stop evaluation on NOT ZERO
-                break;
-            }
+Pop:
+    stack_.pop_back();
+    NEXT;
 
-            case Opcode::Stop_False: {
-                insist(stack_.size() >= 1);
-                auto pv = std::get_if<bool>(&stack_.back());
-                insist(pv, "invalid type of variant");
-                if (not *pv) goto exit; // stop evaluation on NOT ZERO
-                break;
-            }
+/*======================================================================================================================
+ * Load / Update operations
+ *====================================================================================================================*/
 
-            case Opcode::Stop_True: {
-                insist(stack_.size() >= 1);
-                auto pv = std::get_if<bool>(&stack_.back());
-                insist(pv, "invalid type of variant");
-                if (*pv) goto exit; // stop evaluation on NOT ZERO
-                break;
-            }
+/* Load a value from the tuple to the top of the stack. */
+Ld_Tup: {
+    std::size_t idx = static_cast<std::size_t>(*op++);
+    insist(idx < t.size(), "index out of bounds");
+    stack_.emplace_back(t[idx]);
+}
+NEXT;
 
-            /*==========================================================================================================
-             * Stack manipulation operations
-             *========================================================================================================*/
+    /* Load a value from the context to the top of the stack. */
+Ld_Ctx: {
+    std::size_t idx = static_cast<std::size_t>(*op++);
+    insist(idx < context_.size(), "index out of bounds");
+    stack_.emplace_back(context_[idx]);
+}
+NEXT;
 
-            case Opcode::Pop:
-                stack_.pop_back();
-                break;
+Upd_Ctx: {
+    std::size_t idx = static_cast<std::size_t>(*op++);
+    insist(idx < context_.size(), "index out of bounds");
+    insist(stack_.back().index() == context_[idx].index());
+    context_[idx] = stack_.back();
+}
+NEXT;
 
-            /*==========================================================================================================
-             * Load / Update operations
-             *========================================================================================================*/
-
-            /* Load a value from the tuple to the top of the stack. */
-            case Opcode::Ld_Tup: {
-                std::size_t idx = static_cast<std::size_t>(*++it);
-                insist(idx < t.size(), "index out of bounds");
-                stack_.emplace_back(t[idx]);
-                break;
-            }
-
-            /* Load a value from the context to the top of the stack. */
-            case Opcode::Ld_Ctx: {
-                std::size_t idx = static_cast<std::size_t>(*++it);
-                insist(idx < context_.size(), "index out of bounds");
-                stack_.emplace_back(context_[idx]);
-                break;
-            }
-
-            case Opcode::Upd_Ctx: {
-                std::size_t idx = static_cast<std::size_t>(*++it);
-                insist(idx < context_.size(), "index out of bounds");
-                insist(stack_.back().index() == context_[idx].index());
-                context_[idx] = stack_.back();
-                break;
-            }
-
-            /*----- Load from row store ------------------------------------------------------------------------------*/
+/*----- Load from row store ------------------------------------------------------------------------------------------*/
 #define PREPARE \
     insist(stack_.size() >= 3); \
     /* Get value bit offset. */ \
@@ -792,66 +795,66 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
         bool is_null = not bool((*(addr + bytes) >> bits) & 0x1); \
         if (is_null) { \
             stack_.back() = value_type(null_type()); \
-            break; \
+            NEXT; \
         } \
     } \
 
-            case Opcode::Ld_RS_i8: {
-                PREPARE_LOAD;
-                stack_.back() = int64_t(*reinterpret_cast<int8_t*>(addr + bytes));
-                break;
-            }
+Ld_RS_i8: {
+    PREPARE_LOAD;
+    stack_.back() = int64_t(*reinterpret_cast<int8_t*>(addr + bytes));
+}
+NEXT;
 
-            case Opcode::Ld_RS_i16: {
-                PREPARE_LOAD;
-                stack_.back() = int64_t(*reinterpret_cast<int16_t*>(addr + bytes));
-                break;
-            }
+Ld_RS_i16: {
+    PREPARE_LOAD;
+    stack_.back() = int64_t(*reinterpret_cast<int16_t*>(addr + bytes));
+}
+NEXT;
 
-            case Opcode::Ld_RS_i32: {
-                PREPARE_LOAD;
-                stack_.back() = int64_t(*reinterpret_cast<int32_t*>(addr + bytes));
-                break;
-            }
+Ld_RS_i32: {
+    PREPARE_LOAD;
+    stack_.back() = int64_t(*reinterpret_cast<int32_t*>(addr + bytes));
+}
+NEXT;
 
-            case Opcode::Ld_RS_i64: {
-                PREPARE_LOAD;
-                stack_.back() = *reinterpret_cast<int64_t*>(addr + bytes);
-                break;
-            }
+Ld_RS_i64: {
+    PREPARE_LOAD;
+    stack_.back() = *reinterpret_cast<int64_t*>(addr + bytes);
+}
+NEXT;
 
-            case Opcode::Ld_RS_f: {
-                PREPARE_LOAD;
-                stack_.back() = *reinterpret_cast<float*>(addr + bytes);
-                break;
-            }
+Ld_RS_f: {
+    PREPARE_LOAD;
+    stack_.back() = *reinterpret_cast<float*>(addr + bytes);
+}
+NEXT;
 
-            case Opcode::Ld_RS_d: {
-                PREPARE_LOAD;
-                stack_.back() = *reinterpret_cast<double*>(addr + bytes);
-                break;
-            }
+Ld_RS_d: {
+    PREPARE_LOAD;
+    stack_.back() = *reinterpret_cast<double*>(addr + bytes);
+}
+NEXT;
 
-            case Opcode::Ld_RS_s: {
-                /* Get string length. */
-                auto pv_len = std::get_if<int64_t>(&stack_.back());
-                insist(pv_len, "invalid type of variant");
-                auto len = std::size_t(*pv_len);
-                stack_.pop_back();
+Ld_RS_s: {
+    /* Get string length. */
+    auto pv_len = std::get_if<int64_t>(&stack_.back());
+    insist(pv_len, "invalid type of variant");
+    auto len = std::size_t(*pv_len);
+    stack_.pop_back();
 
-                PREPARE_LOAD;
+    PREPARE_LOAD;
 
-                auto first = reinterpret_cast<char*>(addr + bytes);
-                stack_.back() = std::string(first, first + len);
-                break;
-            }
+    auto first = reinterpret_cast<char*>(addr + bytes);
+    stack_.back() = std::string(first, first + len);
+}
+NEXT;
 
-            case Opcode::Ld_RS_b: {
-                PREPARE_LOAD;
-                const std::size_t bits = value_off % 8;
-                stack_.back() = bool((*reinterpret_cast<uint8_t*>(addr + bytes) >> bits) & 0x1);
-                break;
-            }
+Ld_RS_b: {
+    PREPARE_LOAD;
+    const std::size_t bits = value_off % 8;
+    stack_.back() = bool((*reinterpret_cast<uint8_t*>(addr + bytes) >> bits) & 0x1);
+}
+NEXT;
 
 #undef PREPARE_LOAD
 
@@ -869,164 +872,163 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
         setbit(addr + bytes, bool(pv_value), bits); \
         if (not pv_value) { \
             stack_.pop_back(); \
-            break; \
+            NEXT; \
         } \
     } \
 \
     auto value = *pv_value; \
     stack_.pop_back();
 
+St_RS_i8: {
+    PREPARE_STORE(int64_t);
+    auto p = reinterpret_cast<int8_t*>(addr + bytes);
+    *p = value;
+}
+NEXT;
 
-            case Opcode::St_RS_i8: {
-                PREPARE_STORE(int64_t);
-                auto p = reinterpret_cast<int8_t*>(addr + bytes);
-                *p = value;
-                break;
-            }
+St_RS_i16: {
+    PREPARE_STORE(int64_t);
+    auto p = reinterpret_cast<int16_t*>(addr + bytes);
+    *p = value;
+}
+NEXT;
 
-            case Opcode::St_RS_i16: {
-                PREPARE_STORE(int64_t);
-                auto p = reinterpret_cast<int16_t*>(addr + bytes);
-                *p = value;
-                break;
-            }
+St_RS_i32: {
+    PREPARE_STORE(int64_t);
+    auto p = reinterpret_cast<int32_t*>(addr + bytes);
+    *p = value;
+}
+NEXT;
 
-            case Opcode::St_RS_i32: {
-                PREPARE_STORE(int64_t);
-                auto p = reinterpret_cast<int32_t*>(addr + bytes);
-                *p = value;
-                break;
-            }
+St_RS_i64: {
+    PREPARE_STORE(int64_t);
+    auto p = reinterpret_cast<int64_t*>(addr + bytes);
+    *p = value;
+}
+NEXT;
 
-            case Opcode::St_RS_i64: {
-                PREPARE_STORE(int64_t);
-                auto p = reinterpret_cast<int64_t*>(addr + bytes);
-                *p = value;
-                break;
-            }
+St_RS_f: {
+    PREPARE_STORE(float);
+    auto p = reinterpret_cast<float*>(addr + bytes);
+    *p = value;
+}
+NEXT;
 
-            case Opcode::St_RS_f: {
-                PREPARE_STORE(float);
-                auto p = reinterpret_cast<float*>(addr + bytes);
-                *p = value;
-                break;
-            }
+St_RS_d: {
+    PREPARE_STORE(double);
+    auto p = reinterpret_cast<double*>(addr + bytes);
+    *p = value;
+}
+NEXT;
 
-            case Opcode::St_RS_d: {
-                PREPARE_STORE(double);
-                auto p = reinterpret_cast<double*>(addr + bytes);
-                *p = value;
-                break;
-            }
+St_RS_s: {
+    auto pv_len = std::get_if<int64_t>(&stack_.back());
+    insist(pv_len, "invalid type of variant");
+    auto len = *pv_len;
+    stack_.pop_back();
+    PREPARE_STORE(std::string);
+    auto p = reinterpret_cast<char*>(addr + bytes);
+    strncpy(p, value.c_str(), len);
+}
+NEXT;
 
-            case Opcode::St_RS_s: {
-                auto pv_len = std::get_if<int64_t>(&stack_.back());
-                insist(pv_len, "invalid type of variant");
-                auto len = *pv_len;
-                stack_.pop_back();
-                PREPARE_STORE(std::string);
-                auto p = reinterpret_cast<char*>(addr + bytes);
-                strncpy(p, value.c_str(), len);
-                break;
-            }
-
-            case Opcode::St_RS_b: {
-                PREPARE_STORE(bool);
-                const auto bits = value_off % 8;
-                setbit(addr + bytes, value, bits);
-                break;
-            }
+St_RS_b: {
+    PREPARE_STORE(bool);
+    const auto bits = value_off % 8;
+    setbit(addr + bytes, value, bits);
+}
+NEXT;
 
 #undef PREPARE_STORE
 
 #undef PREPARE
 
-            /*==========================================================================================================
-             * Arithmetical operations
-             *========================================================================================================*/
+/*======================================================================================================================
+ * Arithmetical operations
+ *====================================================================================================================*/
 
-            /* Bitwise negation */
-            case Opcode::Neg_i: UNARY(~, int64_t);
+/* Bitwise negation */
+Neg_i: UNARY(~, int64_t);
 
-            /* Arithmetic negation */
-            case Opcode::Minus_i: UNARY(-, int64_t);
-            case Opcode::Minus_f: UNARY(-, float);
-            case Opcode::Minus_d: UNARY(-, double);
+/* Arithmetic negation */
+Minus_i: UNARY(-, int64_t);
+Minus_f: UNARY(-, float);
+Minus_d: UNARY(-, double);
 
-            /* Add two values. */
-            case Opcode::Add_i: BINARY(+, int64_t);
-            case Opcode::Add_f: BINARY(+, float);
-            case Opcode::Add_d: BINARY(+, double);
+/* Add two values. */
+Add_i: BINARY(+, int64_t);
+Add_f: BINARY(+, float);
+Add_d: BINARY(+, double);
 
-            /* Subtract two values. */
-            case Opcode::Sub_i: BINARY(-, int64_t);
-            case Opcode::Sub_f: BINARY(-, float);
-            case Opcode::Sub_d: BINARY(-, double);
+/* Subtract two values. */
+Sub_i: BINARY(-, int64_t);
+Sub_f: BINARY(-, float);
+Sub_d: BINARY(-, double);
 
-            /* Multiply two values. */
-            case Opcode::Mul_i: BINARY(*, int64_t);
-            case Opcode::Mul_f: BINARY(*, float);
-            case Opcode::Mul_d: BINARY(*, double);
+/* Multiply two values. */
+Mul_i: BINARY(*, int64_t);
+Mul_f: BINARY(*, float);
+Mul_d: BINARY(*, double);
 
-            /* Divide two values. */
-            case Opcode::Div_i: BINARY(/, int64_t);
-            case Opcode::Div_f: BINARY(/, float);
-            case Opcode::Div_d: BINARY(/, double);
+/* Divide two values. */
+Div_i: BINARY(/, int64_t);
+Div_f: BINARY(/, float);
+Div_d: BINARY(/, double);
 
-            /* Modulo divide two values. */
-            case Opcode::Mod_i: BINARY(%, int64_t);
+/* Modulo divide two values. */
+Mod_i: BINARY(%, int64_t);
 
-            /* Concatenate two strings. */
-            case Opcode::Cat_s: BINARY(+, std::string);
+/* Concatenate two strings. */
+Cat_s: BINARY(+, std::string);
 
-            /*==========================================================================================================
-             * Logical operations
-             *========================================================================================================*/
+/*======================================================================================================================
+ * Logical operations
+ *====================================================================================================================*/
 
-            /* Logical not */
-            case Opcode::Not_b: UNARY(not, bool);
+/* Logical not */
+Not_b: UNARY(not, bool);
 
-            /* Logical and. */
-            case Opcode::And_b: BINARY(and, bool);
+/* Logical and. */
+And_b: BINARY(and, bool);
 
-            /* Logical or. */
-            case Opcode::Or_b: BINARY(or, bool);
+/* Logical or. */
+Or_b: BINARY(or, bool);
 
-            /*==========================================================================================================
-             * Comparison operations
-             *========================================================================================================*/
+/*======================================================================================================================
+ * Comparison operations
+ *====================================================================================================================*/
 
-            case Opcode::Eq_i: BINARY(==, int64_t);
-            case Opcode::Eq_f: BINARY(==, float);
-            case Opcode::Eq_d: BINARY(==, double);
-            case Opcode::Eq_b: BINARY(==, bool);
-            case Opcode::Eq_s: BINARY(==, std::string);
+Eq_i: BINARY(==, int64_t);
+Eq_f: BINARY(==, float);
+Eq_d: BINARY(==, double);
+Eq_b: BINARY(==, bool);
+Eq_s: BINARY(==, std::string);
 
-            case Opcode::NE_i: BINARY(!=, int64_t);
-            case Opcode::NE_f: BINARY(!=, float);
-            case Opcode::NE_d: BINARY(!=, double);
-            case Opcode::NE_b: BINARY(!=, bool);
-            case Opcode::NE_s: BINARY(!=, std::string);
+NE_i: BINARY(!=, int64_t);
+NE_f: BINARY(!=, float);
+NE_d: BINARY(!=, double);
+NE_b: BINARY(!=, bool);
+NE_s: BINARY(!=, std::string);
 
-            case Opcode::LT_i: BINARY(<, int64_t);
-            case Opcode::LT_f: BINARY(<, float);
-            case Opcode::LT_d: BINARY(<, double);
-            case Opcode::LT_s: BINARY(<, std::string);
+LT_i: BINARY(<, int64_t);
+LT_f: BINARY(<, float);
+LT_d: BINARY(<, double);
+LT_s: BINARY(<, std::string);
 
-            case Opcode::GT_i: BINARY(>, int64_t);
-            case Opcode::GT_f: BINARY(>, float);
-            case Opcode::GT_d: BINARY(>, double);
-            case Opcode::GT_s: BINARY(>, std::string);
+GT_i: BINARY(>, int64_t);
+GT_f: BINARY(>, float);
+GT_d: BINARY(>, double);
+GT_s: BINARY(>, std::string);
 
-            case Opcode::LE_i: BINARY(<=, int64_t);
-            case Opcode::LE_f: BINARY(<=, float);
-            case Opcode::LE_d: BINARY(<=, double);
-            case Opcode::LE_s: BINARY(<=, std::string);
+LE_i: BINARY(<=, int64_t);
+LE_f: BINARY(<=, float);
+LE_d: BINARY(<=, double);
+LE_s: BINARY(<=, std::string);
 
-            case Opcode::GE_i: BINARY(>=, int64_t);
-            case Opcode::GE_f: BINARY(>=, float);
-            case Opcode::GE_d: BINARY(>=, double);
-            case Opcode::GE_s: BINARY(>=, std::string);
+GE_i: BINARY(>=, int64_t);
+GE_f: BINARY(>=, float);
+GE_d: BINARY(>=, double);
+GE_s: BINARY(>=, std::string);
 
 #define CMP(TYPE) { \
     insist(stack_.size() >= 2); \
@@ -1039,54 +1041,56 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
     auto pv_lhs = std::get_if<TYPE>(&v_lhs); \
     insist(pv_lhs, "invalid type of lhs"); \
     stack_.back() = *pv_lhs == rhs ? int64_t(0) : (*pv_lhs < rhs ? int64_t(-1) : int64_t(1)); \
-    break; \
+} \
+NEXT;
+
+Cmp_i: CMP(int64_t);
+Cmp_f: CMP(float);
+Cmp_d: CMP(double);
+Cmp_b: CMP(bool);
+Cmp_s: {
+    insist(stack_.size() >= 2);
+    auto &v_rhs = stack_.back();
+    auto pv_rhs = std::get_if<std::string>(&v_rhs);
+    insist(pv_rhs, "invalid type of rhs");
+    auto rhs = *pv_rhs;
+    stack_.pop_back();
+    auto &v_lhs = stack_.back();
+    auto pv_lhs = std::get_if<std::string>(&v_lhs);
+    insist(pv_lhs, "invalid type of lhs");
+    stack_.back() = int64_t(pv_lhs->compare(rhs));
 }
-            case Opcode::Cmp_i: CMP(int64_t);
-            case Opcode::Cmp_f: CMP(float);
-            case Opcode::Cmp_d: CMP(double);
-            case Opcode::Cmp_b: CMP(bool);
-            case Opcode::Cmp_s: {
-                insist(stack_.size() >= 2);
-                auto &v_rhs = stack_.back();
-                auto pv_rhs = std::get_if<std::string>(&v_rhs);
-                insist(pv_rhs, "invalid type of rhs");
-                auto rhs = *pv_rhs;
-                stack_.pop_back();
-                auto &v_lhs = stack_.back();
-                auto pv_lhs = std::get_if<std::string>(&v_lhs);
-                insist(pv_lhs, "invalid type of lhs");
-                stack_.back() = int64_t(pv_lhs->compare(rhs));
-                break;
-            }
+NEXT;
+
 #undef CMP
 
-            /*==========================================================================================================
-             * Intrinsic functions
-             *========================================================================================================*/
+/*======================================================================================================================
+ * Intrinsic functions
+ *====================================================================================================================*/
 
-            case Opcode::Is_Null:
-                stack_.back() = std::holds_alternative<null_type>(stack_.back());
-                break;
+Is_Null:
+    stack_.back() = std::holds_alternative<null_type>(stack_.back());
+    NEXT;
 
-            /* Cast to int. */
-            case Opcode::Cast_i_f: UNARY((int64_t), float);
-            case Opcode::Cast_i_d: UNARY((int64_t), double);
-            case Opcode::Cast_i_b: UNARY((int64_t), bool);
+/* Cast to int. */
+Cast_i_f: UNARY((int64_t), float);
+Cast_i_d: UNARY((int64_t), double);
+Cast_i_b: UNARY((int64_t), bool);
 
-            /* Cast to float. */
-            case Opcode::Cast_f_i: UNARY((float), int64_t);
-            case Opcode::Cast_f_d: UNARY((float), float);
+/* Cast to float. */
+Cast_f_i: UNARY((float), int64_t);
+Cast_f_d: UNARY((float), float);
 
-            /* Cast to double. */
-            case Opcode::Cast_d_i: UNARY((double), int64_t);
-            case Opcode::Cast_d_f: UNARY((double), float);
-        }
-    }
-exit:
+/* Cast to double. */
+Cast_d_i: UNARY((double), int64_t);
+Cast_d_f: UNARY((double), float);
 
 #undef BINARY
 #undef UNARY
 
+Stop: /* nothing to be done */
+
+    ops.pop_back(); // terminating Stop
     return std::move(stack_);
 }
 

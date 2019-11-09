@@ -233,6 +233,12 @@ struct Store
     /** Return a stack machine to load values row-wise directly from this store. */
     virtual StackMachine loader(const OperatorSchema &schema) const = 0;
 
+    /** Return a stack machine to update the specified attributes directly in this store.  The stack machine expects the
+     * values to update the row with as input tuple, with the values in the same order as the given list of attributes.
+     * Further, the row to update must be specified by the user of the stack machine by setting context at index 0 to
+     * the respective row id. */
+    virtual StackMachine writer(const std::vector<const Attribute*> &attrs) const = 0;
+
     virtual void dump(std::ostream &out) const = 0;
     void dump() const;
 };

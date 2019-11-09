@@ -156,6 +156,89 @@ StackMachine RowStore::loader(const OperatorSchema &schema) const
     return sm;
 }
 
+StackMachine RowStore::writer(const std::vector<const Attribute*> &attrs) const
+{
+    OperatorSchema empty_schema;
+    StackMachine sm(empty_schema);
+
+    /* Add address of store to initial state. */
+    auto row_addr_idx = sm.add(static_cast<int64_t>(reinterpret_cast<uintptr_t>(data_)));
+
+    /* Add row size in bytes. */
+    auto row_size_idx = sm.add_and_emit_load(int64_t(row_size_/8));
+
+    uint8_t tuple_idx = 0;
+    for (auto attr : attrs) {
+        if (not attr) continue; // skip nullptr
+
+        /* Load the next value to the stack. */
+        sm.emit_Ld_Tup(tuple_idx++);
+
+        /* Load row address to stack. */
+        sm.emit_Ld_Ctx(row_addr_idx);
+
+        /* Load null bit offset to stack. */
+        const std::size_t null_off = offset(table().size()) + attr->id;
+        sm.add_and_emit_load(int64_t(null_off));
+
+        /* Load value bit offset to stack. */
+        const std::size_t value_off = offset(attr->id);
+        sm.add_and_emit_load(int64_t(value_off));
+
+        /* Emit store to store instruction. */
+        auto ty = attr->type;
+        if (ty->is_boolean()) {
+            sm.emit_St_RS_b();
+        } else if (auto n = cast<const Numeric>(ty)) {
+            switch (n->kind) {
+                case Numeric::N_Int: {
+                    switch (n->precision) {
+                        default: unreachable("illegal integer type");
+                        case 1: sm.emit_St_RS_i8();  break;
+                        case 2: sm.emit_St_RS_i16(); break;
+                        case 4: sm.emit_St_RS_i32(); break;
+                        case 8: sm.emit_St_RS_i64(); break;
+                    }
+                    break;
+                }
+
+                case Numeric::N_Float: {
+                    if (n->precision == 32)
+                        sm.emit_St_RS_f();
+                    else
+                        sm.emit_St_RS_d();
+                    break;
+                }
+
+                case Numeric::N_Decimal: {
+                    const auto p = ceil_to_pow_2(n->size());
+                    switch (p) {
+                        default: unreachable("illegal precision of decimal type");
+                        case 1: sm.emit_St_RS_i8();  break;
+                        case 2: sm.emit_St_RS_i16(); break;
+                        case 4: sm.emit_St_RS_i32(); break;
+                        case 8: sm.emit_St_RS_i64(); break;
+                    }
+                    break;
+                }
+            }
+        } else if (auto cs = cast<const CharacterSequence>(ty)) {
+            sm.add_and_emit_load(int64_t(cs->length));
+            sm.emit_St_RS_s();
+        } else {
+            unreachable("illegal type");
+        }
+    }
+
+    /* Advance row address to next row. */
+    sm.emit_Ld_Ctx(row_addr_idx);
+    sm.emit_Ld_Ctx(row_size_idx);
+    sm.emit_Add_i();
+    sm.emit_Upd_Ctx(row_addr_idx);
+
+    return sm;
+}
+
 void RowStore::compute_offsets()
 {
     using std::max;

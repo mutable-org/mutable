@@ -9,14 +9,6 @@
 using namespace db;
 
 
-inline bool is_oct  (int c) { return '0' <= c && c <= '7'; }
-inline bool is_dec  (int c) { return '0' <= c && c <= '9'; }
-inline bool is_hex  (int c) { return is_dec(c) || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F'); }
-inline bool is_lower(int c) { return ('a' <= c && c <= 'z'); }
-inline bool is_upper(int c) { return ('A' <= c && c <= 'Z'); }
-inline bool is_alpha(int c) { return is_lower(c) || is_upper(c); }
-inline bool is_alnum(int c) { return is_dec(c) || is_alpha(c); }
-
 void Lexer::initialize_keywords()
 {
 #define DB_KEYWORD(tok, text) keywords_.emplace(pool(#text), TK_##tok);

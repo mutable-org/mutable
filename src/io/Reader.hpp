@@ -23,13 +23,21 @@ struct Reader
 };
 
 /** A reader for delimiter separated value (DSV) files. */
-struct DSVReader : Reader
+struct DSVReader : Reader, ConstTypeVisitor
 {
     char delimiter;
     char escape;
     char quote;
     bool has_header;
     bool skip_header;
+
+    private:
+    Position pos;
+    char c;
+    std::istream *in = nullptr;
+    std::vector<char> buf;
+    std::unique_ptr<Store::Row> row;
+    const Attribute *attr = nullptr;
 
     public:
     DSVReader(const Table &table, Diagnostic &diag,
@@ -42,7 +50,42 @@ struct DSVReader : Reader
     void operator()(std::istream &in, const char *name) override;
 
     private:
-    bool parse_value(const std::string &str, const Attribute &attr, value_type &value);
+    using ConstTypeVisitor::operator();
+    void operator()(Const<ErrorType> &ty) override;
+    void operator()(Const<Boolean> &ty) override;
+    void operator()(Const<CharacterSequence> &ty) override;
+    void operator()(Const<Numeric> &ty) override;
+    void operator()(Const<FnType> &ty) override;
+
+    int step() {
+        switch (c) {
+            case '\n':
+                pos.column = 1;
+                pos.line++;
+            case EOF:
+                break;
+
+            default:
+                pos.column++;
+        }
+        return c = in->get();
+    };
+
+    void push() { buf.push_back(c); step(); }
+
+    bool accept(char chr) { if (c == chr) { step(); return true; } return false; }
+
+    void discard_cell() {
+        if (c == quote) {
+            step();
+            while (c != EOF and c != '\n' and c != quote) { step(); }
+            accept(quote);
+        } else
+            while (c != EOF and c != '\n' and c != delimiter) { step(); }
+    }
+    void discard_row() { while (c != EOF and c != '\n') { step(); } }
+
+    int64_t read_int();
 };
 
 }

@@ -1,5 +1,6 @@
 #include "io/Reader.hpp"
 
+#include "IR/Interpreter.hpp"
 #include "storage/Store.hpp"
 #include "util/macro.hpp"
 #include <cctype>
@@ -27,6 +28,7 @@ DSVReader::DSVReader(const Table &table, Diagnostic &diag,
     , quote(quote)
     , has_header(has_header)
     , skip_header(skip_header)
+    , pos(nullptr)
 { }
 
 void DSVReader::operator()(std::istream &in, const char *name)
@@ -34,61 +36,20 @@ void DSVReader::operator()(std::istream &in, const char *name)
     auto &C = Catalog::Get();
     auto &store = table.store();
     std::vector<const Attribute*> columns; ///< maps column offset to attribute
-
-    /* Parsing data. */
-    int c = '\n';
-    Position start(name), pos(name);
-
-    /*----- Helper functions. ----------------------------------------------------------------------------------------*/
-    auto step = [&]() -> int {
-        switch (c) {
-            case '\n':
-                pos.column = 1;
-                pos.line++;
-            case EOF:
-                break;
-
-            default:
-                pos.column++;
-        }
-        return c = in.get();
-    };
-
-    auto push = [&](std::string &buf) {
-        buf += char(c);
-        step();
-    };
-
-    auto read_quoted = [&](std::string &buf) -> void {
-        insist(c == quote, "quoted strings must begin with the quote character");
-        push(buf); // opening quote
-        while (c != quote) {
-            if (c == EOF or c == '\n') {
-                diag.e(pos) << "Unexpected end of quoted string.\n";
-                return; // unexpected end
-            }
-            push(buf);
-        }
-        insist(c == quote);
-        push(buf); // closing quote
-    };
-
-    auto read_cell = [&]() -> std::string {
-        std::string buf;
-        if (c == quote) {
-            read_quoted(buf);
-            if (c != EOF and c != '\n' and c != delimiter) {
-                /* superfluous characters */
-                diag.e(pos) << "Unexpected characters after a quoted string.\n";
-                while (c != EOF and c != '\n' and c != delimiter) step();
-            }
-        } else {
-            while (c != EOF and c != '\n' and c != delimiter) push(buf);
-        }
-        return buf;
-    };
-
+    this->in = &in;
+    c = '\n';
+    pos = Position(name);
     step(); // initialize the variable `c` by reading the first character from the input stream
+
+    auto read_cell = [&]() -> const char* {
+        buf.clear();
+        while (c != EOF and c != '\n' and c != delimiter) {
+            buf.push_back(c);
+            step();
+        }
+        buf.push_back(0);
+        return C.pool(&buf[0]);
+    };
 
     /*----- Handle header information. -------------------------------------------------------------------------------*/
     if (has_header) {
@@ -96,7 +57,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
             auto name = read_cell();
             const Attribute *attr = nullptr;
             try {
-                attr = &table.at(C.pool(name.c_str()));
+                attr = &table.at(name);
             } catch (std::out_of_range) { /* nothing to do */ }
             columns.push_back(attr);
             if (c == delimiter)
@@ -114,128 +75,118 @@ void DSVReader::operator()(std::istream &in, const char *name)
         }
     }
 
-    /*----- Read data row wise. --------------------------------------------------------------------------------------*/
-    std::vector<std::string> tuple;
-    tuple.reserve(table.size());
-    for (;;) {
-        tuple.emplace_back(read_cell());
-        if (c == delimiter) {
-            step();
-        } else {
-            insist(c == EOF or c == '\n', "expected the end of a row");
-            /* check tuple length */
-            if (tuple.size() != columns.size()) {
-                diag.e(pos) << "Row of incorrect size.\n";
-                goto next;
+    /*----- Read data. -----------------------------------------------------------------------------------------------*/
+    while (in.good()) {
+        row = store.append();
+        for (std::size_t i = 0; i != columns.size(); ++i) {
+            auto col = columns[i];
+            if (i != 0 and not accept(delimiter)) {
+                diag.e(pos) << "Expected a delimiter (" << delimiter << ").\n";
+                discard_row();
+                goto next_row;
             }
 
-            /* Parse strings into values. */
-            {
-                std::vector<value_type> values;
-                values.reserve(table.size());
-                for (std::size_t i = 0; i != columns.size(); ++i) {
-                    if (not columns[i]) continue;
-                    auto &attr = *columns[i];
-                    auto &cell = tuple[i];
-                    auto &value = values.emplace_back();
-                    if (not parse_value(cell, attr, value)) {
-                        diag.e(pos) << "Could not parse the row.\n";
-                        goto next;
-                    }
+            if (col) {
+                if (c == delimiter) {
+                    row->setnull(*col);
+                    step();
+                    continue;
                 }
-
-                /* Append a new row to the store and set its values. */
-                auto row = store.append();
-                auto value_it = values.begin();
-                for (std::size_t i = 0; i != columns.size(); ++i) {
-                    if (not columns[i]) continue;
-                    auto &attr = *columns[i];
-                    auto value = *value_it++;
-
-                    std::visit(overloaded {
-                        [&](null_type)     { row->setnull(attr); },
-                        [&](bool b)        { row->set(attr, b); },
-                        [&](int64_t i)     { row->set(attr, i); },
-                        [&](float f)       { row->set(attr, f); },
-                        [&](double d)      { row->set(attr, d); },
-                        [&](std::string s) { row->set(attr, s); },
-                    }, value);
-                }
+                attr = col;
+                auto ty = col->type;
+                (*this)(*ty);
+            } else {
+                discard_cell();
             }
-next:
+        }
+next_row:;
+        if (c != EOF and c != '\n') {
+            diag.e(pos) << "Expected end of row.\n";
+            discard_row();
+        }
+        insist(c == EOF or c == '\n');
+        step();
+    }
+
+    this->in = nullptr;
+}
+
+
+void DSVReader::operator()(Const<Boolean>&)
+{
+    buf.clear();
+    while (c != EOF and c != '\n' and c != delimiter) { push(); }
+    buf.push_back(0);
+    if (streq("TRUE", &buf[0]))
+        row->set(*attr, true);
+    else if (streq("FALSE", &buf[0]))
+        row->set(*attr, false);
+    else
+        diag.e(pos) << "Expected TRUE or FALSE.\n";
+}
+
+void DSVReader::operator()(Const<CharacterSequence>&)
+{
+    buf.clear();
+    if (c == quote) {
+        step();
+        while (c != EOF and c != '\n' and c != quote) {
+            if (c == escape) {
+                push();
+                if (c == quote)
+                    push();
+            } else {
+                push();
+            }
+        }
+        accept(quote);
+    } else {
+        while (c != EOF and c != '\n' and c != delimiter) push();
+    }
+    buf.push_back(0);
+    row->set(*attr, interpret(std::string(buf.begin(), buf.end()), escape, quote));
+}
+
+void DSVReader::operator()(Const<Numeric> &ty)
+{
+    switch (ty.kind) {
+        case Numeric::N_Int: {
+            int64_t i = read_int();
+            row->set(*attr, i);
+            break;
+        }
+
+        case Numeric::N_Decimal: {
+            // TODO more precise implementation
+            /* fall through */
+        }
+
+        case Numeric::N_Float: {
+            double d;
+            in->unget();
+            *in >> d;
             step();
-            if (c == EOF)
-                break;
-            tuple.clear();
+            row->set(*attr, d);
+            break;
         }
     }
 }
 
-struct Parse2Value : ConstTypeVisitor
+void DSVReader::operator()(Const<ErrorType>&) { unreachable("invalid type"); }
+void DSVReader::operator()(Const<FnType>&) { unreachable("invalid type"); }
+
+int64_t DSVReader::read_int()
 {
-    const std::string &str;
-    value_type &value;
-    bool success = false;
-
-    Parse2Value(const std::string &str, value_type &value)
-        : str(str)
-        , value(value)
-    { }
-
-    using ConstTypeVisitor::operator();
-    void operator()(Const<ErrorType>&) { unreachable("error type"); }
-    void operator()(Const<Boolean>&) {
-        if (str == "TRUE")  { value = true;  success = true; }
-        if (str == "FALSE") { value = false; success = true; }
+    int64_t i = 0;
+    bool is_neg = false;
+    if (accept('-'))
+        is_neg = true;
+    else
+        accept('+');
+    while (is_dec(c)) {
+        i = 10 * i + c - '0';
+        step();
     }
-    void operator()(Const<CharacterSequence>&) {
-        value = interpret(str);
-        success = true;
-    }
-    void operator()(Const<Numeric> &ty) {
-        switch (ty.kind) {
-            case Numeric::N_Int: {
-                char *end;
-                int64_t i = strtoll(str.c_str(), &end, 10);
-                if (end != &*str.end())
-                    break;
-                value = i;
-                success = true;
-                break;
-            }
-
-            case Numeric::N_Decimal: { // TODO more precise way to read decimal
-                std::size_t pos;
-                double d = stod(str, &pos);
-                if (pos != str.length())
-                    break;
-                value = d;
-                success = true;
-                break;
-            }
-
-            case Numeric::N_Float: {
-                std::size_t pos;
-                double d = stod(str, &pos);
-                if (pos != str.length())
-                    break;
-                if (ty.precision == 32)
-                    value = float(d);
-                else
-                    value = d;
-                success = true;
-                break;
-            }
-        }
-    }
-    void operator()(Const<FnType>&) { unreachable("fn type"); }
-};
-
-bool DSVReader::parse_value(const std::string &str, const Attribute &attr, value_type &value)
-{
-    if (str.empty()) { value = null_type(); return true; }
-
-    Parse2Value parse(str, value);
-    parse(*attr.type);
-    return parse.success;
+    if (is_neg) i = -i;
+    return i;
 }

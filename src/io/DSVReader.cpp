@@ -83,7 +83,8 @@ void DSVReader::operator()(std::istream &in, const char *name)
             if (i != 0 and not accept(delimiter)) {
                 diag.e(pos) << "Expected a delimiter (" << delimiter << ").\n";
                 discard_row();
-                goto next_row;
+                store.drop(); // drop the unfinished row
+                goto end_of_row;
             }
 
             if (col) {
@@ -99,7 +100,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
                 discard_cell();
             }
         }
-next_row:;
+end_of_row:
         if (c != EOF and c != '\n') {
             diag.e(pos) << "Expected end of row.\n";
             discard_row();

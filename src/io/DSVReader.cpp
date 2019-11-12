@@ -164,8 +164,11 @@ void DSVReader::operator()(Const<Numeric> &ty)
         case Numeric::N_Float: {
             double d;
             in->unget();
+            auto before = in->tellg();
             *in >> d;
-            step();
+            auto after = in->tellg();
+            pos.column += after - before - 1;
+            step(); // get the next character (hopefully delimiter)
             row->set(*attr, d);
             break;
         }

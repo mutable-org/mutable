@@ -227,6 +227,9 @@ struct Store
     /** Append a row to the store. */
     virtual std::unique_ptr<Row> append() = 0;
 
+    /** Drop the most recently appended row. */
+    virtual void drop() = 0;
+
     /** Return a stack machine to load values row-wise directly from this store. */
     virtual StackMachine loader(const OperatorSchema &schema) const = 0;
 

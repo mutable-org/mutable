@@ -143,6 +143,11 @@ struct RowStore : Store
         return row;
     }
 
+    void drop() override {
+        insist(num_rows_);
+        --num_rows_;
+    }
+
     StackMachine loader(const OperatorSchema &schema) const override;
 
     void dump(std::ostream &out) const override;

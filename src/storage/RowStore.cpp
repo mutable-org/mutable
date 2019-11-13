@@ -158,8 +158,7 @@ StackMachine RowStore::loader(const OperatorSchema &schema) const
 
 StackMachine RowStore::writer(const std::vector<const Attribute*> &attrs) const
 {
-    OperatorSchema empty_schema;
-    StackMachine sm(empty_schema);
+    StackMachine sm;
 
     /* Add address of store to initial state. */
     auto row_addr_idx = sm.add(static_cast<int64_t>(reinterpret_cast<uintptr_t>(data_)));

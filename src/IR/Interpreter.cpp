@@ -1236,9 +1236,7 @@ void Interpreter::operator()(const JoinOperator &op)
 void Interpreter::operator()(const ProjectionOperator &op)
 {
     bool has_child = op.children().size();
-    OperatorSchema empty_schema;
-    auto &S = has_child ? op.child(0)->schema() : empty_schema;
-    auto data = new ProjectionData(StackMachine(S));
+    auto data = new ProjectionData(has_child ? StackMachine(op.child(0)->schema()) : StackMachine());
     op.data(data);
     for (auto &p : op.projections())
         data->projections.emit(*p.first);

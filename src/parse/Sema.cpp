@@ -1001,9 +1001,53 @@ void Sema::operator()(Const<SelectStmt> &s)
 void Sema::operator()(Const<InsertStmt> &s)
 {
     RequireContext RCtx(this);
-    /* TODO */
-    (void) s;
-    unreachable("Not implemented.");
+    Catalog &C = Catalog::Get();
+    if (not C.has_database_in_use()) {
+        diag.e(s.table_name.pos) << "No database in use.\n";
+        return;
+    }
+
+    auto &DB = C.get_database_in_use();
+
+    const Table *tbl;
+    try {
+        tbl = &DB.get_table(s.table_name.text);
+    } catch (std::invalid_argument) {
+        diag.e(s.table_name.pos) << "Table " << s.table_name.text << " does not exist in database " << DB.name << ".\n";
+        return;
+    }
+
+    /* Analyze values. */
+    for (std::size_t i = 0; i != s.tuples.size(); ++i) {
+        auto &t = s.tuples[i];
+        if (t.empty())
+            continue; // syntax error, already reported
+        if (t.size() != tbl->size()) {
+            diag.e(s.table_name.pos) << "Tuple " << (i + 1) << " has not enough values.\n";
+            continue;
+        }
+        for (std::size_t j = 0; j != t.size(); ++j) {
+            auto &v = t[j];
+            auto &attr = tbl->at(j);
+            switch (v.first) {
+                case InsertStmt::I_Expr:
+                    (*this)(*v.second);
+                    if (v.second->type() != attr.type) {
+                        diag.e(s.table_name.pos) << "Value " << *v.second << " is not valid for attribute "
+                                                 << attr.name << ".\n";
+                    }
+                    break;
+
+                case InsertStmt::I_Null:
+                    /* TODO is null-able? */
+                    break;
+
+                case InsertStmt::I_Default:
+                    /* TODO has default? */
+                    break;
+            }
+        }
+    }
 }
 
 void Sema::operator()(Const<UpdateStmt> &s)

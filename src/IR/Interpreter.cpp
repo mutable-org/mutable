@@ -1195,7 +1195,7 @@ void Interpreter::operator()(const ScanOperator &op)
 {
     auto loader = op.store().loader(op.schema());
     for (auto i = op.store().num_rows(); i; --i) {
-        auto &&tuple = loader(tuple_type());
+        auto &&tuple = loader();
         op.parent()->accept(*this, tuple);
     }
 }

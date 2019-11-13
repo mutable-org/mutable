@@ -41,6 +41,7 @@ struct StackMachine
     std::vector<value_type> stack_; ///< the stack of current values
 
     public:
+    StackMachine() { }
     StackMachine(const OperatorSchema &schema, const Expr &expr);
     StackMachine(const OperatorSchema &schema);
 
@@ -51,6 +52,7 @@ struct StackMachine
     void emit(const cnf::CNF &cnf);
 
     tuple_type && operator()(const tuple_type &t);
+    tuple_type && operator()() { return operator()(tuple_type()); }
 
     /* The following macros are used to automatically generate methods to emit a particular opcode.  For example, for
      * the opcode `Pop`, we will define a function `emit_Pop()`, that appends the `Pop` opcode to the current opcode

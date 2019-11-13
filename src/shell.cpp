@@ -200,6 +200,32 @@ int main(int argc, const char **argv)
                     timer.stop();
                     delete callback;
                 }
+            } else if (auto I = cast<InsertStmt>(stmt)) {
+                auto &DB = C.get_database_in_use();
+                auto &T = DB.get_table(I->table_name.text);
+                auto &store = T.store();
+                std::vector<const Attribute*> attrs;
+                for (auto &attr : T) attrs.push_back(&attr);
+                auto W = store.writer(attrs);
+                for (auto &t : I->tuples) {
+                    StackMachine S;
+                    for (auto &v : t) {
+                        switch (v.first) {
+                            case InsertStmt::I_Null:
+                                S.add_and_emit_load(null_type());
+                                break;
+
+                            case InsertStmt::I_Default:
+                                unreachable("not implemented");
+
+                            case InsertStmt::I_Expr:
+                                S.emit(*v.second);
+                                break;
+                        }
+                    }
+                    auto values = S();
+                    W(values);
+                }
             } else if (auto S = cast<CreateTableStmt>(stmt)) {
                 auto &DB = C.get_database_in_use();
                 auto &T = DB.get_table(S->table_name.text);

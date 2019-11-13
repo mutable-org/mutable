@@ -211,8 +211,8 @@ void ASTPrinter::operator()(Const<SelectStmt> &s)
 void ASTPrinter::operator()(Const<InsertStmt> &s)
 {
     out << "INSERT INTO " << s.table_name.text << "\nVALUES\n    ";
-    for (auto value_it = s.values.cbegin(), end = s.values.cend(); value_it != end; ++value_it) {
-        if (value_it != s.values.cbegin()) out << ",\n    ";
+    for (auto value_it = s.tuples.cbegin(), end = s.tuples.cend(); value_it != end; ++value_it) {
+        if (value_it != s.tuples.cbegin()) out << ",\n    ";
         out << '(';
         for (auto elem_it = value_it->cbegin(), elem_end = value_it->cend(); elem_it != elem_end; ++elem_it) {
             if (elem_it != value_it->cbegin()) out << ", ";

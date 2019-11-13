@@ -75,7 +75,7 @@ SelectStmt::~SelectStmt()
 
 InsertStmt::~InsertStmt()
 {
-    for (value_type &v : values) {
+    for (tuple_t &v : tuples) {
         for (element_type &e : v)
             delete e.second;
     }

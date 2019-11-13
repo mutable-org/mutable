@@ -255,9 +255,9 @@ void ASTDumper::operator()(Const<InsertStmt> &s)
     ++indent_;
     indent() << "values";
     ++indent_;
-    for (std::size_t idx = 0, end = s.values.size(); idx != end; ++idx) {
+    for (std::size_t idx = 0, end = s.tuples.size(); idx != end; ++idx) {
         indent() << '[' << idx << ']';
-        const InsertStmt::value_type &v = s.values[idx];
+        const InsertStmt::tuple_t &v = s.tuples[idx];
         ++indent_;
         for (auto &e : v) {
             switch (e.first) {

@@ -256,7 +256,7 @@ Stmt * Parser::parse_InsertStmt()
 {
     bool ok = true;
     Token start = token();
-    std::vector<InsertStmt::value_type> values;
+    std::vector<InsertStmt::tuple_t> tuples;
 
     /* 'INSERT' 'INTO' identifier 'VALUES' */
     expect(TK_Insert);
@@ -268,35 +268,35 @@ Stmt * Parser::parse_InsertStmt()
     /* tuple { ',' tuple } */
     do {
         /* '(' ( 'DEFAULT' | 'NULL' | expression ) { ',' ( 'DEFAULT' | 'NULL' | expression ) } ')' */
-        InsertStmt::value_type value;
+        InsertStmt::tuple_t tuple;
         expect(TK_LPAR);
         do {
             switch (token().type) {
                 case TK_Default:
                     consume();
-                    value.emplace_back(InsertStmt::I_Default, nullptr);
+                    tuple.emplace_back(InsertStmt::I_Default, nullptr);
                     break;
 
                 case TK_Null:
                     consume();
-                    value.emplace_back(InsertStmt::I_Null, nullptr);
+                    tuple.emplace_back(InsertStmt::I_Null, nullptr);
                     break;
 
                 default: {
                     auto e = parse_Expr();
-                    value.emplace_back(InsertStmt::I_Expr, e);
+                    tuple.emplace_back(InsertStmt::I_Expr, e);
                     break;
                 }
             }
         } while (accept(TK_COMMA));
         expect(TK_RPAR);
-        values.emplace_back(value);
+        tuples.emplace_back(tuple);
     } while (accept(TK_COMMA));
 
     if (not ok)
         return new ErrorStmt(start);
 
-    return new InsertStmt(table_name, values);
+    return new InsertStmt(table_name, tuples);
 }
 
 Stmt * Parser::parse_UpdateStmt()

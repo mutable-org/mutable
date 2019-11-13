@@ -515,12 +515,12 @@ struct InsertStmt : Stmt
 {
     enum kind_t { I_Default, I_Null, I_Expr };
     using element_type = std::pair<kind_t, Expr*>;
-    using value_type = std::vector<element_type>;
+    using tuple_t = std::vector<element_type>;
 
     Token table_name;
-    std::vector<value_type> values;
+    std::vector<tuple_t> tuples;
 
-    InsertStmt(Token table_name, std::vector<value_type> values) : table_name(table_name), values(values) { }
+    InsertStmt(Token table_name, std::vector<tuple_t> tuples) : table_name(table_name), tuples(tuples) { }
     ~InsertStmt();
 
     void accept(ASTVisitor &v);

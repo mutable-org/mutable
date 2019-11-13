@@ -1030,13 +1030,19 @@ void Sema::operator()(Const<InsertStmt> &s)
             auto &v = t[j];
             auto &attr = tbl->at(j);
             switch (v.first) {
-                case InsertStmt::I_Expr:
+                case InsertStmt::I_Expr: {
                     (*this)(*v.second);
-                    if (v.second->type() != attr.type) {
-                        diag.e(s.table_name.pos) << "Value " << *v.second << " is not valid for attribute "
-                                                 << attr.name << ".\n";
-                    }
+                    auto ty = as<const PrimitiveType>(v.second->type());
+                    if (ty->is_boolean() and attr.type->is_boolean())
+                        break;
+                    if (ty->is_character_sequence() and attr.type->is_character_sequence())
+                        break;
+                    if (ty->is_numeric() and attr.type->is_numeric())
+                        break;
+                    diag.e(s.table_name.pos) << "Value " << *v.second << " is not valid for attribute "
+                                             << attr.name << ".\n";
                     break;
+                }
 
                 case InsertStmt::I_Null:
                     /* TODO is null-able? */

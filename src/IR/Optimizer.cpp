@@ -83,7 +83,7 @@ std::unique_ptr<Producer> Optimizer::build_operator_tree(const JoinGraph &G,
     stack.pop_back();
 
     /* Perform grouping */
-    if (not G.group_by().empty()) {
+    if (not G.group_by().empty() or not G.aggregates().empty()) {
         // TODO pick "best" algorithm
         auto group_by = new GroupingOperator(G.group_by(), G.aggregates(), GroupingOperator::G_Hashing);
         group_by->add_child(result);

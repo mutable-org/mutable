@@ -1,0 +1,3 @@
+[submodule "libs/replxx"]
+	path = third-party/replxx
+	url = https://github.com/AmokHuginnsson/replxx.git

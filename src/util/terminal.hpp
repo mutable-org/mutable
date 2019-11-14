@@ -13,6 +13,8 @@ constexpr const char *RESET              = "\033[0m";
 constexpr const char *BOLD               = "\033[1m";
 /* 2       set half-bright (simulated with color on a color display) */
 constexpr const char *HALF_BRIGHT        = "\033[2m";
+/* 3       set italic */
+constexpr const char *ITALIC             = "\033[3m";
 /* 4       set underscore (simulated with color on a color display) (the colors used to simulate dim or underline are
  *         set using ESC ] ...) */
 constexpr const char *UNDERLINE          = "\033[4m";

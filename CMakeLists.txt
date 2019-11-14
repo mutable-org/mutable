@@ -1,7 +1,8 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.2.3)
 
 project("dbms" C CXX)
 
+include(ExternalProject)
 enable_testing()
 
 # Threads
@@ -32,7 +33,20 @@ SET(CMAKE_C_FLAGS               "${CMAKE_C_FLAGS} ${CMAKE_COMPILE_FLAGS}")
 SET(CMAKE_CXX_FLAGS             "-std=c++17 ${CMAKE_CXX_FLAGS} ${CMAKE_COMPILE_FLAGS}")
 SET(CMAKE_CXX_FLAGS_DEBUG       "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address")
 
+# Third-Party
+ExternalProject_Add(
+    Replxx
+    PREFIX third-party
+    SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/replxx"
+    CMAKE_ARGS -DBUILD_STATIC_LIBS=ON -DCMAKE_BUILD_TYPE=Release
+    BUILD_BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/third-party/src/Replxx-build/libreplxx.a"
+    INSTALL_COMMAND ":"
+    )
+include_directories(third-party/replxx/include)
+add_library(replxx STATIC IMPORTED)
+set_target_properties(replxx PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/third-party/src/Replxx-build/libreplxx.a")
+
 # Directories
-include_directories(src/)
-add_subdirectory(src/)
-add_subdirectory(unittest/)
+include_directories(src)
+add_subdirectory(src)
+add_subdirectory(unittest)

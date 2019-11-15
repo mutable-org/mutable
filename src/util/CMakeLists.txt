@@ -1,5 +1,6 @@
 add_library(
     util
+    STATIC
     ArgParser.cpp
     Diagnostic.cpp
     fn.cpp

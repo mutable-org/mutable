@@ -1,5 +1,6 @@
 add_library(
     parse
+    STATIC
     AST.cpp
     ASTDot.cpp
     ASTDumper.cpp

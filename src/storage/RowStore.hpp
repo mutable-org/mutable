@@ -15,8 +15,7 @@ struct RowStore : Store
 
     public:
     /** This class acts as an interface to a row of a row store.  Physically, a row is just a byte array of a fixed
-     * length.  To interpret this binary data one needs the table definition attached to the row store.
-     */
+     * length.  To interpret this binary data one needs the table definition attached to the row store.  */
     struct Row : Store::Row
     {
         friend struct RowStore;
@@ -173,9 +172,9 @@ template<typename T>
 T RowStore::Row::get_exact(const Attribute &attr) const
 {
     insist(not isnull(attr));
+    insist(type_check<T>(attr));
 
     const auto off = store.offset(attr);
-    insist(type_check<T>(attr));
     const auto bytes = off / 8;
 
     if constexpr (std::is_same_v<T, bool>) {
@@ -205,9 +204,10 @@ T RowStore::Row::get_exact(const Attribute &attr) const
 template<typename T>
 T RowStore::Row::set_exact(const Attribute &attr, T value)
 {
+    insist(type_check<T>(attr));
+
     null(attr, false);
     const auto off = store.offset(attr);
-    insist(type_check<T>(attr));
     const auto bytes = off / 8;
 
     if constexpr (std::is_same_v<T, bool>) {
@@ -249,7 +249,6 @@ template<typename T>
 T RowStore::Row::get_generic(const Attribute &attr) const
 {
     auto ty = attr.type;
-
     insist(is_convertible<T>(ty), "Attribute not convertible to specified type");
 
     if constexpr (std::is_same_v<T, bool>)
@@ -306,7 +305,6 @@ template<typename T>
 T RowStore::Row::set_generic(const Attribute &attr, T value)
 {
     auto ty = attr.type;
-
     insist(is_convertible<T>(ty), "Attribute not convertible to specified type");
 
     if constexpr (std::is_same_v<T, bool>)

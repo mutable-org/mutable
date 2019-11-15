@@ -4,6 +4,7 @@
 #include "IR/Optimizer.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
+#include "storage/ColumnStore.hpp"
 #include "storage/RowStore.hpp"
 #include "util/ArgParser.hpp"
 #include "util/glyphs.hpp"
@@ -229,7 +230,7 @@ int main(int argc, const char **argv)
             } else if (auto S = cast<CreateTableStmt>(stmt)) {
                 auto &DB = C.get_database_in_use();
                 auto &T = DB.get_table(S->table_name.text);
-                T.store(new RowStore(T));
+                T.store(new ColumnStore(T));
             } else if (auto S = cast<DSVImportStmt>(stmt)) {
                 auto &DB = C.get_database_in_use();
                 auto &T = DB.get_table(S->table_name.text);

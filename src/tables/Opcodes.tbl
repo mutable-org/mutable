@@ -58,6 +58,28 @@ DB_OPCODE(St_RS_d)
 DB_OPCODE(St_RS_s)
 DB_OPCODE(St_RS_b)
 
+/*----- Load from column store ---------------------------------------------------------------------------------------*/
+
+DB_OPCODE(Ld_CS_i8)
+DB_OPCODE(Ld_CS_i16)
+DB_OPCODE(Ld_CS_i32)
+DB_OPCODE(Ld_CS_i64)
+DB_OPCODE(Ld_CS_f)
+DB_OPCODE(Ld_CS_d)
+DB_OPCODE(Ld_CS_s)
+DB_OPCODE(Ld_CS_b)
+
+/*----- Store to column store ----------------------------------------------------------------------------------------*/
+
+DB_OPCODE(St_CS_i8)
+DB_OPCODE(St_CS_i16)
+DB_OPCODE(St_CS_i32)
+DB_OPCODE(St_CS_i64)
+DB_OPCODE(St_CS_f)
+DB_OPCODE(St_CS_d)
+DB_OPCODE(St_CS_s)
+DB_OPCODE(St_CS_b)
+
 /*======================================================================================================================
  * Arithmetical operations
  *====================================================================================================================*/

@@ -26,6 +26,7 @@ add_executable(
     catalog/TypeTest.cpp
 
     # storage
+    storage/ColumnStoreTest.cpp
     storage/RowStoreTest.cpp
     )
 target_link_libraries(unittest db)

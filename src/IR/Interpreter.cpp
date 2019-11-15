@@ -767,6 +767,7 @@ NEXT;
 /*----- Load from row store ------------------------------------------------------------------------------------------*/
 #define PREPARE \
     insist(stack_.size() >= 3); \
+\
     /* Get value bit offset. */ \
     auto pv_value_off = std::get_if<int64_t>(&stack_.back()); \
     insist(pv_value_off, "invalid type of variant"); \
@@ -865,7 +866,7 @@ NEXT;
     auto pv_value = std::get_if<TYPE>(&stack_.back()); \
     insist(pv_value or std::holds_alternative<null_type>(stack_.back()), "invalid type of variant"); \
 \
-    /* Set not null. */ \
+    /* Set null bit. */ \
     { \
         const std::size_t bytes = null_off / 8; \
         const std::size_t bits = null_off % 8; \
@@ -936,6 +937,174 @@ St_RS_b: {
     PREPARE_STORE(bool);
     const auto bits = value_off % 8;
     setbit(addr + bytes, value, bits);
+}
+NEXT;
+
+#undef PREPARE_STORE
+
+#undef PREPARE
+
+/*----- Load from column store ---------------------------------------------------------------------------------------*/
+#define PREPARE(TYPE) \
+    insist(stack_.size() >= 4); \
+\
+    /* Get attribute id. */ \
+    auto pv_attr_id = std::get_if<int64_t>(&stack_.back()); \
+    insist(pv_attr_id, "invalid type of variant"); \
+    auto attr_id = std::size_t(*pv_attr_id); \
+    stack_.pop_back(); \
+\
+    /* Get address of value column. */ \
+    auto pv_value_col_addr = std::get_if<int64_t>(&stack_.back()); \
+    insist(pv_value_col_addr, "invalid type of variant"); \
+    TYPE *value_col_addr = reinterpret_cast<TYPE*>(static_cast<uintptr_t>(*pv_value_col_addr)); \
+    stack_.pop_back(); \
+\
+    /* Get address of null bitmap column. */ \
+    auto pv_null_bitmap_col_addr = std::get_if<int64_t>(&stack_.back()); \
+    insist(pv_null_bitmap_col_addr, "invalid type of variant"); \
+    int64_t *null_bitmap_col_addr = reinterpret_cast<int64_t*>(static_cast<uintptr_t>(*pv_null_bitmap_col_addr)); \
+    stack_.pop_back(); \
+\
+    /* Get row id. */ \
+    auto pv_row_id = std::get_if<int64_t>(&stack_.back()); \
+    insist(pv_row_id, "invalid type of variant"); \
+    auto row_id = static_cast<std::size_t>(*pv_row_id);
+
+#define PREPARE_LOAD(TYPE) \
+    PREPARE(TYPE) \
+\
+    /* Check if null. */ \
+    bool is_null = not ((null_bitmap_col_addr[row_id] >> attr_id) & 0x1); \
+    if (is_null) { \
+        stack_.back() = value_type(null_type()); \
+        NEXT; \
+    }
+
+Ld_CS_i8: {
+    PREPARE_LOAD(int8_t);
+    stack_.back() = int64_t(value_col_addr[row_id]);
+}
+NEXT;
+
+Ld_CS_i16: {
+    PREPARE_LOAD(int16_t);
+    stack_.back() = int64_t(value_col_addr[row_id]);
+}
+NEXT;
+
+Ld_CS_i32: {
+    PREPARE_LOAD(int32_t);
+    stack_.back() = int64_t(value_col_addr[row_id]);
+}
+NEXT;
+
+Ld_CS_i64: {
+    PREPARE_LOAD(int64_t);
+    stack_.back() = int64_t(value_col_addr[row_id]);
+}
+NEXT;
+
+Ld_CS_f: {
+    PREPARE_LOAD(float);
+    stack_.back() = float(value_col_addr[row_id]);
+}
+NEXT;
+
+Ld_CS_d: {
+    PREPARE_LOAD(double);
+    stack_.back() = double(value_col_addr[row_id]);
+}
+NEXT;
+
+Ld_CS_s: {
+    /* Get string length. */
+    auto pv_len = std::get_if<int64_t>(&stack_.back());
+    insist(pv_len, "invalid type of variant");
+    auto len = std::size_t(*pv_len);
+    stack_.pop_back();
+    PREPARE_LOAD(char);
+    auto p = value_col_addr + row_id * len;
+    stack_.back() = std::string(p, p + len);
+}
+NEXT;
+
+Ld_CS_b: {
+    PREPARE_LOAD(uint8_t);
+    const std::size_t bytes = row_id / 8;
+    const std::size_t bits = row_id % 8;
+    stack_.back() = bool((value_col_addr[bytes] >> bits) & 0x1);
+}
+NEXT;
+
+#undef PREPARE_LOAD
+
+#define PREPARE_STORE(TO_TYPE, FROM_TYPE) \
+    PREPARE(TO_TYPE); \
+    stack_.pop_back(); \
+\
+    auto pv_value = std::get_if<FROM_TYPE>(&stack_.back()); \
+    insist(pv_value or std::holds_alternative<null_type>(stack_.back()), "invalid type of variant"); \
+\
+    /* Set null bit. */ \
+    { \
+        setbit(&null_bitmap_col_addr[row_id], bool(pv_value), attr_id); \
+        if (not pv_value) { \
+            stack_.pop_back(); \
+            NEXT; \
+        } \
+    } \
+\
+    auto value = *pv_value; \
+    stack_.pop_back();
+
+St_CS_i8: {
+    PREPARE_STORE(int8_t, int64_t);
+    value_col_addr[row_id] = value;
+}
+NEXT;
+
+St_CS_i16: {
+    PREPARE_STORE(int16_t, int64_t);
+    value_col_addr[row_id] = value;
+}
+NEXT;
+
+St_CS_i32: {
+    PREPARE_STORE(int32_t, int64_t);
+    value_col_addr[row_id] = value;
+}
+NEXT;
+
+St_CS_i64: {
+    PREPARE_STORE(int64_t, int64_t);
+    value_col_addr[row_id] = value;
+}
+NEXT;
+
+St_CS_f: {
+    PREPARE_STORE(float, float);
+    value_col_addr[row_id] = value;
+}
+NEXT;
+
+St_CS_d: {
+    PREPARE_STORE(double, double);
+    value_col_addr[row_id] = value;
+}
+NEXT;
+
+St_CS_s: {
+    PREPARE_STORE(std::string, std::string);
+    // TODO
+    unreachable("not implemented");
+}
+NEXT;
+
+St_CS_b: {
+    PREPARE_STORE(bool, bool);
+    // TODO
+    unreachable("not implemented");
 }
 NEXT;
 

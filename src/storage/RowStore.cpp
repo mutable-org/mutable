@@ -79,7 +79,7 @@ std::size_t RowStore::load(std::filesystem::path path)
 
 StackMachine RowStore::loader(const OperatorSchema &schema) const
 {
-    StackMachine sm(schema);
+    StackMachine sm;
 
     /* Add address of store to initial state. */
     auto addr_idx = sm.add(int64_t(reinterpret_cast<uintptr_t>(data_)));

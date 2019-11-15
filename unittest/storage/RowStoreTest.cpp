@@ -109,4 +109,21 @@ TEST_CASE("RowStore", "[unit]")
         row->setnull(i4);
         REQUIRE(row->isnull(i4));
     }
+
+    SECTION("for_each")
+    {
+        {
+            auto row = store.append();
+            row->set(i8, 42);
+            row = store.append();
+            row->set(i8, 13);
+            REQUIRE(store.num_rows() == 2);
+        }
+
+        std::size_t count = 0;
+        uint64_t sum = 0;
+        store.for_each([&](const Store::Row &row) { ++count; sum += row.get<int64_t>(i8); });
+        REQUIRE(count == store.num_rows());
+        REQUIRE(sum == 55);
+    }
 }

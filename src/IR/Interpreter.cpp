@@ -1130,6 +1130,12 @@ NEXT;
  * Arithmetical operations
  *====================================================================================================================*/
 
+/* Integral increment. */
+Inc: UNARY(++, int64_t);
+
+/* Integral decrement. */
+Dec: UNARY(--, int64_t);
+
 /* Bitwise negation */
 Neg_i: UNARY(~, int64_t);
 

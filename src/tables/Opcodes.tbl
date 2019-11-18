@@ -84,6 +84,11 @@ DB_OPCODE(St_CS_b)
  * Arithmetical operations
  *====================================================================================================================*/
 
+/* Integral increment. */
+DB_OPCODE(Inc)
+/* Integral decrement. */
+DB_OPCODE(Dec)
+
 /* Bitwise negation */
 DB_OPCODE(Neg_i)
 

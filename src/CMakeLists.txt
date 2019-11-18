@@ -48,3 +48,6 @@ target_link_libraries(optimizer storage IR parse lex catalog util)
 
 add_executable(shell shell.cpp)
 target_link_libraries(shell replxx db)
+
+add_executable(wasm wasm.cpp)
+target_link_libraries(wasm db)

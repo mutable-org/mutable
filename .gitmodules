@@ -1,3 +1,6 @@
 [submodule "libs/replxx"]
 	path = third-party/replxx
 	url = https://github.com/AmokHuginnsson/replxx.git
+[submodule "third-party/binaryen"]
+	path = third-party/binaryen
+	url = git@github.com:WebAssembly/binaryen.git

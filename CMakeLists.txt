@@ -42,9 +42,40 @@ ExternalProject_Add(
     BUILD_BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/third-party/src/Replxx-build/libreplxx.a"
     INSTALL_COMMAND ":"
     )
-include_directories(third-party/replxx/include)
+include_directories(SYSTEM third-party/replxx/include)
 add_library(replxx STATIC IMPORTED)
 set_target_properties(replxx PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/third-party/src/Replxx-build/libreplxx.a")
+
+ExternalProject_Add(
+    Binaryen
+    PREFIX third-party
+    SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/binaryen"
+    CMAKE_ARGS -DBUILD_STATIC_LIB=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+    BUILD_BYPRODUCTS "${PROJECT_BINARY_DIR}/third-party/src/Binaryen-build/lib/libbinaryen.a"
+    BUILD_COMMAND ${CMAKE_BUILD_TOOL} binaryen
+    INSTALL_COMMAND ":"
+    )
+include_directories(SYSTEM third-party/binaryen/src)
+add_library(binaryen STATIC IMPORTED)
+set_target_properties(binaryen PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/third-party/src/Binaryen-build/lib/libbinaryen.a")
+
+set(V8_VERSION "8.0.368")
+set(V8_BUILD_ARGS "is_clang=true is_component_build=false v8_monolithic=true is_debug=true is_official_build=false treat_warnings_as_errors=false v8_use_external_startup_data=false use_sysroot=false use_custom_libcxx=false linux_use_bundled_binutils=false clang_use_chrome_plugins=false use_debug_fission=true")
+ExternalProject_Add(
+    V8
+    PREFIX third-party
+    DOWNLOAD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8"
+    SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8"
+    DOWNLOAD_COMMAND fetch --force v8
+    UPDATE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/third_party/depot_tools/gclient sync --revision ${V8_VERSION}
+    CONFIGURE_COMMAND gn gen . --root=${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8 --args=${V8_BUILD_ARGS}
+    BUILD_COMMAND ninja
+    BUILD_BYPRODUCTS "${PROJECT_BINARY_DIR}/third-party/src/V8-build/obj/libv8_monolith.a"
+    INSTALL_COMMAND ":"
+    )
+include_directories(SYSTEM third-party/v8/v8/include)
+add_library(v8 STATIC IMPORTED)
+set_target_properties(v8 PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/third-party/src/V8-build/obj/libv8_monolith.a")
 
 # Directories
 include_directories(src)

@@ -771,19 +771,25 @@ NEXT;
 
 Ld_RS_i8: {
     PREPARE_LOAD;
-    stack_.back() = int64_t(*reinterpret_cast<int8_t*>(addr + bytes));
+    auto pv_res = std::get_if<int64_t>(&stack_.back());
+    insist(pv_res, "invalid type of variant");
+    *pv_res = int64_t(*reinterpret_cast<int8_t*>(addr + bytes));
 }
 NEXT;
 
 Ld_RS_i16: {
     PREPARE_LOAD;
-    stack_.back() = int64_t(*reinterpret_cast<int16_t*>(addr + bytes));
+    auto pv_res = std::get_if<int64_t>(&stack_.back());
+    insist(pv_res, "invalid type of variant");
+    *pv_res = int64_t(*reinterpret_cast<int8_t*>(addr + bytes));
 }
 NEXT;
 
 Ld_RS_i32: {
     PREPARE_LOAD;
-    stack_.back() = int64_t(*reinterpret_cast<int32_t*>(addr + bytes));
+    auto pv_res = std::get_if<int64_t>(&stack_.back());
+    insist(pv_res, "invalid type of variant");
+    *pv_res = int64_t(*reinterpret_cast<int8_t*>(addr + bytes));
 }
 NEXT;
 
@@ -952,25 +958,33 @@ NEXT;
 
 Ld_CS_i8: {
     PREPARE_LOAD(int8_t);
-    stack_.back() = int64_t(value_col_addr[row_id]);
+    auto pv_res = std::get_if<int64_t>(&stack_.back());
+    insist(pv_res, "invalid type of variant");
+    *pv_res = int64_t(value_col_addr[row_id]);
 }
 NEXT;
 
 Ld_CS_i16: {
     PREPARE_LOAD(int16_t);
-    stack_.back() = int64_t(value_col_addr[row_id]);
+    auto pv_res = std::get_if<int64_t>(&stack_.back());
+    insist(pv_res, "invalid type of variant");
+    *pv_res = int64_t(value_col_addr[row_id]);
 }
 NEXT;
 
 Ld_CS_i32: {
     PREPARE_LOAD(int32_t);
-    stack_.back() = int64_t(value_col_addr[row_id]);
+    auto pv_res = std::get_if<int64_t>(&stack_.back());
+    insist(pv_res, "invalid type of variant");
+    *pv_res = int64_t(value_col_addr[row_id]);
 }
 NEXT;
 
 Ld_CS_i64: {
     PREPARE_LOAD(int64_t);
-    stack_.back() = int64_t(value_col_addr[row_id]);
+    auto pv_res = std::get_if<int64_t>(&stack_.back());
+    insist(pv_res, "invalid type of variant");
+    *pv_res = int64_t(value_col_addr[row_id]);
 }
 NEXT;
 

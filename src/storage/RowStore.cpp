@@ -1,7 +1,7 @@
 #include "storage/RowStore.hpp"
 
+#include "backend/Interpreter.hpp"
 #include "catalog/Type.hpp"
-#include "IR/Interpreter.hpp"
 #include "util/fn.hpp"
 #include <algorithm>
 #include <exception>

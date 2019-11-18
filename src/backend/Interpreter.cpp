@@ -1,4 +1,4 @@
-#include "IR/Interpreter.hpp"
+#include "backend/Interpreter.hpp"
 
 #include "parse/AST.hpp"
 #include "parse/ASTVisitor.hpp"

@@ -19,7 +19,6 @@ add_executable(
 
     # IR
     IR/CNFTest.cpp
-    IR/InterpreterTest.cpp
 
     # catalog
     catalog/SchemaTest.cpp
@@ -28,5 +27,8 @@ add_executable(
     # storage
     storage/ColumnStoreTest.cpp
     storage/RowStoreTest.cpp
+
+    # backend
+    backend/InterpreterTest.cpp
     )
 target_link_libraries(unittest db)

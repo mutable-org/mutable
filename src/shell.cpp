@@ -1,6 +1,6 @@
+#include "backend/Interpreter.hpp"
 #include "catalog/Schema.hpp"
 #include "io/Reader.hpp"
-#include "IR/Interpreter.hpp"
 #include "IR/Optimizer.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"

@@ -1,13 +1,14 @@
 add_subdirectory(util)
+add_subdirectory(catalog)
 add_subdirectory(lex)
 add_subdirectory(parse)
-add_subdirectory(IR)
-add_subdirectory(catalog)
 add_subdirectory(storage)
 add_subdirectory(io)
+add_subdirectory(IR)
+add_subdirectory(backend)
 
 add_library(db INTERFACE)
-target_link_libraries(db INTERFACE IR io storage parse lex catalog util)
+target_link_libraries(db INTERFACE backend IR io storage parse lex catalog util)
 
 add_executable(lex-bin lex.cpp)
 target_link_libraries(lex-bin lex util)
@@ -34,7 +35,7 @@ add_executable(store store.cpp)
 target_link_libraries(store storage IR parse lex catalog util)
 
 add_executable(operator operator.cpp)
-target_link_libraries(operator storage IR parse lex catalog util)
+target_link_libraries(operator backend IR storage parse lex catalog util)
 
 add_executable(dsv dsv.cpp)
 target_link_libraries(dsv io storage IR parse lex catalog util)

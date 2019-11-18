@@ -1,8 +1,8 @@
 #include "catch.hpp"
 
+#include "backend/Interpreter.hpp"
 #include "catalog/Type.hpp"
 #include "IR/CNF.hpp"
-#include "IR/Interpreter.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "storage/RowStore.hpp"

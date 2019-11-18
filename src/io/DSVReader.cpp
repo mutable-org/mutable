@@ -1,6 +1,6 @@
 #include "io/Reader.hpp"
 
-#include "IR/Interpreter.hpp"
+#include "backend/Interpreter.hpp"
 #include "storage/Store.hpp"
 #include "util/macro.hpp"
 #include <cctype>

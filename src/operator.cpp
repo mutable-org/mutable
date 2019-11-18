@@ -1,5 +1,5 @@
+#include "backend/Interpreter.hpp"
 #include "IR/CNF.hpp"
-#include "IR/Interpreter.hpp"
 #include "IR/JoinGraph.hpp"
 #include "IR/Operator.hpp"
 #include "parse/Parser.hpp"

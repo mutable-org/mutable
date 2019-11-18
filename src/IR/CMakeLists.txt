@@ -2,7 +2,6 @@ add_library(
     IR
     STATIC
     CNF.cpp
-    Interpreter.cpp
     JoinGraph.cpp
     JoinOrderer.cpp
     Operator.cpp

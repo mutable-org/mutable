@@ -661,37 +661,6 @@ tuple_type && StackMachine::operator()(const tuple_type &t)
 #define NEXT goto *labels[std::size_t(*op++)]
     NEXT;
 
-#define UNARY(OP, TYPE) { \
-    insist(stack_.size() >= 1); \
-    auto &v = stack_.back(); \
-    auto pv = std::get_if<TYPE>(&v); \
-    insist(pv, "invalid type of variant"); \
-    auto res = OP (*pv); \
-    if constexpr (std::is_same_v<decltype(res), TYPE>) \
-        *pv = res; \
-    else \
-        stack_.back() = res; \
-} \
-NEXT;
-
-#define BINARY(OP, TYPE) { \
-    insist(stack_.size() >= 2); \
-    auto &v_rhs = stack_.back(); \
-    auto pv_rhs = std::get_if<TYPE>(&v_rhs); \
-    insist(pv_rhs, "invalid type of rhs"); \
-    auto rhs = *pv_rhs; \
-    stack_.pop_back(); \
-    auto &v_lhs = stack_.back(); \
-    auto pv_lhs = std::get_if<TYPE>(&v_lhs); \
-    insist(pv_lhs, "invalid type of lhs"); \
-    auto res = *pv_lhs OP rhs; \
-    if constexpr (std::is_same_v<decltype(res), TYPE>) \
-        *pv_lhs = res; \
-    else \
-        stack_.back() = res; \
-} \
-NEXT;
-
 /*======================================================================================================================
  * Control flow operations
  *====================================================================================================================*/
@@ -1111,6 +1080,37 @@ NEXT;
 #undef PREPARE_STORE
 
 #undef PREPARE
+
+#define UNARY(OP, TYPE) { \
+    insist(stack_.size() >= 1); \
+    auto &v = stack_.back(); \
+    auto pv = std::get_if<TYPE>(&v); \
+    insist(pv, "invalid type of variant"); \
+    auto res = OP (*pv); \
+    if constexpr (std::is_same_v<decltype(res), TYPE>) \
+        *pv = res; \
+    else \
+        stack_.back() = res; \
+} \
+NEXT;
+
+#define BINARY(OP, TYPE) { \
+    insist(stack_.size() >= 2); \
+    auto &v_rhs = stack_.back(); \
+    auto pv_rhs = std::get_if<TYPE>(&v_rhs); \
+    insist(pv_rhs, "invalid type of rhs"); \
+    auto rhs = *pv_rhs; \
+    stack_.pop_back(); \
+    auto &v_lhs = stack_.back(); \
+    auto pv_lhs = std::get_if<TYPE>(&v_lhs); \
+    insist(pv_lhs, "invalid type of lhs"); \
+    auto res = *pv_lhs OP rhs; \
+    if constexpr (std::is_same_v<decltype(res), TYPE>) \
+        *pv_lhs = res; \
+    else \
+        stack_.back() = res; \
+} \
+NEXT;
 
 /*======================================================================================================================
  * Arithmetical operations

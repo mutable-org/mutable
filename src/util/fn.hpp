@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstring>
 #include <ctime>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <type_traits>
@@ -228,3 +229,28 @@ inline bool is_lower(int c) { return ('a' <= c && c <= 'z'); }
 inline bool is_upper(int c) { return ('A' <= c && c <= 'Z'); }
 inline bool is_alpha(int c) { return is_lower(c) || is_upper(c); }
 inline bool is_alnum(int c) { return is_dec(c) || is_alpha(c); }
+
+/** Returns path of the user's home directory. */
+inline std::filesystem::path get_home_path()
+{
+    std::filesystem::path path;
+#ifdef __linux__
+    auto home = getenv("HOME");
+    if (home)
+        path = home;
+#elif __APPLE__
+    auto home = getenv("HOME");
+    if (home)
+        path = home;
+#elif _WIN32
+    auto homedrive = getenv("HOMEDRIVE");
+    auto homepath = getenv("HOMEPATH");
+    if (homedrive and homepath) {
+        path = homedrive;
+        path /= homepath;
+    }
+#else
+    path = ".";
+#endif
+    return path;
+}

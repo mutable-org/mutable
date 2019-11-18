@@ -132,8 +132,7 @@ StackMachine ColumnStore::loader(const OperatorSchema &schema) const
 
     /* Update row id. */
     sm.emit_Ld_Ctx(row_id_idx);
-    sm.add_and_emit_load(int64_t(1));
-    sm.emit_Add_i();
+    sm.emit_Inc();
     sm.emit_Upd_Ctx(row_id_idx);
     sm.emit_Pop();
 
@@ -218,8 +217,7 @@ StackMachine ColumnStore::writer(const std::vector<const Attribute*> &attrs) con
 
     /* Update row id. */
     sm.emit_Ld_Ctx(row_id_idx);
-    sm.add_and_emit_load(int64_t(1));
-    sm.emit_Add_i();
+    sm.emit_Inc();
     sm.emit_Upd_Ctx(row_id_idx);
     sm.emit_Pop();
 

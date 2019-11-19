@@ -130,10 +130,10 @@ StackMachine RowStore::loader(const OperatorSchema &schema) const
                     const auto p = ceil_to_pow_2(n->size());
                     switch (p) {
                         default: unreachable("illegal precision of decimal type");
-                        case 1: sm.emit_Ld_RS_i8();  break;
-                        case 2: sm.emit_Ld_RS_i16(); break;
-                        case 4: sm.emit_Ld_RS_i32(); break;
-                        case 8: sm.emit_Ld_RS_i64(); break;
+                        case 8: sm.emit_Ld_RS_i8();  break;
+                        case 16: sm.emit_Ld_RS_i16(); break;
+                        case 32: sm.emit_Ld_RS_i32(); break;
+                        case 64: sm.emit_Ld_RS_i64(); break;
                     }
                     break;
                 }

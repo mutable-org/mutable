@@ -121,44 +121,6 @@ struct db::StackMachineBuilder : ConstASTVisitor
     void operator()(Const<DSVImportStmt>&) override { unreachable("not supported"); }
 };
 
-value_type StackMachineBuilder::eval(const Constant &c)
-{
-    errno = 0;
-    switch (c.tok.type) {
-        default: unreachable("illegal token");
-
-        /* Integer */
-        case TK_OCT_INT:
-            return int64_t(strtoll(c.tok.text, nullptr, 8));
-
-        case TK_DEC_INT:
-            return int64_t(strtoll(c.tok.text, nullptr, 10));
-
-        case TK_HEX_INT:
-            return int64_t(strtoll(c.tok.text, nullptr, 16));
-
-        /* Float */
-        case TK_DEC_FLOAT:
-            return strtod(c.tok.text, nullptr);
-
-        case TK_HEX_FLOAT:
-            unreachable("not implemented");
-
-        /* String */
-        case TK_STRING_LITERAL:
-            return interpret(c.tok.text);
-
-        /* Boolean */
-        case TK_True:
-            return true;
-
-        case TK_False:
-            return false;
-    }
-    if (errno)
-        throw std::invalid_argument("constant could not be parsed");
-}
-
 void StackMachineBuilder::operator()(Const<Designator> &e)
 {
     /* Given the designator, identify the position of its value in the tuple.  */
@@ -177,7 +139,7 @@ void StackMachineBuilder::operator()(Const<Designator> &e)
     }
 }
 
-void StackMachineBuilder::operator()(Const<Constant> &e) { stack_machine_.add_and_emit_load(eval(e)); }
+void StackMachineBuilder::operator()(Const<Constant> &e) { stack_machine_.add_and_emit_load(Interpreter::eval(e)); }
 
 void StackMachineBuilder::operator()(Const<FnApplicationExpr> &e)
 {

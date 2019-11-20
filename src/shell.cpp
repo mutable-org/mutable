@@ -198,6 +198,9 @@ next:
         if (options.times)
             std::cout << timer;
     }
+
+    std::cout.flush();
+    std::cerr.flush();
 }
 
 /** Determine codepoint length of utf-8 string. */
@@ -438,7 +441,7 @@ int main(int argc, const char **argv)
     KEY_BIND(control(Replxx::KEY::DOWN),  HINT_NEXT);
     KEY_BIND(meta('p'),                   HISTORY_COMMON_PREFIX_SEARCH);
     KEY_BIND(meta(Replxx::KEY::BACKSPACE),KILL_TO_BEGINING_OF_WORD);
-#undef KEY_BIN
+#undef KEY_BIND
 
     if (options.show_prompt) {
         /* Completion */

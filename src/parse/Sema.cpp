@@ -606,8 +606,10 @@ void Sema::operator()(Const<SelectClause> &c)
 
         if (e.type()->is_error()) continue;
         auto pt = as<const PrimitiveType>(e.type());
-        has_vector = has_vector or pt->is_vectorial();
-        has_scalar = has_scalar or pt->is_scalar();
+        if (not e.is_constant()) { // constants can be broadcast from scalar to vectorial
+            has_vector = has_vector or pt->is_vectorial();
+            has_scalar = has_scalar or pt->is_scalar();
+        }
 
         std::pair<decltype(SemaContext::results)::iterator, bool> res;
         if (s.second) {
@@ -625,9 +627,8 @@ void Sema::operator()(Const<SelectClause> &c)
         }
     }
 
-    if (has_vector and has_scalar) {
+    if (has_vector and has_scalar)
         diag.e(c.tok.pos) << "SELECT clause with mixed scalar and vectorial values is forbidden.\n";
-    }
 }
 
 void Sema::operator()(Const<FromClause> &c)

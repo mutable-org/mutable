@@ -2,6 +2,7 @@
 
 #include "util/macro.hpp"
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstring>
@@ -254,3 +255,11 @@ inline std::filesystem::path get_home_path()
 #endif
     return path;
 }
+
+/** Returns true iff the character sequence only consists of white spaces. */
+inline bool isspace(const char *s, std::size_t len)
+{
+    return std::all_of(s, s + len, static_cast<int(*)(int)>(std::isspace));
+}
+
+inline bool isspace(const char *s) { return isspace(s, strlen(s)); }

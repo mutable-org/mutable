@@ -477,6 +477,7 @@ int main(int argc, const char **argv)
                 while ((cinput == nullptr) and (errno == EAGAIN));
                 insist(errno != EAGAIN);
 
+                /* User sent EOF */
                 if (cinput == nullptr) {
                     if (options.show_prompt)
                         std::cout << std::endl;
@@ -484,8 +485,9 @@ int main(int argc, const char **argv)
                 }
                 insist(cinput);
 
+                /* User sent input */
                 auto len = strlen(cinput);
-                if (len) {
+                if (not isspace(cinput, len)) {
                     ss.write(cinput, len); // append replxx line to stream
                     rx.history_add(cinput);
                     if (cinput[len - 1] == ';') {

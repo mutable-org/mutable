@@ -368,7 +368,7 @@ int main(int argc, const char **argv)
         [&](bool) { options.echo = true; });                /* Callback         */
     ADD(bool, options.ast, false,                           /* Type, Var, Init  */
         nullptr, "--ast",                                   /* Short, Long      */
-        "dot the AST of statements",                        /* Description      */
+        "dump the AST of statements",                       /* Description      */
         [&](bool) { options.ast = true; });                 /* Callback         */
     ADD(bool, options.astdot, false,                        /* Type, Var, Init  */
         nullptr, "--astdot",                                /* Short, Long      */

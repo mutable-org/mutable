@@ -69,10 +69,17 @@ std::unique_ptr<Producer> Optimizer::build_operator_tree(const JoinGraph &G,
                 scan = filter;
             }
             stack.emplace_back(entry_type({ds}, scan));
-        } else {
-            auto query = as<const Query>(e.as_datasource());
-            unreachable("subqueries not yet implemented");
-        }
+        } else if (auto query = cast<const Query>(e.as_datasource())) {
+            auto subG = query->join_graph();
+            auto sub = build_operator_tree(*subG, orders).release();
+            if (query->filter().size()) {
+                auto filter = new FilterOperator(query->filter());
+                filter->add_child(sub);
+                sub = filter;
+            }
+            stack.emplace_back(entry_type({query}, sub));
+        } else
+            unreachable("unsupported join order entry");
     }
 
     if (stack.empty())

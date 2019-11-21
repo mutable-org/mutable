@@ -43,12 +43,6 @@ struct BaseTable : DataSource
     const Table & table() const { return table_; }
 };
 
-/** A (nested) query is a data source that must be computed. */
-struct Query : DataSource
-{
-    Query(const char *alias) : DataSource(alias) { }
-};
-
 /** A join combines source tables by a join condition. */
 struct Join
 {
@@ -102,6 +96,19 @@ struct JoinGraph
 
     void dump(std::ostream &out) const;
     void dump() const;
+};
+
+/** A (nested) query is a data source that must be computed. */
+struct Query : DataSource
+{
+    private:
+    JoinGraph *join_graph_; ///< join graph of the sub-query
+
+    public:
+    Query(const char *alias, JoinGraph *join_graph) : DataSource(alias), join_graph_(join_graph) { }
+    ~Query() { delete join_graph_; };
+
+    JoinGraph * join_graph() const { return join_graph_; }
 };
 
 }

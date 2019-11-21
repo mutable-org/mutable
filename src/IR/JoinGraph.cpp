@@ -228,12 +228,18 @@ struct db::GraphBuilder : ConstASTVisitor
                 aliases.emplace(alias.text, base);
                 graph_->sources_.emplace_back(base);
             } else if (auto stmt = std::get_if<Stmt*>(&tbl.source)) {
-                /* TODO Create a join graph for the nested statement. */
                 insist(tbl.alias.text, "every nested statement requires an alias");
-                auto q = new Query(tbl.alias.text);
-                insist(tbl.alias);
-                aliases.emplace(tbl.alias.text, q);
-                graph_->sources_.emplace_back(q);
+                if (auto select = cast<SelectStmt>(*stmt)) {
+                    /* Create a graph for subquery. */
+                    GraphBuilder builder;
+                    builder(*select);
+                    auto graph = builder.get();
+                    auto q = new Query(tbl.alias.text, graph.release());
+                    insist(tbl.alias);
+                    aliases.emplace(tbl.alias.text, q);
+                    graph_->sources_.emplace_back(q);
+                } else
+                    unreachable("invalid variant");
             } else {
                 unreachable("invalid variant");
             }

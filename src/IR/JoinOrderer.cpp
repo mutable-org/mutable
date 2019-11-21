@@ -30,6 +30,10 @@ DummyJoinOrderer::mapping_type DummyJoinOrderer::operator()(const JoinGraph &G, 
             used.insert(r);
             order.push_back(r); // emit
 
+            /* Check if relation is subquery. */
+            if (auto q = cast<const Query>(r))
+                worklist.push_back(q->join_graph());
+
             /* Apply all possible joins. */
             std::vector<const Join*> joins_used;
             for (auto j : joins) { // TODO apply smaller joins first to get better plans

@@ -79,6 +79,7 @@ struct options_t
     bool echo;
     bool ast;
     bool astdot;
+    bool graph;
     bool graphdot;
     bool plan;
     bool plandot;
@@ -118,6 +119,7 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
             auto joingraph = JoinGraph::Build(*stmt);
             timer.stop();
             if (options.graphdot) joingraph->dot(std::cout);
+            if (options.graph) joingraph->dump(std::cout);
 
             DummyJoinOrderer orderer;
             DummyCostModel costmodel;
@@ -372,6 +374,10 @@ int main(int argc, const char **argv)
         nullptr, "--astdot",                                /* Short, Long      */
         "dot the AST of statements",                        /* Description      */
         [&](bool) { options.astdot = true; });              /* Callback         */
+    ADD(bool, options.graph, false,                         /* Type, Var, Init  */
+        nullptr, "--graph",                                 /* Short, Long      */
+        "dump the computed join graph",                     /* Description      */
+        [&](bool) { options.graph = true; });               /* Callback         */
     ADD(bool, options.graphdot, false,                      /* Type, Var, Init  */
         nullptr, "--graphdot",                              /* Short, Long      */
         "dot the computed join graph",                      /* Description      */

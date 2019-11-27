@@ -278,10 +278,6 @@ struct Consumer : virtual Operator
     const std::vector<Producer*> & children() const { return children_; }
     Producer * child(std::size_t i) const { insist(i < children_.size()); return children_[i]; }
 
-    using Operator::accept;
-    virtual void accept(OperatorVisitor &V, tuple_type &T) = 0;
-    virtual void accept(ConstOperatorVisitor &V, tuple_type &T) const = 0;
-
     void print_recursive(std::ostream &out, unsigned depth) const override;
 
     protected:
@@ -301,8 +297,6 @@ struct CallbackOperator : Consumer
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-    void accept(OperatorVisitor &V, tuple_type &T) override;
-    void accept(ConstOperatorVisitor &V, tuple_type &T) const override;
 
     private:
     void print(std::ostream &out) const override;
@@ -345,8 +339,6 @@ struct FilterOperator : Producer, Consumer
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-    void accept(OperatorVisitor &v, tuple_type &t) override;
-    void accept(ConstOperatorVisitor &v, tuple_type &t) const override;
 
     private:
     void print(std::ostream &out) const override;
@@ -377,8 +369,6 @@ struct JoinOperator : Producer, Consumer
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-    void accept(OperatorVisitor &v, tuple_type &t) override;
-    void accept(ConstOperatorVisitor &v, tuple_type &t) const override;
 
     private:
     void print(std::ostream &out) const override;
@@ -430,8 +420,6 @@ struct ProjectionOperator : Producer, Consumer
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-    void accept(OperatorVisitor &v, tuple_type &t) override;
-    void accept(ConstOperatorVisitor &v, tuple_type &t) const override;
 
     private:
     void print(std::ostream &out) const override;
@@ -457,8 +445,6 @@ struct LimitOperator : Producer, Consumer
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-    void accept(OperatorVisitor &v, tuple_type &t) override;
-    void accept(ConstOperatorVisitor &v, tuple_type &t) const override;
 
     private:
     void print(std::ostream &out) const override;
@@ -506,8 +492,6 @@ struct GroupingOperator : Producer, Consumer
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-    void accept(OperatorVisitor &v, tuple_type &t) override;
-    void accept(ConstOperatorVisitor &v, tuple_type &t) const override;
 
     private:
     void print(std::ostream &out) const override;
@@ -529,8 +513,6 @@ struct SortingOperator : Producer, Consumer
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-    void accept(OperatorVisitor &v, tuple_type &t) override;
-    void accept(ConstOperatorVisitor &v, tuple_type &t) const override;
 
     private:
     void print(std::ostream &out) const override;

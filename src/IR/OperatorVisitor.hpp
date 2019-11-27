@@ -16,24 +16,15 @@ struct TheOperatorVisitor
     virtual ~TheOperatorVisitor() { }
 
     void operator()(Const<Operator> &op) { op.accept(*this); }
-    void operator()(Const<Operator> &op, tuple_type &t) { op.accept(*this, t); }
-
-#define DECLARE(CLASS) \
-    virtual void operator()(Const<CLASS> &op) = 0
-#define DECLARE_CONSUMER(CLASS) \
-    DECLARE(CLASS); \
-    virtual void operator()(Const<CLASS> &op, tuple_type &t) = 0
-
+#define DECLARE(CLASS) virtual void operator()(Const<CLASS> &op) = 0
     DECLARE(ScanOperator);
-    DECLARE_CONSUMER(CallbackOperator);
-    DECLARE_CONSUMER(FilterOperator);
-    DECLARE_CONSUMER(JoinOperator);
-    DECLARE_CONSUMER(ProjectionOperator);
-    DECLARE_CONSUMER(LimitOperator);
-    DECLARE_CONSUMER(GroupingOperator);
-    DECLARE_CONSUMER(SortingOperator);
-
-#undef DECLARE_CONSUMER
+    DECLARE(CallbackOperator);
+    DECLARE(FilterOperator);
+    DECLARE(JoinOperator);
+    DECLARE(ProjectionOperator);
+    DECLARE(LimitOperator);
+    DECLARE(GroupingOperator);
+    DECLARE(SortingOperator);
 #undef DECLARE
 };
 

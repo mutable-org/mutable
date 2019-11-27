@@ -12,17 +12,11 @@ using namespace db;
     void CLASS::accept(OperatorVisitor &v)            { v(*this); } \
     void CLASS::accept(ConstOperatorVisitor &v) const { v(*this); }
 
-#define ACCEPT_CONSUMER(CLASS) \
-    ACCEPT(CLASS) \
-    void CLASS::accept(OperatorVisitor &v, tuple_type &t)            { v(*this, t); } \
-    void CLASS::accept(ConstOperatorVisitor &v, tuple_type &t) const { v(*this, t); }
-
 ACCEPT(ScanOperator);
-
-ACCEPT_CONSUMER(CallbackOperator);
-ACCEPT_CONSUMER(FilterOperator);
-ACCEPT_CONSUMER(JoinOperator);
-ACCEPT_CONSUMER(ProjectionOperator);
-ACCEPT_CONSUMER(LimitOperator);
-ACCEPT_CONSUMER(GroupingOperator);
-ACCEPT_CONSUMER(SortingOperator);
+ACCEPT(CallbackOperator);
+ACCEPT(FilterOperator);
+ACCEPT(JoinOperator);
+ACCEPT(ProjectionOperator);
+ACCEPT(LimitOperator);
+ACCEPT(GroupingOperator);
+ACCEPT(SortingOperator);

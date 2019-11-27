@@ -263,22 +263,15 @@ struct SchemaMinimizer : OperatorVisitor
     public:
     using OperatorVisitor::operator();
 
-#define DECLARE(CLASS) \
-    void operator()(Const<CLASS> &op) override
-#define DECLARE_CONSUMER(CLASS) \
-    void operator()(Const<CLASS>&, tuple_type&) override { } \
-    DECLARE(CLASS)
-
+#define DECLARE(CLASS) void operator()(Const<CLASS> &op) override
     DECLARE(ScanOperator);
-    DECLARE_CONSUMER(CallbackOperator);
-    DECLARE_CONSUMER(FilterOperator);
-    DECLARE_CONSUMER(JoinOperator);
-    DECLARE_CONSUMER(ProjectionOperator);
-    DECLARE_CONSUMER(LimitOperator);
-    DECLARE_CONSUMER(GroupingOperator);
-    DECLARE_CONSUMER(SortingOperator);
-
-#undef DECLARE_CONSUMER
+    DECLARE(CallbackOperator);
+    DECLARE(FilterOperator);
+    DECLARE(JoinOperator);
+    DECLARE(ProjectionOperator);
+    DECLARE(LimitOperator);
+    DECLARE(GroupingOperator);
+    DECLARE(SortingOperator);
 #undef DECLARE
 };
 

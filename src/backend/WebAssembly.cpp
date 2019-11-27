@@ -81,12 +81,14 @@ WASMModule WASMCodeGen::compile(const Operator &op)
     return module;
 }
 
+
 /*======================================================================================================================
- * WASMCodeGen / Recursive descent
+ * WASMCodeGen / Operators
  *====================================================================================================================*/
 
 void WASMCodeGen::operator()(const ScanOperator &op)
 {
+    // TODO implement
 }
 
 void WASMCodeGen::operator()(const CallbackOperator &op)
@@ -96,10 +98,12 @@ void WASMCodeGen::operator()(const CallbackOperator &op)
 
 void WASMCodeGen::operator()(const FilterOperator &op)
 {
+    // TODO implement
 }
 
 void WASMCodeGen::operator()(const JoinOperator &op)
 {
+    // TODO implement
 }
 
 void WASMCodeGen::operator()(const ProjectionOperator &op)
@@ -121,47 +125,19 @@ void WASMCodeGen::operator()(const ProjectionOperator &op)
 
 void WASMCodeGen::operator()(const LimitOperator &op)
 {
+    // TODO implement
 }
 
 void WASMCodeGen::operator()(const GroupingOperator &op)
 {
+    // TODO implement
 }
 
 void WASMCodeGen::operator()(const SortingOperator &op)
 {
+    // TODO implement
 }
 
-/*======================================================================================================================
- * WASMCodeGen / Recursive ascent
- *====================================================================================================================*/
-
-void WASMCodeGen::operator()(const FilterOperator &op, tuple_type &t)
-{
-}
-
-void WASMCodeGen::operator()(const CallbackOperator &op, tuple_type &t)
-{
-}
-
-void WASMCodeGen::operator()(const JoinOperator &op, tuple_type &t)
-{
-}
-
-void WASMCodeGen::operator()(const ProjectionOperator &op, tuple_type &t)
-{
-}
-
-void WASMCodeGen::operator()(const LimitOperator &op, tuple_type &t)
-{
-}
-
-void WASMCodeGen::operator()(const GroupingOperator &op, tuple_type &t)
-{
-}
-
-void WASMCodeGen::operator()(const SortingOperator &op, tuple_type &t)
-{
-}
 
 /*======================================================================================================================
  * WASMCodeGen / Expressions
@@ -169,6 +145,7 @@ void WASMCodeGen::operator()(const SortingOperator &op, tuple_type &t)
 
 void WASMCodeGen::operator()(Const<Designator> &e)
 {
+    // TODO implement
 }
 
 void WASMCodeGen::operator()(Const<Constant> &e)
@@ -213,6 +190,8 @@ void WASMCodeGen::operator()(Const<Constant> &e)
 
 void WASMCodeGen::operator()(Const<FnApplicationExpr> &e)
 {
+    (void) e;
+    unreachable("not implemented");
 }
 
 void WASMCodeGen::operator()(Const<UnaryExpr> &e)
@@ -416,6 +395,11 @@ void WASMCodeGen::operator()(Const<BinaryExpr> &e)
 #undef BINARY
 #undef BINARY_OP
 }
+
+
+/*======================================================================================================================
+ * WASMBackend
+ *====================================================================================================================*/
 
 void WASMBackend::execute(const Operator &plan) const
 {

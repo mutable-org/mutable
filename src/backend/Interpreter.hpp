@@ -10,6 +10,39 @@
 
 namespace db {
 
+/** Implements push-based evaluation of a pipeline in the plan. */
+struct Pipeline : ConstOperatorVisitor
+{
+    private:
+    tuple_type tuple_;
+
+    Pipeline() = default;
+    Pipeline(tuple_type t) : tuple_(t) { }
+
+    public:
+    static void Push(const Operator &pipeline_start) {
+        Pipeline P;
+        P(pipeline_start);
+    }
+
+    static void Push(const Operator &pipeline_start, tuple_type t) {
+        Pipeline P(t);
+        P(pipeline_start);
+    }
+
+    using ConstOperatorVisitor::operator();
+#define DECLARE(CLASS) void operator()(Const<CLASS> &op) override
+    DECLARE(ScanOperator);
+    DECLARE(CallbackOperator);
+    DECLARE(FilterOperator);
+    DECLARE(JoinOperator);
+    DECLARE(ProjectionOperator);
+    DECLARE(LimitOperator);
+    DECLARE(GroupingOperator);
+    DECLARE(SortingOperator);
+#undef DECLARE
+};
+
 /** Evaluates SQL operator trees on the database. */
 struct Interpreter : Backend, ConstOperatorVisitor
 {
@@ -19,24 +52,15 @@ struct Interpreter : Backend, ConstOperatorVisitor
     void execute(const Operator &plan) const override { (*const_cast<Interpreter*>(this))(plan); }
 
     using ConstOperatorVisitor::operator();
-
-#define DECLARE(CLASS) \
-    void operator()(Const<CLASS> &op) override
-#define DECLARE_CONSUMER(CLASS) \
-    DECLARE(CLASS); \
-    void operator()(Const<CLASS> &op, tuple_type &t) override
-
+#define DECLARE(CLASS) void operator()(Const<CLASS> &op) override
     DECLARE(ScanOperator);
-
-    DECLARE_CONSUMER(CallbackOperator);
-    DECLARE_CONSUMER(FilterOperator);
-    DECLARE_CONSUMER(JoinOperator);
-    DECLARE_CONSUMER(ProjectionOperator);
-    DECLARE_CONSUMER(LimitOperator);
-    DECLARE_CONSUMER(GroupingOperator);
-    DECLARE_CONSUMER(SortingOperator);
-
-#undef DECLARE_CONSUMER
+    DECLARE(CallbackOperator);
+    DECLARE(FilterOperator);
+    DECLARE(JoinOperator);
+    DECLARE(ProjectionOperator);
+    DECLARE(LimitOperator);
+    DECLARE(GroupingOperator);
+    DECLARE(SortingOperator);
 #undef DECLARE
 
     static value_type eval(const Constant &c)

@@ -129,6 +129,265 @@ struct FilterData : OperatorData
     FilterData(StackMachine &&filter) : filter(std::move(filter)) { }
 };
 
+
+/*======================================================================================================================
+ * Pipeline
+ *====================================================================================================================*/
+
+void Pipeline::operator()(const ScanOperator &op)
+{
+    auto loader = op.store().loader(op.schema());
+    for (auto i = op.store().num_rows(); i; --i) {
+        tuple_ = loader();
+        op.parent()->accept(*this);
+    }
+}
+
+void Pipeline::operator()(const CallbackOperator &op)
+{
+    op.callback()(op.schema(), tuple_);
+}
+
+void Pipeline::operator()(const FilterOperator &op)
+{
+    auto data = as<FilterData>(op.data());
+    auto res = data->filter(tuple_);
+    insist(res.size() == 1);
+    auto pv = std::get_if<bool>(&res[0]);
+    insist(pv, "invalid type of variant");
+    if (*pv) op.parent()->accept(*this);
+}
+
+void Pipeline::operator()(const JoinOperator &op)
+{
+    switch (op.algo()) {
+        default:
+            unreachable("Illegal join algorithm.");
+
+        case JoinOperator::J_Undefined:
+            /* fall through */
+        case JoinOperator::J_NestedLoops: {
+            auto data = (NestedLoopsJoinData*)(op.data());
+            auto size = op.children().size();
+
+            if (data->active_child == size - 1) {
+                /* This is the right-most child.  Combine its produced tuple with all combinations of the buffered
+                 * tuples. */
+                std::vector<std::size_t> positions(size - 1, std::size_t(-1L)); // positions within each buffer
+                std::size_t child_id = 0; // cursor to the child that provides the next part of the joined tuple
+                auto rhs = tuple_;
+                tuple_type joined;
+                joined.reserve(op.schema().size());
+
+                for (;;) {
+                    if (child_id == size - 1) { // right-most child, which produced `rhs`
+                        /* Combine the tuples.  One tuple from each buffer. */
+                        joined.clear();
+                        for (std::size_t i = 0; i != positions.size(); ++i) {
+                            auto &buffer = data->buffers[i];
+                            joined += buffer[positions[i]];
+                        }
+                        joined += rhs; // append the tuple just produced by the right-most child
+
+                        /* Evaluate the join predicate on the joined tuple. */
+                        auto res = data->predicate(joined);
+                        insist(res.size() == 1);
+                        auto pv = std::get_if<bool>(&res[0]);
+                        insist(pv, "invalid type of variant");
+                        if (*pv) {
+                            tuple_ = joined;
+                            op.parent()->accept(*this);
+                        }
+
+                        --child_id;
+                    } else { // child whose tuples have been materialized in a buffer
+                        ++positions[child_id];
+                        auto &buffer = data->buffers[child_id];
+                        if (positions[child_id] == buffer.size()) { // reached the end of this buffer; backtrack
+                            if (child_id == 0)
+                                break;
+                            positions[child_id] = std::size_t(-1L);
+                            --child_id;
+                        } else {
+                            insist(positions[child_id] < buffer.size(), "position out of bounds");
+                            ++child_id;
+                        }
+                    }
+                }
+            } else {
+                /* This is not the right-most child.  Collect its produced tuples in a buffer. */
+                data->buffers[data->active_child].emplace_back(tuple_);
+            }
+            break;
+        }
+
+        case JoinOperator::J_SimpleHashJoin:
+            // TODO
+            unreachable("Simple hash join not implemented.");
+    }
+}
+
+void Pipeline::operator()(const ProjectionOperator &op)
+{
+    auto data = as<ProjectionData>(op.data());
+
+    if (op.is_anti()) {
+        auto result = data->projections(tuple_);
+        tuple_.insert(tuple_.begin(), result.begin(), result.end());
+    } else {
+        tuple_ = data->projections(tuple_);
+    }
+
+    op.parent()->accept(*this);
+}
+
+void Pipeline::operator()(const LimitOperator &op)
+{
+    auto data = as<LimitData>(op.data());
+    if (data->num_tuples < op.offset())
+        /* discard this tuple */;
+    else if (data->num_tuples < op.offset() + op.limit())
+        op.parent()->accept(*this); // pass tuple on to parent
+    else
+        throw LimitOperator::stack_unwind(); // all tuples produced, now unwind the stack
+    ++data->num_tuples;
+}
+
+void Pipeline::operator()(const GroupingOperator &op)
+{
+    tuple_type *aggregates = nullptr;
+
+    /* Find the group. */
+    switch (op.algo()) {
+        case GroupingOperator::G_Undefined:
+        case GroupingOperator::G_Ordered:
+            unreachable("not implemented");
+
+        case GroupingOperator::G_Hashing: {
+            auto data = as<HashBasedGroupingData>(op.data());
+            auto &groups = data->groups;
+            tuple_type key = data->keys(tuple_); // TODO do the same for aggregates
+            auto it = groups.find(key);
+            if (it == groups.end()) {
+                /* Initialize the group's aggregate to NULL.  This will be overwritten by the neutral element w.r.t. the
+                 * aggregation function. */
+                it = groups.emplace_hint(it, key, tuple_type(op.aggregates().size(), null_type()));
+            }
+            aggregates = &it->second;
+            break;
+        }
+    }
+    insist(aggregates, "must have found the group's aggregate");
+
+    /* Add this tuple to its group by computing the aggregates. */
+    for (std::size_t i = 0, end = op.aggregates().size(); i != end; ++i) {
+        auto fe = as<const FnApplicationExpr>(op.aggregates()[i]);
+        auto ty = fe->type();
+        auto &fn = fe->get_function();
+        auto &agg = (*aggregates)[i];
+
+        switch (fn.fnid) {
+            default:
+                unreachable("function kind not implemented");
+
+            case Function::FN_UDF:
+                unreachable("UDFs not yet supported");
+
+            case Function::FN_COUNT:
+                if (std::holds_alternative<null_type>(agg))
+                    agg = int64_t(0); // initialize
+                if (fe->args.size() == 0) {
+                    agg = std::get<int64_t>(agg) + 1;
+                } else {
+                    StackMachine eval(op.child(0)->schema(), *fe->args[0]);
+                    if (not std::holds_alternative<null_type>(eval(tuple_)[0]))
+                        agg = std::get<int64_t>(agg) + 1;
+                }
+                break;
+
+            case Function::FN_SUM: {
+                if (std::holds_alternative<null_type>(agg))
+                    agg = int64_t(0); // initialize
+                auto arg = fe->args[0];
+                StackMachine eval(op.child(0)->schema(), *arg);
+                auto res = eval(tuple_)[0];
+                if (std::holds_alternative<null_type>(res))
+                    continue; // skip NULL
+                auto n = as<const Numeric>(ty);
+                if (n->kind == Numeric::N_Float) {
+                    agg = to<double>(agg) + to<double>(res);
+                } else {
+                    agg = to<int64_t>(agg) + to<int64_t>(res);
+                }
+                break;
+            }
+
+            case Function::FN_MIN: {
+                using std::min;
+                auto arg = fe->args[0];
+                StackMachine eval(op.child(0)->schema(), *arg);
+                auto res = eval(tuple_)[0];
+                if (std::holds_alternative<null_type>(res))
+                    continue; // skip NULL
+
+                auto n = as<const Numeric>(ty);
+                if (n->kind == Numeric::N_Float and n->precision == 32) {
+                    if (std::holds_alternative<null_type>(agg))
+                        agg = to<float>(res);
+                    else
+                        agg = min(to<float>(agg), to<float>(res));
+                } else if (n->kind == Numeric::N_Float and n->precision == 64) {
+                    if (std::holds_alternative<null_type>(agg))
+                        agg = to<double>(res);
+                    else
+                        agg = min(to<double>(agg), to<double>(res));
+                } else {
+                    if (std::holds_alternative<null_type>(agg))
+                        agg = to<int64_t>(res);
+                    else
+                        agg = min(to<int64_t>(agg), to<int64_t>(res));
+                }
+                break;
+            }
+
+            case Function::FN_MAX: {
+                using std::max;
+                auto arg = fe->args[0];
+                StackMachine eval(op.child(0)->schema(), *arg);
+                auto res = eval(tuple_)[0];
+                if (std::holds_alternative<null_type>(res))
+                    continue; // skip NULL
+
+                auto n = as<const Numeric>(ty);
+                if (n->kind == Numeric::N_Float and n->precision == 32) {
+                    if (std::holds_alternative<null_type>(agg))
+                        agg = to<float>(res);
+                    else
+                        agg = max(to<float>(agg), to<float>(res));
+                } else if (n->kind == Numeric::N_Float and n->precision == 64) {
+                    if (std::holds_alternative<null_type>(agg))
+                        agg = to<double>(res);
+                    else
+                        agg = max(to<double>(agg), to<double>(res));
+                } else {
+                    if (std::holds_alternative<null_type>(agg))
+                        agg = to<int64_t>(res);
+                    else
+                        agg = max(to<int64_t>(agg), to<int64_t>(res));
+                }
+                break;
+            }
+        }
+    }
+}
+
+void Pipeline::operator()(const SortingOperator &op)
+{
+    /* cache all tuples for sorting */
+    auto data = as<SortingData>(op.data());
+    data->buffer.emplace_back(tuple_);
+}
+
 /*======================================================================================================================
  * Interpreter - Recursive descent
  *====================================================================================================================*/
@@ -140,11 +399,7 @@ void Interpreter::operator()(const CallbackOperator &op)
 
 void Interpreter::operator()(const ScanOperator &op)
 {
-    auto loader = op.store().loader(op.schema());
-    for (auto i = op.store().num_rows(); i; --i) {
-        auto &&tuple = loader();
-        op.parent()->accept(*this, tuple);
-    }
+    Pipeline::Push(op);
 }
 
 void Interpreter::operator()(const FilterOperator &op)
@@ -189,12 +444,10 @@ void Interpreter::operator()(const ProjectionOperator &op)
         data->projections.emit(*p.first);
 
     /* Evaluate the projection. */
-    if (has_child) {
+    if (has_child)
         op.child(0)->accept(*this);
-    } else {
-        tuple_type t;
-        (*this)(op, t); // evaluate the projection EXACTLY ONCE on an empty tuple
-    }
+    else
+        Pipeline::Push(op); // evaluate the projection EXACTLY ONCE on an empty tuple
 }
 
 void Interpreter::operator()(const LimitOperator &op)
@@ -210,6 +463,7 @@ void Interpreter::operator()(const LimitOperator &op)
 void Interpreter::operator()(const GroupingOperator &op)
 {
     auto &S = op.child(0)->schema();
+    auto &parent = *op.parent();
     switch (op.algo()) {
         case GroupingOperator::G_Undefined:
         case GroupingOperator::G_Ordered:
@@ -221,10 +475,8 @@ void Interpreter::operator()(const GroupingOperator &op)
             for (auto e : op.group_by())
                 data->keys.emit(*e);
             op.child(0)->accept(*this);
-            for (auto g : data->groups) {
-                auto t = g.first + g.second;
-                op.parent()->accept(*this, t); // pass groups on to parent
-            }
+            for (auto g : data->groups)
+                Pipeline::Push(parent, g.first + g.second); // pass groups on to parent
             break;
         }
     }
@@ -293,251 +545,9 @@ void Interpreter::operator()(const SortingOperator &op)
         insist(pv, "invalid type of variant");
         return *pv < 0;
     });
+
+    auto &parent = *op.parent();
     for (auto t : data->buffer)
-        op.parent()->accept(*this, t);
-}
-
-/*======================================================================================================================
- * Interpreter - Recursive ascent
- *====================================================================================================================*/
-
-void Interpreter::operator()(const CallbackOperator &op, tuple_type &t)
-{
-    op.callback()(op.schema(), t);
-}
-
-void Interpreter::operator()(const FilterOperator &op, tuple_type &t)
-{
-    auto data = as<FilterData>(op.data());
-    auto res = data->filter(t);
-    insist(res.size() == 1);
-    auto pv = std::get_if<bool>(&res[0]);
-    insist(pv, "invalid type of variant");
-    if (*pv)
-        op.parent()->accept(*this, t);
-}
-
-void Interpreter::operator()(const JoinOperator &op, tuple_type &t)
-{
-    switch (op.algo()) {
-        default:
-            unreachable("Illegal join algorithm.");
-
-        case JoinOperator::J_Undefined:
-            /* fall through */
-        case JoinOperator::J_NestedLoops: {
-            auto data = (NestedLoopsJoinData*)(op.data());
-            auto size = op.children().size();
-
-            if (data->active_child == size - 1) {
-                /* This is the right-most child.  Combine its produced tuple with all combinations of the buffered
-                 * tuples. */
-                std::vector<std::size_t> positions(size - 1, std::size_t(-1L)); // positions within each buffer
-                std::size_t child_id = 0; // cursor to the child that provides the next part of the joined tuple
-                tuple_type joined;
-                joined.reserve(op.schema().size());
-
-                for (;;) {
-                    if (child_id == size - 1) { // right-most child, which produced `t`
-                        /* Combine the tuples.  One tuple from each buffer. */
-                        joined.clear();
-                        for (std::size_t i = 0; i != positions.size(); ++i) {
-                            auto &buffer = data->buffers[i];
-                            joined += buffer[positions[i]];
-                        }
-                        joined += t; // append the tuple just produced by the right-most child
-
-                        /* Evaluate the join predicate on the joined tuple. */
-                        auto res = data->predicate(joined);
-                        insist(res.size() == 1);
-                        auto pv = std::get_if<bool>(&res[0]);
-                        insist(pv, "invalid type of variant");
-                        if (*pv)
-                            op.parent()->accept(*this, joined);
-
-                        --child_id;
-                    } else { // child whose tuples have been materialized in a buffer
-                        ++positions[child_id];
-                        auto &buffer = data->buffers[child_id];
-                        if (positions[child_id] == buffer.size()) { // reached the end of this buffer; backtrack
-                            if (child_id == 0)
-                                break;
-                            positions[child_id] = std::size_t(-1L);
-                            --child_id;
-                        } else {
-                            insist(positions[child_id] < buffer.size(), "position out of bounds");
-                            ++child_id;
-                        }
-                    }
-                }
-            } else {
-                /* This is not the right-most child.  Collect its produced tuples in a buffer. */
-                data->buffers[data->active_child].emplace_back(t);
-            }
-            break;
-        }
-
-        case JoinOperator::J_SimpleHashJoin:
-            // TODO
-            unreachable("Simple hash join not implemented.");
-    }
-}
-
-void Interpreter::operator()(const ProjectionOperator &op, tuple_type &t)
-{
-    auto data = as<ProjectionData>(op.data());
-    auto result = data->projections(t);
-
-    if (op.is_anti())
-        result.insert(result.end(), t.begin(), t.end());
-
-    op.parent()->accept(*this, result);
-}
-
-void Interpreter::operator()(const LimitOperator &op, tuple_type &t)
-{
-    auto data = as<LimitData>(op.data());
-    if (data->num_tuples < op.offset())
-        /* discard this tuple */;
-    else if (data->num_tuples < op.offset() + op.limit())
-        op.parent()->accept(*this, t); // pass tuple on to parent
-    else
-        throw LimitOperator::stack_unwind(); // all tuples produced, now unwind the stack
-    ++data->num_tuples;
-}
-
-void Interpreter::operator()(const GroupingOperator &op, tuple_type &t)
-{
-    tuple_type *aggregates = nullptr;
-
-    /* Find the group. */
-    switch (op.algo()) {
-        case GroupingOperator::G_Undefined:
-        case GroupingOperator::G_Ordered:
-            unreachable("not implemented");
-
-        case GroupingOperator::G_Hashing: {
-            auto data = as<HashBasedGroupingData>(op.data());
-            auto &groups = data->groups;
-            tuple_type key = data->keys(t); // TODO do the same for aggregates
-            auto it = groups.find(key);
-            if (it == groups.end()) {
-                /* Initialize the group's aggregate to NULL.  This will be overwritten by the neutral element w.r.t. the
-                 * aggregation function. */
-                it = groups.emplace_hint(it, key, tuple_type(op.aggregates().size(), null_type()));
-            }
-            aggregates = &it->second;
-            break;
-        }
-    }
-    insist(aggregates, "must have found the group's aggregate");
-
-    /* Add this tuple to its group by computing the aggregates. */
-    for (std::size_t i = 0, end = op.aggregates().size(); i != end; ++i) {
-        auto fe = as<const FnApplicationExpr>(op.aggregates()[i]);
-        auto ty = fe->type();
-        auto &fn = fe->get_function();
-        auto &agg = (*aggregates)[i];
-
-        switch (fn.fnid) {
-            default:
-                unreachable("function kind not implemented");
-
-            case Function::FN_UDF:
-                unreachable("UDFs not yet supported");
-
-            case Function::FN_COUNT:
-                if (std::holds_alternative<null_type>(agg))
-                    agg = int64_t(0); // initialize
-                if (fe->args.size() == 0) {
-                    agg = std::get<int64_t>(agg) + 1;
-                } else {
-                    StackMachine eval(op.child(0)->schema(), *fe->args[0]);
-                    if (not std::holds_alternative<null_type>(eval(t)[0]))
-                        agg = std::get<int64_t>(agg) + 1;
-                }
-                break;
-
-            case Function::FN_SUM: {
-                if (std::holds_alternative<null_type>(agg))
-                    agg = int64_t(0); // initialize
-                auto arg = fe->args[0];
-                StackMachine eval(op.child(0)->schema(), *arg);
-                auto res = eval(t)[0];
-                if (std::holds_alternative<null_type>(res))
-                    continue; // skip NULL
-                auto n = as<const Numeric>(ty);
-                if (n->kind == Numeric::N_Float) {
-                    agg = to<double>(agg) + to<double>(res);
-                } else {
-                    agg = to<int64_t>(agg) + to<int64_t>(res);
-                }
-                break;
-            }
-
-            case Function::FN_MIN: {
-                using std::min;
-                auto arg = fe->args[0];
-                StackMachine eval(op.child(0)->schema(), *arg);
-                auto res = eval(t)[0];
-                if (std::holds_alternative<null_type>(res))
-                    continue; // skip NULL
-
-                auto n = as<const Numeric>(ty);
-                if (n->kind == Numeric::N_Float and n->precision == 32) {
-                    if (std::holds_alternative<null_type>(agg))
-                        agg = to<float>(res);
-                    else
-                        agg = min(to<float>(agg), to<float>(res));
-                } else if (n->kind == Numeric::N_Float and n->precision == 64) {
-                    if (std::holds_alternative<null_type>(agg))
-                        agg = to<double>(res);
-                    else
-                        agg = min(to<double>(agg), to<double>(res));
-                } else {
-                    if (std::holds_alternative<null_type>(agg))
-                        agg = to<int64_t>(res);
-                    else
-                        agg = min(to<int64_t>(agg), to<int64_t>(res));
-                }
-                break;
-            }
-
-            case Function::FN_MAX: {
-                using std::max;
-                auto arg = fe->args[0];
-                StackMachine eval(op.child(0)->schema(), *arg);
-                auto res = eval(t)[0];
-                if (std::holds_alternative<null_type>(res))
-                    continue; // skip NULL
-
-                auto n = as<const Numeric>(ty);
-                if (n->kind == Numeric::N_Float and n->precision == 32) {
-                    if (std::holds_alternative<null_type>(agg))
-                        agg = to<float>(res);
-                    else
-                        agg = max(to<float>(agg), to<float>(res));
-                } else if (n->kind == Numeric::N_Float and n->precision == 64) {
-                    if (std::holds_alternative<null_type>(agg))
-                        agg = to<double>(res);
-                    else
-                        agg = max(to<double>(agg), to<double>(res));
-                } else {
-                    if (std::holds_alternative<null_type>(agg))
-                        agg = to<int64_t>(res);
-                    else
-                        agg = max(to<int64_t>(agg), to<int64_t>(res));
-                }
-                break;
-            }
-        }
-    }
-}
-
-void Interpreter::operator()(const SortingOperator &op, tuple_type &t)
-{
-    /* cache all tuples for sorting */
-    auto data = as<SortingData>(op.data());
-    data->buffer.emplace_back(t);
+        Pipeline::Push(parent, t);
 }
 

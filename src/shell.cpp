@@ -1,3 +1,4 @@
+#include "backend/Backend.hpp"
 #include "backend/Interpreter.hpp"
 #include "catalog/Schema.hpp"
 #include "io/Reader.hpp"
@@ -121,7 +122,7 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
             DummyJoinOrderer orderer;
             DummyCostModel costmodel;
             Optimizer Opt(orderer, costmodel);
-            Interpreter I;
+            auto I = Backend::CreateInterpreter();
             timer.start("Compute an optimized Query Plan");
             auto optree = Opt(*joingraph.get()).release();
             timer.stop();
@@ -132,7 +133,7 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
                 auto callback = new CallbackOperator(print);
                 callback->add_child(optree);
                 timer.start("Interpret the Query Plan");
-                I(*callback);
+                I->execute(*callback);
                 timer.stop();
                 delete callback;
             }

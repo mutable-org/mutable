@@ -1,5 +1,6 @@
 #pragma once
 
+#include "backend/Backend.hpp"
 #include "catalog/Schema.hpp"
 #include "IR/Operator.hpp"
 #include "IR/OperatorVisitor.hpp"
@@ -122,10 +123,13 @@ struct StackMachine
 bool eval(const OperatorSchema &schema, const cnf::CNF &cnf, const tuple_type &tuple);
 
 /** Evaluates SQL operator trees on the database. */
-struct Interpreter : ConstOperatorVisitor
+struct Interpreter : Backend, ConstOperatorVisitor
 {
     public:
     Interpreter() = default;
+
+    void execute(const Operator &plan) const override { (*const_cast<Interpreter*>(this))(plan); }
+
     using ConstOperatorVisitor::operator();
 
 #define DECLARE(CLASS) \

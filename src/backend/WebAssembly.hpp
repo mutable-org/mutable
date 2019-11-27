@@ -1,5 +1,6 @@
 #pragma once
 
+#include "backend/Backend.hpp"
 #include "catalog/Schema.hpp"
 #include "IR/Operator.hpp"
 #include "IR/OperatorVisitor.hpp"
@@ -49,8 +50,10 @@ struct WASMCodeGen : ConstOperatorVisitor, ConstASTVisitor {
     wasm::Module *module_;
     wasm::Expression *expr_;
 
+    WASMCodeGen(const WASMModule &module) : module_(module.ref_) { } // private c'tor
+
     public:
-    WASMModule compile(const Operator &op);
+    static WASMModule compile(const Operator &op);
 
     private:
     using ConstOperatorVisitor::operator();
@@ -106,6 +109,11 @@ struct WASMCodeGen : ConstOperatorVisitor, ConstASTVisitor {
     void operator()(Const<UpdateStmt>&) override { unreachable(""); }
     void operator()(Const<DeleteStmt>&) override { unreachable(""); }
     void operator()(Const<DSVImportStmt>&) override { unreachable(""); }
+};
+
+struct WASMBackend : Backend
+{
+    void execute(const Operator &plan) const override;
 };
 
 }

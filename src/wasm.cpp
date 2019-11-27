@@ -1,6 +1,4 @@
-#include "backend/Interpreter.hpp"
-#include "backend/V8Backend.hpp"
-#include "backend/WebAssembly.hpp"
+#include "backend/Backend.hpp"
 #include "IR/CNF.hpp"
 #include "IR/JoinGraph.hpp"
 #include "IR/Operator.hpp"
@@ -160,14 +158,11 @@ FROM mytable AS T;\n\"";
     callback->dump();
     std::cout << '\n';
 
-    WASMCodeGen WASM;
-    auto module = WASM.compile(*callback);
-    module.dump();
-    V8Backend v8backend;
-    v8backend.execute(module);
+    auto WASM = Backend::CreateWASM();
+    auto I = Backend::CreateInterpreter();
 
-    Interpreter I;
-    I(*callback);
+    WASM->execute(*callback);
+    I->execute(*callback);
 
     delete callback;
     delete stmt;

@@ -3,6 +3,7 @@ add_library(
     STATIC
     Backend.cpp
     Interpreter.cpp
+    StackMachine.cpp
     V8Backend.cpp
     WebAssembly.cpp
     )

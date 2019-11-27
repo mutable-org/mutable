@@ -1,6 +1,6 @@
 #include "storage/ColumnStore.hpp"
 
-#include "backend/Interpreter.hpp"
+#include "backend/StackMachine.hpp"
 
 #include <sys/mman.h>
 

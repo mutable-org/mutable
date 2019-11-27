@@ -1,6 +1,7 @@
 #include "catch.hpp"
 
 #include "backend/Interpreter.hpp"
+#include "backend/StackMachine.hpp"
 #include "catalog/Type.hpp"
 #include "IR/CNF.hpp"
 #include "parse/Parser.hpp"

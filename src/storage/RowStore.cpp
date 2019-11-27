@@ -1,6 +1,6 @@
 #include "storage/RowStore.hpp"
 
-#include "backend/Interpreter.hpp"
+#include "backend/StackMachine.hpp"
 #include "catalog/Type.hpp"
 #include "util/fn.hpp"
 #include <algorithm>

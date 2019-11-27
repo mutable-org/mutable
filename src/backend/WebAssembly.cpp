@@ -420,6 +420,7 @@ void WASMCodeGen::operator()(Const<BinaryExpr> &e)
 void WASMBackend::execute(const Operator &plan) const
 {
     auto module = WASMCodeGen::compile(plan);
+    module.dump();
     V8Backend V8;
     V8.execute(module);
 }

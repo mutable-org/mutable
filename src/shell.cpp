@@ -1,5 +1,5 @@
 #include "backend/Backend.hpp"
-#include "backend/Interpreter.hpp"
+#include "backend/StackMachine.hpp"
 #include "catalog/Schema.hpp"
 #include "io/Reader.hpp"
 #include "IR/Optimizer.hpp"

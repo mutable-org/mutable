@@ -1,4 +1,4 @@
-#include "backend/Interpreter.hpp"
+#include "backend/Backend.hpp"
 #include "IR/CNF.hpp"
 #include "IR/JoinGraph.hpp"
 #include "IR/Operator.hpp"
@@ -202,8 +202,8 @@ ORDER BY new_f ASC, 2 * num DESC;\n\"";
     callback->dump();
     std::cout << '\n';
 
-    Interpreter I;
-    I(*callback);
+    auto I = Backend::CreateInterpreter();
+    I->execute(*callback);
 
     delete callback;
     delete stmt;

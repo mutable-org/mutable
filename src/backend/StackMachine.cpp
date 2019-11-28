@@ -24,8 +24,6 @@ struct db::StackMachineBuilder : ConstASTVisitor
         (*this)(expr); // compute the command sequence
     }
 
-    static value_type eval(const Constant &c);
-
     private:
     using ConstASTVisitor::operator();
 

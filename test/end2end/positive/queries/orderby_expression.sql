@@ -1,1 +1,1 @@
-SELECT * FROM R ORDER BY key + fkey;
+SELECT key + fkey FROM R ORDER BY key + fkey;

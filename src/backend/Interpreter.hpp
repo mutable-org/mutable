@@ -10,8 +10,6 @@
 
 namespace db {
 
-bool eval(const OperatorSchema &schema, const cnf::CNF &cnf, const tuple_type &tuple);
-
 /** Evaluates SQL operator trees on the database. */
 struct Interpreter : Backend, ConstOperatorVisitor
 {

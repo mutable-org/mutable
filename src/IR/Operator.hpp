@@ -21,6 +21,7 @@ using OperatorVisitor = TheOperatorVisitor<false>;
 using ConstOperatorVisitor = TheOperatorVisitor<true>;
 
 using tuple_type = std::vector<value_type>;
+static_assert(std::is_move_constructible_v<tuple_type>, "tuple_type must be move constructible");
 
 inline std::ostream & operator<<(std::ostream &out, const tuple_type &tuple)
 {

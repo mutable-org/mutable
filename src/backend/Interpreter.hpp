@@ -77,7 +77,6 @@ struct Interpreter : Backend, ConstOperatorVisitor
         }
         insist(errno == 0, "constant could not be parsed");
     }
-
 };
 
 }

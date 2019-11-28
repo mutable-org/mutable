@@ -41,6 +41,8 @@ using value_type = std::variant<
     bool
 >;
 
+static_assert(std::is_move_constructible_v<value_type>, "value_type must be move constructible");
+
 template<typename To>
 To to(const value_type &value)
 {

@@ -546,7 +546,7 @@ void StackMachine::emit(const cnf::CNF &cnf)
     }
 }
 
-tuple_type && StackMachine::operator()(const tuple_type &t)
+tuple_type StackMachine::operator()(const tuple_type &t)
 {
     static const void *labels[] = {
 #define DB_OPCODE(CODE, ...) && CODE,
@@ -1179,7 +1179,7 @@ Cast_d_f: UNARY((double), float);
 Stop: /* nothing to be done */
 
     ops.pop_back(); // terminating Stop
-    return std::move(stack_);
+    return stack_;
 }
 
 void StackMachine::dump(std::ostream &out) const

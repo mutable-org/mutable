@@ -35,7 +35,7 @@ add_executable(store store.cpp)
 target_link_libraries(store storage IR parse lex catalog util)
 
 add_executable(operator operator.cpp)
-target_link_libraries(operator backend IR storage parse lex catalog util)
+target_link_libraries(operator ${CMAKE_THREAD_LIBS_INIT} backend IR storage parse lex catalog util)
 
 add_executable(dsv dsv.cpp)
 target_link_libraries(dsv io storage IR parse lex catalog util)
@@ -47,7 +47,7 @@ add_executable(optimizer optimizer.cpp)
 target_link_libraries(optimizer storage IR parse lex catalog util)
 
 add_executable(shell shell.cpp)
-target_link_libraries(shell replxx db)
+target_link_libraries(shell ${CMAKE_THREAD_LIBS_INIT} replxx db)
 
 add_executable(wasm wasm.cpp)
-target_link_libraries(wasm db)
+target_link_libraries(wasm ${CMAKE_THREAD_LIBS_INIT} db)

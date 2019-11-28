@@ -49,8 +49,8 @@ if __name__ == '__main__':
             try:
                 out, err = process.communicate(stmt.encode('latin-1'), timeout=10) # wait 10 seconds
                 # process.stdin.close()
-            except subprocess.TimeoutExpired:
-                raise TestException('test case timed out:\n{}'.format(s))
+            except subprocess.TimeoutExpired as ex:
+                raise TestException('test case timed out: {}'.format(ex))
             if err:
                 raise TestException('test failed with error:\n{}'.format(str(err, 'utf-8')))
 

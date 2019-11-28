@@ -1,0 +1,1 @@
+SELECT * FROM (SELECT fkey, COUNT(key) FROM R GROUP BY fkey) AS sub ORDER BY fkey;

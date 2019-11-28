@@ -1,1 +1,1 @@
-SELECT T.key, S.key FROM T, S WHERE T.key = S.fkey ORDER BY T.key, S.key;
+SELECT * FROM R, S WHERE R.key = S.fkey ORDER BY R.key;

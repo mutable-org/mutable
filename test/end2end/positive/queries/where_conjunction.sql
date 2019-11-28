@@ -1,0 +1,1 @@
+SELECT * FROM R WHERE key > 15 AND key < 17 ORDER BY key;

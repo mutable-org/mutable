@@ -1,0 +1,1 @@
+SELECT * FROM R WHERE key = 42;

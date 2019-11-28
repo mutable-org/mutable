@@ -1,1 +1,0 @@
-SELECT COUNT(), COUNT(key) FROM S;

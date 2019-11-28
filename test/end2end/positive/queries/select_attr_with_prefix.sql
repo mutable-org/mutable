@@ -1,0 +1,1 @@
+SELECT R.key FROM R ORDER BY R.key;

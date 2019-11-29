@@ -152,8 +152,8 @@ void Pipeline::operator()(const FilterOperator &op)
 {
     auto data = as<FilterData>(op.data());
     auto res = data->filter(tuple_);
-    insist(res.size() == 1);
-    auto pv = std::get_if<bool>(&res[0]);
+    insist(res.size() > 0, "CNF did not evaluate to a result");
+    auto pv = std::get_if<bool>(&res.back());
     insist(pv, "invalid type of variant");
     if (*pv) op.parent()->accept(*this);
 }

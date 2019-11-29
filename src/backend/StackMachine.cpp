@@ -547,7 +547,7 @@ void StackMachine::emit(const cnf::CNF &cnf)
     }
 }
 
-tuple_type StackMachine::operator()(const tuple_type &t)
+const tuple_type & StackMachine::operator()(const tuple_type &t)
 {
     static const void *labels[] = {
 #define DB_OPCODE(CODE, ...) && CODE,

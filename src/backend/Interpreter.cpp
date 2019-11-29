@@ -134,6 +134,8 @@ struct FilterData : OperatorData
  * Pipeline
  *====================================================================================================================*/
 
+tuple_type Pipeline::empty;
+
 void Pipeline::operator()(const ScanOperator &op)
 {
     auto loader = op.store().loader(op.schema());
@@ -475,8 +477,10 @@ void Interpreter::operator()(const GroupingOperator &op)
             for (auto e : op.group_by())
                 data->keys.emit(*e);
             op.child(0)->accept(*this);
-            for (auto g : data->groups)
-                Pipeline::Push(parent, g.first + g.second); // pass groups on to parent
+            for (auto g : data->groups) {
+                auto t = g.first + g.second;
+                Pipeline::Push(parent, t); // pass groups on to parent
+            }
             break;
         }
     }

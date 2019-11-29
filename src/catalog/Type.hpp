@@ -11,6 +11,7 @@
 namespace db {
 
 struct ErrorType;
+struct NoneType;
 struct PrimitiveType;
 struct Boolean;
 struct CharacterSequence;
@@ -77,6 +78,7 @@ struct Type
 
     /* Type factory methods */
     static const ErrorType * Get_Error();
+    static const NoneType * Get_None();
     static const Boolean * Get_Boolean(category_t category);
     static const CharacterSequence * Get_Char(category_t category, std::size_t length);
     static const CharacterSequence * Get_Varchar(category_t category, std::size_t length);
@@ -134,6 +136,28 @@ struct ErrorType: Type
 
     public:
     ErrorType(ErrorType&&) = default;
+
+    void accept(TypeVisitor &v) override;
+    void accept(ConstTypeVisitor &v) const override;
+
+    bool operator==(const Type &other) const override;
+
+    uint64_t hash() const override;
+
+    void print(std::ostream &out) const override;
+    void dump(std::ostream &out) const override;
+};
+
+/** A type that represents the absence of any pther type.  Used to represent the type of `NULL`. */
+struct NoneType: Type
+{
+    friend struct Type;
+
+    private:
+    NoneType() { }
+
+    public:
+    NoneType(NoneType&&) = default;
 
     void accept(TypeVisitor &v) override;
     void accept(ConstTypeVisitor &v) const override;

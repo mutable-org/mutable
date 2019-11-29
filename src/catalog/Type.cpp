@@ -62,6 +62,12 @@ const ErrorType * Type::Get_Error()
     return &err;
 }
 
+const NoneType * Type::Get_None()
+{
+    static NoneType none;
+    return &none;
+}
+
 const Boolean * Type::Get_Boolean(category_t category)
 {
     static Boolean b_scalar(Type::TY_Scalar);
@@ -110,6 +116,7 @@ const FnType * Type::Get_Function(const Type *return_type, std::vector<const Typ
     void TYPE::accept(TypeVisitor &v) { v(*this); } \
     void TYPE::accept(ConstTypeVisitor &v) const { v(*this); }
 ACCEPT(ErrorType);
+ACCEPT(NoneType);
 ACCEPT(Boolean);
 ACCEPT(CharacterSequence);
 ACCEPT(Numeric);
@@ -119,6 +126,8 @@ ACCEPT(FnType);
 /*===== Comparison ===================================================================================================*/
 
 bool ErrorType::operator==(const Type &other) const { return is<const ErrorType>(&other); }
+
+bool NoneType::operator==(const Type &other) const { return is<const NoneType>(&other); }
 
 bool Boolean::operator==(const Type &other) const
 {
@@ -160,6 +169,8 @@ bool FnType::operator==(const Type &other) const
 /*===== Hash =========================================================================================================*/
 
 uint64_t ErrorType::hash() const { return 0; }
+
+uint64_t NoneType::hash() const { return -1UL; }
 
 uint64_t Boolean::hash() const { return uint64_t(category); }
 
@@ -218,6 +229,8 @@ const PrimitiveType * Numeric::as_vectorial() const
 
 void ErrorType::print(std::ostream &out) const { out << "[ErrorType]"; }
 
+void NoneType::print(std::ostream &out) const { out << "[none]"; }
+
 void Boolean::print(std::ostream &out) const { out << "BOOL"; }
 
 void CharacterSequence::print(std::ostream &out) const
@@ -258,6 +271,8 @@ void FnType::print(std::ostream &out) const
 /*===== Dump =========================================================================================================*/
 
 void ErrorType::dump(std::ostream &out) const { out << "[ErrorType]" << std::endl; }
+
+void NoneType::dump(std::ostream &out) const { out << "[NoneType]" << std::endl; }
 
 void Boolean::dump(std::ostream &out) const
 {

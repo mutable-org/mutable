@@ -270,7 +270,9 @@ struct db::GraphBuilder : ConstASTVisitor
         for (auto &clause : cnf) {
             auto tables = get_tables(clause);
             if (tables.size() == 0) {
-                // TODO
+                /* This clause is a filter and constant.  It applies to all data sources. */
+                for (auto &alias : aliases)
+                    alias.second->update_filter(cnf::CNF{clause});
             } else if (tables.size() == 1) {
                 /* This clause is a filter condition. */
                 auto t = *begin(tables);

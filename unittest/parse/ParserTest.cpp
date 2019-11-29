@@ -131,6 +131,7 @@ TEST_CASE("Parser::parse_Expr()", "[unit]")
         /* primary expression */
         { "id", "id" },
         { "42", "42" },
+        { "NULL", "NULL" },
         { "(id)", "id" },
         { "(((id)))", "id" },
         /* postfix expression */

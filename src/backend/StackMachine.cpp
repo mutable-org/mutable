@@ -540,7 +540,8 @@ void StackMachine::emit(const cnf::CNF &cnf)
             if (pred_it != C.cbegin())
                 ops.push_back(StackMachine::Opcode::Or_b);
         }
-        ops.push_back(StackMachine::Opcode::Stop_False); // a single false clause renders the CNF false
+        if (clause_it != std::prev(cnf.cend()))
+            ops.push_back(StackMachine::Opcode::Stop_False); // a single false clause renders the CNF false
         if (clause_it != cnf.cbegin())
             ops.push_back(StackMachine::Opcode::And_b);
     }

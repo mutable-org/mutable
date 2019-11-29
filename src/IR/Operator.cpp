@@ -37,6 +37,7 @@ ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
     : projections_(projections)
 {
     /* Compute the schema of the operator. */
+    uint64_t const_counter = 0;
     auto &S = schema();
     for (auto &P : projections) {
         auto ty = P.first->type();
@@ -50,10 +51,9 @@ ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
             auto success = S.add_element(id, ty);
             insist(success);
         } else { // no designator, no alias -> derive name
-            static uint64_t counter = 0;
             std::ostringstream oss;
             if (P.first->is_constant())
-                oss << "$const" << counter++;
+                oss << "$const" << const_counter++;
             else
                 oss << *P.first;
             auto &C = Catalog::Get();

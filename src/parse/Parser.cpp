@@ -580,6 +580,7 @@ Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
         case TK_IDENTIFIER:
             lhs = parse_designator(); // XXX For SUM(x), 'SUM' is parsed as designator; should be identifier.
             break;
+        case TK_Null:
         case TK_True:
         case TK_False:
         case TK_STRING_LITERAL:

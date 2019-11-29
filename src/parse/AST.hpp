@@ -129,6 +129,7 @@ struct Constant : Expr
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;
 
+    bool is_null() const { return tok.type == TK_Null; }
     bool is_number() const { return is_integer() or is_float(); }
     bool is_integer() const {
         return tok.type == TK_OCT_INT or

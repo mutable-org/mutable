@@ -170,6 +170,10 @@ void Sema::operator()(Const<Constant> &e)
         default:
             unreachable("a constant must be one of the types below");
 
+        case TK_Null:
+            e.type_ = Type::Get_None();
+            break;
+
         case TK_STRING_LITERAL:
             e.type_ = Type::Get_Char(Type::TY_Scalar, strlen(e.tok.text) - 2); // without quotes
             break;
@@ -605,8 +609,8 @@ void Sema::operator()(Const<SelectClause> &c)
         (*this)(e);
 
         if (e.type()->is_error()) continue;
-        auto pt = as<const PrimitiveType>(e.type());
         if (not e.is_constant()) { // constants can be broadcast from scalar to vectorial
+            auto pt = as<const PrimitiveType>(e.type());
             has_vector = has_vector or pt->is_vectorial();
             has_scalar = has_scalar or pt->is_scalar();
         }
@@ -618,6 +622,7 @@ void Sema::operator()(Const<SelectClause> &c)
             if (not res.second)
                 diag.e(s.second.pos) << "Attribute name " << s.second.text << " already used.\n";
         } else {
+            if (e.is_constant()) continue;
             /* Without alias.  Print expression as string to get a name. */
             std::ostringstream oss;
             oss << *s.first;

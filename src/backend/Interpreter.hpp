@@ -69,6 +69,10 @@ struct Interpreter : Backend, ConstOperatorVisitor
         switch (c.tok.type) {
             default: unreachable("illegal token");
 
+            /* Null */
+            case TK_Null:
+                return null_type();
+
             /* Integer */
             case TK_OCT_INT:
                 return int64_t(strtoll(c.tok.text, nullptr, 8));

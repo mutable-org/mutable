@@ -126,14 +126,14 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
             Optimizer Opt(orderer, costmodel);
             auto I = Backend::CreateInterpreter();
             timer.start("Compute an optimized Query Plan");
-            auto optree = Opt(*joingraph.get()).release();
+            auto optree = Opt(*joingraph.get());
             timer.stop();
             if (options.plan) optree->dump(std::cout);
             if (options.plandot) optree->dot(std::cout);
 
             if (not options.dryrun) {
                 auto callback = new CallbackOperator(print);
-                callback->add_child(optree);
+                callback->add_child(optree.release());
                 timer.start("Interpret the Query Plan");
                 I->execute(*callback);
                 timer.stop();

@@ -9,17 +9,6 @@
 #include <vector>
 
 
-struct Timer;
-
-/** A manager class to record a measurement with a timer. */
-struct TimingProcess
-{
-    Timer &timer;
-
-    TimingProcess(Timer &timer, std::string name);
-    ~TimingProcess();
-};
-
 /** Collect times of events. */
 struct Timer
 {
@@ -34,6 +23,21 @@ struct Timer
     std::vector<entry_type> measurements_;
 
     public:
+    /** A manager class to record a measurement with a timer. */
+    struct TimingProcess
+    {
+        friend struct Timer;
+
+        private:
+        Timer &timer_;
+        std::size_t index_;
+
+        TimingProcess(Timer &timer, std::size_t index) : timer_(timer), index_(index) { }
+
+        public:
+        ~TimingProcess() { timer_.stop(index_); }
+    };
+
     auto begin() const { return measurements_.cbegin(); }
     auto end()   const { return measurements_.cend(); }
     auto cbegin() const { return measurements_.cbegin(); }
@@ -43,37 +47,44 @@ struct Timer
     auto & get(std::size_t i) const { insist(i < measurements_.size()); return measurements_[i]; }
     auto & get(const std::string &name) const {
         auto it = std::find_if(measurements_.begin(), measurements_.end(),
-                               [&](auto elem) { return elem.first == name; });
-        if (it == measurements_.end())
-            throw std::out_of_range("a measurement with the name '" + name + "' does not exist");
+                               [&](auto &elem) { return elem.first == name; });
+        insist(it != measurements_.end(), "a measurement with that name does not exist");
         return it->second;
     }
 
-    void start(std::string name) {
+    std::size_t start(std::string name) {
         auto it = std::find_if(measurements_.begin(), measurements_.end(),
-                               [&](auto elem) { return elem.first == name; });
-        if (it != measurements_.end())
-            throw std::invalid_argument("a measurement with the name '" + name + "' already exists");
+                               [&](auto &elem) { return elem.first == name; });
+        insist(it == measurements_.end(), "a measurement with that name already exists");
         Measurement m{ clock::now(), time_point() };
+        auto index = measurements_.size();
         measurements_.emplace_back(name, m);
+        return index;
     }
 
-    void stop() {
-        insist(not measurements_.empty());
-        auto &e = measurements_.back();
-        if (e.second.end != time_point())
-            throw std::logic_error("cannot stop the measurement '" + e.first + "' because it has already been stopped");
-        e.second.end = clock::now();
+    void stop(std::size_t index) {
+        using std::to_string;
+        insist (index < measurements_.size(), "index out of bounds");
+        auto &ref = measurements_[index];
+        insist(ref.second.end == time_point(), "cannot stop that measurement because it has already been stopped");
+        ref.second.end = clock::now();
     }
 
     void stop(const std::string &name) {
-        auto &m = get(name);
-        if (m.end != time_point())
-            throw std::logic_error("cannot stop the measurement '" + name + "' because it has already been stopped");
-        const_cast<Measurement&>(m).end = clock::now();
+        auto it = std::find_if(measurements_.begin(), measurements_.end(),
+                               [&](auto &elem) { return elem.first == name; });
+        insist(it != measurements_.end(), "a measurement with that name does not exist");
+        insist(it->second.end == time_point(), "cannot stop that measurement because it has already been stopped");
+        it->second.end = clock::now();
     }
 
-    TimingProcess create_timing(std::string name) { return TimingProcess(*this, name); }
+    void stop() {
+        auto &M = measurements_.back();
+        insist(M.second.end == time_point(), "cannot stop that measurement because it has already been stopped");
+        M.second.end = clock::now();
+    }
+
+    TimingProcess create_timing(std::string name) { return TimingProcess(*this, start(name)); }
 
     friend std::ostream & operator<<(std::ostream &out, const Timer &timer) {
         using std::chrono::duration_cast;

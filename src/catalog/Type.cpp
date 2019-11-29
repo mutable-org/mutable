@@ -118,10 +118,7 @@ ACCEPT(FnType);
 
 /*===== Comparison ===================================================================================================*/
 
-bool ErrorType::operator==(const Type &other) const
-{
-    return dynamic_cast<const ErrorType*>(&other) != nullptr;
-}
+bool ErrorType::operator==(const Type &other) const { return is<const ErrorType>(&other); }
 
 bool Boolean::operator==(const Type &other) const
 {

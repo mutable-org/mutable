@@ -50,8 +50,12 @@ ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
             auto success = S.add_element(id, ty);
             insist(success);
         } else { // no designator, no alias -> derive name
+            static uint64_t counter = 0;
             std::ostringstream oss;
-            oss << *P.first;
+            if (P.first->is_constant())
+                oss << "$const" << counter++;
+            else
+                oss << *P.first;
             auto &C = Catalog::Get();
             auto alias = C.pool(oss.str().c_str());
             OperatorSchema::AttributeIdentifier id(alias);

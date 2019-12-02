@@ -551,7 +551,7 @@ void Interpreter::operator()(const SortingOperator &op)
     });
 
     auto &parent = *op.parent();
-    for (auto t : data->buffer)
+    for (auto &t : data->buffer)
         Pipeline::Push(parent, t);
 }
 

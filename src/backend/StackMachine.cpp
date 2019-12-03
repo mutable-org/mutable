@@ -557,6 +557,7 @@ tuple_type StackMachine::operator()(const tuple_type &t)
 
     emit_Stop();
     tuple_type stack;
+    stack.reserve(required_stack_size_);
     auto op = ops.cbegin();
 #define NEXT goto *labels[std::size_t(*op++)]
     NEXT;
@@ -1180,6 +1181,7 @@ Cast_d_f: UNARY((double), float);
 Stop:
     ops.pop_back(); // terminating Stop
 
+    insist(stack.capacity() <= required_stack_size_, "failed to pre-allocate sufficient memory");
     return stack;
 }
 

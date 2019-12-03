@@ -1,7 +1,7 @@
 /* vim: set filetype=cpp: */
 
 #ifndef DB_OPCODE
-#error "define DB_OPCODE(Opcode, __VA_ARGS__) before including this file"
+#error "define DB_OPCODE(Opcode, Delta, __VA_ARGS__) before including this file"
 #endif
 
 /*======================================================================================================================
@@ -9,190 +9,190 @@
  *====================================================================================================================*/
 
 /* Stop the machine. */
-DB_OPCODE(Stop)
+DB_OPCODE(Stop, 0)
 
 /* Stop on condition. */
-DB_OPCODE(Stop_Z)
-DB_OPCODE(Stop_NZ)
-DB_OPCODE(Stop_False)
-DB_OPCODE(Stop_True)
+DB_OPCODE(Stop_Z, 0)
+DB_OPCODE(Stop_NZ, 0)
+DB_OPCODE(Stop_False, 0)
+DB_OPCODE(Stop_True, 0)
 
 /*======================================================================================================================
  * Stack manipulation operations
  *====================================================================================================================*/
 
-DB_OPCODE(Pop)
+DB_OPCODE(Pop, -1)
 
 /*======================================================================================================================
  * Load / Update operations
  *====================================================================================================================*/
 
 /** Load a value from the tuple to the top of the stack. */
-DB_OPCODE(Ld_Tup, index)
+DB_OPCODE(Ld_Tup, 1, index)
 
 /** Load a value from the context to the top of the stack. */
-DB_OPCODE(Ld_Ctx, index)
+DB_OPCODE(Ld_Ctx, 1, index)
 
 /** Update a value in the context with the value on top of the stack. */
-DB_OPCODE(Upd_Ctx, index)
+DB_OPCODE(Upd_Ctx, 0, index)
 
 /*----- Load from row store ------------------------------------------------------------------------------------------*/
 
-DB_OPCODE(Ld_RS_i8)
-DB_OPCODE(Ld_RS_i16)
-DB_OPCODE(Ld_RS_i32)
-DB_OPCODE(Ld_RS_i64)
-DB_OPCODE(Ld_RS_f)
-DB_OPCODE(Ld_RS_d)
-DB_OPCODE(Ld_RS_s)
-DB_OPCODE(Ld_RS_b)
+DB_OPCODE(Ld_RS_i8,  -2)
+DB_OPCODE(Ld_RS_i16, -2)
+DB_OPCODE(Ld_RS_i32, -2)
+DB_OPCODE(Ld_RS_i64, -2)
+DB_OPCODE(Ld_RS_f,   -2)
+DB_OPCODE(Ld_RS_d,   -2)
+DB_OPCODE(Ld_RS_s,   -3)
+DB_OPCODE(Ld_RS_b,   -2)
 
 /*----- Store to row store -------------------------------------------------------------------------------------------*/
 
-DB_OPCODE(St_RS_i8)
-DB_OPCODE(St_RS_i16)
-DB_OPCODE(St_RS_i32)
-DB_OPCODE(St_RS_i64)
-DB_OPCODE(St_RS_f)
-DB_OPCODE(St_RS_d)
-DB_OPCODE(St_RS_s)
-DB_OPCODE(St_RS_b)
+DB_OPCODE(St_RS_i8,  -3)
+DB_OPCODE(St_RS_i16, -3)
+DB_OPCODE(St_RS_i32, -3)
+DB_OPCODE(St_RS_i64, -3)
+DB_OPCODE(St_RS_f,   -3)
+DB_OPCODE(St_RS_d,   -3)
+DB_OPCODE(St_RS_s,   -4)
+DB_OPCODE(St_RS_b,   -3)
 
 /*----- Load from column store ---------------------------------------------------------------------------------------*/
 
-DB_OPCODE(Ld_CS_i8)
-DB_OPCODE(Ld_CS_i16)
-DB_OPCODE(Ld_CS_i32)
-DB_OPCODE(Ld_CS_i64)
-DB_OPCODE(Ld_CS_f)
-DB_OPCODE(Ld_CS_d)
-DB_OPCODE(Ld_CS_s)
-DB_OPCODE(Ld_CS_b)
+DB_OPCODE(Ld_CS_i8,  -3)
+DB_OPCODE(Ld_CS_i16, -3)
+DB_OPCODE(Ld_CS_i32, -3)
+DB_OPCODE(Ld_CS_i64, -3)
+DB_OPCODE(Ld_CS_f,   -3)
+DB_OPCODE(Ld_CS_d,   -3)
+DB_OPCODE(Ld_CS_s,   -4)
+DB_OPCODE(Ld_CS_b,   -3)
 
 /*----- Store to column store ----------------------------------------------------------------------------------------*/
 
-DB_OPCODE(St_CS_i8)
-DB_OPCODE(St_CS_i16)
-DB_OPCODE(St_CS_i32)
-DB_OPCODE(St_CS_i64)
-DB_OPCODE(St_CS_f)
-DB_OPCODE(St_CS_d)
-DB_OPCODE(St_CS_s)
-DB_OPCODE(St_CS_b)
+DB_OPCODE(St_CS_i8,  -4)
+DB_OPCODE(St_CS_i16, -4)
+DB_OPCODE(St_CS_i32, -4)
+DB_OPCODE(St_CS_i64, -4)
+DB_OPCODE(St_CS_f,   -4)
+DB_OPCODE(St_CS_d,   -4)
+DB_OPCODE(St_CS_s,   -5)
+DB_OPCODE(St_CS_b,   -4)
 
 /*======================================================================================================================
  * Arithmetical operations
  *====================================================================================================================*/
 
 /* Integral increment. */
-DB_OPCODE(Inc)
+DB_OPCODE(Inc, 0)
 /* Integral decrement. */
-DB_OPCODE(Dec)
+DB_OPCODE(Dec, 0)
 
 /* Bitwise negation */
-DB_OPCODE(Neg_i)
+DB_OPCODE(Neg_i, 0)
 
 /* Arithmetic negation */
-DB_OPCODE(Minus_i)
-DB_OPCODE(Minus_f)
-DB_OPCODE(Minus_d)
+DB_OPCODE(Minus_i, 0)
+DB_OPCODE(Minus_f, 0)
+DB_OPCODE(Minus_d, 0)
 
 /* Add two values. */
-DB_OPCODE(Add_i)
-DB_OPCODE(Add_f)
-DB_OPCODE(Add_d)
+DB_OPCODE(Add_i, -1)
+DB_OPCODE(Add_f, -1)
+DB_OPCODE(Add_d, -1)
 
 /* Subtract two values. */
-DB_OPCODE(Sub_i)
-DB_OPCODE(Sub_f)
-DB_OPCODE(Sub_d)
+DB_OPCODE(Sub_i, -1)
+DB_OPCODE(Sub_f, -1)
+DB_OPCODE(Sub_d, -1)
 
 /* Multiply two values. */
-DB_OPCODE(Mul_i)
-DB_OPCODE(Mul_f)
-DB_OPCODE(Mul_d)
+DB_OPCODE(Mul_i, -1)
+DB_OPCODE(Mul_f, -1)
+DB_OPCODE(Mul_d, -1)
 
 /* Divide two values. */
-DB_OPCODE(Div_i)
-DB_OPCODE(Div_f)
-DB_OPCODE(Div_d)
+DB_OPCODE(Div_i, -1)
+DB_OPCODE(Div_f, -1)
+DB_OPCODE(Div_d, -1)
 
 /* Modulo divide two values. */
-DB_OPCODE(Mod_i)
+DB_OPCODE(Mod_i, -1)
 
 /* Concatenate two strings. */
-DB_OPCODE(Cat_s)
+DB_OPCODE(Cat_s, -1)
 
 /*======================================================================================================================
  * Logical operations
  *====================================================================================================================*/
 
 /* Logical not */
-DB_OPCODE(Not_b)
+DB_OPCODE(Not_b, 0)
 
 /* Logical and. */
-DB_OPCODE(And_b)
+DB_OPCODE(And_b, 0)
 
 /* Logical or. */
-DB_OPCODE(Or_b)
+DB_OPCODE(Or_b, 0)
 
 /*======================================================================================================================
  * Comparison operations
  *====================================================================================================================*/
 
-DB_OPCODE(Eq_i)
-DB_OPCODE(Eq_f)
-DB_OPCODE(Eq_d)
-DB_OPCODE(Eq_b)
-DB_OPCODE(Eq_s)
+DB_OPCODE(Eq_i, -1)
+DB_OPCODE(Eq_f, -1)
+DB_OPCODE(Eq_d, -1)
+DB_OPCODE(Eq_b, -1)
+DB_OPCODE(Eq_s, -1)
 
-DB_OPCODE(NE_i)
-DB_OPCODE(NE_f)
-DB_OPCODE(NE_d)
-DB_OPCODE(NE_b)
-DB_OPCODE(NE_s)
+DB_OPCODE(NE_i, -1)
+DB_OPCODE(NE_f, -1)
+DB_OPCODE(NE_d, -1)
+DB_OPCODE(NE_b, -1)
+DB_OPCODE(NE_s, -1)
 
-DB_OPCODE(LT_i)
-DB_OPCODE(LT_f)
-DB_OPCODE(LT_d)
-DB_OPCODE(LT_s)
+DB_OPCODE(LT_i, -1)
+DB_OPCODE(LT_f, -1)
+DB_OPCODE(LT_d, -1)
+DB_OPCODE(LT_s, -1)
 
-DB_OPCODE(GT_i)
-DB_OPCODE(GT_f)
-DB_OPCODE(GT_d)
-DB_OPCODE(GT_s)
+DB_OPCODE(GT_i, -1)
+DB_OPCODE(GT_f, -1)
+DB_OPCODE(GT_d, -1)
+DB_OPCODE(GT_s, -1)
 
-DB_OPCODE(LE_i)
-DB_OPCODE(LE_f)
-DB_OPCODE(LE_d)
-DB_OPCODE(LE_s)
+DB_OPCODE(LE_i, -1)
+DB_OPCODE(LE_f, -1)
+DB_OPCODE(LE_d, -1)
+DB_OPCODE(LE_s, -1)
 
-DB_OPCODE(GE_i)
-DB_OPCODE(GE_f)
-DB_OPCODE(GE_d)
-DB_OPCODE(GE_s)
+DB_OPCODE(GE_i, -1)
+DB_OPCODE(GE_f, -1)
+DB_OPCODE(GE_d, -1)
+DB_OPCODE(GE_s, -1)
 
-DB_OPCODE(Cmp_i)
-DB_OPCODE(Cmp_f)
-DB_OPCODE(Cmp_d)
-DB_OPCODE(Cmp_b)
-DB_OPCODE(Cmp_s)
+DB_OPCODE(Cmp_i, -1)
+DB_OPCODE(Cmp_f, -1)
+DB_OPCODE(Cmp_d, -1)
+DB_OPCODE(Cmp_b, -1)
+DB_OPCODE(Cmp_s, -1)
 
 /*======================================================================================================================
  * Intrinsic functions
  *====================================================================================================================*/
 
-DB_OPCODE(Is_Null)
+DB_OPCODE(Is_Null, 0)
 
 /* Cast to int. */
-DB_OPCODE(Cast_i_f)
-DB_OPCODE(Cast_i_d)
-DB_OPCODE(Cast_i_b)
+DB_OPCODE(Cast_i_f, 0)
+DB_OPCODE(Cast_i_d, 0)
+DB_OPCODE(Cast_i_b, 0)
 
 /* Cast to float. */
-DB_OPCODE(Cast_f_i)
-DB_OPCODE(Cast_f_d)
+DB_OPCODE(Cast_f_i, 0)
+DB_OPCODE(Cast_f_d, 0)
 
 /* Cast to double. */
-DB_OPCODE(Cast_d_i)
-DB_OPCODE(Cast_d_f)
+DB_OPCODE(Cast_d_i, 0)
+DB_OPCODE(Cast_d_f, 0)

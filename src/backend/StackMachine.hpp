@@ -35,7 +35,8 @@ struct StackMachine
     std::vector<Opcode> ops; ///< a sequence of operations to perform
     private:
     std::vector<value_type> context_; ///< the context of the stack machine, e.g. constants or global variables
-    std::vector<value_type> stack_; ///< the stack of current values
+    int64_t required_stack_size_ = 0; ///< the required size of the stack
+    int64_t current_stack_size_ = 0; ///< the "current" stack size; i.e. after the last operation is executed
 
     public:
     StackMachine() { }
@@ -44,6 +45,9 @@ struct StackMachine
 
     StackMachine(const StackMachine&) = delete;
     StackMachine(StackMachine&&) = default;
+
+    /** Returns the required size of the stack to evaluate the opcode sequence. */
+    std::size_t required_stack_size() const { return required_stack_size_; }
 
     void emit(const Expr &expr);
     void emit(const cnf::CNF &cnf);
@@ -58,22 +62,25 @@ struct StackMachine
      * appends the `Ld_Ctx` opcode to the opcode sequence and then appends the `idx` parameter to the opcode sequence.
      */
 #define SELECT(XXX, _1, _2, FN, ...) FN(__VA_ARGS__)
-#define ARGS_0(I, ...)
-#define ARGS_1(I, II, ARG0, ...) uint8_t ARG0
-#define ARGS_2(I, II, III, ARG0, ARG1, ...) uint8_t ARG0, uint8_t ARG1
+#define ARGS_0(XXX, ...)
+#define ARGS_1(I, XXX, ARG0, ...) uint8_t ARG0
+#define ARGS_2(I, II, XXX, ARG0, ARG1, ...) uint8_t ARG0, uint8_t ARG1
 #define ARGS(...) SELECT(__VA_ARGS__, ARGS_2, ARGS_1, ARGS_0, __VA_ARGS__)
-#define PUSH_0(I, ...)
-#define PUSH_1(I, II, ARG0, ...) \
+#define PUSH_0(XXX, ...)
+#define PUSH_1(I, XXX, ARG0, ...) \
     ops.push_back(static_cast<Opcode>((ARG0)));
-#define PUSH_2(I, II, III, ARG0, ARG1, ...) \
+#define PUSH_2(I, II, XXX, ARG0, ARG1, ...) \
     ops.push_back(static_cast<Opcode>((ARG0))); \
     ops.push_back(static_cast<Opcode>((ARG1)));
 #define PUSH(...) SELECT(__VA_ARGS__, PUSH_2, PUSH_1, PUSH_0, __VA_ARGS__)
 
-#define DB_OPCODE(...) \
-    void CAT(emit_, FIRST(__VA_ARGS__)) ( ARGS(__VA_ARGS__) ) { \
-        ops.push_back(StackMachine::Opcode:: FIRST(__VA_ARGS__) ); \
-        PUSH(__VA_ARGS__) \
+#define DB_OPCODE(CODE, DELTA, ...) \
+    void emit_ ## CODE ( ARGS(XXX, ##__VA_ARGS__) ) { \
+        ops.push_back(StackMachine::Opcode:: CODE ); \
+        current_stack_size_ += DELTA; \
+        insist(current_stack_size_ >= 0); \
+        required_stack_size_ = std::max(required_stack_size_, current_stack_size_); \
+        PUSH(XXX, ##__VA_ARGS__) \
     }
 
 #include "tables/Opcodes.tbl"

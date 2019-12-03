@@ -477,6 +477,7 @@ void Interpreter::operator()(const GroupingOperator &op)
             op.child(0)->accept(*this);
             for (auto &g : data->groups) {
                 tuple_type t;
+                t.reserve(g.first.size() + g.second.size());
                 t.insert(t.end(), g.first.begin(), g.first.end());
                 t.insert(t.end(), g.second.begin(), g.second.end());
                 Pipeline::Push(parent, std::move(t)); // pass groups on to parent
@@ -545,6 +546,7 @@ void Interpreter::operator()(const SortingOperator &op)
 
     std::sort(data->buffer.begin(), data->buffer.end(), [&](const tuple_type &first, const tuple_type &second) {
         tuple_type t;
+        t.reserve(first.size() + second.size());
         t.insert(t.end(), first.begin(), first.end());
         t.insert(t.end(), second.begin(), second.end());
         auto res = comparator(t);

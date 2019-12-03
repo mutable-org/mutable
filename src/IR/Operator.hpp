@@ -44,6 +44,12 @@ struct tuple_type : public std::vector<value_type>
         swap(as<Base>(*this), as<Base>(other));
         return *this;
     }
+
+    tuple_type clone() const {
+        tuple_type copy;
+        as<Base>(copy) = as<const Base>(*this);
+        return copy;
+    }
 };
 
 static_assert(std::is_move_constructible_v<tuple_type>, "tuple_type must be move constructible");

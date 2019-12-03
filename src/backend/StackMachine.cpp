@@ -547,7 +547,7 @@ void StackMachine::emit(const cnf::CNF &cnf)
     }
 }
 
-tuple_type StackMachine::operator()(const tuple_type &t)
+void StackMachine::operator()(tuple_type *out, const tuple_type &in)
 {
     static const void *labels[] = {
 #define DB_OPCODE(CODE, ...) && CODE,
@@ -556,10 +556,13 @@ tuple_type StackMachine::operator()(const tuple_type &t)
     };
 
     emit_Stop();
-    tuple_type stack;
-    stack.reserve(required_stack_size_);
+    tuple_type &stack = *out;
+    stack.clear();
+    insist(stack.capacity() >= std::size_t(required_stack_size_));
     auto op = ops.cbegin();
-#define NEXT goto *labels[std::size_t(*op++)]
+#define NEXT \
+    insist(stack.capacity() <= std::size_t(required_stack_size_)); \
+    goto *labels[std::size_t(*op++)]
     NEXT;
 
 /*======================================================================================================================
@@ -613,8 +616,8 @@ Pop:
 /* Load a value from the tuple to the top of the stack. */
 Ld_Tup: {
     std::size_t idx = static_cast<std::size_t>(*op++);
-    insist(idx < t.size(), "index out of bounds");
-    stack.emplace_back(t[idx]);
+    insist(idx < in.size(), "index out of bounds");
+    stack.emplace_back(in[idx]);
 }
 NEXT;
 
@@ -803,7 +806,9 @@ St_RS_s: {
     insist(pv_len, "invalid type of variant");
     auto len = *pv_len;
     stack.pop_back();
+
     PREPARE_STORE(std::string);
+
     auto p = reinterpret_cast<char*>(addr + bytes);
     strncpy(p, value.c_str(), len);
 }
@@ -907,7 +912,9 @@ Ld_CS_s: {
     insist(pv_len, "invalid type of variant");
     auto len = std::size_t(*pv_len);
     stack.pop_back();
+
     PREPARE_LOAD(char);
+
     auto p = value_col_addr + row_id * len;
     stack.back() = std::string(p, p + len);
 }
@@ -1182,7 +1189,6 @@ Stop:
     ops.pop_back(); // terminating Stop
 
     insist(stack.capacity() <= required_stack_size_, "failed to pre-allocate sufficient memory");
-    return stack;
 }
 
 void StackMachine::dump(std::ostream &out) const

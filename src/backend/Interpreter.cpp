@@ -73,6 +73,13 @@ value_type operator!(const value_type &value)
  * Declaration of operator data.
  *====================================================================================================================*/
 
+struct ScanData : OperatorData
+{
+    StackMachine loader;
+
+    ScanData(StackMachine &&L) : loader(std::move(L)) { }
+};
+
 struct ProjectionData : OperatorData
 {
     StackMachine projections;
@@ -136,9 +143,9 @@ struct FilterData : OperatorData
 
 void Pipeline::operator()(const ScanOperator &op)
 {
-    auto loader = op.store().loader(op.schema());
+    auto data = as<ScanData>(op.data());
     for (auto i = op.store().num_rows(); i; --i) {
-        tuple_ = loader();
+        data->loader(&tuple_);
         op.parent()->accept(*this);
     }
 }
@@ -175,7 +182,8 @@ void Pipeline::operator()(const JoinOperator &op)
                  * tuples. */
                 std::vector<std::size_t> positions(size - 1, std::size_t(-1L)); // positions within each buffer
                 std::size_t child_id = 0; // cursor to the child that provides the next part of the joined tuple
-                tuple_type rhs = std::move(tuple_);
+                //tuple_type rhs = std::move(tuple_);
+                tuple_type rhs = tuple_.clone();
                 tuple_type joined;
                 joined.reserve(op.schema().size());
 
@@ -216,7 +224,7 @@ void Pipeline::operator()(const JoinOperator &op)
                 }
             } else {
                 /* This is not the right-most child.  Collect its produced tuples in a buffer. */
-                data->buffers[data->active_child].emplace_back(std::move(tuple_));
+                data->buffers[data->active_child].emplace_back(tuple_.clone());
             }
             break;
         }
@@ -385,7 +393,7 @@ void Pipeline::operator()(const SortingOperator &op)
 {
     /* cache all tuples for sorting */
     auto data = as<SortingData>(op.data());
-    data->buffer.emplace_back(std::move(tuple_));
+    data->buffer.emplace_back(tuple_.clone());
 }
 
 /*======================================================================================================================
@@ -399,7 +407,9 @@ void Interpreter::operator()(const CallbackOperator &op)
 
 void Interpreter::operator()(const ScanOperator &op)
 {
-    Pipeline::Push(op);
+    auto data = new ScanData(op.store().loader(op.schema()));
+    op.data(data);
+    Pipeline::Push(op, data->loader.required_stack_size());
 }
 
 void Interpreter::operator()(const FilterOperator &op)
@@ -447,7 +457,7 @@ void Interpreter::operator()(const ProjectionOperator &op)
     if (has_child)
         op.child(0)->accept(*this);
     else
-        Pipeline::Push(op); // evaluate the projection EXACTLY ONCE on an empty tuple
+        Pipeline::Push(op, data->projections.required_stack_size()); // evaluate the projection EXACTLY ONCE on an empty tuple
 }
 
 void Interpreter::operator()(const LimitOperator &op)

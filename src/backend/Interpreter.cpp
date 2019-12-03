@@ -134,8 +134,6 @@ struct FilterData : OperatorData
  * Pipeline
  *====================================================================================================================*/
 
-tuple_type Pipeline::empty;
-
 void Pipeline::operator()(const ScanOperator &op)
 {
     auto loader = op.store().loader(op.schema());
@@ -177,7 +175,7 @@ void Pipeline::operator()(const JoinOperator &op)
                  * tuples. */
                 std::vector<std::size_t> positions(size - 1, std::size_t(-1L)); // positions within each buffer
                 std::size_t child_id = 0; // cursor to the child that provides the next part of the joined tuple
-                auto rhs = tuple_;
+                tuple_type rhs = std::move(tuple_);
                 tuple_type joined;
                 joined.reserve(op.schema().size());
 
@@ -197,7 +195,7 @@ void Pipeline::operator()(const JoinOperator &op)
                         auto pv = std::get_if<bool>(&res[0]);
                         insist(pv, "invalid type of variant");
                         if (*pv) {
-                            tuple_ = joined;
+                            tuple_ = std::move(joined);
                             op.parent()->accept(*this);
                         }
 
@@ -218,7 +216,7 @@ void Pipeline::operator()(const JoinOperator &op)
                 }
             } else {
                 /* This is not the right-most child.  Collect its produced tuples in a buffer. */
-                data->buffers[data->active_child].emplace_back(tuple_);
+                data->buffers[data->active_child].emplace_back(std::move(tuple_));
             }
             break;
         }
@@ -273,7 +271,7 @@ void Pipeline::operator()(const GroupingOperator &op)
             if (it == groups.end()) {
                 /* Initialize the group's aggregate to NULL.  This will be overwritten by the neutral element w.r.t. the
                  * aggregation function. */
-                it = groups.emplace_hint(it, key, tuple_type(op.aggregates().size(), null_type()));
+                it = groups.emplace_hint(it, std::move(key), tuple_type(op.aggregates().size(), null_type()));
             }
             aggregates = &it->second;
             break;
@@ -387,7 +385,7 @@ void Pipeline::operator()(const SortingOperator &op)
 {
     /* cache all tuples for sorting */
     auto data = as<SortingData>(op.data());
-    data->buffer.emplace_back(tuple_);
+    data->buffer.emplace_back(std::move(tuple_));
 }
 
 /*======================================================================================================================
@@ -477,9 +475,11 @@ void Interpreter::operator()(const GroupingOperator &op)
             for (auto e : op.group_by())
                 data->keys.emit(*e);
             op.child(0)->accept(*this);
-            for (auto g : data->groups) {
-                auto t = g.first + g.second;
-                Pipeline::Push(parent, t); // pass groups on to parent
+            for (auto &g : data->groups) {
+                tuple_type t;
+                t.insert(t.end(), g.first.begin(), g.first.end());
+                t.insert(t.end(), g.second.begin(), g.second.end());
+                Pipeline::Push(parent, std::move(t)); // pass groups on to parent
             }
             break;
         }
@@ -544,7 +544,10 @@ void Interpreter::operator()(const SortingOperator &op)
         stack_machines.emplace_back(S, *o.first);
 
     std::sort(data->buffer.begin(), data->buffer.end(), [&](const tuple_type &first, const tuple_type &second) {
-        auto res = comparator(first + second);
+        tuple_type t;
+        t.insert(t.end(), first.begin(), first.end());
+        t.insert(t.end(), second.begin(), second.end());
+        auto res = comparator(t);
         auto pv = std::get_if<int64_t>(&res.back());
         insist(pv, "invalid type of variant");
         return *pv < 0;
@@ -552,6 +555,6 @@ void Interpreter::operator()(const SortingOperator &op)
 
     auto &parent = *op.parent();
     for (auto &t : data->buffer)
-        Pipeline::Push(parent, t);
+        Pipeline::Push(parent, std::move(t));
 }
 

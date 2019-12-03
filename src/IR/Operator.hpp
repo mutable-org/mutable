@@ -20,8 +20,34 @@ struct TheOperatorVisitor;
 using OperatorVisitor = TheOperatorVisitor<false>;
 using ConstOperatorVisitor = TheOperatorVisitor<true>;
 
-using tuple_type = std::vector<value_type>;
+struct tuple_type : public std::vector<value_type>
+{
+    using Base = std::vector<value_type>;
+
+    tuple_type() : Base() { }
+    tuple_type(std::size_t capacity) : Base() { Base::reserve(capacity); }
+    tuple_type(std::size_t count, const value_type &value) : Base(count, value) { }
+    tuple_type(std::vector<value_type> values) {
+        using std::swap;
+        swap(as<Base>(*this), values);
+    }
+
+    tuple_type(const tuple_type&) = delete;
+
+    tuple_type(tuple_type &&other) {
+        using std::swap;
+        swap(as<Base>(*this), as<Base>(other));
+    }
+
+    tuple_type & operator=(tuple_type &&other) {
+        using std::swap;
+        swap(as<Base>(*this), as<Base>(other));
+        return *this;
+    }
+};
+
 static_assert(std::is_move_constructible_v<tuple_type>, "tuple_type must be move constructible");
+static_assert(not std::is_copy_constructible_v<tuple_type>, "tuple_type must not be copy constructible");
 
 inline std::ostream & operator<<(std::ostream &out, const tuple_type &tuple)
 {

@@ -14,11 +14,10 @@ namespace db {
 struct Pipeline : ConstOperatorVisitor
 {
     private:
-    static tuple_type empty;
-    tuple_type &tuple_;
+    tuple_type tuple_;
 
-    Pipeline() : tuple_(empty) { }
-    Pipeline(tuple_type &t) : tuple_(t) { }
+    Pipeline() { }
+    Pipeline(tuple_type &&t) : tuple_(std::move(t)) { }
 
     public:
     static void Push(const Operator &pipeline_start) {
@@ -26,8 +25,8 @@ struct Pipeline : ConstOperatorVisitor
         P(pipeline_start);
     }
 
-    static void Push(const Operator &pipeline_start, tuple_type &t) {
-        Pipeline P(t);
+    static void Push(const Operator &pipeline_start, tuple_type &&t) {
+        Pipeline P(std::move(t));
         P(pipeline_start);
     }
 

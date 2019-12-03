@@ -48,7 +48,7 @@ struct StackMachine
     void emit(const Expr &expr);
     void emit(const cnf::CNF &cnf);
 
-    const tuple_type & operator()(const tuple_type &t = tuple_type());
+    tuple_type operator()(const tuple_type &t = tuple_type());
 
     /* The following macros are used to automatically generate methods to emit a particular opcode.  For example, for
      * the opcode `Pop`, we will define a function `emit_Pop()`, that appends the `Pop` opcode to the current opcode

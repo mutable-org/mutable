@@ -547,7 +547,7 @@ void StackMachine::emit(const cnf::CNF &cnf)
     }
 }
 
-const tuple_type & StackMachine::operator()(const tuple_type &t)
+tuple_type StackMachine::operator()(const tuple_type &t)
 {
     static const void *labels[] = {
 #define DB_OPCODE(CODE, ...) && CODE,
@@ -556,7 +556,7 @@ const tuple_type & StackMachine::operator()(const tuple_type &t)
     };
 
     emit_Stop();
-    stack_.clear();
+    tuple_type stack;
     auto op = ops.cbegin();
 #define NEXT goto *labels[std::size_t(*op++)]
     NEXT;
@@ -566,32 +566,32 @@ const tuple_type & StackMachine::operator()(const tuple_type &t)
  *====================================================================================================================*/
 
 Stop_Z: {
-    insist(stack_.size() >= 1);
-    auto pv = std::get_if<int64_t>(&stack_.back());
+    insist(stack.size() >= 1);
+    auto pv = std::get_if<int64_t>(&stack.back());
     insist(pv, "invalid type of variant");
     if (*pv == 0) goto Stop; // stop evaluation on ZERO
 }
 NEXT;
 
 Stop_NZ: {
-    insist(stack_.size() >= 1);
-    auto pv = std::get_if<int64_t>(&stack_.back());
+    insist(stack.size() >= 1);
+    auto pv = std::get_if<int64_t>(&stack.back());
     insist(pv, "invalid type of variant");
     if (*pv != 0) goto Stop; // stop evaluation on NOT ZERO
 }
 NEXT;
 
 Stop_False: {
-    insist(stack_.size() >= 1);
-    auto pv = std::get_if<bool>(&stack_.back());
+    insist(stack.size() >= 1);
+    auto pv = std::get_if<bool>(&stack.back());
     insist(pv, "invalid type of variant");
     if (not *pv) goto Stop; // stop evaluation on NOT ZERO
 }
 NEXT;
 
 Stop_True: {
-    insist(stack_.size() >= 1);
-    auto pv = std::get_if<bool>(&stack_.back());
+    insist(stack.size() >= 1);
+    auto pv = std::get_if<bool>(&stack.back());
     insist(pv, "invalid type of variant");
     if (*pv) goto Stop; // stop evaluation on NOT ZERO
 }
@@ -602,7 +602,7 @@ NEXT;
  *====================================================================================================================*/
 
 Pop:
-    stack_.pop_back();
+    stack.pop_back();
     NEXT;
 
 /*======================================================================================================================
@@ -613,7 +613,7 @@ Pop:
 Ld_Tup: {
     std::size_t idx = static_cast<std::size_t>(*op++);
     insist(idx < t.size(), "index out of bounds");
-    stack_.emplace_back(t[idx]);
+    stack.emplace_back(t[idx]);
 }
 NEXT;
 
@@ -621,37 +621,37 @@ NEXT;
 Ld_Ctx: {
     std::size_t idx = static_cast<std::size_t>(*op++);
     insist(idx < context_.size(), "index out of bounds");
-    stack_.emplace_back(context_[idx]);
+    stack.emplace_back(context_[idx]);
 }
 NEXT;
 
 Upd_Ctx: {
     std::size_t idx = static_cast<std::size_t>(*op++);
     insist(idx < context_.size(), "index out of bounds");
-    insist(stack_.back().index() == context_[idx].index());
-    context_[idx] = stack_.back();
+    insist(stack.back().index() == context_[idx].index());
+    context_[idx] = stack.back();
 }
 NEXT;
 
 /*----- Load from row store ------------------------------------------------------------------------------------------*/
 #define PREPARE \
-    insist(stack_.size() >= 3); \
+    insist(stack.size() >= 3); \
 \
     /* Get value bit offset. */ \
-    auto pv_value_off = std::get_if<int64_t>(&stack_.back()); \
+    auto pv_value_off = std::get_if<int64_t>(&stack.back()); \
     insist(pv_value_off, "invalid type of variant"); \
     auto value_off = std::size_t(*pv_value_off); \
     const std::size_t bytes = value_off / 8; \
-    stack_.pop_back(); \
+    stack.pop_back(); \
 \
     /* Get null bit offset. */ \
-    auto pv_null_off = std::get_if<int64_t>(&stack_.back()); \
+    auto pv_null_off = std::get_if<int64_t>(&stack.back()); \
     insist(pv_null_off, "invalid type of variant"); \
     auto null_off = std::size_t(*pv_null_off); \
-    stack_.pop_back(); \
+    stack.pop_back(); \
 \
     /* Row address. */ \
-    auto pv_addr = std::get_if<int64_t>(&stack_.back()); \
+    auto pv_addr = std::get_if<int64_t>(&stack.back()); \
     insist(pv_addr, "invalid type of variant"); \
     auto addr = reinterpret_cast<uint8_t*>(*pv_addr);
 
@@ -664,14 +664,14 @@ NEXT;
         const std::size_t bits = null_off % 8; \
         bool is_null = not bool((*(addr + bytes) >> bits) & 0x1); \
         if (is_null) { \
-            stack_.back() = value_type(null_type()); \
+            stack.back() = value_type(null_type()); \
             NEXT; \
         } \
     } \
 
 Ld_RS_i8: {
     PREPARE_LOAD;
-    auto pv_res = std::get_if<int64_t>(&stack_.back());
+    auto pv_res = std::get_if<int64_t>(&stack.back());
     insist(pv_res, "invalid type of variant");
     *pv_res = int64_t(*reinterpret_cast<int8_t*>(addr + bytes));
 }
@@ -679,7 +679,7 @@ NEXT;
 
 Ld_RS_i16: {
     PREPARE_LOAD;
-    auto pv_res = std::get_if<int64_t>(&stack_.back());
+    auto pv_res = std::get_if<int64_t>(&stack.back());
     insist(pv_res, "invalid type of variant");
     *pv_res = int64_t(*reinterpret_cast<int8_t*>(addr + bytes));
 }
@@ -687,7 +687,7 @@ NEXT;
 
 Ld_RS_i32: {
     PREPARE_LOAD;
-    auto pv_res = std::get_if<int64_t>(&stack_.back());
+    auto pv_res = std::get_if<int64_t>(&stack.back());
     insist(pv_res, "invalid type of variant");
     *pv_res = int64_t(*reinterpret_cast<int8_t*>(addr + bytes));
 }
@@ -695,40 +695,40 @@ NEXT;
 
 Ld_RS_i64: {
     PREPARE_LOAD;
-    stack_.back() = *reinterpret_cast<int64_t*>(addr + bytes);
+    stack.back() = *reinterpret_cast<int64_t*>(addr + bytes);
 }
 NEXT;
 
 Ld_RS_f: {
     PREPARE_LOAD;
-    stack_.back() = *reinterpret_cast<float*>(addr + bytes);
+    stack.back() = *reinterpret_cast<float*>(addr + bytes);
 }
 NEXT;
 
 Ld_RS_d: {
     PREPARE_LOAD;
-    stack_.back() = *reinterpret_cast<double*>(addr + bytes);
+    stack.back() = *reinterpret_cast<double*>(addr + bytes);
 }
 NEXT;
 
 Ld_RS_s: {
     /* Get string length. */
-    auto pv_len = std::get_if<int64_t>(&stack_.back());
+    auto pv_len = std::get_if<int64_t>(&stack.back());
     insist(pv_len, "invalid type of variant");
     auto len = std::size_t(*pv_len);
-    stack_.pop_back();
+    stack.pop_back();
 
     PREPARE_LOAD;
 
     auto first = reinterpret_cast<char*>(addr + bytes);
-    stack_.back() = std::string(first, first + len);
+    stack.back() = std::string(first, first + len);
 }
 NEXT;
 
 Ld_RS_b: {
     PREPARE_LOAD;
     const std::size_t bits = value_off % 8;
-    stack_.back() = bool((*reinterpret_cast<uint8_t*>(addr + bytes) >> bits) & 0x1);
+    stack.back() = bool((*reinterpret_cast<uint8_t*>(addr + bytes) >> bits) & 0x1);
 }
 NEXT;
 
@@ -736,10 +736,10 @@ NEXT;
 
 #define PREPARE_STORE(TYPE) \
     PREPARE \
-    stack_.pop_back(); \
+    stack.pop_back(); \
 \
-    auto pv_value = std::get_if<TYPE>(&stack_.back()); \
-    insist(pv_value or std::holds_alternative<null_type>(stack_.back()), "invalid type of variant"); \
+    auto pv_value = std::get_if<TYPE>(&stack.back()); \
+    insist(pv_value or std::holds_alternative<null_type>(stack.back()), "invalid type of variant"); \
 \
     /* Set null bit. */ \
     { \
@@ -747,13 +747,13 @@ NEXT;
         const std::size_t bits = null_off % 8; \
         setbit(addr + bytes, bool(pv_value), bits); \
         if (not pv_value) { \
-            stack_.pop_back(); \
+            stack.pop_back(); \
             NEXT; \
         } \
     } \
 \
     auto value = *pv_value; \
-    stack_.pop_back();
+    stack.pop_back();
 
 St_RS_i8: {
     PREPARE_STORE(int64_t);
@@ -798,10 +798,10 @@ St_RS_d: {
 NEXT;
 
 St_RS_s: {
-    auto pv_len = std::get_if<int64_t>(&stack_.back());
+    auto pv_len = std::get_if<int64_t>(&stack.back());
     insist(pv_len, "invalid type of variant");
     auto len = *pv_len;
-    stack_.pop_back();
+    stack.pop_back();
     PREPARE_STORE(std::string);
     auto p = reinterpret_cast<char*>(addr + bytes);
     strncpy(p, value.c_str(), len);
@@ -821,28 +821,28 @@ NEXT;
 
 /*----- Load from column store ---------------------------------------------------------------------------------------*/
 #define PREPARE(TYPE) \
-    insist(stack_.size() >= 4); \
+    insist(stack.size() >= 4); \
 \
     /* Get attribute id. */ \
-    auto pv_attr_id = std::get_if<int64_t>(&stack_.back()); \
+    auto pv_attr_id = std::get_if<int64_t>(&stack.back()); \
     insist(pv_attr_id, "invalid type of variant"); \
     auto attr_id = std::size_t(*pv_attr_id); \
-    stack_.pop_back(); \
+    stack.pop_back(); \
 \
     /* Get address of value column. */ \
-    auto pv_value_col_addr = std::get_if<int64_t>(&stack_.back()); \
+    auto pv_value_col_addr = std::get_if<int64_t>(&stack.back()); \
     insist(pv_value_col_addr, "invalid type of variant"); \
     TYPE *value_col_addr = reinterpret_cast<TYPE*>(static_cast<uintptr_t>(*pv_value_col_addr)); \
-    stack_.pop_back(); \
+    stack.pop_back(); \
 \
     /* Get address of null bitmap column. */ \
-    auto pv_null_bitmap_col_addr = std::get_if<int64_t>(&stack_.back()); \
+    auto pv_null_bitmap_col_addr = std::get_if<int64_t>(&stack.back()); \
     insist(pv_null_bitmap_col_addr, "invalid type of variant"); \
     int64_t *null_bitmap_col_addr = reinterpret_cast<int64_t*>(static_cast<uintptr_t>(*pv_null_bitmap_col_addr)); \
-    stack_.pop_back(); \
+    stack.pop_back(); \
 \
     /* Get row id. */ \
-    auto pv_row_id = std::get_if<int64_t>(&stack_.back()); \
+    auto pv_row_id = std::get_if<int64_t>(&stack.back()); \
     insist(pv_row_id, "invalid type of variant"); \
     auto row_id = static_cast<std::size_t>(*pv_row_id);
 
@@ -852,13 +852,13 @@ NEXT;
     /* Check if null. */ \
     bool is_null = not ((null_bitmap_col_addr[row_id] >> attr_id) & 0x1); \
     if (is_null) { \
-        stack_.back() = value_type(null_type()); \
+        stack.back() = value_type(null_type()); \
         NEXT; \
     }
 
 Ld_CS_i8: {
     PREPARE_LOAD(int8_t);
-    auto pv_res = std::get_if<int64_t>(&stack_.back());
+    auto pv_res = std::get_if<int64_t>(&stack.back());
     insist(pv_res, "invalid type of variant");
     *pv_res = int64_t(value_col_addr[row_id]);
 }
@@ -866,7 +866,7 @@ NEXT;
 
 Ld_CS_i16: {
     PREPARE_LOAD(int16_t);
-    auto pv_res = std::get_if<int64_t>(&stack_.back());
+    auto pv_res = std::get_if<int64_t>(&stack.back());
     insist(pv_res, "invalid type of variant");
     *pv_res = int64_t(value_col_addr[row_id]);
 }
@@ -874,7 +874,7 @@ NEXT;
 
 Ld_CS_i32: {
     PREPARE_LOAD(int32_t);
-    auto pv_res = std::get_if<int64_t>(&stack_.back());
+    auto pv_res = std::get_if<int64_t>(&stack.back());
     insist(pv_res, "invalid type of variant");
     *pv_res = int64_t(value_col_addr[row_id]);
 }
@@ -882,7 +882,7 @@ NEXT;
 
 Ld_CS_i64: {
     PREPARE_LOAD(int64_t);
-    auto pv_res = std::get_if<int64_t>(&stack_.back());
+    auto pv_res = std::get_if<int64_t>(&stack.back());
     insist(pv_res, "invalid type of variant");
     *pv_res = int64_t(value_col_addr[row_id]);
 }
@@ -890,25 +890,25 @@ NEXT;
 
 Ld_CS_f: {
     PREPARE_LOAD(float);
-    stack_.back() = float(value_col_addr[row_id]);
+    stack.back() = float(value_col_addr[row_id]);
 }
 NEXT;
 
 Ld_CS_d: {
     PREPARE_LOAD(double);
-    stack_.back() = double(value_col_addr[row_id]);
+    stack.back() = double(value_col_addr[row_id]);
 }
 NEXT;
 
 Ld_CS_s: {
     /* Get string length. */
-    auto pv_len = std::get_if<int64_t>(&stack_.back());
+    auto pv_len = std::get_if<int64_t>(&stack.back());
     insist(pv_len, "invalid type of variant");
     auto len = std::size_t(*pv_len);
-    stack_.pop_back();
+    stack.pop_back();
     PREPARE_LOAD(char);
     auto p = value_col_addr + row_id * len;
-    stack_.back() = std::string(p, p + len);
+    stack.back() = std::string(p, p + len);
 }
 NEXT;
 
@@ -916,7 +916,7 @@ Ld_CS_b: {
     PREPARE_LOAD(uint8_t);
     const std::size_t bytes = row_id / 8;
     const std::size_t bits = row_id % 8;
-    stack_.back() = bool((value_col_addr[bytes] >> bits) & 0x1);
+    stack.back() = bool((value_col_addr[bytes] >> bits) & 0x1);
 }
 NEXT;
 
@@ -924,22 +924,22 @@ NEXT;
 
 #define PREPARE_STORE(TO_TYPE, FROM_TYPE) \
     PREPARE(TO_TYPE); \
-    stack_.pop_back(); \
+    stack.pop_back(); \
 \
-    auto pv_value = std::get_if<FROM_TYPE>(&stack_.back()); \
-    insist(pv_value or std::holds_alternative<null_type>(stack_.back()), "invalid type of variant"); \
+    auto pv_value = std::get_if<FROM_TYPE>(&stack.back()); \
+    insist(pv_value or std::holds_alternative<null_type>(stack.back()), "invalid type of variant"); \
 \
     /* Set null bit. */ \
     { \
         setbit(&null_bitmap_col_addr[row_id], bool(pv_value), attr_id); \
         if (not pv_value) { \
-            stack_.pop_back(); \
+            stack.pop_back(); \
             NEXT; \
         } \
     } \
 \
     auto value = *pv_value; \
-    stack_.pop_back();
+    stack.pop_back();
 
 St_CS_i8: {
     PREPARE_STORE(int8_t, int64_t);
@@ -996,33 +996,33 @@ NEXT;
 #undef PREPARE
 
 #define UNARY(OP, TYPE) { \
-    insist(stack_.size() >= 1); \
-    auto &v = stack_.back(); \
+    insist(stack.size() >= 1); \
+    auto &v = stack.back(); \
     auto pv = std::get_if<TYPE>(&v); \
     insist(pv, "invalid type of variant"); \
     auto res = OP (*pv); \
     if constexpr (std::is_same_v<decltype(res), TYPE>) \
         *pv = res; \
     else \
-        stack_.back() = res; \
+        stack.back() = res; \
 } \
 NEXT;
 
 #define BINARY(OP, TYPE) { \
-    insist(stack_.size() >= 2); \
-    auto &v_rhs = stack_.back(); \
+    insist(stack.size() >= 2); \
+    auto &v_rhs = stack.back(); \
     auto pv_rhs = std::get_if<TYPE>(&v_rhs); \
     insist(pv_rhs, "invalid type of rhs"); \
     auto rhs = *pv_rhs; \
-    stack_.pop_back(); \
-    auto &v_lhs = stack_.back(); \
+    stack.pop_back(); \
+    auto &v_lhs = stack.back(); \
     auto pv_lhs = std::get_if<TYPE>(&v_lhs); \
     insist(pv_lhs, "invalid type of lhs"); \
     auto res = *pv_lhs OP rhs; \
     if constexpr (std::is_same_v<decltype(res), TYPE>) \
         *pv_lhs = res; \
     else \
-        stack_.back() = res; \
+        stack.back() = res; \
 } \
 NEXT;
 
@@ -1120,16 +1120,16 @@ GE_d: BINARY(>=, double);
 GE_s: BINARY(>=, std::string);
 
 #define CMP(TYPE) { \
-    insist(stack_.size() >= 2); \
-    auto &v_rhs = stack_.back(); \
+    insist(stack.size() >= 2); \
+    auto &v_rhs = stack.back(); \
     auto pv_rhs = std::get_if<TYPE>(&v_rhs); \
     insist(pv_rhs, "invalid type of rhs"); \
     auto rhs = *pv_rhs; \
-    stack_.pop_back(); \
-    auto &v_lhs = stack_.back(); \
+    stack.pop_back(); \
+    auto &v_lhs = stack.back(); \
     auto pv_lhs = std::get_if<TYPE>(&v_lhs); \
     insist(pv_lhs, "invalid type of lhs"); \
-    stack_.back() = *pv_lhs == rhs ? int64_t(0) : (*pv_lhs < rhs ? int64_t(-1) : int64_t(1)); \
+    stack.back() = *pv_lhs == rhs ? int64_t(0) : (*pv_lhs < rhs ? int64_t(-1) : int64_t(1)); \
 } \
 NEXT;
 
@@ -1138,16 +1138,16 @@ Cmp_f: CMP(float);
 Cmp_d: CMP(double);
 Cmp_b: CMP(bool);
 Cmp_s: {
-    insist(stack_.size() >= 2);
-    auto &v_rhs = stack_.back();
+    insist(stack.size() >= 2);
+    auto &v_rhs = stack.back();
     auto pv_rhs = std::get_if<std::string>(&v_rhs);
     insist(pv_rhs, "invalid type of rhs");
     auto rhs = *pv_rhs;
-    stack_.pop_back();
-    auto &v_lhs = stack_.back();
+    stack.pop_back();
+    auto &v_lhs = stack.back();
     auto pv_lhs = std::get_if<std::string>(&v_lhs);
     insist(pv_lhs, "invalid type of lhs");
-    stack_.back() = int64_t(pv_lhs->compare(rhs));
+    stack.back() = int64_t(pv_lhs->compare(rhs));
 }
 NEXT;
 
@@ -1158,7 +1158,7 @@ NEXT;
  *====================================================================================================================*/
 
 Is_Null:
-    stack_.back() = std::holds_alternative<null_type>(stack_.back());
+    stack.back() = std::holds_alternative<null_type>(stack.back());
     NEXT;
 
 /* Cast to int. */
@@ -1177,10 +1177,10 @@ Cast_d_f: UNARY((double), float);
 #undef BINARY
 #undef UNARY
 
-Stop: /* nothing to be done */
-
+Stop:
     ops.pop_back(); // terminating Stop
-    return stack_;
+
+    return stack;
 }
 
 void StackMachine::dump(std::ostream &out) const

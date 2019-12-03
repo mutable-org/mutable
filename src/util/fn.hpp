@@ -93,10 +93,14 @@ T * cast(U *u) { return dynamic_cast<T*>(u); }
  */
 template<typename T, typename U>
 T * as(U *u) { insist(cast<T>(u)); return static_cast<T*>(u); }
+template<typename T, typename U>
+T & as(U &u) { return *as<T>(&u); }
 
 /** Simple test whether expression u is of type T.  Works with pointers and references. */
 template<typename T, typename U>
 bool is(U *u) { return cast<T>(u) != nullptr; }
+template<typename T, typename U>
+bool is(U &u) { return is<T>(&u); }
 
 inline std::string escape(char c)
 {

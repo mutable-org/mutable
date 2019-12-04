@@ -82,9 +82,12 @@ struct ScanData : OperatorData
 
 struct ProjectionData : OperatorData
 {
+    Pipeline pipeline;
     StackMachine projections;
 
-    ProjectionData(StackMachine &&P) : projections(std::move(P)) { }
+    ProjectionData(StackMachine &&P)
+        : pipeline(0)
+        , projections(std::move(P)) { }
 };
 
 struct JoinData : OperatorData
@@ -242,15 +245,13 @@ void Pipeline::operator()(const JoinOperator &op)
 void Pipeline::operator()(const ProjectionOperator &op)
 {
     auto data = as<ProjectionData>(op.data());
+    auto &pipeline = data->pipeline;
+    data->projections(&pipeline.tuple_, tuple_);
 
-    if (op.is_anti()) {
-        auto result = data->projections(tuple_);
-        tuple_.insert(tuple_.begin(), result.begin(), result.end());
-    } else {
-        tuple_ = data->projections(tuple_);
-    }
+    if (op.is_anti())
+        pipeline.tuple_.insert(pipeline.tuple_.begin(), tuple_.begin(), tuple_.end());
 
-    op.parent()->accept(*this);
+    pipeline.push(*op.parent());
 }
 
 void Pipeline::operator()(const LimitOperator &op)
@@ -456,6 +457,7 @@ void Interpreter::operator()(const ProjectionOperator &op)
     op.data(data);
     for (auto &p : op.projections())
         data->projections.emit(*p.first);
+    data->pipeline.reserve(std::max(data->projections.required_stack_size(), op.schema().size()));
 
     /* Evaluate the projection. */
     if (has_child)

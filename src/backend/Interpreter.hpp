@@ -16,10 +16,10 @@ struct Pipeline : ConstOperatorVisitor
     private:
     tuple_type tuple_;
 
+    public:
     Pipeline(std::size_t size) { tuple_.reserve(size); }
     Pipeline(tuple_type &&t) : tuple_(std::move(t)) { }
 
-    public:
     static void Push(const Operator &pipeline_start, std::size_t size) {
         Pipeline P(size);
         P(pipeline_start);
@@ -29,6 +29,12 @@ struct Pipeline : ConstOperatorVisitor
         Pipeline P(std::move(t));
         P(pipeline_start);
     }
+
+    void reserve(std::size_t tuple_size) {
+        tuple_.reserve(tuple_size);
+    }
+
+    void push(const Operator &pipeline_start) { (*this)(pipeline_start); }
 
     using ConstOperatorVisitor::operator();
 #define DECLARE(CLASS) void operator()(Const<CLASS> &op) override

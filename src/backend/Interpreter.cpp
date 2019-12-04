@@ -87,7 +87,14 @@ struct ProjectionData : OperatorData
     ProjectionData(StackMachine &&P) : projections(std::move(P)) { }
 };
 
-struct NestedLoopsJoinData : OperatorData
+struct JoinData : OperatorData
+{
+    Pipeline pipeline;
+
+    JoinData(std::size_t tuple_size) : pipeline(tuple_size) { };
+};
+
+struct NestedLoopsJoinData : JoinData
 {
     using buffer_type = std::vector<tuple_type>;
 
@@ -95,8 +102,9 @@ struct NestedLoopsJoinData : OperatorData
     buffer_type *buffers;
     std::size_t active_child;
 
-    NestedLoopsJoinData(StackMachine &&predicate, std::size_t num_children)
-        : predicate(std::move(predicate))
+    NestedLoopsJoinData(std::size_t tuple_size, StackMachine &&predicate, std::size_t num_children)
+        : JoinData(tuple_size)
+        , predicate(std::move(predicate))
         , buffers(new buffer_type[num_children - 1])
     { }
 
@@ -174,7 +182,7 @@ void Pipeline::operator()(const JoinOperator &op)
         case JoinOperator::J_Undefined:
             /* fall through */
         case JoinOperator::J_NestedLoops: {
-            auto data = (NestedLoopsJoinData*)(op.data());
+            auto data = as<NestedLoopsJoinData>(op.data());
             auto size = op.children().size();
 
             if (data->active_child == size - 1) {
@@ -182,30 +190,26 @@ void Pipeline::operator()(const JoinOperator &op)
                  * tuples. */
                 std::vector<std::size_t> positions(size - 1, std::size_t(-1L)); // positions within each buffer
                 std::size_t child_id = 0; // cursor to the child that provides the next part of the joined tuple
-                //tuple_type rhs = std::move(tuple_);
                 tuple_type rhs = tuple_.clone();
-                tuple_type joined;
-                joined.reserve(op.schema().size());
+                auto &pipeline = data->pipeline;
 
                 for (;;) {
                     if (child_id == size - 1) { // right-most child, which produced `rhs`
                         /* Combine the tuples.  One tuple from each buffer. */
-                        joined.clear();
+                        pipeline.tuple_.clear();
                         for (std::size_t i = 0; i != positions.size(); ++i) {
                             auto &buffer = data->buffers[i];
-                            joined += buffer[positions[i]];
+                            pipeline.tuple_ += buffer[positions[i]];
                         }
-                        joined += rhs; // append the tuple just produced by the right-most child
+                        pipeline.tuple_ += rhs; // append the tuple just produced by the right-most child
 
                         /* Evaluate the join predicate on the joined tuple. */
-                        auto res = data->predicate(joined);
+                        auto res = data->predicate(pipeline.tuple_);
                         insist(res.size() == 1);
                         auto pv = std::get_if<bool>(&res[0]);
                         insist(pv, "invalid type of variant");
-                        if (*pv) {
-                            tuple_ = std::move(joined);
-                            op.parent()->accept(*this);
-                        }
+                        if (*pv)
+                            pipeline.push(*op.parent());
 
                         --child_id;
                     } else { // child whose tuples have been materialized in a buffer
@@ -428,7 +432,7 @@ void Interpreter::operator()(const JoinOperator &op)
 
         case JoinOperator::J_Undefined:
         case JoinOperator::J_NestedLoops: {
-            auto data = new NestedLoopsJoinData(StackMachine(op.schema()), op.children().size());
+            auto data = new NestedLoopsJoinData(op.schema().size(), StackMachine(op.schema()), op.children().size());
             op.data(data);
             data->predicate.emit(op.predicate());
             for (std::size_t i = 0, end = op.children().size(); i != end; ++i) {

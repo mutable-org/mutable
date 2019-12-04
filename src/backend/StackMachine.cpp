@@ -558,11 +558,18 @@ void StackMachine::operator()(tuple_type *out, const tuple_type &in)
     emit_Stop();
     tuple_type &stack = *out;
     stack.clear();
-    insist(stack.capacity() >= std::size_t(required_stack_size_));
     auto op = ops.cbegin();
+
+#ifndef NDEBUG
+    insist(stack.capacity() >= std::size_t(required_stack_size_), "insufficient memory provided");
+    auto initial_stack_size = stack.capacity();
 #define NEXT \
-    insist(stack.capacity() <= std::size_t(required_stack_size_)); \
+    insist(stack.capacity() == initial_stack_size, "failed to pre-allocate sufficient memory"); \
     goto *labels[std::size_t(*op++)]
+#else
+#define NEXT goto *labels[std::size_t(*op++)]
+#endif
+
     NEXT;
 
 /*======================================================================================================================
@@ -1188,7 +1195,9 @@ Cast_d_f: UNARY((double), float);
 Stop:
     ops.pop_back(); // terminating Stop
 
-    insist(stack.capacity() <= required_stack_size_, "failed to pre-allocate sufficient memory");
+#ifndef NDEBUG
+    insist(initial_stack_size == stack.capacity(), "failed to pre-allocate sufficient memory");
+#endif
 }
 
 void StackMachine::dump(std::ostream &out) const

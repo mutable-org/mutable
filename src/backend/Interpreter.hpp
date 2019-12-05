@@ -8,33 +8,170 @@
 #include <unordered_map>
 
 
+#ifndef VECTORIZED
+#define VECTORIZED 1
+#endif
+
+
 namespace db {
+
+#if VECTORIZED
+
+template<std::size_t N>
+struct Vector
+{
+    static constexpr std::size_t CAPACITY = N;
+
+    private:
+    std::array<tuple_type, N> data_;
+    uint64_t mask_ = 0x0;
+    static_assert(N <= 64, "maximum vector size exceeded");
+
+    public:
+    Vector() = default;
+    Vector(const Vector&) = delete;
+    Vector(Vector&&) = delete;
+
+    Vector(std::size_t tuple_size) { reserve(tuple_size); }
+
+    tuple_type * data() { return data_.data(); }
+    const tuple_type * data() const { return data_.data(); }
+
+    static constexpr std::size_t capacity() { return CAPACITY; }
+    std::size_t size() const { return __builtin_popcountl(mask_); }
+
+    /** Check whether the tuple at the given `index` is alive. */
+    bool alive(std::size_t index) const {
+        insist(index < capacity());
+        return mask_ & (1UL << index);
+    }
+
+    bool empty() const { return size() == 0; }
+
+    uint64_t mask() const { return mask_; }
+    void mask(uint64_t new_mask) { mask_ = new_mask; }
+
+    private:
+    static constexpr uint64_t AllOnes() { return -1LU >> (8 * sizeof(mask_) - capacity()); }
+
+    public:
+#if 0
+    // TODO vector iterator to skip masked out tuples
+    auto begin() { return data(); }
+    auto end()   { return data() + size(); }
+    auto begin() const { return data(); }
+    auto end()   const { return data() + size(); }
+    auto cbegin() const { return begin(); }
+    auto cend()   const { return end(); }
+#endif
+
+    tuple_type & operator[](std::size_t index) {
+        insist(index < capacity(), "index out of bounds");
+        insist(alive(index), "cannot access a dead tuple directly");
+        return data_[index];
+    }
+    const tuple_type & operator[](std::size_t index) const { return const_cast<Vector*>(this)->operator[](index); }
+
+    void reserve(std::size_t tuple_size) {
+        for (auto &t : data_)
+            t.reserve(tuple_size);
+    }
+
+    /** Make all tuples in the vector alive. */
+    void fill() { mask_ = AllOnes(); insist(size() == capacity()); }
+
+    /** Erase a tuple at the given `index` from the vector. */
+    void erase(std::size_t index) {
+        insist(index < capacity(), "index out of bounds");
+        setbit(&mask_, false, index);
+    }
+
+    /** Clears the vector. */
+    void clear() {
+        mask_ = 0;
+        for (auto &t : data_)
+            t.clear();
+    }
+
+    friend std::ostream & operator<<(std::ostream &out, const Vector<N> &vec) {
+        out << "Vector<" << vec.capacity() << "> with " << vec.size() << " elements:\n";
+        for (std::size_t i = 0; i != vec.capacity(); ++i) {
+            out << "    " << i << ": ";
+            if (vec.alive(i))
+                out << vec[i];
+            else
+                out << "[dead]";
+            out << '\n';
+        }
+        return out;
+    }
+
+    void dump(std::ostream &out) const
+    {
+        out << *this;
+        out.flush();
+    }
+
+    void dump() const { dump(std::cerr); }
+};
+
+#endif
+
+struct Interpreter;
 
 /** Implements push-based evaluation of a pipeline in the plan. */
 struct Pipeline : ConstOperatorVisitor
 {
+    friend struct Interpreter;
+
     private:
+#if VECTORIZED
+    Vector<64> vec_;
+#else
     tuple_type tuple_;
+#endif
 
     public:
-    Pipeline(std::size_t size) { tuple_.reserve(size); }
-    Pipeline(tuple_type &&t) : tuple_(std::move(t)) { }
-
-    static void Push(const Operator &pipeline_start, std::size_t size) {
-        Pipeline P(size);
-        P(pipeline_start);
+    Pipeline(std::size_t tuple_size)
+#if VECTORIZED
+        : vec_(tuple_size)
+#endif
+    {
+#if VECTORIZED
+        vec_.mask(1UL); // create one empty tuple in the vector
+#else
+        tuple_.reserve(tuple_size);
+#endif
     }
 
-    static void Push(const Operator &pipeline_start, tuple_type &&t) {
-        Pipeline P(std::move(t));
-        P(pipeline_start);
+    Pipeline(tuple_type &&t)
+#if !VECTORIZED
+        : tuple_(std::move(t))
+#endif
+    {
+#if VECTORIZED
+        vec_.mask(1UL);
+        vec_[0] = std::move(t);
+#endif
     }
 
     void reserve(std::size_t tuple_size) {
+#if VECTORIZED
+        vec_.reserve(tuple_size);
+#else
         tuple_.reserve(tuple_size);
+#endif
     }
 
     void push(const Operator &pipeline_start) { (*this)(pipeline_start); }
+
+    void clear() {
+#if VECTORIZED
+        vec_.clear();
+#else
+        tuple_.clear();
+#endif
+    }
 
     using ConstOperatorVisitor::operator();
 #define DECLARE(CLASS) void operator()(Const<CLASS> &op) override

@@ -253,7 +253,7 @@ void ColumnStore::Row::dispatch(callback_t callback) const
         void operator()(Const<Boolean>&) { callback(attr, row.get_generic<bool>(attr)); }
         void operator()(Const<CharacterSequence> &ty) {
             insist(not ty.is_varying, "varying length character sequences are not supported by this store");
-            callback(attr, row.get_generic<std::string>(attr));
+            callback(attr, row.get_generic<std::string_view>(attr));
         }
         void operator()(Const<Numeric> &ty) {
             switch (ty.kind) {

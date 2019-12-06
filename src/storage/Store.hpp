@@ -8,6 +8,8 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <string>
+#include <string_view>
 #include <type_traits>
 #include <variant>
 
@@ -37,11 +39,12 @@ using value_type = std::variant<
     int64_t,
     float,
     double,
-    std::string,
+    std::string_view,
     bool
 >;
 
 static_assert(std::is_move_constructible_v<value_type>, "value_type must be move constructible");
+static_assert(std::is_trivially_destructible_v<value_type>, "value_type must be trivially destructible");
 
 template<typename To>
 To to(const value_type &value)
@@ -67,7 +70,7 @@ struct hash<db::value_type>
         return std::visit(overloaded {
             [](auto v) -> uint64_t { return murmur3_64(std::hash<decltype(v)>()(v)); },
             [](db::null_type) -> uint64_t { return 0; },
-            [](const std::string &v) -> uint64_t { return StrHash()(v.c_str()); },
+            [](const std::string_view v) -> uint64_t { return StrHash()(v.data(), v.length()); },
         }, value);
     }
 };
@@ -83,7 +86,7 @@ inline std::ostream & operator<<(std::ostream &out, const value_type &value)
         [&] (int64_t v) { out << v; },
         [&] (float v) { out << v << ".f"; },
         [&] (double v) { out << v << '.'; },
-        [&] (std::string v) { out << '"' << v << '"'; },
+        [&] (std::string_view v) { out << '"' << v << '"'; },
         [&] (bool v) { out << (v ? "TRUE" : "FALSE"); },
     }, value);
     return out;
@@ -96,7 +99,7 @@ inline void print(std::ostream &out, const Type *type, value_type value)
         [&] (null_type) { out << "NULL"; },
         [&] (float v) { out << v; },
         [&] (double v) { out << v; },
-        [&] (std::string v) { out << '"' << escape(v) << '"'; },
+        [&] (std::string_view v) { out << '"' << escape(std::string(v)) << '"'; },
         [&] (bool v) { out << (v ? "TRUE" : "FALSE"); },
         [&] (int64_t v) {
             if (auto n = as<const Numeric>(type); n->kind == Numeric::N_Decimal) {

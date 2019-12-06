@@ -181,7 +181,7 @@ TEST_CASE("StackMachine", "[unit]")
     TEST("42", "constant/int64_t", int64_t, 42);
     TEST("13.37", "constant/double", double, 13.37);
     TEST("TRUE", "constant/bool", bool, true);
-    TEST("\"Hello, World!\"", "constant/char", std::string, "Hello, World!");
+    TEST("\"Hello, World!\"", "constant/char", std::string_view, "Hello, World!");
 
     /* Designators */
     TEST("col_int64_t", "designator/attr/int64_t", int64_t, col_int64_t_val);
@@ -199,8 +199,8 @@ TEST_CASE("StackMachine", "[unit]")
     TEST("col_bool", "designator/attr/bool", bool, col_bool_val);
     TEST("tbl1.col_bool", "designator/tbl/bool", bool, col_bool_val);
 
-    TEST("col_char", "designator/attr/char", std::string, col_char_val);
-    TEST("tbl1.col_char", "designator/tbl/char", std::string, col_char_val);
+    TEST("col_char", "designator/attr/char", std::string_view, col_char_val);
+    TEST("tbl1.col_char", "designator/tbl/char", std::string_view, col_char_val);
 
     /* Binary operators */
     TEST("col_int64_t + 13", "binary/arithmetic/+/int64_t", int64_t, col_int64_t_val + 13);
@@ -265,7 +265,7 @@ TEST_CASE("StackMachine", "[unit]")
     TEST("col_bool AND TRUE", "binary/logical/and/bool", bool, col_bool_val and true);
     TEST("col_bool OR FALSE", "binary/logical/or/bool",  bool, col_bool_val or false);
 
-    TEST("col_char .. \"test\"", "binary/string/../char", std::string, col_char_val + "test");
+    TEST("col_char .. \"test\"", "binary/string/../char", std::string_view, col_char_val + "test");
 
     /* Unary operators */
     TEST("+col_int64_t", "unary/arithmetic/+/int64_t", int64_t, +col_int64_t_val);

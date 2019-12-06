@@ -234,8 +234,11 @@ struct Interpreter : Backend, ConstOperatorVisitor
                 unreachable("not implemented");
 
             /* String */
-            case TK_STRING_LITERAL:
-                return interpret(c.tok.text);
+            case TK_STRING_LITERAL: {
+                std::string str = interpret(c.tok.text);
+                const char *cstr = Catalog::Get().pool(str.c_str());
+                return std::string_view(cstr, str.length());
+            }
 
             /* Boolean */
             case TK_True:

@@ -1,6 +1,7 @@
 #include "backend/StackMachine.hpp"
 
 #include "backend/Interpreter.hpp"
+#include <string_view>
 
 
 using namespace db;
@@ -732,7 +733,7 @@ Ld_RS_s: {
     PREPARE_LOAD;
 
     auto first = reinterpret_cast<char*>(addr + bytes);
-    stack.back() = std::string(first, first + len);
+    stack.back() = std::string_view(first, len);
 }
 NEXT;
 
@@ -814,10 +815,10 @@ St_RS_s: {
     auto len = *pv_len;
     stack.pop_back();
 
-    PREPARE_STORE(std::string);
+    PREPARE_STORE(std::string_view);
 
     auto p = reinterpret_cast<char*>(addr + bytes);
-    strncpy(p, value.c_str(), len);
+    strncpy(p, value.data(), len);
 }
 NEXT;
 
@@ -923,7 +924,7 @@ Ld_CS_s: {
     PREPARE_LOAD(char);
 
     auto p = value_col_addr + row_id * len;
-    stack.back() = std::string(p, p + len);
+    stack.back() = std::string_view(p, len);
 }
 NEXT;
 
@@ -993,7 +994,7 @@ St_CS_d: {
 NEXT;
 
 St_CS_s: {
-    PREPARE_STORE(std::string, std::string);
+    PREPARE_STORE(std::string_view, std::string_view);
     // TODO
     unreachable("not implemented");
 }
@@ -1026,18 +1027,15 @@ NEXT;
 #define BINARY(OP, TYPE) { \
     insist(stack.size() >= 2); \
     auto &v_rhs = stack.back(); \
-    auto pv_rhs = std::get_if<TYPE>(&v_rhs); \
+    TYPE *pv_rhs = std::get_if<TYPE>(&v_rhs); \
     insist(pv_rhs, "invalid type of rhs"); \
-    auto rhs = *pv_rhs; \
+    TYPE rhs = *pv_rhs; \
     stack.pop_back(); \
     auto &v_lhs = stack.back(); \
-    auto pv_lhs = std::get_if<TYPE>(&v_lhs); \
+    TYPE *pv_lhs = std::get_if<TYPE>(&v_lhs); \
     insist(pv_lhs, "invalid type of lhs"); \
     auto res = *pv_lhs OP rhs; \
-    if constexpr (std::is_same_v<decltype(res), TYPE>) \
-        *pv_lhs = res; \
-    else \
-        stack.back() = res; \
+    stack.back() = res; \
 } \
 NEXT;
 
@@ -1083,7 +1081,7 @@ Div_d: BINARY(/, double);
 Mod_i: BINARY(%, int64_t);
 
 /* Concatenate two strings. */
-Cat_s: BINARY(+, std::string);
+Cat_s: unreachable("Concat not supported"); //BINARY(+, std::string_view);
 
 /*======================================================================================================================
  * Logical operations
@@ -1106,33 +1104,33 @@ Eq_i: BINARY(==, int64_t);
 Eq_f: BINARY(==, float);
 Eq_d: BINARY(==, double);
 Eq_b: BINARY(==, bool);
-Eq_s: BINARY(==, std::string);
+Eq_s: BINARY(==, std::string_view);
 
 NE_i: BINARY(!=, int64_t);
 NE_f: BINARY(!=, float);
 NE_d: BINARY(!=, double);
 NE_b: BINARY(!=, bool);
-NE_s: BINARY(!=, std::string);
+NE_s: BINARY(!=, std::string_view);
 
 LT_i: BINARY(<, int64_t);
 LT_f: BINARY(<, float);
 LT_d: BINARY(<, double);
-LT_s: BINARY(<, std::string);
+LT_s: BINARY(<, std::string_view);
 
 GT_i: BINARY(>, int64_t);
 GT_f: BINARY(>, float);
 GT_d: BINARY(>, double);
-GT_s: BINARY(>, std::string);
+GT_s: BINARY(>, std::string_view);
 
 LE_i: BINARY(<=, int64_t);
 LE_f: BINARY(<=, float);
 LE_d: BINARY(<=, double);
-LE_s: BINARY(<=, std::string);
+LE_s: BINARY(<=, std::string_view);
 
 GE_i: BINARY(>=, int64_t);
 GE_f: BINARY(>=, float);
 GE_d: BINARY(>=, double);
-GE_s: BINARY(>=, std::string);
+GE_s: BINARY(>=, std::string_view);
 
 #define CMP(TYPE) { \
     insist(stack.size() >= 2); \
@@ -1155,12 +1153,12 @@ Cmp_b: CMP(bool);
 Cmp_s: {
     insist(stack.size() >= 2);
     auto &v_rhs = stack.back();
-    auto pv_rhs = std::get_if<std::string>(&v_rhs);
+    auto pv_rhs = std::get_if<std::string_view>(&v_rhs);
     insist(pv_rhs, "invalid type of rhs");
     auto rhs = *pv_rhs;
     stack.pop_back();
     auto &v_lhs = stack.back();
-    auto pv_lhs = std::get_if<std::string>(&v_lhs);
+    auto pv_lhs = std::get_if<std::string_view>(&v_lhs);
     insist(pv_lhs, "invalid type of lhs");
     stack.back() = int64_t(pv_lhs->compare(rhs));
 }

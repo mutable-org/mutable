@@ -167,6 +167,7 @@ TEST_CASE("StackMachine", "[unit]")
         auto expr = select->select[0].first; \
         StackMachine eval(schema, *expr); \
         tuple_type result; \
+        result.reserve(std::max(schema.size(), eval.required_stack_size())); \
         eval(&result, tup); \
         REQUIRE(result.size() == 1); \
         auto r = result[0]; \

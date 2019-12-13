@@ -128,12 +128,12 @@ TEST_CASE("StackMachine", "[unit]")
     Table &tbl1 = db.add_table(tbl_tbl1);
 
     /* Add columns to tables. */
-    tbl1.push_back(Type::Get_Integer(Type::TY_Vector, 4), col_int64_t);
-    tbl1.push_back(Type::Get_Float(Type::TY_Vector), col_float);
-    tbl1.push_back(Type::Get_Double(Type::TY_Vector), col_double);
-    tbl1.push_back(Type::Get_Decimal(Type::TY_Vector, 8, 2), col_decimal);
-    tbl1.push_back(Type::Get_Boolean(Type::TY_Vector), col_bool);
-    tbl1.push_back(Type::Get_Char(Type::TY_Vector, 4), col_char);
+    tbl1.push_back(col_int64_t, Type::Get_Integer(Type::TY_Vector, 4));
+    tbl1.push_back(col_float, Type::Get_Float(Type::TY_Vector));
+    tbl1.push_back(col_double, Type::Get_Double(Type::TY_Vector));
+    tbl1.push_back(col_decimal, Type::Get_Decimal(Type::TY_Vector, 8, 2));
+    tbl1.push_back(col_bool, Type::Get_Boolean(Type::TY_Vector));
+    tbl1.push_back(col_char, Type::Get_Char(Type::TY_Vector, 4));
 
     /* Create tuple schema. */
     OperatorSchema schema;

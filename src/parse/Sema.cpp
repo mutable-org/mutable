@@ -50,13 +50,19 @@ void Sema::operator()(Const<Designator> &e)
         } else if (auto T = std::get_if<SemaContext::named_expr_table>(&src)) {
             const SemaContext::named_expr_table &tbl = *T;
             /* Find expression inside named expression table. */
-            try {
-                target = tbl.at(e.attr_name.text);
-            } catch (std::out_of_range) {
+            auto [begin, end] = tbl.equal_range(e.attr_name.text);
+            if (begin == end) {
                 diag.e(e.attr_name.pos) << "Source " << e.table_name.text << " has no attribute " << e.attr_name.text
                                         << ".\n";
                 e.type_ = Type::Get_Error();
                 return;
+            } else if (std::distance(begin, end) > 1) {
+                diag.e(e.attr_name.pos) << "Source " << e.table_name.text << " has multipe attributes "
+                                        << e.attr_name.text << ".\n";
+                e.type_ = Type::Get_Error();
+                return;
+            } else {
+                target = begin->second;
             }
         } else {
             unreachable("invalid variant");
@@ -65,11 +71,15 @@ void Sema::operator()(Const<Designator> &e)
     } else {
         /* No table name was specified.  The designator references either a result or a named expression.  Search the
          * named expressions first, because they overrule attribute names. */
-        if (auto it = Ctx.results.find(e.attr_name.text); Ctx.stage > SemaContext::S_Select and it != Ctx.results.end()) {
+        if (auto [begin, end] = Ctx.results.equal_range(e.attr_name.text);
+            Ctx.stage > SemaContext::S_Select and std::distance(begin, end) == 1)
+        {
             /* Found a named expression. */
-            e.target_ = it->second;
+            e.target_ = begin->second;
             is_result = true;
-        } else {
+        }
+        else
+        {
             /* Since no table was explicitly specified, we must search *all* source tables for the attribute. */
             Designator::target_type target;
             const char *alias = nullptr;
@@ -90,11 +100,24 @@ void Sema::operator()(Const<Designator> &e)
                         }
                     } catch (std::out_of_range) {
                         /* This source table has no attribute of that name.  OK, continue. */
+                    } catch (std::invalid_argument) {
+                        /* attribute identifier is ambiguous */
+                        diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text << " is ambiguous.\n";
+                        e.type_ = Type::Get_Error();
+                        return;
                     }
                 } else if (auto T = std::get_if<SemaContext::named_expr_table>(&src.second)) {
                     const SemaContext::named_expr_table &tbl = *T;
-                    try {
-                        Expr *E = tbl.at(e.attr_name.text);
+                    auto [begin, end] = tbl.equal_range(e.attr_name.text);
+                    if (begin == end) {
+                        /* This source table has no attribute of that name.  OK, continue. */
+                    } else if (std::distance(begin, end) > 1) {
+                        diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text << " is ambiguous.\n";
+                        e.type_ = Type::Get_Error();
+                        return;
+                    } else {
+                        insist(std::distance(begin, end) == 1);
+                        Expr *E = begin->second;
                         if (not std::holds_alternative<std::monostate>(target)) {
                             /* ambiguous attribute name */
                             diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text << " is ambiguous.\n";
@@ -105,8 +128,6 @@ void Sema::operator()(Const<Designator> &e)
                             target = E; // we found an attribute of that name in the source tables
                             alias = src.first;
                         }
-                    } catch (std::out_of_range) {
-                        /* This source table has no attribute of that name.  OK, continue. */
                     }
                 } else {
                     unreachable("invalid variant");
@@ -615,20 +636,15 @@ void Sema::operator()(Const<SelectClause> &c)
             has_scalar = has_scalar or pt->is_scalar();
         }
 
-        std::pair<decltype(SemaContext::results)::iterator, bool> res;
         if (s.second) {
             /* With alias. */
-            res = Ctx.results.emplace(s.second.text, s.first);
-            if (not res.second)
-                diag.e(s.second.pos) << "Attribute name " << s.second.text << " already used.\n";
+            Ctx.results.emplace(s.second.text, s.first);
         } else {
             if (e.is_constant()) continue;
             /* Without alias.  Print expression as string to get a name. */
             std::ostringstream oss;
             oss << *s.first;
-            res = Ctx.results.emplace(C.pool(oss.str().c_str()), s.first);
-            if (not res.second)
-                diag.e(c.tok.pos) << "Attribute name " << oss.str() << " already used.\n";
+            Ctx.results.emplace(C.pool(oss.str().c_str()), s.first);
         }
     }
 
@@ -894,12 +910,17 @@ void Sema::operator()(Const<CreateTableStmt> &s)
         /* Before we check the constraints, we must add this newly declared attribute to its table, and hence to the
          * sema context. */
         try {
-            T->push_back(ty->as_vectorial(), attr->name.text);
-        } catch (std::invalid_argument) {
+            T->at(attr->name.text);
             diag.e(attr->name.pos) << "Attribute " << attr->name.text << " occurs multiple times in defintion of table "
-                               << table_name << ".\n";
+                                   << table_name << ".\n";
             error = true;
+        } catch (std::out_of_range) {
+            /* does not exist, ok */
+        } catch (std::invalid_argument) {
+            /* already a duplicate and error has been reported, ignore */
         }
+
+        T->push_back(attr->name.text, ty->as_vectorial());
 
         /* Check constraint definitions. */
         bool has_reference = false; ///< at most one reference allowed per attribute

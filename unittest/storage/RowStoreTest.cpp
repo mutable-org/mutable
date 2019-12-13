@@ -11,16 +11,16 @@ TEST_CASE("RowStore", "[unit]")
 {
     /* Construct a table definition. */
     Table table("mytable");
-    table.push_back(Type::Get_Integer(Type::TY_Vector, 1),      "i1"); // 1 byte
-    table.push_back(Type::Get_Integer(Type::TY_Vector, 2),      "i2"); // 2 byte
-    table.push_back(Type::Get_Integer(Type::TY_Vector, 4),      "i4"); // 4 byte
-    table.push_back(Type::Get_Integer(Type::TY_Vector, 8),      "i8"); // 8 byte
-    table.push_back(Type::Get_Decimal(Type::TY_Vector, 8, 2),   "decimal"); // 4 byte
-    table.push_back(Type::Get_Float(Type::TY_Vector),           "f"); // 4 byte
-    table.push_back(Type::Get_Double(Type::TY_Vector),          "d"); // 8 byte
-    table.push_back(Type::Get_Char(Type::TY_Vector, 3),         "char3"); // 3 byte
-    table.push_back(Type::Get_Boolean(Type::TY_Vector),         "b0"); // 1 bit
-    table.push_back(Type::Get_Boolean(Type::TY_Vector),         "b1"); // 1 bit
+    table.push_back("i1",      Type::Get_Integer(Type::TY_Vector, 1)); // 1 byte
+    table.push_back("i2",      Type::Get_Integer(Type::TY_Vector, 2)); // 2 byte
+    table.push_back("i4",      Type::Get_Integer(Type::TY_Vector, 4)); // 4 byte
+    table.push_back("i8",      Type::Get_Integer(Type::TY_Vector, 8)); // 8 byte
+    table.push_back("decimal", Type::Get_Decimal(Type::TY_Vector, 8, 2)); // 4 byte
+    table.push_back("f",       Type::Get_Float(Type::TY_Vector)); // 4 byte
+    table.push_back("d",       Type::Get_Double(Type::TY_Vector)); // 8 byte
+    table.push_back("char3",   Type::Get_Char(Type::TY_Vector, 3)); // 3 byte
+    table.push_back("b0",      Type::Get_Boolean(Type::TY_Vector)); // 1 bit
+    table.push_back("b1",      Type::Get_Boolean(Type::TY_Vector)); // 1 bit
     constexpr std::size_t ROW_SIZE =
         64 + // i8
         64 + // d

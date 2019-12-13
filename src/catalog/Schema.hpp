@@ -72,7 +72,7 @@ struct Table
     /** the attributes of this table */
     table_type attrs_;
     /** maps attribute names to their position within the table */
-    std::unordered_map<const char*, table_type::size_type> name_to_attr_;
+    std::unordered_multimap<const char*, table_type::size_type> name_to_attr_;
     /** the store backing this table */
     Store *store_ = nullptr;
 
@@ -88,14 +88,22 @@ struct Table
     table_type::const_iterator cend()   const { return attrs_.cend(); }
 
     const Attribute & at(std::size_t i) const { return attrs_.at(i); }
-    const Attribute & at(const char *name) const { return attrs_[name_to_attr_.at(name)]; }
+    const Attribute & at(const char *name) const {
+        auto [begin, end] = name_to_attr_.equal_range(name);
+        if (begin == end) throw std::out_of_range("attribute not found");
+        if (std::distance(begin, end) > 1) std::invalid_argument("name is ambiguous");
+        return attrs_[begin->second];
+    }
     const Attribute & operator[](std::size_t i) const { return at(i); }
     const Attribute & operator[](const char *name) const { return at(name); }
 
     Store & store() const { return *store_; }
     void store(Store *new_store) { store_ = notnull(new_store); }
 
-    void push_back(const PrimitiveType *type, const char *name);
+    void push_back(const char *name, const PrimitiveType *type) {
+        name_to_attr_.emplace(name, attrs_.size());
+        attrs_.emplace_back(Attribute(attrs_.size(), *this, type, name));
+    }
 
     void dump(std::ostream &out) const;
     void dump() const;

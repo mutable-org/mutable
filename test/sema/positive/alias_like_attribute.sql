@@ -1,6 +1,5 @@
 SELECT
-    l_suppkey AS l_orderkey
+    l_suppkey,
+    l_orderkey AS l_suppkey
 FROM
-    LINEITEM
-WHERE
-    l_orderkey > 42;
+    LINEITEM;

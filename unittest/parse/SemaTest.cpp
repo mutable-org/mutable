@@ -161,8 +161,8 @@ TEST_CASE("Sema/Expressions scalar-vector inference", "[sema]")
     const char *db_name = "mydb";
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
-    auto &table = DB.add_table(C.get_pool()("mytable"));
-    table.push_back(Type::Get_Integer(Type::TY_Vector, 4), C.get_pool()("v"));
+    auto &table = DB.add_table(C.pool("mytable"));
+    table.push_back(C.pool("v"), Type::Get_Integer(Type::TY_Vector, 4));
 
     {
         /* Vector compared to scalar yields vector. */
@@ -223,8 +223,8 @@ TEST_CASE("Sema/Expressions/Functions", "[sema]")
     const char *db_name = "mydb";
     auto &DB = C.add_database(db_name);
     C.set_database_in_use(DB);
-    auto &table = DB.add_table(C.get_pool()("mytable"));
-    table.push_back(Type::Get_Integer(Type::TY_Vector, 4), C.get_pool()("v"));
+    auto &table = DB.add_table(C.pool("mytable"));
+    table.push_back(C.pool("v"), Type::Get_Integer(Type::TY_Vector, 4));
 
     {
         /* Vectorial WHERE condition is ok. */

@@ -82,14 +82,14 @@ int main(int argc, const char **argv)
 
     /* Create a table. */
     Table &tbl = db.add_table(mytable);
-    tbl.push_back(Type::Get_Integer(Type::TY_Vector, 4), a);
-    tbl.push_back(Type::Get_Boolean(Type::TY_Vector), b);
-    tbl.push_back(Type::Get_Integer(Type::TY_Vector, 8), c);
-    tbl.push_back(Type::Get_Decimal(Type::TY_Vector, 8, 2), d);
-    tbl.push_back(Type::Get_Integer(Type::TY_Vector, 1), e);
-    tbl.push_back(Type::Get_Boolean(Type::TY_Vector), f);
-    tbl.push_back(Type::Get_Char(Type::TY_Vector, 3), g);
-    tbl.push_back(Type::Get_Double(Type::TY_Vector), h);
+    tbl.push_back(a, Type::Get_Integer(Type::TY_Vector, 4));
+    tbl.push_back(b, Type::Get_Boolean(Type::TY_Vector));
+    tbl.push_back(c, Type::Get_Integer(Type::TY_Vector, 8));
+    tbl.push_back(d, Type::Get_Decimal(Type::TY_Vector, 8, 2));
+    tbl.push_back(e, Type::Get_Integer(Type::TY_Vector, 1));
+    tbl.push_back(f, Type::Get_Boolean(Type::TY_Vector));
+    tbl.push_back(g, Type::Get_Char(Type::TY_Vector, 3));
+    tbl.push_back(h, Type::Get_Double(Type::TY_Vector));
 
     Store *store = new RowStore(tbl);
 

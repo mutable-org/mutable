@@ -49,9 +49,9 @@ TEST_CASE("Table::push_back()")
     const PrimitiveType *vc = Type::Get_Varchar(Type::TY_Vector, 42);
     const PrimitiveType *b = Type::Get_Boolean(Type::TY_Vector);
 
-    r.push_back(i4, "n");
-    r.push_back(vc, "comment");
-    r.push_back(b, "condition");
+    r.push_back("n", i4);
+    r.push_back("comment", vc);
+    r.push_back("condition", b);
 
     REQUIRE(r.size() == 3);
 
@@ -67,9 +67,9 @@ TEST_CASE("Table iterators")
     Table r("mytable");
     const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Vector, 4);
 
-    r.push_back(i4, "a");
-    r.push_back(i4, "b");
-    r.push_back(i4, "c");
+    r.push_back("a", i4);
+    r.push_back("b", i4);
+    r.push_back("c", i4);
     REQUIRE(r.size() == 3);
 
     auto it = r.cbegin();
@@ -87,9 +87,9 @@ TEST_CASE("Table get attribute by name")
     Table r("mytable");
     const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Vector, 4);
 
-    r.push_back(i4, "a");
-    r.push_back(i4, "b");
-    r.push_back(i4, "c");
+    r.push_back("a", i4);
+    r.push_back("b", i4);
+    r.push_back("c", i4);
     REQUIRE(r.size() == 3);
 
     {
@@ -106,13 +106,15 @@ TEST_CASE("Table get attribute by name")
     }
 }
 
-TEST_CASE("Table::push_back() error if name alreay taken")
+TEST_CASE("Table::push_back() duplicate name")
 {
     Table r("mytable");
     const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Vector, 4);
 
-    r.push_back(i4, "a");
-    REQUIRE_THROWS_AS(r.push_back(i4, "a"), std::invalid_argument);
+    const char *attr_name = "a";
+
+    r.push_back(attr_name, i4);
+    r.push_back(attr_name, i4); // OK
 }
 
 TEST_CASE("Catalog singleton c'tor")

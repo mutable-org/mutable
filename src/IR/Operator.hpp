@@ -100,6 +100,11 @@ struct hash<db::tuple_type>
 
 namespace db {
 
+/** Implements the schema of an operator.  This is different from `Table`, which implements the schema of a base table.
+ * The `OperatorSchema` can distinguish between attributes of the same name that belong to different sources, e.g. after
+ * joining two relations that have an attribute name in common.  (The `Table` class cannot distinguish these
+ * attributes.)
+ */
 struct OperatorSchema
 {
     struct AttributeIdentifier

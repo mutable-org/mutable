@@ -69,7 +69,7 @@ int main(int argc, const char **argv)
 
     /* Create a table. */
     Table &tbl = db.add_table(C.pool("tbl"));
-    tbl.push_back(Type::Get_Integer(Type::TY_Vector, 4), a);
+    tbl.push_back(a, Type::Get_Integer(Type::TY_Vector, 4));
 
     const char *sql = "\
 SELECT * \n\

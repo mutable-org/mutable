@@ -85,9 +85,9 @@ int main(int argc, const char **argv)
     const char *c = C.pool("c");
 
     Table &tbl = db.add_table(T);
-    tbl.push_back(Type::Get_Integer(Type::TY_Vector, 4), a);
-    tbl.push_back(Type::Get_Boolean(Type::TY_Vector),    b);
-    tbl.push_back(Type::Get_Char(Type::TY_Vector, 3),    c);
+    tbl.push_back(a, Type::Get_Integer(Type::TY_Vector, 4));
+    tbl.push_back(b, Type::Get_Boolean(Type::TY_Vector));
+    tbl.push_back(c, Type::Get_Char(Type::TY_Vector, 3));
     auto store = new RowStore(tbl);
     tbl.store(store);
 

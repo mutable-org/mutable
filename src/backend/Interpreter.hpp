@@ -16,6 +16,42 @@ struct Vector
     static constexpr std::size_t CAPACITY = N;
 
     private:
+    template<bool C>
+    struct the_iterator
+    {
+        static constexpr bool IsConst = C;
+
+        using vector_t = std::conditional_t<IsConst, const Vector, Vector>;
+        using reference = std::conditional_t<IsConst, const tuple_type&, tuple_type&>;
+        using pointer = std::conditional_t<IsConst, const tuple_type*, tuple_type*>;
+
+        private:
+        vector_t &vec_;
+        uint64_t mask_;
+
+        public:
+        the_iterator(vector_t &vec, uint64_t mask) : vec_(vec), mask_(mask) { }
+
+        bool operator==(the_iterator other) {
+            insist(&this->vec_ == &other.vec_);
+            return this->mask_ == other.mask_;
+        }
+        bool operator!=(the_iterator other) { return not operator==(other); }
+
+        the_iterator & operator++() { mask_ = mask_ & (mask_ - 1UL); /* set lowest 1-bit to 0 */ return *this; }
+        the_iterator operator++(int) { the_iterator clone(*this); operator++(); return clone; }
+
+        std::size_t index() const { return __builtin_ctzl(mask_); }
+
+        reference operator*() const { return vec_[index()]; }
+        pointer operator->() const { return &vec_[index()]; }
+    };
+
+    public:
+    using iterator = the_iterator<false>;
+    using const_iterator = the_iterator<true>;
+
+    private:
     std::array<tuple_type, N> data_;
     uint64_t mask_ = 0x0;
     static_assert(N <= 64, "maximum vector size exceeded");
@@ -33,6 +69,19 @@ struct Vector
     static constexpr std::size_t capacity() { return CAPACITY; }
     std::size_t size() const { return __builtin_popcountl(mask_); }
 
+    iterator begin() { return iterator(*this, mask_); }
+    iterator end()   { return iterator(*this, 0UL); }
+    const_iterator begin() const { return const_iterator(*this, mask_); }
+    const_iterator end()   const { return const_iterator(*this, 0UL); }
+    const_iterator cbegin() const { return const_iterator(*this, mask_); }
+    const_iterator cend()   const { return const_iterator(*this, 0UL); }
+
+    iterator at(std::size_t index) {
+        insist(index < capacity());
+        return iterator(*this, mask_ & (-1UL << index));
+    }
+    const_iterator at(std::size_t index) const { return const_cast<Vector>(this)->at(index); }
+
     /** Check whether the tuple at the given `index` is alive. */
     bool alive(std::size_t index) const {
         insist(index < capacity());
@@ -48,16 +97,6 @@ struct Vector
     static constexpr uint64_t AllOnes() { return -1LU >> (8 * sizeof(mask_) - capacity()); }
 
     public:
-#if 0
-    // TODO vector iterator to skip masked out tuples
-    auto begin() { return data(); }
-    auto end()   { return data() + size(); }
-    auto begin() const { return data(); }
-    auto end()   const { return data() + size(); }
-    auto cbegin() const { return begin(); }
-    auto cend()   const { return end(); }
-#endif
-
     tuple_type & operator[](std::size_t index) {
         insist(index < capacity(), "index out of bounds");
         insist(alive(index), "cannot access a dead tuple directly");
@@ -78,6 +117,8 @@ struct Vector
         insist(index < capacity(), "index out of bounds");
         setbit(&mask_, false, index);
     }
+    void erase(iterator it) { erase(it.index()); }
+    void erase(const_iterator it) { erase(it.index()); }
 
     /** Clears the vector. */
     void clear() {

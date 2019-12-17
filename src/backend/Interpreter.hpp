@@ -8,14 +8,7 @@
 #include <unordered_map>
 
 
-#ifndef VECTORIZED
-#define VECTORIZED 1
-#endif
-
-
 namespace db {
-
-#if VECTORIZED
 
 template<std::size_t N>
 struct Vector
@@ -115,8 +108,6 @@ struct Vector
     void dump() const { dump(std::cerr); }
 };
 
-#endif
-
 struct Interpreter;
 
 /** Implements push-based evaluation of a pipeline in the plan. */
@@ -125,53 +116,26 @@ struct Pipeline : ConstOperatorVisitor
     friend struct Interpreter;
 
     private:
-#if VECTORIZED
     Vector<64> vec_;
-#else
-    tuple_type tuple_;
-#endif
 
     public:
     Pipeline(std::size_t tuple_size)
-#if VECTORIZED
         : vec_(tuple_size)
-#endif
     {
-#if VECTORIZED
         vec_.mask(1UL); // create one empty tuple in the vector
-#else
-        tuple_.reserve(tuple_size);
-#endif
     }
 
     Pipeline(tuple_type &&t)
-#if !VECTORIZED
-        : tuple_(std::move(t))
-#endif
     {
-#if VECTORIZED
         vec_.mask(1UL);
         vec_[0] = std::move(t);
-#endif
     }
 
-    void reserve(std::size_t tuple_size) {
-#if VECTORIZED
-        vec_.reserve(tuple_size);
-#else
-        tuple_.reserve(tuple_size);
-#endif
-    }
+    void reserve(std::size_t tuple_size) { vec_.reserve(tuple_size); }
 
     void push(const Operator &pipeline_start) { (*this)(pipeline_start); }
 
-    void clear() {
-#if VECTORIZED
-        vec_.clear();
-#else
-        tuple_.clear();
-#endif
-    }
+    void clear() { vec_.clear(); }
 
     using ConstOperatorVisitor::operator();
 #define DECLARE(CLASS) void operator()(Const<CLASS> &op) override

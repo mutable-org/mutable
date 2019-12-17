@@ -623,7 +623,9 @@ void Interpreter::operator()(const ProjectionOperator &op)
         op.child(0)->accept(*this);
     else {
         Pipeline pipeline(0);
+#if VECTORIZED
         pipeline.vec_.mask(1); // evaluate the projection EXACTLY ONCE on an empty tuple
+#endif
         pipeline.push(op);
     }
 }

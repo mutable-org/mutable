@@ -693,7 +693,7 @@ Ld_RS_i16: {
     PREPARE_LOAD;
     auto pv_res = std::get_if<int64_t>(&stack.back());
     insist(pv_res, "invalid type of variant");
-    *pv_res = int64_t(*reinterpret_cast<int8_t*>(addr + bytes));
+    *pv_res = int64_t(*reinterpret_cast<int16_t*>(addr + bytes));
 }
 NEXT;
 
@@ -701,7 +701,7 @@ Ld_RS_i32: {
     PREPARE_LOAD;
     auto pv_res = std::get_if<int64_t>(&stack.back());
     insist(pv_res, "invalid type of variant");
-    *pv_res = int64_t(*reinterpret_cast<int8_t*>(addr + bytes));
+    *pv_res = int64_t(*reinterpret_cast<int32_t*>(addr + bytes));
 }
 NEXT;
 

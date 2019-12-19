@@ -2,7 +2,7 @@
 
 import psycopg2
 
-conn = psycopg2.connect('dbname=reference user=postgres')
+conn = psycopg2.connect('dbname=ours user=postgres')
 cur = conn.cursor()
 
 queries = [
@@ -72,12 +72,12 @@ def stringify(x):
 
 for (i, query) in enumerate(queries):
     sql, name = query
-    with open("test/end2end/positive/queries/" + name + '.sql', 'w') as q_file:
+    with open("test/end2end/positive/ours/" + name + '.sql', 'w') as q_file:
         # write query
         q_file.write(sql + '\n')
 
         # write results
-        with open("test/end2end/positive/queries/" + name + '.csv', 'w') as r_file:
+        with open("test/end2end/positive/ours/" + name + '.csv', 'w') as r_file:
             sql = sql.replace('"', '\'')
             res = list()
             for stmt in sql.split(';')[0:-1]:

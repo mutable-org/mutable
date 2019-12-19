@@ -13,10 +13,10 @@ import termcolor
 
 
 CWD                 = os.getcwd()
-SHELL_BIN           = os.path.join(CWD, 'build_debug', 'bin', 'shell')
+SHELL_BIN           = os.path.join(CWD, 'build/debug', 'bin', 'shell')
 TEST_DIR            = os.path.join('test', 'end2end')
-SETUP_SQL           = os.path.join(TEST_DIR, 'setup.sql')
-POSITIVE_TEST_DIR   = os.path.join(TEST_DIR, 'positive', 'queries')
+SETUP_SQL           = os.path.join(TEST_DIR, 'setup_ours_mutable.sql')
+POSITIVE_TEST_DIR   = os.path.join(TEST_DIR, 'positive', 'ours')
 GLOB_POSITIVE       = os.path.join(POSITIVE_TEST_DIR, '**', '*.sql')
 
 

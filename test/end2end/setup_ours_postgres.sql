@@ -1,6 +1,6 @@
-DROP DATABASE IF EXISTS reference;
-CREATE DATABASE reference;
-\c reference;
+DROP DATABASE IF EXISTS ours;
+CREATE DATABASE ours;
+\c ours;
 
 CREATE TABLE R (
     key INTEGER,
@@ -23,6 +23,6 @@ CREATE TABLE T (
     rstring CHAR(15)
 );
 
-\copy R FROM 'test/end2end/positive/data/R.csv' CSV HEADER;
-\copy S FROM 'test/end2end/positive/data/S.csv' CSV HEADER;
-\copy T FROM 'test/end2end/positive/data/T.csv' CSV HEADER;
+\copy R FROM 'test/end2end/data/ours/R.csv' CSV HEADER;
+\copy S FROM 'test/end2end/data/ours/S.csv' CSV HEADER;
+\copy T FROM 'test/end2end/data/ours/T.csv' CSV HEADER;

@@ -1,3 +1,5 @@
+#!env python3
+
 import random
 import string
 
@@ -10,7 +12,7 @@ n_tuples = 100
 str_len = 15
 
 for tab in tables:
-    with open(tab + ".csv", 'w') as file:
+    with open("test/end2end/data/ours/" + tab + ".csv", 'w') as file:
         # write out header
         for (i, attr) in enumerate(schema):
             if i > 0:

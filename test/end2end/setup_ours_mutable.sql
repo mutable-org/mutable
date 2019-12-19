@@ -1,6 +1,6 @@
-CREATE DATABASE simple;
+CREATE DATABASE ours;
 
-USE simple;
+USE ours;
 
 CREATE TABLE R (
     key INT(2),
@@ -23,6 +23,6 @@ CREATE TABLE T (
     rstring CHAR(15)
 );
 
-IMPORT INTO R DSV "test/end2end/positive/data/R.csv" SKIP HEADER;
-IMPORT INTO S DSV "test/end2end/positive/data/S.csv" SKIP HEADER;
-IMPORT INTO T DSV "test/end2end/positive/data/T.csv" SKIP HEADER;
+IMPORT INTO R DSV "test/end2end/data/ours/R.csv" SKIP HEADER;
+IMPORT INTO S DSV "test/end2end/data/ours/S.csv" SKIP HEADER;
+IMPORT INTO T DSV "test/end2end/data/ours/T.csv" SKIP HEADER;

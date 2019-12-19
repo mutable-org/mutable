@@ -115,18 +115,18 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
         if (diag.num_errors() != num_errors) goto next;
 
         if (is<SelectStmt>(stmt)) {
-            timer.start("Construct the Join Graph");
-            auto joingraph = JoinGraph::Build(*stmt);
+            timer.start("Construct the Query Graph");
+            auto query_graph = QueryGraph::Build(*stmt);
             timer.stop();
-            if (options.graphdot) joingraph->dot(std::cout);
-            if (options.graph) joingraph->dump(std::cout);
+            if (options.graphdot) query_graph->dot(std::cout);
+            if (options.graph) query_graph->dump(std::cout);
 
             DummyJoinOrderer orderer;
             DummyCostModel costmodel;
             Optimizer Opt(orderer, costmodel);
             auto I = Backend::CreateInterpreter();
             timer.start("Compute an optimized Query Plan");
-            auto optree = Opt(*joingraph.get());
+            auto optree = Opt(*query_graph.get());
             timer.stop();
             if (options.plan) optree->dump(std::cout);
             if (options.plandot) optree->dot(std::cout);
@@ -368,7 +368,7 @@ int main(int argc, const char **argv)
         [&](bool) { options.echo = true; });                /* Callback         */
     ADD(bool, options.ast, false,                           /* Type, Var, Init  */
         nullptr, "--ast",                                   /* Short, Long      */
-        "dump the AST of statements",                       /* Description      */
+        "print the AST of statements",                      /* Description      */
         [&](bool) { options.ast = true; });                 /* Callback         */
     ADD(bool, options.astdot, false,                        /* Type, Var, Init  */
         nullptr, "--astdot",                                /* Short, Long      */
@@ -376,11 +376,11 @@ int main(int argc, const char **argv)
         [&](bool) { options.astdot = true; });              /* Callback         */
     ADD(bool, options.graph, false,                         /* Type, Var, Init  */
         nullptr, "--graph",                                 /* Short, Long      */
-        "dump the computed join graph",                     /* Description      */
+        "print the computed query graph",                   /* Description      */
         [&](bool) { options.graph = true; });               /* Callback         */
     ADD(bool, options.graphdot, false,                      /* Type, Var, Init  */
         nullptr, "--graphdot",                              /* Short, Long      */
-        "dot the computed join graph",                      /* Description      */
+        "dot the computed query graph",                     /* Description      */
         [&](bool) { options.graphdot = true; });            /* Callback         */
     ADD(bool, options.plan, false,                          /* Type, Var, Init  */
         nullptr, "--plan",                                  /* Short, Long      */

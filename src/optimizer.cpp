@@ -116,8 +116,8 @@ int main(int argc, const char **argv)
                 std::exit(EXIT_FAILURE);
 
             if (auto select = cast<SelectStmt>(stmt)) {
-                auto JG = JoinGraph::Build(*select);
-                auto plan = O(*JG.get());
+                auto query_graph = QueryGraph::Build(*select);
+                auto plan = O(*query_graph.get());
 
                 if (opdot)
                     plan->dot(std::cout);

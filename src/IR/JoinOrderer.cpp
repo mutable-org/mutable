@@ -1,16 +1,16 @@
 #include "IR/JoinOrderer.hpp"
 
-#include "IR/JoinGraph.hpp"
+#include "IR/QueryGraph.hpp"
 #include <unordered_set>
 
 
 using namespace db;
 
 
-DummyJoinOrderer::mapping_type DummyJoinOrderer::operator()(const JoinGraph &G, const CostModel&) const
+DummyJoinOrderer::mapping_type DummyJoinOrderer::operator()(const QueryGraph &G, const CostModel&) const
 {
     mapping_type map;
-    std::vector<const JoinGraph*> worklist;
+    std::vector<const QueryGraph*> worklist;
     worklist.push_back(&G);
 
     while (not worklist.empty()) {
@@ -32,7 +32,7 @@ DummyJoinOrderer::mapping_type DummyJoinOrderer::operator()(const JoinGraph &G, 
 
             /* Check if relation is subquery. */
             if (auto q = cast<const Query>(r))
-                worklist.push_back(q->join_graph());
+                worklist.push_back(q->query_graph());
 
             /* Apply all possible joins. */
             std::vector<const Join*> joins_used;

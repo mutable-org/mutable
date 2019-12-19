@@ -8,7 +8,7 @@ using namespace db;
 
 
 
-std::unique_ptr<Producer> Optimizer::operator()(const JoinGraph &G) const
+std::unique_ptr<Producer> Optimizer::operator()(const QueryGraph &G) const
 {
     /* Compute join order. */
     auto order = join_orderer()(G, cost_model());
@@ -17,7 +17,7 @@ std::unique_ptr<Producer> Optimizer::operator()(const JoinGraph &G) const
     return build_operator_tree(G, order);
 }
 
-std::unique_ptr<Producer> Optimizer::build_operator_tree(const JoinGraph &G,
+std::unique_ptr<Producer> Optimizer::build_operator_tree(const QueryGraph &G,
                                                          const JoinOrderer::mapping_type &orders) const
 {
     auto order = orders.at(&G);
@@ -70,7 +70,7 @@ std::unique_ptr<Producer> Optimizer::build_operator_tree(const JoinGraph &G,
             }
             stack.emplace_back(entry_type({ds}, scan));
         } else if (auto query = cast<const Query>(e.as_datasource())) {
-            auto subG = query->join_graph();
+            auto subG = query->query_graph();
             auto sub = build_operator_tree(*subG, orders).release();
             if (query->filter().size()) {
                 auto filter = new FilterOperator(query->filter());

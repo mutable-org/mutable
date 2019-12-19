@@ -1,7 +1,7 @@
 #pragma once
 
 #include "IR/CostModel.hpp"
-#include "IR/JoinGraph.hpp"
+#include "IR/QueryGraph.hpp"
 #include "util/macro.hpp"
 #include <cstdint>
 #include <unordered_map>
@@ -51,13 +51,13 @@ struct JoinOrderer
      * tree. */
     using order_type = std::vector<entry_type>;
 
-    /** Assigns a join order to each join graph instance (including the nested join graphs of subqueries). */
-    using mapping_type = std::unordered_map<const JoinGraph*, order_type>;
+    /** Assigns a join order to each query graph instance (including the nested query graphs of subqueries). */
+    using mapping_type = std::unordered_map<const QueryGraph*, order_type>;
 
     virtual ~JoinOrderer() { }
 
-    /** Compute a join order for the given join graph that minimizes the cost under the given cost model. */
-    virtual mapping_type operator()(const JoinGraph &G, const CostModel &cm) const = 0;
+    /** Compute a join order for the given query graph that minimizes the cost under the given cost model. */
+    virtual mapping_type operator()(const QueryGraph &G, const CostModel &cm) const = 0;
 };
 
 inline std::ostream & operator<<(std::ostream &out, const JoinOrderer::order_type &order) {
@@ -71,7 +71,7 @@ inline std::ostream & operator<<(std::ostream &out, const JoinOrderer::order_typ
 /** Computes an arbitrary join order (deterministically). */
 struct DummyJoinOrderer : JoinOrderer
 {
-    mapping_type operator()(const JoinGraph &G, const CostModel &cm) const override;
+    mapping_type operator()(const QueryGraph &G, const CostModel &cm) const override;
 };
 
 }

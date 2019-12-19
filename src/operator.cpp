@@ -1,7 +1,7 @@
 #include "backend/Backend.hpp"
 #include "IR/CNF.hpp"
-#include "IR/JoinGraph.hpp"
 #include "IR/Operator.hpp"
+#include "IR/QueryGraph.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "storage/RowStore.hpp"
@@ -140,7 +140,7 @@ ORDER BY new_f ASC, 2 * num DESC;\n\"";
         std::exit(EXIT_FAILURE);
     }
 
-    auto JG = JoinGraph::Build(*stmt);
+    auto query_graph = QueryGraph::Build(*stmt);
 
     auto where = as<WhereClause>(stmt->where)->where;
     auto &select = as<const SelectClause>(stmt->select)->select;
@@ -169,7 +169,8 @@ ORDER BY new_f ASC, 2 * num DESC;\n\"";
     join->add_child(scan2);
 
     /* Group by */
-    auto grouping = new GroupingOperator(JG->group_by(), JG->aggregates(), GroupingOperator::G_Hashing);
+    auto grouping = new GroupingOperator(query_graph->group_by(), query_graph->aggregates(),
+                                         GroupingOperator::G_Hashing);
     grouping->add_child(join);
 
     /* Having */

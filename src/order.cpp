@@ -1,7 +1,7 @@
-#include "IR/JoinGraph.hpp"
 #include "IR/JoinOrderer.hpp"
 #include "IR/Operator.hpp"
 #include "IR/Optimizer.hpp"
+#include "IR/QueryGraph.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "util/ArgParser.hpp"
@@ -97,7 +97,7 @@ WHERE R.a = V.a AND \n\
         std::exit(EXIT_FAILURE);
     }
 
-    auto G = JoinGraph::Build(*stmt);
+    auto G = QueryGraph::Build(*stmt);
     DummyJoinOrderer orderer;
     DummyCostModel cm;
     Optimizer O(orderer, cm);

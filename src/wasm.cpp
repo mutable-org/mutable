@@ -1,7 +1,7 @@
 #include "backend/Backend.hpp"
 #include "IR/CNF.hpp"
-#include "IR/JoinGraph.hpp"
 #include "IR/Operator.hpp"
+#include "IR/QueryGraph.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "storage/RowStore.hpp"
@@ -133,7 +133,7 @@ FROM mytable AS T;\n\"";
         std::exit(EXIT_FAILURE);
     }
 
-    auto JG = JoinGraph::Build(*stmt);
+    auto query_graph = QueryGraph::Build(*stmt);
 
     auto &select = as<const SelectClause>(stmt->select)->select;
 

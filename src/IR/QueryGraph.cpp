@@ -1,4 +1,4 @@
-#include "IR/JoinGraph.hpp"
+#include "IR/QueryGraph.hpp"
 
 #include "catalog/Schema.hpp"
 #include "parse/AST.hpp"
@@ -165,19 +165,19 @@ auto get_aggregates(const Stmt &stmt)
 /*======================================================================================================================
  * GraphBuilder
  *
- * An AST Visitor that constructs the join graph.
+ * An AST Visitor that constructs the query graph.
  *====================================================================================================================*/
 
 struct db::GraphBuilder : ConstASTVisitor
 {
     private:
-    std::unique_ptr<JoinGraph> graph_; ///< the constructed join graph
+    std::unique_ptr<QueryGraph> graph_; ///< the constructed query graph
     std::unordered_map<const char*, DataSource*> aliases; ///< maps aliases to data sources
 
     public:
-    GraphBuilder() : graph_(std::make_unique<JoinGraph>()) { }
+    GraphBuilder() : graph_(std::make_unique<QueryGraph>()) { }
 
-    std::unique_ptr<JoinGraph> get() { return std::move(graph_); }
+    std::unique_ptr<QueryGraph> get() { return std::move(graph_); }
 
     /* Expr */
     void operator()(Const<Expr> &e) { e.accept(*this); }
@@ -347,10 +347,10 @@ struct db::GraphBuilder : ConstASTVisitor
 };
 
 /*======================================================================================================================
- * JoinGraph
+ * QueryGraph
  *====================================================================================================================*/
 
-JoinGraph::~JoinGraph()
+QueryGraph::~QueryGraph()
 {
     for (auto src : sources_)
         delete src;
@@ -358,18 +358,18 @@ JoinGraph::~JoinGraph()
         delete j;
 }
 
-std::unique_ptr<JoinGraph> JoinGraph::Build(const Stmt &stmt)
+std::unique_ptr<QueryGraph> QueryGraph::Build(const Stmt &stmt)
 {
     GraphBuilder builder;
     builder(stmt);
     return builder.get();
 }
 
-void JoinGraph::dot(std::ostream &out) const
+void QueryGraph::dot(std::ostream &out) const
 {
 #define q(X) '"' << X << '"' // quote
 #define id(X) q(std::hex << &X << std::dec) // convert virtual address to identifier
-    out << "graph join_graph\n{\n"
+    out << "graph query_graph\n{\n"
         << "    forcelabels=true;\n"
         << "    overlap=false;\n"
         << "    labeljust=\"l\";\n"
@@ -459,9 +459,9 @@ void JoinGraph::dot(std::ostream &out) const
 #undef q
 }
 
-void JoinGraph::dump(std::ostream &out) const
+void QueryGraph::dump(std::ostream &out) const
 {
-    out << "JoinGraph {\n  sources:";
+    out << "QueryGraph {\n  sources:";
     for (auto src : sources_) {
         out << "\n    ";
         if (auto q = cast<Query>(src))
@@ -484,4 +484,4 @@ void JoinGraph::dump(std::ostream &out) const
     }
     out << "\n}" << std::endl;
 }
-void JoinGraph::dump() const { dump(std::cerr); }
+void QueryGraph::dump() const { dump(std::cerr); }

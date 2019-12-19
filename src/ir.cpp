@@ -1,5 +1,5 @@
 #include "IR/CNF.hpp"
-#include "IR/JoinGraph.hpp"
+#include "IR/QueryGraph.hpp"
 #include "lex/Lexer.hpp"
 #include "lex/Token.hpp"
 #include "lex/TokenType.hpp"
@@ -109,7 +109,7 @@ int main(int argc, const char **argv)
         }
         if (is<SelectStmt>(stmt)) {
             if (ast) stmt->dump(std::cout);
-            auto graph = JoinGraph::Build(*stmt);
+            auto graph = QueryGraph::Build(*stmt);
             if (dot)
                 graph->dot(std::cout);
             else

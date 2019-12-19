@@ -11,7 +11,7 @@ struct DataSource;
 struct Join;
 struct Stmt;
 
-/** A data source in the join graph.  A data source provides a sequence of tuples, optionally with a filter condition
+/** A data source in the query graph.  A data source provides a sequence of tuples, optionally with a filter condition
  * they must fulfill.  Data sources can be joined with one another. */
 struct DataSource
 {
@@ -59,9 +59,9 @@ struct Join
     const sources_t & sources() const { return sources_; }
 };
 
-/** The join graph represents all data sources and joins in a graph structure.  It is used as an intermediate
+/** The query graph represents all data sources and joins in a graph structure.  It is used as an intermediate
  * representation of a query. */
-struct JoinGraph
+struct QueryGraph
 {
     friend struct GraphBuilder;
 
@@ -69,8 +69,8 @@ struct JoinGraph
     using projection_type = std::pair<const Expr*, const char*>;
     using order_type = std::pair<const Expr*, bool>; ///> true means ascending, false means descending
 
-    std::vector<DataSource*> sources_; ///< collection of all data sources in this join graph
-    std::vector<Join*> joins_; ///< collection of all joins in this join graph
+    std::vector<DataSource*> sources_; ///< collection of all data sources in this query graph
+    std::vector<Join*> joins_; ///< collection of all joins in this query graph
 
     std::vector<const Expr*> group_by_; ///< the grouping keys
     std::vector<const Expr*> aggregates_; ///< the aggregates to compute
@@ -79,9 +79,9 @@ struct JoinGraph
     struct { uint64_t limit = 0, offset; } limit_; ///< limit: limit and offset
 
     public:
-    ~JoinGraph();
+    ~QueryGraph();
 
-    static std::unique_ptr<JoinGraph> Build(const Stmt &stmt);
+    static std::unique_ptr<QueryGraph> Build(const Stmt &stmt);
 
     const auto & sources() const { return sources_; }
     const auto & joins() const { return joins_; }
@@ -91,7 +91,7 @@ struct JoinGraph
     const auto & order_by() const { return order_by_; }
     auto limit() const { return limit_; }
 
-    /** Translates the join graph to dot. */
+    /** Translates the query graph to dot. */
     void dot(std::ostream &out) const;
 
     void dump(std::ostream &out) const;
@@ -102,13 +102,13 @@ struct JoinGraph
 struct Query : DataSource
 {
     private:
-    JoinGraph *join_graph_; ///< join graph of the sub-query
+    QueryGraph *query_graph_; ///< query graph of the sub-query
 
     public:
-    Query(const char *alias, JoinGraph *join_graph) : DataSource(alias), join_graph_(join_graph) { }
-    ~Query() { delete join_graph_; };
+    Query(const char *alias, QueryGraph *query_graph) : DataSource(alias), query_graph_(query_graph) { }
+    ~Query() { delete query_graph_; };
 
-    JoinGraph * join_graph() const { return join_graph_; }
+    QueryGraph * query_graph() const { return query_graph_; }
 };
 
 }

@@ -163,23 +163,23 @@ void Pipeline::operator()(const ScanOperator &op)
     auto data = as<ScanData>(op.data());
     const auto num_rows = op.store().num_rows();
 
-    const auto remainder = num_rows % vec_.capacity();
+    const auto remainder = num_rows % block_.capacity();
     std::size_t i = 0;
     /* Fill entire vector. */
-    for (auto end = num_rows - remainder; i != end; i += vec_.capacity()) {
-        vec_.clear();
-        vec_.fill();
-        for (std::size_t j = 0; j != vec_.capacity(); ++j)
-            data->loader(&vec_[j]);
+    for (auto end = num_rows - remainder; i != end; i += block_.capacity()) {
+        block_.clear();
+        block_.fill();
+        for (std::size_t j = 0; j != block_.capacity(); ++j)
+            data->loader(&block_[j]);
         op.parent()->accept(*this);
     }
     if (i != num_rows) {
         /* Fill last vector with remaining tuples. */
-        vec_.clear();
-        vec_.mask((1UL << remainder) - 1);
+        block_.clear();
+        block_.mask((1UL << remainder) - 1);
         for (std::size_t j = 0; i != op.store().num_rows(); ++i, ++j) {
-            insist(j < vec_.capacity());
-            data->loader(&vec_[j]);
+            insist(j < block_.capacity());
+            data->loader(&block_[j]);
         }
         op.parent()->accept(*this);
     }
@@ -187,21 +187,21 @@ void Pipeline::operator()(const ScanOperator &op)
 
 void Pipeline::operator()(const CallbackOperator &op)
 {
-    for (auto &t : vec_)
+    for (auto &t : block_)
         op.callback()(op.schema(), t);
 }
 
 void Pipeline::operator()(const FilterOperator &op)
 {
     auto data = as<FilterData>(op.data());
-    for (auto it = vec_.begin(); it != vec_.end(); ++it) {
+    for (auto it = block_.begin(); it != block_.end(); ++it) {
         auto res = data->filter(*it);
         insist(res.size() > 0, "CNF did not evaluate to a result");
         auto pv = std::get_if<bool>(&res.back());
         insist(pv, "invalid type of variant");
-        if (not *pv) vec_.erase(it);
+        if (not *pv) block_.erase(it);
     }
-    if (not vec_.empty())
+    if (not block_.empty())
         op.parent()->accept(*this);
 }
 
@@ -228,32 +228,32 @@ void Pipeline::operator()(const JoinOperator &op)
                     if (child_id == size - 1) { // right-most child, which produced `rhs`
                         /* Combine the tuples.  One tuple from each buffer. */
                         pipeline.clear();
-                        pipeline.vec_.mask(vec_.mask());
+                        pipeline.block_.mask(block_.mask());
 
                         /* Concatenate tuples from the first n-1 children. */
-                        auto output_it = pipeline.vec_.begin();
+                        auto output_it = pipeline.block_.begin();
                         auto &first = *output_it++;
                         for (std::size_t i = 0; i != positions.size(); ++i) {
                             auto &buffer = data->buffers[i];
                             first += buffer[positions[i]];
                         }
 
-                        /* Fill vector with clones of first tuple and append the tuple from the last child. */
-                        for (; output_it != pipeline.vec_.end(); ++output_it)
+                        /* Fill block with clones of first tuple and append the tuple from the last child. */
+                        for (; output_it != pipeline.block_.end(); ++output_it)
                             output_it->insert(output_it->end(), first.begin(), first.end());
 
-                        /* Evaluate the join predicate on the joined tuple and set the vector's mask accordingly. */
-                        for (auto it = pipeline.vec_.begin(); it != pipeline.vec_.end(); ++it) {
-                            auto &rhs = vec_[it.index()];
+                        /* Evaluate the join predicate on the joined tuple and set the block's mask accordingly. */
+                        for (auto it = pipeline.block_.begin(); it != pipeline.block_.end(); ++it) {
+                            auto &rhs = block_[it.index()];
                             it->insert(it->end(), rhs.begin(), rhs.end()); // append tuple of last child
                             auto res = data->predicate(*it);
                             insist(res.size() >= 1);
                             auto pv = std::get_if<bool>(&res.back());
                             insist(pv, "invalid type of variant");
-                            if (not *pv) pipeline.vec_.erase(it);
+                            if (not *pv) pipeline.block_.erase(it);
                         }
 
-                        if (not pipeline.vec_.empty())
+                        if (not pipeline.block_.empty())
                             pipeline.push(*op.parent());
                         --child_id;
                     } else { // child whose tuples have been materialized in a buffer
@@ -272,7 +272,7 @@ void Pipeline::operator()(const JoinOperator &op)
                 }
             } else {
                 /* This is not the right-most child.  Collect its produced tuples in a buffer. */
-                for (auto &t : vec_)
+                for (auto &t : block_)
                     data->buffers[data->active_child].emplace_back(t.clone());
             }
             break;
@@ -290,9 +290,9 @@ void Pipeline::operator()(const ProjectionOperator &op)
     auto &pipeline = data->pipeline;
 
     pipeline.clear();
-    pipeline.vec_.mask(vec_.mask());
-    for (auto it = vec_.begin(); it != vec_.end(); ++it) {
-        auto &out = pipeline.vec_[it.index()];
+    pipeline.block_.mask(block_.mask());
+    for (auto it = block_.begin(); it != block_.end(); ++it) {
+        auto &out = pipeline.block_[it.index()];
         data->projections(&out, *it);
         if (op.is_anti())
             out.insert(out.begin(), it->begin(), it->end());
@@ -305,13 +305,13 @@ void Pipeline::operator()(const LimitOperator &op)
 {
     auto data = as<LimitData>(op.data());
 
-    for (auto it = vec_.begin(); it != vec_.end(); ++it) {
+    for (auto it = block_.begin(); it != block_.end(); ++it) {
         if (data->num_tuples < op.offset() or data->num_tuples >= op.offset() + op.limit())
-            vec_.erase(it); /* discard this tuple */
+            block_.erase(it); /* discard this tuple */
         ++data->num_tuples;
     }
 
-    if (not vec_.empty())
+    if (not block_.empty())
         op.parent()->accept(*this);
 
     if (data->num_tuples >= op.offset() + op.limit())
@@ -433,7 +433,7 @@ void Pipeline::operator()(const GroupingOperator &op)
             auto data = as<HashBasedGroupingData>(op.data());
             auto &groups = data->groups;
 
-            for (auto &t : vec_) {
+            for (auto &t : block_) {
                 auto key = data->keys(t);
                 auto it = groups.find(key);
                 if (it == groups.end()) {
@@ -452,7 +452,7 @@ void Pipeline::operator()(const SortingOperator &op)
 {
     /* cache all tuples for sorting */
     auto data = as<SortingData>(op.data());
-    for (auto &t : vec_)
+    for (auto &t : block_)
         data->buffer.emplace_back(t.clone());
 }
 
@@ -520,7 +520,7 @@ void Interpreter::operator()(const ProjectionOperator &op)
         op.child(0)->accept(*this);
     else {
         Pipeline pipeline(0);
-        pipeline.vec_.mask(1); // evaluate the projection EXACTLY ONCE on an empty tuple
+        pipeline.block_.mask(1); // evaluate the projection EXACTLY ONCE on an empty tuple
         pipeline.push(op);
     }
 }
@@ -553,23 +553,23 @@ void Interpreter::operator()(const GroupingOperator &op)
             op.child(0)->accept(*this);
 
             const auto num_groups = data->groups.size();
-            const auto remainder = num_groups % data->pipeline.vec_.capacity();
+            const auto remainder = num_groups % data->pipeline.block_.capacity();
             auto it = data->groups.begin();
-            for (std::size_t i = 0; i != num_groups - remainder; i += data->pipeline.vec_.capacity()) {
-                data->pipeline.vec_.clear();
-                data->pipeline.vec_.fill();
-                for (std::size_t j = 0; j != data->pipeline.vec_.capacity(); ++j) {
-                    auto &t = data->pipeline.vec_[j];
+            for (std::size_t i = 0; i != num_groups - remainder; i += data->pipeline.block_.capacity()) {
+                data->pipeline.block_.clear();
+                data->pipeline.block_.fill();
+                for (std::size_t j = 0; j != data->pipeline.block_.capacity(); ++j) {
+                    auto &t = data->pipeline.block_[j];
                     auto &g = *it++;
                     t.insert(t.end(), g.first.begin(), g.first.end());
                     t.insert(t.end(), g.second.begin(), g.second.end());
                 }
                 data->pipeline.push(parent);
             }
-            data->pipeline.vec_.clear();
-            data->pipeline.vec_.mask((1UL << remainder) - 1UL);
+            data->pipeline.block_.clear();
+            data->pipeline.block_.mask((1UL << remainder) - 1UL);
             for (std::size_t i = 0; i != remainder; ++i) {
-                auto &t = data->pipeline.vec_[i];
+                auto &t = data->pipeline.block_[i];
                 auto &g = *it++;
                 t.insert(t.end(), g.first.begin(), g.first.end());
                 t.insert(t.end(), g.second.begin(), g.second.end());
@@ -654,18 +654,18 @@ void Interpreter::operator()(const SortingOperator &op)
     auto &parent = *op.parent();
     data->pipeline.reserve(op.schema().size());
     const auto num_tuples = data->buffer.size();
-    const auto remainder = num_tuples % data->pipeline.vec_.capacity();
+    const auto remainder = num_tuples % data->pipeline.block_.capacity();
     auto it = data->buffer.begin();
-    for (std::size_t i = 0; i != num_tuples - remainder; i += data->pipeline.vec_.capacity()) {
-        data->pipeline.vec_.clear();
-        data->pipeline.vec_.fill();
-        for (std::size_t j = 0; j != data->pipeline.vec_.capacity(); ++j)
-            data->pipeline.vec_[j] = std::move(*it++);
+    for (std::size_t i = 0; i != num_tuples - remainder; i += data->pipeline.block_.capacity()) {
+        data->pipeline.block_.clear();
+        data->pipeline.block_.fill();
+        for (std::size_t j = 0; j != data->pipeline.block_.capacity(); ++j)
+            data->pipeline.block_[j] = std::move(*it++);
         data->pipeline.push(parent);
     }
-    data->pipeline.vec_.clear();
-    data->pipeline.vec_.mask((1UL << remainder) - 1UL);
+    data->pipeline.block_.clear();
+    data->pipeline.block_.mask((1UL << remainder) - 1UL);
     for (std::size_t i = 0; i != remainder; ++i)
-        data->pipeline.vec_[i] = std::move(*it++);
+        data->pipeline.block_[i] = std::move(*it++);
     data->pipeline.push(parent);
 }

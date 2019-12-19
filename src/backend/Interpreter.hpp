@@ -11,7 +11,7 @@
 namespace db {
 
 template<std::size_t N>
-struct Vector
+struct Block
 {
     static constexpr std::size_t CAPACITY = N;
 
@@ -21,19 +21,19 @@ struct Vector
     {
         static constexpr bool IsConst = C;
 
-        using vector_t = std::conditional_t<IsConst, const Vector, Vector>;
+        using block_t = std::conditional_t<IsConst, const Block, Block>;
         using reference = std::conditional_t<IsConst, const tuple_type&, tuple_type&>;
         using pointer = std::conditional_t<IsConst, const tuple_type*, tuple_type*>;
 
         private:
-        vector_t &vec_;
+        block_t &block_;
         uint64_t mask_;
 
         public:
-        the_iterator(vector_t &vec, uint64_t mask) : vec_(vec), mask_(mask) { }
+        the_iterator(block_t &vec, uint64_t mask) : block_(vec), mask_(mask) { }
 
         bool operator==(the_iterator other) {
-            insist(&this->vec_ == &other.vec_);
+            insist(&this->block_ == &other.block_);
             return this->mask_ == other.mask_;
         }
         bool operator!=(the_iterator other) { return not operator==(other); }
@@ -43,8 +43,8 @@ struct Vector
 
         std::size_t index() const { return __builtin_ctzl(mask_); }
 
-        reference operator*() const { return vec_[index()]; }
-        pointer operator->() const { return &vec_[index()]; }
+        reference operator*() const { return block_[index()]; }
+        pointer operator->() const { return &block_[index()]; }
     };
 
     public:
@@ -54,14 +54,14 @@ struct Vector
     private:
     std::array<tuple_type, N> data_;
     uint64_t mask_ = 0x0;
-    static_assert(N <= 64, "maximum vector size exceeded");
+    static_assert(N <= 64, "maximum block size exceeded");
 
     public:
-    Vector() = default;
-    Vector(const Vector&) = delete;
-    Vector(Vector&&) = delete;
+    Block() = default;
+    Block(const Block&) = delete;
+    Block(Block&&) = delete;
 
-    Vector(std::size_t tuple_size) { reserve(tuple_size); }
+    Block(std::size_t tuple_size) { reserve(tuple_size); }
 
     tuple_type * data() { return data_.data(); }
     const tuple_type * data() const { return data_.data(); }
@@ -80,7 +80,7 @@ struct Vector
         insist(index < capacity());
         return iterator(*this, mask_ & (-1UL << index));
     }
-    const_iterator at(std::size_t index) const { return const_cast<Vector>(this)->at(index); }
+    const_iterator at(std::size_t index) const { return const_cast<Block>(this)->at(index); }
 
     /** Check whether the tuple at the given `index` is alive. */
     bool alive(std::size_t index) const {
@@ -102,17 +102,17 @@ struct Vector
         insist(alive(index), "cannot access a dead tuple directly");
         return data_[index];
     }
-    const tuple_type & operator[](std::size_t index) const { return const_cast<Vector*>(this)->operator[](index); }
+    const tuple_type & operator[](std::size_t index) const { return const_cast<Block*>(this)->operator[](index); }
 
     void reserve(std::size_t tuple_size) {
         for (auto &t : data_)
             t.reserve(tuple_size);
     }
 
-    /** Make all tuples in the vector alive. */
+    /** Make all tuples in the block alive. */
     void fill() { mask_ = AllOnes(); insist(size() == capacity()); }
 
-    /** Erase a tuple at the given `index` from the vector. */
+    /** Erase a tuple at the given `index` from the block. */
     void erase(std::size_t index) {
         insist(index < capacity(), "index out of bounds");
         setbit(&mask_, false, index);
@@ -120,15 +120,15 @@ struct Vector
     void erase(iterator it) { erase(it.index()); }
     void erase(const_iterator it) { erase(it.index()); }
 
-    /** Clears the vector. */
+    /** Clears the block. */
     void clear() {
         mask_ = 0;
         for (auto &t : data_)
             t.clear();
     }
 
-    friend std::ostream & operator<<(std::ostream &out, const Vector<N> &vec) {
-        out << "Vector<" << vec.capacity() << "> with " << vec.size() << " elements:\n";
+    friend std::ostream & operator<<(std::ostream &out, const Block<N> &vec) {
+        out << "Block<" << vec.capacity() << "> with " << vec.size() << " elements:\n";
         for (std::size_t i = 0; i != vec.capacity(); ++i) {
             out << "    " << i << ": ";
             if (vec.alive(i))
@@ -157,26 +157,26 @@ struct Pipeline : ConstOperatorVisitor
     friend struct Interpreter;
 
     private:
-    Vector<64> vec_;
+    Block<64> block_;
 
     public:
     Pipeline(std::size_t tuple_size)
-        : vec_(tuple_size)
+        : block_(tuple_size)
     {
-        vec_.mask(1UL); // create one empty tuple in the vector
+        block_.mask(1UL); // create one empty tuple in the block
     }
 
     Pipeline(tuple_type &&t)
     {
-        vec_.mask(1UL);
-        vec_[0] = std::move(t);
+        block_.mask(1UL);
+        block_[0] = std::move(t);
     }
 
-    void reserve(std::size_t tuple_size) { vec_.reserve(tuple_size); }
+    void reserve(std::size_t tuple_size) { block_.reserve(tuple_size); }
 
     void push(const Operator &pipeline_start) { (*this)(pipeline_start); }
 
-    void clear() { vec_.clear(); }
+    void clear() { block_.clear(); }
 
     using ConstOperatorVisitor::operator();
 #define DECLARE(CLASS) void operator()(Const<CLASS> &op) override

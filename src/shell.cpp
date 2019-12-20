@@ -262,26 +262,26 @@ void hook_highlighter(const std::string &context, Replxx::colors_t &colors)
     std::vector<std::pair<std::string, Replxx::Color>> regex_color = {
         /* Keywords */
 #define DB_KEYWORD(tt, name)\
-        { #name, Replxx::Color::YELLOW },
+        { #name, Replxx::Color::BROWN },
 #include "tables/Keywords.tbl"
 #undef DB_KEYWORD
         /* Operators */
-        { "\\(",  Replxx::Color::GRAY},
-        { "\\)",  Replxx::Color::GRAY},
-        { "\\~",  Replxx::Color::GRAY},
-        { "\\+",  Replxx::Color::GRAY},
-        { "\\-",  Replxx::Color::GRAY},
-        { "\\*",  Replxx::Color::GRAY},
-        { "\\/",  Replxx::Color::GRAY},
-        { "\\%",  Replxx::Color::GRAY},
-        { "\\.",  Replxx::Color::GRAY},
-        { "\\=",  Replxx::Color::GRAY},
-        { "\\!=", Replxx::Color::GRAY},
-        { "\\<",  Replxx::Color::GRAY},
-        { "\\>",  Replxx::Color::GRAY},
+        { "\\(",  Replxx::Color::NORMAL},
+        { "\\)",  Replxx::Color::NORMAL},
+        { "\\~",  Replxx::Color::NORMAL},
+        { "\\+",  Replxx::Color::NORMAL},
+        { "\\-",  Replxx::Color::NORMAL},
+        { "\\*",  Replxx::Color::NORMAL},
+        { "\\/",  Replxx::Color::NORMAL},
+        { "\\%",  Replxx::Color::NORMAL},
+        { "\\.",  Replxx::Color::NORMAL},
+        { "\\=",  Replxx::Color::NORMAL},
+        { "\\!=", Replxx::Color::NORMAL},
+        { "\\<",  Replxx::Color::NORMAL},
+        { "\\>",  Replxx::Color::NORMAL},
         /* Constants */
-        {"[\\-|+]{0,1}[0-9]+",          Replxx::Color::BRIGHTMAGENTA}, // integral numbers
-        {"[\\-|+]{0,1}[0-9]*\\.[0-9]+", Replxx::Color::BRIGHTMAGENTA}, // fixed-point and floating-point numbers
+        {"[\\-|+]{0,1}[0-9]+",          Replxx::Color::BLUE}, // integral numbers
+        {"[\\-|+]{0,1}[0-9]*\\.[0-9]+", Replxx::Color::BLUE}, // fixed-point and floating-point numbers
         {"\".*?\"",                     Replxx::Color::BRIGHTMAGENTA}, // double quoted strings
     };
     for (const auto &e : regex_color) {

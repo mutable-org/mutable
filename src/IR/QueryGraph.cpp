@@ -309,6 +309,7 @@ struct db::GraphBuilder : ConstASTVisitor
         /* Add projections */
         {
             auto S = as<SelectClause>(s.select);
+            graph_->projection_is_anti_ = S->select_all;
             for (auto s : S->select)
                 graph_->projections_.emplace_back(s.first, s.second.text);
         }
@@ -426,8 +427,11 @@ void QueryGraph::dot(std::ostream &out) const
     /* Projections */
     out << "             <TR><TD ALIGN=\"LEFT\">\n"
         << "               <B>π</B><FONT POINT-SIZE=\"9\">";
+    if (projection_is_anti())
+        out << "*";
     for (auto it = projections_.begin(), end = projections_.end(); it != end; ++it) {
-        if (it != projections_.begin()) out << ", ";
+        if (it != projections_.begin() or projection_is_anti())
+            out << ", ";
         out << html_escape(to_string(*it->first));
         if (it->second)
             out << " AS " << html_escape(it->second);

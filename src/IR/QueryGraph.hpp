@@ -91,6 +91,7 @@ struct QueryGraph
     std::vector<projection_type> projections_; ///< the data to compute
     std::vector<order_type> order_by_; ///< the order
     struct { uint64_t limit = 0, offset; } limit_; ///< limit: limit and offset
+    bool projection_is_anti_ = false;
 
     public:
     ~QueryGraph();
@@ -104,6 +105,7 @@ struct QueryGraph
     const auto & projections() const { return projections_; }
     const auto & order_by() const { return order_by_; }
     auto limit() const { return limit_; }
+    bool projection_is_anti() const { return projection_is_anti_; }
 
     /** Translates the query graph to dot. */
     void dot(std::ostream &out) const;

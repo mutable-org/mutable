@@ -29,6 +29,6 @@ add_executable(
     storage/RowStoreTest.cpp
 
     # backend
-    backend/InterpreterTest.cpp
+    backend/StackMachineTest.cpp
     )
 target_link_libraries(unittest db)

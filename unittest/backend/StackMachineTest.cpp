@@ -1,16 +1,15 @@
 #include "catch.hpp"
 
-#include "backend/Interpreter.hpp"
 #include "backend/StackMachine.hpp"
 #include "catalog/Type.hpp"
 #include "IR/CNF.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
-#include "storage/RowStore.hpp"
 #include "testutil.hpp"
 #include "util/Diagnostic.hpp"
 #include <cmath>
 #include <string>
+
 
 using namespace db;
 
@@ -19,72 +18,7 @@ using namespace db;
  * Helper funtctions for test setup.
  *====================================================================================================================*/
 
-
-cnf::CNF get_where_cnf(const char * sql)
-{
-    /* Get catalog, lexer, parser, and sema object. */
-    Catalog &C = Catalog::Get();
-    Diagnostic diag(false, std::cout, std::cerr);
-    std::istringstream in(sql);
-    Lexer lexer(diag, C.get_pool(), "-", in);
-    Parser parser(lexer);
-    Sema sema(diag);
-
-    /* Parse and analyze SQL statement. */
-    auto stmt = as<SelectStmt>(parser.parse());
-    sema(*stmt);
-
-    /* Extract WHERE clause and obtain cnf. */
-    auto where = as<WhereClause>(stmt->where);
-    auto cond = where->where;
-    cnf::CNFGenerator cnfGen;
-    cnfGen(*cond);
-    auto cnf = cnfGen.get();
-
-    return cnf;
-}
-
-Expr * get_where_expr(const char * sql)
-{
-    /* Get catalog, lexer, parser, and sema object. */
-    Catalog &C = Catalog::Get();
-    Diagnostic diag(false, std::cout, std::cerr);
-    std::istringstream in(sql);
-    Lexer lexer(diag, C.get_pool(), "-", in);
-    Parser parser(lexer);
-    Sema sema(diag);
-
-    /* Parse and analyze SQL statement. */
-    auto stmt = as<SelectStmt>(parser.parse());
-    sema(*stmt);
-
-    /* Extract WHERE clause and obtain cnf. */
-    auto where = as<WhereClause>(stmt->where);
-
-    return where->where;
-}
-
-Expr * get_select_expr(const char * sql, size_t index)
-{
-    /* Get catalog, lexer, parser, and sema object. */
-    Catalog &C = Catalog::Get();
-    Diagnostic diag(false, std::cout, std::cerr);
-    std::istringstream in(sql);
-    Lexer lexer(diag, C.get_pool(), "-", in);
-    Parser parser(lexer);
-    Sema sema(diag);
-
-    /* Parse and analyze SQL statement. */
-    auto stmt = as<SelectStmt>(parser.parse());
-    sema(*stmt);
-
-    /* Extract WHERE clause and obtain cnf. */
-    auto select = as<SelectClause>(stmt->select);
-
-    return (select->select)[index].first;
-}
-
-Stmt * get_statement(const char *sql)
+Stmt * get_Stmt(const char *sql)
 {
     LEXER(sql);
     Parser parser(lexer);
@@ -101,7 +35,7 @@ Stmt * get_statement(const char *sql)
 }
 
 /*======================================================================================================================
- * Test ExressionEvaluator.
+ * Test StackMachine.
  *====================================================================================================================*/
 
 TEST_CASE("StackMachine", "[unit]")
@@ -162,7 +96,7 @@ TEST_CASE("StackMachine", "[unit]")
 #define TEST(EXPR, NAME, TYPE, VALUE) { \
     DYNAMIC_SECTION(NAME) \
     { \
-        auto stmt = as<const SelectStmt>(get_statement("SELECT " EXPR " FROM tbl1;")); \
+        auto stmt = as<const SelectStmt>(get_Stmt("SELECT " EXPR " FROM tbl1;")); \
         auto select = as<const SelectClause>(stmt->select); \
         auto expr = select->select[0].first; \
         StackMachine eval(schema, *expr); \

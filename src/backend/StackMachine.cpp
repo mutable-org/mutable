@@ -1081,7 +1081,7 @@ Div_d: BINARY(/, double);
 Mod_i: BINARY(%, int64_t);
 
 /* Concatenate two strings. */
-Cat_s: unreachable("Concat not supported"); //BINARY(+, std::string_view);
+Cat_s: stack.pop_back(); NEXT; /* TODO currently not supported */
 
 /*======================================================================================================================
  * Logical operations

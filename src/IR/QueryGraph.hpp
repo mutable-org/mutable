@@ -9,6 +9,7 @@ namespace db {
 
 struct DataSource;
 struct Join;
+struct QueryGraph;
 struct Stmt;
 
 /** A data source in the query graph.  A data source provides a sequence of tuples, optionally with a filter condition
@@ -41,6 +42,19 @@ struct BaseTable : DataSource
     BaseTable(const Table &table, const char *alias) : DataSource(alias), table_(table) { }
 
     const Table & table() const { return table_; }
+};
+
+/** A (nested) query is a data source that must be computed. */
+struct Query : DataSource
+{
+    private:
+    QueryGraph *query_graph_; ///< query graph of the sub-query
+
+    public:
+    Query(const char *alias, QueryGraph *query_graph) : DataSource(alias), query_graph_(query_graph) { }
+    ~Query();
+
+    QueryGraph * query_graph() const { return query_graph_; }
 };
 
 /** A join combines source tables by a join condition. */
@@ -96,19 +110,6 @@ struct QueryGraph
 
     void dump(std::ostream &out) const;
     void dump() const;
-};
-
-/** A (nested) query is a data source that must be computed. */
-struct Query : DataSource
-{
-    private:
-    QueryGraph *query_graph_; ///< query graph of the sub-query
-
-    public:
-    Query(const char *alias, QueryGraph *query_graph) : DataSource(alias), query_graph_(query_graph) { }
-    ~Query() { delete query_graph_; };
-
-    QueryGraph * query_graph() const { return query_graph_; }
 };
 
 }

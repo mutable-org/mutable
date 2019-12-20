@@ -11,6 +11,8 @@
 using namespace db;
 
 
+Query::~Query() { delete query_graph_; };
+
 /** Compute the condition of the WHERE clause of a statement in conjunctive normal form. */
 cnf::CNF get_cnf(const Stmt &stmt)
 {
@@ -230,7 +232,7 @@ struct db::GraphBuilder : ConstASTVisitor
             } else if (auto stmt = std::get_if<Stmt*>(&tbl.source)) {
                 insist(tbl.alias.text, "every nested statement requires an alias");
                 if (auto select = cast<SelectStmt>(*stmt)) {
-                    /* Create a graph for subquery. */
+                    /* Create a graph for the sub query. */
                     GraphBuilder builder;
                     builder(*select);
                     auto graph = builder.get();

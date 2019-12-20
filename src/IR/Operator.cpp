@@ -33,8 +33,9 @@ void Operator::dot(std::ostream &out) const
 void Operator::dump(std::ostream &out) const { print_recursive(out); out << std::endl; }
 void Operator::dump() const { dump(std::cerr); }
 
-ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
+ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections, bool is_anti)
     : projections_(projections)
+    , is_anti_(is_anti)
 {
     /* Compute the schema of the operator. */
     uint64_t const_counter = 0;
@@ -44,12 +45,10 @@ ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
         auto alias = P.second;
         if (alias) { // alias was given
             OperatorSchema::AttributeIdentifier id(P.second);
-            auto success = S.add_element(id, ty);
-            insist(success);
+            S.add_element(id, ty);
         } else if (auto D = cast<const Designator>(P.first)) { // no alias, but designator -> keep name
             OperatorSchema::AttributeIdentifier id(D->table_name.text, D->attr_name.text);
-            auto success = S.add_element(id, ty);
-            insist(success);
+            S.add_element(id, ty);
         } else { // no designator, no alias -> derive name
             std::ostringstream oss;
             if (P.first->is_constant())
@@ -59,8 +58,7 @@ ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
             auto &C = Catalog::Get();
             auto alias = C.pool(oss.str().c_str());
             OperatorSchema::AttributeIdentifier id(alias);
-            auto success = S.add_element(id, ty);
-            insist(success);
+            S.add_element(id, ty);
         }
     }
 }
@@ -77,14 +75,12 @@ GroupingOperator::GroupingOperator(std::vector<const Expr*> group_by,
     for (auto e : group_by) {
         auto ty = e->type();
         if (auto D = cast<const Designator>(e)) {
-            auto success = S.add_element({D->table_name.text, D->attr_name.text}, ty);
-            insist(success);
+            S.add_element({D->table_name.text, D->attr_name.text}, ty);
         } else {
             std::ostringstream oss;
             oss << *e;
             auto alias = C.pool(oss.str().c_str());
-            auto success = S.add_element(alias, ty);
-            insist(success);
+            S.add_element(alias, ty);
         }
     }
 
@@ -93,8 +89,7 @@ GroupingOperator::GroupingOperator(std::vector<const Expr*> group_by,
         std::ostringstream oss;
         oss << *e;
         auto alias = C.pool(oss.str().c_str());
-        auto success = S.add_element(alias, ty);
-        insist(success);
+        S.add_element(alias, ty);
     }
 }
 
@@ -314,14 +309,13 @@ void SchemaMinimizer::operator()(Const<JoinOperator> &op)
 
 void SchemaMinimizer::operator()(Const<ProjectionOperator> &op)
 {
-    if (op.is_anti()) {
-        required = op.schema();
-    } else {
-        GetAttributeIds IDs;
-        for (auto &p : op.projections())
-            IDs(*p.first);
-        required = IDs.get();
-    }
+    required = OperatorSchema();
+    if (op.is_anti())
+        required |= op.child(0)->schema();
+    GetAttributeIds IDs;
+    for (auto &p : op.projections())
+        IDs(*p.first);
+    required |= IDs.get();
 
     (*this)(*op.child(0));
 }

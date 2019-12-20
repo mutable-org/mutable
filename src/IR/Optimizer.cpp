@@ -70,8 +70,8 @@ std::unique_ptr<Producer> Optimizer::build_operator_tree(const QueryGraph &G,
             }
             stack.emplace_back(entry_type({ds}, scan));
         } else if (auto query = cast<const Query>(e.as_datasource())) {
-            auto subG = query->query_graph();
-            auto sub = build_operator_tree(*subG, orders).release();
+            /* Create sub query. */
+            auto sub = build_operator_tree(*query->query_graph(), orders).release();
             if (query->filter().size()) {
                 auto filter = new FilterOperator(query->filter());
                 filter->add_child(sub);
@@ -85,48 +85,41 @@ std::unique_ptr<Producer> Optimizer::build_operator_tree(const QueryGraph &G,
     if (stack.empty())
         return std::make_unique<ProjectionOperator>(G.projections());
 
-    auto e = stack.back();
-    auto result = e.second;
+    insist(stack.size() == 1, "unconnected results");
+    auto plan = stack.back().second;
     stack.pop_back();
 
     /* Perform grouping */
     if (not G.group_by().empty() or not G.aggregates().empty()) {
         // TODO pick "best" algorithm
         auto group_by = new GroupingOperator(G.group_by(), G.aggregates(), GroupingOperator::G_Hashing);
-        group_by->add_child(result);
-        result = group_by;
+        group_by->add_child(plan);
+        plan = group_by;
     }
 
      /* Perform ordering */
     if (not G.order_by().empty()) {
         auto order_by = new SortingOperator(G.order_by());
-        order_by->add_child(result);
-        result = order_by;
+        order_by->add_child(plan);
+        plan = order_by;
     }
 
     //TODO if expression requires computation, replace expression in final projection
 
     /* Perform projection */
-    if (G.projections().empty()) {
-        auto projection = new ProjectionOperator(ProjectionOperator::Anti());
-        projection->add_child(result);
-        result = projection;
-    } else {
-        auto projection = new ProjectionOperator(G.projections());
-        projection->add_child(result);
-        result = projection;
+    if (not G.projections().empty() or G.projection_is_anti())
+    {
+        auto projection = new ProjectionOperator(G.projections(), G.projection_is_anti());
+        projection->add_child(plan);
+        plan = projection;
     }
 
     if (G.limit().limit or G.limit().offset) {
         auto limit = new LimitOperator(G.limit().limit, G.limit().offset);
-        limit->add_child(result);
-        result = limit;
+        limit->add_child(plan);
+        plan = limit;
     }
 
-    stack.emplace_back(e.first, result);
-
-    insist(stack.size() == 1);
-    auto optree = stack[0].second;
-    optree->minimize_schema();
-    return std::unique_ptr<Producer>(optree);
+    plan->minimize_schema();
+    return std::unique_ptr<Producer>(plan);
 }

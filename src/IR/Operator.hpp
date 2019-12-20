@@ -142,7 +142,7 @@ struct OperatorSchema
 
     private:
     std::vector<entry_type> elements_;
-    std::unordered_map<AttributeIdentifier, std::size_t, attr_hash> id_to_elem_;
+    std::unordered_multimap<AttributeIdentifier, std::size_t, attr_hash> id_to_elem_;
 
     public:
     const std::vector<entry_type> & elements() const { return elements_; }
@@ -156,34 +156,33 @@ struct OperatorSchema
     auto cbegin() const { return elements_.cbegin(); }
     auto cend()   const { return elements_.cend(); }
 
-    bool add_element(AttributeIdentifier attr, const Type *type) {
+    void add_element(AttributeIdentifier attr, const Type *type) {
         auto pos = elements_.size();
-        auto res = id_to_elem_.emplace(attr, pos);
-        if (res.second)
-            elements_.push_back({attr, type});
-        return res.second;
+        id_to_elem_.emplace(attr, pos);
+        elements_.emplace_back(attr, type);
     }
 
     const entry_type & operator[](std::size_t idx) const { insist(idx < elements_.size()); return elements_[idx]; }
     std::pair<std::size_t, const entry_type&> operator[](AttributeIdentifier attr) const {
-        auto it = id_to_elem_.find(attr);
-        if (it == id_to_elem_.end())
+        auto [begin, end] = id_to_elem_.equal_range(attr);
+        if (begin == end)
             throw std::logic_error("attribute identifier not found");
-        return {it->second, elements_[it->second]};
+        insist(std::distance(begin, end) == 1, "ambiguous attribute access");
+        return {begin->second, elements_[begin->second]};
     }
 
     OperatorSchema & operator+=(const OperatorSchema &other) {
-        for (auto &e : other) {
-            auto success = this->add_element(e.first, e.second);
-            insist(success, "duplicate entry");
-        }
+        for (auto &e : other)
+            this->add_element(e.first, e.second);
         return *this;
     }
 
     /** Union of two schemas. */
     OperatorSchema & operator|=(const OperatorSchema &other) {
-        for (auto &e : other)
+        for (auto &e : other) {
+            if (id_to_elem_.count(e.first)) continue;
             this->add_element(e.first, e.second);
+        }
         return *this;
     }
 
@@ -349,10 +348,8 @@ struct ScanOperator : Producer
         : store_(store)
     {
         auto &S = schema();
-        for (auto &attr : store.table()) {
-            auto success = S.add_element({alias, attr.name}, attr.type);
-            insist(success, "duplicate attribute in table");
-        }
+        for (auto &attr : store.table())
+            S.add_element({alias, attr.name}, attr.type);
     }
 
     const Store & store() const { return store_; }
@@ -417,39 +414,32 @@ struct ProjectionOperator : Producer, Consumer
     using projection_type = std::pair<const Expr*, const char*>; // a named expression
 
     private:
-    bool is_anti_ = false;
     std::vector<projection_type> projections_;
+    bool is_anti_ = false;
 
     public:
-    ProjectionOperator(std::vector<projection_type> projections);
-
-    static ProjectionOperator Anti(std::vector<projection_type> projections = {}) {
-        ProjectionOperator P(projections);
-        P.is_anti_ = true;
-        return P;
-    }
+    ProjectionOperator(std::vector<projection_type> projections, bool is_anti = false);
 
     /*----- Override child setters to *NOT* modify the computed schema! ----------------------------------------------*/
     virtual void add_child(Producer *child) override {
+        insist(child);
+        children().push_back(child);
+        child->parent(this);
+
         if (is_anti()) {
-            Consumer::add_child(child);
-        } else {
-            insist(child);
-            children().push_back(child);
-            child->parent(this);
+            /* Recompute schema. */
+            OperatorSchema S;
+            for (auto c : children())
+                S += c->schema();
+            for (auto idx = schema().size() - projections_.size(); idx != schema().size(); ++idx) {
+                auto &attr = schema()[idx];
+                S.add_element(attr.first, attr.second);
+            }
+            schema() = S;
         }
     }
-    virtual Producer * set_child(Producer *child, std::size_t i) override {
-        if (is_anti()) {
-            return Consumer::set_child(child, i);
-        } else {
-            insist(child);
-            insist(i < children().size());
-            auto old = children()[i];
-            children()[i] = child;
-            child->parent(this);
-            return old;
-        }
+    virtual Producer * set_child(Producer*, std::size_t) override {
+        unreachable("not supported by ProjectionOperator");
     }
 
     const auto & projections() const { return projections_; }

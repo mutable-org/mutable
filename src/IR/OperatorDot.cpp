@@ -63,7 +63,7 @@ void OperatorDot::operator()(Const<ProjectionOperator> &op)
     if (has_child)
         (*this)(*op.child(0));
     out << id(op) << " [label=<<B>π</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">";
-    if (op.is_anti()) out << '+';
+    if (op.is_anti()) out << '*';
 
     const auto &P = op.projections();
     for (auto it = P.begin(); it != P.end(); ++it) {

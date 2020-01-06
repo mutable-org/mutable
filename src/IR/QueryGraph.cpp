@@ -13,14 +13,6 @@ using namespace db;
 
 Query::~Query() { delete query_graph_; };
 
-/** Compute the condition of the WHERE clause of a statement in conjunctive normal form. */
-cnf::CNF get_cnf(const Stmt &stmt)
-{
-    cnf::CNFGenerator gen;
-    gen(stmt);
-    return gen.get();
-}
-
 /** Helper structure to extract the tables required by an expression. */
 struct GetTables : ConstASTVisitor
 {
@@ -268,7 +260,9 @@ struct db::GraphBuilder : ConstASTVisitor
 
     void operator()(Const<SelectStmt> &s) {
         /* Compute CNF of WHERE clause. */
-        auto cnf = get_cnf(s);
+        cnf::CNF cnf;
+        if (s.where)
+            cnf = cnf::get_CNF(*s.where);
 
         /* Create data sources. */
         if (s.from)

@@ -139,17 +139,6 @@ void CNF::dump() const { dump(std::cerr); }
  * CNF Generator
  *====================================================================================================================*/
 
-void CNFGenerator::operator()(Const<SelectStmt> &s)
-{
-    if (s.where)
-        (*this)(*s.where);
-}
-
-void CNFGenerator::operator()(Const<WhereClause> &s)
-{
-    (*this)(*s.where);
-}
-
 void CNFGenerator::operator()(Const<ErrorExpr> &e)
 {
     result_ = CNF({Clause({Predicate::Create(&e, is_negative_)})});

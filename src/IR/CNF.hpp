@@ -115,27 +115,41 @@ struct CNFGenerator : ConstASTVisitor
     void operator()(Const<BinaryExpr> &e);
 
     /* Clauses */
-    void operator()(Const<ErrorClause>&) { }
-    void operator()(Const<SelectClause>&) { }
-    void operator()(Const<FromClause>&) { }
-    void operator()(Const<WhereClause>&);
-    void operator()(Const<GroupByClause>&) { }
-    void operator()(Const<HavingClause>&) { }
-    void operator()(Const<OrderByClause>&) { }
-    void operator()(Const<LimitClause>&) { }
+    void operator()(Const<ErrorClause>&) { unreachable("not supported"); }
+    void operator()(Const<SelectClause>&) { unreachable("not supported"); }
+    void operator()(Const<FromClause>&) { unreachable("not supported"); }
+    void operator()(Const<WhereClause> &c) { (*this)(*c.where); }
+    void operator()(Const<GroupByClause>&) { unreachable("not supported"); }
+    void operator()(Const<HavingClause> &c) { (*this)(*c.having); }
+    void operator()(Const<OrderByClause>&) { unreachable("not supported"); }
+    void operator()(Const<LimitClause>&) { unreachable("not supported"); }
 
     /* Statements */
-    void operator()(Const<ErrorStmt>&) { }
-    void operator()(Const<EmptyStmt>&) { }
-    void operator()(Const<CreateDatabaseStmt>&) { }
-    void operator()(Const<UseDatabaseStmt>&) { }
-    void operator()(Const<CreateTableStmt>&) { }
-    void operator()(Const<SelectStmt> &s);
-    void operator()(Const<InsertStmt>&) { }
-    void operator()(Const<UpdateStmt>&) { }
-    void operator()(Const<DeleteStmt>&) { }
-    void operator()(Const<DSVImportStmt>&) { }
+    void operator()(Const<ErrorStmt>&) { unreachable("not supported"); }
+    void operator()(Const<EmptyStmt>&) { unreachable("not supported"); }
+    void operator()(Const<CreateDatabaseStmt>&) { unreachable("not supported"); }
+    void operator()(Const<UseDatabaseStmt>&) { unreachable("not supported"); }
+    void operator()(Const<CreateTableStmt>&) { unreachable("not supported"); }
+    void operator()(Const<SelectStmt> &) { unreachable("not supported"); }
+    void operator()(Const<InsertStmt>&) { unreachable("not supported"); }
+    void operator()(Const<UpdateStmt>&) { unreachable("not supported"); }
+    void operator()(Const<DeleteStmt>&) { unreachable("not supported"); }
+    void operator()(Const<DSVImportStmt>&) { unreachable("not supported"); }
 };
+
+inline CNF to_CNF(const Expr &e)
+{
+    CNFGenerator G;
+    G(e);
+    return G.get();
+}
+
+inline CNF get_CNF(const db::Clause &c)
+{
+    CNFGenerator G;
+    G(c);
+    return G.get();
+}
 
 }
 

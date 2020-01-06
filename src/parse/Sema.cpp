@@ -723,6 +723,11 @@ void Sema::operator()(Const<FromClause> &c)
 
             /* Add the results of the nested statement to the list of sources. */
             auto res = Ctx.sources.emplace(table.alias.text, inner_ctx.results);
+            /* Convert scalar results to vectorials. */
+            for (auto &r : inner_ctx.results) {
+                auto e = r.second;
+                e->type_ = as<const PrimitiveType>(e->type())->as_vectorial();
+            }
             if (not res.second) {
                 diag.e(table.alias.pos) << "Table name " << table.alias.text << " already in use.\n";
                 return;

@@ -16,6 +16,7 @@ struct Sema : ASTVisitor
     /** Holds context information used by semantic analysis of a single statement. */
     struct SemaContext
     {
+        Stmt &stmt;
         enum stage_t {
             S_From,
             S_Where,
@@ -33,6 +34,8 @@ struct Sema : ASTVisitor
         std::unordered_multimap<const char*, Expr*> results; ///> list of all results computed by this statement
 
         std::vector<Expr*> group_keys; ///> list of group keys
+
+        SemaContext(Stmt &stmt) : stmt(stmt) { }
     };
 
     private:
@@ -45,9 +48,12 @@ struct Sema : ASTVisitor
         bool needs_context_ = false;
 
         public:
-        RequireContext(Sema *sema) : sema_(*notnull(sema)), needs_context_(sema_.contexts_.empty()) {
+        RequireContext(Sema *sema, Stmt &stmt)
+            : sema_(*notnull(sema))
+            , needs_context_(sema_.contexts_.empty())
+        {
             if (needs_context_)
-                sema_.push_context();
+                sema_.push_context(stmt);
         }
 
         ~RequireContext() {
@@ -95,8 +101,8 @@ struct Sema : ASTVisitor
     void operator()(Const<DSVImportStmt> &s);
 
     private:
-    SemaContext & push_context() {
-        contexts_.emplace_back(new SemaContext());
+    SemaContext & push_context(Stmt &stmt) {
+        contexts_.emplace_back(new SemaContext(stmt));
         return *contexts_.back();
     }
     SemaContext pop_context() {

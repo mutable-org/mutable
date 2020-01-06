@@ -300,6 +300,15 @@ struct db::GraphBuilder : ConstASTVisitor
         /* Add aggregates. */
         graph_->aggregates_ = get_aggregates(s);
 
+        /* Implement HAVING as a refular selection filter on a sub query. */
+        if (s.having) {
+            auto H = as<HavingClause>(s.having);
+            auto sub = new Query("", graph_.release());
+            sub->update_filter(cnf::to_CNF(*H->having));
+            graph_ = std::make_unique<QueryGraph>();
+            graph_->sources_.emplace_back(sub);
+        }
+
         /* Add projections */
         {
             auto S = as<SelectClause>(s.select);

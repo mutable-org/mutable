@@ -13,7 +13,7 @@ import termcolor
 
 
 CWD                 = os.getcwd()
-PARSER_BIN          = os.path.join(CWD, 'build_debug', 'bin', 'parse')
+PARSER_BIN          = os.path.join(CWD, 'build', 'debug', 'bin', 'parse')
 TEST_DIR            = os.path.join('test', 'parse')
 POSITIVE_TEST_DIR   = os.path.join(TEST_DIR, 'positive')
 GLOB_POSITIVE       = os.path.join(POSITIVE_TEST_DIR, '**', '*.sql')

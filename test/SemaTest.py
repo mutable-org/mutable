@@ -13,7 +13,7 @@ import termcolor
 
 
 CWD                 = os.getcwd()
-SEMA_BIN            = os.path.join(CWD, 'build_debug', 'bin', 'check')
+SEMA_BIN            = os.path.join(CWD, 'build', 'debug', 'bin', 'check')
 TEST_DIR            = os.path.join('test', 'sema')
 SEMA_SETUP          = os.path.join(TEST_DIR, 'setup.sql')
 POSITIVE_TEST_DIR   = os.path.join(TEST_DIR, 'positive')

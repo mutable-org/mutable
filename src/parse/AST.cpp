@@ -28,6 +28,8 @@ SelectClause::~SelectClause()
 {
     for (auto s : select)
         delete s.first;
+    for (auto e : expansion)
+        delete e;
 }
 
 FromClause::~FromClause()

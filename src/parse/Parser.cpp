@@ -409,7 +409,7 @@ Clause * Parser::parse_SelectClause()
 {
     Token start = token();
     bool ok = true;
-    bool select_all = false;
+    Token select_all;
     std::vector<SelectClause::select_type> select;
 
     /* 'SELECT' */
@@ -417,8 +417,8 @@ Clause * Parser::parse_SelectClause()
 
     /* ( '*' | expression [ 'AS' identifier ] ) */
     if (token() == TK_ASTERISK) {
+        select_all = token();
         consume();
-        select_all = true;
     } else {
         auto e = parse_Expr();
         Token tok;

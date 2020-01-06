@@ -240,9 +240,10 @@ struct SelectClause : Clause
     using select_type = std::pair<Expr*, Token>; ///> list of selected elements; expr AS name
 
     std::vector<select_type> select;
-    bool select_all;
+    Token select_all;
+    std::vector<Expr*> expansion; ///> list of expressions expanded from `SELECT *`
 
-    SelectClause(Token tok, std::vector<select_type> select, bool select_all)
+    SelectClause(Token tok, std::vector<select_type> select, Token select_all)
         : Clause(tok)
         , select(select)
         , select_all(select_all)

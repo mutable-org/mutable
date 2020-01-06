@@ -625,6 +625,43 @@ void Sema::operator()(Const<SelectClause> &c)
     bool has_vector = false;
     bool has_scalar = false;
 
+    if (c.select_all) {
+        /* Expand the `SELECT *` by creating dummy expressions for all accessible values of all sources. */
+        auto &stmt = as<const SelectStmt>(Ctx.stmt);
+
+        if (stmt.group_by) {
+            std::ostringstream oss;
+            auto group_by = as<const GroupByClause>(stmt.group_by);
+            for (auto expr : group_by->group_by) {
+                oss << *expr;
+                auto str = C.pool(oss.str().c_str());
+                oss.str("");
+                Ctx.results.emplace(str, expr);
+            }
+        } else if (stmt.having) {
+            diag.w(c.select_all.pos) << "The '*' has no meaning in this query.  Did you forget the GROUP BY clause?.\n";
+        } else {
+            for (auto &src : Ctx.sources) {
+                if (auto ptr = std::get_if<const Table*>(&src.second)) {
+                    auto &tbl = **ptr;
+                    for (auto &attr : tbl) {
+                        Token table_name(c.select_all.pos, tbl.name, TK_IDENTIFIER);
+                        Token attr_name(c.select_all.pos, attr.name, TK_IDENTIFIER);
+                        auto e = new Designator(table_name, attr_name);
+                        e->target_ = &attr;
+                        e->type_ = attr.type;
+                        c.expansion.push_back(e);
+                        Ctx.results.emplace(attr.name, e);
+                    }
+                } else {
+                    auto &exprs = std::get<SemaContext::named_expr_table>(src.second);
+                    for (auto &named_expr : exprs)
+                        Ctx.results.emplace(named_expr.first, named_expr.second);
+                }
+            }
+        }
+    }
+
     for (auto s : c.select) {
         auto &e = *s.first;
         (*this)(e);

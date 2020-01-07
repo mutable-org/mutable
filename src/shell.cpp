@@ -1,5 +1,6 @@
 #include "backend/Backend.hpp"
 #include "backend/StackMachine.hpp"
+#include "backend/WebAssembly.hpp"
 #include "catalog/Schema.hpp"
 #include "io/Reader.hpp"
 #include "IR/Optimizer.hpp"
@@ -84,6 +85,7 @@ struct options_t
     bool plan;
     bool plandot;
     bool dryrun;
+    bool wasm;
 };
 
 void process_stream(std::istream &in, const char *filename, options_t options, Diagnostic diag)
@@ -130,6 +132,11 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
             timer.stop();
             if (options.plan) optree->dump(std::cout);
             if (options.plandot) optree->dot(std::cout);
+
+            if (options.wasm) {
+                WASMModule wasm = WASMCodeGen::compile(*optree.get());
+                wasm.dump(std::cout);
+            }
 
             if (not options.dryrun) {
                 auto callback = new CallbackOperator(print);
@@ -394,6 +401,10 @@ int main(int argc, const char **argv)
         nullptr, "--dryrun",                                /* Short, Long      */
         "don't actually execute the query",                 /* Description      */
         [&](bool) { options.dryrun = true; });              /* Callback         */
+    ADD(bool, options.wasm, false,                          /* Type, Var, Init  */
+        nullptr, "--wasm",                                  /* Short, Long      */
+        "show compiled WebAssembly",                        /* Description      */
+        [&](bool) { options.wasm = true; });                /* Callback         */
 #undef ADD
     AP.parse_args(argc, argv);
 

@@ -24,6 +24,3 @@ set_target_properties(check-bin PROPERTIES OUTPUT_NAME check)
 
 add_executable(shell shell.cpp)
 target_link_libraries(shell ${CMAKE_THREAD_LIBS_INIT} replxx db)
-
-add_executable(wasm wasm.cpp)
-target_link_libraries(wasm ${CMAKE_THREAD_LIBS_INIT} db)

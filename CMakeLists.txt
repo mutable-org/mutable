@@ -66,8 +66,8 @@ ExternalProject_Add(
     PREFIX third-party
     DOWNLOAD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8"
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8"
-    DOWNLOAD_COMMAND fetch --force v8
-    UPDATE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/third_party/depot_tools/gclient sync --revision ${V8_VERSION}
+    DOWNLOAD_COMMAND fetch --force v8 && ${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/third_party/depot_tools/gclient sync --revision ${V8_VERSION}
+    UPDATE_COMMAND ":"
     CONFIGURE_COMMAND gn gen . --root=${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8 --args=${V8_BUILD_ARGS}
     BUILD_COMMAND ninja
     BUILD_BYPRODUCTS "${PROJECT_BINARY_DIR}/third-party/src/V8-build/obj/libv8_monolith.a"

@@ -118,7 +118,8 @@ void WASMCodeGen::operator()(const JoinOperator &op)
 
 void WASMCodeGen::operator()(const ProjectionOperator &op)
 {
-    (*this)(*op.child(0));
+    if (op.children().size())
+        (*this)(*op.child(0));
 
     std::vector<BinaryenExpressionRef> exprs;
     for (auto &p : op.projections()) {

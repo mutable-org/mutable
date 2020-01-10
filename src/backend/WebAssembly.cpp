@@ -175,7 +175,7 @@ void WASMCodeGen::operator()(Const<Constant> &e)
             case Numeric::N_Int:
             case Numeric::N_Decimal: {
                 int64_t i = std::get<int64_t>(value);
-                if (n->precision <= 32)
+                if (n->size() <= 32)
                     literal = BinaryenLiteralInt32(i);
                 else
                     literal = BinaryenLiteralInt64(i);
@@ -222,9 +222,8 @@ void WASMCodeGen::operator()(Const<UnaryExpr> &e)
             switch (n->kind) {
                 case Numeric::N_Int:
                 case Numeric::N_Decimal: {
-                    auto bits = n->size();
                     /* In WebAssembly, negation of integral values is achieved by subtraction from zero (0 - x). */
-                    if (bits <= 32) {
+                    if (n->size() <= 32) {
                         auto Zero = BinaryenConst(module_, BinaryenLiteralInt32(0));
                         expr_ = BinaryenBinary(/* module= */ module_,
                                                /* op=     */ BinaryenSubInt32(),
@@ -256,8 +255,7 @@ void WASMCodeGen::operator()(Const<UnaryExpr> &e)
             switch (n->kind) {
                 case Numeric::N_Int:
                 case Numeric::N_Decimal: {
-                    auto bits = n->size();
-                    if (bits <= 32) {
+                    if (n->size() <= 32) {
                         auto AllOnes = BinaryenConst(module_, BinaryenLiteralInt32(-1));
                         expr_ = BinaryenBinary(/* module= */ module_,
                                                /* op=     */ BinaryenXorInt32(),
@@ -312,8 +310,7 @@ void WASMCodeGen::operator()(Const<BinaryExpr> &e)
     switch (n->kind) { \
         case Numeric::N_Int: \
         case Numeric::N_Decimal: { \
-            auto bits = n->size(); \
-            if (bits <= 32) \
+            if (n->size() <= 32) \
                 BINARY_OP(OP, Int32); \
             else \
                 BINARY_OP(OP, Int64); \
@@ -336,8 +333,7 @@ void WASMCodeGen::operator()(Const<BinaryExpr> &e)
     switch (n->kind) { \
         case Numeric::N_Int: \
         case Numeric::N_Decimal: { \
-            auto bits = n->size(); \
-            if (bits <= 32) \
+            if (n->size() <= 32) \
                 BINARY_OP(OP_INT, Int32); \
             else \
                 BINARY_OP(OP_INT, Int64); \

@@ -31,7 +31,17 @@ std::ostream & db::operator<<(std::ostream &out, const WASMModule &module)
     return out;
 }
 
-void WASMModule::dump(std::ostream &out) const { out << *this << std::endl; }
+void WASMModule::dump(std::ostream &out) const {
+    out << *this;
+    auto [buffer, length] = binary();
+    out << '[' << std::hex;
+    for (auto ptr = buffer, end = buffer + length; ptr != end; ++ptr) {
+        if (ptr != buffer) out << ", ";
+        out << "0x" << uint32_t(*ptr);
+    }
+    out << std::dec;
+    out << ']' << std::endl;
+}
 void WASMModule::dump() const { dump(std::cerr); }
 
 

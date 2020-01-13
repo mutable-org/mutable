@@ -92,6 +92,22 @@ include_directories(SYSTEM third-party/v8/v8/include)
 add_library(v8 STATIC IMPORTED)
 set_target_properties(v8 PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/third-party/src/V8-build/obj/libv8_monolith.a")
 
+ExternalProject_Add(
+    SpiderMonkey
+    PREFIX third-party
+    SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/js/src"
+    CONFIGURE_COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/js/src"
+    COMMAND autoconf-2.13
+    COMMAND cd "${PROJECT_BINARY_DIR}/third-party/src/SpiderMonkey-build/"
+    COMMAND "CC=${CMAKE_C_COMPILER}" "CXX=${CMAKE_CXX_COMPILER}" "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/js/src/configure" --enable-debug --disable-optimize
+    BUILD_COMMAND make -j 6
+    BUILD_BYPRODUCTS "${PROJECT_BINARY_DIR}/third-party/src/SpiderMonkey-build/js/src/build/libjs_static.a"
+    INSTALL_COMMAND ":"
+    )
+include_directories(SYSTEM third-party/SpiderMonkey/js/public)
+add_library(spidermonkey STATIC IMPORTED)
+set_target_properties(spidermonkey PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/third-party/src/SpiderMonkey-build/js/src/build/libjs_static.a")
+
 # Directories
 include_directories(src)
 add_subdirectory(src)

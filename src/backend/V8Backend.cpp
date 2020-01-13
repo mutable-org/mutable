@@ -29,7 +29,7 @@ void V8Backend::execute(const WASMModule &module)
 {
     using args_t = v8::Local<v8::Value>[];
 
-    /* Create requires V8 scopes. */
+    /* Create required V8 scopes. */
     v8::Isolate::Scope isolate_scope(isolate_);
     v8::HandleScope handle_scope(isolate_); // tracks and disposes of all object handles
     v8::Local<v8::Context> context = v8::Context::New(isolate_);
@@ -37,14 +37,14 @@ void V8Backend::execute(const WASMModule &module)
 
     /* Create WASM module. */
     std::cerr << "Compiling and loading WASM module...";
-    auto [binary, binary_size] = module.binary();
+    auto [binary_addr, binary_size] = module.binary();
     std::cerr << " Finished.  WASM module is " << binary_size << " bytes.\n";
     auto v8_wasm_module = v8::WasmModuleObject::DeserializeOrCompile(
             /* isolate=           */ isolate_,
             /* serialized_module= */ { nullptr, 0 },
-            /* wire_bytes=        */ v8::MemorySpan<const uint8_t>(binary, binary_size)
+            /* wire_bytes=        */ v8::MemorySpan<const uint8_t>(binary_addr, binary_size)
             ).ToLocalChecked();
-    free(binary);
+    free(binary_addr);
 
     /* Create V8 strings. */
     auto str_WebAssembly = v8::String::NewFromUtf8(isolate_, "WebAssembly").ToLocalChecked();

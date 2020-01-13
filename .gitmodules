@@ -4,3 +4,6 @@
 [submodule "third-party/binaryen"]
 	path = third-party/binaryen
 	url = git@github.com:WebAssembly/binaryen.git
+[submodule "third-party/SpiderMonkey"]
+	path = third-party/SpiderMonkey
+	url = git@github.com:mozilla/gecko-dev.git

@@ -144,6 +144,12 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
                 timer.start("Interpret the Query Plan");
                 I->execute(*callback);
                 timer.stop();
+
+                if (options.wasm) {
+                    auto V8 = Backend::CreateWASM();
+                    V8->execute(*callback);
+                }
+
                 delete callback;
             }
         } else if (auto I = cast<InsertStmt>(stmt)) {

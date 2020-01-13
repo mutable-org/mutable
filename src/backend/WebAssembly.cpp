@@ -52,19 +52,49 @@ void WASMModule::dump() const { dump(std::cerr); }
 WASMModule WASMCodeGen::compile(const Operator &op)
 {
     WASMModule module; // fresh module
+
+    /*----- Add memory. ----------------------------------------------------------------------------------------------*/
+    BinaryenSetMemory(/* module=         */ module.ref_,
+                      /* initial=        */ 1,
+                      /* maximum=        */ 1,
+                      /* exportName=     */ nullptr,
+                      /* segments=       */ nullptr,
+                      /* segmentPassive= */ nullptr,
+                      /* segmentOffsets= */ nullptr,
+                      /* segmentSizes=   */ nullptr,
+                      /* numSegments=    */ 0,
+                      /* shared=         */ 0);
+    BinaryenAddMemoryImport(/* module=             */ module.ref_,
+                            /* internalName=       */ "mem",
+                            /* externalModuleName= */ "env",
+                            /* externalBaseName=   */ "mem",
+                            /* shared=             */ 0);
+
+
     WASMCodeGen codegen(module);
     codegen(op); // emit code
 
-    /*----- Patch main function into module and optimize. ------------------------------------------------------------*/
+    /*----- Patch invokable function into module and export it. ------------------------------------------------------*/
+    std::vector<BinaryenType> param_types;
+    //param_types.push_back(BinaryenTypeInt32());
+
+    auto val = BinaryenLoad(/* module= */ module.ref_,
+                            /* bytes=  */ 4,
+                            /* signed= */ 1,
+                            /* offset= */ 0,
+                            /* align=  */ 0,
+                            /* type=   */ BinaryenTypeInt32(),
+                            /* ptr=    */ BinaryenConst(module.ref_, BinaryenLiteralInt32(20)));
+
     std::vector<BinaryenExpressionRef> block;
-    block.emplace_back(BinaryenNop(module.ref_));
+    block.emplace_back(val);
 
     auto fn_ty = BinaryenAddFunctionType(
             /* module=     */ module.ref_,
             /* name=       */ nullptr,
-            /* result=     */ BinaryenTypeNone(),
-            /* paramTypes= */ nullptr,
-            /* numParams=  */ 0);
+            /* result=     */ BinaryenTypeInt32(),
+            /* paramTypes= */ &param_types[0],
+            /* numParams=  */ param_types.size());
     auto fn_body = BinaryenBlock(
             /* module=      */ module.ref_,
             /* name=        */ nullptr,
@@ -73,20 +103,21 @@ WASMModule WASMCodeGen::compile(const Operator &op)
             /* type=        */ BinaryenTypeAuto());
     auto fn = BinaryenAddFunction(
             /* module=      */ module.ref_,
-            /* name=        */ "main",
+            /* name=        */ "run",
             /* type=        */ fn_ty,
             /* varTypes=    */ nullptr,
             /* numVarTypes= */ 0,
             /* body=        */ fn_body);
 
-    BinaryenSetStart(module.ref_, fn);
-    BinaryenAddFunctionExport(module.ref_, "main", "main");
+    BinaryenAddFunctionExport(module.ref_, "run", "run");
+
+
+    /*----- Validate and optimize module. ----------------------------------------------------------------------------*/
     if (not BinaryenModuleValidate(module.ref_))
         throw std::logic_error("invalid module");
-
     BinaryenSetOptimizeLevel(2); // O2
     BinaryenSetShrinkLevel(0); // shrinking not required
-    BinaryenModuleOptimize(module.ref_);
+    //BinaryenModuleOptimize(module.ref_);
 
     return module;
 }
@@ -411,7 +442,6 @@ void WASMCodeGen::operator()(Const<BinaryExpr> &e)
 void WASMBackend::execute(const Operator &plan) const
 {
     auto module = WASMCodeGen::compile(plan);
-    module.dump();
     V8Backend V8;
     V8.execute(module);
 }

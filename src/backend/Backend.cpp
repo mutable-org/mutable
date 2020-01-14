@@ -8,5 +8,5 @@ using namespace db;
 
 
 std::unique_ptr<Backend> Backend::CreateInterpreter() { return std::make_unique<Interpreter>(); }
-
-std::unique_ptr<Backend> Backend::CreateWASM() { return std::make_unique<WASMBackend>(); }
+std::unique_ptr<Backend> Backend::CreateWasmV8() { return std::make_unique<WasmV8Backend>(); }
+std::unique_ptr<Backend> Backend::CreateWasmSpiderMonkey() { return std::make_unique<WasmSpiderMonkeyBackend>(); }

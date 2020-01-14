@@ -53,7 +53,7 @@ std::string prompt(bool is_editing, Timer::duration dur = Timer::duration())
 
         bg = 238;
         static auto &C = Catalog::Get();
-        prompt << term::bg(bg) << term::FG_WHITE << " mu" 
+        prompt << term::bg(bg) << term::FG_WHITE << " mu"
             << term::ITALIC << term::fg(30) << 't' << term::RESET
             << term::bg(bg) << term::FG_WHITE << "able ";
         if (C.has_database_in_use()) {

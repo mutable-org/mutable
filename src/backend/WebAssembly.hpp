@@ -102,9 +102,7 @@ struct WASMCodeGen : ConstOperatorVisitor, ConstASTVisitor {
     void operator()(Const<DSVImportStmt>&) override { unreachable(""); }
 };
 
-struct WASMBackend : Backend
-{
-    void execute(const Operator &plan) const override;
-};
+struct WasmV8Backend : Backend { void execute(const Operator &plan) const override; };
+struct WasmSpiderMonkeyBackend : Backend { void execute(const Operator &plan) const override; };
 
 }

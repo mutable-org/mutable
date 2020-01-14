@@ -439,9 +439,15 @@ void WASMCodeGen::operator()(Const<BinaryExpr> &e)
  * WASMBackend
  *====================================================================================================================*/
 
-void WASMBackend::execute(const Operator &plan) const
+void WasmV8Backend::execute(const Operator &plan) const
 {
     auto module = WASMCodeGen::compile(plan);
     V8Backend V8;
     V8.execute(module);
+}
+
+void WasmSpiderMonkeyBackend::execute(const Operator &plan) const
+{
+    auto module = WASMCodeGen::compile(plan);
+    // TODO execute
 }

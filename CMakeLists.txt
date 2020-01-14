@@ -73,7 +73,7 @@ add_library(binaryen STATIC IMPORTED)
 set_target_properties(binaryen PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/third-party/src/Binaryen-build/lib/libbinaryen.a")
 add_dependencies(binaryen Binaryen)
 
-# V8 -  Google's Javascript and WebAssembly Engine (used in Chome, Node.js)
+# V8 - Google's JavaScript and WebAssembly Engine (used in Chrome, Node.js)
 set(V8_VERSION "8.0.368")
 set(V8_BUILD_ARGS "is_clang=true is_component_build=false v8_monolithic=true is_debug=true is_official_build=false treat_warnings_as_errors=false v8_use_external_startup_data=false use_sysroot=false use_custom_libcxx=false linux_use_bundled_binutils=false clang_use_chrome_plugins=false use_debug_fission=true")
 ExternalProject_Add(
@@ -92,21 +92,27 @@ include_directories(SYSTEM third-party/v8/v8/include)
 add_library(v8 STATIC IMPORTED)
 set_target_properties(v8 PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/third-party/src/V8-build/obj/libv8_monolith.a")
 
+# SpiderMonkey - Mozilla's JavaScript and WebAssembly Engine (used in Firefox)
 ExternalProject_Add(
     SpiderMonkey
     PREFIX third-party
-    SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/js/src"
+    DOWNLOAD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party"
+    SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey"
+    URL "https://codeload.github.com/mozilla/gecko-dev/zip/1808f51e9f84c6dc4a24c57a9757a6ee4d69692d"
+    URL_HASH MD5=da25d97009f8d390e58fe3acdb2ee0c8
+    DOWNLOAD_NAME "SpiderMonkey.zip"
     CONFIGURE_COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/js/src"
     COMMAND autoconf-2.13
     COMMAND cd "${PROJECT_BINARY_DIR}/third-party/src/SpiderMonkey-build/"
     COMMAND "CC=${CMAKE_C_COMPILER}" "CXX=${CMAKE_CXX_COMPILER}" "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/js/src/configure" --enable-debug --disable-optimize
-    BUILD_COMMAND make -j 6
+    BUILD_COMMAND make -j ${CMAKE_BUILD_PARALLEL_LEVEL}
     BUILD_BYPRODUCTS "${PROJECT_BINARY_DIR}/third-party/src/SpiderMonkey-build/js/src/build/libjs_static.a"
     INSTALL_COMMAND ":"
     )
 include_directories(SYSTEM third-party/SpiderMonkey/js/public)
 add_library(spidermonkey STATIC IMPORTED)
 set_target_properties(spidermonkey PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/third-party/src/SpiderMonkey-build/js/src/build/libjs_static.a")
+add_dependencies(spidermonkey SpiderMonkey)
 
 # Directories
 include_directories(src)

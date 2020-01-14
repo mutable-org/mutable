@@ -1,13 +1,13 @@
-#include "V8Backend.hpp"
+#include "V8Platform.hpp"
 
 #include "v8-internal.h"
 
 using namespace db;
 
 
-std::unique_ptr<v8::Platform> V8Backend::PLATFORM_(nullptr);
+std::unique_ptr<v8::Platform> V8Platform::PLATFORM_(nullptr);
 
-V8Backend::V8Backend()
+V8Platform::V8Platform()
 {
     if (PLATFORM_ == nullptr) {
         PLATFORM_ = v8::platform::NewDefaultPlatform();
@@ -20,13 +20,13 @@ V8Backend::V8Backend()
     isolate_ = v8::Isolate::New(create_params);
 }
 
-V8Backend::~V8Backend()
+V8Platform::~V8Platform()
 {
     isolate_->Dispose();
     delete allocator_;
 }
 
-void V8Backend::execute(const WASMModule &module)
+void V8Platform::execute(const WASMModule &module)
 {
     using args_t = v8::Local<v8::Value>[];
 

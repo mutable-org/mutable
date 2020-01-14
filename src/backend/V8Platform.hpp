@@ -7,7 +7,7 @@
 
 namespace db {
 
-struct V8Backend
+struct V8Platform : WasmPlatform
 {
     private:
     static std::unique_ptr<v8::Platform> PLATFORM_;
@@ -15,10 +15,10 @@ struct V8Backend
     v8::Isolate *isolate_ = nullptr;
 
     public:
-    V8Backend();
-    ~V8Backend();
+    V8Platform();
+    ~V8Platform();
 
-    void execute(const WASMModule &module);
+    void execute(const WASMModule &module) override;
 };
 
 }

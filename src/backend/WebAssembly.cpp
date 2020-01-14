@@ -1,7 +1,6 @@
 #include "backend/WebAssembly.hpp"
 
 #include "backend/Interpreter.hpp"
-#include "backend/V8Backend.hpp"
 #include "binaryen-c.h"
 #include <exception>
 
@@ -432,22 +431,4 @@ void WASMCodeGen::operator()(Const<BinaryExpr> &e)
 #undef BINARY_INT_FLOAT
 #undef BINARY
 #undef BINARY_OP
-}
-
-
-/*======================================================================================================================
- * WASMBackend
- *====================================================================================================================*/
-
-void WasmV8Backend::execute(const Operator &plan) const
-{
-    auto module = WASMCodeGen::compile(plan);
-    V8Backend V8;
-    V8.execute(module);
-}
-
-void WasmSpiderMonkeyBackend::execute(const Operator &plan) const
-{
-    auto module = WASMCodeGen::compile(plan);
-    // TODO execute
 }

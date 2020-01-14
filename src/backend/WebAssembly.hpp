@@ -102,7 +102,26 @@ struct WASMCodeGen : ConstOperatorVisitor, ConstASTVisitor {
     void operator()(Const<DSVImportStmt>&) override { unreachable(""); }
 };
 
-struct WasmV8Backend : Backend { void execute(const Operator &plan) const override; };
-struct WasmSpiderMonkeyBackend : Backend { void execute(const Operator &plan) const override; };
+/** A platform to execute WASM modules. */
+struct WasmPlatform
+{
+    virtual ~WasmPlatform() { }
+    virtual void execute(const WASMModule &module) = 0;
+};
+
+/** A backend to execute WASM modules on a specific platform. */
+struct WasmBackend : Backend
+{
+    private:
+    std::unique_ptr<WasmPlatform> platform_;
+
+    public:
+    WasmBackend(std::unique_ptr<WasmPlatform> platform) : platform_(std::move(platform)) { }
+
+    void execute(const Operator &plan) const override {
+        auto module = WASMCodeGen::compile(plan);
+        platform_->execute(module);
+    }
+};
 
 }

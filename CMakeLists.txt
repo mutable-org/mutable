@@ -113,8 +113,8 @@ if (APPLE)
         BUILD_COMMAND ""
         INSTALL_COMMAND ""
         )
-    set(SM_DEPENDS MacOSX10.11.sdk)
-    set(SM_BUILD_ARGS --with-macos-sdk=${CMAKE_CURRENT_SOURCE_DIR}/third-party/MacOSX10.11.sdk)
+    set(SPIDERMONKEY_DEPENDS MacOSX10.11.sdk)
+    set(SPIDERMONKEY_BUILD_ARGS --with-macos-sdk=${CMAKE_CURRENT_SOURCE_DIR}/third-party/MacOSX10.11.sdk)
 endif()
 ExternalProject_Add(
     SpiderMonkey
@@ -124,11 +124,11 @@ ExternalProject_Add(
     URL "https://codeload.github.com/mozilla/gecko-dev/zip/1808f51e9f84c6dc4a24c57a9757a6ee4d69692d"
     URL_HASH MD5=da25d97009f8d390e58fe3acdb2ee0c8
     DOWNLOAD_NAME "SpiderMonkey.zip"
-    DEPENDS ${SM_DEPENDS}
+    DEPENDS ${SPIDERMONKEY_DEPENDS}
     CONFIGURE_COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/js/src"
     COMMAND ${AUTOCONF_BINARY}
     COMMAND cd "${PROJECT_BINARY_DIR}/third-party/src/SpiderMonkey-build/"
-    COMMAND "CC=${CMAKE_C_COMPILER}" "CXX=${CMAKE_CXX_COMPILER}" "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/js/src/configure" --prefix="${PROJECT_BINARY_DIR}/third-party/src/SpiderMonkey-install" --enable-debug --disable-optimize --disable-tests ${SM_BUILD_ARGS}
+    COMMAND "CC=${CMAKE_C_COMPILER}" "CXX=${CMAKE_CXX_COMPILER}" "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/js/src/configure" --prefix="${PROJECT_BINARY_DIR}/third-party/src/SpiderMonkey-install" --enable-debug --disable-optimize --disable-tests ${SPIDERMONKEY_BUILD_ARGS}
     BUILD_COMMAND make -j ${CMAKE_BUILD_PARALLEL_LEVEL}
     BUILD_BYPRODUCTS "${PROJECT_BINARY_DIR}/third-party/src/SpiderMonkey-build/js/src/build/libjs_static.a"
     INSTALL_COMMAND ":"

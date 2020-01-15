@@ -28,6 +28,14 @@ else()
         OUTPUT_VARIABLE PAGESIZE
         OUTPUT_STRIP_TRAILING_WHITESPACE)
 endif()
+
+# Deviant binaries
+if (APPLE)
+    set(AUTOCONF_BINARY autoconf213)
+else()
+    set(AUTOCONF_BINARY autoconf-2.13)
+endif()
+
 SET(CMAKE_COMPILE_FLAGS         "-W -Wall -pedantic -DLEVEL1_DCACHE_LINESIZE=${LEVEL1_DCACHE_LINESIZE} -DPAGESIZE=${PAGESIZE} -march=native -ggdb -Wno-variadic-macros -Wno-gnu-zero-variadic-macro-arguments -Wno-gnu-label-as-value")
 SET(CMAKE_C_FLAGS               "${CMAKE_C_FLAGS} ${CMAKE_COMPILE_FLAGS}")
 SET(CMAKE_CXX_FLAGS             "-std=c++17 ${CMAKE_CXX_FLAGS} ${CMAKE_COMPILE_FLAGS}")
@@ -94,7 +102,6 @@ set_target_properties(v8 PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/thi
 
 # SpiderMonkey - Mozilla's JavaScript and WebAssembly Engine (used in Firefox)
 if (APPLE)
-    set(AUTOCONF_BINARY autoconf213)
     ExternalProject_Add(
         MacOSX10.11.sdk
         PREFIX third-party
@@ -108,8 +115,6 @@ if (APPLE)
         )
     set(SM_DEPENDS MacOSX10.11.sdk)
     set(SM_BUILD_ARGS --with-macos-sdk=${CMAKE_CURRENT_SOURCE_DIR}/third-party/MacOSX10.11.sdk)
-else()
-    set(AUTOCONF_BINARY autoconf-2.13)
 endif()
 ExternalProject_Add(
     SpiderMonkey

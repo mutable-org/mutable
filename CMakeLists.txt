@@ -93,6 +93,11 @@ add_library(v8 STATIC IMPORTED)
 set_target_properties(v8 PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/third-party/src/V8-build/obj/libv8_monolith.a")
 
 # SpiderMonkey - Mozilla's JavaScript and WebAssembly Engine (used in Firefox)
+if (APPLE)
+    set(AUTOCONF_BINARY autoconf213)
+else()
+    set(AUTOCONF_BINARY autoconf-2.13)
+endif()
 ExternalProject_Add(
     SpiderMonkey
     PREFIX third-party
@@ -102,7 +107,7 @@ ExternalProject_Add(
     URL_HASH MD5=da25d97009f8d390e58fe3acdb2ee0c8
     DOWNLOAD_NAME "SpiderMonkey.zip"
     CONFIGURE_COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/js/src"
-    COMMAND autoconf-2.13
+    COMMAND ${AUTOCONF_BINARY}
     COMMAND cd "${PROJECT_BINARY_DIR}/third-party/src/SpiderMonkey-build/"
     COMMAND "CC=${CMAKE_C_COMPILER}" "CXX=${CMAKE_CXX_COMPILER}" "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/js/src/configure" --enable-debug --disable-optimize
     BUILD_COMMAND make -j ${CMAKE_BUILD_PARALLEL_LEVEL}

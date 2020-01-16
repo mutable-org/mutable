@@ -146,8 +146,15 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
                 timer.stop();
 
                 if (options.wasm) {
-                    auto V8 = Backend::CreateWASM();
+#if WITH_V8
+                    auto V8 = Backend::CreateWasmV8();
                     V8->execute(*callback);
+#elif WITH_SPIDERMONKEY
+                    auto SM = Backend::CreateWasmSpiderMonkey();
+                    SM->execute(*callback);
+#else
+                    std::cerr << "No WASM backend available.\n";
+#endif
                 }
 
                 delete callback;

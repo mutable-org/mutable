@@ -82,6 +82,8 @@ set_target_properties(binaryen PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DI
 add_dependencies(binaryen Binaryen)
 
 # V8 - Google's JavaScript and WebAssembly Engine (used in Chrome, Node.js)
+set(WITH_V8 FALSE CACHE BOOL "Enable the V8 platform.")
+if(${WITH_V8})
 set(V8_VERSION "8.0.368")
 set(V8_BUILD_ARGS "is_clang=true is_component_build=false v8_monolithic=true is_debug=true is_official_build=false treat_warnings_as_errors=false v8_use_external_startup_data=false use_sysroot=false use_custom_libcxx=false linux_use_bundled_binutils=false clang_use_chrome_plugins=false use_debug_fission=true")
 ExternalProject_Add(
@@ -96,12 +98,17 @@ ExternalProject_Add(
     BUILD_BYPRODUCTS "${PROJECT_BINARY_DIR}/third-party/src/V8-build/obj/libv8_monolith.a"
     INSTALL_COMMAND ":"
     )
+add_definitions(-DWITH_V8)
 include_directories(SYSTEM third-party/v8/v8/include)
 add_library(v8 STATIC IMPORTED)
 set_target_properties(v8 PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/third-party/src/V8-build/obj/libv8_monolith.a")
+endif()
 
-# Apple MacOSX10.11 SDK - Required by SpiderMonkey
+# SpiderMonkey - Mozilla's JavaScript and WebAssembly Engine (used in Firefox)
+set(WITH_SPIDERMONKEY FALSE CACHE BOOL "Enable the SpiderMonkey platform.")
+if(${WITH_SPIDERMONKEY})
 if (APPLE)
+    # Apple MacOSX10.11 SDK - Required by SpiderMonkey
     ExternalProject_Add(
         MacOSX10.11.sdk
         PREFIX third-party
@@ -116,8 +123,6 @@ if (APPLE)
     set(SPIDERMONKEY_DEPENDS MacOSX10.11.sdk)
     set(SPIDERMONKEY_BUILD_ARGS --with-macos-sdk=${CMAKE_CURRENT_SOURCE_DIR}/third-party/MacOSX10.11.sdk)
 endif()
-
-# SpiderMonkey - Mozilla's JavaScript and WebAssembly Engine (used in Firefox)
 ExternalProject_Add(
     SpiderMonkey
     PREFIX third-party
@@ -133,9 +138,11 @@ ExternalProject_Add(
     BUILD_BYPRODUCTS "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/target/debug/build/mozjs_sys-976838596e5f086e/out/dist/bin/libmozjs-72.so"
     INSTALL_COMMAND ":"
     )
+add_definitions(-DWITH_SPIDERMONKEY)
 include_directories(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/target/debug/build/mozjs_sys-976838596e5f086e/out/dist/include/")
 add_library(spidermonkey SHARED IMPORTED)
 set_target_properties(spidermonkey PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/target/debug/build/mozjs_sys-976838596e5f086e/out/dist/bin/libmozjs-72.so")
+endif()
 
 # Directories
 include_directories(src)

@@ -40,6 +40,7 @@ void WASMModule::dump(std::ostream &out) const {
     }
     out << std::dec;
     out << ']' << std::endl;
+    free(buffer);
 }
 void WASMModule::dump() const { dump(std::cerr); }
 

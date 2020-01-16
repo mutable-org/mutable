@@ -9,6 +9,8 @@ namespace db {
 struct SpiderMonkeyPlatform : WasmPlatform
 {
     private:
+    static bool is_init_;
+    JSContext *ctx_ = nullptr;
 
     public:
     SpiderMonkeyPlatform();

@@ -134,4 +134,6 @@ T * _notnull(T *arg, const char *filename, const unsigned line, const char *args
 
 #endif
 
+#define DISCARD (void)
+
 }

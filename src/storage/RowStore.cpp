@@ -15,6 +15,13 @@
 using namespace db;
 
 
+#ifndef NDEBUG
+static constexpr std::size_t ALLOCATION_SIZE = 1UL << 30; ///< 1 GiB
+#else
+static constexpr std::size_t ALLOCATION_SIZE = 1UL << 37; ///< 128 GiB
+#endif
+
+
 /*======================================================================================================================
  * RowStore
  *====================================================================================================================*/
@@ -23,17 +30,15 @@ RowStore::RowStore(const Table &table)
     : Store(table)
     , offsets_(new uint32_t[table.size() + 1]) // add one slot for the offset of the meta data
 {
+    auto &allocator = Catalog::Get().allocator();
     compute_offsets();
     capacity_ = ALLOCATION_SIZE / (row_size_ / 8);
-    data_ = mmap(nullptr, ALLOCATION_SIZE, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_NORESERVE, 0, 0);
-    if (data_ == MAP_FAILED)
-        throw std::runtime_error("RowStore failed to allocate memory");
+    data_ = allocator.allocate(ALLOCATION_SIZE);
 }
 
 RowStore::~RowStore()
 {
     delete[] offsets_;
-    munmap(data_, ALLOCATION_SIZE);
 }
 
 void RowStore::save(std::filesystem::path path) const
@@ -45,7 +50,7 @@ void RowStore::save(std::filesystem::path path) const
         << num_rows_ << '\n';
 
     std::size_t num_bytes = num_rows_ * row_size_/8;
-    out.write(reinterpret_cast<char*>(data_), num_bytes);
+    out.write(data_.as<char*>(), num_bytes);
 }
 
 std::size_t RowStore::load(std::filesystem::path path)
@@ -72,7 +77,7 @@ std::size_t RowStore::load(std::filesystem::path path)
     in.get(); // skip new line
 
     std::size_t num_bytes = num_fresh_rows * row_size_/8;
-    in.read(reinterpret_cast<char*>(data_) + num_rows_ * row_size_/8, num_bytes);
+    in.read(data_.as<char*>() + num_rows_ * row_size_/8, num_bytes);
     num_rows_ += num_fresh_rows;
     return num_fresh_rows;
 }
@@ -82,7 +87,7 @@ StackMachine RowStore::loader(const OperatorSchema &schema) const
     StackMachine sm;
 
     /* Add address of store to initial state. */
-    auto addr_idx = sm.add(int64_t(reinterpret_cast<uintptr_t>(data_)));
+    auto addr_idx = sm.add(int64_t(data_.as<uintptr_t>()));
 
     /* Add row size to context. */
     auto row_size_idx = sm.add(int64_t(row_size_/8));
@@ -161,7 +166,7 @@ StackMachine RowStore::writer(const std::vector<const Attribute*> &attrs, std::s
     StackMachine sm;
 
     /* Add address of store to initial state. */
-    auto row_addr_idx = sm.add(static_cast<int64_t>(reinterpret_cast<uintptr_t>(data_) + row_id * row_size_ / 8));
+    auto row_addr_idx = sm.add(int64_t(data_.as<uintptr_t>() + row_id * row_size_ / 8));
 
     /* Add row size in bytes. */
     auto row_size_idx = sm.add_and_emit_load(int64_t(row_size_/8));
@@ -273,7 +278,7 @@ void RowStore::compute_offsets()
 
 void RowStore::dump(std::ostream &out) const
 {
-    out << "RowStore at " << data_ << " for table \"" << table().name << "\": " << num_rows_ << '/' << capacity_
+    out << "RowStore at " << data_.addr() << " for table \"" << table().name << "\": " << num_rows_ << '/' << capacity_
         << " rows, " << row_size_ << " bits per row, offsets [";
     for (uint32_t i = 0, end = table().size(); i != end; ++i) {
         if (i != 0) out << ", ";

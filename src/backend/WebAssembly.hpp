@@ -105,6 +105,42 @@ struct WASMCodeGen : ConstOperatorVisitor, ConstASTVisitor {
 /** A platform to execute WASM modules. */
 struct WasmPlatform
 {
+    static constexpr std::size_t WASM_PAGE_SIZE = 1UL << 16; // 64 KiB pages
+    static constexpr std::size_t WASM_MAX_MEMORY = (1UL << 31) - (1UL << 16); // 2^32 - 2^16 bytes, approx 2 GiB
+
+    struct WasmContext
+    {
+        uint32_t id;
+        rewire::AddressSpace vm;
+
+        WasmContext(uint32_t id, std::size_t size) : id(id), vm(size) { }
+    };
+
+    private:
+    static uint32_t wasm_counter_;
+    static std::unordered_map<uint32_t, WasmContext> contexts_;
+
+    protected:
+    static WasmContext & Create_Wasm_Context(std::size_t size) {
+        auto res = contexts_.emplace(wasm_counter_, WasmContext(wasm_counter_, size));
+        insist(res.second, "WasmContext with that ID already exists");
+        ++wasm_counter_;
+        return res.first->second;
+    }
+
+    static void Dispose_Wasm_Context(uint32_t id) {
+        auto res = contexts_.erase(id);
+        (void) res;
+        insist(res == 1, "There is no context with the given ID to erase");
+    }
+
+    public:
+    static WasmContext & Get_Wasm_Context_By_ID(uint32_t id) {
+        auto it = contexts_.find(id);
+        insist(it != contexts_.end(), "There is no context with the given ID");
+        return it->second;
+    }
+
     virtual ~WasmPlatform() { }
     virtual void execute(const WASMModule &module) = 0;
 };

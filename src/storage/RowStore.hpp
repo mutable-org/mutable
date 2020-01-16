@@ -1,18 +1,13 @@
 #pragma once
 
 #include "storage/Store.hpp"
+#include "util/memory.hpp"
 
 
 namespace db {
 
 struct RowStore : Store
 {
-#ifndef NDEBUG
-    static constexpr std::size_t ALLOCATION_SIZE = 1UL << 30; ///< 1 GB
-#else
-    static constexpr std::size_t ALLOCATION_SIZE = 1UL << 40; ///< 1 TB
-#endif
-
     public:
     /** This class acts as an interface to a row of a row store.  Physically, a row is just a byte array of a fixed
      * length.  To interpret this binary data one needs the table definition attached to the row store.  */
@@ -96,7 +91,7 @@ struct RowStore : Store
     };
 
     private:
-    void *data_; ///< the location of the data
+    rewire::Memory data_; ///< the underlying memory containing the data
     std::size_t num_rows_ = 0; ///< the number of rows in use
     std::size_t capacity_; ///< the number of available rows
     uint32_t *offsets_; ///< the offsets from the first column, in bits, of all columns
@@ -160,7 +155,7 @@ struct RowStore : Store
     void compute_offsets();
 
     /** Return a pointer to the `idx`th row. */
-    uintptr_t at(std::size_t idx) const { return reinterpret_cast<uintptr_t>(data_) + row_size_/8 * idx; }
+    uintptr_t at(std::size_t idx) const { return data_.as<uintptr_t>() + row_size_/8 * idx; }
 };
 
 

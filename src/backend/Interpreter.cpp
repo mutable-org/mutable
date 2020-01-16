@@ -669,3 +669,5 @@ void Interpreter::operator()(const SortingOperator &op)
         data->pipeline.block_[i] = std::move(*it++);
     data->pipeline.push(parent);
 }
+
+std::unique_ptr<Backend> Backend::CreateInterpreter() { return std::make_unique<Interpreter>(); }

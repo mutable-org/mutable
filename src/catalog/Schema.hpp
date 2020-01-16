@@ -3,6 +3,7 @@
 #include "catalog/Type.hpp"
 #include "util/fn.hpp"
 #include "util/macro.hpp"
+#include "util/memory.hpp"
 #include "util/Pool.hpp"
 #include "util/StringPool.hpp"
 #include <cmath>
@@ -192,6 +193,7 @@ struct Database
 struct Catalog
 {
     private:
+    std::unique_ptr<rewire::Allocator> allocator_; ///> our custom allocator
     StringPool pool_; ///> pool of strings
     std::unordered_map<const char*, Database*> databases_; ///> the databases
     Database *database_in_use_ = nullptr; ///> the currently used database
@@ -219,6 +221,10 @@ struct Catalog
 
     StringPool & get_pool() { return pool_; }
     const StringPool & get_pool() const { return pool_; }
+
+    rewire::Allocator & allocator() { return *allocator_; }
+    const rewire::Allocator & allocator() const { return *allocator_; }
+
     const char * pool(const char *str) { return pool_(str); }
 
     /*===== Database =================================================================================================*/

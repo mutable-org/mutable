@@ -9,6 +9,33 @@ using namespace db;
 
 
 /*======================================================================================================================
+ * Helper functions
+ *====================================================================================================================*/
+
+static BinaryenType get_binaryen_type(const Type *ty)
+{
+    insist(not ty->is_error());
+
+    if (ty->is_boolean()) return BinaryenTypeInt32();
+
+    if (auto n = cast<const Numeric>(ty)) {
+        if (n->kind == Numeric::N_Float) {
+            if (n->size() == 32) return BinaryenTypeFloat32();
+            else                 return BinaryenTypeFloat64();
+        }
+
+        switch (n->size()) {
+            case 8:  /* not supported, fall through */
+            case 16: /* not supported, fall through */
+            case 32: return BinaryenTypeInt32();
+            case 64: return BinaryenTypeInt64();
+        }
+    }
+
+    unreachable("unsupported type");
+}
+
+/*======================================================================================================================
  * WASMModule
  *====================================================================================================================*/
 
@@ -54,37 +81,55 @@ WASMModule WASMCodeGen::compile(const Operator &op)
     WASMModule module; // fresh module
 
     /*----- Add memory. ----------------------------------------------------------------------------------------------*/
-    BinaryenSetMemory(/* module=         */ module.ref_,
-                      /* initial=        */ 1,
-                      /* maximum=        */ 1,
-                      /* exportName=     */ nullptr,
-                      /* segments=       */ nullptr,
-                      /* segmentPassive= */ nullptr,
-                      /* segmentOffsets= */ nullptr,
-                      /* segmentSizes=   */ nullptr,
-                      /* numSegments=    */ 0,
-                      /* shared=         */ 0);
-    BinaryenAddMemoryImport(/* module=             */ module.ref_,
-                            /* internalName=       */ "mem",
-                            /* externalModuleName= */ "env",
-                            /* externalBaseName=   */ "mem",
-                            /* shared=             */ 0);
-
+    BinaryenSetMemory(
+        /* module=         */ module.ref_,
+        /* initial=        */ 1,
+        /* maximum=        */ WasmPlatform::WASM_MAX_MEMORY / WasmPlatform::WASM_PAGE_SIZE, // allowed maximum
+        /* exportName=     */ "memory",
+        /* segments=       */ nullptr,
+        /* segmentPassive= */ nullptr,
+        /* segmentOffsets= */ nullptr,
+        /* segmentSizes=   */ nullptr,
+        /* numSegments=    */ 0,
+        /* shared=         */ 0
+    );
 
     WASMCodeGen codegen(module);
     codegen(op); // emit code
 
     /*----- Patch invokable function into module and export it. ------------------------------------------------------*/
     std::vector<BinaryenType> param_types;
-    //param_types.push_back(BinaryenTypeInt32());
+    param_types.push_back(BinaryenTypeInt32());
+    param_types.push_back(BinaryenTypeInt32());
 
-    auto val = BinaryenLoad(/* module= */ module.ref_,
-                            /* bytes=  */ 4,
-                            /* signed= */ 1,
-                            /* offset= */ 0,
-                            /* align=  */ 0,
-                            /* type=   */ BinaryenTypeInt32(),
-                            /* ptr=    */ BinaryenConst(module.ref_, BinaryenLiteralInt32(20)));
+    auto module_id = BinaryenLocalGet(
+        /* module= */ module.ref_,
+        /* index=  */ 0,
+        /* type=   */ BinaryenTypeInt32()
+    );
+
+    auto idx = BinaryenLocalGet(
+        /* module= */ module.ref_,
+        /* index=  */ 1,
+        /* type=   */ BinaryenTypeInt32()
+    );
+
+    auto ptr = BinaryenBinary(
+        /* module= */ module.ref_,
+        /* op=     */ BinaryenMulInt32(),
+        /* left=   */ idx,
+        /* right=  */ BinaryenConst(module.ref_, BinaryenLiteralInt32(sizeof(int32_t)))
+    );
+
+    auto val = BinaryenLoad(
+        /* module= */ module.ref_,
+        /* bytes=  */ 4,
+        /* signed= */ 1,
+        /* offset= */ 0,
+        /* align=  */ 0,
+        /* type=   */ BinaryenTypeInt32(),
+        /* ptr=    */ ptr
+    );
 
     std::vector<BinaryenExpressionRef> block;
     block.emplace_back(val);
@@ -108,9 +153,7 @@ WASMModule WASMCodeGen::compile(const Operator &op)
             /* varTypes=    */ nullptr,
             /* numVarTypes= */ 0,
             /* body=        */ fn_body);
-
     BinaryenAddFunctionExport(module.ref_, "run", "run");
-
 
     /*----- Validate and optimize module. ----------------------------------------------------------------------------*/
     if (not BinaryenModuleValidate(module.ref_))
@@ -130,6 +173,26 @@ WASMModule WASMCodeGen::compile(const Operator &op)
 void WASMCodeGen::operator()(const ScanOperator &op)
 {
     // TODO implement
+    // the scan operator knows which attributes are reqired (from the OperatorSchema)
+    // add an import to this module for the table/columns being accessed
+    // load the imported value to retrieve the pointer to the table/columns
+
+    for (auto attr : op.schema()) {
+        std::ostringstream oss;
+        oss << attr.first.table_name << '.' << attr.first.attr_name;
+        auto import_name = oss.str();
+
+        /* Add an import for the address of the attribute (table or column). */
+        BinaryenAddGlobalImport(
+            /* module=             */ module_,
+            /* internalName=       */ import_name.c_str(),
+            /* externalModuleName= */ "env",
+            /* externalBaseName=   */ import_name.c_str(),
+            /* type=               */ BinaryenTypeInt32(),
+            /* mutable=            */ false
+        );
+
+    }
 }
 
 void WASMCodeGen::operator()(const CallbackOperator &op)
@@ -168,16 +231,19 @@ void WASMCodeGen::operator()(const ProjectionOperator &op)
 void WASMCodeGen::operator()(const LimitOperator &op)
 {
     // TODO implement
+    (*this)(*op.child(0));
 }
 
 void WASMCodeGen::operator()(const GroupingOperator &op)
 {
     // TODO implement
+    (*this)(*op.child(0));
 }
 
 void WASMCodeGen::operator()(const SortingOperator &op)
 {
     // TODO implement
+    (*this)(*op.child(0));
 }
 
 
@@ -433,3 +499,11 @@ void WASMCodeGen::operator()(Const<BinaryExpr> &e)
 #undef BINARY
 #undef BINARY_OP
 }
+
+
+/*======================================================================================================================
+ * WasmPlatform
+ *====================================================================================================================*/
+
+uint32_t WasmPlatform::wasm_counter_ = 0;
+std::unordered_map<uint32_t, WasmPlatform::WasmContext> WasmPlatform::contexts_;

@@ -4,6 +4,7 @@ add_library(
     ArgParser.cpp
     Diagnostic.cpp
     fn.cpp
+    memory.cpp
     Position.cpp
     terminal.cpp
     )

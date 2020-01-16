@@ -1,8 +1,18 @@
 #include "V8Platform.hpp"
 
-#include "v8-internal.h"
+#include <chrono>
+
+
+#define V8STR(str) ( v8::String::NewFromUtf8(this->isolate_, (str)).ToLocalChecked() )
+
 
 using namespace db;
+using args_t = v8::Local<v8::Value>[];
+
+
+constexpr std::size_t KiB = 1024 * 1024;
+constexpr std::size_t CHUNK_SIZE = 64 * KiB;
+constexpr std::size_t INTS_PER_CHUNK = CHUNK_SIZE / sizeof(int);
 
 
 std::unique_ptr<v8::Platform> V8Platform::PLATFORM_(nullptr);
@@ -28,74 +38,114 @@ V8Platform::~V8Platform()
 
 void V8Platform::execute(const WASMModule &module)
 {
-    using args_t = v8::Local<v8::Value>[];
-
     /* Create required V8 scopes. */
     v8::Isolate::Scope isolate_scope(isolate_);
     v8::HandleScope handle_scope(isolate_); // tracks and disposes of all object handles
     v8::Local<v8::Context> context = v8::Context::New(isolate_);
     v8::Context::Scope context_scope(context);
 
-    /* Create WASM module. */
-    std::cerr << "Compiling and loading WASM module...";
-    auto [binary_addr, binary_size] = module.binary();
-    std::cerr << " Finished.  WASM module is " << binary_size << " bytes.\n";
-    auto v8_wasm_module = v8::WasmModuleObject::DeserializeOrCompile(
-            /* isolate=           */ isolate_,
-            /* serialized_module= */ { nullptr, 0 },
-            /* wire_bytes=        */ v8::MemorySpan<const uint8_t>(binary_addr, binary_size)
-            ).ToLocalChecked();
-    free(binary_addr);
+    auto &wasm_context = Create_Wasm_Context(WASM_MAX_MEMORY);
+    auto v8_wasm_module = compile_wasm_module(module);
 
-#define V8STR(str) ( v8::String::NewFromUtf8(isolate_, (str)).ToLocalChecked() )
-
-    /* Get the WebAssembly instance class prototype. */
-    auto web_assembly_class = context->Global()->Get(context, V8STR("WebAssembly")).ToLocalChecked().As<v8::Object>();
-
-    /* Create a WebAssembly memory object. */
-    auto wasm_memory_class = web_assembly_class->Get(context, V8STR("Memory")).ToLocalChecked().As<v8::Object>();
-    auto memory_params_object = v8::Object::New(isolate_);
-    memory_params_object->Set(context, V8STR("initial"), v8::Int32::New(isolate_, 1));
-    memory_params_object->Set(context, V8STR("maximum"), v8::Int32::New(isolate_, 1));
-    args_t memory_args { memory_params_object };
-    auto wasm_memory = wasm_memory_class->CallAsConstructor(context, 1, memory_args).ToLocalChecked().As<v8::Object>();
-    insist(not wasm_memory.IsEmpty());
-
-    /* Create host memory. */
-    auto host_memory = new int32_t[1024];
-    for (int32_t i = 0; i != 1024; ++i)
-        host_memory[i] = i;
-    auto store = v8::ArrayBuffer::NewBackingStore(host_memory, 1024 * sizeof(int32_t), [](void* data, size_t, void*) { delete[] reinterpret_cast<int32_t*>(data); }, nullptr);
-    auto buffer = v8::ArrayBuffer::New(isolate_, std::move(store));
-    wasm_memory->Set(context, V8STR("buffer"), buffer); /// XXX: the underlying buffer is not replaced
+    /* Allocate and initialize host memory. */
+    auto memory = Catalog::Get().allocator().allocate(WASM_MAX_MEMORY);
+    for (auto p = memory.as<int*>(), end = p + INTS_PER_CHUNK; p != end; ++p)
+        *p = 0;
+    for (auto p = memory.as<int*>() + INTS_PER_CHUNK, end = p + INTS_PER_CHUNK; p != end; ++p)
+        *p = 1;
 
     /* Create the import object for instantiating the WebAssembly module. */
-    auto host_object = v8::Object::New(isolate_);
-    host_object->Set(context, V8STR("mem"), wasm_memory);
-    auto import_object = v8::Object::New(isolate_);
-    import_object->Set(context, V8STR("env"), host_object);
+    auto imports = v8::Object::New(isolate_);
+    DISCARD imports->Set(context, V8STR("env"), create_env());
 
     /* Create a WebAssembly instance object. */
-    auto instance_class = web_assembly_class->Get(context, V8STR("Instance")).ToLocalChecked().As<v8::Object>();
-    insist(not instance_class.IsEmpty());
-    args_t instance_args { v8_wasm_module, import_object };
-    auto instance = instance_class->CallAsConstructor(context, 2, instance_args).ToLocalChecked().As<v8::Object>();
-    insist(not instance.IsEmpty());
+    auto instance = create_wasm_instance(v8_wasm_module, imports);
+
+    /* Set the underlying memory for the instance. */
+    memory.map(2 * CHUNK_SIZE, 0, wasm_context.vm, 0);
+    v8::SetWasmInstanceRawMemory(instance, wasm_context.vm.as<uint8_t*>(), wasm_context.vm.size());
 
     /* Get the exports of the created WebAssembly instance. */
     auto exports = instance->Get(context, V8STR("exports")).ToLocalChecked().As<v8::Object>();
-    insist(not exports.IsEmpty());
-
-    /* Get exported function `run` from the exports. */
     auto run = exports->Get(context, V8STR("run")).ToLocalChecked().As<v8::Function>();
-    insist(not run.IsEmpty());
 
     /* Invoke the exported function `run` of the module. */
-    std::cerr << "Executing the module...";
-    args_t args{ };
-    auto result = run->Call(context, context->Global(), 0, args).ToLocalChecked().As<v8::Object>();
-    insist(not result.IsEmpty());
-    std::cerr << " Finished.\n";
+    args_t args {
+        v8::Int32::New(isolate_, wasm_context.id),
+        v8::Int32::New(isolate_, INTS_PER_CHUNK),
+    };
+    auto result = run->Call(context, context->Global(), 2, args).ToLocalChecked().As<v8::Int32>();
+    std::cerr << "Result is " << result->Value() << std::endl;
+}
 
-    std::cout << "Result is " << *v8::String::Utf8Value(isolate_, v8::Local<v8::String>::Cast(result)) << std::endl;
+v8::Local<v8::WasmModuleObject> V8Platform::compile_wasm_module(const WASMModule &module)
+{
+    auto [binary_addr, binary_size] = module.binary();
+    auto v8_wasm_module = v8::WasmModuleObject::DeserializeOrCompile(
+        /* isolate=           */ isolate_,
+        /* serialized_module= */ { nullptr, 0 },
+        /* wire_bytes=        */ v8::MemorySpan<const uint8_t>(binary_addr, binary_size)
+    ).ToLocalChecked();
+    free(binary_addr);
+    return v8_wasm_module;
+}
+
+v8::Local<v8::Object> V8Platform::create_wasm_instance(v8::Local<v8::WasmModuleObject> module,
+                                                       v8::Local<v8::Object> imports)
+{
+    auto Ctx = isolate_->GetCurrentContext();
+    args_t instance_args { module, imports };
+    return
+        Ctx->Global()->                                                             // get the `global` object
+        Get(Ctx, V8STR("WebAssembly")).ToLocalChecked().As<v8::Object>()->          // get WebAssembly class
+        Get(Ctx, V8STR("Instance")).ToLocalChecked().As<v8::Object>()->             // get WebAssembly.Instance class
+        CallAsConstructor(Ctx, 2, instance_args).ToLocalChecked().As<v8::Object>(); // instantiate WebAssembly.Instance
+}
+
+v8::Local<v8::Object> V8Platform::create_env() const
+{
+    auto env = v8::Object::New(isolate_);
+
+    auto &C = Catalog::Get();
+    auto &DB = C.get_database_in_use();
+    auto Ctx = isolate_->GetCurrentContext();
+
+    std::ostringstream oss;
+    for (auto it = DB.begin_tables(); it != DB.end_tables(); ++it) {
+        auto &table = *it->second;
+        for (auto &attr : table) {
+            oss.str("");
+            oss << table.name << '.' << attr.name;
+            auto import_name = oss.str();
+            DISCARD env->Set(Ctx, V8STR(import_name.c_str()), v8::Int32::New(isolate_, 0));
+        }
+    }
+
+#ifndef NDEBUG
+    {
+        auto json = to_json(env);
+        std::cerr << "env: " << *v8::String::Utf8Value(isolate_, json) << "}\n";
+    }
+#endif
+
+    return env;
+}
+
+v8::Local<v8::String> V8Platform::to_json(v8::Local<v8::Value> val) const
+{
+    auto Ctx = isolate_->GetCurrentContext();
+    auto json = Ctx->Global()->Get(Ctx, V8STR("JSON")).ToLocalChecked().As<v8::Object>();
+    auto stringify = json->Get(Ctx, V8STR("stringify")).ToLocalChecked().As<v8::Function>();
+    v8::Local<v8::Value> args[] = { val };
+    return stringify->Call(Ctx, Ctx->Global(), 1, args).ToLocalChecked().As<v8::String>();
+}
+
+
+/*======================================================================================================================
+ * Backend
+ *====================================================================================================================*/
+
+std::unique_ptr<Backend> Backend::CreateWasmV8()
+{
+    return std::make_unique<WasmBackend>(std::make_unique<V8Platform>());
 }

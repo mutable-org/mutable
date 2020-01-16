@@ -6,6 +6,7 @@ add_executable(
 
     # util
     util/FnTest.cpp
+    util/MemoryTest.cpp
     util/PoolTest.cpp
     util/PositionTest.cpp
     util/StringPoolTest.cpp

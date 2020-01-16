@@ -1,6 +1,7 @@
 #pragma once
 
 #include "storage/Store.hpp"
+#include "util/memory.hpp"
 
 
 namespace db {
@@ -8,9 +9,9 @@ namespace db {
 struct ColumnStore : Store
 {
 #ifndef NDEBUG
-    static constexpr std::size_t ALLOCATION_SIZE = 1UL << 30; ///< 1 GB
+    static constexpr std::size_t ALLOCATION_SIZE = 1UL << 30; ///< 1 GiB
 #else
-    static constexpr std::size_t ALLOCATION_SIZE = 1UL << 40; ///< 1 TB
+    static constexpr std::size_t ALLOCATION_SIZE = 1UL << 37; ///< 128 GiB
 #endif
 
     public:
@@ -31,13 +32,13 @@ struct ColumnStore : Store
         public:
         /** Check whether the value of the attribute is NULL. */
         bool isnull(const Attribute &attr) const override {
-            auto bitmap_col = reinterpret_cast<uint64_t*>(store.columns_.back());
+            auto bitmap_col = store.columns_.back().as<uint64_t*>();
             return not bool((bitmap_col[rid_] >> attr.id) & 0x1);
         }
 
         private:
         void null(const Attribute &attr, bool value) {
-            auto bitmap_col = reinterpret_cast<uint64_t*>(store.columns_.back());
+            auto bitmap_col = store.columns_.back().as<uint64_t*>();
             setbit(&bitmap_col[rid_], not value, attr.id);
         }
 
@@ -91,7 +92,7 @@ struct ColumnStore : Store
     std::size_t num_rows_ = 0;
     std::size_t capacity_;
     std::size_t row_size_ = 0;
-    std::vector<void*> columns_;
+    std::vector<rewire::Memory> columns_;
 
     public:
     ColumnStore(const Table &table);
@@ -146,11 +147,11 @@ T ColumnStore::Row::get_exact(const Attribute &attr) const
     insist(not isnull(attr));
     insist(type_check<T>(attr));
 
-    const auto col = store.columns_[attr.id];
+    const auto &col = store.columns_[attr.id];
     if constexpr (std::is_same_v<T, bool>) {
         const auto bytes = rid_ / 8;
         const auto bits = rid_ % 8;
-        auto p = reinterpret_cast<uint8_t*>(col) + bytes;
+        auto p = col.as<uint8_t*>() + bytes;
         return bool((*p >> bits) & 0x1); // extract single bit
     } else if constexpr (std::is_same_v<T, std::string>) {
         auto cs = as<const CharacterSequence>(attr.type);
@@ -158,14 +159,14 @@ T ColumnStore::Row::get_exact(const Attribute &attr) const
             unreachable("varying length character sequences are not supported by this store");
         } else {
             const auto len = attr.type->size() / 8;
-            auto p = reinterpret_cast<char*>(col) + rid_ * len;
+            auto p = col.as<char*>() + rid_ * len;
             std::string str;
             for (auto end = p + len; p != end; ++p)
                 str += *p;
             return str;
         }
     } else {
-        return *(reinterpret_cast<T*>(col) + rid_);
+        return *(col.as<T*>() + rid_);
     }
 }
 
@@ -176,12 +177,12 @@ T ColumnStore::Row::set_exact(const Attribute &attr, T value)
 
     null(attr, false);
     insist(not isnull(attr));
-    const auto col = store.columns_[attr.id];
+    const auto &col = store.columns_[attr.id];
 
     if constexpr (std::is_same_v<T, bool>) {
         const auto bytes = rid_ / 8;
         const auto bits = rid_ % 8;
-        auto p = reinterpret_cast<uint8_t*>(col) + bytes;
+        auto p = col.as<uint8_t*>() + bytes;
         setbit(p, value, bits);
     } else if constexpr (std::is_same_v<T, const char*>) {
         auto cs = as<const CharacterSequence>(attr.type);
@@ -189,7 +190,7 @@ T ColumnStore::Row::set_exact(const Attribute &attr, T value)
             unreachable("varying length character sequences are not supported by this store");
         } else {
             const auto len = attr.type->size() / 8;
-            auto p = reinterpret_cast<char*>(col) + rid_ * len;
+            auto p = col.as<char*>() + rid_ * len;
             strncpy(p, value, len);
         }
     } else if constexpr (std::is_same_v<T, std::string>) {
@@ -198,11 +199,11 @@ T ColumnStore::Row::set_exact(const Attribute &attr, T value)
             unreachable("varying length character sequences are not supported by this store");
         } else {
             const auto len = attr.type->size() / 8;
-            auto p = reinterpret_cast<char*>(col) + rid_ * len;
+            auto p = col.as<char*>() + rid_ * len;
             strncpy(p, value.c_str(), len);
         }
     } else {
-        auto p = reinterpret_cast<T*>(col) + rid_;
+        auto p = col.as<T*>() + rid_;
         *p = value;
 #ifndef NDEBUG
         T check = get_exact<T>(attr);

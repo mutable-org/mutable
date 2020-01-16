@@ -17,36 +17,26 @@ ColumnStore::ColumnStore(const Table &table)
 {
     uint32_t max_attr_size = 0;
 
+    auto &allocator = Catalog::Get().allocator();
+
     /* Allocate columns for the attributes. */
     /* XXX All bools into one columns or one column per boolean? */
     columns_.reserve(table.size());
     for (auto &attr : table) {
-        auto col = mmap(nullptr, ALLOCATION_SIZE, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_NORESERVE, 0, 0);
-        if (col == MAP_FAILED)
-            throw std::runtime_error("RowStore failed to allocate memory");
-        columns_.push_back(col);
+        columns_.emplace_back(allocator.allocate(ALLOCATION_SIZE));
         auto size = attr.type->size();
         row_size_ += size;
         max_attr_size = std::max(max_attr_size, size);
     }
 
     /* Allocate a column for the null bitmap. */
-    {
-        auto col = mmap(nullptr, ALLOCATION_SIZE, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_NORESERVE, 0, 0);
-        if (col == MAP_FAILED)
-            throw std::runtime_error("RowStore failed to allocate memory");
-        columns_.push_back(col);
-    }
-    insist(columns_.size() == table.size() + 1);
+    columns_.emplace_back(allocator.allocate(ALLOCATION_SIZE));
 
+    insist(columns_.size() == table.size() + 1);
     capacity_ = ALLOCATION_SIZE / (max_attr_size / 8);
 }
 
-ColumnStore::~ColumnStore()
-{
-    for (auto col : columns_)
-        munmap(col, ALLOCATION_SIZE);
-}
+ColumnStore::~ColumnStore() { }
 
 std::size_t ColumnStore::load(std::filesystem::path path)
 {
@@ -66,7 +56,7 @@ StackMachine ColumnStore::loader(const OperatorSchema &schema) const
     auto row_id_idx = sm.add(int64_t(0));
 
     /* Add address of null bitmap column to context. */
-    const auto null_bitmap_col_addr = reinterpret_cast<uintptr_t>(columns_.back());
+    const auto null_bitmap_col_addr = columns_.back().as<uintptr_t>();
     auto null_bitmap_col_addr_idx = sm.add(int64_t(null_bitmap_col_addr));
 
     for (auto &attr_ident : schema) {
@@ -79,7 +69,7 @@ StackMachine ColumnStore::loader(const OperatorSchema &schema) const
         sm.emit_Ld_Ctx(null_bitmap_col_addr_idx);
 
         /* Load column address to stack. */
-        const auto col_addr = reinterpret_cast<uintptr_t>(columns_[attr.id]);
+        const auto col_addr = columns_[attr.id].as<uintptr_t>();
         sm.add_and_emit_load(int64_t(col_addr));
 
         /* Load attribute id to stack. */
@@ -147,7 +137,7 @@ StackMachine ColumnStore::writer(const std::vector<const Attribute*> &attrs, std
     auto row_id_idx = sm.add(int64_t(row_id));
 
     /* Add address of null bitmap column to context. */
-    const auto null_bitmap_col_addr = reinterpret_cast<uintptr_t>(columns_.back());
+    const auto null_bitmap_col_addr = columns_.back().as<uintptr_t>();
     auto null_bitmap_col_addr_idx = sm.add(int64_t(null_bitmap_col_addr));
 
     uint8_t tuple_idx = 0;
@@ -164,7 +154,7 @@ StackMachine ColumnStore::writer(const std::vector<const Attribute*> &attrs, std
         sm.emit_Ld_Ctx(null_bitmap_col_addr_idx);
 
         /* Load column address to stack. */
-        const auto col_addr = reinterpret_cast<uintptr_t>(columns_[attr->id]);
+        const auto col_addr = columns_[attr->id].as<uintptr_t>();
         sm.add_and_emit_load(int64_t(col_addr));
 
         /* Load attribute id to stack. */

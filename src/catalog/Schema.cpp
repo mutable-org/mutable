@@ -89,6 +89,7 @@ const Function * Database::get_function(const char *name) const
  *====================================================================================================================*/
 
 Catalog::Catalog()
+    : allocator_(new rewire::LinearAllocator())
 {
     /* Initialize standard functions. */
 #define DB_FUNCTION(NAME, KIND) { \

@@ -100,7 +100,11 @@ ExternalProject_Add(
     PREFIX third-party
     DOWNLOAD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8"
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8"
-    DOWNLOAD_COMMAND fetch --force v8 && ${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/third_party/depot_tools/gclient sync --revision ${V8_VERSION}
+    DOWNLOAD_COMMAND fetch --force v8
+    COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/"
+    COMMAND git remote add -f mutable git@gitlab.cs.uni-saarland.de:bigdata/mutable/v8.git || true
+    COMMAND git checkout f16bc69f65dcfb6299b5b6068ed4cff503626448
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/third_party/depot_tools/gclient sync
     UPDATE_COMMAND ":"
     CONFIGURE_COMMAND gn gen . --root=${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8 --args=${V8_BUILD_ARGS}
     BUILD_COMMAND ninja
@@ -158,3 +162,4 @@ endif()
 include_directories(src)
 add_subdirectory(src)
 add_subdirectory(unittest)
+add_subdirectory(benchmark)

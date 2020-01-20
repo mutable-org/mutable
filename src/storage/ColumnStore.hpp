@@ -134,7 +134,7 @@ struct ColumnStore : Store
 
     StackMachine loader(const OperatorSchema &schema) const override;
 
-    StackMachine writer(const std::vector<const Attribute*> &attrs) const override;
+    StackMachine writer(const std::vector<const Attribute*> &attrs, std::size_t row_id) const override;
 
     void dump(std::ostream &out) const override;
     using Store::dump;

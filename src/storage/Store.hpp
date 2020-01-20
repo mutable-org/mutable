@@ -242,7 +242,7 @@ struct Store
      * values to update the row with as input tuple, with the values in the same order as the given list of attributes.
      * Further, the row to update must be specified by the user of the stack machine by setting context at index 0 to
      * the respective row id. */
-    virtual StackMachine writer(const std::vector<const Attribute*> &attrs) const = 0;
+    virtual StackMachine writer(const std::vector<const Attribute*> &attrs, std::size_t row_id = 0) const = 0;
 
     virtual void dump(std::ostream &out) const = 0;
     void dump() const;

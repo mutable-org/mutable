@@ -139,12 +139,12 @@ StackMachine ColumnStore::loader(const OperatorSchema &schema) const
     return sm;
 }
 
-StackMachine ColumnStore::writer(const std::vector<const Attribute*> &attrs) const
+StackMachine ColumnStore::writer(const std::vector<const Attribute*> &attrs, std::size_t row_id) const
 {
     StackMachine sm;
 
     /* Add row id to context. */
-    auto row_id_idx = sm.add(int64_t(0));
+    auto row_id_idx = sm.add(int64_t(row_id));
 
     /* Add address of null bitmap column to context. */
     const auto null_bitmap_col_addr = reinterpret_cast<uintptr_t>(columns_.back());

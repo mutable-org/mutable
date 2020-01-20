@@ -158,7 +158,7 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
             auto &store = T.store();
             std::vector<const Attribute*> attrs;
             for (auto &attr : T) attrs.push_back(&attr);
-            auto W = store.writer(attrs);
+            auto W = store.writer(attrs, store.num_rows()); // append values
             for (auto &t : I->tuples) {
                 StackMachine S;
                 for (auto &v : t) {
@@ -176,6 +176,7 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
                     }
                 }
                 auto values = S();
+                store.append();
                 W(values);
             }
         } else if (auto S = cast<CreateTableStmt>(stmt)) {

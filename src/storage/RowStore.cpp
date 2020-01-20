@@ -156,12 +156,12 @@ StackMachine RowStore::loader(const OperatorSchema &schema) const
     return sm;
 }
 
-StackMachine RowStore::writer(const std::vector<const Attribute*> &attrs) const
+StackMachine RowStore::writer(const std::vector<const Attribute*> &attrs, std::size_t row_id) const
 {
     StackMachine sm;
 
     /* Add address of store to initial state. */
-    auto row_addr_idx = sm.add(static_cast<int64_t>(reinterpret_cast<uintptr_t>(data_)));
+    auto row_addr_idx = sm.add(static_cast<int64_t>(reinterpret_cast<uintptr_t>(data_) + row_id * row_size_ / 8));
 
     /* Add row size in bytes. */
     auto row_size_idx = sm.add_and_emit_load(int64_t(row_size_/8));

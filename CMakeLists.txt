@@ -33,10 +33,17 @@ SET(CMAKE_C_FLAGS               "${CMAKE_C_FLAGS} ${CMAKE_COMPILE_FLAGS}")
 SET(CMAKE_CXX_FLAGS             "-std=c++17 ${CMAKE_CXX_FLAGS} ${CMAKE_COMPILE_FLAGS}")
 SET(CMAKE_CXX_FLAGS_DEBUG       "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address")
 
+########################################################################################################################
 # Third-Party
+########################################################################################################################
+
+# Replxx - Interactive Command Line Tool with History and Completions
 ExternalProject_Add(
     Replxx
     PREFIX third-party
+    DOWNLOAD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party"
+    GIT_REPOSITORY "https://github.com/AmokHuginnsson/replxx.git"
+    GIT_TAG 130c57ed96a0c14c8ce7330c5ec23338c17701d9
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/replxx"
     CMAKE_ARGS -DBUILD_STATIC_LIBS=ON -DCMAKE_BUILD_TYPE=Release
     BUILD_BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/third-party/src/Replxx-build/libreplxx.a"
@@ -45,10 +52,15 @@ ExternalProject_Add(
 include_directories(SYSTEM third-party/replxx/include)
 add_library(replxx STATIC IMPORTED)
 set_target_properties(replxx PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/third-party/src/Replxx-build/libreplxx.a")
+add_dependencies(replxx Replxx)
 
+# Binaryen - WebAssembly CodeGen API with WASM-specific Optimizations
 ExternalProject_Add(
     Binaryen
     PREFIX third-party
+    DOWNLOAD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party"
+    GIT_REPOSITORY "https://github.com/WebAssembly/binaryen.git"
+    GIT_TAG 132d81eca7f9b07520ce17f69ea348bfb4dbc8e8
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/binaryen"
     CMAKE_ARGS -DBUILD_STATIC_LIB=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
     BUILD_BYPRODUCTS "${PROJECT_BINARY_DIR}/third-party/src/Binaryen-build/lib/libbinaryen.a"
@@ -58,7 +70,9 @@ ExternalProject_Add(
 include_directories(SYSTEM third-party/binaryen/src)
 add_library(binaryen STATIC IMPORTED)
 set_target_properties(binaryen PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/third-party/src/Binaryen-build/lib/libbinaryen.a")
+add_dependencies(binaryen Binaryen)
 
+# V8 -  Google's Javascript and WebAssembly Engine (used in Chome, Node.js)
 set(V8_VERSION "8.0.368")
 set(V8_BUILD_ARGS "is_clang=true is_component_build=false v8_monolithic=true is_debug=true is_official_build=false treat_warnings_as_errors=false v8_use_external_startup_data=false use_sysroot=false use_custom_libcxx=false linux_use_bundled_binutils=false clang_use_chrome_plugins=false use_debug_fission=true")
 ExternalProject_Add(

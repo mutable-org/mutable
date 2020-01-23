@@ -45,7 +45,8 @@ ExternalProject_Add(
     GIT_REPOSITORY "https://github.com/AmokHuginnsson/replxx.git"
     GIT_TAG 130c57ed96a0c14c8ce7330c5ec23338c17701d9
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/replxx"
-    CMAKE_ARGS -DBUILD_STATIC_LIBS=ON -DCMAKE_BUILD_TYPE=Release
+    PATCH_COMMAND sed -i.origin "s/ replxx-d / replxx /g" "CMakeLists.txt"
+    CMAKE_ARGS -DBUILD_STATIC_LIBS=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
     BUILD_BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/third-party/src/Replxx-build/libreplxx.a"
     INSTALL_COMMAND ":"
     )

@@ -81,32 +81,42 @@ LEXER_POSITIVE_DIR  = os.path.join(LEXER_TEST_DIR, 'positive')
 LEXER_GLOB_POSITIVE = os.path.join(LEXER_POSITIVE_DIR, '**', '*.sql')
 LEXER_SANITY_FILE   = os.path.join(LEXER_TEST_DIR, 'sanity.sql')
 
-def lexer_pos_case(sql_filename, tok_filename):
+def lexer_case(sql_filename, is_positive):
     stmt = None
-    with open(sql_filename, 'r') as sql_file:
-        stmt = sql_file.read()
+    if is_positive:
+        with open(sql_filename, 'r') as sql_file:
+            stmt = sql_file.read()
+    else:
+        stmt = sql_filename  # sanity test input is a string instead of a filename
 
     try:
-        process = subprocess.Popen([LEXER_BIN, '-'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=CWD)
+        process = subprocess.Popen([binary, '-'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE , cwd=CWD)
 
         out, err = process.communicate(stmt.encode(), timeout=5)
 
-        if err:
-            raise TestException(f'test failed with error:\n {str(err, "utf-8")}')
+        if is_positive:
+            if err:
+                raise TestException(f'test failed with error:\n {str(err, "utf-8")}')
 
-        with open(tok_filename, 'r') as tok_file:
-            out = str(out, 'utf-8').splitlines()
-            tokens = tok_file.read().splitlines()
+            tok_filename = os.path.splitext(sql_filename)[0] + '.tok'
+            with open(tok_filename, 'r') as tok_file:
+                out = str(out, 'utf-8').splitlines()
+                tokens = tok_file.read().splitlines()
 
-            if len(out) < len(tokens):
-                raise TestException(f'actual output is shorter than expected: received: {len(out)}, expected: {len(tokens)}')
-            elif len(out) > len(tokens):
-                raise TestException(f'actual output is longer than expected: received: {len(out)}, expected: {len(tokens)}')
+                if len(out) < len(tokens):
+                    raise TestException(f'actual output is shorter than expected: received: {len(out)}, expected: {len(tokens)}')
+                elif len(out) > len(tokens):
+                    raise TestException(f'actual output is longer than expected: received: {len(out)}, expected: {len(tokens)}')
 
-            for actual, expected in zip(out, tokens):
-                if actual != expected:
-                    c_actual, c_expected = colordiff(actual, expected)
-                    raise TestException(f'token streams differ:\nreceived:\n{c_actual}\nexpected\n{c_expected}')
+                for actual, expected in zip(out, tokens):
+                    if actual != expected:
+                        c_actual, c_expected = colordiff(actual, expected)
+                        raise TestException(f'token streams differ:\nreceived:\n{c_actual}\nexpected\n{c_expected}')
+        else:
+            if process.returncode != 1:
+                raise TestException(f'unexpected return code {process.returncode}')
+            if not err:
+                raise TestException(f'expected an error message')
 
         return True, f'`{sql_filename} {termcolor.ok("✓")}'
 
@@ -117,27 +127,6 @@ def lexer_pos_case(sql_filename, tok_filename):
         return False, f'`{sql_filename} {termcolor.err("✘")}\n {str(e).strip()}'
 
 
-def lexer_san_case(test_case):
-    try:
-        process = subprocess.Popen([LEXER_BIN, '-'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE , cwd=CWD)
-
-        out, err = process.communicate(test_case.encode(), timeout=5)
-
-        if process.returncode != 1:
-            raise TestException(f'unexpected return code {process.returncode}')
-        if not err:
-            raise TestException(f'expected an error message')
-
-        return True, f'`{test_case} {termcolor.ok("✓")}'
-
-
-    except subprocess.TimeoutExpired as ex:
-        return False, f'`{test_case} {termcolor.err("✘")}\n {ex}'
-
-    except TestException as e:
-        return False, f'`{test_case} {termcolor.err("✘")}\n {str(e).strip()}'
-
-
 def lexer_test():
     n_tests = n_passed = 0
     results = list()
@@ -145,9 +134,8 @@ def lexer_test():
     test_files = sorted(glob.glob(LEXER_GLOB_POSITIVE, recursive=True))
 
     for sql_filename in tqdm(test_files, desc='Lexer (positive)'.ljust(30), disable=quiet, bar_format=bar_format):
-        tok_filename = os.path.splitext(sql_filename)[0] + '.tok'
 
-        success, err = lexer_pos_case(sql_filename, tok_filename)
+        success, err = lexer_case(sql_filename, True)
         n_tests += 1
         n_passed += 1 if success else 0
         results.append((success, err))
@@ -155,7 +143,8 @@ def lexer_test():
     with open(LEXER_SANITY_FILE, 'r') as sanity_file:
         num_lines = sum(1 for line in open(LEXER_SANITY_FILE, 'r'))
         for test_case in tqdm(sanity_file, total=num_lines, desc='Lexer (sanity)'.ljust(30), disable=quiet, bar_format=bar_format):
-            success, err = lexer_san_case(test_case)
+
+            success, err = lexer_case(test_case, False)
             n_tests += 1
             n_passed += 1 if success else 0
             results.append((success, err))
@@ -347,6 +336,7 @@ def sema_test():
 #-----------------------------------------------------------------------------------------------------------------------
 # End to End Tests
 #-----------------------------------------------------------------------------------------------------------------------
+CWD               = os.getcwd()
 SHELL_BIN         = os.path.join(CWD, 'build', 'debug', 'bin', 'shell')
 E2E_TEST_DIR      = os.path.join('test', 'end2end')
 E2E_SETUP         = os.path.join(E2E_TEST_DIR, 'setup_ours_mutable.sql')
@@ -418,7 +408,7 @@ if __name__ == '__main__':
     parser.add_argument('component', nargs='*', help='a component to be tested, e.g. lexer or sema.')
     group = parser.add_mutually_exclusive_group()
     group.add_argument('-v', '--verbose', help='increase output verbosity', action='store_true')
-    group.add_argument('-q', '--quiet',   help='disable output, failure indicated by returcode', action='store_true')
+    group.add_argument('-q', '--quiet',   help='disable output, failure indicated by returncode', action='store_true')
     args = parser.parse_args()
 
     parse_components(args.component)

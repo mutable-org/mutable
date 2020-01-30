@@ -11,6 +11,11 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#elif __APPLE__
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #endif
 
 
@@ -28,7 +33,13 @@ using namespace rewire;
 Allocator::Allocator()
 {
     errno = 0;
+#if __linux
     fd_ = memfd_create("rewire_allocator", MFD_CLOEXEC);
+#elif __APPLE__
+    auto name = std::to_string(getpid());
+    fd_ = shm_open(name.c_str(), O_RDWR | O_TRUNC | O_CREAT, S_IRUSR | S_IWUSR);
+    shm_unlink(name.c_str());
+#endif
     if (fd_ == -1)
         throw std::runtime_error(strerror(errno));
 }

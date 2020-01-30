@@ -2,8 +2,6 @@
 
 #include "backend/StackMachine.hpp"
 
-#include <sys/mman.h>
-
 
 using namespace db;
 
@@ -219,6 +217,7 @@ void ColumnStore::dump(std::ostream &out) const
     out << "ColumnStore for table \"" << table().name << "\": " << num_rows_ << '/' << capacity_
         << " rows, " << row_size_ << " bits per row" << std::endl;
 }
+
 
 /*======================================================================================================================
  * ColumnStore::Row

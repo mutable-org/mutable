@@ -143,6 +143,9 @@ struct RowStore : Store
         --num_rows_;
     }
 
+    /** Returns the memory of the store. */
+    const rewire::Memory & memory() const { return data_; }
+
     StackMachine loader(const OperatorSchema &schema) const override;
 
     StackMachine writer(const std::vector<const Attribute*> &attrs, std::size_t row_id) const override;

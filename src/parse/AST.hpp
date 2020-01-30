@@ -9,8 +9,7 @@
 namespace db {
 
 // forward declare the AST visitor
-template<bool C>
-struct TheASTVisitor;
+template<bool C> struct TheASTVisitor;
 using ASTVisitor = TheASTVisitor<false>;
 using ConstASTVisitor = TheASTVisitor<true>;
 

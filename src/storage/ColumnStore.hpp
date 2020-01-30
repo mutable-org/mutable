@@ -134,6 +134,12 @@ struct ColumnStore : Store
         --num_rows_;
     }
 
+    /** Returns the memory of the column assigned to the attribute with id `attr_id`. */
+    const rewire::Memory & memory(std::size_t attr_id) const {
+        insist(attr_id < columns_.size());
+        return columns_[attr_id]; // XXX What if attributes were erased and added again to a table?
+    }
+
     StackMachine loader(const OperatorSchema &schema) const override;
 
     StackMachine writer(const std::vector<const Attribute*> &attrs, std::size_t row_id) const override;

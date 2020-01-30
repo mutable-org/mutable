@@ -18,88 +18,29 @@ struct Expression;
 
 namespace db {
 
-struct WASMCodeGen;
-
-struct WASMModule
+struct WasmModule
 {
-    friend struct WASMCodeGen;
-
     private:
     wasm::Module *ref_;
 
     public:
-    WASMModule();
-    ~WASMModule();
-    WASMModule(const WASMModule&) = delete;
-    WASMModule(WASMModule&&) = default;
+    WasmModule();
+    ~WasmModule();
+    WasmModule(const WasmModule&) = delete;
+    WasmModule(WasmModule&&) = default;
+
+    wasm::Module * ref() { return ref_; }
+    const wasm::Module * ref() const { return ref_; }
 
     /** Returns the binary representation of this module in a freshly allocated memory.  The caller must dispose of this
      * memory. */
     std::pair<uint8_t*, std::size_t> binary() const;
 
     /** Print module in human-readable text format. */
-    friend std::ostream & operator<<(std::ostream &out, const WASMModule &module);
+    friend std::ostream & operator<<(std::ostream &out, const WasmModule &module);
 
     void dump(std::ostream &out) const;
     void dump() const;
-};
-
-/** Compiles a physical plan to WebAssembly. */
-struct WASMCodeGen : ConstOperatorVisitor, ConstASTVisitor {
-    private:
-    wasm::Module *module_;
-    wasm::Expression *expr_;
-
-    WASMCodeGen(const WASMModule &module) : module_(module.ref_) { } // private c'tor
-
-    public:
-    static WASMModule compile(const Operator &op);
-
-    private:
-    using ConstOperatorVisitor::operator();
-#define DECLARE(CLASS) void operator()(ConstOperatorVisitor::Const<CLASS> &op) override
-    DECLARE(ScanOperator);
-    DECLARE(CallbackOperator);
-    DECLARE(FilterOperator);
-    DECLARE(JoinOperator);
-    DECLARE(ProjectionOperator);
-    DECLARE(LimitOperator);
-    DECLARE(GroupingOperator);
-    DECLARE(SortingOperator);
-#undef DECLARE
-
-    using ConstASTVisitor::operator();
-    using ConstASTVisitor::Const;
-
-    /* Expressions */
-    void operator()(Const<ErrorExpr>&) override { unreachable(""); }
-    void operator()(Const<Designator> &e) override;
-    void operator()(Const<Constant> &e) override;
-    void operator()(Const<FnApplicationExpr> &e) override;
-    void operator()(Const<UnaryExpr> &e) override;
-    void operator()(Const<BinaryExpr> &e) override;
-
-    /* Clauses */
-    void operator()(Const<ErrorClause>&) override { unreachable(""); }
-    void operator()(Const<SelectClause>&) override { unreachable(""); }
-    void operator()(Const<FromClause>&) override { unreachable(""); }
-    void operator()(Const<WhereClause>&) override { unreachable(""); }
-    void operator()(Const<GroupByClause>&) override { unreachable(""); }
-    void operator()(Const<HavingClause>&) override { unreachable(""); }
-    void operator()(Const<OrderByClause>&) override { unreachable(""); }
-    void operator()(Const<LimitClause>&) override { unreachable(""); }
-
-    /* Statements */
-    void operator()(Const<ErrorStmt>&) override { unreachable(""); }
-    void operator()(Const<EmptyStmt>&) override { unreachable(""); }
-    void operator()(Const<CreateDatabaseStmt>&) override { unreachable(""); }
-    void operator()(Const<UseDatabaseStmt>&) override { unreachable(""); }
-    void operator()(Const<CreateTableStmt>&) override { unreachable(""); }
-    void operator()(Const<SelectStmt>&) override { unreachable(""); }
-    void operator()(Const<InsertStmt>&) override { unreachable(""); }
-    void operator()(Const<UpdateStmt>&) override { unreachable(""); }
-    void operator()(Const<DeleteStmt>&) override { unreachable(""); }
-    void operator()(Const<DSVImportStmt>&) override { unreachable(""); }
 };
 
 /** A platform to execute WASM modules. */
@@ -141,8 +82,10 @@ struct WasmPlatform
         return it->second;
     }
 
+    static WasmModule compile(const Operator &op);
+
     virtual ~WasmPlatform() { }
-    virtual void execute(const WASMModule &module) = 0;
+    virtual void execute(const WasmModule &module) = 0;
 };
 
 /** A backend to execute WASM modules on a specific platform. */
@@ -154,10 +97,7 @@ struct WasmBackend : Backend
     public:
     WasmBackend(std::unique_ptr<WasmPlatform> platform) : platform_(std::move(platform)) { }
 
-    void execute(const Operator &plan) const override {
-        auto module = WASMCodeGen::compile(plan);
-        platform_->execute(module);
-    }
+    void execute(const Operator &plan) const override;
 };
 
 }

@@ -122,6 +122,7 @@ struct OperatorSchema
         bool operator==(AttributeIdentifier other) const {
             return this->table_name == other.table_name and this->attr_name == other.attr_name;
         }
+        bool operator!=(AttributeIdentifier other) const { return not operator==(other); }
 
         friend std::ostream & operator<<(std::ostream &out, AttributeIdentifier id) {
             if (id.table_name)

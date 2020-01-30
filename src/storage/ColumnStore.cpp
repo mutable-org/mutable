@@ -18,7 +18,6 @@ ColumnStore::ColumnStore(const Table &table)
     auto &allocator = Catalog::Get().allocator();
 
     /* Allocate columns for the attributes. */
-    /* XXX All bools into one columns or one column per boolean? */
     columns_.reserve(table.size());
     for (auto &attr : table) {
         columns_.emplace_back(allocator.allocate(ALLOCATION_SIZE));

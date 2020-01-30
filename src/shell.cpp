@@ -132,15 +132,15 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
             timer.stop();
             if (options.plan) optree->dump(std::cout);
             if (options.plandot) optree->dot(std::cout);
+            auto callback = new CallbackOperator(print);
+            callback->add_child(optree.release());
 
             if (options.wasm) {
-                WASMModule wasm = WASMCodeGen::compile(*optree.get());
+                WasmModule wasm = WasmPlatform::compile(*callback);
                 wasm.dump(std::cout);
             }
 
             if (not options.dryrun) {
-                auto callback = new CallbackOperator(print);
-                callback->add_child(optree.release());
                 timer.start("Interpret the Query Plan");
                 I->execute(*callback);
                 timer.stop();
@@ -156,9 +156,8 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
                     std::cerr << "No WASM backend available.\n";
 #endif
                 }
-
-                delete callback;
             }
+            delete callback;
         } else if (auto I = cast<InsertStmt>(stmt)) {
             auto &DB = C.get_database_in_use();
             auto &T = DB.get_table(I->table_name.text);

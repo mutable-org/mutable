@@ -19,10 +19,6 @@
 #endif
 
 
-#define IS_PAGE_ALIGNED(N) ( (N) == ( (N) & ~(PAGESIZE - 1UL) ) )
-#define CEIL_TO_NEXT_PAGE(N) ( (N - 1UL) | (PAGESIZE - 1UL) ) + 1UL
-
-
 using namespace rewire;
 
 
@@ -62,7 +58,7 @@ Memory Allocator::create_memory(void *addr, std::size_t size, std::size_t offset
 
 AddressSpace::AddressSpace(std::size_t size)
 {
-    auto aligned_size = CEIL_TO_NEXT_PAGE(size);
+    auto aligned_size = Ceil_To_Next_Page(size);
     addr_ = mmap(nullptr, aligned_size, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, /* fd= */ -1, /* offset= */ 0);
     if (addr_ == MAP_FAILED)
         throw std::runtime_error(strerror(errno));
@@ -83,16 +79,16 @@ Memory::Memory(Allocator &allocator, void *addr, std::size_t size, std::size_t o
     , offset_(offset)
 { }
 
-void Memory::map(std::size_t size, std::size_t offset_src, const AddressSpace &vm, std::size_t offset_dst)
+void Memory::map(std::size_t size, std::size_t offset_src, const AddressSpace &vm, std::size_t offset_dst) const
 {
     insist(size <= this->size(), "size exceeds memory size");
     insist(offset_src < this->size(), "source offset out of bounds");
-    insist(IS_PAGE_ALIGNED(offset_src), "source offset is not page aligned");
+    insist(Is_Page_Aligned(offset_src), "source offset is not page aligned");
     insist(offset_src + size <= this->size(), "source range out of bounds");
 
     insist(size <= vm.size(), "size exceeds address space");
     insist(offset_dst < vm.size(), "destination offset out of bounds");
-    insist(IS_PAGE_ALIGNED(offset_dst), "destination offset is not page aligned");
+    insist(Is_Page_Aligned(offset_dst), "destination offset is not page aligned");
     insist(offset_dst + size <= vm.size(), "destination range out of bounds");
 
     void *dst_addr = vm.as<uint8_t*>() + offset_dst;
@@ -118,9 +114,9 @@ void Memory::dump() const { dump(std::cerr); }
 
 Memory LinearAllocator::allocate(std::size_t size)
 {
-    std::size_t aligned_size = CEIL_TO_NEXT_PAGE(size);
+    std::size_t aligned_size = Ceil_To_Next_Page(size);
     insist(aligned_size >= size, "size must be ceiled");
-    insist((aligned_size & (PAGESIZE - 1UL)) == 0, "not page aligned");
+    insist(Is_Page_Aligned(aligned_size), "not page aligned");
 #if __linux
     std::size_t min_cap = offset_ + aligned_size;
     if (min_cap > capacity_) {

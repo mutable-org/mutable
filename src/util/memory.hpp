@@ -8,6 +8,12 @@
 
 namespace rewire {
 
+constexpr std::size_t Pagesize = PAGESIZE;
+
+constexpr std::size_t Is_Page_Aligned(std::size_t n) { return (n & (Pagesize - 1UL)) == 0; }
+
+constexpr std::size_t Ceil_To_Next_Page(std::size_t n) { return ((n - 1UL) | (Pagesize - 1UL)) + 1UL; }
+
 struct Memory;
 
 struct Allocator
@@ -100,7 +106,7 @@ struct Memory
     const T as() const { return reinterpret_cast<T>(addr()); }
 
     /** Map `size` bytes starting at `offset_src` into the address space of `vm` at offset `offset_dst`.  */
-    void map(std::size_t size, std::size_t offset_src, const AddressSpace &vm, std::size_t offset_dst);
+    void map(std::size_t size, std::size_t offset_src, const AddressSpace &vm, std::size_t offset_dst) const;
 
     void dump(std::ostream &out) const;
     void dump() const;

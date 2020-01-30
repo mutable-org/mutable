@@ -138,6 +138,9 @@ struct ColumnStore : Store
 
     StackMachine writer(const std::vector<const Attribute*> &attrs, std::size_t row_id) const override;
 
+    void accept(StoreVisitor &v) override { v(*this); }
+    void accept(ConstStoreVisitor &v) const override { v(*this); }
+
     void dump(std::ostream &out) const override;
     using Store::dump;
 };

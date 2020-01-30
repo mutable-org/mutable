@@ -19,6 +19,10 @@ namespace db {
 struct OperatorSchema;
 struct StackMachine;
 
+template<bool C> struct TheStoreVisitor;
+using StoreVisitor = TheStoreVisitor<false>;
+using ConstStoreVisitor = TheStoreVisitor<true>;
+
 /** Reports an erroneous access to an attribute's value that is set to NULL. */
 struct null_error : std::logic_error
 {
@@ -244,8 +248,34 @@ struct Store
      * the respective row id. */
     virtual StackMachine writer(const std::vector<const Attribute*> &attrs, std::size_t row_id = 0) const = 0;
 
+    /** Accept a store visitor. */
+    virtual void accept(StoreVisitor &v) = 0;
+    /** Accept a store visitor. */
+    virtual void accept(ConstStoreVisitor &v) const = 0;
+
     virtual void dump(std::ostream &out) const = 0;
     void dump() const;
 };
+
+struct RowStore;
+struct ColumnStore;
+
+template<bool C>
+struct TheStoreVisitor
+{
+    static constexpr bool is_constant = C;
+
+    template<typename T>
+    using Const = std::conditional_t<is_constant, const T, T>;
+
+    virtual ~TheStoreVisitor() { }
+
+    void operator()(Const<Store> &s) { s.accept(*this); }
+    virtual void operator()(Const<RowStore> &s) = 0;
+    virtual void operator()(Const<ColumnStore> &s) = 0;
+};
+
+using StoreVisitor = TheStoreVisitor<false>;
+using ConstStoreVisitor = TheStoreVisitor<true>;
 
 }

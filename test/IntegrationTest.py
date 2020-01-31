@@ -90,7 +90,7 @@ def lexer_case(sql_filename, is_positive):
         stmt = sql_filename  # sanity test input is a string instead of a filename
 
     try:
-        process = subprocess.Popen([binary, '-'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE , cwd=CWD)
+        process = subprocess.Popen([LEXER_BIN, '-'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE , cwd=CWD)
 
         out, err = process.communicate(stmt.encode(), timeout=5)
 

@@ -39,6 +39,7 @@ Allocator::Allocator()
     auto name = std::to_string(getpid());
     fd_ = shm_open(name.c_str(), O_RDWR | O_TRUNC | O_CREAT, S_IRUSR | S_IWUSR);
     shm_unlink(name.c_str());
+    ftruncate(fd_, 1UL << 44);
 #endif
     if (fd_ == -1)
         throw std::runtime_error(strerror(errno));
@@ -120,12 +121,16 @@ Memory LinearAllocator::allocate(std::size_t size)
     std::size_t aligned_size = CEIL_TO_NEXT_PAGE(size);
     insist(aligned_size >= size, "size must be ceiled");
     insist((aligned_size & (PAGESIZE - 1UL)) == 0, "not page aligned");
+#if __linux
     std::size_t min_cap = offset_ + aligned_size;
     if (min_cap > capacity_) {
         errno = 0;
         if (ftruncate(fd(), min_cap))
             throw std::runtime_error(strerror(errno));
     }
+#elif __APPLE__
+    /** In macOS, we preallocate the memory because resizing with `ftruncate()` is not supported. */
+#endif
 
     errno = 0;
     void *addr = mmap(nullptr, aligned_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd(), offset_);

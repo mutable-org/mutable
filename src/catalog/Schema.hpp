@@ -52,6 +52,9 @@ struct Attribute
     Attribute(const Attribute&) = delete;
     Attribute(Attribute&&) = default;
 
+    bool operator==(const Attribute &other) const { return &this->table == &other.table and this->id == other.id; }
+    bool operator!=(const Attribute &other) const { return not operator==(other); }
+
     friend std::ostream & operator<<(std::ostream &out, const Attribute &attr) {
         return out << '`' << attr.name << "` " << *attr.type;
     }
@@ -300,4 +303,17 @@ bool db::type_check(const Attribute &attr) {
     }
 
     return false;
+}
+
+namespace std {
+
+template<>
+struct hash<db::Attribute>
+{
+    uint64_t operator()(const db::Attribute &attr) const {
+        StrHash h;
+        return h(attr.table.name) * (attr.id + 1);
+    }
+};
+
 }

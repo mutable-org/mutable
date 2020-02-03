@@ -145,6 +145,7 @@ struct ErrorType: Type
     uint64_t hash() const override;
 
     void print(std::ostream &out) const override;
+    using Type::dump;
     void dump(std::ostream &out) const override;
 };
 
@@ -167,6 +168,7 @@ struct NoneType: Type
     uint64_t hash() const override;
 
     void print(std::ostream &out) const override;
+    using Type::dump;
     void dump(std::ostream &out) const override;
 };
 
@@ -192,6 +194,7 @@ struct Boolean : PrimitiveType
     uint64_t hash() const override;
 
     void print(std::ostream &out) const override;
+    using Type::dump;
     void dump(std::ostream &out) const override;
 
     virtual const PrimitiveType *as_scalar() const override;
@@ -233,6 +236,7 @@ struct CharacterSequence : PrimitiveType
     uint64_t hash() const override;
 
     void print(std::ostream &out) const override;
+    using Type::dump;
     void dump(std::ostream &out) const override;
 
     virtual const PrimitiveType *as_scalar() const override;
@@ -294,6 +298,7 @@ struct Numeric : PrimitiveType
     uint64_t hash() const override;
 
     void print(std::ostream &out) const override;
+    using Type::dump;
     void dump(std::ostream &out) const override;
 
     virtual const PrimitiveType *as_scalar() const override;
@@ -325,6 +330,7 @@ struct FnType : Type
     uint64_t hash() const override;
 
     void print(std::ostream &out) const override;
+    using Type::dump;
     void dump(std::ostream &out) const override;
 };
 

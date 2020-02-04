@@ -99,3 +99,13 @@
 * [ ] gather statistics to aid query planning/compilation
     * [ ] statistics about data
     * [ ] statistics about workload
+
+### Documentation
+
+* document every class with at least 1-3 sentences
+* document interface functions (most public's)
+* document non-trivial functions/code
+
+### Testing
+
+* automatically run tests locally before every push (to master) (commit?)

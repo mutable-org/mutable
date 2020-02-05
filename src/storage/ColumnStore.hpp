@@ -6,6 +6,7 @@
 
 namespace db {
 
+/** This class implements a column store. */
 struct ColumnStore : Store
 {
 #ifndef NDEBUG

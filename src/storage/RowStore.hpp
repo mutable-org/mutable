@@ -6,6 +6,7 @@
 
 namespace db {
 
+/** This class implements a row store. */
 struct RowStore : Store
 {
     public:

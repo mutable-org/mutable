@@ -35,7 +35,7 @@ Allocator::Allocator()
     auto name = std::to_string(getpid());
     fd_ = shm_open(name.c_str(), O_RDWR | O_TRUNC | O_CREAT, S_IRUSR | S_IWUSR);
     shm_unlink(name.c_str());
-    ftruncate(fd_, 1UL << 44);
+    ftruncate(fd_, 1UL << 44); // preallocate memory because resizing with `ftruncate()` is not supported on macOS
 #endif
     if (fd_ == -1)
         throw std::runtime_error(strerror(errno));
@@ -125,7 +125,8 @@ Memory LinearAllocator::allocate(std::size_t size)
             throw std::runtime_error(strerror(errno));
     }
 #elif __APPLE__
-    /** In macOS, we preallocate the memory because resizing with `ftruncate()` is not supported. */
+    /* Nothing to be done.
+     * Memory has been preallocated because resizing with `ftruncate()` is not supported on macOS.  */
 #endif
 
     errno = 0;

@@ -476,9 +476,11 @@ void QueryGraph::dump(std::ostream &out) const
     /*----- Print sources. -------------------------------------------------------------------------------------------*/
     for (auto src : sources()) {
         out << "\n    ";
-        if (auto q = cast<Query>(src))
-            out << "(...) AS " << q->alias();
-        else {
+        if (auto q = cast<Query>(src)) {
+            out << "(...)";
+            if (q->alias())
+                out << " AS " << q->alias();
+        } else {
             auto bt = as<BaseTable>(src);
             out << bt->table().name;
             if (bt->alias() != bt->table().name)

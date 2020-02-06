@@ -229,7 +229,7 @@ struct db::GraphBuilder : ConstASTVisitor
                     GraphBuilder builder;
                     builder(*select);
                     auto graph = builder.get();
-                    auto q = new Query(tbl.alias.text, graph.release());
+                    auto q = new Query(graph.release(), tbl.alias.text);
                     insist(tbl.alias);
                     aliases.emplace(tbl.alias.text, q);
                     graph_->sources_.emplace_back(q);
@@ -304,7 +304,7 @@ struct db::GraphBuilder : ConstASTVisitor
         /* Implement HAVING as a refular selection filter on a sub query. */
         if (s.having) {
             auto H = as<HavingClause>(s.having);
-            auto sub = new Query("", graph_.release());
+            auto sub = new Query(graph_.release(), nullptr);
             sub->update_filter(cnf::to_CNF(*H->having));
             graph_ = std::make_unique<QueryGraph>();
             graph_->sources_.emplace_back(sub);

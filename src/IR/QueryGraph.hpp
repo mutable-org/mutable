@@ -51,7 +51,7 @@ struct Query : DataSource
     QueryGraph *query_graph_; ///< query graph of the sub-query
 
     public:
-    Query(const char *alias, QueryGraph *query_graph) : DataSource(alias), query_graph_(query_graph) { }
+    Query(QueryGraph *query_graph, const char *alias) : DataSource(alias), query_graph_(query_graph) { }
     ~Query();
 
     QueryGraph * query_graph() const { return query_graph_; }

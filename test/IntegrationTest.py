@@ -347,10 +347,6 @@ def end2end_case(sql_filename, csv_filename):
     stmt = None
     with open(sql_filename, 'r') as sql_file:
         stmt = sql_file.read()
-    expected = None
-    with open(csv_filename, 'r') as csv_file:
-        expected = csv_file.read().strip()
-    actual = None
 
     try:
         # Parse the input statement and pretty print it.
@@ -361,6 +357,12 @@ def end2end_case(sql_filename, csv_filename):
 
         if err:
             raise TestException(f'failed with error {str(err, "utf-8")}')
+
+        expected = None
+        if not os.path.isfile(csv_filename):
+            raise TestException(f'result file {csv_filename} does not exist')
+        with open(csv_filename, 'r') as csv_file:
+            expected = csv_file.read().strip()
 
         actual = '\n'.join(str(out, 'latin-1').splitlines()[8:])
 

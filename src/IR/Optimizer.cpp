@@ -72,6 +72,12 @@ std::unique_ptr<Producer> Optimizer::build_operator_tree(const QueryGraph &G,
         } else if (auto query = cast<const Query>(e.as_datasource())) {
             /* Create sub query. */
             auto sub = build_operator_tree(*query->query_graph(), orders).release();
+            /* Prefix every attribute of the subquery with the subquery's alias. */
+            OperatorSchema S;
+            for (auto &attr : sub->schema())
+                S.add_element({query->alias(), attr.first.attr_name}, attr.second);
+            sub->schema() = S;
+            /* Apply filter, if any. */
             if (query->filter().size()) {
                 auto filter = new FilterOperator(query->filter());
                 filter->add_child(sub);

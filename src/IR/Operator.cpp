@@ -12,9 +12,7 @@ std::ostream & db::operator<<(std::ostream &out, const OperatorSchema &schema)
         if (i != 0) out << ", ";
         auto &e = schema[i];
         out << '[' << i << "] ";
-        if (e.first.table_name)
-            out << e.first.table_name << '.';
-        out << e.first.attr_name << " :" << *e.second;
+        out << e.first << " :" << *e.second;
     }
     return out;
 }

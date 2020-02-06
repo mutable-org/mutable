@@ -143,7 +143,6 @@ struct OperatorSchema
 
     private:
     std::vector<entry_type> elements_;
-    std::unordered_multimap<AttributeIdentifier, std::size_t, attr_hash> id_to_elem_;
 
     public:
     const std::vector<entry_type> & elements() const { return elements_; }
@@ -152,24 +151,37 @@ struct OperatorSchema
 
     auto begin() { return elements_.begin(); }
     auto end()   { return elements_.end(); }
-    auto begin() const { return elements_.begin(); }
-    auto end()   const { return elements_.end(); }
+    auto begin() const { return elements_.cbegin(); }
+    auto end()   const { return elements_.cend(); }
     auto cbegin() const { return elements_.cbegin(); }
     auto cend()   const { return elements_.cend(); }
 
-    void add_element(AttributeIdentifier attr, const Type *type) {
-        auto pos = elements_.size();
-        id_to_elem_.emplace(attr, pos);
-        elements_.emplace_back(attr, type);
+    decltype(elements_)::iterator find(AttributeIdentifier attr) {
+        std::function<bool(entry_type&)> pred;
+        if (attr.table_name)
+            pred = [&](entry_type &e) -> bool { return e.first == attr; }; // match qualified
+        else
+            pred = [&](entry_type &e) -> bool { return e.first.attr_name == attr.attr_name; }; // match unqualified
+        auto it = std::find_if(begin(), end(), pred);
+        insist(it == end() or std::find_if(std::next(it), end(), pred) == end(), "duplicate entry; lookup ambiguous");
+        return it;
     }
+    decltype(elements_)::const_iterator find(AttributeIdentifier attr) const {
+        return const_cast<OperatorSchema*>(this)->find(attr);
+    }
+
+    bool has(AttributeIdentifier attr) const { return find(attr) != end(); }
 
     const entry_type & operator[](std::size_t idx) const { insist(idx < elements_.size()); return elements_[idx]; }
     std::pair<std::size_t, const entry_type&> operator[](AttributeIdentifier attr) const {
-        auto [begin, end] = id_to_elem_.equal_range(attr);
-        if (begin == end)
-            throw std::logic_error("attribute identifier not found");
-        insist(std::distance(begin, end) == 1, "ambiguous attribute access");
-        return {begin->second, elements_[begin->second]};
+        auto pos = find(attr);
+        insist(pos != end(), "id not found");
+        return { std::distance(begin(), pos), *pos };
+    }
+
+    void add_element(AttributeIdentifier attr, const Type *type) {
+        insist(attr.table_name == nullptr or strlen(attr.table_name) != 0);
+        elements_.emplace_back(attr, type);
     }
 
     OperatorSchema & operator+=(const OperatorSchema &other) {
@@ -181,7 +193,7 @@ struct OperatorSchema
     /** Union of two schemas. */
     OperatorSchema & operator|=(const OperatorSchema &other) {
         for (auto &e : other) {
-            if (id_to_elem_.count(e.first)) continue;
+            if (has(e.first)) continue;
             this->add_element(e.first, e.second);
         }
         return *this;
@@ -191,12 +203,10 @@ struct OperatorSchema
     friend OperatorSchema operator&(const OperatorSchema &first, const OperatorSchema &second) {
         OperatorSchema res;
         for (auto &elem : first) {
-            try {
-                auto other = second[elem.first];
-                insist(elem.second == other.second.second, "type mismatch");
-                res.add_element(elem.first, elem.second);
-            } catch (std::logic_error) {
-                /* not in both schemas, continue. */
+            auto it = second.find(elem.first);
+            if (it != second.end()) {
+                insist(elem.second == it->second, "type mismatch");
+                res.add_element(it->first, it->second);
             }
         }
         return res;

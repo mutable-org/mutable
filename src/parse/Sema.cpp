@@ -80,7 +80,7 @@ void Sema::operator()(Const<Designator> &e)
         }
         else
         {
-            /* Since no table was explicitly specified, we must search *all* source tables for the attribute. */
+            /* Since no table was explicitly specified, we must search *all* sources for the attribute. */
             Designator::target_type target;
             const char *alias = nullptr;
             for (auto &src : Ctx.sources) {

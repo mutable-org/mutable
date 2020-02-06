@@ -62,19 +62,13 @@ struct db::StackMachineBuilder : ConstASTVisitor
 void StackMachineBuilder::operator()(Const<Designator> &e)
 {
     /* Given the designator, identify the position of its value in the tuple.  */
-    auto target = e.target();
-    if (auto p = std::get_if<const Expr*>(&target)) {
-        /* This designator references another expression.  Evaluate it. */
-        (*this)(**p);
-    } else if (auto p = std::get_if<const Attribute*>(&target)) {
-        insist(e.table_name.text, "must have been set by sema");
-        /* Lookup tuple element type by attribute identifier. */
-        std::size_t idx = schema_[{e.table_name.text, e.attr_name.text}].first;
-        insist(idx < schema_.size(), "index out of bounds");
-        stack_machine_.emit_Ld_Tup(idx);
-    } else {
-        unreachable("designator has no target");
-    }
+    std::size_t idx;
+    if (e.has_explicit_table_name())
+        idx = schema_[{e.table_name.text, e.attr_name.text}].first;
+    else
+        idx = schema_[{nullptr, e.attr_name.text}].first;
+    insist(idx < schema_.size(), "index out of bounds");
+    stack_machine_.emit_Ld_Tup(idx);
 }
 
 void StackMachineBuilder::operator()(Const<Constant> &e) { stack_machine_.add_and_emit_load(Interpreter::eval(e)); }

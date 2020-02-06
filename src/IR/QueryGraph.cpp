@@ -2,6 +2,7 @@
 
 #include "catalog/Schema.hpp"
 #include "parse/AST.hpp"
+#include "parse/ASTDumper.hpp"
 #include "parse/ASTVisitor.hpp"
 #include "util/macro.hpp"
 #include <set>
@@ -471,26 +472,85 @@ void QueryGraph::dot(std::ostream &out) const
 void QueryGraph::dump(std::ostream &out) const
 {
     out << "QueryGraph {\n  sources:";
-    for (auto src : sources_) {
+
+    /*----- Print sources. -------------------------------------------------------------------------------------------*/
+    for (auto src : sources()) {
         out << "\n    ";
         if (auto q = cast<Query>(src))
-            out << "(Q)";
+            out << "(...) AS " << q->alias();
         else {
             auto bt = as<BaseTable>(src);
             out << bt->table().name;
+            if (bt->alias() != bt->table().name)
+                out << " AS " << src->alias();
         }
-        out << ' ' << src->alias() << "  " << src->filter();
+        if (not src->filter().empty())
+            out << " WHERE " << src->filter();
     }
-    out << "\n  joins:";
-    for (auto j : joins_) {
-        out << "\n    {";
-        auto &srcs = j->sources();
-        for (auto it = srcs.begin(), end = srcs.end(); it != end; ++it) {
-            if (it != srcs.begin()) out << ' ';
-            out << (*it)->alias();
+
+    /*----- Print joins. ---------------------------------------------------------------------------------------------*/
+    if (joins().empty()) {
+        out << "\n  no joins";
+    } else {
+        out << "\n  joins:";
+        for (auto j : joins()) {
+            out << "\n    {";
+            auto &srcs = j->sources();
+            for (auto it = srcs.begin(), end = srcs.end(); it != end; ++it) {
+                if (it != srcs.begin()) out << ' ';
+                out << (*it)->alias();
+            }
+            out << "}  " << j->condition();
         }
-        out << "}  " << j->condition();
     }
+
+    /*----- Print grouping and aggregation information.  -------------------------------------------------------------*/
+    if (group_by().empty() and aggregates().empty()) {
+        out << "\n  no grouping";
+    } else {
+        if (not group_by().empty()) {
+            out << "\n  group by: ";
+            for (auto it = group_by().begin(), end = group_by().end(); it != end; ++it) {
+                if (it != group_by().begin())
+                    out << ", ";
+                out << **it;
+            }
+        }
+        if (not aggregates().empty()) {
+            out << "\n  aggregates: ";
+            for (auto it = aggregates().begin(), end = aggregates().end(); it != end; ++it) {
+                if (it != aggregates().begin())
+                    out << ", ";
+                out << **it;
+            }
+        }
+    }
+
+    /*----- Print ordering information. ------------------------------------------------------------------------------*/
+    if (order_by().empty()) {
+        out << "\n  no order";
+    } else {
+        out << "\n  order by: ";
+        for (auto it = order_by().begin(), end = order_by().end(); it != end; ++it) {
+            if (it != order_by().begin())
+                out << ", ";
+            out << *it->first << ' ' << (it->second ? "ASC" : "DESC");
+        }
+    }
+
+    /*----- Print projections. ---------------------------------------------------------------------------------------*/
+    out << "\n  projections: ";
+    for (auto &p : projections()) {
+        if (p.second) {
+            out << "\n    AS " << p.second;
+            ASTDumper P(out, 3);
+            P(*p.first);
+        } else {
+            ASTDumper P(out, 2);
+            P(*p.first);
+        }
+    }
+
     out << "\n}" << std::endl;
 }
 void QueryGraph::dump() const { dump(std::cerr); }

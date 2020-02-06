@@ -47,7 +47,7 @@ struct Predicate
 
 struct Clause : public std::vector<Predicate>
 {
-    using std::vector<Predicate>::vector;
+    using std::vector<Predicate>::vector; // c'tor
 
     bool operator<=(const Clause &other) const;
     bool operator>=(const Clause &other) const { return other <= *this; }
@@ -62,7 +62,7 @@ struct Clause : public std::vector<Predicate>
 
 struct CNF : public std::vector<Clause>
 {
-    using std::vector<Clause>::vector;
+    using std::vector<Clause>::vector; // c'tor
 
     friend std::ostream & operator<<(std::ostream &out, const CNF &cnf);
     friend std::string to_string(const CNF &cnf) {

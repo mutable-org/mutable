@@ -664,10 +664,20 @@ void Sema::operator()(Const<SelectClause> &c)
         }
     }
 
-    for (auto s : c.select) {
-        auto &e = *s.first;
-        (*this)(e);
+    for (auto &s : c.select) {
+        auto it = std::find_if(Ctx.group_keys.begin(), Ctx.group_keys.end(),
+                               [=](const Expr *expr) { return *expr == *s.first; });
+        if (it != Ctx.group_keys.end()) { // check if `s.first` is a grouping key
+            /* Replace expression by a designator pointing to the grouping key. */
+            auto d = make_designator(s.first, *it);
+            d->type_ = as<const PrimitiveType>(d->type())->as_scalar();
+            delete s.first;
+            s.first = d;
+        } else {
+            (*this)(*s.first);
+        }
 
+        auto &e = *s.first;
         if (e.type()->is_error()) continue;
         if (not e.is_constant()) { // constants can be broadcast from scalar to vectorial
             auto pt = as<const PrimitiveType>(e.type());
@@ -825,7 +835,7 @@ void Sema::operator()(Const<OrderByClause> &c)
     Ctx.stage = SemaContext::S_OrderBy;
 
     /* Analyze all ordering expressions. */
-    for (auto o : c.order_by) {
+    for (auto &o : c.order_by) {
         Expr *e = o.first;
         (*this)(*e);
 
@@ -843,8 +853,13 @@ void Sema::operator()(Const<OrderByClause> &c)
 
             /* If the expression is not of scalar type, check whether it is a grouping expression. */
             for (auto grp : Ctx.group_keys) {
-                if (*grp == *e)
+                if (*grp == *e) { // the expression is a grouping key
+                    /* Replace expression by a designator pointing to the grouping key. */
+                    auto d = make_designator(o.first, grp);
+                    delete o.first;
+                    o.first = d;
                     goto ok;
+                }
             }
 
             /* The expression is neither scalar nor a grouping expression. */

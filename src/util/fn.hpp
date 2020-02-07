@@ -8,6 +8,7 @@
 #include <cstring>
 #include <ctime>
 #include <filesystem>
+#include <initializer_list>
 #include <iomanip>
 #include <iostream>
 #include <type_traits>
@@ -277,3 +278,5 @@ inline bool isspace(const char *s, std::size_t len)
 }
 
 inline bool isspace(const char *s) { return isspace(s, strlen(s)); }
+
+void exec(const char *executable, std::initializer_list<const char*> args);

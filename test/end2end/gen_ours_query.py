@@ -55,6 +55,7 @@ queries = [
     ('SELECT R.key, S.key FROM R, S WHERE R.key = S.fkey AND R.key < 10 ORDER BY R.key, S.key;', 'join_binary'),
     ('SELECT R.key, S.key, T.key FROM R, S, T WHERE R.key = S.fkey + T.fkey AND R.key < 10 ORDER BY R.key, S.key, T.key;', 'join_ternary'),
     ('SELECT R.key, S.key, T.key FROM R, S, T WHERE R.key = S.fkey AND R.key = T.fkey AND R.key < 10 ORDER BY R.key, S.key, T.key;', 'join_binary_x2'),
+    ('SELECT R.key, S.key, T.key FROM R, S, T WHERE R.key = S.fkey AND S.key = T.fkey ORDER BY R.key, S.key, T.key;', 'join_chain'),
     # SUBQUERY
     ('SELECT * FROM (SELECT * FROM R) AS sub ORDER BY key;', 'subquery_from_select_all'),
     ('SELECT fkey FROM (SELECT key, fkey FROM R) AS sub ORDER BY fkey;', 'subquery_from_select_attr'),

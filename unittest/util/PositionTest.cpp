@@ -8,7 +8,7 @@ using namespace db;
 
 
 
-TEST_CASE("Position c'tor", "[unit][util]")
+TEST_CASE("Position c'tor", "[core][util][position]")
 {
     SECTION("c'tor by name")
     {

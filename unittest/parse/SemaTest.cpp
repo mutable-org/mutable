@@ -12,7 +12,7 @@
 using namespace db;
 
 
-TEST_CASE("Sema c'tor", "[unit][sema]")
+TEST_CASE("Sema c'tor", "[core][parse][sema]")
 {
     LEXER("SELECT * FROM test;");
     Sema sema(diag);
@@ -21,7 +21,7 @@ TEST_CASE("Sema c'tor", "[unit][sema]")
     REQUIRE(err.str().empty());
 }
 
-TEST_CASE("Sema/Expressions", "[unit][sema]")
+TEST_CASE("Sema/Expressions", "[core][parse][sema]")
 {
     std::pair<const char*, const Type*> exprs[] = {
         /* { expression , type } */
@@ -154,7 +154,7 @@ TEST_CASE("Sema/Expressions", "[unit][sema]")
     }
 }
 
-TEST_CASE("Sema/Expressions scalar-vector inference", "[sema]")
+TEST_CASE("Sema/Expressions scalar-vector inference", "[core][parse][sema]")
 {
     /* Create a dummy DB and a dummy table with a scalar and a vector attribute. */
     Catalog &C = Catalog::Get();
@@ -216,7 +216,7 @@ TEST_CASE("Sema/Expressions scalar-vector inference", "[sema]")
     Catalog::Clear();
 }
 
-TEST_CASE("Sema/Expressions/Functions", "[sema]")
+TEST_CASE("Sema/Expressions/Functions", "[core][parse][sema]")
 {
     /* Create a dummy DB and a dummy table with a scalar and a vector attribute. */
     Catalog &C = Catalog::Get();

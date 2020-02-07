@@ -12,7 +12,7 @@
 using namespace db;
 
 
-TEST_CASE("Type/PrimitiveType c'tor", "[unit]")
+TEST_CASE("Type/PrimitiveType c'tor", "[core][catalog][type]")
 {
     const Boolean *scalar = Type::Get_Boolean(Type::TY_Scalar);
     const Boolean *vectorial = Type::Get_Boolean(Type::TY_Vector);
@@ -24,14 +24,14 @@ TEST_CASE("Type/PrimitiveType c'tor", "[unit]")
     CHECK(vectorial->is_vectorial());
 }
 
-TEST_CASE("Type/Boolean", "[unit]")
+TEST_CASE("Type/Boolean", "[core][catalog][type]")
 {
     const Boolean *b_scalar = Type::Get_Boolean(Type::TY_Scalar);
     const Boolean *b_vectorial = Type::Get_Boolean(Type::TY_Vector);
     REQUIRE(b_scalar != b_vectorial);
 }
 
-TEST_CASE("Type/CharacterSequence", "[unit]")
+TEST_CASE("Type/CharacterSequence", "[core][catalog][type]")
 {
     SECTION("CHAR(N)")
     {
@@ -48,7 +48,7 @@ TEST_CASE("Type/CharacterSequence", "[unit]")
     }
 }
 
-TEST_CASE("Type/Numeric c'tor", "[unit]")
+TEST_CASE("Type/Numeric c'tor", "[core][catalog][type]")
 {
     using std::ceil;
     using std::log2;
@@ -122,7 +122,7 @@ TEST_CASE("Type/Numeric c'tor", "[unit]")
     }
 }
 
-TEST_CASE("Type convert to scalar/vectorial", "[unit]")
+TEST_CASE("Type convert to scalar/vectorial", "[core][catalog][type]")
 {
     const PrimitiveType *scalar;
     const PrimitiveType *vectorial;
@@ -164,7 +164,7 @@ TEST_CASE("Type convert to scalar/vectorial", "[unit]")
 }
 
 
-TEST_CASE("Type/Numeric print()", "[unit]")
+TEST_CASE("Type/Numeric print()", "[core][catalog][type]")
 {
     std::ostringstream oss;
 
@@ -205,7 +205,7 @@ TEST_CASE("Type/Numeric print()", "[unit]")
     oss.str("");
 }
 
-TEST_CASE("Type internalize", "[unit]")
+TEST_CASE("Type internalize", "[core][catalog][type]")
 {
     SECTION("Boolean")
     {

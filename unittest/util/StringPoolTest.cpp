@@ -6,13 +6,13 @@
 using namespace db;
 
 
-TEST_CASE("StringPool c'tor", "[unit][util]")
+TEST_CASE("StringPool c'tor", "[core][util][stringpool]")
 {
     StringPool pool(42);
     REQUIRE(pool.size() == 0);
 }
 
-TEST_CASE("StringPool internalize", "[unit][util]")
+TEST_CASE("StringPool internalize", "[core][util][stringpool]")
 {
     StringPool pool;
 

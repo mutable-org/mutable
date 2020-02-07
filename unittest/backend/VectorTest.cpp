@@ -6,7 +6,7 @@
 using namespace db;
 
 
-TEST_CASE("Vector", "[unit]")
+TEST_CASE("Vector", "[core][backend][vector]")
 {
     using Vec = Vector<64>;
     std::string str = "The quick brown fox jumps over the fence";

@@ -6,13 +6,13 @@
 using namespace db;
 
 
-TEST_CASE("Pool c'tor", "[unit][util]")
+TEST_CASE("Pool c'tor", "[core][util][pool]")
 {
     Pool<int> pool(42);
     REQUIRE(pool.size() == 0);
 }
 
-TEST_CASE("Pool internalize simple", "[unit][util]")
+TEST_CASE("Pool internalize simple", "[core][util][pool]")
 {
     Pool<int> pool;
 
@@ -30,7 +30,7 @@ TEST_CASE("Pool internalize simple", "[unit][util]")
     REQUIRE(i0 == i2);
 }
 
-TEST_CASE("Pool internalize object", "[unit][util]")
+TEST_CASE("Pool internalize object", "[core][util][pool]")
 {
     struct Object
     {

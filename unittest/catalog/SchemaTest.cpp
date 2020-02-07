@@ -22,7 +22,7 @@ std::string get_unique_id()
 
 }
 
-TEST_CASE("Table c'tor")
+TEST_CASE("Table c'tor", "[core][catalog][schema]")
 {
     Table r("mytable");
 
@@ -41,7 +41,7 @@ TEST_CASE("Table empty access")
         REQUIRE(((void) "this code must be dead or the table is not empty", false));
 }
 
-TEST_CASE("Table::push_back()")
+TEST_CASE("Table::push_back()", "[core][catalog][schema]")
 {
     Table r("mytable");
 
@@ -62,7 +62,7 @@ TEST_CASE("Table::push_back()")
     REQUIRE(streq(attr.name, "comment"));
 }
 
-TEST_CASE("Table iterators")
+TEST_CASE("Table iterators", "[core][catalog][schema]")
 {
     Table r("mytable");
     const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Vector, 4);
@@ -82,7 +82,7 @@ TEST_CASE("Table iterators")
     REQUIRE(it == r.cend());
 }
 
-TEST_CASE("Table get attribute by name")
+TEST_CASE("Table get attribute by name", "[core][catalog][schema]")
 {
     Table r("mytable");
     const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Vector, 4);
@@ -106,7 +106,7 @@ TEST_CASE("Table get attribute by name")
     }
 }
 
-TEST_CASE("Table::push_back() duplicate name")
+TEST_CASE("Table::push_back() duplicate name", "[core][catalog][schema]")
 {
     Table r("mytable");
     const PrimitiveType *i4 = Type::Get_Integer(Type::TY_Vector, 4);
@@ -117,7 +117,8 @@ TEST_CASE("Table::push_back() duplicate name")
     r.push_back(attr_name, i4); // OK
 }
 
-TEST_CASE("Catalog singleton c'tor")
+// XXX: This might not be the right place for the following tests.
+TEST_CASE("Catalog singleton c'tor", "[core][catalog]")
 {
     Catalog &C = Catalog::Get();
     Catalog &C2 = Catalog::Get();
@@ -125,7 +126,7 @@ TEST_CASE("Catalog singleton c'tor")
     Catalog::Clear();
 }
 
-TEST_CASE("Catalog Database creation")
+TEST_CASE("Catalog Database creation", "[core][catalog]")
 {
     Catalog &C = Catalog::Get();
     std::string db_name = get_unique_id();
@@ -136,7 +137,7 @@ TEST_CASE("Catalog Database creation")
     Catalog::Clear();
 }
 
-TEST_CASE("Catalog::drop_database() by name")
+TEST_CASE("Catalog::drop_database() by name", "[core][catalog]")
 {
     Catalog &C = Catalog::Get();
     std::string db_name = get_unique_id();
@@ -149,7 +150,7 @@ TEST_CASE("Catalog::drop_database() by name")
     Catalog::Clear();
 }
 
-TEST_CASE("Catalog::drop_database() by reference")
+TEST_CASE("Catalog::drop_database() by reference", "[core][catalog]")
 {
     Catalog &C = Catalog::Get();
     std::string db_name = get_unique_id();
@@ -165,7 +166,7 @@ TEST_CASE("Catalog::drop_database() by reference")
     Catalog::Clear();
 }
 
-TEST_CASE("Catalog use database")
+TEST_CASE("Catalog use database", "[core][catalog]")
 {
     Catalog &C = Catalog::Get();
     std::string db_name = get_unique_id();
@@ -182,7 +183,7 @@ TEST_CASE("Catalog use database")
     Catalog::Clear();
 }
 
-TEST_CASE("Database c'tor")
+TEST_CASE("Database c'tor", "[core][catalog][database]")
 {
     Catalog &C = Catalog::Get();
     std::string db_name = get_unique_id();
@@ -191,7 +192,7 @@ TEST_CASE("Database c'tor")
     Catalog::Clear();
 }
 
-TEST_CASE("Database/add table error if name already taken")
+TEST_CASE("Database/add table error if name already taken", "[core][catalog][database]")
 {
     Catalog &C = Catalog::Get();
     std::string db_name = get_unique_id();

@@ -5,7 +5,7 @@
 #include <cstring>
 
 
-TEST_CASE("streq", "[unit][util]")
+TEST_CASE("streq", "[core][util][fn]")
 {
     const char *s0 = "Hello, World";
     const char *s1 = strdup(s0);
@@ -26,7 +26,7 @@ TEST_CASE("streq", "[unit][util]")
     free((void*) s1);
 }
 
-TEST_CASE("ceil_to_pow_2", "[unit][util]")
+TEST_CASE("ceil_to_pow_2", "[core][util][fn]")
 {
     uint32_t u31 = 1U << 31;
     uint64_t u63 = 1UL << 63;
@@ -42,7 +42,7 @@ TEST_CASE("ceil_to_pow_2", "[unit][util]")
     REQUIRE(u63 == ceil_to_pow_2(u63));
 }
 
-TEST_CASE("pow", "[unit][util]")
+TEST_CASE("pow", "[core][util][fn]")
 {
     REQUIRE(pow(4, 0) == 1);
     REQUIRE(pow(4, 1) == 4);

@@ -6,14 +6,14 @@
 using namespace rewire;
 
 
-TEST_CASE("rewire::AddressSpace", "[unit][util]")
+TEST_CASE("rewire::AddressSpace", "[core][util][memory]")
 {
     AddressSpace vm(10000);
     REQUIRE(vm.addr());
     REQUIRE(vm.size() >= 10000);
 }
 
-TEST_CASE("rewire::Memory/c'tor", "[unit][util]")
+TEST_CASE("rewire::Memory/c'tor", "[core][util][memory]")
 {
     Memory mem;
     REQUIRE(mem.addr() == nullptr);
@@ -21,7 +21,7 @@ TEST_CASE("rewire::Memory/c'tor", "[unit][util]")
     REQUIRE(mem.offset() == 0);
 }
 
-TEST_CASE("rewire::LinearAllocator", "[unit][util]")
+TEST_CASE("rewire::LinearAllocator", "[core][util][memory]")
 {
     constexpr std::size_t INTS_PER_PAGE = PAGESIZE / sizeof(int);
 

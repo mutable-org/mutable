@@ -38,7 +38,7 @@ Stmt * get_Stmt(const char *sql)
  * Test StackMachine.
  *====================================================================================================================*/
 
-TEST_CASE("StackMachine", "[unit]")
+TEST_CASE("StackMachine", "[core][backend][stackmachine]")
 {
     using std::to_string;
     using decimal = int64_t;

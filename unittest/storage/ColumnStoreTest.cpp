@@ -7,7 +7,7 @@
 using namespace db;
 
 
-TEST_CASE("ColumnStore", "[unit]")
+TEST_CASE("ColumnStore", "[core][storage][columnstore]")
 {
     /* Construct a table definition. */
     Table table("mytable");

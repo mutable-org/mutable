@@ -14,7 +14,7 @@ using namespace db;
  * Test parser utility methods.
  *====================================================================================================================*/
 
-TEST_CASE("Parser c'tor", "[unit]")
+TEST_CASE("Parser c'tor", "[core][parse][parser]")
 {
     LEXER("SELECT * FROM Tbl WHERE x=42;");
     Parser parser(lexer);
@@ -31,7 +31,7 @@ TEST_CASE("Parser c'tor", "[unit]")
     REQUIRE(streq(tok.text, "SELECT"));
 }
 
-TEST_CASE("Parser::no()", "[unit]")
+TEST_CASE("Parser::no()", "[core][parse][parser]")
 {
     LEXER("SELECT * FROM Tbl WHERE x=42;");
     Parser parser(lexer);
@@ -39,7 +39,7 @@ TEST_CASE("Parser::no()", "[unit]")
     REQUIRE(not parser.no(TK_Select));
 }
 
-TEST_CASE("Parser::consume()", "[unit]")
+TEST_CASE("Parser::consume()", "[core][parse][parser]")
 {
     LEXER("SELECT * FROM Tbl WHERE x=42;");
     Parser parser(lexer);
@@ -48,7 +48,7 @@ TEST_CASE("Parser::consume()", "[unit]")
     REQUIRE(parser.token() == TK_ASTERISK);
 }
 
-TEST_CASE("Parser::accept()", "[unit]")
+TEST_CASE("Parser::accept()", "[core][parse][parser]")
 {
     LEXER("SELECT * FROM Tbl WHERE x=42;");
     Parser parser(lexer);
@@ -57,7 +57,7 @@ TEST_CASE("Parser::accept()", "[unit]")
     REQUIRE(parser.token() == TK_ASTERISK);
 }
 
-TEST_CASE("Parser::expect()", "[unit]")
+TEST_CASE("Parser::expect()", "[core][parse][parser]")
 {
     LEXER("SELECT * FROM Tbl WHERE x=42;");
     Parser parser(lexer);
@@ -83,7 +83,7 @@ TEST_CASE("Parser::expect()", "[unit]")
  * Test miscellaneous parser routines.
  *====================================================================================================================*/
 
-TEST_CASE("Parser::parse_designator()", "[unit]")
+TEST_CASE("Parser::parse_designator()", "[core][parse][parser]")
 {
     LEXER("a.b");
     Parser parser(lexer);
@@ -94,7 +94,7 @@ TEST_CASE("Parser::parse_designator()", "[unit]")
     delete ast;
 }
 
-TEST_CASE("Parser::expect_integer()", "[unit]")
+TEST_CASE("Parser::expect_integer()", "[core][parse][parser]")
 {
     LEXER("07 19 0xC0d3 abc");
     Parser parser(lexer);
@@ -124,7 +124,7 @@ TEST_CASE("Parser::expect_integer()", "[unit]")
     REQUIRE(parser.token() == TK_IDENTIFIER);
 }
 
-TEST_CASE("Parser::parse_Expr()", "[unit]")
+TEST_CASE("Parser::parse_Expr()", "[core][parse][parser]")
 {
     std::pair<const char*, const char*> exprs[] = {
         /* { expression , fully-parenthesized-expression } */
@@ -202,7 +202,7 @@ TEST_CASE("Parser::parse_Expr()", "[unit]")
     }
 }
 
-TEST_CASE("Parser::parse_Expr() sanity tests", "[unit]")
+TEST_CASE("Parser::parse_Expr() sanity tests", "[core][parse][parser]")
 {
     const char *exprs[] = {
         /* primary expression */
@@ -237,7 +237,7 @@ TEST_CASE("Parser::parse_Expr() sanity tests", "[unit]")
     }
 }
 
-TEST_CASE("Parser::parse_data_type()", "[unit]")
+TEST_CASE("Parser::parse_data_type()", "[core][parse][parser]")
 {
     SECTION("Boolean")
     {

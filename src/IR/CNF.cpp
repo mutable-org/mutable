@@ -161,7 +161,7 @@ void CNFGenerator::operator()(Const<FnApplicationExpr> &e)
 
 void CNFGenerator::operator()(Const<UnaryExpr> &e)
 {
-    switch (e.op.type) {
+    switch (e.op().type) {
         case TK_Not:
             is_negative_ = not is_negative_;
             (*this)(*e.expr);
@@ -184,14 +184,14 @@ void CNFGenerator::operator()(Const<BinaryExpr> &e)
         (*this)(*e.rhs);
         auto cnf_rhs = result_;
 
-        if ((not is_negative_ and e.op == TK_And) or (is_negative_ and e.op == TK_Or)) {
+        if ((not is_negative_ and e.op() == TK_And) or (is_negative_ and e.op() == TK_Or)) {
             result_ = cnf_lhs and cnf_rhs;
-        } else if ((not is_negative_ and e.op == TK_Or) or (is_negative_ and e.op == TK_And)) {
+        } else if ((not is_negative_ and e.op() == TK_Or) or (is_negative_ and e.op() == TK_And)) {
             result_ = cnf_lhs or cnf_rhs;
-        } else if (e.op == TK_EQUAL or e.op == TK_BANG_EQUAL) {
+        } else if (e.op() == TK_EQUAL or e.op() == TK_BANG_EQUAL) {
             /* A ↔ B ⇔ (A → B) ^ (B → A) ⇔ (¬A v B) ^ (¬B v A) */
             auto equiv = ((not cnf_lhs) or cnf_rhs) and ((not cnf_rhs) or cnf_lhs);
-            if ((not is_negative_ and e.op == TK_BANG_EQUAL) or (is_negative_ and e.op == TK_EQUAL))
+            if ((not is_negative_ and e.op() == TK_BANG_EQUAL) or (is_negative_ and e.op() == TK_EQUAL))
                 result_ = not equiv; // A ↮ B ⇔ ¬(A ↔ B)
             else
                 result_ = equiv;

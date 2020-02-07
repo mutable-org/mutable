@@ -29,10 +29,13 @@ struct Expr
 {
     friend struct Sema;
 
+    Token tok;
+
     private:
     const Type *type_ = nullptr; ///> the type of an expression, determined by the semantic analysis
 
     public:
+    Expr(Token tok) : tok(tok) { }
     virtual ~Expr() { }
 
     const Type * type() const { return notnull(type_); }
@@ -62,9 +65,7 @@ struct Expr
 /** The error expression.  Used when the parser encountered a syntactical error. */
 struct ErrorExpr : Expr
 {
-    Token tok;
-
-    explicit ErrorExpr(Token tok) : tok(tok) { }
+    explicit ErrorExpr(Token tok) : Expr(tok) { }
 
     bool is_constant() const { return false; }
 
@@ -86,9 +87,9 @@ struct Designator : Expr
     target_type target_; ///< the target that is referenced by this designator
 
     public:
-    explicit Designator(Token attr_name) : attr_name(attr_name) { }
+    explicit Designator(Token attr_name) : Expr(attr_name), attr_name(attr_name) { }
 
-    Designator(Token table_name, Token attr_name) : table_name(table_name), attr_name(attr_name) { }
+    Designator(Token dot, Token table_name, Token attr_name) : Expr(dot), table_name(table_name), attr_name(attr_name) { }
 
     bool is_constant() const {
         if (auto e = std::get_if<const Expr*>(&target_))
@@ -117,9 +118,7 @@ struct Designator : Expr
 /** A constant: a string literal or a numeric constant. */
 struct Constant : Expr
 {
-    Token tok;
-
-    Constant(Token tok) : tok(tok) { }
+    Constant(Token tok) : Expr(tok) { }
 
     bool is_constant() const { return true; }
 
@@ -142,6 +141,7 @@ struct Constant : Expr
 /** A postfix expression. */
 struct PostfixExpr : Expr
 {
+    PostfixExpr(Token tok) : Expr(tok) { }
 };
 
 /** A function application. */
@@ -155,7 +155,7 @@ struct FnApplicationExpr : PostfixExpr
     const Function *func_ = nullptr;
 
     public:
-    FnApplicationExpr(Expr *fn, std::vector<Expr*> args) : fn(fn), args(args) { }
+    FnApplicationExpr(Token lpar, Expr *fn, std::vector<Expr*> args) : PostfixExpr(lpar), fn(fn), args(args) { }
     ~FnApplicationExpr();
 
     bool is_constant() const { return false; }
@@ -172,13 +172,13 @@ struct FnApplicationExpr : PostfixExpr
 /** A unary expression: "+e", "-e", "~e", "NOT e". */
 struct UnaryExpr : Expr
 {
-    Token op;
     Expr *expr;
 
-    UnaryExpr(Token op, Expr *expr) : op(op), expr(notnull(expr)) { }
+    UnaryExpr(Token op, Expr *expr) : Expr(op), expr(notnull(expr)) { }
     ~UnaryExpr() { delete expr; }
 
     bool is_constant() const { return expr->is_constant(); }
+    Token op() const { return tok; }
 
     bool operator==(const Expr &other) const;
 
@@ -189,14 +189,14 @@ struct UnaryExpr : Expr
 /** A binary expression.  This includes all arithmetic and logical binary operations. */
 struct BinaryExpr : Expr
 {
-    Token op;
     Expr *lhs;
     Expr *rhs;
 
-    BinaryExpr(Token op, Expr *lhs, Expr *rhs) : op(op), lhs(notnull(lhs)), rhs(notnull(rhs)) { }
+    BinaryExpr(Token op, Expr *lhs, Expr *rhs) : Expr(op), lhs(notnull(lhs)), rhs(notnull(rhs)) { }
     ~BinaryExpr() { delete lhs; delete rhs; }
 
     bool is_constant() const { return lhs->is_constant() and rhs->is_constant(); }
+    Token op() const { return tok; }
 
     bool operator==(const Expr &other) const;
 

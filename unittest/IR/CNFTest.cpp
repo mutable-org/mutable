@@ -175,7 +175,7 @@ TEST_CASE("CNF/CNFGenerator", "[unit]")
         REQUIRE(not pred.negative());
         auto b = cast<const BinaryExpr>(pred.expr());
         REQUIRE(b);
-        REQUIRE(b->op.type == TK_LESS);
+        REQUIRE(b->op().type == TK_LESS);
 
         delete expr;
     }

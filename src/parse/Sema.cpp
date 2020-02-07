@@ -436,13 +436,13 @@ void Sema::operator()(Const<UnaryExpr> &e)
         return;
     }
 
-    switch (e.op.type) {
+    switch (e.op().type) {
         default:
             unreachable("invalid unary expression");
 
         case TK_Not:
             if (not e.expr->type()->is_boolean()) {
-                diag.e(e.op.pos) << "Invalid expression " << e << " must be boolean.\n";
+                diag.e(e.op().pos) << "Invalid expression " << e << " must be boolean.\n";
                 e.type_ = Type::Get_Error();
                 return;
             }
@@ -452,7 +452,7 @@ void Sema::operator()(Const<UnaryExpr> &e)
         case TK_MINUS:
         case TK_TILDE:
             if (not e.expr->type()->is_numeric()) {
-                diag.e(e.op.pos) << "Invalid expression " << e << " must be numeric.\n";
+                diag.e(e.op().pos) << "Invalid expression " << e << " must be numeric.\n";
                 e.type_ = Type::Get_Error();
                 return;
             }
@@ -475,7 +475,7 @@ void Sema::operator()(Const<BinaryExpr> &e)
     }
 
     /* Validate that lhs and rhs are compatible with binary operator. */
-    switch (e.op.type) {
+    switch (e.op().type) {
         default:
             unreachable("Invalid binary operator.");
 
@@ -490,7 +490,7 @@ void Sema::operator()(Const<BinaryExpr> &e)
             const Numeric *ty_lhs = cast<const Numeric>(e.lhs->type());
             const Numeric *ty_rhs = cast<const Numeric>(e.rhs->type());
             if (not ty_lhs or not ty_rhs) {
-                diag.e(e.op.pos) << "Invalid expression " << e << ", operands must be of numeric type.\n";
+                diag.e(e.op().pos) << "Invalid expression " << e << ", operands must be of numeric type.\n";
                 e.type_ = Type::Get_Error();
                 return;
             }
@@ -507,7 +507,7 @@ void Sema::operator()(Const<BinaryExpr> &e)
             auto ty_lhs = cast<const CharacterSequence>(e.lhs->type());
             auto ty_rhs = cast<const CharacterSequence>(e.rhs->type());
             if (not ty_lhs or not ty_rhs) {
-                diag.e(e.op.pos) << "Invalid expression " << e << ", concatenation requires string operands.\n";
+                diag.e(e.op().pos) << "Invalid expression " << e << ", concatenation requires string operands.\n";
                 e.type_ = Type::Get_Error();
                 return;
             }
@@ -529,7 +529,7 @@ void Sema::operator()(Const<BinaryExpr> &e)
                 /* Verify that both operands are of numeric type. */
                 auto ty_rhs = cast<const Numeric>(e.rhs->type());
                 if (not ty_lhs or not ty_rhs) {
-                    diag.e(e.op.pos) << "Invalid expression " << e << ", both operands must be of numeric type.\n";
+                    diag.e(e.op().pos) << "Invalid expression " << e << ", both operands must be of numeric type.\n";
                     e.type_ = Type::Get_Error();
                     return;
                 }
@@ -545,7 +545,7 @@ void Sema::operator()(Const<BinaryExpr> &e)
                 /* Verify that both operands are character sequences. */
                 auto ty_rhs = cast<const CharacterSequence>(e.rhs->type());
                 if (not ty_lhs or not ty_rhs) {
-                    diag.e(e.op.pos) << "Invalid expression " << e << ", both operands must be strings.\n";
+                    diag.e(e.op().pos) << "Invalid expression " << e << ", both operands must be strings.\n";
                     e.type_ = Type::Get_Error();
                     return;
                 }
@@ -558,7 +558,7 @@ void Sema::operator()(Const<BinaryExpr> &e)
                 /* Comparisons always have boolean type. */
                 e.type_ = Type::Get_Boolean(c);
             } else {
-                diag.e(e.op.pos) << "Invalid expression " << e << ", operator not supported for given operands.\n";
+                diag.e(e.op().pos) << "Invalid expression " << e << ", operator not supported for given operands.\n";
                 e.type_ = Type::Get_Error();
                 return;
             }
@@ -572,7 +572,7 @@ void Sema::operator()(Const<BinaryExpr> &e)
             if (e.lhs->type()->is_numeric() and e.rhs->type()->is_numeric()) goto ok;
 
             /* All other operand types are incomparable. */
-            diag.e(e.op.pos) << "Invalid expression " << e << ", operands are incomparable.\n";
+            diag.e(e.op().pos) << "Invalid expression " << e << ", operands are incomparable.\n";
             e.type_ = Type::Get_Error();
             return;
 ok:
@@ -594,7 +594,7 @@ ok:
 
             /* Both operands must be of boolean type. */
             if (not ty_lhs or not ty_rhs) {
-                diag.e(e.op.pos) << "Invalid expression " << e << ", operands must be of boolean type.\n";
+                diag.e(e.op().pos) << "Invalid expression " << e << ", operands must be of boolean type.\n";
                 e.type_ = Type::Get_Error();
                 return;
             }
@@ -621,6 +621,7 @@ void Sema::operator()(Const<SelectClause> &c)
     SemaContext &Ctx = get_context();
     Ctx.stage = SemaContext::S_Select;
     Catalog &C = Catalog::Get();
+    auto dot_str = C.pool(".");
 
     bool has_vector = false;
     bool has_scalar = false;
@@ -645,9 +646,10 @@ void Sema::operator()(Const<SelectClause> &c)
                 if (auto ptr = std::get_if<const Table*>(&src.second)) {
                     auto &tbl = **ptr;
                     for (auto &attr : tbl) {
+                        Token dot(c.select_all.pos, dot_str, TK_DOT);
                         Token table_name(c.select_all.pos, tbl.name, TK_IDENTIFIER);
                         Token attr_name(c.select_all.pos, attr.name, TK_IDENTIFIER);
-                        auto e = new Designator(table_name, attr_name);
+                        auto e = new Designator(dot, table_name, attr_name);
                         e->target_ = &attr;
                         e->type_ = attr.type;
                         c.expansion.push_back(e);

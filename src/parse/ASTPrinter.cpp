@@ -37,14 +37,14 @@ void ASTPrinter::operator()(Const<FnApplicationExpr> &e)
 
 void ASTPrinter::operator()(Const<UnaryExpr> &e)
 {
-    out << '(' << e.op.text;
-    if (e.op == TK_Not) out << ' ';
+    out << '(' << e.op().text;
+    if (e.op() == TK_Not) out << ' ';
     out << *e.expr << ')';
 }
 
 void ASTPrinter::operator()(Const<BinaryExpr> &e)
 {
-    out << '(' << *e.lhs << ' ' << e.op.text << ' ' << *e.rhs << ')';
+    out << '(' << *e.lhs << ' ' << e.op().text << ' ' << *e.rhs << ')';
 }
 
 /*===== Clause =======================================================================================================*/

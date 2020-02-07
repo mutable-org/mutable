@@ -121,7 +121,7 @@ void ASTDot::operator()(Const<FnApplicationExpr> &e)
 void ASTDot::operator()(Const<UnaryExpr> &e)
 {
     (*this)(*e.expr);
-    indent() << id(e) << " [label=<" << html_escape(e.op.text);
+    indent() << id(e) << " [label=<" << html_escape(e.op().text);
 
     if (e.has_type()) {
         std::ostringstream oss;
@@ -137,7 +137,7 @@ void ASTDot::operator()(Const<BinaryExpr> &e)
 {
     (*this)(*e.lhs);
     (*this)(*e.rhs);
-    indent() << id(e) << " [label=<" << html_escape(e.op.text);
+    indent() << id(e) << " [label=<" << html_escape(e.op().text);
 
     if (e.has_type()) {
         std::ostringstream oss;

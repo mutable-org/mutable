@@ -133,7 +133,7 @@ void StackMachineBuilder::operator()(Const<UnaryExpr> &e)
     (*this)(*e.expr);
     auto ty = e.expr->type();
 
-    switch (e.op.type) {
+    switch (e.op().type) {
         default:
             unreachable("illegal token type");
 
@@ -249,7 +249,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
     };
 
     std::string opname;
-    switch (e.op.type) {
+    switch (e.op().type) {
         default: unreachable("illegal operator");
 
         /*----- Arithmetic operators ---------------------------------------------------------------------------------*/
@@ -275,7 +275,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
         case TK_Or:             opname = "Or";  break;
     }
 
-    switch (e.op.type) {
+    switch (e.op().type) {
         default: unreachable("illegal operator");
 
         /*----- Arithmetic operators ---------------------------------------------------------------------------------*/
@@ -289,7 +289,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
             emit_cast(ty_rhs, ty);
             scale(ty_rhs, ty);
 
-            std::string opstr = e.op.type == TK_PLUS ? "Add" : "Sub";
+            std::string opstr = e.op().type == TK_PLUS ? "Add" : "Sub";
             opstr += tystr_to;
             auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
             stack_machine_.emit(opcode);

@@ -133,7 +133,7 @@ bool UnaryExpr::operator==(const Expr &o) const
 {
     auto other = cast<const UnaryExpr>(&o);
     if (not other) return false;
-    if (this->op.text != other->op.text) return false;
+    if (this->op().text != other->op().text) return false;
     return *this->expr == *other->expr;
 }
 
@@ -141,7 +141,7 @@ bool BinaryExpr::operator==(const Expr &o) const
 {
     auto other = cast<const BinaryExpr>(&o);
     if (not other) return false;
-    if (this->op.text != other->op.text) return false;
+    if (this->op().text != other->op().text) return false;
     return *this->lhs == *other->lhs and *this->rhs == *other->rhs;
 }
 

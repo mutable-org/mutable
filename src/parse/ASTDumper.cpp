@@ -54,9 +54,9 @@ void ASTDumper::operator()(Const<FnApplicationExpr> &e)
 
 void ASTDumper::operator()(Const<UnaryExpr> &e)
 {
-    indent() << "UnaryExpr '" << e.op.text << "'";
+    indent() << "UnaryExpr '" << e.op().text << "'";
     if (e.has_type()) out << " of type " << *e.type();
-    out << " (" << e.op.pos << ')';
+    out << " (" << e.op().pos << ')';
     ++indent_;
     (*this)(*e.expr);
     --indent_;
@@ -64,9 +64,9 @@ void ASTDumper::operator()(Const<UnaryExpr> &e)
 
 void ASTDumper::operator()(Const<BinaryExpr> &e)
 {
-    indent() << "BinaryExpr '" << e.op.text << "'";
+    indent() << "BinaryExpr '" << e.op().text << "'";
     if (e.has_type()) out << " of type " << *e.type();
-    out << " (" << e.op.pos << ')';
+    out << " (" << e.op().pos << ')';
     ++indent_;
     (*this)(*e.lhs);
     (*this)(*e.rhs);

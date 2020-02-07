@@ -721,7 +721,7 @@ void WasmPipelineCG::operator()(const UnaryExpr &e)
 {
     (*this)(*e.expr);
 
-    switch (e.op.type) {
+    switch (e.op().type) {
         default:
             unreachable("illegal token type");
 
@@ -872,7 +872,7 @@ void WasmPipelineCG::operator()(const BinaryExpr &e)
     break; \
 }
 
-    switch (e.op.type) {
+    switch (e.op().type) {
         default:
             unreachable("illegal token type");
 

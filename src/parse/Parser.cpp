@@ -621,7 +621,8 @@ Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
     }
 
     /* postfix-expression ::= postfix-expression '(' [ expression { ',' expression } ] ')' | primary-expression */
-    while (accept(TK_LPAR)) {
+    while (token() == TK_LPAR) {
+        Token lpar = consume();
         std::vector<Expr*> args;
         if (token().type != TK_RPAR) {
             do
@@ -629,7 +630,7 @@ Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
             while (accept(TK_COMMA));
         }
         expect(TK_RPAR);
-        lhs = new FnApplicationExpr(lhs, args);
+        lhs = new FnApplicationExpr(lpar, lhs, args);
     }
 
     for (;;) {
@@ -648,11 +649,12 @@ Expr * Parser::parse_designator()
     Token lhs = token();
     if (not expect(TK_IDENTIFIER))
         return new ErrorExpr(lhs);
-    if (accept(TK_DOT)) {
+    if (token() == TK_DOT) {
+        Token dot = consume();
         Token rhs = token();
         if (not expect(TK_IDENTIFIER))
             return new ErrorExpr(rhs);
-        return new Designator(lhs, rhs); // tbl.attr
+        return new Designator(dot, lhs, rhs); // tbl.attr
     }
     return new Designator(lhs); // attr
 }

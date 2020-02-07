@@ -9,6 +9,7 @@
 #include "storage/ColumnStore.hpp"
 #include "storage/RowStore.hpp"
 #include "util/ArgParser.hpp"
+#include "util/DotTool.hpp"
 #include "util/glyphs.hpp"
 #include "util/terminal.hpp"
 #include "util/Timer.hpp"
@@ -99,6 +100,7 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
     Catalog &C = Catalog::Get();
     Sema sema(diag);
     std::size_t num_errors = 0;
+    const bool is_stdin = streq(filename, "-");
 
     auto print = [](const OperatorSchema &schema, const tuple_type &t) {
         db::print(std::cout, schema, t);
@@ -119,15 +121,23 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
         sema(*stmt);
         timer.stop();
         if (options.ast) stmt->dump(std::cout);
-        if (options.astdot) stmt->dot(std::cout);
+        if (options.astdot) {
+            DotTool dot(diag);
+            stmt->dot(dot.stream());
+            dot.show("ast", is_stdin);
+        }
         if (diag.num_errors() != num_errors) goto next;
 
         if (is<SelectStmt>(stmt)) {
             timer.start("Construct the Query Graph");
             auto query_graph = QueryGraph::Build(*stmt);
             timer.stop();
-            if (options.graphdot) query_graph->dot(std::cout);
             if (options.graph) query_graph->dump(std::cout);
+            if (options.graphdot) {
+                DotTool dot(diag);
+                query_graph->dot(dot.stream());
+                dot.show("graph", is_stdin);
+            }
 
             DummyJoinOrderer orderer;
             DummyCostModel costmodel;
@@ -137,7 +147,11 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
             auto optree = Opt(*query_graph.get());
             timer.stop();
             if (options.plan) optree->dump(std::cout);
-            if (options.plandot) optree->dot(std::cout);
+            if (options.plandot) {
+                DotTool dot(diag);
+                optree->dot(dot.stream());
+                dot.show("plan", is_stdin);
+            }
             auto callback = new CallbackOperator(print);
             callback->add_child(optree.release());
 
@@ -442,6 +456,7 @@ int main(int argc, const char **argv)
     /* Disable synchronisation between C and C++ I/O (e.g. stdin vs std::cin). */
     std::ios_base::sync_with_stdio(false);
 
+    /* Create the diagnostics object. */
     Diagnostic diag(options.has_color, std::cout, std::cerr);
 
     /* ----- Replxx configuration ------------------------------------------------------------------------------------*/

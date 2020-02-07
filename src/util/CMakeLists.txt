@@ -3,6 +3,7 @@ add_library(
     STATIC
     ArgParser.cpp
     Diagnostic.cpp
+    DotTool.cpp
     fn.cpp
     memory.cpp
     Position.cpp

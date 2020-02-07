@@ -60,7 +60,7 @@ queries = [
     ('SELECT fkey FROM (SELECT key, fkey FROM R) AS sub ORDER BY fkey;', 'subquery_from_select_attr'),
     ('SELECT sub.key FROM (SELECT key FROM R) AS sub ORDER BY sub.key;', 'subquery_from_select_attr_with_prefix'),
     ('SELECT * FROM (SELECT fkey, COUNT(key) FROM R GROUP BY fkey) AS sub ORDER BY fkey;', 'subquery_from_groupby'),
-    ('SELECT k, f, x FROM (SELECT key AS k, fkey AS f, 2.0 * rfloat AS x FROM R) AS T WHERE T.f < 42 ORDER BY k;', 'subquery_from_renaming'),
+    ('SELECT k, f, x FROM (SELECT key AS k, 2 * fkey AS f, rfloat AS x FROM R) AS T WHERE T.f < 42 ORDER BY k;', 'subquery_from_renaming'),
 ]
 def stringify(x):
     if x == None:

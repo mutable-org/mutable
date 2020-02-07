@@ -13,10 +13,13 @@ struct ASTDot : ConstASTVisitor
     static constexpr const char * const GRAPH_TYPE = "graph";
     static constexpr const char * const EDGE = " -- ";
 
-    public:
     std::ostream &out;
 
-    ASTDot(std::ostream &out);
+    private:
+    int indent_;
+
+    public:
+    ASTDot(std::ostream &out, int indent = 0);
     ~ASTDot();
 
     /* Expressions */
@@ -48,6 +51,16 @@ struct ASTDot : ConstASTVisitor
     void operator()(Const<UpdateStmt> &s);
     void operator()(Const<DeleteStmt> &s);
     void operator()(Const<DSVImportStmt> &s);
+
+    private:
+    std::ostream & indent() const {
+        insist(indent_ >= 0, "Indent must not be negative!  Missing increment or superfluous decrement?");
+        if (indent_)
+            out << '\n' << std::string(2 * indent_, ' ');
+        return out;
+    }
+
+    void cluster(Const<Clause> &c, const char *name, const char *label, const char *color);
 };
 
 }

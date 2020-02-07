@@ -11,56 +11,76 @@
 using namespace db;
 
 
-ASTDot::ASTDot(std::ostream &out)
+ASTDot::ASTDot(std::ostream &out, int i)
     : out(out)
+    , indent_(i)
 {
-    out << GRAPH_TYPE << " ast\n{\n"
-        << "    forcelabels=true;\n"
-        << "    graph [fontname = \"DejaVu Sans\"];\n"
-        << "    node [fontname = \"DejaVu Sans\"];\n"
-        << "    edge [fontname = \"DejaVu Sans\"];\n\n";
+    out << GRAPH_TYPE << " ast\n{";
+    ++indent_;
+    indent() << "forcelabels=true;";
+    indent() << "graph [fontname = \"DejaVu Sans\"];";
+    indent() << "node [fontname = \"DejaVu Sans\"];";
+    indent() << "edge [fontname = \"DejaVu Sans\"];";
 }
 
 ASTDot::~ASTDot()
 {
-    out << '}' << std::endl;
+    --indent_;
+    insist(indent_ == 0);
+    out << "\n}" << std::endl;
+}
+
+void ASTDot::cluster(Const<Clause> &c, const char *name, const char *label, const char *color)
+{
+    indent() << "subgraph cluster_" << name << '_' << &c;
+    indent() << '{';
+    ++indent_;
+    indent() << "style=\"rounded,filled\";";
+    indent() << "color=\"" << color << "\";";
+    indent() << "penwidth=\"4\";";
+    indent() << id(c) << " [label=\"" << label << "\"];";
+
+    (*this)(c);
+
+    --indent_;
+    indent() << '}';
 }
 
 /*--- Expressions ----------------------------------------------------------------------------------------------------*/
 
 void ASTDot::operator()(Const<ErrorExpr> &e)
 {
-    out << "    " << id(e) << " [label=<<FONT COLOR=\"red\"><B>ErrorExpr</B></FONT>>];\n";
+    indent() << id(e) << " [label=<<FONT COLOR=\"red\"><B>ErrorExpr</B></FONT>>];";
 }
 
 void ASTDot::operator()(Const<Designator> &e)
 {
-    out << "    " << id(e) << " [label=<<B>";
+    indent() << id(e) << " [label=<<B>";
 
-    if (e.has_explicit_table_name()) out << e.table_name.text << ".";
+    if (e.has_explicit_table_name()) out << e.table_name.text << '.';
     out << e.attr_name.text << "</B>";
     if (e.has_type()) {
         std::ostringstream oss;
         oss << *e.type();
         out << "<FONT POINT-SIZE=\"11\"><I> : " << html_escape(oss.str()) << "</I></FONT>";
     }
-    out << ">];\n";
+    out << ">];";
 
     /* Dot edge to table. */
     const auto &t = e.target();
     if (auto val = std::get_if<const Attribute*>(&t)) {
         const Attribute &A = **val;
-        out << id(e) << EDGE << A.table.name << ':' << A.name
-            << " [style=\"dashed\",dir=\"forward\",color=\"#404040\"];\n";
+        indent() << id(e) << EDGE << A.table.name << ':' << A.name
+            << " [style=\"dashed\",dir=\"forward\",color=\"#404040\"];";
     } else if (auto val = std::get_if<const Expr*>(&t)) {
         const Expr *expr = *val;
-        out << id(e) << EDGE << id(*expr) << " [style=\"dashed\",dir=\"forward\",color=\"#404040\"];\n";
+        indent() << id(e) << EDGE << id(*expr) << " [style=\"dashed\",dir=\"forward\",color=\"#404040\"];";
     }
 }
 
 void ASTDot::operator()(Const<Constant> &e)
 {
-    out << "    " << id(e) << " [label=<<B>";
+    indent() << id(e) << " [label=<<B>";
 
     if (e.is_string()) {
         out << html_escape(e.tok.text);
@@ -75,13 +95,13 @@ void ASTDot::operator()(Const<Constant> &e)
         out << "<FONT POINT-SIZE=\"11\"><I> : " << html_escape(oss.str()) << "</I></FONT>";
     }
 
-    out << ">];\n";
+    out << ">];";
 }
 
 void ASTDot::operator()(Const<FnApplicationExpr> &e)
 {
     (*this)(*e.fn);
-    out << "    " << id(e) << " [label=<()";
+    indent() << id(e) << " [label=<()";
 
     if (e.has_type()) {
         std::ostringstream oss;
@@ -89,19 +109,19 @@ void ASTDot::operator()(Const<FnApplicationExpr> &e)
         out << "<FONT POINT-SIZE=\"11\"><I> : " << html_escape(oss.str()) << "</I></FONT>";
     }
 
-    out << ">];\n";
-    out << id(e) << EDGE << id(*e.fn) << ";\n";
+    out << ">];";
+    indent() << id(e) << EDGE << id(*e.fn) << ';';
 
     for (auto arg : e.args) {
         (*this)(*arg);
-        out << id(e) << EDGE << id(*arg) << ";\n";
+        indent() << id(e) << EDGE << id(*arg) << ';';
     }
 }
 
 void ASTDot::operator()(Const<UnaryExpr> &e)
 {
     (*this)(*e.expr);
-    out << "    " << id(e) << " [label=<" << html_escape(e.op.text);
+    indent() << id(e) << " [label=<" << html_escape(e.op.text);
 
     if (e.has_type()) {
         std::ostringstream oss;
@@ -109,15 +129,15 @@ void ASTDot::operator()(Const<UnaryExpr> &e)
         out << "<FONT POINT-SIZE=\"11\"><I> : " << html_escape(oss.str()) << "</I></FONT>";
     }
 
-    out << ">];\n"
-        << id(e) << EDGE << id(*e.expr) << ";\n";
+    out << ">];";
+    indent() << id(e) << EDGE << id(*e.expr) << ';';
 }
 
 void ASTDot::operator()(Const<BinaryExpr> &e)
 {
     (*this)(*e.lhs);
     (*this)(*e.rhs);
-    out << "    " << id(e) << " [label=<" << html_escape(e.op.text);
+    indent() << id(e) << " [label=<" << html_escape(e.op.text);
 
     if (e.has_type()) {
         std::ostringstream oss;
@@ -125,63 +145,56 @@ void ASTDot::operator()(Const<BinaryExpr> &e)
         out << "<FONT POINT-SIZE=\"11\"><I> : " << html_escape(oss.str()) << "</I></FONT>";
     }
 
-    out << ">];\n"
-        << id(e) << EDGE << id(*e.lhs) << ";\n"
-        << id(e) << EDGE << id(*e.rhs) << ";\n";
+    out << ">];";
+    indent() << id(e) << EDGE << id(*e.lhs) << ';';
+    indent() << id(e) << EDGE << id(*e.rhs) << ';';
 }
 
 /*--- Clauses --------------------------------------------------------------------------------------------------------*/
 
 void ASTDot::operator()(Const<ErrorClause> &c)
 {
-    out << "    " << id(c) << " [label=\"ErrorClause\"];\n";
+    indent() << id(c) << " [label=\"ErrorClause\"];";
 }
 
 void ASTDot::operator()(Const<SelectClause> &c)
 {
-    out << "  subgraph cluster_select_" << &c
-        << " {\n    style=\"rounded,filled\";\n    color=\"#e6194B20\";\n    penwidth=\"4\";\n"
-        << "    " << id(c) << " [label=\"SELECT\"];\n";
-
     if (c.select_all) {
-        out << q(std::hex << c << '*') << "[label=\"*\"];\n"
-            << id(c) << EDGE << q(std::hex << c << '*') << ";\n";
+        out << '\n';
+        indent() << q(std::hex << c << '*') << "[label=\"*\"];";
+        indent() << id(c) << EDGE << q(std::hex << c << '*') << ';';
     }
     for (auto &s : c.select) {
+        out << '\n';
         (*this)(*s.first);
         if (s.second) {
-            out << "    " << id(s.second) << " [label=\"AS " << s.second.text << "\"];\n"
-                << "    " << id(c) << EDGE << id(s.second) << ";\n"
-                << "    " << id(s.second) << EDGE << id(*s.first) << ";\n";
+            indent() << id(s.second) << " [label=\"AS " << s.second.text << "\"];";
+            indent() << id(c) << EDGE << id(s.second) << ";";
+            indent() << id(s.second) << EDGE << id(*s.first) << ';';
         } else {
-            out << "    " << id(c) << EDGE << id(*s.first) << ";\n";
+            indent() << id(c) << EDGE << id(*s.first) << ';';
         }
     }
-
-    out << "  }\n";
 }
 
 void ASTDot::operator()(Const<FromClause> &c)
 {
-    out << "  subgraph cluster_from_" << (&c)
-        << " {\n    style=\"rounded,filled\";\n    color=\"#bfef4550\";\n    penwidth=\"4\";\n"
-        << "    " << id(c) << " [label=\"FROM\"];\n";
-
     for (auto &t : c.from) {
+        out << '\n';
         if (auto name = std::get_if<Token>(&t.source)) {
             if (t.alias) {
-                out << "    " << id(t.alias) << " [label=\"AS " << t.alias.text << "\"];\n"
-                    << "    " << id (*name) << " [label=\"" << name->text << "\"];\n"
-                    << "    " << id(c) << EDGE << id(t.alias) << EDGE << id(*name) << ";\n";
+                indent() << id(t.alias) << " [label=\"AS " << t.alias.text << "\"];";
+                indent() << id (*name) << " [label=\"" << name->text << "\"];";
+                indent() << id(c) << EDGE << id(t.alias) << EDGE << id(*name) << ';';
             } else {
-                out << id(*name) << " [label=\"" << name->text << "\"];\n"
-                    << "    " << id(c) << EDGE << id(*name) << ";\n";
+                indent() << id(*name) << " [label=\"" << name->text << "\"];";
+                indent() << id(c) << EDGE << id(*name) << ';';
             }
         } else if (auto stmt = std::get_if<Stmt*>(&t.source)) {
             insist(t.alias, "nested statements must have an alias");
-            out << id(t.alias) << " [label=\"AS " << t.alias.text << "\"];\n";
+            indent() << id(t.alias) << " [label=\"AS " << t.alias.text << "\"];";
             (*this)(**stmt);
-            out << "    " << id(c) << EDGE << id(t.alias) << EDGE << id(**stmt) << ";\n";
+            indent() << id(c) << EDGE << id(t.alias) << EDGE << id(**stmt) << ';';
         } else {
             unreachable("invalid variant");
         }
@@ -189,86 +202,59 @@ void ASTDot::operator()(Const<FromClause> &c)
             insist(std::holds_alternative<Token>(t.source));
             auto &name = std::get<Token>(t.source);
             auto &R = t.table();
-            out << id(name) << EDGE << R.name << ":n [dir=\"forward\",color=\"#404040\"];\n";
+            indent() << id(name) << EDGE << R.name << ":n [dir=\"forward\",color=\"#404040\"];";
         }
     }
-
-    out << "  }\n";
 }
 
 void ASTDot::operator()(Const<WhereClause> &c)
 {
-    out << "  subgraph cluster_where_" << (&c)
-        << " {\n    style=\"rounded,filled\";\n    color=\"#42d4f430\";\n    penwidth=\"4\";\n"
-        << "    " << id(c) << " [label=\"WHERE\"];\n";
-
+    out << '\n';
     (*this)(*c.where);
-    out << "    " << id(c) << EDGE << id(*c.where) << ";\n";
-
-    out << "  }\n";
+    indent() << id(c) << EDGE << id(*c.where) << ';';
 }
 
 void ASTDot::operator()(Const<GroupByClause> &c)
 {
-    out << "  subgraph cluster_groupby_" << (&c)
-        << " {\n    style=\"rounded,filled\";\n    color=\"#3cb44b30\";\n    penwidth=\"4\";\n"
-        << "    " << id(c) << " [label=\"GROUP BY\"];\n";
-
     for (auto &g : c.group_by) {
+        out << '\n';
         (*this)(*g);
-        out << "    " << id(c) << EDGE << id(*g) << ";\n";
+        indent() << id(c) << EDGE << id(*g) << ';';
     }
-
-    out << "  }\n";
 }
 
 void ASTDot::operator()(Const<HavingClause> &c)
 {
-    out << "  subgraph cluster_having_" << (&c)
-        << " {\n    style=\"rounded,filled\";\n    color=\"#aaffc350\";\n    penwidth=\"4\";\n"
-        << "    " << id(c) << " [label=\"HAVING\"];\n";
-
+    out << '\n';
     (*this)(*c.having);
-    out << "    " << id(c) << EDGE << id(*c.having) << ";\n";
-
-    out << "  }\n";
+    indent() << id(c) << EDGE << id(*c.having) << ';';
 }
 
 void ASTDot::operator()(Const<OrderByClause> &c)
 {
-    out << "  subgraph cluster_orderby" << (&c)
-        << " {\n    style=\"rounded,filled\";\n    color=\"#ffe11950\";\n    penwidth=\"4\";\n"
-        << "    " << id(c) << " [label=\"ORDER BY\"];\n";
-
     for (auto &o : c.order_by) {
+        out << '\n';
         if (o.second)
-            out << id(o.second) << " [label=\"ASC\"];\n";
+            indent() << id(o.second) << " [label=\"ASC\"];";
         else
-            out << id(o.second) << " [label=\"DESC\"];\n";
-        out << "    " << id(c) << EDGE << id(o.second) << ";\n";
-
+            indent() << id(o.second) << " [label=\"DESC\"];";
+        indent() << id(c) << EDGE << id(o.second) << ';';
         (*this)(*o.first);
-        out << id(o.second) << EDGE << id(*o.first) << ";\n";
+        indent() << id(o.second) << EDGE << id(*o.first) << ';';
     }
-
-    out << "  }\n";
 }
 
 void ASTDot::operator()(Const<LimitClause> &c)
 {
-    out << "  subgraph cluster_limit_" << (&c)
-        << " {\n    style=\"rounded,filled\";\n    color=\"#80800040\";\n    penwidth=\"4\";\n";
-
-    out << "    " << id(c) << " [label=\"LIMIT\"];\n";
-    out << id(c.limit) << " [label=<<B>" << c.limit.text << "</B>>];\n";
-    out << "    " << id(c) << EDGE << id(c.limit) << ";\n";
+    out << '\n';
+    indent() << id(c.limit) << " [label=<<B>" << c.limit.text << "</B>>];";
+    indent() << id(c) << EDGE << id(c.limit) << ";";
 
     if (c.offset) {
-        out << id(c.offset) << " [label=<OFFSET <B>" << c.offset.text << "</B>>];\n";
-        out << "    " << id(c) << EDGE << id(c.offset) << ";\n";
+        out << '\n';
+        indent() << id(c.offset) << " [label=<OFFSET <B>" << c.offset.text << "</B>>];";
+        indent() << id(c) << EDGE << id(c.offset) << ';';
     }
-
-    out << "  }\n";
 }
 
 /*--- Statements -----------------------------------------------------------------------------------------------------*/
@@ -300,66 +286,61 @@ void ASTDot::operator()(Const<CreateTableStmt>&)
 
 void ASTDot::operator()(Const<SelectStmt> &s)
 {
-    out << "    " << id(s) << " [label=\"SelectStmt\"];\n";
+    out << '\n';
+    std::ostringstream oss;
+    indent() << id(s) << " [label=\"SelectStmt\"];";
 
     if (s.from) {
         /* Dot the accessed tables first. */
-        out << "  subgraph {\n";
+        indent() << "subgraph sources";
+        indent() << '{';
+        ++indent_;
         if (auto f = cast<FromClause>(s.from)) {
             for (auto &t : f->from) {
                 if (t.has_table()) {
                     auto &R = t.table();
 
-                    out << R.name << " [shape=none,style=filled,fillcolor=white,label=<\n<TABLE>\n<TR><TD BORDER=\"0\"><B>"
-                        << R.name << "</B></TD></TR>\n";
+                    indent() << R.name << "[shape=none,style=filled,fillcolor=white,label=<";
+                    ++indent_;
+                    indent() << "<TABLE>";
+                    ++indent_;
+                    indent() << "<TR><TD BORDER=\"0\"><B>" << R.name << "</B></TD></TR>";
 
                     for (auto &A : R) {
-                        std::ostringstream oss;
+                        oss.str("");
                         oss << *A.type;
-                        out << "<TR><TD PORT=\"" << A.name << "\">" << A.name
-                            << "<FONT POINT-SIZE=\"11\"><I> : " << html_escape(oss.str()) << "</I></FONT>"
-                            << "</TD></TR>\n";
+                        indent() << "<TR><TD PORT=\"" << A.name << "\">" << A.name
+                                 << "<FONT POINT-SIZE=\"11\"><I> : " << html_escape(oss.str()) << "</I></FONT>"
+                                 << "</TD></TR>";
                     }
 
-                    out << "</TABLE>\n>];\n";
+                    --indent_;
+                    indent() << "</TABLE>";
+                    --indent_;
+                    indent() << ">];";
                 }
             }
         }
-        out << "  }\n";
+        --indent_;
+        indent() << "}\n";
     }
 
-    (*this)(*s.select);
-    out << "    " << id(s) << EDGE << id(*s.select) << ";\n";
+    cluster(*s.select, "select", "SELECT", "#e6194B20");
+    indent() << id(s) << EDGE << id(*s.select) << ';';
 
-    if (s.from) {
-        (*this)(*s.from);
-        out << "    " << id(s) << EDGE << id(*s.from) << ";\n";
+#define DOT(NAME, LABEL, COLOR) \
+    if (s.NAME) { \
+        out << '\n'; \
+        cluster(*s.NAME, #NAME, LABEL, COLOR); \
+        indent() << id(s) << EDGE << id(*s.NAME) << ';'; \
     }
-
-    if (s.where) {
-        (*this)(*s.where);
-        out << "    " << id(s) << EDGE << id(*s.where) << ";\n";
-    }
-
-    if (s.group_by) {
-        (*this)(*s.group_by);
-        out << "    " << id(s) << EDGE << id(*s.group_by) << ";\n";
-    }
-
-    if (s.having) {
-        (*this)(*s.having);
-        out << "    " << id(s) << EDGE << id(*s.having) << ";\n";
-    }
-
-    if (s.order_by) {
-        (*this)(*s.order_by);
-        out << "    " << id(s) << EDGE << id(*s.order_by) << ";\n";
-    }
-
-    if (s.limit) {
-        (*this)(*s.limit);
-        out << "    " << id(s) << EDGE << id(*s.limit) << ";\n";
-    }
+    DOT(from,     "FROM",     "#bfef4550");
+    DOT(where,    "WHERE",    "#42d4f430");
+    DOT(group_by, "GROUP BY", "#3cb44b30");
+    DOT(having,   "HAVING",   "#aaffc350");
+    DOT(order_by, "ORDER BY", "#ffe11950");
+    DOT(limit,    "LIMIT",    "#80800040");
+#undef DOT
 }
 
 void ASTDot::operator()(Const<InsertStmt>&)

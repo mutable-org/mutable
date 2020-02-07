@@ -833,7 +833,7 @@ void Sema::operator()(Const<OrderByClause> &c)
         auto pt = as<const PrimitiveType>(e->type());
 
         if (Ctx.group_keys.empty()) {
-            /* TODO Test: If we did not group, the ordering expressions must be vectorial. */
+            /* If we did not group, the ordering expressions must be vectorial. */
             if (not pt->is_vectorial())
                 diag.e(c.tok.pos) << "Cannot order by " << *e << ", expression must be vectorial.\n";
         } else {

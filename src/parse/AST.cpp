@@ -105,8 +105,11 @@ bool Designator::operator==(const Expr &o) const
 {
     auto other = cast<const Designator>(&o);
     if (not other) return false;
-    return this->table_name.text == other->table_name.text and
-           this->attr_name.text == other->attr_name.text;
+    if (this->has_explicit_table_name() or other->has_explicit_table_name())
+        return this->table_name.text == other->table_name.text and
+               this->attr_name.text == other->attr_name.text;
+    else
+        return this->attr_name.text == other->attr_name.text;
 }
 
 bool Constant::operator==(const Expr &o) const

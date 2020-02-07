@@ -119,6 +119,18 @@ struct Sema : ASTVisitor
         insist(not contexts_.empty());
         return *contexts_.back();
     }
+
+    /** Creates a new designator that has the same textual representation as `expr` and has `expr` as target. */
+    Designator * make_designator(const Expr *from, const Expr *to) {
+        auto &C = Catalog::Get();
+        std::ostringstream oss;
+        oss << *from;
+        Token tok(from->tok.pos, C.pool(oss.str().c_str()), TK_IDENTIFIER);
+        auto d = new Designator(tok);
+        d->type_ = to->type();
+        d->target_ = to;
+        return d;
+    }
 };
 
 }

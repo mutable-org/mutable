@@ -18,10 +18,15 @@ from tqdm import tqdm
 #-----------------------------------------------------------------------------------------------------------------------
 CWD = os.getcwd()
 
+component_keywords = ['lexer', 'parser', 'sema', 'end2end']
+
 bar_format = '{desc}: {n}/{total} ({percentage:3.0f}%)|{bar}|'
 
 check_lexer = check_parser = check_sema = check_end2end = False
 verbose = quiet = False
+
+def list_to_str(lst):
+    return ', '.join(lst)
 
 def parse_components(components):
     global check_lexer
@@ -407,7 +412,7 @@ if __name__ == '__main__':
     # parser.add_argument('parser',  type=bool, help='run parser tests')
     # parser.add_argument('sema',    type=bool, help='run semantic analysis tests')
     # parser.add_argument('end2end', type=bool, help='run end to end tests')
-    parser.add_argument('component', nargs='*', help='a component to be tested, e.g. lexer or sema.')
+    parser.add_argument('component', nargs='*', help=f'a component to be tested, available options: {list_to_str(component_keywords)}.')
     group = parser.add_mutually_exclusive_group()
     group.add_argument('-v', '--verbose', help='increase output verbosity', action='store_true')
     group.add_argument('-q', '--quiet',   help='disable output, failure indicated by returncode', action='store_true')

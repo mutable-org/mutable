@@ -250,7 +250,7 @@ inline bool is_alnum(int c) { return is_dec(c) || is_alpha(c); }
 inline std::filesystem::path get_home_path()
 {
     std::filesystem::path path;
-#ifdef __linux__
+#if __linux
     auto home = getenv("HOME");
     if (home)
         path = home;

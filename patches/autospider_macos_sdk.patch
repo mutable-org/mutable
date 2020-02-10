@@ -4,4 +4,4 @@
 >     macos_sdk_dir = os.environ.get("MACOS_SDK_DIR")
 >     if macos_sdk_dir:
 >         CONFIGURE_ARGS += ' --with-macos-sdk=' + macos_sdk_dir
-> 
+>

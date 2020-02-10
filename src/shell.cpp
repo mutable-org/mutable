@@ -23,6 +23,12 @@
 #include <regex>
 #include <vector>
 
+#if __linux
+#include <unistd.h>
+#elif __APPLE__
+#include <unistd.h>
+#endif
+
 
 using namespace db;
 
@@ -349,6 +355,11 @@ Replxx::hints_t hook_hint(const std::string &prefix, int &context_len, Replxx::C
 
 int main(int argc, const char **argv)
 {
+    std::cout << "PID";
+#if __linux || __APPLE__
+    std::cout << ' ' << getpid();
+#endif
+    std::cout << std::endl;
 
     /* Identify whether the terminal supports colors. */
     const bool term_has_color = term::has_color();

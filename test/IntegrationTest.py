@@ -369,7 +369,7 @@ def end2end_case(sql_filename, csv_filename):
         with open(csv_filename, 'r') as csv_file:
             expected = csv_file.read().strip()
 
-        actual = '\n'.join(str(out, 'latin-1').splitlines()[8:])
+        actual = '\n'.join(str(out, 'latin-1').splitlines()[9:])
 
         if actual != expected:
             raise TestException(f'failed due to different results')

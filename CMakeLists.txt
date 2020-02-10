@@ -29,6 +29,12 @@ else()
         OUTPUT_STRIP_TRAILING_WHITESPACE)
 endif()
 
+# Fix macOS system includes
+if(APPLE)
+    include_directories(SYSTEM "/usr/local/include")
+endif()
+
+
 # Shared library suffix
 if(APPLE)
     set(SHARED_LIB_SUFFIX dylib)

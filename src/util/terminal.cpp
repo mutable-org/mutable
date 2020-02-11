@@ -17,10 +17,11 @@ bool term::has_color()
         "xterm-256",
         "xterm-256color",
     };
-    auto term = std::getenv("TERM");
-    for (auto supported : SUPPORTED_TERMS) {
-        if (streq(term, supported))
-            return true;
+    if (auto term = std::getenv("TERM")) {
+        for (auto supported : SUPPORTED_TERMS) {
+            if (streq(term, supported))
+                return true;
+        }
     }
     return false;
 }

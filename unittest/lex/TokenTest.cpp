@@ -6,7 +6,7 @@
 using namespace db;
 
 
-TEST_CASE("Token c'tor", "[core][lex][token]]")
+TEST_CASE("Token c'tor", "[core][lex][token]")
 {
     Position pos("the_file");
     Token tok(pos, "the_text", TK_ERROR);

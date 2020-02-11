@@ -33,10 +33,10 @@ struct Attribute
 {
     friend struct Table;
 
-    std::size_t id; ///> the internal identifier of the attribute, unique within its table
-    const Table &table; ///> the table the attribute belongs to
-    const PrimitiveType *type; ///> the type of the attribute
-    const char *name; ///> the name of the attribute
+    std::size_t id; ///< the internal identifier of the attribute, unique within its table
+    const Table &table; ///< the table the attribute belongs to
+    const PrimitiveType *type; ///< the type of the attribute
+    const char *name; ///< the name of the attribute
 
     private:
     explicit Attribute(std::size_t id, const Table &table, const PrimitiveType *type, const char *name)
@@ -52,6 +52,7 @@ struct Attribute
     Attribute(const Attribute&) = delete;
     Attribute(Attribute&&) = default;
 
+    /** Compares to attributes.  Attributes are equal if they have the same `id` and belong to the same `table`. */
     bool operator==(const Attribute &other) const { return &this->table == &other.table and this->id == other.id; }
     bool operator!=(const Attribute &other) const { return not operator==(other); }
 
@@ -106,7 +107,9 @@ struct Table
      * exists. */
     const Attribute & operator[](const char *name) const { return at(name); }
 
+    /** Returns a reference to the backing store. */
     Store & store() const { return *store_; }
+    /** Sets the backing store for this table.  `new_store` must not be `nullptr`. */
     void store(Store *new_store) { store_ = notnull(new_store); }
 
     /** Adds a new attribute with the given `name` and `type` to the table.  Throws `std::invalid_argument` if the
@@ -136,15 +139,18 @@ struct Function
         FN_UDF, // for all user-defined functions
     };
 
-    const char *name; ///> the name of the function
-    fnid_t fnid; ///> the function id
+    const char *name; ///< the name of the function
+    fnid_t fnid; ///< the function id
     DECLARE_ENUM(kind_t) kind; ///< the function kind: Scalar, Aggregate, etc.
 
     Function(const char *name, fnid_t fnid, kind_t kind) : name(name), fnid(fnid), kind(kind) { }
 
+    /** Returns `true` iff this is a user-defined function. */
     bool is_UDF() const { return fnid == FN_UDF; }
 
+    /** Returns `true` iff this function is scalar, i.e.\ if it is evaluated *per tuple*. */
     bool is_scalar() const { return kind == FN_Scalar; }
+    /** Returns `true` iff this function is an aggregation, i.e.\ if it is evaluated *on all tuples*. */
     bool is_aggregate() const { return kind == FN_Aggregate; }
 
     void dump(std::ostream &out) const;
@@ -161,16 +167,16 @@ struct Function
 #undef kind_t
 };
 
-/** A description of a database.  It is a set of tables, functions, and statistics. */
+/** A `Database` is a set of `db::Table`s, `db::Function`s, and `db::Statistics`. */
 struct Database
 {
     friend struct Catalog;
 
     public:
-    const char *name;
+    const char *name; ///< the name of the database
     private:
-    std::unordered_map<const char*, Table*> tables_; ///> the tables of this database
-    std::unordered_map<const char*, Function*> functions_; ///> functions defined in this database
+    std::unordered_map<const char*, Table*> tables_; ///< the tables of this database
+    std::unordered_map<const char*, Function*> functions_; ///< functions defined in this database
 
     private:
     Database(const char *name);
@@ -178,18 +184,24 @@ struct Database
     public:
     ~Database();
 
+    /** Returns the number of tables in this `Database`. */
     std::size_t size() const { return tables_.size(); }
     auto begin_tables() const { return tables_.cbegin(); }
     auto end_tables() const { return tables_.cend(); }
 
     /*===== Tables ===================================================================================================*/
+    /** Returns a reference to the `Table` with the given `name`.  Throws `std::out_of_range` if no `Table` with the
+     * given `name` exists in this `Database`. */
     Table & get_table(const char *name) const { return *tables_.at(name); }
+    /** Adds a new `Table` to this `Database`.  Throws `std::invalid_argument` if a `Table` with the given `name`
+     * already exists. */
     Table & add_table(const char *name) {
         auto it = tables_.find(name);
         if (it != tables_.end()) throw std::invalid_argument("table with that name already exists");
         it = tables_.emplace_hint(it, name, new Table(name));
         return *it->second;
     }
+    /** Adds a new `Table` to this `Database`.  TODO implement transfer of ownership with unique_ptr */
     Table & add(Table *r) {
         auto it = tables_.find(r->name);
         if (it != tables_.end()) throw std::invalid_argument("table with that name already exists");
@@ -198,68 +210,86 @@ struct Database
     }
 
     /*===== Functions ================================================================================================*/
+    /** Returns a reference to the `db::Function` with the given `name`.  First searches this `Database` instance.  If
+     * no `db::Function` with the given `name` is found, searches the global `db::Catalog`.  Throws
+     * `std::invalid_argument` if no `db::Function` with the given `name` exists. */
     const Function * get_function(const char *name) const;
 };
 
-/** The catalog keeps track of all meta information of the database system.  There is always exactly one catalog. */
+/** The catalog contains all `Database`s and keeps track of all meta information of the database system.  There is
+ * always exactly one catalog. */
 struct Catalog
 {
     private:
-    std::unique_ptr<rewire::Allocator> allocator_; ///> our custom allocator
-    StringPool pool_; ///> pool of strings
-    std::unordered_map<const char*, Database*> databases_; ///> the databases
-    Database *database_in_use_ = nullptr; ///> the currently used database
-    std::unordered_map<const char*, Function*> standard_functions_; ///> functions defined by the SQL standard
+    std::unique_ptr<rewire::Allocator> allocator_; ///< our custom allocator
+    StringPool pool_; ///< pool of strings
+    std::unordered_map<const char*, Database*> databases_; ///< the databases
+    Database *database_in_use_ = nullptr; ///< the currently used database
+    std::unordered_map<const char*, Function*> standard_functions_; ///< functions defined by the SQL standard
 
     private:
     Catalog();
     Catalog(const Catalog&) = delete;
 
-    static Catalog the_catalog_;
+    static Catalog the_catalog_; ///< the single catalog instance
 
     public:
     ~Catalog();
 
-    /** Return a reference to the catalog. */
+    /** Return a reference to the single `Catalog` instance. */
     static Catalog & Get() { return the_catalog_; }
 
-    /** Destroys the current catalog and immediately creates a new catalog instance. */
+    /** Destroys the current `Catalog` instance and immediately replaces it by a new one. */
     static void Clear() {
         the_catalog_.~Catalog();
         new (&the_catalog_) Catalog();
     }
 
+    /** Returns the number of `Database`s. */
     std::size_t num_databases() const { return databases_.size(); }
 
+    /** Returns a reference to the `StringPool`. */
     StringPool & get_pool() { return pool_; }
+    /** Returns a reference to the `StringPool`. */
     const StringPool & get_pool() const { return pool_; }
 
+    /** Returns a reference to the `rewire::Allocator`. */
     rewire::Allocator & allocator() { return *allocator_; }
+    /** Returns a reference to the `rewire::Allocator`. */
     const rewire::Allocator & allocator() const { return *allocator_; }
 
+    /** Creates an internalized copy of the string `str` by adding it to the internal `StringPool`. */
     const char * pool(const char *str) { return pool_(str); }
 
     /*===== Database =================================================================================================*/
+    /** Creates a new `Database` with the given `name`. */
     Database & add_database(const char *name);
+    /** Returns the `Database` with the given `name`.  Throws `std::out_of_range` if no such `Database` exists. */
     Database & get_database(const char *name) const { return *databases_.at(name); }
+    /** Drops the `Database` with the given `name`.  Throws `std::out_of_range` if no such `Database` exists or if the
+     * `Database` is currently in use.  See `get_database_in_use()`. */
     void drop_database(const char *name);
-    void drop_database(const Database &S) { return drop_database(S.name); }
+    /** Drops the `Database` `db`.  Throws `std::out_of_range` if the `db` is currently in use. */
+    void drop_database(const Database &db) { return drop_database(db.name); }
 
+    /** Returns `true` if *any* `Database` is currently in use. */
     bool has_database_in_use() const { return database_in_use_ != nullptr; }
+    /** Returns a reference to the `Database` that is currently in use, if any.  Throws `std::logic_error` otherwise. */
     Database & get_database_in_use() {
         if (not has_database_in_use())
             throw std::logic_error("no database currently in use");
         return *database_in_use_;
     }
-    const Database & get_database_in_use() const {
-        if (not has_database_in_use())
-            throw std::logic_error("no database currently in use");
-        return *database_in_use_;
-    }
-    void set_database_in_use(Database &s) { database_in_use_ = &s; }
+    /** Returns a reference to the `Database` that is currently in use, if any.  Throws `std::logic_error` otherwise. */
+    const Database & get_database_in_use() const { return const_cast<Catalog*>(this)->get_database_in_use(); }
+    /** Sets the `Database` `db` as the `Database` that is currently in use.  */
+    void set_database_in_use(Database &db) { database_in_use_ = &db; }
+    /** Unsets the `Database` that is currenly in use. */
     void unset_database_in_use() { database_in_use_ = nullptr; }
 
     /*===== Functions ================================================================================================*/
+    /** Returns a reference to the `db::Function` with the given `name`.  Throws `std::out_of_range` if no such
+     * `Function` exists. */
     const Function * get_function(const char *name) const { return standard_functions_.at(name); }
 };
 
@@ -316,6 +346,7 @@ bool db::type_check(const Attribute &attr) {
 
 namespace std {
 
+/** Specializes `std::hash<T>` for `db::Attribute`. */
 template<>
 struct hash<db::Attribute>
 {

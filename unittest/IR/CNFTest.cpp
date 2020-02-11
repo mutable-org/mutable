@@ -138,10 +138,7 @@ TEST_CASE("CNF/CNFGenerator", "[core][ir][cnf]")
 
         auto expr = parser.parse_Expr();
         sema(*expr);
-
-        CNFGenerator gen;
-        gen(*expr);
-        auto cnf = gen.get();
+        auto cnf = to_CNF(*expr);
 
         REQUIRE(cnf.size() == 1);
         auto &clause = cnf[0];
@@ -163,10 +160,7 @@ TEST_CASE("CNF/CNFGenerator", "[core][ir][cnf]")
 
         auto expr = parser.parse_Expr();
         sema(*expr);
-
-        CNFGenerator gen;
-        gen(*expr);
-        auto cnf = gen.get();
+        auto cnf = to_CNF(*expr);
 
         REQUIRE(cnf.size() == 1);
         auto &clause = cnf[0];
@@ -188,10 +182,7 @@ TEST_CASE("CNF/CNFGenerator", "[core][ir][cnf]")
 
         auto expr = parser.parse_Expr();
         sema(*expr);
-
-        CNFGenerator gen;
-        gen(*expr);
-        auto cnf = gen.get();
+        auto cnf = to_CNF(*expr);
 
         REQUIRE(cnf.size() == 1);
         auto &clause = cnf[0];
@@ -220,10 +211,7 @@ TEST_CASE("CNF/CNFGenerator", "[core][ir][cnf]")
 
         auto expr = parser.parse_Expr();
         sema(*expr);
-
-        CNFGenerator gen;
-        gen(*expr);
-        auto cnf = gen.get();
+        auto cnf = to_CNF(*expr);
 
         REQUIRE(cnf.size() == 2);
         auto &clause0 = cnf[0];

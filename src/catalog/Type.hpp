@@ -28,13 +28,13 @@ using ConstTypeVisitor = TheTypeVisitor<true>;
 struct Type
 {
 #define category_t(X) X(TY_Scalar), X(TY_Vector)
-    DECLARE_ENUM(category_t); ///< a category for whether this type is scalar or vector
+    DECLARE_ENUM(category_t); ///< a category for whether this type is *scalar* or *vectorial*
     protected:
     static constexpr const char *CATEGORY_TO_STR_[] = { ENUM_TO_STR(category_t) };
 #undef category_t
 
     protected:
-    static Pool<Type> types_; ///< a pool of parameterized types
+    static Pool<Type> types_; ///< a pool of internalized, parameterized types
 
     public:
     Type() = default;
@@ -49,14 +49,19 @@ struct Type
     bool operator!=(const Type &other) const { return not operator==(other); }
 
     bool is_error() const { return (void*) this == Get_Error(); }
+    /** Returns `true` iff this `Type` is a `db::PrimitiveType`. */
     bool is_primitive() const { return is<const PrimitiveType>(this); }
     bool is_boolean() const { return is<const Boolean>(this); }
     bool is_character_sequence() const { return is<const CharacterSequence>(this); }
+    /** Returns `true` iff this `Type` is a `db::Numeric` type. */
     bool is_numeric() const { return is<const Numeric>(this); }
     bool is_integral() const;
     bool is_decimal() const;
+    /** Returns `true` iff this type is a floating-point type, i.e.\ `f32` or `f64`. */
     bool is_floating_point() const;
+    /** Returns `true` iff this type is a 32 bit floating-point type. */
     bool is_float() const;
+    /** Returns `true` iff this type is a 64 bit floating-point type. */
     bool is_double() const;
 
     /** Compute the size in bits of an instance of this type. */
@@ -65,27 +70,41 @@ struct Type
     /** Compute the alignment requirement in bits of an instance of this type. */
     virtual uint32_t alignment() const { throw std::logic_error("the size of this type is not defined"); }
 
+    /** Compute the 64 bit hash of this `Type`. */
     virtual uint64_t hash() const = 0;
 
+    /** Print a textual representation of this `Type` to `out`. */
     virtual void print(std::ostream &out) const = 0;
+
     virtual void dump(std::ostream &out) const = 0;
     void dump() const;
 
+    /** Print a textual representation of `Type` `t` to `out`. */
     friend std::ostream & operator<<(std::ostream &out, const Type &t) {
         t.print(out);
         return out;
     }
 
-    /* Type factory methods */
+    /*----- Type factory methods -------------------------------------------------------------------------------------*/
+    /** Returns a `db::ErrorType`. */
     static const ErrorType * Get_Error();
+    /** Returns a `db::NoneType`. */
     static const NoneType * Get_None();
+    /** Returns a `db::Boolean` type of the given `category`. */
     static const Boolean * Get_Boolean(category_t category);
+    /** Returns a `db::CharacterSequence` type of the given `category` and fixed `length`. */
     static const CharacterSequence * Get_Char(category_t category, std::size_t length);
+    /** Returns a `db::CharacterSequence` type of the given `category` and varying `length`. */
     static const CharacterSequence * Get_Varchar(category_t category, std::size_t length);
+    /** Returns a `db::Numeric` type for decimals of given `category`, decimal `digits`, and `scale`. */
     static const Numeric * Get_Decimal(category_t category, unsigned digits, unsigned scale);
+    /** Returns a `db::Numeric` type for integrals of given `category` and `num_bytes` bytes. */
     static const Numeric * Get_Integer(category_t category, unsigned num_bytes);
+    /** Returns a `db::Numeric` type of given `category` for 32 bit floating-points. */
     static const Numeric * Get_Float(category_t category);
+    /** Returns a `db::Numeric` type of given `category` for 64 bit floating-points. */
     static const Numeric * Get_Double(category_t category);
+    /** Returns a `db::FnType` for a function with parameter types `parameter_types` and return type `return_type`. */
     static const FnType * Get_Function(const Type *return_type, std::vector<const Type*> parameter_types);
 };
 
@@ -106,7 +125,7 @@ struct hash<db::Type>
 
 namespace db {
 
-/** Primitive types are used for values. */
+/** `PrimitiveType`s represent `db::Type`s of values. */
 struct PrimitiveType : Type
 {
     category_t category; ///< whether this type is scalar or vector
@@ -116,17 +135,19 @@ struct PrimitiveType : Type
     PrimitiveType(PrimitiveType&&) = default;
     virtual ~PrimitiveType() { }
 
+    /** Returns `true` iff this `PrimitiveType` is *scalar*, i.e.\ if it is for a single value. */
     bool is_scalar() const { return category == TY_Scalar; }
+    /** Returns `true` iff this `PrimitiveType` is *vectorial*, i.e.\ if it is for a sequence of values. */
     bool is_vectorial() const { return category == TY_Vector; }
 
-    /** Convert this type to a scalar. */
-    virtual const PrimitiveType *as_scalar() const = 0;
+    /** Convert this `PrimitiveType` to its *scalar* equivalent. */
+    virtual const PrimitiveType * as_scalar() const = 0;
 
-    /** Convert this type to a vectorial. */
-    virtual const PrimitiveType *as_vectorial() const = 0;
+    /** Convert this `PrimitiveType` to its *vectorial* equivalent. */
+    virtual const PrimitiveType * as_vectorial() const = 0;
 };
 
-/** The error type.  Used when parsing of a data type fails or when semantic analysis detects a type error. */
+/** This `db::Type` is assigned when parsing of a data type fails or when semantic analysis detects a type error. */
 struct ErrorType: Type
 {
     friend struct Type;
@@ -149,7 +170,7 @@ struct ErrorType: Type
     void dump(std::ostream &out) const override;
 };
 
-/** A type that represents the absence of any pther type.  Used to represent the type of `NULL`. */
+/** A `db::Type` that represents the absence of any other type.  Used to represent the type of `NULL`. */
 struct NoneType: Type
 {
     friend struct Type;
@@ -201,13 +222,13 @@ struct Boolean : PrimitiveType
     virtual const PrimitiveType *as_vectorial() const override;
 };
 
-/** The type of character strings, both fixed length and varying. */
+/** The type of character strings, both fixed length and varying length. */
 struct CharacterSequence : PrimitiveType
 {
     friend struct Type;
 
-    std::size_t length; ///> the maximum length of the string in bytes
-    bool is_varying; ///> true if varying, false otherwise; corresponds to Char(N) and Varchar(N)
+    std::size_t length; ///< the maximum length of the string in bytes
+    bool is_varying; ///< true if varying, false otherwise; corresponds to Char(N) and Varchar(N)
 
     private:
     CharacterSequence(category_t category, std::size_t length, bool is_varying)
@@ -243,7 +264,7 @@ struct CharacterSequence : PrimitiveType
     virtual const PrimitiveType *as_vectorial() const override;
 };
 
-/** The numeric type represents integer and floating-point types of different precision, and scale. */
+/** The numeric type represents integer and floating-point types of different precision and scale. */
 struct Numeric : PrimitiveType
 {
     friend struct Type;
@@ -251,10 +272,11 @@ struct Numeric : PrimitiveType
     /** The maximal number of decimal digits that can be accurately represented by DECIMAL(p,s). */
     static constexpr std::size_t MAX_DECIMAL_PRECISION = 19;
 
+    /** How many binary digits fit into a single decimal digit.  Used to compute precision. */
     static constexpr float DECIMAL_TO_BINARY_DIGITS = 3.32192f;
 
 #define kind_t(X) X(N_Int), X(N_Decimal), X(N_Float)
-    DECLARE_ENUM(kind_t) kind; ///> the kind of numeric type
+    DECLARE_ENUM(kind_t) kind; ///< the kind of numeric type
     private:
     static constexpr const char *KIND_TO_STR_[] = { ENUM_TO_STR(kind_t) };
 #undef kind_t
@@ -265,8 +287,8 @@ struct Numeric : PrimitiveType
      *  For FLOAT and DOUBLE, precision is the size of the type in bits, i.e. 32 and 64, respectively.
      *  For DECIMAL, precision is the number of decimal digits that can be represented.
      */
-    unsigned precision; ///> the number of bits used to represent the number
-    unsigned scale; ///> the number of decimal digits right of the decimal point
+    unsigned precision; ///< the number of bits used to represent the number
+    unsigned scale; ///< the number of decimal digits right of the decimal point
 
     private:
     Numeric(category_t category, kind_t kind, unsigned precision, unsigned scale)
@@ -334,7 +356,7 @@ struct FnType : Type
     void dump(std::ostream &out) const override;
 };
 
-/* Given two numeric types, compute the numeric type that is as least as precise as either of them. */
+/* Given two `db::Numeric` types, compute the `db::Numeric` type that is at least as precise as either of them. */
 const Numeric * arithmetic_join(const Numeric *lhs, const Numeric *rhs);
 
 }
@@ -388,6 +410,7 @@ bool db::is_convertible(const Type *ty) {
 
 namespace db {
 
+/** The `db::Type` visitor. */
 template<bool C>
 struct TheTypeVisitor
 {

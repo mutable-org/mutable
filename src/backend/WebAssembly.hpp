@@ -18,10 +18,11 @@ struct Expression;
 
 namespace db {
 
+/** A `WasmModule` is a wrapper around a [**Binaryen**] (https://github.com/WebAssembly/binaryen) `wasm::Module`. */
 struct WasmModule
 {
     private:
-    wasm::Module *ref_;
+    wasm::Module *ref_; ///< the underlying [**Binaryen**] (https://github.com/WebAssembly/binaryen) WASM module
 
     public:
     WasmModule();
@@ -29,7 +30,9 @@ struct WasmModule
     WasmModule(const WasmModule&) = delete;
     WasmModule(WasmModule&&) = default;
 
+    /** Returns the underlying [**Binaryen**] (https://github.com/WebAssembly/binaryen) WASM module. */
     wasm::Module * ref() { return ref_; }
+    /** Returns the underlying [**Binaryen**] (https://github.com/WebAssembly/binaryen) WASM module. */
     const wasm::Module * ref() const { return ref_; }
 
     /** Returns the binary representation of this module in a freshly allocated memory.  The caller must dispose of this
@@ -43,25 +46,29 @@ struct WasmModule
     void dump() const;
 };
 
-/** A platform to execute WASM modules. */
+/** A `WasmPlatform` provides an environment to execute WebAssembly modules. */
 struct WasmPlatform
 {
-    static constexpr std::size_t WASM_PAGE_SIZE = 1UL << 16; // 64 KiB pages
-    static constexpr std::size_t WASM_MAX_MEMORY = (1UL << 31) - (1UL << 16); // 2^32 - 2^16 bytes, approx 2 GiB
+    /** the size of a WebAssembly memory page, 64 KiB. */
+    static constexpr std::size_t WASM_PAGE_SIZE = 1UL << 16;
+    /** The maximum memory of a WebAssembly module:  2^32 - 2^16 bytes ≈ 2 GiB */
+    static constexpr std::size_t WASM_MAX_MEMORY = (1UL << 31) - (1UL << 16);
 
+    /** A `WasmContext` holds associated information of a WebAssembly module instance. */
     struct WasmContext
     {
-        uint32_t id;
-        rewire::AddressSpace vm;
+        uint32_t id; ///< a unique ID
+        rewire::AddressSpace vm; ///< the WebAssembly module instance's virtual address space aka.\ *linear memory*
 
         WasmContext(uint32_t id, std::size_t size) : id(id), vm(size) { }
     };
 
     private:
-    static uint32_t wasm_counter_;
-    static std::unordered_map<uint32_t, WasmContext> contexts_;
+    static uint32_t wasm_counter_; ///< a counter used to generate unique IDs
+    static std::unordered_map<uint32_t, WasmContext> contexts_; ///< maps unique IDs to `WasmContext` instances
 
     protected:
+    /** Creates a new `WasmContext` with `size` bytes of virtual address space. */
     static WasmContext & Create_Wasm_Context(std::size_t size) {
         auto res = contexts_.emplace(wasm_counter_, WasmContext(wasm_counter_, size));
         insist(res.second, "WasmContext with that ID already exists");
@@ -69,6 +76,7 @@ struct WasmPlatform
         return res.first->second;
     }
 
+    /** Disposes of the `WasmContext` with ID `id`. */
     static void Dispose_Wasm_Context(uint32_t id) {
         auto res = contexts_.erase(id);
         (void) res;
@@ -76,19 +84,23 @@ struct WasmPlatform
     }
 
     public:
+    /** Returns a reference to the `WasmContext` with ID `id`. */
     static WasmContext & Get_Wasm_Context_By_ID(uint32_t id) {
         auto it = contexts_.find(id);
         insist(it != contexts_.end(), "There is no context with the given ID");
         return it->second;
     }
 
+    /** Compiles the plan `op` to a `WasmModule`. */
     static WasmModule compile(const Operator &op);
 
     virtual ~WasmPlatform() { }
+
+    /** Executes the `WasmModule` `module` on this `WasmPlatform`. */
     virtual void execute(const WasmModule &module) = 0;
 };
 
-/** A backend to execute WASM modules on a specific platform. */
+/** A `Backend` to execute `WasmModule`s on a specific `WasmPlatform`. */
 struct WasmBackend : Backend
 {
     private:

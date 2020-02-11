@@ -3,18 +3,19 @@
 
 namespace db {
 
+/** Pretty-prints the AST in SQL. */
 struct ASTPrinter : ConstASTVisitor
 {
-    using ConstASTVisitor::operator();
-
     public:
-    std::ostream &out;
+    std::ostream &out; ///< the output stream to write to
     private:
-    unsigned indent;
-    bool is_nested = false; // is the statement nested?
+    unsigned indent_; ///< the current level of indentation
+    bool is_nested_ = false; ///< whether the statement is nested; determines if a final ';' must be printed
 
     public:
-    ASTPrinter(std::ostream &out, unsigned indent = 0) : out(out), indent(indent) { (void)(this->indent); }
+    ASTPrinter(std::ostream &out, unsigned indent = 0) : out(out), indent_(indent) { (void)(this->indent_); }
+
+    using ConstASTVisitor::operator();
 
     /* Expressions */
     virtual void operator()(Const<ErrorExpr> &e);

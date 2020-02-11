@@ -20,6 +20,7 @@ struct TheOperatorVisitor;
 using OperatorVisitor = TheOperatorVisitor<false>;
 using ConstOperatorVisitor = TheOperatorVisitor<true>;
 
+/** The `tuple_type` represents a sequence of attribute values. */
 struct tuple_type : public std::vector<value_type>
 {
     using Base = std::vector<value_type>;
@@ -45,6 +46,7 @@ struct tuple_type : public std::vector<value_type>
         return *this;
     }
 
+    /** Creates an exact copy of `this` tuple. */
     tuple_type clone() const {
         tuple_type copy;
         as<Base>(copy) = as<const Base>(*this);
@@ -55,6 +57,7 @@ struct tuple_type : public std::vector<value_type>
 static_assert(std::is_move_constructible_v<tuple_type>, "tuple_type must be move constructible");
 static_assert(not std::is_copy_constructible_v<tuple_type>, "tuple_type must not be copy constructible");
 
+/** Prints a textual representation of `tuple` to `out`. */
 inline std::ostream & operator<<(std::ostream &out, const tuple_type &tuple)
 {
     for (auto it = tuple.begin(), end = tuple.end(); it != end; ++it) {
@@ -100,13 +103,15 @@ struct hash<db::tuple_type>
 
 namespace db {
 
-/** Implements the schema of an operator.  This is different from `Table`, which implements the schema of a base table.
- * The `OperatorSchema` can distinguish between attributes of the same name that belong to different sources, e.g. after
- * joining two relations that have an attribute name in common.  (The `Table` class cannot distinguish these
+/** Implements the schema of a `db::Operator`.  This is different from `db::Table`, which implements the schema of a
+ * base table.  The `OperatorSchema` allows attributes of the same name that belong to different sources, e.g. after
+ * joining two relations that have an attribute name in common.  (The `db::Table` class cannot distinguish these
  * attributes.)
  */
 struct OperatorSchema
 {
+    /** An `AttributeIdentifier` identifies an attrbite within a *result set*.  It is **not** equivalent to
+     * `db::Attribute`: an `AttributeIdentifier` may have no table name. */
     struct AttributeIdentifier
     {
         const char *table_name;
@@ -147,6 +152,7 @@ struct OperatorSchema
     public:
     const std::vector<entry_type> & elements() const { return elements_; }
 
+    /** Returns the number of attributes in this `OperatorSchema`. */
     auto size() const { return elements_.size(); }
 
     auto begin() { return elements_.begin(); }
@@ -156,6 +162,8 @@ struct OperatorSchema
     auto cbegin() const { return elements_.cbegin(); }
     auto cend()   const { return elements_.cend(); }
 
+    /** Returns an iterator to the entry with the given `AttributeIdentifier` `attr`, or `end()` if no such entry
+     * exists.  */
     decltype(elements_)::iterator find(AttributeIdentifier attr) {
         std::function<bool(entry_type&)> pred;
         if (attr.table_name)
@@ -166,31 +174,40 @@ struct OperatorSchema
         insist(it == end() or std::find_if(std::next(it), end(), pred) == end(), "duplicate entry; lookup ambiguous");
         return it;
     }
+    /** Returns an iterator to the entry with the given `AttributeIdentifier` `attr`, or `end()` if no such entry
+     * exists.  */
     decltype(elements_)::const_iterator find(AttributeIdentifier attr) const {
         return const_cast<OperatorSchema*>(this)->find(attr);
     }
 
+    /** Returns `true` iff this `OperatorSchema` contains an entry with `AttributeIdentifier` `attr`. */
     bool has(AttributeIdentifier attr) const { return find(attr) != end(); }
 
+    /** Returns the entry at index `idx`. */
     const entry_type & operator[](std::size_t idx) const { insist(idx < elements_.size()); return elements_[idx]; }
+
+    /** Returns a `std::pair` of the index and a reference to the entry with `AttributeIdentifier` `attr`. */
     std::pair<std::size_t, const entry_type&> operator[](AttributeIdentifier attr) const {
         auto pos = find(attr);
         insist(pos != end(), "id not found");
         return { std::distance(begin(), pos), *pos };
     }
 
+    /** Adds a new entry `attr` of type `type` to this `OperatorSchema`. */
     void add_element(AttributeIdentifier attr, const Type *type) {
         insist(attr.table_name == nullptr or strlen(attr.table_name) != 0);
         elements_.emplace_back(attr, type);
     }
 
+    /** Adds all entries of `other` to `this` `OperatorSchema`. */
     OperatorSchema & operator+=(const OperatorSchema &other) {
         for (auto &e : other)
             this->add_element(e.first, e.second);
         return *this;
     }
 
-    /** Union of two schemas. */
+    /** Adds all entries of `other` to `this` `OperatorSchema` using *set semantics*.  If an entry of `other` with a
+     * particular `AttributeIdentifier` already exists in `this`, it is not added again. */
     OperatorSchema & operator|=(const OperatorSchema &other) {
         for (auto &e : other) {
             if (has(e.first)) continue;
@@ -199,7 +216,7 @@ struct OperatorSchema
         return *this;
     }
 
-    /** Intersection of two schemas. */
+    /** Computes the *set intersection* of two `OperatorSchema`s. */
     friend OperatorSchema operator&(const OperatorSchema &first, const OperatorSchema &second) {
         OperatorSchema res;
         for (auto &elem : first) {
@@ -236,25 +253,32 @@ inline void print(std::ostream &out, const OperatorSchema &schema, const tuple_t
     }
 }
 
-/** This abstract class serves as a placeholder to associate data with operator nodes in the operator tree. */
+/** This interface is used to attach data to `db::Operator` instances. */
 struct OperatorData
 {
     virtual ~OperatorData() = 0;
 };
 
+/** An `Operator` represents an operation in a *query plan*.  A plan is a tree structure of `Operator`s.  `Operator`s
+ * can be evaluated to a sequence of tuples and have an `OperatorSchema`. */
 struct Operator
 {
     private:
-    OperatorSchema schema_;
-    mutable OperatorData *data_ = nullptr;
+    OperatorSchema schema_; ///< the schema of this `Operator`
+    mutable OperatorData *data_ = nullptr; ///< the data object associated to this `Operator`; may be `nullptr`
 
     public:
     virtual ~Operator() { delete data_; }
 
+    /** Returns the `OperatorSchema` of this `Operator`. */
     OperatorSchema & schema() { return schema_; }
+    /** Returns the `OperatorSchema` of this `Operator`. */
     const OperatorSchema & schema() const { return schema_; }
 
+    /** Attached `OperatorData` `data` to this `Operator`.  Returns the previously attached `OperatorData`.  May return
+     * `nullptr`. */
     OperatorData * data(OperatorData *data) const { std::swap(data, data_); return data; }
+    /** Returns the `OperatorData` attached to this `Operator`. */
     OperatorData * data() const { return data_; }
 
     virtual void accept(OperatorVisitor &v) = 0;
@@ -265,11 +289,14 @@ struct Operator
         return out;
     }
 
+    /** Minimizes the `OperatorSchema` of this `Operator`.  The `OperatorSchema` is reduced to the attributes actually
+     * required by ancestors of this `Operator` in the plan. */
     void minimize_schema();
 
     virtual void print(std::ostream &out) const = 0;
     virtual void print_recursive(std::ostream &out, unsigned depth = 0) const;
 
+    /** Prints a representation of this `Operator` and its descendants in the dot language. */
     void dot(std::ostream &out) const;
 
     void dump(std::ostream &out) const;
@@ -278,22 +305,26 @@ struct Operator
 
 struct Consumer;
 
+/** A `Producer` is an `Operator` that can be evaluated to a sequence of tuples. */
 struct Producer : virtual Operator
 {
     private:
-    Consumer *parent_;
+    Consumer *parent_; ///< the parent of this `Producer`
 
     public:
     virtual ~Producer() { }
 
+    /** Returns the parent of this `Producer`. */
     Consumer * parent() const { return parent_; }
+    /** Sets the parent of this `Producer`.  Returns the previous parent.  May return `nullptr`. */
     Consumer * parent(Consumer *c) { std::swap(parent_, c); return c; }
 };
 
+/** A `Consumer` is an `Operator` that can be evaluated on a sequence of tuples. */
 struct Consumer : virtual Operator
 {
     private:
-    std::vector<Producer*> children_;
+    std::vector<Producer*> children_; ///< the children of this `Consumer`
 
     public:
     virtual ~Consumer() {
@@ -301,12 +332,14 @@ struct Consumer : virtual Operator
             delete c;
     }
 
+    /** Adds a `child` to this `Consumer` and updates this `Consumer`s schema accordingly. */
     virtual void add_child(Producer *child) {
         insist(child);
         children_.push_back(child);
         child->parent(this);
         schema() += child->schema();
     }
+    /** Sets the `i`-th `child` of this `Consumer`.  Forces a recomputation of this `Consumer`s schema. */
     virtual Producer * set_child(Producer *child, std::size_t i) {
         insist(child);
         insist(i < children_.size());
@@ -322,7 +355,11 @@ struct Consumer : virtual Operator
 
         return old;
     }
+
+    /** Returns a reference to the children of this `Consumer`. */
     const std::vector<Producer*> & children() const { return children_; }
+
+    /** Returns the `i`-th child of this `Consumer`. */
     Producer * child(std::size_t i) const { insist(i < children_.size()); return children_[i]; }
 
     void print_recursive(std::ostream &out, unsigned depth) const override;

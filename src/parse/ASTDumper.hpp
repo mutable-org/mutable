@@ -5,14 +5,15 @@
 
 namespace db {
 
+/** Dumps a textual representation of the AST to an output stream. */
 struct ASTDumper : ConstASTVisitor
 {
     using ConstASTVisitor::operator();
 
     public:
-    std::ostream &out;
+    std::ostream &out; ///< the output stream to write to
     private:
-    int indent_;
+    int indent_; ///< the current level of indentation
 
     public:
     ASTDumper(std::ostream &out, int indent = 0) : out(out), indent_(indent) { }
@@ -48,6 +49,7 @@ struct ASTDumper : ConstASTVisitor
     void operator()(Const<DSVImportStmt> &s);
 
     private:
+    /** Start a new line with proper indentation. */
     std::ostream & indent() const {
         insist(indent_ >= 0, "Indent must not be negative!  Missing increment or superfluous decrement?");
         if (indent_)

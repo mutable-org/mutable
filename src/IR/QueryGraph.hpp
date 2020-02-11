@@ -14,8 +14,9 @@ struct Join;
 struct QueryGraph;
 struct Stmt;
 
-/** A data source in the query graph.  A data source provides a sequence of tuples, optionally with a filter condition
- * they must fulfill.  Data sources can be joined with one another. */
+/** A `DataSource` in a `db::QueryGraph`.  Represents something that can be evaluated to a sequence of tuples,
+ * optionally filtered by a filter condition.  A `DataSource` can be joined with one or more other `DataSource`s by a
+ * `db::Join`. */
 struct DataSource
 {
     private:
@@ -31,15 +32,21 @@ struct DataSource
 
     virtual ~DataSource() { }
 
+    /** Returns the id of this `DataSource`. */
     std::size_t id() const { return id_; }
+    /** Returns the alias of this `DataSource`.  May be `nullptr`. */
     const char * alias() const { return alias_; }
+    /** Returns the filter of this `DataSource`.  May be empty. */
     cnf::CNF filter() const { return filter_; }
+    /** Adds `filter` to the current filter of this `DataSource` by logical conjunction. */
     void update_filter(cnf::CNF filter) { filter_ = filter_ and filter; }
+    /** Adds `join` to the set of `db::Join`s of this `DataSource`. */
     void add_join(Join *join) { joins_.emplace_back(join); }
+    /** Returns a reference to the `db::Join`s using this `DataSource`. */
     const auto & joins() const { return joins_; }
 };
 
-/** A base table is a data source that is materialized and stored persistently. */
+/** A `BaseTable` is a `db::DataSource` that is materialized and stored persistently by the database system. */
 struct BaseTable : DataSource
 {
     private:
@@ -48,10 +55,12 @@ struct BaseTable : DataSource
     public:
     BaseTable(std::size_t id, const char *alias, const Table &table) : DataSource(id, alias), table_(table) { }
 
+    /** Returns a reference to the `db::Table` providing the tuples. */
     const Table & table() const { return table_; }
 };
 
-/** A (nested) query is a data source that must be computed. */
+/** A `Query` in a `db::QueryGraph` is a `db::DataSource` that represents a nested query.  As such, a `Query` contains a
+ * `db::QueryGraph`.  A `Query` must be evaluated to acquire its sequence of tuples. */
 struct Query : DataSource
 {
     private:
@@ -61,10 +70,11 @@ struct Query : DataSource
     Query(std::size_t id, const char *alias, QueryGraph *query_graph) : DataSource(id, alias), query_graph_(query_graph) { }
     ~Query();
 
+    /** Returns a reference to the internal `db::QueryGraph`. */
     QueryGraph * query_graph() const { return query_graph_; }
 };
 
-/** A join combines source tables by a join condition. */
+/** A `Join` in a `db::QueryGraph` combines `db::DataSource`s by a join condition. */
 struct Join
 {
     using sources_t = std::vector<DataSource*>;
@@ -76,7 +86,9 @@ struct Join
     public:
     Join(cnf::CNF condition, sources_t sources) : condition_(condition) , sources_(sources) { }
 
+    /** Returns the join condition. */
     cnf::CNF condition() const { return condition_; }
+    /** Returns a reference to the joined `db::DataSource`s. */
     const sources_t & sources() const { return sources_; }
 };
 
@@ -86,7 +98,7 @@ struct QueryGraph
 {
     friend struct GraphBuilder;
 
-    using Subproblem = SmallBitset; ///< export a type declaration for subproblems encoded as bitsets
+    using Subproblem = SmallBitset; ///< encode `QueryGraph::Subproblem`s as `SmallBitset`s
 
     private:
     using projection_type = std::pair<const Expr*, const char*>;

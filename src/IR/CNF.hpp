@@ -12,39 +12,55 @@ struct Expr;
 
 namespace cnf {
 
+/** A `Predicate` contains a `db::Expr` of `db::Boolean` type in either *positive* or *negative* form. */
 struct Predicate
 {
     private:
-    uintptr_t literal_; // pointer to Expr; LSB is 1 iff literal is negated
+    uintptr_t literal_; ///< pointer to Expr; LSB is 1 iff literal is negated
 
     Predicate(uintptr_t l) : literal_(l) { }
 
     public:
+    /** Creates a *positive* `Predicate` from `e`. */
     static Predicate Positive(const Expr *e) { return Predicate(reinterpret_cast<uintptr_t>(e) | 0x0UL); }
+    /** Creates a *negative* `Predicate` from `e`. */
     static Predicate Negative(const Expr *e) { return Predicate(reinterpret_cast<uintptr_t>(e) | 0x1UL); }
+    /** Creates a `Predicate` from `e`.  The `Predicate` is *negative* iff `is_negative`. */
     static Predicate Create(const Expr *e, bool is_negative) { return is_negative ? Negative(e) : Positive(e); }
 
+    /** Returns `true` iff this `Predicate` is *negative*. */
     bool negative() const { return literal_ & 0x1UL; }
 
+    /** Returns the `db::Expr` within this `Predicate`. */
     const Expr * expr() const { return reinterpret_cast<const Expr*>(literal_ & ~0b11UL); }
+    /** Returns the `db::Expr` within this `Predicate`. */
     const Expr * operator*() const { return expr(); }
+    /** Returns the `db::Expr` within this `Predicate`. */
     const Expr * operator->() const { return expr(); }
 
+    /** Returns a negated version of this `Predicate`, i.e.\ if this `Predicate` is *positive*, the returned `Predicate`
+     * is *negative*. */
     Predicate operator!() const { return Predicate(literal_ ^ 0x1UL); }
 
+    /** Returns `true` iff `other` is equal to `this`.  Two `Predicate`s are equal, iff they have the same `db::Expr`
+     * and the same *sign*. */
     bool operator==(Predicate other) const { return this->literal_ == other.literal_; }
+    /** Returns `true` iff `other` is not equal to `this`.  Two `Predicate`s are equal, iff they have the same
+     * `db::Expr` and the same *sign*. */
     bool operator!=(Predicate other) const { return not operator==(other); }
 
-    /** Compare predicates by the location of the referenced expression in memory.  Negative predicates are one larger
-     * than positive predicates of the same expression. */
+    /** Compare `Predicate`s by the location of their referenced `db::Expr` in memory and their sign.  Negative
+     * `Predicate`s are larger than positive `Predicate`s of the same expression. */
     bool operator<(Predicate other) const { return this->literal_ < other.literal_; }
 
+    /** Print a textual representation of `pred` to `out`. */
     friend std::ostream & operator<<(std::ostream &out, const Predicate &pred);
 
     void dump(std::ostream &out) const;
     void dump() const;
 };
 
+/** A `Clause` represents a **disjunction** of `db::Predicate`s. */
 struct Clause : public std::vector<Predicate>
 {
     using std::vector<Predicate>::vector; // c'tor
@@ -54,16 +70,19 @@ struct Clause : public std::vector<Predicate>
     bool operator==(const Clause &other) const { return *this >= other and *this <= other; }
     bool operator!=(const Clause &other) const { return not operator==(other); }
 
+    /** Print a textual representation of `clause` to `out`. */
     friend std::ostream & operator<<(std::ostream &out, const Clause &clause);
 
     void dump(std::ostream &out) const;
     void dump() const;
 };
 
+/** A `CNF` represents a **conjunction** of `cnf::Clause`s. */
 struct CNF : public std::vector<Clause>
 {
     using std::vector<Clause>::vector; // c'tor
 
+    /** Print a textual representation of `cnf` to `out`. */
     friend std::ostream & operator<<(std::ostream &out, const CNF &cnf);
     friend std::string to_string(const CNF &cnf) {
         std::ostringstream oss;
@@ -75,81 +94,34 @@ struct CNF : public std::vector<Clause>
     void dump() const;
 };
 
-/** The logical or of two clauses is the concatenation of the predicates. */
+/** Returns the **logical or** of two `cnf::Clause`s, i.e.\ the disjunction of the `db::Predicate`s of `lhs` and `rhs`.
+ */
 Clause operator||(const Clause &lhs, const Clause &rhs);
 
-/** The logical and of two clauses is a CNF with the clauses. */
+/** Returns the **logical and** of two `cnf::Clause`s, i.e.\ a `cnf::CNF` with the two `cnf::Clause`s `lhs` and `rhs`.
+ */
 CNF operator&&(const Clause &lhs, const Clause &rhs);
 
-/** The logical and of two CNFs is the concatenation of the clauses. */
+/** Returns the **logical and** of two `cnf::CNF`s, i.e.\ the conjunction of the `cnf::Clause`s of `lhs` and `rhs`. */
 CNF operator&&(const CNF &lhs, const CNF &rhs);
 
-/** The logical or of two CNFs is computed using the distributive law of propositional logic. */
+/** Returns the **logical or** of two `cnf::CNF`s.  It is computed using the [*distributive law* from Boolean
+ * algebra](https://en.wikipedia.org/wiki/Distributive_property): *P ∨ (Q ∧ R) ↔ ((P ∨ Q) ∧ (P ∨ R))* */
 CNF operator||(const CNF &lhs, const CNF &rhs);
 
-/** The logical not of a clause. */
+/** Returns the **logical negation** of a `cnf::Clause`.  It is computed using [De Morgan's laws]
+ * (https://en.wikipedia.org/wiki/De_Morgan%27s_laws): *¬(P ∨ Q) ↔ ¬P ∧ ¬Q*. */
 CNF operator!(const Clause &clause);
 
-/** The logical not of a clause. */
+/** Returns the **logical negation** of a `cnf::CNF`.  It is computed using [De Morgan's laws]
+ * (https://en.wikipedia.org/wiki/De_Morgan%27s_laws): *¬(P ∧ Q) ↔ ¬P ∨ ¬Q*. */
 CNF operator!(const CNF &cnf);
 
-struct CNFGenerator : ConstASTVisitor
-{
-    using ConstASTVisitor::operator();
+/** Converts the `db::Boolean` `db::Expr` `e` to a `cnf::CNF`. */
+CNF to_CNF(const Expr &e);
+/** Converts the `db::Boolean` `db::Expr` of `c` to a `cnf::CNF`. */
+CNF get_CNF(const db::Clause &c);
 
-    private:
-    bool is_negative_ = false;
-    CNF result_;
-
-    public:
-    CNFGenerator() { }
-
-    CNF get() const { return result_; }
-
-    /* Expressions */
-    void operator()(Const<ErrorExpr> &e);
-    void operator()(Const<Designator> &e);
-    void operator()(Const<Constant> &e);
-    void operator()(Const<FnApplicationExpr> &e);
-    void operator()(Const<UnaryExpr> &e);
-    void operator()(Const<BinaryExpr> &e);
-
-    /* Clauses */
-    void operator()(Const<ErrorClause>&) { unreachable("not supported"); }
-    void operator()(Const<SelectClause>&) { unreachable("not supported"); }
-    void operator()(Const<FromClause>&) { unreachable("not supported"); }
-    void operator()(Const<WhereClause> &c) { (*this)(*c.where); }
-    void operator()(Const<GroupByClause>&) { unreachable("not supported"); }
-    void operator()(Const<HavingClause> &c) { (*this)(*c.having); }
-    void operator()(Const<OrderByClause>&) { unreachable("not supported"); }
-    void operator()(Const<LimitClause>&) { unreachable("not supported"); }
-
-    /* Statements */
-    void operator()(Const<ErrorStmt>&) { unreachable("not supported"); }
-    void operator()(Const<EmptyStmt>&) { unreachable("not supported"); }
-    void operator()(Const<CreateDatabaseStmt>&) { unreachable("not supported"); }
-    void operator()(Const<UseDatabaseStmt>&) { unreachable("not supported"); }
-    void operator()(Const<CreateTableStmt>&) { unreachable("not supported"); }
-    void operator()(Const<SelectStmt> &) { unreachable("not supported"); }
-    void operator()(Const<InsertStmt>&) { unreachable("not supported"); }
-    void operator()(Const<UpdateStmt>&) { unreachable("not supported"); }
-    void operator()(Const<DeleteStmt>&) { unreachable("not supported"); }
-    void operator()(Const<DSVImportStmt>&) { unreachable("not supported"); }
-};
-
-inline CNF to_CNF(const Expr &e)
-{
-    CNFGenerator G;
-    G(e);
-    return G.get();
-}
-
-inline CNF get_CNF(const db::Clause &c)
-{
-    CNFGenerator G;
-    G(c);
-    return G.get();
-}
 
 }
 

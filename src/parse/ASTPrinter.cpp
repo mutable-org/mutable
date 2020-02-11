@@ -172,8 +172,8 @@ void ASTPrinter::operator()(Const<CreateTableStmt> &s)
 
 void ASTPrinter::operator()(Const<SelectStmt> &s)
 {
-    bool was_nested = is_nested;
-    is_nested = true;
+    bool was_nested = is_nested_;
+    is_nested_ = true;
 
     (*this)(*s.select);
 
@@ -203,8 +203,8 @@ void ASTPrinter::operator()(Const<SelectStmt> &s)
         (*this)(*s.limit);
     }
 
-    is_nested = was_nested;
-    if (not is_nested)
+    is_nested_ = was_nested;
+    if (not is_nested_)
         out << ';';
 }
 

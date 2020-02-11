@@ -20,7 +20,8 @@ CWD = os.getcwd()
 
 component_keywords = ['lexer', 'parser', 'sema', 'end2end']
 
-bar_format = '{desc}: {n}/{total} ({percentage:3.0f}%)|{bar}|'
+# bar_format = '{desc}: {n}/{total} ({percentage:3.0f}%)|{bar}|'
+bar_format = '    |{bar:16}| {n}/{total}'
 
 check_lexer = check_parser = check_sema = check_end2end = False
 verbose = quiet = False
@@ -52,15 +53,20 @@ def parse_components(components):
         if len(components) > 0:
             raise Exception(f'Cannot parse command line argument(s): {components}')
 
+def print_testcase(test_case):
+    if not quiet:
+        print(f'{test_case}:')
 
 def print_summary(component, n_tests, n_passed):
     if not quiet:
-        component = component.ljust(30)
-        print(f'{termcolor.tc(component, termcolor.TermColor.BOLD)}' + ':', end=' ')
+        print(f'{termcolor.tc(component, termcolor.TermColor.BOLD)}: ', end='')
         if n_passed < n_tests:
-            print(f'Passed: {termcolor.err(n_passed)}/{termcolor.tc(n_tests, termcolor.TermColor.BOLD)}')
+            print(f'{termcolor.err(n_passed)}/{termcolor.tc(n_tests, termcolor.TermColor.BOLD)}')
         else:
-            print(f'Passed: {termcolor.ok(n_passed)}/{termcolor.tc(n_tests, termcolor.TermColor.BOLD)}')
+            print(f'{termcolor.ok(n_passed)}/{termcolor.tc(n_tests, termcolor.TermColor.BOLD)}')
+        # terminal_cols, _ = shutil.get_terminal_size()
+        terminal_cols = 60
+        print(f'{terminal_cols*"-"}')
         # else:
         #     print(f'Passed: {termcolor.ok(n_passed)}/{termcolor.tc(n_tests, termcolor.TermColor.BOLD)}', end=' ')
         # n_failed = n_tests - n_passed
@@ -138,16 +144,17 @@ def lexer_test():
 
     test_files = sorted(glob.glob(LEXER_GLOB_POSITIVE, recursive=True))
 
-    for sql_filename in tqdm(test_files, desc='Lexer (positive)'.ljust(30), disable=quiet, bar_format=bar_format):
-
+    print_testcase('Lexer (positive)')
+    for sql_filename in tqdm(test_files, desc='Lexer (positive)', disable=quiet, bar_format=bar_format):
         success, err = lexer_case(sql_filename, True)
         n_tests += 1
         n_passed += 1 if success else 0
         results.append((success, err))
 
     with open(LEXER_SANITY_FILE, 'r') as sanity_file:
+        print_testcase('Lexer (sanity)')
         num_lines = sum(1 for line in open(LEXER_SANITY_FILE, 'r'))
-        for test_case in tqdm(sanity_file, total=num_lines, desc='Lexer (sanity)'.ljust(30), disable=quiet, bar_format=bar_format):
+        for test_case in tqdm(sanity_file, total=num_lines, desc='Lexer (sanity)', disable=quiet, bar_format=bar_format):
 
             success, err = lexer_case(test_case, False)
             n_tests += 1
@@ -244,7 +251,8 @@ def parser_test():
 
     test_files = sorted(glob.glob(PARSER_GLOB_POSITIVE, recursive=True))
 
-    for sql_filename in tqdm(test_files, desc='Parser (positive)'.ljust(30), disable=quiet, bar_format=bar_format):
+    print_testcase('Parser (positive)')
+    for sql_filename in tqdm(test_files, desc='Parser (positive)', disable=quiet, bar_format=bar_format):
 
         success, err = parser_case(sql_filename, True)
         n_tests += 1
@@ -253,7 +261,8 @@ def parser_test():
 
     test_files = sorted(glob.glob(PARSER_GLOB_SANITY, recursive=True))
 
-    for sql_filename in tqdm(test_files, desc='Parser (sanity)'.ljust(30), disable=quiet, bar_format=bar_format):
+    print_testcase('Parser (sanity)')
+    for sql_filename in tqdm(test_files, desc='Parser (sanity)', disable=quiet, bar_format=bar_format):
 
         success, err = parser_case(sql_filename, False)
         n_tests += 1
@@ -319,7 +328,8 @@ def sema_test():
 
     test_files = sorted(glob.glob(SEMA_GLOB_POSITIVE, recursive=True))
 
-    for sql_filename in tqdm(test_files, desc='Semantic analysis (positive)'.ljust(30), disable=quiet, bar_format=bar_format):
+    print_testcase('Sema (positive)')
+    for sql_filename in tqdm(test_files, desc='Sema (positive)', disable=quiet, bar_format=bar_format):
 
         success, err = sema_case(sql_filename, True, sql_setup)
         n_tests += 1
@@ -328,7 +338,8 @@ def sema_test():
 
     test_files = sorted(glob.glob(SEMA_GLOB_SANITY, recursive=True))
 
-    for sql_filename in tqdm(test_files, desc='Semantic analysis (sanity)'.ljust(30), disable=quiet, bar_format=bar_format):
+    print_testcase('Sema (positive)')
+    for sql_filename in tqdm(test_files, desc='Sema (sanity)', disable=quiet, bar_format=bar_format):
 
         success, err = sema_case(sql_filename, False, sql_setup)
         n_tests += 1
@@ -390,7 +401,8 @@ def end2end_test():
 
     test_files = sorted(glob.glob(E2E_GLOB_POSITIVE, recursive=True))
 
-    for sql_filename in tqdm(test_files, desc='End to end'.ljust(30), disable=quiet, bar_format=bar_format):
+    print_testcase('End to end')
+    for sql_filename in tqdm(test_files, desc='End to end', disable=quiet, bar_format=bar_format):
         csv_filename = os.path.splitext(sql_filename)[0] + '.csv'
 
         success, err = end2end_case(sql_filename, csv_filename)
@@ -471,7 +483,6 @@ if __name__ == '__main__':
         print_summary('End to end', n_tests, n_passed)
 
     # Summary
-    terminal_cols, _ = shutil.get_terminal_size()
-    print_summary(f'{terminal_cols*"-"}\nTotal', total_tests, total_passed)
+    print_summary(f'Total', total_tests, total_passed)
 
     exit(0 if not failed else 1)

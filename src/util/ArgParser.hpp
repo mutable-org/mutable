@@ -53,7 +53,6 @@ class ArgParser
     std::unordered_map<const char*, const Option*> key_map; ///< maps the option name to the option object
     std::size_t short_len_ = 0;
     std::size_t long_len_  = 0;
-    const char *filename_ = nullptr;
 
     public:
     ArgParser() { }
@@ -79,7 +78,6 @@ class ArgParser
         }
     }
 
-    const char * get_filename() const { return filename_; }
     void print_args(FILE *out = stdout) const;
     void parse_args(int argc, const char **argv);
     const std::vector<const char*> & args() const { return args_; }

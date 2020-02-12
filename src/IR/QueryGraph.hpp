@@ -21,13 +21,16 @@ struct DataSource
     cnf::CNF filter_; ///< filter condition on this data source
     std::vector<Join*> joins_; ///< joins with this data source
     const char *alias_; ///< the alias of this data source
+    const std::size_t id_; ///< unique identifier of this data source within its query graph
 
     public:
-    DataSource(const char *alias) : alias_(alias) {
+    DataSource(std::size_t id, const char *alias) : alias_(alias), id_(id) {
         insist(not alias or strlen(alias) != 0, "if the data source has an alias, it must not be empty");
     }
+
     virtual ~DataSource() { }
 
+    std::size_t id() const { return id_; }
     const char * alias() const { return alias_; }
     cnf::CNF filter() const { return filter_; }
     void update_filter(cnf::CNF filter) { filter_ = filter_ and filter; }
@@ -42,7 +45,7 @@ struct BaseTable : DataSource
     const Table &table_; ///< the table providing the tuples
 
     public:
-    BaseTable(const Table &table, const char *alias) : DataSource(alias), table_(table) { }
+    BaseTable(std::size_t id, const char *alias, const Table &table) : DataSource(id, alias), table_(table) { }
 
     const Table & table() const { return table_; }
 };
@@ -54,7 +57,7 @@ struct Query : DataSource
     QueryGraph *query_graph_; ///< query graph of the sub-query
 
     public:
-    Query(QueryGraph *query_graph, const char *alias) : DataSource(alias), query_graph_(query_graph) { }
+    Query(std::size_t id, const char *alias, QueryGraph *query_graph) : DataSource(id, alias), query_graph_(query_graph) { }
     ~Query();
 
     QueryGraph * query_graph() const { return query_graph_; }

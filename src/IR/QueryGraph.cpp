@@ -219,7 +219,7 @@ struct db::GraphBuilder : ConstASTVisitor
                 /* Create a new base table. */
                 insist(tbl.has_table());
                 Token alias = tbl.alias ? tbl.alias : *tok;
-                auto base = new BaseTable(tbl.table(), alias.text);
+                auto base = new BaseTable(graph_->sources_.size(), alias.text, tbl.table());
                 aliases.emplace(alias.text, base);
                 graph_->sources_.emplace_back(base);
             } else if (auto stmt = std::get_if<Stmt*>(&tbl.source)) {
@@ -229,7 +229,7 @@ struct db::GraphBuilder : ConstASTVisitor
                     GraphBuilder builder;
                     builder(*select);
                     auto graph = builder.get();
-                    auto q = new Query(graph.release(), tbl.alias.text);
+                    auto q = new Query(graph_->sources_.size(), tbl.alias.text, graph.release());
                     insist(tbl.alias);
                     aliases.emplace(tbl.alias.text, q);
                     graph_->sources_.emplace_back(q);
@@ -301,10 +301,10 @@ struct db::GraphBuilder : ConstASTVisitor
         /* Add aggregates. */
         graph_->aggregates_ = get_aggregates(s);
 
-        /* Implement HAVING as a refular selection filter on a sub query. */
+        /* Implement HAVING as a regular selection filter on a sub query. */
         if (s.having) {
             auto H = as<HavingClause>(s.having);
-            auto sub = new Query(graph_.release(), nullptr);
+            auto sub = new Query(0, "HAVING", graph_.release());
             sub->update_filter(cnf::to_CNF(*H->having));
             graph_ = std::make_unique<QueryGraph>();
             graph_->sources_.emplace_back(sub);

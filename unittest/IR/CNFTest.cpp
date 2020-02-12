@@ -16,7 +16,7 @@ using namespace db::cnf;
  * Test CNF operations.
  *====================================================================================================================*/
 
-TEST_CASE("CNF/Clause operators", "[unit]")
+TEST_CASE("CNF/Clause operators", "[core][ir][cnf]")
 {
     Position pos("test");
     Designator A(Token(pos, "A", TK_IDENTIFIER));
@@ -62,7 +62,7 @@ TEST_CASE("CNF/Clause operators", "[unit]")
     }
 }
 
-TEST_CASE("CNF/CNF operators", "[unit]")
+TEST_CASE("CNF/CNF operators", "[core][ir][cnf]")
 {
     Position pos("test");
     Designator A(Token(pos, "A", TK_IDENTIFIER));
@@ -128,7 +128,7 @@ TEST_CASE("CNF/CNF operators", "[unit]")
     }
 }
 
-TEST_CASE("CNF/CNFGenerator", "[unit]")
+TEST_CASE("CNF/CNFGenerator", "[core][ir][cnf]")
 {
     SECTION("literal single value")
     {

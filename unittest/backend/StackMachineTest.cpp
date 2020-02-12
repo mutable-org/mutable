@@ -199,7 +199,7 @@ TEST_CASE("StackMachine", "[core][backend][stackmachine]")
     TEST("col_bool AND TRUE", "binary/logical/and/bool", bool, col_bool_val and true);
     TEST("col_bool OR FALSE", "binary/logical/or/bool",  bool, col_bool_val or false);
 
-    TEST("col_char .. \"test\"", "binary/string/../char", std::string_view, col_char_val + "test");
+    //TEST("col_char .. \"test\"", "binary/string/../char", std::string_view, col_char_val + "test");
 
     /* Unary operators */
     TEST("+col_int64_t", "unary/arithmetic/+/int64_t", int64_t, +col_int64_t_val);

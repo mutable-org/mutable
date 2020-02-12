@@ -72,6 +72,34 @@ void DPsize::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &
         for (std::size_t s1 = 1; s1 < s; ++s1) {
             /* Check for all combinations of subsets if they are valid joins and if so, forward the combination to the cost model. */
             std::size_t s2 = s - s1;
+            for (auto S1 = GospersHack::enumerate_all(s1, N); S1; ++S1) { // enumerate all subsets of size `s1`
+                for (auto S2 = GospersHack::enumerate_all(s2, N); S2; ++S2) { // enumerate all subsets of size `s - s1`
+                    ++inner_counter;
+                    if (*S1 & *S2) continue; // check for disjointness
+                    if (not M.is_connected(Subproblem(*S1), Subproblem(*S2))) continue; // check for connectedness
+                    ++csg_cmp_pair_counter;
+                    PT.update(cf, Subproblem(*S1), Subproblem(*S2), 0);
+                }
+            }
+        }
+    }
+}
+
+void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
+{
+    auto &sources = G.sources();
+    std::size_t N = sources.size();
+    AdjacencyMatrix M(G);
+
+    /* Both counters serve for debugging. */
+    std::size_t inner_counter = 0;
+    std::size_t csg_cmp_pair_counter = 0;
+
+    /* Process all subplans of size greater than one. */
+    for (std::size_t s = 2, n = sources.size(); s <= n; ++s) {
+        for (std::size_t s1 = 1; s1 < s; ++s1) {
+            /* Check for all combinations of subsets if they are valid joins and if so, forward the combination to the cost model. */
+            std::size_t s2 = s - s1;
             if (s1 == s2) { // if subproblems of equal size
                 /* Use optimized version of DPsize.*/
                 for (auto S1 = GospersHack::enumerate_all(s1, N); S1; ++S1) { // enumerate all subsets of size `s1`

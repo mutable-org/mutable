@@ -35,6 +35,11 @@ struct DPsize final : PlanEnumerator
     void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
 };
 
+struct DPsizeOpt final : PlanEnumerator
+{
+    void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
+};
+
 /** Computes the join order using subset-based dynamic programming. */
 struct DPsub final : PlanEnumerator
 {

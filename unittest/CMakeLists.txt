@@ -20,6 +20,7 @@ add_executable(
 
     # IR
     IR/CNFTest.cpp
+    IR/AdjacencyMatrixTest.cpp
 
     # catalog
     catalog/SchemaTest.cpp

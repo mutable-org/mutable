@@ -116,6 +116,13 @@ struct QueryGraph
     auto limit() const { return limit_; }
     bool projection_is_anti() const { return projection_is_anti_; }
 
+    /** Returns a data souce given its id. */
+    const DataSource * operator[](uint64_t id) const {
+        auto ds = sources_[id];
+        insist(ds->id() == id, "given id and data source id must match");
+        return ds;
+    }
+
     /** Translates the query graph to dot. */
     void dot(std::ostream &out) const;
 

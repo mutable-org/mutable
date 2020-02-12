@@ -1,6 +1,7 @@
 #pragma once
 
 #include "IR/CNF.hpp"
+#include <cstring>
 #include <memory>
 #include <vector>
 
@@ -22,7 +23,9 @@ struct DataSource
     const char *alias_; ///< the alias of this data source
 
     public:
-    DataSource(const char *alias) : alias_(alias) { }
+    DataSource(const char *alias) : alias_(alias) {
+        insist(not alias or strlen(alias) != 0, "if the data source has an alias, it must not be empty");
+    }
     virtual ~DataSource() { }
 
     const char * alias() const { return alias_; }
@@ -112,6 +115,9 @@ struct QueryGraph
 
     void dump(std::ostream &out) const;
     void dump() const;
+
+    private:
+    void dot_recursive(std::ostream &out) const;
 };
 
 }

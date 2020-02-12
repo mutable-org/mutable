@@ -374,8 +374,6 @@ std::unique_ptr<QueryGraph> QueryGraph::Build(const Stmt &stmt)
 
 void QueryGraph::dot(std::ostream &out) const
 {
-#define q(X) '"' << X << '"' // quote
-#define id(X) q(std::hex << &X << std::dec) // convert virtual address to identifier
     out << "graph query_graph\n{\n"
         << "    forcelabels=true;\n"
         << "    overlap=false;\n"
@@ -385,8 +383,24 @@ void QueryGraph::dot(std::ostream &out) const
         << "    node [fontname = \"DejaVu Sans\"];\n"
         << "    edge [fontname = \"DejaVu Sans\"];\n";
 
+    dot_recursive(out);
+
+    out << '}' << std::endl;
+}
+
+void QueryGraph::dot_recursive(std::ostream &out) const
+{
+#define q(X) '"' << X << '"' // quote
+#define id(X) q(std::hex << &X << std::dec) // convert virtual address to identifier
+    for (auto ds : sources()) {
+        if (auto q = cast<Query>(ds)) {
+            q->query_graph()->dot_recursive(out);
+        }
+    }
+
     out << "  subgraph cluster_" << this << " {\n"
-        << "    hideous [label=\"\",style=\"invis\"];\n";
+        << "    hideous [label=\"\",style=\"invis\"];\n\n"
+        << "    " << id(*this) << " [shape=point,style=invis];\n";
 
     for (auto ds : sources_) {
         out << "    " << id(*ds) << " [label=<<B>" << ds->alias() << "</B>";
@@ -395,6 +409,9 @@ void QueryGraph::dot(std::ostream &out) const
                 << html_escape(to_string(ds->filter()))
                 << "</FONT>";
         out << ">,style=filled,fillcolor=\"0.0 0.0 0.8\"];\n";
+        if (auto q = cast<Query>(ds)) {
+            out << id(*ds) << " -- " << id(*q->query_graph()) << " [lhead=cluster_" << q->query_graph() << "];\n";
+        }
     }
 
     for (auto j : joins_) {
@@ -463,8 +480,7 @@ void QueryGraph::dot(std::ostream &out) const
 
     out << "           </TABLE>\n"
         << "          >;\n"
-        << "  }\n"
-        << '}' << std::endl;
+        << "  }\n";
 #undef id
 #undef q
 }

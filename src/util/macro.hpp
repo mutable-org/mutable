@@ -69,8 +69,8 @@ inline void _insist(const bool cond, const char *filename, const unsigned line, 
     std::cout.flush();
     std::cerr << filename << ':' << line << ": Condition '" << condstr << "' failed.";
     if (msg)
-        std::cout << "  " << msg << '.';
-    std::cout << std::endl;
+        std::cerr << "  " << msg << '.';
+    std::cerr << std::endl;
 
     abort();
     __builtin_unreachable();

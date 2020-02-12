@@ -60,7 +60,7 @@ void DummyPlanEnumerator::operator()(const QueryGraph &G, const CostFunction&, P
 void DPsize::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
 {
     auto &sources = G.sources();
-    std::size_t N = sources.size();
+    std::size_t n = sources.size();
     AdjacencyMatrix M(G);
 
     /* Both counters serve for debugging. */
@@ -68,17 +68,18 @@ void DPsize::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &
     std::size_t csg_cmp_pair_counter = 0;
 
     /* Process all subplans of size greater than one. */
-    for (std::size_t s = 2, n = sources.size(); s <= n; ++s) {
+    for (std::size_t s = 2; s <= n; ++s) {
         for (std::size_t s1 = 1; s1 < s; ++s1) {
-            /* Check for all combinations of subsets if they are valid joins and if so, forward the combination to the cost model. */
+            /* Check for all combinations of subsets if they are valid joins and if so, forward the combination to the
+             * plan table. */
             std::size_t s2 = s - s1;
-            for (auto S1 = GospersHack::enumerate_all(s1, N); S1; ++S1) { // enumerate all subsets of size `s1`
-                for (auto S2 = GospersHack::enumerate_all(s2, N); S2; ++S2) { // enumerate all subsets of size `s - s1`
+            for (auto S1 = GospersHack::enumerate_all(s1, n); S1; ++S1) { // enumerate all subsets of size `s1`
+                for (auto S2 = GospersHack::enumerate_all(s2, n); S2; ++S2) { // enumerate all subsets of size `s - s1`
                     ++inner_counter;
-                    if (*S1 & *S2) continue; // check for disjointness
-                    if (not M.is_connected(Subproblem(*S1), Subproblem(*S2))) continue; // check for connectedness
+                    if (*S1 & *S2) continue; // not disjoint? -> skip
+                    if (not M.is_connected(*S1, *S2)) continue; // not connected? -> skip
                     ++csg_cmp_pair_counter;
-                    PT.update(cf, Subproblem(*S1), Subproblem(*S2), 0);
+                    PT.update(cf, *S1, *S2, 0);
                 }
             }
         }
@@ -88,7 +89,7 @@ void DPsize::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &
 void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
 {
     auto &sources = G.sources();
-    std::size_t N = sources.size();
+    std::size_t n = sources.size();
     AdjacencyMatrix M(G);
 
     /* Both counters serve for debugging. */
@@ -96,14 +97,14 @@ void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTabl
     std::size_t csg_cmp_pair_counter = 0;
 
     /* Process all subplans of size greater than one. */
-    for (std::size_t s = 2, n = sources.size(); s <= n; ++s) {
+    for (std::size_t s = 2; s <= n; ++s) {
         for (std::size_t s1 = 1; s1 < s; ++s1) {
             /* Check for all combinations of subsets if they are valid joins and if so, forward the combination to the cost model. */
             std::size_t s2 = s - s1;
             if (s1 == s2) { // if subproblems of equal size
                 /* Use optimized version of DPsize.*/
-                for (auto S1 = GospersHack::enumerate_all(s1, N); S1; ++S1) { // enumerate all subsets of size `s1`
-                    GospersHack S2 = GospersHack::enumerate_from(*S1, N);
+                for (auto S1 = GospersHack::enumerate_all(s1, n); S1; ++S1) { // enumerate all subsets of size `s1`
+                    GospersHack S2 = GospersHack::enumerate_from(*S1, n);
                     for (++S2; S2; ++S2) { // consider only the subsets following S1
                         ++inner_counter;
                         if (*S1 & *S2) continue; // check for disjointness
@@ -114,8 +115,8 @@ void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTabl
                 }
             } else {
                 /* Standard version. */
-                for (auto S1 = GospersHack::enumerate_all(s1, N); S1; ++S1) { // enumerate all subsets of size `s1`
-                    for (auto S2 = GospersHack::enumerate_all(s2, N); S2; ++S2) { // enumerate all subsets of size `s - s1`
+                for (auto S1 = GospersHack::enumerate_all(s1, n); S1; ++S1) { // enumerate all subsets of size `s1`
+                    for (auto S2 = GospersHack::enumerate_all(s2, n); S2; ++S2) { // enumerate all subsets of size `s - s1`
                         ++inner_counter;
                         if (*S1 & *S2) continue; // check for disjointness
                         if (not M.is_connected(Subproblem(*S1), Subproblem(*S2))) continue; // check for connectedness
@@ -131,14 +132,14 @@ void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTabl
 void DPsub::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
 {
     auto &sources = G.sources();
-    std::size_t N = sources.size();
+    std::size_t n = sources.size();
     AdjacencyMatrix M(G);
 
     /* Both counters serve for debugging. */
     std::size_t inner_counter = 0;
     std::size_t csg_cmp_pair_counter = 0;
 
-    for (std::size_t i = 1, end = 1UL << N; i < end; ++i) {
+    for (std::size_t i = 1, end = 1UL << n; i < end; ++i) {
         Subproblem S(i); // {Rj | floor(i/2^j) mod 2 = 1}
         if (not M.is_connected(S)) continue;
         for (Subproblem S1(least_subset(S)); S1 != 0; S1 = Subproblem(next_subset(S1, S))) {

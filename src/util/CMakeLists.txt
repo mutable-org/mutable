@@ -1,6 +1,7 @@
 add_library(
     util
     STATIC
+    ADT.cpp
     ArgParser.cpp
     Diagnostic.cpp
     DotTool.cpp

@@ -30,19 +30,19 @@ struct DummyPlanEnumerator final : PlanEnumerator
 };
 
 /** Computes the join order using size-based dynamic programming. */
-struct DPsizePlanEnumerator final : PlanEnumerator
+struct DPsize final : PlanEnumerator
 {
     void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
 };
 
 /** Computes the join order using subset-based dynamic programming. */
-struct DPsubPlanEnumerator final : PlanEnumerator
+struct DPsub final : PlanEnumerator
 {
     void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
 };
 
 /** Computes the join order using connected subgraph complement pairs. */
-struct DPccpPlanEnumerator final : PlanEnumerator
+struct DPccp final : PlanEnumerator
 {
     void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
 };

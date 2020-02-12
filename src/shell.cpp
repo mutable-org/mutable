@@ -141,7 +141,7 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
                 dot.show("graph", is_stdin);
             }
 
-            DPsizePlanEnumerator pe;
+            DPsize pe;
             CostFunction cf([](CostFunction::Subproblem left, CostFunction::Subproblem right, int, const PlanTable &T) {
                 return sum_wo_overflow(T[left].cost, T[right].cost, T[left].size, T[right].size);
             });

@@ -57,7 +57,7 @@ void DummyPlanEnumerator::operator()(const QueryGraph &G, const CostFunction&, P
 #endif
 }
 
-void DPsizePlanEnumerator::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
+void DPsize::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
 {
     auto &sources = G.sources();
     std::size_t N = sources.size();
@@ -100,7 +100,7 @@ void DPsizePlanEnumerator::operator()(const QueryGraph &G, const CostFunction &c
     }
 }
 
-void DPsubPlanEnumerator::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
+void DPsub::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
 {
     auto &sources = G.sources();
     std::size_t N = sources.size();
@@ -126,7 +126,7 @@ void DPsubPlanEnumerator::operator()(const QueryGraph &G, const CostFunction &cf
     }
 }
 
-void DPccpPlanEnumerator::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
+void DPccp::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
 {
     // TODO implement
 }

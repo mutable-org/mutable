@@ -116,3 +116,44 @@ struct SmallBitset
     void dump(std::ostream &out) const;
     void dump() const;
 };
+
+/** Enumerate all subsets of size `k` based on superset of size `n`.
+ *  See http://programmingforinsomniacs.blogspot.com/2018/03/gospers-hack-explained.html */
+struct GospersHack
+{
+    private:
+    uint64_t set_;
+    uint64_t limit_;
+
+    GospersHack() { }
+
+    public:
+    static GospersHack enumerate_all(uint64_t k, uint64_t n) {
+        insist(k <= n, "invalid enumeration");
+        GospersHack GH;
+        GH.set_ = (1UL << k) - 1;
+        GH.limit_ = 1UL << n;
+        return GH;
+    }
+    static GospersHack enumerate_from(SmallBitset set, uint64_t n) {
+        GospersHack GH;
+        GH.set_ = set;
+        GH.limit_ = 1UL << n;
+        insist(set <= GH.limit_, "set exceeds the limit");
+        return GH;
+    }
+
+    /** Advance to the next subset. */
+    GospersHack & operator++() {
+        uint64_t c = set_ & -set_;
+        uint64_t r = set_ + c;
+        set_ = (((r ^ set_) >> 2) / c) | r;
+        return *this;
+    }
+
+    /** Returns false iff all subsets have been enumerated. */
+    operator bool() const { return set_ < limit_; }
+
+    /** Returns the current subset. */
+    SmallBitset operator*() const { return SmallBitset(set_); }
+};

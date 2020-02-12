@@ -74,7 +74,7 @@ struct PlanTable
 
     void update(const CostFunction &cf, Subproblem left, Subproblem right, int op) {
         auto &entry = at(left | right);
-        auto cost = cf(left, right, /* op= */ 0, *this);
+        auto cost = cf(left, right, op, *this);
         if (cost < entry.cost) {
             entry.cost = cost;
             entry.left = left;

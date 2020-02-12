@@ -1,6 +1,7 @@
 #pragma once
 
 #include "IR/CNF.hpp"
+#include "util/ADT.hpp"
 #include <cstring>
 #include <memory>
 #include <vector>
@@ -85,6 +86,8 @@ struct QueryGraph
 {
     friend struct GraphBuilder;
 
+    using Subproblem = SmallBitset; ///< export a type declaration for subproblems encoded as bitsets
+
     private:
     using projection_type = std::pair<const Expr*, const char*>;
     using order_type = std::pair<const Expr*, bool>; ///> true means ascending, false means descending
@@ -121,6 +124,79 @@ struct QueryGraph
 
     private:
     void dot_recursive(std::ostream &out) const;
+};
+
+
+/** An adjacency matrix for a given query graph. Represents the join graph. */
+struct AdjacencyMatrix
+{
+    private:
+    SmallBitset m_[SmallBitset::CAPACITY]; ///< matrix entries
+
+    public:
+    AdjacencyMatrix() { }
+    AdjacencyMatrix(const QueryGraph &query_graph)
+    {
+        /* Iterate over all joins in the query graph. */
+        for (auto join : query_graph.joins()) {
+            if (join->sources().size() != 2)
+                throw std::invalid_argument("building adjacency matrix for non-binary join");
+            /* Take both join inputs and set the appropriate bit in the adjacency matrix. */
+            auto i = join->sources()[0]->id(); // first join input
+            auto j = join->sources()[1]->id(); // second join input
+            set_bidirectional(i, j); // symmetric matrix
+        }
+
+    }
+
+    /** Set the bit in row `i` and offset `j` to to one. */
+    void set(std::size_t i, std::size_t j) {
+        insist(i < SmallBitset::CAPACITY, "offset is out-of-bounds");
+        insist(j < SmallBitset::CAPACITY, "offset is out-of-bounds");
+        m_[i].set(j);
+    }
+    /** Set the bit in row `i` and offset `j` and the symmetric bit to one. */
+    void set_bidirectional(std::size_t i, std::size_t j) { set(i, j); set(j, i); }
+
+    /** Get the bit in row `i` and offset `j` to to one. */
+    bool get(std::size_t i, std::size_t j) const {
+        insist(i < SmallBitset::CAPACITY, "offset is out-of-bounds");
+        insist(j < SmallBitset::CAPACITY, "offset is out-of-bounds");
+        return m_[i].contains(j);
+    }
+
+    /** Returns true if there is at least one edge between one of the data sources in each subset. */
+    bool is_connected(SmallBitset left, SmallBitset right) {
+        SmallBitset reachable;
+        /* Compute the set of reachable data sources from the data sources in `right`. */
+        for (auto it : right)
+            reachable = reachable | m_[it];
+        /* Intersect the data source of `left` with the data source reachable from `right`.  If the result is non-empty,
+         * `left` and `right` are connected. */
+        return left & reachable;
+    }
+
+    /** Returns true if the subproblem `s` is connected. */
+    bool is_connected(SmallBitset s) {
+        SmallBitset reachable;
+        /* Subproblem with single relation is trivially connected. */
+        if (s.size() == 1) return true;
+        /* Compute the set of reachable data sources from the data sources in `s`. */
+        for (auto it : s)
+            reachable = reachable | m_[it];
+        /* If `reachable` is a subset of `s`, then it is connected. */
+        return s.is_subset(reachable);
+    }
+
+    friend std::ostream & operator<<(std::ostream &out, const AdjacencyMatrix &m) {
+        out << "Adjacency Matrix";
+        for (auto s : m.m_)
+            out << '\n' << s;
+        return out;
+    }
+
+    void dump(std::ostream &out) const;
+    void dump() const;
 };
 
 }

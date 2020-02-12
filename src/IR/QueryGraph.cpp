@@ -572,3 +572,6 @@ void QueryGraph::dump(std::ostream &out) const
     out << "\n}" << std::endl;
 }
 void QueryGraph::dump() const { dump(std::cerr); }
+
+void AdjacencyMatrix::dump(std::ostream &out) const { out << *this << std::endl; }
+void AdjacencyMatrix::dump() const { dump(std::cerr); }

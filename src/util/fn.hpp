@@ -280,3 +280,34 @@ inline bool isspace(const char *s, std::size_t len)
 inline bool isspace(const char *s) { return isspace(s, strlen(s)); }
 
 void exec(const char *executable, std::initializer_list<const char*> args);
+
+inline uint64_t least_subset(uint64_t set) { return set & -set; }
+inline uint64_t next_subset(uint64_t subset, uint64_t set) { return (subset - set) & set; }
+
+template<typename T, typename U>
+auto add_wo_overflow(T left, U right)
+{
+    using CT = std::common_type_t<T, U>;
+    CT res;
+    if (__builtin_add_overflow(CT(left), CT(right), &res))
+        return std::numeric_limits<CT>::max();
+    return res;
+}
+
+template<typename N0, typename N1>
+auto sum_wo_overflow(N0 n0, N1 n1)
+{
+    return add_wo_overflow(n0, n1);
+}
+
+/** Returns the sum of the given parameters. In case the addition overflows, the maximal numeric value for the common
+ * type is returned.*/
+template<typename N0, typename N1, typename... Numbers>
+auto sum_wo_overflow(N0 n0, N1 n1, Numbers... numbers)
+{
+    using CT = std::common_type_t<N0, N1, Numbers...>;
+    CT res;
+    if (__builtin_add_overflow(CT(n0), CT(n1), &res))
+        return std::numeric_limits<CT>::max();
+    return sum_wo_overflow(res, numbers...);
+}

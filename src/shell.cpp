@@ -1,19 +1,21 @@
 #include "backend/Backend.hpp"
 #include "backend/StackMachine.hpp"
 #include "backend/WebAssembly.hpp"
+#include "catalog/CostFunction.hpp"
 #include "catalog/Schema.hpp"
 #include "io/Reader.hpp"
 #include "IR/Optimizer.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
+#include "replxx.hxx"
 #include "storage/ColumnStore.hpp"
 #include "storage/RowStore.hpp"
 #include "util/ArgParser.hpp"
 #include "util/DotTool.hpp"
+#include "util/fn.hpp"
 #include "util/glyphs.hpp"
 #include "util/terminal.hpp"
 #include "util/Timer.hpp"
-#include "replxx.hxx"
 #include <cerrno>
 #include <cstdlib>
 #include <fstream>
@@ -139,9 +141,11 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
                 dot.show("graph", is_stdin);
             }
 
-            DummyJoinOrderer orderer;
-            DummyCostModel costmodel;
-            Optimizer Opt(orderer, costmodel);
+            DPsizePlanEnumerator pe;
+            CostFunction cf([](CostFunction::Subproblem left, CostFunction::Subproblem right, int, const PlanTable &T) {
+                return sum_wo_overflow(T[left].cost, T[right].cost, T[left].size, T[right].size);
+            });
+            Optimizer Opt(pe, cf);
             auto I = Backend::CreateInterpreter();
             timer.start("Compute an optimized Query Plan");
             auto optree = Opt(*query_graph.get());

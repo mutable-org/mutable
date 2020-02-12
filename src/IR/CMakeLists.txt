@@ -2,10 +2,10 @@ add_library(
     IR
     STATIC
     CNF.cpp
-    JoinOrderer.cpp
     Operator.cpp
     OperatorDot.cpp
     OperatorVisitor.cpp
     Optimizer.cpp
+    PlanEnumerator.cpp
     QueryGraph.cpp
     )

@@ -70,20 +70,18 @@ bool type_check(const Attribute &attr);
 /** A table is a sorted set of attributes. */
 struct Table
 {
-    const char *name;
+    const char *name; ///< the name of the table
     private:
     using table_type = std::vector<Attribute>;
-    /** the attributes of this table */
-    table_type attrs_;
-    /** maps attribute names to their position within the table */
-    std::unordered_multimap<const char*, table_type::size_type> name_to_attr_;
-    /** the store backing this table */
-    Store *store_ = nullptr;
+    table_type attrs_; ///< the attributes of this table, maintained as a sorted set
+    std::unordered_map<const char*, table_type::size_type> name_to_attr_; ///< maps attribute names to attributes
+    Store *store_ = nullptr; ///< the store backing this table; may be `nullptr`
 
     public:
     Table(const char *name) : name(name) { }
     ~Table();
 
+    /** Returns the number of attributes in this table. */
     std::size_t size() const { return attrs_.size(); }
 
     table_type::const_iterator begin()  const { return attrs_.cbegin(); }
@@ -91,21 +89,32 @@ struct Table
     table_type::const_iterator cbegin() const { return attrs_.cbegin(); }
     table_type::const_iterator cend()   const { return attrs_.cend(); }
 
-    const Attribute & at(std::size_t i) const { return attrs_.at(i); }
-    const Attribute & at(const char *name) const {
-        auto [begin, end] = name_to_attr_.equal_range(name);
-        if (begin == end) throw std::out_of_range("attribute not found");
-        if (std::distance(begin, end) > 1) std::invalid_argument("name is ambiguous");
-        return attrs_[begin->second];
+    /** Returns the attribute with the given `id`. */
+    const Attribute & at(std::size_t id) const {
+        insist(id < attrs_.size(), "id out of bounds");
+        auto &attr = attrs_[id];
+        insist(attr.id == id, "attribute ID mismatch");
+        return attr;
     }
+    /** Returns the attribute with the given `id`. */
     const Attribute & operator[](std::size_t i) const { return at(i); }
+
+    /** Returns the attribute with the given `name`.  Throws `std::out_of_range` if no attribute with the given `name`
+     * exists. */
+    const Attribute & at(const char *name) const { return at(name_to_attr_.at(name)); }
+    /** Returns the attribute with the given `name`.  Throws `std::out_of_range` if no attribute with the given `name`
+     * exists. */
     const Attribute & operator[](const char *name) const { return at(name); }
 
     Store & store() const { return *store_; }
     void store(Store *new_store) { store_ = notnull(new_store); }
 
+    /** Adds a new attribute with the given `name` and `type` to the table.  Throws `std::invalid_argument` if the
+     * `name` is already in use. */
     void push_back(const char *name, const PrimitiveType *type) {
-        name_to_attr_.emplace(name, attrs_.size());
+        auto res = name_to_attr_.emplace(name, attrs_.size());
+        if (not res.second)
+            throw std::invalid_argument("attribute name already in use");
         attrs_.emplace_back(Attribute(attrs_.size(), *this, type, name));
     }
 

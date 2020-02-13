@@ -969,17 +969,13 @@ void Sema::operator()(Const<CreateTableStmt> &s)
         /* Before we check the constraints, we must add this newly declared attribute to its table, and hence to the
          * sema context. */
         try {
-            T->at(attr->name.text);
+            T->push_back(attr->name.text, ty->as_vectorial());
+        } catch (std::invalid_argument) {
+            /* attribute name is a duplicate */
             diag.e(attr->name.pos) << "Attribute " << attr->name.text << " occurs multiple times in defintion of table "
                                    << table_name << ".\n";
             error = true;
-        } catch (std::out_of_range) {
-            /* does not exist, ok */
-        } catch (std::invalid_argument) {
-            /* already a duplicate and error has been reported, ignore */
         }
-
-        T->push_back(attr->name.text, ty->as_vectorial());
 
         /* Check constraint definitions. */
         bool has_reference = false; ///< at most one reference allowed per attribute

@@ -34,8 +34,7 @@ TEST_CASE("Table empty access")
 {
     Table r("mytable");
 
-    REQUIRE_THROWS_AS(r[42].id, std::out_of_range);
-    REQUIRE_THROWS_AS(r["attribute"].id, std::out_of_range);
+    REQUIRE_THROWS_AS(r["attribute"], std::out_of_range);
 
     for (auto it = r.cbegin(), end = r.cend(); it != end; ++it)
         REQUIRE(((void) "this code must be dead or the table is not empty", false));
@@ -114,7 +113,7 @@ TEST_CASE("Table::push_back() duplicate name", "[core][catalog][schema]")
     const char *attr_name = "a";
 
     r.push_back(attr_name, i4);
-    r.push_back(attr_name, i4); // OK
+    REQUIRE_THROWS_AS(r.push_back(attr_name, i4), std::invalid_argument); // duplicate
 }
 
 // XXX: This might not be the right place for the following tests.

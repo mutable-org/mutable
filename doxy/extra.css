@@ -1,0 +1,243 @@
+a, a:visited
+{
+    color: rgb(32, 167, 178) !important;
+}
+
+#projectlogo
+{
+    padding: 10px;
+}
+
+tt, code, kbd, samp
+{
+    font-family: 'Inconsolata', 'Roboto Mono', 'Courier New', 'Monaco', 'monospace';
+    font-size: 90%;
+    line-height: 140%;
+    background-color: #E0E0E0;
+    border: 0.2mm solid #808080;
+    border-radius: 1mm;
+    padding: 0mm 1mm;
+}
+
+
+/*======================================================================================================================
+ * Header
+ *====================================================================================================================*/
+
+#titlearea
+{
+    border: unset;
+}
+
+#top ul,
+#top ul li a
+{
+    background-image: none;
+    background-color: black;
+    text-shadow: unset;
+    color: white !important;
+}
+#top ul li a:hover
+{
+    color: rgb(32, 167, 178) !important;
+}
+
+#nav-path > ul
+{
+    border: unset;
+    border-top: 0.2mm solid white;
+    padding-left: 10px;
+}
+
+#main-nav > ul
+{
+    padding-top: 5pt;
+    padding-bottom: 5pt;
+}
+#main-nav a
+{
+    font-size: 12pt;
+}
+
+.navpath li
+{
+    background-image: unset;
+}
+.navpath li.navelem a.el
+{
+    font-size: 10pt;
+    font-family: 'Inconsolata', 'Roboto Mono', 'Courier New', 'Monaco', 'monospace';
+    font-weight: bold;
+}
+.navpath li.navelem a
+{
+    display: inline-block;
+}
+.navelem:not(:last-child):after
+{
+    font-family: initial;
+    display: inline-block;
+    content: "→";
+    margin-left: 10px;
+    color: white;
+    font-weight: 900;
+    margin-right: -15px;
+}
+
+input#MSearchField
+{
+    font-size: 11pt;
+    font-family: 'Inconsolata', 'Roboto Mono', 'Courier New', 'Monaco', 'monospace';
+    line-height: 125%;
+}
+
+div.header
+{
+    margin-top: 50px;
+    background-image: unset;
+}
+
+.memItemRight
+{
+    background-color: unset;
+}
+
+
+/*======================================================================================================================
+ * Lists
+ *====================================================================================================================*/
+
+.icon
+{
+    background-color: black;
+}
+
+/*======================================================================================================================
+ * Documentation
+ *====================================================================================================================*/
+
+span.mlabel
+{
+    background-color: rgb(32, 167, 178);
+    border: 0.2mm solid #808080;
+    border-radius: 1mm;
+    padding: 2pt 3pt;
+    font-size: 8pt;
+    line-height: 140%;
+}
+
+.memtitle
+{
+    padding: 2pt 5pt;
+    background: unset;
+    font-size: 14pt;
+    font-family: 'Inconsolata', 'Roboto Mono', 'Courier New', 'Monaco', 'monospace';
+    border: unset;
+}
+
+.memproto
+{
+    background-image: unset;
+    box-shadow: unset;
+    background-color: #E0E0E0;
+    font-family: 'Inconsolata', 'Roboto Mono', 'Courier New', 'Monaco', 'monospace';
+    font-size: 90%;
+    line-height: 140%;
+    border: 0.2mm solid #808080;
+    border-radius: 0;
+}
+
+.memname
+{
+    font-family: 'Inconsolata', 'Roboto Mono', 'Courier New', 'Monaco', 'monospace';
+}
+
+.memdoc
+{
+    border-left: unset;
+    border-right: unset;
+    border-radius: 0;
+    background-image: unset;
+    box-shadow: unset;
+    border-bottom: 0.2mm solid #888;
+    padding-bottom: 10px;
+}
+
+.memdoc > p
+{
+    margin: 6pt 0;
+}
+
+td.mlabels-right
+{
+    vertical-align: top;
+}
+
+td.mlabels-right > .mlabels
+{
+    padding: 0;
+    margin-right: 6px;
+}
+td.mlabels-right > .mlabels span.mlabel
+{
+    font-size: 8pt;
+    line-height: 120%;
+    color: white;
+    font-weight: bold;
+    margin: 0;
+    margin-left: 2pt;
+    background-color: hsla(40, 25%, 52%, 1);
+    border: 0.2mm solid #888;
+    border-radius: 8pt;
+    padding: 1pt 3pt;
+}
+
+.memproto .mlabels-right .mlabel
+{
+    background: unset;
+    border: unset;
+}
+
+.memdoc .fieldtable
+{
+    box-shadow: unset;
+    border-radius: unset;
+}
+.memdoc .fieldtable th
+{
+    background: unset;
+    font-weight: bold;
+}
+.memdoc .fieldtable td
+{
+    font-family: 'Inconsolata', 'Roboto Mono', 'Courier New', 'Monaco', 'monospace';
+    font-size: 10pt;
+}
+
+/*======================================================================================================================
+ * SVG style
+ *====================================================================================================================*/
+
+svg .node a:hover
+{
+    text-decoration: none;
+    cursor: pointer;
+}
+
+svg .node a text
+{
+    font-family: 'Inconsolata', 'Roboto Mono', 'Courier New', 'Monaco', 'monospace';
+    font-weight: bold;
+    fill: black;
+}
+svg .node a:hover text
+{
+    font-family: 'Inconsolata', 'Roboto Mono', 'Courier New', 'Monaco', 'monospace';
+    font-weight: bold;
+    fill: rgb(32, 167, 178);
+}
+
+svg .node polygon[fill="#bfbfbf"]
+{
+    fill: #E0E0E0;
+}

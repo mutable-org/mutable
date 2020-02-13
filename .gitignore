@@ -1,3 +1,4 @@
 build*/
-doxy/
+doxy/html/
+doxy/latex/
 third-party/

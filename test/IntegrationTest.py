@@ -1,488 +1,315 @@
-#!env python3
+#!/usr/bin/env python3
 
-import argparse
-import glob
-import os
-import re
 import subprocess
-import sys
-import termcolor
-import shutil
+import os
+import glob
+import argparse
+
+import yaml
+import yamale
+from tqdm import tqdm
+from colorama import Fore, Back, Style
 
 from testexception import *
-from testutil import *
-from tqdm import tqdm
+
 
 #-----------------------------------------------------------------------------------------------------------------------
-# Helpers
+# TEST EXECUTION
 #-----------------------------------------------------------------------------------------------------------------------
-CWD = os.getcwd()
 
-component_keywords = ['lexer', 'parser', 'sema', 'end2end']
+def run_command(command, query):
+    try:
+        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   cwd=os.getcwd())
+        out, err = process.communicate(query.encode('latin-1'), timeout=5)
+        return process.returncode, out, err
+    except subprocess.TimeoutExpired as ex:
+        raise TestException(f'Timeout expired')
 
-# bar_format = '{desc}: {n}/{total} ({percentage:3.0f}%)|{bar}|'
-bar_format = '    |{bar:16}| {n}/{total}'
 
-check_lexer = check_parser = check_sema = check_end2end = False
-verbose = quiet = False
+def run_stage(args, test_case, stage_name, command):
+    stage = test_case.stages[stage_name]
+    try:
+        returncode, out, err = run_command(command, test_case.query)
+        out = out.decode('UTF-8')
+        err = err.decode('UTF-8')
+        num_err = err.count('error')
 
-def list_to_str(lst):
-    return ', '.join(lst)
+        if 'returncode' in stage:
+            check_returncode(stage['returncode'], returncode)
+        if 'num_err' in stage:
+            check_numerr(stage['num_err'], num_err)
+        if 'err' in stage:
+            check_stderr(stage['err'], err)
+        if 'out' in stage:
+            check_stdout(stage['out'], out)
+    except TestException as ex:
+        report_failure(str(ex), stage_name, test_case)
+        return False
+    report_success(stage_name, test_case, args.verbose)
+    return True
 
-def parse_components(components):
-    global check_lexer
-    global check_parser
-    global check_sema
-    global check_end2end
 
-    if len(components)==0:
-        check_lexer = check_parser = check_sema = check_end2end = True
+#-----------------------------------------------------------------------------------------------------------------------
+# RESULT CHECKING
+#-----------------------------------------------------------------------------------------------------------------------
+
+file_reported = False  # Has test success/failure about the current test file been reported?
+
+def check_returncode(expected, actual):
+    expected = expected if expected != None else 0
+    if expected != actual:
+        raise TestException(f'Expected return code {expected}, received {actual}')
+    return
+
+
+def check_numerr(expected, actual):
+    expected = expected if expected != None else 0
+    if expected != actual:
+        raise TestException(f'Expected {expected} error, received {actual}')
+    return
+
+
+def check_stderr(expected, actual):
+    expected = expected if expected != None else ''
+    if expected != actual:
+        raise TestException(f'Expected err\n{expected}\nreceived\n{actual}')
+    return
+
+
+def check_stdout(expected, actual):
+    expected = expected if expected != None else ''
+    expected = sorted(expected.split('\n'))
+    actual = sorted(actual.split('\n'))
+    if expected != actual:
+        raise TestException(f'Expected out\n{expected}\nreceived\n{actual}')
+    return
+
+
+#-----------------------------------------------------------------------------------------------------------------------
+# REPORTING AND EXCEPTION HANDLING
+#-----------------------------------------------------------------------------------------------------------------------
+
+def report_failure(message, stage, test_case):
+    symbol = Fore.RED + '✘' + Style.RESET_ALL
+    if test_case.file_reported:
+        tqdm.write(f'└─ {stage} {symbol} {message}')
     else:
-        if 'lexer' in components:
-            check_lexer = True
-            components.remove('lexer')
-        if 'parser' in components:
-            check_parser = True
-            components.remove('parser')
-        if 'sema' in components:
-            check_sema = True
-            components.remove('sema')
-        if 'end2end' in components:
-            check_end2end = True
-            components.remove('end2end')
-        if len(components) > 0:
-            raise Exception(f'Cannot parse command line argument(s): {components}')
-
-def print_testcase(test_case):
-    if not quiet:
-        print(f'{test_case}:')
-
-def print_summary(component, n_tests, n_passed):
-    if not quiet:
-        print(f'{termcolor.tc(component, termcolor.TermColor.BOLD)}: ', end='')
-        if n_passed < n_tests:
-            print(f'{termcolor.err(n_passed)}/{termcolor.tc(n_tests, termcolor.TermColor.BOLD)}')
-        else:
-            print(f'{termcolor.ok(n_passed)}/{termcolor.tc(n_tests, termcolor.TermColor.BOLD)}')
-        # terminal_cols, _ = shutil.get_terminal_size()
-        terminal_cols = 60
-        print(f'{terminal_cols*"-"}')
-        # else:
-        #     print(f'Passed: {termcolor.ok(n_passed)}/{termcolor.tc(n_tests, termcolor.TermColor.BOLD)}', end=' ')
-        # n_failed = n_tests - n_passed
-        # if n_failed > 0:
-        #     print(f'Failed: {termcolor.err(n_failed)}/{termcolor.tc(n_tests, termcolor.TermColor.BOLD)}')
-        # else:
-        #     print(f'Failed: {n_failed}/{termcolor.tc(n_tests, termcolor.TermColor.BOLD)}')
+        tqdm.write(f'{test_case.filename}\n└─ {stage} {symbol} {message}')
+        test_case.file_reported = True
 
 
-def print_results(results):
-    if not quiet:
-        for success, err in results:
-            if not success or verbose:
-                print(err)
-
-
-#-----------------------------------------------------------------------------------------------------------------------
-# Lexer Tests
-#-----------------------------------------------------------------------------------------------------------------------
-LEXER_BIN           = os.path.join(CWD, 'build', 'debug', 'bin', 'lex')
-LEXER_TEST_DIR      = os.path.join('test', 'lex')
-LEXER_POSITIVE_DIR  = os.path.join(LEXER_TEST_DIR, 'positive')
-LEXER_GLOB_POSITIVE = os.path.join(LEXER_POSITIVE_DIR, '**', '*.sql')
-LEXER_SANITY_FILE   = os.path.join(LEXER_TEST_DIR, 'sanity.sql')
-
-def lexer_case(sql_filename, is_positive):
-    stmt = None
-    if is_positive:
-        with open(sql_filename, 'r') as sql_file:
-            stmt = sql_file.read()
+def report_warning(message, stage, test_case):
+    symbol = Fore.YELLOW + '!' + Style.RESET_ALL
+    if test_case.file_reported:
+        tqdm.write(f'└─ {stage} {symbol} {message}')
     else:
-        stmt = sql_filename  # sanity test input is a string instead of a filename
+        tqdm.write(f'{test_case.filename}\n└─ {stage} {symbol} {message}')
+        file_reported = True
 
-    try:
-        process = subprocess.Popen([LEXER_BIN, '-'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE , cwd=CWD)
 
-        out, err = process.communicate(stmt.encode(), timeout=5)
-
-        if is_positive:
-            if err:
-                raise TestException(f'test failed with error:\n {str(err, "utf-8")}')
-
-            tok_filename = os.path.splitext(sql_filename)[0] + '.tok'
-            with open(tok_filename, 'r') as tok_file:
-                out = str(out, 'utf-8').splitlines()
-                tokens = tok_file.read().splitlines()
-
-                if len(out) < len(tokens):
-                    raise TestException(f'actual output is shorter than expected: received: {len(out)}, expected: {len(tokens)}')
-                elif len(out) > len(tokens):
-                    raise TestException(f'actual output is longer than expected: received: {len(out)}, expected: {len(tokens)}')
-
-                for actual, expected in zip(out, tokens):
-                    if actual != expected:
-                        c_actual, c_expected = colordiff(actual, expected)
-                        raise TestException(f'token streams differ:\nreceived:\n{c_actual}\nexpected\n{c_expected}')
+def report_success(stage, test_case, verbose):
+    if verbose:
+        symbol = Fore.GREEN + '✓' + Style.RESET_ALL
+        if test_case.file_reported:
+            tqdm.write(f'└─ {stage} {symbol}')
         else:
-            if process.returncode != 1:
-                raise TestException(f'unexpected return code {process.returncode}')
-            if not err:
-                raise TestException(f'expected an error message')
-
-        return True, f'`{sql_filename} {termcolor.ok("✓")}'
-
-    except subprocess.TimeoutExpired as ex:
-        return False, f'`{sql_filename} {termcolor.err("✘")}\n {ex}'
-
-    except TestException as e:
-        return False, f'`{sql_filename} {termcolor.err("✘")}\n {str(e).strip()}'
+            tqdm.write(f'{test_case.filename}\n└─ {stage} {symbol}')
+            test_case.file_reported = True
 
 
-def lexer_test():
-    n_tests = n_passed = 0
-    results = list()
+def report_summary(stage_counter, stage_pass_counter, required_counter, required_pass_counter, bad_files_counter):
+    # Define helper functions
+    in_red   = lambda x: f'{Fore.RED}{x}{Style.RESET_ALL}'
+    in_green = lambda x: f'{Fore.GREEN}{x}{Style.RESET_ALL}'
+    in_bold  = lambda x: f'{Style.BRIGHT}{x}{Style.RESET_ALL}'
+    keys = list(stage_counter.keys()) + ['Required', 'Total', 'Bad files']
+    max_len = len(max(keys, key=len))
+    results = [80 * '-']
 
-    test_files = sorted(glob.glob(LEXER_GLOB_POSITIVE, recursive=True))
+    # Bad files
+    if bad_files_counter > 0:
+        results += [f'{"Bad files".ljust(max_len)}: {bad_files_counter}']
+        results += [80 * '-']
 
-    print_testcase('Lexer (positive)')
-    for sql_filename in tqdm(test_files, desc='Lexer (positive)', disable=quiet, bar_format=bar_format):
-        success, err = lexer_case(sql_filename, True)
-        n_tests += 1
-        n_passed += 1 if success else 0
-        results.append((success, err))
+    # Assemble stage info
+    for stage in stage_counter.keys():
+        passed = stage_pass_counter[stage]
+        total = stage_counter[stage]
+        passed = in_red(passed) if total > passed else in_green(passed)
+        results += [f'{stage.ljust(max_len)}: {passed}/{total}']
+    results += [80 * '-']
 
-    with open(LEXER_SANITY_FILE, 'r') as sanity_file:
-        print_testcase('Lexer (sanity)')
-        num_lines = sum(1 for line in open(LEXER_SANITY_FILE, 'r'))
-        for test_case in tqdm(sanity_file, total=num_lines, desc='Lexer (sanity)', disable=quiet, bar_format=bar_format):
+    # Assemble overall info
+    passed = required_pass_counter
+    required = required_counter
+    passed = in_red(passed) if required > passed else in_green(passed)
+    results += [f'{in_bold("Required".ljust(max_len))}: {passed}/{required}']
+    passed = sum(stage_pass_counter.values())
+    total = sum(stage_counter.values())
+    passed = in_red(passed) if total > passed else in_green(passed)
+    results += [f'{in_bold("Total".ljust(max_len))}: {passed}/{total}']
 
-            success, err = lexer_case(test_case, False)
-            n_tests += 1
-            n_passed += 1 if success else 0
-            results.append((success, err))
-
-    return n_tests, n_passed, results
+    # Print results
+    print('\n'.join(results))
 
 
 #-----------------------------------------------------------------------------------------------------------------------
-# Parser Tests
+# STAGE AND SETUP DEFINITIONS
 #-----------------------------------------------------------------------------------------------------------------------
-PARSER_BIN           = os.path.join(CWD, 'build', 'debug', 'bin', 'parse')
-PARSER_TEST_DIR      = os.path.join('test', 'parse')
-PARSER_POSITIVE_DIR  = os.path.join(PARSER_TEST_DIR, 'positive')
-PARSER_GLOB_POSITIVE = os.path.join(PARSER_POSITIVE_DIR, '**', '*.sql')
-PARSER_SANITY_DIR    = os.path.join(PARSER_TEST_DIR, 'sanity')
-PARSER_GLOB_SANITY   = os.path.join(PARSER_SANITY_DIR, '**', '*.sql')
 
-def parser_case(sql_filename, is_positive):
-    stmts = None
-    with open(sql_filename, 'r') as sql_file:
-        stmts = re.split(r'\n\s*\n+', sql_file.read())
+def lexer_command(test_case):
+    binary = BINARIES['lex']
+    command = [binary, '-']
+    return command
 
-    n_cases = len(stmts)
 
+def parser_command(test_case):
+    binary = BINARIES['parse']
+    command = [binary, '-']
+    return command
+
+
+def sema_command(test_case):
+    binary = BINARIES['check']
+    setup = SETUPS[test_case.db]
+    command = [binary, '--quiet', setup, '-']
+    return command
+
+
+def end2end_command(test_case):
+    binary = BINARIES['shell']
+    setup = SETUPS[test_case.db]
+    command = [binary, '--quiet', '--noprompt', setup, '-']
+    return command
+
+
+COMMAND = {
+    'lexer': lexer_command,
+    'parser': parser_command,
+    'sema': sema_command,
+    'end2end': end2end_command,
+}
+
+BINARIES_DIR = os.path.join(os.getcwd(), 'build', 'debug', 'bin')
+BINARIES = {
+    'lex': os.path.join(BINARIES_DIR, 'lex'),
+    'parse': os.path.join(BINARIES_DIR, 'parse'),
+    'check': os.path.join(BINARIES_DIR, 'check'),
+    'shell': os.path.join(BINARIES_DIR, 'shell'),
+}
+
+SETUPS = {
+    'ours': os.path.join('test', 'ours.sql'),
+    'tpch': os.path.join('test', 'tpch.sql'),
+}
+
+
+#-----------------------------------------------------------------------------------------------------------------------
+# HELPERS
+#-----------------------------------------------------------------------------------------------------------------------
+
+yml_schema = os.path.join(os.getcwd(), 'test', '_schema.yml')
+
+def schema_valid(test_case) -> bool:
+    schema = yamale.make_schema(yml_schema)
+    data = yamale.make_data(test_case.filename)
     try:
-        for stmt in stmts:
-
-            if is_positive:
-                # Parse the input statement and pretty print it.
-                process = subprocess.Popen([PARSER_BIN, '-'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                                stderr=subprocess.PIPE, cwd=CWD)
-
-                pretty, err = process.communicate(stmt.encode('latin-1'), timeout=5) # wait 5 seconds
-                if err:
-                    raise TestException(f'test failed with error:\n {str(err, "utf-8")}')
-
-                # Parse the input statement and print its AST.
-                process = subprocess.Popen([PARSER_BIN, '--ast', '-'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                           stderr=subprocess.PIPE, cwd=CWD)
-
-                ast_original, err = process.communicate(stmt.encode('latin-1'), timeout=5) # wait 5 seconds
-                if err:
-                    raise TestException(f'test failed with error:\n{str(err, "utf-8")}')
-
-                # Parse the pretty-printed statement and print its AST.
-                process = subprocess.Popen([PARSER_BIN, '--ast', '-'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                           stderr=subprocess.PIPE, cwd=CWD)
-
-                ast_pretty, err = process.communicate(pretty, timeout=5) # wait 5 seconds
-                if err:
-                    raise TestException(f'test failed with error:\n{str(err, "utf-8")}')
-
-                without_comments = re.sub(r'^--.*', '', stmt)
-                in_original = re.sub(r'\s+', '', without_comments)
-                in_pretty = re.sub(r'\s+', '', str(pretty, 'latin-1'))
-                ast_original = re.sub(r' *\(.*\)', '', str(ast_original, 'latin-1'))
-                ast_pretty =  re.sub(r' *\(.*\)', '', str(ast_pretty, 'latin-1'))
-
-                if in_original != in_pretty:
-                    actual, expected = colordiff(in_pretty, in_original)
-                    raise TestException(f'statements differ:\nreceived:\n{actual}\nexpected:\n{expected}')
-
-                if (ast_original != ast_pretty):
-                    actual, expected = colordiff(ast_pretty, ast_original)
-                    raise TestException(f'ASTs differ:\noriginal:\n{actual}\npretty:\n{expected}')
-
-            else:
-                # Parse the input statement.
-                process = subprocess.Popen([PARSER_BIN, '-'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                               stderr=subprocess.PIPE, cwd=CWD)
-
-                out, err = process.communicate(stmt.encode('latin-1'), timeout=5) # wait 5 seconds
-
-                if process.returncode != 1:
-                    raise TestException(f'unexpected return code {process.returncode}')
-                if not err:
-                    raise TestException(f'expected an error message')
-
-        return True, f'`{sql_filename} {termcolor.ok("✓")}'
-
-
-    except subprocess.TimeoutExpired as ex:
-        return False, f'`{sql_filename} ({n_cases} statements) {termcolor.err("✘")}\n {ex}'
-
-    except TestException as e:
-        return False, f'`{sql_filename} ({n_cases} statements) {termcolor.err("✘")}\n {str(e).strip()}'
-
-
-def parser_test():
-    n_tests = n_passed = 0
-    results = list()
-
-    test_files = sorted(glob.glob(PARSER_GLOB_POSITIVE, recursive=True))
-
-    print_testcase('Parser (positive)')
-    for sql_filename in tqdm(test_files, desc='Parser (positive)', disable=quiet, bar_format=bar_format):
-
-        success, err = parser_case(sql_filename, True)
-        n_tests += 1
-        n_passed += 1 if success else 0
-        results.append((success, err))
-
-    test_files = sorted(glob.glob(PARSER_GLOB_SANITY, recursive=True))
-
-    print_testcase('Parser (sanity)')
-    for sql_filename in tqdm(test_files, desc='Parser (sanity)', disable=quiet, bar_format=bar_format):
-
-        success, err = parser_case(sql_filename, False)
-        n_tests += 1
-        n_passed += 1 if success else 0
-        results.append((success, err))
-
-    return n_tests, n_passed, results
+        yamale.validate(schema, data)
+    except ValueError:
+        report_warning('YAML schema invalid', 'yaml_check', test_case)
+        return False
+    return True
 
 
 #-----------------------------------------------------------------------------------------------------------------------
-# Semantic Analysis Tests
+# MAIN ROUNTINE
 #-----------------------------------------------------------------------------------------------------------------------
-SEMA_BIN           = os.path.join(CWD, 'build', 'debug', 'bin', 'check')
-SEMA_TEST_DIR      = os.path.join('test', 'sema')
-SEMA_SETUP         = os.path.join(SEMA_TEST_DIR, 'setup.sql')
-SEMA_POSITIVE_DIR  = os.path.join(SEMA_TEST_DIR, 'positive')
-SEMA_GLOB_POSITIVE = os.path.join(SEMA_POSITIVE_DIR, '**', '*.sql')
-SEMA_SANITY_DIR    = os.path.join(SEMA_TEST_DIR, 'sanity')
-SEMA_GLOB_SANITY   = os.path.join(SEMA_SANITY_DIR, '**', '*.sql')
 
-def sema_case(sql_filename, is_positive, sql_setup=None, verbose=False):
-    stmt = None
-    with open(sql_filename, 'r') as sql_file:
-        stmt = sql_file.read()
-    if sql_setup:
-        stmt = sql_setup + stmt
-
-    try:
-        # Run the semantic analysis on the entire input file
-        process = subprocess.Popen([SEMA_BIN, '-'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                        stderr=subprocess.PIPE, cwd=CWD)
-
-        out, err = process.communicate(stmt.encode('latin-1'), timeout=5) # wait 5 seconds
-
-        if is_positive:
-            if err:
-                raise TestException(f'failed with unexpected error\n{str(err, "utf-8")}')
-            if process.returncode != 0:
-                raise TestException(f'failed with unexpected error code {process.returncode}')
-        else:
-            if not err:
-                raise TestException('expected error message')
-            if err and process.returncode != 1:
-                raise TestException(f'failed wit unexpected error\n{str(err, "utf-8")}')
-            if process.returncode != 1:
-                raise TestException(f'failed with unexpected returncode {process.returncode}')
-
-        return True, f'`{sql_filename} {termcolor.ok("✓")}'
-
-    except subprocess.TimeoutExpired as ex:
-        return False, f'`{sql_filename} {termcolor.err("✘")}\n {ex}'
-
-    except TestException as e:
-        return False, f'`{sql_filename} {termcolor.err("✘")}\n {str(e).strip()}'
-
-
-def sema_test():
-    n_tests = n_passed = 0
-    results = list()
-
-    with open(SEMA_SETUP, 'r') as setup_file:
-        sql_setup = setup_file.read()
-
-    test_files = sorted(glob.glob(SEMA_GLOB_POSITIVE, recursive=True))
-
-    print_testcase('Sema (positive)')
-    for sql_filename in tqdm(test_files, desc='Sema (positive)', disable=quiet, bar_format=bar_format):
-
-        success, err = sema_case(sql_filename, True, sql_setup)
-        n_tests += 1
-        n_passed += 1 if success else 0
-        results.append((success, err))
-
-    test_files = sorted(glob.glob(SEMA_GLOB_SANITY, recursive=True))
-
-    print_testcase('Sema (positive)')
-    for sql_filename in tqdm(test_files, desc='Sema (sanity)', disable=quiet, bar_format=bar_format):
-
-        success, err = sema_case(sql_filename, False, sql_setup)
-        n_tests += 1
-        n_passed += 1 if success else 0
-        results.append((success, err))
-
-    return n_tests, n_passed, results
-
-
-#-----------------------------------------------------------------------------------------------------------------------
-# End to End Tests
-#-----------------------------------------------------------------------------------------------------------------------
-CWD               = os.getcwd()
-SHELL_BIN         = os.path.join(CWD, 'build', 'debug', 'bin', 'shell')
-E2E_TEST_DIR      = os.path.join('test', 'end2end')
-E2E_SETUP         = os.path.join(E2E_TEST_DIR, 'setup_ours_mutable.sql')
-E2E_POSITIVE_DIR  = os.path.join(E2E_TEST_DIR, 'positive', 'ours')
-E2E_GLOB_POSITIVE = os.path.join(E2E_POSITIVE_DIR, '**', '*.sql')
-
-def end2end_case(sql_filename, csv_filename):
-    stmt = None
-    with open(sql_filename, 'r') as sql_file:
-        stmt = sql_file.read()
-
-    try:
-        # Parse the input statement and pretty print it.
-        process = subprocess.Popen([SHELL_BIN, '--quiet', '--noprompt', E2E_SETUP, '-'],
-                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=CWD)
-
-        out, err = process.communicate(stmt.encode('latin-1'), timeout=10) # wait 10 seconds
-
-        if err:
-            raise TestException(f'failed with error {str(err, "utf-8")}')
-
-        expected = None
-        if not os.path.isfile(csv_filename):
-            raise TestException(f'result file {csv_filename} does not exist')
-        with open(csv_filename, 'r') as csv_file:
-            expected = csv_file.read().strip()
-
-        actual = '\n'.join(str(out, 'latin-1').splitlines())
-
-        if actual != expected:
-            raise TestException(f'failed due to different results')
-
-        return True, f'`{sql_filename} {termcolor.ok("✓")}'
-
-    except TestException as e:
-        return False, f'`{sql_filename} {termcolor.err("✘")}\n {str(e).strip()}'
-        # print('{}'.format(colordiff_simple(actual,expected)))
-
-    except subprocess.TimeoutExpired as ex:
-        return False, f'`{sql_filename} {termcolor.err("✘")}\n  {ex}'
-
-
-def end2end_test():
-    n_tests = n_passed = 0
-    results = list()
-
-    test_files = sorted(glob.glob(E2E_GLOB_POSITIVE, recursive=True))
-
-    print_testcase('End to end')
-    for sql_filename in tqdm(test_files, desc='End to end', disable=quiet, bar_format=bar_format):
-        csv_filename = os.path.splitext(sql_filename)[0] + '.csv'
-
-        success, err = end2end_case(sql_filename, csv_filename)
-        n_tests += 1
-        n_passed += 1 if success else 0
-        results.append((success, err))
-
-    return n_tests, n_passed, results
-
-
-#-----------------------------------------------------------------------------------------------------------------------
-# Main
-#-----------------------------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
+    # Run legacy tests
+    tqdm.write('Running legacy integration tests...')
+    legacy = os.path.join(os.getcwd(), 'test', 'LegacyIntegrationTest.py')
+    legacy_returncode = os.WEXITSTATUS(os.system(legacy))
 
+    # Pars args
     parser = argparse.ArgumentParser(description="""Run integration tests on mutable. Note that the
                                                     build direcory is assumed to be build/debug.""")
-    # parser.add_argument('lexer',   type=bool, help='run lexer tests')
-    # parser.add_argument('parser',  type=bool, help='run parser tests')
-    # parser.add_argument('sema',    type=bool, help='run semantic analysis tests')
-    # parser.add_argument('end2end', type=bool, help='run end to end tests')
-    parser.add_argument('component', nargs='*', help=f'a component to be tested, available options: {list_to_str(component_keywords)}.')
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument('-v', '--verbose', help='increase output verbosity', action='store_true')
-    group.add_argument('-q', '--quiet',   help='disable output, failure indicated by returncode', action='store_true')
+    parser.add_argument('-a', '--all', help='require optional tests to pass', action='store_true')
+    parser.add_argument('-v', '--verbose', help='increase output verbosity', action='store_true')
     args = parser.parse_args()
 
-    parse_components(args.component)
+    # Check if interactive terminal
+    is_interactive = True if 'TERM' in os.environ else False
 
-    verbose = args.verbose
-    quiet = args.quiet
-    failed = False
+    # Set up counters
+    stage_counter = dict()
+    stage_pass_counter = dict()
+    required_counter = 0
+    required_pass_counter = 0
+    bad_files_counter = 0
 
-    total_tests = total_passed = 0
+    # Glob test files
+    TEST_GLOB = os.path.join('test', '**', '[!_]*.yml')
+    test_files = sorted(glob.glob(TEST_GLOB, recursive=True))
 
-    # Lexer tests
-    if (check_lexer):
-        n_tests, n_passed, results = lexer_test()
-        failed = failed or n_tests > n_passed
+    # Create dummy test case class
+    class TestCase: pass
+    test_case = TestCase()
 
-        total_tests += n_tests
-        total_passed += n_passed
+    # Set up event log
+    log = tqdm(total=0, position=1, ncols=80, leave=False, bar_format='{desc}', disable=(not is_interactive))
 
-        print_results(results)
-        print_summary('Lexer', n_tests, n_passed)
+    for test_file in tqdm(test_files, position=0, ncols=80, leave=False,
+            bar_format='|{bar}| {n}/{total}', disable=(not is_interactive)):
+        # Log current test file
+        log.set_description_str(f'Current file: {test_file}'.ljust(80))
 
-    # Parser tests
-    if (check_parser):
-        n_tests, n_passed, results = parser_test()
-        failed = failed or n_tests > n_passed
+        # Set up file report
+        test_case.filename = test_file
+        test_case.file_reported = False
 
-        total_tests += n_tests
-        total_passed += n_passed
+        # Validate schema
+        if not schema_valid(test_case):
+            bad_files_counter += 1
+            continue
 
-        print_results(results)
-        print_summary('Parser', n_tests, n_passed)
+        # Open test file
+        with open(test_file, 'r') as f:
+            yml_test_case = yaml.safe_load(f)
 
-    # Sema tests
-    if (check_sema):
-        n_tests, n_passed, results = sema_test()
-        failed = failed or n_tests > n_passed
+        # Import test case into global namespace
+        test_case.description = yml_test_case['description']
+        test_case.db = yml_test_case['db']
+        test_case.query = yml_test_case['query']
+        test_case.required = yml_test_case['required']
+        test_case.stages = yml_test_case['stages']
 
-        total_tests += n_tests
-        total_passed += n_passed
+        # Execute test stages
+        success = True
+        for stage in test_case.stages:
+            # Execute test
+            if success:
+                success = run_stage(args, test_case, stage, COMMAND[stage](test_case))
+            else:
+                report_failure("earlier stage failed", stage, test_case)
+            # Store results
+            stage_counter[stage] = stage_counter.get(stage, 0) + 1
+            stage_pass_counter[stage] = stage_pass_counter.get(stage, 0) + success
+            if test_case.required:
+                required_counter += 1
+                required_pass_counter += success
 
-        print_results(results)
-        print_summary('Semantic analysis', n_tests, n_passed)
+    # Close event log
+    log.clear()
+    log.close()
 
-    # End2End tests
-    if (check_end2end):
-        n_tests, n_passed, results = end2end_test()
-        failed = failed or n_tests > n_passed
+    # Log test results
+    report_summary(stage_counter, stage_pass_counter, required_counter, required_pass_counter, bad_files_counter)
 
-        total_tests += n_tests
-        total_passed += n_passed
-
-        print_results(results)
-        print_summary('End to end', n_tests, n_passed)
-
-    # Summary
-    print_summary(f'Total', total_tests, total_passed)
-
-    exit(0 if not failed else 1)
+    if args.all:
+        # All tests successful
+        exit(legacy_returncode or sum(stage_counter.values()) > sum(stage_pass_counter.values()))
+    else:
+        # All required tests successful
+        exit(legacy_returncode or required_counter > required_pass_counter)

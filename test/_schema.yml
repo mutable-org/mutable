@@ -1,0 +1,16 @@
+description: str()
+db: str()
+query: str()
+required: bool()
+
+stages:
+    lexer: include('stage', required=False)
+    parser: include('stage', required=False)
+    sema: include('stage', required=False)
+    end2end: include('stage', required=False)
+---
+stage:
+    out: str(required=False)
+    err: str(required=False)
+    num_err: int(required=False)
+    returncode: int(required=False)

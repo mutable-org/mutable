@@ -3,11 +3,11 @@
 #include "backend/WebAssembly.hpp"
 #include "catalog/CostFunction.hpp"
 #include "catalog/Schema.hpp"
+#include "globals.hpp"
 #include "io/Reader.hpp"
 #include "IR/Optimizer.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
-#include "replxx.hxx"
 #include "storage/ColumnStore.hpp"
 #include "storage/RowStore.hpp"
 #include "util/ArgParser.hpp"
@@ -24,6 +24,7 @@
 #include <ios>
 #include <iostream>
 #include <regex>
+#include <replxx.hxx>
 #include <vector>
 
 #if __linux
@@ -34,8 +35,8 @@
 
 
 using namespace db;
-
 using Replxx = replxx::Replxx;
+
 
 void usage(std::ostream &out, const char *name)
 {
@@ -77,27 +78,8 @@ std::string prompt(bool is_editing, Timer::duration dur = Timer::duration())
     return prompt.str();
 }
 
-struct options_t
-{
-    /* Help */
-    bool show_help;
-    /* Shell configuration */
-    bool has_color;
-    bool show_prompt;
-    /* Additional outputs */
-    bool times;
-    bool echo;
-    bool ast;
-    bool astdot;
-    bool graph;
-    bool graphdot;
-    bool plan;
-    bool plandot;
-    bool dryrun;
-    bool wasm;
-};
 
-void process_stream(std::istream &in, const char *filename, options_t options, Diagnostic diag)
+void process_stream(std::istream &in, const char *filename, Diagnostic diag)
 {
     Catalog &C = Catalog::Get();
     Sema sema(diag);
@@ -116,14 +98,14 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
     while (parser.token()) {
         Timer timer;
         auto stmt = parser.parse();
-        if (options.echo)
+        if (get_options().echo)
             std::cout << *stmt << std::endl;
         if (diag.num_errors() != num_errors) goto next;
         timer.start("Semantic Analysis");
         sema(*stmt);
         timer.stop();
-        if (options.ast) stmt->dump(std::cout);
-        if (options.astdot) {
+        if (get_options().ast) stmt->dump(std::cout);
+        if (get_options().astdot) {
             DotTool dot(diag);
             stmt->dot(dot.stream());
             dot.show("ast", is_stdin);
@@ -134,8 +116,8 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
             timer.start("Construct the Query Graph");
             auto query_graph = QueryGraph::Build(*stmt);
             timer.stop();
-            if (options.graph) query_graph->dump(std::cout);
-            if (options.graphdot) {
+            if (get_options().graph) query_graph->dump(std::cout);
+            if (get_options().graphdot) {
                 DotTool dot(diag);
                 query_graph->dot(dot.stream());
                 dot.show("graph", is_stdin);
@@ -150,8 +132,8 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
             timer.start("Compute an optimized Query Plan");
             auto optree = Opt(*query_graph.get());
             timer.stop();
-            if (options.plan) optree->dump(std::cout);
-            if (options.plandot) {
+            if (get_options().plan) optree->dump(std::cout);
+            if (get_options().plandot) {
                 DotTool dot(diag);
                 optree->dot(dot.stream());
                 dot.show("plan", is_stdin);
@@ -159,17 +141,17 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
             auto callback = new CallbackOperator(print);
             callback->add_child(optree.release());
 
-            if (options.wasm) {
+            if (get_options().wasm) {
                 WasmModule wasm = WasmPlatform::compile(*callback);
                 wasm.dump(std::cout);
             }
 
-            if (not options.dryrun) {
+            if (not get_options().dryrun) {
                 timer.start("Interpret the Query Plan");
                 I->execute(*callback);
                 timer.stop();
 
-                if (options.wasm) {
+                if (get_options().wasm) {
 #if WITH_V8
                     auto V8 = Backend::CreateWasmV8();
                     V8->execute(*callback);
@@ -242,7 +224,7 @@ next:
         num_errors = diag.num_errors();
         delete stmt;
 
-        if (options.times)
+        if (get_options().times)
             std::cout << timer;
     }
 
@@ -373,19 +355,12 @@ Replxx::hints_t hook_hint(const std::string &prefix, int &context_len, Replxx::C
 
 int main(int argc, const char **argv)
 {
-    std::cout << "PID";
-#if __linux || __APPLE__
-    std::cout << ' ' << getpid();
-#endif
-    std::cout << std::endl;
-
     /* Identify whether the terminal supports colors. */
     const bool term_has_color = term::has_color();
     /* TODO Identify whether the terminal uses a unicode character encoding. */
     (void) term_has_color;
 
     /*----- Parse command line arguments. ----------------------------------------------------------------------------*/
-    options_t options;
     ArgParser AP;
 #define ADD(TYPE, VAR, INIT, SHORT, LONG, DESCR, CALLBACK)\
     VAR = INIT;\
@@ -393,75 +368,87 @@ int main(int argc, const char **argv)
         std::function<void(TYPE)> callback = CALLBACK;\
         AP.add(SHORT, LONG, VAR, DESCR, callback);\
     }
-    ADD(bool, options.show_help, false,                     /* Type, Var, Init  */
+    ADD(bool, get_options().show_help, false,               /* Type, Var, Init  */
         "-h", "--help",                                     /* Short, Long      */
         "prints this help message",                         /* Description      */
-        [&](bool) { options.show_help = true; });           /* Callback         */
+        [&](bool) { get_options().show_help = true; });     /* Callback         */
     /* Shell configuration */
-    ADD(bool, options.has_color, false,                     /* Type, Var, Init  */
+    ADD(bool, get_options().has_color, false,               /* Type, Var, Init  */
         nullptr, "--color",                                 /* Short, Long      */
         "use colors",                                       /* Description      */
-        [&](bool) { options.has_color = true; });           /* Callback         */
-    ADD(bool, options.show_prompt, true,                    /* Type, Var, Init  */
+        [&](bool) { get_options().has_color = true; });     /* Callback         */
+    ADD(bool, get_options().show_prompt, true,              /* Type, Var, Init  */
         nullptr, "--noprompt",                              /* Short, Long      */
         "disable prompt",                                   /* Description      */
-        [&](bool) { options.show_prompt = false; });        /* Callback         */
+        [&](bool) { get_options().show_prompt = false; });  /* Callback         */
+    ADD(bool, get_options().quiet, false,                   /* Type, Var, Init  */
+        "-q", "--quiet",                                    /* Short, Long      */
+        "work in quiet mode",                               /* Description      */
+        [&](bool) { get_options().quiet = true; });         /* Callback         */
     /* Additional output */
-    ADD(bool, options.times, false,                         /* Type, Var, Init  */
+    ADD(bool, get_options().times, false,                   /* Type, Var, Init  */
         "-t", "--times",                                    /* Short, Long      */
         "report exact timings",                             /* Description      */
-        [&](bool) { options.times = true; });               /* Callback         */
-    ADD(bool, options.echo, false,                          /* Type, Var, Init  */
+        [&](bool) { get_options().times = true; });         /* Callback         */
+    ADD(bool, get_options().echo, false,                    /* Type, Var, Init  */
         nullptr, "--echo",                                  /* Short, Long      */
         "echo statements",                                  /* Description      */
-        [&](bool) { options.echo = true; });                /* Callback         */
-    ADD(bool, options.ast, false,                           /* Type, Var, Init  */
+        [&](bool) { get_options().echo = true; });          /* Callback         */
+    ADD(bool, get_options().ast, false,                     /* Type, Var, Init  */
         nullptr, "--ast",                                   /* Short, Long      */
         "print the AST of statements",                      /* Description      */
-        [&](bool) { options.ast = true; });                 /* Callback         */
-    ADD(bool, options.astdot, false,                        /* Type, Var, Init  */
+        [&](bool) { get_options().ast = true; });           /* Callback         */
+    ADD(bool, get_options().astdot, false,                  /* Type, Var, Init  */
         nullptr, "--astdot",                                /* Short, Long      */
         "dot the AST of statements",                        /* Description      */
-        [&](bool) { options.astdot = true; });              /* Callback         */
-    ADD(bool, options.graph, false,                         /* Type, Var, Init  */
+        [&](bool) { get_options().astdot = true; });        /* Callback         */
+    ADD(bool, get_options().graph, false,                   /* Type, Var, Init  */
         nullptr, "--graph",                                 /* Short, Long      */
         "print the computed query graph",                   /* Description      */
-        [&](bool) { options.graph = true; });               /* Callback         */
-    ADD(bool, options.graphdot, false,                      /* Type, Var, Init  */
+        [&](bool) { get_options().graph = true; });         /* Callback         */
+    ADD(bool, get_options().graphdot, false,                /* Type, Var, Init  */
         nullptr, "--graphdot",                              /* Short, Long      */
         "dot the computed query graph",                     /* Description      */
-        [&](bool) { options.graphdot = true; });            /* Callback         */
-    ADD(bool, options.plan, false,                          /* Type, Var, Init  */
+        [&](bool) { get_options().graphdot = true; });      /* Callback         */
+    ADD(bool, get_options().plan, false,                    /* Type, Var, Init  */
         nullptr, "--plan",                                  /* Short, Long      */
         "emit the chosen execution plan",                   /* Description      */
-        [&](bool) { options.plan = true; });                /* Callback         */
-    ADD(bool, options.plandot, false,                       /* Type, Var, Init  */
+        [&](bool) { get_options().plan = true; });          /* Callback         */
+    ADD(bool, get_options().plandot, false,                 /* Type, Var, Init  */
         nullptr, "--plandot",                               /* Short, Long      */
         "dot the chosen operator tree",                     /* Description      */
-        [&](bool) { options.plandot = true; });             /* Callback         */
-    ADD(bool, options.dryrun, false,                        /* Type, Var, Init  */
+        [&](bool) { get_options().plandot = true; });       /* Callback         */
+    ADD(bool, get_options().dryrun, false,                  /* Type, Var, Init  */
         nullptr, "--dryrun",                                /* Short, Long      */
         "don't actually execute the query",                 /* Description      */
-        [&](bool) { options.dryrun = true; });              /* Callback         */
-    ADD(bool, options.wasm, false,                          /* Type, Var, Init  */
+        [&](bool) { get_options().dryrun = true; });        /* Callback         */
+    ADD(bool, get_options().wasm, false,                    /* Type, Var, Init  */
         nullptr, "--wasm",                                  /* Short, Long      */
         "show compiled WebAssembly",                        /* Description      */
-        [&](bool) { options.wasm = true; });                /* Callback         */
+        [&](bool) { get_options().wasm = true; });          /* Callback         */
 #undef ADD
     AP.parse_args(argc, argv);
 
-    if (options.show_help) {
+    if (get_options().show_help) {
         usage(std::cout, argv[0]);
         std::cout << "WHERE\n";
         AP.print_args(stdout);
         std::exit(EXIT_SUCCESS);
     }
 
+    if (not get_options().quiet) {
+        std::cout << "PID";
+#if __linux || __APPLE__
+        std::cout << ' ' << getpid();
+#endif
+        std::cout << std::endl;
+    }
+
     /* Disable synchronisation between C and C++ I/O (e.g. stdin vs std::cin). */
     std::ios_base::sync_with_stdio(false);
 
     /* Create the diagnostics object. */
-    Diagnostic diag(options.has_color, std::cout, std::cerr);
+    Diagnostic diag(get_options().has_color, std::cout, std::cerr);
 
     /* ----- Replxx configuration ------------------------------------------------------------------------------------*/
     Replxx rx;
@@ -504,7 +491,7 @@ int main(int argc, const char **argv)
     KEY_BIND(meta(Replxx::KEY::BACKSPACE),KILL_TO_BEGINING_OF_WORD);
 #undef KEY_BIND
 
-    if (options.show_prompt) {
+    if (get_options().show_prompt) {
         /* Completion */
         rx.set_completion_callback(std::bind(&hook_completion, std::placeholders::_1, std::placeholders::_2));
         rx.set_completion_count_cutoff(128);
@@ -523,7 +510,7 @@ int main(int argc, const char **argv)
 
     /* Other options */
     rx.set_word_break_characters(" \t.,-%!;:=*~^'\"/?<>|[](){}");
-    rx.set_no_color(not options.show_prompt);
+    rx.set_no_color(not get_options().show_prompt);
 
     auto args = AP.args();
     if (args.empty())
@@ -537,13 +524,13 @@ int main(int argc, const char **argv)
             std::stringstream ss;
             for (;;) {
                 do
-                    cinput = rx.input(options.show_prompt ? prompt(ss.str().size() != 0) : ""); // Read one line of input
+                    cinput = rx.input(get_options().show_prompt ? prompt(ss.str().size() != 0) : ""); // Read one line of input
                 while ((cinput == nullptr) and (errno == EAGAIN));
                 insist(errno != EAGAIN);
 
                 /* User sent EOF */
                 if (cinput == nullptr) {
-                    if (options.show_prompt)
+                    if (get_options().show_prompt)
                         std::cout << std::endl;
                     break;
                 }
@@ -555,7 +542,7 @@ int main(int argc, const char **argv)
                     ss.write(cinput, len); // append replxx line to stream
                     rx.history_add(cinput);
                     if (cinput[len - 1] == ';') {
-                        process_stream(ss, filename, options, diag);
+                        process_stream(ss, filename, diag);
                         ss.str(""); // empty the stream
                         ss.clear(); // and clear EOF bit
                     } else
@@ -572,7 +559,7 @@ int main(int argc, const char **argv)
                 diag.err() << ".  Aborting." << std::endl;
                 break;
             }
-            process_stream(in, filename, options, diag);
+            process_stream(in, filename, diag);
         }
     }
 

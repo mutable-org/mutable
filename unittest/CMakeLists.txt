@@ -34,5 +34,8 @@ add_executable(
 
     # backend
     backend/StackMachineTest.cpp
+
+    # globals
+    ../src/globals.cpp
     )
 target_link_libraries(unittest db)

@@ -1,6 +1,7 @@
 #include "parse/Sema.hpp"
 
 #include "catalog/Schema.hpp"
+#include "globals.hpp"
 #include <cstdint>
 #include <sstream>
 #include <unordered_map>
@@ -917,7 +918,8 @@ void Sema::operator()(Const<CreateDatabaseStmt> &s)
 
     try {
         C.add_database(db_name);
-        diag.out() << "Created database " << db_name << ".\n";
+        if (not get_options().quiet)
+            diag.out() << "Created database " << db_name << ".\n";
     } catch (std::invalid_argument) {
         diag.e(s.database_name.pos) << "Database " << db_name << " already exists.\n";
     }
@@ -932,7 +934,8 @@ void Sema::operator()(Const<UseDatabaseStmt> &s)
     try {
         auto &DB = C.get_database(db_name);
         C.set_database_in_use(DB);
-        diag.out() << "Using database " << db_name << ".\n";
+        if (not get_options().quiet)
+            diag.out() << "Using database " << db_name << ".\n";
     } catch (std::out_of_range) {
         diag.e(s.database_name.pos) << "Database " << db_name << " not found.\n";
     }
@@ -1057,7 +1060,8 @@ void Sema::operator()(Const<CreateTableStmt> &s)
         return;
     }
 
-    diag.out() << "Created table " << table_name << " in database " << DB.name << ".\n";
+    if (not get_options().quiet)
+        diag.out() << "Created table " << table_name << " in database " << DB.name << ".\n";
 }
 
 void Sema::operator()(Const<SelectStmt> &s)
@@ -1184,8 +1188,10 @@ void Sema::operator()(Const<DSVImportStmt> &s)
     }
 
     /* Sanity check for skip header. */
-    if (s.skip_header and not s.has_header)
-        diag.n(s.path.pos) << "I will assume the existence of a header so I can skip it.\n";
+    if (s.skip_header and not s.has_header) {
+        if (not get_options().quiet)
+            diag.n(s.path.pos) << "I will assume the existence of a header so I can skip it.\n";
+    }
 
     /* Duplicate check. */
     std::unordered_map<const char*, const char*> duplicates;

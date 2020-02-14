@@ -366,7 +366,7 @@ def end2end_case(sql_filename, csv_filename):
 
     try:
         # Parse the input statement and pretty print it.
-        process = subprocess.Popen([SHELL_BIN, '--noprompt', E2E_SETUP, '-'],
+        process = subprocess.Popen([SHELL_BIN, '--quiet', '--noprompt', E2E_SETUP, '-'],
                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=CWD)
 
         out, err = process.communicate(stmt.encode('latin-1'), timeout=10) # wait 10 seconds
@@ -380,7 +380,7 @@ def end2end_case(sql_filename, csv_filename):
         with open(csv_filename, 'r') as csv_file:
             expected = csv_file.read().strip()
 
-        actual = '\n'.join(str(out, 'latin-1').splitlines()[9:])
+        actual = '\n'.join(str(out, 'latin-1').splitlines())
 
         if actual != expected:
             raise TestException(f'failed due to different results')

@@ -107,6 +107,10 @@ struct SmallBitset
     friend SmallBitset operator&(SmallBitset left, SmallBitset right) { return intersect(left, right); }
     friend SmallBitset operator-(SmallBitset left, SmallBitset right) { return subtract(left, right); }
 
+    SmallBitset & operator|=(SmallBitset other) { return *this = *this | other; }
+    SmallBitset & operator&=(SmallBitset other) { return *this = *this & other; }
+    SmallBitset & operator-=(SmallBitset other) { return *this = *this - other; }
+
     friend std::ostream & operator<<(std::ostream &out, SmallBitset s) {
         for (uint64_t mask = 1UL << (SmallBitset::CAPACITY - 1); mask; mask >>= 1)
             out << bool(s & SmallBitset(mask));

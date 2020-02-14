@@ -230,3 +230,132 @@ TEST_CASE("AdjacencyMatrix/QueryGraph Matrix", "[unit]")
 
     delete stmt;
 }
+
+TEST_CASE("AdjacencyMatrix", "[unit]")
+{
+    AdjacencyMatrix M;
+
+    /* Query graph consisting of four relations with two joins edges.
+     * (0,2) (0,3)
+     * The resulting adjacency matrix:
+     *     0 1 2 3 (indices)
+     *     -------
+     * 0 | 0 0 1 1
+     * 1 | 0 0 0 0
+     * 2 | 1 0 0 0
+     * 3 | 1 0 0 0
+     */
+    M.set_bidirectional(0, 2);
+    M.set_bidirectional(0, 3);
+
+    SECTION("reachable from singleton")
+    {
+        {
+            SmallBitset S(0b0100UL); // 2
+            SmallBitset R(0b1101UL); // 0, 2, 3
+            REQUIRE(M.reachable(S) == R);
+        }
+        {
+            SmallBitset S(0b0010UL); // 1
+            SmallBitset R(0b0010UL); // 1
+            REQUIRE(M.reachable(S) == R);
+        }
+    }
+
+    SECTION("reachable from set")
+    {
+        {
+            SmallBitset S(0b1100UL); // 2, 3
+            SmallBitset R(0b1101UL); // 0, 2, 3
+            REQUIRE(M.reachable(S) == R);
+        }
+        {
+            SmallBitset S(0b1101UL); // 0, 2, 3
+            SmallBitset R(0b1101UL); // 0, 2, 3
+            REQUIRE(M.reachable(S) == R);
+        }
+        {
+            SmallBitset S(0b0110UL); // 1, 2
+            SmallBitset R(0b1111UL); // 0, 1, 2, 3
+            REQUIRE(M.reachable(S) == R);
+        }
+    }
+
+    SECTION("reachable from singleton within subset")
+    {
+        SmallBitset subset(0b0110); // 1, 2
+        {
+            SmallBitset S(0b0010UL); // 1
+            SmallBitset R(0b0010UL); // 1
+            REQUIRE(M.reachable(S, subset) == R);
+        }
+        {
+            SmallBitset S(0b0100UL); // 2
+            SmallBitset R(0b0100UL); // 2
+            REQUIRE(M.reachable(S, subset) == R);
+        }
+    }
+
+    SECTION("reachable from singleton outside subset")
+    {
+        SmallBitset subset(0b0110); // 1, 2
+        SmallBitset S(0b0001UL); // 0
+        SmallBitset R(0b0000UL); // ∅
+        REQUIRE(M.reachable(S, subset) == R);
+    }
+
+    SECTION("reachable from set within subset")
+    {
+        SmallBitset subset(0b0111); // 0, 1, 2
+        {
+            SmallBitset S(0b0101UL); // 0, 2
+            SmallBitset R(0b0101UL); // 0, 2
+            REQUIRE(M.reachable(S, subset) == R);
+        }
+        {
+            SmallBitset S(0b0011UL); // 0, 1
+            SmallBitset R(0b0111UL); // 0, 1, 2
+            REQUIRE(M.reachable(S, subset) == R);
+        }
+    }
+
+    SECTION("reachable from set partially within subset")
+    {
+        SmallBitset subset(0b1110); // 1, 2, 3
+        SmallBitset S(0b0011UL); // 0, 1
+        SmallBitset R(0b0010UL); // 1
+        REQUIRE(M.reachable(S, subset) == R);
+    }
+
+    SECTION("reachable from set partially within subset")
+    {
+        SmallBitset subset(0b1110); // 1, 2, 3
+        SmallBitset S(0b0001UL); // 0
+        SmallBitset R(0b0000UL); // ∅
+        REQUIRE(M.reachable(S, subset) == R);
+    }
+
+    SECTION("connected singleton")
+    {
+        {
+            SmallBitset S(0b0001UL); // 0
+            REQUIRE(M.is_connected(S));
+        }
+        {
+            SmallBitset S(0b0010UL); // 1
+            REQUIRE(M.is_connected(S));
+        }
+    }
+
+    SECTION("connected set")
+    {
+        {
+            SmallBitset S(0b0011UL); // 0, 1
+            REQUIRE(not M.is_connected(S));
+        }
+        {
+            SmallBitset S(0b0101UL); // 0, 2
+            REQUIRE(M.is_connected(S));
+        }
+    }
+}

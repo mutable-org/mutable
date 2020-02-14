@@ -172,27 +172,44 @@ struct AdjacencyMatrix
         return m_[i].contains(j);
     }
 
-    /** Returns true if there is at least one edge between one of the data sources in each subset. */
-    bool is_connected(SmallBitset left, SmallBitset right) {
-        SmallBitset reachable;
-        /* Compute the set of reachable data sources from the data sources in `right`. */
-        for (auto it : right)
-            reachable = reachable | m_[it];
-        /* Intersect the data source of `left` with the data source reachable from `right`.  If the result is non-empty,
-         * `left` and `right` are connected. */
-        return left & reachable;
+    /** Computes the set of nodes reachable from `src`, i.e.\ the set of nodes reachable from any node in `src`. */
+    SmallBitset reachable(SmallBitset src) const {
+        SmallBitset R_old(0);
+        SmallBitset R_new(src);
+        while (auto R = R_new - R_old) {
+            R_old = R_new;
+            for (auto x : R)
+                R_new |= m_[x]; // add all nodes reachable from node `x` to the set of reachable nodes
+        }
+        return R_new;
     }
 
-    /** Returns true if the subproblem `s` is connected. */
-    bool is_connected(SmallBitset s) {
-        SmallBitset reachable;
-        /* Subproblem with single relation is trivially connected. */
-        if (s.size() == 1) return true;
-        /* Compute the set of reachable data sources from the data sources in `s`. */
-        for (auto it : s)
-            reachable = reachable | m_[it];
-        /* If `reachable` is a subset of `s`, then it is connected. */
-        return s.is_subset(reachable);
+    /** Computes the set of nodes in `S` reachable from `src`, i.e.\ the set of nodes in `S` reachable from any node in
+     * `src`. */
+    SmallBitset reachable(SmallBitset src, SmallBitset S) const {
+        SmallBitset R_old(0);
+        SmallBitset R_new(src & S);
+        while (auto R = R_new - R_old) {
+            R_old = R_new;
+            for (auto x : R)
+                R_new |= m_[x] & S; // add all nodes in `S` reachable from node `x` to the set of reachable nodes
+        }
+        return R_new;
+    }
+
+    /** Returns `true` iff the subproblem `S` is connected.  `S` is connected iff any node in `S` can reach all other
+     * nodes of `S` using only nodes in `S`.  */
+    bool is_connected(SmallBitset S) const { return reachable(SmallBitset(1UL << *S.begin()), S) == S; }
+
+    /** Returns `true` iff there is at least one edge (join) between `left` and `right`. */
+    bool is_connected(SmallBitset left, SmallBitset right) const {
+        SmallBitset neighbors;
+        /* Compute the neighbors of `right`. */
+        for (auto it : right)
+            neighbors = neighbors | m_[it];
+        /* Intersect `left` with the neighbors of `right`.  If the result is non-empty, `left` and `right` are
+         * immediately connected by a join. */
+        return left & neighbors;
     }
 
     friend std::ostream & operator<<(std::ostream &out, const AdjacencyMatrix &m) {

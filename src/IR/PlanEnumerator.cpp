@@ -88,6 +88,7 @@ void DPsize::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &
 
 void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
 {
+    constexpr uint64_t MAX = std::numeric_limits<uint64_t>::max();
     auto &sources = G.sources();
     std::size_t n = sources.size();
     AdjacencyMatrix M(G);
@@ -98,14 +99,17 @@ void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTabl
 
     /* Process all subplans of size greater than one. */
     for (std::size_t s = 2; s <= n; ++s) {
-        for (std::size_t s1 = 1; s1 < s; ++s1) {
+        std::size_t m = s/2 + 1;
+        for (std::size_t s1 = 1; s1 < m; ++s1) {
             /* Check for all combinations of subsets if they are valid joins and if so, forward the combination to the cost model. */
             std::size_t s2 = s - s1;
             if (s1 == s2) { // if subproblems of equal size
                 /* Use optimized version of DPsize.*/
                 for (auto S1 = GospersHack::enumerate_all(s1, n); S1; ++S1) { // enumerate all subsets of size `s1`
+                    if (PT[*S1].cost == MAX) continue;
                     GospersHack S2 = GospersHack::enumerate_from(*S1, n);
                     for (++S2; S2; ++S2) { // consider only the subsets following S1
+                        if (PT[*S2].cost == MAX) continue;
                         ++inner_counter;
                         if (*S1 & *S2) continue; // check for disjointness
                         if (not M.is_connected(Subproblem(*S1), Subproblem(*S2))) continue; // check for connectedness
@@ -116,7 +120,9 @@ void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTabl
             } else {
                 /* Standard version. */
                 for (auto S1 = GospersHack::enumerate_all(s1, n); S1; ++S1) { // enumerate all subsets of size `s1`
+                    if (PT[*S1].cost == MAX) continue;
                     for (auto S2 = GospersHack::enumerate_all(s2, n); S2; ++S2) { // enumerate all subsets of size `s - s1`
+                        if (PT[*S2].cost == MAX) continue;
                         ++inner_counter;
                         if (*S1 & *S2) continue; // check for disjointness
                         if (not M.is_connected(Subproblem(*S1), Subproblem(*S2))) continue; // check for connectedness

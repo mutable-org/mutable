@@ -126,13 +126,41 @@ span.mlabel
     line-height: 140%;
 }
 
+.memberdecls .groupheader
+{
+    margin-top: 8px;
+    font-size: 12pt;
+    font-weight: 200;
+    padding-bottom: 0;
+    border-bottom: 0.2mm solid #000000;
+    line-height: 120%;
+}
+
+.contents > h2.groupheader:first-of-type
+{
+    background-color: black;
+    color: white;
+    box-sizing: border-box;
+    padding: 10px;
+}
+
+.contents > h2.groupheader:not(:first-of-type)
+{
+    display: none;
+}
+
 .memtitle
 {
     padding: 2pt 5pt;
     background: unset;
-    font-size: 14pt;
+    font-size: 12pt;
+    line-height: 150%;
     font-family: 'Inconsolata', 'Roboto Mono', 'Courier New', 'Monaco', 'monospace';
     border: unset;
+}
+.memtitle .permalink
+{
+    font-size: 12pt;
 }
 
 .memproto

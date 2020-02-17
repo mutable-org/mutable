@@ -38,9 +38,12 @@ struct PrintData : OperatorData
             printer.emit_Ld_Tup(0, i);
             printer.emit_Print(ostream_index, S[i].type);
         }
-        // std::cerr << "Printer:\n";
-        // printer.dump();
     }
+};
+
+struct NoOpData : OperatorData
+{
+    uint32_t num_rows = 0;
 };
 
 struct ProjectionData : OperatorData
@@ -313,7 +316,10 @@ void Pipeline::operator()(const PrintOperator &op)
     }
 }
 
-void Pipeline::operator()(const NoOpOperator&) { /* nothing to be done */ }
+void Pipeline::operator()(const NoOpOperator &op)
+{
+    as<NoOpData>(op.data())->num_rows++;
+}
 
 void Pipeline::operator()(const FilterOperator &op)
 {
@@ -636,7 +642,12 @@ void Interpreter::operator()(const PrintOperator &op)
     op.child(0)->accept(*this);
 }
 
-void Interpreter::operator()(const NoOpOperator &op) { op.child(0)->accept(*this); }
+void Interpreter::operator()(const NoOpOperator &op)
+{
+    op.data(new NoOpData());
+    op.child(0)->accept(*this);
+    op.out << as<NoOpData>(op.data())->num_rows << " rows\n";
+}
 
 void Interpreter::operator()(const ScanOperator &op)
 {

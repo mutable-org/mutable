@@ -85,7 +85,7 @@ ExternalProject_Add(
     PREFIX third-party
     DOWNLOAD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party"
     GIT_REPOSITORY "https://github.com/WebAssembly/binaryen.git"
-    GIT_TAG 9384ff68eea8090578354bab35fce2e621a588c4
+    GIT_TAG dfb2f27d0123ad62b44914fd0210db1d21cfc91e
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/binaryen"
     CMAKE_ARGS -DBUILD_STATIC_LIB=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
     BUILD_BYPRODUCTS "${PROJECT_BINARY_DIR}/third-party/src/Binaryen-build/lib/libbinaryen.a"
@@ -101,7 +101,12 @@ add_dependencies(binaryen Binaryen)
 set(WITH_V8 FALSE CACHE BOOL "Enable the V8 platform.")
 if(${WITH_V8})
 set(V8_VERSION "8.0.368")
-set(V8_BUILD_ARGS "is_clang=true is_component_build=false v8_monolithic=true is_debug=true is_official_build=false treat_warnings_as_errors=false v8_use_external_startup_data=false use_sysroot=false use_custom_libcxx=false linux_use_bundled_binutils=false clang_use_chrome_plugins=false use_debug_fission=true")
+set(V8_BUILD_ARGS "is_clang=true is_component_build=false v8_monolithic=true is_official_build=false treat_warnings_as_errors=false v8_use_external_startup_data=false use_sysroot=false use_custom_libcxx=false linux_use_bundled_binutils=false clang_use_chrome_plugins=false")
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(V8_BUILD_ARGS "${V8_BUILD_ARGS} is_debug=true use_debug_fission=true")
+else()
+    set(V8_BUILD_ARGS "${V8_BUILD_ARGS} is_debug=false")
+endif()
 ExternalProject_Add(
     V8
     PREFIX third-party
@@ -110,7 +115,7 @@ ExternalProject_Add(
     DOWNLOAD_COMMAND fetch --force v8
     COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/"
     COMMAND git remote add -f mutable git@gitlab.cs.uni-saarland.de:bigdata/mutable/v8.git || true
-    COMMAND git checkout f16bc69f65dcfb6299b5b6068ed4cff503626448
+    COMMAND git checkout ad945bd745c95801d5581d2baa2ba750a360203a
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/third_party/depot_tools/gclient sync
     UPDATE_COMMAND ":"
     CONFIGURE_COMMAND gn gen . --root=${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8 --args=${V8_BUILD_ARGS}
@@ -169,4 +174,3 @@ endif()
 include_directories(src)
 add_subdirectory(src)
 add_subdirectory(unittest)
-add_subdirectory(benchmark)

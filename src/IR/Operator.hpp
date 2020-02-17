@@ -169,9 +169,13 @@ struct PrintOperator : Consumer
     void print(std::ostream &out) const override;
 };
 
-/** Drops the produced results.  This is used for benchmarking. */
+/** Drops the produced results and outputs only the number of result tuples produced.  This is used for benchmarking. */
 struct NoOpOperator : Consumer
 {
+    std::ostream &out;
+
+    NoOpOperator(std::ostream &out) : out(out) { }
+
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
 

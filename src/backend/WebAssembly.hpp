@@ -54,6 +54,11 @@ struct WasmPlatform
     /** The maximum memory of a WebAssembly module:  2^32 - 2^16 bytes ≈ 2 GiB */
     static constexpr std::size_t WASM_MAX_MEMORY = (1UL << 31) - (1UL << 16);
 
+    /** The size of the module's output buffer in tuples. */
+    static constexpr std::size_t NUM_TUPLES_OUTPUT_BUFFER = 32;
+
+    static constexpr bool WRITE_RESULTS_COLUMN_MAJOR = false;
+
     /** A `WasmContext` holds associated information of a WebAssembly module instance. */
     struct WasmContext
     {
@@ -91,13 +96,13 @@ struct WasmPlatform
         return it->second;
     }
 
-    /** Compiles the plan `op` to a `WasmModule`. */
-    static WasmModule compile(const Operator &op);
+    /** Compiles the `plan` to a `WasmModule`. */
+    static WasmModule compile(const Operator &plan);
 
     virtual ~WasmPlatform() { }
 
-    /** Executes the `WasmModule` `module` on this `WasmPlatform`. */
-    virtual void execute(const WasmModule &module) = 0;
+    /** Compiles the given `plan` to a `WasmModule` and executes it on this `WasmPlatform`. */
+    virtual void execute(const Operator &plan) = 0;
 };
 
 /** A `Backend` to execute `WasmModule`s on a specific `WasmPlatform`. */

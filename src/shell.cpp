@@ -127,21 +127,28 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
                 optree->dot(dot.stream());
                 dot.show("plan", is_stdin);
             }
-            Consumer *plan = nullptr;
-            if (Options::Get().benchmark)
-                plan = new NoOpOperator();
-            else
-                plan = new PrintOperator(std::cout);
+
+            std::unique_ptr<Consumer> plan;
+            auto print = [&](const Schema &S, const Tuple &t) { t.print(std::cout, S); std::cout << '\n'; };
+            if (Options::Get().benchmark) {
+                plan = std::make_unique<NoOpOperator>(std::cout);
+            } else {
+#if 0
+                plan = std::make_unique<CallbackOperator>(print);
+#else
+                plan = std::make_unique<PrintOperator>(std::cout);
+#endif
+            }
+
             plan->add_child(optree.release());
 
-            if (Options::Get().wasm) {
-                WasmModule wasm = WasmPlatform::compile(*plan);
+            if (Options::Get().dryrun and Options::Get().wasm) {
+                WasmModule wasm = TIME_EXPR(WasmPlatform::compile(*plan), "Compile to WebAssembly", timer);
                 wasm.dump(std::cout);
             }
 
             if (not Options::Get().dryrun) {
-                TIME_EXPR(I->execute(*plan), "Execute query", timer);
-
+                TIME_THIS("Execute query", timer);
                 if (Options::Get().wasm) {
 #if WITH_V8
                     auto V8 = Backend::CreateWasmV8();
@@ -152,9 +159,10 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
 #else
                     std::cerr << "No WASM backend available.\n";
 #endif
+                } else {
+                    I->execute(*plan);
                 }
             }
-            delete plan;
         } else if (auto I = cast<InsertStmt>(stmt)) {
             auto &DB = C.get_database_in_use();
             auto &T = DB.get_table(I->table_name.text);

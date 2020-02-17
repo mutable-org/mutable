@@ -78,14 +78,17 @@ BinaryenExpressionRef convert(BinaryenModuleRef module, BinaryenExpressionRef ex
     if (T->is_integral()) {
         if (T->size() == 64) {
             if (O->is_integral()) {
-                if (O->size() <= 32) {
-                    return CONVERT(ExtendS32Int64); // i32 to i64
-                }
+                if (O->size() == 64)
+                    return expr; // i64 to i64; no conversion required
+                else
+                    return CONVERT(ExtendSInt32); // i32 to i64
             }
         }
         if (T->size() == 32) {
             if (O->is_integral()) {
-                if (O->size() <= 32)
+                if (O->size() == 64)
+                    return CONVERT(WrapInt64); // i64 to i32
+                else
                     return expr; // i32 to i32; no conversion required
             }
         }
@@ -148,20 +151,24 @@ struct BlockBuilder
 struct WasmCodeGen : ConstOperatorVisitor
 {
     private:
-    BinaryenModuleRef module_; ///< the WASM module
+    WasmModule &module_; ///< the WASM module
     std::size_t num_params_; ///< number of function parameters
     std::vector<BinaryenType> param_types; ///< types of function parameters
     std::vector<BinaryenType> locals_; ///< types of function locals
     BlockBuilder block_; ///< the global block
-    BinaryenExpressionRef b_out_; ///< ptr to the output location
+    std::unordered_map<std::string, BinaryenExpressionRef> imports_; ///< output locations of columns
+    BinaryenExpressionRef b_num_tuples_; ///< number of result tuples produced
 
-    WasmCodeGen(WasmModule &module) : module_(module.ref()), block_(module.ref(), "fn.body") { } // private c'tor
+    WasmCodeGen(WasmModule &module) : module_(module), block_(module.ref(), "fn.body") { } // private c'tor
 
     public:
-    static WasmModule compile(const Operator &op);
+    static WasmModule compile(const Operator &plan);
 
     /** Returns the current WASM module. */
-    BinaryenModuleRef module() { return module_; }
+    BinaryenModuleRef module() { return module_.ref(); }
+
+    /** Returns the local variable holding the number of result tuples produced. */
+    BinaryenExpressionRef num_tuples() const { return b_num_tuples_; }
 
     /** Creates a new local and returns an expression accessing this fresh local. */
     BinaryenExpressionRef add_local(BinaryenType ty) {
@@ -170,8 +177,64 @@ struct WasmCodeGen : ConstOperatorVisitor
         return BinaryenLocalGet(module(), idx, ty);
     }
 
-    /** Returns an expression evaluating to the location where output (results) are written to. */
-    BinaryenExpressionRef out() const { return b_out_; }
+    /** Adds a global import to the module.  If the import is mutable, the value of the global is copied over into a
+     * fresh local variable.  (This is a work-around, since global imports cannot be mutable.)
+     * \param name          the name of the imported value
+     * \param ty            the type of the imported value
+     * \param is_mutable    whether the imported value is mutable
+     * \returns a BinaryenExpressionRef with the value of the global
+     */
+    BinaryenExpressionRef add_import(std::string name, BinaryenType ty, bool is_mutable = false) {
+        auto it = imports_.find(name);
+        if (it == imports_.end()) {
+            BinaryenAddGlobalImport(
+                /* module=             */ module(),
+                /* internalName=       */ name.c_str(),
+                /* externalModuleName= */ "env",
+                /* externalBaseName=   */ name.c_str(),
+                /* type=               */ ty,
+                /* mutable=            */ false
+            );
+            auto b_global = BinaryenGlobalGet(
+                /* module= */ module(),
+                /* name=   */ name.c_str(),
+                /* type=   */ ty
+            );
+            if (is_mutable) {
+                auto b_local = add_local(ty);
+                block_ += BinaryenLocalSet(
+                    /* module= */ module(),
+                    /* index=  */ BinaryenLocalGetGetIndex(b_local),
+                    /* value=  */ b_global
+                );
+                it = imports_.emplace_hint(it, name, b_local);
+            } else {
+                it = imports_.emplace_hint(it, name, b_global);
+            }
+        }
+        return it->second;
+    }
+
+    /** Returns the local variable that is initialized with the imported global of the given `name`. */
+    BinaryenExpressionRef get_import(const std::string &name) const {
+        auto it = imports_.find(name);
+        insist(it != imports_.end(), "no import with the given name");
+        return it->second;
+    }
+
+    BinaryenExpressionRef inc_num_tuples(int32_t n = 1) {
+        auto b_inc = BinaryenBinary(
+            /* module= */ module(),
+            /* op=     */ BinaryenAddInt32(),
+            /* lhs=    */ b_num_tuples_,
+            /* rhs=    */ BinaryenConst(module(), BinaryenLiteralInt32(n))
+        );
+        return BinaryenLocalSet(
+            /* module= */ module(),
+            /* index=  */ BinaryenLocalGetGetIndex(b_num_tuples_),
+            /* value=  */ b_inc
+        );
+    }
 
     private:
     /*----- OperatorVisitor ------------------------------------------------------------------------------------------*/
@@ -196,7 +259,7 @@ struct WasmPipelineCG : ConstOperatorVisitor, ConstASTExprVisitor
     std::unordered_map<Schema::Identifier, BinaryenExpressionRef> intermediates_; ///< a map of intermediate results
 
     public:
-    WasmPipelineCG(WasmCodeGen &CG) : CG(CG) , block_(CG.module()) { }
+    WasmPipelineCG(WasmCodeGen &CG) : CG(CG) , block_(CG.module(), "pipeline") { }
 
     /** Return the current WASM module. */
     BinaryenModuleRef module() { return CG.module(); }
@@ -213,6 +276,9 @@ struct WasmPipelineCG : ConstOperatorVisitor, ConstASTExprVisitor
     BinaryenExpressionRef compile(const Expr &expr);
     /** Compiles a `cnf::CNF` to a `BinaryenExpressionRef`.  (Without short-circuit evaluation!) */
     BinaryenExpressionRef compile(const cnf::CNF &cnf);
+
+    void write_results_column_major(const Schema &schema);
+    void write_results_row_major(const Schema &schema);
 
     /* Operators */
     using ConstOperatorVisitor::operator();
@@ -248,7 +314,7 @@ struct WasmStoreCG : ConstStoreVisitor
  * WasmCodeGen
  *====================================================================================================================*/
 
-WasmModule WasmCodeGen::compile(const Operator &op)
+WasmModule WasmCodeGen::compile(const Operator &plan)
 {
     WasmModule module; // fresh module
     WasmCodeGen codegen(module);
@@ -272,56 +338,23 @@ WasmModule WasmCodeGen::compile(const Operator &op)
         /* shared=         */ 0
     );
 
-    /*----- Import callback to print i32. ----------------------------------------------------------------------------*/
-    BinaryenAddFunctionImport(
-        /* module=             */ module.ref(),
-        /* internalName=       */ "print_i32",
-        /* externalModuleName= */ "env",
-        /* externalBaseName=   */ "print_i32",
-        /* params=             */ BinaryenTypeInt32(),
-        /* results=            */ BinaryenTypeNone()
-    );
+    /*----- Import output locations.  --------------------------------------------------------------------------------*/
+    std::ostringstream oss;
+    codegen.add_import("out", BinaryenTypeInt32(), /* is_mutable= */ true);
+    for (auto attr : plan.schema()) {
+        oss.str("");
+        oss << "out_" << attr.id;
+        codegen.add_import(oss.str(), BinaryenTypeInt32(), /* is_mutable= */ true);
+    }
 
-    /*----- Import output location.  ---------------------------------------------------------------------------------*/
-    BinaryenAddGlobalImport(
-        /* module=             */ module.ref(),
-        /* internalName=       */ "out",
-        /* externalModuleName= */ "env",
-        /* externalBaseName=   */ "out",
-        /* type=               */ BinaryenTypeInt32(),
-        /* mutable=            */ false
-    );
-
-    /*----- Copy output location from global to local, s.t. it is mutable. -------------------------------------------*/
-    codegen.b_out_ = codegen.add_local(BinaryenTypeInt32());
-    auto b_out_global = BinaryenGlobalGet(
-        /* module= */ module.ref(),
-        /* name=   */ "out",
-        /* type=   */ BinaryenTypeInt32()
-    );
-    codegen.block_ += BinaryenLocalSet(
-        /* module= */ module.ref(),
-        /* index=  */ BinaryenLocalGetGetIndex(codegen.b_out_),
-        /* value=  */ b_out_global
-    );
+    /*----- Count number of result tuples. ---------------------------------------------------------------------------*/
+    codegen.b_num_tuples_ = codegen.add_local(BinaryenTypeInt32());
 
     /*----- Compile plan. --------------------------------------------------------------------------------------------*/
-    codegen(op); // emit code
+    codegen(plan); // emit code
 
-    /*----- Compute number of output records written. ----------------------------------------------------------------*/
-    auto num_attrs = op.schema().num_entries();
-    auto b_diff = BinaryenBinary(
-        /* module= */ module.ref(),
-        /* op=     */ BinaryenSubInt32(),
-        /* left=   */ codegen.out(),
-        /* right=  */ b_out_global
-    );
-    codegen.block_ += BinaryenBinary(
-        /* module= */ module.ref(),
-        /* op=     */ BinaryenDivSInt32(),
-        /* left=   */ b_diff,
-        /* right=  */ BinaryenConst(module.ref(), BinaryenLiteralInt32(8 * num_attrs))
-    );
+    /*----- Return the number of result tuples produced. -------------------------------------------------------------*/
+    codegen.block_ += codegen.b_num_tuples_;
 
     /*----- Add function. --------------------------------------------------------------------------------------------*/
     BinaryenAddFunction(
@@ -340,9 +373,17 @@ WasmModule WasmCodeGen::compile(const Operator &op)
         module.dump();
         throw std::logic_error("invalid module");
     }
+#if 0
+#ifdef NDEBUG
+    std::cerr << "WebAssembly before optimization:\n";
+    module.dump();
     BinaryenSetOptimizeLevel(2); // O2
     BinaryenSetShrinkLevel(0); // shrinking not required
-    //BinaryenModuleOptimize(module.ref());
+    BinaryenModuleOptimize(module.ref());
+    std::cerr << "WebAssembly after optimization:\n";
+    module.dump();
+#endif
+#endif
 
     return module;
 }
@@ -354,7 +395,22 @@ void WasmCodeGen::operator()(const ScanOperator &op)
 
 void WasmCodeGen::operator()(const CallbackOperator &op) { (*this)(*op.child(0)); }
 
-void WasmCodeGen::operator()(const PrintOperator &op) { (*this)(*op.child(0)); }
+void WasmCodeGen::operator()(const PrintOperator &op)
+{
+    std::vector<BinaryenType> print_param_types;
+    for (auto &e : op.schema())
+        print_param_types.push_back(get_binaryen_type(e.type));
+    BinaryenAddFunctionImport(
+        /* module=             */ module(),
+        /* internalName=       */ "print",
+        /* externalModuleName= */ "env",
+        /* externalBaseName=   */ "print",
+        /* params=             */ BinaryenTypeCreate(&print_param_types[0], print_param_types.size()),
+        /* results=            */ BinaryenTypeNone()
+    );
+
+    (*this)(*op.child(0));
+}
 
 void WasmCodeGen::operator()(const NoOpOperator &op) { (*this)(*op.child(0)); }
 
@@ -372,11 +428,10 @@ void WasmCodeGen::operator()(const JoinOperator &op)
 
 void WasmCodeGen::operator()(const ProjectionOperator &op)
 {
-    if (op.children().size()) {
+    if (op.children().size())
         (*this)(*op.child(0));
-    } else {
-        // TODO implement
-    }
+    else
+        block_ += WasmPipelineCG::compile(op, *this);
 }
 
 void WasmCodeGen::operator()(const LimitOperator &op)
@@ -451,6 +506,71 @@ BinaryenExpressionRef WasmPipelineCG::compile(const cnf::CNF &cnf)
     return b_cnf;
 }
 
+void WasmPipelineCG::write_results_row_major(const Schema &schema)
+{
+    std::size_t offset = 0;
+    auto b_out = CG.get_import("out");
+    for (auto &attr : schema) {
+        auto value = intermediates_.at(attr.id);
+        auto bytes = attr.type->size() == 64 ? 8 : 4;
+        block_ += BinaryenStore(
+            /* module= */ module(),
+            /* bytes=  */ bytes,
+            /* offset= */ offset,
+            /* align=  */ 0,
+            /* ptr=    */ b_out,
+            /* value=  */ value,
+            /* type=   */ get_binaryen_type(attr.type)
+        );
+        offset += 8;
+    }
+
+    auto inc = BinaryenBinary(
+        /* module= */ module(),
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ b_out,
+        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(offset))
+    );
+    block_ += BinaryenLocalSet(
+        /* module = */ module(),
+        /* index=   */ BinaryenLocalGetGetIndex(b_out),
+        /* value=   */ inc
+    );
+}
+
+void WasmPipelineCG::write_results_column_major(const Schema &schema)
+{
+    std::ostringstream oss;
+    for (auto &attr : schema) {
+        oss.str("");
+        oss << "out_" << attr.id;
+        auto b_out = CG.get_import(oss.str());
+        auto value = intermediates_.at(attr.id);
+        auto bytes = attr.type->size() == 64 ? 8 : 4;
+
+        block_ += BinaryenStore(
+            /* module= */ module(),
+            /* bytes=  */ bytes,
+            /* offset= */ 0,
+            /* align=  */ 0,
+            /* ptr=    */ b_out,
+            /* value=  */ value,
+            /* type=   */ get_binaryen_type(attr.type)
+        );
+        auto inc = BinaryenBinary(
+            /* module= */ module(),
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ b_out,
+            /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(bytes))
+        );
+        block_ += BinaryenLocalSet(
+            /* module = */ module(),
+            /* index=   */ BinaryenLocalGetGetIndex(b_out),
+            /* value=   */ inc
+        );
+    }
+}
+
 
 /*======================================================================================================================
  * WasmPipelineCG / Operator
@@ -462,9 +582,11 @@ void WasmPipelineCG::operator()(const ScanOperator &op)
     std::ostringstream oss;
 
     oss.str("");
-    oss << "loop_" << table.name;
+    oss << "scan_" << table.name;
     auto loop_name = oss.str();
-    BlockBuilder loop_body(module(), "loop.body");
+    oss << ".body";
+    auto body_name = oss.str();
+    BlockBuilder loop_body(module(), body_name.c_str());
 
     /*----- Create induction variable. -------------------------------------------------------------------------------*/
     b_induction_var = CG.add_local(BinaryenTypeInt32());
@@ -533,57 +655,57 @@ void WasmPipelineCG::operator()(const ScanOperator &op)
 
 void WasmPipelineCG::operator()(const CallbackOperator &op)
 {
-    std::size_t offset = 0;
-
-    /*----- Write results. -------------------------------------------------------------------------------------------*/
-    for (auto &e : op.schema()) {
-        auto value = intermediates_.at(e.id);
-        auto bytes = e.type->size() == 64 ? 8 : 4;
-        block_ += BinaryenStore(
-            /* module= */ module(),
-            /* bytes=  */ bytes,
-            /* offset= */ offset,
-            /* align=  */ 0,
-            /* ptr=    */ CG.out(),
-            /* value=  */ value,
-            /* type=   */ get_binaryen_type(e.type)
-        );
-        offset += 8;
-    }
-
-    auto inc = BinaryenBinary(
-        /* module= */ module(),
-        /* op=     */ BinaryenAddInt32(),
-        /* left=   */ CG.out(),
-        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(offset))
-    );
-    block_ += BinaryenLocalSet(
-        /* module = */ module(),
-        /* index=   */ BinaryenLocalGetGetIndex(CG.out()),
-        /* value=   */ inc
-    );
+    if constexpr (WasmPlatform::WRITE_RESULTS_COLUMN_MAJOR)
+        write_results_column_major(op.schema());
+    else
+        write_results_row_major(op.schema());
+    block_ += CG.inc_num_tuples();
 }
 
 void WasmPipelineCG::operator()(const PrintOperator &op)
 {
-    // TODO
-    unreachable("not implemented");
+#if 0
+    /* Callback per result tuple. */
+    std::vector<BinaryenExpressionRef> args;
+    for (auto &e : op.schema()) {
+        auto it = intermediates_.find(e.id);
+        insist(it != intermediates_.end(), "unknown identifier");
+        args.push_back(it->second);
+    }
+    block_ += BinaryenCall(
+        /* module=      */ module(),
+        /* target=      */ "print",
+        /* operands=    */ &args[0],
+        /* numOperands= */ args.size(),
+        /* returnType=  */ BinaryenTypeNone()
+    );
+#else
+    if constexpr (WasmPlatform::WRITE_RESULTS_COLUMN_MAJOR)
+        write_results_column_major(op.schema());
+    else
+        write_results_row_major(op.schema());
+#endif
+    block_ += CG.inc_num_tuples();
+    // TODO issue a callback whenever NUM_TUPLES_OUTPUT_BUFFER tuples have been written, and reset counter
 }
 
-void WasmPipelineCG::operator()(const NoOpOperator&) { /* nothing to be done */ }
+void WasmPipelineCG::operator()(const NoOpOperator&)
+{
+    block_ += CG.inc_num_tuples();
+}
 
 void WasmPipelineCG::operator()(const FilterOperator &op)
 {
-    BlockBuilder then_block(module(), "if.then");
+    BlockBuilder then_block(module(), "filter.accept");
     swap(this->block_, then_block);
     (*this)(*op.parent());
     swap(this->block_, then_block);
 
     block_ += BinaryenIf(
-        /* module=    */ module(),
-        /* condition= */ compile(op.filter()),
-        /* ifTrue=    */ then_block.finalize(),
-        /* ifFalse=   */ nullptr
+        /* module=  */ module(),
+        /* cond=    */ compile(op.filter()),
+        /* ifTrue=  */ then_block.finalize(),
+        /* ifFalse= */ nullptr
     );
 }
 
@@ -602,7 +724,56 @@ void WasmPipelineCG::operator()(const ProjectionOperator &op)
 
 void WasmPipelineCG::operator()(const LimitOperator &op)
 {
+    /* Emit code for the rest of the pipeline. */
+    BlockBuilder within_limits_block(module(), "limit.within");
+    swap(this->block_, within_limits_block);
     (*this)(*op.parent());
+    swap(this->block_, within_limits_block);
+
+    /* Declare a new counter.  Will be initialized to 0. */
+    auto b_count = CG.add_local(BinaryenTypeInt32());
+
+    /* Check whether the pipeline has exceeded the limit. */
+    auto b_cond_exceeds_limits = BinaryenBinary(
+        /* module= */ module(),
+        /* op=     */ BinaryenGeSInt32(),
+        /* lhs=    */ b_count,
+        /* rhs=    */ BinaryenConst(module(), BinaryenLiteralInt32(op.limit() + op.offset()))
+    );
+
+    /* Abort the pipeline once the limit is exceeded. */
+    block_ += BinaryenBreak(
+        /* module= */ module(),
+        /* name=   */ "pipeline",
+        /* cond=   */ b_cond_exceeds_limits,
+        /* value=  */ nullptr
+    );
+
+    /* Check whether the pipeline is within the limits. */
+    auto b_cond_within_limits = BinaryenBinary(
+        /* module= */ module(),
+        /* op=     */ BinaryenGeSInt32(),
+        /* lhs=    */ b_count,
+        /* rhs=    */ BinaryenConst(module(), BinaryenLiteralInt32(op.offset()))
+    );
+    block_ += BinaryenIf(
+        /* module=  */ module(),
+        /* cond=    */ b_cond_within_limits,
+        /* ifTrue=  */ within_limits_block.finalize(),
+        /* ifFalse= */ nullptr
+    );
+
+    auto b_inc = BinaryenBinary(
+        /* module= */ module(),
+        /* op=     */ BinaryenAddInt32(),
+        /* lhs=    */ b_count,
+        /* rhs=    */ BinaryenConst(module(), BinaryenLiteralInt32(1))
+    );
+    block_ += BinaryenLocalSet(
+        /* module= */ module(),
+        /* index=  */ BinaryenLocalGetGetIndex(b_count),
+        /* value=  */ b_inc
+    );
 }
 
 void WasmPipelineCG::operator()(const GroupingOperator &op)
@@ -807,7 +978,7 @@ void WasmPipelineCG::operator()(const BinaryExpr &e)
     break; \
 }
 
-#define CMP(OP) \
+#define CMP(OP, OPS) \
 { \
     auto n_lhs = as<const Numeric>(e.lhs->type()); \
     auto n_rhs = as<const Numeric>(e.rhs->type()); \
@@ -818,9 +989,9 @@ void WasmPipelineCG::operator()(const BinaryExpr &e)
         case Numeric::N_Int: \
         case Numeric::N_Decimal: { \
             if (n->size() <= 32) \
-                BINARY_OP(OP##S, Int32); \
+                BINARY_OP(OPS, Int32); \
             else \
-                BINARY_OP(OP##S, Int64); \
+                BINARY_OP(OPS, Int64); \
             break; \
         } \
 \
@@ -885,12 +1056,12 @@ void WasmPipelineCG::operator()(const BinaryExpr &e)
         case TK_DOTDOT:
             unreachable("not yet supported");
 
-        case TK_LESS:           CMP(Lt); break;
-        case TK_GREATER:        CMP(Gt); break;
-        case TK_LESS_EQUAL:     CMP(Le); break;
-        case TK_GREATER_EQUAL:  CMP(Ge); break;
-        case TK_EQUAL:          BINARY(Eq); break;
-        case TK_BANG_EQUAL:     BINARY(Ne); break;
+        case TK_LESS:           CMP(Lt, LtS); break;
+        case TK_GREATER:        CMP(Gt, GtS); break;
+        case TK_LESS_EQUAL:     CMP(Le, LeS); break;
+        case TK_GREATER_EQUAL:  CMP(Ge, GeS); break;
+        case TK_EQUAL:          CMP(Eq, Eq); break;
+        case TK_BANG_EQUAL:     CMP(Ne, Ne); break;
 
         case TK_And:
             insist(e.type()->is_boolean());
@@ -987,7 +1158,30 @@ void WasmStoreCG::operator()(const RowStore &store)
         }
 
         /*----- Generate code for value access. ----------------------------------------------------------------------*/
-        {
+        if (attr.type->size() < 8) {
+            auto b_byte = BinaryenLoad(
+                /* module= */ pipeline.module(),
+                /* bytes=  */ 1,
+                /* signed= */ false,
+                /* offset= */ store.offset(attr.id) / 8,
+                /* align=  */ 0,
+                /* type=   */ BinaryenTypeInt32(),
+                /* ptr=    */ b_row_addr
+            );
+            auto b_shifted = BinaryenBinary(
+                /* module= */ pipeline.module(),
+                /* op=     */ BinaryenShrUInt32(),
+                /* lhs=    */ b_byte,
+                /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(store.offset(attr.id) % 8))
+            );
+            auto b_value = BinaryenBinary(
+                /* module= */ pipeline.module(),
+                /* op=     */ BinaryenAndInt32(),
+                /* lhs=    */ b_shifted,
+                /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32((1 << attr.type->size()) - 1))
+            );
+            pipeline.intermediates_.emplace(e.id, b_value);
+        } else {
             auto b_value = BinaryenLoad(
                 /* module= */ pipeline.module(),
                 /* bytes=  */ attr.type->size() / 8,
@@ -1062,7 +1256,4 @@ WasmModule WasmPlatform::compile(const Operator &op)
  * WasmBackend
  *====================================================================================================================*/
 
-void WasmBackend::execute(const Operator &plan) const {
-    auto module = WasmCodeGen::compile(plan);
-    platform_->execute(module);
-}
+void WasmBackend::execute(const Operator &plan) const { platform_->execute(plan); }

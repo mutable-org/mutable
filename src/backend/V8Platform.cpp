@@ -1,5 +1,8 @@
 #include "V8Platform.hpp"
 
+#include "catalog/Schema.hpp"
+#include "globals.hpp"
+#include "IR/Tuple.hpp"
 #include "storage/ColumnStore.hpp"
 #include "storage/RowStore.hpp"
 #include "storage/Store.hpp"
@@ -13,6 +16,77 @@
 using namespace db;
 using args_t = v8::Local<v8::Value>[];
 
+
+/*======================================================================================================================
+ * V8 Callback Functions
+ *
+ * Functions to be called from the WebAssembly module to give control flow and pass data to the host.
+ *====================================================================================================================*/
+
+void print(const v8::FunctionCallbackInfo<v8::Value> &info)
+{
+    for (int i = 0; i != info.Length(); ++i) {
+        v8::HandleScope handle_scope(info.GetIsolate());
+        if (i != 0) std::cout << ',';
+        std::cout << *v8::String::Utf8Value(info.GetIsolate(), info[i]);
+    }
+    std::cout << '\n';
+}
+
+struct print_value : ConstTypeVisitor
+{
+    using base = ConstTypeVisitor;
+
+    std::ostream &out;
+    const uint64_t *ptr;
+
+    print_value(std::ostream &out, const uint64_t *ptr) : out(out), ptr(ptr) { }
+
+    using base::operator();
+
+    void operator()(Const<ErrorType>&) override { unreachable("Value cannot have error type"); }
+
+    void operator()(Const<Boolean>&) override { out << (*reinterpret_cast<const uint8_t*>(ptr) ? "TRUE" : "FALSE"); }
+
+    void operator()(Const<CharacterSequence>&) override { unreachable("not implemented"); }
+
+    void operator()(Const<Numeric> &n) override {
+        switch (n.kind) {
+            case Numeric::N_Int:
+                if (n.size() <= 32)
+                    out << *reinterpret_cast<const int32_t*>(ptr);
+                else
+                    out << *reinterpret_cast<const int64_t*>(ptr);
+                break;
+
+            case Numeric::N_Float:
+                if (n.size() == 32)
+                    out << *reinterpret_cast<const float*>(ptr);
+                else
+                    out << *reinterpret_cast<const double*>(ptr);
+                break;
+
+            case Numeric::N_Decimal: {
+                auto i = *reinterpret_cast<const int64_t*>(ptr);
+                auto factor = powi(10, n.scale);
+                auto pre = i / factor;
+                auto post = i % factor;
+                out << pre << '.';
+                auto old_fill = out.fill('0');
+                out << std::setw(n.scale) << post;
+                out.fill(old_fill);
+                break;
+            }
+        }
+    }
+
+    void operator()(Const<FnType>&) override { unreachable("FnType is not a value"); }
+};
+
+
+/*======================================================================================================================
+ * V8Platform
+ *====================================================================================================================*/
 
 struct EnvGen : ConstStoreVisitor
 {
@@ -38,13 +112,16 @@ struct EnvGen : ConstStoreVisitor
         auto Ctx = isolate_->GetCurrentContext();
         auto &table = s.table();
 
+        /* Map entire row store to WebAssembly linear memory. */
         const auto ptr = rewire::Pagesize * next_page_;
         const auto bytes = s.num_rows() * s.row_size() / 8;
         const auto aligned_bytes = rewire::Ceil_To_Next_Page(bytes);
         const auto num_pages = aligned_bytes / rewire::Pagesize;
         auto &mem = s.memory();
-        mem.map(aligned_bytes, 0, wasm_context_.vm, ptr);
-        next_page_ += num_pages + 1; // "install" a guard page after the mapping to fault on oob
+        if (aligned_bytes) {
+            mem.map(aligned_bytes, 0, wasm_context_.vm, ptr);
+            next_page_ += num_pages + 1; // "install" a guard page after the mapping to fault on oob
+        }
 
         /* Add table address to env. */
         DISCARD env_->Set(Ctx, V8STR(table.name), v8::Int32::New(isolate_, ptr));
@@ -67,23 +144,22 @@ struct EnvGen : ConstStoreVisitor
             oss << table.name << '.' << attr.name;
             auto env_name = oss.str();
 
+            /* Map next column into WebAssembly linear memory. */
             const auto ptr = rewire::Pagesize * next_page_;
             const auto bytes = s.num_rows() * attr.type->size() / 8;
             const auto aligned_bytes = rewire::Ceil_To_Next_Page(bytes);
             const auto num_pages = aligned_bytes / rewire::Pagesize;
             auto &mem = s.memory(attr.id);
-            mem.map(aligned_bytes, 0, wasm_context_.vm, ptr);
+            if (aligned_bytes) {
+                mem.map(aligned_bytes, 0, wasm_context_.vm, ptr);
+                next_page_ += num_pages + 1; // "install" a guard page after the mapping to fault on oob
+            }
+
+            /* Add column address to env. */
             DISCARD env_->Set(Ctx, V8STR(env_name.c_str()), v8::Int32::New(isolate_, ptr));
-            next_page_ += num_pages + 1; // "install" a guard page after the mapping to fault on oob
         }
     }
 };
-
-void print_i32(const v8::FunctionCallbackInfo<v8::Value> &info)
-{
-    insist(info.Length() == 1);
-    std::cerr << "print_i32(" << info[0].As<v8::Int32>()->Value() << ')' << std::endl;
-}
 
 std::unique_ptr<v8::Platform> V8Platform::PLATFORM_(nullptr);
 
@@ -107,8 +183,10 @@ V8Platform::~V8Platform()
     delete allocator_;
 }
 
-void V8Platform::execute(const WasmModule &module)
+void V8Platform::execute(const Operator &plan)
 {
+    auto module = compile(plan);
+
     /* Create required V8 scopes. */
     v8::Isolate::Scope isolate_scope(isolate_);
     v8::HandleScope handle_scope(isolate_); // tracks and disposes of all object handles
@@ -116,14 +194,13 @@ void V8Platform::execute(const WasmModule &module)
     v8::Context::Scope context_scope(context);
 
     auto &wasm_context = Create_Wasm_Context(WASM_MAX_MEMORY);
-    auto v8_wasm_module = compile_wasm_module(module);
 
     /* Create the import object for instantiating the WebAssembly module. */
     auto imports = v8::Object::New(isolate_);
-    DISCARD imports->Set(context, V8STR("env"), create_env(wasm_context));
+    DISCARD imports->Set(context, V8STR("env"), create_env(wasm_context, plan));
 
     /* Create a WebAssembly instance object. */
-    auto instance = create_wasm_instance(v8_wasm_module, imports);
+    auto instance = instantiate(module, imports);
 
     /* Set the underlying memory for the instance. */
     v8::SetWasmInstanceRawMemory(instance, wasm_context.vm.as<uint8_t*>(), wasm_context.vm.size());
@@ -134,58 +211,100 @@ void V8Platform::execute(const WasmModule &module)
 
     /* Invoke the exported function `run` of the module. */
     args_t args { v8::Int32::New(isolate_, wasm_context.id), };
-    auto result = run->Call(context, context->Global(), 1, args).ToLocalChecked().As<v8::Int32>()->Value();
+    const uint32_t num_tuples =
+        run->Call(context, context->Global(), 1, args).ToLocalChecked().As<v8::Int32>()->Value();
 
-    /* Print results. */
-    std::cerr << result << " results:\n"
-              << std::hex << std::setfill('0');
-    for (uint8_t *ptr = output_buffer_.as<uint8_t*>(); result != 0; --result, ptr += 16) {
-        std::cerr << "0x"
-                  << std::setw(2) << (unsigned)(ptr[3]) << ' '
-                  << std::setw(2) << (unsigned)(ptr[2]) << ' '
-                  << std::setw(2) << (unsigned)(ptr[1]) << ' '
-                  << std::setw(2) << (unsigned)(ptr[0]) << ' '
-                  << std::setw(2) << (unsigned)(ptr[7]) << ' '
-                  << std::setw(2) << (unsigned)(ptr[6]) << ' '
-                  << std::setw(2) << (unsigned)(ptr[5]) << ' '
-                  << std::setw(2) << (unsigned)(ptr[4]) << '\n'
-                  << "0x"
-                  << std::setw(2) << (unsigned)(ptr[11]) << ' '
-                  << std::setw(2) << (unsigned)(ptr[10]) << ' '
-                  << std::setw(2) << (unsigned)(ptr[9]) << ' '
-                  << std::setw(2) << (unsigned)(ptr[8]) << ' '
-                  << std::setw(2) << (unsigned)(ptr[15]) << ' '
-                  << std::setw(2) << (unsigned)(ptr[14]) << ' '
-                  << std::setw(2) << (unsigned)(ptr[13]) << ' '
-                  << std::setw(2) << (unsigned)(ptr[12]) << '\n';
+    /* Extract results. */
+    auto &S = plan.schema();
+    if (auto callback_op = cast<const CallbackOperator>(&plan)) {
+        Tuple tup(plan.schema());
+        if constexpr (WasmPlatform::WRITE_RESULTS_COLUMN_MAJOR) {
+            unreachable("callback with results in column-major order not supported");
+        } else {
+            for (auto ptr = output_buffer_.as<uint64_t*>(), end = ptr + num_tuples * S.num_entries(); ptr < end;) {
+                for (std::size_t i = 0; i != S.num_entries(); ++i, ++ptr) {
+                    auto ty = S[i].type;
+                    if (ty->is_boolean()) {
+                        tup.set(i, bool(ptr[0] & 0b1), false);
+                    } else if (auto n = cast<const Numeric>(ty)) {
+                        switch (n->kind) {
+                            case Numeric::N_Int:
+                            case Numeric::N_Decimal: {
+                                switch (n->size()) {
+                                    case 8:
+                                    case 16:
+                                    case 32:
+                                        tup.set(i, int64_t(*reinterpret_cast<int32_t*>(ptr)), false);
+                                        break;
+
+                                    case 64:
+                                        tup.set(i, *reinterpret_cast<int64_t*>(ptr), false);
+                                        break;
+                                }
+                                break;
+                            }
+
+                            case Numeric::N_Float: {
+                                if (n->size() == 32)
+                                    tup.set(i, *reinterpret_cast<float*>(ptr), false);
+                                else
+                                    tup.set(i, *reinterpret_cast<double*>(ptr), false);
+                                break;
+                            }
+                        }
+                    } else {
+                        unreachable("unsupported type");
+                    }
+                }
+                callback_op->callback()(S, tup);
+                tup.clear();
+            }
+        }
+    } else if (auto print_op = cast<const PrintOperator>(&plan)) {
+        if constexpr (WasmPlatform::WRITE_RESULTS_COLUMN_MAJOR) {
+            unreachable("printing results in column-major order not supported");
+        } else {
+            print_value P(print_op->out, output_buffer_.as<uint64_t*>());
+            for (std::size_t i = 0; i != num_tuples; ++i) {
+                for (std::size_t j = 0; j != S.num_entries(); ++j, ++P.ptr) {
+                    if (j != 0) P.out << ',';
+                    P(*S[j].type);
+                }
+                P.out << '\n';
+            }
+        }
+        if (not Options::Get().quiet)
+            print_op->out << num_tuples << " rows\n";
+    } else if (auto noop_op = cast<const NoOpOperator>(&plan)) {
+        if (not Options::Get().quiet)
+            noop_op->out << num_tuples << " rows\n";
     }
 }
 
-v8::Local<v8::WasmModuleObject> V8Platform::compile_wasm_module(const WasmModule &module)
-{
-    auto [binary_addr, binary_size] = module.binary();
-    auto v8_wasm_module = v8::WasmModuleObject::DeserializeOrCompile(
-        /* isolate=           */ isolate_,
-        /* serialized_module= */ { nullptr, 0 },
-        /* wire_bytes=        */ v8::MemorySpan<const uint8_t>(binary_addr, binary_size)
-    ).ToLocalChecked();
-    free(binary_addr);
-    return v8_wasm_module;
-}
-
-v8::Local<v8::Object> V8Platform::create_wasm_instance(v8::Local<v8::WasmModuleObject> module,
-                                                       v8::Local<v8::Object> imports)
+v8::Local<v8::WasmModuleObject> V8Platform::instantiate(const WasmModule &module, v8::Local<v8::Object> imports)
 {
     auto Ctx = isolate_->GetCurrentContext();
-    args_t instance_args { module, imports };
-    return
-        Ctx->Global()->                                                             // get the `global` object
-        Get(Ctx, V8STR("WebAssembly")).ToLocalChecked().As<v8::Object>()->          // get WebAssembly class
-        Get(Ctx, V8STR("Instance")).ToLocalChecked().As<v8::Object>()->             // get WebAssembly.Instance class
-        CallAsConstructor(Ctx, 2, instance_args).ToLocalChecked().As<v8::Object>(); // instantiate WebAssembly.Instance
+    auto [binary_addr, binary_size] = module.binary();
+    auto bs = v8::ArrayBuffer::NewBackingStore(
+        /* data =        */ binary_addr,
+        /* byte_length=  */ binary_size,
+        /* deleter=      */ v8::BackingStore::EmptyDeleter,
+        /* deleter_data= */ nullptr
+    );
+    auto buffer = v8::ArrayBuffer::New(isolate_, std::move(bs));
+    args_t module_args { buffer };
+
+    auto wasm = Ctx->Global()->Get(Ctx, V8STR("WebAssembly")).ToLocalChecked().As<v8::Object>(); // WebAssembly class
+    auto wasm_module = wasm->Get(Ctx, V8STR("Module")).ToLocalChecked().As<v8::Object>()
+                           ->CallAsConstructor(Ctx, 1, module_args).ToLocalChecked().As<v8::Object>();
+    free(binary_addr);
+
+    args_t instance_args { wasm_module, imports };
+    return wasm->Get(Ctx, V8STR("Instance")).ToLocalChecked().As<v8::Object>()
+               ->CallAsConstructor(Ctx, 2, instance_args).ToLocalChecked().As<v8::WasmModuleObject>();
 }
 
-v8::Local<v8::Object> V8Platform::create_env(const WasmContext &wasm_context) const
+v8::Local<v8::Object> V8Platform::create_env(const WasmContext &wasm_context, const Operator &plan) const
 {
     auto Ctx = isolate_->GetCurrentContext();
     auto &DB = Catalog::Get().get_database_in_use();
@@ -195,18 +314,39 @@ v8::Local<v8::Object> V8Platform::create_env(const WasmContext &wasm_context) co
         G(it->second->store());
 
     /* Map the remaining address space to the output buffer. */
-    const auto ptr_out = G.get_next_page() * rewire::Pagesize;
+    auto ptr_out = G.get_next_page() * rewire::Pagesize;
     const auto remaining = wasm_context.vm.size() - ptr_out;
-    DISCARD env->Set(Ctx, V8STR("out"), v8::Int32::New(isolate_, ptr_out));
     output_buffer_.map(remaining, 0, wasm_context.vm, ptr_out);
 
-    auto v8_print_i32 = v8::Function::New(Ctx, print_i32).ToLocalChecked();
-    DISCARD env->Set(Ctx, V8STR("print_i32"), v8_print_i32);
+    /* Output location for row-major layout. */
+    DISCARD env->Set(Ctx, V8STR("out"), v8::Int32::New(isolate_, ptr_out));
 
-#ifndef NDEBUG
+    /* Output location(s) for column-major layout.  Similar to PAX-blocks. */
+    std::ostringstream oss;
+    for (auto attr : plan.schema()) {
+        auto ty = attr.type;
+        oss.str("");
+        oss << "out_" << attr.id;
+        DISCARD env->Set(Ctx, V8STR(oss.str().c_str()), v8::Int32::New(isolate_, ptr_out));
+        if (ty->size() <= 32)
+            ptr_out += 4 * WasmPlatform::NUM_TUPLES_OUTPUT_BUFFER; // 4 byte per value
+        else
+            ptr_out += (ty->size() * WasmPlatform::NUM_TUPLES_OUTPUT_BUFFER + 7) / 8;
+    }
+
+    /* Add printing functions to environment. */
+#define ADD_FUNC(FUNC) { \
+    auto func = v8::Function::New(Ctx, (FUNC)).ToLocalChecked(); \
+    DISCARD env->Set(Ctx, V8STR(#FUNC), func); \
+}
+    ADD_FUNC(print);
+#undef ADD_FUNC
+
+#if 0
     {
         auto json = to_json(env);
         std::cerr << "env: " << *v8::String::Utf8Value(isolate_, json) << '\n';
+        std::cerr.flush();
     }
 #endif
 

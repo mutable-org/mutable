@@ -26,9 +26,9 @@ struct tuple_type : public std::vector<value_type>
     using Base = std::vector<value_type>;
 
     tuple_type() : Base() { }
-    tuple_type(std::size_t capacity) : Base() { Base::reserve(capacity); }
+    explicit tuple_type(std::size_t capacity) : Base() { Base::reserve(capacity); }
     tuple_type(std::size_t count, const value_type &value) : Base(count, value) { }
-    tuple_type(std::vector<value_type> values) {
+    explicit tuple_type(std::vector<value_type> values) {
         using std::swap;
         swap(as<Base>(*this), values);
     }

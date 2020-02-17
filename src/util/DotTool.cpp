@@ -6,6 +6,7 @@
 #include <fstream>
 #include <graphviz/gvc.h>
 #include <iostream>
+#include <sstream>
 
 #if __linux
 #include <dlfcn.h>
@@ -72,36 +73,32 @@ void DotTool::render_to_pdf(const char *path_to_pdf)
 
 void DotTool::show(const char *name, bool interactive)
 {
-    if (libgraphviz and interactive) {
-        char buffer[L_tmpnam];
-        auto res = std::tmpnam(buffer);
-        insist(res);
-        render_to_pdf(buffer);
-#if __linux
-        exec("/usr/bin/setsid", { "--fork", "xdg-open", buffer });
-#elif __APPLE__
-        exec("/usr/bin/open", { "-a", "Preview", buffer });
-#endif
-    } else {
-        std::ostringstream oss;
-        oss << name << '_';
+    std::ostringstream oss;
+    oss << name << '_';
 #if __linux || __APPLE__
-        oss << getpid();
+    oss << getpid();
 #endif
-        if (libgraphviz) {
-            oss << ".pdf";
-            render_to_pdf(oss.str().c_str());
-            diag.out() << diag.NOTE << "Rendering to '" << oss.str() << "'.\n" << diag.RESET;
+    if (libgraphviz) {
+        oss << ".pdf";
+        render_to_pdf(oss.str().c_str());
+        if (interactive) {
+#if __linux
+            exec("/usr/bin/setsid", { "--fork", "xdg-open", oss.str().c_str() });
+#elif __APPLE__
+            exec("/usr/bin/open", { "-a", "Preview", oss.str().c_str() });
+#endif
         } else {
-            oss << ".dot";
-            std::ofstream out(oss.str());
-            if (not out) {
-                diag.err() << "Failed to generate '" << oss.str() << "'.\n";
-                return;
-            }
-            out << stream_.rdbuf();
-            out.flush();
-            if (interactive) diag.out() << diag.NOTE << "Rendering to '" << oss.str() << "'.\n" << diag.RESET;
+            diag.out() << diag.NOTE << "Rendering to '" << oss.str() << "'.\n" << diag.RESET;
         }
+    } else {
+        oss << ".dot";
+        std::ofstream out(oss.str());
+        if (not out) {
+            diag.err() << "Failed to generate '" << oss.str() << "'.\n";
+            return;
+        }
+        out << stream_.rdbuf();
+        out.flush();
+        if (interactive) diag.out() << diag.NOTE << "Rendering to '" << oss.str() << "'.\n" << diag.RESET;
     }
 }

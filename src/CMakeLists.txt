@@ -23,4 +23,4 @@ target_link_libraries(check-bin parse lex catalog util)
 set_target_properties(check-bin PROPERTIES OUTPUT_NAME check)
 
 add_executable(shell shell.cpp)
-target_link_libraries(shell ${CMAKE_THREAD_LIBS_INIT} replxx db)
+target_link_libraries(shell ${CMAKE_THREAD_LIBS_INIT} dl replxx db)

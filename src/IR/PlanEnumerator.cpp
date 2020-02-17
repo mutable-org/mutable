@@ -10,7 +10,7 @@
 using namespace db;
 
 
-void DummyPlanEnumerator::operator()(const QueryGraph &G, const CostFunction&, PlanTable &PT) const
+void DummyPlanEnumerator::operator()(const QueryGraph&, const CostFunction&, PlanTable&) const
 {
 #if 0
     while (not worklist.empty()) {
@@ -161,7 +161,7 @@ void DPsub::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &P
     }
 }
 
-void DPccp::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
+void DPccp::operator()(const QueryGraph&, const CostFunction&, PlanTable&) const
 {
     // TODO implement
 }

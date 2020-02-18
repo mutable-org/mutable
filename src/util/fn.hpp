@@ -177,10 +177,9 @@ bool intersect(const Container &first, const Set &second)
 }
 
 /** Power function for integral types. */
-template<typename T>
-inline
-typename std::enable_if<std::is_integral<T>::value, T>::type
-powi(const T base, const T exp)
+template<typename T, typename U>
+auto powi(const T base, const U exp) ->
+std::enable_if_t< std::is_integral_v<T> and std::is_integral_v<U>, std::common_type_t<T, U> >
 {
     if (exp == 0)
         return 1;

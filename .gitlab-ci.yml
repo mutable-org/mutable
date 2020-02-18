@@ -5,6 +5,7 @@
 # Define the stages of the pipeline.
 stages:
     - check
+    - pages
     - build
     - test
 
@@ -18,6 +19,22 @@ check:syntax:
     script:
         - exit 0
     allow_failure: true
+
+
+#-----------------------------------------------------------------------------------------------------------------------
+# PAGES
+#-----------------------------------------------------------------------------------------------------------------------
+
+pages:doxygen:
+    stage: pages
+    tags:
+        - nginx
+    script:
+        - doxygen Doxyfile
+        - rm -r /usr/share/nginx/html
+        - mv doxy/html /usr/share/nginx
+    only:
+        - master
 
 
 #-----------------------------------------------------------------------------------------------------------------------

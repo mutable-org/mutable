@@ -75,27 +75,75 @@ TEST_CASE("RowStore", "[core][storage][rowstore]")
     {
         auto row = store.append();
 
-        row->set(i1, 42);
-        row->set(i2, 43);
-        row->set(i4, 44);
-        row->set(i8, 45);
-        row->set(decimal, 1337); // 13.37
-        row->set(f, 13.37f);
-        row->set(d, 42.42);
-        row->set(char3, std::string("OK"));
-        row->set(b0, true);
-        row->set(b1, false);
+        SECTION("row/set+get/i1")
+        {
+            row->set(i1, 42);
+            REQUIRE(not row->isnull(i1));
+            REQUIRE(row->get<int8_t>(i1) == 42);
+        }
 
-        REQUIRE(row->get<int8_t>(i1) == 42);
-        REQUIRE(row->get<int16_t>(i2) == 43);
-        REQUIRE(row->get<int32_t>(i4) == 44);
-        REQUIRE(row->get<int64_t>(i8) == 45);
-        REQUIRE(row->get<int32_t>(decimal) == 1337);
-        REQUIRE(row->get<float>(f) == 13.37f);
-        REQUIRE(row->get<double>(d) == 42.42);
-        REQUIRE(streq(row->get<std::string>(char3).c_str(), "OK"));
-        REQUIRE(row->get<bool>(b0) == true);
-        REQUIRE(row->get<bool>(b1) == false);
+        SECTION("row/set+get/i2")
+        {
+            row->set(i2, 43);
+            REQUIRE(not row->isnull(i2));
+            REQUIRE(row->get<int16_t>(i2) == 43);
+        }
+
+        SECTION("row/set+get/i4")
+        {
+            row->set(i4, 44);
+            REQUIRE(not row->isnull(i4));
+            REQUIRE(row->get<int32_t>(i4) == 44);
+        }
+
+        SECTION("row/set+get/i8")
+        {
+            row->set(i8, 45);
+            REQUIRE(not row->isnull(i8));
+            REQUIRE(row->get<int64_t>(i8) == 45);
+        }
+
+        SECTION("row/set+get/decimal")
+        {
+            row->set(decimal, 1337); // 13.37
+            REQUIRE(not row->isnull(decimal));
+            REQUIRE(row->get<int32_t>(decimal) == 1337);
+        }
+
+        SECTION("row/set+get/f")
+        {
+            row->set(f, 13.37f);
+            REQUIRE(not row->isnull(f));
+            REQUIRE(row->get<float>(f) == 13.37f);
+        }
+
+        SECTION("row/set+get/d")
+        {
+            row->set(d, 42.42);
+            REQUIRE(not row->isnull(d));
+            REQUIRE(row->get<double>(d) == 42.42);
+        }
+
+        SECTION("row/set+get/char3")
+        {
+            row->set(char3, std::string("OK"));
+            REQUIRE(not row->isnull(char3));
+            REQUIRE(streq(row->get<std::string>(char3).c_str(), "OK"));
+        }
+
+        SECTION("row/set+get/b0")
+        {
+            row->set(b0, true);
+            REQUIRE(not row->isnull(b0));
+            REQUIRE(row->get<bool>(b0) == true);
+        }
+
+        SECTION("row/set+get/b1")
+        {
+            row->set(b1, false);
+            REQUIRE(not row->isnull(b1));
+            REQUIRE(row->get<bool>(b1) == false);
+        }
     }
 
     SECTION("row/NULL")

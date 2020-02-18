@@ -60,9 +60,9 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
             auto &sub = sub_table.get_final();
 
             /* Prefix every attribute of the nested query with the nested query's alias. */
-            OperatorSchema S;
-            for (auto &attr : sub_plan->schema())
-                S.add_element({Q->alias(), attr.first.attr_name}, attr.second);
+            Schema S;
+            for (auto &e : sub_plan->schema())
+                S.add({Q->alias(), e.id.name}, e.type);
             sub_plan->schema() = S;
 
             /* Update the plan table with the size and cost of the nested query and save the plan in the array of source

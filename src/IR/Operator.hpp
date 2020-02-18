@@ -20,238 +20,7 @@ struct TheOperatorVisitor;
 using OperatorVisitor = TheOperatorVisitor<false>;
 using ConstOperatorVisitor = TheOperatorVisitor<true>;
 
-/** The `tuple_type` represents a sequence of attribute values. */
-struct tuple_type : public std::vector<value_type>
-{
-    using Base = std::vector<value_type>;
-
-    tuple_type() : Base() { }
-    explicit tuple_type(std::size_t capacity) : Base() { Base::reserve(capacity); }
-    tuple_type(std::size_t count, const value_type &value) : Base(count, value) { }
-    explicit tuple_type(std::vector<value_type> values) {
-        using std::swap;
-        swap(as<Base>(*this), values);
-    }
-
-    tuple_type(const tuple_type&) = delete;
-
-    tuple_type(tuple_type &&other) {
-        using std::swap;
-        swap(as<Base>(*this), as<Base>(other));
-    }
-
-    tuple_type & operator=(tuple_type &&other) {
-        using std::swap;
-        swap(as<Base>(*this), as<Base>(other));
-        return *this;
-    }
-
-    /** Creates an exact copy of `this` tuple. */
-    tuple_type clone() const {
-        tuple_type copy;
-        as<Base>(copy) = as<const Base>(*this);
-        return copy;
-    }
-};
-
-static_assert(std::is_move_constructible_v<tuple_type>, "tuple_type must be move constructible");
-static_assert(not std::is_copy_constructible_v<tuple_type>, "tuple_type must not be copy constructible");
-
-/** Prints a textual representation of `tuple` to `out`. */
-inline std::ostream & operator<<(std::ostream &out, const tuple_type &tuple)
-{
-    for (auto it = tuple.begin(), end = tuple.end(); it != end; ++it) {
-        if (it != tuple.begin()) out << ", ";
-        std::visit(overloaded {
-            [&](auto &&arg) { out << arg; },
-            [&](std::string s) { out << '"' << s << '"'; },
-            [&](bool b) { out << (b ? "TRUE" : "FALSE"); },
-        }, *it);
-    }
-    return out;
-}
-
-inline tuple_type operator+(tuple_type left, const tuple_type &right)
-{
-    left.insert(left.end(), right.begin(), right.end());
-    return left;
-}
-
-inline tuple_type & operator+=(tuple_type &left, const tuple_type &right)
-{
-    left.insert(left.end(), right.begin(), right.end());
-    return left;
-}
-
-}
-
-namespace std {
-
-template<>
-struct hash<db::tuple_type>
-{
-    uint64_t operator()(const db::tuple_type &tuple) const {
-        uint64_t h = 0;
-        std::hash<db::value_type> hasher;
-        for (auto &v : tuple)
-            h ^= (h << 32) ^ hasher(v); // TODO is this any good?
-        return h;
-    }
-};
-
-}
-
-namespace db {
-
-/** Implements the schema of a `db::Operator`.  This is different from `db::Table`, which implements the schema of a
- * base table.  The `OperatorSchema` allows attributes of the same name that belong to different sources, e.g. after
- * joining two relations that have an attribute name in common.  (The `db::Table` class cannot distinguish these
- * attributes.)
- */
-struct OperatorSchema
-{
-    /** An `AttributeIdentifier` identifies an attrbite within a *result set*.  It is **not** equivalent to
-     * `db::Attribute`: an `AttributeIdentifier` may have no table name. */
-    struct AttributeIdentifier
-    {
-        const char *table_name;
-        const char *attr_name;
-
-        AttributeIdentifier(const char *table_name, const char *attr_name)
-            : table_name(table_name)
-            , attr_name(attr_name)
-        { }
-
-        AttributeIdentifier(const char *attr_name) : table_name(nullptr), attr_name(attr_name) { }
-
-        bool operator==(AttributeIdentifier other) const {
-            return this->table_name == other.table_name and this->attr_name == other.attr_name;
-        }
-        bool operator!=(AttributeIdentifier other) const { return not operator==(other); }
-
-        friend std::ostream & operator<<(std::ostream &out, AttributeIdentifier id) {
-            if (id.table_name)
-                out << id.table_name << '.';
-            return out << id.attr_name;
-        }
-    };
-
-    using entry_type = std::pair<AttributeIdentifier, const Type*>;
-
-    struct attr_hash
-    {
-        uint64_t operator()(AttributeIdentifier attr) const {
-            std::hash<const char*> h;
-            return h(attr.table_name) << 32 ^ h(attr.attr_name);
-        }
-    };
-
-    private:
-    std::vector<entry_type> elements_;
-
-    public:
-    const std::vector<entry_type> & elements() const { return elements_; }
-
-    /** Returns the number of attributes in this `OperatorSchema`. */
-    auto size() const { return elements_.size(); }
-
-    auto begin() { return elements_.begin(); }
-    auto end()   { return elements_.end(); }
-    auto begin() const { return elements_.cbegin(); }
-    auto end()   const { return elements_.cend(); }
-    auto cbegin() const { return elements_.cbegin(); }
-    auto cend()   const { return elements_.cend(); }
-
-    /** Returns an iterator to the entry with the given `AttributeIdentifier` `attr`, or `end()` if no such entry
-     * exists.  */
-    decltype(elements_)::iterator find(AttributeIdentifier attr) {
-        std::function<bool(entry_type&)> pred;
-        if (attr.table_name)
-            pred = [&](entry_type &e) -> bool { return e.first == attr; }; // match qualified
-        else
-            pred = [&](entry_type &e) -> bool { return e.first.attr_name == attr.attr_name; }; // match unqualified
-        auto it = std::find_if(begin(), end(), pred);
-        insist(it == end() or std::find_if(std::next(it), end(), pred) == end(), "duplicate entry; lookup ambiguous");
-        return it;
-    }
-    /** Returns an iterator to the entry with the given `AttributeIdentifier` `attr`, or `end()` if no such entry
-     * exists.  */
-    decltype(elements_)::const_iterator find(AttributeIdentifier attr) const {
-        return const_cast<OperatorSchema*>(this)->find(attr);
-    }
-
-    /** Returns `true` iff this `OperatorSchema` contains an entry with `AttributeIdentifier` `attr`. */
-    bool has(AttributeIdentifier attr) const { return find(attr) != end(); }
-
-    /** Returns the entry at index `idx`. */
-    const entry_type & operator[](std::size_t idx) const { insist(idx < elements_.size()); return elements_[idx]; }
-
-    /** Returns a `std::pair` of the index and a reference to the entry with `AttributeIdentifier` `attr`. */
-    std::pair<std::size_t, const entry_type&> operator[](AttributeIdentifier attr) const {
-        auto pos = find(attr);
-        insist(pos != end(), "id not found");
-        return { std::distance(begin(), pos), *pos };
-    }
-
-    /** Adds a new entry `attr` of type `type` to this `OperatorSchema`. */
-    void add_element(AttributeIdentifier attr, const Type *type) {
-        insist(attr.table_name == nullptr or strlen(attr.table_name) != 0);
-        elements_.emplace_back(attr, type);
-    }
-
-    /** Adds all entries of `other` to `this` `OperatorSchema`. */
-    OperatorSchema & operator+=(const OperatorSchema &other) {
-        for (auto &e : other)
-            this->add_element(e.first, e.second);
-        return *this;
-    }
-
-    /** Adds all entries of `other` to `this` `OperatorSchema` using *set semantics*.  If an entry of `other` with a
-     * particular `AttributeIdentifier` already exists in `this`, it is not added again. */
-    OperatorSchema & operator|=(const OperatorSchema &other) {
-        for (auto &e : other) {
-            if (has(e.first)) continue;
-            this->add_element(e.first, e.second);
-        }
-        return *this;
-    }
-
-    /** Computes the *set intersection* of two `OperatorSchema`s. */
-    friend OperatorSchema operator&(const OperatorSchema &first, const OperatorSchema &second) {
-        OperatorSchema res;
-        for (auto &elem : first) {
-            auto it = second.find(elem.first);
-            if (it != second.end()) {
-                insist(elem.second == it->second, "type mismatch");
-                res.add_element(it->first, it->second);
-            }
-        }
-        return res;
-    }
-
-    friend std::ostream & operator<<(std::ostream &out, const OperatorSchema &schema);
-
-    void dump(std::ostream &out) const;
-    void dump() const;
-};
-
-inline OperatorSchema operator+(const OperatorSchema &left, const OperatorSchema &right)
-{
-    OperatorSchema S(left);
-    S += right;
-    return S;
-}
-
-inline void print(std::ostream &out, const OperatorSchema &schema, const tuple_type &tuple)
-{
-    insist(schema.elements().size() == tuple.size(), "schema size does not match tuple size");
-    auto t = tuple.begin();
-    auto s = schema.begin();
-    for (auto end = tuple.end(); t != end; ++t, ++s) {
-        if (t != tuple.begin()) out << ',';
-        print(out, s->second, *t);
-    }
-}
+struct Tuple;
 
 /** This interface is used to attach data to `db::Operator` instances. */
 struct OperatorData
@@ -260,20 +29,20 @@ struct OperatorData
 };
 
 /** An `Operator` represents an operation in a *query plan*.  A plan is a tree structure of `Operator`s.  `Operator`s
- * can be evaluated to a sequence of tuples and have an `OperatorSchema`. */
+ * can be evaluated to a sequence of tuples and have a `Schema`. */
 struct Operator
 {
     private:
-    OperatorSchema schema_; ///< the schema of this `Operator`
+    Schema schema_; ///< the schema of this `Operator`
     mutable OperatorData *data_ = nullptr; ///< the data object associated to this `Operator`; may be `nullptr`
 
     public:
     virtual ~Operator() { delete data_; }
 
-    /** Returns the `OperatorSchema` of this `Operator`. */
-    OperatorSchema & schema() { return schema_; }
-    /** Returns the `OperatorSchema` of this `Operator`. */
-    const OperatorSchema & schema() const { return schema_; }
+    /** Returns the `Schema` of this `Operator`. */
+    Schema & schema() { return schema_; }
+    /** Returns the `Schema` of this `Operator`. */
+    const Schema & schema() const { return schema_; }
 
     /** Attached `OperatorData` `data` to this `Operator`.  Returns the previously attached `OperatorData`.  May return
      * `nullptr`. */
@@ -289,7 +58,7 @@ struct Operator
         return out;
     }
 
-    /** Minimizes the `OperatorSchema` of this `Operator`.  The `OperatorSchema` is reduced to the attributes actually
+    /** Minimizes the `Schema` of this `Operator`.  The `Schema` is reduced to the attributes actually
      * required by ancestors of this `Operator` in the plan. */
     void minimize_schema();
 
@@ -349,7 +118,7 @@ struct Consumer : virtual Operator
 
         /* Recompute operator schema. */
         auto &S = schema();
-        S = OperatorSchema();
+        S = Schema();
         for (auto c : children_)
             S += c->schema();
 
@@ -371,7 +140,7 @@ struct Consumer : virtual Operator
 struct CallbackOperator : Consumer
 {
     private:
-    using callback_type = std::function<void(const OperatorSchema &, const tuple_type&)>;
+    using callback_type = std::function<void(const Schema &, const Tuple&)>;
     callback_type callback_;
 
     public:
@@ -397,7 +166,7 @@ struct ScanOperator : Producer
     {
         auto &S = schema();
         for (auto &attr : store.table())
-            S.add_element({alias, attr.name}, attr.type);
+            S.add({alias, attr.name}, attr.type);
     }
 
     const Store & store() const { return store_; }
@@ -476,12 +245,12 @@ struct ProjectionOperator : Producer, Consumer
 
         if (is_anti()) {
             /* Recompute schema. */
-            OperatorSchema S;
+            Schema S;
             for (auto c : children())
                 S += c->schema();
             for (auto idx = schema().size() - projections_.size(); idx != schema().size(); ++idx) {
-                auto &attr = schema()[idx];
-                S.add_element(attr.first, attr.second);
+                auto &e = schema()[idx];
+                S.add(e.id, e.type);
             }
             schema() = S;
         }

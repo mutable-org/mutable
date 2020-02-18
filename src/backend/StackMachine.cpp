@@ -1,10 +1,31 @@
 #include "backend/StackMachine.hpp"
 
 #include "backend/Interpreter.hpp"
-#include <string_view>
+#include <functional>
 
 
 using namespace db;
+
+
+/*======================================================================================================================
+ * Helper functions
+ *====================================================================================================================*/
+
+/** Return the type suffix for the given `PrimitiveType` `ty`. */
+const char * tystr(const PrimitiveType *ty) {
+    if (ty->is_boolean())
+        return "_b";
+    if (ty->is_character_sequence())
+        return "_s";
+    auto n = as<const Numeric>(ty);
+    switch (n->kind) {
+        case Numeric::N_Int:
+        case Numeric::N_Decimal:
+            return "_i";
+        case Numeric::N_Float:
+            return n->precision == 32 ? "_f" : "_d";
+    }
+};
 
 
 /*======================================================================================================================
@@ -15,12 +36,12 @@ struct db::StackMachineBuilder : ConstASTVisitor
 {
     private:
     StackMachine &stack_machine_;
-    const OperatorSchema &schema_;
+    const Schema &schema_;
 
     public:
-    StackMachineBuilder(StackMachine &stack_machine, const OperatorSchema &schema, const Expr &expr)
+    StackMachineBuilder(StackMachine &stack_machine, const Schema &in_schema, const Expr &expr)
         : stack_machine_(stack_machine)
-        , schema_(schema)
+        , schema_(in_schema)
     {
         (*this)(expr); // compute the command sequence
     }
@@ -71,7 +92,12 @@ void StackMachineBuilder::operator()(Const<Designator> &e)
     stack_machine_.emit_Ld_Tup(idx);
 }
 
-void StackMachineBuilder::operator()(Const<Constant> &e) { stack_machine_.add_and_emit_load(Interpreter::eval(e)); }
+void StackMachineBuilder::operator()(Const<Constant> &e) {
+    if (e.tok == TK_Null)
+        stack_machine_.emit_Push_Null();
+    else
+        stack_machine_.add_and_emit_load(Interpreter::eval(e));
+}
 
 void StackMachineBuilder::operator()(Const<FnApplicationExpr> &e)
 {
@@ -176,29 +202,15 @@ void StackMachineBuilder::operator()(Const<UnaryExpr> &e)
 
 void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
 {
-    auto tystr = [](const PrimitiveType *ty) -> std::string {
-        if (ty->is_boolean())
-            return "_b";
-        if (ty->is_character_sequence())
-            return "_s";
-        auto n = as<const Numeric>(ty);
-        switch (n->kind) {
-            case Numeric::N_Int:
-            case Numeric::N_Decimal:
-                return "_i";
-            case Numeric::N_Float:
-                return n->precision == 32 ? "_f" : "_d";
-        }
-    };
-
     auto ty = as<const PrimitiveType>(e.type());
     auto ty_lhs = as<const PrimitiveType>(e.lhs->type());
     auto ty_rhs = as<const PrimitiveType>(e.rhs->type());
-    auto tystr_to   = tystr(ty);
+    auto tystr_to = tystr(ty);
 
+    /* Emit instructions to convert the current top-of-stack of type `from_ty` to type `to_ty`. */
     auto emit_cast = [&](const PrimitiveType *from_ty, const PrimitiveType *to_ty) {
-        auto tystr_to = tystr(to_ty);
-        auto tystr_from = tystr(from_ty);
+        std::string tystr_to = tystr(to_ty);
+        std::string tystr_from = tystr(from_ty);
         /* Cast LHS if necessary. */
         if (tystr_from != tystr_to) {
             std::string opstr = "Cast" + tystr_to + tystr_from;
@@ -207,6 +219,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
         }
     };
 
+    /* Emit instructions to bring the current top-of-stack with precision of `from_ty` to precision of `to_ty`. */
     auto scale = [&](const PrimitiveType *from_ty, const PrimitiveType *to_ty) {
         auto n_from = as<const Numeric>(from_ty);
         auto n_to = as<const Numeric>(to_ty);
@@ -215,20 +228,46 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
             /* Scale up. */
             auto delta = n_to->scale - n_from->scale;
             const int64_t factor = powi<int64_t>(10, delta);
-            stack_machine_.add_and_emit_load(factor);
-            stack_machine_.emit_Mul_i(); // multiply by scale factor
+            switch (n_from->kind) {
+                case Numeric::N_Float:
+                    if (n_from->precision == 32) {
+                        stack_machine_.add_and_emit_load(float(factor));
+                        stack_machine_.emit_Mul_f(); // multiply by scale factor
+                    } else {
+                        stack_machine_.add_and_emit_load(double(factor));
+                        stack_machine_.emit_Mul_d(); // multiply by scale factor
+                    }
+                    break;
+
+                case Numeric::N_Decimal:
+                case Numeric::N_Int:
+                    stack_machine_.add_and_emit_load(factor);
+                    stack_machine_.emit_Mul_i(); // multiply by scale factor
+                    break;
+            }
         } else if (n_from->scale > n_to->scale) {
             insist(n_from->is_decimal(), "only decimals have a scale");
-            insist(n_to->is_floating_point(), "only floating points are more precise than decimals");
             /* Scale down. */
             auto delta = n_from->scale - n_to->scale;
             const int64_t factor = powi<int64_t>(10, delta);
-            if (n_to->is_float()) {
-                stack_machine_.add_and_emit_load(float(1.f / factor));
-                stack_machine_.emit_Mul_f(); // multiply by inverse scale factor
-            } else {
-                stack_machine_.add_and_emit_load(double(1. / factor));
-                stack_machine_.emit_Mul_d(); // multiply by inverse scale factor
+            switch (n_from->kind) {
+                case Numeric::N_Float:
+                    if (n_from->precision == 32) {
+                        stack_machine_.add_and_emit_load(float(1.f / factor));
+                        stack_machine_.emit_Mul_f(); // multiply by inverse scale factor
+                    } else {
+                        stack_machine_.add_and_emit_load(double(1. / factor));
+                        stack_machine_.emit_Mul_d(); // multiply by inverse scale factor
+                    }
+                    break;
+
+                case Numeric::N_Decimal:
+                    stack_machine_.add_and_emit_load(factor);
+                    stack_machine_.emit_Div_i(); // divide by scale factor
+                    break;
+
+                case Numeric::N_Int:
+                    unreachable("int cannot be scaled down");
             }
         }
     };
@@ -282,12 +321,12 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
         case TK_PLUS:
         case TK_MINUS: {
             (*this)(*e.lhs);
-            emit_cast(ty_lhs, ty);
             scale(ty_lhs, ty);
+            emit_cast(ty_lhs, ty);
 
             (*this)(*e.rhs);
-            emit_cast(ty_rhs, ty);
             scale(ty_rhs, ty);
+            emit_cast(ty_rhs, ty);
 
             std::string opstr = e.op().type == TK_PLUS ? "Add" : "Sub";
             opstr += tystr_to;
@@ -300,28 +339,39 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
             auto n_lhs = as<const Numeric>(ty_lhs);
             auto n_rhs = as<const Numeric>(ty_rhs);
             auto n_res = as<const Numeric>(ty);
+            int64_t the_scale = 0;
 
             (*this)(*e.lhs);
-            emit_cast(ty_lhs, ty);
+            if (n_lhs->is_floating_point()) {
+                scale(n_lhs, n_res); // scale float up before cast to preserve decimal places
+                the_scale += n_res->scale;
+            } else {
+                the_scale += n_lhs->scale;
+            }
+            emit_cast(n_lhs, n_res);
 
             (*this)(*e.rhs);
-            emit_cast(ty_rhs, ty);
+            if (n_rhs->is_floating_point()) {
+                scale(n_rhs, n_res); // scale float up before cast to preserve decimal places
+                the_scale += n_res->scale;
+            } else {
+                the_scale += n_rhs->scale;
+            }
+            emit_cast(n_rhs, n_res);
 
             std::string opstr = "Mul";
             opstr += tystr_to;
             auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
             stack_machine_.emit(opcode); // Mul_x
 
-            const int64_t scale = n_lhs->scale + n_rhs->scale - n_res->scale;
-            insist(scale >= 0);
-            if (scale != 0) {
-                const int64_t factor = powi<int64_t>(10, scale);
+            /* Scale down again, if necessary. */
+            the_scale -= n_res->scale;
+            insist(the_scale >= 0);
+            if (the_scale != 0) {
+                insist(n_res->is_decimal());
+                const int64_t factor = powi<int64_t>(10, the_scale);
                 load_numeric(factor, n_res);
-
-                opstr = "Div";
-                opstr += tystr_to;
-                opcode = StackMachine::STR_TO_OPCODE.at(opstr);
-                stack_machine_.emit(opcode); // Div_x
+                stack_machine_.emit_Div_i();
             }
 
             break;
@@ -329,109 +379,59 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
 
         case TK_SLASH: {
             /* Division with potentially different numeric types is a tricky thing.  Not only must we convert the values
-             * from their original data type to the type of the result, but we also must scale them correctly.  Below is
-             * a list with examples of the different cases.  From this list we derive the formula:
+             * from their original data type to the type of the result, but we also must scale them correctly.
              *
-             *      scale = scale_rhs + (scale_res - scale_lhs)
+             * The effective scale of the result is computed as `scale_lhs - scale_rhs`.
              *
+             * (1) If the effective scale of the result is *less* than the expected scale of the result, the LHS must be
+             *     scaled up.
              *
-             *  INT / DECIMAL(2) -> DECIMAL(2)
+             * (2) If the effective scale of the result is *greater* than the expected scale of the result, the result
+             *     must be scaled down.
              *
-             *      42 / 2.37
-             *  ->  42 / 237
-             *  ->  42 * 10^2 * 10^2 // 237
-             *   =  420,000 // 237
-             *   =  1772
-             *  ->  17.72
-             *
-             *  DECIMAL(2) / INT -> DECIMAL(2)
-             *
-             *      42.00 / 2
-             *  ->  4200 / 2
-             *  ->  4200 * 10^0 * 10^0 // 2
-             *   =  4200 // 2
-             *   =  2100
-             *  ->  21.00
-             *
-             *  FLOAT / DECIMAL(2) -> FLOAT
-             *
-             *      42.f / 2.37
-             *  ->  42.f / 237
-             *  ->  42.f * 10^2 * 10^0 / 237
-             *   =  4200.f / 237
-             *   =  17.72f
-             *  ->  17.72f
-             *
-             *  DECIMAL(2) / FLOAT -> FLOAT
-             *
-             *      42.00 / 2.37f
-             *  ->  4200 / 2.37f
-             *  ->  4200 * 10^0 * 10^-2 / 2.37f
-             *   =  42.f / 2.37f
-             *   =  17.72f
-             *  ->  17.72f
-             *
-             *  DECIMAL(2) / DECIMAL(2) -> DECIMAL(2)
-             *
-             *      42.00 / 2.37
-             *  ->  4200 / 237
-             *  ->  4200 * 10^2 * 10^0 // 237
-             *  ->  420,000 // 237
-             *   =  1772
-             *  ->  17.72
-             *
-             *  DECIMAL(3) / DECIMAL(2) -> DECIMAL(3)
-             *
-             *      42.000 / 2.37
-             *  ->  42,000 / 237
-             *  ->  42,000 * 10^2 * 10^0 // 237
-             *   =  4,200,000 // 237
-             *   =  17721
-             *  ->  17.721
-             *
-             *  DECIMAL(2) / DECIMAL(3) -> DECIMAL(3)
-             *
-             *      42.00 / 2.370
-             *  ->  4200 / 2370
-             *  ->  4200 * 10^3 * 10^1 // 2370
-             *  ->  4,200,000 // 2370
-             *   =  17721
-             *  ->  17.721
+             * With these rules we can achieve maximum precision within the rules of the type system.
              */
 
             auto n_lhs = as<const Numeric>(ty_lhs);
             auto n_rhs = as<const Numeric>(ty_rhs);
             auto n_res = as<const Numeric>(ty);
+            int64_t the_scale = 0;
 
             (*this)(*e.lhs);
-            emit_cast(ty_lhs, ty);
+            if (n_lhs->is_floating_point()) {
+                scale(n_lhs, n_res); // scale float up before cast to preserve decimal places
+                the_scale += n_res->scale;
+            } else {
+                the_scale += n_lhs->scale;
+            }
+            emit_cast(n_lhs, n_res);
 
-            const auto scale = n_rhs->scale + (n_res->scale - n_lhs->scale);
-            if (scale > 0) {
-                const int64_t factor = powi<int64_t>(10, scale); // scale up by rhs
+            if (n_rhs->is_floating_point())
+                the_scale -= n_res->scale;
+            else
+                the_scale -= n_rhs->scale;
+
+            if (the_scale < n_res->scale) {
+                const int64_t factor = powi<int64_t>(10, n_res->scale - the_scale); // scale up
                 load_numeric(factor, n_res);
-
-                std::string opstr = "Mul";
-                opstr += tystr_to;
-                auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
-                stack_machine_.emit(opcode); // Mul_x
-            } else if (scale < 0) {
-                const int64_t factor = powi<int64_t>(10, -scale); // scale up by rhs
-                load_numeric(factor, n_res);
-
-                std::string opstr = "Div";
-                opstr += tystr_to;
-                auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
-                stack_machine_.emit(opcode); // Div_x
+                stack_machine_.emit_Mul_i();
             }
 
             (*this)(*e.rhs);
-            emit_cast(ty_rhs, ty);
+            if (n_rhs->is_floating_point())
+                scale(n_rhs, n_res); // scale float up before cast to preserve decimal places
+            emit_cast(n_rhs, n_res);
 
             std::string opstr = "Div";
             opstr += tystr_to;
             auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
             stack_machine_.emit(opcode); // Div_x
+
+            if (the_scale > n_res->scale) {
+                const int64_t factor = powi<int64_t>(10, the_scale - n_res->scale); // scale down
+                load_numeric(factor, n_res);
+                stack_machine_.emit_Div_i();
+            }
 
             break;
         }
@@ -463,12 +463,12 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
                 auto n_res = arithmetic_join(n_lhs, n_rhs);
 
                 (*this)(*e.lhs);
-                emit_cast(n_lhs, n_res);
                 scale(n_lhs, n_res);
+                emit_cast(n_lhs, n_res);
 
                 (*this)(*e.rhs);
-                emit_cast(n_rhs, n_res);
                 scale(n_rhs, n_res);
+                emit_cast(n_rhs, n_res);
 
                 std::string opstr = opname + tystr(n_res);
                 auto opcode = StackMachine::STR_TO_OPCODE.at(opstr);
@@ -497,6 +497,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
     }
 }
 
+
 /*======================================================================================================================
  * Stack Machine
  *====================================================================================================================*/
@@ -507,19 +508,23 @@ const std::unordered_map<std::string, StackMachine::Opcode> StackMachine::STR_TO
 #undef DB_OPCODE
 };
 
-StackMachine::StackMachine(const OperatorSchema &schema, const Expr &expr)
-    : schema(schema)
+StackMachine::StackMachine(Schema in_schema, const Expr &expr)
+    : in_schema(in_schema)
 {
-    StackMachineBuilder Builder(*this, schema, expr); // compute the command sequence for this stack machine
+    emit(expr);
+    emit_Emit(0, expr.type());
 }
 
-StackMachine::StackMachine(const OperatorSchema &schema)
-    : schema(schema)
-{ }
+StackMachine::StackMachine(Schema in_schema, const cnf::CNF &cnf)
+    : in_schema(in_schema)
+{
+    emit(cnf);
+    emit_Emit(0, Type::Get_Boolean(Type::TY_Vector));
+}
 
 void StackMachine::emit(const Expr &expr)
 {
-    StackMachineBuilder Builder(*this, schema, expr); // compute the command sequence for this stack machine
+    StackMachineBuilder Builder(*this, in_schema, expr); // compute the command sequence for this stack machine
 }
 
 void StackMachine::emit(const cnf::CNF &cnf)
@@ -540,9 +545,27 @@ void StackMachine::emit(const cnf::CNF &cnf)
         if (clause_it != cnf.cbegin())
             ops.push_back(StackMachine::Opcode::And_b);
     }
+    out_schema.push_back(Type::Get_Boolean(Type::TY_Vector));
 }
 
-void StackMachine::operator()(tuple_type *out, const tuple_type &in)
+void StackMachine::emit_Emit(std::size_t index, const Type *ty)
+{
+    if (index >= out_schema.size())
+        out_schema.resize(index + 1, Type::Get_Error());
+    out_schema[index] = ty;
+
+    if (ty->is_none()) {
+        emit_Emit_Null(index);
+    } else {
+        std::ostringstream oss;
+        oss << "Emit" << tystr(as<const PrimitiveType>(ty));
+        auto opcode = StackMachine::STR_TO_OPCODE.at(oss.str());
+        emit(opcode);
+        emit(static_cast<Opcode>(index));
+    }
+}
+
+void StackMachine::operator()(Tuple *out, const Tuple &in)
 {
     static const void *labels[] = {
 #define DB_OPCODE(CODE, ...) && CODE,
@@ -551,65 +574,118 @@ void StackMachine::operator()(tuple_type *out, const tuple_type &in)
     };
 
     emit_Stop();
-    tuple_type &stack = *out;
-    stack.clear();
-    auto op = ops.cbegin();
+    if (not values_) {
+        values_ = new Value[required_stack_size()];
+        null_bits_ = new bool[required_stack_size()]();
+    }
+    top_ = 0; // points to the top of the stack, i.e. the top-most entry
+    op_ = ops.cbegin();
+    auto p_mem = memory_; // pointer to free memory; used like a linear allocator
 
-#ifndef NDEBUG
-    insist(stack.capacity() >= std::size_t(required_stack_size_), "insufficient memory provided");
-    auto initial_stack_size = stack.capacity();
-#define NEXT \
-    insist(stack.capacity() == initial_stack_size, "failed to pre-allocate sufficient memory"); \
-    goto *labels[std::size_t(*op++)]
-#else
-#define NEXT goto *labels[std::size_t(*op++)]
-#endif
+#define NEXT goto *labels[std::size_t(*op_++)]
+
+#define PUSH(VAL, NUL) { \
+    insist(top_ < required_stack_size(), "index out of bounds"); \
+    values_[top_] = (VAL); \
+    null_bits_[top_] = (NUL); \
+    ++top_; \
+}
+#define POP() --top_
+#define TOP_IS_NULL (null_bits_[top_ - 1UL])
+#define TOP (values_[top_ - 1UL])
 
     NEXT;
+
 
 /*======================================================================================================================
  * Control flow operations
  *====================================================================================================================*/
 
 Stop_Z: {
-    insist(stack.size() >= 1);
-    auto pv = std::get_if<int64_t>(&stack.back());
-    insist(pv, "invalid type of variant");
-    if (*pv == 0) goto Stop; // stop evaluation on ZERO
+    insist(top_ >= 1);
+    if (TOP.as_i() == 0) {
+        top_ = 1;
+        TOP = 0;
+        goto Stop; // stop evaluation on ZERO
+    }
 }
 NEXT;
 
 Stop_NZ: {
-    insist(stack.size() >= 1);
-    auto pv = std::get_if<int64_t>(&stack.back());
-    insist(pv, "invalid type of variant");
-    if (*pv != 0) goto Stop; // stop evaluation on NOT ZERO
+    insist(top_ >= 1);
+    if (TOP.as_i() != 0) {
+        auto val = TOP.as_i();
+        top_ = 1;
+        TOP = val;
+        goto Stop; // stop evaluation on NOT ZERO
+    }
 }
 NEXT;
 
 Stop_False: {
-    insist(stack.size() >= 1);
-    auto pv = std::get_if<bool>(&stack.back());
-    insist(pv, "invalid type of variant");
-    if (not *pv) goto Stop; // stop evaluation on NOT ZERO
+    insist(top_ >= 1);
+    if (not TOP.as_b()) {
+        top_ = 1;
+        TOP = false;
+        goto Stop; // stop evaluation on FALSE
+    }
 }
 NEXT;
 
 Stop_True: {
-    insist(stack.size() >= 1);
-    auto pv = std::get_if<bool>(&stack.back());
-    insist(pv, "invalid type of variant");
-    if (*pv) goto Stop; // stop evaluation on NOT ZERO
+    insist(top_ >= 1);
+    if (TOP.as_b()) {
+        top_ = 1;
+        TOP = true;
+        goto Stop; // stop evaluation on TRUE
+    }
 }
 NEXT;
+
 
 /*======================================================================================================================
  * Stack manipulation operations
  *====================================================================================================================*/
 
 Pop:
-    stack.pop_back();
+    POP();
     NEXT;
+
+Push_Null:
+    PUSH(0, true);
+    NEXT;
+
+
+/*======================================================================================================================
+ * Output operations
+ *====================================================================================================================*/
+
+Emit_Null: {
+    std::size_t idx = std::size_t(*op_++);
+    out->null(idx);
+}
+NEXT;
+
+Emit_i:
+Emit_f:
+Emit_d:
+Emit_b: {
+    std::size_t idx = std::size_t(*op_++);
+    out->set(idx, TOP, TOP_IS_NULL);
+}
+NEXT;
+
+Emit_s: {
+    std::size_t idx = std::size_t(*op_++);
+    if (TOP_IS_NULL) {
+        out->null(idx);
+    } else {
+        out->not_null(idx);
+        strcpy(reinterpret_cast<char*>((*out)[idx].as_p()), reinterpret_cast<char*>(TOP.as_p()));
+    }
+}
+NEXT;
+
 
 /*======================================================================================================================
  * Load / Update operations
@@ -617,49 +693,41 @@ Pop:
 
 /* Load a value from the tuple to the top of the stack. */
 Ld_Tup: {
-    std::size_t idx = static_cast<std::size_t>(*op++);
-    insist(idx < in.size(), "index out of bounds");
-    stack.emplace_back(in[idx]);
+    std::size_t idx = std::size_t(*op_++);
+    PUSH(in[idx], in.is_null(idx));
 }
 NEXT;
 
-    /* Load a value from the context to the top of the stack. */
+/* Load a value from the context to the top of the value_stack_. */
 Ld_Ctx: {
-    std::size_t idx = static_cast<std::size_t>(*op++);
+    std::size_t idx = std::size_t(*op_++);
     insist(idx < context_.size(), "index out of bounds");
-    stack.emplace_back(context_[idx]);
+    PUSH(context_[idx], false);
 }
 NEXT;
 
 Upd_Ctx: {
-    std::size_t idx = static_cast<std::size_t>(*op++);
+    std::size_t idx = static_cast<std::size_t>(*op_++);
     insist(idx < context_.size(), "index out of bounds");
-    insist(stack.back().index() == context_[idx].index());
-    context_[idx] = stack.back();
+    context_[idx] = TOP;
 }
 NEXT;
 
 /*----- Load from row store ------------------------------------------------------------------------------------------*/
 #define PREPARE \
-    insist(stack.size() >= 3); \
+    insist(top_ >= 3); \
 \
     /* Get value bit offset. */ \
-    auto pv_value_off = std::get_if<int64_t>(&stack.back()); \
-    insist(pv_value_off, "invalid type of variant"); \
-    auto value_off = std::size_t(*pv_value_off); \
+    auto value_off = std::size_t(TOP.as_i()); \
     const std::size_t bytes = value_off / 8; \
-    stack.pop_back(); \
+    POP(); \
 \
     /* Get null bit offset. */ \
-    auto pv_null_off = std::get_if<int64_t>(&stack.back()); \
-    insist(pv_null_off, "invalid type of variant"); \
-    auto null_off = std::size_t(*pv_null_off); \
-    stack.pop_back(); \
+    auto null_off = std::size_t(TOP.as_i()); \
+    POP(); \
 \
     /* Row address. */ \
-    auto pv_addr = std::get_if<int64_t>(&stack.back()); \
-    insist(pv_addr, "invalid type of variant"); \
-    auto addr = reinterpret_cast<uint8_t*>(*pv_addr);
+    auto addr = reinterpret_cast<uint8_t*>(TOP.as_i());
 
 #define PREPARE_LOAD \
     PREPARE \
@@ -669,72 +737,62 @@ NEXT;
         const std::size_t bytes = null_off / 8; \
         const std::size_t bits = null_off % 8; \
         bool is_null = not bool((*(addr + bytes) >> bits) & 0x1); \
-        if (is_null) { \
-            stack.back() = value_type(null_type()); \
+        TOP_IS_NULL = is_null; \
+        if (is_null) \
             NEXT; \
-        } \
     } \
 
 Ld_RS_i8: {
     PREPARE_LOAD;
-    auto pv_res = std::get_if<int64_t>(&stack.back());
-    insist(pv_res, "invalid type of variant");
-    *pv_res = int64_t(*reinterpret_cast<int8_t*>(addr + bytes));
+    TOP = int64_t(*reinterpret_cast<int8_t*>(addr + bytes));
 }
 NEXT;
 
 Ld_RS_i16: {
     PREPARE_LOAD;
-    auto pv_res = std::get_if<int64_t>(&stack.back());
-    insist(pv_res, "invalid type of variant");
-    *pv_res = int64_t(*reinterpret_cast<int16_t*>(addr + bytes));
+    TOP = int64_t(*reinterpret_cast<int16_t*>(addr + bytes));
 }
 NEXT;
 
 Ld_RS_i32: {
     PREPARE_LOAD;
-    auto pv_res = std::get_if<int64_t>(&stack.back());
-    insist(pv_res, "invalid type of variant");
-    *pv_res = int64_t(*reinterpret_cast<int32_t*>(addr + bytes));
+    TOP = int64_t(*reinterpret_cast<int32_t*>(addr + bytes));
 }
 NEXT;
 
 Ld_RS_i64: {
     PREPARE_LOAD;
-    stack.back() = *reinterpret_cast<int64_t*>(addr + bytes);
+    TOP = *reinterpret_cast<int64_t*>(addr + bytes);
 }
 NEXT;
 
 Ld_RS_f: {
     PREPARE_LOAD;
-    stack.back() = *reinterpret_cast<float*>(addr + bytes);
+    TOP = *reinterpret_cast<float*>(addr + bytes);
 }
 NEXT;
 
 Ld_RS_d: {
     PREPARE_LOAD;
-    stack.back() = *reinterpret_cast<double*>(addr + bytes);
+    TOP = *reinterpret_cast<double*>(addr + bytes);
 }
 NEXT;
 
 Ld_RS_s: {
-    /* Get string length. */
-    auto pv_len = std::get_if<int64_t>(&stack.back());
-    insist(pv_len, "invalid type of variant");
-    auto len = std::size_t(*pv_len);
-    stack.pop_back();
-
+    auto len = TOP.as_i();
+    POP();
     PREPARE_LOAD;
-
-    auto first = reinterpret_cast<char*>(addr + bytes);
-    stack.back() = std::string_view(first, len);
+    strncpy(reinterpret_cast<char*>(p_mem), reinterpret_cast<char*>(addr + bytes), len);
+    p_mem[len] = 0; // terminating NUL byte
+    TOP = p_mem;
+    p_mem += len + 1;
 }
 NEXT;
 
 Ld_RS_b: {
     PREPARE_LOAD;
     const std::size_t bits = value_off % 8;
-    stack.back() = bool((*reinterpret_cast<uint8_t*>(addr + bytes) >> bits) & 0x1);
+    TOP = bool((*reinterpret_cast<uint8_t*>(addr + bytes) >> bits) & 0x1);
 }
 NEXT;
 
@@ -742,84 +800,78 @@ NEXT;
 
 #define PREPARE_STORE(TYPE) \
     PREPARE \
-    stack.pop_back(); \
-\
-    auto pv_value = std::get_if<TYPE>(&stack.back()); \
-    insist(pv_value or std::holds_alternative<null_type>(stack.back()), "invalid type of variant"); \
+    POP(); \
 \
     /* Set null bit. */ \
     { \
         const std::size_t bytes = null_off / 8; \
         const std::size_t bits = null_off % 8; \
-        setbit(addr + bytes, bool(pv_value), bits); \
-        if (not pv_value) { \
-            stack.pop_back(); \
+        bool is_null = TOP_IS_NULL; \
+        setbit(addr + bytes, is_null, bits); \
+        if (is_null) { \
+            POP(); \
             NEXT; \
         } \
     } \
 \
-    auto value = *pv_value; \
-    stack.pop_back();
+    auto val = TOP; \
+    POP();
 
 St_RS_i8: {
     PREPARE_STORE(int64_t);
     auto p = reinterpret_cast<int8_t*>(addr + bytes);
-    *p = value;
+    *p = val.as_i();;
 }
 NEXT;
 
 St_RS_i16: {
     PREPARE_STORE(int64_t);
     auto p = reinterpret_cast<int16_t*>(addr + bytes);
-    *p = value;
+    *p = val.as_i();
 }
 NEXT;
 
 St_RS_i32: {
     PREPARE_STORE(int64_t);
     auto p = reinterpret_cast<int32_t*>(addr + bytes);
-    *p = value;
+    *p = val.as_i();
 }
 NEXT;
 
 St_RS_i64: {
     PREPARE_STORE(int64_t);
     auto p = reinterpret_cast<int64_t*>(addr + bytes);
-    *p = value;
+    *p = val.as_i();
 }
 NEXT;
 
 St_RS_f: {
     PREPARE_STORE(float);
     auto p = reinterpret_cast<float*>(addr + bytes);
-    *p = value;
+    *p = val.as_f();
 }
 NEXT;
 
 St_RS_d: {
     PREPARE_STORE(double);
     auto p = reinterpret_cast<double*>(addr + bytes);
-    *p = value;
+    *p = val.as_d();
 }
 NEXT;
 
 St_RS_s: {
-    auto pv_len = std::get_if<int64_t>(&stack.back());
-    insist(pv_len, "invalid type of variant");
-    auto len = *pv_len;
-    stack.pop_back();
-
-    PREPARE_STORE(std::string_view);
-
-    auto p = reinterpret_cast<char*>(addr + bytes);
-    strncpy(p, value.data(), len);
+    /* TODO not yet supported */
+    POP();
+    PREPARE_STORE(char);
+    (void) bytes;
+    (void) val;
 }
 NEXT;
 
 St_RS_b: {
     PREPARE_STORE(bool);
     const auto bits = value_off % 8;
-    setbit(addr + bytes, value, bits);
+    setbit(addr + bytes, val.as_b(), bits);
 }
 NEXT;
 
@@ -829,96 +881,75 @@ NEXT;
 
 /*----- Load from column store ---------------------------------------------------------------------------------------*/
 #define PREPARE(TYPE) \
-    insist(stack.size() >= 4); \
+    insist(top_ >= 4); \
 \
     /* Get attribute id. */ \
-    auto pv_attr_id = std::get_if<int64_t>(&stack.back()); \
-    insist(pv_attr_id, "invalid type of variant"); \
-    auto attr_id = std::size_t(*pv_attr_id); \
-    stack.pop_back(); \
+    auto attr_id = std::size_t(TOP.as_i()); \
+    POP(); \
 \
     /* Get address of value column. */ \
-    auto pv_value_col_addr = std::get_if<int64_t>(&stack.back()); \
-    insist(pv_value_col_addr, "invalid type of variant"); \
-    TYPE *value_col_addr = reinterpret_cast<TYPE*>(static_cast<uintptr_t>(*pv_value_col_addr)); \
-    stack.pop_back(); \
+    TYPE *value_col_addr = reinterpret_cast<TYPE*>(uintptr_t(TOP.as_i())); \
+    POP(); \
 \
     /* Get address of null bitmap column. */ \
-    auto pv_null_bitmap_col_addr = std::get_if<int64_t>(&stack.back()); \
-    insist(pv_null_bitmap_col_addr, "invalid type of variant"); \
-    int64_t *null_bitmap_col_addr = reinterpret_cast<int64_t*>(static_cast<uintptr_t>(*pv_null_bitmap_col_addr)); \
-    stack.pop_back(); \
+    int64_t *null_bitmap_col_addr = reinterpret_cast<int64_t*>(uintptr_t(TOP.as_i())); \
+    POP(); \
 \
     /* Get row id. */ \
-    auto pv_row_id = std::get_if<int64_t>(&stack.back()); \
-    insist(pv_row_id, "invalid type of variant"); \
-    auto row_id = static_cast<std::size_t>(*pv_row_id);
+    auto row_id = std::size_t(TOP.as_i());
 
 #define PREPARE_LOAD(TYPE) \
     PREPARE(TYPE) \
 \
     /* Check if null. */ \
     bool is_null = not ((null_bitmap_col_addr[row_id] >> attr_id) & 0x1); \
-    if (is_null) { \
-        stack.back() = value_type(null_type()); \
-        NEXT; \
-    }
+    TOP_IS_NULL = is_null;
 
 Ld_CS_i8: {
     PREPARE_LOAD(int8_t);
-    auto pv_res = std::get_if<int64_t>(&stack.back());
-    insist(pv_res, "invalid type of variant");
-    *pv_res = int64_t(value_col_addr[row_id]);
+    TOP = int64_t(value_col_addr[row_id]);
 }
 NEXT;
 
 Ld_CS_i16: {
     PREPARE_LOAD(int16_t);
-    auto pv_res = std::get_if<int64_t>(&stack.back());
-    insist(pv_res, "invalid type of variant");
-    *pv_res = int64_t(value_col_addr[row_id]);
+    TOP = int64_t(value_col_addr[row_id]);
 }
 NEXT;
 
 Ld_CS_i32: {
     PREPARE_LOAD(int32_t);
-    auto pv_res = std::get_if<int64_t>(&stack.back());
-    insist(pv_res, "invalid type of variant");
-    *pv_res = int64_t(value_col_addr[row_id]);
+    TOP = int64_t(value_col_addr[row_id]);
 }
 NEXT;
 
 Ld_CS_i64: {
     PREPARE_LOAD(int64_t);
-    auto pv_res = std::get_if<int64_t>(&stack.back());
-    insist(pv_res, "invalid type of variant");
-    *pv_res = int64_t(value_col_addr[row_id]);
+    TOP = int64_t(value_col_addr[row_id]);
 }
 NEXT;
 
 Ld_CS_f: {
     PREPARE_LOAD(float);
-    stack.back() = float(value_col_addr[row_id]);
+    TOP = float(value_col_addr[row_id]);
 }
 NEXT;
 
 Ld_CS_d: {
     PREPARE_LOAD(double);
-    stack.back() = double(value_col_addr[row_id]);
+    TOP = double(value_col_addr[row_id]);
 }
 NEXT;
 
 Ld_CS_s: {
-    /* Get string length. */
-    auto pv_len = std::get_if<int64_t>(&stack.back());
-    insist(pv_len, "invalid type of variant");
-    auto len = std::size_t(*pv_len);
-    stack.pop_back();
-
+    auto len = TOP.as_i();
+    POP();
     PREPARE_LOAD(char);
-
-    auto p = value_col_addr + row_id * len;
-    stack.back() = std::string_view(p, len);
+    auto str = value_col_addr + len * row_id;
+    strncpy(reinterpret_cast<char*>(p_mem), reinterpret_cast<char*>(str), len);
+    p_mem[len] = 0; // terminating NUL byte
+    TOP = p_mem;
+    p_mem += len + 1;
 }
 NEXT;
 
@@ -926,7 +957,7 @@ Ld_CS_b: {
     PREPARE_LOAD(uint8_t);
     const std::size_t bytes = row_id / 8;
     const std::size_t bits = row_id % 8;
-    stack.back() = bool((value_col_addr[bytes] >> bits) & 0x1);
+    TOP = bool((value_col_addr[bytes] >> bits) & 0x1);
 }
 NEXT;
 
@@ -934,70 +965,71 @@ NEXT;
 
 #define PREPARE_STORE(TO_TYPE, FROM_TYPE) \
     PREPARE(TO_TYPE); \
-    stack.pop_back(); \
-\
-    auto pv_value = std::get_if<FROM_TYPE>(&stack.back()); \
-    insist(pv_value or std::holds_alternative<null_type>(stack.back()), "invalid type of variant"); \
+    POP(); \
 \
     /* Set null bit. */ \
     { \
-        setbit(&null_bitmap_col_addr[row_id], bool(pv_value), attr_id); \
-        if (not pv_value) { \
-            stack.pop_back(); \
+        bool is_null = TOP_IS_NULL; \
+        setbit(&null_bitmap_col_addr[row_id], is_null, attr_id); \
+        if (is_null) { \
+            POP(); \
             NEXT; \
         } \
     } \
 \
-    auto value = *pv_value; \
-    stack.pop_back();
+    auto val = TOP; \
+    POP();
 
 St_CS_i8: {
     PREPARE_STORE(int8_t, int64_t);
-    value_col_addr[row_id] = value;
+    value_col_addr[row_id] = val.as_i();
 }
 NEXT;
 
 St_CS_i16: {
     PREPARE_STORE(int16_t, int64_t);
-    value_col_addr[row_id] = value;
+    value_col_addr[row_id] = val.as_i();
 }
 NEXT;
 
 St_CS_i32: {
     PREPARE_STORE(int32_t, int64_t);
-    value_col_addr[row_id] = value;
+    value_col_addr[row_id] = val.as_i();
 }
 NEXT;
 
 St_CS_i64: {
     PREPARE_STORE(int64_t, int64_t);
-    value_col_addr[row_id] = value;
+    value_col_addr[row_id] = val.as_i();
 }
 NEXT;
 
 St_CS_f: {
     PREPARE_STORE(float, float);
-    value_col_addr[row_id] = value;
+    value_col_addr[row_id] = val.as_f();
 }
 NEXT;
 
 St_CS_d: {
     PREPARE_STORE(double, double);
-    value_col_addr[row_id] = value;
+    value_col_addr[row_id] = val.as_d();
 }
 NEXT;
 
 St_CS_s: {
-    PREPARE_STORE(std::string_view, std::string_view);
-    // TODO
-    unreachable("not implemented");
+    /* TODO not yet supported */
+    POP();
+    PREPARE_STORE(char, char);
+    (void) value_col_addr;
+    (void) val;
 }
 NEXT;
 
 St_CS_b: {
     PREPARE_STORE(bool, bool);
-    // TODO
-    unreachable("not implemented");
+    const auto bytes = row_id / 8;
+    const auto bits = row_id % 8;
+    setbit(value_col_addr + bytes, val.as_b(), bits);
 }
 NEXT;
 
@@ -1005,37 +1037,28 @@ NEXT;
 
 #undef PREPARE
 
-#define UNARY(OP, TYPE) { \
-    insist(stack.size() >= 1); \
-    auto &v = stack.back(); \
-    auto pv = std::get_if<TYPE>(&v); \
-    insist(pv, "invalid type of variant"); \
-    auto res = OP (*pv); \
-    if constexpr (std::is_same_v<decltype(res), TYPE>) \
-        *pv = res; \
-    else \
-        stack.back() = res; \
-} \
-NEXT;
-
-#define BINARY(OP, TYPE) { \
-    insist(stack.size() >= 2); \
-    auto &v_rhs = stack.back(); \
-    TYPE *pv_rhs = std::get_if<TYPE>(&v_rhs); \
-    insist(pv_rhs, "invalid type of rhs"); \
-    TYPE rhs = *pv_rhs; \
-    stack.pop_back(); \
-    auto &v_lhs = stack.back(); \
-    TYPE *pv_lhs = std::get_if<TYPE>(&v_lhs); \
-    insist(pv_lhs, "invalid type of lhs"); \
-    auto res = *pv_lhs OP rhs; \
-    stack.back() = res; \
-} \
-NEXT;
 
 /*======================================================================================================================
  * Arithmetical operations
  *====================================================================================================================*/
+
+#define UNARY(OP, TYPE) { \
+    insist(top_ >= 1); \
+    TYPE val = TOP.as<TYPE>(); \
+    TOP = OP(val); \
+} \
+NEXT;
+
+#define BINARY(OP, TYPE) { \
+    insist(top_ >= 2); \
+    TYPE rhs = TOP.as<TYPE>(); \
+    bool is_rhs_null = TOP_IS_NULL; \
+    POP(); \
+    TYPE lhs = TOP.as<TYPE>(); \
+    TOP = OP(lhs, rhs); \
+    TOP_IS_NULL = TOP_IS_NULL | is_rhs_null; \
+} \
+NEXT;
 
 /* Integral increment. */
 Inc: UNARY(++, int64_t);
@@ -1052,30 +1075,33 @@ Minus_f: UNARY(-, float);
 Minus_d: UNARY(-, double);
 
 /* Add two values. */
-Add_i: BINARY(+, int64_t);
-Add_f: BINARY(+, float);
-Add_d: BINARY(+, double);
+Add_i: BINARY(std::plus{}, int64_t);
+Add_f: BINARY(std::plus{}, float);
+Add_d: BINARY(std::plus{}, double);
 
 /* Subtract two values. */
-Sub_i: BINARY(-, int64_t);
-Sub_f: BINARY(-, float);
-Sub_d: BINARY(-, double);
+Sub_i: BINARY(std::minus{}, int64_t);
+Sub_f: BINARY(std::minus{}, float);
+Sub_d: BINARY(std::minus{}, double);
 
 /* Multiply two values. */
-Mul_i: BINARY(*, int64_t);
-Mul_f: BINARY(*, float);
-Mul_d: BINARY(*, double);
+Mul_i: BINARY(std::multiplies{}, int64_t);
+Mul_f: BINARY(std::multiplies{}, float);
+Mul_d: BINARY(std::multiplies{}, double);
 
 /* Divide two values. */
-Div_i: BINARY(/, int64_t);
-Div_f: BINARY(/, float);
-Div_d: BINARY(/, double);
+Div_i: BINARY(std::divides{}, int64_t);
+Div_f: BINARY(std::divides{}, float);
+Div_d: BINARY(std::divides{}, double);
 
 /* Modulo divide two values. */
-Mod_i: BINARY(%, int64_t);
+Mod_i: BINARY(std::modulus{}, int64_t);
 
 /* Concatenate two strings. */
-Cat_s: stack.pop_back(); NEXT; /* TODO currently not supported */
+Cat_s:
+    POP(); // TODO not yet supported
+    NEXT;
+
 
 /*======================================================================================================================
  * Logical operations
@@ -1085,58 +1111,56 @@ Cat_s: stack.pop_back(); NEXT; /* TODO currently not supported */
 Not_b: UNARY(not, bool);
 
 /* Logical and. */
-And_b: BINARY(and, bool);
+And_b: BINARY(std::logical_and{}, bool);
 
 /* Logical or. */
-Or_b: BINARY(or, bool);
+Or_b: BINARY(std::logical_or{}, bool);
+
 
 /*======================================================================================================================
  * Comparison operations
  *====================================================================================================================*/
 
-Eq_i: BINARY(==, int64_t);
-Eq_f: BINARY(==, float);
-Eq_d: BINARY(==, double);
-Eq_b: BINARY(==, bool);
-Eq_s: BINARY(==, std::string_view);
+Eq_i: BINARY(std::equal_to{}, int64_t);
+Eq_f: BINARY(std::equal_to{}, float);
+Eq_d: BINARY(std::equal_to{}, double);
+Eq_b: BINARY(std::equal_to{}, bool);
+Eq_s: BINARY(streq, char*);
 
-NE_i: BINARY(!=, int64_t);
-NE_f: BINARY(!=, float);
-NE_d: BINARY(!=, double);
-NE_b: BINARY(!=, bool);
-NE_s: BINARY(!=, std::string_view);
+NE_i: BINARY(std::not_equal_to{}, int64_t);
+NE_f: BINARY(std::not_equal_to{}, float);
+NE_d: BINARY(std::not_equal_to{}, double);
+NE_b: BINARY(std::not_equal_to{}, bool);
+NE_s: BINARY(not streq, char*);
 
-LT_i: BINARY(<, int64_t);
-LT_f: BINARY(<, float);
-LT_d: BINARY(<, double);
-LT_s: BINARY(<, std::string_view);
+LT_i: BINARY(std::less{}, int64_t);
+LT_f: BINARY(std::less{}, float);
+LT_d: BINARY(std::less{}, double);
+LT_s: BINARY(0 > strcmp, char*)
 
-GT_i: BINARY(>, int64_t);
-GT_f: BINARY(>, float);
-GT_d: BINARY(>, double);
-GT_s: BINARY(>, std::string_view);
+GT_i: BINARY(std::greater{}, int64_t);
+GT_f: BINARY(std::greater{}, float);
+GT_d: BINARY(std::greater{}, double);
+GT_s: BINARY(0 < strcmp, char*);
 
-LE_i: BINARY(<=, int64_t);
-LE_f: BINARY(<=, float);
-LE_d: BINARY(<=, double);
-LE_s: BINARY(<=, std::string_view);
+LE_i: BINARY(std::less_equal{}, int64_t);
+LE_f: BINARY(std::less_equal{}, float);
+LE_d: BINARY(std::less_equal{}, double);
+LE_s: BINARY(0 >= strcmp, char*);
 
-GE_i: BINARY(>=, int64_t);
-GE_f: BINARY(>=, float);
-GE_d: BINARY(>=, double);
-GE_s: BINARY(>=, std::string_view);
+GE_i: BINARY(std::greater_equal{}, int64_t);
+GE_f: BINARY(std::greater_equal{}, float);
+GE_d: BINARY(std::greater_equal{}, double);
+GE_s: BINARY(0 <= strcmp, char*);
 
 #define CMP(TYPE) { \
-    insist(stack.size() >= 2); \
-    auto &v_rhs = stack.back(); \
-    auto pv_rhs = std::get_if<TYPE>(&v_rhs); \
-    insist(pv_rhs, "invalid type of rhs"); \
-    auto rhs = *pv_rhs; \
-    stack.pop_back(); \
-    auto &v_lhs = stack.back(); \
-    auto pv_lhs = std::get_if<TYPE>(&v_lhs); \
-    insist(pv_lhs, "invalid type of lhs"); \
-    stack.back() = *pv_lhs == rhs ? int64_t(0) : (*pv_lhs < rhs ? int64_t(-1) : int64_t(1)); \
+    insist(top_ >= 2); \
+    TYPE rhs = TOP.as<TYPE>(); \
+    bool is_rhs_null = TOP_IS_NULL; \
+    POP(); \
+    TYPE lhs = TOP.as<TYPE>(); \
+    TOP = lhs == rhs ? 0 : (lhs < rhs ? int64_t(-1) : int64_t(1)); \
+    TOP_IS_NULL = TOP_IS_NULL | is_rhs_null; \
 } \
 NEXT;
 
@@ -1144,28 +1168,18 @@ Cmp_i: CMP(int64_t);
 Cmp_f: CMP(float);
 Cmp_d: CMP(double);
 Cmp_b: CMP(bool);
-Cmp_s: {
-    insist(stack.size() >= 2);
-    auto &v_rhs = stack.back();
-    auto pv_rhs = std::get_if<std::string_view>(&v_rhs);
-    insist(pv_rhs, "invalid type of rhs");
-    auto rhs = *pv_rhs;
-    stack.pop_back();
-    auto &v_lhs = stack.back();
-    auto pv_lhs = std::get_if<std::string_view>(&v_lhs);
-    insist(pv_lhs, "invalid type of lhs");
-    stack.back() = int64_t(pv_lhs->compare(rhs));
-}
-NEXT;
+Cmp_s: BINARY(strcmp, char*);
 
 #undef CMP
+
 
 /*======================================================================================================================
  * Intrinsic functions
  *====================================================================================================================*/
 
 Is_Null:
-    stack.back() = std::holds_alternative<null_type>(stack.back());
+    TOP = bool(TOP_IS_NULL);
+    TOP_IS_NULL = false;
     NEXT;
 
 /* Cast to int. */
@@ -1175,7 +1189,7 @@ Cast_i_b: UNARY((int64_t), bool);
 
 /* Cast to float. */
 Cast_f_i: UNARY((float), int64_t);
-Cast_f_d: UNARY((float), float);
+Cast_f_d: UNARY((float), double);
 
 /* Cast to double. */
 Cast_d_i: UNARY((double), int64_t);
@@ -1187,9 +1201,20 @@ Cast_d_f: UNARY((double), float);
 Stop:
     ops.pop_back(); // terminating Stop
 
-#ifndef NDEBUG
-    insist(initial_stack_size == stack.capacity(), "failed to pre-allocate sufficient memory");
+#if 0
+    for (std::size_t i = 0; i != top_; ++i) {
+        if (auto cs = cast<const CharacterSequence>(out_schema[i])) {
+            out->not_null(i);
+            strncpy((*out)[i].as<char*>(), values_[i].as<char*>(), cs->length);
+            (*out)[i].as<char*>()[cs->length] = 0; // terminating NUL byte
+        } else {
+            out->set(i, values_[i], null_bits_[i]);
+        }
+    }
 #endif
+
+    op_ = ops.cbegin();
+    top_ = 0;
 }
 
 void StackMachine::dump(std::ostream &out) const
@@ -1199,21 +1224,46 @@ void StackMachine::dump(std::ostream &out) const
         if (it != context_.cbegin()) out << ", ";
         out << *it;
     }
-    out << "]\n    Tuple Schema: " << schema
+    out << ']'
+        << "\n    Input Schema:  " << in_schema
+        << "\n    Output Schema: {[";
+    for (auto it = out_schema.begin(), end = out_schema.end(); it != end; ++it) {
+        if (it != out_schema.begin()) out << ',';
+        out << ' ' << **it;
+    }
+    out << " ]}"
         << "\n    Opcode Sequence:\n";
+    const std::size_t current_op = op_ - ops.begin();
     for (std::size_t i = 0; i != ops.size(); ++i) {
         auto opc = ops[i];
-        out << "        [0x" << std::hex << std::setfill('0') << std::setw(4) << i << std::dec << "]: "
+        if (i == current_op)
+            out << "    --> ";
+        else
+            out << "        ";
+        out << "[0x" << std::hex << std::setfill('0') << std::setw(4) << i << std::dec << "]: "
             << StackMachine::OPCODE_TO_STR[static_cast<std::size_t>(opc)];
         switch (opc) {
+            /* Opcodes with *one* operand. */
             case Opcode::Ld_Tup:
             case Opcode::Ld_Ctx:
             case Opcode::Upd_Ctx:
+            case Opcode::Emit_i:
+            case Opcode::Emit_f:
+            case Opcode::Emit_d:
+            case Opcode::Emit_b:
+            case Opcode::Emit_s:
                 ++i;
                 out << ' ' << static_cast<int64_t>(ops[i]);
             default:;
         }
         out << '\n';
+    }
+    out << "    Stack:\n";
+    for (std::size_t i = top_; i --> 0; ) {
+        if (null_bits_[i])
+            out << "      NULL\n";
+        else
+            out << "      " << values_[i] << '\n';
     }
     out.flush();
 }

@@ -1,17 +1,25 @@
 #pragma once
 
-#include "IR/Operator.hpp"
+#include "catalog/Schema.hpp"
+#include "IR/Tuple.hpp"
 #include <cstdint>
 
 
 namespace db {
 
+namespace cnf {
+    struct CNF;
+}
+struct Expr;
 struct StackMachineBuilder;
 
 /** A stack machine that evaluates an expression. */
 struct StackMachine
 {
+    friend struct Interpreter;
     friend struct StackMachineBuilder;
+
+    static constexpr std::size_t SIZE_OF_MEMORY = 4 * 1024; // 4 KiB
 
     enum class Opcode : uint8_t
     {
@@ -22,44 +30,77 @@ struct StackMachine
 
     using index_t = std::size_t;
 
-    const OperatorSchema schema;
-
+    private:
     static constexpr const char *OPCODE_TO_STR[] = {
 #define DB_OPCODE(CODE, ...) #CODE,
 #include "tables/Opcodes.tbl"
 #undef DB_OPCODE
     };
-
     static const std::unordered_map<std::string, Opcode> STR_TO_OPCODE;
 
-    std::vector<Opcode> ops; ///< a sequence of operations to perform
+    public:
+    static Opcode str_to_opcode(const std::string &str) { return STR_TO_OPCODE.at(str); }
+
     private:
-    std::vector<value_type> context_; ///< the context of the stack machine, e.g. constants or global variables
+    /*----- The schema of incoming and outgoing tuples. --------------------------------------------------------------*/
+    Schema in_schema; ///< schema of the input tuple
+    std::vector<const Type*> out_schema; ///< schema of the output tuple
+
+    /*----- Fields defining the structure of the machine. ------------------------------------------------------------*/
+    std::vector<Opcode> ops; ///< the sequence of operations to perform
+    std::vector<Value> context_; ///< the context of the stack machine, e.g. constants or global variables
     int64_t required_stack_size_ = 0; ///< the required size of the stack
     int64_t current_stack_size_ = 0; ///< the "current" stack size; i.e. after the last operation is executed
 
+    /*----- Fields capturing the internal state during execution. ----------------------------------------------------*/
+    Value *values_ = nullptr; ///< array of values used as a stack
+    bool *null_bits_ = nullptr; ///< array of NULL bits used as a stack
+    decltype(ops)::const_iterator op_; ///< the next operation to execute
+    std::size_t top_ = 0; ///< the top of the stack
+    uint8_t memory_[SIZE_OF_MEMORY]; ///< memory usable by the stack machine, e.g. to work on BLOBs
+
     public:
+    /** Create a `StackMachine` that does not accept input. */
     StackMachine() { }
-    StackMachine(const OperatorSchema &schema, const Expr &expr);
-    StackMachine(const OperatorSchema &schema);
+
+    /** Create a `StackMachine` with the given input `Schema` `in_schema`.  This is the c'tor used when constructing the
+     * opcode sequence from the outside. */
+    explicit StackMachine(Schema in_schema) : in_schema(in_schema) { }
+
+    /** Create a `StackMachine` with the given input `Schema` `in_schema`, compile the `Expr` `expr`, and emit the
+     * result to the output `Tuple` at index `0`.  This is a *convenience* c'tor to construct a `StackMachine` that
+     * evaluates exactly one expression. */
+    StackMachine(Schema in_schema, const Expr &expr);
+
+    /** Create a `StackMachine` with the given input `Schema` `in_schema`, compile the `cnf::CNF` `cnf`, and emit the
+     * result to the output `Tuple` at index `0`.  This is a *convenience* c'tor to construct a `StackMachine` that
+     * evaluates exactly one CNF formula. */
+    StackMachine(Schema in_schema, const cnf::CNF &cnf);
 
     StackMachine(const StackMachine&) = delete;
     StackMachine(StackMachine&&) = default;
 
+    ~StackMachine() {
+        delete[] values_;
+        delete[] null_bits_;
+    }
+
+    /** Returns the `Schema` of input `Tuple`s. */
+    const Schema & schema_in() const { return in_schema; }
+
+    /** Returns a sequence of `Type`s defining the schema of output `Tuple`s. */
+    const std::vector<const Type*> & schema_out() const { return out_schema; }
+
+    std::size_t num_ops() const { return ops.size(); }
+
     /** Returns the required size of the stack to evaluate the opcode sequence. */
     std::size_t required_stack_size() const { return required_stack_size_; }
 
+    /** Emit operations evaluating the `Expr` `expr`. */
     void emit(const Expr &expr);
+
+    /** Emit operations evaluating the `CNF` formula `cnf`. */
     void emit(const cnf::CNF &cnf);
-
-    void operator()(tuple_type *out, const tuple_type &in = tuple_type());
-
-    tuple_type operator()(const tuple_type &in = tuple_type()) {
-        tuple_type out;
-        out.reserve(required_stack_size_);
-        operator()(&out, in);
-        return out;
-    }
 
     /* The following macros are used to automatically generate methods to emit a particular opcode.  For example, for
      * the opcode `Pop`, we will define a function `emit_Pop()`, that appends the `Pop` opcode to the current opcode
@@ -106,24 +147,33 @@ struct StackMachine
     /** Append the given opcode to the opcode sequence. */
     void emit(Opcode opc) { ops.push_back(opc); }
 
-    /** Adds a value to the context and returns its assigned index. */
-    std::size_t add(value_type value) {
+    /** Emit an `Emit_X` instruction based on `Type` `ty`, e.g.\ `Emit_i32` for `Type` `INT(4)` aka `i32`. */
+    void emit_Emit(std::size_t index, const Type *ty);
+
+    /** Appends the `Value` `val` to the context and returns its assigned index. */
+    std::size_t add(Value val) {
         auto idx = context_.size();
-        context_.push_back(value);
+        context_.push_back(val);
         return idx;
     }
 
-    void set(std::size_t idx, value_type value) {
+    /** Sets the `Value` in the context at index `idx` to `val`. */
+    void set(std::size_t idx, Value val) {
         insist(idx < context_.size(), "index out of bounds");
-        context_[idx] = value;
+        context_[idx] = val;
     }
 
-    /** Adds a value to the context and emits a load instruction to load this value to the top of the stack. */
-    std::size_t add_and_emit_load(value_type value) {
-        auto idx = add(value);
+    /** Adds the `Value` `val` to the context and emits a `load` instruction to load this value to the top of the stack.
+     */
+    std::size_t add_and_emit_load(Value val) {
+        auto idx = add(val);
         emit_Ld_Ctx(idx);
         return idx;
     }
+
+    /** Evaluate this `StackMachine` given the input `Tuple` `in` and producing the results in the output `Tuple`
+     * referenced by `out`. */
+    void operator()(Tuple *out, const Tuple &in = Tuple());
 
     void dump(std::ostream &out) const;
     void dump() const;

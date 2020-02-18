@@ -4,11 +4,12 @@
 #error "define DB_OPCODE(Opcode, Delta, __VA_ARGS__) before including this file"
 #endif
 
+
 /*======================================================================================================================
  * Control flow operations
  *====================================================================================================================*/
 
-/* Stop the machine. */
+/** Stop the machine. */
 DB_OPCODE(Stop, 0)
 
 /* Stop on condition. */
@@ -17,21 +18,42 @@ DB_OPCODE(Stop_NZ, 0)
 DB_OPCODE(Stop_False, 0)
 DB_OPCODE(Stop_True, 0)
 
+
 /*======================================================================================================================
  * Stack manipulation operations
  *====================================================================================================================*/
 
+/** Remove the top entry from the stack. */
 DB_OPCODE(Pop, -1)
+
+/** Push NULL to top of the stack. */
+DB_OPCODE(Push_Null, +1)
+
+
+/*======================================================================================================================
+ * Output operations
+ *====================================================================================================================*/
+
+/** Set the output tuple at the given index to NULL. */
+DB_OPCODE(Emit_Null, 0, index)
+
+/* Emit the current top of stack to the output tuple at the given index. */
+DB_OPCODE(Emit_i, 0, index)
+DB_OPCODE(Emit_f, 0, index)
+DB_OPCODE(Emit_d, 0, index)
+DB_OPCODE(Emit_s, 0, index)
+DB_OPCODE(Emit_b, 0, index)
+
 
 /*======================================================================================================================
  * Load / Update operations
  *====================================================================================================================*/
 
 /** Load a value from the tuple to the top of the stack. */
-DB_OPCODE(Ld_Tup, 1, index)
+DB_OPCODE(Ld_Tup, +1, index)
 
 /** Load a value from the context to the top of the stack. */
-DB_OPCODE(Ld_Ctx, 1, index)
+DB_OPCODE(Ld_Ctx, +1, index)
 
 /** Update a value in the context with the value on top of the stack. */
 DB_OPCODE(Upd_Ctx, 0, index)
@@ -80,6 +102,7 @@ DB_OPCODE(St_CS_d,   -4)
 DB_OPCODE(St_CS_s,   -5)
 DB_OPCODE(St_CS_b,   -4)
 
+
 /*======================================================================================================================
  * Arithmetical operations
  *====================================================================================================================*/
@@ -123,6 +146,7 @@ DB_OPCODE(Mod_i, -1)
 /* Concatenate two strings. */
 DB_OPCODE(Cat_s, -1)
 
+
 /*======================================================================================================================
  * Logical operations
  *====================================================================================================================*/
@@ -135,6 +159,7 @@ DB_OPCODE(And_b, 0)
 
 /* Logical or. */
 DB_OPCODE(Or_b, 0)
+
 
 /*======================================================================================================================
  * Comparison operations
@@ -177,6 +202,7 @@ DB_OPCODE(Cmp_f, -1)
 DB_OPCODE(Cmp_d, -1)
 DB_OPCODE(Cmp_b, -1)
 DB_OPCODE(Cmp_s, -1)
+
 
 /*======================================================================================================================
  * Intrinsic functions

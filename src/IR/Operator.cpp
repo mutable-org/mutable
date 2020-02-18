@@ -6,20 +6,6 @@
 using namespace db;
 
 
-std::ostream & db::operator<<(std::ostream &out, const OperatorSchema &schema)
-{
-    for (std::size_t i = 0, end = schema.size(); i != end; ++i) {
-        if (i != 0) out << ", ";
-        auto &e = schema[i];
-        out << '[' << i << "] ";
-        out << e.first << " :" << *e.second;
-    }
-    return out;
-}
-
-void OperatorSchema::dump(std::ostream &out) const { out << *this << std::endl; }
-void OperatorSchema::dump() const { dump(std::cerr); }
-
 OperatorData::~OperatorData() { }
 
 void Operator::dot(std::ostream &out) const
@@ -42,11 +28,11 @@ ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections,
         auto ty = P.first->type();
         auto alias = P.second;
         if (alias) { // alias was given
-            OperatorSchema::AttributeIdentifier id(P.second);
-            S.add_element(id, ty);
+            Schema::Identifier id(P.second);
+            S.add(id, ty);
         } else if (auto D = cast<const Designator>(P.first)) { // no alias, but designator -> keep name
-            OperatorSchema::AttributeIdentifier id(D->table_name.text, D->attr_name.text);
-            S.add_element(id, ty);
+            Schema::Identifier id(D->table_name.text, D->attr_name.text);
+            S.add(id, ty);
         } else { // no designator, no alias -> derive name
             std::ostringstream oss;
             if (P.first->is_constant())
@@ -55,8 +41,8 @@ ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections,
                 oss << *P.first;
             auto &C = Catalog::Get();
             auto alias = C.pool(oss.str().c_str());
-            OperatorSchema::AttributeIdentifier id(alias);
-            S.add_element(id, ty);
+            Schema::Identifier id(alias);
+            S.add(id, ty);
         }
     }
 }
@@ -73,12 +59,12 @@ GroupingOperator::GroupingOperator(std::vector<const Expr*> group_by,
     for (auto e : group_by) {
         auto ty = e->type();
         if (auto D = cast<const Designator>(e)) {
-            S.add_element({D->table_name.text, D->attr_name.text}, ty);
+            S.add({D->table_name.text, D->attr_name.text}, ty);
         } else {
             std::ostringstream oss;
             oss << *e;
             auto alias = C.pool(oss.str().c_str());
-            S.add_element(alias, ty);
+            S.add(alias, ty);
         }
     }
 
@@ -87,7 +73,7 @@ GroupingOperator::GroupingOperator(std::vector<const Expr*> group_by,
         std::ostringstream oss;
         oss << *e;
         auto alias = C.pool(oss.str().c_str());
-        S.add_element(alias, ty);
+        S.add(alias, ty);
     }
 }
 
@@ -183,7 +169,7 @@ struct GetAttributeIds : ConstASTVisitor
     using ConstASTVisitor::operator();
 
     private:
-    OperatorSchema schema;
+    Schema schema;
 
     public:
     GetAttributeIds() { }
@@ -199,9 +185,9 @@ struct GetAttributeIds : ConstASTVisitor
         if (auto p = std::get_if<const Expr*>(&target)) {
             (*this)(**p);
         } else if (std::holds_alternative<const Attribute*>(target)) {
-            OperatorSchema::AttributeIdentifier id(e.table_name.text, e.attr_name.text);
-            if (not schema.has(id))
-                schema.add_element({e.table_name.text, e.attr_name.text}, e.type());
+            Schema::Identifier id(e.table_name.text, e.attr_name.text);
+            if (not schema.has(id)) // avoid duplicates
+                schema.add(id, e.type());
         } else {
             unreachable("designator has no target");
         }
@@ -257,7 +243,7 @@ auto get_attr_ids(const cnf::CNF &cnf)
 struct SchemaMinimizer : OperatorVisitor
 {
     private:
-    OperatorSchema required;
+    Schema required;
 
     public:
     using OperatorVisitor::operator();
@@ -299,7 +285,7 @@ void SchemaMinimizer::operator()(Const<JoinOperator> &op)
     auto ours = get_attr_ids(op.predicate());
     ours |= required; // what we need and all operators above us
 
-    op.schema() = OperatorSchema();
+    op.schema() = Schema();
     for (auto c : const_cast<const JoinOperator&>(op).children()) {
         required = ours & c->schema(); // what we need from this child
         (*this)(*c);
@@ -309,7 +295,7 @@ void SchemaMinimizer::operator()(Const<JoinOperator> &op)
 
 void SchemaMinimizer::operator()(Const<ProjectionOperator> &op)
 {
-    required = OperatorSchema();
+    required = Schema();
     if (op.is_anti())
         required |= op.child(0)->schema();
     GetAttributeIds IDs;

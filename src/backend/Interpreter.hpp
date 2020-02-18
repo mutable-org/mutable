@@ -4,6 +4,7 @@
 #include "catalog/Schema.hpp"
 #include "IR/Operator.hpp"
 #include "IR/OperatorVisitor.hpp"
+#include "IR/Tuple.hpp"
 #include "util/macro.hpp"
 #include <unordered_map>
 
@@ -23,8 +24,8 @@ struct Block
         static constexpr bool IsConst = C;
 
         using block_t = std::conditional_t<IsConst, const Block, Block>;
-        using reference = std::conditional_t<IsConst, const tuple_type&, tuple_type&>;
-        using pointer = std::conditional_t<IsConst, const tuple_type*, tuple_type*>;
+        using reference = std::conditional_t<IsConst, const Tuple&, Tuple&>;
+        using pointer = std::conditional_t<IsConst, const Tuple*, Tuple*>;
 
         private:
         block_t &block_;
@@ -53,7 +54,7 @@ struct Block
     using const_iterator = the_iterator<true>;
 
     private:
-    std::array<tuple_type, N> data_; ///< an array of the tuples of this `Block`; some slots may be unused
+    std::array<Tuple, N> data_; ///< an array of the tuples of this `Block`; some slots may be unused
     uint64_t mask_ = 0x0; ///< a mast identifying which slots of `data_` are in use
     static_assert(N <= 64, "maximum block size exceeded");
 
@@ -62,13 +63,16 @@ struct Block
     Block(const Block&) = delete;
     Block(Block&&) = delete;
 
-    /** Create a new `Block` with tuples of `tuple_size` many attributes. */
-    Block(std::size_t tuple_size) { reserve(tuple_size); }
+    /** Create a new `Block` with tuples of `Schema` `schema`. */
+    Block(Schema schema) {
+        for (auto &t : data_)
+            t = Tuple(schema);
+    }
 
     /** Return a pointer to the underlying array of tuples. */
-    tuple_type * data() { return data_.data(); }
+    Tuple * data() { return data_.data(); }
     /** Return a pointer to the underlying array of tuples. */
-    const tuple_type * data() const { return data_.data(); }
+    const Tuple * data() const { return data_.data(); }
 
     /** Return the capacity of this `Block`. */
     static constexpr std::size_t capacity() { return CAPACITY; }
@@ -110,19 +114,13 @@ struct Block
 
     public:
     /** Returns the tuple at index `index`.  The tuple must be *alive*!  */
-    tuple_type & operator[](std::size_t index) {
+    Tuple & operator[](std::size_t index) {
         insist(index < capacity(), "index out of bounds");
         insist(alive(index), "cannot access a dead tuple directly");
         return data_[index];
     }
     /** Returns the tuple at index `index`.  The tuple must be *alive*!  */
-    const tuple_type & operator[](std::size_t index) const { return const_cast<Block*>(this)->operator[](index); }
-
-    /** Reserve space for `tuple_size` many attributes in each tuple. */
-    void reserve(std::size_t tuple_size) {
-        for (auto &t : data_)
-            t.reserve(tuple_size);
-    }
+    const Tuple & operator[](std::size_t index) const { return const_cast<Block*>(this)->operator[](index); }
 
     /** Make all tuples in this `Block` *alive*. */
     void fill() { mask_ = AllOnes(); insist(size() == capacity()); }
@@ -177,19 +175,19 @@ struct Pipeline : ConstOperatorVisitor
     Block<64> block_;
 
     public:
-    Pipeline(std::size_t tuple_size)
-        : block_(tuple_size)
+    Pipeline() { }
+
+    Pipeline(const Schema &schema)
+        : block_(schema)
     {
         block_.mask(1UL); // create one empty tuple in the block
     }
 
-    Pipeline(tuple_type &&t)
+    Pipeline(Tuple &&t)
     {
         block_.mask(1UL);
         block_[0] = std::move(t);
     }
-
-    void reserve(std::size_t tuple_size) { block_.reserve(tuple_size); }
 
     void push(const Operator &pipeline_start) { (*this)(pipeline_start); }
 
@@ -228,7 +226,7 @@ struct Interpreter : Backend, ConstOperatorVisitor
     DECLARE(SortingOperator);
 #undef DECLARE
 
-    static value_type eval(const Constant &c)
+    static Value eval(const Constant &c)
     {
         errno = 0;
         switch (c.tok.type) {
@@ -236,7 +234,7 @@ struct Interpreter : Backend, ConstOperatorVisitor
 
             /* Null */
             case TK_Null:
-                return null_type();
+                unreachable("NULL cannot be evaluated to a Value");
 
             /* Integer */
             case TK_OCT_INT:
@@ -257,9 +255,9 @@ struct Interpreter : Backend, ConstOperatorVisitor
 
             /* String */
             case TK_STRING_LITERAL: {
-                std::string str = interpret(c.tok.text);
-                const char *cstr = Catalog::Get().pool(str.c_str());
-                return std::string_view(cstr, str.length());
+                std::string str(c.tok.text);
+                auto substr = interpret(str);
+                return Catalog::Get().pool(substr.c_str()); // return internalized string by reference
             }
 
             /* Boolean */

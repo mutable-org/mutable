@@ -22,33 +22,31 @@ struct ColumnStore : Store
     {
         friend struct ColumnStore;
 
-        public:
-        const ColumnStore &store;
         private:
+        const ColumnStore &store_;
         std::size_t rid_; ///< row id
 
         private:
-        Row(const ColumnStore &store, std::size_t rid) : store(store), rid_(rid) { }
+        Row(const ColumnStore &store, std::size_t rid) : store_(store), rid_(rid) { }
 
         public:
+        const Store & store() const override { return store_; }
+
         /** Check whether the value of the attribute is NULL. */
         bool isnull(const Attribute &attr) const override {
-            auto bitmap_col = store.columns_.back().as<uint64_t*>();
+            auto bitmap_col = store_.columns_.back().as<uint64_t*>();
             return not bool((bitmap_col[rid_] >> attr.id) & 0x1);
         }
 
         private:
         void null(const Attribute &attr, bool value) {
-            auto bitmap_col = store.columns_.back().as<uint64_t*>();
+            auto bitmap_col = store_.columns_.back().as<uint64_t*>();
             setbit(&bitmap_col[rid_], not value, attr.id);
         }
 
         public:
         /** Set the attribute to NULL. */
         void setnull(const Attribute &attr) override { null(attr, true); }
-
-        /** Invoke a callable for each attribute in the row and pass the attribute and its value. */
-        void dispatch(callback_t callback) const override;
 
         private:
         /** Retrieve the value of the attribute in this row.  `T` is the exact type of the attribute as stored in the
@@ -104,9 +102,6 @@ struct ColumnStore : Store
     /** Returns the effective size of a row, in bits. */
     std::size_t row_size() const { return row_size_; }
 
-    std::size_t load(std::filesystem::path path) override;
-    void save(std::filesystem::path path) const override;
-
     void for_each(const std::function<void(Store::Row &row)> &fn) override {
         for (std::size_t i = 0, end = num_rows_; i != end; ++i) {
             Row r(*this, i);
@@ -140,7 +135,7 @@ struct ColumnStore : Store
         return columns_[attr_id]; // XXX What if attributes were erased and added again to a table?
     }
 
-    StackMachine loader(const OperatorSchema &schema) const override;
+    StackMachine loader(const Schema &schema) const override;
 
     StackMachine writer(const std::vector<const Attribute*> &attrs, std::size_t row_id) const override;
 
@@ -157,7 +152,7 @@ T ColumnStore::Row::get_exact(const Attribute &attr) const
     insist(not isnull(attr));
     insist(type_check<T>(attr));
 
-    const auto &col = store.columns_[attr.id];
+    const auto &col = store_.columns_[attr.id];
     if constexpr (std::is_same_v<T, bool>) {
         const auto bytes = rid_ / 8;
         const auto bits = rid_ % 8;
@@ -187,7 +182,7 @@ T ColumnStore::Row::set_exact(const Attribute &attr, T value)
 
     null(attr, false);
     insist(not isnull(attr));
-    const auto &col = store.columns_[attr.id];
+    const auto &col = store_.columns_[attr.id];
 
     if constexpr (std::is_same_v<T, bool>) {
         const auto bytes = rid_ / 8;

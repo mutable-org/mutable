@@ -35,19 +35,10 @@ ColumnStore::ColumnStore(const Table &table)
 
 ColumnStore::~ColumnStore() { }
 
-std::size_t ColumnStore::load(std::filesystem::path path)
-{
-    unreachable("not implemented");
-}
-
-void ColumnStore::save(std::filesystem::path path) const
-{
-    unreachable("not implemented");
-}
-
-StackMachine ColumnStore::loader(const OperatorSchema &schema) const
+StackMachine ColumnStore::loader(const Schema &schema) const
 {
     StackMachine sm;
+    std::size_t out_idx = 0;
 
     /* Add row id to context. */
     auto row_id_idx = sm.add(int64_t(0));
@@ -56,8 +47,8 @@ StackMachine ColumnStore::loader(const OperatorSchema &schema) const
     const auto null_bitmap_col_addr = columns_.back().as<uintptr_t>();
     auto null_bitmap_col_addr_idx = sm.add(int64_t(null_bitmap_col_addr));
 
-    for (auto &attr_ident : schema) {
-        auto &attr = table().at(attr_ident.first.attr_name);
+    for (auto &e : schema) {
+        auto &attr = table().at(e.id.name);
 
         /* Load row id to stack. */
         sm.emit_Ld_Ctx(row_id_idx);
@@ -115,6 +106,7 @@ StackMachine ColumnStore::loader(const OperatorSchema &schema) const
         } else {
             unreachable("illegal type");
         }
+        sm.emit_Emit(out_idx++, attr.type);
     }
 
     /* Update row id. */
@@ -128,7 +120,10 @@ StackMachine ColumnStore::loader(const OperatorSchema &schema) const
 
 StackMachine ColumnStore::writer(const std::vector<const Attribute*> &attrs, std::size_t row_id) const
 {
-    StackMachine sm;
+    Schema in;
+    for (auto attr : attrs)
+        in.add({"attr"}, attr->type);
+    StackMachine sm(in);
 
     /* Add row id to context. */
     auto row_id_idx = sm.add(int64_t(row_id));
@@ -215,59 +210,4 @@ void ColumnStore::dump(std::ostream &out) const
 {
     out << "ColumnStore for table \"" << table().name << "\": " << num_rows_ << '/' << capacity_
         << " rows, " << row_size_ << " bits per row" << std::endl;
-}
-
-
-/*======================================================================================================================
- * ColumnStore::Row
- *====================================================================================================================*/
-
-void ColumnStore::Row::dispatch(callback_t callback) const
-{
-    struct TypeDispatch : ConstTypeVisitor
-    {
-        callback_t callback;
-        const Attribute &attr;
-        const ColumnStore::Row &row;
-
-        TypeDispatch(callback_t callback, const Attribute &attr, const ColumnStore::Row &row)
-            : callback(callback)
-            , attr(attr)
-            , row(row)
-        { }
-
-        using ConstTypeVisitor::operator();
-        void operator()(Const<ErrorType>&) { unreachable("error type"); }
-        void operator()(Const<Boolean>&) { callback(attr, row.get_generic<bool>(attr)); }
-        void operator()(Const<CharacterSequence> &ty) {
-            insist(not ty.is_varying, "varying length character sequences are not supported by this store");
-            callback(attr, row.get_generic<std::string_view>(attr));
-        }
-        void operator()(Const<Numeric> &ty) {
-            switch (ty.kind) {
-                case Numeric::N_Int:
-                case Numeric::N_Decimal:
-                    callback(attr, row.get_generic<int64_t>(attr));
-                    return;
-
-                case Numeric::N_Float:
-                    if (ty.precision == 32)
-                        callback(attr, row.get_generic<float>(attr));
-                    else
-                        callback(attr, row.get_generic<double>(attr));
-                    return;
-            }
-        }
-        void operator()(Const<FnType>&) { unreachable("fn type"); }
-    };
-
-    for (auto &attr : store.table()) {
-        if (isnull(attr)) {
-            callback(attr, value_type());
-            continue;
-        }
-
-        TypeDispatch dispatcher(callback, attr, *this);
-        dispatcher(*attr.type);
-    }
 }

@@ -86,8 +86,8 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
     std::size_t num_errors = 0;
     const bool is_stdin = streq(filename, "-");
 
-    auto print = [](const OperatorSchema &schema, const tuple_type &t) {
-        db::print(std::cout, schema, t);
+    auto print = [](const Schema &schema, const Tuple &tup) {
+        tup.print(std::cout, schema);
         std::cout << '\n';
     };
 
@@ -171,12 +171,16 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             std::vector<const Attribute*> attrs;
             for (auto &attr : T) attrs.push_back(&attr);
             auto W = store.writer(attrs, store.num_rows()); // append values
+            Schema tuple_schema;
+            for (auto &attr : attrs) tuple_schema.add({attr->name}, attr->type);
+            Tuple tup(tuple_schema);
+            Tuple none;
             for (auto &t : I->tuples) {
-                StackMachine S;
+                StackMachine S(Schema{});
                 for (auto &v : t) {
                     switch (v.first) {
                         case InsertStmt::I_Null:
-                            S.add_and_emit_load(null_type());
+                            S.emit_Push_Null();
                             break;
 
                         case InsertStmt::I_Default:
@@ -187,9 +191,9 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
                             break;
                     }
                 }
-                auto values = S();
+                S(&tup);
                 store.append();
-                W(values);
+                W(&none, tup);
             }
         } else if (auto S = cast<CreateTableStmt>(stmt)) {
             auto &DB = C.get_database_in_use();

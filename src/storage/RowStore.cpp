@@ -39,50 +39,10 @@ RowStore::~RowStore()
     delete[] offsets_;
 }
 
-void RowStore::save(std::filesystem::path path) const
-{
-    std::ofstream out(path, std::ios_base::binary);
-
-    out << "store\n" << typeid(*this).name()
-        << "\ntable\n" << table().name << '\n'
-        << num_rows_ << '\n';
-
-    std::size_t num_bytes = num_rows_ * row_size_/8;
-    out.write(data_.as<char*>(), num_bytes);
-}
-
-std::size_t RowStore::load(std::filesystem::path path)
-{
-    std::string buf;
-    std::ifstream in(path, std::ios_base::binary);
-
-    in >> buf;
-    if (buf != "store")
-        throw std::invalid_argument("not a storage file");
-    in >> buf;
-    if (buf != typeid(*this).name())
-        throw std::invalid_argument("this storeage file is of a different type");
-    in >> buf;
-    if (buf != "table")
-        throw std::invalid_argument("missing table name");
-    in >> buf;
-    if (buf != table().name)
-        throw std::invalid_argument("this storage file is for a different table");
-    std::size_t num_fresh_rows;
-    in >> num_fresh_rows;
-    if (capacity_ - num_fresh_rows < num_rows_)
-        throw std::runtime_error("not enough capacity to load data from storage file");
-    in.get(); // skip new line
-
-    std::size_t num_bytes = num_fresh_rows * row_size_/8;
-    in.read(data_.as<char*>() + num_rows_ * row_size_/8, num_bytes);
-    num_rows_ += num_fresh_rows;
-    return num_fresh_rows;
-}
-
-StackMachine RowStore::loader(const OperatorSchema &schema) const
+StackMachine RowStore::loader(const Schema &schema) const
 {
     StackMachine sm;
+    std::size_t out_idx = 0;
 
     /* Add address of store to initial state. */
     auto addr_idx = sm.add(int64_t(data_.as<uintptr_t>()));
@@ -90,8 +50,8 @@ StackMachine RowStore::loader(const OperatorSchema &schema) const
     /* Add row size to context. */
     auto row_size_idx = sm.add(int64_t(row_size_/8));
 
-    for (auto &attr_ident : schema) {
-        auto &attr = table().at(attr_ident.first.attr_name);
+    for (auto &e : schema) {
+        auto &attr = table().at(e.id.name);
 
         /* Load row address to stack. */
         sm.emit_Ld_Ctx(addr_idx);
@@ -147,6 +107,7 @@ StackMachine RowStore::loader(const OperatorSchema &schema) const
         } else {
             unreachable("illegal type");
         }
+        sm.emit_Emit(out_idx++, attr.type);
     }
 
     /* Update row address. */
@@ -161,7 +122,10 @@ StackMachine RowStore::loader(const OperatorSchema &schema) const
 
 StackMachine RowStore::writer(const std::vector<const Attribute*> &attrs, std::size_t row_id) const
 {
-    StackMachine sm;
+    Schema in;
+    for (auto attr : attrs)
+        in.add({"attr"}, attr->type);
+    StackMachine sm(in);
 
     /* Add address of store to initial state. */
     auto row_addr_idx = sm.add(int64_t(data_.as<uintptr_t>() + row_id * row_size_ / 8));
@@ -283,59 +247,4 @@ void RowStore::dump(std::ostream &out) const
         out << offsets_[i];
     }
     out << ']' << std::endl;
-}
-
-
-/*======================================================================================================================
- * RowStore::Row
- *====================================================================================================================*/
-
-void RowStore::Row::dispatch(callback_t callback) const
-{
-    struct TypeDispatch : ConstTypeVisitor
-    {
-        callback_t callback;
-        const Attribute &attr;
-        const RowStore::Row &row;
-
-        TypeDispatch(callback_t callback, const Attribute &attr, const RowStore::Row &row)
-            : callback(callback)
-            , attr(attr)
-            , row(row)
-        { }
-
-        using ConstTypeVisitor::operator();
-        void operator()(Const<ErrorType>&) { unreachable("error type"); }
-        void operator()(Const<Boolean>&) { callback(attr, row.get_generic<bool>(attr)); }
-        void operator()(Const<CharacterSequence> &ty) {
-            insist(not ty.is_varying, "varying length character sequences are not supported by this store");
-            callback(attr, row.get_generic<std::string_view>(attr));
-        }
-        void operator()(Const<Numeric> &ty) {
-            switch (ty.kind) {
-                case Numeric::N_Int:
-                case Numeric::N_Decimal:
-                    callback(attr, row.get_generic<int64_t>(attr));
-                    return;
-
-                case Numeric::N_Float:
-                    if (ty.precision == 32)
-                        callback(attr, row.get_generic<float>(attr));
-                    else
-                        callback(attr, row.get_generic<double>(attr));
-                    return;
-            }
-        }
-        void operator()(Const<FnType>&) { unreachable("fn type"); }
-    };
-
-    for (auto &attr : store.table()) {
-        if (isnull(attr)) {
-            callback(attr, value_type());
-            continue;
-        }
-
-        TypeDispatch dispatcher(callback, attr, *this);
-        dispatcher(*attr.type);
-    }
 }

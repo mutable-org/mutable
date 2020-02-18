@@ -16,20 +16,21 @@ struct RowStore : Store
     {
         friend struct RowStore;
 
-        public:
-        const RowStore &store;
         private:
+        const RowStore &store_;
         uintptr_t addr_;
 
         private:
-        Row(const RowStore &store, uintptr_t addr) : store(store), addr_(addr) { }
+        Row(const RowStore &store, uintptr_t addr) : store_(store), addr_(addr) { }
 
         public:
+        const Store & store() const override { return store_; }
+
         uintptr_t addr() const { return addr_; }
 
         /** Check whether the value of the attribute is NULL. */
         bool isnull(const Attribute &attr) const override {
-            const std::size_t off = store.offset(store.table().size()) + attr.id;
+            const std::size_t off = store_.offset(store_.table().size()) + attr.id;
             const std::size_t bytes = off / 8;
             const std::size_t bits = off % 8;
             auto p = reinterpret_cast<uint8_t*>(addr_ + bytes);
@@ -38,7 +39,7 @@ struct RowStore : Store
 
         private:
         void null(const Attribute &attr, bool value) {
-            const std::size_t off = store.offset(store.table().size()) + attr.id;
+            const std::size_t off = store_.offset(store_.table().size()) + attr.id;
             const std::size_t bytes = off / 8;
             const std::size_t bits = off % 8;
             auto p = reinterpret_cast<uint8_t*>(addr_ + bytes);
@@ -48,9 +49,6 @@ struct RowStore : Store
         public:
         /** Set the attribute to NULL. */
         void setnull(const Attribute &attr) override { null(attr, true); }
-
-        /** Invoke a callable for each attribute in the row and pass the attribute and its value. */
-        void dispatch(callback_t callback) const override;
 
         private:
         /** Retrieve the value of the attribute in this row.  `T` is the exact type of the attribute as stored in the
@@ -113,9 +111,6 @@ struct RowStore : Store
     /** Returns the effective size of a row, in bits. */
     std::size_t row_size() const { return row_size_; }
 
-    std::size_t load(std::filesystem::path path) override;
-    void save(std::filesystem::path path) const override;
-
     void for_each(const std::function<void(Store::Row &row)> &fn) override {
         for (std::size_t i = 0, end = num_rows_; i != end; ++i) {
             Row r(*this, at(i));
@@ -146,7 +141,7 @@ struct RowStore : Store
     /** Returns the memory of the store. */
     const rewire::Memory & memory() const { return data_; }
 
-    StackMachine loader(const OperatorSchema &schema) const override;
+    StackMachine loader(const Schema &schema) const override;
 
     StackMachine writer(const std::vector<const Attribute*> &attrs, std::size_t row_id) const override;
 
@@ -176,7 +171,7 @@ T RowStore::Row::get_exact(const Attribute &attr) const
     insist(not isnull(attr));
     insist(type_check<T>(attr));
 
-    const auto off = store.offset(attr);
+    const auto off = store_.offset(attr);
     const auto bytes = off / 8;
 
     if constexpr (std::is_same_v<T, bool>) {
@@ -209,7 +204,7 @@ T RowStore::Row::set_exact(const Attribute &attr, T value)
     insist(type_check<T>(attr));
 
     null(attr, false);
-    const auto off = store.offset(attr);
+    const auto off = store_.offset(attr);
     const auto bytes = off / 8;
 
     if constexpr (std::is_same_v<T, bool>) {

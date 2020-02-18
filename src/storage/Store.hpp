@@ -16,7 +16,6 @@
 
 namespace db {
 
-struct OperatorSchema;
 struct StackMachine;
 
 template<bool C> struct TheStoreVisitor;
@@ -30,104 +29,14 @@ struct null_error : std::logic_error
     null_error(const char *str) : logic_error(str) { }
 };
 
-/** The type of "NULL". */
-struct null_type
-{
-    friend std::ostream & operator<<(std::ostream &out, null_type) { return out << "NULL"; }
-    bool operator==(null_type) const { return true; }
-};
-
-/** A polymorphic type to hold a value of an attribute. */
-using value_type = std::variant<
-    null_type,
-    int64_t,
-    float,
-    double,
-    std::string_view,
-    bool
->;
-
-static_assert(std::is_move_constructible_v<value_type>, "value_type must be move constructible");
-static_assert(std::is_trivially_destructible_v<value_type>, "value_type must be trivially destructible");
-
-template<typename To>
-To to(const value_type &value)
-{
-    return std::visit(
-        [](auto value) -> To {
-            if constexpr (std::is_convertible_v<decltype(value), To>) {
-                return value;
-            } else {
-                unreachable("value cannot be converted to target type");
-            }
-        }, value);
-}
-
-}
-
-namespace std {
-
-template<>
-struct hash<db::value_type>
-{
-    uint64_t operator()(const db::value_type &value) const {
-        return std::visit(overloaded {
-            [](auto v) -> uint64_t { return murmur3_64(std::hash<decltype(v)>()(v)); },
-            [](db::null_type) -> uint64_t { return 0; },
-            [](const std::string_view v) -> uint64_t { return StrHash()(v.data(), v.length()); },
-        }, value);
-    }
-};
-
-}
-
-namespace db {
-
-inline std::ostream & operator<<(std::ostream &out, const value_type &value)
-{
-    std::visit(overloaded {
-        [&] (null_type) { out << "NULL"; },
-        [&] (int64_t v) { out << v; },
-        [&] (float v) { out << v << ".f"; },
-        [&] (double v) { out << v << '.'; },
-        [&] (std::string_view v) { out << '"' << v << '"'; },
-        [&] (bool v) { out << (v ? "TRUE" : "FALSE"); },
-    }, value);
-    return out;
-}
-
-/** Prints an attribute's value to an output stream. */
-inline void print(std::ostream &out, const Type *type, value_type value)
-{
-    std::visit(overloaded {
-        [&] (null_type) { out << "NULL"; },
-        [&] (float v) { out << v; },
-        [&] (double v) { out << v; },
-        [&] (std::string_view v) { out << '"' << escape(std::string(v)) << '"'; },
-        [&] (bool v) { out << (v ? "TRUE" : "FALSE"); },
-        [&] (int64_t v) {
-            if (auto n = as<const Numeric>(type); n->kind == Numeric::N_Decimal) {
-                using std::setw, std::setfill;
-                int64_t shift = pow(10, n->scale);
-                int64_t pre = v / shift;
-                int64_t post = std::abs(v) % shift;
-                out << pre << '.' << setw(n->scale) << setfill('0') << post;
-                return;
-            } else {
-                out << v;
-            }
-        },
-    }, value);
-}
-
 /** Defines a generic store interface. */
 struct Store
 {
     struct Row
     {
-        using callback_t = std::function<void(const Attribute&, value_type)>;
-
         virtual ~Row() { }
+
+        virtual const Store & store() const = 0;
 
         /** Check whether the value of the attribute is NULL. */
         virtual bool isnull(const Attribute &attr) const = 0;
@@ -146,19 +55,7 @@ struct Store
         template<typename T>
         void set(const Attribute &attr, T value) { set_(attr, value); }
 
-        /** Invokes a callback function for each attribute of the row, passing the attribute and its value. */
-        virtual void dispatch(callback_t callback) const = 0;
-
-        /** Output a human-readable representation of this row. */
-        friend std::ostream & operator<<(std::ostream &out, const Row &row) {
-            row.print(out);
-            return out;
-        }
-
         protected:
-        /** Helper function to make operator<< virtual. */
-        void print(std::ostream &out) const;
-
         /*==============================================================================================================
          * Virtual Getters
          *
@@ -223,12 +120,6 @@ struct Store
     /** Return the number of rows in this store. */
     virtual std::size_t num_rows() const = 0;
 
-    /** Saves the contents of the store to the file at `path`. */
-    virtual void save(std::filesystem::path path) const = 0;
-
-    /** Loads data for the store from a file at `path`.  Returns the number of rows loaded. */
-    virtual std::size_t load(std::filesystem::path path) = 0;
-
     /** Evaluate a function on each row of the store. */
     virtual void for_each(const std::function<void(Row &row)> &fn) = 0;
     virtual void for_each(const std::function<void(const Row &row)> &fn) const = 0;
@@ -240,7 +131,7 @@ struct Store
     virtual void drop() = 0;
 
     /** Return a stack machine to load values row-wise directly from this store. */
-    virtual StackMachine loader(const OperatorSchema &schema) const = 0;
+    virtual StackMachine loader(const Schema &schema) const = 0;
 
     /** Return a stack machine to update the specified attributes directly in this store.  The stack machine expects the
      * values to update the row with as input tuple, with the values in the same order as the given list of attributes.

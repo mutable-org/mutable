@@ -199,10 +199,8 @@ struct WasmPipelineCG : ConstOperatorVisitor, ConstASTVisitor
     BlockBuilder block_; ///< used to construct the current block
     BinaryenExpressionRef expr_; ///< used for recursive construction of expressions
     BinaryenExpressionRef b_induction_var; ///< the induction variable that is used as the row id
-    std::unordered_map<OperatorSchema::AttributeIdentifier, BinaryenExpressionRef,
-                       OperatorSchema::attr_hash> is_null_; ///< a map of intermediate results
-    std::unordered_map<OperatorSchema::AttributeIdentifier, BinaryenExpressionRef,
-                       OperatorSchema::attr_hash> intermediates_; ///< a map of intermediate results
+    std::unordered_map<Schema::Identifier, BinaryenExpressionRef> is_null_; ///< a map of intermediate results
+    std::unordered_map<Schema::Identifier, BinaryenExpressionRef> intermediates_; ///< a map of intermediate results
 
     public:
     WasmPipelineCG(WasmCodeGen &CG) : CG(CG) , block_(CG.module()) { }
@@ -273,9 +271,9 @@ struct WasmPipelineCG : ConstOperatorVisitor, ConstASTVisitor
 struct WasmStoreCG : ConstStoreVisitor
 {
     WasmPipelineCG &pipeline;
-    const OperatorSchema &schema;
+    const Schema &schema;
 
-    WasmStoreCG(WasmPipelineCG &pipeline, const OperatorSchema &schema)
+    WasmStoreCG(WasmPipelineCG &pipeline, const Schema &schema)
         : pipeline(pipeline)
         , schema(schema)
     { }
@@ -579,9 +577,9 @@ void WasmPipelineCG::operator()(const CallbackOperator &op)
     std::size_t offset = 0;
 
     /*----- Write results. -------------------------------------------------------------------------------------------*/
-    for (auto &attr : op.schema()) {
-        auto value = intermediates_.at(attr.first);
-        auto bytes = attr.second->size() == 64 ? 8 : 4;
+    for (auto &e : op.schema()) {
+        auto value = intermediates_.at(e.id);
+        auto bytes = e.type->size() == 64 ? 8 : 4;
         block_ += BinaryenStore(
             /* module= */ module(),
             /* bytes=  */ bytes,
@@ -589,7 +587,7 @@ void WasmPipelineCG::operator()(const CallbackOperator &op)
             /* align=  */ 0,
             /* ptr=    */ CG.out(),
             /* value=  */ value,
-            /* type=   */ get_binaryen_type(attr.second)
+            /* type=   */ get_binaryen_type(e.type)
         );
         offset += 8;
     }
@@ -630,8 +628,8 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
 void WasmPipelineCG::operator()(const ProjectionOperator &op)
 {
     auto p = op.projections().begin();
-    for (auto &attr : op.schema())
-        intermediates_[attr.first] = compile(*p++->first); // FIXME: Does not work with duplicate AttributeIdentifier
+    for (auto &e : op.schema())
+        intermediates_[e.id] = compile(*p++->first); // FIXME: Does not work with duplicate Identifier
     (*this)(*op.parent());
 }
 
@@ -662,7 +660,7 @@ void WasmPipelineCG::operator()(const Designator &e)
         (*this)(**pe);
     } else if (auto pa = std::get_if<const Attribute*>(&t)) {
         auto &attr = **pa;
-        OperatorSchema::AttributeIdentifier id(attr.table.name, attr.name);
+        Schema::Identifier id(attr.table.name, attr.name);
         auto it = intermediates_.find(id);
         insist(it != intermediates_.end(), "no intermediate result for the given designator");
         expr_ = it->second;
@@ -678,30 +676,25 @@ void WasmPipelineCG::operator()(const Constant &e)
 
     auto ty = e.type();
     if (ty->is_boolean()) {
-        bool b = std::get<bool>(value);
-        literal = BinaryenLiteralInt32(b);
+        literal = BinaryenLiteralInt32(value.as_b());
     } else if (ty->is_character_sequence()) {
         unreachable("not yet implemented");
     } else if (auto n = cast<const Numeric>(ty)) {
         switch (n->kind) {
             case Numeric::N_Int:
             case Numeric::N_Decimal: {
-                int64_t i = std::get<int64_t>(value);
                 if (n->size() <= 32)
-                    literal = BinaryenLiteralInt32(i);
+                    literal = BinaryenLiteralInt32(value.as_i());
                 else
-                    literal = BinaryenLiteralInt64(i);
+                    literal = BinaryenLiteralInt64(value.as_i());
                 break;
             }
 
             case Numeric::N_Float: {
-                if (n->precision == 32) {
-                    float f = std::get<float>(value);
-                    literal = BinaryenLiteralFloat32(f);
-                } else {
-                    double d = std::get<double>(value);
-                    literal = BinaryenLiteralFloat64(d);
-                }
+                if (n->precision == 32)
+                    literal = BinaryenLiteralFloat32(value.as_f());
+                else
+                    literal = BinaryenLiteralFloat64(value.as_d());
                 break;
             }
         }
@@ -985,8 +978,8 @@ void WasmStoreCG::operator()(const RowStore &store)
 
     /*----- Generate code to access null bitmap and value of all required attributes. --------------------------------*/
     const auto null_bitmap_offset = store.offset(table.size());
-    for (auto &attr_schema : schema) {
-        auto &attr = table[attr_schema.first.attr_name];
+    for (auto &e : schema) {
+        auto &attr = table[e.id.name];
 
         /*----- Generate code for null bit check. --------------------------------------------------------------------*/
         {
@@ -1021,7 +1014,7 @@ void WasmStoreCG::operator()(const RowStore &store)
                 /* left=   */ b_shr,
                 /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(1))
             );
-            pipeline.is_null_.emplace(attr_schema.first, b_isnull);
+            pipeline.is_null_.emplace(e.id, b_isnull);
         }
 
         /*----- Generate code for value access. ----------------------------------------------------------------------*/
@@ -1035,7 +1028,7 @@ void WasmStoreCG::operator()(const RowStore &store)
                 /* type=   */ get_binaryen_type(attr.type),
                 /* ptr=    */ b_row_addr
             );
-            pipeline.intermediates_.emplace(attr_schema.first, b_value);
+            pipeline.intermediates_.emplace(e.id, b_value);
         }
     }
 }

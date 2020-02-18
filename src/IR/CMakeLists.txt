@@ -8,4 +8,5 @@ add_library(
     Optimizer.cpp
     PlanEnumerator.cpp
     QueryGraph.cpp
+    Tuple.cpp
     )

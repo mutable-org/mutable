@@ -1,3 +1,4 @@
+if (CMAKE_BUILD_TYPE MATCHES Debug)
 include_directories(.)
 
 add_executable(
@@ -20,9 +21,10 @@ add_executable(
     parse/SemaTest.cpp
 
     # IR
-    IR/CNFTest.cpp
     IR/AdjacencyMatrixTest.cpp
+    IR/CNFTest.cpp
     IR/PlanEnumeratorTest.cpp
+    IR/TupleTest.cpp
 
     # catalog
     catalog/SchemaTest.cpp
@@ -39,3 +41,4 @@ add_executable(
     ../src/globals.cpp
     )
 target_link_libraries(unittest db)
+endif()

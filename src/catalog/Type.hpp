@@ -49,6 +49,7 @@ struct Type
     bool operator!=(const Type &other) const { return not operator==(other); }
 
     bool is_error() const { return (void*) this == Get_Error(); }
+    bool is_none() const { return (void*) this == Get_None(); }
     /** Returns `true` iff this `Type` is a `db::PrimitiveType`. */
     bool is_primitive() const { return is<const PrimitiveType>(this); }
     bool is_boolean() const { return is<const Boolean>(this); }
@@ -272,7 +273,7 @@ struct Numeric : PrimitiveType
     /** How many binary digits fit into a single decimal digit.  Used to compute precision. */
     static constexpr float DECIMAL_TO_BINARY_DIGITS = 3.32192f;
 
-#define kind_t(X) X(N_Int), X(N_Decimal), X(N_Float)
+#define kind_t(X) X(N_Int), X(N_Float), X(N_Decimal)
     DECLARE_ENUM(kind_t) kind; ///< the kind of numeric type
     private:
     static constexpr const char *KIND_TO_STR_[] = { ENUM_TO_STR(kind_t) };

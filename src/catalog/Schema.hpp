@@ -19,6 +19,160 @@
 
 namespace db {
 
+/** A `Schema` represents a sequence of identifiers, optionally with a prefix, and their associated types.  The `Schema`
+ * allows identifiers of the same name with different prefix.  */
+struct Schema
+{
+    /** An `Identifier` is composed of a name and an optional prefix. */
+    struct Identifier
+    {
+        const char *prefix; ///< prefix of this `Identifier`, may be `nullptr`
+        const char *name; ///< the name of this `Identifier`
+
+        Identifier(const char *prefix, const char *name) : prefix(prefix) , name(name) {
+            insist(prefix == nullptr or strlen(prefix) > 0, "prefix must not be the empty string");
+        }
+        Identifier(const char *name) : prefix(nullptr), name(name) { }
+
+        bool operator==(Identifier other) const {
+            return this->prefix == other.prefix and this->name == other.name;
+        }
+        bool operator!=(Identifier other) const { return not operator==(other); }
+
+        friend std::ostream & operator<<(std::ostream &out, Identifier id) {
+            if (id.prefix)
+                out << id.prefix << '.';
+            return out << id.name;
+        }
+    };
+
+    struct entry_type
+    {
+        Identifier id;
+        const Type *type;
+
+        entry_type(Identifier id, const Type *type) : id(id), type(notnull(type)) { }
+    };
+
+    private:
+    std::vector<entry_type> entries_;
+
+    public:
+    const std::vector<entry_type> & entries() const { return entries_; }
+
+    /** Returns the number of entries in this `Schema`. */
+    auto size() const { return entries_.size(); }
+
+    auto begin() { return entries_.begin(); }
+    auto end()   { return entries_.end(); }
+    auto begin() const { return entries_.cbegin(); }
+    auto end()   const { return entries_.cend(); }
+    auto cbegin() const { return entries_.cbegin(); }
+    auto cend()   const { return entries_.cend(); }
+
+    /** Returns an iterator to the entry with the given `Identifier` `id`, or `end()` if no such entry exists.  */
+    decltype(entries_)::iterator find(Identifier id) {
+        std::function<bool(entry_type&)> pred;
+        if (id.prefix)
+            pred = [&](entry_type &e) -> bool { return e.id == id; }; // match qualified
+        else
+            pred = [&](entry_type &e) -> bool { return e.id.name == id.name; }; // match unqualified
+        auto it = std::find_if(begin(), end(), pred);
+        insist(it == end() or std::find_if(std::next(it), end(), pred) == end(), "duplicate entry; lookup ambiguous");
+        return it;
+    }
+    /** Returns an iterator to the entry with the given `Identifier` `id`, or `end()` if no such entry exists.  */
+    decltype(entries_)::const_iterator find(Identifier id) const { return const_cast<Schema*>(this)->find(id); }
+
+    /** Returns `true` iff this `Schema` contains an entry with `Identifier` `id`. */
+    bool has(Identifier id) const { return find(id) != end(); }
+
+    /** Returns the entry at index `idx`. */
+    const entry_type & operator[](std::size_t idx) const {
+        insist(idx < entries_.size(), "index out of bounds");
+        return entries_[idx];
+    }
+
+    /** Returns a `std::pair` of the index and a reference to the entry with `Identifier` `id`. */
+    std::pair<std::size_t, const entry_type&> operator[](Identifier id) const {
+        auto pos = find(id);
+        insist(pos != end(), "identifier not found");
+        return { std::distance(begin(), pos), *pos };
+    }
+
+    /** Adds a new entry `id` of type `type` to this `Schema`. */
+    void add(Identifier id, const Type *type) { entries_.emplace_back(id, type); }
+
+    /** Adds all entries of `other` to `this` `Schema`. */
+    Schema & operator+=(const Schema &other) {
+        for (auto &e : other)
+            entries_.emplace_back(e);
+        return *this;
+    }
+
+    /** Adds all entries of `other` to `this` `Schema` using *set semantics*.  If an entry of `other` with a particular
+     * `Identifier` already exists in `this`, it is not added again. */
+    Schema & operator|=(const Schema &other) {
+        for (auto &e : other) {
+            if (not has(e.id))
+                entries_.emplace_back(e);
+        }
+        return *this;
+    }
+
+    friend std::ostream & operator<<(std::ostream &out, const Schema &schema) {
+        out << "{[";
+        for (auto it = schema.begin(), end = schema.end(); it != end; ++it) {
+            if (it != schema.begin()) out << ',';
+            out << ' ' << it->id << " :" << *it->type;
+        }
+        return out << " ]}";
+    }
+
+    void dump(std::ostream &out) const;
+    void dump() const;
+};
+
+inline Schema operator+(const Schema &left, const Schema &right)
+{
+    Schema S(left);
+    S += right;
+    return S;
+}
+
+/** Computes the *set intersection* of two `Schema`s. */
+inline Schema operator&(const Schema &first, const Schema &second) {
+    Schema res;
+    for (auto &e : first) {
+        auto it = second.find(e.id);
+        if (it != second.end()) {
+            insist(e.type == it->type, "type mismatch");
+            res.add(e.id, e.type);
+        }
+    }
+    return res;
+}
+
+}
+
+namespace std {
+
+template<>
+struct hash<db::Schema::Identifier>
+{
+    uint64_t operator()(db::Schema::Identifier id) const {
+        StrHash h;
+        uint64_t hash = h(id.name);
+        if (id.prefix)
+            hash *= h(id.prefix);
+        return hash;
+    }
+};
+
+}
+
+namespace db {
+
 /*======================================================================================================================
  * Attribute, Table, Database
  *====================================================================================================================*/

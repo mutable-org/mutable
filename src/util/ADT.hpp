@@ -80,11 +80,17 @@ struct SmallBitset
     SmallBitset() : bits_(0) { };
     explicit SmallBitset(uint64_t bits) : bits_(bits) { };
 
-    /** Set the `offset`-th bit to `1`. */
-    void set(std::size_t offset) {
+    /** Set the `offset`-th bit to `val`. */
+    void set(std::size_t offset, bool val) {
         insist(offset < CAPACITY, "offset is out-of-bounds");
-        setbit(&bits_, 1, offset);
+        setbit(&bits_, val, offset);
     }
+
+    /** Set the `offset`-th bit to `1`. */
+    void set(std::size_t offset) { set(offset, true); }
+
+    /** Set the `offset`-th bit to `0`. */
+    void clear(std::size_t offset) { set(offset, false); }
 
     /** Returns `true` iff the `offset`-th bit is set to `1`. */
     bool contains(std::size_t offset) const {

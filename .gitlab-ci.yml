@@ -31,8 +31,9 @@ pages:doxygen:
         - nginx
     script:
         - doxygen Doxyfile
-        - rm -r /usr/share/nginx/html
-        - mv doxy/html /usr/share/nginx
+        - rm -rf /usr/share/nginx/html/mutable
+        - mkdir -p /usr/share/nginx/html/mutable
+        - mv doxy/html/* /usr/share/nginx/html/mutable
     only:
         - master
 

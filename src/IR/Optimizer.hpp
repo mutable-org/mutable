@@ -75,6 +75,19 @@ struct PlanTable
     /** Returns the entry for a given subproblem. */
     const entry_type & operator[](Subproblem s) const { return at(s); }
 
+    /** Returns true iff all entries of both plan tables are equal. */
+    bool operator==(const PlanTable &other) const {
+        if (num_sources_ != other.num_sources()) return false;
+        for (std::size_t i = 0; i < 1UL << num_sources_; ++i) {
+            Subproblem S(i);
+            if (at(S) != other.at(S)) return false;
+        }
+        return true;
+    }
+    /** Returns true iff at least one entry in both plan tables is not equal. */
+    bool operator!=(const PlanTable &other) const { return not (*this==other); }
+
+
     /** Returns the entry for the final plan. */
     const entry_type & get_final() const { return at(Subproblem((1UL << num_sources_) - 1)); }
 

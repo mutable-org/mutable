@@ -22,6 +22,7 @@ add_executable(
     # IR
     IR/CNFTest.cpp
     IR/AdjacencyMatrixTest.cpp
+    IR/PlanEnumeratorTest.cpp
 
     # catalog
     catalog/SchemaTest.cpp

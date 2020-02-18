@@ -22,17 +22,26 @@ struct PlanTable
 
     struct entry_type
     {
-        Subproblem left;
-        Subproblem right;
-        std::size_t size;
-        uint64_t cost = std::numeric_limits<uint64_t>::max();
+        Subproblem left; //< the left subproblem
+        Subproblem right; //< the right subproblem
+        std::size_t size; //< the size of the subproblem
+        uint64_t cost = std::numeric_limits<uint64_t>::max(); //< the cost of the subproblem
 
+        /* Returns all subproblems. */
         std::vector<Subproblem> get_subproblems() const {
             std::vector<Subproblem> s;
             if (left) s.push_back(left);
             if (right) s.push_back(right);
             return s;
         }
+
+        /** Returns true iff all fields are equal. */
+        bool operator==(const entry_type &other) const {
+            return (size == other.size) and (cost == other.cost) and (left == other.left) and (right == other.right);
+        }
+        /** Returns true iff at least one field is not equal. */
+        bool operator!=(const entry_type &other) const { return not (*this==other); }
+
     };
 
     private:

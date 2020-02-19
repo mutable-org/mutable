@@ -281,7 +281,9 @@ inline bool isspace(const char *s) { return isspace(s, strlen(s)); }
 
 void exec(const char *executable, std::initializer_list<const char*> args);
 
+/** Returns the least subset of a given `set`, i.e.\ the set represented by the lowest 1 bit. */
 inline uint64_t least_subset(uint64_t set) { return set & -set; }
+/** Returns the next subset of a given `subset` and `set. */
 inline uint64_t next_subset(uint64_t subset, uint64_t set) { return (subset - set) & set; }
 
 template<typename T, typename U>

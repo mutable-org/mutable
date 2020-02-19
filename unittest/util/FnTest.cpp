@@ -51,3 +51,13 @@ TEST_CASE("pow", "[core][util][fn]")
     REQUIRE(pow(4, 4) == 256);
     REQUIRE(pow(4, 5) == 1024);
 }
+
+TEST_CASE("subsets/least_subset, next_subset", "[util][fn]")
+{
+    uint64_t set = 10;
+
+    REQUIRE(least_subset(set) == 2);
+    REQUIRE(next_subset(2, set) == 8);
+    REQUIRE(next_subset(8, set) == set);
+    REQUIRE(next_subset(10, set) == 0);
+}

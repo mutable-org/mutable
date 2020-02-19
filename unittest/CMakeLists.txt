@@ -5,6 +5,7 @@ add_executable(
     main.cpp
 
     # util
+    util/ADTTest.cpp
     util/FnTest.cpp
     util/MemoryTest.cpp
     util/PoolTest.cpp

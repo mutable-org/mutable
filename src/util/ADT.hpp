@@ -110,7 +110,7 @@ struct SmallBitset
     /** Convert the `SmallBitset` type to `uint64_t`. */
     operator uint64_t() const { return bits_; }
 
-    /** Returns `true` if the set represented by `other` is a subset of `this`, i.e.\ `other` ⊆ `this`. */
+    /** Returns `true` if the set represented by `this` is a subset of `other`, i.e.\ `this` ⊆ `other`. */
     bool is_subset(SmallBitset other) const { return this->bits_ == (other.bits_ & this->bits_); }
 
     /** Returns the union of `left` and `right`, i.e.\ `left` ∪ `right`. */

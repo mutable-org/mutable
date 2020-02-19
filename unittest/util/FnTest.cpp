@@ -61,3 +61,18 @@ TEST_CASE("subsets/least_subset, next_subset", "[util][fn]")
     REQUIRE(next_subset(8, set) == set);
     REQUIRE(next_subset(10, set) == 0);
 }
+
+TEST_CASE("sum_wo_overflow", "[util][fn]")
+{
+    uint64_t UL_MAX = std::numeric_limits<uint64_t>::max();
+    uint64_t U_MAX = std::numeric_limits<uint64_t>::max();
+
+    REQUIRE(sum_wo_overflow(5U, 10U) == 15U);
+    REQUIRE(sum_wo_overflow(UL_MAX, 10U) == UL_MAX);
+    REQUIRE(sum_wo_overflow((1UL << 63), (1UL << 63)) == UL_MAX);
+    REQUIRE(sum_wo_overflow((1UL << 62), (1UL << 62)) == (1UL << 63));
+    REQUIRE(sum_wo_overflow((1UL << 63), (1UL << 63), 5U) == UL_MAX);
+    REQUIRE(sum_wo_overflow((1UL << 63), 5U, (1UL << 63), 1U) == UL_MAX);
+    REQUIRE(sum_wo_overflow(UL_MAX, U_MAX) == UL_MAX);
+    REQUIRE(sum_wo_overflow(UL_MAX - 1, 1U) == UL_MAX);
+}

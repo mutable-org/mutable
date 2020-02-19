@@ -1,0 +1,33 @@
+description: group by scalar
+db: ours
+query: |
+    SELECT * FROM R GROUP BY 42;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: * TK_ASTERISK
+            -:1:10: FROM TK_From
+            -:1:15: R TK_IDENTIFIER
+            -:1:17: GROUP TK_Group
+            -:1:23: BY TK_By
+            -:1:26: 42 TK_DEC_INT
+            -:1:28: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT *
+            FROM R
+            GROUP BY 42;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        num_err: 1
+        returncode: 1

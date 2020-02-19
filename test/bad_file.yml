@@ -1,0 +1,12 @@
+description: yaml file with incorrect schema
+# required key db is missing
+query: |
+    SELECT key, fkey FROM R WHERE key < 5;
+required: YES
+
+stages:
+    lexer:
+        returncode: 0
+
+    end2end:
+        returncode: 0

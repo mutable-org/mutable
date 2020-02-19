@@ -141,11 +141,11 @@ void process_stream(std::istream &in, const char *filename, options_t options, D
                 dot.show("graph", is_stdin);
             }
 
-            DPsize pe;
+            DPsizeOpt dp_size_opt;
             CostFunction cf([](CostFunction::Subproblem left, CostFunction::Subproblem right, int, const PlanTable &T) {
                 return sum_wo_overflow(T[left].cost, T[right].cost, T[left].size, T[right].size);
             });
-            Optimizer Opt(pe, cf);
+            Optimizer Opt(dp_size_opt, cf);
             auto I = Backend::CreateInterpreter();
             timer.start("Compute an optimized Query Plan");
             auto optree = Opt(*query_graph.get());

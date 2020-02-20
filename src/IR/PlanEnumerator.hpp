@@ -35,6 +35,9 @@ struct DPsize final : PlanEnumerator
     void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
 };
 
+/** Computes the join order using size-based dynamic programming.  In addition to `DPsize`, applies the following
+ * optimizations.  First, do not enumerate symmetric subproblems.  Second, in case both subproblems are of equal size,
+ * consider only subproblem succeeding the first subproblem. */
 struct DPsizeOpt final : PlanEnumerator
 {
     void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
@@ -42,6 +45,13 @@ struct DPsizeOpt final : PlanEnumerator
 
 /** Computes the join order using subset-based dynamic programming. */
 struct DPsub final : PlanEnumerator
+{
+    void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
+};
+
+/** Computes the join order using subset-based dynamic programming.  In comparison to `DPsub`, do not enumerate
+ * symmetric subproblems. */
+struct DPsubOpt final : PlanEnumerator
 {
     void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
 };

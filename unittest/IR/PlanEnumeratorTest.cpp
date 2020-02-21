@@ -190,4 +190,6 @@ TEST_CASE("PlanEnumerator", "[unit]")
         dp_sub_opt(G, cf, plan_table);
         REQUIRE(expected_plan_table_dpsub == plan_table);
     }
+
+    delete stmt;
 }

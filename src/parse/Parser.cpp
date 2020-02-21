@@ -624,7 +624,9 @@ Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
     while (token() == TK_LPAR) {
         Token lpar = consume();
         std::vector<Expr*> args;
-        if (token().type != TK_RPAR) {
+        if (token().type == TK_ASTERISK) {
+            consume();
+        } else if (token().type != TK_RPAR) {
             do
                 args.push_back(parse_Expr());
             while (accept(TK_COMMA));

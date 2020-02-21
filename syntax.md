@@ -167,7 +167,7 @@ hexadecimal-constant ::= '0x' hexadecimal-digit { hexadecimal-digit } ;
 ```ebnf
 primary-expression::= designator | constant | '(' expression ')' ;
 
-postfix-expression ::= postfix-expression '(' [ expression { ',' expression } ] ')' | (* function call *)
+postfix-expression ::= postfix-expression '(' ( '*' | [ expression { ',' expression } ] ) ')' | (* function call *)
                        primary-expression ;
 
 unary-expression ::= [ '+' | '-' | '~' ] postfix-expression ;

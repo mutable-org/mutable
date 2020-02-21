@@ -415,7 +415,7 @@ Clause * Parser::parse_SelectClause()
     /* 'SELECT' */
     expect(TK_Select);
 
-    /* ( '*' | expression [ 'AS' identifier ] ) */
+    /* ( '*' | expression [ [ 'AS' ] identifier ] ) */
     if (token() == TK_ASTERISK) {
         select_all = token();
         consume();
@@ -425,17 +425,23 @@ Clause * Parser::parse_SelectClause()
         if (accept(TK_As)) {
             tok = token();
             ok = ok and expect(TK_IDENTIFIER);
+        } else if (token().type == TK_IDENTIFIER) {
+            tok = token();
+            consume();
         }
         select.push_back(std::make_pair(e, tok));
     }
 
-    /* { ',' expression [ 'AS' identifier ] } */
+    /* { ',' expression [ [ 'AS' ] identifier ] } */
     while (accept(TK_COMMA)) {
         auto e = parse_Expr();
         Token tok;
         if (accept(TK_As)) {
             tok = token();
             ok = ok and expect(TK_IDENTIFIER);
+        } else if (token().type == TK_IDENTIFIER) {
+            tok = token();
+            consume();
         }
         select.push_back(std::make_pair(e, tok));
     }
@@ -462,7 +468,7 @@ Clause * Parser::parse_FromClause()
         if (accept(TK_LPAR)) {
             Stmt *S = parse_SelectStmt();
             expect(TK_RPAR);
-            expect(TK_As);
+            accept(TK_As);
             alias = token();
             ok = ok and expect(TK_IDENTIFIER);
             from.emplace_back(S, alias);
@@ -472,6 +478,9 @@ Clause * Parser::parse_FromClause()
             if (accept(TK_As)) {
                 alias = token();
                 ok = ok and expect(TK_IDENTIFIER);
+            } else if (token().type == TK_IDENTIFIER) {
+                alias = token();
+                consume();
             }
             from.emplace_back(table, alias);
         }

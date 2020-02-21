@@ -81,4 +81,5 @@ integrationtest:linux-amd64:
         - amd64
     needs: ["build:linux-amd64"]
     script:
+        - pip3 install --user --upgrade colorama pyyaml yamale tqdm
         - python3 test/IntegrationTest.py -v

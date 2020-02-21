@@ -1,1 +1,1 @@
-SELECT * FROM R WHERE rstring < "m" ORDER BY key;
+SELECT key FROM R WHERE rstring < "m" ORDER BY key;

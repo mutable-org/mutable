@@ -1,1 +1,1 @@
-SELECT * FROM R WHERE key = 42;
+SELECT key FROM R WHERE key = 42;

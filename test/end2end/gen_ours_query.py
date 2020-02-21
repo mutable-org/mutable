@@ -24,13 +24,13 @@ queries = [
     ('SELECT key, fkey - key FROM R ORDER BY key;', 'select_expr_attr'),
     ('SELECT 42, 42, "abc", "abc", key, key FROM R ORDER BY key;', 'select_repeatedly'),
     # WHERE
-    ('SELECT * FROM R WHERE key = 42;', 'where_equal'),
-    ('SELECT * FROM R WHERE key < 42 ORDER BY key;', 'where_less'),
-    ('SELECT * FROM R WHERE key > 15 AND key < 30 AND key < 17 ORDER BY key;' , 'where_conjunction'),
-    ('SELECT * FROM R WHERE key > 15 OR key < 17 OR key < 70 ORDER BY key;' , 'where_disjunction'),
-    ('SELECT * FROM R WHERE TRUE ORDER BY key;', 'where_true'),
-    ('SELECT * FROM R WHERE FALSE;', 'where_false'),
-    ('SELECT * FROM R WHERE rstring < "m" ORDER BY key;', 'where_strcmp'),
+    ('SELECT key FROM R WHERE key = 42;', 'where_equal'),
+    ('SELECT key FROM R WHERE key < 42 ORDER BY key;', 'where_less'),
+    ('SELECT key FROM R WHERE key > 15 AND key < 30 AND key < 17 ORDER BY key;' , 'where_conjunction'),
+    ('SELECT key FROM R WHERE key > 15 OR key < 17 OR key < 70 ORDER BY key;' , 'where_disjunction'),
+    ('SELECT key FROM R WHERE TRUE ORDER BY key;', 'where_true'),
+    ('SELECT key FROM R WHERE FALSE;', 'where_false'),
+    ('SELECT key FROM R WHERE rstring < "m" ORDER BY key;', 'where_strcmp'),
     ('SELECT key, rfloat FROM R WHERE rfloat < 3.14 ORDER BY key LIMIT 1;', 'where_float'),
     # GROUP BY
     ('SELECT fkey FROM R GROUP BY fkey ORDER BY fkey;', 'groupby_attr'),
@@ -44,13 +44,13 @@ queries = [
     ('SELECT 42, COUNT(key) FROM R HAVING SUM(key) > 100;', 'having_with_aggregation_without_groupby'),
     ('SELECT fkey FROM R GROUP BY fkey HAVING COUNT(key) > 1 ORDER BY fkey;', 'having_with_groupby'),
     # ORDER BY
-    ('SELECT * FROM R ORDER BY key ASC;', 'orderby_attr_asc'),
-    ('SELECT * FROM R ORDER BY key DESC;', 'orderby_attr_desc'),
+    ('SELECT key FROM R ORDER BY key ASC;', 'orderby_attr_asc'),
+    ('SELECT key FROM R ORDER BY key DESC;', 'orderby_attr_desc'),
     ('SELECT key + fkey FROM R ORDER BY key + fkey;', 'orderby_expression'),
-    ('SELECT * FROM R ORDER BY fkey, key;', 'orderby_compound'),
+    ('SELECT fkey, key FROM R ORDER BY fkey, key;', 'orderby_compound'),
     # LIMIT
-    ('SELECT * FROM R ORDER BY key LIMIT 3;', 'limit'),
-    ('SELECT * FROM R ORDER BY key LIMIT 3 OFFSET 4;', 'limit_with_offset'),
+    ('SELECT key FROM R ORDER BY key LIMIT 3;', 'limit'),
+    ('SELECT key FROM R ORDER BY key LIMIT 3 OFFSET 4;', 'limit_with_offset'),
     # JOINS
     ('SELECT R.key, S.key FROM R, S WHERE R.key = S.fkey AND R.key < 10 ORDER BY R.key, S.key;', 'join_binary'),
     ('SELECT R.key, S.key, T.key FROM R, S, T WHERE R.key = S.fkey + T.fkey AND R.key < 10 ORDER BY R.key, S.key, T.key;', 'join_ternary'),
@@ -60,7 +60,7 @@ queries = [
     ('SELECT * FROM (SELECT * FROM R) AS sub ORDER BY key;', 'subquery_from_select_all'),
     ('SELECT fkey FROM (SELECT key, fkey FROM R) AS sub ORDER BY fkey;', 'subquery_from_select_attr'),
     ('SELECT sub.key FROM (SELECT key FROM R) AS sub ORDER BY sub.key;', 'subquery_from_select_attr_with_prefix'),
-    ('SELECT * FROM (SELECT fkey, COUNT(key) FROM R GROUP BY fkey) AS sub ORDER BY fkey;', 'subquery_from_groupby'),
+    ('SELECT fkey, cnt FROM (SELECT fkey, COUNT(key) AS cnt FROM R GROUP BY fkey) AS sub ORDER BY fkey;', 'subquery_from_groupby'),
     ('SELECT k, f, x FROM (SELECT key AS k, 2 * fkey AS f, rfloat AS x FROM R) AS T WHERE T.f < 42 ORDER BY k;', 'subquery_from_renaming'),
 ]
 def stringify(x):

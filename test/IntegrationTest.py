@@ -227,17 +227,18 @@ def schema_valid(test_case) -> bool:
 #-----------------------------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
-    # Run legacy tests
-    tqdm.write('Running legacy integration tests...')
-    legacy = os.path.join(os.getcwd(), 'test', 'LegacyIntegrationTest.py')
-    legacy_returncode = os.WEXITSTATUS(os.system(legacy))
-
     # Pars args
     parser = argparse.ArgumentParser(description="""Run integration tests on mutable. Note that the
                                                     build direcory is assumed to be build/debug.""")
+    parser.add_argument('component', nargs='*', help=f'a component to be tested.')
     parser.add_argument('-a', '--all', help='require optional tests to pass', action='store_true')
     parser.add_argument('-v', '--verbose', help='increase output verbosity', action='store_true')
     args = parser.parse_args()
+
+    # Run legacy tests
+    tqdm.write('Running legacy integration tests...')
+    legacy = os.path.join(os.getcwd(), 'test', 'LegacyIntegrationTest.py')
+    legacy_returncode = os.WEXITSTATUS(os.system(f'{legacy} {" ".join(args.component)}'))
 
     # Check if interactive terminal
     is_interactive = True if 'TERM' in os.environ else False

@@ -209,6 +209,15 @@ struct AdjacencyMatrix
         return R_new;
     }
 
+    /** Computes the neighbors of `S`, i.e.\ all nodes that are connected to `S` via a single edge.  Nodes from `S` are
+     * not part of the neighborhood. */
+    SmallBitset neighbors(SmallBitset S) const {
+        SmallBitset neighbors;
+        for (auto it : S)
+            neighbors |= m_[it];
+        return neighbors - S;
+    }
+
     /** Returns `true` iff the subproblem `S` is connected.  `S` is connected iff any node in `S` can reach all other
      * nodes of `S` using only nodes in `S`.  */
     bool is_connected(SmallBitset S) const { return reachable(SmallBitset(1UL << *S.begin()), S) == S; }

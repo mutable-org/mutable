@@ -1,0 +1,64 @@
+description: Compare the precision of floats
+db: ours
+query: |
+    SELECT R.rfloat * S.rfloat FROM R, S WHERE R.key = S.fkey AND R.key < 5;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: R TK_IDENTIFIER
+            -:1:9: . TK_DOT
+            -:1:10: rfloat TK_IDENTIFIER
+            -:1:17: * TK_ASTERISK
+            -:1:19: S TK_IDENTIFIER
+            -:1:20: . TK_DOT
+            -:1:21: rfloat TK_IDENTIFIER
+            -:1:28: FROM TK_From
+            -:1:33: R TK_IDENTIFIER
+            -:1:34: , TK_COMMA
+            -:1:36: S TK_IDENTIFIER
+            -:1:38: WHERE TK_Where
+            -:1:44: R TK_IDENTIFIER
+            -:1:45: . TK_DOT
+            -:1:46: key TK_IDENTIFIER
+            -:1:50: = TK_EQUAL
+            -:1:52: S TK_IDENTIFIER
+            -:1:53: . TK_DOT
+            -:1:54: fkey TK_IDENTIFIER
+            -:1:59: AND TK_And
+            -:1:63: R TK_IDENTIFIER
+            -:1:64: . TK_DOT
+            -:1:65: key TK_IDENTIFIER
+            -:1:69: < TK_LESS
+            -:1:71: 5 TK_DEC_INT
+            -:1:72: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT (R.rfloat * S.rfloat)
+            FROM R, S
+            WHERE ((R.key = S.fkey) AND (R.key < 5));
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        # maybe switch to sqlite3 ref
+        out: |
+            1.8964481
+            2.054899
+            14.737832
+        err: NULL
+        num_err: 0
+        returncode: 0

@@ -5,21 +5,21 @@ CREATE DATABASE ours;
 CREATE TABLE R (
     key INTEGER,
     fkey INTEGER,
-    rfloat FLOAT,
+    rfloat REAL, -- 32-bit variable-precision floating point
     rstring CHAR(15)
 );
 
 CREATE TABLE S (
     key INTEGER,
     fkey INTEGER,
-    rfloat FLOAT,
+    rfloat REAL, -- 32-bit variable-precision floating point
     rstring CHAR(15)
 );
 
 CREATE TABLE T (
     key INTEGER,
     fkey INTEGER,
-    rfloat FLOAT,
+    rfloat REAL, -- 32-bit variable-precision floating point
     rstring CHAR(15)
 );
 

@@ -86,11 +86,11 @@ void DSVReader::operator()(std::istream &in, const char *name)
                 goto end_of_row;
             }
 
-            if (col) {
+            if (col) { // current cell should be read
                 if (c == delimiter) {
                     row->setnull(*col);
-                    step();
-                    continue;
+                    continue; // keep delimiter (expected at beginning of each loop)
+
                 }
                 attr = col;
                 auto ty = col->type;

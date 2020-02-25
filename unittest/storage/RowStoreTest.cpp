@@ -18,7 +18,7 @@ TEST_CASE("RowStore", "[core][storage][rowstore]")
     table.push_back("decimal", Type::Get_Decimal(Type::TY_Vector, 8, 2)); // 4 byte
     table.push_back("f",       Type::Get_Float(Type::TY_Vector)); // 4 byte
     table.push_back("d",       Type::Get_Double(Type::TY_Vector)); // 8 byte
-    table.push_back("char3",   Type::Get_Char(Type::TY_Vector, 3)); // 3 byte
+    table.push_back("char3",   Type::Get_Char(Type::TY_Vector, 3)); // 3 byte + NUL byte
     table.push_back("b0",      Type::Get_Boolean(Type::TY_Vector)); // 1 bit
     table.push_back("b1",      Type::Get_Boolean(Type::TY_Vector)); // 1 bit
     constexpr std::size_t ROW_SIZE =
@@ -29,7 +29,7 @@ TEST_CASE("RowStore", "[core][storage][rowstore]")
         32 + // f
         16 + // i2
         8  + // i1
-        24 + // char3
+        32 + // char3
         2  + // b0 & b1
         10; // bitmap
     constexpr std::size_t ROW_SIZE_WITH_PADDING = ROW_SIZE + (ROW_SIZE % 64 ? 64 - ROW_SIZE % 64 : 0);
@@ -59,8 +59,8 @@ TEST_CASE("RowStore", "[core][storage][rowstore]")
         REQUIRE(store.offset(i2)      == 224);
         REQUIRE(store.offset(i1)      == 240);
         REQUIRE(store.offset(char3)   == 248);
-        REQUIRE(store.offset(b0)      == 272);
-        REQUIRE(store.offset(b1)      == 273);
+        REQUIRE(store.offset(b0)      == 280);
+        REQUIRE(store.offset(b1)      == 281);
     }
 
     SECTION("append")

@@ -245,14 +245,11 @@ struct CharacterSequence : PrimitiveType
 
     bool operator==(const Type &other) const override;
 
-    uint32_t size() const override {
-        if (is_varying)
-            return 8 * sizeof(char*);
-        else
-            return 8 * length;
-    }
+    /** Returns the number of bits required to store a sequence of `length` many characters and a terminating NUL byte.
+     */
+    uint32_t size() const override { return 8 * (length + 1); }
 
-    uint32_t alignment() const override { return is_varying ? 8 * sizeof(const char*) : 8 * sizeof(char); }
+    uint32_t alignment() const override { return 8; }
 
     uint64_t hash() const override;
 

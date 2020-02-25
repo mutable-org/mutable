@@ -134,7 +134,8 @@ TEST_CASE("PlanEnumerator", "[unit]")
     expected_plan_table_dpsize.at(Subproblem(14)) = { Subproblem(2), Subproblem(12),  960, 126 };
     expected_plan_table_dpsize.at(Subproblem(15)) = { Subproblem(5), Subproblem(10), 4800, 195 };
 
-    SECTION("DPsize") {
+    SECTION("DPsize")
+    {
         DPsize dp_size;
         PlanTable plan_table(num_sources);
         /* Initialize `PlanTable` for base case. */
@@ -144,7 +145,8 @@ TEST_CASE("PlanEnumerator", "[unit]")
         REQUIRE(expected_plan_table_dpsize == plan_table);
     }
 
-    SECTION("DPsizeOpt") {
+    SECTION("DPsizeOpt")
+    {
         DPsizeOpt dp_size_opt;
         PlanTable plan_table(num_sources);
         /* Initialize `PlanTable` for base case. */
@@ -154,6 +156,7 @@ TEST_CASE("PlanEnumerator", "[unit]")
         REQUIRE(expected_plan_table_dpsize == plan_table);
     }
 
+    /* Initialize `PlanTable` for `DPsub` algorithms. */
     PlanTable expected_plan_table_dpsub(num_sources);
     expected_plan_table_dpsub.at(Subproblem(1))  = { Subproblem(0), Subproblem(0),     5,   0 };
     expected_plan_table_dpsub.at(Subproblem(2))  = { Subproblem(0), Subproblem(0),    10,   0 };
@@ -171,7 +174,8 @@ TEST_CASE("PlanEnumerator", "[unit]")
     expected_plan_table_dpsub.at(Subproblem(14)) = { Subproblem(2), Subproblem(12),  960, 126 };
     expected_plan_table_dpsub.at(Subproblem(15)) = { Subproblem(5), Subproblem(10), 4800, 195 };
 
-    SECTION("DPsub") {
+    SECTION("DPsub")
+    {
         DPsub dp_sub;
         PlanTable plan_table(num_sources);
         /* Initialize `PlanTable` for base case. */
@@ -181,7 +185,8 @@ TEST_CASE("PlanEnumerator", "[unit]")
         REQUIRE(expected_plan_table_dpsub == plan_table);
     }
 
-    SECTION("DPsubOpt") {
+    SECTION("DPsubOpt")
+    {
         DPsubOpt dp_sub_opt;
         PlanTable plan_table(num_sources);
         /* Initialize `PlanTable` for base case. */

@@ -199,7 +199,9 @@ struct GetAttributeIds : ConstASTVisitor
         if (auto p = std::get_if<const Expr*>(&target)) {
             (*this)(**p);
         } else if (std::holds_alternative<const Attribute*>(target)) {
-            schema.add_element({e.table_name.text, e.attr_name.text}, e.type());
+            OperatorSchema::AttributeIdentifier id(e.table_name.text, e.attr_name.text);
+            if (not schema.has(id))
+                schema.add_element({e.table_name.text, e.attr_name.text}, e.type());
         } else {
             unreachable("designator has no target");
         }

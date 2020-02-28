@@ -91,6 +91,7 @@ TEST_CASE("StackMachine", "[core][backend][stackmachine]")
     in.set(2, col_double_val);
     in.set(3, col_decimal_val);
     in.set(4, col_bool_val);
+    in.not_null(5);
     strcpy(reinterpret_cast<char*>(in[5].as_p()), col_char_val);
 
 #define TEST(EXPR, NAME, COND) { \
@@ -107,6 +108,7 @@ TEST_CASE("StackMachine", "[core][backend][stackmachine]")
         if(tup.is_null(0)) { \
             expr->dump(); \
             eval.dump(); \
+            std::cerr << "Got NULL\n"; \
             delete stmt; \
         } \
         REQUIRE(not tup.is_null(0)); \
@@ -114,6 +116,7 @@ TEST_CASE("StackMachine", "[core][backend][stackmachine]")
         if (not (COND)) { \
             expr->dump(); \
             eval.dump(); \
+            std::cerr << "Got " << tup[0] << '\n'; \
             delete stmt; \
         } \
         REQUIRE(COND); \
@@ -143,8 +146,8 @@ TEST_CASE("StackMachine", "[core][backend][stackmachine]")
     TEST("col_bool", "designator/attr/bool", RES == col_bool_val);
     TEST("tbl1.col_bool", "designator/tbl/bool", RES == col_bool_val);
 
-    // TEST("col_char", "designator/attr/char", std::string_view, col_char_val);
-    // TEST("tbl1.col_char", "designator/tbl/char", std::string_view, col_char_val);
+    TEST("col_char", "designator/attr/char", streq(RES.as<char*>(), col_char_val));
+    TEST("tbl1.col_char", "designator/tbl/char", streq(RES.as<char*>(), col_char_val));
 
     /* Binary operators */
     TEST("col_int64_t + 13", "binary/arithmetic/+/int64_t", RES == col_int64_t_val + 13);
@@ -199,17 +202,17 @@ TEST_CASE("StackMachine", "[core][backend][stackmachine]")
     TEST("col_bool != TRUE", "binary/comparison/!=/bool", RES == (col_bool_val != true));
     TEST("col_bool =  TRUE", "binary/comparison/=/bool",  RES == (col_bool_val == true));
 
-    // TEST("col_char <  \"Hello, World!\"", "binary/comparison/</char",  bool, col_char_val <  "Hello, World!");
-    // TEST("col_char <= \"Hello, World!\"", "binary/comparison/<=/char", bool, col_char_val <= "Hello, World!");
-    // TEST("col_char >  \"Hello, World!\"", "binary/comparison/>/char",  bool, col_char_val >  "Hello, World!");
-    // TEST("col_char >= \"Hello, World!\"", "binary/comparison/>=/char", bool, col_char_val >= "Hello, World!");
-    // TEST("col_char != \"Hello, World!\"", "binary/comparison/!=/char", bool, col_char_val != "Hello, World!");
-    // TEST("col_char =  \"Hello, World!\"", "binary/comparison/=/char",  bool, col_char_val == "Hello, World!");
+    TEST("col_char <  \"Hello, World!\"", "binary/comparison/</char",  RES == std::string(col_char_val) <  "Hello, World");
+    TEST("col_char <= \"Hello, World!\"", "binary/comparison/<=/char", RES == std::string(col_char_val) <= "Hello, World");
+    TEST("col_char >  \"Hello, World!\"", "binary/comparison/>/char",  RES == std::string(col_char_val) >  "Hello, World");
+    TEST("col_char >= \"Hello, World!\"", "binary/comparison/>=/char", RES == std::string(col_char_val) >= "Hello, World");
+    TEST("col_char != \"Hello, World!\"", "binary/comparison/!=/char", RES == (std::string(col_char_val) != "Hello, World"));
+    TEST("col_char =  \"Hello, World!\"", "binary/comparison/=/char",  RES == (std::string(col_char_val) == "Hello, World"));
 
     TEST("col_bool AND TRUE", "binary/logical/and/bool", RES == (col_bool_val and true));
     TEST("col_bool OR FALSE", "binary/logical/or/bool",  RES == (col_bool_val or false));
 
-    //TEST("col_char .. \"test\"", "binary/string/../char", std::string_view, col_char_val + "test");
+    TEST("col_char .. \"test\"", "binary/string/../char", std::string(RES.as<char*>()) == "YEStest");
 
     /* Unary operators */
     TEST("+col_int64_t", "unary/arithmetic/+/int64_t", RES == +col_int64_t_val);

@@ -1098,9 +1098,34 @@ Div_d: BINARY(std::divides{}, double);
 Mod_i: BINARY(std::modulus{}, int64_t);
 
 /* Concatenate two strings. */
-Cat_s:
-    POP(); // TODO not yet supported
-    NEXT;
+Cat_s: {
+    bool rhs_is_null = TOP_IS_NULL;
+    Value rhs = TOP;
+    POP();
+    bool lhs_is_null = TOP_IS_NULL;
+    Value lhs = TOP;
+
+    if (rhs_is_null)
+        NEXT; // nothing to be done
+    if (lhs_is_null) {
+        TOP = rhs;
+        TOP_IS_NULL = rhs_is_null;
+        NEXT;
+    }
+
+    insist(not rhs_is_null and not lhs_is_null);
+    char *dest = reinterpret_cast<char*>(p_mem);
+    TOP = dest;
+    /* Append LHS. */
+    for (auto src = lhs.as<char*>(); *src; ++src, ++dest)
+        *dest = *src;
+    /* Append RHS. */
+    for (auto src = rhs.as<char*>(); *src; ++src, ++dest)
+        *dest = *src;
+    *dest++ = 0; // terminating NUL byte
+    p_mem = reinterpret_cast<uint8_t*>(dest);
+}
+NEXT;
 
 
 /*======================================================================================================================

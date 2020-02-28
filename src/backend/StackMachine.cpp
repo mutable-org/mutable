@@ -88,7 +88,7 @@ void StackMachineBuilder::operator()(Const<Designator> &e)
         idx = schema_[{e.table_name.text, e.attr_name.text}].first;
     else
         idx = schema_[{nullptr, e.attr_name.text}].first;
-    insist(idx < schema_.size(), "index out of bounds");
+    insist(idx < schema_.num_entries(), "index out of bounds");
     stack_machine_.emit_Ld_Tup(idx);
 }
 
@@ -147,7 +147,7 @@ void StackMachineBuilder::operator()(Const<FnApplicationExpr> &e)
             oss << e;
             auto name = C.pool(oss.str().c_str());
             auto idx = schema_[{name}].first;
-            insist(idx < schema_.size(), "index out of bounds");
+            insist(idx < schema_.num_entries(), "index out of bounds");
             stack_machine_.emit_Ld_Tup(idx);
             return;
         }

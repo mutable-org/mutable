@@ -222,7 +222,7 @@ void Pipeline::operator()(const JoinOperator &op)
                         std::size_t n = 0; // number of attrs in `first`
                         for (std::size_t i = 0; i != positions.size(); ++i) {
                             auto &buffer = data->buffers[i];
-                            auto n_child = op.child(i)->schema().size(); // number of attributes from this child
+                            auto n_child = op.child(i)->schema().num_entries(); // number of attributes from this child
                             first.insert(buffer[positions[i]], n, n_child);
                             n += n_child;
                         }
@@ -232,7 +232,7 @@ void Pipeline::operator()(const JoinOperator &op)
                             output_it->insert(first, 0, n);
 
                         /* Evaluate the join predicate on the joined tuple and set the block's mask accordingly. */
-                        const auto num_attrs_rhs = op.child(child_id)->schema().size();
+                        const auto num_attrs_rhs = op.child(child_id)->schema().num_entries();
                         for (auto it = pipeline.block_.begin(); it != pipeline.block_.end(); ++it) {
                             auto &rhs = block_[it.index()];
                             it->insert(rhs, n, num_attrs_rhs); // append attrs of tuple from last child
@@ -283,7 +283,7 @@ void Pipeline::operator()(const ProjectionOperator &op)
 
 
     if (op.is_anti()) {
-        const auto num_anti = op.child(0)->schema().size();
+        const auto num_anti = op.child(0)->schema().num_entries();
         const auto num_projections = op.projections().size();
         for (auto it = block_.begin(); it != block_.end(); ++it) {
             auto &out = pipeline.block_[it.index()];
@@ -581,7 +581,7 @@ void Interpreter::operator()(const SortingOperator &op)
                     /* Add offset equal to size of LHS. */
                     ++i;
                     comparator.ops[i] =
-                        static_cast<StackMachine::Opcode>(static_cast<uint8_t>(comparator.ops[i]) + S.size());
+                        static_cast<StackMachine::Opcode>(static_cast<uint8_t>(comparator.ops[i]) + S.num_entries());
                     break;
             }
         }
@@ -616,8 +616,8 @@ void Interpreter::operator()(const SortingOperator &op)
     Tuple res(res_schema);
     std::sort(data->buffer.begin(), data->buffer.end(), [&](const Tuple &first, const Tuple &second) {
         sort_buffer.clear();
-        sort_buffer.insert(first, 0, op.schema().size());
-        sort_buffer.insert(second, op.schema().size(), op.schema().size());
+        sort_buffer.insert(first, 0, op.schema().num_entries());
+        sort_buffer.insert(second, op.schema().num_entries(), op.schema().num_entries());
         comparator(&res, sort_buffer);
         insist(not res.is_null(0));
         return res[0].as_i() < 0;

@@ -248,7 +248,7 @@ struct ProjectionOperator : Producer, Consumer
             Schema S;
             for (auto c : children())
                 S += c->schema();
-            for (auto idx = schema().size() - projections_.size(); idx != schema().size(); ++idx) {
+            for (auto idx = schema().num_entries() - projections_.size(); idx != schema().num_entries(); ++idx) {
                 auto &e = schema()[idx];
                 S.add(e.id, e.type);
             }

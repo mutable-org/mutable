@@ -351,7 +351,7 @@ WasmModule WasmCodeGen::compile(const Operator &op)
     codegen(op); // emit code
 
     /*----- Compute number of output records written. ----------------------------------------------------------------*/
-    auto num_attrs = op.schema().size();
+    auto num_attrs = op.schema().num_entries();
     auto b_diff = BinaryenBinary(
         /* module= */ module.ref(),
         /* op=     */ BinaryenSubInt32(),

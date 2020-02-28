@@ -60,15 +60,15 @@ struct Schema
     public:
     const std::vector<entry_type> & entries() const { return entries_; }
 
-    /** Returns the number of entries in this `Schema`. */
-    auto size() const { return entries_.size(); }
-
     auto begin() { return entries_.begin(); }
     auto end()   { return entries_.end(); }
     auto begin() const { return entries_.cbegin(); }
     auto end()   const { return entries_.cend(); }
     auto cbegin() const { return entries_.cbegin(); }
     auto cend()   const { return entries_.cend(); }
+
+    /** Returns the number of entries in this `Schema`. */
+    auto num_entries() const { return entries_.size(); }
 
     /** Returns an iterator to the entry with the given `Identifier` `id`, or `end()` if no such entry exists.  */
     decltype(entries_)::iterator find(Identifier id) {

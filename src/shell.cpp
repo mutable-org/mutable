@@ -120,7 +120,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             if (get_options().graphdot) {
                 DotTool dot(diag);
                 query_graph->dot(dot.stream());
-                dot.show("graph", is_stdin);
+                dot.show("graph", is_stdin, "fdp");
             }
 
             DPsizeOpt dp_size_opt;

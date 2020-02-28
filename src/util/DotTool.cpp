@@ -60,18 +60,18 @@ DotTool::DotTool(Diagnostic &diag)
 #endif
 }
 
-void DotTool::render_to_pdf(const char *path_to_pdf)
+void DotTool::render_to_pdf(const char *path_to_pdf, const char *algo)
 {
     /*----- Render the dot graph with graphviz. ----------------------------------------------------------------------*/
     auto dotstr = stream_.str();
     Agraph_t *G = notnull(sym_agmemread(dotstr.c_str()));
-    sym_gvLayout(gvc, G, "dot");
+    sym_gvLayout(gvc, G, algo);
     sym_gvRenderFilename(gvc, G, "pdf", path_to_pdf);
     sym_gvFreeLayout(gvc, G);
     sym_agclose(G);
 }
 
-void DotTool::show(const char *name, bool interactive)
+void DotTool::show(const char *name, bool interactive, const char *algo)
 {
     std::ostringstream oss;
     oss << name << '_';
@@ -80,7 +80,7 @@ void DotTool::show(const char *name, bool interactive)
 #endif
     if (libgraphviz) {
         oss << ".pdf";
-        render_to_pdf(oss.str().c_str());
+        render_to_pdf(oss.str().c_str(), algo);
         if (interactive) {
 #if __linux
             exec("/usr/bin/setsid", { "--fork", "xdg-open", oss.str().c_str() });

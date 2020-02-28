@@ -8,6 +8,8 @@
  * the dot output directly to PDF. */
 struct DotTool
 {
+    static constexpr const char *DEFAULT_LAYOUT_ALGORITHM = "dot";
+
     db::Diagnostic &diag;
     private:
     std::stringstream stream_;
@@ -22,6 +24,6 @@ struct DotTool
 
     friend std::ostream & operator<<(std::ostream &out, const DotTool &dot) { return out << dot.stream_.rdbuf(); }
 
-    void render_to_pdf(const char *path_to_pdf);
-    void show(const char *name, bool interactive);
+    void render_to_pdf(const char *path_to_pdf, const char *algo = DEFAULT_LAYOUT_ALGORITHM);
+    void show(const char *name, bool interactive, const char *algo = DEFAULT_LAYOUT_ALGORITHM);
 };

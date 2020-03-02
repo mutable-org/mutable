@@ -180,9 +180,9 @@ struct Tuple
 
     private:
     Value *values_ = nullptr; ///< the `Value`s in this `Tuple`
-    SmallBitset null_mask_; ///< a bit mask for the `NULL` values; `1` represents `NULL`
+    SmallBitset null_mask_ = SmallBitset(-1UL); ///< a bit mask for the `NULL` values; `1` represents `NULL`
 #ifndef NDEBUG
-    std::size_t num_values_; ///< the number of `Value`s in this `Tuple`
+    std::size_t num_values_ = 0; ///< the number of `Value`s in this `Tuple`
 #define INBOUNDS(VAR) insist((VAR) < num_values_, "index out of bounds")
 #else
 #define INBOUNDS(VAR)

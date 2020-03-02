@@ -79,37 +79,45 @@ struct LimitData : OperatorData
 struct GroupingData : OperatorData
 {
     Pipeline pipeline;
-    StackMachine keys;
-    Schema key_schema;
-    Schema agg_schema;
-
+    StackMachine eval_keys; ///< extracts the key from a tuple
+    Schema key_schema; ///< the schema of a key
     std::vector<StackMachine> eval_args; ///< StackMachines to evaluate the args of aggregations
     std::vector<Tuple> args; ///< tuple used to hold the evaluated args
 
     GroupingData(const GroupingOperator &op)
         : pipeline(op.schema())
-        , keys(op.child(0)->schema())
+        , eval_keys(op.child(0)->schema())
     {
-        std::size_t key_idx = 0;
-        for (auto k : op.group_by()) {
-            keys.emit(*k);
-            keys.emit_Emit(key_idx++, k->type());
-            key_schema.add({"k"}, k->type());
+        std::ostringstream oss;
+
+        /* Compile the stack machine to compute the key and compute the key schema. */
+        {
+            std::size_t key_idx = 0;
+            for (auto k : op.group_by()) {
+                oss.str("");
+                oss << "key_{" << *k << '}';
+                key_schema.add({oss.str().c_str()}, k->type());
+
+                eval_keys.emit(*k);
+                eval_keys.emit_Emit(key_idx++, k->type());
+            }
         }
 
         /* Compile a StackMachine to evaluate the arguments of each aggregation function.  For example, for the
          * aggregation `AVG(price * tax)`, the compiled StackMachine evaluates `price * tax`. */
         for (auto agg : op.aggregates()) {
-            agg_schema.add({"agg"}, agg->type());
             auto fe = as<const FnApplicationExpr>(agg);
-
             std::size_t arg_idx = 0;
+            Schema S;
             StackMachine sm(op.child(0)->schema());
             for (auto arg : fe->args) {
+                oss.str("");
+                oss << "arg_{" << *arg << '}';
+                S.add({oss.str().c_str()}, arg->type());
+
                 sm.emit(*arg);
                 sm.emit_Emit(arg_idx++, arg->type());
             }
-            Schema S;
             for (auto ty : sm.schema_out())
                 S.add({"arg"}, ty);
             eval_args.emplace_back(std::move(sm));
@@ -120,8 +128,48 @@ struct GroupingData : OperatorData
 
 struct HashBasedGroupingData : GroupingData
 {
-    std::unordered_map<Tuple, Tuple> groups;
-    HashBasedGroupingData(const GroupingOperator &op) : GroupingData(op) { }
+    /** Callable to compute the hash of the keys of a tuple. */
+    struct hasher
+    {
+        std::size_t key_size;
+
+        hasher(std::size_t key_size) : key_size(key_size) { }
+
+        uint64_t operator()(const Tuple &tup) const {
+            std::hash<Value> h;
+            uint64_t hash = 0xcbf29ce484222325;
+            for (std::size_t i = 0; i != key_size; ++i) {
+                hash ^= tup.is_null(i) ? 0 : h(tup[i]);
+                hash *= 1099511628211;
+            }
+            return hash;
+        }
+    };
+
+    /** Callable to compare two tuples by their keys. */
+    struct equals
+    {
+        std::size_t key_size;
+
+        equals(std::size_t key_size) : key_size(key_size) { }
+
+        uint64_t operator()(const Tuple &first, const Tuple &second) const {
+            for (std::size_t i = 0; i != key_size; ++i) {
+                if (first.is_null(i) != second.is_null(i)) return false;
+                if (not first.is_null(i))
+                    if (first.get(i) != second.get(i)) return false;
+            }
+            return true;
+        }
+    };
+
+    /** A set of tuples, where the key part is used for hasing and comparison. */
+    std::unordered_set<Tuple, hasher, equals> groups;
+
+    HashBasedGroupingData(const GroupingOperator &op)
+        : GroupingData(op)
+        , groups(1024, hasher(key_schema.num_entries()), equals(key_schema.num_entries()))
+    { }
 };
 
 struct SortingData : OperatorData
@@ -320,12 +368,17 @@ void Pipeline::operator()(const LimitOperator &op)
 
 void Pipeline::operator()(const GroupingOperator &op)
 {
-    auto perform_aggregation = [&](Tuple &aggregates, Tuple &tuple, GroupingData &data) {
+    auto perform_aggregation = [&](Tuple &group, Tuple &tuple, GroupingData &data) {
+        const std::size_t key_size = op.group_by().size();
+
         /* Add this tuple to its group by computing the aggregates. */
         for (std::size_t i = 0, end = op.aggregates().size(); i != end; ++i) {
             auto &eval_args = data.eval_args[i];
             auto &args = data.args[i];
             eval_args(&args, tuple);
+
+            bool is_null = group.is_null(key_size + i);
+            auto &val = group[key_size + i];
 
             auto fe = as<const FnApplicationExpr>(op.aggregates()[i]);
             auto ty = fe->type();
@@ -339,64 +392,64 @@ void Pipeline::operator()(const GroupingOperator &op)
                     unreachable("UDFs not yet supported");
 
                 case Function::FN_COUNT:
-                    if (aggregates.is_null(i))
-                        aggregates.set(i, 0); // initialize
+                    if (is_null)
+                        group.set(key_size + i, 0); // initialize
                     if (fe->args.size() == 0) { // COUNT(*)
-                        aggregates[i].as_i() += 1;
+                        val.as_i() += 1;
                     } else { // COUNT(x) aka. count not NULL
-                        aggregates[i].as_i() += not args.is_null(0);
+                        val.as_i() += not args.is_null(0);
                     }
                     break;
 
                 case Function::FN_SUM: {
                     auto n = as<const Numeric>(ty);
-                    if (aggregates.is_null(i)) {
+                    if (is_null) {
                         if (n->is_floating_point())
-                            aggregates.set(i, 0.); // double precision
+                            group.set(key_size + i, 0.); // double precision
                         else
-                            aggregates.set(i, 0); // int
+                            group.set(key_size + i, 0); // int
                     }
                     if (args.is_null(0)) continue; // skip NULL
                     if (n->is_floating_point())
-                        aggregates[i].as_d() += args[0].as_d();
+                        val.as_d() += args[0].as_d();
                     else
-                        aggregates[i].as_i() += args[0].as_i();
+                        val.as_i() += args[0].as_i();
                     break;
                 }
 
                 case Function::FN_MIN: {
                     using std::min;
                     if (args.is_null(0)) continue; // skip NULL
-                    if (aggregates.is_null(i)) {
-                        aggregates.set(i, args[0]);
+                    if (is_null) {
+                        group.set(key_size + i, args[0]);
                         continue;
                     }
 
                     auto n = as<const Numeric>(ty);
                     if (n->is_float())
-                        aggregates[i].as_f() = min(aggregates[i].as_f(), args[0].as_f());
+                        val.as_f() = min(val.as_f(), args[0].as_f());
                     else if (n->is_double())
-                        aggregates[i].as_d() = min(aggregates[i].as_d(), args[0].as_d());
+                        val.as_d() = min(val.as_d(), args[0].as_d());
                     else
-                        aggregates[i].as_i() = min(aggregates[i].as_i(), args[0].as_i());
+                        val.as_i() = min(val.as_i(), args[0].as_i());
                     break;
                 }
 
                 case Function::FN_MAX: {
                     using std::max;
                     if (args.is_null(0)) continue; // skip NULL
-                    if (aggregates.is_null(i)) {
-                        aggregates.set(i, args[0]);
+                    if (is_null) {
+                        group.set(key_size + i, args[0]);
                         continue;
                     }
 
                     auto n = as<const Numeric>(ty);
                     if (n->is_float())
-                        aggregates[i].as_f() = max(aggregates[i].as_f(), args[0].as_f());
+                        val.as_f() = max(val.as_f(), args[0].as_f());
                     else if (n->is_double())
-                        aggregates[i].as_d() = max(aggregates[i].as_d(), args[0].as_d());
+                        val.as_d() = max(val.as_d(), args[0].as_d());
                     else
-                        aggregates[i].as_i() = max(aggregates[i].as_i(), args[0].as_i());
+                        val.as_i() = max(val.as_i(), args[0].as_i());
                     break;
                 }
             }
@@ -413,16 +466,17 @@ void Pipeline::operator()(const GroupingOperator &op)
             auto data = as<HashBasedGroupingData>(op.data());
             auto &groups = data->groups;
 
+            Tuple g(op.schema());
             for (auto &t : block_) {
-                Tuple key(data->key_schema);
-                data->keys(&key, t);
-                auto it = groups.find(key);
+                data->eval_keys(&g, t);
+                auto it = groups.find(g);
                 if (it == groups.end()) {
-                    /* Initialize the group's aggregate to NULL.  This will be overwritten by the neutral element
-                     * w.r.t. the aggregation function. */
-                    it = groups.emplace_hint(it, std::move(key), Tuple(data->agg_schema));
+                    /* Initialize the group's aggregate to NULL.  This will be overwritten by the neutral element w.r.t.
+                     * the aggregation function. */
+                    it = groups.emplace_hint(it, std::move(g));
+                    g = Tuple(op.schema());
                 }
-                perform_aggregation(it->second, t, *data);
+                perform_aggregation(const_cast<Tuple&>(*it), t, *data);
             }
             break;
         }
@@ -523,6 +577,7 @@ void Interpreter::operator()(const GroupingOperator &op)
         case GroupingOperator::G_Hashing: {
             auto data = new HashBasedGroupingData(op);
             op.data(data);
+
             op.child(0)->accept(*this);
 
             const auto num_groups = data->groups.size();
@@ -532,20 +587,16 @@ void Interpreter::operator()(const GroupingOperator &op)
                 data->pipeline.block_.clear();
                 data->pipeline.block_.fill();
                 for (std::size_t j = 0; j != data->pipeline.block_.capacity(); ++j) {
-                    auto &t = data->pipeline.block_[j];
-                    auto &g = *it++;
-                    t.insert(g.first, 0, op.group_by().size());
-                    t.insert(g.second, op.group_by().size(), op.aggregates().size());
+                    auto node = data->groups.extract(it++);
+                    swap(data->pipeline.block_[j], node.value());
                 }
                 data->pipeline.push(parent);
             }
             data->pipeline.block_.clear();
             data->pipeline.block_.mask((1UL << remainder) - 1UL);
             for (std::size_t i = 0; i != remainder; ++i) {
-                auto &t = data->pipeline.block_[i];
-                auto &g = *it++;
-                t.insert(g.first, 0, op.group_by().size());
-                t.insert(g.second, op.group_by().size(), op.aggregates().size());
+                auto node = data->groups.extract(it++);
+                swap(data->pipeline.block_[i], node.value());
             }
             data->pipeline.push(parent);
 

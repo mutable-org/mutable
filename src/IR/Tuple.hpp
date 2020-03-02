@@ -288,8 +288,10 @@ struct Tuple
     bool operator==(const Tuple &other) const {
         if (this->null_mask_ != other.null_mask_) return false;
         SmallBitset alive(~null_mask_);
-        for (auto idx : alive)
-            if (this->get(idx) != other.get(idx)) return false;
+        for (auto idx : alive) {
+            if (this->get(idx) != other.get(idx))
+                return false;
+        }
         return true;
     }
     bool operator!=(const Tuple &other) const { return not operator==(other); }

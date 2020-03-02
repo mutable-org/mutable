@@ -565,7 +565,7 @@ void StackMachine::emit_Emit(std::size_t index, const Type *ty)
     }
 }
 
-void StackMachine::operator()(Tuple *out, const Tuple &in)
+void StackMachine::operator()(Tuple *out, const Tuple &in) const
 {
     static const void *labels[] = {
 #define DB_OPCODE(CODE, ...) && CODE,
@@ -573,7 +573,7 @@ void StackMachine::operator()(Tuple *out, const Tuple &in)
 #undef DB_OPCODE
     };
 
-    emit_Stop();
+    const_cast<StackMachine*>(this)->emit_Stop();
     if (not values_) {
         values_ = new Value[required_stack_size()];
         null_bits_ = new bool[required_stack_size()]();
@@ -709,7 +709,7 @@ NEXT;
 Upd_Ctx: {
     std::size_t idx = static_cast<std::size_t>(*op_++);
     insist(idx < context_.size(), "index out of bounds");
-    context_[idx] = TOP;
+    const_cast<StackMachine*>(this)->context_[idx] = TOP;
 }
 NEXT;
 
@@ -1224,7 +1224,7 @@ Cast_d_f: UNARY((double), float);
 #undef UNARY
 
 Stop:
-    ops.pop_back(); // terminating Stop
+    const_cast<StackMachine*>(this)->ops.pop_back(); // terminating Stop
 
 #if 0
     for (std::size_t i = 0; i != top_; ++i) {

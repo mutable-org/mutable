@@ -53,11 +53,11 @@ struct StackMachine
     int64_t current_stack_size_ = 0; ///< the "current" stack size; i.e. after the last operation is executed
 
     /*----- Fields capturing the internal state during execution. ----------------------------------------------------*/
-    Value *values_ = nullptr; ///< array of values used as a stack
-    bool *null_bits_ = nullptr; ///< array of NULL bits used as a stack
-    decltype(ops)::const_iterator op_; ///< the next operation to execute
-    std::size_t top_ = 0; ///< the top of the stack
-    uint8_t memory_[SIZE_OF_MEMORY]; ///< memory usable by the stack machine, e.g. to work on BLOBs
+    mutable Value *values_ = nullptr; ///< array of values used as a stack
+    mutable bool *null_bits_ = nullptr; ///< array of NULL bits used as a stack
+    mutable decltype(ops)::const_iterator op_; ///< the next operation to execute
+    mutable std::size_t top_ = 0; ///< the top of the stack
+    mutable uint8_t memory_[SIZE_OF_MEMORY]; ///< memory usable by the stack machine, e.g. to work on BLOBs
 
     public:
     /** Create a `StackMachine` that does not accept input. */
@@ -173,7 +173,7 @@ struct StackMachine
 
     /** Evaluate this `StackMachine` given the input `Tuple` `in` and producing the results in the output `Tuple`
      * referenced by `out`. */
-    void operator()(Tuple *out, const Tuple &in = Tuple());
+    void operator()(Tuple *out, const Tuple &in = Tuple()) const;
 
     void dump(std::ostream &out) const;
     void dump() const;

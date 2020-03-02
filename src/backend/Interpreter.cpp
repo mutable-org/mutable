@@ -33,8 +33,8 @@ struct ProjectionData : OperatorData
     ProjectionData(const ProjectionOperator &op)
         : pipeline(op.schema())
         , projections(op.children().size() ? StackMachine(op.child(0)->schema()) : StackMachine(Schema()))
+        , res(op.schema())
     {
-        res = Tuple(op.schema());
         std::size_t out_idx = 0;
         for (auto &p : op.projections()) {
             projections.emit(*p.first);
@@ -62,11 +62,8 @@ struct NestedLoopsJoinData : JoinData
         : JoinData(op)
         , predicate(op.schema(), op.predicate())
         , buffers(new buffer_type[op.children().size()])
-    {
-        Schema S;
-        S.add({"result"}, Type::Get_Boolean(Type::TY_Vector));
-        res = Tuple(S);
-    }
+        , res({ Type::Get_Boolean(Type::TY_Vector) })
+    { }
 
     ~NestedLoopsJoinData() { delete[] buffers; }
 };
@@ -80,7 +77,6 @@ struct GroupingData : OperatorData
 {
     Pipeline pipeline;
     StackMachine eval_keys; ///< extracts the key from a tuple
-    Schema key_schema; ///< the schema of a key
     std::vector<StackMachine> eval_args; ///< StackMachines to evaluate the args of aggregations
     std::vector<Tuple> args; ///< tuple used to hold the evaluated args
 
@@ -94,10 +90,6 @@ struct GroupingData : OperatorData
         {
             std::size_t key_idx = 0;
             for (auto k : op.group_by()) {
-                oss.str("");
-                oss << "key_{" << *k << '}';
-                key_schema.add({oss.str().c_str()}, k->type());
-
                 eval_keys.emit(*k);
                 eval_keys.emit_Emit(key_idx++, k->type());
             }
@@ -108,20 +100,13 @@ struct GroupingData : OperatorData
         for (auto agg : op.aggregates()) {
             auto fe = as<const FnApplicationExpr>(agg);
             std::size_t arg_idx = 0;
-            Schema S;
             StackMachine sm(op.child(0)->schema());
             for (auto arg : fe->args) {
-                oss.str("");
-                oss << "arg_{" << *arg << '}';
-                S.add({oss.str().c_str()}, arg->type());
-
                 sm.emit(*arg);
                 sm.emit_Emit(arg_idx++, arg->type());
             }
-            for (auto ty : sm.schema_out())
-                S.add({"arg"}, ty);
+            args.emplace_back(Tuple(sm.schema_out()));
             eval_args.emplace_back(std::move(sm));
-            args.emplace_back(Tuple(S));
         }
     }
 };
@@ -168,7 +153,7 @@ struct HashBasedGroupingData : GroupingData
 
     HashBasedGroupingData(const GroupingOperator &op)
         : GroupingData(op)
-        , groups(1024, hasher(key_schema.num_entries()), equals(key_schema.num_entries()))
+        , groups(1024, hasher(op.group_by().size()), equals(op.group_by().size()))
     { }
 };
 
@@ -183,11 +168,11 @@ struct FilterData : OperatorData
 {
     StackMachine filter;
     Tuple res;
-    FilterData(const FilterOperator &op) : filter(op.child(0)->schema(), op.filter()) {
-        Schema S;
-        S.add({"result"}, Type::Get_Boolean(Type::TY_Vector));
-        res = Tuple(S);
-    }
+
+    FilterData(const FilterOperator &op)
+        : filter(op.child(0)->schema(), op.filter())
+        , res({ Type::Get_Boolean(Type::TY_Vector) })
+    { }
 };
 
 
@@ -662,9 +647,7 @@ void Interpreter::operator()(const SortingOperator &op)
     sort_schema += op.schema();
     sort_schema += op.schema();
     Tuple sort_buffer(sort_schema);
-    Schema res_schema;
-    res_schema.add({"result"}, Type::Get_Boolean(Type::TY_Vector));
-    Tuple res(res_schema);
+    Tuple res({ Type::Get_Integer(Type::TY_Vector, 4) });
     std::sort(data->buffer.begin(), data->buffer.end(), [&](const Tuple &first, const Tuple &second) {
         sort_buffer.clear();
         sort_buffer.insert(first, 0, op.schema().num_entries());

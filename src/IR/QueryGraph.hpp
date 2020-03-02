@@ -209,8 +209,7 @@ struct AdjacencyMatrix
         return R_new;
     }
 
-    /** Computes the neighbors of `S`, i.e.\ all nodes that are connected to `S` via a single edge.  Nodes from `S` are
-     * not part of the neighborhood. */
+    /** Computes the neighbors of `S`.  Nodes from `S` are not part of the neighborhood. */
     SmallBitset neighbors(SmallBitset S) const {
         SmallBitset neighbors;
         for (auto it : S)

@@ -310,8 +310,8 @@ struct hash<db::Value>
     uint64_t operator()(db::Value val) const {
         /* Inspired by FNV-1a 64 bit. */
         uint64_t hash = 0xcbf29ce484222325;
-        for (uint64_t *p = reinterpret_cast<uint64_t*>(&val.val_), *end = p + sizeof(val.val_);
-             p != end; p += sizeof(uint64_t))
+        for (uint64_t *p = reinterpret_cast<uint64_t*>(&val.val_), *end = p + sizeof(val.val_) / sizeof(uint64_t);
+             p != end; ++p)
         {
             hash ^= *p;
             hash *= 1099511628211;

@@ -2,7 +2,7 @@ description: Compare the precision of floats
 db: ours
 query: |
     SELECT R.rfloat * S.rfloat FROM R, S WHERE R.key = S.fkey AND R.key < 5;
-required: YES
+required: NO
 
 stages:
     lexer:

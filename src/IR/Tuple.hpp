@@ -192,6 +192,7 @@ struct Tuple
     /** Create a fresh `Tuple` with enough memory allocated to store all attributes of `S`.  This includes allocation
      * of memory to store character sequences within the `Tuple`. */
     explicit Tuple(const Schema &S);
+    explicit Tuple(std::vector<const Type*> types);
 
     Tuple() { }
     Tuple(const Tuple&) = delete;

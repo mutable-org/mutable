@@ -90,6 +90,27 @@ Tuple::Tuple(const Schema &S)
     clear();
 }
 
+Tuple::Tuple(std::vector<const Type*> types)
+#ifndef NDEBUG
+    : num_values_(types.size())
+#endif
+{
+    std::size_t additional_bytes = 0;
+    for (auto &ty : types) {
+        if (auto cs = cast<const CharacterSequence>(ty))
+            additional_bytes += cs->size() / 8;
+    }
+    values_ = (Value*) malloc(types.size() * sizeof(Value) + additional_bytes);
+    uint8_t *p = reinterpret_cast<uint8_t*>(values_) + types.size() * sizeof(Value);
+    for (std::size_t i = 0; i != types.size(); ++i) {
+        if (auto cs = cast<const CharacterSequence>(types[i])) {
+            values_[i] = p;
+            p += cs->size() / 8;
+        }
+    }
+    clear();
+}
+
 Tuple Tuple::clone(const Schema &S) const
 {
     Tuple cpy(S);

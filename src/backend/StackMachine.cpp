@@ -1184,8 +1184,9 @@ GE_s: BINARY(0 <= strcmp, char*);
     bool is_rhs_null = TOP_IS_NULL; \
     POP(); \
     TYPE lhs = TOP.as<TYPE>(); \
-    TOP = lhs == rhs ? 0 : (lhs < rhs ? int64_t(-1) : int64_t(1)); \
-    TOP_IS_NULL = TOP_IS_NULL | is_rhs_null; \
+    bool is_lhs_null = TOP_IS_NULL; \
+    TOP = int64_t(lhs >= rhs) - int64_t(lhs <= rhs); \
+    TOP_IS_NULL = is_lhs_null | is_rhs_null; \
 } \
 NEXT;
 

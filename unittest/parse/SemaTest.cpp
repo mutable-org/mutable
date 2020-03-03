@@ -129,6 +129,19 @@ TEST_CASE("Sema/Expressions", "[core][parse][sema]")
         { "\"text\" = TRUE", Type::Get_Error() },
         { "42 = \"text\"", Type::Get_Error() },
         { "\"text\" = 42", Type::Get_Error() },
+
+        /* string concatenation */
+        { "\"text\" .. \"text\"", Type::Get_Char(Type::TY_Scalar, 8) },
+
+        { "42 .. 42", Type::Get_Error() },
+        { "3.14 .. 3.14", Type::Get_Error() },
+        { "TRUE .. FALSE", Type::Get_Error() },
+        { "\"text\" .. 42", Type::Get_Error() },
+        { "\"text\" .. 3.14", Type::Get_Error() },
+        { "\"text\" .. TRUE", Type::Get_Error() },
+        { "42 .. \"text\"", Type::Get_Error() },
+        { "3.14 .. \"text\"", Type::Get_Error() },
+        { "TRUE .. \"text\"", Type::Get_Error() },
     };
 
     for (auto e : exprs) {

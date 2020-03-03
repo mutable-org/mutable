@@ -37,11 +37,13 @@ struct db::StackMachineBuilder : ConstASTVisitor
     private:
     StackMachine &stack_machine_;
     const Schema &schema_;
+    const std::size_t tuple_id;
 
     public:
-    StackMachineBuilder(StackMachine &stack_machine, const Schema &in_schema, const Expr &expr)
+    StackMachineBuilder(StackMachine &stack_machine, const Schema &in_schema, const Expr &expr, std::size_t tuple_id)
         : stack_machine_(stack_machine)
         , schema_(in_schema)
+        , tuple_id(tuple_id)
     {
         (*this)(expr); // compute the command sequence
     }
@@ -89,7 +91,7 @@ void StackMachineBuilder::operator()(Const<Designator> &e)
     else
         idx = schema_[{nullptr, e.attr_name.text}].first;
     insist(idx < schema_.num_entries(), "index out of bounds");
-    stack_machine_.emit_Ld_Tup(idx);
+    stack_machine_.emit_Ld_Tup(tuple_id, idx);
 }
 
 void StackMachineBuilder::operator()(Const<Constant> &e) {
@@ -148,7 +150,7 @@ void StackMachineBuilder::operator()(Const<FnApplicationExpr> &e)
             auto name = C.pool(oss.str().c_str());
             auto idx = schema_[{name}].first;
             insist(idx < schema_.num_entries(), "index out of bounds");
-            stack_machine_.emit_Ld_Tup(idx);
+            stack_machine_.emit_Ld_Tup(tuple_id, idx);
             return;
         }
     }
@@ -511,30 +513,30 @@ const std::unordered_map<std::string, StackMachine::Opcode> StackMachine::STR_TO
 StackMachine::StackMachine(Schema in_schema, const Expr &expr)
     : in_schema(in_schema)
 {
-    emit(expr);
-    emit_Emit(0, expr.type());
+    emit(expr, 1);
+    // TODO emit St
 }
 
 StackMachine::StackMachine(Schema in_schema, const cnf::CNF &cnf)
     : in_schema(in_schema)
 {
     emit(cnf);
-    emit_Emit(0, Type::Get_Boolean(Type::TY_Vector));
+    // TODO emit St
 }
 
-void StackMachine::emit(const Expr &expr)
+void StackMachine::emit(const Expr &expr, std::size_t tuple_id)
 {
-    StackMachineBuilder Builder(*this, in_schema, expr); // compute the command sequence for this stack machine
+    StackMachineBuilder Builder(*this, in_schema, expr, tuple_id); // compute the command sequence for this stack machine
 }
 
-void StackMachine::emit(const cnf::CNF &cnf)
+void StackMachine::emit(const cnf::CNF &cnf, std::size_t tuple_id)
 {
     /* Compile filter into stack machine.  TODO: short-circuit evaluation. */
     for (auto clause_it = cnf.cbegin(); clause_it != cnf.cend(); ++clause_it) {
         auto &C = *clause_it;
         for (auto pred_it = C.cbegin(); pred_it != C.cend(); ++pred_it) {
             auto &P = *pred_it;
-            emit(*P.expr()); // emit code for predicate
+            emit(*P.expr(), tuple_id); // emit code for predicate
             if (P.negative())
                 ops.push_back(StackMachine::Opcode::Not_b); // negate if negative
             if (pred_it != C.cbegin())
@@ -548,24 +550,21 @@ void StackMachine::emit(const cnf::CNF &cnf)
     out_schema.push_back(Type::Get_Boolean(Type::TY_Vector));
 }
 
-void StackMachine::emit_Emit(std::size_t index, const Type *ty)
+void StackMachine::emit_St_Tup(std::size_t tuple_id, std::size_t index, const Type *ty)
 {
-    if (index >= out_schema.size())
-        out_schema.resize(index + 1, Type::Get_Error());
-    out_schema[index] = ty;
-
     if (ty->is_none()) {
-        emit_Emit_Null(index);
+        emit_St_Tup_Null(tuple_id, index);
     } else {
         std::ostringstream oss;
-        oss << "Emit" << tystr(as<const PrimitiveType>(ty));
+        oss << "St_Tup" << tystr(as<const PrimitiveType>(ty));
         auto opcode = StackMachine::STR_TO_OPCODE.at(oss.str());
         emit(opcode);
+        emit(static_cast<Opcode>(tuple_id));
         emit(static_cast<Opcode>(index));
     }
 }
 
-void StackMachine::operator()(Tuple *out, const Tuple &in) const
+void StackMachine::operator()(Tuple **tuples) const
 {
     static const void *labels[] = {
 #define DB_OPCODE(CODE, ...) && CODE,
@@ -603,42 +602,25 @@ void StackMachine::operator()(Tuple *out, const Tuple &in) const
 
 Stop_Z: {
     insist(top_ >= 1);
-    if (TOP.as_i() == 0) {
-        top_ = 1;
-        TOP = 0;
-        goto Stop; // stop evaluation on ZERO
-    }
+    if (TOP.as_i() == 0) goto Stop; // stop evaluation on ZERO
 }
 NEXT;
 
 Stop_NZ: {
     insist(top_ >= 1);
-    if (TOP.as_i() != 0) {
-        auto val = TOP.as_i();
-        top_ = 1;
-        TOP = val;
-        goto Stop; // stop evaluation on NOT ZERO
-    }
+    if (TOP.as_i() != 0) goto Stop; // stop evaluation on NOT ZERO
 }
 NEXT;
 
 Stop_False: {
     insist(top_ >= 1);
-    if (not TOP.as_b()) {
-        top_ = 1;
-        TOP = false;
-        goto Stop; // stop evaluation on FALSE
-    }
+    if (not TOP.as_b()) goto Stop; // stop evaluation on FALSE
 }
 NEXT;
 
 Stop_True: {
     insist(top_ >= 1);
-    if (TOP.as_b()) {
-        top_ = 1;
-        TOP = true;
-        goto Stop; // stop evaluation on TRUE
-    }
+    if (TOP.as_b()) goto Stop; // stop evaluation on TRUE
 }
 NEXT;
 
@@ -657,9 +639,55 @@ Push_Null:
 
 
 /*======================================================================================================================
+ * Tuple Access Operations
+ *====================================================================================================================*/
+
+Ld_Tup: {
+    std::size_t tuple_id = std::size_t(*op_++);
+    std::size_t index = std::size_t(*op_++);
+    auto &t = *tuples[tuple_id];
+    // if (not t.is_null(index))
+    //     std::cerr << "Loading Value " << t[index] << " from Tuple " << tuple_id << std::endl;
+    // else
+    //     std::cerr << "Loading NULL from index " << index << " of Tuple " << tuple_id << std::endl;
+    PUSH(t[index], t.is_null(index));
+}
+NEXT;
+
+St_Tup_Null: {
+    std::size_t tuple_id = std::size_t(*op_++);
+    std::size_t index = std::size_t(*op_++);
+    auto &t = *tuples[tuple_id];
+    t.null(index);
+}
+NEXT;
+
+St_Tup_b:
+St_Tup_i:
+St_Tup_f:
+St_Tup_d: {
+    std::size_t tuple_id = std::size_t(*op_++);
+    std::size_t index = std::size_t(*op_++);
+    auto &t = *tuples[tuple_id];
+    t.set(index, TOP, TOP_IS_NULL);
+}
+NEXT;
+
+St_Tup_s: {
+    std::size_t tuple_id = std::size_t(*op_++);
+    std::size_t index = std::size_t(*op_++);
+    auto &t = *tuples[tuple_id];
+    t.not_null(index);
+    strcpy(reinterpret_cast<char*>(t[index].as_p()), reinterpret_cast<char*>(TOP.as_p()));
+}
+NEXT;
+
+
+/*======================================================================================================================
  * Output operations
  *====================================================================================================================*/
 
+#if 0
 Emit_Null: {
     std::size_t idx = std::size_t(*op_++);
     out->null(idx);
@@ -697,6 +725,7 @@ Ld_Tup: {
     PUSH(in[idx], in.is_null(idx));
 }
 NEXT;
+#endif
 
 /* Load a value from the context to the top of the value_stack_. */
 Ld_Ctx: {
@@ -1269,17 +1298,24 @@ void StackMachine::dump(std::ostream &out) const
         out << "[0x" << std::hex << std::setfill('0') << std::setw(4) << i << std::dec << "]: "
             << StackMachine::OPCODE_TO_STR[static_cast<std::size_t>(opc)];
         switch (opc) {
-            /* Opcodes with *one* operand. */
+            /* Opcodes with *two* operands. */
             case Opcode::Ld_Tup:
-            case Opcode::Ld_Ctx:
-            case Opcode::Upd_Ctx:
-            case Opcode::Emit_i:
-            case Opcode::Emit_f:
-            case Opcode::Emit_d:
-            case Opcode::Emit_b:
-            case Opcode::Emit_s:
+            case Opcode::St_Tup_i:
+            case Opcode::St_Tup_f:
+            case Opcode::St_Tup_d:
+            case Opcode::St_Tup_s:
+            case Opcode::St_Tup_b:
                 ++i;
                 out << ' ' << static_cast<int64_t>(ops[i]);
+                /* fall through */
+
+            /* Opcodes with *one* operand. */
+            case Opcode::Ld_Ctx:
+            case Opcode::Upd_Ctx:
+                ++i;
+                out << ' ' << static_cast<int64_t>(ops[i]);
+                /* fall through */
+
             default:;
         }
         out << '\n';

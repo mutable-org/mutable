@@ -31,32 +31,36 @@ DB_OPCODE(Push_Null, +1)
 
 
 /*======================================================================================================================
- * Output operations
+ * Tuple Access Operations
  *====================================================================================================================*/
-
-/** Set the output tuple at the given index to NULL. */
-DB_OPCODE(Emit_Null, 0, index)
-
-/* Emit the current top of stack to the output tuple at the given index. */
-DB_OPCODE(Emit_i, 0, index)
-DB_OPCODE(Emit_f, 0, index)
-DB_OPCODE(Emit_d, 0, index)
-DB_OPCODE(Emit_s, 0, index)
-DB_OPCODE(Emit_b, 0, index)
-
-
-/*======================================================================================================================
- * Load / Update operations
- *====================================================================================================================*/
-
-/** Load a value from the tuple to the top of the stack. */
-DB_OPCODE(Ld_Tup, +1, index)
 
 /** Load a value from the context to the top of the stack. */
 DB_OPCODE(Ld_Ctx, +1, index)
 
 /** Update a value in the context with the value on top of the stack. */
 DB_OPCODE(Upd_Ctx, 0, index)
+
+
+/** Load a value from a tuple to the top of the stack. */
+DB_OPCODE(Ld_Tup, +1, tuple_id, index)
+
+/** Store NULL into a tuple. */
+DB_OPCODE(St_Tup_Null, 0, tuple_id, index)
+/** Store the current top-of-stack into a tuple. */
+DB_OPCODE(St_Tup_i, 0, tuple_id, index)
+/** Store the current top-of-stack into a tuple. */
+DB_OPCODE(St_Tup_f, 0, tuple_id, index)
+/** Store the current top-of-stack into a tuple. */
+DB_OPCODE(St_Tup_d, 0, tuple_id, index)
+/** Store the current top-of-stack into a tuple. */
+DB_OPCODE(St_Tup_s, 0, tuple_id, index)
+/** Store the current top-of-stack into a tuple. */
+DB_OPCODE(St_Tup_b, 0, tuple_id, index)
+
+
+/*======================================================================================================================
+ * Storage Access Operations
+ *====================================================================================================================*/
 
 /*----- Load from row store ------------------------------------------------------------------------------------------*/
 

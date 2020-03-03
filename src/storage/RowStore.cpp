@@ -107,7 +107,7 @@ StackMachine RowStore::loader(const Schema &schema) const
         } else {
             unreachable("illegal type");
         }
-        sm.emit_Emit(out_idx++, attr.type);
+        sm.emit_St_Tup(0, out_idx++, attr.type);
     }
 
     /* Update row address. */
@@ -120,25 +120,31 @@ StackMachine RowStore::loader(const Schema &schema) const
     return sm;
 }
 
-StackMachine RowStore::writer(const std::vector<const Attribute*> &attrs, std::size_t row_id) const
+StackMachine RowStore::writer(const std::vector<const Attribute*> &attrs) const
 {
     Schema in;
     for (auto attr : attrs)
         in.add({"attr"}, attr->type);
     StackMachine sm(in);
 
-    /* Add address of store to initial state. */
-    auto row_addr_idx = sm.add(int64_t(data_.as<uintptr_t>() + row_id * row_size_ / 8));
+    /* Get row id.  Allocate a slot in the context, that is to be set from the user of this StackMachine. */
+    sm.add_and_emit_load(int64_t(0));
 
-    /* Add row size in bytes. */
-    auto row_size_idx = sm.add_and_emit_load(int64_t(row_size_/8));
+    /* Get row size in bytes. */
+    sm.add_and_emit_load(int64_t(row_size_/8));
+
+    sm.emit_Mul_i(); // multiply row size (in bytes) and row id to compute row offset
+    sm.add_and_emit_load(int64_t(data_.as<uintptr_t>())); // load store base addr
+    sm.emit_Add_i(); // add row offset to base address to compute row addr
+    auto row_addr_idx = sm.add(int64_t(0)); // allocate slot for row addr
+    sm.emit_Upd_Ctx(row_addr_idx);
 
     uint8_t tuple_idx = 0;
     for (auto attr : attrs) {
         if (not attr) continue; // skip nullptr
 
         /* Load the next value to the stack. */
-        sm.emit_Ld_Tup(tuple_idx++);
+        sm.emit_Ld_Tup(0, tuple_idx++);
 
         /* Load row address to stack. */
         sm.emit_Ld_Ctx(row_addr_idx);
@@ -195,12 +201,6 @@ StackMachine RowStore::writer(const std::vector<const Attribute*> &attrs, std::s
             unreachable("illegal type");
         }
     }
-
-    /* Advance row address to next row. */
-    sm.emit_Ld_Ctx(row_addr_idx);
-    sm.emit_Ld_Ctx(row_size_idx);
-    sm.emit_Add_i();
-    sm.emit_Upd_Ctx(row_addr_idx);
 
     return sm;
 }

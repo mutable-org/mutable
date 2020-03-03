@@ -143,7 +143,7 @@ struct RowStore : Store
 
     StackMachine loader(const Schema &schema) const override;
 
-    StackMachine writer(const std::vector<const Attribute*> &attrs, std::size_t row_id) const override;
+    StackMachine writer(const std::vector<const Attribute*> &attrs) const override;
 
     void accept(StoreVisitor &v) override { v(*this); }
     void accept(ConstStoreVisitor &v) const override { v(*this); }

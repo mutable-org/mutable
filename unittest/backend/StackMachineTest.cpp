@@ -94,35 +94,40 @@ TEST_CASE("StackMachine", "[core][backend][stackmachine]")
     in.not_null(5);
     strcpy(reinterpret_cast<char*>(in[5].as_p()), col_char_val);
 
-#define TEST(EXPR, NAME, COND) { \
-    DYNAMIC_SECTION(NAME) \
-    { \
-        auto stmt = as<const SelectStmt>(get_Stmt("SELECT " EXPR " FROM tbl1;")); \
-        auto select = as<const SelectClause>(stmt->select); \
-        auto expr = select->select[0].first; \
-        StackMachine eval(schema, *expr); \
-        Schema out_schema; \
-        out_schema.add({"result"}, eval.schema_out()[0]); \
-        Tuple tup(out_schema); \
-        eval(&tup, in); \
-        if(tup.is_null(0)) { \
-            expr->dump(); \
-            eval.dump(); \
-            std::cerr << "Got NULL\n"; \
-            delete stmt; \
-        } \
-        REQUIRE(not tup.is_null(0)); \
-        auto RES = tup[0]; \
-        if (not (COND)) { \
-            expr->dump(); \
-            eval.dump(); \
-            std::cerr << "Got " << tup[0] << '\n'; \
-            delete stmt; \
-        } \
-        REQUIRE(COND); \
-        delete stmt; \
-    } \
-}
+    auto __test = [&](const char *exprstr, const char *name, auto cond) {
+        DYNAMIC_SECTION(name)
+        {
+            std::ostringstream oss;
+            oss << "SELECT " << exprstr << " FROM tbl1;\n";
+            auto stmt = as<const SelectStmt>(get_Stmt(oss.str().c_str()));
+            auto select = as<const SelectClause>(stmt->select);
+            auto expr = select->select[0].first;
+            StackMachine eval(schema);
+            eval.emit(*expr, 1);
+            eval.emit_St_Tup(0, 0, expr->type());
+            Tuple out({ expr->type() });
+            Tuple *args[] = {&out, &in};
+            eval(args);
+            if(out.is_null(0)) {
+                expr->dump();
+                eval.dump();
+                std::cerr << "Got NULL\n";
+                delete stmt;
+            }
+            REQUIRE(not out.is_null(0));
+            bool cond_res = cond(out[0]);
+            if (not cond_res) {
+                expr->dump();
+                eval.dump();
+                std::cerr << "Got " << out[0] << '\n';
+                delete stmt;
+            }
+            REQUIRE(cond_res);
+            delete stmt;
+        }
+    };
+
+#define TEST(EXPR, NAME, COND) __test(EXPR, NAME, [&](Value RES) { return COND; })
 
     /* Constants */
     TEST("42", "constant/int64_t", RES == 42);

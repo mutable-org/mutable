@@ -170,30 +170,32 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             auto &store = T.store();
             std::vector<const Attribute*> attrs;
             for (auto &attr : T) attrs.push_back(&attr);
-            auto W = store.writer(attrs, store.num_rows()); // append values
+            auto W = store.writer(attrs); // append values
             Schema tuple_schema;
             for (auto &attr : attrs) tuple_schema.add({attr->name}, attr->type);
             Tuple tup(tuple_schema);
             Tuple none;
             for (auto &t : I->tuples) {
-                StackMachine S(Schema{});
+                StackMachine get_tuple(Schema{});
                 for (auto &v : t) {
                     switch (v.first) {
                         case InsertStmt::I_Null:
-                            S.emit_Push_Null();
+                            get_tuple.emit_Push_Null();
                             break;
 
                         case InsertStmt::I_Default:
                             unreachable("not implemented");
 
                         case InsertStmt::I_Expr:
-                            S.emit(*v.second);
+                            get_tuple.emit(*v.second);
                             break;
                     }
                 }
-                S(&tup);
+                Tuple *args[] = { &tup };
+                get_tuple(args);
+                W.set(0, store.num_rows());
                 store.append();
-                W(&none, tup);
+                W(args);
             }
         } else if (auto S = cast<CreateTableStmt>(stmt)) {
             auto &DB = C.get_database_in_use();

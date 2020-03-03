@@ -83,8 +83,10 @@ Tuple::Tuple(const Schema &S)
     uint8_t *p = reinterpret_cast<uint8_t*>(values_) + S.num_entries() * sizeof(Value);
     for (std::size_t i = 0; i != S.num_entries(); ++i) {
         if (auto cs = cast<const CharacterSequence>(S[i].type)) {
-            values_[i] = p;
+            new (&values_[i]) Value(p);
             p += cs->size() / 8;
+        } else {
+            new (&values_[i]) Value();
         }
     }
     clear();
@@ -104,8 +106,10 @@ Tuple::Tuple(std::vector<const Type*> types)
     uint8_t *p = reinterpret_cast<uint8_t*>(values_) + types.size() * sizeof(Value);
     for (std::size_t i = 0; i != types.size(); ++i) {
         if (auto cs = cast<const CharacterSequence>(types[i])) {
-            values_[i] = p;
+            new (&values_[i]) Value(p);
             p += cs->size() / 8;
+        } else {
+            new (&values_[i]) Value();
         }
     }
     clear();

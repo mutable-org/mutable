@@ -97,10 +97,10 @@ struct StackMachine
     std::size_t required_stack_size() const { return required_stack_size_; }
 
     /** Emit operations evaluating the `Expr` `expr`. */
-    void emit(const Expr &expr);
+    void emit(const Expr &expr, std::size_t tuple_id = 0);
 
     /** Emit operations evaluating the `CNF` formula `cnf`. */
-    void emit(const cnf::CNF &cnf);
+    void emit(const cnf::CNF &cnf, std::size_t tuple_id = 0);
 
     /* The following macros are used to automatically generate methods to emit a particular opcode.  For example, for
      * the opcode `Pop`, we will define a function `emit_Pop()`, that appends the `Pop` opcode to the current opcode
@@ -147,8 +147,8 @@ struct StackMachine
     /** Append the given opcode to the opcode sequence. */
     void emit(Opcode opc) { ops.push_back(opc); }
 
-    /** Emit an `Emit_X` instruction based on `Type` `ty`, e.g.\ `Emit_i32` for `Type` `INT(4)` aka `i32`. */
-    void emit_Emit(std::size_t index, const Type *ty);
+    /** Emit an `St_Tup_X` instruction based on `Type` `ty`, e.g.\ `St_Tup_i` for integral `Type`s. */
+    void emit_St_Tup(std::size_t tuple_id, std::size_t index, const Type *ty);
 
     /** Appends the `Value` `val` to the context and returns its assigned index. */
     std::size_t add(Value val) {
@@ -171,9 +171,11 @@ struct StackMachine
         return idx;
     }
 
-    /** Evaluate this `StackMachine` given the input `Tuple` `in` and producing the results in the output `Tuple`
-     * referenced by `out`. */
-    void operator()(Tuple *out, const Tuple &in = Tuple()) const;
+    /** Evaluate this `StackMachine` given the `Tuple`s referenced by `tuples`.
+     *
+     * By convention, the *output* `Tuple`s should be given before the *input* `Tuple`s.  However, a `Tuple` can be used
+     * for both input and output. */
+    void operator()(Tuple **tuples) const;
 
     void dump(std::ostream &out) const;
     void dump() const;

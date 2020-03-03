@@ -106,7 +106,7 @@ StackMachine ColumnStore::loader(const Schema &schema) const
         } else {
             unreachable("illegal type");
         }
-        sm.emit_Emit(out_idx++, attr.type);
+        sm.emit_St_Tup(0, out_idx++, attr.type);
     }
 
     /* Update row id. */
@@ -118,15 +118,15 @@ StackMachine ColumnStore::loader(const Schema &schema) const
     return sm;
 }
 
-StackMachine ColumnStore::writer(const std::vector<const Attribute*> &attrs, std::size_t row_id) const
+StackMachine ColumnStore::writer(const std::vector<const Attribute*> &attrs) const
 {
     Schema in;
     for (auto attr : attrs)
         in.add({"attr"}, attr->type);
     StackMachine sm(in);
 
-    /* Add row id to context. */
-    auto row_id_idx = sm.add(int64_t(row_id));
+    /* Get row id.  Allocate a slot in the context, that is to be set from the user of this StackMachine. */
+    auto row_id_idx = sm.add(int64_t(0));
 
     /* Add address of null bitmap column to context. */
     const auto null_bitmap_col_addr = columns_.back().as<uintptr_t>();
@@ -136,10 +136,10 @@ StackMachine ColumnStore::writer(const std::vector<const Attribute*> &attrs, std
     for (auto attr : attrs) {
         if (not attr) continue;
 
-        /* Load the next value to the stack. */
-        sm.emit_Ld_Tup(tuple_idx++);
+        /* Load the next value from the tuple to the stack. */
+        sm.emit_Ld_Tup(0, tuple_idx++);
 
-        /* Load row id to stack. */
+        /* Load row id from first tuple to stack. */
         sm.emit_Ld_Ctx(row_id_idx);
 
         /* Load address of null bitmap column to stack. */
@@ -196,12 +196,6 @@ StackMachine ColumnStore::writer(const std::vector<const Attribute*> &attrs, std
             unreachable("illegal type");
         }
     }
-
-    /* Update row id. */
-    sm.emit_Ld_Ctx(row_id_idx);
-    sm.emit_Inc();
-    sm.emit_Upd_Ctx(row_id_idx);
-    sm.emit_Pop();
 
     return sm;
 }

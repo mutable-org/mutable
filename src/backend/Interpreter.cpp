@@ -37,8 +37,8 @@ struct ProjectionData : OperatorData
     {
         std::size_t out_idx = 0;
         for (auto &p : op.projections()) {
-            projections.emit(*p.first);
-            projections.emit_Emit(out_idx++, p.first->type());
+            projections.emit(*p.first, 1);
+            projections.emit_St_Tup(0, out_idx++, p.first->type());
         }
     }
 };
@@ -60,10 +60,13 @@ struct NestedLoopsJoinData : JoinData
 
     NestedLoopsJoinData(const JoinOperator &op)
         : JoinData(op)
-        , predicate(op.schema(), op.predicate())
+        , predicate(op.schema())
         , buffers(new buffer_type[op.children().size()])
         , res({ Type::Get_Boolean(Type::TY_Vector) })
-    { }
+    {
+        predicate.emit(op.predicate(), 1);
+        predicate.emit_St_Tup(0, 0, Type::Get_Boolean(Type::TY_Vector));
+    }
 
     ~NestedLoopsJoinData() { delete[] buffers; }
 };
@@ -90,8 +93,8 @@ struct GroupingData : OperatorData
         {
             std::size_t key_idx = 0;
             for (auto k : op.group_by()) {
-                eval_keys.emit(*k);
-                eval_keys.emit_Emit(key_idx++, k->type());
+                eval_keys.emit(*k, 1);
+                eval_keys.emit_St_Tup(0, key_idx++, k->type());
             }
         }
 
@@ -101,11 +104,13 @@ struct GroupingData : OperatorData
             auto fe = as<const FnApplicationExpr>(agg);
             std::size_t arg_idx = 0;
             StackMachine sm(op.child(0)->schema());
+            std::vector<const Type*> arg_types;
             for (auto arg : fe->args) {
-                sm.emit(*arg);
-                sm.emit_Emit(arg_idx++, arg->type());
+                sm.emit(*arg, 1);
+                sm.emit_St_Tup(0, arg_idx++, arg->type());
+                arg_types.push_back(arg->type());
             }
-            args.emplace_back(Tuple(sm.schema_out()));
+            args.emplace_back(Tuple(arg_types));
             eval_args.emplace_back(std::move(sm));
         }
     }
@@ -170,9 +175,12 @@ struct FilterData : OperatorData
     Tuple res;
 
     FilterData(const FilterOperator &op)
-        : filter(op.child(0)->schema(), op.filter())
+        : filter(op.child(0)->schema())
         , res({ Type::Get_Boolean(Type::TY_Vector) })
-    { }
+    {
+        filter.emit(op.filter(), 1);
+        filter.emit_St_Tup_b(0, 0);
+    }
 };
 
 
@@ -191,8 +199,10 @@ void Pipeline::operator()(const ScanOperator &op)
     for (auto end = num_rows - remainder; i != end; i += block_.capacity()) {
         block_.clear();
         block_.fill();
-        for (std::size_t j = 0; j != block_.capacity(); ++j)
-            data->loader(&block_[j]);
+        for (std::size_t j = 0; j != block_.capacity(); ++j) {
+            Tuple *args[] = { &block_[j] };
+            data->loader(args);
+        }
         op.parent()->accept(*this);
     }
     if (i != num_rows) {
@@ -201,7 +211,8 @@ void Pipeline::operator()(const ScanOperator &op)
         block_.mask((1UL << remainder) - 1);
         for (std::size_t j = 0; i != op.store().num_rows(); ++i, ++j) {
             insist(j < block_.capacity());
-            data->loader(&block_[j]);
+            Tuple *args[] = { &block_[j] };
+            data->loader(args);
         }
         op.parent()->accept(*this);
     }
@@ -217,7 +228,8 @@ void Pipeline::operator()(const FilterOperator &op)
 {
     auto data = as<FilterData>(op.data());
     for (auto it = block_.begin(); it != block_.end(); ++it) {
-        data->filter(&data->res, *it);
+        Tuple *args[] = { &data->res, &*it };
+        data->filter(args);
         if (data->res.is_null(0) or not data->res[0].as_b()) block_.erase(it);
     }
     if (not block_.empty())
@@ -269,7 +281,8 @@ void Pipeline::operator()(const JoinOperator &op)
                         for (auto it = pipeline.block_.begin(); it != pipeline.block_.end(); ++it) {
                             auto &rhs = block_[it.index()];
                             it->insert(rhs, n, num_attrs_rhs); // append attrs of tuple from last child
-                            data->predicate(&data->res, *it);
+                            Tuple *args[] = { &data->res, &*it };
+                            data->predicate(args);
                             if (data->res.is_null(0) or not data->res[0].as_b())
                                 pipeline.block_.erase(it);
                         }
@@ -320,14 +333,16 @@ void Pipeline::operator()(const ProjectionOperator &op)
         const auto num_projections = op.projections().size();
         for (auto it = block_.begin(); it != block_.end(); ++it) {
             auto &out = pipeline.block_[it.index()];
-            data->projections(&data->res, *it);
+            Tuple *args[] = { &data->res, &*it };
+            data->projections(args);
             out.insert(*it, 0, num_anti);
             out.insert(data->res, num_anti, num_projections);
         }
     } else {
         for (auto it = block_.begin(); it != block_.end(); ++it) {
             auto &out = pipeline.block_[it.index()];
-            data->projections(&out, *it);
+            Tuple *args[] = { &out, &*it };
+            data->projections(args);
         }
     }
 
@@ -359,8 +374,9 @@ void Pipeline::operator()(const GroupingOperator &op)
         /* Add this tuple to its group by computing the aggregates. */
         for (std::size_t i = 0, end = op.aggregates().size(); i != end; ++i) {
             auto &eval_args = data.eval_args[i];
-            auto &args = data.args[i];
-            eval_args(&args, tuple);
+            auto &agg_args = data.args[i];
+            Tuple *args[] = { &agg_args, &tuple };
+            eval_args(args);
 
             bool is_null = group.is_null(key_size + i);
             auto &val = group[key_size + i];
@@ -382,7 +398,7 @@ void Pipeline::operator()(const GroupingOperator &op)
                     if (fe->args.size() == 0) { // COUNT(*)
                         val.as_i() += 1;
                     } else { // COUNT(x) aka. count not NULL
-                        val.as_i() += not args.is_null(0);
+                        val.as_i() += not agg_args.is_null(0);
                     }
                     break;
 
@@ -394,47 +410,47 @@ void Pipeline::operator()(const GroupingOperator &op)
                         else
                             group.set(key_size + i, 0); // int
                     }
-                    if (args.is_null(0)) continue; // skip NULL
+                    if (agg_args.is_null(0)) continue; // skip NULL
                     if (n->is_floating_point())
-                        val.as_d() += args[0].as_d();
+                        val.as_d() += agg_args[0].as_d();
                     else
-                        val.as_i() += args[0].as_i();
+                        val.as_i() += agg_args[0].as_i();
                     break;
                 }
 
                 case Function::FN_MIN: {
                     using std::min;
-                    if (args.is_null(0)) continue; // skip NULL
+                    if (agg_args.is_null(0)) continue; // skip NULL
                     if (is_null) {
-                        group.set(key_size + i, args[0]);
+                        group.set(key_size + i, agg_args[0]);
                         continue;
                     }
 
                     auto n = as<const Numeric>(ty);
                     if (n->is_float())
-                        val.as_f() = min(val.as_f(), args[0].as_f());
+                        val.as_f() = min(val.as_f(), agg_args[0].as_f());
                     else if (n->is_double())
-                        val.as_d() = min(val.as_d(), args[0].as_d());
+                        val.as_d() = min(val.as_d(), agg_args[0].as_d());
                     else
-                        val.as_i() = min(val.as_i(), args[0].as_i());
+                        val.as_i() = min(val.as_i(), agg_args[0].as_i());
                     break;
                 }
 
                 case Function::FN_MAX: {
                     using std::max;
-                    if (args.is_null(0)) continue; // skip NULL
+                    if (agg_args.is_null(0)) continue; // skip NULL
                     if (is_null) {
-                        group.set(key_size + i, args[0]);
+                        group.set(key_size + i, agg_args[0]);
                         continue;
                     }
 
                     auto n = as<const Numeric>(ty);
                     if (n->is_float())
-                        val.as_f() = max(val.as_f(), args[0].as_f());
+                        val.as_f() = max(val.as_f(), agg_args[0].as_f());
                     else if (n->is_double())
-                        val.as_d() = max(val.as_d(), args[0].as_d());
+                        val.as_d() = max(val.as_d(), agg_args[0].as_d());
                     else
-                        val.as_i() = max(val.as_i(), args[0].as_i());
+                        val.as_i() = max(val.as_i(), agg_args[0].as_i());
                     break;
                 }
             }
@@ -453,7 +469,8 @@ void Pipeline::operator()(const GroupingOperator &op)
 
             Tuple g(op.schema());
             for (auto &t : block_) {
-                data->eval_keys(&g, t);
+                Tuple *args[] = { &g, &t };
+                data->eval_keys(args);
                 auto it = groups.find(g);
                 if (it == groups.end()) {
                     /* Initialize the group's aggregate to NULL.  This will be overwritten by the neutral element w.r.t.
@@ -601,26 +618,9 @@ void Interpreter::operator()(const SortingOperator &op)
 
     StackMachine comparator(S);
     for (auto o : orderings) {
-        comparator.emit(*o.first); // LHS
+        comparator.emit(*o.first, 1); // LHS
         auto num_ops = comparator.num_ops();
-        comparator.emit(*o.first); // RHS
-        /* Patch indices of RHS. */
-        for (std::size_t i = num_ops; i != comparator.num_ops(); ++i) {
-            auto opc = comparator.ops[i];
-            switch (opc) {
-                case StackMachine::Opcode::Ld_Ctx:
-                    ++i;
-                default:
-                    break;
-
-                case StackMachine::Opcode::Ld_Tup:
-                    /* Add offset equal to size of LHS. */
-                    ++i;
-                    comparator.ops[i] =
-                        static_cast<StackMachine::Opcode>(static_cast<uint8_t>(comparator.ops[i]) + S.num_entries());
-                    break;
-            }
-        }
+        comparator.emit(*o.first, 2); // RHS
 
         /* Emit comparison. */
         auto ty = o.first->type();
@@ -639,20 +639,14 @@ void Interpreter::operator()(const SortingOperator &op)
 
         if (not o.second)
             comparator.emit_Minus_i(); // sort descending
-        comparator.emit_Emit_i(0);
+        comparator.emit_St_Tup_i(0, 0);
         comparator.emit_Stop_NZ();
     }
 
-    Schema sort_schema;
-    sort_schema += op.schema();
-    sort_schema += op.schema();
-    Tuple sort_buffer(sort_schema);
     Tuple res({ Type::Get_Integer(Type::TY_Vector, 4) });
-    std::sort(data->buffer.begin(), data->buffer.end(), [&](const Tuple &first, const Tuple &second) {
-        sort_buffer.clear();
-        sort_buffer.insert(first, 0, op.schema().num_entries());
-        sort_buffer.insert(second, op.schema().num_entries(), op.schema().num_entries());
-        comparator(&res, sort_buffer);
+    std::sort(data->buffer.begin(), data->buffer.end(), [&](Tuple &first, Tuple &second) {
+        Tuple *args[] = { &res, &first, &second };
+        comparator(args);
         insist(not res.is_null(0));
         return res[0].as_i() < 0;
     });

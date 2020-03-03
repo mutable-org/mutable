@@ -133,11 +133,10 @@ struct Store
     /** Return a stack machine to load values row-wise directly from this store. */
     virtual StackMachine loader(const Schema &schema) const = 0;
 
-    /** Return a stack machine to update the specified attributes directly in this store.  The stack machine expects the
-     * values to update the row with as input tuple, with the values in the same order as the given list of attributes.
-     * Further, the row to update must be specified by the user of the stack machine by setting context at index 0 to
-     * the respective row id. */
-    virtual StackMachine writer(const std::vector<const Attribute*> &attrs, std::size_t row_id = 0) const = 0;
+    /** Return a `StackMachine` to update the specified attributes directly in this `Store`.  The `StackMachine` expects
+     * one `Tuple` containing the `Value`s to write to the row.  The `Value`s must be in the same order as in the given
+     * list of `Attribute`s `attrs`.  The row id can be set in the context at index `0`. */
+    virtual StackMachine writer(const std::vector<const Attribute*> &attrs) const = 0;
 
     /** Accept a store visitor. */
     virtual void accept(StoreVisitor &v) = 0;

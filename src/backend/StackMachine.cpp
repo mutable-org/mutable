@@ -2,6 +2,7 @@
 
 #include "backend/Interpreter.hpp"
 #include <functional>
+#include <regex>
 
 
 using namespace db;
@@ -49,6 +50,8 @@ struct db::StackMachineBuilder : ConstASTVisitor
     }
 
     private:
+    static std::unordered_map<std::string, std::regex> regexes_; ///< regexes built from patterns in LIKE expressions
+
     using ConstASTVisitor::operator();
 
     /* Expressions */
@@ -81,6 +84,8 @@ struct db::StackMachineBuilder : ConstASTVisitor
     void operator()(Const<DeleteStmt>&) override { unreachable("not supported"); }
     void operator()(Const<DSVImportStmt>&) override { unreachable("not supported"); }
 };
+
+std::unordered_map<std::string, std::regex> StackMachineBuilder::regexes_;
 
 void StackMachineBuilder::operator()(Const<Designator> &e)
 {
@@ -304,12 +309,13 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
         case TK_DOTDOT:         opname = "Cat"; break;
 
         /*----- Comparison operators ---------------------------------------------------------------------------------*/
-        case TK_LESS:           opname = "LT";  break;
-        case TK_GREATER:        opname = "GT";  break;
-        case TK_LESS_EQUAL:     opname = "LE";  break;
-        case TK_GREATER_EQUAL:  opname = "GE";  break;
-        case TK_EQUAL:          opname = "Eq";  break;
-        case TK_BANG_EQUAL:     opname = "NE";  break;
+        case TK_LESS:           opname = "LT";    break;
+        case TK_GREATER:        opname = "GT";    break;
+        case TK_LESS_EQUAL:     opname = "LE";    break;
+        case TK_GREATER_EQUAL:  opname = "GE";    break;
+        case TK_EQUAL:          opname = "Eq";    break;
+        case TK_BANG_EQUAL:     opname = "NE";    break;
+        case TK_Like:           opname = "Like";  break;
 
         /*----- Logical operators ------------------------------------------------------------------------------------*/
         case TK_And:            opname = "And"; break;
@@ -483,6 +489,23 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
                 stack_machine_.emit(opcode);
             }
             break;
+
+        case TK_Like: {
+            if (auto rhs = cast<const Constant>(e.rhs)) {
+                (*this)(*e.lhs);
+                auto pattern = unquote(rhs->tok.text);
+                auto it = regexes_.find(pattern);
+                if (it == regexes_.end())
+                    it = StackMachineBuilder::regexes_.insert({pattern, pattern_to_regex(pattern.c_str(), true)}).first;
+                stack_machine_.add_and_emit_load(&(it->second));
+                stack_machine_.emit_Like_const();
+            } else {
+                (*this)(*e.lhs);
+                (*this)(*e.rhs);
+                stack_machine_.emit_Like_expr();
+            }
+            break;
+        }
 
         /*----- Logical operators ------------------------------------------------------------------------------------*/
         case TK_And:
@@ -1309,6 +1332,34 @@ Cmp_b: CMP(bool);
 Cmp_s: BINARY(strcmp, char*);
 
 #undef CMP
+
+Like_const: {
+    insist(top_ >= 2);
+    std::regex *re = TOP.as<std::regex*>();
+    POP();
+    if (not TOP_IS_NULL) {
+        char *str = TOP.as<char*>();
+        TOP = std::regex_match(str, *re);
+    }
+}
+NEXT;
+
+Like_expr: {
+    insist(top_ >= 2);
+    if (TOP_IS_NULL) {
+        POP();
+        TOP_IS_NULL = true;
+    } else {
+        char *pattern = TOP.as<char*>();
+        POP();
+        if (not TOP_IS_NULL) {
+            std::regex re(pattern_to_regex(pattern));
+            char *str = TOP.as<char*>();
+            TOP = std::regex_match(str, re);
+        }
+    }
+}
+NEXT;
 
 
 /*======================================================================================================================

@@ -588,6 +588,25 @@ ok:
             break;
         }
 
+        case TK_Like: {
+            auto ty_lhs = cast<const CharacterSequence>(e.lhs->type());
+            auto ty_rhs = cast<const CharacterSequence>(e.rhs->type());
+            if (not ty_lhs or not ty_rhs) {
+                diag.e(e.op().pos) << "Invalid expression " << e << ", operands must be character sequences.\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
+            insist(ty_lhs);
+            insist(ty_rhs);
+
+            /* Scalar and scalar yield a scalar.  Otherwise, expression yields a vectorial. */
+            Type::category_t c = std::max(ty_lhs->category, ty_rhs->category);
+
+            /* Comparisons always have boolean type. */
+            e.type_ = Type::Get_Boolean(c);
+            break;
+        }
+
         case TK_And:
         case TK_Or: {
             const Boolean *ty_lhs = cast<const Boolean>(e.lhs->type());

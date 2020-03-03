@@ -35,7 +35,8 @@ int get_precedence(const TokenType tt)
         case TK_LESS_EQUAL:
         case TK_GREATER_EQUAL:
         case TK_EQUAL:
-        case TK_BANG_EQUAL:         ++p;
+        case TK_BANG_EQUAL:
+        case TK_Like:               ++p;
         /* logical NOT */
         case TK_Not:                ++p;
         /* logical AND */
@@ -78,7 +79,7 @@ Stmt * Parser::parse()
             switch (token().type) {
                 default:
                     stmt = new ErrorStmt(token());
-                    diag.e(token().pos) << "expecte a create database statement or a create table statement, got "
+                    diag.e(token().pos) << "expected a create database statement or a create table statement, got "
                                         << token().text << '\n';
                     consume();
                     break;

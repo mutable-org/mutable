@@ -207,6 +207,10 @@ DB_OPCODE(Cmp_d, -1)
 DB_OPCODE(Cmp_b, -1)
 DB_OPCODE(Cmp_s, -1)
 
+/* `LIKE` operator. */
+DB_OPCODE(Like_const, -1)
+DB_OPCODE(Like_expr, -1)
+
 
 /*======================================================================================================================
  * Intrinsic functions

@@ -155,6 +155,19 @@ TEST_CASE("Sema/Expressions", "[core][parse][sema]")
         { "42 = \"text\"", Type::Get_Error() },
         { "\"text\" = 42", Type::Get_Error() },
 
+        { "\"text\" LIKE \"pattern\"", Type::Get_Boolean(Type::TY_Scalar) },
+        { "\"text\" LIKE \"pattern\" .. \"other\"", Type::Get_Boolean(Type::TY_Scalar) },
+
+        { "42 LIKE \"pattern\"", Type::Get_Error() },
+        { "3.14 LIKE \"pattern\"", Type::Get_Error() },
+        { "TRUE LIKE \"pattern\"", Type::Get_Error() },
+        { "\"text\" LIKE 42", Type::Get_Error() },
+        { "\"text\" LIKE 3.14", Type::Get_Error() },
+        { "\"text\" LIKE TRUE", Type::Get_Error() },
+        { "42 LIKE 1337", Type::Get_Error() },
+        { "TRUE LIKE FALSE", Type::Get_Error() },
+        { "3.14 LIKE 3.14", Type::Get_Error() },
+
         /* string concatenation */
         { "\"text\" .. \"text\"", Type::Get_Char(Type::TY_Scalar, 8) },
 

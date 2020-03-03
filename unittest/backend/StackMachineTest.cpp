@@ -207,6 +207,11 @@ TEST_CASE("StackMachine", "[core][backend][stackmachine]")
     TEST("col_bool != TRUE", "binary/comparison/!=/bool", RES == (col_bool_val != true));
     TEST("col_bool =  TRUE", "binary/comparison/=/bool",  RES == (col_bool_val == true));
 
+    TEST("col_char LIKE \"YES\"",         "binary/comparison/like_const/char",    RES == std::regex_match(std::string(col_char_val), std::regex("YES")));
+    TEST("col_char LIKE \"_ES\"",         "binary/comparison/like_wildcard/char", RES == std::regex_match(std::string(col_char_val), std::regex(".ES")));
+    TEST("col_char LIKE \"Y%\"",          "binary/comparison/like_any/char",      RES == std::regex_match(std::string(col_char_val), std::regex("Y(.*)")));
+    TEST("col_char LIKE \"N\" .. \"%\"",  "binary/comparison/like_const/char",    RES == std::regex_match(std::string(col_char_val), std::regex("N(.*)")));
+
     TEST("col_char <  \"Hello, World!\"", "binary/comparison/</char",  RES == std::string(col_char_val) <  "Hello, World");
     TEST("col_char <= \"Hello, World!\"", "binary/comparison/<=/char", RES == std::string(col_char_val) <= "Hello, World");
     TEST("col_char >  \"Hello, World!\"", "binary/comparison/>/char",  RES == std::string(col_char_val) >  "Hello, World");

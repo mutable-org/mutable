@@ -76,3 +76,34 @@ TEST_CASE("sum_wo_overflow", "[util][fn]")
     REQUIRE(sum_wo_overflow(UL_MAX, U_MAX) == UL_MAX);
     REQUIRE(sum_wo_overflow(UL_MAX - 1, 1U) == UL_MAX);
 }
+
+TEST_CASE("pattern_to_regex", "[core][util][fn]")
+{
+    std::string s1 = "abcd";
+    std::string s2 = "defg";
+    std::string s3 = "\"+";
+
+    auto r1 = std::regex("abcd");
+    auto r1_ = pattern_to_regex("abcd");
+
+    REQUIRE(std::regex_match(s1, r1) == std::regex_match(s1, r1_));
+    REQUIRE(std::regex_match(s2, r1) == std::regex_match(s2, r1_));
+
+    auto r2 = std::regex("...d");
+    auto r2_ = pattern_to_regex("___d");
+
+    REQUIRE(std::regex_match(s1, r2) == std::regex_match(s1, r2_));
+    REQUIRE(std::regex_match(s2, r2) == std::regex_match(s2, r2_));
+
+    auto r3 = std::regex("(.*)d(.*)");
+    auto r3_ = pattern_to_regex("%d%");
+
+    REQUIRE(std::regex_match(s1, r3) == std::regex_match(s1, r3_));
+    REQUIRE(std::regex_match(s2, r3) == std::regex_match(s2, r3_));
+
+    auto r4 = std::regex("\".");
+    auto r4_ = pattern_to_regex("\"_");
+
+    REQUIRE(std::regex_match(s2, r4) == std::regex_match(s2, r4_));
+    REQUIRE(std::regex_match(s3, r4) == std::regex_match(s3, r4_));
+}

@@ -11,6 +11,8 @@
 #include <initializer_list>
 #include <iomanip>
 #include <iostream>
+#include <regex>
+#include <sstream>
 #include <type_traits>
 #include <variant>
 
@@ -145,6 +147,46 @@ inline std::string interpret(const std::string &str, char esc = '\\', char quote
 
 /** Escapes special characters in a string to be printable in HTML documents.  Primarily used for DOT. */
 std::string html_escape(std::string str);
+
+/** Transforms a SQL-style LIKE pattern into a std::regex. */
+inline std::regex pattern_to_regex(const char *pattern, const bool optimize = false, const char escape_char = '\\')
+{
+    std::stringstream ss;
+    for (const char *c = pattern; *c; ++c) {
+        switch (*c) {
+            default:
+                if (*c == escape_char) {
+                    ++c;
+                    ss << "\\" << *c;
+                } else
+                    ss << *c;
+                break;
+            case '%':
+                ss << "(.*)";
+                break;
+            case '_':
+                ss << '.';
+                break;
+            case '[':
+            case ']':
+            case '(':
+            case ')':
+            case '\\':
+            case '.':
+            case '*':
+            case '+':
+            case '^':
+            case '?':
+            case '|':
+            case '{':
+            case '}':
+            case '$':
+                ss << "\\" << *c;
+                break;
+        }
+    }
+    return optimize ? std::regex(ss.str(), std::regex::optimize) : std::regex(ss.str());
+}
 
 /** Checks whether haystack contains needle. */
 template<typename H, typename N>

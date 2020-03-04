@@ -143,6 +143,12 @@ struct SmallBitset
         return out;
     }
 
+    /** Print a textual representation of `this` with `size` bits to `out`. */
+    void print_fixed_length(std::ostream &out, std::size_t size) const {
+        for (uint64_t mask = 1UL << (size - 1); mask; mask >>= 1)
+            out << bool(*this & SmallBitset(mask));
+    }
+
     void dump(std::ostream &out) const;
     void dump() const;
 };

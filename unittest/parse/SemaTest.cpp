@@ -25,6 +25,10 @@ TEST_CASE("Sema/Expressions", "[core][parse][sema]")
 {
     std::pair<const char*, const Type*> exprs[] = {
         /* { expression , type } */
+
+        /* NULL expressions */
+        { "NULL", Type::Get_None() },
+
         /* boolean constants */
         { "TRUE", Type::Get_Boolean(Type::TY_Scalar) },
         { "FALSE", Type::Get_Boolean(Type::TY_Scalar) },
@@ -93,6 +97,15 @@ TEST_CASE("Sema/Expressions", "[core][parse][sema]")
         { "1 % 2", Type::Get_Integer(Type::TY_Scalar, 4) },
         { "0x80000000 + 42", Type::Get_Integer(Type::TY_Scalar, 8) },
 
+        { "0x80000000 + NULL", Type::Get_Error() },
+        { "NULL - 0x80000000", Type::Get_Error() },
+        { "0x80000000 - NULL", Type::Get_Error() },
+        { "0x80000000 * NULL", Type::Get_Error() },
+        { "0x80000000 / NULL", Type::Get_Error() },
+        { "NULL / 0x80000000", Type::Get_Error() },
+        { "0x80000000 % NULL", Type::Get_Error() },
+        { "NULL % 0x80000000", Type::Get_Error() },
+
         { "2.718 + 3.14", Type::Get_Double(Type::TY_Scalar) },
         { "42 + 3.14", Type::Get_Double(Type::TY_Scalar) },
         { "3.14 + 42", Type::Get_Double(Type::TY_Scalar) },
@@ -103,6 +116,9 @@ TEST_CASE("Sema/Expressions", "[core][parse][sema]")
         { "\"Hello, World\" + 42", Type::Get_Error() },
         { "42 + \"Hello, World\"", Type::Get_Error() },
 
+        { "\"Hello, World\" + NULL", Type::Get_Error() },
+        { "NULL + \"Hello, World\"", Type::Get_Error() },
+
         /* comparative expressions */
         { "42 < 1337", Type::Get_Boolean(Type::TY_Scalar) },
         { "42 <= 1337", Type::Get_Boolean(Type::TY_Scalar) },
@@ -111,16 +127,25 @@ TEST_CASE("Sema/Expressions", "[core][parse][sema]")
         { "42 = 1337", Type::Get_Boolean(Type::TY_Scalar) },
         { "42 != 1337", Type::Get_Boolean(Type::TY_Scalar) },
         { "3.14 < 0x80000000", Type::Get_Boolean(Type::TY_Scalar) },
+        { "0x80000000 = NULL", Type::Get_Error() },
+        { "0x80000000 < NULL", Type::Get_Error() },
+        { "0x80000000 > NULL", Type::Get_Error() },
+        { "0x80000000 <= NULL", Type::Get_Error() },
+        { "0x80000000 >= NULL", Type::Get_Error() },
+        { "0x80000000 != NULL", Type::Get_Error() },
 
         { "TRUE < FALSE", Type::Get_Error() },
         { "TRUE < 42", Type::Get_Error() },
         { "42 < TRUE", Type::Get_Error() },
         { "42 < \"Hello, World\"", Type::Get_Error() },
         { "\"Hello, World\" < 42", Type::Get_Error() },
+        { "NULL < \"Hello, World\"", Type::Get_Error() },
+        { "\"Hello, World\" < NULL", Type::Get_Error() },
 
         { "TRUE = FALSE", Type::Get_Boolean(Type::TY_Scalar) },
         { "TRUE != FALSE", Type::Get_Boolean(Type::TY_Scalar) },
-
+        { "NULL = NULL", Type::Get_Error() },
+        { "NULL != NULL", Type::Get_Error() },
         { "\"verylongtext\" = \"shorty\"", Type::Get_Boolean(Type::TY_Scalar) },
 
         { "TRUE = 42", Type::Get_Error() },
@@ -142,6 +167,8 @@ TEST_CASE("Sema/Expressions", "[core][parse][sema]")
         { "42 .. \"text\"", Type::Get_Error() },
         { "3.14 .. \"text\"", Type::Get_Error() },
         { "TRUE .. \"text\"", Type::Get_Error() },
+        { "\"text\" .. NULL", Type::Get_Error() },
+        { "NULL .. \"text\"", Type::Get_Error() },
     };
 
     for (auto e : exprs) {

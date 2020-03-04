@@ -8,7 +8,7 @@ using namespace db;
 
 
 
-TEST_CASE("Position c'tor", "[core][util][position]")
+TEST_CASE("Position c'tor", "[core][util][Position]")
 {
     SECTION("c'tor by name")
     {
@@ -26,5 +26,44 @@ TEST_CASE("Position c'tor", "[core][util][position]")
         REQUIRE(strcmp(start.name, "the_file") == 0);
         REQUIRE(start.line == 13);
         REQUIRE(start.column == 42);
+    }
+}
+/*Some test cases by Aditya. Needs review.*/
+TEST_CASE("Position compare","[core][util][Position]")
+{
+    SECTION("compare check name, line, and column using == and != operator")
+    {
+        Position p1("the_file", 18, 50);
+        Position p2("the_file", 18, 50);
+
+        REQUIRE(p1 == p2);
+        REQUIRE_FALSE(p1 != p2);
+    }
+
+    SECTION("compare check name using == and != operator")
+    {
+        Position p1("the_file", 18, 50);
+        Position p2("the_files", 19, 51);
+
+        REQUIRE_FALSE(p1 == p2);
+        REQUIRE(p1 != p2);
+    }
+
+    SECTION("compare check name, line, and column using == and != operator")
+    {
+        Position p1("the_file");
+        Position p2("the_file");
+
+        REQUIRE(p1 == p2);
+        REQUIRE_FALSE(p1 != p2);
+    }
+
+    SECTION("compare check name using == and != operator")
+    {
+        Position p1("the_file");
+        Position p2("the_files");
+
+        REQUIRE_FALSE(p1 == p2);
+        REQUIRE(p1 != p2);
     }
 }

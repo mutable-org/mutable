@@ -42,14 +42,14 @@ TEST_CASE("ceil_to_pow_2", "[core][util][fn]")
     REQUIRE(u63 == ceil_to_pow_2(u63));
 }
 
-TEST_CASE("pow", "[core][util][fn]")
+TEST_CASE("powi", "[core][util][fn]")
 {
-    REQUIRE(pow(4, 0) == 1);
-    REQUIRE(pow(4, 1) == 4);
-    REQUIRE(pow(4, 2) == 16);
-    REQUIRE(pow(4, 3) == 64);
-    REQUIRE(pow(4, 4) == 256);
-    REQUIRE(pow(4, 5) == 1024);
+    REQUIRE(powi(4, 0) == 1);
+    REQUIRE(powi(4, 1) == 4);
+    REQUIRE(powi(4, 2) == 16);
+    REQUIRE(powi(4, 3) == 64);
+    REQUIRE(powi(4, 4) == 256);
+    REQUIRE(powi(4, 5) == 1024);
 }
 
 TEST_CASE("subsets/least_subset, next_subset", "[util][fn]")

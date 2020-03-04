@@ -115,7 +115,6 @@ StackMachine RowStore::loader(const Schema &schema) const
     sm.emit_Ld_Ctx(row_size_idx);
     sm.emit_Add_i();
     sm.emit_Upd_Ctx(addr_idx);
-    sm.emit_Pop();
 
     return sm;
 }

@@ -113,7 +113,6 @@ StackMachine ColumnStore::loader(const Schema &schema) const
     sm.emit_Ld_Ctx(row_id_idx);
     sm.emit_Inc();
     sm.emit_Upd_Ctx(row_id_idx);
-    sm.emit_Pop();
 
     return sm;
 }

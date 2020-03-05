@@ -1085,7 +1085,7 @@ NEXT;
     POP(); \
     TYPE lhs = TOP.as<TYPE>(); \
     TOP = OP(lhs, rhs); \
-    TOP_IS_NULL = TOP_IS_NULL | is_rhs_null; \
+    TOP_IS_NULL = TOP_IS_NULL or is_rhs_null; \
 } \
 NEXT;
 
@@ -1215,7 +1215,7 @@ GE_s: BINARY(0 <= strcmp, char*);
     TYPE lhs = TOP.as<TYPE>(); \
     bool is_lhs_null = TOP_IS_NULL; \
     TOP = int64_t(lhs >= rhs) - int64_t(lhs <= rhs); \
-    TOP_IS_NULL = is_lhs_null | is_rhs_null; \
+    TOP_IS_NULL = is_lhs_null or is_rhs_null; \
 } \
 NEXT;
 

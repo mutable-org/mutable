@@ -96,14 +96,11 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
     Parser parser(lexer);
 
     while (parser.token()) {
-        Timer timer;
         auto stmt = parser.parse();
         if (get_options().echo)
             std::cout << *stmt << std::endl;
         if (diag.num_errors() != num_errors) goto next;
-        timer.start("Semantic Analysis");
-        sema(*stmt);
-        timer.stop();
+        TIME_EXPR(sema(*stmt), "Semantic Analysis", C.timer());
         if (get_options().ast) stmt->dump(std::cout);
         if (get_options().astdot) {
             DotTool dot(diag);
@@ -113,9 +110,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
         if (diag.num_errors() != num_errors) goto next;
 
         if (is<SelectStmt>(stmt)) {
-            timer.start("Construct the Query Graph");
-            auto query_graph = QueryGraph::Build(*stmt);
-            timer.stop();
+            auto query_graph = TIME_EXPR(QueryGraph::Build(*stmt), "Construct the Query Graph", C.timer());
             if (get_options().graph) query_graph->dump(std::cout);
             if (get_options().graphdot) {
                 DotTool dot(diag);
@@ -129,9 +124,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             });
             Optimizer Opt(dp_ccp, cf);
             auto I = Backend::CreateInterpreter();
-            timer.start("Compute an optimized Query Plan");
-            auto optree = Opt(*query_graph.get());
-            timer.stop();
+            auto optree = TIME_EXPR(Opt(*query_graph.get()), "Compute Query Plan", C.timer());
             if (get_options().plan) optree->dump(std::cout);
             if (get_options().plandot) {
                 DotTool dot(diag);
@@ -147,9 +140,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             }
 
             if (not get_options().dryrun) {
-                timer.start("Interpret the Query Plan");
-                I->execute(*callback);
-                timer.stop();
+                TIME_EXPR(I->execute(*callback), "Interpret the Query Plan", C.timer());
 
                 if (get_options().wasm) {
 #if WITH_V8
@@ -221,9 +212,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
                     diag.err() << ": " << strerror(errno);
                 diag.err() << std::endl;
             } else {
-                timer.start("Read DSV file");
-                R(file, S->path.text);
-                timer.stop();
+                TIME_EXPR(R(file, S->path.text), "Read DSV file", C.timer());
             }
         }
 next:
@@ -231,7 +220,7 @@ next:
         delete stmt;
 
         if (get_options().times)
-            std::cout << timer;
+            std::cout << C.timer();
     }
 
     std::cout.flush();

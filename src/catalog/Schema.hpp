@@ -6,6 +6,7 @@
 #include "util/memory.hpp"
 #include "util/Pool.hpp"
 #include "util/StringPool.hpp"
+#include "util/Timer.hpp"
 #include <cmath>
 #include <exception>
 #include <functional>
@@ -380,6 +381,7 @@ struct Catalog
     std::unordered_map<const char*, Database*> databases_; ///< the databases
     Database *database_in_use_ = nullptr; ///< the currently used database
     std::unordered_map<const char*, Function*> standard_functions_; ///< functions defined by the SQL standard
+    Timer timer_; ///< a global timer
 
     private:
     Catalog();
@@ -406,6 +408,11 @@ struct Catalog
     StringPool & get_pool() { return pool_; }
     /** Returns a reference to the `StringPool`. */
     const StringPool & get_pool() const { return pool_; }
+
+    /** Returns the global `Timer` instance. */
+    Timer & timer() { return timer_; }
+    /** Returns the global `Timer` instance. */
+    const Timer & timer() const { return timer_; }
 
     /** Returns a reference to the `rewire::Allocator`. */
     rewire::Allocator & allocator() { return *allocator_; }

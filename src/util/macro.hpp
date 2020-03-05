@@ -30,6 +30,9 @@ namespace {
 #define STR_(X) #X
 #define STR(X) STR_(X)
 
+#define PASTE_(X, Y) X ## Y
+#define PASTE(X, Y) PASTE_(X, Y)
+
 /*===== First element of list. =======================================================================================*/
 #define FIRST(X, ...) X
 #define TAIL(X, ...) __VA_ARGS__

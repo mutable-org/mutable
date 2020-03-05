@@ -1164,11 +1164,31 @@ NEXT;
 /* Logical not */
 Not_b: UNARY(not, bool);
 
-/* Logical and. */
-And_b: BINARY(std::logical_and{}, bool);
+/* Logical and with three-valued logic (https://en.wikipedia.org/wiki/Three-valued_logic#Kleene_and_Priest_logics). */
+And_b: {
+    insist(top_ >= 2);
+    bool rhs = TOP.as<bool>();
+    bool is_rhs_null = TOP_IS_NULL;
+    POP();
+    bool lhs = TOP.as<bool>();
+    bool is_lhs_null = TOP_IS_NULL;
+    TOP = lhs and rhs;
+    TOP_IS_NULL = (lhs or is_lhs_null) and (rhs or is_rhs_null) and (is_lhs_null or is_rhs_null);
+}
+NEXT;
 
-/* Logical or. */
-Or_b: BINARY(std::logical_or{}, bool);
+/* Logical or with three-valued logic (https://en.wikipedia.org/wiki/Three-valued_logic#Kleene_and_Priest_logics). */
+Or_b: {
+    insist(top_ >= 2);
+    bool rhs = TOP.as<bool>();
+    bool is_rhs_null = TOP_IS_NULL;
+    POP();
+    bool lhs = TOP.as<bool>();
+    bool is_lhs_null = TOP_IS_NULL;
+    TOP = lhs or rhs;
+    TOP_IS_NULL = (not lhs or is_lhs_null) and (not rhs or is_rhs_null) and (is_lhs_null or is_rhs_null);
+}
+NEXT;
 
 
 /*======================================================================================================================

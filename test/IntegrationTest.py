@@ -251,7 +251,7 @@ if __name__ == '__main__':
     bad_files_counter = 0
 
     # Glob test files
-    TEST_GLOB = os.path.join('test', '**', '[!_]*.yml')
+    TEST_GLOB = os.path.join('test', '[!_]*.yml')
     test_files = sorted(glob.glob(TEST_GLOB, recursive=True))
 
     # Create dummy test case class

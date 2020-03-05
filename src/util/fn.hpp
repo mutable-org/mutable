@@ -218,16 +218,21 @@ inline uint64_t murmur3_64(uint64_t v)
     return v;
 }
 
-#if 0
-// TODO implement printing time points in a portable way (macOS vs Linux) for all clock types
+/** Print `std::chrono::time_point` in human-readable format. */
 template<typename Clock, typename Duration>
 std::ostream & operator<<(std::ostream &out, std::chrono::time_point<Clock, Duration> tp)
 {
-    const time_t time = Clock::to_time_t(tp); // convert the clock's time_point to std::time_t
+    using namespace std::chrono;
+    system_clock::time_point tp_sys(tp);
+    const time_t time = Clock::to_time_t(tp_sys); // convert the clock's time_point to std::time_t
     auto tm = std::localtime(&time); // convert the given time since epoch to local calendar time
-    return out << std::put_time(tm, "%T (%Z)");
+    auto oldfill = out.fill('0');
+    out << std::put_time(tm, "%T.") << std::setw(3)
+        << duration_cast<milliseconds>(tp_sys.time_since_epoch()).count() % 1000
+        << std::put_time(tm, " (%Z)");
+    out.fill(oldfill);
+    return out;
 }
-#endif
 
 /* Template class definition to concatenate more types to std::variant. */
 template <typename T, typename... Args> struct Concat;

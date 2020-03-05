@@ -619,7 +619,6 @@ void Interpreter::operator()(const SortingOperator &op)
     StackMachine comparator(S);
     for (auto o : orderings) {
         comparator.emit(*o.first, 1); // LHS
-        auto num_ops = comparator.num_ops();
         comparator.emit(*o.first, 2); // RHS
 
         /* Emit comparison. */

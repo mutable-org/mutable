@@ -127,24 +127,33 @@ void DSVReader::operator()(Const<Boolean>&)
 
 void DSVReader::operator()(Const<CharacterSequence>&)
 {
+    /* This implementation is compliant with RFC 4180.  In quoted strings, quotes have to be escaped with an additional
+     * quote.  In unquoted strings, delimiter and quotes are prohibited.  In both cases, escape sequences are not
+     * supported.  Note that EOF implicily closes quoted strings.
+     * Source: https://tools.ietf.org/html/rfc4180#section-2 */
     buf.clear();
-    if (c == quote) {
-        step();
-        while (c != EOF and c != '\n' and c != quote) {
-            if (c == escape) {
+    if (accept(quote)) {
+        while (c != EOF) {
+            if (c != quote) {
                 push();
+            } else {
+                step();
                 if (c == quote)
                     push();
-            } else {
-                push();
+                else
+                    break;
             }
         }
-        accept(quote);
     } else {
-        while (c != EOF and c != '\n' and c != delimiter) push();
+        while (c != EOF and c != '\n' and c != delimiter) {
+            if (c == quote)
+                diag.e(pos) << "WARNING: Illegal character '\"' found in unquoted string.\n";
+            else
+                push();
+        }
     }
     buf.push_back(0);
-    row->set(*attr, interpret(std::string(buf.begin(), buf.end()), escape, quote));
+    row->set(*attr, std::string(buf.begin(), buf.end()));
 }
 
 void DSVReader::operator()(Const<Numeric> &ty)

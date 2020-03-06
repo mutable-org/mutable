@@ -223,12 +223,21 @@ template<typename Clock, typename Duration>
 std::ostream & operator<<(std::ostream &out, std::chrono::time_point<Clock, Duration> tp)
 {
     using namespace std::chrono;
-    system_clock::time_point tp_sys(tp);
-    const time_t time = Clock::to_time_t(tp_sys); // convert the clock's time_point to std::time_t
+    time_t time;
+    if constexpr (std::is_same_v<Clock, system_clock>) {
+        time = system_clock::to_time_t(tp); // convert the clock's time_point to std::time_t
+    } else {
+        /* The time point cannot directly be converted to time_t.  To do so, we first must relate the time point in
+         * Clock to a time point in the system_clock. */
+        auto tpc_now = Clock::now();
+        auto sys_now = system_clock::now();
+        auto tp_sys = time_point_cast<system_clock::duration>(tp - tpc_now + sys_now);
+        time = system_clock::to_time_t(tp_sys);
+    }
     auto tm = std::localtime(&time); // convert the given time since epoch to local calendar time
     auto oldfill = out.fill('0');
     out << std::put_time(tm, "%T.") << std::setw(3)
-        << duration_cast<milliseconds>(tp_sys.time_since_epoch()).count() % 1000
+        << duration_cast<milliseconds>(tp.time_since_epoch()).count() % 1000
         << std::put_time(tm, " (%Z)");
     out.fill(oldfill);
     return out;

@@ -7,7 +7,6 @@
 using namespace db;
 
 
-
 TEST_CASE("Position c'tor", "[core][util][Position]")
 {
     SECTION("c'tor by name")
@@ -28,7 +27,7 @@ TEST_CASE("Position c'tor", "[core][util][Position]")
         REQUIRE(start.column == 42);
     }
 }
-/*Some test cases by Aditya. Needs review.*/
+
 TEST_CASE("Position compare","[core][util][Position]")
 {
     SECTION("compare check name, line, and column using == and != operator")

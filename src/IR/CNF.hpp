@@ -70,6 +70,14 @@ struct Clause : public std::vector<Predicate>
     bool operator==(const Clause &other) const { return *this >= other and *this <= other; }
     bool operator!=(const Clause &other) const { return not operator==(other); }
 
+    /** Returns a `Schema` instance containing all required definitions (of `Attribute`s and other `Designator`s). */
+    Schema get_required() const {
+        Schema required;
+        for (auto &P : *this)
+            required |= P.expr()->get_required();
+        return required;
+    }
+
     /** Print a textual representation of `clause` to `out`. */
     friend std::ostream & operator<<(std::ostream &out, const Clause &clause);
 
@@ -81,6 +89,14 @@ struct Clause : public std::vector<Predicate>
 struct CNF : public std::vector<Clause>
 {
     using std::vector<Clause>::vector; // c'tor
+
+    /** Returns a `Schema` instance containing all required definitions (of `Attribute`s and other `Designator`s). */
+    Schema get_required() const {
+        Schema required;
+        for (auto &clause : *this)
+            required |= clause.get_required();
+        return required;
+    }
 
     /** Print a textual representation of `cnf` to `out`. */
     friend std::ostream & operator<<(std::ostream &out, const CNF &cnf);

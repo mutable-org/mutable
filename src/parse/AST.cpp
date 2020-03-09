@@ -148,6 +148,83 @@ bool BinaryExpr::operator==(const Expr &o) const
     return *this->lhs == *other->lhs and *this->rhs == *other->rhs;
 }
 
+
+/*======================================================================================================================
+ * get_required
+ *====================================================================================================================*/
+
+struct GetRequired : ConstASTVisitor
+{
+    using ConstASTVisitor::operator();
+
+    private:
+    Schema schema;
+
+    public:
+    GetRequired() { }
+
+    auto & get() { return schema; }
+
+    /* Expr */
+    void operator()(Const<Expr> &e) { e.accept(*this); }
+    void operator()(Const<ErrorExpr>&) { unreachable("graph must not contain errors"); }
+
+    void operator()(Const<Designator> &e) {
+        auto target = e.target();
+        if (auto p = std::get_if<const Expr*>(&target)) {
+            (*this)(**p);
+        } else if (std::holds_alternative<const Attribute*>(target)) {
+            Schema::Identifier id(e.table_name.text, e.attr_name.text);
+            if (not schema.has(id)) // avoid duplicates
+                schema.add(id, e.type());
+        } else {
+            unreachable("designator has no target");
+        }
+    }
+
+    void operator()(Const<Constant>&) { /* nothing to be done */ }
+
+    void operator()(Const<FnApplicationExpr> &e) {
+        //(*this)(*e.fn);
+        for (auto arg : e.args)
+            (*this)(*arg);
+    }
+
+    void operator()(Const<UnaryExpr> &e) { (*this)(*e.expr); }
+
+    void operator()(Const<BinaryExpr> &e) { (*this)(*e.lhs); (*this)(*e.rhs); }
+
+    /* Clauses */
+    void operator()(Const<ErrorClause>&) { unreachable("not implemented"); }
+    void operator()(Const<SelectClause>&) { unreachable("not implemented"); }
+    void operator()(Const<FromClause>&) { unreachable("not implemented"); }
+    void operator()(Const<WhereClause>&) { unreachable("not implemented"); }
+    void operator()(Const<GroupByClause>&) { unreachable("not implemented"); }
+    void operator()(Const<HavingClause>&) { unreachable("not implemented"); }
+    void operator()(Const<OrderByClause>&) { unreachable("not implemented"); }
+    void operator()(Const<LimitClause>&) { unreachable("not implemented"); }
+
+    /* Statements */
+    void operator()(Const<ErrorStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<EmptyStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<CreateDatabaseStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<UseDatabaseStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<CreateTableStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<SelectStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<InsertStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<UpdateStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<DeleteStmt>&) { unreachable("not implemented"); }
+    void operator()(Const<DSVImportStmt>&) { }
+};
+
+Schema Expr::get_required() const
+{
+    GetRequired R;
+    R(*this);
+    return R.get();
+}
+
+
 /*======================================================================================================================
  * Stream printing
  *====================================================================================================================*/

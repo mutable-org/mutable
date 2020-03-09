@@ -1,5 +1,6 @@
 #pragma once
 
+#include "catalog/Schema.hpp"
 #include "lex/Token.hpp"
 #include <iostream>
 #include <variant>
@@ -48,6 +49,9 @@ struct Expr
 
     virtual void accept(ASTVisitor &v) = 0;
     virtual void accept(ConstASTVisitor &v) const = 0;
+
+    /** Returns a `Schema` instance containing all required definitions (of `Attribute`s and other `Designator`s). */
+    Schema get_required() const;
 
     void dot(std::ostream &out) const;
 

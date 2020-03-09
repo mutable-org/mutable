@@ -142,11 +142,12 @@ inline Schema operator+(const Schema &left, const Schema &right)
 }
 
 /** Computes the *set intersection* of two `Schema`s. */
-inline Schema operator&(const Schema &first, const Schema &second) {
+inline Schema operator&(const Schema &left, const Schema &right)
+{
     Schema res;
-    for (auto &e : first) {
-        auto it = second.find(e.id);
-        if (it != second.end()) {
+    for (auto &e : left) {
+        auto it = right.find(e.id);
+        if (it != right.end()) {
             insist(e.type == it->type, "type mismatch");
             res.add(e.id, e.type);
         }

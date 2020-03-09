@@ -306,7 +306,7 @@ void Pipeline::operator()(const JoinOperator &op)
                 }
             } else {
                 /* This is not the right-most child.  Collect its produced tuples in a buffer. */
-                const auto tuple_schema = op.child(data->active_child)->schema();
+                const auto &tuple_schema = op.child(data->active_child)->schema();
                 for (auto &t : block_)
                     data->buffers[data->active_child].emplace_back(t.clone(tuple_schema));
             }

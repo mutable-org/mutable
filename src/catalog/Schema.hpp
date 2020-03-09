@@ -155,6 +155,13 @@ inline Schema operator&(const Schema &left, const Schema &right)
     return res;
 }
 
+inline Schema operator|(const Schema &left, const Schema &right)
+{
+    Schema res(left);
+    res |= right;
+    return res;
+}
+
 }
 
 namespace std {

@@ -166,8 +166,27 @@ void DSVReader::operator()(Const<Numeric> &ty)
         }
 
         case Numeric::N_Decimal: {
-            // TODO more precise implementation
-            /* fall through */
+            auto scale = ty.scale;
+            /* Read pre dot digits. */
+            int64_t d = read_int();
+            // std::cerr << "Read: " << d;
+            d = d * powi(10, scale);
+            if (accept('.')) {
+                /* Read post dot digits. */
+                int64_t post_dot = 0;
+                auto n = scale;
+                while (n > 0 and is_dec(c)) {
+                    post_dot = 10 * post_dot + c - '0';
+                    step();
+                    n--;
+                }
+                post_dot *= powi(10, n);
+                /* Discard further digits */
+                while (is_dec(c)) { step(); }
+                d += d >= 0 ? post_dot : -post_dot;
+            }
+            row->set(*attr, d);
+            break;
         }
 
         case Numeric::N_Float: {

@@ -71,6 +71,66 @@ struct NestedLoopsJoinData : JoinData
     ~NestedLoopsJoinData() { delete[] buffers; }
 };
 
+struct SimpleHashJoinData : JoinData
+{
+    bool is_probe_phase = false; ///< determines whether tuples are used to *build* or *probe* the hash table
+    StackMachine build_key; ///< extracts the key of the build input
+    StackMachine probe_key; ///< extracts the key of the probe input
+    std::unordered_multimap<Tuple, Tuple> ht; ///< hash table on build input
+
+    Schema key_schema; ///< the `Schema` of the `key`
+    Tuple key; ///< `Tuple` to hold the key
+
+    SimpleHashJoinData(const JoinOperator &op)
+        : JoinData(op)
+        , build_key(op.child(0)->schema())
+        , probe_key(op.child(1)->schema())
+    {
+        /* Decompose the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. */
+        auto &pred = op.predicate();
+        insist(pred.size() == 1, "invalid predicate for simple hash join");
+        auto &clause = pred[0];
+        insist(clause.size() == 1, "invalid predicate for simple hash join");
+        auto &literal = clause[0];
+        insist(not literal.negative(), "invalid predicate for simple hash join");
+        auto expr = literal.expr();
+        auto binary = as<const BinaryExpr>(expr);
+        insist(binary->tok == TK_EQUAL);
+        auto first = binary->lhs;
+        auto second = binary->rhs;
+        insist(first->type() == second->type(), "the two sides of a comparison should have matching types");
+
+        key_schema.add("key", first->type());
+        key = Tuple(key_schema);
+
+        /* Identify for each part `A.x` and `B.y` to which side of the join they belong. */
+        auto required_first = first->get_required();
+        auto &schema_lhs = op.child(0)->schema();
+#ifndef NDEBUG
+        auto required_second = second->get_required();
+        auto &schema_rhs = op.child(1)->schema();
+#endif
+
+        if ((required_first & schema_lhs).num_entries() != 0) { // build on first, probe second
+#ifndef NDEBUG
+            insist((required_first & schema_rhs).num_entries() == 0,
+                   "first expression requires definitions from both sides");
+            insist((required_second & schema_lhs).num_entries() == 0,
+                   "second expression requires definition from left-hand side");
+#endif
+            build_key.emit(*first, 1);
+            build_key.emit_St_Tup(0, 0, first->type());
+            probe_key.emit(*second, 1);
+            probe_key.emit_St_Tup(0, 0, second->type());
+        } else {                                                // build on second, probe first
+            build_key.emit(*second, 1);
+            build_key.emit_St_Tup(0, 0, second->type());
+            probe_key.emit(*first, 1);
+            probe_key.emit_St_Tup(0, 0, first->type());
+        }
+    }
+};
+
 struct LimitData : OperatorData
 {
     std::size_t num_tuples = 0;
@@ -313,9 +373,45 @@ void Pipeline::operator()(const JoinOperator &op)
             break;
         }
 
-        case JoinOperator::J_SimpleHashJoin:
-            // TODO
-            unreachable("Simple hash join not implemented.");
+        case JoinOperator::J_SimpleHashJoin: {
+            auto data = as<SimpleHashJoinData>(op.data());
+            Tuple *args[2] = { &data->key, nullptr };
+            if (data->is_probe_phase) {
+                const auto &tuple_schema = op.child(1)->schema();
+                const auto num_entries_build = op.child(0)->schema().num_entries();
+                const auto num_entries_probe = tuple_schema.num_entries();
+                auto &pipeline = data->pipeline;
+                std::size_t i = 0;
+                for (auto &t : block_) {
+                    args[1] = &t;
+                    data->probe_key(args);
+                    auto [it, end] = data->ht.equal_range(*args[0]);
+                    pipeline.block_.fill();
+                    for (; it != end; ++it, ++i) {
+                        if (i == pipeline.block_.capacity()) {
+                            pipeline.push(*op.parent());
+                            i = 0;
+                        }
+
+                        pipeline.block_[i].insert(it->second, 0, num_entries_build);
+                        pipeline.block_[i].insert(t, num_entries_build, num_entries_probe);
+                    }
+                }
+
+                if (i != 0) {
+                    insist(i <= pipeline.block_.capacity());
+                    pipeline.block_.mask(i == pipeline.block_.capacity() ? -1UL : (1UL << i) - 1);
+                    pipeline.push(*op.parent());
+                }
+            } else {
+                const auto &tuple_schema = op.child(0)->schema();
+                for (auto &t : block_) {
+                    args[1] = &t;
+                    data->build_key(args);
+                    data->ht.emplace(args[0]->clone(data->key_schema), t.clone(tuple_schema));
+                }
+            }
+        }
     }
 }
 
@@ -536,9 +632,14 @@ void Interpreter::operator()(const JoinOperator &op)
             break;
         }
 
-        case JoinOperator::J_SimpleHashJoin:
-            // TODO
-            unreachable("Simple hash join not implemented.");
+        case JoinOperator::J_SimpleHashJoin: {
+            auto data = new SimpleHashJoinData(op);
+            op.data(data);
+            op.child(0)->accept(*this); // build HT on LHS
+            data->is_probe_phase = true;
+            op.child(1)->accept(*this); // probe HT with RHS
+            break;
+        }
     }
 }
 

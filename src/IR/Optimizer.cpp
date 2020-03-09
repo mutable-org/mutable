@@ -7,6 +7,20 @@
 using namespace db;
 
 
+/** Returns `true` iff the given join predicate in `cnf::CNF` formula is an equi-join. */
+bool is_equi_join(const cnf::CNF &cnf)
+{
+    if (cnf.size() != 1) return false;
+    auto &clause = cnf[0];
+    if (clause.size() != 1) return false;
+    auto &literal = clause[0];
+    if (literal.negative()) return false;
+    auto expr = literal.expr();
+    auto binary = cast<const BinaryExpr>(expr);
+    if (not binary or binary->tok != TK_EQUAL) return false;
+    return is<const Designator>(binary->lhs) and is<const Designator>(binary->rhs);
+}
+
 void PlanTable::dump(std::ostream &out) const
 {
     constexpr std::size_t width = 20;
@@ -156,10 +170,17 @@ Optimizer::construct_plan(const QueryGraph &G, PlanTable &plan_table, Producer *
                 }
 
                 /* Construct the join. */
-                auto join = new JoinOperator(join_condition, JoinOperator::J_NestedLoops); // TODO use better algo
-                for (auto sub_plan : sub_plans)
-                    join->add_child(sub_plan);
-                return join;
+                if (sub_plans.size() == 2 and is_equi_join(join_condition)) {
+                    auto join = new JoinOperator(join_condition, JoinOperator::J_SimpleHashJoin);
+                    for (auto sub_plan : sub_plans)
+                        join->add_child(sub_plan);
+                    return join;
+                } else {
+                    auto join = new JoinOperator(join_condition, JoinOperator::J_NestedLoops);
+                    for (auto sub_plan : sub_plans)
+                        join->add_child(sub_plan);
+                    return join;
+                }
             }
         };
         return construct_plan_impl(s, construct_plan_impl);

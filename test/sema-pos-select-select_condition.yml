@@ -1,0 +1,44 @@
+description: SELECT statement testing
+db: ours
+query: |
+    SELECT * FROM R WHERE R.key > 1 AND R.key < 5;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: * TK_ASTERISK
+            -:1:10: FROM TK_From
+            -:1:15: R TK_IDENTIFIER
+            -:1:17: WHERE TK_Where
+            -:1:23: R TK_IDENTIFIER
+            -:1:24: . TK_DOT
+            -:1:25: key TK_IDENTIFIER
+            -:1:29: > TK_GREATER
+            -:1:31: 1 TK_DEC_INT
+            -:1:33: AND TK_And
+            -:1:37: R TK_IDENTIFIER
+            -:1:38: . TK_DOT
+            -:1:39: key TK_IDENTIFIER
+            -:1:43: < TK_LESS
+            -:1:45: 5 TK_DEC_INT
+            -:1:46: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT *
+            FROM R
+            WHERE ((R.key > 1) AND (R.key < 5));
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

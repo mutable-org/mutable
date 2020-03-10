@@ -1,0 +1,35 @@
+description: INSERT statement testing
+db: ours
+query: |
+    INSERT INTO R VALUES(100, 42, 5.67890, "testinginsert");
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: INSERT TK_Insert
+            -:1:8: INTO TK_Into
+            -:1:13: R TK_IDENTIFIER
+            -:1:15: VALUES TK_Values
+            -:1:21: ( TK_LPAR
+            -:1:22: 100 TK_DEC_INT
+            -:1:25: , TK_COMMA
+            -:1:27: 42 TK_DEC_INT
+            -:1:29: , TK_COMMA
+            -:1:31: 5.67890 TK_DEC_FLOAT
+            -:1:38: , TK_COMMA
+            -:1:40: "testinginsert" TK_STRING_LITERAL
+            -:1:55: ) TK_RPAR
+            -:1:56: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            INSERT INTO R
+            VALUES
+                (100, 42, 5.67890, "testinginsert");
+        err: NULL
+        num_err: 0
+        returncode: 0

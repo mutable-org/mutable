@@ -1,0 +1,88 @@
+description: Datatype testing
+db: ours
+query: |
+    CREATE TABLE my_table (
+        x INT(4),
+        y FLOAT,
+        z DECIMAL(10, 2),
+        vc VARCHAR(42),
+        c CHAR(13),
+        b BOOL,
+        d DOUBLE
+    );
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: TABLE TK_Table
+            -:1:14: my_table TK_IDENTIFIER
+            -:1:23: ( TK_LPAR
+            -:2:5: x TK_IDENTIFIER
+            -:2:7: INT TK_Int
+            -:2:10: ( TK_LPAR
+            -:2:11: 4 TK_DEC_INT
+            -:2:12: ) TK_RPAR
+            -:2:13: , TK_COMMA
+            -:3:5: y TK_IDENTIFIER
+            -:3:7: FLOAT TK_Float
+            -:3:12: , TK_COMMA
+            -:4:5: z TK_IDENTIFIER
+            -:4:7: DECIMAL TK_Decimal
+            -:4:14: ( TK_LPAR
+            -:4:15: 10 TK_DEC_INT
+            -:4:17: , TK_COMMA
+            -:4:19: 2 TK_DEC_INT
+            -:4:20: ) TK_RPAR
+            -:4:21: , TK_COMMA
+            -:5:5: vc TK_IDENTIFIER
+            -:5:8: VARCHAR TK_Varchar
+            -:5:15: ( TK_LPAR
+            -:5:16: 42 TK_DEC_INT
+            -:5:18: ) TK_RPAR
+            -:5:19: , TK_COMMA
+            -:6:5: c TK_IDENTIFIER
+            -:6:7: CHAR TK_Char
+            -:6:11: ( TK_LPAR
+            -:6:12: 13 TK_DEC_INT
+            -:6:14: ) TK_RPAR
+            -:6:15: , TK_COMMA
+            -:7:5: b TK_IDENTIFIER
+            -:7:7: BOOL TK_Bool
+            -:7:11: , TK_COMMA
+            -:8:5: d TK_IDENTIFIER
+            -:8:7: DOUBLE TK_Double
+            -:9:1: ) TK_RPAR
+            -:9:2: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            CREATE TABLE my_table
+            (
+                x INT(4),
+                y FLOAT,
+                z DECIMAL(10, 2),
+                vc VARCHAR(42),
+                c CHAR(13),
+                b BOOL,
+                d DOUBLE
+            );
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 0
+
+    end2end:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

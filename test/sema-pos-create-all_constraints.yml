@@ -1,0 +1,154 @@
+description: Constarints testing
+db: ours
+query: |
+    CREATE TABLE test (
+        id INT(4) PRIMARY KEY,
+        not_nu INT(4) NOT NULL,
+        uniq INT(4) UNIQUE,
+        checked INT(4) CHECK ((checked < 42)),
+        ref_id INT(2) REFERENCES R(key),
+        many_checks INT(4) CHECK ((many_checks > 13))
+        CHECK ((many_checks != 5)) CHECK ((many_checks < 1337)
+        AND (many_checks > 808)),
+        combined INT(4) UNIQUE CHECK ((combined != 13))
+    );
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: TABLE TK_Table
+            -:1:14: test TK_IDENTIFIER
+            -:1:19: ( TK_LPAR
+            -:2:5: id TK_IDENTIFIER
+            -:2:8: INT TK_Int
+            -:2:11: ( TK_LPAR
+            -:2:12: 4 TK_DEC_INT
+            -:2:13: ) TK_RPAR
+            -:2:15: PRIMARY TK_Primary
+            -:2:23: KEY TK_Key
+            -:2:26: , TK_COMMA
+            -:3:5: not_nu TK_IDENTIFIER
+            -:3:12: INT TK_Int
+            -:3:15: ( TK_LPAR
+            -:3:16: 4 TK_DEC_INT
+            -:3:17: ) TK_RPAR
+            -:3:19: NOT TK_Not
+            -:3:23: NULL TK_Null
+            -:3:27: , TK_COMMA
+            -:4:5: uniq TK_IDENTIFIER
+            -:4:10: INT TK_Int
+            -:4:13: ( TK_LPAR
+            -:4:14: 4 TK_DEC_INT
+            -:4:15: ) TK_RPAR
+            -:4:17: UNIQUE TK_Unique
+            -:4:23: , TK_COMMA
+            -:5:5: checked TK_IDENTIFIER
+            -:5:13: INT TK_Int
+            -:5:16: ( TK_LPAR
+            -:5:17: 4 TK_DEC_INT
+            -:5:18: ) TK_RPAR
+            -:5:20: CHECK TK_Check
+            -:5:26: ( TK_LPAR
+            -:5:27: ( TK_LPAR
+            -:5:28: checked TK_IDENTIFIER
+            -:5:36: < TK_LESS
+            -:5:38: 42 TK_DEC_INT
+            -:5:40: ) TK_RPAR
+            -:5:41: ) TK_RPAR
+            -:5:42: , TK_COMMA
+            -:6:5: ref_id TK_IDENTIFIER
+            -:6:12: INT TK_Int
+            -:6:15: ( TK_LPAR
+            -:6:16: 2 TK_DEC_INT
+            -:6:17: ) TK_RPAR
+            -:6:19: REFERENCES TK_References
+            -:6:30: R TK_IDENTIFIER
+            -:6:31: ( TK_LPAR
+            -:6:32: key TK_IDENTIFIER
+            -:6:35: ) TK_RPAR
+            -:6:36: , TK_COMMA
+            -:7:5: many_checks TK_IDENTIFIER
+            -:7:17: INT TK_Int
+            -:7:20: ( TK_LPAR
+            -:7:21: 4 TK_DEC_INT
+            -:7:22: ) TK_RPAR
+            -:7:24: CHECK TK_Check
+            -:7:30: ( TK_LPAR
+            -:7:31: ( TK_LPAR
+            -:7:32: many_checks TK_IDENTIFIER
+            -:7:44: > TK_GREATER
+            -:7:46: 13 TK_DEC_INT
+            -:7:48: ) TK_RPAR
+            -:7:49: ) TK_RPAR
+            -:8:5: CHECK TK_Check
+            -:8:11: ( TK_LPAR
+            -:8:12: ( TK_LPAR
+            -:8:13: many_checks TK_IDENTIFIER
+            -:8:25: != TK_BANG_EQUAL
+            -:8:28: 5 TK_DEC_INT
+            -:8:29: ) TK_RPAR
+            -:8:30: ) TK_RPAR
+            -:8:32: CHECK TK_Check
+            -:8:38: ( TK_LPAR
+            -:8:39: ( TK_LPAR
+            -:8:40: many_checks TK_IDENTIFIER
+            -:8:52: < TK_LESS
+            -:8:54: 1337 TK_DEC_INT
+            -:8:58: ) TK_RPAR
+            -:9:5: AND TK_And
+            -:9:9: ( TK_LPAR
+            -:9:10: many_checks TK_IDENTIFIER
+            -:9:22: > TK_GREATER
+            -:9:24: 808 TK_DEC_INT
+            -:9:27: ) TK_RPAR
+            -:9:28: ) TK_RPAR
+            -:9:29: , TK_COMMA
+            -:10:5: combined TK_IDENTIFIER
+            -:10:14: INT TK_Int
+            -:10:17: ( TK_LPAR
+            -:10:18: 4 TK_DEC_INT
+            -:10:19: ) TK_RPAR
+            -:10:21: UNIQUE TK_Unique
+            -:10:28: CHECK TK_Check
+            -:10:34: ( TK_LPAR
+            -:10:35: ( TK_LPAR
+            -:10:36: combined TK_IDENTIFIER
+            -:10:45: != TK_BANG_EQUAL
+            -:10:48: 13 TK_DEC_INT
+            -:10:50: ) TK_RPAR
+            -:10:51: ) TK_RPAR
+            -:11:1: ) TK_RPAR
+            -:11:2: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            CREATE TABLE test
+            (
+                id INT(4) PRIMARY KEY,
+                not_nu INT(4) NOT NULL,
+                uniq INT(4) UNIQUE,
+                checked INT(4) CHECK ((checked < 42)),
+                ref_id INT(2) REFERENCES R(key),
+                many_checks INT(4) CHECK ((many_checks > 13)) CHECK ((many_checks != 5)) CHECK (((many_checks < 1337) AND (many_checks > 808))),
+                combined INT(4) UNIQUE CHECK ((combined != 13))
+            );
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

@@ -36,7 +36,7 @@ TEST_CASE("Sema/Expressions", "[core][parse][sema]")
         { "42", Type::Get_Integer(Type::TY_Scalar, 4) },
         { "017", Type::Get_Integer(Type::TY_Scalar, 4) },
         { "0xC0FF33", Type::Get_Integer(Type::TY_Scalar, 4) },
-        { "0xC0FF33", Type::Get_Integer(Type::TY_Scalar, 4) },
+        { "0xc0ff33", Type::Get_Integer(Type::TY_Scalar, 4) },
 
         { "017777777777", Type::Get_Integer(Type::TY_Scalar, 4) }, // 2^31 - 1, octal
         { "2147483647", Type::Get_Integer(Type::TY_Scalar, 4) }, // 2^31 - 1, decimal

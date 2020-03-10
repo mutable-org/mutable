@@ -169,6 +169,27 @@ TEST_CASE("Sema/Expressions", "[core][parse][sema]")
         { "TRUE .. \"text\"", Type::Get_Error() },
         { "\"text\" .. NULL", Type::Get_Error() },
         { "NULL .. \"text\"", Type::Get_Error() },
+
+        /* Three Valued Logic */
+        { "FALSE AND FALSE", Type::Get_Boolean(Type::TY_Scalar) },
+        { "FALSE AND NULL", Type::Get_Error() },
+        { "FALSE AND TRUE", Type::Get_Boolean(Type::TY_Scalar) },
+        { "NULL AND FALSE", Type::Get_Error() },
+        { "NULL AND NULL", Type::Get_Error() },
+        { "NULL AND TRUE", Type::Get_Error() },
+        { "TRUE AND FALSE", Type::Get_Boolean(Type::TY_Scalar) },
+        { "TRUE AND NULL", Type::Get_Error() },
+        { "TRUE AND TRUE", Type::Get_Boolean(Type::TY_Scalar) },
+
+        { "FALSE OR FALSE", Type::Get_Boolean(Type::TY_Scalar) },
+        { "FALSE OR NULL", Type::Get_Error() },
+        { "FALSE OR TRUE", Type::Get_Boolean(Type::TY_Scalar) },
+        { "NULL OR FALSE", Type::Get_Error() },
+        { "NULL OR NULL", Type::Get_Error() },
+        { "NULL OR TRUE", Type::Get_Error() },
+        { "TRUE OR FALSE", Type::Get_Boolean(Type::TY_Scalar) },
+        { "TRUE OR NULL", Type::Get_Error() },
+        { "TRUE OR TRUE", Type::Get_Boolean(Type::TY_Scalar) },
     };
 
     for (auto e : exprs) {

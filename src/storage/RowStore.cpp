@@ -70,34 +70,23 @@ StackMachine RowStore::loader(const Schema &schema) const
             sm.emit_Ld_RS_b();
         } else if (auto n = cast<const Numeric>(ty)) {
             switch (n->kind) {
-                case Numeric::N_Int: {
-                    switch (n->precision) {
-                        default: unreachable("illegal integer type");
-                        case 1: sm.emit_Ld_RS_i8();  break;
-                        case 2: sm.emit_Ld_RS_i16(); break;
-                        case 4: sm.emit_Ld_RS_i32(); break;
-                        case 8: sm.emit_Ld_RS_i64(); break;
+                case Numeric::N_Int:
+                case Numeric::N_Decimal: {
+                    switch (n->size()) {
+                        default: unreachable("illegal type");
+                        case  8: sm.emit_Ld_RS_i8();  break;
+                        case 16: sm.emit_Ld_RS_i16(); break;
+                        case 32: sm.emit_Ld_RS_i32(); break;
+                        case 64: sm.emit_Ld_RS_i64(); break;
                     }
                     break;
                 }
 
                 case Numeric::N_Float: {
-                    if (n->precision == 32)
+                    if (n->size() == 32)
                         sm.emit_Ld_RS_f();
                     else
                         sm.emit_Ld_RS_d();
-                    break;
-                }
-
-                case Numeric::N_Decimal: {
-                    const auto p = ceil_to_pow_2(n->size());
-                    switch (p) {
-                        default: unreachable("illegal precision of decimal type");
-                        case 8: sm.emit_Ld_RS_i8();  break;
-                        case 16: sm.emit_Ld_RS_i16(); break;
-                        case 32: sm.emit_Ld_RS_i32(); break;
-                        case 64: sm.emit_Ld_RS_i64(); break;
-                    }
                     break;
                 }
             }
@@ -162,34 +151,22 @@ StackMachine RowStore::writer(const std::vector<const Attribute*> &attrs) const
             sm.emit_St_RS_b();
         } else if (auto n = cast<const Numeric>(ty)) {
             switch (n->kind) {
-                case Numeric::N_Int: {
-                    switch (n->precision) {
-                        default: unreachable("illegal integer type");
-                        case 1: sm.emit_St_RS_i8();  break;
-                        case 2: sm.emit_St_RS_i16(); break;
-                        case 4: sm.emit_St_RS_i32(); break;
-                        case 8: sm.emit_St_RS_i64(); break;
+                case Numeric::N_Int:
+                case Numeric::N_Decimal:
+                    switch (n->size()) {
+                        default: unreachable("illegal type");
+                        case  8: sm.emit_St_RS_i8();  break;
+                        case 16: sm.emit_St_RS_i16(); break;
+                        case 32: sm.emit_St_RS_i32(); break;
+                        case 64: sm.emit_St_RS_i64(); break;
                     }
                     break;
-                }
 
                 case Numeric::N_Float: {
-                    if (n->precision == 32)
+                    if (n->size() == 32)
                         sm.emit_St_RS_f();
                     else
                         sm.emit_St_RS_d();
-                    break;
-                }
-
-                case Numeric::N_Decimal: {
-                    const auto p = ceil_to_pow_2(n->size());
-                    switch (p) {
-                        default: unreachable("illegal precision of decimal type");
-                        case 1: sm.emit_St_RS_i8();  break;
-                        case 2: sm.emit_St_RS_i16(); break;
-                        case 4: sm.emit_St_RS_i32(); break;
-                        case 8: sm.emit_St_RS_i64(); break;
-                    }
                     break;
                 }
             }

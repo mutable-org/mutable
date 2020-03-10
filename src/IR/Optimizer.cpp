@@ -21,26 +21,7 @@ bool is_equi_join(const cnf::CNF &cnf)
     return is<const Designator>(binary->lhs) and is<const Designator>(binary->rhs);
 }
 
-void PlanTable::dump(std::ostream &out) const
-{
-    constexpr std::size_t width = 20;
-    std::size_t n = 1UL << num_sources_;
-
-    out << "Plan Table:\n";
-    out << std::setw(Subproblem::CAPACITY) << "Subproblem" << "\t";
-    out << std::setw(width) << "Size" << "\t";
-    out << std::setw(width) << "Cost" << "\t";
-    out << std::setw(Subproblem::CAPACITY) << "Left" << "\t";
-    out << std::setw(Subproblem::CAPACITY) << "Right" << "\n";
-
-    for (std::size_t i = 1; i < n; ++i) {
-        out << /*std::setw(width) <<*/ Subproblem(i) << "\t";
-        out << std::setw(width) << at(Subproblem(i)).size << "\t";
-        out << std::setw(width) << at(Subproblem(i)).cost << "\t";
-        out << /*std::setw(width) <<*/ at(Subproblem(i)).left << "\t";
-        out << /*std::setw(width) <<*/ at(Subproblem(i)).right << "\n";
-    }
-}
+void PlanTable::dump(std::ostream &out) const { out << *this << std::endl; }
 void PlanTable::dump() const { dump(std::cerr); }
 
 std::unique_ptr<Producer> Optimizer::operator()(const QueryGraph &G) const

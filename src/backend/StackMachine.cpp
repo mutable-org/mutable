@@ -792,7 +792,7 @@ NEXT;
         const std::size_t bytes = null_off / 8; \
         const std::size_t bits = null_off % 8; \
         bool is_null = TOP_IS_NULL; \
-        setbit(addr + bytes, is_null, bits); \
+        setbit(addr + bytes, not is_null, bits); \
         if (is_null) { \
             POP(); \
             NEXT; \
@@ -955,7 +955,7 @@ NEXT;
     /* Set null bit. */ \
     { \
         bool is_null = TOP_IS_NULL; \
-        setbit(&null_bitmap_col_addr[row_id], is_null, attr_id); \
+        setbit(&null_bitmap_col_addr[row_id], not is_null, attr_id); \
         if (is_null) { \
             POP(); \
             NEXT; \

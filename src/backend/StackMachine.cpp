@@ -646,10 +646,6 @@ Ld_Tup: {
     std::size_t tuple_id = std::size_t(*op_++);
     std::size_t index = std::size_t(*op_++);
     auto &t = *tuples[tuple_id];
-    // if (not t.is_null(index))
-    //     std::cerr << "Loading Value " << t[index] << " from Tuple " << tuple_id << std::endl;
-    // else
-    //     std::cerr << "Loading NULL from index " << index << " of Tuple " << tuple_id << std::endl;
     PUSH(t[index], t.is_null(index));
 }
 NEXT;
@@ -686,46 +682,6 @@ NEXT;
 /*======================================================================================================================
  * Output operations
  *====================================================================================================================*/
-
-#if 0
-Emit_Null: {
-    std::size_t idx = std::size_t(*op_++);
-    out->null(idx);
-}
-NEXT;
-
-Emit_i:
-Emit_f:
-Emit_d:
-Emit_b: {
-    std::size_t idx = std::size_t(*op_++);
-    out->set(idx, TOP, TOP_IS_NULL);
-}
-NEXT;
-
-Emit_s: {
-    std::size_t idx = std::size_t(*op_++);
-    if (TOP_IS_NULL) {
-        out->null(idx);
-    } else {
-        out->not_null(idx);
-        strcpy(reinterpret_cast<char*>((*out)[idx].as_p()), reinterpret_cast<char*>(TOP.as_p()));
-    }
-}
-NEXT;
-
-
-/*======================================================================================================================
- * Load / Update operations
- *====================================================================================================================*/
-
-/* Load a value from the tuple to the top of the stack. */
-Ld_Tup: {
-    std::size_t idx = std::size_t(*op_++);
-    PUSH(in[idx], in.is_null(idx));
-}
-NEXT;
-#endif
 
 /* Load a value from the context to the top of the value_stack_. */
 Ld_Ctx: {

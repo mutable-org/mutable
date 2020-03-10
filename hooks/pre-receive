@@ -1,0 +1,33 @@
+#!/bin/bash
+
+has_physical_tabs()
+{
+    ! git diff $1...$2 -- $3 | perl -nle "exit 1 if /^\+.*\t/"
+}
+
+has_trailing_whitespaces()
+{
+    ! git diff $1...$2 -- $3 | perl -nle "exit 1 if /^\+.*\s$/"
+}
+
+while read oldsha newsha refname; do
+    PUSH_PASSED=1
+    for f in $(git diff --name-only ${oldsha}...${newsha});
+    do
+        if has_physical_tabs ${oldsha} ${newsha} $f; then
+            PUSH_PASSED=0
+            >&2 echo "error: file '$f' introduces physical tabs"
+        fi
+        if has_trailing_whitespaces ${oldsha} ${newsha} $f; then
+            PUSH_PASSED=0
+            >&2 echo "error: file '$f' introduces trailing white spaces"
+        fi
+    done
+
+    if [[ $PUSH_PASSED -eq 0 ]]; then
+        >&2 echo "push rejected"
+        exit 1
+    fi
+done
+
+exit 0

@@ -17,8 +17,7 @@ stages:
 check:syntax:
     stage: check
     script:
-        - exit 0
-    allow_failure: true
+        - echo ${CI_COMMIT_BEFORE_SHA} ${CI_COMMIT_SHA} ${CI_COMMIT_REF_NAME} | hooks/pre-receive
 
 
 #-----------------------------------------------------------------------------------------------------------------------

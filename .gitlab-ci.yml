@@ -36,12 +36,8 @@ build:linux-amd64:
         - ninja
     artifacts:
         paths:
-            - build/debug/bin/
+            - "build/debug/bin/"
         expire_in: 1 day
-    #only:
-        #refs:
-            #- ci
-            #- merge_requests
 
 
 #-----------------------------------------------------------------------------------------------------------------------

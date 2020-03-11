@@ -85,6 +85,7 @@ Tuple::Tuple(const Schema &S)
     for (std::size_t i = 0; i != S.num_entries(); ++i) {
         if (auto cs = cast<const CharacterSequence>(S[i].type)) {
             new (&values_[i]) Value(p);
+            *p = '\0'; // terminating NUL byte
             p += cs->size() / 8;
         } else {
             new (&values_[i]) Value();

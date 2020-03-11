@@ -82,3 +82,26 @@ report:doxygen:
         - mv doxy/html/* /usr/share/nginx/html/mutable/doxy
     only:
         - master
+
+report:coverage:
+    stage: report
+    tags:
+        - nginx
+    needs: [ "build:linux-amd64" ]
+    script:
+        - mkdir -p build/debug
+        - cd build/debug
+        - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS_DEBUG=--coverage ../..
+        - ninja
+        - bin/unittest --reporter junit --out catch.xml \[core\]
+        - echo -e '#!/bin/bash\nllvm-cov gcov "$@"' > gcov.sh
+        - chmod a+x gcov.sh
+        - lcov --directory src --gcov-tool ./gcov.sh --rc lcov_branch_coverage=1 --capture --output-file cov.info
+        - rm -rf /usr/share/nginx/html/mutable/coverage
+        - mkdir -p /usr/share/nginx/html/mutable/coverage
+        - genhtml --branch-coverage cov.info -o /usr/share/nginx/html/mutable/coverage
+    artifacts:
+        reports:
+            junit: "build/debug/catch.xml"
+    only:
+        - master

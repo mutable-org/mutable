@@ -43,6 +43,7 @@ struct value_printer : ConstTypeVisitor
                 auto old_fill = out_.fill('0');
                 out_ << std::setw(n.scale) << post;
                 out_.fill(old_fill);
+                break;
             }
 
             case Numeric::N_Float:

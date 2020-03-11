@@ -564,6 +564,113 @@ void StackMachine::emit_St_Tup(std::size_t tuple_id, std::size_t index, const Ty
     }
 }
 
+void StackMachine::emit_Cast(const Type *to_ty, const Type *from_ty)
+{
+    auto to   = as<const PrimitiveType>(to_ty);
+    auto from = as<const PrimitiveType>(from_ty);
+    if (from->as_vectorial() == to->as_vectorial()) return; // nothing to be done
+
+    if (auto n_from = cast<const Numeric>(from)) {
+        auto n_to = as<const Numeric>(to);
+
+        switch (n_from->kind) {
+            case Numeric::N_Int:
+                switch (n_to->kind) {
+                    case Numeric::N_Int: /* int -> int */
+                        /* nothing to be done */
+                        return;
+
+                    case Numeric::N_Decimal: /* int -> decimal */
+                        add_and_emit_load(powi(10L, n_to->scale));
+                        emit_Mul_i();
+                        return;
+
+                    case Numeric::N_Float:
+                        if (n_to->size() == 32) /* int -> float */
+                            emit_Cast_f_i();
+                        else                    /* int -> double */
+                            emit_Cast_d_i();
+                        return;
+                }
+                break;
+
+            case Numeric::N_Float:
+                if (n_from->size() == 32) {
+                    switch (n_to->kind) {
+                        case Numeric::N_Int: /* float -> int */
+                            emit_Cast_i_f();
+                            return;
+
+                        case Numeric::N_Decimal: /* float -> decimal */
+                            add_and_emit_load(float(powi(10L, n_to->scale)));
+                            emit_Mul_f();
+                            emit_Cast_i_f();
+                            return;
+
+                        case Numeric::N_Float: /* float -> double */
+                            insist(n_to->size() == 64, "float to float");
+                            emit_Cast_d_f();
+                            return;
+                    }
+                } else {
+                    switch (n_to->kind) {
+                        case Numeric::N_Int: /* double -> int */
+                            emit_Cast_i_d();
+                            return;
+
+                        case Numeric::N_Decimal: /* double -> decimal */
+                            add_and_emit_load(double(powi(10L, n_to->scale)));
+                            emit_Mul_d();
+                            emit_Cast_i_d();
+                            return;
+
+                        case Numeric::N_Float:
+                            insist(n_to->size() == 32, "double to double");
+                            emit_Cast_f_d(); /* double -> float */
+                            return;
+                    }
+                }
+                break;
+
+            case Numeric::N_Decimal:
+                switch (n_to->kind) {
+                    case Numeric::N_Int: /* decimal -> int */
+                        add_and_emit_load(powi(10L, n_to->scale));
+                        emit_Div_i();
+                        return;
+
+                    case Numeric::N_Decimal: { /* decimal -> decimal */
+                        unreachable("not implemented");
+                        auto delta = n_to->scale - n_from->scale;
+                        if (delta > 0) {        /* decimal of lower scale to decimal of higher scale */
+                            add_and_emit_load(powi(10L, delta));
+                            emit_Mul_i();
+                        } else if (delta < 0) { /* decimal of higher scale to decimal of lower scale */
+                            add_and_emit_load(powi(10L, -delta));
+                            emit_Div_i();
+                        }
+                        return;
+                    }
+
+                    case Numeric::N_Float:
+                        if (n_to->size() == 32) {   /* decimal -> float */
+                            emit_Cast_f_i();
+                            add_and_emit_load(float(powi(10L, n_from->scale)));
+                            emit_Div_f();
+                        } else {                    /* decimal -> double */
+                            emit_Cast_d_i();
+                            add_and_emit_load(double(powi(10L, n_from->scale)));
+                            emit_Div_d();
+                        }
+                        return;
+                }
+                break;
+        }
+    }
+
+    unreachable("unsupported conversion");
+}
+
 void StackMachine::operator()(Tuple **tuples) const
 {
     static const void *labels[] = {

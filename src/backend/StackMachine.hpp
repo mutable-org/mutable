@@ -150,6 +150,9 @@ struct StackMachine
     /** Emit an `St_Tup_X` instruction based on `Type` `ty`, e.g.\ `St_Tup_i` for integral `Type`s. */
     void emit_St_Tup(std::size_t tuple_id, std::size_t index, const Type *ty);
 
+    /** Emit opcodes to convert a value of `Type` `from_ty` to `Type` `to_ty`. */
+    void emit_Cast(const Type *to_ty, const Type *from_ty);
+
     /** Appends the `Value` `val` to the context and returns its assigned index. */
     std::size_t add(Value val) {
         auto idx = context_.size();

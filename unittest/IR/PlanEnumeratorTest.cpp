@@ -52,7 +52,7 @@ void init_PT_base_case(const QueryGraph &G, PlanTable &PT)
 /*======================================================================================================================
  * Test Cost Function.
  *====================================================================================================================*/
-TEST_CASE("PlanEnumerator", "[unit]")
+TEST_CASE("PlanEnumerator", "[core][IR][planenumerator]")
 {
     using Subproblem = SmallBitset;
     /* Get Catalog and create new database to use for unit testing. */

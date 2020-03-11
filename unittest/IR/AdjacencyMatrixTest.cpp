@@ -39,7 +39,7 @@ Stmt * get_Stmt(const char *sql)
  * Test Adjacency Matrix.
  *====================================================================================================================*/
 
-TEST_CASE("AdjacencyMatrix/Standalone Matrix", "[unit]")
+TEST_CASE("AdjacencyMatrix/Standalone Matrix", "[core][IR][adjacencymatrix][unit]")
 {
     AdjacencyMatrix adj_mat;
 
@@ -135,7 +135,7 @@ TEST_CASE("AdjacencyMatrix/Standalone Matrix", "[unit]")
     }
 }
 
-TEST_CASE("AdjacencyMatrix/QueryGraph Matrix", "[unit]")
+TEST_CASE("AdjacencyMatrix/QueryGraph Matrix", "[core][IR][adjacencymatrix][unit]")
 {
     /* Get Catalog and create new database to use for unit testing. */
     Catalog::Clear();
@@ -231,7 +231,7 @@ TEST_CASE("AdjacencyMatrix/QueryGraph Matrix", "[unit]")
     delete stmt;
 }
 
-TEST_CASE("AdjacencyMatrix", "[unit]")
+TEST_CASE("AdjacencyMatrix", "[core][IR][adjacencymatrix][unit]")
 {
     AdjacencyMatrix M;
 

@@ -1,5 +1,5 @@
 [![pipeline status](https://gitlab.cs.uni-saarland.de/bigdata/mutable/mutable/badges/master/pipeline.svg)](https://gitlab.cs.uni-saarland.de/bigdata/mutable/mutable/-/commits/master)
-[![coverage report](https://gitlab.cs.uni-saarland.de/bigdata/mutable/mutable/badges/master/coverage.svg)](https://gitlab.cs.uni-saarland.de/bigdata/mutable/mutable/-/commits/master)
+[![coverage report](https://gitlab.cs.uni-saarland.de/bigdata/mutable/mutable/badges/master/coverage.svg)](http://deeprig02.cs.uni-saarland.de/mutable/coverage/)
 
 # mu*t*able
 ## A Database System for Research

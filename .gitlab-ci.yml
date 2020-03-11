@@ -100,6 +100,7 @@ report:coverage:
         - rm -rf /usr/share/nginx/html/mutable/coverage
         - mkdir -p /usr/share/nginx/html/mutable/coverage
         - genhtml --branch-coverage cov.info -o /usr/share/nginx/html/mutable/coverage
+    coverage: '/branches\.\.\.: \d+\.\d+/'
     artifacts:
         reports:
             junit: "build/debug/catch.xml"

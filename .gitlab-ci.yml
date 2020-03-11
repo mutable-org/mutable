@@ -5,9 +5,9 @@
 # Define the stages of the pipeline.
 stages:
     - check
-    - pages
     - build
     - test
+    - report
 
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -18,23 +18,6 @@ check:syntax:
     stage: check
     script:
         - echo ${CI_COMMIT_BEFORE_SHA} ${CI_COMMIT_SHA} ${CI_COMMIT_REF_NAME} | hooks/pre-receive
-
-
-#-----------------------------------------------------------------------------------------------------------------------
-# PAGES
-#-----------------------------------------------------------------------------------------------------------------------
-
-pages:doxygen:
-    stage: pages
-    tags:
-        - nginx
-    script:
-        - doxygen Doxyfile
-        - rm -rf /usr/share/nginx/html/mutable
-        - mkdir -p /usr/share/nginx/html/mutable
-        - mv doxy/html/* /usr/share/nginx/html/mutable
-    only:
-        - master
 
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -82,3 +65,20 @@ integrationtest:linux-amd64:
     script:
         - pip3 install --user --upgrade colorama pyyaml yamale tqdm
         - python3 test/IntegrationTest.py -v
+
+
+#-----------------------------------------------------------------------------------------------------------------------
+# REPORT
+#-----------------------------------------------------------------------------------------------------------------------
+
+report:doxygen:
+    stage: report
+    tags:
+        - nginx
+    script:
+        - doxygen Doxyfile
+        - rm -rf /usr/share/nginx/html/mutable/doxy
+        - mkdir -p /usr/share/nginx/html/mutable/doxy
+        - mv doxy/html/* /usr/share/nginx/html/mutable/doxy
+    only:
+        - master

@@ -162,8 +162,8 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             std::vector<const Attribute*> attrs;
             for (auto &attr : T) attrs.push_back(&attr);
             auto W = store.writer(attrs); // append values
-            Schema tuple_schema;
-            for (auto &attr : attrs) tuple_schema.add({attr->name}, attr->type);
+            std::vector<const Type*> tuple_schema;
+            for (auto attr : attrs) tuple_schema.push_back(attr->type);
             Tuple tup(tuple_schema);
             Tuple none;
             for (auto &t : I->tuples) {

@@ -168,17 +168,21 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             Tuple none;
             for (auto &t : I->tuples) {
                 StackMachine get_tuple(Schema{});
-                for (auto &v : t) {
+                for (std::size_t i = 0; i != t.size(); ++i) {
+                    auto &v = t[i];
                     switch (v.first) {
                         case InsertStmt::I_Null:
-                            get_tuple.emit_Push_Null();
+                            get_tuple.emit_St_Tup_Null(0, i);
                             break;
 
                         case InsertStmt::I_Default:
-                            unreachable("not implemented");
+                            /* nothing to be done, Tuples are initialized to default values */
+                            break;
 
                         case InsertStmt::I_Expr:
                             get_tuple.emit(*v.second);
+                            get_tuple.emit_Cast(tuple_schema[i], v.second->type());
+                            get_tuple.emit_St_Tup(0, i, tuple_schema[i]);
                             break;
                     }
                 }

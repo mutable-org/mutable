@@ -52,7 +52,7 @@ TEST_CASE("powi", "[core][util][fn]")
     REQUIRE(powi(4, 5) == 1024);
 }
 
-TEST_CASE("subsets/least_subset, next_subset", "[util][fn]")
+TEST_CASE("subsets/least_subset, next_subset", "[core][util][fn]")
 {
     uint64_t set = 10;
 
@@ -62,7 +62,7 @@ TEST_CASE("subsets/least_subset, next_subset", "[util][fn]")
     REQUIRE(next_subset(10, set) == 0);
 }
 
-TEST_CASE("sum_wo_overflow", "[util][fn]")
+TEST_CASE("sum_wo_overflow", "[core][util][fn]")
 {
     uint64_t UL_MAX = std::numeric_limits<uint64_t>::max();
     uint64_t U_MAX = std::numeric_limits<uint64_t>::max();

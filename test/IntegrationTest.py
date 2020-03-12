@@ -200,8 +200,8 @@ BINARIES = {
 }
 
 SETUPS = {
-    'ours': os.path.join('test', 'ours.sql'),
-    'tpch': os.path.join('test', 'tpch.sql'),
+    'ours':     os.path.join('test', 'ours.sql'),
+    'tpc_h':    os.path.join('test', 'tpc_h.sql'),
 }
 
 

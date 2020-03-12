@@ -94,6 +94,11 @@ struct PlanTable
     /** Get the already computed cost of a subproblem. */
     auto c(Subproblem s) const { return at(s).cost; }
 
+    /** Returns true iff the entry specified by `S` is empty. */
+    bool empty(Subproblem S) const {
+        return (c(S) == std::numeric_limits<uint64_t>::max()) and (at(S).left == 0) and (at(S).right == 0);
+    }
+
     void update(const CostFunction &cf, Subproblem left, Subproblem right, int op) {
         auto &entry = at(left | right);
         auto cost = cf(left, right, op, *this);

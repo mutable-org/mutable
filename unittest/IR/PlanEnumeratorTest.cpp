@@ -116,113 +116,148 @@ TEST_CASE("PlanEnumerator", "[core][IR][planenumerator]")
 
     constexpr uint64_t MAX = std::numeric_limits<uint64_t>::max();
 
-    /* Initialize `PlanTable` for `DPsiz` algorithms. */
-    PlanTable expected_plan_table_dpsize(num_sources);
-    expected_plan_table_dpsize.at(Subproblem(1))  = { Subproblem(0), Subproblem(0),     5,   0 };
-    expected_plan_table_dpsize.at(Subproblem(2))  = { Subproblem(0), Subproblem(0),    10,   0 };
-    expected_plan_table_dpsize.at(Subproblem(3))  = { Subproblem(0), Subproblem(0),     0, MAX };
-    expected_plan_table_dpsize.at(Subproblem(4))  = { Subproblem(0), Subproblem(0),     8,   0 };
-    expected_plan_table_dpsize.at(Subproblem(5))  = { Subproblem(1), Subproblem(4),    40,  13 };
-    expected_plan_table_dpsize.at(Subproblem(6))  = { Subproblem(0), Subproblem(0),     0, MAX };
-    expected_plan_table_dpsize.at(Subproblem(7))  = { Subproblem(0), Subproblem(0),     0, MAX };
-    expected_plan_table_dpsize.at(Subproblem(8))  = { Subproblem(0), Subproblem(0),    12,   0 };
-    expected_plan_table_dpsize.at(Subproblem(9))  = { Subproblem(1), Subproblem(8),    60,  17 };
-    expected_plan_table_dpsize.at(Subproblem(10)) = { Subproblem(2), Subproblem(8),   120,  22 };
-    expected_plan_table_dpsize.at(Subproblem(11)) = { Subproblem(2), Subproblem(9),   600,  87 };
-    expected_plan_table_dpsize.at(Subproblem(12)) = { Subproblem(4), Subproblem(8),    96,  20 };
-    expected_plan_table_dpsize.at(Subproblem(13)) = { Subproblem(8), Subproblem(5),   480,  65 };
-    expected_plan_table_dpsize.at(Subproblem(14)) = { Subproblem(2), Subproblem(12),  960, 126 };
-    expected_plan_table_dpsize.at(Subproblem(15)) = { Subproblem(5), Subproblem(10), 4800, 195 };
-
     SECTION("DPsize")
     {
+        /* Initialize `PlanTable` for `DPsize`. */
+        PlanTable expected_plan_table(num_sources);
+        expected_plan_table.at(Subproblem(1))  = { Subproblem(0), Subproblem(0),     5,   0 };
+        expected_plan_table.at(Subproblem(2))  = { Subproblem(0), Subproblem(0),    10,   0 };
+        expected_plan_table.at(Subproblem(3))  = { Subproblem(0), Subproblem(0),     0, MAX };
+        expected_plan_table.at(Subproblem(4))  = { Subproblem(0), Subproblem(0),     8,   0 };
+        expected_plan_table.at(Subproblem(5))  = { Subproblem(1), Subproblem(4),    40,  13 };
+        expected_plan_table.at(Subproblem(6))  = { Subproblem(0), Subproblem(0),     0, MAX };
+        expected_plan_table.at(Subproblem(7))  = { Subproblem(0), Subproblem(0),     0, MAX };
+        expected_plan_table.at(Subproblem(8))  = { Subproblem(0), Subproblem(0),    12,   0 };
+        expected_plan_table.at(Subproblem(9))  = { Subproblem(1), Subproblem(8),    60,  17 };
+        expected_plan_table.at(Subproblem(10)) = { Subproblem(2), Subproblem(8),   120,  22 };
+        expected_plan_table.at(Subproblem(11)) = { Subproblem(2), Subproblem(9),   600,  87 };
+        expected_plan_table.at(Subproblem(12)) = { Subproblem(4), Subproblem(8),    96,  20 };
+        expected_plan_table.at(Subproblem(13)) = { Subproblem(8), Subproblem(5),   480,  65 };
+        expected_plan_table.at(Subproblem(14)) = { Subproblem(2), Subproblem(12),  960, 126 };
+        expected_plan_table.at(Subproblem(15)) = { Subproblem(5), Subproblem(10), 4800, 195 };
+
         DPsize dp_size;
         PlanTable plan_table(num_sources);
         /* Initialize `PlanTable` for base case. */
         pe_test::init_PT_base_case(G, plan_table);
 
         dp_size(G, cf, plan_table);
-        REQUIRE(expected_plan_table_dpsize == plan_table);
+        REQUIRE(expected_plan_table == plan_table);
     }
 
     SECTION("DPsizeOpt")
     {
+        /* Initialize `PlanTable` for `DPsize`. */
+        PlanTable expected_plan_table(num_sources);
+        expected_plan_table.at(Subproblem(1))  = { Subproblem(0), Subproblem(0),     5,   0 };
+        expected_plan_table.at(Subproblem(2))  = { Subproblem(0), Subproblem(0),    10,   0 };
+        expected_plan_table.at(Subproblem(3))  = { Subproblem(0), Subproblem(0),     0, MAX };
+        expected_plan_table.at(Subproblem(4))  = { Subproblem(0), Subproblem(0),     8,   0 };
+        expected_plan_table.at(Subproblem(5))  = { Subproblem(1), Subproblem(4),    40,  13 };
+        expected_plan_table.at(Subproblem(6))  = { Subproblem(0), Subproblem(0),     0, MAX };
+        expected_plan_table.at(Subproblem(7))  = { Subproblem(0), Subproblem(0),     0, MAX };
+        expected_plan_table.at(Subproblem(8))  = { Subproblem(0), Subproblem(0),    12,   0 };
+        expected_plan_table.at(Subproblem(9))  = { Subproblem(1), Subproblem(8),    60,  17 };
+        expected_plan_table.at(Subproblem(10)) = { Subproblem(2), Subproblem(8),   120,  22 };
+        expected_plan_table.at(Subproblem(11)) = { Subproblem(2), Subproblem(9),   600,  87 };
+        expected_plan_table.at(Subproblem(12)) = { Subproblem(4), Subproblem(8),    96,  20 };
+        expected_plan_table.at(Subproblem(13)) = { Subproblem(8), Subproblem(5),   480,  65 };
+        expected_plan_table.at(Subproblem(14)) = { Subproblem(2), Subproblem(12),  960, 126 };
+        expected_plan_table.at(Subproblem(15)) = { Subproblem(5), Subproblem(10), 4800, 195 };
+
         DPsizeOpt dp_size_opt;
         PlanTable plan_table(num_sources);
         /* Initialize `PlanTable` for base case. */
         pe_test::init_PT_base_case(G, plan_table);
 
         dp_size_opt(G, cf, plan_table);
-        REQUIRE(expected_plan_table_dpsize == plan_table);
+        REQUIRE(expected_plan_table == plan_table);
     }
-
-    /* Initialize `PlanTable` for `DPsub` algorithms. */
-    PlanTable expected_plan_table_dpsub(num_sources);
-    expected_plan_table_dpsub.at(Subproblem(1))  = { Subproblem(0), Subproblem(0),     5,   0 };
-    expected_plan_table_dpsub.at(Subproblem(2))  = { Subproblem(0), Subproblem(0),    10,   0 };
-    expected_plan_table_dpsub.at(Subproblem(3))  = { Subproblem(0), Subproblem(0),     0, MAX };
-    expected_plan_table_dpsub.at(Subproblem(4))  = { Subproblem(0), Subproblem(0),     8,   0 };
-    expected_plan_table_dpsub.at(Subproblem(5))  = { Subproblem(1), Subproblem(4),    40,  13 };
-    expected_plan_table_dpsub.at(Subproblem(6))  = { Subproblem(0), Subproblem(0),     0, MAX };
-    expected_plan_table_dpsub.at(Subproblem(7))  = { Subproblem(0), Subproblem(0),     0, MAX };
-    expected_plan_table_dpsub.at(Subproblem(8))  = { Subproblem(0), Subproblem(0),    12,   0 };
-    expected_plan_table_dpsub.at(Subproblem(9))  = { Subproblem(1), Subproblem(8),    60,  17 };
-    expected_plan_table_dpsub.at(Subproblem(10)) = { Subproblem(2), Subproblem(8),   120,  22 };
-    expected_plan_table_dpsub.at(Subproblem(11)) = { Subproblem(2), Subproblem(9),   600,  87 };
-    expected_plan_table_dpsub.at(Subproblem(12)) = { Subproblem(4), Subproblem(8),    96,  20 };
-    expected_plan_table_dpsub.at(Subproblem(13)) = { Subproblem(5), Subproblem(8),   480,  65 };
-    expected_plan_table_dpsub.at(Subproblem(14)) = { Subproblem(2), Subproblem(12),  960, 126 };
-    expected_plan_table_dpsub.at(Subproblem(15)) = { Subproblem(5), Subproblem(10), 4800, 195 };
-
     SECTION("DPsub")
     {
+        /* Initialize `PlanTable` for `DPsub`. */
+        PlanTable expected_plan_table(num_sources);
+        expected_plan_table.at(Subproblem(1))  = { Subproblem(0), Subproblem(0),     5,   0 };
+        expected_plan_table.at(Subproblem(2))  = { Subproblem(0), Subproblem(0),    10,   0 };
+        expected_plan_table.at(Subproblem(3))  = { Subproblem(0), Subproblem(0),     0, MAX };
+        expected_plan_table.at(Subproblem(4))  = { Subproblem(0), Subproblem(0),     8,   0 };
+        expected_plan_table.at(Subproblem(5))  = { Subproblem(1), Subproblem(4),    40,  13 };
+        expected_plan_table.at(Subproblem(6))  = { Subproblem(0), Subproblem(0),     0, MAX };
+        expected_plan_table.at(Subproblem(7))  = { Subproblem(0), Subproblem(0),     0, MAX };
+        expected_plan_table.at(Subproblem(8))  = { Subproblem(0), Subproblem(0),    12,   0 };
+        expected_plan_table.at(Subproblem(9))  = { Subproblem(1), Subproblem(8),    60,  17 };
+        expected_plan_table.at(Subproblem(10)) = { Subproblem(2), Subproblem(8),   120,  22 };
+        expected_plan_table.at(Subproblem(11)) = { Subproblem(2), Subproblem(9),   600,  87 };
+        expected_plan_table.at(Subproblem(12)) = { Subproblem(4), Subproblem(8),    96,  20 };
+        expected_plan_table.at(Subproblem(13)) = { Subproblem(5), Subproblem(8),   480,  65 };
+        expected_plan_table.at(Subproblem(14)) = { Subproblem(2), Subproblem(12),  960, 126 };
+        expected_plan_table.at(Subproblem(15)) = { Subproblem(5), Subproblem(10), 4800, 195 };
+
         DPsub dp_sub;
         PlanTable plan_table(num_sources);
         /* Initialize `PlanTable` for base case. */
         pe_test::init_PT_base_case(G, plan_table);
 
         dp_sub(G, cf, plan_table);
-        REQUIRE(expected_plan_table_dpsub == plan_table);
+        REQUIRE(expected_plan_table == plan_table);
     }
 
     SECTION("DPsubOpt")
     {
+        /* Initialize `PlanTable` for `DPsub`. */
+        PlanTable expected_plan_table(num_sources);
+        expected_plan_table.at(Subproblem(1))  = { Subproblem(0), Subproblem(0),     5,   0 };
+        expected_plan_table.at(Subproblem(2))  = { Subproblem(0), Subproblem(0),    10,   0 };
+        expected_plan_table.at(Subproblem(3))  = { Subproblem(0), Subproblem(0),     0, MAX };
+        expected_plan_table.at(Subproblem(4))  = { Subproblem(0), Subproblem(0),     8,   0 };
+        expected_plan_table.at(Subproblem(5))  = { Subproblem(1), Subproblem(4),    40,  13 };
+        expected_plan_table.at(Subproblem(6))  = { Subproblem(0), Subproblem(0),     0, MAX };
+        expected_plan_table.at(Subproblem(7))  = { Subproblem(0), Subproblem(0),     0, MAX };
+        expected_plan_table.at(Subproblem(8))  = { Subproblem(0), Subproblem(0),    12,   0 };
+        expected_plan_table.at(Subproblem(9))  = { Subproblem(1), Subproblem(8),    60,  17 };
+        expected_plan_table.at(Subproblem(10)) = { Subproblem(2), Subproblem(8),   120,  22 };
+        expected_plan_table.at(Subproblem(11)) = { Subproblem(2), Subproblem(9),   600,  87 };
+        expected_plan_table.at(Subproblem(12)) = { Subproblem(4), Subproblem(8),    96,  20 };
+        expected_plan_table.at(Subproblem(13)) = { Subproblem(5), Subproblem(8),   480,  65 };
+        expected_plan_table.at(Subproblem(14)) = { Subproblem(2), Subproblem(12),  960, 126 };
+        expected_plan_table.at(Subproblem(15)) = { Subproblem(5), Subproblem(10), 4800, 195 };
+
         DPsubOpt dp_sub_opt;
         PlanTable plan_table(num_sources);
         /* Initialize `PlanTable` for base case. */
         pe_test::init_PT_base_case(G, plan_table);
 
         dp_sub_opt(G, cf, plan_table);
-        REQUIRE(expected_plan_table_dpsub == plan_table);
+        REQUIRE(expected_plan_table == plan_table);
     }
-
-    /* Initialize `PlanTable` for `DPccp` algorithm. */
-    PlanTable expected_plan_table_dpccp(num_sources);
-    expected_plan_table_dpccp.at(Subproblem(1))  = { Subproblem(0), Subproblem(0),     5,   0 };
-    expected_plan_table_dpccp.at(Subproblem(2))  = { Subproblem(0), Subproblem(0),    10,   0 };
-    expected_plan_table_dpccp.at(Subproblem(3))  = { Subproblem(0), Subproblem(0),     0, MAX };
-    expected_plan_table_dpccp.at(Subproblem(4))  = { Subproblem(0), Subproblem(0),     8,   0 };
-    expected_plan_table_dpccp.at(Subproblem(5))  = { Subproblem(1), Subproblem(4),    40,  13 };
-    expected_plan_table_dpccp.at(Subproblem(6))  = { Subproblem(0), Subproblem(0),     0, MAX };
-    expected_plan_table_dpccp.at(Subproblem(7))  = { Subproblem(0), Subproblem(0),     0, MAX };
-    expected_plan_table_dpccp.at(Subproblem(8))  = { Subproblem(0), Subproblem(0),    12,   0 };
-    expected_plan_table_dpccp.at(Subproblem(9))  = { Subproblem(1), Subproblem(8),    60,  17 };
-    expected_plan_table_dpccp.at(Subproblem(10)) = { Subproblem(2), Subproblem(8),   120,  22 };
-    expected_plan_table_dpccp.at(Subproblem(11)) = { Subproblem(9), Subproblem(2),   600,  87 };
-    expected_plan_table_dpccp.at(Subproblem(12)) = { Subproblem(4), Subproblem(8),    96,  20 };
-    expected_plan_table_dpccp.at(Subproblem(13)) = { Subproblem(5), Subproblem(8),   480,  65 };
-    expected_plan_table_dpccp.at(Subproblem(14)) = { Subproblem(2), Subproblem(12),  960, 126 };
-    expected_plan_table_dpccp.at(Subproblem(15)) = { Subproblem(5), Subproblem(10), 4800, 195 };
 
     SECTION("DPccp")
     {
+        /* Initialize `PlanTable` for `DPccp`. */
+        PlanTable expected_plan_table(num_sources);
+        expected_plan_table.at(Subproblem(1))  = { Subproblem(0), Subproblem(0),     5,   0 };
+        expected_plan_table.at(Subproblem(2))  = { Subproblem(0), Subproblem(0),    10,   0 };
+        expected_plan_table.at(Subproblem(3))  = { Subproblem(0), Subproblem(0),     0, MAX };
+        expected_plan_table.at(Subproblem(4))  = { Subproblem(0), Subproblem(0),     8,   0 };
+        expected_plan_table.at(Subproblem(5))  = { Subproblem(1), Subproblem(4),    40,  13 };
+        expected_plan_table.at(Subproblem(6))  = { Subproblem(0), Subproblem(0),     0, MAX };
+        expected_plan_table.at(Subproblem(7))  = { Subproblem(0), Subproblem(0),     0, MAX };
+        expected_plan_table.at(Subproblem(8))  = { Subproblem(0), Subproblem(0),    12,   0 };
+        expected_plan_table.at(Subproblem(9))  = { Subproblem(1), Subproblem(8),    60,  17 };
+        expected_plan_table.at(Subproblem(10)) = { Subproblem(2), Subproblem(8),   120,  22 };
+        expected_plan_table.at(Subproblem(11)) = { Subproblem(9), Subproblem(2),   600,  87 };
+        expected_plan_table.at(Subproblem(12)) = { Subproblem(4), Subproblem(8),    96,  20 };
+        expected_plan_table.at(Subproblem(13)) = { Subproblem(5), Subproblem(8),   480,  65 };
+        expected_plan_table.at(Subproblem(14)) = { Subproblem(2), Subproblem(12),  960, 126 };
+        expected_plan_table.at(Subproblem(15)) = { Subproblem(5), Subproblem(10), 4800, 195 };
+
         DPccp dp_ccp;
         PlanTable plan_table(num_sources);
         /* Initialize `PlanTable` for base case. */
         pe_test::init_PT_base_case(G, plan_table);
 
         dp_ccp(G, cf, plan_table);
-        REQUIRE(expected_plan_table_dpccp == plan_table);
+        REQUIRE(expected_plan_table == plan_table);
     }
 
     delete stmt;

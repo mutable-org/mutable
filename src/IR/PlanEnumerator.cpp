@@ -333,3 +333,34 @@ void DPccp::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &P
     std::cout << "  #ccp: " << ccp << "\n";
 #endif
 }
+
+void TDbasic::PlanGen(const QueryGraph &G, const CostFunction &cf, PlanTable &PT, const AdjacencyMatrix &M,
+                      Subproblem S) const
+{
+    if (PT.empty(S)) {
+        /* Naive Partitioning */
+        /* Iterate over all non-empty and strict subsets in `S`. */
+        for (Subproblem sub(least_subset(S)); sub != S; sub = Subproblem(next_subset(sub, S))) {
+            Subproblem complement = S - sub;
+            /* Check for valid connected subgraph complement pair. */
+            if (least_subset(sub) < least_subset(complement) and M.is_connected(sub) and M.is_connected(complement)){
+                /* Process `sub` and `complement` recursively. */
+                PlanGen(G, cf, PT, M, sub);
+                PlanGen(G, cf, PT, M, complement);
+
+                /* Update `PlanTable`. */
+                PT.update(cf, sub, complement, 0);
+                PT.update(cf, complement, sub, 0);
+            }
+        }
+    }
+}
+
+void TDbasic::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
+{
+    auto &sources = G.sources();
+    std::size_t n = sources.size();
+    AdjacencyMatrix M(G);
+
+    PlanGen(G, cf, PT, M, Subproblem((1UL << n) - 1));
+}

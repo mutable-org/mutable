@@ -66,4 +66,11 @@ struct DPccp final : PlanEnumerator
     void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
 };
 
+struct TDbasic final : PlanEnumerator
+{
+    void PlanGen(const QueryGraph &G, const CostFunction &cf, PlanTable &PT, const AdjacencyMatrix &M, Subproblem S)
+        const;
+    void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &Pt) const override;
+};
+
 }

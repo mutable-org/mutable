@@ -102,6 +102,8 @@ report:coverage:
         - genhtml --branch-coverage cov.info -o /usr/share/nginx/html/mutable/coverage
     coverage: '/branches\.\.\.: \d+\.\d+/'
     artifacts:
+        paths:
+            - "build/debug/catch.xml"
         reports:
             junit: "build/debug/catch.xml"
     only:

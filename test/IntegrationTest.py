@@ -57,32 +57,29 @@ def run_stage(args, test_case, stage_name, command):
 file_reported = False  # Has test success/failure about the current test file been reported?
 
 def check_returncode(expected, actual):
-    expected = expected if expected != None else 0
-    if expected != actual:
+    if expected != None and expected != actual:
         raise TestException(f'Expected return code {expected}, received {actual}')
     return
 
 
 def check_numerr(expected, actual):
-    expected = expected if expected != None else 0
-    if expected != actual:
+    if expected != None and expected != actual:
         raise TestException(f'Expected {expected} error, received {actual}')
     return
 
 
 def check_stderr(expected, actual):
-    expected = expected if expected != None else ''
-    if expected != actual:
+    if expected != None and expected != actual:
         raise TestException(f'Expected err\n{expected}\nreceived\n{actual}')
     return
 
 
 def check_stdout(expected, actual):
-    expected = expected if expected != None else ''
-    expected = sorted(expected.split('\n'))
-    actual = sorted(actual.split('\n'))
-    if expected != actual:
-        raise TestException(f'Expected out\n{expected}\nreceived\n{actual}')
+    if expected != None:
+        expected = sorted(expected.split('\n'))
+        actual = sorted(actual.split('\n'))
+        if expected != actual:
+            raise TestException(f'Expected out\n{expected}\nreceived\n{actual}')
     return
 
 

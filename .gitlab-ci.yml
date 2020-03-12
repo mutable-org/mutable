@@ -93,7 +93,7 @@ report:coverage:
         - cd build/debug
         - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS_DEBUG=--coverage ../..
         - ninja
-        - bin/unittest --reporter junit --out catch.xml \[core\]
+        - bin/unittest --durations yes --reporter junit --out catch.xml \[core\]
         - echo -e '#!/bin/bash\nllvm-cov gcov "$@"' > gcov.sh
         - chmod a+x gcov.sh
         - lcov --directory src --gcov-tool ./gcov.sh --rc lcov_branch_coverage=1 --capture --output-file cov.info

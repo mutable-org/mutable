@@ -1,8 +1,8 @@
 #pragma once
 
 
-/** The `options_t` represents options provided as command line argument to the shell. */
-struct options_t
+/** Singleton class representing options provided as command line argument to the binaries. */
+struct Options
 {
     /* Help */
     bool show_help;
@@ -23,7 +23,13 @@ struct options_t
     bool plandot;
     bool dryrun;
     bool wasm;
-};
 
-/** Returns a reference to the global `options_t` instance. */
-options_t & get_options();
+    private:
+    Options() = default;
+
+    static Options the_options_;
+
+    public:
+    /** Return a reference to the single `Options` instance. */
+    static Options & Get() { return the_options_; }
+};

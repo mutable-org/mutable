@@ -35,26 +35,26 @@ int main(int argc, const char **argv)
         std::function<void(TYPE)> callback = CALLBACK;\
         AP.add(SHORT, LONG, VAR, DESCR, callback);\
     }
-    ADD(bool, get_options().show_help, false,               /* Type, Var, Init  */
+    ADD(bool, Options::Get().show_help, false,              /* Type, Var, Init  */
         "-h", "--help",                                     /* Short, Long      */
         "prints this help message",                         /* Description      */
-        [&](bool) { get_options().show_help = true; });     /* Callback         */
-    ADD(bool, get_options().has_color, false,               /* Type, Var, Init  */
+        [&](bool) { Options::Get().show_help = true; });    /* Callback         */
+    ADD(bool, Options::Get().has_color, false,              /* Type, Var, Init  */
         nullptr, "--color",                                 /* Short, Long      */
         "use colors",                                       /* Description      */
-        [&](bool) { get_options().has_color = true; });     /* Callback         */
-    ADD(bool, get_options().ast, false,                     /* Type, Var, Init  */
+        [&](bool) { Options::Get().has_color = true; });    /* Callback         */
+    ADD(bool, Options::Get().ast, false,                    /* Type, Var, Init  */
         nullptr, "--ast",                                   /* Short, Long      */
         "print AST",                                        /* Description      */
-        [&](bool) { get_options().ast = true; });           /* Callback         */
-    ADD(bool, get_options().quiet, false,                   /* Type, Var, Init  */
+        [&](bool) { Options::Get().ast = true; });          /* Callback         */
+    ADD(bool, Options::Get().quiet, false,                  /* Type, Var, Init  */
         "-q", "--quiet",                                    /* Short, Long      */
         "work in quiet mode",                               /* Description      */
-        [&](bool) { get_options().quiet = true; });         /* Callback         */
+        [&](bool) { Options::Get().quiet = true; });        /* Callback         */
 #undef ADD
     AP.parse_args(argc, argv);
 
-    if (get_options().show_help) {
+    if (Options::Get().show_help) {
         usage(std::cout, argv[0]);
         std::cout << "WHERE\n";
         AP.print_args(stdout);
@@ -68,7 +68,7 @@ int main(int argc, const char **argv)
     std::istream *in;
 
     /* Create the diagnostics object. */
-    Diagnostic diag(get_options().has_color, std::cout, std::cerr);
+    Diagnostic diag(Options::Get().has_color, std::cout, std::cerr);
 
     bool sema_error = false;
     Catalog &C = Catalog::Get();
@@ -103,7 +103,7 @@ int main(int argc, const char **argv)
                 continue;
             }
             sema(*stmt);
-            if (get_options().ast) stmt->dump(std::cout);
+            if (Options::Get().ast) stmt->dump(std::cout);
             sema_error = sema_error or diag.num_errors();
             diag.clear(); // clear sema errors
             delete stmt;

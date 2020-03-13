@@ -97,12 +97,12 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
 
     while (parser.token()) {
         auto stmt = parser.parse();
-        if (get_options().echo)
+        if (Options::Get().echo)
             std::cout << *stmt << std::endl;
         if (diag.num_errors() != num_errors) goto next;
         TIME_EXPR(sema(*stmt), "Semantic Analysis", C.timer());
-        if (get_options().ast) stmt->dump(std::cout);
-        if (get_options().astdot) {
+        if (Options::Get().ast) stmt->dump(std::cout);
+        if (Options::Get().astdot) {
             DotTool dot(diag);
             stmt->dot(dot.stream());
             dot.show("ast", is_stdin);
@@ -111,8 +111,8 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
 
         if (is<SelectStmt>(stmt)) {
             auto query_graph = TIME_EXPR(QueryGraph::Build(*stmt), "Construct the Query Graph", C.timer());
-            if (get_options().graph) query_graph->dump(std::cout);
-            if (get_options().graphdot) {
+            if (Options::Get().graph) query_graph->dump(std::cout);
+            if (Options::Get().graphdot) {
                 DotTool dot(diag);
                 query_graph->dot(dot.stream());
                 dot.show("graph", is_stdin, "fdp");
@@ -125,8 +125,8 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             Optimizer Opt(dp_ccp, cf);
             auto I = Backend::CreateInterpreter();
             auto optree = TIME_EXPR(Opt(*query_graph.get()), "Compute Query Plan", C.timer());
-            if (get_options().plan) optree->dump(std::cout);
-            if (get_options().plandot) {
+            if (Options::Get().plan) optree->dump(std::cout);
+            if (Options::Get().plandot) {
                 DotTool dot(diag);
                 optree->dot(dot.stream());
                 dot.show("plan", is_stdin);
@@ -134,15 +134,15 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             auto callback = new CallbackOperator(print);
             callback->add_child(optree.release());
 
-            if (get_options().wasm) {
+            if (Options::Get().wasm) {
                 WasmModule wasm = WasmPlatform::compile(*callback);
                 wasm.dump(std::cout);
             }
 
-            if (not get_options().dryrun) {
+            if (not Options::Get().dryrun) {
                 TIME_EXPR(I->execute(*callback), "Interpret the Query Plan", C.timer());
 
-                if (get_options().wasm) {
+                if (Options::Get().wasm) {
 #if WITH_V8
                     auto V8 = Backend::CreateWasmV8();
                     V8->execute(*callback);
@@ -223,7 +223,7 @@ next:
         num_errors = diag.num_errors();
         delete stmt;
 
-        if (get_options().times)
+        if (Options::Get().times)
             std::cout << C.timer();
     }
 
@@ -367,75 +367,75 @@ int main(int argc, const char **argv)
         std::function<void(TYPE)> callback = CALLBACK;\
         AP.add(SHORT, LONG, VAR, DESCR, callback);\
     }
-    ADD(bool, get_options().show_help, false,               /* Type, Var, Init  */
+    ADD(bool, Options::Get().show_help, false,              /* Type, Var, Init  */
         "-h", "--help",                                     /* Short, Long      */
         "prints this help message",                         /* Description      */
-        [&](bool) { get_options().show_help = true; });     /* Callback         */
+        [&](bool) { Options::Get().show_help = true; });    /* Callback         */
     /* Shell configuration */
-    ADD(bool, get_options().has_color, false,               /* Type, Var, Init  */
+    ADD(bool, Options::Get().has_color, false,              /* Type, Var, Init  */
         nullptr, "--color",                                 /* Short, Long      */
         "use colors",                                       /* Description      */
-        [&](bool) { get_options().has_color = true; });     /* Callback         */
-    ADD(bool, get_options().show_prompt, true,              /* Type, Var, Init  */
+        [&](bool) { Options::Get().has_color = true; });    /* Callback         */
+    ADD(bool, Options::Get().show_prompt, true,             /* Type, Var, Init  */
         nullptr, "--noprompt",                              /* Short, Long      */
         "disable prompt",                                   /* Description      */
-        [&](bool) { get_options().show_prompt = false; });  /* Callback         */
-    ADD(bool, get_options().quiet, false,                   /* Type, Var, Init  */
+        [&](bool) { Options::Get().show_prompt = false; }); /* Callback         */
+    ADD(bool, Options::Get().quiet, false,                  /* Type, Var, Init  */
         "-q", "--quiet",                                    /* Short, Long      */
         "work in quiet mode",                               /* Description      */
-        [&](bool) { get_options().quiet = true; });         /* Callback         */
+        [&](bool) { Options::Get().quiet = true; });        /* Callback         */
     /* Additional output */
-    ADD(bool, get_options().times, false,                   /* Type, Var, Init  */
+    ADD(bool, Options::Get().times, false,                  /* Type, Var, Init  */
         "-t", "--times",                                    /* Short, Long      */
         "report exact timings",                             /* Description      */
-        [&](bool) { get_options().times = true; });         /* Callback         */
-    ADD(bool, get_options().echo, false,                    /* Type, Var, Init  */
+        [&](bool) { Options::Get().times = true; });        /* Callback         */
+    ADD(bool, Options::Get().echo, false,                   /* Type, Var, Init  */
         nullptr, "--echo",                                  /* Short, Long      */
         "echo statements",                                  /* Description      */
-        [&](bool) { get_options().echo = true; });          /* Callback         */
-    ADD(bool, get_options().ast, false,                     /* Type, Var, Init  */
+        [&](bool) { Options::Get().echo = true; });         /* Callback         */
+    ADD(bool, Options::Get().ast, false,                    /* Type, Var, Init  */
         nullptr, "--ast",                                   /* Short, Long      */
         "print the AST of statements",                      /* Description      */
-        [&](bool) { get_options().ast = true; });           /* Callback         */
-    ADD(bool, get_options().astdot, false,                  /* Type, Var, Init  */
+        [&](bool) { Options::Get().ast = true; });          /* Callback         */
+    ADD(bool, Options::Get().astdot, false,                 /* Type, Var, Init  */
         nullptr, "--astdot",                                /* Short, Long      */
         "dot the AST of statements",                        /* Description      */
-        [&](bool) { get_options().astdot = true; });        /* Callback         */
-    ADD(bool, get_options().graph, false,                   /* Type, Var, Init  */
+        [&](bool) { Options::Get().astdot = true; });       /* Callback         */
+    ADD(bool, Options::Get().graph, false,                  /* Type, Var, Init  */
         nullptr, "--graph",                                 /* Short, Long      */
         "print the computed query graph",                   /* Description      */
-        [&](bool) { get_options().graph = true; });         /* Callback         */
-    ADD(bool, get_options().graphdot, false,                /* Type, Var, Init  */
+        [&](bool) { Options::Get().graph = true; });        /* Callback         */
+    ADD(bool, Options::Get().graphdot, false,               /* Type, Var, Init  */
         nullptr, "--graphdot",                              /* Short, Long      */
         "dot the computed query graph",                     /* Description      */
-        [&](bool) { get_options().graphdot = true; });      /* Callback         */
-    ADD(bool, get_options().plan, false,                    /* Type, Var, Init  */
+        [&](bool) { Options::Get().graphdot = true; });     /* Callback         */
+    ADD(bool, Options::Get().plan, false,                   /* Type, Var, Init  */
         nullptr, "--plan",                                  /* Short, Long      */
         "emit the chosen execution plan",                   /* Description      */
-        [&](bool) { get_options().plan = true; });          /* Callback         */
-    ADD(bool, get_options().plandot, false,                 /* Type, Var, Init  */
+        [&](bool) { Options::Get().plan = true; });         /* Callback         */
+    ADD(bool, Options::Get().plandot, false,                /* Type, Var, Init  */
         nullptr, "--plandot",                               /* Short, Long      */
         "dot the chosen operator tree",                     /* Description      */
-        [&](bool) { get_options().plandot = true; });       /* Callback         */
-    ADD(bool, get_options().dryrun, false,                  /* Type, Var, Init  */
+        [&](bool) { Options::Get().plandot = true; });      /* Callback         */
+    ADD(bool, Options::Get().dryrun, false,                 /* Type, Var, Init  */
         nullptr, "--dryrun",                                /* Short, Long      */
         "don't actually execute the query",                 /* Description      */
-        [&](bool) { get_options().dryrun = true; });        /* Callback         */
-    ADD(bool, get_options().wasm, false,                    /* Type, Var, Init  */
+        [&](bool) { Options::Get().dryrun = true; });       /* Callback         */
+    ADD(bool, Options::Get().wasm, false,                   /* Type, Var, Init  */
         nullptr, "--wasm",                                  /* Short, Long      */
         "show compiled WebAssembly",                        /* Description      */
-        [&](bool) { get_options().wasm = true; });          /* Callback         */
+        [&](bool) { Options::Get().wasm = true; });         /* Callback         */
 #undef ADD
     AP.parse_args(argc, argv);
 
-    if (get_options().show_help) {
+    if (Options::Get().show_help) {
         usage(std::cout, argv[0]);
         std::cout << "WHERE\n";
         AP.print_args(stdout);
         std::exit(EXIT_SUCCESS);
     }
 
-    if (not get_options().quiet) {
+    if (not Options::Get().quiet) {
         std::cout << "PID";
 #if __linux || __APPLE__
         std::cout << ' ' << getpid();
@@ -447,7 +447,7 @@ int main(int argc, const char **argv)
     std::ios_base::sync_with_stdio(false);
 
     /* Create the diagnostics object. */
-    Diagnostic diag(get_options().has_color, std::cout, std::cerr);
+    Diagnostic diag(Options::Get().has_color, std::cout, std::cerr);
 
     /* ----- Replxx configuration ------------------------------------------------------------------------------------*/
     Replxx rx;
@@ -490,7 +490,7 @@ int main(int argc, const char **argv)
     KEY_BIND(meta(Replxx::KEY::BACKSPACE),KILL_TO_BEGINING_OF_WORD);
 #undef KEY_BIND
 
-    if (get_options().show_prompt) {
+    if (Options::Get().show_prompt) {
         /* Completion */
         rx.set_completion_callback(std::bind(&hook_completion, std::placeholders::_1, std::placeholders::_2));
         rx.set_completion_count_cutoff(128);
@@ -509,7 +509,7 @@ int main(int argc, const char **argv)
 
     /* Other options */
     rx.set_word_break_characters(" \t.,-%!;:=*~^'\"/?<>|[](){}");
-    rx.set_no_color(not get_options().show_prompt);
+    rx.set_no_color(not Options::Get().show_prompt);
 
     auto args = AP.args();
     if (args.empty())
@@ -523,13 +523,13 @@ int main(int argc, const char **argv)
             std::stringstream ss;
             for (;;) {
                 do
-                    cinput = rx.input(get_options().show_prompt ? prompt(ss.str().size() != 0) : ""); // Read one line of input
+                    cinput = rx.input(Options::Get().show_prompt ? prompt(ss.str().size() != 0) : ""); // Read one line of input
                 while ((cinput == nullptr) and (errno == EAGAIN));
                 insist(errno != EAGAIN);
 
                 /* User sent EOF */
                 if (cinput == nullptr) {
-                    if (get_options().show_prompt)
+                    if (Options::Get().show_prompt)
                         std::cout << std::endl;
                     break;
                 }

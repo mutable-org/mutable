@@ -5,6 +5,9 @@ add_executable(
     unittest
     main.cpp
 
+    # src
+    GlobalsTest.cpp
+
     # util
     util/ADTTest.cpp
     util/FnTest.cpp

@@ -937,7 +937,7 @@ void Sema::operator()(Const<CreateDatabaseStmt> &s)
 
     try {
         C.add_database(db_name);
-        if (not get_options().quiet)
+        if (not Options::Get().quiet)
             diag.out() << "Created database " << db_name << ".\n";
     } catch (std::invalid_argument) {
         diag.e(s.database_name.pos) << "Database " << db_name << " already exists.\n";
@@ -953,7 +953,7 @@ void Sema::operator()(Const<UseDatabaseStmt> &s)
     try {
         auto &DB = C.get_database(db_name);
         C.set_database_in_use(DB);
-        if (not get_options().quiet)
+        if (not Options::Get().quiet)
             diag.out() << "Using database " << db_name << ".\n";
     } catch (std::out_of_range) {
         diag.e(s.database_name.pos) << "Database " << db_name << " not found.\n";
@@ -1079,7 +1079,7 @@ void Sema::operator()(Const<CreateTableStmt> &s)
         return;
     }
 
-    if (not get_options().quiet)
+    if (not Options::Get().quiet)
         diag.out() << "Created table " << table_name << " in database " << DB.name << ".\n";
 }
 
@@ -1208,7 +1208,7 @@ void Sema::operator()(Const<DSVImportStmt> &s)
 
     /* Sanity check for skip header. */
     if (s.skip_header and not s.has_header) {
-        if (not get_options().quiet)
+        if (not Options::Get().quiet)
             diag.n(s.path.pos) << "I will assume the existence of a header so I can skip it.\n";
     }
 

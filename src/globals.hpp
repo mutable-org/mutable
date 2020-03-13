@@ -27,9 +27,7 @@ struct Options
     private:
     Options() = default;
 
-    static Options the_options_;
-
     public:
     /** Return a reference to the single `Options` instance. */
-    static Options & Get() { return the_options_; }
+    static Options & Get();
 };

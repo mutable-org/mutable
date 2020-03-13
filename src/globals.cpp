@@ -1,4 +1,8 @@
 #include "globals.hpp"
 
 
-Options Options::the_options_;
+Options & Options::Get()
+{
+    static Options the_options;
+    return the_options;
+}

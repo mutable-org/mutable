@@ -20,6 +20,7 @@ struct OperatorDot : ConstOperatorVisitor
 #define DECLARE(CLASS) void operator()(Const<CLASS> &op) override
     DECLARE(ScanOperator);
     DECLARE(CallbackOperator);
+    DECLARE(PrintOperator);
     DECLARE(FilterOperator);
     DECLARE(JoinOperator);
     DECLARE(ProjectionOperator);

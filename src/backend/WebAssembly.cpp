@@ -179,6 +179,7 @@ struct WasmCodeGen : ConstOperatorVisitor
 #define DECLARE(CLASS) void operator()(const CLASS &op) override
     DECLARE(ScanOperator);
     DECLARE(CallbackOperator);
+    DECLARE(PrintOperator);
     DECLARE(FilterOperator);
     DECLARE(JoinOperator);
     DECLARE(ProjectionOperator);
@@ -226,6 +227,7 @@ struct WasmPipelineCG : ConstOperatorVisitor, ConstASTVisitor
 #define DECLARE(CLASS) void operator()(const CLASS &op) override
     DECLARE(ScanOperator);
     DECLARE(CallbackOperator);
+    DECLARE(PrintOperator);
     DECLARE(FilterOperator);
     DECLARE(JoinOperator);
     DECLARE(ProjectionOperator);
@@ -394,10 +396,9 @@ void WasmCodeGen::operator()(const ScanOperator &op)
     block_ += WasmPipelineCG::compile(op, *this);
 }
 
-void WasmCodeGen::operator()(const CallbackOperator &op)
-{
-    (*this)(*op.child(0));
-}
+void WasmCodeGen::operator()(const CallbackOperator &op) { (*this)(*op.child(0)); }
+
+void WasmCodeGen::operator()(const PrintOperator &op) { (*this)(*op.child(0)); }
 
 void WasmCodeGen::operator()(const FilterOperator &op)
 {
@@ -603,6 +604,12 @@ void WasmPipelineCG::operator()(const CallbackOperator &op)
         /* index=   */ BinaryenLocalGetGetIndex(CG.out()),
         /* value=   */ inc
     );
+}
+
+void WasmPipelineCG::operator()(const PrintOperator &op)
+{
+    // TODO
+    unreachable("not implemented");
 }
 
 void WasmPipelineCG::operator()(const FilterOperator &op)

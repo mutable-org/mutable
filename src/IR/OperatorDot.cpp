@@ -30,10 +30,9 @@ void OperatorDot::operator()(Const<ScanOperator> &op)
     out << "    " << id(op) << " [label=<<B>" << html_escape(op.store().table().name) << "</B>>];\n";
 }
 
-void OperatorDot::operator()(Const<CallbackOperator> &op)
-{
-    (*this)(*op.child(0));
-}
+void OperatorDot::operator()(Const<CallbackOperator> &op) { (*this)(*op.child(0)); }
+
+void OperatorDot::operator()(Const<PrintOperator> &op) { (*this)(*op.child(0)); }
 
 void OperatorDot::operator()(Const<FilterOperator> &op)
 {

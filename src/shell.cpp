@@ -86,11 +86,6 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
     std::size_t num_errors = 0;
     const bool is_stdin = streq(filename, "-");
 
-    auto print = [](const Schema &schema, const Tuple &tup) {
-        tup.print(std::cout, schema);
-        std::cout << '\n';
-    };
-
     /*----- Process the input stream. --------------------------------------------------------------------------------*/
     Lexer lexer(diag, C.get_pool(), filename, in);
     Parser parser(lexer);
@@ -131,30 +126,30 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
                 optree->dot(dot.stream());
                 dot.show("plan", is_stdin);
             }
-            auto callback = new CallbackOperator(print);
-            callback->add_child(optree.release());
+            auto plan = new PrintOperator(std::cout);
+            plan->add_child(optree.release());
 
             if (Options::Get().wasm) {
-                WasmModule wasm = WasmPlatform::compile(*callback);
+                WasmModule wasm = WasmPlatform::compile(*plan);
                 wasm.dump(std::cout);
             }
 
             if (not Options::Get().dryrun) {
-                TIME_EXPR(I->execute(*callback), "Interpret the Query Plan", C.timer());
+                TIME_EXPR(I->execute(*plan), "Interpret the Query Plan", C.timer());
 
                 if (Options::Get().wasm) {
 #if WITH_V8
                     auto V8 = Backend::CreateWasmV8();
-                    V8->execute(*callback);
+                    V8->execute(*plan);
 #elif WITH_SPIDERMONKEY
                     auto SM = Backend::CreateWasmSpiderMonkey();
-                    SM->execute(*callback);
+                    SM->execute(*plan);
 #else
                     std::cerr << "No WASM backend available.\n";
 #endif
                 }
             }
-            delete callback;
+            delete plan;
         } else if (auto I = cast<InsertStmt>(stmt)) {
             auto &DB = C.get_database_in_use();
             auto &T = DB.get_table(I->table_name.text);

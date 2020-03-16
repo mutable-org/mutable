@@ -19,6 +19,7 @@ struct TheOperatorVisitor
 #define DECLARE(CLASS) virtual void operator()(Const<CLASS> &op) = 0
     DECLARE(ScanOperator);
     DECLARE(CallbackOperator);
+    DECLARE(PrintOperator);
     DECLARE(FilterOperator);
     DECLARE(JoinOperator);
     DECLARE(ProjectionOperator);

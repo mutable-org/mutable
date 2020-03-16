@@ -284,6 +284,14 @@ void Pipeline::operator()(const CallbackOperator &op)
         op.callback()(op.schema(), t);
 }
 
+void Pipeline::operator()(const PrintOperator &op)
+{
+    for (auto &t : block_) {
+        t.print(op.out, op.schema());
+        std::cout << '\n';
+    }
+}
+
 void Pipeline::operator()(const FilterOperator &op)
 {
     auto data = as<FilterData>(op.data());
@@ -595,6 +603,11 @@ void Pipeline::operator()(const SortingOperator &op)
  *====================================================================================================================*/
 
 void Interpreter::operator()(const CallbackOperator &op)
+{
+    op.child(0)->accept(*this);
+}
+
+void Interpreter::operator()(const PrintOperator &op)
 {
     op.child(0)->accept(*this);
 }

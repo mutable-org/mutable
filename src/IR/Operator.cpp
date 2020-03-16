@@ -110,6 +110,15 @@ void CallbackOperator::print(std::ostream &out) const
     out << "CallbackOperator";
 }
 
+void PrintOperator::print(std::ostream &out) const
+{
+    out << "PrintOperator";
+    if (&this->out == &std::cout)
+        out << " to stdout";
+    else if (&this->out == &std::cerr)
+        out << " to stderr";
+}
+
 void ScanOperator::print(std::ostream &out) const
 {
     out << "ScanOperator (" << store().table().name << ')';
@@ -175,6 +184,7 @@ struct SchemaMinimizer : OperatorVisitor
 #define DECLARE(CLASS) void operator()(Const<CLASS> &op) override
     DECLARE(ScanOperator);
     DECLARE(CallbackOperator);
+    DECLARE(PrintOperator);
     DECLARE(FilterOperator);
     DECLARE(JoinOperator);
     DECLARE(ProjectionOperator);
@@ -190,6 +200,12 @@ void SchemaMinimizer::operator()(Const<ScanOperator> &op)
 }
 
 void SchemaMinimizer::operator()(Const<CallbackOperator> &op)
+{
+    (*this)(*op.child(0)); // this operator does not affect what is required; nothing to be done
+    op.schema() = op.child(0)->schema();
+}
+
+void SchemaMinimizer::operator()(Const<PrintOperator> &op)
 {
     (*this)(*op.child(0)); // this operator does not affect what is required; nothing to be done
     op.schema() = op.child(0)->schema();

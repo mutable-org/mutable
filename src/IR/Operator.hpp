@@ -146,7 +146,21 @@ struct CallbackOperator : Consumer
     public:
     CallbackOperator(callback_type callback) : callback_(callback) { }
 
-    auto & callback() const { return callback_; }
+    const auto & callback() const { return callback_; }
+
+    void accept(OperatorVisitor &v) override;
+    void accept(ConstOperatorVisitor &v) const override;
+
+    private:
+    void print(std::ostream &out) const override;
+};
+
+/** Prints the produced `Tuple`s to a `std::ostream` instance. */
+struct PrintOperator : Consumer
+{
+    std::ostream &out;
+
+    PrintOperator(std::ostream &out) : out(out) { }
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;

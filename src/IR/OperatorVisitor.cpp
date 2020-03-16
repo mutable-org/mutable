@@ -14,6 +14,7 @@ using namespace db;
 
 ACCEPT(ScanOperator);
 ACCEPT(CallbackOperator);
+ACCEPT(PrintOperator);
 ACCEPT(FilterOperator);
 ACCEPT(JoinOperator);
 ACCEPT(ProjectionOperator);

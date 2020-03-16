@@ -337,7 +337,7 @@ void DPccp::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &P
 void TDbasic::PlanGen(const QueryGraph &G, const CostFunction &cf, PlanTable &PT, const AdjacencyMatrix &M,
                       Subproblem S) const
 {
-    if (PT.empty(S)) {
+    if (not PT.has_plan(S)) {
         /* Naive Partitioning */
         /* Iterate over all non-empty and strict subsets in `S`. */
         for (Subproblem sub(least_subset(S)); sub != S; sub = Subproblem(next_subset(sub, S))) {

@@ -288,7 +288,7 @@ void Pipeline::operator()(const PrintOperator &op)
 {
     for (auto &t : block_) {
         t.print(op.out, op.schema());
-        std::cout << '\n';
+        op.out << '\n';
     }
 }
 

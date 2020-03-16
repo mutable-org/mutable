@@ -24,6 +24,25 @@ struct ScanData : OperatorData
     ScanData(const ScanOperator &op) : loader(op.store().loader(op.schema())) { }
 };
 
+struct PrintData : OperatorData
+{
+    StackMachine printer;
+    PrintData(const PrintOperator &op)
+        : printer(op.schema())
+    {
+        auto &S = op.schema();
+        auto ostream_index = printer.add(&op.out);
+        for (std::size_t i = 0; i != S.num_entries(); ++i) {
+            if (i != 0)
+                printer.emit_Putc(ostream_index, ',');
+            printer.emit_Ld_Tup(0, i);
+            printer.emit_Print(ostream_index, S[i].type);
+        }
+        // std::cerr << "Printer:\n";
+        // printer.dump();
+    }
+};
+
 struct ProjectionData : OperatorData
 {
     Pipeline pipeline;
@@ -286,8 +305,10 @@ void Pipeline::operator()(const CallbackOperator &op)
 
 void Pipeline::operator()(const PrintOperator &op)
 {
+    auto data = as<PrintData>(op.data());
     for (auto &t : block_) {
-        t.print(op.out, op.schema());
+        Tuple *args[] = { &t };
+        data->printer(args);
         op.out << '\n';
     }
 }
@@ -609,6 +630,7 @@ void Interpreter::operator()(const CallbackOperator &op)
 
 void Interpreter::operator()(const PrintOperator &op)
 {
+    op.data(new PrintData(op));
     op.child(0)->accept(*this);
 }
 

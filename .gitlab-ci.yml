@@ -75,7 +75,7 @@ unittest:macos-amd64:
         - macos
         - amd64
     needs:
-        - job: "build:linux-amd64"
+        - job: "build:macos-amd64"
           artifacts: true
     script: build/debug/bin/unittest \[core\]
 
@@ -97,7 +97,7 @@ integrationtest:macos-amd64:
         - macos
         - amd64
     needs:
-        - job: "build:linux-amd64"
+        - job: "build:macos-amd64"
           artifacts: true
     script:
         - pip3 install --user --upgrade colorama pyyaml yamale tqdm

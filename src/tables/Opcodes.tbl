@@ -31,7 +31,7 @@ DB_OPCODE(Push_Null, +1)
 
 
 /*======================================================================================================================
- * Tuple Access Operations
+ * Context Access Operations
  *====================================================================================================================*/
 
 /** Load a value from the context to the top of the stack. */
@@ -40,6 +40,10 @@ DB_OPCODE(Ld_Ctx, +1, index)
 /** Update a value in the context with the value on top of the stack. */
 DB_OPCODE(Upd_Ctx, 0, index)
 
+
+/*======================================================================================================================
+ * Tuple Access Operations
+ *====================================================================================================================*/
 
 /** Load a value from a tuple to the top of the stack. */
 DB_OPCODE(Ld_Tup, +1, tuple_id, index)
@@ -56,6 +60,21 @@ DB_OPCODE(St_Tup_d, 0, tuple_id, index)
 DB_OPCODE(St_Tup_s, 0, tuple_id, index)
 /** Store the current top-of-stack into a tuple. */
 DB_OPCODE(St_Tup_b, 0, tuple_id, index)
+
+
+/*======================================================================================================================
+ * I/O Operations
+ *====================================================================================================================*/
+
+/** Writes the character `chr` to the `std::ostream` instance referenced by the `index`-th slot in the context. */
+DB_OPCODE(Putc, 0, index, chr)
+
+/* Print a value to the std::ostream instance referenced by the index-th slot in the context. */
+DB_OPCODE(Print_i, 0, index)
+DB_OPCODE(Print_f, 0, index)
+DB_OPCODE(Print_d, 0, index)
+DB_OPCODE(Print_s, 0, index)
+DB_OPCODE(Print_b, 0, index)
 
 
 /*======================================================================================================================

@@ -587,6 +587,20 @@ void StackMachine::emit_St_Tup(std::size_t tuple_id, std::size_t index, const Ty
     }
 }
 
+void StackMachine::emit_Print(std::size_t ostream_index, const Type *ty)
+{
+    if (ty->is_none()) {
+        emit_Push_Null();
+        emit_Print_i(ostream_index);
+    } else {
+        std::ostringstream oss;
+        oss << "Print" << tystr(as<const PrimitiveType>(ty));
+        auto opcode = StackMachine::STR_TO_OPCODE.at(oss.str());
+        emit(opcode);
+        emit(static_cast<Opcode>(ostream_index));
+    }
+}
+
 void StackMachine::emit_Cast(const Type *to_ty, const Type *from_ty)
 {
     auto to   = as<const PrimitiveType>(to_ty);
@@ -769,6 +783,26 @@ Push_Null:
 
 
 /*======================================================================================================================
+ * Context Access Operations
+ *====================================================================================================================*/
+
+/* Load a value from the context to the top of the value_stack_. */
+Ld_Ctx: {
+    std::size_t idx = std::size_t(*op_++);
+    insist(idx < context_.size(), "index out of bounds");
+    PUSH(context_[idx], false);
+}
+NEXT;
+
+Upd_Ctx: {
+    std::size_t idx = static_cast<std::size_t>(*op_++);
+    insist(idx < context_.size(), "index out of bounds");
+    const_cast<StackMachine*>(this)->context_[idx] = TOP;
+}
+NEXT;
+
+
+/*======================================================================================================================
  * Tuple Access Operations
  *====================================================================================================================*/
 
@@ -810,23 +844,73 @@ NEXT;
 
 
 /*======================================================================================================================
- * Output operations
+ * I/O Operations
  *====================================================================================================================*/
 
-/* Load a value from the context to the top of the value_stack_. */
-Ld_Ctx: {
-    std::size_t idx = std::size_t(*op_++);
-    insist(idx < context_.size(), "index out of bounds");
-    PUSH(context_[idx], false);
+Putc: {
+    std::size_t index = std::size_t(*op_++);
+    unsigned char chr = (unsigned char)(*op_++);
+    std::ostream *out = reinterpret_cast<std::ostream*>(context_[index].as_p());
+    (*out) << chr;
 }
 NEXT;
 
-Upd_Ctx: {
-    std::size_t idx = static_cast<std::size_t>(*op_++);
-    insist(idx < context_.size(), "index out of bounds");
-    const_cast<StackMachine*>(this)->context_[idx] = TOP;
+Print_i: {
+    std::size_t index = std::size_t(*op_++);
+    std::ostream *out = reinterpret_cast<std::ostream*>(context_[index].as_p());
+    if (TOP_IS_NULL)
+        (*out) << "NULL";
+    else
+        (*out) << TOP.as_i();
 }
 NEXT;
+
+Print_f: {
+    std::size_t index = std::size_t(*op_++);
+    std::ostream *out = reinterpret_cast<std::ostream*>(context_[index].as_p());
+    if (TOP_IS_NULL)
+        (*out) << "NULL";
+    else
+        (*out) << TOP.as_f();
+}
+NEXT;
+
+Print_d: {
+    std::size_t index = std::size_t(*op_++);
+    std::ostream *out = reinterpret_cast<std::ostream*>(context_[index].as_p());
+    if (TOP_IS_NULL)
+        (*out) << "NULL";
+    else
+        (*out) << TOP.as_d();
+}
+NEXT;
+
+Print_s: {
+    std::size_t index = std::size_t(*op_++);
+    std::ostream *out = reinterpret_cast<std::ostream*>(context_[index].as_p());
+    if (TOP_IS_NULL) {
+        (*out) << "NULL";
+    } else {
+        const char *str = reinterpret_cast<char*>(TOP.as_p());
+        (*out) << '"' << str << '"';
+    }
+}
+NEXT;
+
+Print_b: {
+    std::size_t index = std::size_t(*op_++);
+    std::ostream *out = reinterpret_cast<std::ostream*>(context_[index].as_p());
+    if (TOP_IS_NULL)
+        (*out) << "NULL";
+    else
+        (*out) << (TOP.as_b() ? "TRUE" : "FALSE");
+}
+NEXT;
+
+
+/*======================================================================================================================
+ * Storage Access Operations
+ *====================================================================================================================*/
 
 /*----- Load from row store ------------------------------------------------------------------------------------------*/
 #define PREPARE \
@@ -1439,6 +1523,7 @@ void StackMachine::dump(std::ostream &out) const
             case Opcode::St_Tup_d:
             case Opcode::St_Tup_s:
             case Opcode::St_Tup_b:
+            case Opcode::Putc:
                 ++i;
                 out << ' ' << static_cast<int64_t>(ops[i]);
                 /* fall through */
@@ -1446,6 +1531,11 @@ void StackMachine::dump(std::ostream &out) const
             /* Opcodes with *one* operand. */
             case Opcode::Ld_Ctx:
             case Opcode::Upd_Ctx:
+            case Opcode::Print_i:
+            case Opcode::Print_f:
+            case Opcode::Print_d:
+            case Opcode::Print_s:
+            case Opcode::Print_b:
                 ++i;
                 out << ' ' << static_cast<int64_t>(ops[i]);
                 /* fall through */

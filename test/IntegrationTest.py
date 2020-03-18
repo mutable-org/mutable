@@ -89,7 +89,7 @@ def run_stage(args, test_case, stage_name, command):
         if 'out' in stage:
             check_stdout(stage['out'], out, args.verbose)
     except TestException as ex:
-        report_failure(str(ex), stage_name, test_case)
+        report_failure(str(ex), stage_name, test_case, args.debug)
         return False
     report_success(stage_name, test_case, args.verbose)
     return True
@@ -99,17 +99,15 @@ def run_stage(args, test_case, stage_name, command):
 # RESULT CHECKING
 #-----------------------------------------------------------------------------------------------------------------------
 
-file_reported = False  # Has test success/failure about the current test file been reported?
-
 def check_returncode(expected, actual):
     if expected != None and expected != actual:
         raise TestException(f'Expected return code {expected}, received {actual}')
     return
 
 
-def check_numerr(expected, actual):
-    if expected != None and expected != actual:
-        raise TestException(f'Expected {expected} error, received {actual}')
+def check_numerr(num_err_expected, num_err_actual):
+    if num_err_expected != None and num_err_expected != num_err_actual:
+        raise TestException(f'Expected {num_err_expected} errors, received {num_err_actual}')
     return
 
 
@@ -135,32 +133,34 @@ def check_stdout(expected, actual, verbose):
 # REPORTING AND EXCEPTION HANDLING
 #-----------------------------------------------------------------------------------------------------------------------
 
-def report_failure(message, stage, test_case):
-    symbol = Fore.RED + '✘' + Style.RESET_ALL
-    if test_case.file_reported:
-        tqdm.write(f'└─ {stage} {symbol} {message}')
-    else:
-        tqdm.write(f'{test_case.filename}\n└─ {stage} {symbol} {message}')
+def report(message, stage_name, test_case, symbol):
+    if not test_case.file_reported:
+        tqdm.write(f'{test_case.filename}')
         test_case.file_reported = True
+    tqdm.write(f'└─ {stage_name} {symbol} {message}')
 
 
-def report_warning(message, stage, test_case):
+def print_debug_command(test_case, stage_name):
+    query = test_case.query.replace('"', '\\"').strip()
+    tqdm.write(f'   echo "{query}" | {" ".join(COMMAND[stage_name](test_case))}')
+
+
+def report_failure(message, stage_name, test_case, debug):
+    symbol = Fore.RED + '✘' + Style.RESET_ALL
+    report(message, stage_name, test_case, symbol)
+    if debug:
+        print_debug_command(test_case, stage_name)
+
+
+def report_warning(message, stage_name, test_case):
     symbol = Fore.YELLOW + '!' + Style.RESET_ALL
-    if test_case.file_reported:
-        tqdm.write(f'└─ {stage} {symbol} {message}')
-    else:
-        tqdm.write(f'{test_case.filename}\n└─ {stage} {symbol} {message}')
-        file_reported = True
+    report(message, stage_name, test_case, symbol)
 
 
-def report_success(stage, test_case, verbose):
+def report_success(stage_name, test_case, verbose):
     if verbose:
         symbol = Fore.GREEN + '✓' + Style.RESET_ALL
-        if test_case.file_reported:
-            tqdm.write(f'└─ {stage} {symbol}')
-        else:
-            tqdm.write(f'{test_case.filename}\n└─ {stage} {symbol}')
-            test_case.file_reported = True
+        report('', stage_name, test_case, symbol)
 
 
 def report_summary(stage_counter, stage_pass_counter, required_counter, required_pass_counter, bad_files_counter):
@@ -246,7 +246,7 @@ BINARIES = {
 
 
 #-----------------------------------------------------------------------------------------------------------------------
-# MAIN ROUNTINE
+# MAIN ROUTINE
 #-----------------------------------------------------------------------------------------------------------------------
 
 if __name__ == '__main__':
@@ -255,6 +255,7 @@ if __name__ == '__main__':
                                                     build direcory is assumed to be build/debug.""")
     parser.add_argument('-a', '--all', help='require optional tests to pass', action='store_true')
     parser.add_argument('-v', '--verbose', help='increase output verbosity', action='store_true')
+    parser.add_argument('-d', '--debug', help='print debug commands for failed test cases', action='store_true')
     args = parser.parse_args()
 
     # Check if interactive terminal

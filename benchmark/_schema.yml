@@ -1,0 +1,6 @@
+description: str()
+suite: str()
+benchmark: str()
+readonly: bool()
+pattern: str()
+cases: map()

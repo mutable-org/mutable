@@ -1,0 +1,36 @@
+description: Projection of 1 to 10 attributes of type INT(4).
+suite: ours
+benchmark: projection
+readonly: yes
+pattern: '^Execute query:.*'
+cases:
+    1_of_10: |
+        SELECT a0
+        FROM Attributes_i32;
+    2_of_10: |
+        SELECT a0, a1
+        FROM Attributes_i32;
+    3_of_10: |
+        SELECT a0, a1, a2
+        FROM Attributes_i32;
+    4_of_10: |
+        SELECT a0, a1, a2, a3
+        FROM Attributes_i32;
+    5_of_10: |
+        SELECT a0, a1, a2, a3, a4
+        FROM Attributes_i32;
+    6_of_10: |
+        SELECT a0, a1, a2, a3, a4, a5
+        FROM Attributes_i32;
+    7_of_10: |
+        SELECT a0, a1, a2, a3, a4, a5, a6
+        FROM Attributes_i32;
+    8_of_10: |
+        SELECT a0, a1, a2, a3, a4, a5, a6, a7
+        FROM Attributes_i32;
+    9_of_10: |
+        SELECT a0, a1, a2, a3, a4, a5, a6, a7, a8
+        FROM Attributes_i32;
+    9_of_10: |
+        SELECT a0, a1, a2, a3, a4, a5, a6, a7, a8, a9
+        FROM Attributes_i32;

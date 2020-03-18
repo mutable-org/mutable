@@ -1,0 +1,76 @@
+body
+{
+    font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji";
+}
+
+.navbar-brand
+{
+    padding-right: 1.5rem;
+    border-right: 1.5px solid #6c757d;
+}
+
+#benchmarks
+{
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.ico-rotate
+{
+    transform: rotate(180deg);
+}
+
+.sidebar-sticky
+{
+    height: calc(100vh - 56px);
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+nav.sidebar .sidebar-heading
+{
+    color: #6c757d;
+    font-size: 10pt;
+    text-transform: uppercase;
+}
+
+nav.sidebar a.nav-link
+{
+    color: #333;
+    font-weight: 500;
+    font-size: 11pt;
+    line-height: 100%;
+}
+
+nav.sidebar a.nav-link i
+{
+    color: #999;
+    margin-right: 4pt;
+    font-size: 75%;
+    vertical-align: baseline;
+}
+
+nav.sidebar .nav .nav a.nav-link
+{
+    color: #6c757d;
+    margin-left: calc(1rem + 5px);
+    font-size: 75%;
+    font-weight: normal;
+    line-height: 100%;
+    padding-top: .2rem;
+    padding-bottom: .2rem;
+}
+
+main h2
+{
+    color: #333;
+    font-size: 18pt;
+    border-bottom: 1px solid #6c757d;
+    margin-top: 1.5rem;
+}
+
+main h3
+{
+    color: black;
+    font-size: 12pt;
+}

@@ -1,0 +1,17 @@
+description: Filter on attribute of type INT(8).
+suite: ours
+benchmark: filter
+readonly: yes
+pattern: '^Execute query:.*'
+cases:
+    0.0: SELECT 1 FROM Attributes_i64 WHERE a0 < -9223372036854775808;
+    0.1: SELECT 1 FROM Attributes_i64 WHERE a0 < -7378697629483821056;
+    0.2: SELECT 1 FROM Attributes_i64 WHERE a0 < -5534023222112865280;
+    0.3: SELECT 1 FROM Attributes_i64 WHERE a0 < -3689348814741910528;
+    0.4: SELECT 1 FROM Attributes_i64 WHERE a0 < -1844674407370954752;
+    0.5: SELECT 1 FROM Attributes_i64 WHERE a0 < 0;
+    0.6: SELECT 1 FROM Attributes_i64 WHERE a0 < 1844674407370954752;
+    0.7: SELECT 1 FROM Attributes_i64 WHERE a0 < 3689348814741909504;
+    0.8: SELECT 1 FROM Attributes_i64 WHERE a0 < 5534023222112866304;
+    0.9: SELECT 1 FROM Attributes_i64 WHERE a0 < 7378697629483821056;
+    1.0: SELECT 1 FROM Attributes_i64 WHERE a0 < 9223372036854775807;

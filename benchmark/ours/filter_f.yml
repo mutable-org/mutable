@@ -1,0 +1,17 @@
+description: Filter on attribute of type FLOAT.
+suite: ours
+benchmark: filter
+readonly: yes
+pattern: '^Execute query:.*'
+cases:
+    0.0: SELECT 1 FROM Attributes_f WHERE a0 < 0.0;
+    0.1: SELECT 1 FROM Attributes_f WHERE a0 < 0.1;
+    0.2: SELECT 1 FROM Attributes_f WHERE a0 < 0.2;
+    0.3: SELECT 1 FROM Attributes_f WHERE a0 < 0.3;
+    0.4: SELECT 1 FROM Attributes_f WHERE a0 < 0.4;
+    0.5: SELECT 1 FROM Attributes_f WHERE a0 < 0.5;
+    0.6: SELECT 1 FROM Attributes_f WHERE a0 < 0.6;
+    0.7: SELECT 1 FROM Attributes_f WHERE a0 < 0.7;
+    0.8: SELECT 1 FROM Attributes_f WHERE a0 < 0.8;
+    0.9: SELECT 1 FROM Attributes_f WHERE a0 < 0.9;
+    1.0: SELECT 1 FROM Attributes_f WHERE a0 < 1.0;

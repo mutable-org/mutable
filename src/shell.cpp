@@ -105,7 +105,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
         if (diag.num_errors() != num_errors) goto next;
 
         if (is<SelectStmt>(stmt)) {
-            auto query_graph = TIME_EXPR(QueryGraph::Build(*stmt), "Construct the Query Graph", C.timer());
+            auto query_graph = TIME_EXPR(QueryGraph::Build(*stmt), "Construct the query graph", C.timer());
             if (Options::Get().graph) query_graph->dump(std::cout);
             if (Options::Get().graphdot) {
                 DotTool dot(diag);
@@ -119,7 +119,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             });
             Optimizer Opt(dp_ccp, cf);
             auto I = Backend::CreateInterpreter();
-            auto optree = TIME_EXPR(Opt(*query_graph.get()), "Compute Query Plan", C.timer());
+            auto optree = TIME_EXPR(Opt(*query_graph.get()), "Compute the query plan", C.timer());
             if (Options::Get().plan) optree->dump(std::cout);
             if (Options::Get().plandot) {
                 DotTool dot(diag);
@@ -135,7 +135,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             }
 
             if (not Options::Get().dryrun) {
-                TIME_EXPR(I->execute(*plan), "Interpret the Query Plan", C.timer());
+                TIME_EXPR(I->execute(*plan), "Execute query", C.timer());
 
                 if (Options::Get().wasm) {
 #if WITH_V8

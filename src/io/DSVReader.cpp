@@ -147,7 +147,7 @@ void DSVReader::operator()(Const<CharacterSequence>&)
     } else {
         while (c != EOF and c != '\n' and c != delimiter) {
             if (c == quote)
-                diag.e(pos) << "WARNING: Illegal character '\"' found in unquoted string.\n";
+                diag.e(pos) << "WARNING: Illegal character " << quote << " found in unquoted string.\n";
             else
                 push();
         }

@@ -133,15 +133,29 @@ void DSVReader::operator()(Const<CharacterSequence>&)
      * Source: https://tools.ietf.org/html/rfc4180#section-2 */
     buf.clear();
     if (accept(quote)) {
-        while (c != EOF) {
-            if (c != quote) {
-                push();
-            } else {
-                step();
-                if (c == quote)
+        if (escape == quote) { // RFC 4180
+            while (c != EOF) {
+                if (c != quote) {
                     push();
-                else
+                } else {
+                    step();
+                    if (c == quote)
+                        push();
+                    else
+                        break;
+                }
+            }
+        } else {
+            while (c != EOF) {
+                if (c == quote) {
+                    step();
                     break;
+                } else if (c == escape) {
+                    step();
+                    push();
+                } else {
+                    push();
+                }
             }
         }
     } else {

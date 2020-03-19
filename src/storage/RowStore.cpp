@@ -209,7 +209,8 @@ void RowStore::compute_offsets()
     offsets_[num_attrs] = off;
     off += num_attrs; // reserve space for the NULL bitmap
     if (off % alignment)
-        row_size_ = off + (alignment - off % alignment); // the row size is padded to fulfill the alignment requirements
+        off += (alignment - off % alignment); // the offset is padded to fulfill the alignment requirements
+    row_size_ = off;
 
     delete[] attrs;
 }

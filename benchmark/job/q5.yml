@@ -1,0 +1,75 @@
+description: Join Order Benchmark Query 5
+suite: job
+benchmark: q5
+readonly: yes
+pattern: '^Execute query:.*'
+cases:
+    a: |
+        SELECT MIN(t.title) AS typical_european_movie
+        FROM company_type AS ct,
+             info_type AS it,
+             movie_companies AS mc,
+             movie_info AS mi,
+             title AS t
+        WHERE ct.kind = "production companies"
+          AND mc.note LIKE "%(theatrical)%"
+          AND mc.note LIKE "%(France)%"
+          AND mi.info IN ("Sweden",
+                          "Norway",
+                          "Germany",
+                          "Denmark",
+                          "Swedish",
+                          "Denish",
+                          "Norwegian",
+                          "German")
+          AND t.production_year > 2005
+          AND t.id = mi.movie_id
+          AND t.id = mc.movie_id
+          AND mc.movie_id = mi.movie_id
+          AND ct.id = mc.company_type_id
+          AND it.id = mi.info_type_id;
+    b: |
+        SELECT MIN(t.title) AS american_vhs_movie
+        FROM company_type AS ct,
+             info_type AS it,
+             movie_companies AS mc,
+             movie_info AS mi,
+             title AS t
+        WHERE ct.kind = "production companies"
+          AND mc.note LIKE "%(VHS)%"
+          AND mc.note LIKE "%(USA)%"
+          AND mc.note LIKE "%(1994)%"
+          AND mi.info IN ("USA",
+                          "America")
+          AND t.production_year > 2010
+          AND t.id = mi.movie_id
+          AND t.id = mc.movie_id
+          AND mc.movie_id = mi.movie_id
+          AND ct.id = mc.company_type_id
+          AND it.id = mi.info_type_id;
+    c: |
+        SELECT MIN(t.title) AS american_movie
+        FROM company_type AS ct,
+             info_type AS it,
+             movie_companies AS mc,
+             movie_info AS mi,
+             title AS t
+        WHERE ct.kind = "production companies"
+          AND NOT (mc.note LIKE "%(TV)%")
+          AND mc.note LIKE "%(USA)%"
+          AND mi.info IN ("Sweden",
+                          "Norway",
+                          "Germany",
+                          "Denmark",
+                          "Swedish",
+                          "Denish",
+                          "Norwegian",
+                          "German",
+                          "USA",
+                          "American")
+          AND t.production_year > 1990
+          AND t.id = mi.movie_id
+          AND t.id = mc.movie_id
+          AND mc.movie_id = mi.movie_id
+          AND ct.id = mc.company_type_id
+          AND it.id = mi.info_type_id;

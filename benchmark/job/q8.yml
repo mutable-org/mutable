@@ -1,0 +1,101 @@
+description: Join Order Benchmark Query 8
+suite: job
+benchmark: q8
+readonly: yes
+pattern: '^Execute query:.*'
+cases:
+    a: |
+        SELECT MIN(an1.name) AS actress_pseudonym,
+               MIN(t.title) AS japanese_movie_dubbed
+        FROM aka_name AS an1,
+             cast_info AS ci,
+             company_name AS cn,
+             movie_companies AS mc,
+             name AS n1,
+             role_type AS rt,
+             title AS t
+        WHERE ci.note = "(voice: English version)"
+          AND cn.country_code = "[jp]"
+          AND mc.note LIKE "%(Japan)%"
+          AND NOT (mc.note LIKE "%(USA)%")
+          AND n1.name LIKE "%Yo%"
+          AND NOT (n1.name LIKE "%Yu%")
+          AND rt.role = "actress"
+          AND an1.person_id = n1.id
+          AND n1.id = ci.person_id
+          AND ci.movie_id = t.id
+          AND t.id = mc.movie_id
+          AND mc.company_id = cn.id
+          AND ci.role_id = rt.id
+          AND an1.person_id = ci.person_id
+          AND ci.movie_id = mc.movie_id;
+    b: |
+        SELECT MIN(an.name) AS acress_pseudonym,
+               MIN(t.title) AS japanese_anime_movie
+        FROM aka_name AS an,
+             cast_info AS ci,
+             company_name AS cn,
+             movie_companies AS mc,
+             name AS n,
+             role_type AS rt,
+             title AS t
+        WHERE ci.note = "(voice: English version)"
+          AND cn.country_code = "[jp]"
+          AND mc.note LIKE "%(Japan)%"
+          AND NOT (mc.note LIKE "%(USA)%")
+          AND (mc.note LIKE "%(2006)%"
+               OR mc.note LIKE "%(2007)%")
+          AND n.name LIKE "%Yo%"
+          AND NOT (n.name LIKE "%Yu%")
+          AND rt.role = "actress"
+          AND t.production_year BETWEEN 2006 AND 2007
+          AND (t.title LIKE "One Piece%"
+               OR t.title LIKE "Dragon Ball Z%")
+          AND an.person_id = n.id
+          AND n.id = ci.person_id
+          AND ci.movie_id = t.id
+          AND t.id = mc.movie_id
+          AND mc.company_id = cn.id
+          AND ci.role_id = rt.id
+          AND an.person_id = ci.person_id
+          AND ci.movie_id = mc.movie_id;
+    c: |
+        SELECT MIN(a1.name) AS writer_pseudo_name,
+               MIN(t.title) AS movie_title
+        FROM aka_name AS a1,
+             cast_info AS ci,
+             company_name AS cn,
+             movie_companies AS mc,
+             name AS n1,
+             role_type AS rt,
+             title AS t
+        WHERE cn.country_code = "[us]"
+          AND rt.role = "writer"
+          AND a1.person_id = n1.id
+          AND n1.id = ci.person_id
+          AND ci.movie_id = t.id
+          AND t.id = mc.movie_id
+          AND mc.company_id = cn.id
+          AND ci.role_id = rt.id
+          AND a1.person_id = ci.person_id
+          AND ci.movie_id = mc.movie_id;
+    d: |
+        SELECT MIN(an1.name) AS costume_designer_pseudo,
+               MIN(t.title) AS movie_with_costumes
+        FROM aka_name AS an1,
+             cast_info AS ci,
+             company_name AS cn,
+             movie_companies AS mc,
+             name AS n1,
+             role_type AS rt,
+             title AS t
+        WHERE cn.country_code = "[us]"
+          AND rt.role = "costume designer"
+          AND an1.person_id = n1.id
+          AND n1.id = ci.person_id
+          AND ci.movie_id = t.id
+          AND t.id = mc.movie_id
+          AND mc.company_id = cn.id
+          AND ci.role_id = rt.id
+          AND an1.person_id = ci.person_id
+          AND ci.movie_id = mc.movie_id;

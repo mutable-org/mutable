@@ -4,13 +4,12 @@ import os
 import urllib.request
 import zlib
 import tarfile
+import argparse
 
-DATA_URL = 'https://bigdata.uni-saarland.de/mutable/imdb.tgz'
-CRC_URL = 'https://bigdata.uni-saarland.de/mutable/imdb.crc32'
+BASE_URL = 'https://bigdata.uni-saarland.de/mutable/'
+BASE_DIR = os.path.join(os.getcwd(), 'benchmark')
 
-DATA_DIR = os.path.join(os.getcwd(), 'benchmark', 'job', 'data')
-DATA_FILE = os.path.join(DATA_DIR, 'imdb.tgz')
-CRC_FILE = os.path.join(DATA_DIR, 'imdb.crc32')
+benchmarks = ['job', 'job-light']
 
 def compute_checksum(filename):
     with open(filename, 'rb') as f:
@@ -29,6 +28,23 @@ def verify_checksum():
         return True
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Download benchmark data.')
+    parser.add_argument('benchmark', help=f'the benchmark, currently supported {", ".join(benchmarks)}')
+    args = parser.parse_args()
+    benchmark = args.benchmark
+
+    # Check if benchmark is supported
+    if benchmark not in benchmarks:
+        print('ERROR: Benchmark not supported.')
+        exit(1)
+
+    # Define file locations and urls
+    DATA_DIR  = os.path.join(BASE_DIR, benchmark, 'data')
+    CRC_URL   = BASE_URL + benchmark + '.crc32'
+    CRC_FILE  = os.path.join(DATA_DIR, f'{benchmark}.crc32')
+    DATA_URL  = BASE_URL + benchmark + '.tgz'
+    DATA_FILE = os.path.join(DATA_DIR, f'{benchmark}.tgz')
+
     # Create data directory
     if not os.path.isdir(DATA_DIR):
         os.mkdir(DATA_DIR)

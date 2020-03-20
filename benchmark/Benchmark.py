@@ -60,6 +60,7 @@ def time_command(command, query, pattern, num_runs=3):
 
     if process.returncode or len(err):
         query = query.encode('unicode_escape').decode()
+        out = '\n'.join(out.split('\n')[-20:])
         tqdm.write(f'''\
 Unexpected failure during execution of benchmark "{path_to_benchmark}" with return code {process.returncode}:
 $ echo -e "{query}" | {' '.join(cmd)}

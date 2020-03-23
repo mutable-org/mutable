@@ -37,15 +37,13 @@ class ArgParser
     template<typename T>
     struct OptionImpl : public Option
     {
-        OptionImpl(const char *shortName, const char *longName, T &var, const char* descr, std::function<void(T)> callback)
+        OptionImpl(const char *shortName, const char *longName, const char* descr, std::function<void(T)> callback)
             : Option(shortName, longName, descr)
-            , var(var)
             , callback(callback)
         { }
 
         void parse(const char **&argv) const override;
 
-        T &var;
         std::function<void(T)> callback;
     };
 
@@ -65,16 +63,14 @@ class ArgParser
      *
      * @param shortName name of the short option, e.g. "-s"
      * @param longName name of the long option, e.g. "--long"
-     * @param var the variable that captures the effect of the option
      * @param descr a textual description of the option
-     * @param callback a callback function that is invoked if the option is given; `var` is passed as argument to the
-     * callback
+     * @param callback a callback function that is invoked if the option is given
      */
     template<typename T>
-    void add(const char *shortName, const char *longName, T &var, const char *descr, std::function<void(T)> callback) {
+    void add(const char *shortName, const char *longName, const char *descr, std::function<void(T)> callback) {
         if (shortName) shortName = pool_(shortName);
         if (longName)  longName  = pool_(longName);
-        auto opt = new OptionImpl<T>(shortName, longName, var, descr, callback);
+        auto opt = new OptionImpl<T>(shortName, longName, descr, callback);
         opts_.push_back(opt);
 
         if (shortName) {

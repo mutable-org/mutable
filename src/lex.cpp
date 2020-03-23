@@ -29,7 +29,7 @@ int main(int argc, const char **argv)
     TYPE VAR = INIT;\
     {\
         std::function<void(TYPE)> callback = CALLBACK;\
-        AP.add(SHORT, LONG, VAR, DESCR, callback);\
+        AP.add(SHORT, LONG, DESCR, callback);\
     }
     ADD(bool, show_help, false,             /* Type, Var, Init  */
         "-h", "--help",                     /* Short, Long      */

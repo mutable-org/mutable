@@ -868,20 +868,26 @@ NEXT;
 Print_f: {
     std::size_t index = std::size_t(*op_++);
     std::ostream *out = reinterpret_cast<std::ostream*>(context_[index].as_p());
-    if (TOP_IS_NULL)
+    if (TOP_IS_NULL) {
         (*out) << "NULL";
-    else
+    } else {
+        const auto old_precision = out->precision(std::numeric_limits<float>::max_digits10 - 1);
         (*out) << TOP.as_f();
+        out->precision(old_precision);
+    }
 }
 NEXT;
 
 Print_d: {
     std::size_t index = std::size_t(*op_++);
     std::ostream *out = reinterpret_cast<std::ostream*>(context_[index].as_p());
-    if (TOP_IS_NULL)
+    if (TOP_IS_NULL) {
         (*out) << "NULL";
-    else
+    } else {
+        const auto old_precision = out->precision(std::numeric_limits<double>::max_digits10 - 1);
         (*out) << TOP.as_d();
+        out->precision(old_precision);
+    }
 }
 NEXT;
 

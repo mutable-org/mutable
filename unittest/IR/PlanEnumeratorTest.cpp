@@ -136,12 +136,12 @@ TEST_CASE("PlanEnumerator", "[core][IR][planenumerator]")
         expected_plan_table.at(Subproblem(14)) = { Subproblem(2), Subproblem(12),  960, 126 };
         expected_plan_table.at(Subproblem(15)) = { Subproblem(5), Subproblem(10), 4800, 195 };
 
-        DPsize dp_size;
+        auto dp_size = PlanEnumerator::CreateDPsize();
         PlanTable plan_table(num_sources);
         /* Initialize `PlanTable` for base case. */
         pe_test::init_PT_base_case(G, plan_table);
 
-        dp_size(G, cf, plan_table);
+        (*dp_size)(G, cf, plan_table);
         REQUIRE(expected_plan_table == plan_table);
     }
 
@@ -165,12 +165,12 @@ TEST_CASE("PlanEnumerator", "[core][IR][planenumerator]")
         expected_plan_table.at(Subproblem(14)) = { Subproblem(2), Subproblem(12),  960, 126 };
         expected_plan_table.at(Subproblem(15)) = { Subproblem(5), Subproblem(10), 4800, 195 };
 
-        DPsizeOpt dp_size_opt;
+        auto dp_size_opt = PlanEnumerator::CreateDPsizeOpt();
         PlanTable plan_table(num_sources);
         /* Initialize `PlanTable` for base case. */
         pe_test::init_PT_base_case(G, plan_table);
 
-        dp_size_opt(G, cf, plan_table);
+        (*dp_size_opt)(G, cf, plan_table);
         REQUIRE(expected_plan_table == plan_table);
     }
     SECTION("DPsub")
@@ -193,12 +193,12 @@ TEST_CASE("PlanEnumerator", "[core][IR][planenumerator]")
         expected_plan_table.at(Subproblem(14)) = { Subproblem(2), Subproblem(12),  960, 126 };
         expected_plan_table.at(Subproblem(15)) = { Subproblem(5), Subproblem(10), 4800, 195 };
 
-        DPsub dp_sub;
+        auto dp_sub = PlanEnumerator::CreateDPsub();
         PlanTable plan_table(num_sources);
         /* Initialize `PlanTable` for base case. */
         pe_test::init_PT_base_case(G, plan_table);
 
-        dp_sub(G, cf, plan_table);
+        (*dp_sub)(G, cf, plan_table);
         REQUIRE(expected_plan_table == plan_table);
     }
 
@@ -222,12 +222,12 @@ TEST_CASE("PlanEnumerator", "[core][IR][planenumerator]")
         expected_plan_table.at(Subproblem(14)) = { Subproblem(2), Subproblem(12),  960, 126 };
         expected_plan_table.at(Subproblem(15)) = { Subproblem(5), Subproblem(10), 4800, 195 };
 
-        DPsubOpt dp_sub_opt;
+        auto dp_sub_opt = PlanEnumerator::CreateDPsubOpt();
         PlanTable plan_table(num_sources);
         /* Initialize `PlanTable` for base case. */
         pe_test::init_PT_base_case(G, plan_table);
 
-        dp_sub_opt(G, cf, plan_table);
+        (*dp_sub_opt)(G, cf, plan_table);
         REQUIRE(expected_plan_table == plan_table);
     }
 
@@ -251,12 +251,12 @@ TEST_CASE("PlanEnumerator", "[core][IR][planenumerator]")
         expected_plan_table.at(Subproblem(14)) = { Subproblem(2), Subproblem(12),  960, 126 };
         expected_plan_table.at(Subproblem(15)) = { Subproblem(5), Subproblem(10), 4800, 195 };
 
-        DPccp dp_ccp;
+        auto dp_ccp = PlanEnumerator::CreateDPccp();
         PlanTable plan_table(num_sources);
         /* Initialize `PlanTable` for base case. */
         pe_test::init_PT_base_case(G, plan_table);
 
-        dp_ccp(G, cf, plan_table);
+        (*dp_ccp)(G, cf, plan_table);
         REQUIRE(expected_plan_table == plan_table);
     }
 
@@ -280,12 +280,12 @@ TEST_CASE("PlanEnumerator", "[core][IR][planenumerator]")
         expected_plan_table.at(Subproblem(14)) = { Subproblem(2), Subproblem(12),  960, 126 };
         expected_plan_table.at(Subproblem(15)) = { Subproblem(5), Subproblem(10), 4800, 195 };
 
-        TDbasic td_basic;
+        auto td_basic = PlanEnumerator::CreateTDbasic();
         PlanTable plan_table(num_sources);
         /* Initialize `PlanTable` for base case. */
         pe_test::init_PT_base_case(G, plan_table);
 
-        td_basic(G, cf, plan_table);
+        (*td_basic)(G, cf, plan_table);
         REQUIRE(expected_plan_table == plan_table);
     }
     delete stmt;

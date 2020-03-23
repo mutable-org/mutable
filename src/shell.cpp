@@ -113,11 +113,11 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
                 dot.show("graph", is_stdin, "fdp");
             }
 
-            DPccp dp_ccp;
+            std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::Create("DPccp");
             CostFunction cf([](CostFunction::Subproblem left, CostFunction::Subproblem right, int, const PlanTable &T) {
                 return sum_wo_overflow(T[left].cost, T[right].cost, T[left].size, T[right].size);
             });
-            Optimizer Opt(dp_ccp, cf);
+            Optimizer Opt(*pe.get(), cf);
             auto I = Backend::CreateInterpreter();
             auto optree = TIME_EXPR(Opt(*query_graph.get()), "Compute the query plan", C.timer());
             if (Options::Get().plan) optree->dump(std::cout);

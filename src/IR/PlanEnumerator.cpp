@@ -15,6 +15,29 @@
 
 using namespace db;
 
+const std::unordered_map<std::string, PlanEnumerator::kind_t> PlanEnumerator::STR_TO_KIND = {
+#define DB_PLAN_ENUMERATOR(NAME, _) { #NAME,  PlanEnumerator::PE_ ## NAME },
+#include "tables/PlanEnumerator.tbl"
+#undef DB_PLAN_ENUMERATOR
+};
+
+std::unique_ptr<PlanEnumerator> PlanEnumerator::Create(PlanEnumerator::kind_t kind) {
+    switch(kind) {
+#define DB_PLAN_ENUMERATOR(NAME, _) case PE_ ## NAME: return Create ## NAME();
+#include "tables/PlanEnumerator.tbl"
+#undef DB_PLAN_ENUMERATOR
+    }
+}
+
+/*======================================================================================================================
+ * DummyPlanEnumerator
+ *====================================================================================================================*/
+
+/** Computes an arbitrary join order (deterministically). */
+struct DummyPlanEnumerator final : PlanEnumerator
+{
+    void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
+};
 
 void DummyPlanEnumerator::operator()(const QueryGraph&, const CostFunction&, PlanTable&) const
 {
@@ -63,6 +86,16 @@ void DummyPlanEnumerator::operator()(const QueryGraph&, const CostFunction&, Pla
 #endif
 }
 
+/*======================================================================================================================
+ * DPsize
+ *====================================================================================================================*/
+
+/** Computes the join order using size-based dynamic programming. */
+struct DPsize final : PlanEnumerator
+{
+    void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
+};
+
 void DPsize::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
 {
     auto &sources = G.sources();
@@ -102,6 +135,18 @@ void DPsize::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &
     std::cout << "  OnoLohmanCounter (#cpp): " << csg_cmp_pair_counter/2 << std::endl;
 #endif
 }
+
+/*======================================================================================================================
+ * DPsizeOpt
+ *====================================================================================================================*/
+
+/** Computes the join order using size-based dynamic programming.  In addition to `DPsize`, applies the following
+ * optimizations.  First, do not enumerate symmetric subproblems.  Second, in case both subproblems are of equal size,
+ * consider only subproblems succeeding the first subproblem. */
+struct DPsizeOpt final : PlanEnumerator
+{
+    void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
+};
 
 void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
 {
@@ -173,6 +218,16 @@ void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTabl
 #endif
 }
 
+/*======================================================================================================================
+ * DPsub
+ *====================================================================================================================*/
+
+/** Computes the join order using subset-based dynamic programming. */
+struct DPsub final : PlanEnumerator
+{
+    void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
+};
+
 void DPsub::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
 {
     auto &sources = G.sources();
@@ -209,6 +264,17 @@ void DPsub::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &P
     std::cout << "  OnoLohmanCounter (#cpp): " << csg_cmp_pair_counter/2 << std::endl;
 #endif
 }
+
+/*======================================================================================================================
+ * DPsubOpt
+ *====================================================================================================================*/
+
+/** Computes the join order using subset-based dynamic programming.  In comparison to `DPsub`, do not enumerate
+ * symmetric subproblems. */
+struct DPsubOpt final : PlanEnumerator
+{
+    void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
+};
 
 void DPsubOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
 {
@@ -253,9 +319,23 @@ void DPsubOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable
 #endif
 }
 
+/*======================================================================================================================
+ * DPccp
+ *====================================================================================================================*/
+
 #if PE_COUNTER
 std::size_t ccp = 0;
 #endif
+
+/** Computes the join order using connected subgraph complement pairs (ccp). */
+struct DPccp final : PlanEnumerator
+{
+    /** For each connected subgraph (csg) `S1` of `G`, enumerate all complement connected subgraphs,
+     * i.e.\ all csgs of `G - S1` that are connected to `S1`. */
+    void enumerate_cmp(const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &cf, PlanTable &PT,
+                       Subproblem S1) const;
+    void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
+};
 
 void DPccp::enumerate_cmp(const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &cf, PlanTable &PT,
                           Subproblem S1) const
@@ -334,6 +414,17 @@ void DPccp::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &P
 #endif
 }
 
+/*======================================================================================================================
+ * TDbasic
+ *====================================================================================================================*/
+
+struct TDbasic final : PlanEnumerator
+{
+    void PlanGen(const QueryGraph &G, const CostFunction &cf, PlanTable &PT, const AdjacencyMatrix &M, Subproblem S)
+        const;
+    void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &Pt) const override;
+};
+
 void TDbasic::PlanGen(const QueryGraph &G, const CostFunction &cf, PlanTable &PT, const AdjacencyMatrix &M,
                       Subproblem S) const
 {
@@ -364,3 +455,11 @@ void TDbasic::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable 
 
     PlanGen(G, cf, PT, M, Subproblem((1UL << n) - 1));
 }
+
+
+#define DB_PLAN_ENUMERATOR(NAME, _) \
+    std::unique_ptr<PlanEnumerator> PlanEnumerator::Create ## NAME() { \
+        return std::make_unique<NAME>(); \
+    }
+#include "tables/PlanEnumerator.tbl"
+#undef DB_PLAN_ENUMERATOR

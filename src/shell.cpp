@@ -218,8 +218,10 @@ next:
         num_errors = diag.num_errors();
         delete stmt;
 
-        if (Options::Get().times)
+        if (Options::Get().times) {
             std::cout << C.timer();
+            std::cout.flush();
+        }
     }
 
     std::cout.flush();

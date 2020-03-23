@@ -1,5 +1,5 @@
 description: Projection of 1 to 10 attributes of type FLOAT.
-suite: ours
+suite: operators
 benchmark: projection
 readonly: yes
 pattern: '^Execute query:.*'

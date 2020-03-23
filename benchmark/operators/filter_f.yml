@@ -1,5 +1,5 @@
 description: Filter on attribute of type FLOAT.
-suite: ours
+suite: operators
 benchmark: filter
 readonly: yes
 pattern: '^Execute query:.*'

@@ -7,7 +7,7 @@ import string
 
 NUM_TUPLES = 10000
 STRLEN = 10
-OUTPUT_DIR = os.path.join(os.getcwd(), 'benchmark', 'ours', 'data')
+OUTPUT_DIR = os.path.join(os.getcwd(), 'benchmark', 'operators', 'data')
 
 TYPE_TO_STR = {
         'b':    'BOOL',
@@ -173,5 +173,5 @@ def gen_tables(schema, path_to_dir):
 
 if __name__ == '__main__':
     print(f'Generating data in {OUTPUT_DIR}')
-    gen_database('ours', SCHEMA, OUTPUT_DIR)
+    gen_database('operators', SCHEMA, OUTPUT_DIR)
     gen_tables(SCHEMA, OUTPUT_DIR)

@@ -1,5 +1,5 @@
 description: Filter on attribute of type INT(8).
-suite: ours
+suite: operators
 benchmark: filter
 readonly: yes
 pattern: '^Execute query:.*'

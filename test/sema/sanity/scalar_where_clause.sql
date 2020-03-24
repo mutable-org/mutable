@@ -1,3 +1,0 @@
-SELECT *
-FROM LINEITEM
-WHERE AVG(l_discount) > 42;

@@ -1,5 +1,0 @@
--:1:1: SELECT TK_Select
--:1:8: * TK_ASTERISK
--:2:1: FROM TK_From
--:2:6: tbl TK_IDENTIFIER
--:2:9: ; TK_SEMICOL

@@ -1,3 +1,0 @@
-SELECT *
-FROM LINEITEM
-WHERE NOT (l_linenumber = 42);

@@ -1,5 +1,0 @@
-SELECT l.l_orderkey
-FROM LINEITEM AS l;
-
-SELECT l_orderkey
-FROM LINEITEM AS l;

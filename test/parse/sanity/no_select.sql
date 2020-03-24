@@ -1,7 +1,0 @@
-SELECT;
-
-SELECT FROM x;
-
-SELECT () FROM x;
-
-FROM x;

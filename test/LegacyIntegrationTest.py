@@ -18,7 +18,7 @@ from tqdm import tqdm
 #-----------------------------------------------------------------------------------------------------------------------
 CWD = os.getcwd()
 
-component_keywords = ['lexer', 'parser', 'sema', 'end2end']
+component_keywords = ['end2end']
 
 # bar_format = '{desc}: {n}/{total} ({percentage:3.0f}%)|{bar}|'
 bar_format = '    |{bar:16}| {n}/{total}'
@@ -36,7 +36,7 @@ def parse_components(components):
     global check_end2end
 
     if len(components)==0:
-        check_lexer = check_parser = check_sema = check_end2end = True
+        check_end2end = True
     else:
         if 'lexer' in components:
             check_lexer = True

@@ -6,6 +6,7 @@ struct Options
 {
     /* Help */
     bool show_help;
+    bool list_plan_enumerators;
 
     /* Shell configuration */
     bool has_color;
@@ -23,6 +24,9 @@ struct Options
     bool plandot;
     bool dryrun;
     bool wasm;
+
+    /* Keyword arguments. */
+    const char *plan_enumerator;
 
     private:
     Options() = default;

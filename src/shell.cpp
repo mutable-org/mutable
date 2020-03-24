@@ -113,7 +113,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
                 dot.show("graph", is_stdin, "fdp");
             }
 
-            std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::Create("DPccp");
+            std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::Create(Options::Get().plan_enumerator);
             CostFunction cf([](CostFunction::Subproblem left, CostFunction::Subproblem right, int, const PlanTable &T) {
                 return sum_wo_overflow(T[left].cost, T[right].cost, T[left].size, T[right].size);
             });
@@ -422,6 +422,26 @@ int main(int argc, const char **argv)
         nullptr, "--wasm",                                  /* Short, Long      */
         "show compiled WebAssembly",                        /* Description      */
         [&](bool) { Options::Get().wasm = true; });         /* Callback         */
+    ADD(const char *, Options::Get().plan_enumerator,       /* Type, Var        */
+        "DPccp",                                            /* Init             */
+        nullptr, "--plan-enumerator",                       /* Short, Long      */
+        "specify the plan enumerator",                      /* Description      */
+        /* Callback         */
+        [&](const char *str) {
+            if (PlanEnumerator::STR_TO_KIND.find(str) == PlanEnumerator::STR_TO_KIND.end()) {
+                std::cerr << "There is no plan enumerator with the name \"" << str << "\"." << std::endl;
+                AP.print_args(stderr);
+                std::exit(EXIT_FAILURE);
+            }
+            Options::Get().plan_enumerator = str;
+        }
+       );
+    ADD(bool, Options::Get().list_plan_enumerators, false,  /* Type, Var, Init  */
+        nullptr, "--list-plan-enumerators",                 /* Short, Long      */
+        "list all available plan enumerators",              /* Description      */
+        /* Callback */
+        [&](bool) { Options::Get().list_plan_enumerators = true; }
+    );
 #undef ADD
     AP.parse_args(argc, argv);
 
@@ -429,6 +449,21 @@ int main(int argc, const char **argv)
         usage(std::cout, argv[0]);
         std::cout << "WHERE\n";
         AP.print_args(stdout);
+        std::exit(EXIT_SUCCESS);
+    }
+
+    if (Options::Get().list_plan_enumerators) {
+        std::cout << "List of available plan enumerators:";
+        constexpr std::pair<const char*, const char*> PE[] = {
+#define DB_PLAN_ENUMERATOR(NAME, DESCR) { #NAME, DESCR },
+#include "tables/PlanEnumerator.tbl"
+#undef DB_PLAN_ENUMERATOR
+        };
+        std::size_t max_len = 0;
+        for (auto pe : PE) max_len = std::max(max_len, strlen(pe.first));
+        for (auto pe : PE)
+            std::cout << "\n    " << std::setw(max_len) << std::left << pe.first << "    -    " << pe.second;
+        std::cout << std::endl;
         std::exit(EXIT_SUCCESS);
     }
 

@@ -126,7 +126,11 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
                 optree->dot(dot.stream());
                 dot.show("plan", is_stdin);
             }
-            auto plan = new PrintOperator(std::cout);
+            Consumer *plan = nullptr;
+            if (Options::Get().benchmark)
+                plan = new NoOpOperator();
+            else
+                plan = new PrintOperator(std::cout);
             plan->add_child(optree.release());
 
             if (Options::Get().wasm) {
@@ -422,6 +426,10 @@ int main(int argc, const char **argv)
         nullptr, "--wasm",                                  /* Short, Long      */
         "show compiled WebAssembly",                        /* Description      */
         [&](bool) { Options::Get().wasm = true; });         /* Callback         */
+    ADD(bool, Options::Get().benchmark, false,              /* Type, Var, Init  */
+        nullptr, "--benchmark",                             /* Short, Long      */
+        "run queries in benchmark mode",                    /* Description      */
+        [&](bool) { Options::Get().benchmark = true; });    /* Callback         */
     ADD(const char *, Options::Get().plan_enumerator,       /* Type, Var        */
         "DPccp",                                            /* Init             */
         nullptr, "--plan-enumerator",                       /* Short, Long      */

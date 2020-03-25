@@ -24,6 +24,8 @@ struct Options
     bool plandot;
     bool dryrun;
     bool wasm;
+    /** If `true`, the results of queries are dropped and not passed back to the user. */
+    bool benchmark;
 
     /* Keyword arguments. */
     const char *plan_enumerator;

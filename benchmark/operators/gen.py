@@ -7,7 +7,7 @@ import string
 
 NUM_TUPLES = 10000
 STRLEN = 10
-OUTPUT_DIR = os.path.join(os.getcwd(), 'benchmark', 'operators', 'data')
+OUTPUT_DIR = os.path.join('benchmark', 'operators', 'data')
 
 TYPE_TO_STR = {
         'b':    'BOOL',
@@ -156,7 +156,7 @@ def gen_column(name, ty, num_tuples):
         raise Exception('unsupported type')
 
 def gen_table(table_name, attributes, path_to_dir):
-    print(f'Generating data for table {table_name}.')
+    print(f'Generating data for table {table_name}')
     path = os.path.join(path_to_dir, table_name + '.csv')
     columns = [ gen_column(attr[0], attr[1], NUM_TUPLES) for attr in attributes ]
 
@@ -173,5 +173,6 @@ def gen_tables(schema, path_to_dir):
 
 if __name__ == '__main__':
     print(f'Generating data in {OUTPUT_DIR}')
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
     gen_database('operators', SCHEMA, OUTPUT_DIR)
     gen_tables(SCHEMA, OUTPUT_DIR)

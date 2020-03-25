@@ -100,7 +100,7 @@ def perform_benchmark(path_to_benchmark):
     # Collect results in data frame
     measurements = pandas.DataFrame(columns=['date', 'suite', 'benchmark', 'name', 'case', 'time'])
 
-    command = [ MUTABLE_BINARY, '-t', schema ]
+    command = [ MUTABLE_BINARY, '--benchmark', '--times', schema ]
     if args.binargs:
         command.extend(args.binargs.split(' '))
     for case, query in yml['cases'].items():

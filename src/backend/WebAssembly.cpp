@@ -180,6 +180,7 @@ struct WasmCodeGen : ConstOperatorVisitor
     DECLARE(ScanOperator);
     DECLARE(CallbackOperator);
     DECLARE(PrintOperator);
+    DECLARE(NoOpOperator);
     DECLARE(FilterOperator);
     DECLARE(JoinOperator);
     DECLARE(ProjectionOperator);
@@ -228,6 +229,7 @@ struct WasmPipelineCG : ConstOperatorVisitor, ConstASTVisitor
     DECLARE(ScanOperator);
     DECLARE(CallbackOperator);
     DECLARE(PrintOperator);
+    DECLARE(NoOpOperator);
     DECLARE(FilterOperator);
     DECLARE(JoinOperator);
     DECLARE(ProjectionOperator);
@@ -399,6 +401,8 @@ void WasmCodeGen::operator()(const ScanOperator &op)
 void WasmCodeGen::operator()(const CallbackOperator &op) { (*this)(*op.child(0)); }
 
 void WasmCodeGen::operator()(const PrintOperator &op) { (*this)(*op.child(0)); }
+
+void WasmCodeGen::operator()(const NoOpOperator &op) { (*this)(*op.child(0)); }
 
 void WasmCodeGen::operator()(const FilterOperator &op)
 {
@@ -611,6 +615,8 @@ void WasmPipelineCG::operator()(const PrintOperator &op)
     // TODO
     unreachable("not implemented");
 }
+
+void WasmPipelineCG::operator()(const NoOpOperator&) { /* nothing to be done */ }
 
 void WasmPipelineCG::operator()(const FilterOperator &op)
 {

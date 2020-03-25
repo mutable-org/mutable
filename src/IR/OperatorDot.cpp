@@ -34,6 +34,8 @@ void OperatorDot::operator()(Const<CallbackOperator> &op) { (*this)(*op.child(0)
 
 void OperatorDot::operator()(Const<PrintOperator> &op) { (*this)(*op.child(0)); }
 
+void OperatorDot::operator()(Const<NoOpOperator> &op) { (*this)(*op.child(0)); }
+
 void OperatorDot::operator()(Const<FilterOperator> &op)
 {
     (*this)(*op.child(0));

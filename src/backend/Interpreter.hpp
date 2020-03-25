@@ -198,6 +198,7 @@ struct Pipeline : ConstOperatorVisitor
     DECLARE(ScanOperator);
     DECLARE(CallbackOperator);
     DECLARE(PrintOperator);
+    DECLARE(NoOpOperator);
     DECLARE(FilterOperator);
     DECLARE(JoinOperator);
     DECLARE(ProjectionOperator);
@@ -220,6 +221,7 @@ struct Interpreter : Backend, ConstOperatorVisitor
     DECLARE(ScanOperator);
     DECLARE(CallbackOperator);
     DECLARE(PrintOperator);
+    DECLARE(NoOpOperator);
     DECLARE(FilterOperator);
     DECLARE(JoinOperator);
     DECLARE(ProjectionOperator);

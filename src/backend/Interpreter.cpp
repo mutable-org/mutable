@@ -313,6 +313,8 @@ void Pipeline::operator()(const PrintOperator &op)
     }
 }
 
+void Pipeline::operator()(const NoOpOperator&) { /* nothing to be done */ }
+
 void Pipeline::operator()(const FilterOperator &op)
 {
     auto data = as<FilterData>(op.data());
@@ -633,6 +635,8 @@ void Interpreter::operator()(const PrintOperator &op)
     op.data(new PrintData(op));
     op.child(0)->accept(*this);
 }
+
+void Interpreter::operator()(const NoOpOperator &op) { op.child(0)->accept(*this); }
 
 void Interpreter::operator()(const ScanOperator &op)
 {

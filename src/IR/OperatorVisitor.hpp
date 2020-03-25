@@ -20,6 +20,7 @@ struct TheOperatorVisitor
     DECLARE(ScanOperator);
     DECLARE(CallbackOperator);
     DECLARE(PrintOperator);
+    DECLARE(NoOpOperator);
     DECLARE(FilterOperator);
     DECLARE(JoinOperator);
     DECLARE(ProjectionOperator);

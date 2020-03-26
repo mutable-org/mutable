@@ -114,9 +114,9 @@ report:doxygen:
         - nginx
     script:
         - doxygen Doxyfile
-        - rm -rf /usr/share/nginx/html/mutable/doxy
-        - mkdir -p /usr/share/nginx/html/mutable/doxy
-        - mv doxy/html/* /usr/share/nginx/html/mutable/doxy
+        - rm -rf /srv/http/mutable/doxy
+        - mkdir -p /srv/http/mutable/doxy
+        - mv doxy/html/* /srv/http/mutable/doxy
     only:
         - master
 
@@ -134,9 +134,9 @@ report:coverage:
         - echo -e '#!/bin/bash\nllvm-cov gcov "$@"' > gcov.sh
         - chmod a+x gcov.sh
         - lcov --directory src --gcov-tool ./gcov.sh --rc lcov_branch_coverage=1 --capture --output-file cov.info
-        - rm -rf /usr/share/nginx/html/mutable/coverage
-        - mkdir -p /usr/share/nginx/html/mutable/coverage
-        - genhtml --branch-coverage cov.info -o /usr/share/nginx/html/mutable/coverage
+        - rm -rf /srv/http/mutable/coverage
+        - mkdir -p /srv/http/mutable/coverage
+        - genhtml --branch-coverage cov.info -o /srv/http/mutable/coverage
     coverage: '/branches\.\.\.: \d+\.\d+/'
     artifacts:
         paths:

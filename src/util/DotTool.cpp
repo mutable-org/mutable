@@ -60,45 +60,54 @@ DotTool::DotTool(Diagnostic &diag)
 #endif
 }
 
-void DotTool::render_to_pdf(const char *path_to_pdf, const char *algo)
+int DotTool::render_to_pdf(const char *path_to_pdf, const char *algo)
 {
     /*----- Render the dot graph with graphviz. ----------------------------------------------------------------------*/
     auto dotstr = stream_.str();
     Agraph_t *G = notnull(sym_agmemread(dotstr.c_str()));
     sym_gvLayout(gvc, G, algo);
-    sym_gvRenderFilename(gvc, G, "pdf", path_to_pdf);
+    auto ret = sym_gvRenderFilename(gvc, G, "pdf", path_to_pdf);
     sym_gvFreeLayout(gvc, G);
     sym_agclose(G);
+    return ret;
 }
 
 void DotTool::show(const char *name, bool interactive, const char *algo)
 {
+    /* Construct filename. */
     std::ostringstream oss;
     oss << name << '_';
 #if __linux || __APPLE__
     oss << getpid();
 #endif
+
+    /* Try to render a PDF document. */
     if (libgraphviz) {
-        oss << ".pdf";
-        render_to_pdf(oss.str().c_str(), algo);
+        const std::string filename_pdf = oss.str() + ".pdf";
+        if (render_to_pdf(filename_pdf.c_str(), algo))
+            goto show_dot; // fall back to DOT
+
         if (interactive) {
 #if __linux
-            exec("/usr/bin/setsid", { "--fork", "xdg-open", oss.str().c_str() });
+            exec("/usr/bin/setsid", { "--fork", "xdg-open", filename_pdf.c_str() });
 #elif __APPLE__
-            exec("/usr/bin/open", { "-a", "Preview", oss.str().c_str() });
+            exec("/usr/bin/open", { "-a", "Preview", filename_pdf.c_str() });
 #endif
         } else {
-            diag.out() << diag.NOTE << "Rendering to '" << oss.str() << "'.\n" << diag.RESET;
+            diag.out() << diag.NOTE << "Rendering to '" << filename_pdf << "'.\n" << diag.RESET;
         }
-    } else {
-        oss << ".dot";
-        std::ofstream out(oss.str());
-        if (not out) {
-            diag.err() << "Failed to generate '" << oss.str() << "'.\n";
-            return;
-        }
-        out << stream_.rdbuf();
-        out.flush();
-        if (interactive) diag.out() << diag.NOTE << "Rendering to '" << oss.str() << "'.\n" << diag.RESET;
+        return;
     }
+
+show_dot:
+    /* Fallback: emit graph as a DOT file. */
+    const std::string filename_dot = oss.str() + ".dot";
+    std::ofstream out(filename_dot);
+    if (not out) {
+        diag.err() << "Failed to generate '" << filename_dot << "'.\n";
+        return;
+    }
+    out << stream_.rdbuf();
+    out.flush();
+    diag.out() << diag.NOTE << "Rendering to '" << filename_dot << "'.\n" << diag.RESET;
 }

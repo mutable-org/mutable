@@ -288,5 +288,34 @@ TEST_CASE("PlanEnumerator", "[core][IR][planenumerator]")
         (*td_basic)(G, cf, plan_table);
         REQUIRE(expected_plan_table == plan_table);
     }
+
+    SECTION("TDMinCutAGaT")
+    {
+        /* Initialize `PlanTable` for `TDMinCutAGaT`. */
+        PlanTable expected_plan_table(num_sources);
+        expected_plan_table.at(Subproblem(1))  = { Subproblem(0), Subproblem(0),     5,   0 };
+        expected_plan_table.at(Subproblem(2))  = { Subproblem(0), Subproblem(0),    10,   0 };
+        expected_plan_table.at(Subproblem(3))  = { Subproblem(0), Subproblem(0),     0, MAX };
+        expected_plan_table.at(Subproblem(4))  = { Subproblem(0), Subproblem(0),     8,   0 };
+        expected_plan_table.at(Subproblem(5))  = { Subproblem(1), Subproblem(4),    40,  13 };
+        expected_plan_table.at(Subproblem(6))  = { Subproblem(0), Subproblem(0),     0, MAX };
+        expected_plan_table.at(Subproblem(7))  = { Subproblem(0), Subproblem(0),     0, MAX };
+        expected_plan_table.at(Subproblem(8))  = { Subproblem(0), Subproblem(0),    12,   0 };
+        expected_plan_table.at(Subproblem(9))  = { Subproblem(1), Subproblem(8),    60,  17 };
+        expected_plan_table.at(Subproblem(10)) = { Subproblem(2), Subproblem(8),   120,  22 };
+        expected_plan_table.at(Subproblem(11)) = { Subproblem(9), Subproblem(2),   600,  87 };
+        expected_plan_table.at(Subproblem(12)) = { Subproblem(4), Subproblem(8),    96,  20 };
+        expected_plan_table.at(Subproblem(13)) = { Subproblem(5), Subproblem(8),   480,  65 };
+        expected_plan_table.at(Subproblem(14)) = { Subproblem(2), Subproblem(12),  960, 126 };
+        expected_plan_table.at(Subproblem(15)) = { Subproblem(5), Subproblem(10), 4800, 195 };
+
+        auto td_mincut_agat = PlanEnumerator::CreateTDMinCutAGaT();
+        PlanTable plan_table(num_sources);
+        /* Initialize `PlanTable` for base case. */
+        pe_test::init_PT_base_case(G, plan_table);
+
+        (*td_mincut_agat)(G, cf, plan_table);
+        REQUIRE(expected_plan_table == plan_table);
+    }
     delete stmt;
 }

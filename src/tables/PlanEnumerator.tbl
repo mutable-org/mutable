@@ -12,3 +12,4 @@ DB_PLAN_ENUMERATOR( DPsub,                  "subset-based subproblem enumeration
 DB_PLAN_ENUMERATOR( DPsubOpt,               "optimized DPsub: does not enumerate symmetric subproblems" )
 DB_PLAN_ENUMERATOR( DPccp,                  "enumerates connected subgraph complement pairs" )
 DB_PLAN_ENUMERATOR( TDbasic,                "basic top-down join enumeration using generate-and-test partitioning" )
+DB_PLAN_ENUMERATOR( TDMinCutAGaT,           "top-down join enumeration using minimal graph cuts and advanced generate-and-test partitioning" )

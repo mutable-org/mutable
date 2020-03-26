@@ -456,6 +456,75 @@ void TDbasic::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable 
     PlanGen(G, cf, PT, M, Subproblem((1UL << n) - 1));
 }
 
+/*======================================================================================================================
+ * TDMinCutAGaT
+ *====================================================================================================================*/
+
+struct TDMinCutAGaT final : PlanEnumerator
+{
+    struct queue_entry
+    {
+        Subproblem C;
+        Subproblem X;
+        Subproblem T;
+
+        queue_entry(Subproblem C, Subproblem X, Subproblem T) : C(C), X(X), T(T) { }
+    };
+    void MinCutAGaT(const QueryGraph &G, const CostFunction &cf, PlanTable &PT, const AdjacencyMatrix &M, Subproblem S,
+                    Subproblem C, Subproblem X, Subproblem T) const;
+    void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
+};
+
+void TDMinCutAGaT::MinCutAGaT(const QueryGraph &G, const CostFunction &cf, PlanTable &PT, const AdjacencyMatrix &M,
+                              Subproblem S, Subproblem C, Subproblem X, Subproblem T) const
+{
+    if (PT.has_plan(S)) return;
+
+    std::queue<queue_entry> queue;
+    queue.push(queue_entry(C, X, T));
+
+    while (not queue.empty()) {
+        auto e = queue.front();
+        queue.pop();
+
+        Subproblem T_tmp;
+        Subproblem X_tmp;
+        Subproblem N_T = (M.neighbors(e.T) & S) - e.C; // sufficient to check if neighbors of T are connected
+        if (M.is_connected(N_T)) {
+            /* ccp (C, S - C) found, process `C` and `S - C` recursively. */
+            Subproblem cmpl = S - e.C;
+            MinCutAGaT(G, cf, PT, M, e.C, Subproblem(least_subset(e.C)), Subproblem(0), Subproblem(least_subset(e.C)));
+            MinCutAGaT(G, cf, PT, M, cmpl, Subproblem(least_subset(cmpl)), Subproblem(0),
+                       Subproblem(least_subset(cmpl)));
+
+            /* Update `PlanTable`. */
+            PT.update(cf, e.C, cmpl, 0);
+            PT.update(cf, cmpl, e.C, 0);
+
+            T_tmp = Subproblem(0);
+        } else T_tmp = e.C;
+
+        if (e.C.size() + 1 >= S.size()) continue;
+
+        X_tmp = e.X;
+        Subproblem N_C = M.neighbors(e.C);
+
+        for (auto i : (N_C - e.X)) {
+            Subproblem v(1UL << i);
+            queue.push(queue_entry(e.C | v, X_tmp, T_tmp | v));
+            X_tmp = X_tmp | v;
+        }
+    }
+}
+
+void TDMinCutAGaT::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
+{
+    auto &sources = G.sources();
+    std::size_t n = sources.size();
+    AdjacencyMatrix M(G);
+
+    MinCutAGaT(G, cf, PT, M, Subproblem((1UL << n) - 1), Subproblem(1), Subproblem(0), Subproblem(1));
+}
 
 #define DB_PLAN_ENUMERATOR(NAME, _) \
     std::unique_ptr<PlanEnumerator> PlanEnumerator::Create ## NAME() { \

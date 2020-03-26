@@ -17,8 +17,8 @@ import yamale
 import yaml
 
 
-MUTABLE_BINARY  = os.path.join(os.getcwd(), 'build', 'release', 'bin', 'shell')
-YML_SCHEMA      = os.path.join(os.getcwd(), 'benchmark', '_schema.yml')
+MUTABLE_BINARY  = os.path.join('build', 'release', 'bin', 'shell')
+YML_SCHEMA      = os.path.join('benchmark', '_schema.yml')
 
 
 class BenchmarkError(Exception):

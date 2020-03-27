@@ -398,9 +398,7 @@ void QueryGraph::dot_recursive(std::ostream &out) const
         }
     }
 
-    out << "  subgraph cluster_" << this << " {\n"
-        << "    hideous [label=\"\",style=\"invis\"];\n\n"
-        << "    " << id(*this) << " [shape=point,style=invis];\n";
+    out << "\n  subgraph cluster_" << this << " {\n";
 
     for (auto ds : sources_) {
         out << "    " << id(*ds) << " [label=<<B>" << ds->alias() << "</B>";
@@ -409,9 +407,8 @@ void QueryGraph::dot_recursive(std::ostream &out) const
                 << html_escape(to_string(ds->filter()))
                 << "</FONT>";
         out << ">,style=filled,fillcolor=\"0.0 0.0 0.8\"];\n";
-        if (auto q = cast<Query>(ds)) {
-            out << id(*ds) << " -- " << id(*q->query_graph()) << " [lhead=cluster_" << q->query_graph() << "];\n";
-        }
+        if (auto q = cast<Query>(ds))
+            out << "  " << id(*ds) << " -- \"cluster_" << q->query_graph() << "\";\n";
     }
 
     for (auto j : joins_) {

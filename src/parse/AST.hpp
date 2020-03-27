@@ -208,6 +208,15 @@ struct BinaryExpr : Expr
     void accept(ConstASTVisitor &v) const;
 };
 
+#define DB_AST_EXPR_LIST(X) \
+    X(ErrorExpr) \
+    X(Designator) \
+    X(Constant) \
+    X(FnApplicationExpr) \
+    X(UnaryExpr) \
+    X(BinaryExpr)
+
+
 /*======================================================================================================================
  * Clauses
  *====================================================================================================================*/
@@ -344,6 +353,17 @@ struct LimitClause : Clause
     void accept(ConstASTVisitor &v) const;
 };
 
+#define DB_AST_CLAUSE_LIST(X) \
+    X(ErrorClause) \
+    X(SelectClause) \
+    X(FromClause) \
+    X(WhereClause) \
+    X(GroupByClause) \
+    X(HavingClause) \
+    X(OrderByClause) \
+    X(LimitClause)
+
+
 /*======================================================================================================================
  * Constraints
  *====================================================================================================================*/
@@ -401,6 +421,14 @@ struct ReferenceConstraint : Constraint
         , on_delete(action)
     { }
 };
+
+#define DB_AST_CONSTRAINT_LIST(X) \
+    X(PrimaryKeyConstraint) \
+    X(UniqueConstraint) \
+    X(NotNullConstraint) \
+    X(CheckConditionConstraint) \
+    X(ReferenceConstraint)
+
 
 /*======================================================================================================================
  * Statements
@@ -603,5 +631,24 @@ struct DSVImportStmt : ImportStmt
     void accept(ASTVisitor &v);
     void accept(ConstASTVisitor &v) const;
 };
+
+#define DB_AST_STMT_LIST(X) \
+    X(ErrorStmt) \
+    X(EmptyStmt) \
+    X(CreateDatabaseStmt) \
+    X(UseDatabaseStmt) \
+    X(CreateTableStmt) \
+    X(SelectStmt) \
+    X(InsertStmt) \
+    X(UpdateStmt) \
+    X(DeleteStmt) \
+    X(ImportStmt) \
+    X(DSVImportStmt)
+
+#define DB_AST_LIST(X) \
+    DB_AST_EXPR_LIST(X) \
+    DB_AST_CLAUSE_LIST(X) \
+    DB_AST_CONSTRAINT_LIST(X) \
+    DB_AST_STMT_LIST(X)
 
 }

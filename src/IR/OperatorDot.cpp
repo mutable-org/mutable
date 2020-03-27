@@ -116,7 +116,7 @@ void OperatorDot::operator()(Const<GroupingOperator> &op)
 void OperatorDot::operator()(Const<SortingOperator> &op)
 {
     (*this)(*op.child(0));
-    out << "    " << id(op) << " [label=<<B>Ω</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">";
+    out << "    " << id(op) << " [label=<<B>ω</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">";
 
     const auto &O = op.order_by();
     for (auto it = O.begin(); it != O.end(); ++it) {

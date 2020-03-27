@@ -9,10 +9,8 @@
 
 namespace db {
 
-struct Sema : ASTVisitor
+struct Sema : ASTExprVisitor, ASTClauseVisitor, ASTStmtVisitor
 {
-    using ASTVisitor::operator();
-
     /** Holds context information used by semantic analysis of a single statement. */
     struct SemaContext
     {
@@ -70,35 +68,15 @@ struct Sema : ASTVisitor
     public:
     Sema(Diagnostic &diag) : diag(diag) { }
 
-    /* Expressions */
-    void operator()(Const<ErrorExpr> &e);
-    void operator()(Const<Designator> &e);
-    void operator()(Const<Constant> &e);
-    void operator()(Const<FnApplicationExpr> &e);
-    void operator()(Const<UnaryExpr> &e);
-    void operator()(Const<BinaryExpr> &e);
-
-    /* Clauses */
-    void operator()(Const<ErrorClause> &c);
-    void operator()(Const<SelectClause> &c);
-    void operator()(Const<FromClause> &c);
-    void operator()(Const<WhereClause> &c);
-    void operator()(Const<GroupByClause> &c);
-    void operator()(Const<HavingClause> &c);
-    void operator()(Const<OrderByClause> &c);
-    void operator()(Const<LimitClause> &c);
-
-    /* Statements */
-    void operator()(Const<ErrorStmt> &s);
-    void operator()(Const<EmptyStmt> &s);
-    void operator()(Const<CreateDatabaseStmt> &s);
-    void operator()(Const<UseDatabaseStmt> &s);
-    void operator()(Const<CreateTableStmt> &s);
-    void operator()(Const<SelectStmt> &s);
-    void operator()(Const<InsertStmt> &s);
-    void operator()(Const<UpdateStmt> &s);
-    void operator()(Const<DeleteStmt> &s);
-    void operator()(Const<DSVImportStmt> &s);
+    using ASTExprVisitor::Const;
+    using ASTExprVisitor::operator();
+    using ASTClauseVisitor::operator();
+    using ASTStmtVisitor::operator();
+#define DECLARE(CLASS) void operator()(Const<CLASS>&) override;
+    DB_AST_EXPR_LIST(DECLARE)
+    DB_AST_CLAUSE_LIST(DECLARE)
+    DB_AST_STMT_LIST(DECLARE)
+#undef DECLARE
 
     private:
     SemaContext & push_context(Stmt &stmt) {

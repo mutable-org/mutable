@@ -182,7 +182,7 @@ struct WasmCodeGen : ConstOperatorVisitor
 };
 
 /** Compiles a single pipeline.  Pipelines begin at producer nodes in the operator tree. */
-struct WasmPipelineCG : ConstOperatorVisitor, ConstASTVisitor
+struct WasmPipelineCG : ConstOperatorVisitor, ConstASTExprVisitor
 {
     friend struct WasmStoreCG;
 
@@ -220,37 +220,9 @@ struct WasmPipelineCG : ConstOperatorVisitor, ConstASTVisitor
     DB_OPERATOR_LIST(DECLARE)
 #undef DECLARE
 
-#define DECLARE(CLASS) void operator()(const CLASS &op) override
-    using ConstASTVisitor::operator();
-    /* Expressions */
-    void operator()(const ErrorExpr&) override { unreachable(""); }
-    DECLARE(Designator);
-    DECLARE(Constant);
-    DECLARE(FnApplicationExpr);
-    DECLARE(UnaryExpr);
-    DECLARE(BinaryExpr);
-
-    /* Clauses */
-    void operator()(const ErrorClause&) override { unreachable(""); }
-    void operator()(const SelectClause&) override { unreachable(""); }
-    void operator()(const FromClause&) override { unreachable(""); }
-    void operator()(const WhereClause&) override { unreachable(""); }
-    void operator()(const GroupByClause&) override { unreachable(""); }
-    void operator()(const HavingClause&) override { unreachable(""); }
-    void operator()(const OrderByClause&) override { unreachable(""); }
-    void operator()(const LimitClause&) override { unreachable(""); }
-
-    /* Statements */
-    void operator()(const ErrorStmt&) override { unreachable(""); }
-    void operator()(const EmptyStmt&) override { unreachable(""); }
-    void operator()(const CreateDatabaseStmt&) override { unreachable(""); }
-    void operator()(const UseDatabaseStmt&) override { unreachable(""); }
-    void operator()(const CreateTableStmt&) override { unreachable(""); }
-    void operator()(const SelectStmt&) override { unreachable(""); }
-    void operator()(const InsertStmt&) override { unreachable(""); }
-    void operator()(const UpdateStmt&) override { unreachable(""); }
-    void operator()(const DeleteStmt&) override { unreachable(""); }
-    void operator()(const DSVImportStmt&) override { unreachable(""); }
+    using ConstASTExprVisitor::operator();
+#define DECLARE(CLASS) void operator()(const CLASS &op) override;
+    DB_AST_EXPR_LIST(DECLARE)
 #undef DECLARE
 };
 
@@ -647,6 +619,8 @@ void WasmPipelineCG::operator()(const SortingOperator &op)
 /*======================================================================================================================
  * WasmPipelineCG / Expr
  *====================================================================================================================*/
+
+void WasmPipelineCG::operator()(const ErrorExpr&) { unreachable("no errors at this stage"); }
 
 void WasmPipelineCG::operator()(const Designator &e)
 {

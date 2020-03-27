@@ -73,6 +73,7 @@ void ASTDumper::operator()(Const<BinaryExpr> &e)
     --indent_;
 }
 
+
 /*===== Clause =======================================================================================================*/
 
 void ASTDumper::operator()(Const<ErrorClause> &c)
@@ -175,6 +176,41 @@ void ASTDumper::operator()(Const<LimitClause> &c)
 
     --indent_;
 }
+
+
+/*===== Constraint ===================================================================================================*/
+
+void ASTDumper::operator()(Const<PrimaryKeyConstraint> &c)
+{
+    indent() << "PrimaryKeyConstraint (" << c.tok.pos << ')';
+}
+
+void ASTDumper::operator()(Const<UniqueConstraint> &c)
+{
+    indent() << "UniqueConstraint (" << c.tok.pos << ')';
+}
+
+void ASTDumper::operator()(Const<NotNullConstraint> &c)
+{
+    indent() << "NotNullConstraint (" << c.tok.pos << ')';
+}
+
+void ASTDumper::operator()(Const<CheckConditionConstraint> &c)
+{
+    indent() << "CheckConditionConstraint (" << c.tok.pos << ')';
+    ++indent_;
+    (*this)(*c.cond);
+    --indent_;
+}
+
+void ASTDumper::operator()(Const<ReferenceConstraint> &c)
+{
+    indent() << "ReferenceConstraint (" << c.tok.pos << ')';
+    ++indent_;
+    indent() << c.table_name.text << '(' << c.attr_name.text << ')';
+    --indent_;
+}
+
 
 /*===== Stmt =========================================================================================================*/
 

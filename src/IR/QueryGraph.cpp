@@ -15,10 +15,8 @@ using namespace db;
 Query::~Query() { delete query_graph_; };
 
 /** Helper structure to extract the tables required by an expression. */
-struct GetTables : ConstASTVisitor
+struct GetTables : ConstASTExprVisitor
 {
-    using ConstASTVisitor::operator();
-
     private:
     std::set<const char*> tables_;
 
@@ -27,45 +25,22 @@ struct GetTables : ConstASTVisitor
 
     std::set<const char*> get() { return std::move(tables_); }
 
-    /* Expr */
-    void operator()(Const<Expr> &e) { e.accept(*this); }
-    void operator()(Const<ErrorExpr>&) { unreachable("graph must not contain errors"); }
+    using ConstASTExprVisitor::operator();
+    void operator()(Const<ErrorExpr>&) override { unreachable("graph must not contain errors"); }
 
-    void operator()(Const<Designator> &e) { tables_.emplace(e.get_table_name()); }
+    void operator()(Const<Designator> &e) override { tables_.emplace(e.get_table_name()); }
 
-    void operator()(Const<Constant>&) { /* nothing to be done */ }
+    void operator()(Const<Constant>&) override { /* nothing to be done */ }
 
-    void operator()(Const<FnApplicationExpr> &e) {
+    void operator()(Const<FnApplicationExpr> &e) override {
         (*this)(*e.fn);
         for (auto arg : e.args)
             (*this)(*arg);
     }
 
-    void operator()(Const<UnaryExpr> &e) { (*this)(*e.expr); }
+    void operator()(Const<UnaryExpr> &e) override { (*this)(*e.expr); }
 
-    void operator()(Const<BinaryExpr> &e) { (*this)(*e.lhs); (*this)(*e.rhs); }
-
-    /* Clauses */
-    void operator()(Const<ErrorClause>&) { unreachable("not implemented"); }
-    void operator()(Const<SelectClause>&) { unreachable("not implemented"); }
-    void operator()(Const<FromClause>&) { unreachable("not implemented"); }
-    void operator()(Const<WhereClause>&) { unreachable("not implemented"); }
-    void operator()(Const<GroupByClause>&) { unreachable("not implemented"); }
-    void operator()(Const<HavingClause>&) { unreachable("not implemented"); }
-    void operator()(Const<OrderByClause>&) { unreachable("not implemented"); }
-    void operator()(Const<LimitClause>&) { unreachable("not implemented"); }
-
-    /* Statements */
-    void operator()(Const<ErrorStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<EmptyStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<CreateDatabaseStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<UseDatabaseStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<CreateTableStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<SelectStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<InsertStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<UpdateStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<DeleteStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<DSVImportStmt>&) { }
+    void operator()(Const<BinaryExpr> &e) override { (*this)(*e.lhs); (*this)(*e.rhs); }
 };
 
 /** Given a clause of a CNF formula, compute the tables that are required by this clause. */
@@ -79,10 +54,8 @@ auto get_tables(const cnf::Clause &clause)
 }
 
 /** Helper structure to extract the aggregate functions. */
-struct GetAggregates : ConstASTVisitor
+struct GetAggregates : ConstASTExprVisitor, ConstASTClauseVisitor, ConstASTStmtVisitor
 {
-    using ConstASTVisitor::operator();
-
     private:
     std::vector<const Expr*> aggregates_;
 
@@ -91,16 +64,18 @@ struct GetAggregates : ConstASTVisitor
 
     auto get() { return std::move(aggregates_); }
 
-    /* Expr */
-    void operator()(Const<Expr> &e) { e.accept(*this); }
-    void operator()(Const<ErrorExpr>&) { unreachable("graph must not contain errors"); }
+    using ConstASTExprVisitor::Const;
 
-    void operator()(Const<Designator>&) { /* nothing to be done */ }
-    void operator()(Const<Constant>&) { /* nothing to be done */ }
-    void operator()(Const<UnaryExpr> &e) { (*this)(*e.expr); }
-    void operator()(Const<BinaryExpr> &e) { (*this)(*e.lhs); (*this)(*e.rhs); }
+    /*----- Expressions ----------------------------------------------------------------------------------------------*/
+    using ConstASTExprVisitor::operator();
+    void operator()(Const<ErrorExpr>&) override { unreachable("graph must not contain errors"); }
 
-    void operator()(Const<FnApplicationExpr> &e) {
+    void operator()(Const<Designator>&) override { /* nothing to be done */ }
+    void operator()(Const<Constant>&) override { /* nothing to be done */ }
+    void operator()(Const<UnaryExpr> &e) override { (*this)(*e.expr); }
+    void operator()(Const<BinaryExpr> &e) override { (*this)(*e.lhs); (*this)(*e.rhs); }
+
+    void operator()(Const<FnApplicationExpr> &e) override {
         insist(e.has_function());
         if (e.get_function().is_aggregate()) { // test that this is an aggregation
             using std::find_if, std::to_string;
@@ -111,38 +86,40 @@ struct GetAggregates : ConstASTVisitor
         }
     }
 
-    /* Clauses */
-    void operator()(Const<ErrorClause>&) { unreachable("not implemented"); }
-    void operator()(Const<FromClause>&) { unreachable("not implemented"); }
-    void operator()(Const<WhereClause>&) { unreachable("not implemented"); }
-    void operator()(Const<GroupByClause>&) { unreachable("not implemented"); }
-    void operator()(Const<LimitClause>&) { unreachable("not implemented"); }
+    /*----- Clauses --------------------------------------------------------------------------------------------------*/
+    using ConstASTClauseVisitor::operator();
+    void operator()(Const<ErrorClause>&) override { unreachable("not implemented"); }
+    void operator()(Const<FromClause>&) override { unreachable("not implemented"); }
+    void operator()(Const<WhereClause>&) override { unreachable("not implemented"); }
+    void operator()(Const<GroupByClause>&) override { unreachable("not implemented"); }
+    void operator()(Const<LimitClause>&) override { unreachable("not implemented"); }
 
 
-    void operator()(Const<SelectClause> &c) {
+    void operator()(Const<SelectClause> &c) override {
         for (auto s : c.select)
             (*this)(*s.first);
     }
 
-    void operator()(Const<HavingClause> &c) { (*this)(*c.having); }
+    void operator()(Const<HavingClause> &c) override { (*this)(*c.having); }
 
-    void operator()(Const<OrderByClause> &c) {
+    void operator()(Const<OrderByClause> &c) override {
         for (auto o : c.order_by)
             (*this)(*o.first);
     }
 
-    /* Statements */
-    void operator()(Const<ErrorStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<EmptyStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<CreateDatabaseStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<UseDatabaseStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<CreateTableStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<InsertStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<UpdateStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<DeleteStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<DSVImportStmt>&) { }
+    /*----- Statements -----------------------------------------------------------------------------------------------*/
+    using ConstASTStmtVisitor::operator();
+    void operator()(Const<ErrorStmt>&) override { unreachable("not implemented"); }
+    void operator()(Const<EmptyStmt>&) override { unreachable("not implemented"); }
+    void operator()(Const<CreateDatabaseStmt>&) override { unreachable("not implemented"); }
+    void operator()(Const<UseDatabaseStmt>&) override { unreachable("not implemented"); }
+    void operator()(Const<CreateTableStmt>&) override { unreachable("not implemented"); }
+    void operator()(Const<InsertStmt>&) override { unreachable("not implemented"); }
+    void operator()(Const<UpdateStmt>&) override { unreachable("not implemented"); }
+    void operator()(Const<DeleteStmt>&) override { unreachable("not implemented"); }
+    void operator()(Const<DSVImportStmt>&) override { }
 
-    void operator()(Const<SelectStmt> &s) {
+    void operator()(Const<SelectStmt> &s) override {
         if (s.having) (*this)(*s.having);
         (*this)(*s.select);
         if (s.order_by) (*this)(*s.order_by);
@@ -163,7 +140,7 @@ auto get_aggregates(const Stmt &stmt)
  * An AST Visitor that constructs the query graph.
  *====================================================================================================================*/
 
-struct db::GraphBuilder : ConstASTVisitor
+struct db::GraphBuilder : ConstASTStmtVisitor
 {
     private:
     std::unique_ptr<QueryGraph> graph_; ///< the constructed query graph
@@ -174,74 +151,7 @@ struct db::GraphBuilder : ConstASTVisitor
 
     std::unique_ptr<QueryGraph> get() { return std::move(graph_); }
 
-    /* Expr */
-    void operator()(Const<Expr> &e) { e.accept(*this); }
-    void operator()(Const<ErrorExpr>&) { unreachable("graph must not contain errors"); }
-
-    void operator()(Const<Designator> &e) {
-        unreachable("not implemented");
-        (void) e;
-    }
-
-    void operator()(Const<Constant> &e) {
-        unreachable("not implemented");
-        (void) e;
-    }
-
-    void operator()(Const<FnApplicationExpr> &e) {
-        unreachable("not implemented");
-        (void) e;
-    }
-
-    void operator()(Const<UnaryExpr> &e) {
-        unreachable("not implemented");
-        (void) e;
-    }
-
-    void operator()(Const<BinaryExpr> &e) {
-        unreachable("not implemented");
-        (void) e;
-    }
-
-    /* Clauses */
-    void operator()(Const<Clause> &c) { c.accept(*this); }
-    void operator()(Const<ErrorClause>&) { unreachable("graph must not contain errors"); }
-    void operator()(Const<SelectClause>&) { unreachable("not implemented"); }
-    void operator()(Const<WhereClause>&) { unreachable("not implemented"); }
-    void operator()(Const<GroupByClause>&) { unreachable("not implemented"); }
-    void operator()(Const<HavingClause>&) { unreachable("not implemented"); }
-    void operator()(Const<OrderByClause>&) { unreachable("not implemented"); }
-    void operator()(Const<LimitClause>&) { unreachable("not implemented"); }
-
-    void operator()(Const<FromClause> &c) {
-        for (auto &tbl : c.from) {
-            if (auto tok = std::get_if<Token>(&tbl.source)) {
-                /* Create a new base table. */
-                insist(tbl.has_table());
-                Token alias = tbl.alias ? tbl.alias : *tok;
-                auto base = new BaseTable(graph_->sources_.size(), alias.text, tbl.table());
-                aliases.emplace(alias.text, base);
-                graph_->sources_.emplace_back(base);
-            } else if (auto stmt = std::get_if<Stmt*>(&tbl.source)) {
-                insist(tbl.alias.text, "every nested statement requires an alias");
-                if (auto select = cast<SelectStmt>(*stmt)) {
-                    /* Create a graph for the sub query. */
-                    GraphBuilder builder;
-                    builder(*select);
-                    auto graph = builder.get();
-                    auto q = new Query(graph_->sources_.size(), tbl.alias.text, graph.release());
-                    insist(tbl.alias);
-                    aliases.emplace(tbl.alias.text, q);
-                    graph_->sources_.emplace_back(q);
-                } else
-                    unreachable("invalid variant");
-            } else {
-                unreachable("invalid variant");
-            }
-        }
-    }
-
-    /* Statements */
+    using ConstASTStmtVisitor::operator();
     void operator()(Const<Stmt> &s) { s.accept(*this); }
     void operator()(Const<ErrorStmt>&) { unreachable("graph must not contain errors"); }
 
@@ -262,12 +172,40 @@ struct db::GraphBuilder : ConstASTVisitor
     void operator()(Const<SelectStmt> &s) {
         /* Compute CNF of WHERE clause. */
         cnf::CNF cnf;
-        if (s.where)
-            cnf = cnf::get_CNF(*s.where);
+        if (s.where) {
+            auto where = as<WhereClause>(s.where);
+            cnf = cnf::to_CNF(*where->where);
+        }
 
         /* Create data sources. */
-        if (s.from)
-            (*this)(*s.from);
+        if (s.from) {
+            auto from = as<FromClause>(s.from);
+            for (auto &tbl : from->from) {
+                if (auto tok = std::get_if<Token>(&tbl.source)) {
+                    /* Create a new base table. */
+                    insist(tbl.has_table());
+                    Token alias = tbl.alias ? tbl.alias : *tok;
+                    auto base = new BaseTable(graph_->sources_.size(), alias.text, tbl.table());
+                    aliases.emplace(alias.text, base);
+                    graph_->sources_.emplace_back(base);
+                } else if (auto stmt = std::get_if<Stmt*>(&tbl.source)) {
+                    insist(tbl.alias.text, "every nested statement requires an alias");
+                    if (auto select = cast<SelectStmt>(*stmt)) {
+                        /* Create a graph for the sub query. */
+                        GraphBuilder builder;
+                        builder(*select);
+                        auto graph = builder.get();
+                        auto q = new Query(graph_->sources_.size(), tbl.alias.text, graph.release());
+                        insist(tbl.alias);
+                        aliases.emplace(tbl.alias.text, q);
+                        graph_->sources_.emplace_back(q);
+                    } else
+                        unreachable("invalid variant");
+                } else {
+                    unreachable("invalid variant");
+                }
+            }
+        }
 
         /* Dissect CNF into joins and filters. */
         for (auto &clause : cnf) {

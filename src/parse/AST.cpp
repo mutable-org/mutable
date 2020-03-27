@@ -153,10 +153,8 @@ bool BinaryExpr::operator==(const Expr &o) const
  * get_required
  *====================================================================================================================*/
 
-struct GetRequired : ConstASTVisitor
+struct GetRequired : ConstASTExprVisitor
 {
-    using ConstASTVisitor::operator();
-
     private:
     Schema schema;
 
@@ -182,6 +180,8 @@ struct GetRequired : ConstASTVisitor
         }
     }
 
+    using ConstASTExprVisitor::operator();
+
     void operator()(Const<Constant>&) { /* nothing to be done */ }
 
     void operator()(Const<FnApplicationExpr> &e) {
@@ -193,28 +193,6 @@ struct GetRequired : ConstASTVisitor
     void operator()(Const<UnaryExpr> &e) { (*this)(*e.expr); }
 
     void operator()(Const<BinaryExpr> &e) { (*this)(*e.lhs); (*this)(*e.rhs); }
-
-    /* Clauses */
-    void operator()(Const<ErrorClause>&) { unreachable("not implemented"); }
-    void operator()(Const<SelectClause>&) { unreachable("not implemented"); }
-    void operator()(Const<FromClause>&) { unreachable("not implemented"); }
-    void operator()(Const<WhereClause>&) { unreachable("not implemented"); }
-    void operator()(Const<GroupByClause>&) { unreachable("not implemented"); }
-    void operator()(Const<HavingClause>&) { unreachable("not implemented"); }
-    void operator()(Const<OrderByClause>&) { unreachable("not implemented"); }
-    void operator()(Const<LimitClause>&) { unreachable("not implemented"); }
-
-    /* Statements */
-    void operator()(Const<ErrorStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<EmptyStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<CreateDatabaseStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<UseDatabaseStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<CreateTableStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<SelectStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<InsertStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<UpdateStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<DeleteStmt>&) { unreachable("not implemented"); }
-    void operator()(Const<DSVImportStmt>&) { }
 };
 
 Schema Expr::get_required() const

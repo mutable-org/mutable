@@ -8,39 +8,34 @@ using namespace db;
  * AST methods to accept the visitor
  *====================================================================================================================*/
 
-#define ACCEPT(CLASS) \
-    void CLASS::accept(ASTVisitor &v)            { v(*this); } \
-    void CLASS::accept(ConstASTVisitor &v) const { v(*this); }
-
 /*===== Expressions ==================================================================================================*/
 
-ACCEPT(ErrorExpr);
-ACCEPT(Designator);
-ACCEPT(Constant);
-ACCEPT(FnApplicationExpr);
-ACCEPT(UnaryExpr);
-ACCEPT(BinaryExpr);
+#define ACCEPT_EXPR(CLASS) \
+    void CLASS::accept(ASTExprVisitor &v)            { v(*this); } \
+    void CLASS::accept(ConstASTExprVisitor &v) const { v(*this); }
+
+DB_AST_EXPR_LIST(ACCEPT_EXPR)
 
 /*===== Clauses ======================================================================================================*/
 
-ACCEPT(ErrorClause);
-ACCEPT(SelectClause);
-ACCEPT(FromClause);
-ACCEPT(WhereClause);
-ACCEPT(GroupByClause);
-ACCEPT(HavingClause);
-ACCEPT(OrderByClause);
-ACCEPT(LimitClause);
+#define ACCEPT_CLAUSE(CLASS) \
+    void CLASS::accept(ASTClauseVisitor &v)            { v(*this); } \
+    void CLASS::accept(ConstASTClauseVisitor &v) const { v(*this); }
+
+DB_AST_CLAUSE_LIST(ACCEPT_CLAUSE)
+
+/*===== Constraints ==================================================================================================*/
+
+#define ACCEPT_CONSTRAINT(CLASS) \
+    void CLASS::accept(ASTConstraintVisitor &v)            { v(*this); } \
+    void CLASS::accept(ConstASTConstraintVisitor &v) const { v(*this); }
+
+DB_AST_CONSTRAINT_LIST(ACCEPT_CONSTRAINT)
 
 /*===== Statements ===================================================================================================*/
 
-ACCEPT(ErrorStmt);
-ACCEPT(EmptyStmt);
-ACCEPT(CreateDatabaseStmt);
-ACCEPT(UseDatabaseStmt);
-ACCEPT(CreateTableStmt);
-ACCEPT(SelectStmt);
-ACCEPT(InsertStmt);
-ACCEPT(UpdateStmt);
-ACCEPT(DeleteStmt);
-ACCEPT(DSVImportStmt);
+#define ACCEPT_STMT(CLASS) \
+    void CLASS::accept(ASTStmtVisitor &v)            { v(*this); } \
+    void CLASS::accept(ConstASTStmtVisitor &v) const { v(*this); }
+
+DB_AST_STMT_LIST(ACCEPT_STMT)

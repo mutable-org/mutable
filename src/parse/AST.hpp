@@ -9,10 +9,19 @@
 
 namespace db {
 
-// forward declare the AST visitor
-template<bool C> struct TheASTVisitor;
-using ASTVisitor = TheASTVisitor<false>;
-using ConstASTVisitor = TheASTVisitor<true>;
+// forward declare the AST visitors
+template<bool C> struct TheASTExprVisitor;
+using ASTExprVisitor = TheASTExprVisitor<false>;
+using ConstASTExprVisitor = TheASTExprVisitor<true>;
+template<bool C> struct TheASTClauseVisitor;
+using ASTClauseVisitor = TheASTClauseVisitor<false>;
+using ConstASTClauseVisitor = TheASTClauseVisitor<true>;
+template<bool C> struct TheASTConstraintVisitor;
+using ASTConstraintVisitor = TheASTConstraintVisitor<false>;
+using ConstASTConstraintVisitor = TheASTConstraintVisitor<true>;
+template<bool C> struct TheASTStmtVisitor;
+using ASTStmtVisitor = TheASTStmtVisitor<false>;
+using ConstASTStmtVisitor = TheASTStmtVisitor<true>;
 
 struct Type;
 struct Function;
@@ -47,8 +56,8 @@ struct Expr
     virtual bool operator==(const Expr &other) const = 0;
     bool operator!=(const Expr &other) const { return not operator==(other); }
 
-    virtual void accept(ASTVisitor &v) = 0;
-    virtual void accept(ConstASTVisitor &v) const = 0;
+    virtual void accept(ASTExprVisitor &v) = 0;
+    virtual void accept(ConstASTExprVisitor &v) const = 0;
 
     /** Returns a `Schema` instance containing all required definitions (of `Attribute`s and other `Designator`s). */
     Schema get_required() const;
@@ -75,8 +84,8 @@ struct ErrorExpr : Expr
 
     bool operator==(const Expr &other) const;
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTExprVisitor &v);
+    void accept(ConstASTExprVisitor &v) const;
 };
 
 /** A designator.  Identifies an attribute, optionally preceeded by a table name, a named expression, or a function. */
@@ -103,8 +112,8 @@ struct Designator : Expr
 
     bool operator==(const Expr &other) const;
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTExprVisitor &v);
+    void accept(ConstASTExprVisitor &v) const;
 
     bool has_explicit_table_name() const { return bool(table_name); }
     bool is_identifier() const { return not has_explicit_table_name(); }
@@ -128,8 +137,8 @@ struct Constant : Expr
 
     bool operator==(const Expr &other) const;
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTExprVisitor &v);
+    void accept(ConstASTExprVisitor &v) const;
 
     bool is_null() const { return tok.type == TK_Null; }
     bool is_number() const { return is_integer() or is_float(); }
@@ -169,8 +178,8 @@ struct FnApplicationExpr : PostfixExpr
     bool has_function() const { return func_; }
     const Function & get_function() const { insist(func_); return *func_; }
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTExprVisitor &v);
+    void accept(ConstASTExprVisitor &v) const;
 };
 
 /** A unary expression: "+e", "-e", "~e", "NOT e". */
@@ -186,8 +195,8 @@ struct UnaryExpr : Expr
 
     bool operator==(const Expr &other) const;
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTExprVisitor &v);
+    void accept(ConstASTExprVisitor &v) const;
 };
 
 /** A binary expression.  This includes all arithmetic and logical binary operations. */
@@ -204,8 +213,8 @@ struct BinaryExpr : Expr
 
     bool operator==(const Expr &other) const;
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTExprVisitor &v);
+    void accept(ConstASTExprVisitor &v) const;
 };
 
 #define DB_AST_EXPR_LIST(X) \
@@ -228,8 +237,8 @@ struct Clause
     Clause(Token tok) : tok(tok) { }
     virtual ~Clause() { }
 
-    virtual void accept(ASTVisitor &v) = 0;
-    virtual void accept(ConstASTVisitor &v) const = 0;
+    virtual void accept(ASTClauseVisitor &v) = 0;
+    virtual void accept(ConstASTClauseVisitor &v) const = 0;
 
     void dot(std::ostream &out) const;
 
@@ -243,8 +252,8 @@ struct ErrorClause : Clause
 {
     ErrorClause(Token tok) : Clause(tok) { }
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTClauseVisitor &v);
+    void accept(ConstASTClauseVisitor &v) const;
 };
 
 struct SelectClause : Clause
@@ -262,8 +271,8 @@ struct SelectClause : Clause
     { }
     ~SelectClause();
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTClauseVisitor &v);
+    void accept(ConstASTClauseVisitor &v) const;
 };
 
 struct FromClause : Clause
@@ -292,8 +301,8 @@ struct FromClause : Clause
     FromClause(Token tok, std::vector<from_type> from) : Clause(tok), from(from) { }
     ~FromClause();
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTClauseVisitor &v);
+    void accept(ConstASTClauseVisitor &v) const;
 };
 
 struct WhereClause : Clause
@@ -303,8 +312,8 @@ struct WhereClause : Clause
     WhereClause(Token tok, Expr *where) : Clause(tok), where(notnull(where)) { }
     ~WhereClause();
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTClauseVisitor &v);
+    void accept(ConstASTClauseVisitor &v) const;
 };
 
 struct GroupByClause : Clause
@@ -314,8 +323,8 @@ struct GroupByClause : Clause
     GroupByClause(Token tok, std::vector<Expr*> group_by) : Clause(tok), group_by(group_by) { }
     ~GroupByClause();
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTClauseVisitor &v);
+    void accept(ConstASTClauseVisitor &v) const;
 };
 
 struct HavingClause : Clause
@@ -325,8 +334,8 @@ struct HavingClause : Clause
     HavingClause(Token tok, Expr *having) : Clause(tok), having(having) { }
     ~HavingClause();
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTClauseVisitor &v);
+    void accept(ConstASTClauseVisitor &v) const;
 };
 
 struct OrderByClause : Clause
@@ -338,8 +347,8 @@ struct OrderByClause : Clause
     OrderByClause(Token tok, std::vector<order_type> order_by) : Clause(tok), order_by(order_by) { }
     ~OrderByClause();
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTClauseVisitor &v);
+    void accept(ConstASTClauseVisitor &v) const;
 };
 
 struct LimitClause : Clause
@@ -349,8 +358,8 @@ struct LimitClause : Clause
 
     LimitClause(Token tok, Token limit, Token offset) : Clause(tok), limit(limit), offset(offset) { }
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTClauseVisitor &v);
+    void accept(ConstASTClauseVisitor &v) const;
 };
 
 #define DB_AST_CLAUSE_LIST(X) \
@@ -376,21 +385,33 @@ struct Constraint
     Constraint(Token tok) : tok(tok) { }
 
     virtual ~Constraint() { }
+
+    virtual void accept(ASTConstraintVisitor &v) = 0;
+    virtual void accept(ConstASTConstraintVisitor &v) const = 0;
 };
 
 struct PrimaryKeyConstraint : Constraint
 {
     PrimaryKeyConstraint(Token tok) : Constraint(tok) { }
+
+    void accept(ASTConstraintVisitor &v);
+    void accept(ConstASTConstraintVisitor &v) const;
 };
 
 struct UniqueConstraint : Constraint
 {
     UniqueConstraint(Token tok) : Constraint(tok) { }
+
+    void accept(ASTConstraintVisitor &v);
+    void accept(ConstASTConstraintVisitor &v) const;
 };
 
 struct NotNullConstraint : Constraint
 {
     NotNullConstraint(Token tok) : Constraint(tok) { }
+
+    void accept(ASTConstraintVisitor &v);
+    void accept(ConstASTConstraintVisitor &v) const;
 };
 
 struct CheckConditionConstraint : Constraint
@@ -400,6 +421,9 @@ struct CheckConditionConstraint : Constraint
     CheckConditionConstraint(Token tok, Expr *cond) : Constraint(tok), cond(notnull(cond)) { }
 
     ~CheckConditionConstraint() { delete cond; }
+
+    void accept(ASTConstraintVisitor &v);
+    void accept(ConstASTConstraintVisitor &v) const;
 };
 
 struct ReferenceConstraint : Constraint
@@ -420,6 +444,9 @@ struct ReferenceConstraint : Constraint
         , attr_name(attr_name)
         , on_delete(action)
     { }
+
+    void accept(ASTConstraintVisitor &v);
+    void accept(ConstASTConstraintVisitor &v) const;
 };
 
 #define DB_AST_CONSTRAINT_LIST(X) \
@@ -439,8 +466,8 @@ struct Stmt
 {
     virtual ~Stmt() { }
 
-    virtual void accept(ASTVisitor &v) = 0;
-    virtual void accept(ConstASTVisitor &v) const = 0;
+    virtual void accept(ASTStmtVisitor &v) = 0;
+    virtual void accept(ConstASTStmtVisitor &v) const = 0;
 
     void dot(std::ostream &out) const;
 
@@ -457,8 +484,8 @@ struct ErrorStmt : Stmt
 
     explicit ErrorStmt(Token tok) : tok(tok) { }
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTStmtVisitor &v);
+    void accept(ConstASTStmtVisitor &v) const;
 };
 
 struct EmptyStmt : Stmt
@@ -467,8 +494,8 @@ struct EmptyStmt : Stmt
 
     explicit EmptyStmt(Token tok) : tok(tok) { }
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTStmtVisitor &v);
+    void accept(ConstASTStmtVisitor &v) const;
 };
 
 struct CreateDatabaseStmt : Stmt
@@ -477,8 +504,8 @@ struct CreateDatabaseStmt : Stmt
 
     explicit CreateDatabaseStmt(Token database_name) : database_name(database_name) { }
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTStmtVisitor &v);
+    void accept(ConstASTStmtVisitor &v) const;
 };
 
 struct UseDatabaseStmt : Stmt
@@ -487,8 +514,8 @@ struct UseDatabaseStmt : Stmt
 
     explicit UseDatabaseStmt(Token database_name) : database_name(database_name) { }
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTStmtVisitor &v);
+    void accept(ConstASTStmtVisitor &v) const;
 };
 
 struct CreateTableStmt : Stmt
@@ -524,8 +551,8 @@ struct CreateTableStmt : Stmt
             delete a;
     }
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTStmtVisitor &v);
+    void accept(ConstASTStmtVisitor &v) const;
 };
 
 /** A SQL select statement. */
@@ -555,8 +582,8 @@ struct SelectStmt : Stmt
         , limit(limit)
     { }
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTStmtVisitor &v);
+    void accept(ConstASTStmtVisitor &v) const;
 
     ~SelectStmt();
 };
@@ -574,8 +601,8 @@ struct InsertStmt : Stmt
     InsertStmt(Token table_name, std::vector<tuple_t> tuples) : table_name(table_name), tuples(tuples) { }
     ~InsertStmt();
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTStmtVisitor &v);
+    void accept(ConstASTStmtVisitor &v) const;
 };
 
 /** A SQL update statement. */
@@ -595,8 +622,8 @@ struct UpdateStmt : Stmt
 
     ~UpdateStmt();
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTStmtVisitor &v);
+    void accept(ConstASTStmtVisitor &v) const;
 };
 
 /** A SQL delete statement. */
@@ -608,8 +635,8 @@ struct DeleteStmt : Stmt
     DeleteStmt(Token table_name, Clause *where) : table_name(table_name), where(where) { }
     ~DeleteStmt();
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTStmtVisitor &v);
+    void accept(ConstASTStmtVisitor &v) const;
 };
 
 /** A SQL import statement. */
@@ -628,8 +655,8 @@ struct DSVImportStmt : ImportStmt
     bool has_header = false;
     bool skip_header = false;
 
-    void accept(ASTVisitor &v);
-    void accept(ConstASTVisitor &v) const;
+    void accept(ASTStmtVisitor &v);
+    void accept(ConstASTStmtVisitor &v) const;
 };
 
 #define DB_AST_STMT_LIST(X) \
@@ -642,7 +669,6 @@ struct DSVImportStmt : ImportStmt
     X(InsertStmt) \
     X(UpdateStmt) \
     X(DeleteStmt) \
-    X(ImportStmt) \
     X(DSVImportStmt)
 
 #define DB_AST_LIST(X) \

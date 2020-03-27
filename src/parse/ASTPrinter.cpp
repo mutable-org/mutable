@@ -120,6 +120,33 @@ void ASTPrinter::operator()(Const<LimitClause> &c)
         out << " OFFSET " << c.offset.text;
 }
 
+/*===== Constraint ===================================================================================================*/
+
+void ASTPrinter::operator()(Const<PrimaryKeyConstraint>&)
+{
+    out << "PRIMARY KEY";
+}
+
+void ASTPrinter::operator()(Const<UniqueConstraint>&)
+{
+    out << "UNIQUE";
+}
+
+void ASTPrinter::operator()(Const<NotNullConstraint>&)
+{
+    out << "NOT NULL";
+}
+
+void ASTPrinter::operator()(Const<CheckConditionConstraint> &c)
+{
+    out << "CHECK(" << *c.cond << ')';
+}
+
+void ASTPrinter::operator()(Const<ReferenceConstraint> &c)
+{
+    out << "REFERENCES " << c.table_name.text << '(' << c.attr_name.text << ')';
+}
+
 /*===== Stmt =========================================================================================================*/
 
 void ASTPrinter::operator()(Const<ErrorStmt>&)
@@ -150,21 +177,8 @@ void ASTPrinter::operator()(Const<CreateTableStmt> &s)
         if (it != s.attributes.cbegin()) out << ',';
         out << "\n    " << attr->name.text << ' ' << *attr->type;
         for (auto c : attr->constraints) {
-            if (is<PrimaryKeyConstraint>(c)) {
-                out << " PRIMARY KEY";
-            } else if (is<UniqueConstraint>(c)) {
-                out << " UNIQUE";
-            } else if (is<NotNullConstraint>(c)) {
-                out << " NOT NULL";
-            } else if (auto check = cast<CheckConditionConstraint>(c)) {
-                out << " CHECK (";
-                (*this)(*check->cond);
-                out << ')';
-            } else if (auto ref = cast<ReferenceConstraint>(c)) {
-                out << " REFERENCES " << ref->table_name.text << '(' << ref->attr_name.text << ')';
-            } else {
-                unreachable("invalid constraint");
-            }
+            out << ' ';
+            (*this)(*c);
         }
     }
     out << "\n);";

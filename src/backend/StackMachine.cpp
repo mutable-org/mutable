@@ -33,7 +33,7 @@ const char * tystr(const PrimitiveType *ty) {
  * StackMachineBuilder
  *====================================================================================================================*/
 
-struct db::StackMachineBuilder : ConstASTVisitor
+struct db::StackMachineBuilder : ConstASTExprVisitor
 {
     private:
     StackMachine &stack_machine_;
@@ -52,37 +52,13 @@ struct db::StackMachineBuilder : ConstASTVisitor
     private:
     static std::unordered_map<std::string, std::regex> regexes_; ///< regexes built from patterns in LIKE expressions
 
-    using ConstASTVisitor::operator();
-
-    /* Expressions */
+    using ConstASTExprVisitor::operator();
     void operator()(Const<ErrorExpr>&) override { unreachable("invalid expression"); }
     void operator()(Const<Designator> &e) override;
     void operator()(Const<Constant> &e) override;
     void operator()(Const<FnApplicationExpr> &e) override;
     void operator()(Const<UnaryExpr> &e) override;
     void operator()(Const<BinaryExpr> &e) override;
-
-    /* Clauses */
-    void operator()(Const<ErrorClause>&) override { unreachable("not supported"); }
-    void operator()(Const<SelectClause>&) override { unreachable("not supported"); }
-    void operator()(Const<FromClause>&) override { unreachable("not supported"); }
-    void operator()(Const<WhereClause>&) override { unreachable("not supported"); }
-    void operator()(Const<GroupByClause>&) override { unreachable("not supported"); }
-    void operator()(Const<HavingClause>&) override { unreachable("not supported"); }
-    void operator()(Const<OrderByClause>&) override { unreachable("not supported"); }
-    void operator()(Const<LimitClause>&) override { unreachable("not supported"); }
-
-    /* Statements */
-    void operator()(Const<ErrorStmt>&) override { unreachable("not supported"); }
-    void operator()(Const<EmptyStmt>&) override { unreachable("not supported"); }
-    void operator()(Const<CreateDatabaseStmt>&) override { unreachable("not supported"); }
-    void operator()(Const<UseDatabaseStmt>&) override { unreachable("not supported"); }
-    void operator()(Const<CreateTableStmt>&) override { unreachable("not supported"); }
-    void operator()(Const<SelectStmt>&) override { unreachable("not supported"); }
-    void operator()(Const<InsertStmt>&) override { unreachable("not supported"); }
-    void operator()(Const<UpdateStmt>&) override { unreachable("not supported"); }
-    void operator()(Const<DeleteStmt>&) override { unreachable("not supported"); }
-    void operator()(Const<DSVImportStmt>&) override { unreachable("not supported"); }
 };
 
 std::unordered_map<std::string, std::regex> StackMachineBuilder::regexes_;

@@ -46,6 +46,7 @@ void ASTDot::cluster(Const<Clause> &c, const char *name, const char *label, cons
     indent() << '}';
 }
 
+
 /*--- Expressions ----------------------------------------------------------------------------------------------------*/
 
 void ASTDot::operator()(Const<ErrorExpr> &e)
@@ -150,6 +151,7 @@ void ASTDot::operator()(Const<BinaryExpr> &e)
     indent() << id(e) << EDGE << id(*e.rhs) << ';';
 }
 
+
 /*--- Clauses --------------------------------------------------------------------------------------------------------*/
 
 void ASTDot::operator()(Const<ErrorClause> &c)
@@ -169,7 +171,7 @@ void ASTDot::operator()(Const<SelectClause> &c)
         (*this)(*s.first);
         if (s.second) {
             indent() << id(s.second) << " [label=\"AS " << s.second.text << "\"];";
-            indent() << id(c) << EDGE << id(s.second) << ";";
+            indent() << id(c) << EDGE << id(s.second) << ';';
             indent() << id(s.second) << EDGE << id(*s.first) << ';';
         } else {
             indent() << id(c) << EDGE << id(*s.first) << ';';
@@ -248,7 +250,7 @@ void ASTDot::operator()(Const<LimitClause> &c)
 {
     out << '\n';
     indent() << id(c.limit) << " [label=<<B>" << c.limit.text << "</B>>];";
-    indent() << id(c) << EDGE << id(c.limit) << ";";
+    indent() << id(c) << EDGE << id(c.limit) << ';';
 
     if (c.offset) {
         out << '\n';
@@ -256,6 +258,37 @@ void ASTDot::operator()(Const<LimitClause> &c)
         indent() << id(c) << EDGE << id(c.offset) << ';';
     }
 }
+
+
+/*--- Constraints ----------------------------------------------------------------------------------------------------*/
+
+void ASTDot::operator()(Const<PrimaryKeyConstraint> &c)
+{
+    indent() << id(c) << " [label=<<B>PRIMARY KEY</B>>];";
+}
+
+void ASTDot::operator()(Const<UniqueConstraint> &c)
+{
+    indent() << id(c) << " [label=<<B>UNIQUE</B>>];";
+}
+
+void ASTDot::operator()(Const<NotNullConstraint> &c)
+{
+    indent() << id(c) << " [label=<<B>NOT NULL</B>>];";
+}
+
+void ASTDot::operator()(Const<CheckConditionConstraint> &c)
+{
+    (*this)(*c.cond);
+    indent() << id(c) << " [label=<<B>CHECK()</B>>];";
+    indent() << id(c) << EDGE << id(*c.cond) << ';';
+}
+
+void ASTDot::operator()(Const<ReferenceConstraint> &c)
+{
+    indent() << id(c) << " [label=<<B>REFERENCES " << c.table_name.text << '(' << c.attr_name.text << ")</B>>];";
+}
+
 
 /*--- Statements -----------------------------------------------------------------------------------------------------*/
 

@@ -309,7 +309,7 @@ void hook_highlighter(const std::string &context, Replxx::colors_t &colors)
         /* Constants */
         {"[\\-|+]{0,1}[0-9]+",          Replxx::Color::BLUE}, // integral numbers
         {"[\\-|+]{0,1}[0-9]*\\.[0-9]+", Replxx::Color::BLUE}, // fixed-point and floating-point numbers
-        {"\".*?\"",                     Replxx::Color::BRIGHTMAGENTA}, // double quoted strings
+        {"\"([^\\\\\"]|\\\\\")*\"",     Replxx::Color::BRIGHTMAGENTA}, // double quoted strings
     };
     for (const auto &e : regex_color) {
         std::size_t pos = 0;

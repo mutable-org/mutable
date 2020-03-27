@@ -1189,21 +1189,21 @@ void Sema::operator()(Const<DSVImportStmt> &s)
         diag.e(s.table_name.pos) << "Table " << s.table_name.text << " does not exist in database " << DB.name << ".\n";
     }
 
-    /* Check that delimiter, escape character, and row separator have length 1. */
-    if (s.delimiter) {
-        auto str = interpret(s.delimiter.text);
-        if (str.length() != 1)
-            diag.e(s.delimiter.pos) << "Invalid delimiter " << s.delimiter.text << ".  Must have length 1.\n";
-    }
-    if (s.escape) {
-        auto str = interpret(s.escape.text);
-        if (str.length() != 1)
-            diag.e(s.escape.pos) << "Invalid escape character " << s.escape.text << ".  Must have length 1.\n";
-    }
-    if (s.quote) {
-        auto str = interpret(s.quote.text);
-        if (str.length() != 1)
-            diag.e(s.quote.pos) << "Invalid quote character " << s.quote.text << ".  Must have length 1.\n";
+    /* If character was provided by user, check that length is equal to 1. */
+#define CHARACTER_LENGTH(NAME, SYMBOL) \
+    std::string NAME = s.NAME ? interpret(s.NAME.text) : SYMBOL; \
+    if (NAME.length() != 1) \
+        diag.e(s.NAME.pos) << "Invalid " #NAME " character " << s.NAME.text << ". Must have length 1.\n";
+    CHARACTER_LENGTH(delimiter, ",");
+    CHARACTER_LENGTH(quote,     "\"");
+    CHARACTER_LENGTH(escape,    "\\");
+#undef CHARACTER_LENGTH
+
+    /* Delimiter and quote character must be distinct. */
+    if (delimiter == quote) {
+        auto pos = s.delimiter ? s.delimiter.pos : s.quote.pos;
+        diag.e(pos) << "The delimiter (" << delimiter << ") must differ from the quote character (" << quote << ").\n";
+        return;
     }
 
     /* Sanity check for skip header. */
@@ -1211,21 +1211,4 @@ void Sema::operator()(Const<DSVImportStmt> &s)
         if (not Options::Get().quiet)
             diag.n(s.path.pos) << "I will assume the existence of a header so I can skip it.\n";
     }
-
-    /* Duplicate check. */
-    std::unordered_map<const char*, const char*> duplicates;
-#define DUPLICATE(NAME, SYMBOL, DESCRIPTION) \
-    { \
-        const char *sym = C.pool(s.NAME ? interpret(s.NAME.text).c_str() : SYMBOL); \
-        auto res = duplicates.emplace(sym, DESCRIPTION); \
-        if (not res.second) { \
-            auto &pos = s.NAME ? s.NAME.pos : s.path.pos; \
-            diag.e(pos) << "The " DESCRIPTION " (" << sym << ") must differ from the " << res.first->second \
-                                    << ".\n"; \
-        } \
-    }
-    DUPLICATE(delimiter, ",",   "delimiter");
-    DUPLICATE(quote,     "\"",  "quote character");
-    DUPLICATE(escape,    "\\",  "escape character");
-#undef DUPLICATE
 }

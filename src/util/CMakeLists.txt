@@ -9,4 +9,5 @@ add_library(
     memory.cpp
     Position.cpp
     terminal.cpp
+    Timer.cpp
     )

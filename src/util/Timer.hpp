@@ -103,6 +103,9 @@ struct Timer
         return out;
     }
 
+    void dump(std::ostream &out) const;
+    void dump() const;
+
     /** Computes the total duration of all `Measurement`s. */
     duration total() const {
         duration d(0);

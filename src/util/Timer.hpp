@@ -82,6 +82,13 @@ struct Timer
         ref.end = clock::now();
     }
 
+    /** Erase a `Measurement` from this `Timer`. */
+    void erase(std::size_t id) {
+        insist (id < measurements_.size(), "id out of bounds");
+        auto &ref = measurements_[id];
+        ref.begin = ref.end = time_point();
+    }
+
     public:
     /** Creates a new `TimingProcess` with the given `name`. */
     TimingProcess create_timing(std::string name) { return TimingProcess(*this, /* ID= */ start(name)); }
@@ -92,6 +99,7 @@ struct Timer
         using std::chrono::microseconds;
 
         for (auto &m : timer) {
+            if (m.begin == time_point()) continue; // measurement has been removed
             out << m.name << ": ";
             if (m.end == time_point()) {
                 out << "started at " << m.begin << ", not finished\n";

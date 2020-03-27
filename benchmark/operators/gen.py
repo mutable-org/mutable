@@ -5,7 +5,7 @@ import random
 import string
 
 
-NUM_TUPLES = 10000
+NUM_TUPLES = 1_000_000
 STRLEN = 10
 OUTPUT_DIR = os.path.join('benchmark', 'operators', 'data')
 

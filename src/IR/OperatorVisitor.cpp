@@ -12,13 +12,4 @@ using namespace db;
     void CLASS::accept(OperatorVisitor &v)            { v(*this); } \
     void CLASS::accept(ConstOperatorVisitor &v) const { v(*this); }
 
-ACCEPT(ScanOperator);
-ACCEPT(CallbackOperator);
-ACCEPT(PrintOperator);
-ACCEPT(NoOpOperator);
-ACCEPT(FilterOperator);
-ACCEPT(JoinOperator);
-ACCEPT(ProjectionOperator);
-ACCEPT(LimitOperator);
-ACCEPT(GroupingOperator);
-ACCEPT(SortingOperator);
+DB_OPERATOR_LIST(ACCEPT)

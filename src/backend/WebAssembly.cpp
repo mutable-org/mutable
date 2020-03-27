@@ -176,17 +176,8 @@ struct WasmCodeGen : ConstOperatorVisitor
     private:
     /*----- OperatorVisitor ------------------------------------------------------------------------------------------*/
     using ConstOperatorVisitor::operator();
-#define DECLARE(CLASS) void operator()(const CLASS &op) override
-    DECLARE(ScanOperator);
-    DECLARE(CallbackOperator);
-    DECLARE(PrintOperator);
-    DECLARE(NoOpOperator);
-    DECLARE(FilterOperator);
-    DECLARE(JoinOperator);
-    DECLARE(ProjectionOperator);
-    DECLARE(LimitOperator);
-    DECLARE(GroupingOperator);
-    DECLARE(SortingOperator);
+#define DECLARE(CLASS) void operator()(const CLASS &op) override;
+    DB_OPERATOR_LIST(DECLARE)
 #undef DECLARE
 };
 
@@ -225,17 +216,8 @@ struct WasmPipelineCG : ConstOperatorVisitor, ConstASTVisitor
 
     /* Operators */
     using ConstOperatorVisitor::operator();
-#define DECLARE(CLASS) void operator()(const CLASS &op) override
-    DECLARE(ScanOperator);
-    DECLARE(CallbackOperator);
-    DECLARE(PrintOperator);
-    DECLARE(NoOpOperator);
-    DECLARE(FilterOperator);
-    DECLARE(JoinOperator);
-    DECLARE(ProjectionOperator);
-    DECLARE(LimitOperator);
-    DECLARE(GroupingOperator);
-    DECLARE(SortingOperator);
+#define DECLARE(CLASS) void operator()(const CLASS &op) override;
+    DB_OPERATOR_LIST(DECLARE)
 #undef DECLARE
 
 #define DECLARE(CLASS) void operator()(const CLASS &op) override

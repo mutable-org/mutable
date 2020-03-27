@@ -386,4 +386,16 @@ struct SortingOperator : Producer, Consumer
     void print(std::ostream &out) const override;
 };
 
+#define DB_OPERATOR_LIST(X) \
+    X(ScanOperator) \
+    X(CallbackOperator) \
+    X(PrintOperator) \
+    X(NoOpOperator) \
+    X(FilterOperator) \
+    X(JoinOperator) \
+    X(ProjectionOperator) \
+    X(LimitOperator) \
+    X(GroupingOperator) \
+    X(SortingOperator)
+
 }

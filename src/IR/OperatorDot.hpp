@@ -17,17 +17,8 @@ struct OperatorDot : ConstOperatorVisitor
     ~OperatorDot();
 
     using ConstOperatorVisitor::operator();
-#define DECLARE(CLASS) void operator()(Const<CLASS> &op) override
-    DECLARE(ScanOperator);
-    DECLARE(CallbackOperator);
-    DECLARE(PrintOperator);
-    DECLARE(NoOpOperator);
-    DECLARE(FilterOperator);
-    DECLARE(JoinOperator);
-    DECLARE(ProjectionOperator);
-    DECLARE(LimitOperator);
-    DECLARE(GroupingOperator);
-    DECLARE(SortingOperator);
+#define DECLARE(CLASS) void operator()(Const<CLASS> &op) override;
+    DB_OPERATOR_LIST(DECLARE)
 #undef DECLARE
 };
 

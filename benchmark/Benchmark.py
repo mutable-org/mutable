@@ -17,6 +17,8 @@ import yamale
 import yaml
 
 
+NUM_RUNS        = 5
+DEFAULT_TIMEOUT = 300 # 5 minutes
 MUTABLE_BINARY  = os.path.join('build', 'release', 'bin', 'shell')
 YML_SCHEMA      = os.path.join('benchmark', '_schema.yml')
 
@@ -41,29 +43,29 @@ def validate_schema(path_to_file, path_to_schema) -> bool:
         return False
     return True
 
-def time_command(command, query, pattern, num_runs=3):
+# Start the shell with `command` and pass `query_str` to its stdin.  Consume the output and search for timings using the
+# given regex `pattern`.  Returns a list with the measured times.
+def time_command(command, query_str, pattern, timeout = DEFAULT_TIMEOUT):
     cmd = command + [ '--quiet', '-' ]
-    input = '\n'.join([query] * num_runs) + '\n'
 
     process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                cwd=os.getcwd())
 
-    TIMEOUT = 60
     try:
-        out, err = process.communicate(input.encode('latin-1'), timeout=TIMEOUT)
+        out, err = process.communicate(query_str.encode('latin-1'), timeout=timeout)
     except subprocess.TimeoutExpired:
         process.kill()
-        raise BenchmarkError(f'Benchmark timed out after {TIMEOUT} seconds')
+        raise BenchmarkError(f'Benchmark timed out after {timeout} seconds')
 
     out = out.decode('latin-1')
     err = err.decode('latin-1')
 
     if process.returncode or len(err):
-        query = query.encode('unicode_escape').decode()
+        query_str = query_str.encode('unicode_escape').decode()
         out = '\n'.join(out.split('\n')[-20:])
         tqdm.write(f'''\
 Unexpected failure during execution of benchmark "{path_to_benchmark}" with return code {process.returncode}:
-$ echo -e "{query}" | {' '.join(cmd)}
+$ echo -e "{query_str}" | {' '.join(cmd)}
 ===== stdout =====
 {out}
 ===== stderr =====
@@ -95,6 +97,8 @@ def perform_benchmark(path_to_benchmark):
 
     suite = yml['suite']
     benchmark = yml['benchmark']
+    is_readonly = yml['readonly']
+    cases = yml['cases']
     name = os.path.splitext(os.path.basename(path_to_benchmark))[0]
 
     # Collect results in data frame
@@ -103,20 +107,41 @@ def perform_benchmark(path_to_benchmark):
     command = [ MUTABLE_BINARY, '--benchmark', '--times', schema ]
     if args.binargs:
         command.extend(args.binargs.split(' '))
-    for case, query in yml['cases'].items():
-        query = query.strip().replace('\n', ' ')
-        if args.verbose:
-            cmd_str = ' '.join(command)
-            tqdm.write(f'$ echo -e "{query}" | {cmd_str} -')
+
+    if is_readonly:
+        timeout = DEFAULT_TIMEOUT + 30 * len(cases)
+        combined_query = ''
+        for case, query_str in cases.items():
+            query = query_str.strip().replace('\n', ' ') # transform to a one-liner
+            if args.verbose:
+                cmd_str = ' '.join(command)
+                tqdm.write(f'$ echo -e "{query}" | {cmd_str} -')
+            query = '\n'.join([query] * NUM_RUNS) + '\n' # repeat query for stable results
+            combined_query += query
         try:
-            durations = time_command(command, query, yml['pattern'], 5)
+            durations = time_command(command, combined_query, yml['pattern'], timeout)
         except BenchmarkError as ex:
             tqdm.write(f'Benchmark {suite}/{benchmark} failed: {str(ex)}')
-            continue
 
-        for dur in durations:
-            #  csv.write(f'{date},{suite},{benchmark},{name},{case},{dur}\n')
-            measurements.loc[len(measurements)] = [ date, suite, benchmark, name, case, dur ]
+        for case in cases.keys():
+            for i in range(NUM_RUNS):
+                measurements.loc[len(measurements)] = [ date, suite, benchmark, name, case, durations[0] ]
+                durations.pop(0)
+    else:
+        for case, query_str in cases.items():
+            query = query_str.strip().replace('\n', ' ') # transform to a one-liner
+            if args.verbose:
+                cmd_str = ' '.join(command)
+                tqdm.write(f'$ echo -e "{query}" | {cmd_str} -')
+            query = '\n'.join([query] * NUM_RUNS) + '\n' # repeat query for stable results
+            try:
+                durations = time_command(command, query, yml['pattern'])
+            except BenchmarkError as ex:
+                tqdm.write(f'Benchmark {suite}/{benchmark} failed: {str(ex)}')
+                continue
+
+            for dur in durations:
+                measurements.loc[len(measurements)] = [ date, suite, benchmark, name, case, dur ]
 
     return suite, benchmark, name, measurements, yml
 

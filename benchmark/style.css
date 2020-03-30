@@ -62,16 +62,38 @@ nav.sidebar .nav .nav a.nav-link
     padding-bottom: .2rem;
 }
 
+main h1
+{
+    color: #333;
+    font-size: 24pt;
+    margin-top: 1.5rem;
+}
+
 main h2
 {
     color: #333;
-    font-size: 18pt;
+    font-size: 16pt;
     border-bottom: 1px solid #6c757d;
     margin-top: 1.5rem;
 }
 
 main h3
 {
-    color: black;
+    color: #6c757d;
     font-size: 12pt;
+}
+
+.commitish
+{
+    display: inline-block;
+    vertical-align: bottom;
+
+    font-family: "Courier New", Courier, monospace;
+    font-size: 85%;
+    color: #333;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 5em;
 }

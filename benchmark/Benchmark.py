@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from colorama import Fore, Back, Style
+from git import Repo
 from tqdm import tqdm
 from yattag import Doc, indent
 import altair
@@ -211,6 +212,10 @@ if __name__ == '__main__':
         the_suite[benchmark] = the_benchmark
         benchmark_results[suite] = the_suite
 
+    repo = Repo('.')
+    commit = repo.head.commit
+    prev_commit_sha = os.environ.get('PREV_COMMIT_SHA', None)
+
     doc, tag, text = Doc().tagtext()
     doc.asis('<!DOCTYPE html>')
     current_suite = None
@@ -246,24 +251,59 @@ if __name__ == '__main__':
             with tag('div', klass='container-fluid'):
                 with tag('div', klass='row'):
                     # Generate nav sidebar
-                    with tag('nav', klass='col-md-2 d-none d-md-block bg-light sidebar'):
-                        with tag('div', klass='sidebar-sticky position-fixed'):
-                            with tag('h6', klass='sidebar-heading px-3 mt-4 mb-1 text-muted'):
-                                text('Benchmark Suites')
-                            with tag('ul', klass='nav flex-column'):
-                                for suite, benchmarks in benchmark_results.items():
-                                    with tag('li', klass='nav-item'):
-                                        with tag('a', klass='nav-link', href=f'#{suite}'):
-                                            doc.line('i', '', klass='far fa-arrow-alt-circle-right')
-                                            text(suite)
-                                        with tag('ul', klass='nav flex-column'):
-                                            for benchmark in benchmarks.keys():
-                                                with tag('li', klass='nav-item'):
-                                                    with tag('a', klass='nav-link', href=f'#{suite}_{benchmark}'):
-                                                        text(benchmark)
+                    with tag('nav', klass='col-4 col-md-3 col-lg-2 px-1 d-md-block bg-light sidebar sidebar-sticky position-fixed'):
+                        with tag('h6', klass='sidebar-heading px-3 mt-4 mb-1 text-muted'):
+                            text('General')
+                        with tag('ul', klass='nav flex-column'):
+                            with tag('li', klass='nav-item'):
+                                doc.line('a', 'Information', klass='nav-link', href=f'#info')
+                            if prev_commit_sha:
+                                with tag('li', klass='nav-item'):
+                                    with tag('a', klass='nav-link', href=f'./{prev_commit_sha}.html'):
+                                        text('View previous Benchmark')
+                                with tag('li', klass='nav-item'):
+                                    with tag('a', klass='nav-link', rel='noopener', href=f'https://gitlab.cs.uni-saarland.de/bigdata/mutable/mutable/-/compare/{prev_commit_sha}...{commit}'):
+                                        text('Inspect Diff to previous Version ')
+                                        doc.line('i', '',  klass='fas fa-external-link-alt')
+                            with tag('li', klass='nav-item'):
+                                with tag('a', klass='nav-link', href=f'./{commit}.csv'):
+                                    text('Download Measurement Data ')
+                                    doc.line('i', '', klass='fas fa-download')
+                        with tag('h6', klass='sidebar-heading px-3 mt-4 mb-1 text-muted'):
+                            text('Benchmark Suites')
+                        with tag('ul', klass='nav flex-column'):
+                            for suite, benchmarks in benchmark_results.items():
+                                with tag('li', klass='nav-item'):
+                                    with tag('a', klass='nav-link', href=f'#{suite}'):
+                                        doc.line('i', '', klass='far fa-arrow-alt-circle-right')
+                                        text(suite)
+                                    with tag('ul', klass='nav flex-column'):
+                                        for benchmark in benchmarks.keys():
+                                            with tag('li', klass='nav-item'):
+                                                with tag('a', klass='nav-link', href=f'#{suite}_{benchmark}'):
+                                                    text(benchmark)
 
                     # Generate main content
-                    with tag('main', role='main', klass='col-md-9 ml-sm-auto col-lg-10 px-4'):
+                    with tag('main', role='main', klass='col-8 col-md-9 col-lg-10 ml-sm-auto col-lg-10 px-4'):
+                        with tag('div', id='info'):
+                            doc.line('h1', 'Information')
+                            with tag('p'):
+                                text('This benchmark was performed on commit ')
+                                with tag('a', rel='noopener',
+                                         href=f'https://gitlab.cs.uni-saarland.de/bigdata/mutable/mutable/-/commit/{commit}'):
+                                    doc.attr(
+                                        ( 'data-toggle', 'tooltip' ),
+                                        ( 'title', f'Commit {commit} by {commit.author.name} on \
+                                                     {commit.committed_datetime}.' )
+                                    )
+                                    with tag('span', klass='commitish'):
+                                        text(str(commit))
+                                sysname, nodename, release, version, machine = os.uname()
+                                if nodename:
+                                    text(f' on machine {nodename}.')
+                                else:
+                                    text(' on an unknown machine.')
+                                text(f' The operating system is {sysname} {release}.')
                         for suite, benchmarks in benchmark_results.items():
                             with tag('div', id=suite, klass='suite'):
                                 doc.line('h2', suite)
@@ -283,8 +323,8 @@ if __name__ == '__main__':
                                integrity='sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo',
                                crossorigin='anonymous'):
                 pass
-            with tag('script', src='https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js',
-                               integrity='sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6',
+            with tag('script', src='https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.bundle.min.js',
+                               integrity='sha384-6khuMg9gaYr5AxOqhkVIODVIvm9ynTT5J4V1cfthmT+emCG6yVmEZsRHdxlotUnm',
                                crossorigin='anonymous'):
                 pass
 
@@ -332,6 +372,12 @@ if __name__ == '__main__':
                         text('var opt = {"renderer": "canvas", "actions": false};')
                         text(f'vegaEmbed("#chart_{suite}_{benchmark}" , spec, opt);')
 
+            with tag('script', type='text/javascript'):
+                text('''\
+$(function () {
+  $('[data-toggle="tooltip"]').tooltip()
+})
+''')
 
     with open('benchmark.html', 'w') as html:
         html.write(indent(doc.getvalue()))

@@ -139,7 +139,7 @@ void ASTPrinter::operator()(Const<NotNullConstraint>&)
 
 void ASTPrinter::operator()(Const<CheckConditionConstraint> &c)
 {
-    out << "CHECK(" << *c.cond << ')';
+    out << "CHECK (" << *c.cond << ')';
 }
 
 void ASTPrinter::operator()(Const<ReferenceConstraint> &c)

@@ -250,9 +250,10 @@ void SchemaMinimizer::operator()(Const<LimitOperator> &op)
 
 void SchemaMinimizer::operator()(Const<GroupingOperator> &op)
 {
+    required = Schema(); // the GroupingOperator doesn't care what later operators require
     for (auto &Grp : op.group_by())
         required |= Grp->get_required();
-    for (auto &Agg : op.aggregates())
+    for (auto &Agg : op.aggregates()) // TODO drop aggregates not required
         required |= Agg->get_required();
     (*this)(*op.child(0));
     /* Schema of grouping operator does not change. */

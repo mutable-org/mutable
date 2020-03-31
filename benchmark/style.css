@@ -25,6 +25,7 @@ body
     height: calc(100vh - 56px);
     overflow-x: hidden;
     overflow-y: auto;
+    overflow-wrap: break-word;
 }
 
 nav.sidebar .sidebar-heading

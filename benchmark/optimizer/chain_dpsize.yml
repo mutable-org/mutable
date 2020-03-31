@@ -1,0 +1,241 @@
+description: Join order enumeration using DPsize
+suite: plan-enumerators
+benchmark: chain
+readonly: yes
+pattern: '^Compute the query plan:.*'
+args: '--plan-enumerator DPsizeOpt'
+cases:
+    2:  SELECT
+            *
+        FROM
+            T0,
+            T1
+        WHERE
+            T0.key = T1.fkey
+        ;
+    3:  SELECT
+            *
+        FROM
+            T0,
+            T1,
+            T2
+        WHERE
+            T0.key = T1.fkey AND
+            T1.key = T2.fkey
+        ;
+    4:  SELECT
+            *
+        FROM
+            T0,
+            T1,
+            T2,
+            T3
+        WHERE
+            T0.key = T1.fkey AND
+            T1.key = T2.fkey AND
+            T2.key = T3.fkey
+        ;
+    5:  SELECT
+            *
+        FROM
+            T0,
+            T1,
+            T2,
+            T3,
+            T4
+        WHERE
+            T0.key = T1.fkey AND
+            T1.key = T2.fkey AND
+            T2.key = T3.fkey AND
+            T3.key = T4.fkey
+        ;
+    8:  SELECT
+            *
+        FROM
+            T0,
+            T1,
+            T2,
+            T3,
+            T4,
+            T5,
+            T6,
+            T7
+        WHERE
+            T0.key = T1.fkey AND
+            T1.key = T2.fkey AND
+            T2.key = T3.fkey AND
+            T3.key = T4.fkey AND
+            T4.key = T5.fkey AND
+            T5.key = T6.fkey AND
+            T6.key = T7.fkey
+        ;
+    10: SELECT
+            *
+        FROM
+            T0,
+            T1,
+            T2,
+            T3,
+            T4,
+            T5,
+            T6,
+            T7,
+            T8,
+            T9
+        WHERE
+            T0.key = T1.fkey AND
+            T1.key = T2.fkey AND
+            T2.key = T3.fkey AND
+            T3.key = T4.fkey AND
+            T4.key = T5.fkey AND
+            T5.key = T6.fkey AND
+            T6.key = T7.fkey AND
+            T7.key = T8.fkey AND
+            T8.key = T9.fkey
+        ;
+    12: SELECT
+            *
+        FROM
+            T0,
+            T1,
+            T2,
+            T3,
+            T4,
+            T5,
+            T6,
+            T7,
+            T8,
+            T9,
+            T10,
+            T11
+        WHERE
+            T0.key = T1.fkey AND
+            T1.key = T2.fkey AND
+            T2.key = T3.fkey AND
+            T3.key = T4.fkey AND
+            T4.key = T5.fkey AND
+            T5.key = T6.fkey AND
+            T6.key = T7.fkey AND
+            T7.key = T8.fkey AND
+            T8.key = T9.fkey AND
+            T9.key = T10.fkey AND
+            T10.key = T11.fkey
+        ;
+    15: SELECT
+            *
+        FROM
+            T0,
+            T1,
+            T2,
+            T3,
+            T4,
+            T5,
+            T6,
+            T7,
+            T8,
+            T9,
+            T10,
+            T11,
+            T12,
+            T13,
+            T14
+        WHERE
+            T0.key = T1.fkey AND
+            T1.key = T2.fkey AND
+            T2.key = T3.fkey AND
+            T3.key = T4.fkey AND
+            T4.key = T5.fkey AND
+            T5.key = T6.fkey AND
+            T6.key = T7.fkey AND
+            T7.key = T8.fkey AND
+            T8.key = T9.fkey AND
+            T9.key = T10.fkey AND
+            T10.key = T11.fkey AND
+            T11.key = T12.fkey AND
+            T12.key = T13.fkey AND
+            T13.key = T14.fkey
+        ;
+    18: SELECT
+            *
+        FROM
+            T0,
+            T1,
+            T2,
+            T3,
+            T4,
+            T5,
+            T6,
+            T7,
+            T8,
+            T9,
+            T10,
+            T11,
+            T12,
+            T13,
+            T14,
+            T15,
+            T16,
+            T17
+        WHERE
+            T0.key = T1.fkey AND
+            T1.key = T2.fkey AND
+            T2.key = T3.fkey AND
+            T3.key = T4.fkey AND
+            T4.key = T5.fkey AND
+            T5.key = T6.fkey AND
+            T6.key = T7.fkey AND
+            T7.key = T8.fkey AND
+            T8.key = T9.fkey AND
+            T9.key = T10.fkey AND
+            T10.key = T11.fkey AND
+            T11.key = T12.fkey AND
+            T12.key = T13.fkey AND
+            T13.key = T14.fkey AND
+            T14.key = T15.fkey AND
+            T15.key = T16.fkey AND
+            T16.key = T17.fkey
+        ;
+    20: SELECT
+            *
+        FROM
+            T0,
+            T1,
+            T2,
+            T3,
+            T4,
+            T5,
+            T6,
+            T7,
+            T8,
+            T9,
+            T10,
+            T11,
+            T12,
+            T13,
+            T14,
+            T15,
+            T16,
+            T17,
+            T18,
+            T19
+        WHERE
+            T0.key = T1.fkey AND
+            T1.key = T2.fkey AND
+            T2.key = T3.fkey AND
+            T3.key = T4.fkey AND
+            T4.key = T5.fkey AND
+            T5.key = T6.fkey AND
+            T6.key = T7.fkey AND
+            T7.key = T8.fkey AND
+            T8.key = T9.fkey AND
+            T9.key = T10.fkey AND
+            T10.key = T11.fkey AND
+            T11.key = T12.fkey AND
+            T12.key = T13.fkey AND
+            T13.key = T14.fkey AND
+            T14.key = T15.fkey AND
+            T15.key = T16.fkey AND
+            T16.key = T17.fkey AND
+            T17.key = T18.fkey AND
+            T18.key = T19.fkey
+        ;

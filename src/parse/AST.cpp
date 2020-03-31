@@ -168,16 +168,9 @@ struct GetRequired : ConstASTExprVisitor
     void operator()(Const<ErrorExpr>&) { unreachable("graph must not contain errors"); }
 
     void operator()(Const<Designator> &e) {
-        auto target = e.target();
-        if (auto p = std::get_if<const Expr*>(&target)) {
-            (*this)(**p);
-        } else if (std::holds_alternative<const Attribute*>(target)) {
-            Schema::Identifier id(e.table_name.text, e.attr_name.text);
-            if (not schema.has(id)) // avoid duplicates
-                schema.add(id, e.type());
-        } else {
-            unreachable("designator has no target");
-        }
+        Schema::Identifier id(e.table_name.text, e.attr_name.text);
+        if (not schema.has(id)) // avoid duplicates
+            schema.add(id, e.type());
     }
 
     using ConstASTExprVisitor::operator();

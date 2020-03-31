@@ -1,0 +1,1 @@
+SELECT * FROM R, (SELECT * FROM R) AS B WHERE R.key = B.key;

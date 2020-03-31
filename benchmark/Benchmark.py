@@ -307,6 +307,12 @@ if __name__ == '__main__':
                                 else:
                                     text(' on an unknown machine.')
                                 text(f' The operating system is {sysname} {release}.')
+                            with tag('p'):
+                                text('To inspect the diff to the previously benchmarked version locally, execute the \
+                                      following command:')
+                                with tag('pre'):
+                                    with tag('code'):
+                                        text(f'$ git difftool {prev_commit_sha} {commit}')
                         for suite, benchmarks in benchmark_results.items():
                             with tag('div', id=suite, klass='suite'):
                                 doc.line('h2', suite)

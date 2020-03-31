@@ -97,3 +97,16 @@ main h3
     text-overflow: ellipsis;
     max-width: 5em;
 }
+
+pre
+{
+    border: 0.5px solid #999;
+    border-radius: 5px;
+    background-color: #f8f9fa;
+    padding: 5px 10px;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 80%;
+    display: inline-block;
+    cursor: text;
+    margin-left: 2.5em;
+}

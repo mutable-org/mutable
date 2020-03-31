@@ -58,14 +58,10 @@ GroupingOperator::GroupingOperator(std::vector<const Expr*> group_by,
     auto &S = schema();
     for (auto e : group_by) {
         auto ty = e->type();
-        if (auto D = cast<const Designator>(e)) {
-            S.add({D->table_name.text, D->attr_name.text}, ty);
-        } else {
-            std::ostringstream oss;
-            oss << *e;
-            auto alias = C.pool(oss.str().c_str());
-            S.add(alias, ty);
-        }
+        std::ostringstream oss;
+        oss << *e;
+        auto alias = C.pool(oss.str().c_str());
+        S.add(alias, ty);
     }
 
     for (auto e : aggregates) {

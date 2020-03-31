@@ -381,19 +381,21 @@ void QueryGraph::dot_recursive(std::ostream &out) const
     }
 
     /* Projections */
-    out << "             <TR><TD ALIGN=\"LEFT\">\n"
-        << "               <B>π</B><FONT POINT-SIZE=\"9\">";
-    if (projection_is_anti())
-        out << "*";
-    for (auto it = projections_.begin(), end = projections_.end(); it != end; ++it) {
-        if (it != projections_.begin() or projection_is_anti())
-            out << ", ";
-        out << html_escape(to_string(*it->first));
-        if (it->second)
-            out << " AS " << html_escape(it->second);
+    if (projection_is_anti() or not projections_.empty()) {
+        out << "             <TR><TD ALIGN=\"LEFT\">\n"
+            << "               <B>π</B><FONT POINT-SIZE=\"9\">";
+        if (projection_is_anti())
+            out << "*";
+        for (auto it = projections_.begin(), end = projections_.end(); it != end; ++it) {
+            if (it != projections_.begin() or projection_is_anti())
+                out << ", ";
+            out << html_escape(to_string(*it->first));
+            if (it->second)
+                out << " AS " << html_escape(it->second);
+        }
+        out << "</FONT>\n"
+            << "             </TD></TR>\n";
     }
-    out << "</FONT>\n"
-        << "             </TD></TR>\n";
 
     /* Group by and aggregates */
     if (not group_by_.empty() or not aggregates_.empty()) {

@@ -19,6 +19,7 @@ void Sema::operator()(Const<ErrorExpr> &e)
 
 void Sema::operator()(Const<Designator> &e)
 {
+    Catalog &C = Catalog::Get();
     SemaContext &Ctx = get_context();
     bool is_result = false;
 
@@ -172,12 +173,19 @@ void Sema::operator()(Const<Designator> &e)
         case SemaContext::S_Having:
         case SemaContext::S_OrderBy:
         case SemaContext::S_Select:
-            /* Detect whether we grouped by this designator.  In that case, convert the type to scalar. */
+            /* Detect whether we grouped by this designator.  In that case, convert the type to scalar and redirect the
+             * target to the grouping key. */
             for (auto grp : Ctx.group_keys) {
                 Designator *d = cast<Designator>(grp);
                 if (d and d->target() == e.target()) {
                     /* The grouping key and this designator reference the same attribute. */
                     e.type_ = pt->as_scalar();
+                    e.target_ = d;
+                    std::ostringstream oss;
+                    oss << *d;
+                    e.table_name.text = nullptr;
+                    e.table_name.type = TokenType::TK_EOF;
+                    e.attr_name.text = C.pool(oss.str().c_str());
                     break;
                 }
             }

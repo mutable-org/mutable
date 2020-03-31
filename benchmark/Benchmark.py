@@ -314,6 +314,10 @@ if __name__ == '__main__':
                                     with tag('pre'):
                                         with tag('code'):
                                             text(f'$ git difftool {prev_commit_sha} {commit}')
+                            if args.binargs:
+                                with tag('p'):
+                                    doc.line('b', 'Supplementary Command Line Arguments: ')
+                                    doc.line('code', args.binargs)
                         for suite, benchmarks in benchmark_results.items():
                             with tag('div', id=suite, klass='suite'):
                                 doc.line('h2', suite)

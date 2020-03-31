@@ -100,6 +100,7 @@ def perform_benchmark(path_to_benchmark):
     benchmark = yml['benchmark']
     is_readonly = yml['readonly']
     cases = yml['cases']
+    supplementary_cmd_args = yml.get('args', None)
     name = os.path.splitext(os.path.basename(path_to_benchmark))[0]
 
     # Collect results in data frame
@@ -108,6 +109,8 @@ def perform_benchmark(path_to_benchmark):
     command = [ MUTABLE_BINARY, '--benchmark', '--times', schema ]
     if args.binargs:
         command.extend(args.binargs.split(' '))
+    if supplementary_cmd_args:
+        command.extend(supplementary_cmd_args.split(' '))
 
     if is_readonly:
         timeout = DEFAULT_TIMEOUT + 30 * len(cases)

@@ -104,7 +104,7 @@ def perform_benchmark(path_to_benchmark):
     name = os.path.splitext(os.path.basename(path_to_benchmark))[0]
 
     # Collect results in data frame
-    measurements = pandas.DataFrame(columns=['date', 'suite', 'benchmark', 'name', 'case', 'time'])
+    measurements = pandas.DataFrame(columns=['suite', 'benchmark', 'name', 'case', 'time'])
 
     command = [ MUTABLE_BINARY, '--benchmark', '--times', schema ]
     if args.binargs:
@@ -129,7 +129,7 @@ def perform_benchmark(path_to_benchmark):
 
         for case in cases.keys():
             for i in range(NUM_RUNS):
-                measurements.loc[len(measurements)] = [ date, suite, benchmark, name, case, durations[0] ]
+                measurements.loc[len(measurements)] = [ suite, benchmark, name, case, durations[0] ]
                 durations.pop(0)
     else:
         for case, query_str in cases.items():
@@ -145,7 +145,7 @@ def perform_benchmark(path_to_benchmark):
                 continue
 
             for dur in durations:
-                measurements.loc[len(measurements)] = [ date, suite, benchmark, name, case, dur ]
+                measurements.loc[len(measurements)] = [ suite, benchmark, name, case, dur ]
 
     return suite, benchmark, name, measurements, yml
 
@@ -187,9 +187,13 @@ if __name__ == '__main__':
 
     # Write measurements to CSV file
     with open('benchmark.csv', 'w') as csv:
-        csv.write('date,suite,benchmark,name,case,time\n')
+        csv.write('commit,date,suite,benchmark,name,case,time\n')
 
     benchmark_results = dict()
+
+    repo = Repo('.')
+    commit = repo.head.commit
+    prev_commit_sha = os.environ.get('PREV_COMMIT_SHA', None)
 
     for path_to_benchmark in tqdm(benchmark_files, position=0, ncols=80, leave=False,
                                   bar_format='|{bar}| {n}/{total}', disable=not is_interactive):
@@ -206,6 +210,8 @@ if __name__ == '__main__':
         num_benchmarks_passed += 1
 
         # Write measurements to CSV file
+        measurements.insert(0, 'commit', pandas.Series(str(commit), measurements.index))
+        measurements.insert(1, 'date', pandas.Series(date, measurements.index))
         measurements.to_csv('benchmark.csv', index=False, header=False, mode='a')
 
         # Add measurements to benchmark results dictionary
@@ -214,10 +220,6 @@ if __name__ == '__main__':
         the_benchmark[name] = (measurements, yml)
         the_suite[benchmark] = the_benchmark
         benchmark_results[suite] = the_suite
-
-    repo = Repo('.')
-    commit = repo.head.commit
-    prev_commit_sha = os.environ.get('PREV_COMMIT_SHA', None)
 
     doc, tag, text = Doc().tagtext()
     doc.asis('<!DOCTYPE html>')

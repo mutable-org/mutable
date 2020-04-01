@@ -1,0 +1,154 @@
+description: subquery from select attr with prefix
+db: ours
+query: |
+    SELECT sub.key FROM (SELECT key FROM R) AS sub ORDER BY sub.key;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: sub TK_IDENTIFIER
+            -:1:11: . TK_DOT
+            -:1:12: key TK_IDENTIFIER
+            -:1:16: FROM TK_From
+            -:1:21: ( TK_LPAR
+            -:1:22: SELECT TK_Select
+            -:1:29: key TK_IDENTIFIER
+            -:1:33: FROM TK_From
+            -:1:38: R TK_IDENTIFIER
+            -:1:39: ) TK_RPAR
+            -:1:41: AS TK_As
+            -:1:44: sub TK_IDENTIFIER
+            -:1:48: ORDER TK_Order
+            -:1:54: BY TK_By
+            -:1:57: sub TK_IDENTIFIER
+            -:1:60: . TK_DOT
+            -:1:61: key TK_IDENTIFIER
+            -:1:64: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT sub.key
+            FROM (SELECT key
+            FROM R) AS sub
+            ORDER BY sub.key ASC;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            0
+            1
+            2
+            3
+            4
+            5
+            6
+            7
+            8
+            9
+            10
+            11
+            12
+            13
+            14
+            15
+            16
+            17
+            18
+            19
+            20
+            21
+            22
+            23
+            24
+            25
+            26
+            27
+            28
+            29
+            30
+            31
+            32
+            33
+            34
+            35
+            36
+            37
+            38
+            39
+            40
+            41
+            42
+            43
+            44
+            45
+            46
+            47
+            48
+            49
+            50
+            51
+            52
+            53
+            54
+            55
+            56
+            57
+            58
+            59
+            60
+            61
+            62
+            63
+            64
+            65
+            66
+            67
+            68
+            69
+            70
+            71
+            72
+            73
+            74
+            75
+            76
+            77
+            78
+            79
+            80
+            81
+            82
+            83
+            84
+            85
+            86
+            87
+            88
+            89
+            90
+            91
+            92
+            93
+            94
+            95
+            96
+            97
+            98
+            99
+        err: NULL
+        num_err: 0
+        returncode: 0

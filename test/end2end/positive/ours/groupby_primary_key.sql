@@ -1,1 +1,0 @@
-SELECT key FROM R GROUP BY key ORDER BY key;

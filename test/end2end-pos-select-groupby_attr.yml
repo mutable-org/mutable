@@ -1,0 +1,112 @@
+description: groupby attr
+db: ours
+query: |
+    SELECT fkey FROM R GROUP BY fkey ORDER BY fkey;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: fkey TK_IDENTIFIER
+            -:1:13: FROM TK_From
+            -:1:18: R TK_IDENTIFIER
+            -:1:20: GROUP TK_Group
+            -:1:26: BY TK_By
+            -:1:29: fkey TK_IDENTIFIER
+            -:1:34: ORDER TK_Order
+            -:1:40: BY TK_By
+            -:1:43: fkey TK_IDENTIFIER
+            -:1:47: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT fkey
+            FROM R
+            GROUP BY fkey
+            ORDER BY fkey ASC;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            1
+            2
+            3
+            4
+            5
+            6
+            7
+            9
+            10
+            11
+            12
+            13
+            16
+            18
+            19
+            20
+            21
+            23
+            24
+            26
+            27
+            28
+            29
+            30
+            32
+            33
+            34
+            35
+            36
+            38
+            40
+            41
+            43
+            45
+            47
+            48
+            49
+            50
+            51
+            55
+            57
+            59
+            60
+            65
+            66
+            68
+            69
+            74
+            77
+            78
+            79
+            80
+            81
+            83
+            84
+            85
+            86
+            88
+            89
+            90
+            91
+            92
+            95
+            96
+            98
+            99
+        err: NULL
+        num_err: 0
+        returncode: 0

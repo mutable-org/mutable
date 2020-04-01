@@ -1,0 +1,117 @@
+description: groupby with aggregation count
+db: ours
+query: |
+    SELECT fkey, COUNT(key) FROM R GROUP BY fkey ORDER BY fkey;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: fkey TK_IDENTIFIER
+            -:1:12: , TK_COMMA
+            -:1:14: COUNT TK_IDENTIFIER
+            -:1:19: ( TK_LPAR
+            -:1:20: key TK_IDENTIFIER
+            -:1:23: ) TK_RPAR
+            -:1:25: FROM TK_From
+            -:1:30: R TK_IDENTIFIER
+            -:1:32: GROUP TK_Group
+            -:1:38: BY TK_By
+            -:1:41: fkey TK_IDENTIFIER
+            -:1:46: ORDER TK_Order
+            -:1:52: BY TK_By
+            -:1:55: fkey TK_IDENTIFIER
+            -:1:59: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT fkey, COUNT(key)
+            FROM R
+            GROUP BY fkey
+            ORDER BY fkey ASC;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            1,1
+            2,1
+            3,1
+            4,2
+            5,1
+            6,1
+            7,4
+            9,1
+            10,2
+            11,3
+            12,3
+            13,1
+            16,1
+            18,2
+            19,1
+            20,1
+            21,1
+            23,1
+            24,2
+            26,1
+            27,4
+            28,1
+            29,1
+            30,1
+            32,2
+            33,1
+            34,1
+            35,1
+            36,1
+            38,1
+            40,1
+            41,3
+            43,1
+            45,1
+            47,4
+            48,2
+            49,1
+            50,1
+            51,1
+            55,3
+            57,1
+            59,1
+            60,1
+            65,1
+            66,1
+            68,1
+            69,2
+            74,2
+            77,1
+            78,1
+            79,2
+            80,1
+            81,2
+            83,1
+            84,1
+            85,2
+            86,3
+            88,2
+            89,1
+            90,1
+            91,3
+            92,1
+            95,2
+            96,1
+            98,1
+            99,1
+        err: NULL
+        num_err: 0
+        returncode: 0

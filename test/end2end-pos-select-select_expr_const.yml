@@ -1,0 +1,38 @@
+description: select expr const
+db: ours
+query: |
+    SELECT 42 + 13;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: 42 TK_DEC_INT
+            -:1:11: + TK_PLUS
+            -:1:13: 13 TK_DEC_INT
+            -:1:15: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT (42 + 13);
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            55
+        err: NULL
+        num_err: 0
+        returncode: 0

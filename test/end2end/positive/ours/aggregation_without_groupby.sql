@@ -1,1 +1,0 @@
-SELECT COUNT(fkey) FROM R;

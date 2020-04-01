@@ -1,0 +1,163 @@
+description: select subquery renamed
+db: ours
+query: |
+    SELECT * FROM R, (SELECT * FROM R) AS B WHERE R.key = B.key ORDER BY R.key;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: * TK_ASTERISK
+            -:1:10: FROM TK_From
+            -:1:15: R TK_IDENTIFIER
+            -:1:16: , TK_COMMA
+            -:1:18: ( TK_LPAR
+            -:1:19: SELECT TK_Select
+            -:1:26: * TK_ASTERISK
+            -:1:28: FROM TK_From
+            -:1:33: R TK_IDENTIFIER
+            -:1:34: ) TK_RPAR
+            -:1:36: AS TK_As
+            -:1:39: B TK_IDENTIFIER
+            -:1:41: WHERE TK_Where
+            -:1:47: R TK_IDENTIFIER
+            -:1:48: . TK_DOT
+            -:1:49: key TK_IDENTIFIER
+            -:1:53: = TK_EQUAL
+            -:1:55: B TK_IDENTIFIER
+            -:1:56: . TK_DOT
+            -:1:57: key TK_IDENTIFIER
+            -:1:61: ORDER TK_Order
+            -:1:67: BY TK_By
+            -:1:70: R TK_IDENTIFIER
+            -:1:71: . TK_DOT
+            -:1:72: key TK_IDENTIFIER
+            -:1:75: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT *
+            FROM R, (SELECT *
+            FROM R) AS B
+            WHERE (R.key = B.key)
+            ORDER BY R.key ASC;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            0,81,1.11331,"uPIGuilCFOljtsa",0,81,1.11331,"uPIGuilCFOljtsa"
+            1,57,5.8926601,"yAyrVJ8VFG1myth",1,57,5.8926601,"yAyrVJ8VFG1myth"
+            2,48,0.78799999,"Sn3WMEpw 12Xc0K",2,48,0.78799999,"Sn3WMEpw 12Xc0K"
+            3,45,2.0950699,"Q7omKtKX ojr1wO",3,45,2.0950699,"Q7omKtKX ojr1wO"
+            4,4,8.0504599,"ZE5jtNf3oJIuhva",4,4,8.0504599,"ZE5jtNf3oJIuhva"
+            5,74,3.99401,"N gFCGnxaEY h92",5,74,3.99401,"N gFCGnxaEY h92"
+            6,1,6.8028302,"H3vwVSJAtt9wfGn",6,1,6.8028302,"H3vwVSJAtt9wfGn"
+            7,81,5.0766301,"MXK865leHW yPPj",7,81,5.0766301,"MXK865leHW yPPj"
+            8,10,0.85653001,"eEvwIdiQ2aNhtMT",8,10,0.85653001,"eEvwIdiQ2aNhtMT"
+            9,85,6.4987798,"bgHOVlONEnO52EO",9,85,6.4987798,"bgHOVlONEnO52EO"
+            10,85,4.8541398,"ht3kPdZFpWZ2Dpo",10,85,4.8541398,"ht3kPdZFpWZ2Dpo"
+            11,7,4.0262098,"V2PLcaRP6b2iD 0",11,7,4.0262098,"V2PLcaRP6b2iD 0"
+            12,11,9.26367,"1KeNZDX Qxca8 j",12,11,9.26367,"1KeNZDX Qxca8 j"
+            13,91,4.8667102,"LNDuDTDe5hDf1EE",13,91,4.8667102,"LNDuDTDe5hDf1EE"
+            14,30,4.0377598,"7jkCFpjTQqTQIoc",14,30,4.0377598,"7jkCFpjTQqTQIoc"
+            15,96,9.3573399,"AnjGhfIVEPRbiT9",15,96,9.3573399,"AnjGhfIVEPRbiT9"
+            16,83,5.2894101,"qi6G3Q4uJRNVr1f",16,83,5.2894101,"qi6G3Q4uJRNVr1f"
+            17,32,9.05336,"1FaRAwoQuiaAE34",17,32,9.05336,"1FaRAwoQuiaAE34"
+            18,69,0.36028001,"XibCW69CWqqWj39",18,69,0.36028001,"XibCW69CWqqWj39"
+            19,95,1.54553,"629z3BuU6y2zQxG",19,95,1.54553,"629z3BuU6y2zQxG"
+            20,4,8.5859299,"OzcTyOBMU28RoZ9",20,4,8.5859299,"OzcTyOBMU28RoZ9"
+            21,68,3.3115001,"B3Qk9ClVxb H4LC",21,68,3.3115001,"B3Qk9ClVxb H4LC"
+            22,55,0.01691,"6htuqWEpUT1tSTZ",22,55,0.01691,"6htuqWEpUT1tSTZ"
+            23,51,6.9720802,"iMpXvKjZ0TNxmUb",23,51,6.9720802,"iMpXvKjZ0TNxmUb"
+            24,86,2.1370101,"d4yKFgnVzvqOMBP",24,86,2.1370101,"d4yKFgnVzvqOMBP"
+            25,60,6.11274,"wc3ktYZJr423xNy",25,60,6.11274,"wc3ktYZJr423xNy"
+            26,89,5.1795802,"DP1cyq l74mtf0i",26,89,5.1795802,"DP1cyq l74mtf0i"
+            27,20,7.4365501,"dQPowgnRESRUiIO",27,20,7.4365501,"dQPowgnRESRUiIO"
+            28,88,1.5280499,"NaUdD0Yw7B3ke7S",28,88,1.5280499,"NaUdD0Yw7B3ke7S"
+            29,49,8.5344801,"8avimNNbBVqZKdI",29,49,8.5344801,"8avimNNbBVqZKdI"
+            30,79,5.3412399,"5lpFb2LQUcV3R7a",30,79,5.3412399,"5lpFb2LQUcV3R7a"
+            31,10,4.7030702,"vD7OE8CBP0nPdH7",31,10,4.7030702,"vD7OE8CBP0nPdH7"
+            32,59,6.9946499,"wKmvHz8GBTq8YtE",32,59,6.9946499,"wKmvHz8GBTq8YtE"
+            33,88,8.3057203,"PrSryyjChpEoAae",33,88,8.3057203,"PrSryyjChpEoAae"
+            34,55,9.6078796,"o0sbu8RyhebuQ10",34,55,9.6078796,"o0sbu8RyhebuQ10"
+            35,11,2.7892799,"cvjqVfUeWQRl3jg",35,11,2.7892799,"cvjqVfUeWQRl3jg"
+            36,24,0.85613,"tevroexFNrTkdha",36,24,0.85613,"tevroexFNrTkdha"
+            37,95,5.50388,"WcTOtTu7rMuRlvl",37,95,5.50388,"WcTOtTu7rMuRlvl"
+            38,12,8.3262796,"SWTsHCDS7ovGARe",38,12,8.3262796,"SWTsHCDS7ovGARe"
+            39,43,1.84364,"D7ezZEnDJjT Hwm",39,43,1.84364,"D7ezZEnDJjT Hwm"
+            40,79,2.25687,"gcb2 Tnmu7NNpJK",40,79,2.25687,"gcb2 Tnmu7NNpJK"
+            41,9,1.56533,"ZrdCSR2EOQxlyMH",41,9,1.56533,"ZrdCSR2EOQxlyMH"
+            42,28,6.4763498,"50EKTvjSHrs7ffF",42,28,6.4763498,"50EKTvjSHrs7ffF"
+            43,5,8.8942299,"umBOq2kBwzkwLgb",43,5,8.8942299,"umBOq2kBwzkwLgb"
+            44,35,1.81489,"kneFVUq2UrS7zic",44,35,1.81489,"kneFVUq2UrS7zic"
+            45,40,2.5239899,"Hw2zA2dDgnfbDQI",45,40,2.5239899,"Hw2zA2dDgnfbDQI"
+            46,36,4.3811598,"rH9mPJiiF 5dH0f",46,36,4.3811598,"rH9mPJiiF 5dH0f"
+            47,91,2.9186201,"saedcJMlvIEw1Vx",47,91,2.9186201,"saedcJMlvIEw1Vx"
+            48,34,8.2054901,"RSk eJhViicULrk",48,34,8.2054901,"RSk eJhViicULrk"
+            49,29,8.5601301,"ZUd5Y xpJ8H8UG1",49,29,8.5601301,"ZUd5Y xpJ8H8UG1"
+            50,12,5.25951,"ctZpJd9Vro112XT",50,12,5.25951,"ctZpJd9Vro112XT"
+            51,91,8.8743896,"eimOrSOF9vsGKSB",51,91,8.8743896,"eimOrSOF9vsGKSB"
+            52,41,7.9614301,"SXJhjxKE2nP5JdQ",52,41,7.9614301,"SXJhjxKE2nP5JdQ"
+            53,32,6.6684098,"4dSiE7 S8rcT 1G",53,32,6.6684098,"4dSiE7 S8rcT 1G"
+            54,48,5.7192302,"k S9pRjruDmf4Sy",54,48,5.7192302,"k S9pRjruDmf4Sy"
+            55,77,8.0193195,"NLPvwqIGnCxCWI5",55,77,8.0193195,"NLPvwqIGnCxCWI5"
+            56,41,7.4748101,"LIh9h50QzeyvVH8",56,41,7.4748101,"LIh9h50QzeyvVH8"
+            57,18,7.5415101,"OqqZ1jFYQHXvQYo",57,18,7.5415101,"OqqZ1jFYQHXvQYo"
+            58,47,1.08346,"OB3j5NDz5TZI7Tf",58,47,1.08346,"OB3j5NDz5TZI7Tf"
+            59,12,2.348,"hYX7rilt3p0m7Rr",59,12,2.348,"hYX7rilt3p0m7Rr"
+            60,27,4.4338298,"71Gri9WZLH1cpol",60,27,4.4338298,"71Gri9WZLH1cpol"
+            61,2,0.50579,"V xM0ikzOwxlR9 ",61,2,0.50579,"V xM0ikzOwxlR9 "
+            62,69,2.5065401,"KpBAxOUKDuhuexg",62,69,2.5065401,"KpBAxOUKDuhuexg"
+            63,13,4.52005,"Nmt5pToB 1aGsb4",63,13,4.52005,"Nmt5pToB 1aGsb4"
+            64,41,6.0829701,"ERniU hcmGs1pwt",64,41,6.0829701,"ERniU hcmGs1pwt"
+            65,27,4.3007002,"3a0ZtTTQ8rdFFbu",65,27,4.3007002,"3a0ZtTTQ8rdFFbu"
+            66,47,8.1176901,"jkjUHWpv2t9lWkN",66,47,8.1176901,"jkjUHWpv2t9lWkN"
+            67,84,4.8218899,"1WjHRObjwnqjmpr",67,84,4.8218899,"1WjHRObjwnqjmpr"
+            68,3,1.80416,"sTVA2jZInBvNaVX",68,3,1.80416,"sTVA2jZInBvNaVX"
+            69,92,3.24383,"7l3JvDFbamaNgVG",69,92,3.24383,"7l3JvDFbamaNgVG"
+            70,86,6.7848601,"eqCYlASNIQUAvLX",70,86,6.7848601,"eqCYlASNIQUAvLX"
+            71,90,2.30111,"jqWZubcETbZoSZ8",71,90,2.30111,"jqWZubcETbZoSZ8"
+            72,21,8.0132198,"m05F1PlhYTVUKgH",72,21,8.0132198,"m05F1PlhYTVUKgH"
+            73,65,1.9390399,"wW8oJGQKJvE7ndj",73,65,1.9390399,"wW8oJGQKJvE7ndj"
+            74,74,4.4890499,"6jon2nJEbTRDfTc",74,74,4.4890499,"6jon2nJEbTRDfTc"
+            75,7,3.6873801,"So9FlYk8uC5kLmf",75,7,3.6873801,"So9FlYk8uC5kLmf"
+            76,7,4.5052299,"z09FoCs hmW5Ywq",76,7,4.5052299,"z09FoCs hmW5Ywq"
+            77,6,7.8922701,"oEFqRtp53VkIW8s",77,6,7.8922701,"oEFqRtp53VkIW8s"
+            78,50,1.28952,"sFjoUIs7 5FqgBT",78,50,1.28952,"sFjoUIs7 5FqgBT"
+            79,27,3.41732,"wM JSxfiuhp3mlJ",79,27,3.41732,"wM JSxfiuhp3mlJ"
+            80,23,8.3134499,"wyKbZqObRvchTyd",80,23,8.3134499,"wyKbZqObRvchTyd"
+            81,24,3.6784101,"7 dRYh8zyIPo3iG",81,24,3.6784101,"7 dRYh8zyIPo3iG"
+            82,66,8.5116596,"RwR5Jb7NcWBDfO ",82,66,8.5116596,"RwR5Jb7NcWBDfO "
+            83,47,2.2453899,"UGtVJC5d0vdm5BN",83,47,2.2453899,"UGtVJC5d0vdm5BN"
+            84,19,5.48804,"thHSSDaycG5lBgP",84,19,5.48804,"thHSSDaycG5lBgP"
+            85,18,2.91272,"AWjLqgW8ixfB3CY",85,18,2.91272,"AWjLqgW8ixfB3CY"
+            86,47,2.5365,"BxVunwuUCizLxdr",86,47,2.5365,"BxVunwuUCizLxdr"
+            87,80,1.82278,"It7CMx3TTZzdCoS",87,80,1.82278,"It7CMx3TTZzdCoS"
+            88,99,0.47804001,"pRybZb8VLrXyQFa",88,99,0.47804001,"pRybZb8VLrXyQFa"
+            89,55,6.0245299,"ziUFpTlarWC2W R",89,55,6.0245299,"ziUFpTlarWC2W R"
+            90,7,0.75041002,"oWyq8ImxCExXYjm",90,7,0.75041002,"oWyq8ImxCExXYjm"
+            91,86,4.4992299,"XbEIXTR8BLg5Hws",91,86,4.4992299,"XbEIXTR8BLg5Hws"
+            92,27,9.9636497,"R5eH1c4cFq1UVEi",92,27,9.9636497,"R5eH1c4cFq1UVEi"
+            93,38,8.5136204,"s6oygHMIxBiXyim",93,38,8.5136204,"s6oygHMIxBiXyim"
+            94,11,0.65748,"ZteZZkHTEdgI0il",94,11,0.65748,"ZteZZkHTEdgI0il"
+            95,98,9.6626501,"b5DHJKUsV741Poi",95,98,9.6626501,"b5DHJKUsV741Poi"
+            96,16,6.2502198,"mFolkKn4V6C2F7w",96,16,6.2502198,"mFolkKn4V6C2F7w"
+            97,33,6.5113001,"waofnS8eyrSEDbe",97,33,6.5113001,"waofnS8eyrSEDbe"
+            98,26,3.4019301,"J2U VZvgGPHcID7",98,26,3.4019301,"J2U VZvgGPHcID7"
+            99,78,4.1813502,"84z6tLK d3fFYcP",99,78,4.1813502,"84z6tLK d3fFYcP"
+        err: NULL
+        num_err: 0
+        returncode: 0

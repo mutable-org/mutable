@@ -1,0 +1,42 @@
+description: aggregation without groupby
+db: ours
+query: |
+    SELECT COUNT(fkey) FROM R;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: COUNT TK_IDENTIFIER
+            -:1:13: ( TK_LPAR
+            -:1:14: fkey TK_IDENTIFIER
+            -:1:18: ) TK_RPAR
+            -:1:20: FROM TK_From
+            -:1:25: R TK_IDENTIFIER
+            -:1:26: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT COUNT(fkey)
+            FROM R;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            100
+        err: NULL
+        num_err: 0
+        returncode: 0

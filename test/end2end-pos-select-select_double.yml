@@ -1,0 +1,36 @@
+description: select double
+db: ours
+query: |
+    SELECT 13.37;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: 13.37 TK_DEC_FLOAT
+            -:1:13: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT 13.37;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            13.37
+        err: NULL
+        num_err: 0
+        returncode: 0

@@ -1,0 +1,53 @@
+description: where float
+db: ours
+query: |
+    SELECT key, rfloat FROM R WHERE rfloat < 3.14 ORDER BY key LIMIT 1;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: key TK_IDENTIFIER
+            -:1:11: , TK_COMMA
+            -:1:13: rfloat TK_IDENTIFIER
+            -:1:20: FROM TK_From
+            -:1:25: R TK_IDENTIFIER
+            -:1:27: WHERE TK_Where
+            -:1:33: rfloat TK_IDENTIFIER
+            -:1:40: < TK_LESS
+            -:1:42: 3.14 TK_DEC_FLOAT
+            -:1:47: ORDER TK_Order
+            -:1:53: BY TK_By
+            -:1:56: key TK_IDENTIFIER
+            -:1:60: LIMIT TK_Limit
+            -:1:66: 1 TK_DEC_INT
+            -:1:67: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT key, rfloat
+            FROM R
+            WHERE (rfloat < 3.14)
+            ORDER BY key ASC
+            LIMIT 1;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            0,1.11331
+        err: NULL
+        num_err: 0
+        returncode: 0

@@ -1,0 +1,99 @@
+description: subquery from renaming
+db: ours
+query: |
+    SELECT k, f, x FROM (SELECT key AS k, 2 * fkey AS f, rfloat AS x FROM R) AS T WHERE T.f < 42 ORDER BY k;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: k TK_IDENTIFIER
+            -:1:9: , TK_COMMA
+            -:1:11: f TK_IDENTIFIER
+            -:1:12: , TK_COMMA
+            -:1:14: x TK_IDENTIFIER
+            -:1:16: FROM TK_From
+            -:1:21: ( TK_LPAR
+            -:1:22: SELECT TK_Select
+            -:1:29: key TK_IDENTIFIER
+            -:1:33: AS TK_As
+            -:1:36: k TK_IDENTIFIER
+            -:1:37: , TK_COMMA
+            -:1:39: 2 TK_DEC_INT
+            -:1:41: * TK_ASTERISK
+            -:1:43: fkey TK_IDENTIFIER
+            -:1:48: AS TK_As
+            -:1:51: f TK_IDENTIFIER
+            -:1:52: , TK_COMMA
+            -:1:54: rfloat TK_IDENTIFIER
+            -:1:61: AS TK_As
+            -:1:64: x TK_IDENTIFIER
+            -:1:66: FROM TK_From
+            -:1:71: R TK_IDENTIFIER
+            -:1:72: ) TK_RPAR
+            -:1:74: AS TK_As
+            -:1:77: T TK_IDENTIFIER
+            -:1:79: WHERE TK_Where
+            -:1:85: T TK_IDENTIFIER
+            -:1:86: . TK_DOT
+            -:1:87: f TK_IDENTIFIER
+            -:1:89: < TK_LESS
+            -:1:91: 42 TK_DEC_INT
+            -:1:94: ORDER TK_Order
+            -:1:100: BY TK_By
+            -:1:103: k TK_IDENTIFIER
+            -:1:104: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT k, f, x
+            FROM (SELECT key AS k, (2 * fkey) AS f, rfloat AS x
+            FROM R) AS T
+            WHERE (T.f < 42)
+            ORDER BY k ASC;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            4,8,8.0504599
+            6,2,6.8028302
+            8,20,0.85653001
+            11,14,4.0262098
+            12,22,9.26367
+            20,8,8.5859299
+            27,40,7.4365501
+            31,20,4.7030702
+            35,22,2.7892799
+            38,24,8.3262796
+            41,18,1.56533
+            43,10,8.8942299
+            50,24,5.25951
+            57,36,7.5415101
+            59,24,2.348
+            61,4,0.50579
+            63,26,4.52005
+            68,6,1.80416
+            75,14,3.6873801
+            76,14,4.5052299
+            77,12,7.8922701
+            84,38,5.48804
+            85,36,2.91272
+            90,14,0.75041002
+            94,22,0.65748
+            96,32,6.2502198
+        err: NULL
+        num_err: 0
+        returncode: 0

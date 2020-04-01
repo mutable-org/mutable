@@ -1,1 +1,0 @@
-SELECT *, key, 42 FROM R ORDER BY key;

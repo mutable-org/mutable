@@ -1,0 +1,93 @@
+description: join binary x2
+db: ours
+query: |
+    SELECT R.key, S.key, T.key FROM R, S, T WHERE R.key = S.fkey AND R.key = T.fkey AND R.key < 10 ORDER BY R.key, S.key, T.key;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: R TK_IDENTIFIER
+            -:1:9: . TK_DOT
+            -:1:10: key TK_IDENTIFIER
+            -:1:13: , TK_COMMA
+            -:1:15: S TK_IDENTIFIER
+            -:1:16: . TK_DOT
+            -:1:17: key TK_IDENTIFIER
+            -:1:20: , TK_COMMA
+            -:1:22: T TK_IDENTIFIER
+            -:1:23: . TK_DOT
+            -:1:24: key TK_IDENTIFIER
+            -:1:28: FROM TK_From
+            -:1:33: R TK_IDENTIFIER
+            -:1:34: , TK_COMMA
+            -:1:36: S TK_IDENTIFIER
+            -:1:37: , TK_COMMA
+            -:1:39: T TK_IDENTIFIER
+            -:1:41: WHERE TK_Where
+            -:1:47: R TK_IDENTIFIER
+            -:1:48: . TK_DOT
+            -:1:49: key TK_IDENTIFIER
+            -:1:53: = TK_EQUAL
+            -:1:55: S TK_IDENTIFIER
+            -:1:56: . TK_DOT
+            -:1:57: fkey TK_IDENTIFIER
+            -:1:62: AND TK_And
+            -:1:66: R TK_IDENTIFIER
+            -:1:67: . TK_DOT
+            -:1:68: key TK_IDENTIFIER
+            -:1:72: = TK_EQUAL
+            -:1:74: T TK_IDENTIFIER
+            -:1:75: . TK_DOT
+            -:1:76: fkey TK_IDENTIFIER
+            -:1:81: AND TK_And
+            -:1:85: R TK_IDENTIFIER
+            -:1:86: . TK_DOT
+            -:1:87: key TK_IDENTIFIER
+            -:1:91: < TK_LESS
+            -:1:93: 10 TK_DEC_INT
+            -:1:96: ORDER TK_Order
+            -:1:102: BY TK_By
+            -:1:105: R TK_IDENTIFIER
+            -:1:106: . TK_DOT
+            -:1:107: key TK_IDENTIFIER
+            -:1:110: , TK_COMMA
+            -:1:112: S TK_IDENTIFIER
+            -:1:113: . TK_DOT
+            -:1:114: key TK_IDENTIFIER
+            -:1:117: , TK_COMMA
+            -:1:119: T TK_IDENTIFIER
+            -:1:120: . TK_DOT
+            -:1:121: key TK_IDENTIFIER
+            -:1:124: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT R.key, S.key, T.key
+            FROM R, S, T
+            WHERE (((R.key = S.fkey) AND (R.key = T.fkey)) AND (R.key < 10))
+            ORDER BY R.key ASC, S.key ASC, T.key ASC;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            2,19,64
+            2,25,64
+            6,4,26
+            8,27,99
+        err: NULL
+        num_err: 0
+        returncode: 0

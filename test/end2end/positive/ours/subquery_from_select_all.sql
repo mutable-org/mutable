@@ -1,1 +1,0 @@
-SELECT * FROM (SELECT * FROM R) AS sub ORDER BY key;

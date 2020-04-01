@@ -1,0 +1,50 @@
+description: limit with offset
+db: ours
+query: |
+    SELECT key FROM R ORDER BY key LIMIT 3 OFFSET 4;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: key TK_IDENTIFIER
+            -:1:12: FROM TK_From
+            -:1:17: R TK_IDENTIFIER
+            -:1:19: ORDER TK_Order
+            -:1:25: BY TK_By
+            -:1:28: key TK_IDENTIFIER
+            -:1:32: LIMIT TK_Limit
+            -:1:38: 3 TK_DEC_INT
+            -:1:40: OFFSET TK_Offset
+            -:1:47: 4 TK_DEC_INT
+            -:1:48: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT key
+            FROM R
+            ORDER BY key ASC
+            LIMIT 3 OFFSET 4;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            4
+            5
+            6
+        err: NULL
+        num_err: 0
+        returncode: 0

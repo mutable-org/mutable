@@ -1,1 +1,0 @@
-SELECT * FROM R, (SELECT * FROM R) AS B WHERE R.key = B.key ORDER BY R.key;

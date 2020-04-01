@@ -1,0 +1,62 @@
+description: having without groupby
+db: ours
+query: |
+    SELECT 42 FROM R HAVING SUM(key) > 100; SELECT 13 FROM R HAVING SUM(key) < 100;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: 42 TK_DEC_INT
+            -:1:11: FROM TK_From
+            -:1:16: R TK_IDENTIFIER
+            -:1:18: HAVING TK_Having
+            -:1:25: SUM TK_IDENTIFIER
+            -:1:28: ( TK_LPAR
+            -:1:29: key TK_IDENTIFIER
+            -:1:32: ) TK_RPAR
+            -:1:34: > TK_GREATER
+            -:1:36: 100 TK_DEC_INT
+            -:1:39: ; TK_SEMICOL
+            -:1:41: SELECT TK_Select
+            -:1:48: 13 TK_DEC_INT
+            -:1:51: FROM TK_From
+            -:1:56: R TK_IDENTIFIER
+            -:1:58: HAVING TK_Having
+            -:1:65: SUM TK_IDENTIFIER
+            -:1:68: ( TK_LPAR
+            -:1:69: key TK_IDENTIFIER
+            -:1:72: ) TK_RPAR
+            -:1:74: < TK_LESS
+            -:1:76: 100 TK_DEC_INT
+            -:1:79: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT 42
+            FROM R
+            HAVING (SUM(key) > 100);
+            SELECT 13
+            FROM R
+            HAVING (SUM(key) < 100);
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            42
+        err: NULL
+        num_err: 0
+        returncode: 0

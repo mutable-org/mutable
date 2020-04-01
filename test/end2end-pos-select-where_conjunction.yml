@@ -1,0 +1,56 @@
+description: where conjunction
+db: ours
+query: |
+    SELECT key FROM R WHERE key > 15 AND key < 30 AND key < 17 ORDER BY key;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: key TK_IDENTIFIER
+            -:1:12: FROM TK_From
+            -:1:17: R TK_IDENTIFIER
+            -:1:19: WHERE TK_Where
+            -:1:25: key TK_IDENTIFIER
+            -:1:29: > TK_GREATER
+            -:1:31: 15 TK_DEC_INT
+            -:1:34: AND TK_And
+            -:1:38: key TK_IDENTIFIER
+            -:1:42: < TK_LESS
+            -:1:44: 30 TK_DEC_INT
+            -:1:47: AND TK_And
+            -:1:51: key TK_IDENTIFIER
+            -:1:55: < TK_LESS
+            -:1:57: 17 TK_DEC_INT
+            -:1:60: ORDER TK_Order
+            -:1:66: BY TK_By
+            -:1:69: key TK_IDENTIFIER
+            -:1:72: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT key
+            FROM R
+            WHERE (((key > 15) AND (key < 30)) AND (key < 17))
+            ORDER BY key ASC;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            16
+        err: NULL
+        num_err: 0
+        returncode: 0

@@ -1,0 +1,36 @@
+description: select null
+db: ours
+query: |
+    SELECT NULL;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: NULL TK_Null
+            -:1:12: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT NULL;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

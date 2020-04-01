@@ -1,0 +1,79 @@
+description: join binary
+db: ours
+query: |
+    SELECT R.key, S.key FROM R, S WHERE R.key = S.fkey AND R.key < 10 ORDER BY R.key, S.key;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: R TK_IDENTIFIER
+            -:1:9: . TK_DOT
+            -:1:10: key TK_IDENTIFIER
+            -:1:13: , TK_COMMA
+            -:1:15: S TK_IDENTIFIER
+            -:1:16: . TK_DOT
+            -:1:17: key TK_IDENTIFIER
+            -:1:21: FROM TK_From
+            -:1:26: R TK_IDENTIFIER
+            -:1:27: , TK_COMMA
+            -:1:29: S TK_IDENTIFIER
+            -:1:31: WHERE TK_Where
+            -:1:37: R TK_IDENTIFIER
+            -:1:38: . TK_DOT
+            -:1:39: key TK_IDENTIFIER
+            -:1:43: = TK_EQUAL
+            -:1:45: S TK_IDENTIFIER
+            -:1:46: . TK_DOT
+            -:1:47: fkey TK_IDENTIFIER
+            -:1:52: AND TK_And
+            -:1:56: R TK_IDENTIFIER
+            -:1:57: . TK_DOT
+            -:1:58: key TK_IDENTIFIER
+            -:1:62: < TK_LESS
+            -:1:64: 10 TK_DEC_INT
+            -:1:67: ORDER TK_Order
+            -:1:73: BY TK_By
+            -:1:76: R TK_IDENTIFIER
+            -:1:77: . TK_DOT
+            -:1:78: key TK_IDENTIFIER
+            -:1:81: , TK_COMMA
+            -:1:83: S TK_IDENTIFIER
+            -:1:84: . TK_DOT
+            -:1:85: key TK_IDENTIFIER
+            -:1:88: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT R.key, S.key
+            FROM R, S
+            WHERE ((R.key = S.fkey) AND (R.key < 10))
+            ORDER BY R.key ASC, S.key ASC;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            2,19
+            2,25
+            3,75
+            5,2
+            6,4
+            7,50
+            7,70
+            8,27
+        err: NULL
+        num_err: 0
+        returncode: 0

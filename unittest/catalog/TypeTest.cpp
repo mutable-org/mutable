@@ -249,3 +249,133 @@ TEST_CASE("Type internalize", "[core][catalog][type]")
     }
 }
 
+TEST_CASE("Type compatibility", "[core][catalog][type]")
+{
+    /* `PrimitiveType`s. */
+    auto i2 = Type::Get_Integer(Type::TY_Scalar, 2);
+    auto i4 = Type::Get_Integer(Type::TY_Scalar, 4);
+    auto i4_ = Type::Get_Integer(Type::TY_Scalar, 4);
+    auto f = Type::Get_Float(Type::TY_Scalar);
+    auto f_ = Type::Get_Float(Type::TY_Scalar);
+    auto d = Type::Get_Double(Type::TY_Scalar);
+    auto d_ = Type::Get_Double(Type::TY_Scalar);
+    auto dec_9_2 = Type::Get_Decimal(Type::TY_Scalar, 9, 2);
+    auto dec_9_2_ = Type::Get_Decimal(Type::TY_Scalar, 9, 2);
+    auto b = Type::Get_Boolean(Type::TY_Scalar);
+    auto b_ = Type::Get_Boolean(Type::TY_Scalar);
+    auto vc42 = Type::Get_Varchar(Type::TY_Scalar, 42);
+    auto vc42_ = Type::Get_Varchar(Type::TY_Scalar, 42);
+    auto c42 = Type::Get_Char(Type::TY_Scalar, 42);
+    auto c42_ = Type::Get_Char(Type::TY_Scalar, 42);
+
+    /* `ErrorType`. */
+    auto e = Type::Get_Error();
+    auto e_ = Type::Get_Error();
+
+    /* `NoneType`. */
+    auto n = Type::Get_None();
+    auto n_ = Type::Get_None();
+
+    /* `FnType`. */
+    auto return_type = Type::Get_Integer(Type::TY_Scalar, 8);
+    std::vector<const Type*> param_types;
+    auto fn = Type::Get_Function(return_type, param_types);
+    auto fn_ = Type::Get_Function(return_type, param_types);
+
+    SECTION("Integer")
+    {
+        REQUIRE(is_comparable(i4, i4_));
+        REQUIRE(is_comparable(i4, i2));
+        REQUIRE(is_comparable(i4, f));
+        REQUIRE(is_comparable(i4, d));
+        REQUIRE(is_comparable(i4, dec_9_2));
+        REQUIRE_FALSE(is_comparable(i4, b));
+        REQUIRE_FALSE(is_comparable(i4, vc42));
+        REQUIRE_FALSE(is_comparable(i4, c42));
+        REQUIRE_FALSE(is_comparable(i4, e));
+        REQUIRE_FALSE(is_comparable(i4, n));
+        REQUIRE_FALSE(is_comparable(i4, fn));
+    }
+
+    SECTION("Float")
+    {
+        REQUIRE(is_comparable(f, f_));
+        REQUIRE(is_comparable(f, d));
+        REQUIRE(is_comparable(f, dec_9_2));
+        REQUIRE_FALSE(is_comparable(f, b));
+        REQUIRE_FALSE(is_comparable(f, vc42));
+        REQUIRE_FALSE(is_comparable(f, c42));
+        REQUIRE_FALSE(is_comparable(f, e));
+        REQUIRE_FALSE(is_comparable(f, n));
+        REQUIRE_FALSE(is_comparable(f, fn));
+    }
+
+    SECTION("Double")
+    {
+        REQUIRE(is_comparable(d, d_));
+        REQUIRE(is_comparable(d, dec_9_2));
+        REQUIRE_FALSE(is_comparable(d, b));
+        REQUIRE_FALSE(is_comparable(d, vc42));
+        REQUIRE_FALSE(is_comparable(d, c42));
+        REQUIRE_FALSE(is_comparable(d, e));
+        REQUIRE_FALSE(is_comparable(d, n));
+        REQUIRE_FALSE(is_comparable(d, fn));
+    }
+
+    SECTION("Decimal")
+    {
+        REQUIRE(is_comparable(dec_9_2, dec_9_2_));
+        REQUIRE_FALSE(is_comparable(dec_9_2, b));
+        REQUIRE_FALSE(is_comparable(dec_9_2, vc42));
+        REQUIRE_FALSE(is_comparable(dec_9_2, c42));
+        REQUIRE_FALSE(is_comparable(dec_9_2, e));
+        REQUIRE_FALSE(is_comparable(dec_9_2, n));
+        REQUIRE_FALSE(is_comparable(dec_9_2, fn));
+    }
+
+    SECTION("Boolean")
+    {
+        REQUIRE(is_comparable(b, b_));
+        REQUIRE_FALSE(is_comparable(b, vc42));
+        REQUIRE_FALSE(is_comparable(b, c42));
+        REQUIRE_FALSE(is_comparable(b, e));
+        REQUIRE_FALSE(is_comparable(b, n));
+        REQUIRE_FALSE(is_comparable(b, fn));
+    }
+
+    SECTION("Varchar")
+    {
+        REQUIRE(is_comparable(vc42, vc42_));
+        REQUIRE(is_comparable(vc42, c42_));
+        REQUIRE_FALSE(is_comparable(vc42, e));
+        REQUIRE_FALSE(is_comparable(vc42, n));
+        REQUIRE_FALSE(is_comparable(vc42, fn));
+    }
+
+    SECTION("CharacterSequence")
+    {
+        REQUIRE(is_comparable(c42, c42_));
+        REQUIRE_FALSE(is_comparable(c42, e));
+        REQUIRE_FALSE(is_comparable(c42, n));
+        REQUIRE_FALSE(is_comparable(c42, fn));
+    }
+
+    SECTION("Error")
+    {
+        REQUIRE_FALSE(is_comparable(e, e_));
+        REQUIRE_FALSE(is_comparable(e, n));
+        REQUIRE_FALSE(is_comparable(e, fn));
+    }
+
+    SECTION("None")
+    {
+        REQUIRE_FALSE(is_comparable(n, n_));
+        REQUIRE_FALSE(is_comparable(n, fn));
+    }
+
+    SECTION("Function")
+    {
+        REQUIRE_FALSE(is_comparable(fn, fn_));
+    }
+}
+

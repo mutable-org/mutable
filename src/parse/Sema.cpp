@@ -576,15 +576,11 @@ void Sema::operator()(Const<BinaryExpr> &e)
 
         case TK_EQUAL:
         case TK_BANG_EQUAL: {
-            if (e.lhs->type()->is_boolean() and e.rhs->type()->is_boolean()) goto ok;
-            if (e.lhs->type()->is_character_sequence() and e.rhs->type()->is_character_sequence()) goto ok;
-            if (e.lhs->type()->is_numeric() and e.rhs->type()->is_numeric()) goto ok;
-
-            /* All other operand types are incomparable. */
-            diag.e(e.op().pos) << "Invalid expression " << e << ", operands are incomparable.\n";
-            e.type_ = Type::Get_Error();
-            return;
-ok:
+            if (not is_comparable(e.lhs->type(), e.rhs->type())) {
+                diag.e(e.op().pos) << "Invalid expression " << e << ", operands are incomparable.\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
             const PrimitiveType *ty_lhs = as<const PrimitiveType>(e.lhs->type());
             const PrimitiveType *ty_rhs = as<const PrimitiveType>(e.rhs->type());
 

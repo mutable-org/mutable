@@ -1,0 +1,100 @@
+description: Join of comparable integer types
+db: ours
+query: |
+    SELECT R.key
+    FROM R, S
+    WHERE R.key = 2 * S.fkey;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: R TK_IDENTIFIER
+            -:1:9: . TK_DOT
+            -:1:10: key TK_IDENTIFIER
+            -:2:1: FROM TK_From
+            -:2:6: R TK_IDENTIFIER
+            -:2:7: , TK_COMMA
+            -:2:9: S TK_IDENTIFIER
+            -:3:1: WHERE TK_Where
+            -:3:7: R TK_IDENTIFIER
+            -:3:8: . TK_DOT
+            -:3:9: key TK_IDENTIFIER
+            -:3:13: = TK_EQUAL
+            -:3:15: 2 TK_DEC_INT
+            -:3:17: * TK_ASTERISK
+            -:3:19: S TK_IDENTIFIER
+            -:3:20: . TK_DOT
+            -:3:21: fkey TK_IDENTIFIER
+            -:3:25: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT R.key
+            FROM R, S
+            WHERE (R.key = (2 * S.fkey));
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            10
+            12
+            44
+            34
+            50
+            56
+            4
+            88
+            4
+            42
+            16
+            58
+            96
+            74
+            84
+            86
+            50
+            80
+            62
+            52
+            14
+            22
+            22
+            38
+            72
+            40
+            98
+            56
+            78
+            34
+            82
+            14
+            84
+            60
+            6
+            24
+            26
+            52
+            66
+            54
+            86
+            66
+            32
+            26
+            48
+        err: NULL
+        num_err: 0
+        returncode: 0

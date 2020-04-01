@@ -1,0 +1,46 @@
+description: Join of incomparable numeric and boolean type
+db: ours
+query: |
+    SELECT R.id
+    FROM R, S
+    WHERE R.id = S.bool;
+required: NO
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: R TK_IDENTIFIER
+            -:1:9: . TK_DOT
+            -:1:10: id TK_IDENTIFIER
+            -:2:1: FROM TK_From
+            -:2:6: R TK_IDENTIFIER
+            -:2:7: , TK_COMMA
+            -:2:9: S TK_IDENTIFIER
+            -:3:1: WHERE TK_Where
+            -:3:7: R TK_IDENTIFIER
+            -:3:8: . TK_DOT
+            -:3:9: id TK_IDENTIFIER
+            -:3:12: = TK_EQUAL
+            -:3:14: S TK_IDENTIFIER
+            -:3:15: . TK_DOT
+            -:3:16: bool TK_IDENTIFIER
+            -:3:20: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT R.id
+            FROM R, S
+            WHERE (R.id = S.bool);
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

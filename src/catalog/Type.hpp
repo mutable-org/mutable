@@ -112,6 +112,9 @@ struct Type
 template<typename T>
 bool is_convertible(const Type *attr);
 
+/** Returns true iff both types have the same `PrimitiveType`, i.e. `Boolean`, `CharacterSequence`, or `Numeric`. */
+bool is_comparable(const Type *first, const Type *second);
+
 }
 
 namespace std {
@@ -403,6 +406,13 @@ bool db::is_convertible(const Type *ty) {
     if constexpr (std::is_arithmetic_v<T>)
         return is<const Numeric>(ty);
 
+    return false;
+}
+
+inline bool db::is_comparable(const Type *first, const Type *second) {
+    if (first->is_boolean() and second->is_boolean()) return true;
+    if (first->is_character_sequence() and second->is_character_sequence()) return true;
+    if (first->is_numeric() and second->is_numeric()) return true;
     return false;
 }
 

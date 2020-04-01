@@ -122,7 +122,7 @@ struct SimpleHashJoinData : JoinData
         insist(binary->tok == TK_EQUAL);
         auto first = binary->lhs;
         auto second = binary->rhs;
-        insist(first->type() == second->type(), "the two sides of a comparison should have matching types");
+        insist(is_comparable(first->type(), second->type()), "the two sides of a comparison should be comparable");
 
         key_schema.add("key", first->type());
         key = Tuple(key_schema);

@@ -1,0 +1,55 @@
+description: Join of comparable floating types
+db: ours
+query: |
+    SELECT R.key
+    FROM R, S
+    WHERE R.rfloat = 1.0 * S.rfloat;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: R TK_IDENTIFIER
+            -:1:9: . TK_DOT
+            -:1:10: key TK_IDENTIFIER
+            -:2:1: FROM TK_From
+            -:2:6: R TK_IDENTIFIER
+            -:2:7: , TK_COMMA
+            -:2:9: S TK_IDENTIFIER
+            -:3:1: WHERE TK_Where
+            -:3:7: R TK_IDENTIFIER
+            -:3:8: . TK_DOT
+            -:3:9: rfloat TK_IDENTIFIER
+            -:3:16: = TK_EQUAL
+            -:3:18: 1.0 TK_DEC_FLOAT
+            -:3:22: * TK_ASTERISK
+            -:3:24: S TK_IDENTIFIER
+            -:3:25: . TK_DOT
+            -:3:26: rfloat TK_IDENTIFIER
+            -:3:32: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT R.key
+            FROM R, S
+            WHERE (R.rfloat = (1.0 * S.rfloat));
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+        err: NULL
+        num_err: 0
+        returncode: 0

@@ -352,9 +352,12 @@ $(function () {
 if __name__ == '__main__':
     # Parse args
     parser = argparse.ArgumentParser(description='''Run benchmarks on mutable.
-                                                    The build directory is assumed to be ./build/release .''')
+                                                    The build directory is assumed to be './build/release'.''')
     parser.add_argument('suite', nargs='*', help='a benchmark suite to be run')
     parser.add_argument('--html', help='Generate static HTML report', dest='html', default=False, action='store_true')
+    parser.add_argument('-o', '--output',
+                        help='Specify file to write measurement in CSV format (defaults to \'benchmark.csv\')',
+                        dest='output', metavar='FILE.csv', default=None, action='store')
     parser.add_argument('--args', help='provide additional arguments to pass through to the binary', dest='binargs',
                                   metavar='ARGS', default=None, action='store')
     parser.add_argument('-v', '--verbose', help='verbose output', dest='verbose', default=False, action='store_true')
@@ -379,8 +382,13 @@ if __name__ == '__main__':
     date = datetime.date.today().isoformat()
 
     # Write measurements to CSV file
-    with open('benchmark.csv', 'w') as csv:
-        csv.write('commit,date,suite,benchmark,name,case,time\n')
+    output_csv_file = args.output or 'benchmark.csv'
+    if not args.output or not os.path.isfile(output_csv_file): # no output file specified or file does not exist
+        tqdm.write(f'Writing measurements to \'{output_csv_file}\'.')
+        with open(output_csv_file, 'w') as csv:
+            csv.write('commit,date,suite,benchmark,name,case,time\n')
+    else:
+        tqdm.write(f'Adding measurements to \'{output_csv_file}\'.')
 
     benchmark_results = dict()
 
@@ -408,7 +416,7 @@ if __name__ == '__main__':
         # Write measurements to CSV file
         measurements.insert(0, 'commit', pandas.Series(str(commit), measurements.index))
         measurements.insert(1, 'date', pandas.Series(date, measurements.index))
-        measurements.to_csv('benchmark.csv', index=False, header=False, mode='a')
+        measurements.to_csv(output_csv_file, index=False, header=False, mode='a')
 
         # Add measurements to benchmark results dictionary
         the_suite = benchmark_results.get(suite, dict())

@@ -380,7 +380,7 @@ if __name__ == '__main__':
                         y = altair.Y('mean(time)', title='Time (ms)')
                     )
                     band = base.mark_errorband(extent='ci').encode(
-                        y = 'time'
+                        y = altair.Y('time', title=None)
                     )
                     chart = line + band
                     with tag('script', type='text/javascript'):

@@ -79,7 +79,7 @@ def run_stage(args, test_case, stage_name, command):
         if 'err' in stage:
             check_stderr(stage['err'], err)
         if 'out' in stage:
-            check_stdout(stage['out'], out)
+            check_stdout(stage['out'], out, args.verbose)
     except TestException as ex:
         report_failure(str(ex), stage_name, test_case)
         return False
@@ -111,12 +111,15 @@ def check_stderr(expected, actual):
     return
 
 
-def check_stdout(expected, actual):
+def check_stdout(expected, actual, verbose):
     if expected != None:
-        expected = sorted(expected.split('\n'))
-        actual = sorted(actual.split('\n'))
+        expected_sorted = sorted(expected.split('\n'))
+        actual_sorted = sorted(actual.split('\n'))
         if expected != actual:
-            raise TestException(f'Expected out\n{expected}\nreceived\n{actual}')
+            diff = ""
+            if verbose:
+                diff = '\n==>' + colordiff(actual, expected).rstrip('\n').replace('\n', '\n   ')
+            raise TestException(f'Expected output differs.{diff}')
     return
 
 

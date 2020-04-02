@@ -1,0 +1,34 @@
+description: Aggregate function ISNULL testing
+db: tpc-h
+query: |
+    SELECT ISNULL(l_linenumber) FROM LINEITEM;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: ISNULL TK_IDENTIFIER
+            -:1:14: ( TK_LPAR
+            -:1:15: l_linenumber TK_IDENTIFIER
+            -:1:27: ) TK_RPAR
+            -:1:29: FROM TK_From
+            -:1:34: LINEITEM TK_IDENTIFIER
+            -:1:42: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT ISNULL(l_linenumber)
+            FROM LINEITEM;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

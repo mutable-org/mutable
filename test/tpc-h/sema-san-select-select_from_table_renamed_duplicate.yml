@@ -1,0 +1,35 @@
+description: SELECT with renamed duplicate table sanity testing
+db: tpc-h
+query: |
+    SELECT l_linenumber FROM LINEITEM AS ORDERS, ORDERS;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: l_linenumber TK_IDENTIFIER
+            -:1:21: FROM TK_From
+            -:1:26: LINEITEM TK_IDENTIFIER
+            -:1:35: AS TK_As
+            -:1:38: ORDERS TK_IDENTIFIER
+            -:1:44: , TK_COMMA
+            -:1:46: ORDERS TK_IDENTIFIER
+            -:1:52: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT l_linenumber
+            FROM LINEITEM AS ORDERS, ORDERS;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

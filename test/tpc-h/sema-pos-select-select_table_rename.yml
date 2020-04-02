@@ -1,0 +1,33 @@
+description: SELECT attribute from table rename testing
+db: tpc-h
+query: |
+    SELECT l_orderkey FROM LINEITEM AS l;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: l_orderkey TK_IDENTIFIER
+            -:1:19: FROM TK_From
+            -:1:24: LINEITEM TK_IDENTIFIER
+            -:1:33: AS TK_As
+            -:1:36: l TK_IDENTIFIER
+            -:1:37: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT l_orderkey
+            FROM LINEITEM AS l;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

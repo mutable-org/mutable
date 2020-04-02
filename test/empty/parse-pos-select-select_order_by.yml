@@ -1,0 +1,36 @@
+description: SELECT with ORDER BY statement testing
+db: empty
+query: |
+    SELECT * FROM tbl ORDER BY a ASC, b DESC, c ASC;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: * TK_ASTERISK
+            -:1:10: FROM TK_From
+            -:1:15: tbl TK_IDENTIFIER
+            -:1:19: ORDER TK_Order
+            -:1:25: BY TK_By
+            -:1:28: a TK_IDENTIFIER
+            -:1:30: ASC TK_Ascending
+            -:1:33: , TK_COMMA
+            -:1:35: b TK_IDENTIFIER
+            -:1:37: DESC TK_Descending
+            -:1:41: , TK_COMMA
+            -:1:43: c TK_IDENTIFIER
+            -:1:45: ASC TK_Ascending
+            -:1:48: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT *
+            FROM tbl
+            ORDER BY a ASC, b DESC, c ASC;
+        err: NULL
+        num_err: 0
+        returncode: 0

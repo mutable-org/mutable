@@ -1,0 +1,36 @@
+description: SELECT statement with scalar and vector sanity testing
+db: tpc-h
+query: |
+    SELECT l_linenumber, MAX(l_quantity) FROM LINEITEM;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: l_linenumber TK_IDENTIFIER
+            -:1:20: , TK_COMMA
+            -:1:22: MAX TK_IDENTIFIER
+            -:1:25: ( TK_LPAR
+            -:1:26: l_quantity TK_IDENTIFIER
+            -:1:36: ) TK_RPAR
+            -:1:38: FROM TK_From
+            -:1:43: LINEITEM TK_IDENTIFIER
+            -:1:51: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT l_linenumber, MAX(l_quantity)
+            FROM LINEITEM;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

@@ -1,0 +1,56 @@
+description: Subquery ambigous attribute sanity testing
+db: tpc-h
+query: |
+    SELECT l_orderkey, l_suppkey FROM LINEITEM AS LITEM, (SELECT ps_suppkey AS l_suppkey FROM PARTSUPP) AS PSUPP WHERE LITEM.l_suppkey = PSUPP.l_suppkey;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: l_orderkey TK_IDENTIFIER
+            -:1:18: , TK_COMMA
+            -:1:20: l_suppkey TK_IDENTIFIER
+            -:1:30: FROM TK_From
+            -:1:35: LINEITEM TK_IDENTIFIER
+            -:1:44: AS TK_As
+            -:1:47: LITEM TK_IDENTIFIER
+            -:1:52: , TK_COMMA
+            -:1:54: ( TK_LPAR
+            -:1:55: SELECT TK_Select
+            -:1:62: ps_suppkey TK_IDENTIFIER
+            -:1:73: AS TK_As
+            -:1:76: l_suppkey TK_IDENTIFIER
+            -:1:86: FROM TK_From
+            -:1:91: PARTSUPP TK_IDENTIFIER
+            -:1:99: ) TK_RPAR
+            -:1:101: AS TK_As
+            -:1:104: PSUPP TK_IDENTIFIER
+            -:1:110: WHERE TK_Where
+            -:1:116: LITEM TK_IDENTIFIER
+            -:1:121: . TK_DOT
+            -:1:122: l_suppkey TK_IDENTIFIER
+            -:1:132: = TK_EQUAL
+            -:1:134: PSUPP TK_IDENTIFIER
+            -:1:139: . TK_DOT
+            -:1:140: l_suppkey TK_IDENTIFIER
+            -:1:149: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT l_orderkey, l_suppkey
+            FROM LINEITEM AS LITEM, (SELECT ps_suppkey AS l_suppkey
+            FROM PARTSUPP) AS PSUPP
+            WHERE (LITEM.l_suppkey = PSUPP.l_suppkey);
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

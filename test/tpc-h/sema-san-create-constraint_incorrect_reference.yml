@@ -1,0 +1,44 @@
+description: Constraints with incorrect REFERENCE sanity testing
+db: tpc-h
+query: |
+    CREATE TABLE incorrect_type_ref_table (incorrect_type_ref INT(8) REFERENCES LINEITEM(l_orderkey));
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: TABLE TK_Table
+            -:1:14: incorrect_type_ref_table TK_IDENTIFIER
+            -:1:39: ( TK_LPAR
+            -:1:40: incorrect_type_ref TK_IDENTIFIER
+            -:1:59: INT TK_Int
+            -:1:62: ( TK_LPAR
+            -:1:63: 8 TK_DEC_INT
+            -:1:64: ) TK_RPAR
+            -:1:66: REFERENCES TK_References
+            -:1:77: LINEITEM TK_IDENTIFIER
+            -:1:85: ( TK_LPAR
+            -:1:86: l_orderkey TK_IDENTIFIER
+            -:1:96: ) TK_RPAR
+            -:1:97: ) TK_RPAR
+            -:1:98: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            CREATE TABLE incorrect_type_ref_table
+            (
+                incorrect_type_ref INT(8) REFERENCES LINEITEM(l_orderkey)
+            );
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

@@ -1,0 +1,22 @@
+description: SELECT statement without attribute sanity testing
+db: empty
+query: |
+    SELECT FROM x;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: FROM TK_From
+            -:1:13: x TK_IDENTIFIER
+            -:1:14: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

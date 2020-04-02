@@ -1,0 +1,47 @@
+description: Constraints PRIMARY KEY testing
+db: empty
+query: |
+    CREATE TABLE primary_key_check_table (key INT(4) PRIMARY KEY CHECK (42 > 0));
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: TABLE TK_Table
+            -:1:14: primary_key_check_table TK_IDENTIFIER
+            -:1:38: ( TK_LPAR
+            -:1:39: key TK_IDENTIFIER
+            -:1:43: INT TK_Int
+            -:1:46: ( TK_LPAR
+            -:1:47: 4 TK_DEC_INT
+            -:1:48: ) TK_RPAR
+            -:1:50: PRIMARY TK_Primary
+            -:1:58: KEY TK_Key
+            -:1:62: CHECK TK_Check
+            -:1:68: ( TK_LPAR
+            -:1:69: 42 TK_DEC_INT
+            -:1:72: > TK_GREATER
+            -:1:74: 0 TK_OCT_INT
+            -:1:75: ) TK_RPAR
+            -:1:76: ) TK_RPAR
+            -:1:77: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            CREATE TABLE primary_key_check_table
+            (
+                key INT(4) PRIMARY KEY CHECK ((42 > 0))
+            );
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

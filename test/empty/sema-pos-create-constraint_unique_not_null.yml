@@ -1,0 +1,52 @@
+description: Constraints UNIQUE and NOT NULL testing
+db: empty
+query: |
+    CREATE TABLE unique_not_null_table ( unn1 INT(4) UNIQUE NOT NULL, unn2 INT(4) NOT NULL UNIQUE);
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: TABLE TK_Table
+            -:1:14: unique_not_null_table TK_IDENTIFIER
+            -:1:36: ( TK_LPAR
+            -:1:38: unn1 TK_IDENTIFIER
+            -:1:43: INT TK_Int
+            -:1:46: ( TK_LPAR
+            -:1:47: 4 TK_DEC_INT
+            -:1:48: ) TK_RPAR
+            -:1:50: UNIQUE TK_Unique
+            -:1:57: NOT TK_Not
+            -:1:61: NULL TK_Null
+            -:1:65: , TK_COMMA
+            -:1:67: unn2 TK_IDENTIFIER
+            -:1:72: INT TK_Int
+            -:1:75: ( TK_LPAR
+            -:1:76: 4 TK_DEC_INT
+            -:1:77: ) TK_RPAR
+            -:1:79: NOT TK_Not
+            -:1:83: NULL TK_Null
+            -:1:88: UNIQUE TK_Unique
+            -:1:94: ) TK_RPAR
+            -:1:95: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            CREATE TABLE unique_not_null_table
+            (
+                unn1 INT(4) UNIQUE NOT NULL,
+                unn2 INT(4) NOT NULL UNIQUE
+            );
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

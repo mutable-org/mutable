@@ -1,0 +1,53 @@
+description: INSERT statement testing
+db: empty
+query: |
+    INSERT INTO mytable
+    VALUES
+        (DEFAULT, NULL, 42, "abcd", 0xC0FF33),
+        ("Hello", 13, 13, "World", 1337);
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: INSERT TK_Insert
+            -:1:8: INTO TK_Into
+            -:1:13: mytable TK_IDENTIFIER
+            -:2:1: VALUES TK_Values
+            -:3:5: ( TK_LPAR
+            -:3:6: DEFAULT TK_Default
+            -:3:13: , TK_COMMA
+            -:3:15: NULL TK_Null
+            -:3:19: , TK_COMMA
+            -:3:21: 42 TK_DEC_INT
+            -:3:23: , TK_COMMA
+            -:3:25: "abcd" TK_STRING_LITERAL
+            -:3:31: , TK_COMMA
+            -:3:33: 0xC0FF33 TK_HEX_INT
+            -:3:41: ) TK_RPAR
+            -:3:42: , TK_COMMA
+            -:4:5: ( TK_LPAR
+            -:4:6: "Hello" TK_STRING_LITERAL
+            -:4:13: , TK_COMMA
+            -:4:15: 13 TK_DEC_INT
+            -:4:17: , TK_COMMA
+            -:4:19: 13 TK_DEC_INT
+            -:4:21: , TK_COMMA
+            -:4:23: "World" TK_STRING_LITERAL
+            -:4:30: , TK_COMMA
+            -:4:32: 1337 TK_DEC_INT
+            -:4:36: ) TK_RPAR
+            -:4:37: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            INSERT INTO mytable
+            VALUES
+                (DEFAULT, NULL, 42, "abcd", 0xC0FF33),
+                ("Hello", 13, 13, "World", 1337);
+        err: NULL
+        num_err: 0
+        returncode: 0

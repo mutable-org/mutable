@@ -1,0 +1,39 @@
+description: ORDER BY and GROUP BY statement sanity testing
+db: tpc-h
+query: |
+    SELECT l_returnflag FROM LINEITEM GROUP BY l_returnflag ORDER BY l_linestatus;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: l_returnflag TK_IDENTIFIER
+            -:1:21: FROM TK_From
+            -:1:26: LINEITEM TK_IDENTIFIER
+            -:1:35: GROUP TK_Group
+            -:1:41: BY TK_By
+            -:1:44: l_returnflag TK_IDENTIFIER
+            -:1:57: ORDER TK_Order
+            -:1:63: BY TK_By
+            -:1:66: l_linestatus TK_IDENTIFIER
+            -:1:78: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT l_returnflag
+            FROM LINEITEM
+            GROUP BY l_returnflag
+            ORDER BY l_linestatus ASC;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

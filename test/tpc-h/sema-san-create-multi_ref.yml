@@ -1,0 +1,49 @@
+description: Multiple REFERENCES sanity testing
+db: tpc-h
+query: |
+    CREATE TABLE multi_ref_table (multi_ref INT(4) REFERENCES LINEITEM(l_orderkey) REFERENCES ORDERS(o_orderkey));
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: TABLE TK_Table
+            -:1:14: multi_ref_table TK_IDENTIFIER
+            -:1:30: ( TK_LPAR
+            -:1:31: multi_ref TK_IDENTIFIER
+            -:1:41: INT TK_Int
+            -:1:44: ( TK_LPAR
+            -:1:45: 4 TK_DEC_INT
+            -:1:46: ) TK_RPAR
+            -:1:48: REFERENCES TK_References
+            -:1:59: LINEITEM TK_IDENTIFIER
+            -:1:67: ( TK_LPAR
+            -:1:68: l_orderkey TK_IDENTIFIER
+            -:1:78: ) TK_RPAR
+            -:1:80: REFERENCES TK_References
+            -:1:91: ORDERS TK_IDENTIFIER
+            -:1:97: ( TK_LPAR
+            -:1:98: o_orderkey TK_IDENTIFIER
+            -:1:108: ) TK_RPAR
+            -:1:109: ) TK_RPAR
+            -:1:110: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            CREATE TABLE multi_ref_table
+            (
+                multi_ref INT(4) REFERENCES LINEITEM(l_orderkey) REFERENCES ORDERS(o_orderkey)
+            );
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

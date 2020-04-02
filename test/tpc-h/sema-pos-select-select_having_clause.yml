@@ -1,0 +1,39 @@
+description: SELECT with HAVING clause testing
+db: tpc-h
+query: |
+    SELECT "OK" FROM LINEITEM HAVING AVG(l_extendedprice) >= 1337.42;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: "OK" TK_STRING_LITERAL
+            -:1:13: FROM TK_From
+            -:1:18: LINEITEM TK_IDENTIFIER
+            -:1:27: HAVING TK_Having
+            -:1:34: AVG TK_IDENTIFIER
+            -:1:37: ( TK_LPAR
+            -:1:38: l_extendedprice TK_IDENTIFIER
+            -:1:53: ) TK_RPAR
+            -:1:55: >= TK_GREATER_EQUAL
+            -:1:58: 1337.42 TK_DEC_FLOAT
+            -:1:65: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT "OK"
+            FROM LINEITEM
+            HAVING (AVG(l_extendedprice) >= 1337.42);
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

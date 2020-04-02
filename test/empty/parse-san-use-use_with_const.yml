@@ -1,0 +1,21 @@
+description: USE statemet with constant sanity testing
+db: empty
+query: |
+    USE 42;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: USE TK_Use
+            -:1:5: 42 TK_DEC_INT
+            -:1:7: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

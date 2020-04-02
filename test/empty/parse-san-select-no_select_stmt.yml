@@ -1,0 +1,21 @@
+description: no SELECT keyword sanity testing
+db: empty
+query: |
+    FROM x;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: FROM TK_From
+            -:1:6: x TK_IDENTIFIER
+            -:1:7: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

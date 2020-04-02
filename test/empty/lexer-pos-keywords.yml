@@ -1,0 +1,26 @@
+description: Keywords testing
+db: empty
+query: |
+    AND AS ASC BY DESC FROM GROUP LIMIT NOT OFFSET OR ORDER SELECT WHERE
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: AND TK_And
+            -:1:5: AS TK_As
+            -:1:8: ASC TK_Ascending
+            -:1:12: BY TK_By
+            -:1:15: DESC TK_Descending
+            -:1:20: FROM TK_From
+            -:1:25: GROUP TK_Group
+            -:1:31: LIMIT TK_Limit
+            -:1:37: NOT TK_Not
+            -:1:41: OFFSET TK_Offset
+            -:1:48: OR TK_Or
+            -:1:51: ORDER TK_Order
+            -:1:57: SELECT TK_Select
+            -:1:64: WHERE TK_Where
+        err: NULL
+        num_err: 0
+        returncode: 0

@@ -1,0 +1,53 @@
+description: Nested SELECT statement testing
+db: empty
+query: |
+    SELECT * FROM Alpha AS A, (SELECT x, y FROM Beta ) AS B, (SELECT z FROM Gamma AS Y) AS C, Delta;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: * TK_ASTERISK
+            -:1:10: FROM TK_From
+            -:1:15: Alpha TK_IDENTIFIER
+            -:1:21: AS TK_As
+            -:1:24: A TK_IDENTIFIER
+            -:1:25: , TK_COMMA
+            -:1:27: ( TK_LPAR
+            -:1:28: SELECT TK_Select
+            -:1:35: x TK_IDENTIFIER
+            -:1:36: , TK_COMMA
+            -:1:38: y TK_IDENTIFIER
+            -:1:40: FROM TK_From
+            -:1:45: Beta TK_IDENTIFIER
+            -:1:50: ) TK_RPAR
+            -:1:52: AS TK_As
+            -:1:55: B TK_IDENTIFIER
+            -:1:56: , TK_COMMA
+            -:1:58: ( TK_LPAR
+            -:1:59: SELECT TK_Select
+            -:1:66: z TK_IDENTIFIER
+            -:1:68: FROM TK_From
+            -:1:73: Gamma TK_IDENTIFIER
+            -:1:79: AS TK_As
+            -:1:82: Y TK_IDENTIFIER
+            -:1:83: ) TK_RPAR
+            -:1:85: AS TK_As
+            -:1:88: C TK_IDENTIFIER
+            -:1:89: , TK_COMMA
+            -:1:91: Delta TK_IDENTIFIER
+            -:1:96: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT *
+            FROM Alpha AS A, (SELECT x, y
+            FROM Beta) AS B, (SELECT z
+            FROM Gamma AS Y) AS C, Delta;
+        err: NULL
+        num_err: 0
+        returncode: 0

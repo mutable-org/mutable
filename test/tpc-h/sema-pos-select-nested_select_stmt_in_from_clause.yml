@@ -1,0 +1,85 @@
+description: Nested SELECT statement testing
+db: tpc-h
+query: |
+    SELECT o_orderkey, o_clerk, avg_price
+    FROM
+        ORDERS,
+        (SELECT l_orderkey, AVG(l_extendedprice) AS avg_price
+         FROM LINEITEM
+         GROUP BY l_orderkey) AS L,
+        CUSTOMER AS C
+    WHERE
+        o_orderkey = L.l_orderkey AND
+        o_custkey = c_custkey AND
+        c_name = "Marco Polo";
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: o_orderkey TK_IDENTIFIER
+            -:1:18: , TK_COMMA
+            -:1:20: o_clerk TK_IDENTIFIER
+            -:1:27: , TK_COMMA
+            -:1:29: avg_price TK_IDENTIFIER
+            -:2:1: FROM TK_From
+            -:3:5: ORDERS TK_IDENTIFIER
+            -:3:11: , TK_COMMA
+            -:4:5: ( TK_LPAR
+            -:4:6: SELECT TK_Select
+            -:4:13: l_orderkey TK_IDENTIFIER
+            -:4:23: , TK_COMMA
+            -:4:25: AVG TK_IDENTIFIER
+            -:4:28: ( TK_LPAR
+            -:4:29: l_extendedprice TK_IDENTIFIER
+            -:4:44: ) TK_RPAR
+            -:4:46: AS TK_As
+            -:4:49: avg_price TK_IDENTIFIER
+            -:5:6: FROM TK_From
+            -:5:11: LINEITEM TK_IDENTIFIER
+            -:6:6: GROUP TK_Group
+            -:6:12: BY TK_By
+            -:6:15: l_orderkey TK_IDENTIFIER
+            -:6:25: ) TK_RPAR
+            -:6:27: AS TK_As
+            -:6:30: L TK_IDENTIFIER
+            -:6:31: , TK_COMMA
+            -:7:5: CUSTOMER TK_IDENTIFIER
+            -:7:14: AS TK_As
+            -:7:17: C TK_IDENTIFIER
+            -:8:1: WHERE TK_Where
+            -:9:5: o_orderkey TK_IDENTIFIER
+            -:9:16: = TK_EQUAL
+            -:9:18: L TK_IDENTIFIER
+            -:9:19: . TK_DOT
+            -:9:20: l_orderkey TK_IDENTIFIER
+            -:9:31: AND TK_And
+            -:10:5: o_custkey TK_IDENTIFIER
+            -:10:15: = TK_EQUAL
+            -:10:17: c_custkey TK_IDENTIFIER
+            -:10:27: AND TK_And
+            -:11:5: c_name TK_IDENTIFIER
+            -:11:12: = TK_EQUAL
+            -:11:14: "Marco Polo" TK_STRING_LITERAL
+            -:11:26: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT o_orderkey, o_clerk, avg_price
+            FROM ORDERS, (SELECT l_orderkey, AVG(l_extendedprice) AS avg_price
+            FROM LINEITEM
+            GROUP BY l_orderkey) AS L, CUSTOMER AS C
+            WHERE (((o_orderkey = L.l_orderkey) AND (o_custkey = c_custkey)) AND (c_name = "Marco Polo"));
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

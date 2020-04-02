@@ -1,0 +1,35 @@
+description: Alias function testing
+db: tpc-h
+query: |
+    SELECT l_suppkey, l_orderkey AS l_suppkey FROM LINEITEM;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: l_suppkey TK_IDENTIFIER
+            -:1:17: , TK_COMMA
+            -:1:19: l_orderkey TK_IDENTIFIER
+            -:1:30: AS TK_As
+            -:1:33: l_suppkey TK_IDENTIFIER
+            -:1:43: FROM TK_From
+            -:1:48: LINEITEM TK_IDENTIFIER
+            -:1:56: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT l_suppkey, l_orderkey AS l_suppkey
+            FROM LINEITEM;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

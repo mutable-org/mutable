@@ -1,0 +1,39 @@
+description: NOT expression testing
+db: tpc-h
+query: |
+    SELECT * FROM LINEITEM WHERE NOT (l_linenumber = 42);
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: * TK_ASTERISK
+            -:1:10: FROM TK_From
+            -:1:15: LINEITEM TK_IDENTIFIER
+            -:1:24: WHERE TK_Where
+            -:1:30: NOT TK_Not
+            -:1:34: ( TK_LPAR
+            -:1:35: l_linenumber TK_IDENTIFIER
+            -:1:48: = TK_EQUAL
+            -:1:50: 42 TK_DEC_INT
+            -:1:52: ) TK_RPAR
+            -:1:53: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT *
+            FROM LINEITEM
+            WHERE (NOT (l_linenumber = 42));
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

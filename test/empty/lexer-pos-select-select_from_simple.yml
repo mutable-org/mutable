@@ -1,0 +1,17 @@
+description: SELECT FROM table testing
+db: empty
+query: |
+    SELECT * FROM tbl;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: * TK_ASTERISK
+            -:1:10: FROM TK_From
+            -:1:15: tbl TK_IDENTIFIER
+            -:1:18: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0

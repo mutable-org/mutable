@@ -1,0 +1,44 @@
+description: Constraints REFERENCES testing
+db: tpc-h
+query: |
+    CREATE TABLE ref_table (lineitem_orderkey INT(4) REFERENCES LINEITEM(l_orderkey));
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: TABLE TK_Table
+            -:1:14: ref_table TK_IDENTIFIER
+            -:1:24: ( TK_LPAR
+            -:1:25: lineitem_orderkey TK_IDENTIFIER
+            -:1:43: INT TK_Int
+            -:1:46: ( TK_LPAR
+            -:1:47: 4 TK_DEC_INT
+            -:1:48: ) TK_RPAR
+            -:1:50: REFERENCES TK_References
+            -:1:61: LINEITEM TK_IDENTIFIER
+            -:1:69: ( TK_LPAR
+            -:1:70: l_orderkey TK_IDENTIFIER
+            -:1:80: ) TK_RPAR
+            -:1:81: ) TK_RPAR
+            -:1:82: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            CREATE TABLE ref_table
+            (
+                lineitem_orderkey INT(4) REFERENCES LINEITEM(l_orderkey)
+            );
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

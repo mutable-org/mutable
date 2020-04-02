@@ -1,0 +1,64 @@
+description: Subquery doubly nested attribute sanity testing
+db: tpc-h
+query: |
+    SELECT
+        ps_partkey, innermost_ps_suppkey
+    FROM
+        (SELECT ps_partkey, innermost_ps_suppkey AS intermediate_ps_suppkey
+         FROM
+            (SELECT ps_partkey, ps_suppkey AS innermost_ps_suppkey
+             FROM PARTSUPP) AS innermost
+        ) AS intermediate;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:2:5: ps_partkey TK_IDENTIFIER
+            -:2:15: , TK_COMMA
+            -:2:17: innermost_ps_suppkey TK_IDENTIFIER
+            -:3:1: FROM TK_From
+            -:4:5: ( TK_LPAR
+            -:4:6: SELECT TK_Select
+            -:4:13: ps_partkey TK_IDENTIFIER
+            -:4:23: , TK_COMMA
+            -:4:25: innermost_ps_suppkey TK_IDENTIFIER
+            -:4:46: AS TK_As
+            -:4:49: intermediate_ps_suppkey TK_IDENTIFIER
+            -:5:6: FROM TK_From
+            -:6:9: ( TK_LPAR
+            -:6:10: SELECT TK_Select
+            -:6:17: ps_partkey TK_IDENTIFIER
+            -:6:27: , TK_COMMA
+            -:6:29: ps_suppkey TK_IDENTIFIER
+            -:6:40: AS TK_As
+            -:6:43: innermost_ps_suppkey TK_IDENTIFIER
+            -:7:10: FROM TK_From
+            -:7:15: PARTSUPP TK_IDENTIFIER
+            -:7:23: ) TK_RPAR
+            -:7:25: AS TK_As
+            -:7:28: innermost TK_IDENTIFIER
+            -:8:5: ) TK_RPAR
+            -:8:7: AS TK_As
+            -:8:10: intermediate TK_IDENTIFIER
+            -:8:22: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT ps_partkey, innermost_ps_suppkey
+            FROM (SELECT ps_partkey, innermost_ps_suppkey AS intermediate_ps_suppkey
+            FROM (SELECT ps_partkey, ps_suppkey AS innermost_ps_suppkey
+            FROM PARTSUPP) AS innermost) AS intermediate;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

@@ -1,0 +1,31 @@
+description: SELECT table with rename testing
+db: empty
+query: |
+    SELECT * FROM tbl_a AS A, tbl_b AS B;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: * TK_ASTERISK
+            -:1:10: FROM TK_From
+            -:1:15: tbl_a TK_IDENTIFIER
+            -:1:21: AS TK_As
+            -:1:24: A TK_IDENTIFIER
+            -:1:25: , TK_COMMA
+            -:1:27: tbl_b TK_IDENTIFIER
+            -:1:33: AS TK_As
+            -:1:36: B TK_IDENTIFIER
+            -:1:37: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT *
+            FROM tbl_a AS A, tbl_b AS B;
+        err: NULL
+        num_err: 0
+        returncode: 0

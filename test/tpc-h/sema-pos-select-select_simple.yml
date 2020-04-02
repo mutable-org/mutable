@@ -1,0 +1,33 @@
+description: Simple SELECT testing
+db: tpc-h
+query: |
+    SELECT o_orderkey, o_totalprice FROM ORDERS;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: o_orderkey TK_IDENTIFIER
+            -:1:18: , TK_COMMA
+            -:1:20: o_totalprice TK_IDENTIFIER
+            -:1:33: FROM TK_From
+            -:1:38: ORDERS TK_IDENTIFIER
+            -:1:44: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT o_orderkey, o_totalprice
+            FROM ORDERS;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

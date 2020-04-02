@@ -1,0 +1,37 @@
+description: SELECT attribute with scalar and vector values sanity testing
+db: tpc-h
+query: |
+    SELECT l_returnflag, l_linestatus FROM LINEITEM GROUP BY l_returnflag;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: l_returnflag TK_IDENTIFIER
+            -:1:20: , TK_COMMA
+            -:1:22: l_linestatus TK_IDENTIFIER
+            -:1:35: FROM TK_From
+            -:1:40: LINEITEM TK_IDENTIFIER
+            -:1:49: GROUP TK_Group
+            -:1:55: BY TK_By
+            -:1:58: l_returnflag TK_IDENTIFIER
+            -:1:70: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT l_returnflag, l_linestatus
+            FROM LINEITEM
+            GROUP BY l_returnflag;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

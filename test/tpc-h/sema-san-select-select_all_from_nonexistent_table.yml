@@ -1,0 +1,31 @@
+description: SELECT all from nonexistent table sanity testing
+db: tpc-h
+query: |
+    SELECT * FROM nonexistent_table;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: * TK_ASTERISK
+            -:1:10: FROM TK_From
+            -:1:15: nonexistent_table TK_IDENTIFIER
+            -:1:32: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT *
+            FROM nonexistent_table;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

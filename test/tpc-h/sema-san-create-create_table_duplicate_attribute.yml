@@ -1,0 +1,46 @@
+description: CREATE TABLE with duplicate attribute sanity testing
+db: tpc-h
+query: |
+    CREATE TABLE mytable (n INT(4), n INT(4));
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: TABLE TK_Table
+            -:1:14: mytable TK_IDENTIFIER
+            -:1:22: ( TK_LPAR
+            -:1:23: n TK_IDENTIFIER
+            -:1:25: INT TK_Int
+            -:1:28: ( TK_LPAR
+            -:1:29: 4 TK_DEC_INT
+            -:1:30: ) TK_RPAR
+            -:1:31: , TK_COMMA
+            -:1:33: n TK_IDENTIFIER
+            -:1:35: INT TK_Int
+            -:1:38: ( TK_LPAR
+            -:1:39: 4 TK_DEC_INT
+            -:1:40: ) TK_RPAR
+            -:1:41: ) TK_RPAR
+            -:1:42: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            CREATE TABLE mytable
+            (
+                n INT(4),
+                n INT(4)
+            );
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

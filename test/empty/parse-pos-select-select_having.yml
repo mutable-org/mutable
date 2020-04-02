@@ -1,0 +1,38 @@
+description: SELECT with HAVING statement testing
+db: empty
+query: |
+    SELECT AVG(a) FROM tbl HAVING (MIN(a) > 42);
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: AVG TK_IDENTIFIER
+            -:1:11: ( TK_LPAR
+            -:1:12: a TK_IDENTIFIER
+            -:1:13: ) TK_RPAR
+            -:1:15: FROM TK_From
+            -:1:20: tbl TK_IDENTIFIER
+            -:1:24: HAVING TK_Having
+            -:1:31: ( TK_LPAR
+            -:1:32: MIN TK_IDENTIFIER
+            -:1:35: ( TK_LPAR
+            -:1:36: a TK_IDENTIFIER
+            -:1:37: ) TK_RPAR
+            -:1:39: > TK_GREATER
+            -:1:41: 42 TK_DEC_INT
+            -:1:43: ) TK_RPAR
+            -:1:44: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT AVG(a)
+            FROM tbl
+            HAVING (MIN(a) > 42);
+        err: NULL
+        num_err: 0
+        returncode: 0

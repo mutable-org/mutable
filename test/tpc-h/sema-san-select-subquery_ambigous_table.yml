@@ -1,0 +1,50 @@
+description: Subquery ambigous table sanity testing
+db: tpc-h
+query: |
+    SELECT s_suppkey, ps_partkey FROM SUPPLIER, (SELECT ps_partkey, ps_suppkey FROM PARTSUPP) AS SUPPLIER WHERE s_suppkey = ps_suppkey;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: s_suppkey TK_IDENTIFIER
+            -:1:17: , TK_COMMA
+            -:1:19: ps_partkey TK_IDENTIFIER
+            -:1:30: FROM TK_From
+            -:1:35: SUPPLIER TK_IDENTIFIER
+            -:1:43: , TK_COMMA
+            -:1:45: ( TK_LPAR
+            -:1:46: SELECT TK_Select
+            -:1:53: ps_partkey TK_IDENTIFIER
+            -:1:63: , TK_COMMA
+            -:1:65: ps_suppkey TK_IDENTIFIER
+            -:1:76: FROM TK_From
+            -:1:81: PARTSUPP TK_IDENTIFIER
+            -:1:89: ) TK_RPAR
+            -:1:91: AS TK_As
+            -:1:94: SUPPLIER TK_IDENTIFIER
+            -:1:103: WHERE TK_Where
+            -:1:109: s_suppkey TK_IDENTIFIER
+            -:1:119: = TK_EQUAL
+            -:1:121: ps_suppkey TK_IDENTIFIER
+            -:1:131: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT s_suppkey, ps_partkey
+            FROM SUPPLIER, (SELECT ps_partkey, ps_suppkey
+            FROM PARTSUPP) AS SUPPLIER
+            WHERE (s_suppkey = ps_suppkey);
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

@@ -1,0 +1,40 @@
+description: SELECT with WHERE clause testing
+db: tpc-h
+query: |
+    SELECT * FROM LINEITEM WHERE l_tax < 0.05 AND l_discount > 0.20;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: * TK_ASTERISK
+            -:1:10: FROM TK_From
+            -:1:15: LINEITEM TK_IDENTIFIER
+            -:1:24: WHERE TK_Where
+            -:1:30: l_tax TK_IDENTIFIER
+            -:1:36: < TK_LESS
+            -:1:38: 0.05 TK_DEC_FLOAT
+            -:1:43: AND TK_And
+            -:1:47: l_discount TK_IDENTIFIER
+            -:1:58: > TK_GREATER
+            -:1:60: 0.20 TK_DEC_FLOAT
+            -:1:64: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT *
+            FROM LINEITEM
+            WHERE ((l_tax < 0.05) AND (l_discount > 0.20));
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

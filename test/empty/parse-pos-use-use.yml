@@ -1,0 +1,22 @@
+description: USE statement testing
+db: empty
+query: |
+    USE mydb;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: USE TK_Use
+            -:1:5: mydb TK_IDENTIFIER
+            -:1:9: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            USE mydb;
+        err: NULL
+        num_err: 0
+        returncode: 0

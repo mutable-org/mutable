@@ -1,0 +1,30 @@
+description: DELETE statement testing
+db: empty
+query: |
+    DELETE FROM mytable WHERE (x = 42);
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: DELETE TK_Delete
+            -:1:8: FROM TK_From
+            -:1:13: mytable TK_IDENTIFIER
+            -:1:21: WHERE TK_Where
+            -:1:27: ( TK_LPAR
+            -:1:28: x TK_IDENTIFIER
+            -:1:30: = TK_EQUAL
+            -:1:32: 42 TK_DEC_INT
+            -:1:34: ) TK_RPAR
+            -:1:35: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            DELETE FROM mytable
+            WHERE (x = 42);
+        err: NULL
+        num_err: 0
+        returncode: 0

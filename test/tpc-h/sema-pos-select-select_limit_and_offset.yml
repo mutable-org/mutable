@@ -1,0 +1,36 @@
+description: SELECT with LIMIT and OFFSET testing
+db: tpc-h
+query: |
+    SELECT * FROM LINEITEM LIMIT 42 OFFSET 1337;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: * TK_ASTERISK
+            -:1:10: FROM TK_From
+            -:1:15: LINEITEM TK_IDENTIFIER
+            -:1:24: LIMIT TK_Limit
+            -:1:30: 42 TK_DEC_INT
+            -:1:33: OFFSET TK_Offset
+            -:1:40: 1337 TK_DEC_INT
+            -:1:44: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT *
+            FROM LINEITEM
+            LIMIT 42 OFFSET 1337;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

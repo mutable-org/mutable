@@ -1,0 +1,32 @@
+description: SELECT all statement with string and constant testing
+db: empty
+query: |
+    SELECT *, "abc", 42;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: * TK_ASTERISK
+            -:1:9: , TK_COMMA
+            -:1:11: "abc" TK_STRING_LITERAL
+            -:1:16: , TK_COMMA
+            -:1:18: 42 TK_DEC_INT
+            -:1:20: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT *, "abc", 42;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

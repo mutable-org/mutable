@@ -1,0 +1,31 @@
+description: SELECT nonexistent attribute sanity testing
+db: tpc-h
+query: |
+    SELECT nonexistent_attribute FROM LINEITEM;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: nonexistent_attribute TK_IDENTIFIER
+            -:1:30: FROM TK_From
+            -:1:35: LINEITEM TK_IDENTIFIER
+            -:1:43: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT nonexistent_attribute
+            FROM LINEITEM;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

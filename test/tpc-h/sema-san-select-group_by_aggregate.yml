@@ -1,0 +1,38 @@
+description: GROUP BY sanity testing
+db: tpc-h
+query: |
+    SELECT * FROM LINEITEM GROUP BY SUM(l_orderkey);
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: * TK_ASTERISK
+            -:1:10: FROM TK_From
+            -:1:15: LINEITEM TK_IDENTIFIER
+            -:1:24: GROUP TK_Group
+            -:1:30: BY TK_By
+            -:1:33: SUM TK_IDENTIFIER
+            -:1:36: ( TK_LPAR
+            -:1:37: l_orderkey TK_IDENTIFIER
+            -:1:47: ) TK_RPAR
+            -:1:48: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT *
+            FROM LINEITEM
+            GROUP BY SUM(l_orderkey);
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

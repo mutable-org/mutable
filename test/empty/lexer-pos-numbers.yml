@@ -1,0 +1,38 @@
+description: Numbers testing
+db: empty
+query: |
+    0 01234567 1 1234567890 0x0 0X0 0xa 0xA 0x0123456789abcdef 0X0123456789ABCDEF 1.023 0.123 .0123 1. 42e5 42E5 42e+5 42e-5 .123e5 0x0. 0x1.23 0x.123 0x.adf 0x.123p5 0x.123p+5 0x.123p-5
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: 0 TK_OCT_INT
+            -:1:3: 01234567 TK_OCT_INT
+            -:1:12: 1 TK_DEC_INT
+            -:1:14: 1234567890 TK_DEC_INT
+            -:1:25: 0x0 TK_HEX_INT
+            -:1:29: 0X0 TK_HEX_INT
+            -:1:33: 0xa TK_HEX_INT
+            -:1:37: 0xA TK_HEX_INT
+            -:1:41: 0x0123456789abcdef TK_HEX_INT
+            -:1:60: 0X0123456789ABCDEF TK_HEX_INT
+            -:1:79: 1.023 TK_DEC_FLOAT
+            -:1:85: 0.123 TK_DEC_FLOAT
+            -:1:91: .0123 TK_DEC_FLOAT
+            -:1:97: 1. TK_DEC_FLOAT
+            -:1:100: 42e5 TK_DEC_FLOAT
+            -:1:105: 42E5 TK_DEC_FLOAT
+            -:1:110: 42e+5 TK_DEC_FLOAT
+            -:1:116: 42e-5 TK_DEC_FLOAT
+            -:1:122: .123e5 TK_DEC_FLOAT
+            -:1:129: 0x0. TK_HEX_FLOAT
+            -:1:134: 0x1.23 TK_HEX_FLOAT
+            -:1:141: 0x.123 TK_HEX_FLOAT
+            -:1:148: 0x.adf TK_HEX_FLOAT
+            -:1:155: 0x.123p5 TK_HEX_FLOAT
+            -:1:164: 0x.123p+5 TK_HEX_FLOAT
+            -:1:174: 0x.123p-5 TK_HEX_FLOAT
+        err: NULL
+        num_err: 0
+        returncode: 0

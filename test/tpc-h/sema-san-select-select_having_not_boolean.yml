@@ -1,0 +1,37 @@
+description: SELECT with HAVING no boolean condition sanity testing
+db: tpc-h
+query: |
+    SELECT 1 FROM LINEITEM HAVING AVG(l_linenumber);
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: 1 TK_DEC_INT
+            -:1:10: FROM TK_From
+            -:1:15: LINEITEM TK_IDENTIFIER
+            -:1:24: HAVING TK_Having
+            -:1:31: AVG TK_IDENTIFIER
+            -:1:34: ( TK_LPAR
+            -:1:35: l_linenumber TK_IDENTIFIER
+            -:1:47: ) TK_RPAR
+            -:1:48: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT 1
+            FROM LINEITEM
+            HAVING AVG(l_linenumber);
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

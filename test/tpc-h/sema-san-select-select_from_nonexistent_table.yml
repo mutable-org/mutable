@@ -1,0 +1,33 @@
+description: SELECT from nonexistent table sanity testing
+db: tpc-h
+query: |
+    SELECT nonexistent_table.l_orderkey FROM LINEITEM;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: nonexistent_table TK_IDENTIFIER
+            -:1:25: . TK_DOT
+            -:1:26: l_orderkey TK_IDENTIFIER
+            -:1:37: FROM TK_From
+            -:1:42: LINEITEM TK_IDENTIFIER
+            -:1:50: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT nonexistent_table.l_orderkey
+            FROM LINEITEM;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

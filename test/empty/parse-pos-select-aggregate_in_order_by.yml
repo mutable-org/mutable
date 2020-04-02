@@ -1,0 +1,39 @@
+description: Aggregate functions with ORDER BY testing
+db: empty
+query: |
+    SELECT * FROM mytable ORDER BY MAX(x) DESC, AVG(y) ASC;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: * TK_ASTERISK
+            -:1:10: FROM TK_From
+            -:1:15: mytable TK_IDENTIFIER
+            -:1:23: ORDER TK_Order
+            -:1:29: BY TK_By
+            -:1:32: MAX TK_IDENTIFIER
+            -:1:35: ( TK_LPAR
+            -:1:36: x TK_IDENTIFIER
+            -:1:37: ) TK_RPAR
+            -:1:39: DESC TK_Descending
+            -:1:43: , TK_COMMA
+            -:1:45: AVG TK_IDENTIFIER
+            -:1:48: ( TK_LPAR
+            -:1:49: y TK_IDENTIFIER
+            -:1:50: ) TK_RPAR
+            -:1:52: ASC TK_Ascending
+            -:1:55: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT *
+            FROM mytable
+            ORDER BY MAX(x) DESC, AVG(y) ASC;
+        err: NULL
+        num_err: 0
+        returncode: 0

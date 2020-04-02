@@ -1,0 +1,45 @@
+description: GROUP BY and ORDER BY testing
+db: tpc-h
+query: |
+    SELECT l_orderkey + l_partkey FROM LINEITEM GROUP BY l_orderkey, l_partkey ORDER BY LINEITEM.l_orderkey;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: l_orderkey TK_IDENTIFIER
+            -:1:19: + TK_PLUS
+            -:1:21: l_partkey TK_IDENTIFIER
+            -:1:31: FROM TK_From
+            -:1:36: LINEITEM TK_IDENTIFIER
+            -:1:45: GROUP TK_Group
+            -:1:51: BY TK_By
+            -:1:54: l_orderkey TK_IDENTIFIER
+            -:1:64: , TK_COMMA
+            -:1:66: l_partkey TK_IDENTIFIER
+            -:1:76: ORDER TK_Order
+            -:1:82: BY TK_By
+            -:1:85: LINEITEM TK_IDENTIFIER
+            -:1:93: . TK_DOT
+            -:1:94: l_orderkey TK_IDENTIFIER
+            -:1:104: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT (l_orderkey + l_partkey)
+            FROM LINEITEM
+            GROUP BY l_orderkey, l_partkey
+            ORDER BY LINEITEM.l_orderkey ASC;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

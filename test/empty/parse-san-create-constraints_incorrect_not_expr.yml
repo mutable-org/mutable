@@ -1,0 +1,36 @@
+description: Constraints sanity testing
+db: empty
+query: |
+    CREATE TABLE test (a INT(4) NOT, b INT(4));
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: TABLE TK_Table
+            -:1:14: test TK_IDENTIFIER
+            -:1:19: ( TK_LPAR
+            -:1:20: a TK_IDENTIFIER
+            -:1:22: INT TK_Int
+            -:1:25: ( TK_LPAR
+            -:1:26: 4 TK_DEC_INT
+            -:1:27: ) TK_RPAR
+            -:1:29: NOT TK_Not
+            -:1:32: , TK_COMMA
+            -:1:34: b TK_IDENTIFIER
+            -:1:36: INT TK_Int
+            -:1:39: ( TK_LPAR
+            -:1:40: 4 TK_DEC_INT
+            -:1:41: ) TK_RPAR
+            -:1:42: ) TK_RPAR
+            -:1:43: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

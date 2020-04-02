@@ -1,0 +1,35 @@
+description: SELECT statement with constant testing
+db: empty
+query: |
+    SELECT 42;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: 42 TK_DEC_INT
+            -:1:10: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT 42;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            42
+        err: NULL
+        num_err: 0
+        returncode: 0

@@ -1,0 +1,19 @@
+description: USE statemet imcomplete sanity testing
+db: empty
+query: |
+    USE
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: USE TK_Use
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

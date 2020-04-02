@@ -1,0 +1,60 @@
+description: CHECK function testing
+db: empty
+query: |
+    CREATE TABLE correct_type_check_table (a INT(4) CHECK (a > 42), b INT(4) CHECK (b > 2 * a));
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: TABLE TK_Table
+            -:1:14: correct_type_check_table TK_IDENTIFIER
+            -:1:39: ( TK_LPAR
+            -:1:40: a TK_IDENTIFIER
+            -:1:42: INT TK_Int
+            -:1:45: ( TK_LPAR
+            -:1:46: 4 TK_DEC_INT
+            -:1:47: ) TK_RPAR
+            -:1:49: CHECK TK_Check
+            -:1:55: ( TK_LPAR
+            -:1:56: a TK_IDENTIFIER
+            -:1:58: > TK_GREATER
+            -:1:60: 42 TK_DEC_INT
+            -:1:62: ) TK_RPAR
+            -:1:63: , TK_COMMA
+            -:1:65: b TK_IDENTIFIER
+            -:1:67: INT TK_Int
+            -:1:70: ( TK_LPAR
+            -:1:71: 4 TK_DEC_INT
+            -:1:72: ) TK_RPAR
+            -:1:74: CHECK TK_Check
+            -:1:80: ( TK_LPAR
+            -:1:81: b TK_IDENTIFIER
+            -:1:83: > TK_GREATER
+            -:1:85: 2 TK_DEC_INT
+            -:1:87: * TK_ASTERISK
+            -:1:89: a TK_IDENTIFIER
+            -:1:90: ) TK_RPAR
+            -:1:91: ) TK_RPAR
+            -:1:92: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            CREATE TABLE correct_type_check_table
+            (
+                a INT(4) CHECK ((a > 42)),
+                b INT(4) CHECK ((b > (2 * a)))
+            );
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

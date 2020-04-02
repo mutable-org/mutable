@@ -1,0 +1,49 @@
+description: Aggregate function MIN, MAX, AVG and SUM testing
+db: tpc-h
+query: |
+    SELECT MIN(l_linenumber), MAX(l_linenumber), AVG(l_linenumber), SUM(l_linenumber) FROM LINEITEM;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: MIN TK_IDENTIFIER
+            -:1:11: ( TK_LPAR
+            -:1:12: l_linenumber TK_IDENTIFIER
+            -:1:24: ) TK_RPAR
+            -:1:25: , TK_COMMA
+            -:1:27: MAX TK_IDENTIFIER
+            -:1:30: ( TK_LPAR
+            -:1:31: l_linenumber TK_IDENTIFIER
+            -:1:43: ) TK_RPAR
+            -:1:44: , TK_COMMA
+            -:1:46: AVG TK_IDENTIFIER
+            -:1:49: ( TK_LPAR
+            -:1:50: l_linenumber TK_IDENTIFIER
+            -:1:62: ) TK_RPAR
+            -:1:63: , TK_COMMA
+            -:1:65: SUM TK_IDENTIFIER
+            -:1:68: ( TK_LPAR
+            -:1:69: l_linenumber TK_IDENTIFIER
+            -:1:81: ) TK_RPAR
+            -:1:83: FROM TK_From
+            -:1:88: LINEITEM TK_IDENTIFIER
+            -:1:96: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT MIN(l_linenumber), MAX(l_linenumber), AVG(l_linenumber), SUM(l_linenumber)
+            FROM LINEITEM;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

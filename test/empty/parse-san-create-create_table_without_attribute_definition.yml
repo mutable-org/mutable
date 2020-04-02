@@ -1,0 +1,25 @@
+description: CREATE TABLE without attribute definition sanity testing
+db: empty
+query: |
+    CREATE TABLE x ( a );
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: TABLE TK_Table
+            -:1:14: x TK_IDENTIFIER
+            -:1:16: ( TK_LPAR
+            -:1:18: a TK_IDENTIFIER
+            -:1:20: ) TK_RPAR
+            -:1:21: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

@@ -1,0 +1,13 @@
+description: Escape for string literal testing
+db: empty
+query: |
+    "\"\""
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: "\"\"" TK_STRING_LITERAL
+        err: NULL
+        num_err: 0
+        returncode: 0

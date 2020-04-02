@@ -1,0 +1,57 @@
+description: UPDATE statement testing
+db: empty
+query: |
+    UPDATE mytable
+    SET
+        x = 42,
+        y = 3.14,
+        vc = "Hello, World",
+        b = TRUE
+    WHERE
+        (z < 1337);
+required: NO
+
+stages:
+    lexer:
+        out: |
+            -:1:1: UPDATE TK_Update
+            -:1:8: mytable TK_IDENTIFIER
+            -:2:1: SET TK_Set
+            -:3:5: x TK_IDENTIFIER
+            -:3:7: = TK_EQUAL
+            -:3:9: 42 TK_DEC_INT
+            -:3:11: , TK_COMMA
+            -:4:5: y TK_IDENTIFIER
+            -:4:7: = TK_EQUAL
+            -:4:9: 3.14 TK_DEC_FLOAT
+            -:4:13: , TK_COMMA
+            -:5:5: vc TK_IDENTIFIER
+            -:5:8: = TK_EQUAL
+            -:5:10: "Hello, World" TK_STRING_LITERAL
+            -:5:24: , TK_COMMA
+            -:6:5: b TK_IDENTIFIER
+            -:6:7: = TK_EQUAL
+            -:6:9: TRUE TK_True
+            -:7:1: WHERE TK_Where
+            -:8:5: ( TK_LPAR
+            -:8:6: z TK_IDENTIFIER
+            -:8:8: < TK_LESS
+            -:8:10: 1337 TK_DEC_INT
+            -:8:14: ) TK_RPAR
+            -:8:15: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            UPDATE mytable
+            SET
+                x = 42,
+                y = 3.14,
+                vc = "Hello, World",
+                b = TRUE
+            WHERE (z < 1337);
+        err: NULL
+        num_err: 0
+        returncode: 0

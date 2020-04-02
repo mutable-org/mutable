@@ -1,0 +1,45 @@
+description: CHECK keyword with attribute incorrect statement sanity testing
+db: tpc-h
+query: |
+    CREATE TABLE incorrect_type_check_table (a INT(4) CHECK (a + 42));
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: TABLE TK_Table
+            -:1:14: incorrect_type_check_table TK_IDENTIFIER
+            -:1:41: ( TK_LPAR
+            -:1:42: a TK_IDENTIFIER
+            -:1:44: INT TK_Int
+            -:1:47: ( TK_LPAR
+            -:1:48: 4 TK_DEC_INT
+            -:1:49: ) TK_RPAR
+            -:1:51: CHECK TK_Check
+            -:1:57: ( TK_LPAR
+            -:1:58: a TK_IDENTIFIER
+            -:1:60: + TK_PLUS
+            -:1:62: 42 TK_DEC_INT
+            -:1:64: ) TK_RPAR
+            -:1:65: ) TK_RPAR
+            -:1:66: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            CREATE TABLE incorrect_type_check_table
+            (
+                a INT(4) CHECK ((a + 42))
+            );
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

@@ -1,0 +1,95 @@
+description: CREATE TABLE testing
+db: empty
+query: |
+    CREATE TABLE all_types (a INT(1), b INT(2), c INT(4), d INT(8), e FLOAT, f DOUBLE, g DECIMAL(10,2), h BOOL, i CHAR(42), j VARCHAR(42));
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: TABLE TK_Table
+            -:1:14: all_types TK_IDENTIFIER
+            -:1:24: ( TK_LPAR
+            -:1:25: a TK_IDENTIFIER
+            -:1:27: INT TK_Int
+            -:1:30: ( TK_LPAR
+            -:1:31: 1 TK_DEC_INT
+            -:1:32: ) TK_RPAR
+            -:1:33: , TK_COMMA
+            -:1:35: b TK_IDENTIFIER
+            -:1:37: INT TK_Int
+            -:1:40: ( TK_LPAR
+            -:1:41: 2 TK_DEC_INT
+            -:1:42: ) TK_RPAR
+            -:1:43: , TK_COMMA
+            -:1:45: c TK_IDENTIFIER
+            -:1:47: INT TK_Int
+            -:1:50: ( TK_LPAR
+            -:1:51: 4 TK_DEC_INT
+            -:1:52: ) TK_RPAR
+            -:1:53: , TK_COMMA
+            -:1:55: d TK_IDENTIFIER
+            -:1:57: INT TK_Int
+            -:1:60: ( TK_LPAR
+            -:1:61: 8 TK_DEC_INT
+            -:1:62: ) TK_RPAR
+            -:1:63: , TK_COMMA
+            -:1:65: e TK_IDENTIFIER
+            -:1:67: FLOAT TK_Float
+            -:1:72: , TK_COMMA
+            -:1:74: f TK_IDENTIFIER
+            -:1:76: DOUBLE TK_Double
+            -:1:82: , TK_COMMA
+            -:1:84: g TK_IDENTIFIER
+            -:1:86: DECIMAL TK_Decimal
+            -:1:93: ( TK_LPAR
+            -:1:94: 10 TK_DEC_INT
+            -:1:96: , TK_COMMA
+            -:1:97: 2 TK_DEC_INT
+            -:1:98: ) TK_RPAR
+            -:1:99: , TK_COMMA
+            -:1:101: h TK_IDENTIFIER
+            -:1:103: BOOL TK_Bool
+            -:1:107: , TK_COMMA
+            -:1:109: i TK_IDENTIFIER
+            -:1:111: CHAR TK_Char
+            -:1:115: ( TK_LPAR
+            -:1:116: 42 TK_DEC_INT
+            -:1:118: ) TK_RPAR
+            -:1:119: , TK_COMMA
+            -:1:121: j TK_IDENTIFIER
+            -:1:123: VARCHAR TK_Varchar
+            -:1:130: ( TK_LPAR
+            -:1:131: 42 TK_DEC_INT
+            -:1:133: ) TK_RPAR
+            -:1:134: ) TK_RPAR
+            -:1:135: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            CREATE TABLE all_types
+            (
+                a INT(1),
+                b INT(2),
+                c INT(4),
+                d INT(8),
+                e FLOAT,
+                f DOUBLE,
+                g DECIMAL(10, 2),
+                h BOOL,
+                i CHAR(42),
+                j VARCHAR(42)
+            );
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

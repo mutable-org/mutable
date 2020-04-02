@@ -1,0 +1,66 @@
+description: SELECT attribute ambiguous sanity testing
+db: tpc-h
+query: |
+    SELECT T.key FROM (SELECT L.l_orderkey AS key, O.o_orderkey AS key FROM LINEITEM AS L, ORDERS AS O WHERE L.l_orderkey = O.o_orderkey ) AS T;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: T TK_IDENTIFIER
+            -:1:9: . TK_DOT
+            -:1:10: key TK_IDENTIFIER
+            -:1:14: FROM TK_From
+            -:1:19: ( TK_LPAR
+            -:1:20: SELECT TK_Select
+            -:1:27: L TK_IDENTIFIER
+            -:1:28: . TK_DOT
+            -:1:29: l_orderkey TK_IDENTIFIER
+            -:1:40: AS TK_As
+            -:1:43: key TK_IDENTIFIER
+            -:1:46: , TK_COMMA
+            -:1:48: O TK_IDENTIFIER
+            -:1:49: . TK_DOT
+            -:1:50: o_orderkey TK_IDENTIFIER
+            -:1:61: AS TK_As
+            -:1:64: key TK_IDENTIFIER
+            -:1:68: FROM TK_From
+            -:1:73: LINEITEM TK_IDENTIFIER
+            -:1:82: AS TK_As
+            -:1:85: L TK_IDENTIFIER
+            -:1:86: , TK_COMMA
+            -:1:88: ORDERS TK_IDENTIFIER
+            -:1:95: AS TK_As
+            -:1:98: O TK_IDENTIFIER
+            -:1:100: WHERE TK_Where
+            -:1:106: L TK_IDENTIFIER
+            -:1:107: . TK_DOT
+            -:1:108: l_orderkey TK_IDENTIFIER
+            -:1:119: = TK_EQUAL
+            -:1:121: O TK_IDENTIFIER
+            -:1:122: . TK_DOT
+            -:1:123: o_orderkey TK_IDENTIFIER
+            -:1:134: ) TK_RPAR
+            -:1:136: AS TK_As
+            -:1:139: T TK_IDENTIFIER
+            -:1:140: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT T.key
+            FROM (SELECT L.l_orderkey AS key, O.o_orderkey AS key
+            FROM LINEITEM AS L, ORDERS AS O
+            WHERE (L.l_orderkey = O.o_orderkey)) AS T;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

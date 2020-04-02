@@ -1,0 +1,45 @@
+description: Constraints CHECK testing
+db: empty
+query: |
+    CREATE TABLE check_table (check_attr INT(4) CHECK (13 < 42));
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:8: TABLE TK_Table
+            -:1:14: check_table TK_IDENTIFIER
+            -:1:26: ( TK_LPAR
+            -:1:27: check_attr TK_IDENTIFIER
+            -:1:38: INT TK_Int
+            -:1:41: ( TK_LPAR
+            -:1:42: 4 TK_DEC_INT
+            -:1:43: ) TK_RPAR
+            -:1:45: CHECK TK_Check
+            -:1:51: ( TK_LPAR
+            -:1:52: 13 TK_DEC_INT
+            -:1:55: < TK_LESS
+            -:1:57: 42 TK_DEC_INT
+            -:1:59: ) TK_RPAR
+            -:1:60: ) TK_RPAR
+            -:1:61: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            CREATE TABLE check_table
+            (
+                check_attr INT(4) CHECK ((13 < 42))
+            );
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

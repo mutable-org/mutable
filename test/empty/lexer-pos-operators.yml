@@ -1,0 +1,29 @@
+description: Operators testing
+db: empty
+query: |
+    ( ) ~ + - * / % = != < > <= >= , . ;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: ( TK_LPAR
+            -:1:3: ) TK_RPAR
+            -:1:5: ~ TK_TILDE
+            -:1:7: + TK_PLUS
+            -:1:9: - TK_MINUS
+            -:1:11: * TK_ASTERISK
+            -:1:13: / TK_SLASH
+            -:1:15: % TK_PERCENT
+            -:1:17: = TK_EQUAL
+            -:1:19: != TK_BANG_EQUAL
+            -:1:22: < TK_LESS
+            -:1:24: > TK_GREATER
+            -:1:26: <= TK_LESS_EQUAL
+            -:1:29: >= TK_GREATER_EQUAL
+            -:1:32: , TK_COMMA
+            -:1:34: . TK_DOT
+            -:1:36: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0

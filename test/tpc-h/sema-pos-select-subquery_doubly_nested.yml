@@ -1,0 +1,62 @@
+description: SELECT subquery testing
+db: tpc-h
+query: |
+    SELECT ps_partkey, intermediate_ps_suppkey
+    FROM
+    (SELECT ps_partkey, innermost_ps_suppkey AS intermediate_ps_suppkey
+    FROM
+    (SELECT ps_partkey, ps_suppkey AS innermost_ps_suppkey
+    FROM PARTSUPP) AS innermost) AS intermediate;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: ps_partkey TK_IDENTIFIER
+            -:1:18: , TK_COMMA
+            -:1:20: intermediate_ps_suppkey TK_IDENTIFIER
+            -:2:1: FROM TK_From
+            -:3:1: ( TK_LPAR
+            -:3:2: SELECT TK_Select
+            -:3:9: ps_partkey TK_IDENTIFIER
+            -:3:19: , TK_COMMA
+            -:3:21: innermost_ps_suppkey TK_IDENTIFIER
+            -:3:42: AS TK_As
+            -:3:45: intermediate_ps_suppkey TK_IDENTIFIER
+            -:4:1: FROM TK_From
+            -:5:1: ( TK_LPAR
+            -:5:2: SELECT TK_Select
+            -:5:9: ps_partkey TK_IDENTIFIER
+            -:5:19: , TK_COMMA
+            -:5:21: ps_suppkey TK_IDENTIFIER
+            -:5:32: AS TK_As
+            -:5:35: innermost_ps_suppkey TK_IDENTIFIER
+            -:6:1: FROM TK_From
+            -:6:6: PARTSUPP TK_IDENTIFIER
+            -:6:14: ) TK_RPAR
+            -:6:16: AS TK_As
+            -:6:19: innermost TK_IDENTIFIER
+            -:6:28: ) TK_RPAR
+            -:6:30: AS TK_As
+            -:6:33: intermediate TK_IDENTIFIER
+            -:6:45: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT ps_partkey, intermediate_ps_suppkey
+            FROM (SELECT ps_partkey, innermost_ps_suppkey AS intermediate_ps_suppkey
+            FROM (SELECT ps_partkey, ps_suppkey AS innermost_ps_suppkey
+            FROM PARTSUPP) AS innermost) AS intermediate;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

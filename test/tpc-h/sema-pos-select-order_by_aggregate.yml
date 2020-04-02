@@ -1,0 +1,47 @@
+description: ORDER BY with agggregate function testing
+db: tpc-h
+query: |
+    SELECT l_returnflag, AVG(l_linenumber) FROM LINEITEM GROUP BY l_returnflag ORDER BY MAX(l_quantity);
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: l_returnflag TK_IDENTIFIER
+            -:1:20: , TK_COMMA
+            -:1:22: AVG TK_IDENTIFIER
+            -:1:25: ( TK_LPAR
+            -:1:26: l_linenumber TK_IDENTIFIER
+            -:1:38: ) TK_RPAR
+            -:1:40: FROM TK_From
+            -:1:45: LINEITEM TK_IDENTIFIER
+            -:1:54: GROUP TK_Group
+            -:1:60: BY TK_By
+            -:1:63: l_returnflag TK_IDENTIFIER
+            -:1:76: ORDER TK_Order
+            -:1:82: BY TK_By
+            -:1:85: MAX TK_IDENTIFIER
+            -:1:88: ( TK_LPAR
+            -:1:89: l_quantity TK_IDENTIFIER
+            -:1:99: ) TK_RPAR
+            -:1:100: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT l_returnflag, AVG(l_linenumber)
+            FROM LINEITEM
+            GROUP BY l_returnflag
+            ORDER BY MAX(l_quantity) ASC;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

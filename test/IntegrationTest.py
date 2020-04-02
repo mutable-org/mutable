@@ -29,6 +29,14 @@ def schema_valid(test_case) -> bool:
     return True
 
 
+def location_valid(test_case) -> bool:
+    subdir = os.path.basename(os.path.dirname(test_case.filename))
+    if subdir != test_case.db:
+        report_warning('File is placed in incorrect directory', 'location_check', test_case)
+        return False
+    return True
+
+
 class TestException(Exception):
     def __init__(self, str):
         Exception(str)
@@ -209,14 +217,14 @@ def parser_command(test_case):
 
 def sema_command(test_case):
     binary = BINARIES['check']
-    setup = SETUPS[test_case.db]
+    setup = os.path.join(os.path.dirname(test_case.filename), 'data', 'schema.sql')
     command = [binary, '--quiet', setup, '-']
     return command
 
 
 def end2end_command(test_case):
     binary = BINARIES['shell']
-    setup = SETUPS[test_case.db]
+    setup = os.path.join(os.path.dirname(test_case.filename), 'data', 'schema.sql')
     command = [binary, '--quiet', '--noprompt', setup, '-']
     return command
 
@@ -234,11 +242,6 @@ BINARIES = {
     'parse': os.path.join(BINARIES_DIR, 'parse'),
     'check': os.path.join(BINARIES_DIR, 'check'),
     'shell': os.path.join(BINARIES_DIR, 'shell'),
-}
-
-SETUPS = {
-    'ours':     os.path.join('test', 'ours.sql'),
-    'tpc_h':    os.path.join('test', 'tpc_h.sql'),
 }
 
 
@@ -265,7 +268,7 @@ if __name__ == '__main__':
     bad_files_counter = 0
 
     # Glob test files
-    TEST_GLOB = os.path.join('test', '[!_]*.yml')
+    TEST_GLOB = os.path.join('test', '**', '[!_]*.yml')
     test_files = sorted(glob.glob(TEST_GLOB, recursive=True))
 
     # Create dummy test case class
@@ -299,6 +302,11 @@ if __name__ == '__main__':
         test_case.query = yml_test_case['query']
         test_case.required = yml_test_case['required']
         test_case.stages = yml_test_case['stages']
+
+        # Validate dataset location
+        if not location_valid(test_case):
+            bad_files_counter += 1
+            continue
 
         # Execute test stages
         success = True

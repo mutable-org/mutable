@@ -1,0 +1,35 @@
+description: SELECT with rename table sanity testing
+db: tpc-h
+query: |
+    SELECT LINEITEM.l_orderkey FROM LINEITEM AS l;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: LINEITEM TK_IDENTIFIER
+            -:1:16: . TK_DOT
+            -:1:17: l_orderkey TK_IDENTIFIER
+            -:1:28: FROM TK_From
+            -:1:33: LINEITEM TK_IDENTIFIER
+            -:1:42: AS TK_As
+            -:1:45: l TK_IDENTIFIER
+            -:1:46: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT LINEITEM.l_orderkey
+            FROM LINEITEM AS l;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

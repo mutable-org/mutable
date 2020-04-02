@@ -1,0 +1,27 @@
+description: SELECT qualified attribute testing
+db: empty
+query: |
+    SELECT tbl.x FROM tbl;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: tbl TK_IDENTIFIER
+            -:1:11: . TK_DOT
+            -:1:12: x TK_IDENTIFIER
+            -:1:14: FROM TK_From
+            -:1:19: tbl TK_IDENTIFIER
+            -:1:22: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT tbl.x
+            FROM tbl;
+        err: NULL
+        num_err: 0
+        returncode: 0

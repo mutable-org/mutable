@@ -1,0 +1,79 @@
+description: INSERT INTO testing
+db: tpc-h
+query: |
+    INSERT INTO NATION
+    VALUES
+    (0, "Germany", 42, "Einigkeit und Recht und Freiheit"),
+    (1, "United States", 1, "United States of America"),
+    (2, NULL, NULL, NULL),
+    (DEFAULT, "Iceland", 3, NULL);
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: INSERT TK_Insert
+            -:1:8: INTO TK_Into
+            -:1:13: NATION TK_IDENTIFIER
+            -:2:1: VALUES TK_Values
+            -:3:1: ( TK_LPAR
+            -:3:2: 0 TK_OCT_INT
+            -:3:3: , TK_COMMA
+            -:3:5: "Germany" TK_STRING_LITERAL
+            -:3:14: , TK_COMMA
+            -:3:16: 42 TK_DEC_INT
+            -:3:18: , TK_COMMA
+            -:3:20: "Einigkeit und Recht und Freiheit" TK_STRING_LITERAL
+            -:3:54: ) TK_RPAR
+            -:3:55: , TK_COMMA
+            -:4:1: ( TK_LPAR
+            -:4:2: 1 TK_DEC_INT
+            -:4:3: , TK_COMMA
+            -:4:5: "United States" TK_STRING_LITERAL
+            -:4:20: , TK_COMMA
+            -:4:22: 1 TK_DEC_INT
+            -:4:23: , TK_COMMA
+            -:4:25: "United States of America" TK_STRING_LITERAL
+            -:4:51: ) TK_RPAR
+            -:4:52: , TK_COMMA
+            -:5:1: ( TK_LPAR
+            -:5:2: 2 TK_DEC_INT
+            -:5:3: , TK_COMMA
+            -:5:5: NULL TK_Null
+            -:5:9: , TK_COMMA
+            -:5:11: NULL TK_Null
+            -:5:15: , TK_COMMA
+            -:5:17: NULL TK_Null
+            -:5:21: ) TK_RPAR
+            -:5:22: , TK_COMMA
+            -:6:1: ( TK_LPAR
+            -:6:2: DEFAULT TK_Default
+            -:6:9: , TK_COMMA
+            -:6:11: "Iceland" TK_STRING_LITERAL
+            -:6:20: , TK_COMMA
+            -:6:22: 3 TK_DEC_INT
+            -:6:23: , TK_COMMA
+            -:6:25: NULL TK_Null
+            -:6:29: ) TK_RPAR
+            -:6:30: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            INSERT INTO NATION
+            VALUES
+                (0, "Germany", 42, "Einigkeit und Recht und Freiheit"),
+                (1, "United States", 1, "United States of America"),
+                (2, NULL, NULL, NULL),
+                (DEFAULT, "Iceland", 3, NULL);
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

@@ -1,0 +1,38 @@
+description: Alias override testing
+db: tpc-h
+query: |
+    SELECT l_suppkey AS l_orderkey FROM LINEITEM WHERE l_orderkey > 42;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: l_suppkey TK_IDENTIFIER
+            -:1:18: AS TK_As
+            -:1:21: l_orderkey TK_IDENTIFIER
+            -:1:32: FROM TK_From
+            -:1:37: LINEITEM TK_IDENTIFIER
+            -:1:46: WHERE TK_Where
+            -:1:52: l_orderkey TK_IDENTIFIER
+            -:1:63: > TK_GREATER
+            -:1:65: 42 TK_DEC_INT
+            -:1:67: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT l_suppkey AS l_orderkey
+            FROM LINEITEM
+            WHERE (l_orderkey > 42);
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

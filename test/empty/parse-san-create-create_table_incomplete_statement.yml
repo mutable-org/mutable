@@ -1,0 +1,20 @@
+description: CREATE TABLE incomplete statement sanity testing
+db: empty
+query: |
+    CREATE;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: CREATE TK_Create
+            -:1:7: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

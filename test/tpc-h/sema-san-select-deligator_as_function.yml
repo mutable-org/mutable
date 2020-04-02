@@ -1,0 +1,36 @@
+description: Deligator as function sanity testing
+db: tpc-h
+query: |
+    SELECT nota.fn(n) FROM LINEITEM;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: nota TK_IDENTIFIER
+            -:1:12: . TK_DOT
+            -:1:13: fn TK_IDENTIFIER
+            -:1:15: ( TK_LPAR
+            -:1:16: n TK_IDENTIFIER
+            -:1:17: ) TK_RPAR
+            -:1:19: FROM TK_From
+            -:1:24: LINEITEM TK_IDENTIFIER
+            -:1:32: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT nota.fn(n)
+            FROM LINEITEM;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 1

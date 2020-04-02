@@ -1,0 +1,35 @@
+description: SELECT qualified attribute from table rename testing
+db: tpc-h
+query: |
+    SELECT l.l_orderkey FROM LINEITEM AS l;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: l TK_IDENTIFIER
+            -:1:9: . TK_DOT
+            -:1:10: l_orderkey TK_IDENTIFIER
+            -:1:21: FROM TK_From
+            -:1:26: LINEITEM TK_IDENTIFIER
+            -:1:35: AS TK_As
+            -:1:38: l TK_IDENTIFIER
+            -:1:39: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT l.l_orderkey
+            FROM LINEITEM AS l;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

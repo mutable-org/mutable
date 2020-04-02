@@ -71,6 +71,11 @@ nav.sidebar .nav .nav a.nav-link
     padding-bottom: .2rem;
 }
 
+main
+{
+    margin-bottom: 100px;
+}
+
 main h1
 {
     color: #333;

@@ -27,9 +27,9 @@ YML_SCHEMA      = os.path.join('benchmark', '_schema.yml')
 class BenchmarkError(Exception):
     pass
 
-#-----------------------------------------------------------------------------------------------------------------------
+########################################################################################################################
 # Helper functions
-#-----------------------------------------------------------------------------------------------------------------------
+########################################################################################################################
 
 in_red   = lambda x: f'{Fore.RED}{x}{Style.RESET_ALL}'
 in_green = lambda x: f'{Fore.GREEN}{x}{Style.RESET_ALL}'
@@ -88,6 +88,9 @@ $ echo -e "{query_str}" | {' '.join(cmd)}
                     continue
     return durations
 
+#=======================================================================================================================
+# Perform the benchmarks specified in a YAML file
+#=======================================================================================================================
 def perform_benchmark(path_to_benchmark):
     # Get benchmark schema
     schema = os.path.join(os.path.dirname(path_to_benchmark), 'data', 'schema.sql')
@@ -150,81 +153,16 @@ def perform_benchmark(path_to_benchmark):
     return suite, benchmark, name, measurements, yml
 
 
-#-----------------------------------------------------------------------------------------------------------------------
-# main
-#-----------------------------------------------------------------------------------------------------------------------
-
-if __name__ == '__main__':
-    # Parse args
-    parser = argparse.ArgumentParser(description='''Run benchmarks on mutable.
-                                                    The build directory is assumed to be ./build/release .''')
-    parser.add_argument('suite', nargs='*', help='a benchmark suite to be run')
-    parser.add_argument('--args', help='provide additional arguments to pass through to the binary', dest='binargs',
-                                  metavar='ARGS', default=None, action='store')
-    parser.add_argument('-v', '--verbose', help='verbose output', dest='verbose', default=False, action='store_true')
-    args = parser.parse_args()
-
-    # Check whether we are interactive
-    is_interactive = True if 'TERM' in os.environ else False
-
-    # Get benchmark files
-    if not args.suite:
-        benchmark_files = sorted(glob.glob(os.path.join('benchmark', '**', '[!_]*.yml'), recursive=True))
-    else:
-        benchmark_files = []
-        for suite in sorted(set(args.suite)):
-            benchmark_files.extend(sorted(glob.glob(os.path.join('benchmark', suite, '**', '[!_]*.yml'), recursive=True)))
-
-    # Set up counters
-    num_benchmarks_total = len(benchmark_files)
-    num_benchmarks_passed = 0
-
-    # Set up event log
-    log = tqdm(total=0, position=1, ncols=80, leave=False, bar_format='{desc}', disable=not is_interactive)
-
-    # Get date
-    date = datetime.date.today().isoformat()
-
-    # Write measurements to CSV file
-    with open('benchmark.csv', 'w') as csv:
-        csv.write('commit,date,suite,benchmark,name,case,time\n')
-
-    benchmark_results = dict()
-
-    repo = Repo('.')
-    commit = repo.head.commit
+#=======================================================================================================================
+# Generate static HTML report
+#=======================================================================================================================
+def generate_html(commit, benchmark_results):
     prev_commit_sha = os.environ.get('PREV_COMMIT_SHA', None)
-
-    for path_to_benchmark in tqdm(benchmark_files, position=0, ncols=80, leave=False,
-                                  bar_format='|{bar}| {n}/{total}', disable=not is_interactive):
-        # Log current file
-        log.set_description_str(f'Running benchmark "{path_to_benchmark}"'.ljust(80))
-
-        # Validate schema
-        if not validate_schema(path_to_benchmark, YML_SCHEMA):
-            tqdm.write(f'Benchmark file "{path_to_benchmark}" violates schema.')
-            continue
-
-        # Perform the benchmark
-        suite, benchmark, name, measurements, yml = perform_benchmark(path_to_benchmark)
-        num_benchmarks_passed += 1
-
-        # Write measurements to CSV file
-        measurements.insert(0, 'commit', pandas.Series(str(commit), measurements.index))
-        measurements.insert(1, 'date', pandas.Series(date, measurements.index))
-        measurements.to_csv('benchmark.csv', index=False, header=False, mode='a')
-
-        # Add measurements to benchmark results dictionary
-        the_suite = benchmark_results.get(suite, dict())
-        the_benchmark = the_suite.get(benchmark, dict())
-        the_benchmark[name] = (measurements, yml)
-        the_suite[benchmark] = the_benchmark
-        benchmark_results[suite] = the_suite
+    current_suite = None
+    current_benchmark = None
 
     doc, tag, text = Doc().tagtext()
     doc.asis('<!DOCTYPE html>')
-    current_suite = None
-    current_benchmark = None
     with tag('html'):
         with tag('head'):
             with tag('script', src='https://cdn.jsdelivr.net/npm/vega@5'):
@@ -406,6 +344,81 @@ $(function () {
     with open('benchmark.html', 'w') as html:
         html.write(indent(doc.getvalue()))
         html.write('\n')
+
+
+#=======================================================================================================================
+# main
+#=======================================================================================================================
+if __name__ == '__main__':
+    # Parse args
+    parser = argparse.ArgumentParser(description='''Run benchmarks on mutable.
+                                                    The build directory is assumed to be ./build/release .''')
+    parser.add_argument('suite', nargs='*', help='a benchmark suite to be run')
+    parser.add_argument('--html', help='Generate static HTML report', dest='html', default=False, action='store_true')
+    parser.add_argument('--args', help='provide additional arguments to pass through to the binary', dest='binargs',
+                                  metavar='ARGS', default=None, action='store')
+    parser.add_argument('-v', '--verbose', help='verbose output', dest='verbose', default=False, action='store_true')
+    args = parser.parse_args()
+
+    # Check whether we are interactive
+    is_interactive = True if 'TERM' in os.environ else False
+
+    # Get benchmark files
+    if not args.suite:
+        benchmark_files = sorted(glob.glob(os.path.join('benchmark', '**', '[!_]*.yml'), recursive=True))
+    else:
+        benchmark_files = []
+        for suite in sorted(set(args.suite)):
+            benchmark_files.extend(sorted(glob.glob(os.path.join('benchmark', suite, '**', '[!_]*.yml'), recursive=True)))
+
+    # Set up counters
+    num_benchmarks_total = len(benchmark_files)
+    num_benchmarks_passed = 0
+
+    # Get date
+    date = datetime.date.today().isoformat()
+
+    # Write measurements to CSV file
+    with open('benchmark.csv', 'w') as csv:
+        csv.write('commit,date,suite,benchmark,name,case,time\n')
+
+    benchmark_results = dict()
+
+    repo = Repo('.')
+    commit = repo.head.commit
+
+    # Set up event log
+    log = tqdm(total=0, position=1, ncols=80, leave=False, bar_format='{desc}', disable=not is_interactive)
+
+    # Process benchmark files and collect measurements
+    for path_to_benchmark in tqdm(benchmark_files, position=0, ncols=80, leave=False,
+                                  bar_format='|{bar}| {n}/{total}', disable=not is_interactive):
+        # Log current file
+        log.set_description_str(f'Running benchmark "{path_to_benchmark}"'.ljust(80))
+
+        # Validate schema
+        if not validate_schema(path_to_benchmark, YML_SCHEMA):
+            tqdm.write(f'Benchmark file "{path_to_benchmark}" violates schema.')
+            continue
+
+        # Perform the benchmark
+        suite, benchmark, name, measurements, yml = perform_benchmark(path_to_benchmark)
+        num_benchmarks_passed += 1
+
+        # Write measurements to CSV file
+        measurements.insert(0, 'commit', pandas.Series(str(commit), measurements.index))
+        measurements.insert(1, 'date', pandas.Series(date, measurements.index))
+        measurements.to_csv('benchmark.csv', index=False, header=False, mode='a')
+
+        # Add measurements to benchmark results dictionary
+        the_suite = benchmark_results.get(suite, dict())
+        the_benchmark = the_suite.get(benchmark, dict())
+        the_benchmark[name] = (measurements, yml)
+        the_suite[benchmark] = the_benchmark
+        benchmark_results[suite] = the_suite
+
+    if args.html:
+        generate_html(commit, benchmark_results)
 
     # Close event log
     log.clear()

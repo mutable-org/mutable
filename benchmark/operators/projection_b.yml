@@ -3,34 +3,35 @@ suite: operators
 benchmark: projection
 readonly: yes
 pattern: '^Execute query:.*'
+label: 'Number of Attributes'
 cases:
-    1_of_10: |
+    1: |
         SELECT a0
         FROM Attributes_b;
-    2_of_10: |
+    2: |
         SELECT a0, a1
         FROM Attributes_b;
-    3_of_10: |
+    3: |
         SELECT a0, a1, a2
         FROM Attributes_b;
-    4_of_10: |
+    4: |
         SELECT a0, a1, a2, a3
         FROM Attributes_b;
-    5_of_10: |
+    5: |
         SELECT a0, a1, a2, a3, a4
         FROM Attributes_b;
-    6_of_10: |
+    6: |
         SELECT a0, a1, a2, a3, a4, a5
         FROM Attributes_b;
-    7_of_10: |
+    7: |
         SELECT a0, a1, a2, a3, a4, a5, a6
         FROM Attributes_b;
-    8_of_10: |
+    8: |
         SELECT a0, a1, a2, a3, a4, a5, a6, a7
         FROM Attributes_b;
-    9_of_10: |
+    9: |
         SELECT a0, a1, a2, a3, a4, a5, a6, a7, a8
         FROM Attributes_b;
-    9_of_10: |
+    10: |
         SELECT a0, a1, a2, a3, a4, a5, a6, a7, a8, a9
         FROM Attributes_b;

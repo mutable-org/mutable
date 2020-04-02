@@ -347,13 +347,17 @@ if __name__ == '__main__':
             for suite, benchmarks in benchmark_results.items():
                 for benchmark, names in benchmarks.items():
                     combined_measurements = None
+                    combined_labels = set()
                     for name, data in names.items():
                         measurements, yml = data
+
+                        # Produce chart
                         num_cases = len(measurements['case'].unique())
                         chart_width = 30 * num_cases
                         chart_title = yml['description']
+                        chart_x_label = yml.get('label', 'Cases')
                         base = altair.Chart(measurements, title=chart_title, width=chart_width).encode(
-                            x = altair.X('case:N', title='Cases')
+                            x = altair.X('case:N', title=chart_x_label)
                         )
                         box = base.mark_boxplot().encode(
                             y = altair.Y('time:Q', title='Time (ms)')
@@ -363,17 +367,21 @@ if __name__ == '__main__':
 
                         combined_measurements = pandas.concat([combined_measurements, measurements],
                                                               ignore_index=True, sort=False)
+                        combined_labels.add(chart_x_label)
 
                         with tag('script', type='text/javascript'):
                             text(f'var spec = {chart.to_json()};')
                             text('var opt = {"renderer": "canvas", "actions": false};')
                             text(f'vegaEmbed("#chart_{suite}_{benchmark}_{name}" , spec, opt);')
 
+                    # Produce combined chart
+                    if len(combined_labels) == 0:
+                        combined_labels.add('Cases')
                     num_cases = len(combined_measurements['case'].unique())
                     chart_width = 50 * num_cases
                     chart_title = f'Combined chart for {suite} / {benchmark}.'
                     base = altair.Chart(combined_measurements, title=chart_title, width=chart_width).encode(
-                        x = altair.X('case:N', title='Cases'),
+                        x = altair.X('case:N', title=' | '.join(sorted(combined_labels))),
                         color = 'name'
                     )
                     line = base.mark_line().encode(

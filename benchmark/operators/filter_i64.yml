@@ -3,6 +3,7 @@ suite: operators
 benchmark: filter
 readonly: yes
 pattern: '^Execute query:.*'
+label: 'Selectivity'
 cases:
     0.0: SELECT 1 FROM Attributes_i64 WHERE a0 < -9223372036854775807;
     0.1: SELECT 1 FROM Attributes_i64 WHERE a0 < -7378697629483821056;

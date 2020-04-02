@@ -44,8 +44,8 @@ def validate_schema(path_to_file, path_to_schema) -> bool:
         return False
     return True
 
-# Start the shell with `command` and pass `query_str` to its stdin.  Consume the output and search for timings using the
-# given regex `pattern`.  Returns a list with the measured times.
+# Start the shell with `command` and pass `query_str` to its stdin.  Search the stdout for timings using the given regex
+# `pattern` and return them as a list.
 def time_command(command, query_str, pattern, timeout = DEFAULT_TIMEOUT):
     cmd = command + [ '--quiet', '-' ]
 

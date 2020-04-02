@@ -4,13 +4,50 @@ import subprocess
 import os
 import glob
 import argparse
+import difflib
 
 import yaml
 import yamale
 from tqdm import tqdm
 from colorama import Fore, Back, Style
 
-from testexception import *
+
+#-----------------------------------------------------------------------------------------------------------------------
+# HELPERS
+#-----------------------------------------------------------------------------------------------------------------------
+
+yml_schema = os.path.join(os.getcwd(), 'test', '_schema.yml')
+
+def schema_valid(test_case) -> bool:
+    schema = yamale.make_schema(yml_schema)
+    data = yamale.make_data(test_case.filename)
+    try:
+        yamale.validate(schema, data)
+    except ValueError:
+        report_warning('YAML schema invalid', 'yaml_check', test_case)
+        return False
+    return True
+
+
+class TestException(Exception):
+    def __init__(self, str):
+        Exception(str)
+
+
+def colordiff(actual, expected):
+    output = []
+    matcher = difflib.SequenceMatcher(None, actual, expected)
+    for opcode, a0, a1, e0, e1 in matcher.get_opcodes():
+        if opcode == "equal":
+            output.append(actual[a0:a1])
+        elif opcode == "insert":
+            output.append(Fore.GREEN + expected[e0:e1] + Fore.RESET)
+        elif opcode == "delete":
+            output.append(Fore.RED + actual[a0:a1] + Fore.RESET)
+        elif opcode == "replace":
+            output.append(Fore.GREEN + expected[e0:e1] + Fore.RESET)
+            output.append(Fore.RED + actual[a0:a1] + Fore.RESET)
+    return "".join(output)
 
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -200,23 +237,6 @@ SETUPS = {
     'ours':     os.path.join('test', 'ours.sql'),
     'tpc_h':    os.path.join('test', 'tpc_h.sql'),
 }
-
-
-#-----------------------------------------------------------------------------------------------------------------------
-# HELPERS
-#-----------------------------------------------------------------------------------------------------------------------
-
-yml_schema = os.path.join(os.getcwd(), 'test', '_schema.yml')
-
-def schema_valid(test_case) -> bool:
-    schema = yamale.make_schema(yml_schema)
-    data = yamale.make_data(test_case.filename)
-    try:
-        yamale.validate(schema, data)
-    except ValueError:
-        report_warning('YAML schema invalid', 'yaml_check', test_case)
-        return False
-    return True
 
 
 #-----------------------------------------------------------------------------------------------------------------------

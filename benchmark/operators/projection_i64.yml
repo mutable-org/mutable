@@ -3,6 +3,9 @@ suite: operators
 benchmark: projection
 readonly: yes
 pattern: '^Execute query:.*'
+configurations:
+    Interpreter: ''
+    WebAssembly: --wasm
 label: 'Number of Attributes'
 cases:
     1: |

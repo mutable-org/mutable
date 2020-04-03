@@ -1,11 +1,18 @@
 description: Join order enumeration using DPccp
 suite: plan-enumerators
-benchmark: chain
+benchmark: cycle
 readonly: yes
 pattern: '^Compute the query plan:.*'
-args: '--plan-enumerator DPccp'
+args: --dryrun
+configurations:
+    DPccp:          '--plan-enumerator DPccp'
+    DPsize:         '--plan-enumerator DPsize'
+    DPsub:          '--plan-enumerator DPsub'
+    TDbasic:        '--plan-enumerator TDbasic'
+    TDMinCutAGaT:   '--plan-enumerator TDMinCutAGaT'
+label: 'Number of Joins'
 cases:
-    2:  SELECT
+    2: SELECT
             *
         FROM
             T0,
@@ -13,7 +20,7 @@ cases:
         WHERE
             T0.key = T1.fkey
         ;
-    3:  SELECT
+    3: SELECT
             *
         FROM
             T0,
@@ -21,7 +28,8 @@ cases:
             T2
         WHERE
             T0.key = T1.fkey AND
-            T1.key = T2.fkey
+            T1.key = T2.fkey AND
+            T2.key = T0.fkey
         ;
     4:  SELECT
             *
@@ -33,7 +41,8 @@ cases:
         WHERE
             T0.key = T1.fkey AND
             T1.key = T2.fkey AND
-            T2.key = T3.fkey
+            T2.key = T3.fkey AND
+            T3.key = T0.fkey
         ;
     5:  SELECT
             *
@@ -47,7 +56,8 @@ cases:
             T0.key = T1.fkey AND
             T1.key = T2.fkey AND
             T2.key = T3.fkey AND
-            T3.key = T4.fkey
+            T3.key = T4.fkey AND
+            T4.key = T0.fkey
         ;
     8:  SELECT
             *
@@ -67,7 +77,8 @@ cases:
             T3.key = T4.fkey AND
             T4.key = T5.fkey AND
             T5.key = T6.fkey AND
-            T6.key = T7.fkey
+            T6.key = T7.fkey AND
+            T7.key = T0.fkey
         ;
     10: SELECT
             *
@@ -91,7 +102,8 @@ cases:
             T5.key = T6.fkey AND
             T6.key = T7.fkey AND
             T7.key = T8.fkey AND
-            T8.key = T9.fkey
+            T8.key = T9.fkey AND
+            T9.key = T0.fkey
         ;
     12: SELECT
             *
@@ -119,7 +131,8 @@ cases:
             T7.key = T8.fkey AND
             T8.key = T9.fkey AND
             T9.key = T10.fkey AND
-            T10.key = T11.fkey
+            T10.key = T11.fkey AND
+            T11.key = T0.fkey
         ;
     15: SELECT
             *
@@ -153,7 +166,8 @@ cases:
             T10.key = T11.fkey AND
             T11.key = T12.fkey AND
             T12.key = T13.fkey AND
-            T13.key = T14.fkey
+            T13.key = T14.fkey AND
+            T14.key = T0.fkey
         ;
     18: SELECT
             *
@@ -193,7 +207,8 @@ cases:
             T13.key = T14.fkey AND
             T14.key = T15.fkey AND
             T15.key = T16.fkey AND
-            T16.key = T17.fkey
+            T16.key = T17.fkey AND
+            T17.key = T0.fkey
         ;
     20: SELECT
             *
@@ -237,5 +252,6 @@ cases:
             T15.key = T16.fkey AND
             T16.key = T17.fkey AND
             T17.key = T18.fkey AND
-            T18.key = T19.fkey
+            T18.key = T19.fkey AND
+            T19.key = T0.fkey
         ;

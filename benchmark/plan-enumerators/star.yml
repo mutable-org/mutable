@@ -1,9 +1,16 @@
-description: Join order enumeration of STAR queries using DPccp
+description: Join order enumeration using DPsub
 suite: plan-enumerators
 benchmark: star
 readonly: yes
 pattern: '^Compute the query plan:.*'
-args: '--plan-enumerator DPccp'
+args: --dryrun
+configurations:
+    DPccp:          '--plan-enumerator DPccp'
+    DPsize:         '--plan-enumerator DPsize'
+    DPsub:          '--plan-enumerator DPsub'
+    TDbasic:        '--plan-enumerator TDbasic'
+    TDMinCutAGaT:   '--plan-enumerator TDMinCutAGaT'
+label: 'Number of Joins'
 cases:
     2:  SELECT
             *

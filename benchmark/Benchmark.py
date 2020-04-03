@@ -8,6 +8,7 @@ import altair
 import argparse
 import datetime
 import glob
+import itertools
 import numpy
 import os
 import pandas
@@ -27,6 +28,7 @@ YML_SCHEMA      = os.path.join('benchmark', '_schema.yml')
 class BenchmarkError(Exception):
     pass
 
+
 ########################################################################################################################
 # Helper functions
 ########################################################################################################################
@@ -35,6 +37,10 @@ in_red   = lambda x: f'{Fore.RED}{x}{Style.RESET_ALL}'
 in_green = lambda x: f'{Fore.GREEN}{x}{Style.RESET_ALL}'
 in_bold  = lambda x: f'{Style.BRIGHT}{x}{Style.RESET_ALL}'
 
+
+#=======================================================================================================================
+# Validate a YAML file given a YAML schema file (with yamale)
+#=======================================================================================================================
 def validate_schema(path_to_file, path_to_schema) -> bool:
     schema = yamale.make_schema(path_to_schema)
     data = yamale.make_data(path_to_file)
@@ -44,29 +50,39 @@ def validate_schema(path_to_file, path_to_schema) -> bool:
         return False
     return True
 
-# Start the shell with `command` and pass `query_str` to its stdin.  Search the stdout for timings using the given regex
+
+#=======================================================================================================================
+# Start the shell with `command` and pass `query` to its stdin.  Search the stdout for timings using the given regex
 # `pattern` and return them as a list.
-def time_command(command, query_str, pattern, timeout = DEFAULT_TIMEOUT):
+#=======================================================================================================================
+def benchmark_query(command, query, pattern, timeout = DEFAULT_TIMEOUT):
     cmd = command + [ '--quiet', '-' ]
+    query = query.strip().replace('\n', ' ') + '\n' # transform to a one-liner and append new line to submit query
 
     process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                cwd=os.getcwd())
-
     try:
-        out, err = process.communicate(query_str.encode('latin-1'), timeout=timeout)
+        out, err = process.communicate(query.encode('latin-1'), timeout=timeout)
     except subprocess.TimeoutExpired:
         process.kill()
         raise BenchmarkError(f'Benchmark timed out after {timeout} seconds')
+    finally:
+        if process.poll() is None: # if process is still alive
+            process.terminate() # try to shut down gracefully
+            try:
+                process.wait(timeout=5) # wait for process to terminate
+            except TimeoutExpired:
+                process.kill() # kill if process did not terminate in time
 
     out = out.decode('latin-1')
     err = err.decode('latin-1')
 
     if process.returncode or len(err):
-        query_str = query_str.encode('unicode_escape').decode()
+        query = query.encode('unicode_escape').decode()
         out = '\n'.join(out.split('\n')[-20:])
         tqdm.write(f'''\
-Unexpected failure during execution of benchmark "{path_to_benchmark}" with return code {process.returncode}:
-$ echo -e "{query_str}" | {' '.join(cmd)}
+Unexpected failure during execution of benchmark "{path_to_file}" with return code {process.returncode}:
+$ echo -e "{query}" | {' '.join(cmd)}
 ===== stdout =====
 {out}
 ===== stderr =====
@@ -86,77 +102,104 @@ $ echo -e "{query_str}" | {' '.join(cmd)}
                     durations.append(dur)
                 except ValueError:
                     continue
+
     return durations
 
-#=======================================================================================================================
-# Perform the benchmarks specified in a YAML file
-#=======================================================================================================================
-def perform_benchmark(path_to_benchmark):
-    # Get benchmark schema
-    schema = os.path.join(os.path.dirname(path_to_benchmark), 'data', 'schema.sql')
 
-    # Open file
-    with open(path_to_benchmark, 'r') as f:
-        yml = yaml.safe_load(f)
-
+#=======================================================================================================================
+# Perform an experiment under a particular configuration.
+#
+# @param experiment the name of the experiment (YAML file)
+# @param name       the name of this configuration
+# @param yml        the loaded YAML file
+# @param config     the configuration of this experiment
+# @return           a pandas.DataFrame with the measurements
+#=======================================================================================================================
+def run_configuration(experiment, name, config, yml):
+    # Extract YAML settings
     suite = yml['suite']
     benchmark = yml['benchmark']
     is_readonly = yml['readonly']
     cases = yml['cases']
-    supplementary_cmd_args = yml.get('args', None)
-    name = os.path.splitext(os.path.basename(path_to_benchmark))[0]
+    supplementary_args = yml.get('args', None)
 
-    # Collect results in data frame
-    measurements = pandas.DataFrame(columns=['suite', 'benchmark', 'name', 'case', 'time'])
+    if name:
+        tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration {name}.')
+    else:
+        tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment}.')
 
+    # Get database schema
+    schema = os.path.join(os.path.dirname(path_to_file), 'data', 'schema.sql')
+
+    # Assemble command
     command = [ MUTABLE_BINARY, '--benchmark', '--times', schema ]
     if args.binargs:
         command.extend(args.binargs.split(' '))
-    if supplementary_cmd_args:
-        command.extend(supplementary_cmd_args.split(' '))
+    if supplementary_args:
+        command.extend(supplementary_args.split(' '))
+    if config:
+        command.extend(config.split(' '))
 
-    if is_readonly:
-        timeout = DEFAULT_TIMEOUT + 30 * len(cases)
-        combined_query = ''
-        for case, query_str in cases.items():
-            query = query_str.strip().replace('\n', ' ') # transform to a one-liner
-            if args.verbose:
-                cmd_str = ' '.join(command)
-                tqdm.write(f'$ echo -e "{query}" | {cmd_str} -')
-            query = '\n'.join([query] * NUM_RUNS) + '\n' # repeat query for stable results
-            combined_query += query
-        try:
-            durations = time_command(command, combined_query, yml['pattern'], timeout)
-        except BenchmarkError as ex:
-            tqdm.write(f'Benchmark {suite}/{benchmark} failed: {str(ex)}')
+    # Collect results in data frame
+    measurements = pandas.DataFrame(columns=['suite', 'benchmark', 'experiment', 'name', 'config', 'case', 'time'])
 
-        for case in cases.keys():
-            for i in range(NUM_RUNS):
-                measurements.loc[len(measurements)] = [ suite, benchmark, name, case, durations[0] ]
-                durations.pop(0)
+    try:
+        if is_readonly:
+            timeout = DEFAULT_TIMEOUT + 30 * len(cases)
+            combined_query = list()
+            for case in cases.values():
+                combined_query.extend([case] * NUM_RUNS)
+            query = '\n'.join(combined_query)
+            durations = benchmark_query(command, query, yml['pattern'])
+            for case in cases.keys():
+                for i in range(NUM_RUNS):
+                    measurements.loc[len(measurements)] = [ suite, benchmark, experiment, name, config, case, durations[0] ]
+                    durations.pop(0)
+        else:
+            for case, query_str in cases.items():
+                query = [query_str] * NUM_RUNS
+                durations = benchmark_query(command, query_str, yml['pattern'])
+                for dur in durations:
+                    measurements.loc[len(measurements)] = [ suite, benchmark, experiment, name, config, case, dur ]
+    except BenchmarkError as ex:
+        tqdm.write(f'Benchmark {suite}/{benchmark} failed: {str(ex)}')
+
+    return measurements
+
+
+#=======================================================================================================================
+# Perform the experiment specified in a YAML file with all provided configurations
+#
+# @param experiment_name the name of this experiment
+# @param path_to_file    the path to the experiment YAML file
+# @return                a map from configuration name to (pandas.DataFrame, YAML object)
+#=======================================================================================================================
+def perform_experiment(experiment_name, path_to_file):
+    tqdm.write(f'Perform benchmarks in \'{path_to_file}\'.')
+
+    # Open file
+    with open(path_to_file, 'r') as f:
+        yml = yaml.safe_load(f)
+
+    configs = yml.get('configurations', dict())
+
+    experiment = dict()
+    if configs:
+        # Run benchmark under different configurations
+        for config_name, config in configs.items():
+            measurements = run_configuration(experiment_name, config_name, config, yml)
+            experiment[config_name] = (measurements, yml)
     else:
-        for case, query_str in cases.items():
-            query = query_str.strip().replace('\n', ' ') # transform to a one-liner
-            if args.verbose:
-                cmd_str = ' '.join(command)
-                tqdm.write(f'$ echo -e "{query}" | {cmd_str} -')
-            query = '\n'.join([query] * NUM_RUNS) + '\n' # repeat query for stable results
-            try:
-                durations = time_command(command, query, yml['pattern'])
-            except BenchmarkError as ex:
-                tqdm.write(f'Benchmark {suite}/{benchmark} failed: {str(ex)}')
-                continue
+        measurements = run_configuration(experiment_name, '', '', yml)
+        experiment[''] = (measurements, yml)
 
-            for dur in durations:
-                measurements.loc[len(measurements)] = [ suite, benchmark, name, case, dur ]
-
-    return suite, benchmark, name, measurements, yml
+    return experiment
 
 
 #=======================================================================================================================
 # Generate static HTML report
 #=======================================================================================================================
-def generate_html(commit, benchmark_results):
+def generate_html(commit, results):
     prev_commit_sha = os.environ.get('PREV_COMMIT_SHA', None)
     current_suite = None
     current_benchmark = None
@@ -215,7 +258,7 @@ def generate_html(commit, benchmark_results):
                         with tag('h6', klass='sidebar-heading px-3 mt-4 mb-1 text-muted'):
                             text('Benchmark Suites')
                         with tag('ul', klass='nav flex-column'):
-                            for suite, benchmarks in benchmark_results.items():
+                            for suite, benchmarks in results.items():
                                 with tag('li', klass='nav-item'):
                                     with tag('a', klass='nav-link', href=f'#{suite}'):
                                         doc.line('i', '', klass='far fa-arrow-alt-circle-right')
@@ -258,16 +301,36 @@ def generate_html(commit, benchmark_results):
                                 with tag('p'):
                                     doc.line('b', 'Supplementary Command Line Arguments: ')
                                     doc.line('code', args.binargs)
-                        for suite, benchmarks in benchmark_results.items():
+                        for suite, benchmarks in results.items():
                             with tag('div', id=suite, klass='suite'):
                                 doc.line('h2', suite)
-                                for benchmark, names in benchmarks.items():
+                                for benchmark, experiments in benchmarks.items():
                                     with tag('div', id=f'{suite}_{benchmark}', klass='benchmark'):
                                         doc.line('h3', benchmark)
-                                        for name, _ in names.items():
-                                            with tag('div', id=f'chart_{suite}_{benchmark}_{name}'):
-                                                pass
-                                        doc.stag('div', id=f'chart_{suite}_{benchmark}')
+                                        with tag('div', klass='charts'):
+                                            for experiment, configs in experiments.items():
+                                                for config in configs.keys():
+                                                    with tag('div', klass='card', style='width: auto;'):
+                                                        if config:
+                                                            doc.line('div', f'{experiment} ({config})', klass='card-header')
+                                                        else:
+                                                            doc.line('div', f'{experiment}', klass='card-header')
+                                                        with tag('div', klass='card-img-top'):
+                                                            with tag('div', id=f'chart_{suite}_{benchmark}_{experiment}_{config}'):
+                                                                pass
+                                                        with tag('div', klass='card-body'):
+                                                            with tag('h5', klass='card-title'):
+                                                                if config:
+                                                                    text(f'Experiment {experiment} with configuration {config}.')
+                                                                else:
+                                                                    text(f'Experiment {experiment}.')
+                                            with tag('div', klass='card', style='width: auto;'):
+                                                doc.line('div', f'{suite} / {benchmark}', klass='card-header')
+                                                with tag('div', klass='card-img-top'):
+                                                    with tag('div', id=f'chart_{suite}_{benchmark}'):
+                                                        pass
+                                                with tag('div', klass='card-body'):
+                                                    doc.line('h5', f'Combined chart for benchmark {suite} / {benchmark}.', klass='card-title')
 
             with tag('script', src='https://code.jquery.com/jquery-3.4.1.slim.min.js',
                                integrity='sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n',
@@ -282,53 +345,58 @@ def generate_html(commit, benchmark_results):
                                crossorigin='anonymous'):
                 pass
 
-            for suite, benchmarks in benchmark_results.items():
-                for benchmark, names in benchmarks.items():
+            for suite, benchmarks in results.items():
+                for benchmark, experiments in benchmarks.items():
                     combined_measurements = None
                     combined_labels = set()
-                    for name, data in names.items():
-                        measurements, yml = data
+                    for experiment, configs in experiments.items():
+                        for config, data in configs.items():
+                            measurements, yml = data
 
-                        # Produce chart
-                        num_cases = len(measurements['case'].unique())
-                        chart_width = 30 * num_cases
-                        chart_title = yml['description']
-                        chart_x_label = yml.get('label', 'Cases')
-                        base = altair.Chart(measurements, title=chart_title, width=chart_width).encode(
-                            x = altair.X('case:N', title=chart_x_label)
-                        )
-                        box = base.mark_boxplot().encode(
-                            y = altair.Y('time:Q', title='Time (ms)')
-                        )
-                        line = base.mark_line(color='red').encode(y='mean(time)')
-                        chart = box + line
+                            # Produce chart
+                            num_cases = len(measurements['case'].unique())
+                            chart_width = 30 * num_cases
+                            chart_title = yml['description']
+                            chart_x_label = yml.get('label', 'Cases')
+                            base = altair.Chart(measurements, title=chart_title, width=chart_width).encode(
+                                x = altair.X('case:N', title=chart_x_label)
+                            )
+                            box = base.mark_boxplot().encode(
+                                y = altair.Y('time:Q', title='Time (ms)')
+                            )
+                            line = base.mark_line(color='red').encode(y='mean(time)')
+                            chart = box + line
 
-                        combined_measurements = pandas.concat([combined_measurements, measurements],
-                                                              ignore_index=True, sort=False)
-                        combined_labels.add(chart_x_label)
+                            combined_measurements = pandas.concat([combined_measurements, measurements],
+                                                                  ignore_index=True, sort=False)
+                            combined_labels.add(chart_x_label)
 
-                        with tag('script', type='text/javascript'):
-                            text(f'var spec = {chart.to_json()};')
-                            text('var opt = {"renderer": "canvas", "actions": false};')
-                            text(f'vegaEmbed("#chart_{suite}_{benchmark}_{name}" , spec, opt);')
+                            with tag('script', type='text/javascript'):
+                                text(f'var spec = {chart.to_json()};')
+                                text('var opt = {"renderer": "canvas", "actions": false};')
+                                text(f'vegaEmbed("#chart_{suite}_{benchmark}_{experiment}_{config}" , spec, opt);')
 
                     # Produce combined chart
                     if len(combined_labels) == 0:
                         combined_labels.add('Cases')
                     num_cases = len(combined_measurements['case'].unique())
                     chart_width = 50 * num_cases
-                    chart_title = f'Combined chart for {suite} / {benchmark}.'
-                    base = altair.Chart(combined_measurements, title=chart_title, width=chart_width).encode(
-                        x = altair.X('case:N', title=' | '.join(sorted(combined_labels))),
-                        color = 'name'
-                    )
+                    #  chart_title = f'Combined chart for {suite} / {benchmark}.'
+                    sel = altair.selection_multi(fields=['col'], bind='legend')
+                    base = altair.Chart(combined_measurements, width=chart_width
+                        ).transform_calculate(
+                            col = "datum.experiment + ' ' + datum.name"
+                        ).encode(
+                            x = altair.X('case:N', title=' | '.join(sorted(combined_labels))),
+                            color = altair.Color('col:N', title='Experiments')
+                        )
                     line = base.mark_line().encode(
                         y = altair.Y('mean(time)', title='Time (ms)')
                     )
                     band = base.mark_errorband(extent='ci').encode(
                         y = altair.Y('time', title=None)
                     )
-                    chart = line + band
+                    chart = (line + band).add_selection(sel).interactive()
                     with tag('script', type='text/javascript'):
                         text(f'var spec = {chart.to_json()};')
                         text('var opt = {"renderer": "canvas", "actions": false};')
@@ -386,11 +454,24 @@ if __name__ == '__main__':
     if not args.output or not os.path.isfile(output_csv_file): # no output file specified or file does not exist
         tqdm.write(f'Writing measurements to \'{output_csv_file}\'.')
         with open(output_csv_file, 'w') as csv:
-            csv.write('commit,date,suite,benchmark,name,case,time\n')
+            csv.write('commit,date,suite,benchmark,experiment,name,config,case,time\n')
     else:
         tqdm.write(f'Adding measurements to \'{output_csv_file}\'.')
 
-    benchmark_results = dict()
+    # A central object to collect all measurements of all experiments.  Has the following structure:
+    #
+    # results
+    # └── suites
+    #     └── benchmarks
+    #         └── experiments
+    #             └── configurations
+    #                 └── measurements (pandas.DataFrame, YAML object)
+    #
+    # results:      suite name      --> suite
+    # suite:        benchmark name  --> benchmark
+    # benchmark:    experiment name --> experiment
+    # experiment:   configuration name --> measurements (pandas.DataFrame, YAML object)
+    results = dict()
 
     repo = Repo('.')
     commit = repo.head.commit
@@ -398,35 +479,44 @@ if __name__ == '__main__':
     # Set up event log
     log = tqdm(total=0, position=1, ncols=80, leave=False, bar_format='{desc}', disable=not is_interactive)
 
-    # Process benchmark files and collect measurements
-    for path_to_benchmark in tqdm(benchmark_files, position=0, ncols=80, leave=False,
+    # Process experiment files and collect measurements
+    for path_to_file in tqdm(benchmark_files, position=0, ncols=80, leave=False,
                                   bar_format='|{bar}| {n}/{total}', disable=not is_interactive):
         # Log current file
-        log.set_description_str(f'Running benchmark "{path_to_benchmark}"'.ljust(80))
+        log.set_description_str(f'Running benchmark "{path_to_file}"'.ljust(80))
 
         # Validate schema
-        if not validate_schema(path_to_benchmark, YML_SCHEMA):
-            tqdm.write(f'Benchmark file "{path_to_benchmark}" violates schema.')
+        if not validate_schema(path_to_file, YML_SCHEMA):
+            tqdm.write(f'Benchmark file "{path_to_file}" violates schema.')
             continue
 
-        # Perform the benchmark
-        suite, benchmark, name, measurements, yml = perform_benchmark(path_to_benchmark)
+        # Process the experiment file
+        experiment_name = os.path.splitext(os.path.basename(path_to_file))[0]
+        experiment = perform_experiment(experiment_name, path_to_file)
+
+        for config_name, data in experiment.items():
+            measurements, yml = data
+
+            # Add commit SHA and date columns
+            measurements.insert(0, 'commit', pandas.Series(str(commit), measurements.index))
+            measurements.insert(1, 'date',   pandas.Series(date, measurements.index))
+
+            # Write to CSV file
+            measurements.to_csv(output_csv_file, index=False, header=False, mode='a')
+
+            # Add to benchmark results
+            suite = results.get(yml['suite'], dict())
+            benchmark = suite.get(yml['benchmark'], dict())
+            experiment = benchmark.get(experiment_name, dict())
+            experiment[config_name] = data
+            benchmark[experiment_name] = experiment
+            suite[yml['benchmark']] = benchmark
+            results[yml['suite']] = suite
+
         num_benchmarks_passed += 1
 
-        # Write measurements to CSV file
-        measurements.insert(0, 'commit', pandas.Series(str(commit), measurements.index))
-        measurements.insert(1, 'date', pandas.Series(date, measurements.index))
-        measurements.to_csv(output_csv_file, index=False, header=False, mode='a')
-
-        # Add measurements to benchmark results dictionary
-        the_suite = benchmark_results.get(suite, dict())
-        the_benchmark = the_suite.get(benchmark, dict())
-        the_benchmark[name] = (measurements, yml)
-        the_suite[benchmark] = the_benchmark
-        benchmark_results[suite] = the_suite
-
     if args.html:
-        generate_html(commit, benchmark_results)
+        generate_html(commit, results)
 
     # Close event log
     log.clear()

@@ -97,6 +97,13 @@ main h3
     font-size: 12pt;
 }
 
+main h5
+{
+    color: #333;
+    font-size: 11pt;
+    font-weight: bold;
+}
+
 .commitish
 {
     display: inline-block;
@@ -135,4 +142,25 @@ pre
 pre code
 {
     padding: 5px 10px;
+}
+
+.charts
+{
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: flex-start;
+    align-content: flex-start;
+    padding: -10px;
+}
+
+.charts .card
+{
+    margin: 10px;
+}
+
+.charts .card-img-top
+{
+    padding: 5px;
 }

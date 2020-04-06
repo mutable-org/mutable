@@ -1,4 +1,4 @@
-description: Join order enumeration using DPccp
+description: Plan enumeration of cycle queries.
 suite: plan-enumerators
 benchmark: cycle
 readonly: yes

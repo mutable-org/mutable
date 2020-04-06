@@ -1,4 +1,4 @@
-description: Join order enumeration of clique queries
+description: Plan enumeration of clique queries.
 suite: plan-enumerators
 benchmark: clique
 readonly: yes

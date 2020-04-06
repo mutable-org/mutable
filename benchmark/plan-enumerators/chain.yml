@@ -1,4 +1,4 @@
-description: Join order enumeration using DPccp
+description: Plan enumeration of chain queries.
 suite: plan-enumerators
 benchmark: chain
 readonly: yes

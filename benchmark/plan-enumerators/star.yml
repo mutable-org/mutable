@@ -1,4 +1,4 @@
-description: Join order enumeration using DPsub
+description: Plan enumeration of star queries.
 suite: plan-enumerators
 benchmark: star
 readonly: yes

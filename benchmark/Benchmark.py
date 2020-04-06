@@ -337,21 +337,19 @@ def generate_html(commit, results):
                                         doc.line('h3', benchmark)
                                         with tag('div', klass='charts'):
                                             for experiment, configs in experiments.items():
-                                                for config in configs.keys():
+                                                for config, data in configs.items():
+                                                    _, yml = data
                                                     with tag('div', klass='card', style='width: auto;'):
-                                                        if config:
-                                                            doc.line('div', f'{experiment} ({config})', klass='card-header')
-                                                        else:
-                                                            doc.line('div', f'{experiment}', klass='card-header')
+                                                        with tag('div', klass='card-header'):
+                                                            if config:
+                                                                text(f'{experiment} ({config})')
+                                                            else:
+                                                                text(experiment)
                                                         with tag('div', klass='card-img-top'):
                                                             with tag('div', id=f'chart_{suite}_{benchmark}_{experiment}_{config}'):
                                                                 pass
                                                         with tag('div', klass='card-body'):
-                                                            with tag('h5', klass='card-title'):
-                                                                if config:
-                                                                    text(f'Experiment {experiment} with configuration {config}.')
-                                                                else:
-                                                                    text(f'Experiment {experiment}.')
+                                                            doc.line('h5', yml['description'], klass='card-title')
                                             with tag('div', klass='card', style='width: auto;'):
                                                 doc.line('div', f'{suite} / {benchmark}', klass='card-header')
                                                 with tag('div', klass='card-img-top'):
@@ -384,9 +382,8 @@ def generate_html(commit, results):
                             # Produce chart
                             num_cases = len(measurements['case'].unique())
                             chart_width = 30 * num_cases
-                            chart_title = yml['description']
                             chart_x_label = yml.get('label', 'Cases')
-                            base = altair.Chart(measurements, title=chart_title, width=chart_width).encode(
+                            base = altair.Chart(measurements, width=chart_width).encode(
                                 x = altair.X('case:N', title=chart_x_label)
                             )
                             box = base.mark_boxplot().encode(

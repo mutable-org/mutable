@@ -156,7 +156,6 @@ def run_configuration(experiment, name, config, yml):
     try:
         if is_readonly:
             timeout = DEFAULT_TIMEOUT + NUM_RUNS * TIMEOUT_PER_CASE * len(cases)
-            tqdm.write(f'Timeout for all cases combined is {timeout} seconds.')
             combined_query = list()
             for case in cases.values():
                 if args.verbose:
@@ -178,7 +177,6 @@ def run_configuration(experiment, name, config, yml):
                         durations.pop(0)
         else:
             timeout = DEFAULT_TIMEOUT + NUM_RUNS * TIMEOUT_PER_CASE
-            tqdm.write(f'Timeout per case is {timeout} seconds.')
             for case, query_str in cases.items():
                 if args.verbose:
                     print_command(command, query_str, '    ')

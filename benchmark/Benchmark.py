@@ -20,12 +20,16 @@ import yaml
 
 
 NUM_RUNS        = 5
-DEFAULT_TIMEOUT = 300 # 5 minutes
+DEFAULT_TIMEOUT = 120 # 2 minutes
+TIMEOUT_PER_CASE = 30 # 30 seconds
 MUTABLE_BINARY  = os.path.join('build', 'release', 'bin', 'shell')
 YML_SCHEMA      = os.path.join('benchmark', '_schema.yml')
 
 
 class BenchmarkError(Exception):
+    pass
+
+class BenchmarkTimeoutException(Exception):
     pass
 
 
@@ -51,11 +55,17 @@ def validate_schema(path_to_file, path_to_schema) -> bool:
     return True
 
 
+def print_command(command, query, indent = ''):
+    query_str = query.strip().replace('\n', ' ')
+    command_str = ' '.join(command)
+    tqdm.write(f'{indent}$ echo "{query_str}" | {command_str} -')
+
+
 #=======================================================================================================================
 # Start the shell with `command` and pass `query` to its stdin.  Search the stdout for timings using the given regex
 # `pattern` and return them as a list.
 #=======================================================================================================================
-def benchmark_query(command, query, pattern, timeout = DEFAULT_TIMEOUT):
+def benchmark_query(command, query, pattern, timeout):
     cmd = command + [ '--quiet', '-' ]
     query = query.strip().replace('\n', ' ') + '\n' # transform to a one-liner and append new line to submit query
 
@@ -65,7 +75,7 @@ def benchmark_query(command, query, pattern, timeout = DEFAULT_TIMEOUT):
         out, err = process.communicate(query.encode('latin-1'), timeout=timeout)
     except subprocess.TimeoutExpired:
         process.kill()
-        raise BenchmarkError(f'Benchmark timed out after {timeout} seconds')
+        raise BenchmarkTimeoutException(f'Benchmark timed out after {timeout} seconds')
     finally:
         if process.poll() is None: # if process is still alive
             process.terminate() # try to shut down gracefully
@@ -145,24 +155,44 @@ def run_configuration(experiment, name, config, yml):
 
     try:
         if is_readonly:
-            timeout = DEFAULT_TIMEOUT + 30 * len(cases)
+            timeout = DEFAULT_TIMEOUT + NUM_RUNS * TIMEOUT_PER_CASE * len(cases)
+            tqdm.write(f'Timeout for all cases combined is {timeout} seconds.')
             combined_query = list()
             for case in cases.values():
+                if args.verbose:
+                    print_command(command, case, '    ')
                 combined_query.extend([case] * NUM_RUNS)
             query = '\n'.join(combined_query)
-            durations = benchmark_query(command, query, yml['pattern'])
-            for case in cases.keys():
-                for i in range(NUM_RUNS):
-                    measurements.loc[len(measurements)] = [ suite, benchmark, experiment, name, config, case, durations[0] ]
-                    durations.pop(0)
+            try:
+                durations = benchmark_query(command, query, yml['pattern'], timeout)
+            except BenchmarkTimeoutException as ex:
+                tqdm.write(str(ex))
+                # Add timeout durations
+                for case in cases.keys():
+                    measurements.loc[len(measurements)] = [ suite, benchmark, experiment, name, config, case, timeout * 1000 ]
+            else:
+                # Add measured times
+                for case in cases.keys():
+                    for i in range(NUM_RUNS):
+                        measurements.loc[len(measurements)] = [ suite, benchmark, experiment, name, config, case, durations[0] ]
+                        durations.pop(0)
         else:
+            timeout = DEFAULT_TIMEOUT + NUM_RUNS * TIMEOUT_PER_CASE
+            tqdm.write(f'Timeout per case is {timeout} seconds.')
             for case, query_str in cases.items():
+                if args.verbose:
+                    print_command(command, query_str, '    ')
                 query = [query_str] * NUM_RUNS
-                durations = benchmark_query(command, query_str, yml['pattern'])
-                for dur in durations:
-                    measurements.loc[len(measurements)] = [ suite, benchmark, experiment, name, config, case, dur ]
+                try:
+                    durations = benchmark_query(command, query_str, yml['pattern'], timeout)
+                except BenchmarkTimeoutException as ex:
+                    tqdm.write(str(ex))
+                    measurements.loc[len(measurements)] = [ suite, benchmark, experiment, name, config, case, timeout * 1000 ]
+                else:
+                    for dur in durations:
+                        measurements.loc[len(measurements)] = [ suite, benchmark, experiment, name, config, case, dur ]
     except BenchmarkError as ex:
-        tqdm.write(f'Benchmark {suite}/{benchmark} failed: {str(ex)}')
+        tqdm.write(str(ex))
 
     return measurements
 
@@ -327,7 +357,7 @@ def generate_html(commit, results):
                                             with tag('div', klass='card', style='width: auto;'):
                                                 doc.line('div', f'{suite} / {benchmark}', klass='card-header')
                                                 with tag('div', klass='card-img-top'):
-                                                    with tag('div', id=f'chart_{suite}_{benchmark}'):
+                                                    with tag('div', id=f'chart_{suite}_{benchmark}', klass='chart-interactive'):
                                                         pass
                                                 with tag('div', klass='card-body'):
                                                     doc.line('h5', f'Combined chart for benchmark {suite} / {benchmark}.', klass='card-title')

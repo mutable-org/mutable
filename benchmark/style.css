@@ -164,3 +164,29 @@ pre code
 {
     padding: 5px;
 }
+
+.charts .card .vega-embed
+{
+    padding-right: 5px;
+}
+
+.charts .card .chart-interactive canvas
+{
+    cursor: ns-resize;
+}
+
+.charts .card .chart-interactive canvas:active
+{
+    cursor: grabbing;
+}
+
+.charts .card .card-body
+{
+    padding: .5rem 1.25rem;
+}
+
+.charts .card .card-header
+{
+    padding: 5px 1.25rem;
+    font-size: 12px;
+}

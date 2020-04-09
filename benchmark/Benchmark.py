@@ -127,6 +127,7 @@ $ echo -e "{query}" | {' '.join(cmd)}
 #=======================================================================================================================
 def run_configuration(experiment, name, config, yml):
     # Extract YAML settings
+    version = yml.get('version', 1)
     suite = yml['suite']
     benchmark = yml['benchmark']
     is_readonly = yml['readonly']
@@ -151,7 +152,7 @@ def run_configuration(experiment, name, config, yml):
         command.extend(config.split(' '))
 
     # Collect results in data frame
-    measurements = pandas.DataFrame(columns=['suite', 'benchmark', 'experiment', 'name', 'config', 'case', 'time'])
+    measurements = pandas.DataFrame(columns=['version', 'suite', 'benchmark', 'experiment', 'name', 'config', 'case', 'time'])
 
     try:
         if is_readonly:
@@ -168,12 +169,12 @@ def run_configuration(experiment, name, config, yml):
                 tqdm.write(str(ex))
                 # Add timeout durations
                 for case in cases.keys():
-                    measurements.loc[len(measurements)] = [ suite, benchmark, experiment, name, config, case, timeout * 1000 ]
+                    measurements.loc[len(measurements)] = [ version, suite, benchmark, experiment, name, config, case, timeout * 1000 ]
             else:
                 # Add measured times
                 for case in cases.keys():
                     for i in range(NUM_RUNS):
-                        measurements.loc[len(measurements)] = [ suite, benchmark, experiment, name, config, case, durations[0] ]
+                        measurements.loc[len(measurements)] = [ version, suite, benchmark, experiment, name, config, case, durations[0] ]
                         durations.pop(0)
         else:
             timeout = DEFAULT_TIMEOUT + NUM_RUNS * TIMEOUT_PER_CASE
@@ -479,7 +480,7 @@ if __name__ == '__main__':
     if not args.output or not os.path.isfile(output_csv_file): # no output file specified or file does not exist
         tqdm.write(f'Writing measurements to \'{output_csv_file}\'.')
         with open(output_csv_file, 'w') as csv:
-            csv.write('commit,date,suite,benchmark,experiment,name,config,case,time\n')
+            csv.write('commit,date,version,suite,benchmark,experiment,name,config,case,time\n')
     else:
         tqdm.write(f'Adding measurements to \'{output_csv_file}\'.')
 

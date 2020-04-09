@@ -1,4 +1,5 @@
 description: str()
+version: int(required=False, min=1)
 suite: str()
 benchmark: str()
 readonly: bool()

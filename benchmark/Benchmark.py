@@ -271,7 +271,7 @@ def generate_html(commit, results):
                             text('General')
                         with tag('ul', klass='nav flex-column'):
                             with tag('li', klass='nav-item'):
-                                doc.line('a', 'Information', klass='nav-link', href=f'#info')
+                                doc.line('a', 'Information', klass='nav-link', href=f'#information')
                             if prev_commit_sha:
                                 with tag('li', klass='nav-item'):
                                     with tag('a', klass='nav-link', href=f'./{prev_commit_sha}.html'):
@@ -300,7 +300,7 @@ def generate_html(commit, results):
 
                     # Generate main content
                     with tag('main', role='main', klass='col-8 col-md-9 col-lg-10 ml-sm-auto col-lg-10 px-4'):
-                        with tag('div', id='info'):
+                        with tag('div', id='information'):
                             doc.line('h1', 'Information')
                             with tag('p'):
                                 text('This benchmark was performed on commit ')
@@ -337,6 +337,7 @@ def generate_html(commit, results):
                                     with tag('div', id=f'{suite}_{benchmark}', klass='benchmark'):
                                         doc.line('h3', benchmark)
                                         with tag('div', klass='charts'):
+                                            # Emit cards with the charts and further information
                                             for experiment, configs in experiments.items():
                                                 for config, data in configs.items():
                                                     _, yml = data
@@ -351,6 +352,22 @@ def generate_html(commit, results):
                                                                 pass
                                                         with tag('div', klass='card-body'):
                                                             doc.line('h5', yml['description'], klass='card-title')
+                                                            with tag('div', klass='info', style='display: none;'):
+                                                                with tag('p'):
+                                                                    text('ver. ')
+                                                                    text(str(yml.get('version', 1)))
+                                                                cmd_args = list()
+                                                                if 'args' in yml and yml['args']:
+                                                                    cmd_args.append(str(yml['args']))
+                                                                if config and yml['configurations'][config]:
+                                                                    cmd_args.append(str(yml['configurations'][config]))
+                                                                with tag('p'):
+                                                                    if cmd_args:
+                                                                        cmd_args = map(lambda x: x.strip(), cmd_args)
+                                                                        with tag('code'):
+                                                                            text(' '.join(cmd_args))
+                                                                    else:
+                                                                        text('no supplementary command line arguments')
                                             with tag('div', klass='card', style='width: auto;'):
                                                 doc.line('div', f'{suite} / {benchmark}', klass='card-header')
                                                 with tag('div', klass='card-img-top'):
@@ -372,6 +389,14 @@ def generate_html(commit, results):
                                crossorigin='anonymous'):
                 pass
 
+            with tag('script'):
+#                  text('''\
+#  $(function() {
+#      var cards = $('.charts .card');
+#  });
+#  ''')
+                pass
+
             for suite, benchmarks in results.items():
                 for benchmark, experiments in benchmarks.items():
                     combined_measurements = None
@@ -391,7 +416,7 @@ def generate_html(commit, results):
                                 y = altair.Y('time:Q', title='Time (ms)')
                             )
                             line = base.mark_line(color='red').encode(y='mean(time)')
-                            chart = box + line
+                            chart = (box + line).interactive()
 
                             combined_measurements = pandas.concat([combined_measurements, measurements],
                                                                   ignore_index=True, sort=False)
@@ -399,7 +424,10 @@ def generate_html(commit, results):
 
                             with tag('script', type='text/javascript'):
                                 text(f'var spec = {chart.to_json()};')
-                                text('var opt = {"renderer": "canvas", "actions": false};')
+                                text('''var opt = {
+                                    "renderer": "svg",
+                                    "actions": { "export": true, "source": false, "editor": false, "compiled": false },
+                                    "downloadFileName": "''' +  f'{suite}-{benchmark}-{experiment}-{config}' + '" };')
                                 text(f'vegaEmbed("#chart_{suite}_{benchmark}_{experiment}_{config}" , spec, opt);')
 
                     # Produce combined chart
@@ -408,7 +436,6 @@ def generate_html(commit, results):
                     num_cases = len(combined_measurements['case'].unique())
                     chart_width = 50 * num_cases
                     #  chart_title = f'Combined chart for {suite} / {benchmark}.'
-                    sel = altair.selection_multi(fields=['col'], bind='legend')
                     base = altair.Chart(combined_measurements, width=chart_width
                         ).transform_calculate(
                             col = "datum.experiment + ' ' + datum.name"
@@ -422,10 +449,13 @@ def generate_html(commit, results):
                     band = base.mark_errorband(extent='ci').encode(
                         y = altair.Y('time', title=None)
                     )
-                    chart = (line + band).add_selection(sel).interactive()
+                    chart = (line + band).interactive()
                     with tag('script', type='text/javascript'):
                         text(f'var spec = {chart.to_json()};')
-                        text('var opt = {"renderer": "canvas", "actions": false};')
+                        text('''var opt = {
+                            "renderer": "svg",
+                            "actions": { "export": true, "source": false, "editor": false, "compiled": false },
+                            "downloadFileName": "''' +  f'{suite}-{benchmark}-combined' + '" };')
                         text(f'vegaEmbed("#chart_{suite}_{benchmark}" , spec, opt);')
 
             with tag('script', type='text/javascript'):

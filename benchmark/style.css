@@ -73,7 +73,7 @@ nav.sidebar .nav .nav a.nav-link
 
 main
 {
-    margin-bottom: 100px;
+    margin-bottom: 5rem;
 }
 
 main h1
@@ -95,6 +95,8 @@ main h3
 {
     color: #6c757d;
     font-size: 12pt;
+    margin-top: .25rem;
+    margin-bottom: .5rem;
 }
 
 main h5
@@ -144,8 +146,15 @@ pre code
     padding: 5px 10px;
 }
 
+.benchmark
+{
+    overflow: visible;
+    margin-bottom: 1rem;
+}
+
 .charts
 {
+    position: relative;
     display: flex;
     flex-direction: row;
     flex-wrap: wrap;
@@ -158,6 +167,21 @@ pre code
 .charts .card
 {
     margin: 10px;
+    transition: transform .1s ease-in-out;
+}
+
+.charts .card:hover:not(:last-of-type)
+{
+    margin-bottom: -10%;
+}
+
+.charts .card:hover
+{
+    position: relative;
+    box-shadow: 5px 5px 2px #333;
+    padding-bottom: .5rem;
+    z-index: 1000;
+    transform: scale(1.1);
 }
 
 .charts .card-img-top
@@ -170,23 +194,24 @@ pre code
     padding-right: 5px;
 }
 
-.charts .card .chart-interactive canvas
-{
-    cursor: ns-resize;
-}
-
-.charts .card .chart-interactive canvas:active
-{
-    cursor: grabbing;
-}
-
 .charts .card .card-body
 {
     padding: .5rem 1.25rem;
+    font-size: 11pt;
 }
 
 .charts .card .card-header
 {
     padding: 5px 1.25rem;
     font-size: 12px;
+}
+
+.charts .card:hover .info
+{
+    display: initial !important;
+}
+
+.card p
+{
+    margin-bottom: 5pt;
 }

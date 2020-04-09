@@ -172,7 +172,7 @@ V8Platform::V8Platform()
         v8::V8::Initialize();
     }
 
-    v8::V8::SetFlagsFromString("--predictable");
+    v8::V8::SetFlagsFromString("--no-liftoff");
 
     v8::Isolate::CreateParams create_params;
     create_params.array_buffer_allocator = allocator_ = v8::ArrayBuffer::Allocator::NewDefaultAllocator();

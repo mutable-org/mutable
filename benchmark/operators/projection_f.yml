@@ -4,8 +4,8 @@ benchmark: projection
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:
-    Interpreter: ''
-    WebAssembly: --wasm
+    Interpreter: --backend Interpreter
+    WebAssembly: --backend WasmV8
 label: 'Number of Attributes'
 cases:
     1: |

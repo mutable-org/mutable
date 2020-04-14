@@ -4,8 +4,8 @@ benchmark: filter
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:
-    Interpreter: ''
-    WebAssembly: --wasm
+    Interpreter: --backend Interpreter
+    WebAssembly: --backend WasmV8
 label: 'Selectivity'
 cases:
     0.0: SELECT 1 FROM Attributes_i64 WHERE a0 < -9223372036854775807;

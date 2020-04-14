@@ -417,10 +417,6 @@ int main(int argc, const char **argv)
         nullptr, "--dryrun",                                /* Short, Long      */
         "don't actually execute the query",                 /* Description      */
         [&](bool) { Options::Get().dryrun = true; });       /* Callback         */
-    ADD(bool, Options::Get().wasm, false,                   /* Type, Var, Init  */
-        nullptr, "--wasm",                                  /* Short, Long      */
-        "show compiled WebAssembly",                        /* Description      */
-        [&](bool) { Options::Get().wasm = true; });         /* Callback         */
     ADD(bool, Options::Get().benchmark, false,              /* Type, Var, Init  */
         nullptr, "--benchmark",                             /* Short, Long      */
         "run queries in benchmark mode",                    /* Description      */

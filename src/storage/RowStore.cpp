@@ -225,3 +225,5 @@ void RowStore::dump(std::ostream &out) const
     }
     out << ']' << std::endl;
 }
+
+std::unique_ptr<Store> Store::CreateRowStore(const Table &table) { return std::make_unique<RowStore>(table); }

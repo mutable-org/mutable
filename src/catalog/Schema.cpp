@@ -1,6 +1,5 @@
 #include "catalog/Schema.hpp"
 
-#include "storage/Store.hpp"
 #include "util/fn.hpp"
 #include <algorithm>
 #include <cmath>
@@ -37,11 +36,6 @@ void Attribute::dump() const { dump(std::cerr); }
 /*======================================================================================================================
  * Table
  *====================================================================================================================*/
-
-Table::~Table()
-{
-    delete store_;
-}
 
 void Table::dump(std::ostream &out) const
 {

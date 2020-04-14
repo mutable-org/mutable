@@ -8,8 +8,7 @@
 #include "IR/Optimizer.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
-#include "storage/ColumnStore.hpp"
-#include "storage/RowStore.hpp"
+#include "storage/Store.hpp"
 #include "util/ArgParser.hpp"
 #include "util/DotTool.hpp"
 #include "util/fn.hpp"
@@ -203,7 +202,8 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
         } else if (auto S = cast<CreateTableStmt>(stmt)) {
             auto &DB = C.get_database_in_use();
             auto &T = DB.get_table(S->table_name.text);
-            T.store(new RowStore(T));
+            auto store = Store::CreateRowStore(T);
+            T.store(std::move(store));
         } else if (auto S = cast<DSVImportStmt>(stmt)) {
             auto &DB = C.get_database_in_use();
             auto &T = DB.get_table(S->table_name.text);

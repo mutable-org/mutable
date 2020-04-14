@@ -7,7 +7,7 @@
 #include "IR/PlanEnumerator.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
-#include "storage/RowStore.hpp"
+#include "storage/Store.hpp"
 #include "testutil.hpp"
 #include "util/ADT.hpp"
 
@@ -92,10 +92,10 @@ TEST_CASE("PlanEnumerator", "[core][IR][planenumerator]")
     std::size_t num_rows_B = 10;
     std::size_t num_rows_C = 8;
     std::size_t num_rows_D = 12;
-    tbl_A.store(new RowStore(tbl_A));
-    tbl_B.store(new RowStore(tbl_B));
-    tbl_C.store(new RowStore(tbl_C));
-    tbl_D.store(new RowStore(tbl_D));
+    tbl_A.store(Store::CreateRowStore(tbl_A));
+    tbl_B.store(Store::CreateRowStore(tbl_B));
+    tbl_C.store(Store::CreateRowStore(tbl_C));
+    tbl_D.store(Store::CreateRowStore(tbl_D));
     for (std::size_t i = 0; i < num_rows_A; ++i) { tbl_A.store().append(); }
     for (std::size_t i = 0; i < num_rows_B; ++i) { tbl_B.store().append(); }
     for (std::size_t i = 0; i < num_rows_C; ++i) { tbl_C.store().append(); }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "catalog/Schema.hpp"
 #include "storage/Store.hpp"
 #include "util/memory.hpp"
 

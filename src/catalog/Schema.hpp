@@ -1,6 +1,7 @@
 #pragma once
 
 #include "catalog/Type.hpp"
+#include "storage/Store.hpp"
 #include "util/fn.hpp"
 #include "util/macro.hpp"
 #include "util/memory.hpp"
@@ -11,6 +12,7 @@
 #include <exception>
 #include <functional>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -187,7 +189,6 @@ namespace db {
  *====================================================================================================================*/
 
 struct Table;
-struct Store;
 struct Database;
 struct Catalog;
 
@@ -239,11 +240,10 @@ struct Table
     using table_type = std::vector<Attribute>;
     table_type attrs_; ///< the attributes of this table, maintained as a sorted set
     std::unordered_map<const char*, table_type::size_type> name_to_attr_; ///< maps attribute names to attributes
-    Store *store_ = nullptr; ///< the store backing this table; may be `nullptr`
+    std::unique_ptr<Store> store_; ///< the store backing this table; may be `nullptr`
 
     public:
     Table(const char *name) : name(name) { }
-    ~Table();
 
     /** Returns the number of attributes in this table. */
     std::size_t size() const { return attrs_.size(); }
@@ -273,7 +273,7 @@ struct Table
     /** Returns a reference to the backing store. */
     Store & store() const { return *store_; }
     /** Sets the backing store for this table.  `new_store` must not be `nullptr`. */
-    void store(Store *new_store) { store_ = notnull(new_store); }
+    void store(std::unique_ptr<Store> new_store) { using std::swap; swap(store_, new_store); }
 
     /** Adds a new attribute with the given `name` and `type` to the table.  Throws `std::invalid_argument` if the
      * `name` is already in use. */

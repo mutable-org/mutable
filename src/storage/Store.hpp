@@ -1,6 +1,5 @@
 #pragma once
 
-#include "catalog/Schema.hpp"
 #include "catalog/Type.hpp"
 #include "util/macro.hpp"
 #include <algorithm>
@@ -16,7 +15,10 @@
 
 namespace db {
 
+struct Attribute;
+struct Schema;
 struct StackMachine;
+struct Table;
 
 template<bool C> struct TheStoreVisitor;
 using StoreVisitor = TheStoreVisitor<false>;
@@ -108,11 +110,21 @@ struct Store
         void set_(const Attribute &attr, int32_t value) { set_(attr, int64_t(value)); }
     };
 
+    /** Creates a new `db::RowStore` instance. */
+    static std::unique_ptr<Store> CreateRowStore(const Table &table);
+
+    /** Creates a new `db::ColumnStore` instance. */
+    static std::unique_ptr<Store> CreateColumnStore(const Table &table);
+
     private:
     const Table &table_; ///< the table defining this store's schema
 
-    public:
+    protected:
     Store(const Table &table) : table_(table) { }
+
+    public:
+    Store(const Store&) = delete;
+    Store(Store&&) = default;
     virtual ~Store() { }
 
     const Table & table() const { return table_; }

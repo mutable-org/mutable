@@ -6,6 +6,7 @@ struct Options
 {
     /* Help */
     bool show_help;
+    bool list_stores;
     bool list_plan_enumerators;
 
     /* Shell configuration */
@@ -28,6 +29,7 @@ struct Options
     bool benchmark;
 
     /* Keyword arguments. */
+    const char *store;
     const char *plan_enumerator;
 
     private:

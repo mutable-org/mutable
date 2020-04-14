@@ -202,8 +202,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
         } else if (auto S = cast<CreateTableStmt>(stmt)) {
             auto &DB = C.get_database_in_use();
             auto &T = DB.get_table(S->table_name.text);
-            auto store = Store::CreateRowStore(T);
-            T.store(std::move(store));
+            T.store(Store::Create(Options::Get().store, T));
         } else if (auto S = cast<DSVImportStmt>(stmt)) {
             auto &DB = C.get_database_in_use();
             auto &T = DB.get_table(S->table_name.text);
@@ -439,6 +438,30 @@ int main(int argc, const char **argv)
         nullptr, "--benchmark",                             /* Short, Long      */
         "run queries in benchmark mode",                    /* Description      */
         [&](bool) { Options::Get().benchmark = true; });    /* Callback         */
+
+    /*----- Select store implementation ------------------------------------------------------------------------------*/
+    ADD(const char *, Options::Get().store,                 /* Type, Var        */
+        "RowStore",                                         /* Init             */
+        nullptr, "--store",                                 /* Short, Long      */
+        "specify the store",                                /* Description      */
+        /* Callback         */
+        [&](const char *str) {
+            if (Store::STR_TO_KIND.find(str) == Store::STR_TO_KIND.end()) {
+                std::cerr << "There is no store with the name \"" << str << "\"." << std::endl;
+                AP.print_args(stderr);
+                std::exit(EXIT_FAILURE);
+            }
+            Options::Get().store = str;
+        }
+       );
+    ADD(bool, Options::Get().list_stores, false,            /* Type, Var, Init  */
+        nullptr, "--list-stores",                           /* Short, Long      */
+        "list all available stores",                        /* Description      */
+        /* Callback */
+        [&](bool) { Options::Get().list_stores = true; }
+    );
+
+    /*----- Select plan enumerator implementation --------------------------------------------------------------------*/
     ADD(const char *, Options::Get().plan_enumerator,       /* Type, Var        */
         "DPccp",                                            /* Init             */
         nullptr, "--plan-enumerator",                       /* Short, Long      */
@@ -466,6 +489,21 @@ int main(int argc, const char **argv)
         usage(std::cout, argv[0]);
         std::cout << "WHERE\n";
         AP.print_args(stdout);
+        std::exit(EXIT_SUCCESS);
+    }
+
+    if (Options::Get().list_stores) {
+        std::cout << "List of available stores:";
+        constexpr std::pair<const char*, const char*> stores[] = {
+#define DB_STORE(NAME, DESCR) { #NAME, DESCR },
+#include "tables/Store.tbl"
+#undef DB_STORE
+        };
+        std::size_t max_len = 0;
+        for (auto store : stores) max_len = std::max(max_len, strlen(store.first));
+        for (auto store : stores)
+            std::cout << "\n    " << std::setw(max_len) << std::left << store.first << "    -    " << store.second;
+        std::cout << std::endl;
         std::exit(EXIT_SUCCESS);
     }
 

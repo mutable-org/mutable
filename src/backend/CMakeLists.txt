@@ -1,5 +1,6 @@
 SET(
     BACKEND_SOURCES
+    Backend.cpp
     Interpreter.cpp
     StackMachine.cpp
     WebAssembly.cpp

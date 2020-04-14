@@ -118,7 +118,6 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
                 return sum_wo_overflow(T[left].cost, T[right].cost, T[left].size, T[right].size);
             });
             Optimizer Opt(*pe.get(), cf);
-            auto I = Backend::CreateInterpreter();
             auto optree = TIME_EXPR(Opt(*query_graph.get()), "Compute the query plan", timer);
             if (Options::Get().plan) optree->dump(std::cout);
             if (Options::Get().plandot) {
@@ -138,29 +137,17 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
                 plan = std::make_unique<PrintOperator>(std::cout);
 #endif
             }
-
             plan->add_child(optree.release());
 
-            if (Options::Get().dryrun and Options::Get().wasm) {
+            if (Options::Get().dryrun and strneq("Wasm", Options::Get().backend, 4)) {
                 WasmModule wasm = TIME_EXPR(WasmPlatform::compile(*plan), "Compile to WebAssembly", timer);
                 wasm.dump(std::cout);
             }
 
             if (not Options::Get().dryrun) {
+                auto backend = Backend::Create(Options::Get().backend);
                 TIME_THIS("Execute query", timer);
-                if (Options::Get().wasm) {
-#if WITH_V8
-                    auto V8 = Backend::CreateWasmV8();
-                    V8->execute(*plan);
-#elif WITH_SPIDERMONKEY
-                    auto SM = Backend::CreateWasmSpiderMonkey();
-                    SM->execute(*plan);
-#else
-                    std::cerr << "No WASM backend available.\n";
-#endif
-                } else {
-                    I->execute(*plan);
-                }
+                backend->execute(*plan);
             }
         } else if (auto I = cast<InsertStmt>(stmt)) {
             auto &DB = C.get_database_in_use();
@@ -482,6 +469,28 @@ int main(int argc, const char **argv)
         /* Callback */
         [&](bool) { Options::Get().list_plan_enumerators = true; }
     );
+
+    /*----- Select backend implementation ----------------------------------------------------------------------------*/
+    ADD(const char *, Options::Get().backend,               /* Type, Var        */
+        "Interpreter",                                      /* Init             */
+        nullptr, "--backend",                               /* Short, Long      */
+        "specify the execution backend",                    /* Description      */
+        /* Callback         */
+        [&](const char *str) {
+            if (Backend::STR_TO_KIND.find(str) == Backend::STR_TO_KIND.end()) {
+                std::cerr << "There is no execution backend with the name \"" << str << "\"." << std::endl;
+                AP.print_args(stderr);
+                std::exit(EXIT_FAILURE);
+            }
+            Options::Get().backend = str;
+        }
+       );
+    ADD(bool, Options::Get().list_backends, false,          /* Type, Var, Init  */
+        nullptr, "--list-backends",                         /* Short, Long      */
+        "list all available backends",                      /* Description      */
+        /* Callback */
+        [&](bool) { Options::Get().list_backends = true; }
+    );
 #undef ADD
     AP.parse_args(argc, argv);
 
@@ -503,6 +512,21 @@ int main(int argc, const char **argv)
         for (auto store : stores) max_len = std::max(max_len, strlen(store.first));
         for (auto store : stores)
             std::cout << "\n    " << std::setw(max_len) << std::left << store.first << "    -    " << store.second;
+        std::cout << std::endl;
+        std::exit(EXIT_SUCCESS);
+    }
+
+    if (Options::Get().list_backends) {
+        std::cout << "List of available backends:";
+        constexpr std::pair<const char*, const char*> backends[] = {
+#define DB_BACKEND(NAME, DESCR) { #NAME, DESCR },
+#include "tables/Backend.tbl"
+#undef DB_BACKEND
+        };
+        std::size_t max_len = 0;
+        for (auto backend : backends) max_len = std::max(max_len, strlen(backend.first));
+        for (auto backend : backends)
+            std::cout << "\n    " << std::setw(max_len) << std::left << backend.first << "    -    " << backend.second;
         std::cout << std::endl;
         std::exit(EXIT_SUCCESS);
     }

@@ -8,6 +8,7 @@ struct Options
     bool show_help;
     bool list_stores;
     bool list_plan_enumerators;
+    bool list_backends;
 
     /* Shell configuration */
     bool has_color;
@@ -31,6 +32,7 @@ struct Options
     /* Keyword arguments. */
     const char *store;
     const char *plan_enumerator;
+    const char *backend;
 
     private:
     Options() = default;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <unordered_map>
 
 
 namespace db {
@@ -11,18 +12,23 @@ struct Operator;
  * instances, e.g.\ an `db::Interpreter`.  */
 struct Backend
 {
-    /** Creates a new `db::Interpreter` backend instance. */
-    static std::unique_ptr<Backend> CreateInterpreter();
+    enum kind_t {
+#define DB_BACKEND(NAME, _) B_ ## NAME,
+#include "tables/Backend.tbl"
+#undef DB_BACKEND
+    };
 
-#ifdef WITH_V8
-    /** Creates a new `db::WasmBackend` instance using the `db::V8Platform`. */
-    static std::unique_ptr<Backend> CreateWasmV8();
-#endif
+    static const std::unordered_map<std::string, kind_t> STR_TO_KIND;
 
-#ifdef WITH_SPIDERMONKEY
-    /** Creates a new `db::WasmBackend` instance using the `db::SpiderMonkeyPlatform`. */
-    static std::unique_ptr<Backend> CreateWasmSpiderMonkey();
-#endif
+    /** Create a `Backend` instance given the kind of backend. */
+    static std::unique_ptr<Backend> Create(kind_t kind);
+    /** Create a `Backend` instance given the name of a backend. */
+    static std::unique_ptr<Backend> Create(const char *kind) { return Create(STR_TO_KIND.at(kind)); }
+
+#define DB_BACKEND(NAME, _) \
+    static std::unique_ptr<Backend> Create ## NAME();
+#include "tables/Backend.tbl"
+#undef DB_BACKEND
 
     virtual ~Backend() { }
 

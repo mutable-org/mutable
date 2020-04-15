@@ -24,7 +24,7 @@ add_executable(
     parse/SemaTest.cpp
 
     # IR
-    IR/AdjacencyMatrixTest.cpp
+    IR/QueryGraphTest.cpp
     IR/CNFTest.cpp
     IR/PlanEnumeratorTest.cpp
     IR/TupleTest.cpp

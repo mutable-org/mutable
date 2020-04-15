@@ -1,0 +1,9 @@
+/* vim: set filetype=cpp: */
+
+#ifndef DB_STORE
+#error "define DB_STORE(NAME, DESCR) before including this file"
+#endif
+
+/*        NAME            | Description */
+DB_STORE( RowStore,         "stores attributes in row-major order" )
+DB_STORE( ColumnStore,      "stores attributes in column-major order" )

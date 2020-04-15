@@ -1,0 +1,14 @@
+/* vim: set filetype=cpp: */
+
+#ifndef DB_BACKEND
+#error "define DB_BACKEND(NAME, DESCR) before including this file"
+#endif
+
+/*          NAME          | Description */
+DB_BACKEND( Interpreter,    "interperter backend" )
+#ifdef WITH_V8
+DB_BACKEND( WasmV8,         "WebAssembly backend using Google's V8 engine" )
+#endif
+#ifdef WITH_SPIDERMONKEY
+DB_BACKEND( WasmSM,         "WebAssembly backend using Mozilla's SpiderMonkey engine" )
+#endif

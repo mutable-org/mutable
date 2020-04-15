@@ -2,3 +2,5 @@ build*/
 doxy/html/
 doxy/latex/
 third-party/
+coverage/
+catch.xml

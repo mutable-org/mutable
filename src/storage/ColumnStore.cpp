@@ -30,7 +30,7 @@ ColumnStore::ColumnStore(const Table &table)
     columns_.emplace_back(allocator.allocate(ALLOCATION_SIZE));
 
     insist(columns_.size() == table.size() + 1);
-    capacity_ = ALLOCATION_SIZE / (max_attr_size / 8);
+    capacity_ = (ALLOCATION_SIZE * 8) / max_attr_size;
 }
 
 ColumnStore::~ColumnStore() { }

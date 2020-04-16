@@ -295,11 +295,11 @@ struct WasmPipelineCG : ConstOperatorVisitor, ConstASTExprVisitor
 struct WasmStoreCG : ConstStoreVisitor
 {
     WasmPipelineCG &pipeline;
-    const Schema &schema;
+    const Producer &op;
 
-    WasmStoreCG(WasmPipelineCG &pipeline, const Schema &schema)
+    WasmStoreCG(WasmPipelineCG &pipeline, const Producer &op)
         : pipeline(pipeline)
-        , schema(schema)
+        , op(op)
     { }
 
     ~WasmStoreCG() { }
@@ -610,12 +610,9 @@ void WasmPipelineCG::operator()(const ScanOperator &op)
     );
 
     swap(block_, loop_body);
-    /*----- Generate code to access attributes. ----------------------------------------------------------------------*/
-    WasmStoreCG store(*this, op.schema());
+    /*----- Generate code to access attributes and emit code for the rest of the pipeline. ---------------------------*/
+    WasmStoreCG store(*this, op);
     store(op.store());
-
-    /*----- Generate code for rest of the pipeline. ------------------------------------------------------------------*/
-    (*this)(*op.parent());
 
     /*----- Increment induction variable. ----------------------------------------------------------------------------*/
     auto b_inc_induction_var = BinaryenBinary(
@@ -1088,37 +1085,12 @@ void WasmStoreCG::operator()(const RowStore &store)
     std::ostringstream oss;
     auto &table = store.table();
 
-    BinaryenAddGlobalImport(
-        /* module=             */ pipeline.module(),
-        /* internalName=       */ table.name,
-        /* externalModuleName= */ "env",
-        /* externalBaseName=   */ table.name,
-        /* globalType=         */ BinaryenTypeInt32(),
-        /* mutable=            */ false
-    );
-
-    /*----- Generate code to compute row address. --------------------------------------------------------------------*/
-    auto b_table_addr = BinaryenGlobalGet(
-        /* module= */ pipeline.module(),
-        /* name=   */ table.name,
-        /* type=   */ BinaryenTypeInt32()
-    );
-    auto b_row_offset = BinaryenBinary(
-        /* module= */ pipeline.module(),
-        /* op=     */ BinaryenMulInt32(),
-        /* left=   */ pipeline.b_induction_var,
-        /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(store.row_size() / 8))
-    );
-    auto b_row_addr = BinaryenBinary(
-        /* module= */ pipeline.module(),
-        /* op=     */ BinaryenAddInt32(),
-        /* left=   */ b_table_addr,
-        /* right=  */ b_row_offset
-    );
+    /*----- Import table address. ------------------------------------------------------------------------------------*/
+    auto b_row_addr = pipeline.CG.add_import(table.name, BinaryenTypeInt32(), /* is_mutable= */ true);
 
     /*----- Generate code to access null bitmap and value of all required attributes. --------------------------------*/
     const auto null_bitmap_offset = store.offset(table.size());
-    for (auto &e : schema) {
+    for (auto &e : op.schema()) {
         auto &attr = table[e.id.name];
 
         /*----- Generate code for null bit check. --------------------------------------------------------------------*/
@@ -1194,6 +1166,22 @@ void WasmStoreCG::operator()(const RowStore &store)
             pipeline.intermediates_.emplace(e.id, b_value);
         }
     }
+
+    /*----- Generate code for rest of the pipeline. ------------------------------------------------------------------*/
+    pipeline(*op.parent());
+
+    /*----- Emit code to advance to next row. ------------------------------------------------------------------------*/
+    auto b_row_addr_updated = BinaryenBinary(
+        /* module= */ pipeline.module(),
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ b_row_addr,
+        /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(store.row_size() / 8))
+    );
+    pipeline.block_ += BinaryenLocalSet(
+        /* module= */ pipeline.module(),
+        /* index=  */ BinaryenLocalGetGetIndex(b_row_addr),
+        /* value=  */ b_row_addr_updated
+    );
 }
 
 void WasmStoreCG::operator()(const ColumnStore &store)
@@ -1201,10 +1189,12 @@ void WasmStoreCG::operator()(const ColumnStore &store)
     std::ostringstream oss;
     auto &table = store.table();
 
-    /* Import null bitmap address. */
+    /* Import null bitmap column address. */
+    // TODO
 
     /*----- Generate code to access null bitmap and value of all required attributes. --------------------------------*/
-    for (auto &e : schema) {
+    std::vector<BinaryenExpressionRef> col_addrs;
+    for (auto &e : op.schema()) {
         auto &attr = table[e.id.name];
 
         oss.str("");
@@ -1212,34 +1202,8 @@ void WasmStoreCG::operator()(const ColumnStore &store)
         auto name = oss.str();
 
         /*----- Import column address. -------------------------------------------------------------------------------*/
-        BinaryenAddGlobalImport(
-            /* module=             */ pipeline.module(),
-            /* internalName=       */ name.c_str(),
-            /* externalModuleName= */ "env",
-            /* externalBaseName=   */ name.c_str(),
-            /* globalType=         */ BinaryenTypeInt32(),
-            /* mutable=            */ false
-        );
-
-        /*----- Generate code to load column address. ----------------------------------------------------------------*/
-        const auto attr_size = std::max<std::size_t>(1, attr.type->size() / 8);
-        auto b_col_addr = BinaryenGlobalGet(
-            /* module= */ pipeline.module(),
-            /* name=   */ name.c_str(),
-            /* type=   */ BinaryenTypeInt32()
-        );
-        auto b_attr_offset = BinaryenBinary(
-            /* module= */ pipeline.module(),
-            /* op=     */ BinaryenMulInt32(),
-            /* left=   */ pipeline.b_induction_var,
-            /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(attr_size))
-        );
-        auto b_attr_addr = BinaryenBinary(
-            /* module= */ pipeline.module(),
-            /* op=     */ BinaryenAddInt32(),
-            /* left=   */ b_col_addr,
-            /* right=  */ b_attr_offset
-        );
+        auto b_col_addr = pipeline.CG.add_import(name, BinaryenTypeInt32(), /* is_mutable= */ true);
+        col_addrs.push_back(b_col_addr);
 
         if (attr.type->size() < 8) {
             unreachable("not implemented");
@@ -1251,10 +1215,33 @@ void WasmStoreCG::operator()(const ColumnStore &store)
                 /* offset=  */ 0,
                 /* align=   */ 0,
                 /* type=    */ get_binaryen_type(attr.type),
-                /* ptr=     */ b_attr_addr
+                /* ptr=     */ b_col_addr
             );
             pipeline.intermediates_.emplace(e.id, b_value);
         }
+    }
+
+    /*----- Generate code for rest of the pipeline. ------------------------------------------------------------------*/
+    pipeline(*op.parent());
+
+    /*----- Emit code to advance each column address to next row. ----------------------------------------------------*/
+    auto col_addr_it = col_addrs.cbegin();
+    for (auto &e : op.schema()) {
+        auto &attr = table[e.id.name];
+        auto b_col_addr = *col_addr_it++;
+        const auto attr_size = std::max<std::size_t>(1, attr.type->size() / 8);
+
+        auto b_col_addr_updated = BinaryenBinary(
+            /* module= */ pipeline.module(),
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ b_col_addr,
+            /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(attr_size))
+        );
+        pipeline.block_ += BinaryenLocalSet(
+            /* module= */ pipeline.module(),
+            /* index=  */ BinaryenLocalGetGetIndex(b_col_addr),
+            /* value=  */ b_col_addr_updated
+        );
     }
 }
 

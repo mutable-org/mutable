@@ -179,7 +179,11 @@ V8Platform::V8Platform()
         v8::V8::Initialize();
     }
 
-    v8::V8::SetFlagsFromString("--no-liftoff");
+#if 1
+    v8::V8::SetFlagsFromString("--no-liftoff --experimental-wasm-simd");
+#else
+    v8::V8::SetFlagsFromString("--no-liftoff --print-wasm-code");
+#endif
 
     v8::Isolate::CreateParams create_params;
     create_params.array_buffer_allocator = allocator_ = v8::ArrayBuffer::Allocator::NewDefaultAllocator();

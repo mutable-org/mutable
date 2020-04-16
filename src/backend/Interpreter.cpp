@@ -318,7 +318,7 @@ void Pipeline::operator()(const PrintOperator &op)
 
 void Pipeline::operator()(const NoOpOperator &op)
 {
-    as<NoOpData>(op.data())->num_rows++;
+    as<NoOpData>(op.data())->num_rows += block_.size();
 }
 
 void Pipeline::operator()(const FilterOperator &op)

@@ -107,7 +107,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(V8_BUILD_ARGS "${V8_BUILD_ARGS} is_debug=true use_debug_fission=true")
 else()
     message(STATUS "Building V8 in release mode")
-    set(V8_BUILD_ARGS "${V8_BUILD_ARGS} is_debug=false symbol_level=0")
+    set(V8_BUILD_ARGS "${V8_BUILD_ARGS} is_debug=false symbol_level=0 v8_enable_disassembler=true")
 endif()
 ExternalProject_Add(
     V8

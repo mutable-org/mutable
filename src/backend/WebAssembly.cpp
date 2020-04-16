@@ -1196,9 +1196,66 @@ void WasmStoreCG::operator()(const RowStore &store)
     }
 }
 
-void WasmStoreCG::operator()(const ColumnStore&)
+void WasmStoreCG::operator()(const ColumnStore &store)
 {
-    unreachable("not implemented"); // TODO implement
+    std::ostringstream oss;
+    auto &table = store.table();
+
+    /* Import null bitmap address. */
+
+    /*----- Generate code to access null bitmap and value of all required attributes. --------------------------------*/
+    for (auto &e : schema) {
+        auto &attr = table[e.id.name];
+
+        oss.str("");
+        oss << table.name << '.' << attr.name;
+        auto name = oss.str();
+
+        /*----- Import column address. -------------------------------------------------------------------------------*/
+        BinaryenAddGlobalImport(
+            /* module=             */ pipeline.module(),
+            /* internalName=       */ name.c_str(),
+            /* externalModuleName= */ "env",
+            /* externalBaseName=   */ name.c_str(),
+            /* globalType=         */ BinaryenTypeInt32(),
+            /* mutable=            */ false
+        );
+
+        /*----- Generate code to load column address. ----------------------------------------------------------------*/
+        const auto attr_size = std::max<std::size_t>(1, attr.type->size() / 8);
+        auto b_col_addr = BinaryenGlobalGet(
+            /* module= */ pipeline.module(),
+            /* name=   */ name.c_str(),
+            /* type=   */ BinaryenTypeInt32()
+        );
+        auto b_attr_offset = BinaryenBinary(
+            /* module= */ pipeline.module(),
+            /* op=     */ BinaryenMulInt32(),
+            /* left=   */ pipeline.b_induction_var,
+            /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(attr_size))
+        );
+        auto b_attr_addr = BinaryenBinary(
+            /* module= */ pipeline.module(),
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ b_col_addr,
+            /* right=  */ b_attr_offset
+        );
+
+        if (attr.type->size() < 8) {
+            unreachable("not implemented");
+        } else {
+            auto b_value = BinaryenLoad(
+                /* module=  */ pipeline.module(),
+                /* bytes=   */ attr.type->size() / 8,
+                /* signed=  */ true,
+                /* offset=  */ 0,
+                /* align=   */ 0,
+                /* type=    */ get_binaryen_type(attr.type),
+                /* ptr=     */ b_attr_addr
+            );
+            pipeline.intermediates_.emplace(e.id, b_value);
+        }
+    }
 }
 
 

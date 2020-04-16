@@ -108,7 +108,6 @@ struct EnvGen : ConstStoreVisitor
     using ConstStoreVisitor::operator();
 
     void operator()(const RowStore &s) override {
-        std::ostringstream oss;
         auto Ctx = isolate_->GetCurrentContext();
         auto &table = s.table();
 
@@ -127,6 +126,7 @@ struct EnvGen : ConstStoreVisitor
         DISCARD env_->Set(Ctx, V8STR(table.name), v8::Int32::New(isolate_, ptr));
 
         /* Add table size (num_rows) to env. */
+        std::ostringstream oss;
         oss << table.name << "_num_rows";
         DISCARD env_->Set(Ctx, V8STR(oss.str().c_str()), v8::Int32::New(isolate_, table.store().num_rows()));
     }
@@ -158,6 +158,13 @@ struct EnvGen : ConstStoreVisitor
             /* Add column address to env. */
             DISCARD env_->Set(Ctx, V8STR(env_name.c_str()), v8::Int32::New(isolate_, ptr));
         }
+
+        // TODO add null bitmap column
+
+        /* Add table size (num_rows) to env. */
+        oss.str("");
+        oss << table.name << "_num_rows";
+        DISCARD env_->Set(Ctx, V8STR(oss.str().c_str()), v8::Int32::New(isolate_, table.store().num_rows()));
     }
 };
 

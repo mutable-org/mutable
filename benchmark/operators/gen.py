@@ -143,13 +143,13 @@ def gen_column(name, ty, num_tuples):
     if ty == 'b':
         return [ 'TRUE' if random.getrandbits(1) else 'FALSE' for i in range(num_tuples) ]
     elif ty == 'i8':
-        return [ random.randrange(-2**8 + 1, 2**8-1) for i in range(num_tuples) ]
+        return [ random.randrange(-2**7 + 1, 2**7-1) for i in range(num_tuples) ]
     elif ty == 'i16':
-        return [ random.randrange(-2**16 + 1, 2**16-1) for i in range(num_tuples) ]
+        return [ random.randrange(-2**15 + 1, 2**15-1) for i in range(num_tuples) ]
     elif ty == 'i32':
-        return [ random.randrange(-2**32 + 1, 2**32-1) for i in range(num_tuples) ]
+        return [ random.randrange(-2**31 + 1, 2**31-1) for i in range(num_tuples) ]
     elif ty == 'i64':
-        return [ random.randrange(-2**64 + 1, 2**64-1) for i in range(num_tuples) ]
+        return [ random.randrange(-2**63 + 1, 2**63-1) for i in range(num_tuples) ]
     elif ty == 'f' or ty == 'd':
         return [ random.random() for i in range(num_tuples) ]
     else:

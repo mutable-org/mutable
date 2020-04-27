@@ -121,7 +121,7 @@ def check_stdout(expected, actual, verbose):
     if expected != None:
         expected_sorted = sorted(expected.split('\n'))
         actual_sorted = sorted(actual.split('\n'))
-        if expected != actual:
+        if expected_sorted != actual_sorted:
             diff = ""
             if verbose:
                 diff = '\n==>' + colordiff(actual, expected).rstrip('\n').replace('\n', '\n   ')

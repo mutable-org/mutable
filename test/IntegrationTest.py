@@ -316,7 +316,7 @@ if __name__ == '__main__':
             if success:
                 success = run_stage(args, test_case, stage, COMMAND[stage](test_case))
             else:
-                report_failure("earlier stage failed", stage, test_case)
+                report_failure("earlier stage failed", stage, test_case, args.debug)
             # Store results
             stage_counter[stage] = stage_counter.get(stage, 0) + 1
             stage_pass_counter[stage] = stage_pass_counter.get(stage, 0) + success

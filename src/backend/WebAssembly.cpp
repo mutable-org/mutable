@@ -1,6 +1,8 @@
 #include "backend/WebAssembly.hpp"
 
 #include "backend/Interpreter.hpp"
+#include "backend/WasmAlgo.hpp"
+#include "backend/WasmUtil.hpp"
 #include "IR/CNF.hpp"
 #include "storage/ColumnStore.hpp"
 #include "storage/RowStore.hpp"
@@ -15,151 +17,23 @@ using namespace db;
 
 
 /*======================================================================================================================
- * Helper functions
- *====================================================================================================================*/
-
-static BinaryenType get_binaryen_type(const Type *ty)
-{
-    insist(not ty->is_error());
-
-    if (ty->is_boolean()) return BinaryenTypeInt32();
-
-    if (auto n = cast<const Numeric>(ty)) {
-        if (n->kind == Numeric::N_Float) {
-            if (n->size() == 32) return BinaryenTypeFloat32();
-            else                 return BinaryenTypeFloat64();
-        }
-
-        switch (n->size()) {
-            case 8:  /* not supported, fall through */
-            case 16: /* not supported, fall through */
-            case 32: return BinaryenTypeInt32();
-            case 64: return BinaryenTypeInt64();
-        }
-    }
-
-    unreachable("unsupported type");
-}
-
-BinaryenExpressionRef convert(BinaryenModuleRef module, BinaryenExpressionRef expr,
-                              const Type *original, const Type *target)
-{
-#define CONVERT(CONVERSION) BinaryenUnary(module, Binaryen##CONVERSION(), expr)
-    auto O = as<const Numeric>(original);
-    auto T = as<const Numeric>(target);
-    if (O->as_vectorial() == T->as_vectorial()) return expr; // no conversion required
-
-    if (T->is_double()) {
-        if (O->is_float())
-            return CONVERT(PromoteFloat32); // f32 to f64
-        if (O->is_integral()) {
-            if (O->size() == 64)
-                return CONVERT(ConvertSInt64ToFloat64); // i64 to f64
-            else
-                return CONVERT(ConvertSInt32ToFloat64); // i32 to f64
-        }
-        if (O->is_decimal()) {
-            unreachable("not implemented");
-        }
-    }
-
-    if (T->is_float()) {
-        if (O->is_integral()) {
-            if (O->size() == 64)
-                return CONVERT(ConvertSInt64ToFloat32); // i64 to f32
-            else
-                return CONVERT(ConvertSInt32ToFloat32); // i32 to f32
-        }
-        if (O->is_decimal()) {
-            unreachable("not implemented");
-        }
-    }
-
-    if (T->is_integral()) {
-        if (T->size() == 64) {
-            if (O->is_integral()) {
-                if (O->size() == 64)
-                    return expr; // i64 to i64; no conversion required
-                else
-                    return CONVERT(ExtendSInt32); // i32 to i64
-            }
-        }
-        if (T->size() == 32) {
-            if (O->is_integral()) {
-                if (O->size() == 64)
-                    return CONVERT(WrapInt64); // i64 to i32
-                else
-                    return expr; // i32 to i32; no conversion required
-            }
-        }
-    }
-
-    unreachable("unsupported conversion");
-#undef CONVERT
-};
-
-
-/*======================================================================================================================
  * Code generation helper classes
  *====================================================================================================================*/
-
-/** Helper class to construct WASM blocks. */
-struct BlockBuilder
-{
-    friend void swap(BlockBuilder &first, BlockBuilder &second) {
-        using std::swap;
-        swap(first.module_,      second.module_);
-        swap(first.name_,        second.name_);
-        swap(first.exprs_,       second.exprs_);
-        swap(first.return_type_, second.return_type_);
-    }
-
-    private:
-    BinaryenModuleRef module_;
-    const char *name_;
-    std::vector<BinaryenExpressionRef> exprs_;
-    BinaryenType return_type_;
-
-    public:
-    BlockBuilder(BinaryenModuleRef module, const char *name = nullptr)
-        : module_(module)
-        , name_(name)
-        , return_type_(BinaryenTypeAuto())
-    { }
-    BlockBuilder(const BlockBuilder&) = delete;
-    BlockBuilder(BlockBuilder &&other) { swap(*this, other); }
-
-    BlockBuilder & operator=(BlockBuilder other) { swap(*this, other); return *this; }
-
-    void add(BinaryenExpressionRef expr) { exprs_.push_back(expr); }
-    BlockBuilder & operator+=(BinaryenExpressionRef expr) { add(expr); return *this; }
-
-    void set_return_type(BinaryenType ty) { return_type_ = ty; }
-
-    BinaryenExpressionRef finalize() {
-        return BinaryenBlock(
-            /* module=      */ module_,
-            /* name=        */ name_,
-            /* children=    */ &exprs_[0],
-            /* numChildren= */ exprs_.size(),
-            /* type=        */ return_type_
-        );
-    }
-};
 
 /** Compiles a physical plan to WebAssembly. */
 struct WasmCodeGen : ConstOperatorVisitor
 {
     private:
     WasmModule &module_; ///< the WASM module
-    std::size_t num_params_; ///< number of function parameters
-    std::vector<BinaryenType> param_types; ///< types of function parameters
-    std::vector<BinaryenType> locals_; ///< types of function locals
-    BlockBuilder block_; ///< the global block
+    FunctionBuilder main_; ///< the main function (or entry)
     std::unordered_map<std::string, BinaryenExpressionRef> imports_; ///< output locations of columns
     BinaryenExpressionRef b_num_tuples_; ///< number of result tuples produced
+    BinaryenExpressionRef b_head_of_heap_; ///< address to the head of the heap
 
-    WasmCodeGen(WasmModule &module) : module_(module), block_(module.ref(), "fn.body") { } // private c'tor
+    WasmCodeGen(WasmModule &module)
+        : module_(module)
+        , main_(module.ref(), "run", BinaryenTypeInt32(), { /* module ID */ BinaryenTypeInt32() })
+    { }
 
     public:
     static WasmModule compile(const Operator &plan);
@@ -170,12 +44,11 @@ struct WasmCodeGen : ConstOperatorVisitor
     /** Returns the local variable holding the number of result tuples produced. */
     BinaryenExpressionRef num_tuples() const { return b_num_tuples_; }
 
+    /** Returns the local variable holding the address to the head of the heap. */
+    BinaryenExpressionRef head_of_heap() const { return b_head_of_heap_; }
+
     /** Creates a new local and returns an expression accessing this fresh local. */
-    BinaryenExpressionRef add_local(BinaryenType ty) {
-        std::size_t idx = num_params_ + locals_.size();
-        locals_.push_back(ty);
-        return BinaryenLocalGet(module(), idx, ty);
-    }
+    BinaryenExpressionRef add_local(BinaryenType ty) { return main_.add_local(ty); }
 
     /** Adds a global import to the module.  If the import is mutable, the value of the global is copied over into a
      * fresh local variable.  (This is a work-around, since global imports cannot be mutable.)
@@ -202,7 +75,7 @@ struct WasmCodeGen : ConstOperatorVisitor
             );
             if (is_mutable) {
                 auto b_local = add_local(ty);
-                block_ += BinaryenLocalSet(
+                main_.block() += BinaryenLocalSet(
                     /* module= */ module(),
                     /* index=  */ BinaryenLocalGetGetIndex(b_local),
                     /* value=  */ b_global
@@ -245,21 +118,20 @@ struct WasmCodeGen : ConstOperatorVisitor
 };
 
 /** Compiles a single pipeline.  Pipelines begin at producer nodes in the operator tree. */
-struct WasmPipelineCG : ConstOperatorVisitor, ConstASTExprVisitor
+struct WasmPipelineCG : ConstOperatorVisitor
 {
     friend struct WasmStoreCG;
+    friend struct WasmCodeGen;
 
     WasmCodeGen &CG; ///< the current codegen context
 
     private:
+    WasmCGContext context_; ///< wasm context for compilation of expressions
     BlockBuilder block_; ///< used to construct the current block
-    BinaryenExpressionRef expr_; ///< used for recursive construction of expressions
-    BinaryenExpressionRef b_induction_var; ///< the induction variable that is used as the row id
-    std::unordered_map<Schema::Identifier, BinaryenExpressionRef> is_null_; ///< a map of intermediate results
-    std::unordered_map<Schema::Identifier, BinaryenExpressionRef> intermediates_; ///< a map of intermediate results
 
     public:
-    WasmPipelineCG(WasmCodeGen &CG) : CG(CG) , block_(CG.module(), "pipeline") { }
+    WasmPipelineCG(WasmCodeGen &CG) : CG(CG), context_(CG.module()), block_(CG.module(), "pipeline") { }
+    WasmPipelineCG(WasmCodeGen &CG, const char *name) : CG(CG), context_(CG.module()), block_(CG.module(), name) { }
 
     /** Return the current WASM module. */
     BinaryenModuleRef module() { return CG.module(); }
@@ -271,12 +143,10 @@ struct WasmPipelineCG : ConstOperatorVisitor, ConstASTExprVisitor
         return P.block_.finalize();
     }
 
-    private:
-    /** Compiles an AST expression to a `BinaryenExpressionRef`. */
-    BinaryenExpressionRef compile(const Expr &expr);
-    /** Compiles a `cnf::CNF` to a `BinaryenExpressionRef`.  (Without short-circuit evaluation!) */
-    BinaryenExpressionRef compile(const cnf::CNF &cnf);
+    WasmCGContext & context() { return context_; }
+    const WasmCGContext & context() const { return context_; }
 
+    private:
     void write_results_column_major(const Schema &schema);
     void write_results_row_major(const Schema &schema);
 
@@ -284,11 +154,6 @@ struct WasmPipelineCG : ConstOperatorVisitor, ConstASTExprVisitor
     using ConstOperatorVisitor::operator();
 #define DECLARE(CLASS) void operator()(const CLASS &op) override;
     DB_OPERATOR_LIST(DECLARE)
-#undef DECLARE
-
-    using ConstASTExprVisitor::operator();
-#define DECLARE(CLASS) void operator()(const CLASS &op) override;
-    DB_AST_EXPR_LIST(DECLARE)
 #undef DECLARE
 };
 
@@ -319,11 +184,6 @@ WasmModule WasmCodeGen::compile(const Operator &plan)
     WasmModule module; // fresh module
     WasmCodeGen codegen(module);
 
-    /*----- Declare parameters. --------------------------------------------------------------------------------------*/
-    std::vector<BinaryenType> param_types;
-    param_types.push_back(BinaryenTypeInt32()); // module_id
-    codegen.num_params_ = param_types.size();
-
     /*----- Add memory. ----------------------------------------------------------------------------------------------*/
     BinaryenSetMemory(
         /* module=         */ module.ref(),
@@ -350,22 +210,17 @@ WasmModule WasmCodeGen::compile(const Operator &plan)
     /*----- Count number of result tuples. ---------------------------------------------------------------------------*/
     codegen.b_num_tuples_ = codegen.add_local(BinaryenTypeInt32());
 
+    /*----- Set up head of heap. -------------------------------------------------------------------------------------*/
+    codegen.b_head_of_heap_ = codegen.add_local(BinaryenTypeInt32());
+
     /*----- Compile plan. --------------------------------------------------------------------------------------------*/
     codegen(plan); // emit code
 
     /*----- Return the number of result tuples produced. -------------------------------------------------------------*/
-    codegen.block_ += codegen.b_num_tuples_;
+    codegen.main_.block() += codegen.b_num_tuples_;
 
     /*----- Add function. --------------------------------------------------------------------------------------------*/
-    BinaryenAddFunction(
-        /* module=      */ module.ref(),
-        /* name=        */ "run",
-        /* params=      */ BinaryenTypeCreate(&param_types[0], param_types.size()),
-        /* results=     */ BinaryenTypeInt32(),
-        /* varTypes=    */ &codegen.locals_[0],
-        /* numVarTypes= */ codegen.locals_.size(),
-        /* body=        */ codegen.block_.finalize()
-    );
+    codegen.main_.finalize();
     BinaryenAddFunctionExport(module.ref(), "run", "run");
 
     /*----- Validate and optimize module. ----------------------------------------------------------------------------*/
@@ -390,7 +245,7 @@ WasmModule WasmCodeGen::compile(const Operator &plan)
 
 void WasmCodeGen::operator()(const ScanOperator &op)
 {
-    block_ += WasmPipelineCG::compile(op, *this);
+    main_.block() += WasmPipelineCG::compile(op, *this);
 }
 
 void WasmCodeGen::operator()(const CallbackOperator &op) { (*this)(*op.child(0)); }
@@ -431,7 +286,7 @@ void WasmCodeGen::operator()(const ProjectionOperator &op)
     if (op.children().size())
         (*this)(*op.child(0));
     else
-        block_ += WasmPipelineCG::compile(op, *this);
+        main_.block() += WasmPipelineCG::compile(op, *this);
 }
 
 void WasmCodeGen::operator()(const LimitOperator &op)
@@ -446,7 +301,138 @@ void WasmCodeGen::operator()(const GroupingOperator &op)
 
 void WasmCodeGen::operator()(const SortingOperator &op)
 {
+    /* Save the current head of heap as the beginning of the data to sort. */
+    auto b_data_begin = add_local(BinaryenTypeInt32());
+    main_.block() += BinaryenLocalSet(
+        /* module= */ module(),
+        /* index=  */ BinaryenLocalGetGetIndex(b_data_begin),
+        /* value=  */ head_of_heap()
+    );
+
     (*this)(*op.child(0));
+
+    /* Save the current head of heap as the end of the data to sort. */
+    auto b_data_end = add_local(BinaryenTypeInt32());
+    main_.block() += BinaryenLocalSet(
+        /* module= */ module(),
+        /* index=  */ BinaryenLocalGetGetIndex(b_data_end),
+        /* value=  */ head_of_heap()
+    );
+
+#ifndef NDEBUG
+    {
+        BinaryenExpressionRef args[] = { b_data_begin, b_data_end };
+        main_.block() += BinaryenCall(
+            /* module=      */ module(),
+            /* target=      */ "print",
+            /* operands=    */ args,
+            /* numOperands= */ 2,
+            /* returnType=  */ BinaryenTypeNone()
+        );
+    }
+#endif
+
+    // TODO: generate sorting algorithm and invoke with start and end of data segment
+    WasmQuickSort qsort(op.child(0)->schema(), op.order_by(), WasmPartitionBranchless{});
+    BinaryenExpressionRef qsort_args[] = { b_data_begin, b_data_end };
+    auto b_qsort = qsort.emit(module());
+#if 1
+    main_.block() += BinaryenCall(
+        /* module=      */ module(),
+        /* target=      */ BinaryenFunctionGetName(b_qsort),
+        /* operands=    */ qsort_args,
+        /* numOperands= */ 2,
+        /* returnType=  */ BinaryenTypeNone()
+    );
+#endif
+#if 0
+    auto b_pivot = main_.add_local(BinaryenTypeInt32());
+    main_.block() += BinaryenLocalSet(
+        /* module= */ module(),
+        /* index=  */ BinaryenLocalGetGetIndex(b_pivot),
+        /* value=  */ b_data_begin
+    );
+    WasmPartitionBranchless wasm_partition;
+    wasm_partition.emit(
+        /* module= */ module(),
+        /* fn=     */ main_,
+        /* block=  */ main_.block(),
+        /* schema= */ op.child(0)->schema(),
+        /* order=  */ op.order_by(),
+        /* begin=  */ b_data_begin,
+        /* end=    */ b_data_end,
+        /* pivot=  */ b_pivot
+    );
+#endif
+
+    auto loop_name = "orderby";
+    auto body_name = "orderby.body";
+
+    /*----- Create new pipeline starting at `SortingOperator`. -------------------------------------------------------*/
+    WasmPipelineCG pipeline(*this, body_name);
+
+    /*----- Emit code for data accesses. -----------------------------------------------------------------------------*/
+    std::size_t offset = 0;
+    std::size_t alignment = 0;
+    for (auto &attr : op.schema()) {
+        const std::size_t size_in_bytes = attr.type->size() < 8 ? 1 : attr.type->size() / 8;
+        alignment = std::max(alignment, size_in_bytes);
+        if (offset % size_in_bytes)
+            offset += size_in_bytes - (offset % size_in_bytes); // self-align
+
+        auto b_val = BinaryenLoad(
+            /* module= */ module(),
+            /* bytes=  */ size_in_bytes,
+            /* signed= */ false,
+            /* offset= */ offset,
+            /* align=  */ 0,
+            /* type=   */ get_binaryen_type(attr.type),
+            /* ptr=    */ b_data_begin
+        );
+        pipeline.context().add(attr.id, b_val);
+
+        offset += size_in_bytes;
+    }
+    if (offset % alignment)
+        offset += alignment - (offset % alignment); // align tuple
+
+    /*----- Emit code for rest of the pipeline. ----------------------------------------------------------------------*/
+    pipeline(*op.parent());
+
+    /*----- Increment induction variable. ----------------------------------------------------------------------------*/
+    auto b_inc = BinaryenBinary(
+        /* module= */ module(),
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ b_data_begin,
+        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(offset))
+    );
+    pipeline.block_ += BinaryenLocalSet(
+        /* module= */ module(),
+        /* index=  */ BinaryenLocalGetGetIndex(b_data_begin),
+        /* value=  */ b_inc
+    );
+
+    /*----- Create loop header.  -------------------------------------------------------------------------------------*/
+    /* if (data_begin < data_end) continue; else break; */
+    auto b_loop_cond = BinaryenBinary(
+        /* module= */ module(),
+        /* op=     */ BinaryenLtSInt32(),
+        /* left=   */ b_data_begin,
+        /* right=  */ b_data_end
+    );
+    pipeline.block_ += BinaryenBreak(
+        /* module=    */ module(),
+        /* name=      */ loop_name,
+        /* condition= */ b_loop_cond,
+        /* value=     */ nullptr
+    );
+
+    /*----- Create loop. ---------------------------------------------------------------------------------------------*/
+    main_.block() += BinaryenLoop(
+        /* module= */ module(),
+        /* in=     */ loop_name,
+        /* body=   */ pipeline.block_.finalize()
+    );
 }
 
 
@@ -454,64 +440,12 @@ void WasmCodeGen::operator()(const SortingOperator &op)
  * WasmPipelineCG
  *====================================================================================================================*/
 
-BinaryenExpressionRef WasmPipelineCG::compile(const Expr &expr)
-{
-    (*this)(expr);
-    return expr_;
-}
-
-BinaryenExpressionRef WasmPipelineCG::compile(const cnf::CNF &cnf)
-{
-    BinaryenExpressionRef b_cnf = nullptr;
-    for (auto &clause : cnf) {
-        BinaryenExpressionRef b_clause = nullptr;
-        for (auto &pred : clause) {
-            /* Generate code for the literal of the predicate. */
-            auto b_pred = compile(*pred.expr());
-            /* If the predicate is negative, negate the outcome by computing `1 - pred`. */
-            if (pred.negative()) {
-                b_pred = BinaryenBinary(
-                    /* module= */ module(),
-                    /* op=     */ BinaryenSubInt32(),
-                    /* left=   */ BinaryenConst(module(), BinaryenLiteralInt32(1)),
-                    /* right=  */ b_pred
-                );
-            }
-            /* Add the predicate to the clause with an `or`. */
-            if (b_clause) {
-                b_clause = BinaryenBinary(
-                    /* module= */ module(),
-                    /* op=     */ BinaryenOrInt32(),
-                    /* left=   */ b_clause,
-                    /* right=  */ b_pred
-                );
-            } else {
-                b_clause = b_pred;
-            }
-        }
-        /* Add the clause to the CNF with an `and`. */
-        if (b_cnf) {
-            b_cnf = BinaryenBinary(
-                /* module= */ module(),
-                /* op=     */ BinaryenAndInt32(),
-                /* left=   */ b_cnf,
-                /* right=  */ b_clause
-            );
-        } else {
-            b_cnf = b_clause;
-        }
-    }
-    insist(b_cnf, "empty CNF?");
-
-    return b_cnf;
-}
-
 void WasmPipelineCG::write_results_row_major(const Schema &schema)
 {
     std::size_t offset = 0;
     auto b_out = CG.get_import("out");
     for (auto &attr : schema) {
-        auto value = intermediates_.at(attr.id);
+        auto value = context()[attr.id];
         auto bytes = attr.type->size() == 64 ? 8 : 4;
         block_ += BinaryenStore(
             /* module= */ module(),
@@ -545,7 +479,7 @@ void WasmPipelineCG::write_results_column_major(const Schema &schema)
         oss.str("");
         oss << "out_" << attr.id;
         auto b_out = CG.get_import(oss.str());
-        auto value = intermediates_.at(attr.id);
+        auto value = context()[attr.id];
         auto bytes = attr.type->size() == 64 ? 8 : 4;
 
         block_ += BinaryenStore(
@@ -571,11 +505,6 @@ void WasmPipelineCG::write_results_column_major(const Schema &schema)
     }
 }
 
-
-/*======================================================================================================================
- * WasmPipelineCG / Operator
- *====================================================================================================================*/
-
 void WasmPipelineCG::operator()(const ScanOperator &op)
 {
     auto &table = op.store().table();
@@ -589,7 +518,7 @@ void WasmPipelineCG::operator()(const ScanOperator &op)
     BlockBuilder loop_body(module(), body_name.c_str());
 
     /*----- Create induction variable. -------------------------------------------------------------------------------*/
-    b_induction_var = CG.add_local(BinaryenTypeInt32());
+    auto b_induction_var = CG.add_local(BinaryenTypeInt32());
 
     /*----- Import table size. ---------------------------------------------------------------------------------------*/
     oss.str("");
@@ -628,6 +557,7 @@ void WasmPipelineCG::operator()(const ScanOperator &op)
     );
 
     /*----- Create loop header. --------------------------------------------------------------------------------------*/
+    /* if (induction_var < table_size) continue; else break; */
     auto b_loop_cond = BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenLtUInt32(),
@@ -700,7 +630,7 @@ void WasmPipelineCG::operator()(const FilterOperator &op)
 
     block_ += BinaryenIf(
         /* module=  */ module(),
-        /* cond=    */ compile(op.filter()),
+        /* cond=    */ context().compile(op.filter()),
         /* ifTrue=  */ then_block.finalize(),
         /* ifFalse= */ nullptr
     );
@@ -714,8 +644,10 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
 void WasmPipelineCG::operator()(const ProjectionOperator &op)
 {
     auto p = op.projections().begin();
-    for (auto &e : op.schema())
-        intermediates_[e.id] = compile(*p++->first); // FIXME: Does not work with duplicate Identifier
+    for (auto &e : op.schema()) {
+        if (not context().has(e.id))
+            context().add(e.id, context().compile(*p++->first));
+    }
     (*this)(*op.parent());
 }
 
@@ -780,299 +712,43 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
 
 void WasmPipelineCG::operator()(const SortingOperator &op)
 {
-    (*this)(*op.parent());
-}
+    /* Append current tuple to consecutive memory of tuples to sort. */
+    std::size_t offset = 0;
+    std::size_t alignment = 0;
+    auto &S = op.child(0)->schema();
+    for (auto &attr : S) {
+        const std::size_t size_in_bytes = attr.type->size() < 8 ? 1 : attr.type->size() / 8;
+        alignment = std::max(alignment, size_in_bytes);
+        if (offset % size_in_bytes)
+            offset += size_in_bytes - (offset % size_in_bytes); // self-align
 
-
-/*======================================================================================================================
- * WasmPipelineCG / Expr
- *====================================================================================================================*/
-
-void WasmPipelineCG::operator()(const ErrorExpr&) { unreachable("no errors at this stage"); }
-
-void WasmPipelineCG::operator()(const Designator &e)
-{
-    auto t = e.target();
-    if (auto pe = std::get_if<const Expr*>(&t)) {
-        (*this)(**pe);
-    } else if (auto pa = std::get_if<const Attribute*>(&t)) {
-        auto &attr = **pa;
-        Schema::Identifier id(attr.table.name, attr.name);
-        auto it = intermediates_.find(id);
-        insist(it != intermediates_.end(), "no intermediate result for the given designator");
-        expr_ = it->second;
-    } else {
-        unreachable("designator must have a valid target");
+        auto b_val = context()[attr.id];
+        block_ += BinaryenStore(
+            /* module= */ module(),
+            /* bytes=  */ size_in_bytes,
+            /* offset= */ offset,
+            /* align=  */ 0,
+            /* ptr=    */ CG.head_of_heap(),
+            /* value=  */ b_val,
+            /* type=   */ BinaryenExpressionGetType(b_val)
+        );
+        offset += size_in_bytes;
     }
-}
+    if (offset % alignment)
+        offset += alignment - (offset % alignment); // align tuple
 
-void WasmPipelineCG::operator()(const Constant &e)
-{
-    auto value = Interpreter::eval(e);
-    struct BinaryenLiteral literal;
-
-    auto ty = e.type();
-    if (ty->is_boolean()) {
-        literal = BinaryenLiteralInt32(value.as_b());
-    } else if (ty->is_character_sequence()) {
-        unreachable("not yet implemented");
-    } else if (auto n = cast<const Numeric>(ty)) {
-        switch (n->kind) {
-            case Numeric::N_Int:
-            case Numeric::N_Decimal: {
-                if (n->size() <= 32)
-                    literal = BinaryenLiteralInt32(value.as_i());
-                else
-                    literal = BinaryenLiteralInt64(value.as_i());
-                break;
-            }
-
-            case Numeric::N_Float: {
-                if (n->precision == 32)
-                    literal = BinaryenLiteralFloat32(value.as_f());
-                else
-                    literal = BinaryenLiteralFloat64(value.as_d());
-                break;
-            }
-        }
-    } else
-        unreachable("invalid type");
-
-    expr_ = BinaryenConst(module(), literal);
-}
-
-void WasmPipelineCG::operator()(const FnApplicationExpr &e)
-{
-    (void) e;
-    unreachable("not implemented");
-}
-
-void WasmPipelineCG::operator()(const UnaryExpr &e)
-{
-    (*this)(*e.expr);
-
-    switch (e.op().type) {
-        default:
-            unreachable("illegal token type");
-
-        case TK_PLUS:
-            /* nothing to be done */
-            break;
-
-        case TK_MINUS: {
-            auto n = as<const Numeric>(e.type());
-            switch (n->kind) {
-                case Numeric::N_Int:
-                case Numeric::N_Decimal: {
-                    /* In WebAssembly, negation of integral values is achieved by subtraction from zero (0 - x). */
-                    if (n->size() <= 32) {
-                        auto Zero = BinaryenConst(module(), BinaryenLiteralInt32(0));
-                        expr_ = BinaryenBinary(/* module= */ module(),
-                                               /* op=     */ BinaryenSubInt32(),
-                                               /* left=   */ Zero,
-                                               /* right=  */ expr_);
-                    } else {
-                        auto Zero = BinaryenConst(module(), BinaryenLiteralInt64(0));
-                        expr_ = BinaryenBinary(/* module= */ module(),
-                                               /* op=     */ BinaryenSubInt64(),
-                                               /* left=   */ Zero,
-                                               /* right=  */ expr_);
-                    }
-                    break;
-                }
-
-                case Numeric::N_Float:
-                    if (n->precision == 32)
-                        expr_ = BinaryenUnary(module(), BinaryenNegFloat32(), expr_);
-                    else
-                        expr_ = BinaryenUnary(module(), BinaryenNegFloat64(), expr_);
-                    break;
-            }
-            break;
-        }
-
-        case TK_TILDE: {
-            /* In WebAssembly, bitwise not of a value is achieved by exclusive or with the all 1 bits value. */
-            auto n = as<const Numeric>(e.type());
-            switch (n->kind) {
-                case Numeric::N_Int:
-                case Numeric::N_Decimal: {
-                    if (n->size() <= 32) {
-                        auto AllOnes = BinaryenConst(module(), BinaryenLiteralInt32(-1));
-                        expr_ = BinaryenBinary(/* module= */ module(),
-                                               /* op=     */ BinaryenXorInt32(),
-                                               /* left=   */ AllOnes,
-                                               /* right=  */ expr_);
-                    } else {
-                        auto AllOnes = BinaryenConst(module(), BinaryenLiteralInt64(-1L));
-                        expr_ = BinaryenBinary(/* module= */ module(),
-                                               /* op=     */ BinaryenXorInt64(),
-                                               /* left=   */ AllOnes,
-                                               /* right=  */ expr_);
-                    }
-                    break;
-                }
-
-                case Numeric::N_Float:
-                    unreachable("bitwise not is not supported for floating-point types");
-            }
-            break;
-        }
-
-        case TK_Not: {
-            /* In WebAssembly, booleans are represented as 32 bit integers.  Hence, logical not is achieved by computing
-             * 1 - value. */
-            insist(e.type()->is_boolean());
-            auto One = BinaryenConst(module(), BinaryenLiteralInt32(1));
-            expr_ = BinaryenBinary(/* module= */ module(),
-                                   /* op=     */ BinaryenSubInt32(),
-                                   /* left=   */ One,
-                                   /* right=  */ expr_);
-            break;
-        }
-    }
-}
-
-void WasmPipelineCG::operator()(const BinaryExpr &e)
-{
-    expr_ = nullptr;
-    (*this)(*e.lhs);
-    auto lhs = expr_;
-    insist(lhs);
-    expr_ = nullptr;
-    (*this)(*e.rhs);
-    auto rhs = expr_;
-    insist(rhs);
-
-#define BINARY_OP(OP, TYPE) \
-    expr_ = BinaryenBinary(/* module= */ module(), \
-                           /* op=     */ Binaryen ## OP ## TYPE(), \
-                           /* left=   */ lhs, \
-                           /* right=  */ rhs) \
-
-#define BINARY(OP) \
-{ \
-    auto n = as<const Numeric>(e.type()); \
-    lhs = convert(module(), lhs, as<const Numeric>(e.lhs->type()), n); \
-    rhs = convert(module(), rhs, as<const Numeric>(e.rhs->type()), n); \
-    switch (n->kind) { \
-        case Numeric::N_Int: \
-        case Numeric::N_Decimal: { \
-            if (n->size() <= 32) \
-                BINARY_OP(OP, Int32); \
-            else \
-                BINARY_OP(OP, Int64); \
-            break; \
-        } \
-\
-        case Numeric::N_Float: \
-            if (n->precision == 32) \
-                BINARY_OP(OP, Float32); \
-            else \
-                BINARY_OP(OP, Float64); \
-            break; \
-    } \
-    break; \
-}
-
-#define CMP(OP, OPS) \
-{ \
-    auto n_lhs = as<const Numeric>(e.lhs->type()); \
-    auto n_rhs = as<const Numeric>(e.rhs->type()); \
-    auto n = arithmetic_join(n_lhs, n_rhs); \
-    lhs = convert(module(), lhs, n_lhs, n); \
-    rhs = convert(module(), rhs, n_rhs, n); \
-    switch (n->kind) { \
-        case Numeric::N_Int: \
-        case Numeric::N_Decimal: { \
-            if (n->size() <= 32) \
-                BINARY_OP(OPS, Int32); \
-            else \
-                BINARY_OP(OPS, Int64); \
-            break; \
-        } \
-\
-        case Numeric::N_Float: \
-            if (n->precision == 32) \
-                BINARY_OP(OP, Float32); \
-            else \
-                BINARY_OP(OP, Float64); \
-            break; \
-    } \
-    break; \
-}
-
-    switch (e.op().type) {
-        default:
-            unreachable("illegal token type");
-
-        case TK_PLUS:       BINARY(Add); break;
-        case TK_MINUS:      BINARY(Sub); break;
-        case TK_ASTERISK:   BINARY(Mul); break;
-        case TK_SLASH: {
-            auto n = as<const Numeric>(e.type());
-            switch (n->kind) {
-                case Numeric::N_Int:
-                case Numeric::N_Decimal: {
-                    if (n->size() <= 32)
-                        BINARY_OP(DivS, Int32);
-                    else
-                        BINARY_OP(DivS, Int64);
-                    break;
-                }
-
-                case Numeric::N_Float:
-                    if (n->precision == 32)
-                        BINARY_OP(Div, Float32);
-                    else
-                        BINARY_OP(Div, Float64);
-                    break;
-            }
-            break;
-        }
-
-        case TK_PERCENT: {
-            auto n = as<const Numeric>(e.type());
-            switch (n->kind) {
-                case Numeric::N_Float:
-                    unreachable("module with float not defined");
-
-                case Numeric::N_Int:
-                case Numeric::N_Decimal: {
-                    auto bits = n->size();
-                    if (bits <= 32)
-                        BINARY_OP(RemS, Int32);
-                    else
-                        BINARY_OP(RemS, Int64);
-                    break;
-                }
-            }
-            break;
-        }
-
-        case TK_DOTDOT:
-            unreachable("not yet supported");
-
-        case TK_LESS:           CMP(Lt, LtS); break;
-        case TK_GREATER:        CMP(Gt, GtS); break;
-        case TK_LESS_EQUAL:     CMP(Le, LeS); break;
-        case TK_GREATER_EQUAL:  CMP(Ge, GeS); break;
-        case TK_EQUAL:          CMP(Eq, Eq); break;
-        case TK_BANG_EQUAL:     CMP(Ne, Ne); break;
-
-        case TK_And:
-            insist(e.type()->is_boolean());
-            BINARY_OP(And, Int32); // booleans are represented as 32 bit integers
-            break;
-
-        case TK_Or:
-            insist(e.type()->is_boolean());
-            BINARY_OP(Or, Int32); // booleans are represented as 32 bit integers
-            break;
-    }
-#undef BINARY
-#undef BINARY_OP
-#undef CMP
+    /* Advance head of heap. */
+    auto b_inc = BinaryenBinary(
+        /* module= */ module(),
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ CG.head_of_heap(),
+        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(offset))
+    );
+    block_ += BinaryenLocalSet(
+        /* module= */ module(),
+        /* index=  */ BinaryenLocalGetGetIndex(CG.head_of_heap()),
+        /* value=  */ b_inc
+    );
 }
 
 
@@ -1126,7 +802,7 @@ void WasmStoreCG::operator()(const RowStore &store)
                 /* left=   */ b_shr,
                 /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(1))
             );
-            pipeline.is_null_.emplace(e.id, b_isnull);
+            // TODO add to context nulls
         }
 
         /*----- Generate code for value access. ----------------------------------------------------------------------*/
@@ -1152,7 +828,7 @@ void WasmStoreCG::operator()(const RowStore &store)
                 /* lhs=    */ b_shifted,
                 /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32((1 << attr.type->size()) - 1))
             );
-            pipeline.intermediates_.emplace(e.id, b_value);
+            pipeline.context().add(e.id, b_value);
         } else {
             auto b_value = BinaryenLoad(
                 /* module= */ pipeline.module(),
@@ -1163,7 +839,7 @@ void WasmStoreCG::operator()(const RowStore &store)
                 /* type=   */ get_binaryen_type(attr.type),
                 /* ptr=    */ b_row_addr
             );
-            pipeline.intermediates_.emplace(e.id, b_value);
+            pipeline.context().add(e.id, b_value);
         }
     }
 
@@ -1217,7 +893,7 @@ void WasmStoreCG::operator()(const ColumnStore &store)
                 /* type=    */ get_binaryen_type(attr.type),
                 /* ptr=     */ b_col_addr
             );
-            pipeline.intermediates_.emplace(e.id, b_value);
+            pipeline.context().add(e.id, b_value);
         }
     }
 

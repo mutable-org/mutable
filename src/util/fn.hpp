@@ -370,3 +370,6 @@ auto sum_wo_overflow(N0 n0, N1 n1, Numbers... numbers)
 {
     return sum_wo_overflow(add_wo_overflow(n0, n1), numbers...);
 }
+
+/** A wrapper around `strdup()` that permits `nullptr`. */
+inline const char * strdupn(const char *str) { return str ? strdup(str) : nullptr; }

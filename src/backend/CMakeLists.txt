@@ -3,6 +3,8 @@ SET(
     Backend.cpp
     Interpreter.cpp
     StackMachine.cpp
+    WasmAlgo.cpp
+    WasmUtil.cpp
     WebAssembly.cpp
     )
 

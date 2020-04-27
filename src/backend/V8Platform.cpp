@@ -25,6 +25,9 @@ using args_t = v8::Local<v8::Value>[];
 
 void print(const v8::FunctionCallbackInfo<v8::Value> &info)
 {
+#ifndef NDEBUG
+    std::cout << "v8 function callback: ";
+#endif
     for (int i = 0; i != info.Length(); ++i) {
         v8::HandleScope handle_scope(info.GetIsolate());
         if (i != 0) std::cout << ',';

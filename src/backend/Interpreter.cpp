@@ -1,6 +1,7 @@
 #include "backend/Interpreter.hpp"
 
 #include "backend/StackMachine.hpp"
+#include "globals.hpp"
 #include "parse/AST.hpp"
 #include "parse/ASTVisitor.hpp"
 #include "util/fn.hpp"
@@ -26,6 +27,7 @@ struct ScanData : OperatorData
 
 struct PrintData : OperatorData
 {
+    uint32_t num_rows = 0;
     StackMachine printer;
     PrintData(const PrintOperator &op)
         : printer(op.schema())
@@ -309,6 +311,7 @@ void Pipeline::operator()(const CallbackOperator &op)
 void Pipeline::operator()(const PrintOperator &op)
 {
     auto data = as<PrintData>(op.data());
+    data->num_rows += block_.size();
     for (auto &t : block_) {
         Tuple *args[] = { &t };
         data->printer(args);
@@ -640,6 +643,8 @@ void Interpreter::operator()(const PrintOperator &op)
 {
     op.data(new PrintData(op));
     op.child(0)->accept(*this);
+    if (not Options::Get().quiet)
+        op.out << as<PrintData>(op.data())->num_rows << " rows\n";
 }
 
 void Interpreter::operator()(const NoOpOperator &op)

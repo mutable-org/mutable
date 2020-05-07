@@ -32,6 +32,23 @@ TEST_CASE("CNF/Clause operators", "[core][ir][cnf]")
     cnf::Clause AB({PA, PB});
     cnf::Clause CD({PC, PD});
 
+    SECTION("comparison")
+    {
+        cnf::Clause A({PA});
+        cnf::Clause C({PC});
+
+        REQUIRE(A <= AB);
+        REQUIRE_FALSE(A >= AB);
+        REQUIRE(AB >= A);
+        REQUIRE_FALSE(AB <= A);
+
+        REQUIRE_FALSE(C <= AB);
+        REQUIRE_FALSE(AB <= C);
+
+        REQUIRE(AB == AB);
+        REQUIRE_FALSE(AB == CD);
+    }
+
     /* (A v B) v (C v D) ⇔ (A v B v C v D) */
     SECTION("Logical or")
     {
@@ -82,6 +99,23 @@ TEST_CASE("CNF/CNF operators", "[core][ir][cnf]")
 
     CNF AB_CD({AB, CD}); // (A v B) ^ (C v D)
     CNF AC_BD({AC, BD}); // (A v C) ^ (B v D)
+
+    SECTION("comparison")
+    {
+        CNF cnf_AB({AB});
+        CNF cnf_AC({AC});
+
+        REQUIRE(cnf_AB <= AB_CD);
+        REQUIRE_FALSE(AB_CD <= cnf_AB);
+        REQUIRE(AB_CD >= cnf_AB);
+        REQUIRE_FALSE(cnf_AB >= AB_CD);
+
+        REQUIRE_FALSE(cnf_AC <= AB_CD);
+        REQUIRE_FALSE(AB_CD <= cnf_AC);
+
+        REQUIRE(AB_CD == AB_CD);
+        REQUIRE_FALSE(AB_CD == AC_BD);
+    }
 
     /* [(A v B) ^ (C v D)] v [(A v C) ^ (B v D)]
      * ⇔ (A v B v A v C) ^ (A v B v B v D) ^ (C v D v A v C) ^ (C v D v B v D) */

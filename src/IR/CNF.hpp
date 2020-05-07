@@ -98,6 +98,11 @@ struct CNF : public std::vector<Clause>
         return required;
     }
 
+    bool operator<=(const CNF &other) const;
+    bool operator>=(const CNF &other) const { return other <= *this; }
+    bool operator==(const CNF &other) const { return *this >= other and *this <= other; }
+    bool operator!=(const CNF &other) const { return not operator==(other); }
+
     /** Print a textual representation of `cnf` to `out`. */
     friend std::ostream & operator<<(std::ostream &out, const CNF &cnf);
     friend std::string to_string(const CNF &cnf) {

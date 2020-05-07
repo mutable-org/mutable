@@ -17,8 +17,17 @@ namespace cnf {
 
 bool Clause::operator<=(const Clause &other) const
 {
-    for (auto it : *this) {
-        if (not contains(other, it))
+    for (auto pred : *this) {
+        if (not contains(other, pred))
+            return false;
+    }
+    return true;
+}
+
+bool CNF::operator<=(const CNF &other) const
+{
+    for (auto clause : *this) {
+        if (not contains(other, clause))
             return false;
     }
     return true;

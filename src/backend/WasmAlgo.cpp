@@ -413,6 +413,7 @@ WasmQuickSort::WasmQuickSort(const Schema &schema, const std::vector<order_type>
 BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
 {
     WasmStruct tuple(module, schema);
+    WasmCompare comparator(module, tuple, order);
 
     std::ostringstream oss;
     oss << "qsort";
@@ -422,6 +423,8 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
 
     std::vector<BinaryenType> param_types = { /* begin= */ BinaryenTypeInt32(), /* end= */ BinaryenTypeInt32() };
     FunctionBuilder fn(module, fn_name.c_str(), BinaryenTypeNone(), param_types);
+
+    WasmSwap wasm_swap(module, fn);
 
     const auto b_begin = BinaryenLocalGet(
         /* module= */ module,
@@ -433,7 +436,7 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
         /* index=  */ 1,
         /* type=   */ BinaryenTypeInt32()
     );
-    auto b_delta = BinaryenBinary(
+    const auto b_delta = BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenSubInt32(),
         /* left=   */ b_end,
@@ -463,7 +466,7 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
         /* right=  */ b_half
     );
     const auto b_mid = fn.add_local(BinaryenTypeInt32());
-    fn.block() += BinaryenLocalSet(
+    loop_body += BinaryenLocalSet(
         /* module= */ module,
         /* index=  */ BinaryenLocalGetGetIndex(b_mid),
         /* value=  */ b_mid_addr
@@ -474,10 +477,9 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
     auto load_context_right = tuple.create_load_context(b_last);
 
     /*----- Compare three elements pairwise. -------------------------------------------------------------------------*/
-    WasmCompare comparator(module, tuple, order);
-    auto b_cmp_left_mid   = comparator.emit(fn, fn.block(), load_context_left, load_context_mid);
-    auto b_cmp_left_right = comparator.emit(fn, fn.block(), load_context_left, load_context_right);
-    auto b_cmp_mid_right  = comparator.emit(fn, fn.block(), load_context_mid,  load_context_right);
+    auto b_cmp_left_mid   = comparator.emit(fn, loop_body, load_context_left, load_context_mid);
+    auto b_cmp_left_right = comparator.emit(fn, loop_body, load_context_left, load_context_right);
+    auto b_cmp_mid_right  = comparator.emit(fn, loop_body, load_context_mid,  load_context_right);
 
     auto b_left_le_mid = BinaryenBinary(
         /* module= */ module,
@@ -499,7 +501,6 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
     );
 
     /*----- Swap pivot to front. -------------------------------------------------------------------------------------*/
-    WasmSwap wasm_swap(module, fn);
     BlockBuilder block_swap_left_mid(module);
     wasm_swap.emit(block_swap_left_mid, tuple, b_begin, b_mid);
     BlockBuilder block_swap_left_right(module);
@@ -540,22 +541,6 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
         /* ifFalse=   */ b_if_3
     );
     loop_body += b_if_4;
-
-#if 0
-    {
-        BinaryenExpressionRef args[] = {
-            BinaryenLoad(module, 2, false, 0, 0, BinaryenTypeInt32(), b_begin),
-            BinaryenLoad(module, 2, false, 2, 0, BinaryenTypeInt32(), b_begin)
-        };
-        loop_body += BinaryenCall(
-            /* module=      */ module,
-            /* target=      */ "print",
-            /* operands=    */ args,
-            /* numOperands= */ 2,
-            /* returnType=  */ BinaryenTypeNone()
-        );
-    }
-#endif
 
     /*----- Partition range begin + 1 to end using begin as pivot. ---------------------------------------------------*/
     auto b_begin_plus_one = BinaryenBinary(
@@ -675,7 +660,41 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
         /* ifFalse=   */ nullptr
     );
 
-    // TODO case end - begin == 2
+    /*----- Handle the case where end - begin == 2. ------------------------------------------------------------------*/
+    {
+        BlockBuilder block_swap(module);
+        wasm_swap.emit(block_swap, tuple, b_begin, b_last);
+
+        BlockBuilder block_compare(module);
+        auto load_context_first  = tuple.create_load_context(b_begin);
+        auto load_context_second = tuple.create_load_context(b_last);
+        auto b_compare = comparator.emit(fn, block_compare, load_context_first, load_context_second);
+        auto b_cond_swap = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenGtSInt32(),
+            /* left=   */ b_compare,
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(0))
+        );
+        block_compare += BinaryenIf(
+            /* module=    */ module,
+            /* condition= */ b_cond_swap,
+            /* ifTrue=    */ block_swap.finalize(),
+            /* ifFalse=   */ nullptr
+        );
+
+        auto b_cond = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenEqInt32(),
+            /* left=   */ b_delta,
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(2 * tuple.size()))
+        );
+        fn.block() += BinaryenIf(
+            /* module=    */ module,
+            /* condition= */ b_cond,
+            /* ifTrue=    */ block_compare.finalize(),
+            /* ifFalse=   */ nullptr
+        );
+    }
 
     /*----- Add function definition to module. -----------------------------------------------------------------------*/
     return fn.finalize();

@@ -319,24 +319,10 @@ void WasmCodeGen::operator()(const SortingOperator &op)
         /* value=  */ head_of_heap()
     );
 
-#ifndef NDEBUG
-    {
-        BinaryenExpressionRef args[] = { b_data_begin, b_data_end };
-        main_.block() += BinaryenCall(
-            /* module=      */ module(),
-            /* target=      */ "print",
-            /* operands=    */ args,
-            /* numOperands= */ 2,
-            /* returnType=  */ BinaryenTypeNone()
-        );
-    }
-#endif
-
-    // TODO: generate sorting algorithm and invoke with start and end of data segment
+    /*----- Generate sorting algorithm and invoke with start and end of data segment. --------------------------------*/
     WasmQuickSort qsort(op.child(0)->schema(), op.order_by(), WasmPartitionBranchless{});
     BinaryenExpressionRef qsort_args[] = { b_data_begin, b_data_end };
     auto b_qsort = qsort.emit(module());
-#if 1
     main_.block() += BinaryenCall(
         /* module=      */ module(),
         /* target=      */ BinaryenFunctionGetName(b_qsort),
@@ -344,26 +330,6 @@ void WasmCodeGen::operator()(const SortingOperator &op)
         /* numOperands= */ 2,
         /* returnType=  */ BinaryenTypeNone()
     );
-#endif
-#if 0
-    auto b_pivot = main_.add_local(BinaryenTypeInt32());
-    main_.block() += BinaryenLocalSet(
-        /* module= */ module(),
-        /* index=  */ BinaryenLocalGetGetIndex(b_pivot),
-        /* value=  */ b_data_begin
-    );
-    WasmPartitionBranchless wasm_partition;
-    wasm_partition.emit(
-        /* module= */ module(),
-        /* fn=     */ main_,
-        /* block=  */ main_.block(),
-        /* schema= */ op.child(0)->schema(),
-        /* order=  */ op.order_by(),
-        /* begin=  */ b_data_begin,
-        /* end=    */ b_data_end,
-        /* pivot=  */ b_pivot
-    );
-#endif
 
     auto loop_name = "orderby";
     auto body_name = "orderby.body";
@@ -426,12 +392,18 @@ void WasmCodeGen::operator()(const SortingOperator &op)
         /* condition= */ b_loop_cond,
         /* value=     */ nullptr
     );
+    auto b_loop_entry = BinaryenIf(
+        /* module=    */ module(),
+        /* condition= */ b_loop_cond,
+        /* ifTrue=    */ pipeline.block_.finalize(),
+        /* ifFalse=   */ nullptr
+    );
 
     /*----- Create loop. ---------------------------------------------------------------------------------------------*/
     main_.block() += BinaryenLoop(
         /* module= */ module(),
         /* in=     */ loop_name,
-        /* body=   */ pipeline.block_.finalize()
+        /* body=   */ b_loop_entry
     );
 }
 

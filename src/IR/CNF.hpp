@@ -44,7 +44,9 @@ struct Predicate
 
     /** Returns `true` iff `other` is equal to `this`.  Two `Predicate`s are equal, iff they have the same `db::Expr`
      * and the same *sign*. */
-    bool operator==(Predicate other) const { return this->literal_ == other.literal_; }
+    bool operator==(Predicate other) const {
+        return this->negative() == other.negative() and *this->expr() == *other.expr();
+    }
     /** Returns `true` iff `other` is not equal to `this`.  Two `Predicate`s are equal, iff they have the same
      * `db::Expr` and the same *sign*. */
     bool operator!=(Predicate other) const { return not operator==(other); }

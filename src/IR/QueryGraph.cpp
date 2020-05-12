@@ -28,7 +28,10 @@ struct GetTables : ConstASTExprVisitor
     using ConstASTExprVisitor::operator();
     void operator()(Const<ErrorExpr>&) override { unreachable("graph must not contain errors"); }
 
-    void operator()(Const<Designator> &e) override { tables_.emplace(e.get_table_name()); }
+    void operator()(Const<Designator> &e) override {
+        if (e.has_table_name()) // check whether this designator refers to an attribute of a table
+            tables_.emplace(e.get_table_name());
+    }
 
     void operator()(Const<Constant>&) override { /* nothing to be done */ }
 

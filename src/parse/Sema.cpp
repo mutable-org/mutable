@@ -396,21 +396,19 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
     insist(not e.type()->is_error());
     insist(e.type()->is_primitive());
 
-    const PrimitiveType *ty = as<const PrimitiveType>(e.type());
-
     switch (Ctx.stage) {
         case SemaContext::S_From:
             unreachable("Function application in FROM clause is impossible");
 
         case SemaContext::S_Where:
-            if (ty->is_scalar()) {
+            if (e.func_->is_aggregate()) {
                 diag.e(d->attr_name.pos) << "Aggregate functions are not allowed in WHERE clause.\n";
                 return;
             }
             break;
 
         case SemaContext::S_GroupBy:
-            if (ty->is_scalar()) {
+            if (e.func_->is_aggregate()) {
                 diag.e(d->attr_name.pos) << "Aggregate functions are not allowed in GROUP BY clause.\n";
                 return;
             }

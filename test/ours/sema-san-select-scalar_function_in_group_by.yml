@@ -1,0 +1,40 @@
+description: Scalar function in GROUP BY clause
+db: ours
+query: |
+    SELECT * FROM R GROUP BY ISNULL(1 = 1);
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: * TK_ASTERISK
+            -:1:10: FROM TK_From
+            -:1:15: R TK_IDENTIFIER
+            -:1:17: GROUP TK_Group
+            -:1:23: BY TK_By
+            -:1:26: ISNULL TK_IDENTIFIER
+            -:1:32: ( TK_LPAR
+            -:1:33: 1 TK_DEC_INT
+            -:1:35: = TK_EQUAL
+            -:1:37: 1 TK_DEC_INT
+            -:1:38: ) TK_RPAR
+            -:1:39: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT *
+            FROM R
+            GROUP BY ISNULL((1 = 1));
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 1
+        returncode: 1

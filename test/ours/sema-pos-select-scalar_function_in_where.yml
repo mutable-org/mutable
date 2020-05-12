@@ -1,0 +1,53 @@
+description: Scalar function in WHERE clause
+db: ours
+query: |
+    SELECT * FROM R WHERE ISNULL(1 = 1);
+    SELECT * FROM R WHERE ISNULL(rfloat);
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: * TK_ASTERISK
+            -:1:10: FROM TK_From
+            -:1:15: R TK_IDENTIFIER
+            -:1:17: WHERE TK_Where
+            -:1:23: ISNULL TK_IDENTIFIER
+            -:1:29: ( TK_LPAR
+            -:1:30: 1 TK_DEC_INT
+            -:1:32: = TK_EQUAL
+            -:1:34: 1 TK_DEC_INT
+            -:1:35: ) TK_RPAR
+            -:1:36: ; TK_SEMICOL
+            -:2:1: SELECT TK_Select
+            -:2:8: * TK_ASTERISK
+            -:2:10: FROM TK_From
+            -:2:15: R TK_IDENTIFIER
+            -:2:17: WHERE TK_Where
+            -:2:23: ISNULL TK_IDENTIFIER
+            -:2:29: ( TK_LPAR
+            -:2:30: rfloat TK_IDENTIFIER
+            -:2:36: ) TK_RPAR
+            -:2:37: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT *
+            FROM R
+            WHERE ISNULL((1 = 1));
+            SELECT *
+            FROM R
+            WHERE ISNULL(rfloat);
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

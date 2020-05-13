@@ -89,7 +89,7 @@ integrationtest:linux-amd64:
           artifacts: true
     script:
         - pip3 install --user --upgrade colorama pyyaml yamale tqdm
-        - python3 test/IntegrationTest.py -v
+        - python3 test/IntegrationTest.py --verbose --debug
 
 integrationtest:macos-amd64:
     stage: test
@@ -101,7 +101,7 @@ integrationtest:macos-amd64:
           artifacts: true
     script:
         - pip3 install --user --upgrade colorama pyyaml yamale tqdm
-        - python3 test/IntegrationTest.py -v
+        - python3 test/IntegrationTest.py --verbose --debug
 
 
 #-----------------------------------------------------------------------------------------------------------------------

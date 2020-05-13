@@ -70,6 +70,13 @@ def run_command(command, query):
         return process.returncode, out, err
     except subprocess.TimeoutExpired as ex:
         raise TestException(f'Timeout expired')
+    finally:
+        # Make sure the process is being terminated
+        process.terminate()
+        try:
+            ret = process.wait(0.01) # wait 10 ms
+        except TimeoutExpired:
+            process.kill()
 
 
 def run_stage(args, test_case, stage_name, command):

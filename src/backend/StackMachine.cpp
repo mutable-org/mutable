@@ -1126,7 +1126,7 @@ Ld_CS_s: {
     auto len = TOP.as_i();
     POP();
     PREPARE_LOAD(char);
-    auto str = value_col_addr + len * row_id;
+    auto str = value_col_addr + (len + 1) * row_id;
     strncpy(reinterpret_cast<char*>(p_mem), reinterpret_cast<char*>(str), len);
     p_mem[len] = 0; // terminating NUL byte
     TOP = p_mem;

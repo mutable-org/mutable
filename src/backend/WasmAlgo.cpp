@@ -13,14 +13,14 @@ using namespace db;
  *====================================================================================================================*/
 
 BinaryenExpressionRef WasmPartitionBranching::emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                                                   const Schema &schema, const std::vector<order_type> &order,
+                                                   const WasmStruct &struc, const std::vector<order_type> &order,
                                                    BinaryenExpressionRef b_begin, BinaryenExpressionRef b_end,
                                                    BinaryenExpressionRef b_pivot) const
 {
     (void) module;
     (void) fn;
     (void) block;
-    (void) schema;
+    (void) struc;
     (void) order;
     (void) b_begin;
     (void) b_end;
@@ -123,14 +123,15 @@ BinaryenExpressionRef WasmPartitionBranching::emit(BinaryenModuleRef module, Fun
  *====================================================================================================================*/
 
 BinaryenExpressionRef WasmPartitionBranchless::emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                                                    const Schema &schema, const std::vector<order_type> &order,
+                                                    const WasmStruct &struc, const std::vector<order_type> &order,
                                                     BinaryenExpressionRef b_begin, BinaryenExpressionRef b_end,
                                                     BinaryenExpressionRef b_pivot) const
 {
+    WasmSwap wasm_swap(module, fn);
+    WasmCompare comparator(module, struc, order);
     const char *loop_name = "partition_branchless";
     const char *body_name = "partition_branchless.body";
     BlockBuilder loop_body(module, body_name);
-    std::unordered_map<BinaryenType, BinaryenExpressionRef> swap_temp;
 
     /*----- Copy begin and end. --------------------------------------------------------------------------------------*/
     {
@@ -151,26 +152,24 @@ BinaryenExpressionRef WasmPartitionBranchless::emit(BinaryenModuleRef module, Fu
         b_end = b_end_local;
     }
 
-    WasmStruct tuple(module, schema);
-
-    /*----- Offset end by one tuple.  (This can be dropped when negative offsets are supported.) ---------------------*/
+    /*----- Offset end by one.  (This can be dropped when negative offsets are supported.) ---------------------------*/
     auto b_last = BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ b_end,
-        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(-tuple.size()))
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(-struc.size()))
     );
 
     /*----- Create load context for left, right, and pivot. ----------------------------------------------------------*/
-    auto load_context_left  = tuple.create_load_context(b_begin);
-    auto load_context_right = tuple.create_load_context(b_last);
-    auto load_context_pivot = tuple.create_load_context(b_pivot);
-    WasmCGContext value_context_pivot(module);
+    auto load_context_left  = struc.create_load_context(b_begin);
+    auto load_context_right = struc.create_load_context(b_last);
+    auto load_context_pivot = struc.create_load_context(b_pivot);
 
-    for (auto &attr : schema) {
+    /*----- Load values from pivot. ----------------------------------------------------------------------------------*/
+    WasmCGContext value_context_pivot(module);
+    for (auto &attr : struc.schema) {
         BinaryenType b_attr_type = get_binaryen_type(attr.type);
 
-        /*----- Load value from pivot. -------------------------------------------------------------------------------*/
         auto b_tmp_pivot = fn.add_local(b_attr_type);
         block += BinaryenLocalSet(
             /* module= */ module,
@@ -178,170 +177,37 @@ BinaryenExpressionRef WasmPartitionBranchless::emit(BinaryenModuleRef module, Fu
             /* value=  */ load_context_pivot.get_value(attr.id)
         );
         value_context_pivot.add(attr.id, b_tmp_pivot);
-
-        /*----- Swap attribute of left and right tuple. --------------------------------------------------------------*/
-        /* Introduce temporary for the swap. */
-        auto it = swap_temp.find(b_attr_type);
-        if (it == swap_temp.end())
-            it = swap_temp.emplace_hint(it, b_attr_type, fn.add_local(b_attr_type));
-        auto b_swap = it->second;
-
-        /* tmp = *(end-1) */
-        loop_body += BinaryenLocalSet(
-            /* module= */ module,
-            /* index=  */ BinaryenLocalGetGetIndex(b_swap),
-            /* value=  */ load_context_right.get_value(attr.id)
-        );
-        /* *(end-1) = *begin */
-        loop_body += tuple.store(b_last, attr.id, load_context_left.get_value(attr.id));
-        /* *begin = tmp */
-        loop_body += tuple.store(b_begin, attr.id, b_swap);
     }
 
-    /* Compare left and right tuples to pivot. */
-    BinaryenExpressionRef b_left_is_ok = nullptr;
-    BinaryenExpressionRef b_right_is_ok = nullptr;
-    for (auto &o : order) {
-        auto b_expr_pivot = value_context_pivot.compile(*o.first);
+    /*----- Swap left and right tuple. -------------------------------------------------------------------------------*/
+    wasm_swap.emit(loop_body, struc, b_begin, b_last);
 
-        /*----- Compare left to pivot. -------------------------------------------------------------------------------*/
-        {
-            BinaryenExpressionRef b_cmp_left;
-            auto b_expr_left = load_context_left.compile(*o.first);
-            auto n = as<const Numeric>(o.first->type());
-            switch (n->kind) {
-                case Numeric::N_Int:
-                case Numeric::N_Decimal:
-                    if (n->size() <= 32)
-                        b_cmp_left = BinaryenBinary(
-                            /* module= */ module,
-                            /* op=     */ o.second ? BinaryenLtSInt32() : BinaryenGtSInt32(),
-                            /* left=   */ b_expr_left,
-                            /* right=  */ b_expr_pivot
-                        );
-                    else
-                        b_cmp_left = BinaryenBinary(
-                            /* module= */ module,
-                            /* op=     */ o.second ? BinaryenLtSInt64() : BinaryenGtSInt64(),
-                            /* left=   */ b_expr_left,
-                            /* right=  */ b_expr_pivot
-                        );
-                    break;
-
-                case Numeric::N_Float:
-                    if (n->size() == 32)
-                        b_cmp_left = BinaryenBinary(
-                            /* module= */ module,
-                            /* op=     */ o.second ? BinaryenLtFloat32() : BinaryenGtFloat32(),
-                            /* left=   */ b_expr_left,
-                            /* right=  */ b_expr_pivot
-                        );
-                    else
-                        b_cmp_left = BinaryenBinary(
-                            /* module= */ module,
-                            /* op=     */ o.second ? BinaryenLtFloat64() : BinaryenGtFloat64(),
-                            /* left=   */ b_expr_left,
-                            /* right=  */ b_expr_pivot
-                        );
-                    break;
-            }
-            if (b_left_is_ok) {
-                auto b_left_is_ok_upd = BinaryenBinary(
-                    /* module= */ module,
-                    /* op=     */ BinaryenAndInt32(),
-                    /* left=   */ b_left_is_ok,
-                    /* right=  */ b_cmp_left
-                );
-                loop_body += BinaryenLocalSet(
-                    /* module= */ module,
-                    /* index=  */ BinaryenLocalGetGetIndex(b_left_is_ok),
-                    /* value=  */ b_left_is_ok_upd
-                );
-            } else {
-                b_left_is_ok = fn.add_local(BinaryenTypeInt32());
-                loop_body += BinaryenLocalSet(
-                    /* module= */ module,
-                    /* index=  */ BinaryenLocalGetGetIndex(b_left_is_ok),
-                    /* value=  */ b_cmp_left
-                );
-            }
-        }
-
-        /*----- Compare right to pivot. ------------------------------------------------------------------------------*/
-        {
-            BinaryenExpressionRef b_cmp_right;
-            auto b_expr_right = load_context_right.compile(*o.first);
-            auto n = as<const Numeric>(o.first->type());
-            switch (n->kind) {
-                case Numeric::N_Int:
-                case Numeric::N_Decimal:
-                    if (n->size() <= 32)
-                        b_cmp_right = BinaryenBinary(
-                            /* module= */ module,
-                            /* op=     */ o.second ? BinaryenLeSInt32() : BinaryenGeSInt32(),
-                            /* left=   */ b_expr_pivot,
-                            /* right=  */ b_expr_right
-                        );
-                    else
-                        b_cmp_right = BinaryenBinary(
-                            /* module= */ module,
-                            /* op=     */ o.second ? BinaryenLeSInt64() : BinaryenGeSInt64(),
-                            /* left=   */ b_expr_pivot,
-                            /* right=  */ b_expr_right
-                        );
-                    break;
-
-                case Numeric::N_Float:
-                    if (n->size() == 32)
-                        b_cmp_right = BinaryenBinary(
-                            /* module= */ module,
-                            /* op=     */ o.second ? BinaryenLeFloat32() : BinaryenGeFloat32(),
-                            /* left=   */ b_expr_pivot,
-                            /* right=  */ b_expr_right
-                        );
-                    else
-                        b_cmp_right = BinaryenBinary(
-                            /* module= */ module,
-                            /* op=     */ o.second ? BinaryenLeFloat64() : BinaryenGeFloat64(),
-                            /* left=   */ b_expr_pivot,
-                            /* right=  */ b_expr_right
-                        );
-                    break;
-            }
-            if (b_right_is_ok) {
-                auto b_right_is_ok_upd = BinaryenBinary(
-                    /* module= */ module,
-                    /* op=     */ BinaryenAndInt32(),
-                    /* left=   */ b_right_is_ok,
-                    /* right=  */ b_cmp_right
-                );
-                loop_body += BinaryenLocalSet(
-                    /* module= */ module,
-                    /* index=  */ BinaryenLocalGetGetIndex(b_right_is_ok),
-                    /* value=  */ b_right_is_ok_upd
-                );
-            } else {
-                b_right_is_ok = fn.add_local(BinaryenTypeInt32());
-                loop_body += BinaryenLocalSet(
-                    /* module= */ module,
-                    /* index=  */ BinaryenLocalGetGetIndex(b_right_is_ok),
-                    /* value=  */ b_cmp_right
-                );
-            }
-        }
-    }
-    insist(b_left_is_ok);
-    insist(b_right_is_ok);
+    /*----- Compare left and right tuples to pivot. ------------------------------------------------------------------*/
+    auto b_cmp_left  = comparator.emit(fn, loop_body, load_context_left,  value_context_pivot);
+    auto b_left_is_ok = BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenLtSInt32(),
+        /* left=   */ b_cmp_left,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(0))
+    );
+    auto b_cmp_right = comparator.emit(fn, loop_body, load_context_right, value_context_pivot);
+    auto b_right_is_ok = BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenGeSInt32(),
+        /* left=   */ b_cmp_right,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(0))
+    );
 
     /* Advance begin cursor. */
     {
-        auto b_delta_begin = BinaryenBinary(
-            /* module= */ module,
-            /* op=     */ BinaryenMulInt32(),
-            /* left=   */ b_left_is_ok,
-            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(tuple.size()))
+        auto b_delta_begin = BinaryenSelect(
+            /* module=    */ module,
+            /* condition= */ b_left_is_ok,
+            /* ifTrue=    */ BinaryenConst(module, BinaryenLiteralInt32(struc.size())),
+            /* ifFalse=   */ BinaryenConst(module, BinaryenLiteralInt32(0)),
+            /* type=      */ BinaryenTypeInt32()
         );
-        auto b_begin_inc = BinaryenBinary(
+        auto b_begin_upd = BinaryenBinary(
             /* module= */ module,
             /* op=     */ BinaryenAddInt32(),
             /* left=   */ b_begin,
@@ -350,28 +216,29 @@ BinaryenExpressionRef WasmPartitionBranchless::emit(BinaryenModuleRef module, Fu
         loop_body += BinaryenLocalSet(
             /* module= */ module,
             /* index=  */ BinaryenLocalGetGetIndex(b_begin),
-            /* value=  */ b_begin_inc
+            /* value=  */ b_begin_upd
         );
     }
 
     /* Advance end cursor. */
     {
-        auto b_delta_end = BinaryenBinary(
-            /* module= */ module,
-            /* op=     */ BinaryenMulInt32(),
-            /* left=   */ b_right_is_ok,
-            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(tuple.size()))
+        auto b_delta_end = BinaryenSelect(
+            /* module=    */ module,
+            /* condition= */ b_right_is_ok,
+            /* ifTrue=    */ BinaryenConst(module, BinaryenLiteralInt32(-struc.size())),
+            /* ifFalse=   */ BinaryenConst(module, BinaryenLiteralInt32(0)),
+            /* type=      */ BinaryenTypeInt32()
         );
-        auto b_end_inc = BinaryenBinary(
+        auto b_end_upd = BinaryenBinary(
             /* module= */ module,
-            /* op=     */ BinaryenSubInt32(),
+            /* op=     */ BinaryenAddInt32(),
             /* left=   */ b_end,
             /* right=  */ b_delta_end
         );
         loop_body += BinaryenLocalSet(
             /* module= */ module,
             /* index=  */ BinaryenLocalGetGetIndex(b_end),
-            /* value=  */ b_end_inc
+            /* value=  */ b_end_upd
         );
     }
 
@@ -445,25 +312,37 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
 
     BlockBuilder loop_body(module, "qsort_loop.body");
 
-    auto b_last = BinaryenBinary(
+    const auto b_last = BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ b_end,
         /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(-tuple.size()))
     );
 
-    /*----- Compute pivot element as median of three. ----------------------------------------------------------------*/
-    auto b_half = BinaryenBinary(
+    /*----- Compute middle of data. ----------------------------------------------------------------------------------*/
+    const auto b_size = BinaryenBinary(
         /* module= */ module,
-        /* op=     */ BinaryenDivSInt32(),
+        /* op=     */ BinaryenDivUInt32(),
         /* left=   */ b_delta,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(tuple.size()))
+    );
+    const auto b_half = BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenDivUInt32(),
+        /* left=   */ b_size,
         /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(2))
     );
-    auto b_mid_addr = BinaryenBinary(
+    const auto b_offset_mid = BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenMulInt32(),
+        /* left=   */ b_half,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(tuple.size()))
+    );
+    const auto b_mid_addr = BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ b_begin,
-        /* right=  */ b_half
+        /* right=  */ b_offset_mid
     );
     const auto b_mid = fn.add_local(BinaryenTypeInt32());
     loop_body += BinaryenLocalSet(
@@ -505,7 +384,6 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
     wasm_swap.emit(block_swap_left_mid, tuple, b_begin, b_mid);
     BlockBuilder block_swap_left_right(module);
     wasm_swap.emit(block_swap_left_right, tuple, b_begin, b_last);
-    auto b_block_noop = BlockBuilder(module).finalize();
     block_swap_left_mid.name("if_0_true-swap_left_mid");
     block_swap_left_right.name("if_0_false-swap_left_right");
     auto b_if_0 = BinaryenIf(
@@ -554,7 +432,7 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
         /* module=      */ module,
         /* fn=          */ fn,
         /* block=       */ loop_body,
-        /* schema=      */ schema,
+        /* struc=       */ tuple,
         /* order=       */ order,
         /* b_begin=     */ b_begin_plus_one,
         /* b_end=       */ b_end,

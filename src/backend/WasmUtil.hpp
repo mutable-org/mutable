@@ -5,6 +5,7 @@
 #include "IR/CNF.hpp"
 #include <binaryen-c.h>
 #include <cstring>
+#include <iostream>
 #include <utility>
 #include <vector>
 
@@ -140,6 +141,9 @@ struct WasmCGContext : ConstASTExprVisitor
     /** Compiles a `cnf::CNF` to a `BinaryenExpressionRef`.  (Without short-circuit evaluation!) */
     BinaryenExpressionRef compile(const cnf::CNF &cnf) const;
 
+    void dump(std::ostream &out) const;
+    void dump() const;
+
     private:
     using ConstASTExprVisitor::operator();
 #define DECLARE(CLASS) void operator()(const CLASS &op) override;
@@ -153,40 +157,45 @@ struct WasmStruct
     private:
     BinaryenModuleRef module_;
     std::size_t size_; ///< the size in bytes of the struct
+    std::size_t *offsets_; ///< stores the offsets within the structure
     public:
     const Schema &schema; ///< the schema of the struct
 
     WasmStruct(BinaryenModuleRef module, const Schema &schema)
         : module_(module)
+        , offsets_(new std::size_t[schema.num_entries()])
         , schema(schema)
     {
         /*----- Compute struct size. ---------------------------------------------------------------------------------*/
         std::size_t offset = 0;
         std::size_t alignment = 0;
+        std::size_t idx = 0;
         for (auto &attr : schema) {
             const std::size_t size_in_bytes = attr.type->size() < 8 ? 1 : attr.type->size() / 8;
             alignment = std::max(alignment, size_in_bytes);
             if (offset % size_in_bytes)
                 offset += size_in_bytes - (offset % size_in_bytes); // self-align
+            offsets_[idx++] = offset;
             offset += size_in_bytes;
         }
         if (offset % alignment)
-            offset += alignment - (offset & alignment);
+            offset += alignment - (offset % alignment);
         size_ = offset;
     }
 
+    WasmStruct(const WasmStruct&) = delete;
+
+    ~WasmStruct() { delete[] offsets_; }
+
     std::size_t size() const { return size_; }
+
+    std::size_t offset(std::size_t idx) const { insist(idx < schema.num_entries()); return offsets_[idx]; }
 
     WasmCGContext create_load_context(BinaryenExpressionRef b_ptr) const {
         WasmCGContext context(module_);
-        std::size_t offset = 0;
-        std::size_t alignment = 0;
+        std::size_t idx = 0;
         for (auto &attr : schema) {
             const std::size_t size_in_bytes = attr.type->size() < 8 ? 1 : attr.type->size() / 8;
-            alignment = std::max(alignment, size_in_bytes);
-            if (offset % size_in_bytes)
-                offset += size_in_bytes - (offset % size_in_bytes); // self-align
-
             BinaryenType b_attr_type = get_binaryen_type(attr.type);
 
             /*----- Load value from struct.  -------------------------------------------------------------------------*/
@@ -194,32 +203,25 @@ struct WasmStruct
                 /* module= */ module_,
                 /* bytes=  */ size_in_bytes,
                 /* signed= */ true,
-                /* offset= */ offset,
+                /* offset= */ offset(idx++),
                 /* align=  */ 0,
                 /* type=   */ b_attr_type,
                 /* ptr=    */ b_ptr
             );
             context.add(attr.id, b_val);
-
-            offset += size_in_bytes;
         }
         return context;
     }
 
     BinaryenExpressionRef store(BinaryenExpressionRef b_ptr, Schema::Identifier id, BinaryenExpressionRef b_val) const {
-        std::size_t offset = 0;
-        std::size_t alignment = 0;
+        std::size_t idx = 0;
         for (auto &attr : schema) {
-            const std::size_t size_in_bytes = attr.type->size() < 8 ? 1 : attr.type->size() / 8;
-            alignment = std::max(alignment, size_in_bytes);
-            if (offset % size_in_bytes)
-                offset += size_in_bytes - (offset % size_in_bytes); // self-align
-
             if (attr.id == id) {
+                const std::size_t size_in_bytes = attr.type->size() < 8 ? 1 : attr.type->size() / 8;
                 return BinaryenStore(
                     /* module= */ module_,
                     /* bytes=  */ size_in_bytes,
-                    /* offset= */ offset,
+                    /* offset= */ offset(idx),
                     /* align=  */ 0,
                     /* ptr=    */ b_ptr,
                     /* value=  */ b_val,
@@ -227,11 +229,13 @@ struct WasmStruct
                 );
                 break;
             }
-
-            offset += size_in_bytes;
+            ++idx;
         }
         unreachable("unknown identifier");
     }
+
+    void dump(std::ostream &out) const;
+    void dump() const;
 };
 
 /** Helper class to construct WASM blocks. */

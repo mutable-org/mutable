@@ -57,13 +57,12 @@ struct WasmPlatform
     /** The size of the module's output buffer in tuples. */
     static constexpr std::size_t NUM_TUPLES_OUTPUT_BUFFER = 32;
 
-    static constexpr bool WRITE_RESULTS_COLUMN_MAJOR = false;
-
     /** A `WasmContext` holds associated information of a WebAssembly module instance. */
     struct WasmContext
     {
         uint32_t id; ///< a unique ID
         rewire::AddressSpace vm; ///< the WebAssembly module instance's virtual address space aka.\ *linear memory*
+        uint32_t heap; ///< the beginning of the heap, encoded as offset from the beginning of the virtual address sapce
 
         WasmContext(uint32_t id, std::size_t size) : id(id), vm(size) { }
     };

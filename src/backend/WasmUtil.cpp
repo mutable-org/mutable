@@ -56,6 +56,23 @@ BinaryenExpressionRef WasmCGContext::compile(const cnf::CNF &cnf) const
     return b_cnf;
 }
 
+void WasmCGContext::dump(std::ostream &out) const
+{
+    out << "WasmCGContext:\n";
+    out << "  null values:\n";
+    for (auto &e : nulls_) {
+        out << "    " << e.first << ":\n";
+        BinaryenExpressionPrint(e.second);
+    }
+    out << "  attribute values:\n";
+    for (auto &e : values_) {
+        out << "    " << e.first << ":\n";
+        BinaryenExpressionPrint(e.second);
+    }
+    out << std::endl;
+}
+void WasmCGContext::dump() const { dump(std::cerr); }
+
 void WasmCGContext::operator()(const ErrorExpr&) { unreachable("no errors at this stage"); }
 
 void WasmCGContext::operator()(const Designator &e)
@@ -342,6 +359,21 @@ void WasmCGContext::operator()(const BinaryExpr &e)
 #undef BINARY_OP
 #undef CMP
 }
+
+
+/*======================================================================================================================
+ * WasmStruct
+ *====================================================================================================================*/
+
+void WasmStruct::dump(std::ostream &out) const
+{
+    out << "WasmStruct of schema " << schema << " and size " << size() << " bytes";
+    std::size_t idx = 0;
+    for (auto &attr : schema)
+        out << "\n  " << idx << ": " << attr.id << " of type " << *attr.type << " at offset " << offset(idx++);
+    out << std::endl;
+}
+void WasmStruct::dump() const { dump(std::cerr); }
 
 
 /*======================================================================================================================

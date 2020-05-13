@@ -16,7 +16,7 @@ struct V8Platform : WasmPlatform
     static std::unique_ptr<v8::Platform> PLATFORM_;
     v8::ArrayBuffer::Allocator *allocator_ = nullptr;
     v8::Isolate *isolate_ = nullptr;
-    rewire::Memory output_buffer_; ///< output buffer where the WASM modules write to
+    rewire::Memory mem_; ///< heap memory of the Wasm module
 
     public:
     V8Platform();
@@ -28,7 +28,7 @@ struct V8Platform : WasmPlatform
     /** Compile the `WasmModule` `module` and instantiate a `v8::WasmModuleObject` instance. */
     v8::Local<v8::WasmModuleObject> instantiate(const WasmModule &module, v8::Local<v8::Object> imports);
     /** Creates a V8 object that captures the entire environment.  TODO Only capture things relevant to the module. */
-    v8::Local<v8::Object> create_env(const WasmContext &wasm_context, const Operator &plan) const;
+    v8::Local<v8::Object> create_env(WasmContext &wasm_context, const Operator &plan) const;
     /** Converts any V8 value to JSON. */
     v8::Local<v8::String> to_json(v8::Local<v8::Value> val) const;
 };

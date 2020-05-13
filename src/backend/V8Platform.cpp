@@ -179,7 +179,7 @@ struct EnvGen : ConstStoreVisitor
 std::unique_ptr<v8::Platform> V8Platform::PLATFORM_(nullptr);
 
 V8Platform::V8Platform()
-    : output_buffer_(Catalog::Get().allocator().allocate(1UL << 32)) // 2 GiB
+    : mem_(Catalog::Get().allocator().allocate(1UL << 32)) // 2 GiB
 {
     if (PLATFORM_ == nullptr) {
         PLATFORM_ = v8::platform::NewDefaultPlatform();
@@ -232,67 +232,68 @@ void V8Platform::execute(const Operator &plan)
 
     /* Invoke the exported function `run` of the module. */
     args_t args { v8::Int32::New(isolate_, wasm_context.id), };
-    const uint32_t num_tuples =
+    const uint32_t head_of_heap =
         run->Call(context, context->Global(), 1, args).ToLocalChecked().As<v8::Int32>()->Value();
+
+    /* Compute the size of the heap in bytes. */
+    const uint32_t heap_size = head_of_heap - wasm_context.heap;
+
+    /* Compute the number of result tuples written. */
+    const uint32_t num_tuples = mem_.as<uint32_t*>()[heap_size / sizeof(uint32_t)];
+
+    /* Compute the beginning of the output buffer, located on the heap. */
+    const uint64_t *output_buffer = reinterpret_cast<uint64_t*>(mem_.as<uint8_t*>() + heap_size - num_tuples * plan.schema().num_entries() * 8);
 
     /* Extract results. */
     auto &S = plan.schema();
     if (auto callback_op = cast<const CallbackOperator>(&plan)) {
         Tuple tup(plan.schema());
-        if constexpr (WasmPlatform::WRITE_RESULTS_COLUMN_MAJOR) {
-            unreachable("callback with results in column-major order not supported");
-        } else {
-            for (auto ptr = output_buffer_.as<uint64_t*>(), end = ptr + num_tuples * S.num_entries(); ptr < end;) {
-                for (std::size_t i = 0; i != S.num_entries(); ++i, ++ptr) {
-                    auto ty = S[i].type;
-                    if (ty->is_boolean()) {
-                        tup.set(i, bool(ptr[0] & 0b1), false);
-                    } else if (auto n = cast<const Numeric>(ty)) {
-                        switch (n->kind) {
-                            case Numeric::N_Int:
-                            case Numeric::N_Decimal: {
-                                switch (n->size()) {
-                                    case 8:
-                                    case 16:
-                                    case 32:
-                                        tup.set(i, int64_t(*reinterpret_cast<int32_t*>(ptr)), false);
-                                        break;
+        for (const uint64_t *ptr = output_buffer, *end = ptr + num_tuples * S.num_entries(); ptr < end;) {
+            for (std::size_t i = 0; i != S.num_entries(); ++i, ++ptr) {
+                auto ty = S[i].type;
+                if (ty->is_boolean()) {
+                    tup.set(i, bool(ptr[0] & 0b1), false);
+                } else if (auto n = cast<const Numeric>(ty)) {
+                    switch (n->kind) {
+                        case Numeric::N_Int:
+                        case Numeric::N_Decimal: {
+                            switch (n->size()) {
+                                case 8:
+                                case 16:
+                                case 32:
+                                    tup.set(i, int64_t(*reinterpret_cast<const int32_t*>(ptr)), false);
+                                    break;
 
-                                    case 64:
-                                        tup.set(i, *reinterpret_cast<int64_t*>(ptr), false);
-                                        break;
-                                }
-                                break;
+                                case 64:
+                                    tup.set(i, *reinterpret_cast<const int64_t*>(ptr), false);
+                                    break;
                             }
-
-                            case Numeric::N_Float: {
-                                if (n->size() == 32)
-                                    tup.set(i, *reinterpret_cast<float*>(ptr), false);
-                                else
-                                    tup.set(i, *reinterpret_cast<double*>(ptr), false);
-                                break;
-                            }
+                            break;
                         }
-                    } else {
-                        unreachable("unsupported type");
+
+                        case Numeric::N_Float: {
+                            if (n->size() == 32)
+                                tup.set(i, *reinterpret_cast<const float*>(ptr), false);
+                            else
+                                tup.set(i, *reinterpret_cast<const double*>(ptr), false);
+                            break;
+                        }
                     }
+                } else {
+                    unreachable("unsupported type");
                 }
-                callback_op->callback()(S, tup);
-                tup.clear();
             }
+            callback_op->callback()(S, tup);
+            tup.clear();
         }
     } else if (auto print_op = cast<const PrintOperator>(&plan)) {
-        if constexpr (WasmPlatform::WRITE_RESULTS_COLUMN_MAJOR) {
-            unreachable("printing results in column-major order not supported");
-        } else {
-            print_value P(print_op->out, output_buffer_.as<uint64_t*>());
-            for (std::size_t i = 0; i != num_tuples; ++i) {
-                for (std::size_t j = 0; j != S.num_entries(); ++j, ++P.ptr) {
-                    if (j != 0) P.out << ',';
-                    P(*S[j].type);
-                }
-                P.out << '\n';
+        print_value P(print_op->out, output_buffer);
+        for (std::size_t i = 0; i != num_tuples; ++i) {
+            for (std::size_t j = 0; j != S.num_entries(); ++j, ++P.ptr) {
+                if (j != 0) P.out << ',';
+                P(*S[j].type);
             }
+            P.out << '\n';
         }
         if (not Options::Get().quiet)
             print_op->out << num_tuples << " rows\n";
@@ -325,7 +326,7 @@ v8::Local<v8::WasmModuleObject> V8Platform::instantiate(const WasmModule &module
                ->CallAsConstructor(Ctx, 2, instance_args).ToLocalChecked().As<v8::WasmModuleObject>();
 }
 
-v8::Local<v8::Object> V8Platform::create_env(const WasmContext &wasm_context, const Operator &plan) const
+v8::Local<v8::Object> V8Platform::create_env(WasmContext &wasm_context, const Operator &plan) const
 {
     auto Ctx = isolate_->GetCurrentContext();
     auto &DB = Catalog::Get().get_database_in_use();
@@ -335,25 +336,13 @@ v8::Local<v8::Object> V8Platform::create_env(const WasmContext &wasm_context, co
         G(it->second->store());
 
     /* Map the remaining address space to the output buffer. */
-    auto ptr_out = G.get_next_page() * rewire::Pagesize;
-    const auto remaining = wasm_context.vm.size() - ptr_out;
-    output_buffer_.map(remaining, 0, wasm_context.vm, ptr_out);
+    auto head_of_heap = G.get_next_page() * rewire::Pagesize;
+    const auto remaining = wasm_context.vm.size() - head_of_heap;
+    mem_.map(remaining, 0, wasm_context.vm, head_of_heap);
 
-    /* Output location for row-major layout. */
-    DISCARD env->Set(Ctx, V8STR("out"), v8::Int32::New(isolate_, ptr_out));
-
-    /* Output location(s) for column-major layout.  Similar to PAX-blocks. */
-    std::ostringstream oss;
-    for (auto attr : plan.schema()) {
-        auto ty = attr.type;
-        oss.str("");
-        oss << "out_" << attr.id;
-        DISCARD env->Set(Ctx, V8STR(oss.str().c_str()), v8::Int32::New(isolate_, ptr_out));
-        if (ty->size() <= 32)
-            ptr_out += 4 * WasmPlatform::NUM_TUPLES_OUTPUT_BUFFER; // 4 byte per value
-        else
-            ptr_out += (ty->size() * WasmPlatform::NUM_TUPLES_OUTPUT_BUFFER + 7) / 8;
-    }
+    /* Import next free page, usable for heap allcoations. */
+    DISCARD env->Set(Ctx, V8STR("head_of_heap"), v8::Int32::New(isolate_, head_of_heap));
+    wasm_context.heap = head_of_heap;
 
     /* Add printing functions to environment. */
 #define ADD_FUNC(FUNC) { \

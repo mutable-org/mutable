@@ -29,7 +29,7 @@ struct WasmPartition
      * \param b_pivot   the address of the pivot element
      */
     virtual BinaryenExpressionRef emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                                       const Schema &schema, const std::vector<order_type> &order,
+                                       const WasmStruct &struc, const std::vector<order_type> &order,
                                        BinaryenExpressionRef b_begin, BinaryenExpressionRef b_end,
                                        BinaryenExpressionRef b_pivot) const = 0;
 };
@@ -51,7 +51,7 @@ struct WasmPartition
 struct WasmPartitionBranching : WasmPartition
 {
     BinaryenExpressionRef emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                               const Schema &schema, const std::vector<order_type> &order,
+                               const WasmStruct &struc, const std::vector<order_type> &order,
                                BinaryenExpressionRef b_begin, BinaryenExpressionRef b_end,
                                BinaryenExpressionRef b_pivot) const override;
 };
@@ -77,7 +77,7 @@ struct WasmPartitionBranching : WasmPartition
 struct WasmPartitionBranchless : WasmPartition
 {
     BinaryenExpressionRef emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                               const Schema &schema, const std::vector<order_type> &order,
+                               const WasmStruct &struc, const std::vector<order_type> &order,
                                BinaryenExpressionRef b_begin, BinaryenExpressionRef b_end,
                                BinaryenExpressionRef b_pivot) const override;
 };

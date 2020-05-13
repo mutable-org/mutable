@@ -154,8 +154,7 @@ struct WasmPipelineCG : ConstOperatorVisitor
     const char * name() const { return name_; }
 
     private:
-    void write_results_column_major(const Schema &schema);
-    void write_results_row_major(const Schema &schema);
+    void emit_write_results(const Schema &schema);
 
     /* Operators */
     using ConstOperatorVisitor::operator();
@@ -205,37 +204,41 @@ WasmModule WasmCodeGen::compile(const Operator &plan)
         /* shared=         */ 0
     );
 
-    /*----- Import output locations.  --------------------------------------------------------------------------------*/
-    std::ostringstream oss;
-    codegen.add_import("out", BinaryenTypeInt32(), /* is_mutable= */ true);
-    for (auto attr : plan.schema()) {
-        oss.str("");
-        oss << "out_" << attr.id;
-        codegen.add_import(oss.str(), BinaryenTypeInt32(), /* is_mutable= */ true);
-    }
-
     /*----- Count number of result tuples. ---------------------------------------------------------------------------*/
     codegen.b_num_tuples_ = codegen.add_local(BinaryenTypeInt32());
 
     /*----- Set up head of heap. -------------------------------------------------------------------------------------*/
-    codegen.b_head_of_heap_ = codegen.add_local(BinaryenTypeInt32());
+    codegen.b_head_of_heap_ = codegen.add_import("head_of_heap", BinaryenTypeInt32(), /* is_mutable= */ true);
 
     /*----- Compile plan. --------------------------------------------------------------------------------------------*/
     codegen(plan); // emit code
 
-    /*----- Return the number of result tuples produced. -------------------------------------------------------------*/
-    codegen.main_.block() += codegen.b_num_tuples_;
+    /*----- Write number of results. ---------------------------------------------------------------------------------*/
+    codegen.main_.block() += BinaryenStore(
+        /* module= */ module.ref(),
+        /* bytes=  */ 4,
+        /* offset= */ 0,
+        /* align=  */ 0,
+        /* ptr=    */ codegen.head_of_heap(),
+        /* value=  */ codegen.num_tuples(),
+        /* type=   */ BinaryenTypeInt32()
+    );
+
+    /*----- Return the new head of heap . ----------------------------------------------------------------------------*/
+    codegen.main_.block() += codegen.head_of_heap();
 
     /*----- Add function. --------------------------------------------------------------------------------------------*/
     codegen.main_.finalize();
     BinaryenAddFunctionExport(module.ref(), "run", "run");
 
-    /*----- Validate and optimize module. ----------------------------------------------------------------------------*/
+    /*----- Validate module. -----------------------------------------------------------------------------------------*/
     if (not BinaryenModuleValidate(module.ref())) {
         module.dump();
         throw std::logic_error("invalid module");
     }
+
 #if 0
+    /*----- Optimize module. -----------------------------------------------------------------------------------------*/
 #ifdef NDEBUG
     std::cerr << "WebAssembly before optimization:\n";
     module.dump();
@@ -349,16 +352,17 @@ void WasmCodeGen::operator()(const SortingOperator &op)
     /*----- Emit code for data accesses. -----------------------------------------------------------------------------*/
     std::size_t offset = 0;
     std::size_t alignment = 0;
-    for (auto &attr : op.schema()) {
+    for (auto &attr : op.child(0)->schema()) {
         const std::size_t size_in_bytes = attr.type->size() < 8 ? 1 : attr.type->size() / 8;
         alignment = std::max(alignment, size_in_bytes);
         if (offset % size_in_bytes)
             offset += size_in_bytes - (offset % size_in_bytes); // self-align
 
+
         auto b_val = BinaryenLoad(
             /* module= */ module(),
             /* bytes=  */ size_in_bytes,
-            /* signed= */ false,
+            /* signed= */ true,
             /* offset= */ offset,
             /* align=  */ 0,
             /* type=   */ get_binaryen_type(attr.type),
@@ -424,10 +428,10 @@ void WasmCodeGen::operator()(const SortingOperator &op)
  * WasmPipelineCG
  *====================================================================================================================*/
 
-void WasmPipelineCG::write_results_row_major(const Schema &schema)
+void WasmPipelineCG::emit_write_results(const Schema &schema)
 {
     std::size_t offset = 0;
-    auto b_out = CG.get_import("out");
+    auto b_out = CG.head_of_heap();
     for (auto &attr : schema) {
         auto value = context()[attr.id];
         auto bytes = attr.type->size() == 64 ? 8 : 4;
@@ -451,42 +455,9 @@ void WasmPipelineCG::write_results_row_major(const Schema &schema)
     );
     block_ += BinaryenLocalSet(
         /* module = */ module(),
-        /* index=   */ BinaryenLocalGetGetIndex(b_out),
+        /* index=   */ BinaryenLocalGetGetIndex(CG.head_of_heap()),
         /* value=   */ inc
     );
-}
-
-void WasmPipelineCG::write_results_column_major(const Schema &schema)
-{
-    std::ostringstream oss;
-    for (auto &attr : schema) {
-        oss.str("");
-        oss << "out_" << attr.id;
-        auto b_out = CG.get_import(oss.str());
-        auto value = context()[attr.id];
-        auto bytes = attr.type->size() == 64 ? 8 : 4;
-
-        block_ += BinaryenStore(
-            /* module= */ module(),
-            /* bytes=  */ bytes,
-            /* offset= */ 0,
-            /* align=  */ 0,
-            /* ptr=    */ b_out,
-            /* value=  */ value,
-            /* type=   */ get_binaryen_type(attr.type)
-        );
-        auto inc = BinaryenBinary(
-            /* module= */ module(),
-            /* op=     */ BinaryenAddInt32(),
-            /* left=   */ b_out,
-            /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(bytes))
-        );
-        block_ += BinaryenLocalSet(
-            /* module = */ module(),
-            /* index=   */ BinaryenLocalGetGetIndex(b_out),
-            /* value=   */ inc
-        );
-    }
 }
 
 void WasmPipelineCG::operator()(const ScanOperator &op)
@@ -572,11 +543,7 @@ void WasmPipelineCG::operator()(const ScanOperator &op)
 
 void WasmPipelineCG::operator()(const CallbackOperator &op)
 {
-    if constexpr (WasmPlatform::WRITE_RESULTS_COLUMN_MAJOR)
-        write_results_column_major(op.schema());
-    else
-        write_results_row_major(op.schema());
-    block_ += CG.inc_num_tuples();
+    emit_write_results(op.schema());
 }
 
 void WasmPipelineCG::operator()(const PrintOperator &op)
@@ -597,10 +564,7 @@ void WasmPipelineCG::operator()(const PrintOperator &op)
         /* returnType=  */ BinaryenTypeNone()
     );
 #else
-    if constexpr (WasmPlatform::WRITE_RESULTS_COLUMN_MAJOR)
-        write_results_column_major(op.schema());
-    else
-        write_results_row_major(op.schema());
+    emit_write_results(op.schema());
 #endif
     block_ += CG.inc_num_tuples();
     // TODO issue a callback whenever NUM_TUPLES_OUTPUT_BUFFER tuples have been written, and reset counter

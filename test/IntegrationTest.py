@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 
-import subprocess
-import os
-import glob
 import argparse
 import difflib
-
-import yaml
+import glob
+import itertools
+import os
+import subprocess
 import yamale
-from tqdm import tqdm
+import yaml
+
 from colorama import Fore, Back, Style
+from tqdm import tqdm
 
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -58,6 +59,23 @@ def colordiff(actual, expected):
     return "".join(output)
 
 
+def get_feature_options(feature):
+    shell = BINARIES['shell']
+    stream = os.popen(f'{shell} --list-{feature}s')
+    stream.readline() # skip headline
+    options = list()
+    for line in stream:
+        options.append(line.split()[0])
+    return options
+
+def enumerate_feature_options(feature):
+    options = get_feature_options(feature)
+    flags = list()
+    for opt in options:
+        flags.append([ f'--{feature}', opt ])
+    return flags
+
+
 #-----------------------------------------------------------------------------------------------------------------------
 # TEST EXECUTION
 #-----------------------------------------------------------------------------------------------------------------------
@@ -96,7 +114,7 @@ def run_stage(args, test_case, stage_name, command):
         if 'out' in stage:
             check_stdout(stage['out'], out, args.verbose)
     except TestException as ex:
-        report_failure(str(ex), stage_name, test_case, args.debug)
+        report_failure(str(ex), stage_name, test_case, args.debug, command)
         return False
     report_success(stage_name, test_case, args.verbose)
     return True
@@ -147,16 +165,16 @@ def report(message, stage_name, test_case, symbol):
     tqdm.write(f'└─ {stage_name} {symbol} {message}')
 
 
-def print_debug_command(test_case, stage_name):
-    query = test_case.query.replace('"', '\\"').strip()
-    tqdm.write(f'   echo "{query}" | {" ".join(COMMAND[stage_name](test_case))}')
+def print_debug_command(test_case, stage_name, command):
+    query = test_case.query.replace('"', '\\"').replace('\n', ' ').strip()
+    tqdm.write(f'     $ echo "{query}" | {" ".join(command)}')
 
 
-def report_failure(message, stage_name, test_case, debug):
+def report_failure(message, stage_name, test_case, debug, command=None):
     symbol = Fore.RED + '✘' + Style.RESET_ALL
     report(message, stage_name, test_case, symbol)
-    if debug:
-        print_debug_command(test_case, stage_name)
+    if debug and command:
+        print_debug_command(test_case, stage_name, command)
 
 
 def report_warning(message, stage_name, test_case):
@@ -213,27 +231,37 @@ def report_summary(stage_counter, stage_pass_counter, required_counter, required
 def lexer_command(test_case):
     binary = BINARIES['lex']
     command = [binary, '-']
-    return command
+    return [ command ]
 
 
 def parser_command(test_case):
     binary = BINARIES['parse']
     command = [binary, '-']
-    return command
+    return [ command ]
 
 
 def sema_command(test_case):
     binary = BINARIES['check']
     setup = os.path.join(os.path.dirname(test_case.filename), 'data', 'schema.sql')
     command = [binary, '--quiet', setup, '-']
-    return command
+    return [ command ]
 
 
 def end2end_command(test_case):
     binary = BINARIES['shell']
     setup = os.path.join(os.path.dirname(test_case.filename), 'data', 'schema.sql')
     command = [binary, '--quiet', '--noprompt', setup, '-']
-    return command
+    configurations = list()
+    store_options = enumerate_feature_options('store')
+    backend_options = enumerate_feature_options('backend')
+    for combination in itertools.product(store_options, backend_options):
+        configurations.append(list(itertools.chain.from_iterable(combination)))
+    if 'join' in test_case.filename:
+        configurations.extend(enumerate_feature_options('plan-enumerator'))
+    commands = list()
+    for cfg in configurations:
+        commands.append(command + cfg)
+    return commands
 
 
 COMMAND = {
@@ -321,7 +349,9 @@ if __name__ == '__main__':
         for stage in test_case.stages:
             # Execute test
             if success:
-                success = run_stage(args, test_case, stage, COMMAND[stage](test_case))
+                cmds = COMMAND[stage](test_case)
+                for cmd in cmds:
+                    success = run_stage(args, test_case, stage, cmd) and success
             else:
                 report_failure("earlier stage failed", stage, test_case, args.debug)
             # Store results

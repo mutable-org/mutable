@@ -63,10 +63,15 @@ struct print_value : ConstTypeVisitor
                 break;
 
             case Numeric::N_Float:
-                if (n.size() == 32)
+                if (n.size() == 32) {
+                    const auto old_precision = out.precision(std::numeric_limits<float>::max_digits10 - 1);
                     out << *reinterpret_cast<const float*>(ptr);
-                else
+                    out.precision(old_precision);
+                } else {
+                    const auto old_precision = out.precision(std::numeric_limits<double>::max_digits10 - 1);
                     out << *reinterpret_cast<const double*>(ptr);
+                    out.precision(old_precision);
+                }
                 break;
 
             case Numeric::N_Decimal: {

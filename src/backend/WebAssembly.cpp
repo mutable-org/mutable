@@ -128,23 +128,30 @@ struct WasmPipelineCG : ConstOperatorVisitor
     private:
     WasmCGContext context_; ///< wasm context for compilation of expressions
     BlockBuilder block_; ///< used to construct the current block
+    const char *name_; ///< name of this pipeline
 
     public:
-    WasmPipelineCG(WasmCodeGen &CG) : CG(CG), context_(CG.module()), block_(CG.module(), "pipeline") { }
-    WasmPipelineCG(WasmCodeGen &CG, const char *name) : CG(CG), context_(CG.module()), block_(CG.module(), name) { }
+    WasmPipelineCG(WasmCodeGen &CG, const char *name)
+        : CG(CG)
+        , context_(CG.module())
+        , block_(CG.module(), (std::string("pipeline.") + name).c_str())
+        , name_(name)
+    { }
 
     /** Return the current WASM module. */
     BinaryenModuleRef module() { return CG.module(); }
 
     /** Compiles the pipeline of the given producer to a WASM block. */
-    static BinaryenExpressionRef compile(const Producer &prod, WasmCodeGen &CG) {
-        WasmPipelineCG P(CG);
+    static BinaryenExpressionRef compile(const Producer &prod, WasmCodeGen &CG, const char *name) {
+        WasmPipelineCG P(CG, name);
         P(prod);
         return P.block_.finalize();
     }
 
     WasmCGContext & context() { return context_; }
     const WasmCGContext & context() const { return context_; }
+
+    const char * name() const { return name_; }
 
     private:
     void write_results_column_major(const Schema &schema);
@@ -245,7 +252,10 @@ WasmModule WasmCodeGen::compile(const Operator &plan)
 
 void WasmCodeGen::operator()(const ScanOperator &op)
 {
-    main_.block() += WasmPipelineCG::compile(op, *this);
+    std::ostringstream oss;
+    oss << "scan_" << op.store().table().name;
+    const std::string name = oss.str();
+    main_.block() += WasmPipelineCG::compile(op, *this, name.c_str());
 }
 
 void WasmCodeGen::operator()(const CallbackOperator &op) { (*this)(*op.child(0)); }
@@ -286,7 +296,7 @@ void WasmCodeGen::operator()(const ProjectionOperator &op)
     if (op.children().size())
         (*this)(*op.child(0));
     else
-        main_.block() += WasmPipelineCG::compile(op, *this);
+        main_.block() += WasmPipelineCG::compile(op, *this, "projection");
 }
 
 void WasmCodeGen::operator()(const LimitOperator &op)
@@ -331,11 +341,10 @@ void WasmCodeGen::operator()(const SortingOperator &op)
         /* returnType=  */ BinaryenTypeNone()
     );
 
-    auto loop_name = "orderby";
-    auto body_name = "orderby.body";
-
     /*----- Create new pipeline starting at `SortingOperator`. -------------------------------------------------------*/
-    WasmPipelineCG pipeline(*this, body_name);
+    auto loop_name = "orderby";
+    WasmPipelineCG pipeline(*this, loop_name);
+    BlockBuilder loop_body(module(), "orderby.body");
 
     /*----- Emit code for data accesses. -----------------------------------------------------------------------------*/
     std::size_t offset = 0;
@@ -363,7 +372,9 @@ void WasmCodeGen::operator()(const SortingOperator &op)
         offset += alignment - (offset % alignment); // align tuple
 
     /*----- Emit code for rest of the pipeline. ----------------------------------------------------------------------*/
+    swap(pipeline.block_, loop_body);
     pipeline(*op.parent());
+    swap(pipeline.block_, loop_body);
 
     /*----- Increment induction variable. ----------------------------------------------------------------------------*/
     auto b_inc = BinaryenBinary(
@@ -372,7 +383,7 @@ void WasmCodeGen::operator()(const SortingOperator &op)
         /* left=   */ b_data_begin,
         /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(offset))
     );
-    pipeline.block_ += BinaryenLocalSet(
+    loop_body += BinaryenLocalSet(
         /* module= */ module(),
         /* index=  */ BinaryenLocalGetGetIndex(b_data_begin),
         /* value=  */ b_inc
@@ -386,7 +397,7 @@ void WasmCodeGen::operator()(const SortingOperator &op)
         /* left=   */ b_data_begin,
         /* right=  */ b_data_end
     );
-    pipeline.block_ += BinaryenBreak(
+    loop_body += BinaryenBreak(
         /* module=    */ module(),
         /* name=      */ loop_name,
         /* condition= */ b_loop_cond,
@@ -397,14 +408,15 @@ void WasmCodeGen::operator()(const SortingOperator &op)
     auto b_loop = BinaryenLoop(
         /* module= */ module(),
         /* in=     */ loop_name,
-        /* body=   */ pipeline.block_.finalize()
+        /* body=   */ loop_body.finalize()
     );
-    main_.block() += BinaryenIf(
+    pipeline.block_ += BinaryenIf(
         /* module=    */ module(),
         /* condition= */ b_loop_cond,
         /* ifTrue=    */ b_loop,
         /* ifFalse=   */ nullptr
     );
+    main_.block() += pipeline.block_.finalize();
 }
 
 
@@ -645,7 +657,7 @@ void WasmPipelineCG::operator()(const LimitOperator &op)
     /* Abort the pipeline once the limit is exceeded. */
     block_ += BinaryenBreak(
         /* module= */ module(),
-        /* name=   */ "pipeline",
+        /* name=   */ block_.name(),
         /* cond=   */ b_cond_exceeds_limits,
         /* value=  */ nullptr
     );

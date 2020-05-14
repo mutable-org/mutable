@@ -526,6 +526,7 @@ void WasmPipelineCG::operator()(const ScanOperator &op)
     /*----- Generate code to access attributes and emit code for the rest of the pipeline. ---------------------------*/
     WasmStoreCG store(*this, op);
     store(op.store());
+    swap(block_, loop_body);
 
     /*----- Increment induction variable. ----------------------------------------------------------------------------*/
     auto b_inc_induction_var = BinaryenBinary(
@@ -534,7 +535,7 @@ void WasmPipelineCG::operator()(const ScanOperator &op)
         /* left=   */ b_induction_var,
         /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
     );
-    block_ += BinaryenLocalSet(
+    loop_body += BinaryenLocalSet(
         /* module= */ module(),
         /* index=  */ BinaryenLocalGetGetIndex(b_induction_var),
         /* value=  */ b_inc_induction_var
@@ -548,19 +549,24 @@ void WasmPipelineCG::operator()(const ScanOperator &op)
         /* left=   */ b_induction_var,
         /* right=  */ b_table_size
     );
-    block_ += BinaryenBreak(
+    loop_body += BinaryenBreak(
         /* module=    */ module(),
         /* name=      */ loop_name.c_str(),
         /* condition= */ b_loop_cond,
         /* value=     */ nullptr
     );
-    swap(block_, loop_body);
 
     /*----- Create loop. ---------------------------------------------------------------------------------------------*/
-    block_ += BinaryenLoop(
+    auto b_loop = BinaryenLoop(
         /* module= */ module(),
         /* in=     */ loop_name.c_str(),
         /* body=   */ loop_body.finalize()
+    );
+    block_ += BinaryenIf(
+        /* module=    */ module(),
+        /* condition= */ b_loop_cond,
+        /* ifTrue=    */ b_loop,
+        /* ifFalse=   */ nullptr
     );
 }
 

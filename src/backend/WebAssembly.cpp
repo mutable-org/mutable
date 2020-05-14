@@ -392,18 +392,18 @@ void WasmCodeGen::operator()(const SortingOperator &op)
         /* condition= */ b_loop_cond,
         /* value=     */ nullptr
     );
-    auto b_loop_entry = BinaryenIf(
-        /* module=    */ module(),
-        /* condition= */ b_loop_cond,
-        /* ifTrue=    */ pipeline.block_.finalize(),
-        /* ifFalse=   */ nullptr
-    );
 
     /*----- Create loop. ---------------------------------------------------------------------------------------------*/
-    main_.block() += BinaryenLoop(
+    auto b_loop = BinaryenLoop(
         /* module= */ module(),
         /* in=     */ loop_name,
-        /* body=   */ b_loop_entry
+        /* body=   */ pipeline.block_.finalize()
+    );
+    main_.block() += BinaryenIf(
+        /* module=    */ module(),
+        /* condition= */ b_loop_cond,
+        /* ifTrue=    */ b_loop,
+        /* ifFalse=   */ nullptr
     );
 }
 

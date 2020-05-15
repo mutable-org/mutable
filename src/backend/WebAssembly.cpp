@@ -332,6 +332,25 @@ void WasmCodeGen::operator()(const SortingOperator &op)
         /* value=  */ head_of_heap()
     );
 
+    /*----- Align head of heap. --------------------------------------------------------------------------------------*/
+    auto b_head_inc = BinaryenBinary(
+        /* module= */ module(),
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ head_of_heap(),
+        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(WasmPlatform::WASM_ALIGNMENT - 1))
+    );
+    auto b_head_aligned = BinaryenBinary(
+        /* module= */ module(),
+        /* op=     */ BinaryenAndInt32(),
+        /* left=   */ b_head_inc,
+        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(~(WasmPlatform::WASM_ALIGNMENT - 1)))
+    );
+    main_.block() += BinaryenLocalSet(
+        /* module= */ module(),
+        /* index=  */ BinaryenLocalGetGetIndex(head_of_heap()),
+        /* value=  */ b_head_aligned
+    );
+
     /*----- Generate sorting algorithm and invoke with start and end of data segment. --------------------------------*/
     WasmQuickSort qsort(op.child(0)->schema(), op.order_by(), WasmPartitionBranchless{});
     BinaryenExpressionRef qsort_args[] = { b_data_begin, b_data_end };

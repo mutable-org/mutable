@@ -53,6 +53,8 @@ struct WasmPlatform
     static constexpr std::size_t WASM_PAGE_SIZE = 1UL << 16;
     /** The maximum memory of a WebAssembly module:  2^32 - 2^16 bytes ≈ 2 GiB */
     static constexpr std::size_t WASM_MAX_MEMORY = (1UL << 31) - (1UL << 16);
+    /** The alignment that is suitable for all built-in types. */
+    static constexpr std::size_t WASM_ALIGNMENT = 8;
 
     /** The size of the module's output buffer in tuples. */
     static constexpr std::size_t NUM_TUPLES_OUTPUT_BUFFER = 32;

@@ -369,8 +369,10 @@ void WasmStruct::dump(std::ostream &out) const
 {
     out << "WasmStruct of schema " << schema << " and size " << size() << " bytes";
     std::size_t idx = 0;
-    for (auto &attr : schema)
-        out << "\n  " << idx << ": " << attr.id << " of type " << *attr.type << " at offset " << offset(idx++);
+    for (auto &attr : schema) {
+        out << "\n  " << idx << ": " << attr.id << " of type " << *attr.type << " at offset " << offset(idx);
+        ++idx;
+    }
     out << std::endl;
 }
 void WasmStruct::dump() const { dump(std::cerr); }

@@ -137,7 +137,7 @@ IMPORT INTO {table_name} DSV "{path_to_csv}" SKIP HEADER;
 )
 
 def gen_column(name, ty, num_tuples):
-    random.seed(42)
+    random.seed(hash(name))
     if ('id' in name):
         return range(num_tuples)
     if ty == 'b':

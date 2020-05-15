@@ -1,0 +1,15 @@
+description: Order by multiple attributes of type INT(4).
+suite: operators
+benchmark: order_by-single
+readonly: yes
+pattern: '^Execute query:.*'
+configurations:
+    Interpreter:                --backend Interpreter
+    WebAssembly_RowStore:       --backend WasmV8 --store RowStore
+    WebAssembly_ColumnStore:    --backend WasmV8 --store ColumnStore
+label: 'Number of Attributes to order by'
+cases:
+    1: SELECT a0 FROM Attributes_i32 ORDER BY a0;
+    2: SELECT a0 FROM Attributes_i32 ORDER BY a0, a1;
+    3: SELECT a0 FROM Attributes_i32 ORDER BY a0, a1, a2;
+    4: SELECT a0 FROM Attributes_i32 ORDER BY a0, a1, a2, a3;

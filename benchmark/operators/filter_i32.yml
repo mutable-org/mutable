@@ -20,3 +20,5 @@ cases:
     0.8: SELECT 1 FROM Attributes_i32 WHERE a0 < 1288490188;
     0.9: SELECT 1 FROM Attributes_i32 WHERE a0 < 1717986918;
     1.0: SELECT 1 FROM Attributes_i32 WHERE a0 < 2147483647;
+compare_to:
+    'DuckDB': 'benchmark/operators/filter_i32_duckdb.sh'

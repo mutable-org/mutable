@@ -13,3 +13,5 @@ cases:
     2: SELECT a0 FROM Attributes_i32 ORDER BY a0, a1;
     3: SELECT a0 FROM Attributes_i32 ORDER BY a0, a1, a2;
     4: SELECT a0 FROM Attributes_i32 ORDER BY a0, a1, a2, a3;
+compare_to:
+    'DuckDB': 'benchmark/operators/order_by_i32_multiple_duckdb.sh'

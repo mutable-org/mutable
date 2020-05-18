@@ -201,7 +201,7 @@ def run_configuration(experiment, name, config, yml):
 #
 # @param experiment_name the name of this experiment
 # @param path_to_file    the path to the experiment YAML file
-# @return                a map from configuration name to (pandas.DataFrame, YAML object)
+# @return                a tuple of a YAML object and a map from configuration name to pandas.DataFrame
 #=======================================================================================================================
 def perform_experiment(experiment_name, path_to_file):
     tqdm.write(f'Perform benchmarks in \'{path_to_file}\'.')
@@ -217,12 +217,12 @@ def perform_experiment(experiment_name, path_to_file):
         # Run benchmark under different configurations
         for config_name, config in configs.items():
             measurements = run_configuration(experiment_name, config_name, config, yml)
-            experiment[config_name] = (measurements, yml)
+            experiment[config_name] = measurements
     else:
         measurements = run_configuration(experiment_name, '', '', yml)
-        experiment[''] = (measurements, yml)
+        experiment[''] = measurements
 
-    return experiment
+    return (yml, experiment)
 
 
 #=======================================================================================================================
@@ -359,7 +359,7 @@ def generate_html(commit, results):
                                                                 cmd_args = list()
                                                                 if 'args' in yml and yml['args']:
                                                                     cmd_args.append(str(yml['args']))
-                                                                if config and yml['configurations'][config]:
+                                                                if config and yml['configurations'].get(config, None):
                                                                     cmd_args.append(str(yml['configurations'][config]))
                                                                 with tag('p'):
                                                                     if cmd_args:
@@ -548,11 +548,9 @@ if __name__ == '__main__':
 
         # Process the experiment file
         experiment_name = os.path.splitext(os.path.basename(path_to_file))[0]
-        experiment = perform_experiment(experiment_name, path_to_file)
+        yml, experiment = perform_experiment(experiment_name, path_to_file)
 
-        for config_name, data in experiment.items():
-            measurements, yml = data
-
+        for config_name, measurements in experiment.items():
             # Add commit SHA and date columns
             measurements.insert(0, 'commit', pandas.Series(str(commit), measurements.index))
             measurements.insert(1, 'date',   pandas.Series(date, measurements.index))
@@ -564,12 +562,42 @@ if __name__ == '__main__':
             suite = results.get(yml['suite'], dict())
             benchmark = suite.get(yml['benchmark'], dict())
             experiment = benchmark.get(experiment_name, dict())
-            experiment[config_name] = data
+            experiment[config_name] = (measurements, yml)
             benchmark[experiment_name] = experiment
             suite[yml['benchmark']] = benchmark
             results[yml['suite']] = suite
 
         num_benchmarks_passed += 1
+
+        for name, cmd in yml.get('compare_to', dict()).items():
+            measurements = pandas.DataFrame(columns=['commit', 'date', 'version', 'suite', 'benchmark', 'experiment', 'name', 'config', 'case', 'time'])
+            stream = os.popen(cmd)
+
+            for idx, line in enumerate(stream):
+                time = float(line) * 1000
+                measurements.loc[len(measurements)] = [
+                    str(commit),
+                    date,
+                    yml.get('version', 1),
+                    yml['suite'],
+                    yml['benchmark'],
+                    experiment_name,
+                    name,
+                    name,
+                    list(yml['cases'].keys())[idx],
+                    time
+                ]
+
+            # Add to benchmark results
+            suite = results.get(yml['suite'], dict())
+            benchmark = suite.get(yml['benchmark'], dict())
+            experiment = benchmark[experiment_name]
+            experiment[name] = (measurements, yml)
+            benchmark[experiment_name] = experiment
+            suite[yml['benchmark']] = benchmark
+            results[yml['suite']] = suite
+
+            stream.close()
 
     if args.html:
         generate_html(commit, results)

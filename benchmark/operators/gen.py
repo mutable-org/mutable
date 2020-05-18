@@ -1,5 +1,7 @@
 #!env python3
 
+import itertools
+import math
 import os
 import random
 import string
@@ -8,6 +10,7 @@ import string
 NUM_TUPLES = 1_000_000
 STRLEN = 10
 OUTPUT_DIR = os.path.join('benchmark', 'operators', 'data')
+NUM_DISTINCT_VALUES = 100 # smaller means less distinct values and more duplicates
 
 TYPE_TO_STR = {
         'b':    'BOOL',
@@ -138,22 +141,31 @@ IMPORT INTO {table_name} DSV "{path_to_csv}" SKIP HEADER;
 
 def gen_column(name, ty, num_tuples):
     random.seed(hash(name))
-    if ('id' in name):
+
+    if 'fid' in name:
+        pass # TODO repeat some values
+    elif 'id' in name:
         return range(num_tuples)
+
     if ty == 'b':
-        return [ 'TRUE' if random.getrandbits(1) else 'FALSE' for i in range(num_tuples) ]
-    elif ty == 'i8':
-        return [ random.randrange(-2**7 + 1, 2**7-1) for i in range(num_tuples) ]
-    elif ty == 'i16':
-        return [ random.randrange(-2**15 + 1, 2**15-1) for i in range(num_tuples) ]
-    elif ty == 'i32':
-        return [ random.randrange(-2**31 + 1, 2**31-1) for i in range(num_tuples) ]
-    elif ty == 'i64':
-        return [ random.randrange(-2**63 + 1, 2**63-1) for i in range(num_tuples) ]
+        values = [ 'TRUE', 'FALSE' ]
     elif ty == 'f' or ty == 'd':
-        return [ random.random() for i in range(num_tuples) ]
+        values = [ random.random() for i in range(int(num_tuples / NUM_DISTINCT_VALUES)) ]
+    elif ty == 'i8':
+        values = [ random.randrange( -2**7 + 1,  2**7 - 1, max(1,  2**8 // NUM_DISTINCT_VALUES)) for i in range(NUM_TUPLES // 1000 * NUM_DISTINCT_VALUES) ]
+    elif ty == 'i16':
+        values = [ random.randrange(-2**15 + 1, 2**15 - 1, max(1, 2**16 // NUM_DISTINCT_VALUES)) for i in range(NUM_TUPLES // 1000 * NUM_DISTINCT_VALUES) ]
+    elif ty == 'i32':
+        values = [ random.randrange(-2**31 + 1, 2**31 - 1, max(1, 2**32 // NUM_DISTINCT_VALUES)) for i in range(NUM_TUPLES // 1000 * NUM_DISTINCT_VALUES) ]
+    elif ty == 'i64':
+        values = [ random.randrange(-2**63 + 1, 2**63 - 1, max(1, 2**64 // NUM_DISTINCT_VALUES)) for i in range(NUM_TUPLES // 1000 * NUM_DISTINCT_VALUES) ]
     else:
         raise Exception('unsupported type')
+
+    data = list(itertools.chain.from_iterable(itertools.repeat(values, math.ceil(num_tuples / len(values)))))[0:num_tuples]
+    print(f'  + Generated column {name} of {len(data)} rows with {len(set(data))} distinct values.')
+    random.shuffle(data)
+    return data
 
 def gen_table(table_name, attributes, path_to_dir):
     print(f'Generating data for table {table_name}')

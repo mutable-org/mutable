@@ -56,23 +56,8 @@ struct WasmPartitionBranching : WasmPartition
                                BinaryenExpressionRef b_pivot) const override;
 };
 
-/** Emits a function to perform partitioning of an array of comparable elements without conditional branches.
- *
- *      template<typename T>
- *      T * partition_branchless(const T pivot, T *begin, T *end)
- *      {
- *          while (begin < end) {
- *              const T left = *begin;
- *              const T right = end[-1];
- *              *begin = right;
- *              end[-1] = left;
- *              const ptrdiff_t adv_lo = right < pivot;
- *              const ptrdiff_t adv_hi = left >= pivot;
- *              begin += adv_lo;
- *              end   -= adv_hi;
- *          }
- *          return begin;
- *      }
+/** Emits a function to perform partitioning of an array of comparable elements without conditional branches.  This is
+ * an implemenation in WebAssembly of our `partition_predicated_naive` algorithm in 'util/algorithms.hpp'.
  */
 struct WasmPartitionBranchless : WasmPartition
 {
@@ -97,68 +82,12 @@ struct WasmQuickSort
 
     WasmQuickSort(const Schema &schema, const std::vector<order_type> &order, const WasmPartition &partitioning);
 
-    /** Emits a function to sort a sequence of tuples using the Quicksort algorithm.
+    /** Emits a function to sort a sequence of tuples using the Quicksort algorithm.  This is an implementation in
+     * WebAssembly of our `qsort` algorithm in 'util/algorithms.hpp'.
      *
      * @param module    the WebAssembly module
      * @param b_begin   the expression evaluating to the beginning of the sequence
      * @param b_end     the expression evaluating to the end of the sequence
-     *
-     *
-     *      template<typename Partitioning, typename It>
-     *      void qsort_singlerec(It begin, It end, Partitioning p)
-     *      {
-     *          using std::swap;
-     *          using std::min;
-     *          using std::max;
-     *          assert(begin < end);
-     *
-     *          while (end - begin > 2) {
-     *              // Compute median of three.
-     *              auto pm = begin + (end - begin) / 2;
-     *              bool left_le_mid   = *begin <= *pm;
-     *              bool left_le_right = *begin <= *std::prev(end);
-     *              bool mid_le_right  = *pm <= *std::prev(end);
-     *              if (left_le_mid) {
-     *                  if (left_le_right) {
-     *                      if (mid_le_right)
-     *                          swap(*begin, *pm);
-     *                      else
-     *                          swap(*begin, *std::prev(end));
-     *                  } else {
-     *                      // nothing to be done
-     *                  }
-     *              } else {
-     *                  if (mid_le_right) {
-     *                      if (left_le_right) {
-     *                          // nothing to be done
-     *                      } else {
-     *                          swap(*begin, *std::prev(end));
-     *                      }
-     *                  } else {
-     *                      swap(*begin, *pm);
-     *                  }
-     *              }
-     *              It mid = p(*begin, begin + 1, end);
-     *              assert(*(mid - 1) <= *begin);
-     *              assert(*mid >= *begin);
-     *              assert(verify_partition(begin + 1, mid, end));
-
-     *              if (unlikely(mid != begin + 1)) {
-     *                  swap(*begin, *(mid - 1));
-     *                  --mid;
-     *              }
-     *              assert(verify_partition(begin, mid, end));
-
-     *              if (end - mid >= 2) qsort_singlerec(mid, end, p); // recurse to the right
-     *              end = mid;
-     *          }
-     *
-     *          if (end - begin == 2) {
-     *              if (*begin > *std::next(begin))
-     *                  swap(*begin, *std::next(begin));
-     *              return;
-     *          }
-     *      };
      */
     BinaryenFunctionRef emit(BinaryenModuleRef module) const;
 };

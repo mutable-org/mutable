@@ -186,7 +186,7 @@ BinaryenExpressionRef WasmPartitionBranchless::emit(BinaryenModuleRef module, Fu
     auto b_cmp_left  = comparator.emit(fn, loop_body, load_context_left,  value_context_pivot);
     auto b_left_is_ok = BinaryenBinary(
         /* module= */ module,
-        /* op=     */ BinaryenLtSInt32(),
+        /* op=     */ BinaryenLeSInt32(),
         /* left=   */ b_cmp_left,
         /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(0))
     );
@@ -445,33 +445,13 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
     );
 
     /*----- Patch mid pointer, if necessary. -------------------------------------------------------------------------*/
-    {
-        auto b_is_left_not_empty = BinaryenBinary(
-            /* module= */ module,
-            /* op=     */ BinaryenNeInt32(),
-            /* left=   */ b_mid,
-            /* right=  */ b_begin_plus_one
-        );
-        BlockBuilder block_left_not_empty(module, "left_not_empty");
-        auto b_mid_minus_one = BinaryenBinary(
-            /* module= */ module,
-            /* op=     */ BinaryenAddInt32(),
-            /* left=   */ b_mid,
-            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(-tuple.size()))
-        );
-        wasm_swap.emit(block_left_not_empty, tuple, b_begin, b_mid_minus_one);
-        block_left_not_empty += BinaryenLocalSet(
-            /* module= */ module,
-            /* index=  */ BinaryenLocalGetGetIndex(b_mid),
-            /* value=  */ b_mid_minus_one
-        );
-        loop_body += BinaryenIf(
-            /* module=    */ module,
-            /* condition= */ b_is_left_not_empty,
-            /* ifTrue=    */ block_left_not_empty.finalize(),
-            /* ifFalse=   */ nullptr
-        );
-    }
+    auto b_mid_minus_one = BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ b_mid,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(-tuple.size()))
+    );
+    wasm_swap.emit(loop_body, tuple, b_begin, b_mid_minus_one);
 
     /*----- Recurse right, if necessary. -----------------------------------------------------------------------------*/
     {
@@ -507,7 +487,7 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
     loop_body += BinaryenLocalSet(
         /* module= */ module,
         /* index=  */ BinaryenLocalGetGetIndex(b_end),
-        /* value=  */ b_mid
+        /* value=  */ b_mid_minus_one
     );
 
     /*----- Emit loop header. ----------------------------------------------------------------------------------------*/

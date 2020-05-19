@@ -10,6 +10,7 @@ add_executable(
 
     # util
     util/ADTTest.cpp
+    util/AlgorithmsTest.cpp
     util/FnTest.cpp
     util/MemoryTest.cpp
     util/PoolTest.cpp

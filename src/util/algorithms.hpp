@@ -96,11 +96,11 @@ void qsort(It begin, It end, Partitioning p)
         insist(mid <= end);
         insist(mid >= next(begin));
         insist(verify_partition(next(begin), mid, end));
-        swap(*begin, *--mid);
+        swap(*begin, *prev(mid));
 
         if (distance(mid, end) >= 2) qsort(mid, end, p); // recurse to the right
         insist(std::is_sorted(mid, end));
-        end = mid;
+        end = prev(mid);
     }
 
     if (distance(begin, end) == 2) {

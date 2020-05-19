@@ -150,7 +150,7 @@ def gen_column(name, ty, num_tuples):
     if ty == 'b':
         values = [ 'TRUE', 'FALSE' ]
     elif ty == 'f' or ty == 'd':
-        values = [ random.random() for i in range(int(num_tuples / NUM_DISTINCT_VALUES)) ]
+        values = [ random.random() for i in range(NUM_DISTINCT_VALUES) ]
     elif ty == 'i8':
         values = [ random.randrange( -2**7 + 1,  2**7 - 1, max(1,  2**8 // NUM_DISTINCT_VALUES)) for i in range(NUM_TUPLES // 1000 * NUM_DISTINCT_VALUES) ]
     elif ty == 'i16':
@@ -163,7 +163,7 @@ def gen_column(name, ty, num_tuples):
         raise Exception('unsupported type')
 
     data = list(itertools.chain.from_iterable(itertools.repeat(values, math.ceil(num_tuples / len(values)))))[0:num_tuples]
-    print(f'  + Generated column {name} of {len(data)} rows with {len(set(data))} distinct values.')
+    print(f'  + Generated column {name} of {len(data):,} rows with {len(set(data)):,} distinct values.')
     random.shuffle(data)
     return data
 

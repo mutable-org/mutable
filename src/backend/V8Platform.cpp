@@ -188,7 +188,7 @@ V8Platform::V8Platform()
     }
 
 #if 1
-    v8::V8::SetFlagsFromString("--no-liftoff --experimental-wasm-simd");
+    v8::V8::SetFlagsFromString("--stack_size 1000000 --no-liftoff --experimental-wasm-simd");
 #else
     v8::V8::SetFlagsFromString("--no-liftoff --print-wasm-code");
 #endif

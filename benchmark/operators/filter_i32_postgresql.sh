@@ -3,7 +3,7 @@
 # Define path to PostgreSQL CLI
 POSTGRESQL=psql
 
-{ ${POSTGRESQL} -U postgres | ack 'Time' | cut -d ' ' -f 2; } << EOF
+{ ${POSTGRESQL} -U postgres | grep 'Time' | cut -d ' ' -f 2; } << EOF
 DROP DATABASE IF EXISTS benchmark_tmp;
 CREATE DATABASE benchmark_tmp;
 \c benchmark_tmp

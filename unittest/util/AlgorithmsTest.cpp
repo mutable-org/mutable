@@ -2,6 +2,7 @@
 
 #include "util/algorithms.hpp"
 #include <algorithm>
+#include <array>
 #include <random>
 
 

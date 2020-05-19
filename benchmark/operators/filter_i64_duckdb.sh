@@ -3,7 +3,7 @@
 # Define path to DuckDB CLI
 DUCKDB=duckdb_cli
 
-{ ${DUCKDB} | ack 'Run Time' | cut -d ' ' -f 4; } << EOF
+{ ${DUCKDB} | ack 'Run Time' | cut -d ' ' -f 4 | awk '{print $1 * 1000;}'; } << EOF
 CREATE TABLE Attributes_i64 ( a0 BIGINT, a1 BIGINT, a2 BIGINT, a3 BIGINT, a4 BIGINT, a5 BIGINT, a6 BIGINT, a7 BIGINT, a8 BIGINT, a9 BIGINT);
 COPY Attributes_i64 FROM 'benchmark/operators/data/Attributes_i64.csv' ( HEADER );
 .timer on

@@ -570,11 +570,14 @@ if __name__ == '__main__':
         num_benchmarks_passed += 1
 
         for name, cmd in yml.get('compare_to', dict()).items():
+            if os.path.isfile(cmd) and not os.access(cmd, os.X_OK):
+                tqdm.write(f'Error: File "{cmd}" is not executable.')
+                continue
             measurements = pandas.DataFrame(columns=['commit', 'date', 'version', 'suite', 'benchmark', 'experiment', 'name', 'config', 'case', 'time'])
             stream = os.popen(cmd)
 
             for idx, line in enumerate(stream):
-                time = float(line) * 1000
+                time = float(line) # in milliseconds
                 measurements.loc[len(measurements)] = [
                     str(commit),
                     date,

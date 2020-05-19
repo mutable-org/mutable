@@ -442,16 +442,18 @@ def generate_html(commit, results):
                         color = altair.Color('ident:N', title=None, legend=None)
                     )
                     line = base.mark_line().encode(
-                        y = altair.Y('mean(time)', title='Time (ms)')
+                        y = altair.Y('mean(time)', title='Time (ms)'),
+                        opacity = altair.condition(selection, altair.value(1), altair.value(.3))
                     )
                     band = base.mark_errorband(extent='ci').encode(
                         y = altair.Y('time', title=None),
-                        opacity = altair.condition(selection, altair.value(.5), altair.value(.1))
+                        opacity = altair.condition(selection, altair.value(.4), altair.value(.1))
                     )
                     point = base.mark_point().encode(
                         y = altair.Y('mean(time)', title=None),
                         color = altair.Color('ident:N', title=None),
                         shape = altair.Shape('ident:N', title='Experiments'),
+                        opacity = altair.condition(selection, altair.value(1), altair.value(.3))
                     )
                     chart = (line + band + point).resolve_scale(
                         color='independent',

@@ -439,16 +439,24 @@ def generate_html(commit, results):
                     selection = altair.selection_multi(fields=['ident'], bind='legend')
                     base = altair.Chart(combined_measurements, width=chart_width).encode(
                         x = altair.X('case:N', title=' | '.join(sorted(combined_labels))),
-                        color = altair.Color('ident:N', title='Experiments'),
-                        opacity = altair.condition(selection, altair.value(1), altair.value(.2))
+                        color = altair.Color('ident:N', title=None, legend=None)
                     )
                     line = base.mark_line().encode(
                         y = altair.Y('mean(time)', title='Time (ms)')
                     )
                     band = base.mark_errorband(extent='ci').encode(
-                        y = altair.Y('time', title=None)
+                        y = altair.Y('time', title=None),
+                        opacity = altair.condition(selection, altair.value(.5), altair.value(.1))
                     )
-                    chart = (line + band).add_selection(selection).interactive()
+                    point = base.mark_point().encode(
+                        y = altair.Y('mean(time)', title=None),
+                        color = altair.Color('ident:N', title=None),
+                        shape = altair.Shape('ident:N', title='Experiments'),
+                    )
+                    chart = (line + band + point).resolve_scale(
+                        color='independent',
+                        shape='independent'
+                    ).add_selection(selection).interactive()
                     with tag('script', type='text/javascript'):
                         text(f'var spec = {chart.to_json()};')
                         text('''var opt = {

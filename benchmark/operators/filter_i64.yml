@@ -21,3 +21,4 @@ cases:
     1.0: SELECT 1 FROM Attributes_i64 WHERE a0 < 9223372036854775807;
 compare_to:
     'DuckDB': 'benchmark/operators/filter_i64_duckdb.sh'
+    'PostgreSQL': 'benchmark/operators/filter_i64_postgresql.sh'

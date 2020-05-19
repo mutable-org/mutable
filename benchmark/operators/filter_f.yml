@@ -21,3 +21,4 @@ cases:
     1.0: SELECT 1 FROM Attributes_f WHERE a0 < 1.0;
 compare_to:
     'DuckDB': 'benchmark/operators/filter_f_duckdb.sh'
+    'PostgreSQL': 'benchmark/operators/filter_f_postgresql.sh'

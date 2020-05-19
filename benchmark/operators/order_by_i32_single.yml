@@ -22,3 +22,4 @@ cases:
     1.0: SELECT a0 FROM Attributes_i32 WHERE a0 < 2147483647 ORDER BY a0;
 compare_to:
     'DuckDB': 'benchmark/operators/order_by_i32_single_duckdb.sh'
+    'PostgreSQL': 'benchmark/operators/order_by_i32_single_postgresql.sh'

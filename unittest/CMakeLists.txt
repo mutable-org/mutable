@@ -18,6 +18,7 @@ add_executable(
     util/StringPoolTest.cpp
 
     # lex
+    lex/LexerTest.cpp
     lex/TokenTest.cpp
 
     # parse
@@ -43,6 +44,6 @@ add_executable(
 
     # globals
     ../src/globals.cpp
-    )
+)
 target_link_libraries(unittest db)
 endif()

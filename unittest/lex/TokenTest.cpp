@@ -6,7 +6,7 @@
 using namespace db;
 
 
-TEST_CASE("Token c'tor", "[core][lex][token]")
+TEST_CASE("Token c'tor", "[core][lex][unit]")
 {
     Position pos("the_file");
     Token tok(pos, "the_text", TK_ERROR);
@@ -16,7 +16,7 @@ TEST_CASE("Token c'tor", "[core][lex][token]")
     REQUIRE(TK_ERROR == tok.type);
 }
 
-TEST_CASE("Token::bool()", "[core][lex][token]")
+TEST_CASE("Token::bool()", "[core][lex][unit]")
 {
     Position pos("the_file");
 
@@ -29,4 +29,12 @@ TEST_CASE("Token::bool()", "[core][lex][token]")
         Token tok(pos, "the_text", TK_EOF);
         REQUIRE(not bool(tok));
     }
+}
+
+TEST_CASE("Token::TokenType()", "[core][lex][unit]")
+{
+    Position pos("the_file");
+    Token tok(pos, "the_text", TK_ERROR);
+
+    REQUIRE(TK_ERROR == TokenType(tok));
 }

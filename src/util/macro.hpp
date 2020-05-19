@@ -139,4 +139,10 @@ T * _notnull(T *arg, const char *filename, const unsigned line, const char *args
 
 #define DISCARD (void)
 
+/*======================================================================================================================
+ * Set branch likeliness
+ *====================================================================================================================*/
+#define likely(x)   __builtin_expect((x),1)
+#define unlikely(x) __builtin_expect((x),0)
+
 }

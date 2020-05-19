@@ -343,7 +343,7 @@ void WasmCodeGen::operator()(const SortingOperator &op)
         /* module= */ module(),
         /* op=     */ BinaryenAndInt32(),
         /* left=   */ b_head_inc,
-        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(~(WasmPlatform::WASM_ALIGNMENT - 1)))
+        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(~(int32_t(WasmPlatform::WASM_ALIGNMENT) - 1)))
     );
     main_.block() += BinaryenLocalSet(
         /* module= */ module(),

@@ -433,23 +433,22 @@ def generate_html(commit, results):
                     # Produce combined chart
                     if len(combined_labels) == 0:
                         combined_labels.add('Cases')
+                    combined_measurements['ident'] = combined_measurements['experiment'] + ' ' + combined_measurements['name']
                     num_cases = len(combined_measurements['case'].unique())
                     chart_width = 50 * num_cases
-                    #  chart_title = f'Combined chart for {suite} / {benchmark}.'
-                    base = altair.Chart(combined_measurements, width=chart_width
-                        ).transform_calculate(
-                            col = "datum.experiment + ' ' + datum.name"
-                        ).encode(
-                            x = altair.X('case:N', title=' | '.join(sorted(combined_labels))),
-                            color = altair.Color('col:N', title='Experiments')
-                        )
+                    selection = altair.selection_multi(fields=['ident'], bind='legend')
+                    base = altair.Chart(combined_measurements, width=chart_width).encode(
+                        x = altair.X('case:N', title=' | '.join(sorted(combined_labels))),
+                        color = altair.Color('ident:N', title='Experiments'),
+                        opacity = altair.condition(selection, altair.value(1), altair.value(.2))
+                    )
                     line = base.mark_line().encode(
                         y = altair.Y('mean(time)', title='Time (ms)')
                     )
                     band = base.mark_errorband(extent='ci').encode(
                         y = altair.Y('time', title=None)
                     )
-                    chart = (line + band).interactive()
+                    chart = (line + band).add_selection(selection).interactive()
                     with tag('script', type='text/javascript'):
                         text(f'var spec = {chart.to_json()};')
                         text('''var opt = {

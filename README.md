@@ -26,4 +26,4 @@ See [the license file](LICENSE) contained in this project.
 - [Wiki](https://gitlab.cs.uni-saarland.de/bigdata/mutable/mutable/-/wikis/home)
 - [Documentation](http://deeprig02.cs.uni-saarland.de/mutable/doxy/) (only reachable from within our subnet)
 - [Coverage](http://deeprig02.cs.uni-saarland.de/mutable/coverage/) (only reachable from within our subnet)
-- [Continuous Benchmarking](http://deeprig02.cs.uni-saarland.de/mutable/benchmark)
+- [Continuous Benchmarking](http://deeprig02.cs.uni-saarland.de/mutable/benchmark) (only reachable from within our subnet)

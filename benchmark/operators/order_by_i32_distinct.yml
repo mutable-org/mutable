@@ -1,0 +1,19 @@
+description: Order by single attribute of type INT(4) and varying number or distinct values.
+suite: operators
+benchmark: order_by-distinct
+readonly: yes
+pattern: '^Execute query:.*'
+configurations:
+    Interpreter:             --backend Interpreter
+    WebAssembly_ColumnStore: --backend WasmV8 --store ColumnStore
+label: 'Number of distinct values'
+cases:
+    1:      SELECT id FROM Distinct_i32 ORDER BY n1;
+    10:     SELECT id FROM Distinct_i32 ORDER BY n10;
+    100:    SELECT id FROM Distinct_i32 ORDER BY n100;
+    1000:   SELECT id FROM Distinct_i32 ORDER BY n1000;
+    10000:  SELECT id FROM Distinct_i32 ORDER BY n10000;
+    100000: SELECT id FROM Distinct_i32 ORDER BY n100000;
+compare_to:
+    'DuckDB': 'benchmark/operators/order_by_i32_distinct_duckdb.sh'
+    'PostgreSQL': 'benchmark/operators/order_by_i32_distinct_postgresql.sh'

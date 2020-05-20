@@ -10,7 +10,7 @@ import string
 NUM_TUPLES = 1_000_000
 STRLEN = 10
 OUTPUT_DIR = os.path.join('benchmark', 'operators', 'data')
-NUM_DISTINCT_VALUES = 100 # smaller means less distinct values and more duplicates
+NUM_DISTINCT_VALUES = NUM_TUPLES // 10
 
 TYPE_TO_STR = {
         'b':    'BOOL',
@@ -113,7 +113,50 @@ SCHEMA = {
         ( 'a8', 'd' ),
         ( 'a9', 'd' ),
     ],
+
+    "Distinct_i32": [
+        ( 'id',      'i32' ),
+        ( 'n1',      'i32', 1 ),
+        ( 'n10',     'i32', 10 ),
+        ( 'n100',    'i32', 100 ),
+        ( 'n1000',   'i32', 1000 ),
+        ( 'n10000',  'i32', 10000 ),
+        ( 'n100000', 'i32', 100000 ),
+    ],
 }
+
+
+#=======================================================================================================================
+# Helper Functions
+#=======================================================================================================================
+
+# Generate `num` distinct integer values, drawn uniformly at random from the range [ `smallest`, `largest` ).
+def gen_random_int_values(smallest :int, largest :int, num :int):
+    assert largest - smallest >= num
+
+    if largest - smallest == num:
+        return list(range(smallest, largest))
+
+    taken = set()
+    counter = largest - num
+    values = list()
+
+    for i in range(0, num):
+        val = random.randrange(smallest, largest - num)
+        if val in taken:
+            values.append(counter)
+            counter += 1
+        else:
+            taken.add(val)
+            values.append(val)
+
+    assert len(values) == len(set(values))
+    return values
+
+
+#=======================================================================================================================
+# Data Generation
+#=======================================================================================================================
 
 def gen_database(name, schema, path_to_dir):
     with open(os.path.join(path_to_dir, 'schema.sql'), 'w') as sql:
@@ -128,8 +171,8 @@ CREATE TABLE {table_name}
 (
 ''')
             attrs = list()
-            for name, ty in attributes:
-                attrs.append(f'    {name} {TYPE_TO_STR[ty]}')
+            for attr in attributes:
+                attrs.append(f'    {attr[0]} {TYPE_TO_STR[attr[1]]}')
             sql.write(',\n'.join(attrs))
 
             path_to_csv = os.path.join(path_to_dir, f'{table_name}.csv')
@@ -139,7 +182,10 @@ IMPORT INTO {table_name} DSV "{path_to_csv}" SKIP HEADER;
 '''
 )
 
-def gen_column(name, ty, num_tuples):
+def gen_column(attr, num_tuples):
+    name = attr[0]
+    ty = attr[1]
+    num_distinct_values = attr[2] if len(attr) >= 3 else NUM_DISTINCT_VALUES
     random.seed(hash(name))
 
     if 'fid' in name:
@@ -150,15 +196,15 @@ def gen_column(name, ty, num_tuples):
     if ty == 'b':
         values = [ 'TRUE', 'FALSE' ]
     elif ty == 'f' or ty == 'd':
-        values = [ random.random() for i in range(NUM_DISTINCT_VALUES) ]
+        values = [ random.random() for i in range(num_distinct_values) ]
     elif ty == 'i8':
-        values = [ random.randrange( -2**7 + 1,  2**7 - 1, max(1,  2**8 // NUM_DISTINCT_VALUES)) for i in range(NUM_TUPLES // 1000 * NUM_DISTINCT_VALUES) ]
+        values = gen_random_int_values( -2**7 + 1,  2**7, min( 2**8 - 1, num_distinct_values))
     elif ty == 'i16':
-        values = [ random.randrange(-2**15 + 1, 2**15 - 1, max(1, 2**16 // NUM_DISTINCT_VALUES)) for i in range(NUM_TUPLES // 1000 * NUM_DISTINCT_VALUES) ]
+        values = gen_random_int_values(-2**15 + 1, 2**15, min(2**16 - 1, num_distinct_values))
     elif ty == 'i32':
-        values = [ random.randrange(-2**31 + 1, 2**31 - 1, max(1, 2**32 // NUM_DISTINCT_VALUES)) for i in range(NUM_TUPLES // 1000 * NUM_DISTINCT_VALUES) ]
+        values = gen_random_int_values(-2**31 + 1, 2**31, min(2**32 - 1, num_distinct_values))
     elif ty == 'i64':
-        values = [ random.randrange(-2**63 + 1, 2**63 - 1, max(1, 2**64 // NUM_DISTINCT_VALUES)) for i in range(NUM_TUPLES // 1000 * NUM_DISTINCT_VALUES) ]
+        values = gen_random_int_values(-2**63 + 1, 2**63, min(2**64 - 1, num_distinct_values))
     else:
         raise Exception('unsupported type')
 
@@ -170,7 +216,7 @@ def gen_column(name, ty, num_tuples):
 def gen_table(table_name, attributes, path_to_dir):
     print(f'Generating data for table {table_name}')
     path = os.path.join(path_to_dir, table_name + '.csv')
-    columns = [ gen_column(attr[0], attr[1], NUM_TUPLES) for attr in attributes ]
+    columns = [ gen_column(attr, NUM_TUPLES) for attr in attributes ]
 
     with open(path, 'w') as csv:
         # write header

@@ -6,7 +6,7 @@ pattern: '^Execute query:.*'
 configurations:
     Interpreter: --backend Interpreter
     WebAssembly: --backend WasmV8
-label: 'Number of Attributes'
+label: 'Number of attributes'
 cases:
     1: |
         SELECT a0

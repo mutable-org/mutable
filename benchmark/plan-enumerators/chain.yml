@@ -11,8 +11,7 @@ configurations:
     DPsubOpt:       '--plan-enumerator DPsubOpt'
     TDbasic:        '--plan-enumerator TDbasic'
     TDMinCutAGaT:   '--plan-enumerator TDMinCutAGaT'
-label: 'Number of Joins'
-cases:
+label: 'Number of joins'
     2:  SELECT
             *
         FROM

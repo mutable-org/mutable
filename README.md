@@ -14,6 +14,8 @@ striving for competitive performance with state-of-the-art systems.
 - [Marcel Maltry](https://bigdata.uni-saarland.de/people/maltry.php) <<marcel.maltry@bigdata.uni-saarland.de>>
 - [Joris Nix](https://bigdata.uni-saarland.de/people/nix.php) <<joris.nix@bigdata.uni-saarland.de>>
 - [Jens Dittrich](https://bigdata.uni-saarland.de/people/dittrich.php) <<jens.dittrich@bigdata.uni-saarland.de>>
+- Luca Gretscher <<s8lugret@stud.uni-saarland.de>>
+
 
 ## License
 

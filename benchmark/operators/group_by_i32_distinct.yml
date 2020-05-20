@@ -1,0 +1,17 @@
+description: Group by single attribute of type INT(4) and varying number of distinct values.
+suite: operators
+benchmark: group_by-distinct
+readonly: yes
+pattern: '^Execute query:.*'
+configurations:
+    Interpreter: --backend Interpreter
+label: 'Number of distinct values'
+cases:
+    10:     SELECT 1 FROM Distinct_i32 GROUP BY n10;
+    100:    SELECT 1 FROM Distinct_i32 GROUP BY n100;
+    1000:   SELECT 1 FROM Distinct_i32 GROUP BY n1000;
+    10000:  SELECT 1 FROM Distinct_i32 GROUP BY n10000;
+    100000: SELECT 1 FROM Distinct_i32 GROUP BY n100000;
+compare_to:
+    'DuckDB': 'benchmark/operators/group_by_i32_distinct_duckdb.sh'
+    'PostgreSQL': 'benchmark/operators/group_by_i32_distinct_postgresql.sh'

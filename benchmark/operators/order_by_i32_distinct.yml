@@ -8,7 +8,6 @@ configurations:
     WebAssembly_ColumnStore: --backend WasmV8 --store ColumnStore
 label: 'Number of distinct values'
 cases:
-    1:      SELECT id FROM Distinct_i32 ORDER BY n1;
     10:     SELECT id FROM Distinct_i32 ORDER BY n10;
     100:    SELECT id FROM Distinct_i32 ORDER BY n100;
     1000:   SELECT id FROM Distinct_i32 ORDER BY n1000;

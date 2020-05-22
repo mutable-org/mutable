@@ -340,41 +340,38 @@ def generate_html(commit, results):
                                         with tag('div', klass='charts'):
                                             # Emit cards with the charts and further information
                                             for experiment, configs in experiments.items():
-                                                for config in configs.keys():
-                                                    with tag('div', klass='card', style='width: auto;'):
-                                                        with tag('div', klass='card-header'):
-                                                            if config:
-                                                                text(f'{experiment} ({config})')
-                                                            else:
-                                                                text(experiment)
-                                                        with tag('div', klass='card-img-top'):
-                                                            with tag('div', id=f'chart_{suite}_{benchmark}_{experiment}_{config}'):
-                                                                pass
-                                                        with tag('div', klass='card-body'):
-                                                            doc.line('h5', yml['description'], klass='card-title')
-                                                            with tag('div', klass='info', style='display: none;'):
-                                                                with tag('p'):
-                                                                    text('ver. ')
-                                                                    text(str(yml.get('version', 1)))
-                                                                cmd_args = list()
-                                                                if 'args' in yml and yml['args']:
-                                                                    cmd_args.append(str(yml['args']))
-                                                                if config and yml['configurations'].get(config, None):
-                                                                    cmd_args.append(str(yml['configurations'][config]))
-                                                                with tag('p'):
-                                                                    if cmd_args:
-                                                                        cmd_args = map(lambda x: x.strip(), cmd_args)
-                                                                        with tag('code'):
-                                                                            text(' '.join(cmd_args))
-                                                                    else:
-                                                                        text('no supplementary command line arguments')
-                                            with tag('div', klass='card', style='width: auto;'):
-                                                doc.line('div', f'{suite} / {benchmark}', klass='card-header')
-                                                with tag('div', klass='card-img-top'):
-                                                    with tag('div', id=f'chart_{suite}_{benchmark}', klass='chart-interactive'):
-                                                        pass
-                                                with tag('div', klass='card-body'):
-                                                    doc.line('h5', f'Combined chart for benchmark {suite} / {benchmark}.', klass='card-title')
+                                                with tag('div', klass='card', style='width: auto;'):
+                                                    with tag('div', klass='card-header'):
+                                                        text(experiment)
+                                                    with tag('div', klass='card-img-top'):
+                                                        with tag('div', id=f'chart_{suite}_{benchmark}_{experiment}'):
+                                                            pass
+                                                    with tag('div', klass='card-body'):
+                                                        doc.line('h5', yml['description'], klass='card-title')
+                                                        with tag('div', klass='info', style='display: none;'):
+                                                            with tag('p'):
+                                                                text('ver. ')
+                                                                text(str(yml.get('version', 1)))
+                                                            cmd_args = list()
+                                                            if 'args' in yml and yml['args']:
+                                                                cmd_args.append(str(yml['args']))
+                                                            #  if config and yml['configurations'].get(config, None):
+                                                            #      cmd_args.append(str(yml['configurations'][config]))
+                                                            with tag('p'):
+                                                                if cmd_args:
+                                                                    cmd_args = map(lambda x: x.strip(), cmd_args)
+                                                                    with tag('code'):
+                                                                        text(' '.join(cmd_args))
+                                                                else:
+                                                                    text('no supplementary command line arguments')
+                                            if len(experiments) > 1:
+                                                with tag('div', klass='card', style='width: auto;'):
+                                                    doc.line('div', f'{suite} / {benchmark}', klass='card-header')
+                                                    with tag('div', klass='card-img-top'):
+                                                        with tag('div', id=f'chart_{suite}_{benchmark}', klass='chart-interactive'):
+                                                            pass
+                                                    with tag('div', klass='card-body'):
+                                                        doc.line('h5', f'Combined chart for benchmark {suite} / {benchmark}.', klass='card-title')
 
             with tag('script', src='https://code.jquery.com/jquery-3.4.1.slim.min.js',
                                integrity='sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n',
@@ -400,71 +397,96 @@ def generate_html(commit, results):
             for suite, benchmarks in results.items():
                 for benchmark, data in benchmarks.items():
                     experiments, yml = data
-                    combined_measurements = None
-                    combined_labels = set()
+                    measurements_benchmark = None
+                    labels_benchmark = set()
                     for experiment, configs in experiments.items():
+                        measurements_experiment = None
+                        labels_experiment = set()
                         for config, measurements in configs.items():
-                            # Produce chart
-                            num_cases = len(measurements['case'].unique())
-                            chart_width = 30 * num_cases
-                            chart_x_label = yml.get('label', 'Cases')
-                            base = altair.Chart(measurements, width=chart_width).encode(
-                                x = altair.X('case:N', title=chart_x_label)
-                            )
-                            box = base.mark_boxplot().encode(
-                                y = altair.Y('time:Q', title='Time (ms)')
-                            )
-                            line = base.mark_line(color='red').encode(y='mean(time)')
-                            chart = (box + line).interactive()
+                            measurements_experiment = pandas.concat([measurements_experiment, measurements],
+                                                                    ignore_index=True, sort=False)
 
-                            combined_measurements = pandas.concat([combined_measurements, measurements],
-                                                                  ignore_index=True, sort=False)
-                            combined_labels.add(chart_x_label)
+                        chart_x_label = yml.get('label', 'Cases')
+                        measurements_benchmark = pandas.concat([measurements_benchmark, measurements_experiment],
+                                                               ignore_index=True, sort=False)
+                        labels_benchmark.add(chart_x_label)
 
-                            with tag('script', type='text/javascript'):
-                                text(f'var spec = {chart.to_json()};')
-                                text('''var opt = {
-                                    "renderer": "svg",
-                                    "actions": { "export": true, "source": false, "editor": false, "compiled": false },
-                                    "downloadFileName": "''' +  f'{suite}-{benchmark}-{experiment}-{config}' + '" };')
-                                text(f'vegaEmbed("#chart_{suite}_{benchmark}_{experiment}_{config}" , spec, opt);')
+                        # Produce combined chart for all configurations of the same experiment
+                        measurements_experiment['ident'] = measurements_experiment['experiment'] + ' ' + measurements_experiment['name']
+                        num_cases = len(measurements_experiment['case'].unique())
+                        chart_width = 30 * num_cases
 
-                    # Produce combined chart
-                    if len(combined_labels) == 0:
-                        combined_labels.add('Cases')
-                    combined_measurements['ident'] = combined_measurements['experiment'] + ' ' + combined_measurements['name']
-                    num_cases = len(combined_measurements['case'].unique())
-                    chart_width = 50 * num_cases
-                    selection = altair.selection_multi(fields=['ident'], bind='legend')
-                    base = altair.Chart(combined_measurements, width=chart_width).encode(
-                        x = altair.X('case:N', title=' | '.join(sorted(combined_labels))),
-                        color = altair.Color('ident:N', title=None, legend=None)
-                    )
-                    line = base.mark_line().encode(
-                        y = altair.Y('mean(time)', title='Time (ms)'),
-                        opacity = altair.condition(selection, altair.value(1), altair.value(.3))
-                    )
-                    band = base.mark_errorband(extent='ci').encode(
-                        y = altair.Y('time', title=None),
-                        opacity = altair.condition(selection, altair.value(.4), altair.value(.1))
-                    )
-                    point = base.mark_point().encode(
-                        y = altair.Y('mean(time)', title=None),
-                        color = altair.Color('ident:N', title=None),
-                        shape = altair.Shape('ident:N', title='Experiments'),
-                        opacity = altair.condition(selection, altair.value(1), altair.value(.3))
-                    )
-                    chart = (line + band + point).resolve_scale(
-                        color='independent',
-                        shape='independent'
-                    ).add_selection(selection).interactive()
-                    with tag('script', type='text/javascript'):
-                        text(f'var spec = {chart.to_json()};')
-                        text('''var opt = {
-                            "renderer": "svg",
-                            "actions": { "export": true, "source": false, "editor": false, "compiled": false },
-                            "downloadFileName": "''' +  f'{suite}-{benchmark}-combined' + '" };')
-                        text(f'vegaEmbed("#chart_{suite}_{benchmark}" , spec, opt);')
+                        selection = altair.selection_multi(fields=['ident'], bind='legend')
+                        base = altair.Chart(measurements_experiment, width=chart_width).encode(
+                            x = altair.X('case:N', title=' | '.join(sorted(labels_benchmark))),
+                            color = altair.Color('ident:N', title=None, legend=None)
+                        )
+                        line = base.mark_line().encode(
+                            y = altair.Y('mean(time)', title='Time (ms)'),
+                            opacity = altair.condition(selection, altair.value(1), altair.value(.3))
+                        )
+                        band = base.mark_errorband(extent='ci').encode(
+                            y = altair.Y('time', title=None),
+                            opacity = altair.condition(selection, altair.value(.4), altair.value(.1))
+                        )
+                        point = base.mark_point().encode(
+                            y = altair.Y('mean(time)', title=None),
+                            color = altair.Color('ident:N', title=None),
+                            shape = altair.Shape('ident:N', title='Experiments'),
+                            opacity = altair.condition(selection, altair.value(1), altair.value(.3))
+                        )
+                        chart = (line + band + point).resolve_scale(
+                            color='independent',
+                            shape='independent'
+                        ).add_selection(selection).interactive()
+
+                        with tag('script', type='text/javascript'):
+                            text(f'var spec = {chart.to_json()};')
+                            text('''var opt = {
+                                "renderer": "svg",
+                                "actions": { "export": true, "source": false, "editor": false, "compiled": false },
+                                "downloadFileName": "''' +  f'{suite}-{benchmark}-{experiment}' + '" };')
+                            text(f'vegaEmbed("#chart_{suite}_{benchmark}_{experiment}" , spec, opt);')
+
+                    # Produce combined chart for entire benchmark
+                    if len(experiments) > 1:
+                        if len(labels_benchmark) == 0:
+                            labels_benchmark.add('Cases')
+                        measurements_benchmark['ident'] = measurements_benchmark['experiment'] + ' ' + measurements_benchmark['name']
+                        num_cases = len(measurements_benchmark['case'].unique())
+                        chart_width = 50 * num_cases
+
+                        selection = altair.selection_multi(fields=['ident'], bind='legend')
+                        base = altair.Chart(measurements_benchmark, width=chart_width).encode(
+                            x = altair.X('case:N', title=' | '.join(sorted(labels_benchmark))),
+                            color = altair.Color('ident:N', title=None, legend=None)
+                        )
+                        line = base.mark_line().encode(
+                            y = altair.Y('mean(time)', title='Time (ms)'),
+                            opacity = altair.condition(selection, altair.value(1), altair.value(.3))
+                        )
+                        band = base.mark_errorband(extent='ci').encode(
+                            y = altair.Y('time', title=None),
+                            opacity = altair.condition(selection, altair.value(.4), altair.value(.1))
+                        )
+                        point = base.mark_point().encode(
+                            y = altair.Y('mean(time)', title=None),
+                            color = altair.Color('ident:N', title=None),
+                            shape = altair.Shape('ident:N', title='Experiments'),
+                            opacity = altair.condition(selection, altair.value(1), altair.value(.3))
+                        )
+                        chart = (line + band + point).resolve_scale(
+                            color='independent',
+                            shape='independent'
+                        ).add_selection(selection).interactive()
+
+                        with tag('script', type='text/javascript'):
+                            text(f'var spec = {chart.to_json()};')
+                            text('''var opt = {
+                                "renderer": "svg",
+                                "actions": { "export": true, "source": false, "editor": false, "compiled": false },
+                                "downloadFileName": "''' +  f'{suite}-{benchmark}-combined' + '" };')
+                            text(f'vegaEmbed("#chart_{suite}_{benchmark}" , spec, opt);')
 
             with tag('script', type='text/javascript'):
                 text('''\

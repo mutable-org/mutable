@@ -333,14 +333,14 @@ def generate_html(commit, results):
                         for suite, benchmarks in results.items():
                             with tag('div', id=suite, klass='suite'):
                                 doc.line('h2', suite)
-                                for benchmark, experiments in benchmarks.items():
+                                for benchmark, data in benchmarks.items():
+                                    experiments, yml = data
                                     with tag('div', id=f'{suite}_{benchmark}', klass='benchmark'):
                                         doc.line('h3', benchmark)
                                         with tag('div', klass='charts'):
                                             # Emit cards with the charts and further information
                                             for experiment, configs in experiments.items():
-                                                for config, data in configs.items():
-                                                    _, yml = data
+                                                for config in configs.keys():
                                                     with tag('div', klass='card', style='width: auto;'):
                                                         with tag('div', klass='card-header'):
                                                             if config:
@@ -398,13 +398,12 @@ def generate_html(commit, results):
                 pass
 
             for suite, benchmarks in results.items():
-                for benchmark, experiments in benchmarks.items():
+                for benchmark, data in benchmarks.items():
+                    experiments, yml = data
                     combined_measurements = None
                     combined_labels = set()
                     for experiment, configs in experiments.items():
-                        for config, data in configs.items():
-                            measurements, yml = data
-
+                        for config, measurements in configs.items():
                             # Produce chart
                             num_cases = len(measurements['case'].unique())
                             chart_width = 30 * num_cases
@@ -569,11 +568,11 @@ if __name__ == '__main__':
 
             # Add to benchmark results
             suite = results.get(yml['suite'], dict())
-            benchmark = suite.get(yml['benchmark'], dict())
+            benchmark, _ = suite.get(yml['benchmark'], (dict(), None))
             experiment = benchmark.get(experiment_name, dict())
-            experiment[config_name] = (measurements, yml)
+            experiment[config_name] = measurements
             benchmark[experiment_name] = experiment
-            suite[yml['benchmark']] = benchmark
+            suite[yml['benchmark']] = (benchmark, yml)
             results[yml['suite']] = suite
 
         num_benchmarks_passed += 1
@@ -602,11 +601,11 @@ if __name__ == '__main__':
 
             # Add to benchmark results
             suite = results.get(yml['suite'], dict())
-            benchmark = suite.get(yml['benchmark'], dict())
+            benchmark, _ = suite.get(yml['benchmark'], (dict(), None))
             experiment = benchmark[experiment_name]
-            experiment[name] = (measurements, yml)
+            experiment[name] = measurements
             benchmark[experiment_name] = experiment
-            suite[yml['benchmark']] = benchmark
+            suite[yml['benchmark']] = (benchmark, yml)
             results[yml['suite']] = suite
 
             stream.close()

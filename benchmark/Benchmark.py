@@ -487,6 +487,7 @@ if __name__ == '__main__':
                                                     The build directory is assumed to be './build/release'.''')
     parser.add_argument('suite', nargs='*', help='a benchmark suite to be run')
     parser.add_argument('--html', help='Generate static HTML report', dest='html', default=False, action='store_true')
+    parser.add_argument('--no-compare', help='Skip comparison to other systems', dest='compare', default=True, action='store_false')
     parser.add_argument('-o', '--output',
                         help='Specify file to write measurement in CSV format (defaults to \'benchmark.csv\')',
                         dest='output', metavar='FILE.csv', default=None, action='store')
@@ -577,38 +578,40 @@ if __name__ == '__main__':
 
         num_benchmarks_passed += 1
 
-        for name, cmd in yml.get('compare_to', dict()).items():
-            if os.path.isfile(cmd) and not os.access(cmd, os.X_OK):
-                tqdm.write(f'Error: File "{cmd}" is not executable.')
-                continue
-            measurements = pandas.DataFrame(columns=['commit', 'date', 'version', 'suite', 'benchmark', 'experiment', 'name', 'config', 'case', 'time'])
-            stream = os.popen(cmd)
+        # Compare to other systems
+        if args.compare:
+            for name, cmd in yml.get('compare_to', dict()).items():
+                if os.path.isfile(cmd) and not os.access(cmd, os.X_OK):
+                    tqdm.write(f'Error: File "{cmd}" is not executable.')
+                    continue
+                measurements = pandas.DataFrame(columns=['commit', 'date', 'version', 'suite', 'benchmark', 'experiment', 'name', 'config', 'case', 'time'])
+                stream = os.popen(cmd)
 
-            for idx, line in enumerate(stream):
-                time = float(line) # in milliseconds
-                measurements.loc[len(measurements)] = [
-                    str(commit),
-                    date,
-                    yml.get('version', 1),
-                    yml['suite'],
-                    yml['benchmark'],
-                    experiment_name,
-                    name,
-                    name,
-                    list(yml['cases'].keys())[idx],
-                    time
-                ]
+                for idx, line in enumerate(stream):
+                    time = float(line) # in milliseconds
+                    measurements.loc[len(measurements)] = [
+                        str(commit),
+                        date,
+                        yml.get('version', 1),
+                        yml['suite'],
+                        yml['benchmark'],
+                        experiment_name,
+                        name,
+                        name,
+                        list(yml['cases'].keys())[idx],
+                        time
+                    ]
 
-            # Add to benchmark results
-            suite = results.get(yml['suite'], dict())
-            benchmark, _ = suite.get(yml['benchmark'], (dict(), None))
-            experiment = benchmark[experiment_name]
-            experiment[name] = measurements
-            benchmark[experiment_name] = experiment
-            suite[yml['benchmark']] = (benchmark, yml)
-            results[yml['suite']] = suite
+                # Add to benchmark results
+                suite = results.get(yml['suite'], dict())
+                benchmark, _ = suite.get(yml['benchmark'], (dict(), None))
+                experiment = benchmark[experiment_name]
+                experiment[name] = measurements
+                benchmark[experiment_name] = experiment
+                suite[yml['benchmark']] = (benchmark, yml)
+                results[yml['suite']] = suite
 
-            stream.close()
+                stream.close()
 
     if args.html:
         generate_html(commit, results)

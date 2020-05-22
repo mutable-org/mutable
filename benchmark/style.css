@@ -146,6 +146,27 @@ pre code
     padding: 5px 10px;
 }
 
+.suite > h2
+{
+    cursor: pointer;
+}
+
+.suite > h2 i.fas
+{
+    font-size: 80%;
+    margin-left: 10px;
+    transition-duration: 0.3s;
+    transition-property: transform;
+}
+.suite > h2:hover i.fas.fa-chevron-down
+{
+    transform: rotate(-180deg);
+}
+.suite > h2:hover i.fas.fa-chevron-up
+{
+    transform: rotate(180deg);
+}
+
 .benchmark
 {
     overflow: visible;

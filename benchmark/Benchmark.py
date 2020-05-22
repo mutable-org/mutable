@@ -489,10 +489,47 @@ def generate_html(commit, results):
                             text(f'vegaEmbed("#chart_{suite}_{benchmark}" , spec, opt);')
 
             with tag('script', type='text/javascript'):
-                text('''\
+                doc.asis('''\
 $(function () {
   $('[data-toggle="tooltip"]').tooltip()
-})
+});
+''')
+
+            with tag('script', type='text/javascript'):
+                doc.asis('''\
+$(function () {
+    var suites = $('.suite');
+
+    var headlines = suites.children('h2');
+    var chevron_down = $('<i class="fas fa-chevron-down"></i>');
+    var chevron_up   = $('<i class="fas fa-chevron-up"></i>');
+    headlines.append(chevron_down);
+
+    var toggle_suite = function (_suite) {
+        var suite = $(_suite);
+        var experiments = suite.find('.benchmark');
+        var headline = suite.children('h2');
+        var chevron = headline.find('i.fas');
+        if (chevron.hasClass('fa-chevron-down')) {
+            experiments.hide();
+            chevron.replaceWith(chevron_up.clone());
+        } else {
+            experiments.show();
+            chevron.replaceWith(chevron_down.clone());
+        }
+    };
+
+    headlines.click(function () { toggle_suite($(this).closest('.suite')); });
+
+    var nav_links = $('.nav-link[href^="#"]');
+    nav_links.click(function () {
+        var target = $(document).find($(this).attr('href'));
+        if (!target.is(':visible'))
+            toggle_suite(target.closest('.suite'));
+    });
+
+    headlines.click();
+});
 ''')
 
     with open('benchmark.html', 'w') as html:

@@ -123,6 +123,11 @@ SCHEMA = {
         ( 'n10000',  'i32', 10000 ),
         ( 'n100000', 'i32', 100000 ),
     ],
+
+    "Relation": [
+        ( "id",     'i32'),
+        ( "fid",    'i32'),
+    ],
 }
 
 
@@ -189,8 +194,12 @@ def gen_column(attr, num_tuples):
     random.seed(hash(name))
 
     if 'fid' in name:
-        pass # TODO repeat some values
+        weights = [ random.randrange(0, 5) for i in range(num_tuples) ]
+        foreign_keys = random.choices(range(num_tuples), weights, k=num_tuples)
+        print(f'  + Generated column {name} of {num_tuples} rows with {len(set(foreign_keys))} distinct foreign keys in the range from 0 to {num_tuples-1}.')
+        return foreign_keys
     elif 'id' in name:
+        print(f'  + Generated column {name} of {num_tuples} rows with keys from 0 to {num_tuples-1}.')
         return range(num_tuples)
 
     if ty == 'b':

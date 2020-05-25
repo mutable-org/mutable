@@ -21,3 +21,4 @@ cases:
 compare_to:
     'DuckDB': 'benchmark/operators/equi_join_i32_single_duckdb.sh'
     'PostgreSQL': 'benchmark/operators/equi_join_i32_single_postgresql.sh'
+    'HyPer': 'benchmark/operators/equi_join_i32_single_hyper.py'

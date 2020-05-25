@@ -22,3 +22,4 @@ cases:
 compare_to:
     'DuckDB': 'benchmark/operators/filter_i64_duckdb.sh'
     'PostgreSQL': 'benchmark/operators/filter_i64_postgresql.sh'
+    'HyPer': 'benchmark/operators/filter_i64_hyper.py'

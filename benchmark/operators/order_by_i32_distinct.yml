@@ -16,3 +16,4 @@ cases:
 compare_to:
     'DuckDB': 'benchmark/operators/order_by_i32_distinct_duckdb.sh'
     'PostgreSQL': 'benchmark/operators/order_by_i32_distinct_postgresql.sh'
+    'HyPer': 'benchmark/operators/order_by_i32_distinct_hyper.py'

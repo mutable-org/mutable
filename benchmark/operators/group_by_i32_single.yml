@@ -21,3 +21,4 @@ cases:
 compare_to:
     'DuckDB': 'benchmark/operators/group_by_i32_single_duckdb.sh'
     'PostgreSQL': 'benchmark/operators/group_by_i32_single_postgresql.sh'
+    'HyPer': 'benchmark/operators/group_by_i32_single_hyper.py'

@@ -67,16 +67,17 @@ ExternalProject_Add(
     PREFIX third-party
     DOWNLOAD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party"
     GIT_REPOSITORY "https://github.com/AmokHuginnsson/replxx.git"
-    GIT_TAG 130c57ed96a0c14c8ce7330c5ec23338c17701d9
+    GIT_TAG 737c8e8147d44eae530e2b56592ad8788695ef12
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/replxx"
-    PATCH_COMMAND sed -i.origin "s/^.*set_target_properties( *replxx-static *PROPERTIES.*/set_target_properties(replxx-static PROPERTIES OUTPUT_NAME replxx)/" "CMakeLists.txt"
-    CMAKE_ARGS -DBUILD_STATIC_LIBS=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-    BUILD_BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/third-party/src/Replxx-build/libreplxx.a"
+    PATCH_COMMAND sed -i.origin "s/^.*set_property.*DEBUG_POSTFIX.*//" "CMakeLists.txt"
+    COMMAND       sed -i.origin "s/^if *( *NOT BUILD_SHARED_LIBS AND MSVC *)/if ( NOT BUILD_SHARED_LIBS )/" "CMakeLists.txt"
+    CMAKE_ARGS -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+    BUILD_BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/third-party/src/Replxx-build/libreplxx-static.a"
     INSTALL_COMMAND ":"
     )
 include_directories(SYSTEM third-party/replxx/include)
 add_library(replxx STATIC IMPORTED)
-set_target_properties(replxx PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/third-party/src/Replxx-build/libreplxx.a")
+set_target_properties(replxx PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/third-party/src/Replxx-build/libreplxx-static.a")
 add_dependencies(replxx Replxx)
 
 # Binaryen - WebAssembly CodeGen API with WASM-specific Optimizations

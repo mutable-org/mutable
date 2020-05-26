@@ -556,7 +556,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Check whether we are interactive
-    is_interactive = True if 'TERM' in os.environ else False
+    is_interactive = True if os.environ.get('TERM', False) else False
 
     # Get benchmark files
     if not args.suite:
@@ -639,12 +639,12 @@ if __name__ == '__main__':
 
         # Compare to other systems
         if args.compare:
-            for name, cmd in yml.get('compare_to', dict()).items():
-                if os.path.isfile(cmd) and not os.access(cmd, os.X_OK):
-                    tqdm.write(f'Error: File "{cmd}" is not executable.')
+            for name, script in yml.get('compare_to', dict()).items():
+                if not os.path.isfile(script) or not os.access(script, os.X_OK):
+                    tqdm.write(f'Error: File "{script}" is not executable.')
                     continue
                 measurements = pandas.DataFrame(columns=['commit', 'date', 'version', 'suite', 'benchmark', 'experiment', 'name', 'config', 'case', 'time'])
-                stream = os.popen(cmd)
+                stream = os.popen(f'taskset -c 0 {script}')
 
                 for idx, line in enumerate(stream):
                     time = float(line) # in milliseconds

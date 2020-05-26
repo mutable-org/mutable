@@ -2,6 +2,7 @@
 
 import itertools
 import math
+import multiprocessing
 import os
 import random
 import string
@@ -135,6 +136,17 @@ SCHEMA = {
 # Helper Functions
 #=======================================================================================================================
 
+# Process an `iterable` in groups of size `n`
+def grouper(iterable, n):
+    it = iter(iterable)
+    while True:
+        chunk_it = itertools.islice(it, n)
+        try:
+            first_el = next(chunk_it)
+        except StopIteration:
+            return
+        yield itertools.chain((first_el,), chunk_it)
+
 # Generate `num` distinct integer values, drawn uniformly at random from the range [ `smallest`, `largest` ).
 def gen_random_int_values(smallest :int, largest :int, num :int):
     assert largest - smallest >= num
@@ -197,10 +209,10 @@ def gen_column(attr, num_tuples):
         weights = [ random.randrange(0, 5) for i in range(num_tuples) ]
         foreign_keys = random.choices(range(num_tuples), weights, k=num_tuples)
         print(f'  + Generated column {name} of {num_tuples} rows with {len(set(foreign_keys))} distinct foreign keys in the range from 0 to {num_tuples-1}.')
-        return foreign_keys
+        return map(str, foreign_keys)
     elif 'id' in name:
         print(f'  + Generated column {name} of {num_tuples} rows with keys from 0 to {num_tuples-1}.')
-        return range(num_tuples)
+        return map(str, range(num_tuples))
 
     if ty == 'b':
         values = [ 'TRUE', 'FALSE' ]
@@ -220,19 +232,21 @@ def gen_column(attr, num_tuples):
     data = list(itertools.chain.from_iterable(itertools.repeat(values, math.ceil(num_tuples / len(values)))))[0:num_tuples]
     print(f'  + Generated column {name} of {len(data):,} rows with {len(set(data)):,} distinct values.')
     random.shuffle(data)
-    return data
+    return map(str, data)
 
 def gen_table(table_name, attributes, path_to_dir):
     print(f'Generating data for table {table_name}')
-    path = os.path.join(path_to_dir, table_name + '.csv')
-    columns = [ gen_column(attr, NUM_TUPLES) for attr in attributes ]
+    with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
+        path = os.path.join(path_to_dir, table_name + '.csv')
+        columns = pool.starmap(gen_column, zip(attributes, [NUM_TUPLES] * len(attributes)))
 
-    with open(path, 'w') as csv:
-        # write header
-        csv.write(','.join(map(lambda attr: attr[0], attributes)) + '\n')
-        for i in range(NUM_TUPLES):
-            row = list(map(lambda col: col[i], columns))
-            csv.write(','.join(map(str, row)) + '\n')
+        with open(path, 'w') as csv:
+            # write header
+            csv.write(','.join(map(lambda attr: attr[0], attributes)) + '\n')
+            rows = map(','.join, zip(*columns))
+            for g in grouper(rows, 1000):
+                csv.write('\n'.join(g))
+                csv.write('\n')
 
 def gen_tables(schema, path_to_dir):
     for table_name, attributes in schema.items():

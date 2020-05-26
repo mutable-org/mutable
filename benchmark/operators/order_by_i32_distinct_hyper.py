@@ -35,8 +35,10 @@ if __name__ == '__main__':
                 connection.catalog.create_table(table_def)
                 num_rows = connection.execute_command(f'COPY {table_def.table_name} FROM \'benchmark/operators/data/Distinct_i32.csv\' WITH DELIMITER \',\' CSV HEADER')
                 begin = time.time_ns()
-                res = connection.execute_query(q)
-                res.close()
+                with connection.execute_query(q) as result:
+                    i = 0
+                    for row in result:
+                        i += 1
                 end = time.time_ns()
                 times.append(end - begin)
 

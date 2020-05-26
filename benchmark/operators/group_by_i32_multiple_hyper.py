@@ -22,10 +22,10 @@ if __name__ == '__main__':
 
             times = list()
             queries = [
-                f'SELECT 1 FROM {table_def.table_name} GROUP BY n10000',
-                f'SELECT 1 FROM {table_def.table_name} GROUP BY n10000, n1000',
-                f'SELECT 1 FROM {table_def.table_name} GROUP BY n10000, n1000, n100',
-                f'SELECT 1 FROM {table_def.table_name} GROUP BY n10000, n1000, n100, n10',
+                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY n10000) AS T',
+                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY n10000, n1000) AS T',
+                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY n10000, n1000, n100) AS T',
+                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY n10000, n1000, n100, n10) AS T',
             ]
 
             for q in queries:
@@ -34,8 +34,10 @@ if __name__ == '__main__':
                 connection.catalog.create_table(table_def)
                 num_rows = connection.execute_command(f'COPY {table_def.table_name} FROM \'benchmark/operators/data/Distinct_i32.csv\' WITH DELIMITER \',\' CSV HEADER')
                 begin = time.time_ns()
-                res = connection.execute_query(q)
-                res.close()
+                with connection.execute_query(q) as result:
+                    i = 0
+                    for row in result:
+                        i += 1
                 end = time.time_ns()
                 times.append(end - begin)
 

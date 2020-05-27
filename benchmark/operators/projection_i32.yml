@@ -7,34 +7,17 @@ configurations:
     Interpreter: --backend Interpreter
     WebAssembly: --backend WasmV8
 label: 'Number of attributes'
+tables: [ 'Attributes_multi_i32' ]
 cases:
     1: |
         SELECT a0
-        FROM Attributes_i32;
+        FROM Attributes_multi_i32;
     2: |
         SELECT a0, a1
-        FROM Attributes_i32;
+        FROM Attributes_multi_i32;
     3: |
         SELECT a0, a1, a2
-        FROM Attributes_i32;
+        FROM Attributes_multi_i32;
     4: |
         SELECT a0, a1, a2, a3
-        FROM Attributes_i32;
-    5: |
-        SELECT a0, a1, a2, a3, a4
-        FROM Attributes_i32;
-    6: |
-        SELECT a0, a1, a2, a3, a4, a5
-        FROM Attributes_i32;
-    7: |
-        SELECT a0, a1, a2, a3, a4, a5, a6
-        FROM Attributes_i32;
-    8: |
-        SELECT a0, a1, a2, a3, a4, a5, a6, a7
-        FROM Attributes_i32;
-    9: |
-        SELECT a0, a1, a2, a3, a4, a5, a6, a7, a8
-        FROM Attributes_i32;
-    10: |
-        SELECT a0, a1, a2, a3, a4, a5, a6, a7, a8, a9
-        FROM Attributes_i32;
+        FROM Attributes_multi_i32;

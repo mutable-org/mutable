@@ -6,6 +6,7 @@ pattern: '^Execute query:.*'
 configurations:
     Interpreter: --backend Interpreter
 label: 'Scale factor'
+tables: [ 'Relation' ]
 cases:
     0.0: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid AND R.id <      0 AND S.id <      0;
     0.1: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid AND R.id <  10000 AND S.id <  10000;

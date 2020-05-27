@@ -8,11 +8,12 @@ configurations:
     WebAssembly_RowStore:       --backend WasmV8 --store RowStore
     WebAssembly_ColumnStore:    --backend WasmV8 --store ColumnStore
 label: 'Number of attributes to order by'
+tables: [ 'Distinct_i32' ]
 cases:
-    1: SELECT a0 FROM Attributes_i32 ORDER BY a0;
-    2: SELECT a0 FROM Attributes_i32 ORDER BY a0, a1;
-    3: SELECT a0 FROM Attributes_i32 ORDER BY a0, a1, a2;
-    4: SELECT a0 FROM Attributes_i32 ORDER BY a0, a1, a2, a3;
+    1: SELECT id FROM Distinct_i32 ORDER BY n10000;
+    2: SELECT id FROM Distinct_i32 ORDER BY n10000, n1000;
+    3: SELECT id FROM Distinct_i32 ORDER BY n10000, n1000, n100;
+    4: SELECT id FROM Distinct_i32 ORDER BY n10000, n1000, n100, n10;
 compare_to:
     'DuckDB': 'benchmark/operators/order_by_i32_multiple_duckdb.sh'
     'PostgreSQL': 'benchmark/operators/order_by_i32_multiple_postgresql.sh'

@@ -8,32 +8,32 @@ DROP DATABASE IF EXISTS benchmark_tmp;
 CREATE DATABASE benchmark_tmp;
 \c benchmark_tmp
 
-CREATE TABLE Attributes_i32 ( a0 INT, a1 INT, a2 INT, a3 INT, a4 INT, a5 INT, a6 INT, a7 INT, a8 INT, a9 INT);
-\copy Attributes_i32 FROM 'benchmark/operators/data/Attributes_i32.csv' WITH DELIMITER ',' CSV HEADER;
+CREATE TABLE Distinct_i32 ( id INT, n1 INT, n10 INT, n100 INT, n1000 INT, n10000 INT, n100000 INT);
+\copy Distinct_i32 FROM 'benchmark/operators/data/Distinct_i32.csv' WITH DELIMITER ',' CSV HEADER;
 \timing on
-SELECT a0 FROM Attributes_i32 ORDER BY a0;
+SELECT id FROM Distinct_i32 ORDER BY n10000;
 \timing off
-DROP TABLE Attributes_i32;
+DROP TABLE Distinct_i32;
 
-CREATE TABLE Attributes_i32 ( a0 INT, a1 INT, a2 INT, a3 INT, a4 INT, a5 INT, a6 INT, a7 INT, a8 INT, a9 INT);
-\copy Attributes_i32 FROM 'benchmark/operators/data/Attributes_i32.csv' WITH DELIMITER ',' CSV HEADER;
+CREATE TABLE Distinct_i32 ( id INT, n1 INT, n10 INT, n100 INT, n1000 INT, n10000 INT, n100000 INT);
+\copy Distinct_i32 FROM 'benchmark/operators/data/Distinct_i32.csv' WITH DELIMITER ',' CSV HEADER;
 \timing on
-SELECT a0 FROM Attributes_i32 ORDER BY a0, a1;
+SELECT id FROM Distinct_i32 ORDER BY n10000, n1000;
 \timing off
-DROP TABLE Attributes_i32;
+DROP TABLE Distinct_i32;
 
-CREATE TABLE Attributes_i32 ( a0 INT, a1 INT, a2 INT, a3 INT, a4 INT, a5 INT, a6 INT, a7 INT, a8 INT, a9 INT);
-\copy Attributes_i32 FROM 'benchmark/operators/data/Attributes_i32.csv' WITH DELIMITER ',' CSV HEADER;
+CREATE TABLE Distinct_i32 ( id INT, n1 INT, n10 INT, n100 INT, n1000 INT, n10000 INT, n100000 INT);
+\copy Distinct_i32 FROM 'benchmark/operators/data/Distinct_i32.csv' WITH DELIMITER ',' CSV HEADER;
 \timing on
-SELECT a0 FROM Attributes_i32 ORDER BY a0, a1, a2;
+SELECT id FROM Distinct_i32 ORDER BY n10000, n1000, n100;
 \timing off
-DROP TABLE Attributes_i32;
+DROP TABLE Distinct_i32;
 
 
-CREATE TABLE Attributes_i32 ( a0 INT, a1 INT, a2 INT, a3 INT, a4 INT, a5 INT, a6 INT, a7 INT, a8 INT, a9 INT);
-\copy Attributes_i32 FROM 'benchmark/operators/data/Attributes_i32.csv' WITH DELIMITER ',' CSV HEADER;
+CREATE TABLE Distinct_i32 ( id INT, n1 INT, n10 INT, n100 INT, n1000 INT, n10000 INT, n100000 INT);
+\copy Distinct_i32 FROM 'benchmark/operators/data/Distinct_i32.csv' WITH DELIMITER ',' CSV HEADER;
 \timing on
-SELECT a0 FROM Attributes_i32 ORDER BY a0, a1, a2, a3;
+SELECT id FROM Distinct_i32 ORDER BY n10000, n1000, n100, n10;
 \timing off
-DROP TABLE Attributes_i32;
+DROP TABLE Distinct_i32;
 EOF

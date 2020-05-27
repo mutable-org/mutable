@@ -4,22 +4,23 @@ benchmark: filter
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:
-    Interpreter:                --backend Interpreter
-    WebAssembly_RowStore:       --backend WasmV8 --store RowStore
-    WebAssembly_ColumnStore:    --backend WasmV8 --store ColumnStore
+    Interpreter: --backend Interpreter
+    Wasm-row:    --backend WasmV8 --store RowStore
+    Wasm-col:    --backend WasmV8 --store ColumnStore
 label: 'Selectivity'
+tables: [ 'Attribute_i32' ]
 cases:
-    0.0: SELECT 1 FROM Attributes_i32 WHERE a0 < -2147483647;
-    0.1: SELECT 1 FROM Attributes_i32 WHERE a0 < -1717986918;
-    0.2: SELECT 1 FROM Attributes_i32 WHERE a0 < -1288490188;
-    0.3: SELECT 1 FROM Attributes_i32 WHERE a0 < -858993459;
-    0.4: SELECT 1 FROM Attributes_i32 WHERE a0 < -429496729;
-    0.5: SELECT 1 FROM Attributes_i32 WHERE a0 < 0;
-    0.6: SELECT 1 FROM Attributes_i32 WHERE a0 < 429496729;
-    0.7: SELECT 1 FROM Attributes_i32 WHERE a0 < 858993459;
-    0.8: SELECT 1 FROM Attributes_i32 WHERE a0 < 1288490188;
-    0.9: SELECT 1 FROM Attributes_i32 WHERE a0 < 1717986918;
-    1.0: SELECT 1 FROM Attributes_i32 WHERE a0 < 2147483647;
+    0.0: SELECT 1 FROM Attribute_i32 WHERE val < -2147483647;
+    0.1: SELECT 1 FROM Attribute_i32 WHERE val < -1717986918;
+    0.2: SELECT 1 FROM Attribute_i32 WHERE val < -1288490188;
+    0.3: SELECT 1 FROM Attribute_i32 WHERE val <  -858993459;
+    0.4: SELECT 1 FROM Attribute_i32 WHERE val <  -429496729;
+    0.5: SELECT 1 FROM Attribute_i32 WHERE val <           0;
+    0.6: SELECT 1 FROM Attribute_i32 WHERE val <   429496729;
+    0.7: SELECT 1 FROM Attribute_i32 WHERE val <   858993459;
+    0.8: SELECT 1 FROM Attribute_i32 WHERE val <  1288490188;
+    0.9: SELECT 1 FROM Attribute_i32 WHERE val <  1717986918;
+    1.0: SELECT 1 FROM Attribute_i32 WHERE val <  2147483647;
 compare_to:
     'DuckDB': 'benchmark/operators/filter_i32_duckdb.sh'
     'PostgreSQL': 'benchmark/operators/filter_i32_postgresql.sh'

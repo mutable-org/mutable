@@ -56,7 +56,7 @@ def validate_schema(path_to_file, path_to_schema) -> bool:
 
 
 def print_command(command, query, indent = ''):
-    query_str = query.strip().replace('\n', ' ')
+    query_str = query.strip().replace('\n', ' ').replace('"', '\\"')
     command_str = ' '.join(command)
     tqdm.write(f'{indent}$ echo "{query_str}" | {command_str} -')
 
@@ -154,13 +154,21 @@ def run_configuration(experiment, name, config, yml):
     # Collect results in data frame
     measurements = pandas.DataFrame(columns=['version', 'suite', 'benchmark', 'experiment', 'name', 'config', 'case', 'time'])
 
+    # Produce code to load data into tables
+    path_to_data = os.path.join('benchmark', yml['suite'], 'data')
+    imports = '\n'.join(map(
+        lambda tbl: f'IMPORT INTO {tbl} DSV "{os.path.join(path_to_data, tbl + ".csv")}" HAS HEADER SKIP HEADER;',
+        yml['tables']
+    ))
+
     try:
         if is_readonly:
             timeout = DEFAULT_TIMEOUT + NUM_RUNS * TIMEOUT_PER_CASE * len(cases)
             combined_query = list()
+            combined_query.append(imports)
             for case in cases.values():
                 if args.verbose:
-                    print_command(command, case, '    ')
+                    print_command(command, imports + '\n' + case, '    ')
                 combined_query.extend([case] * NUM_RUNS)
             query = '\n'.join(combined_query)
             try:
@@ -180,8 +188,7 @@ def run_configuration(experiment, name, config, yml):
             timeout = DEFAULT_TIMEOUT + NUM_RUNS * TIMEOUT_PER_CASE
             for case, query_str in cases.items():
                 if args.verbose:
-                    print_command(command, query_str, '    ')
-                query = [query_str] * NUM_RUNS
+                    print_command(command, imports + '\n' + query_str, '    ')
                 try:
                     durations = benchmark_query(command, query_str, yml['pattern'], timeout)
                 except BenchmarkTimeoutException as ex:

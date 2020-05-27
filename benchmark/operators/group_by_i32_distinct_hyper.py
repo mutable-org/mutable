@@ -22,10 +22,10 @@ if __name__ == '__main__':
 
             times = list()
             queries = [
-                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY n10) AS T',
-                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY n100) AS T',
-                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY n1000) AS T',
-                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY n10000) AS T',
+                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY     n10) AS T',
+                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY    n100) AS T',
+                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY   n1000) AS T',
+                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY  n10000) AS T',
                 f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY n100000) AS T',
             ]
 

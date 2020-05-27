@@ -25,14 +25,14 @@ if __name__ == '__main__':
                 f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} WHERE n1000 < -2147483647 GROUP BY n1000) AS T',
                 f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} WHERE n1000 < -1717986918 GROUP BY n1000) AS T',
                 f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} WHERE n1000 < -1288490188 GROUP BY n1000) AS T',
-                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} WHERE n1000 < -858993459  GROUP BY n1000) AS T',
-                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} WHERE n1000 < -429496729  GROUP BY n1000) AS T',
-                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} WHERE n1000 < 0           GROUP BY n1000) AS T',
-                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} WHERE n1000 < 429496729   GROUP BY n1000) AS T',
-                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} WHERE n1000 < 858993459   GROUP BY n1000) AS T',
-                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} WHERE n1000 < 1288490188  GROUP BY n1000) AS T',
-                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} WHERE n1000 < 1717986918  GROUP BY n1000) AS T',
-                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} WHERE n1000 < 2147483647  GROUP BY n1000) AS T',
+                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} WHERE n1000 <  -858993459 GROUP BY n1000) AS T',
+                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} WHERE n1000 <  -429496729 GROUP BY n1000) AS T',
+                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} WHERE n1000 <           0 GROUP BY n1000) AS T',
+                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} WHERE n1000 <   429496729 GROUP BY n1000) AS T',
+                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} WHERE n1000 <   858993459 GROUP BY n1000) AS T',
+                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} WHERE n1000 <  1288490188 GROUP BY n1000) AS T',
+                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} WHERE n1000 <  1717986918 GROUP BY n1000) AS T',
+                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} WHERE n1000 <  2147483647 GROUP BY n1000) AS T',
             ]
 
             for q in queries:

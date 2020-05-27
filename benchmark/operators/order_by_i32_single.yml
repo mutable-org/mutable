@@ -8,18 +8,19 @@ configurations:
     WebAssembly_RowStore:       --backend WasmV8 --store RowStore
     WebAssembly_ColumnStore:    --backend WasmV8 --store ColumnStore
 label: 'Scale factor'
+tables: [ 'Distinct_i32' ]
 cases:
-    0.0: SELECT a0 FROM Attributes_i32 WHERE a0 < -2147483647 ORDER BY a0;
-    0.1: SELECT a0 FROM Attributes_i32 WHERE a0 < -1717986918 ORDER BY a0;
-    0.2: SELECT a0 FROM Attributes_i32 WHERE a0 < -1288490188 ORDER BY a0;
-    0.3: SELECT a0 FROM Attributes_i32 WHERE a0 < -858993459 ORDER BY a0;
-    0.4: SELECT a0 FROM Attributes_i32 WHERE a0 < -429496729 ORDER BY a0;
-    0.5: SELECT a0 FROM Attributes_i32 WHERE a0 < 0 ORDER BY a0;
-    0.6: SELECT a0 FROM Attributes_i32 WHERE a0 < 429496729 ORDER BY a0;
-    0.7: SELECT a0 FROM Attributes_i32 WHERE a0 < 858993459 ORDER BY a0;
-    0.8: SELECT a0 FROM Attributes_i32 WHERE a0 < 1288490188 ORDER BY a0;
-    0.9: SELECT a0 FROM Attributes_i32 WHERE a0 < 1717986918 ORDER BY a0;
-    1.0: SELECT a0 FROM Attributes_i32 WHERE a0 < 2147483647 ORDER BY a0;
+    0.0: SELECT id FROM Distinct_i32 WHERE n100000 < -2147483647 ORDER BY n100000;
+    0.1: SELECT id FROM Distinct_i32 WHERE n100000 < -1717986918 ORDER BY n100000;
+    0.2: SELECT id FROM Distinct_i32 WHERE n100000 < -1288490188 ORDER BY n100000;
+    0.3: SELECT id FROM Distinct_i32 WHERE n100000 <  -858993459 ORDER BY n100000;
+    0.4: SELECT id FROM Distinct_i32 WHERE n100000 <  -429496729 ORDER BY n100000;
+    0.5: SELECT id FROM Distinct_i32 WHERE n100000 <           0 ORDER BY n100000;
+    0.6: SELECT id FROM Distinct_i32 WHERE n100000 <   429496729 ORDER BY n100000;
+    0.7: SELECT id FROM Distinct_i32 WHERE n100000 <   858993459 ORDER BY n100000;
+    0.8: SELECT id FROM Distinct_i32 WHERE n100000 <  1288490188 ORDER BY n100000;
+    0.9: SELECT id FROM Distinct_i32 WHERE n100000 <  1717986918 ORDER BY n100000;
+    1.0: SELECT id FROM Distinct_i32 WHERE n100000 <  2147483647 ORDER BY n100000;
 compare_to:
     'DuckDB': 'benchmark/operators/order_by_i32_single_duckdb.sh'
     'PostgreSQL': 'benchmark/operators/order_by_i32_single_postgresql.sh'

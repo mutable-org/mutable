@@ -647,6 +647,7 @@ if __name__ == '__main__':
         # Compare to other systems
         if args.compare:
             for name, script in yml.get('compare_to', dict()).items():
+                tqdm.write(f'` Perform experiment {yml["suite"]}/{yml["benchmark"]}/{experiment_name} in system {name}.')
                 if not os.path.isfile(script) or not os.access(script, os.X_OK):
                     tqdm.write(f'Error: File "{script}" is not executable.')
                     continue

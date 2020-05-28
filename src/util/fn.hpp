@@ -250,12 +250,20 @@ std::ostream & operator<<(std::ostream &out, const std::variant<T, Args...> valu
 template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
+/** This function implements the 64-bit finalizer of Murmur3_x64 by Austin Appleby, available at
+ * https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp.  We use the optimized constants found by David
+ * Stafford, in particular the values for `Mix01`, as reported at
+ * http://zimbry.blogspot.com/2011/09/better-bit-mixing-improving-on.html.
+ *
+ * @param v     the value to mix
+ * @return      the mixed bits
+ */
 inline uint64_t murmur3_64(uint64_t v)
 {
-    v ^= v >> 33;
-    v *= 0xff51afd7ed558ccd;
-    v ^= v >> 33;
-    v *= 0xc4ceb9fe1a85ec53;
+    v ^= v >> 31;
+    v *= 0x7fb5d329728ea185ULL;
+    v ^= v >> 27;
+    v *= 0x81dadef4bc2dd44dULL;
     v ^= v >> 33;
     return v;
 }

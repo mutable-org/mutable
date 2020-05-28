@@ -210,6 +210,21 @@ WasmModule WasmCodeGen::compile(const Operator &plan)
         /* shared=         */ 0
     );
 
+#if 1
+    /*----- Add print function. --------------------------------------------------------------------------------------*/
+    std::vector<BinaryenType> print_param_types;
+    print_param_types.push_back(BinaryenTypeInt32());
+
+    BinaryenAddFunctionImport(
+        /* module=             */ module.ref(),
+        /* internalName=       */ "print",
+        /* externalModuleName= */ "env",
+        /* externalBaseName=   */ "print",
+        /* params=             */ BinaryenTypeCreate(&print_param_types[0], print_param_types.size()),
+        /* results=            */ BinaryenTypeNone()
+    );
+#endif
+
     /*----- Count number of result tuples. ---------------------------------------------------------------------------*/
     codegen.b_num_tuples_ = codegen.add_local(BinaryenTypeInt32());
 
@@ -271,9 +286,11 @@ void WasmCodeGen::operator()(const CallbackOperator &op) { (*this)(*op.child(0))
 
 void WasmCodeGen::operator()(const PrintOperator &op)
 {
+#if 0
     std::vector<BinaryenType> print_param_types;
     for (auto &e : op.schema())
         print_param_types.push_back(get_binaryen_type(e.type));
+
     BinaryenAddFunctionImport(
         /* module=             */ module(),
         /* internalName=       */ "print",
@@ -282,6 +299,7 @@ void WasmCodeGen::operator()(const PrintOperator &op)
         /* params=             */ BinaryenTypeCreate(&print_param_types[0], print_param_types.size()),
         /* results=            */ BinaryenTypeNone()
     );
+#endif
 
     (*this)(*op.child(0));
 }

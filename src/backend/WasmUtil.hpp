@@ -92,6 +92,26 @@ inline BinaryenExpressionRef convert(BinaryenModuleRef module, BinaryenExpressio
 #undef CONVERT
 };
 
+inline BinaryenExpressionRef reinterpret(BinaryenModuleRef module, const BinaryenExpressionRef expr,
+                                         const BinaryenType target)
+{
+#define CONVERT(CONVERSION, EXPR) BinaryenUnary(module, Binaryen##CONVERSION(), EXPR)
+    const BinaryenType original = BinaryenExpressionGetType(expr);
+    if (original == target) return expr;
+
+    if (target == BinaryenTypeInt64()) {
+        if (original == BinaryenTypeInt32())
+            return CONVERT(ExtendUInt32, expr); // i32 to i64
+        if (original == BinaryenTypeFloat32())
+            return CONVERT(ExtendUInt32, CONVERT(ReinterpretFloat32, expr)); // f32 to i64
+        if (original == BinaryenTypeFloat64())
+            return CONVERT(ReinterpretFloat64, expr); // f64 to i64
+    }
+
+    unreachable("unsupported reinterpretation");
+#undef CONVERT
+}
+
 /** A helper class to provide a context for compilation of expressions. */
 struct WasmCGContext : ConstASTExprVisitor
 {

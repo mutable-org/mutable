@@ -84,7 +84,7 @@ after:
         default: /* fallthrough */;
     }
 
-    if (is_alpha(c_)) return read_keyword_or_identifier();
+    if ('_' == c_ or is_alpha(c_)) return read_keyword_or_identifier();
 
     push();
     const char *str = internalize();

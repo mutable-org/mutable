@@ -41,6 +41,12 @@ struct WasmCodeGen : ConstOperatorVisitor
     /** Returns the current WASM module. */
     BinaryenModuleRef module() { return module_.ref(); }
 
+    /** Returns the current `FunctionBuilder`. */
+    FunctionBuilder & fn() { return main_; }
+
+    /** Returns the current `FunctionBuilder`. */
+    const FunctionBuilder & fn() const { return main_; }
+
     /** Returns the local variable holding the number of result tuples produced. */
     BinaryenExpressionRef num_tuples() const { return b_num_tuples_; }
 

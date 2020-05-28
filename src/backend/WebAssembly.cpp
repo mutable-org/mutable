@@ -704,7 +704,24 @@ void WasmPipelineCG::operator()(const LimitOperator &op)
 
 void WasmPipelineCG::operator()(const GroupingOperator &op)
 {
-    (*this)(*op.parent());
+    WasmHashMumur3_64A hasher;
+
+    std::vector<BinaryenExpressionRef> b_keys;
+    for (auto grp : op.group_by())
+        b_keys.push_back(context().compile(*grp));
+
+    auto b_hash = hasher.emit(module(), CG.fn(), block_, b_keys);
+
+    auto b_hash_i32 = convert(module(), b_hash, Type::Get_Integer(Type::TY_Vector, 8),
+                                                Type::Get_Integer(Type::TY_Vector, 4));
+    BinaryenExpressionRef args[] = { b_hash_i32 };
+    block_ += BinaryenCall(
+        /* module=      */ module(),
+        /* target=      */ "print",
+        /* operands=    */ args,
+        /* numOperands= */ 1,
+        /* returnType=  */ BinaryenTypeNone()
+    );
 }
 
 void WasmPipelineCG::operator()(const SortingOperator &op)

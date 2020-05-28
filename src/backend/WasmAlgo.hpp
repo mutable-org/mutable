@@ -92,4 +92,42 @@ struct WasmQuickSort
     BinaryenFunctionRef emit(BinaryenModuleRef module) const;
 };
 
+
+/*======================================================================================================================
+ * WasmBitMix
+ *====================================================================================================================*/
+
+struct WasmBitMix
+{
+    virtual ~WasmBitMix() { }
+
+    virtual BinaryenExpressionRef emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
+                                       BinaryenExpressionRef bits) const = 0;
+};
+
+struct WasmBitMixMurmur3 : WasmBitMix
+{
+    BinaryenExpressionRef emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
+                               BinaryenExpressionRef bits) const override;
+};
+
+
+/*======================================================================================================================
+ * WasmHash
+ *====================================================================================================================*/
+
+struct WasmHash
+{
+    virtual ~WasmHash() { }
+
+    virtual BinaryenExpressionRef emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
+                                       const std::vector<BinaryenExpressionRef> &values) const = 0;
+};
+
+struct WasmHashMumur3_64A : WasmHash
+{
+    BinaryenExpressionRef emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
+                               const std::vector<BinaryenExpressionRef> &values) const override;
+};
+
 }

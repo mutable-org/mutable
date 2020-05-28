@@ -557,3 +557,248 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
     /*----- Add function definition to module. -----------------------------------------------------------------------*/
     return fn.finalize();
 }
+
+
+/*======================================================================================================================
+ * WasmBitMixMurmur3
+ *====================================================================================================================*/
+
+BinaryenExpressionRef WasmBitMixMurmur3::emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
+                                              BinaryenExpressionRef bits) const
+{
+    /* Taken from https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp by Austin Appleby.  We use the
+     * optimized constants found by David Stafford, in particular the values for `Mix01`, as reported at
+     * http://zimbry.blogspot.com/2011/09/better-bit-mixing-improving-on.html. */
+
+    insist(BinaryenExpressionGetType(bits) == BinaryenTypeInt64(), "WasmBitMix expects a 64-bit integer");
+
+    auto v = fn.add_local(BinaryenTypeInt64());
+
+    // v = v ^ (v >> 31)
+    {
+        auto Shr = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenShrUInt64(),
+            /* left=   */ bits,
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(31))
+        );
+        auto Xor = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenXorInt64(),
+            /* left=   */ bits,
+            /* right=  */ Shr
+        );
+        block += BinaryenLocalSet(
+            /* module= */ module,
+            /* index=  */ BinaryenLocalGetGetIndex(v),
+            /* value=  */ Xor
+        );
+    }
+
+    // v = v * 0x7fb5d329728ea185ULL
+    {
+        auto Mul = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenMulInt64(),
+            /* left=   */ v,
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(0x7fb5d329728ea185ULL))
+        );
+        block += BinaryenLocalSet(
+            /* module= */ module,
+            /* index=  */ BinaryenLocalGetGetIndex(v),
+            /* value=  */ Mul
+        );
+    }
+
+    // v = v ^ (v >> 27)
+    {
+        auto Shr = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenShrUInt64(),
+            /* left=   */ v,
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(27))
+        );
+        auto Xor = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenXorInt64(),
+            /* left=   */ v,
+            /* right=  */ Shr
+        );
+        block += BinaryenLocalSet(
+            /* module= */ module,
+            /* index=  */ BinaryenLocalGetGetIndex(v),
+            /* value=  */ Xor
+        );
+    }
+
+    // v = v * 0x81dadef4bc2dd44dULL
+    {
+        auto Mul = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenMulInt64(),
+            /* left=   */ v,
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(0x81dadef4bc2dd44dULL))
+        );
+        block += BinaryenLocalSet(
+            /* module= */ module,
+            /* index=  */ BinaryenLocalGetGetIndex(v),
+            /* value=  */ Mul
+        );
+    }
+
+    // v = v ^ (v >> 33)
+    {
+        auto Shr = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenShrUInt64(),
+            /* left=   */ v,
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(33))
+        );
+        auto Xor = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenXorInt64(),
+            /* left=   */ v,
+            /* right=  */ Shr
+        );
+        block += BinaryenLocalSet(
+            /* module= */ module,
+            /* index=  */ BinaryenLocalGetGetIndex(v),
+            /* value=  */ Xor
+        );
+    }
+
+    return v;
+}
+
+
+/*======================================================================================================================
+ * WasmHashMumur64A
+ *====================================================================================================================*/
+
+BinaryenExpressionRef WasmHashMumur3_64A::emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
+                                               const std::vector<BinaryenExpressionRef> &values) const
+{
+    /* Inspired by https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp by Austin Appleby.  We use
+     * constants from MurmurHash2_64 as reported on https://sites.google.com/site/murmurhash/. */
+
+    insist(values.size() != 0, "cannot compute the hash of an empty sequence of values");
+
+    const auto m = BinaryenConst(module, BinaryenLiteralInt64(0xc6a4a7935bd1e995LLU));
+    BinaryenExpressionRef h = fn.add_local(BinaryenTypeInt64());
+
+    if (values.size() == 1) {
+        /* In case of a single 64-bit value, we just run the bit mixer. */
+        block += BinaryenLocalSet(
+            /* module= */ module,
+            /* index=  */ BinaryenLocalGetGetIndex(h),
+            /* value=  */ reinterpret(module, values[0], BinaryenTypeInt64())
+        );
+    } else {
+        //  uint64_t h = seed ^ (len * m)
+        block += BinaryenLocalSet(
+            /* module= */ module,
+            /* index=  */ BinaryenLocalGetGetIndex(h),
+            /* value=  */ BinaryenConst(module, BinaryenLiteralInt64(0xc6a4a7935bd1e995LLU * values.size()))
+        );
+        BinaryenExpressionRef k = fn.add_local(BinaryenTypeInt64());
+        for (auto val : values) {
+            block += BinaryenLocalSet(
+                /* module= */ module,
+                /* index=  */ BinaryenLocalGetGetIndex(k),
+                /* value=  */ reinterpret(module, val, BinaryenTypeInt64())
+            );
+
+            // k = k * m
+            {
+                auto Mul = BinaryenBinary(
+                    /* module= */ module,
+                    /* op=     */ BinaryenMulInt64(),
+                    /* left=   */ k,
+                    /* right=  */ m
+                );
+                block += BinaryenLocalSet(
+                    /* module= */ module,
+                    /* index=  */ BinaryenLocalGetGetIndex(k),
+                    /* value=  */ Mul
+                );
+            }
+
+            // k = ROTL32(k, 47);
+            {
+                auto Rot = BinaryenBinary(
+                    /* module= */ module,
+                    /* op=     */ BinaryenRotLInt64(),
+                    /* left=   */ k,
+                    /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(47))
+                );
+                block += BinaryenLocalSet(
+                    /* module= */ module,
+                    /* index=  */ BinaryenLocalGetGetIndex(k),
+                    /* value=  */ Rot
+                );
+            }
+
+            // k = k * m
+            {
+                auto Mul = BinaryenBinary(
+                    /* module= */ module,
+                    /* op=     */ BinaryenMulInt64(),
+                    /* left=   */ k,
+                    /* right=  */ m
+                );
+                block += BinaryenLocalSet(
+                    /* module= */ module,
+                    /* index=  */ BinaryenLocalGetGetIndex(k),
+                    /* value=  */ Mul
+                );
+            }
+
+            // h = h ^ k;
+            {
+                auto Xor = BinaryenBinary(
+                    /* module= */ module,
+                    /* op=     */ BinaryenXorInt64(),
+                    /* left=   */ h,
+                    /* right=  */ k
+                );
+                block += BinaryenLocalSet(
+                    /* module= */ module,
+                    /* index=  */ BinaryenLocalGetGetIndex(h),
+                    /* value=  */ Xor
+                );
+            }
+
+            // h = ROTL32(h, 45);
+            {
+                auto Rot = BinaryenBinary(
+                    /* module= */ module,
+                    /* op=     */ BinaryenRotLInt64(),
+                    /* left=   */ h,
+                    /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(45))
+                );
+                block += BinaryenLocalSet(
+                    /* module= */ module,
+                    /* index=  */ BinaryenLocalGetGetIndex(h),
+                    /* value=  */ Rot
+                );
+            }
+
+            // h = h * 5
+            {
+                auto Mul = BinaryenBinary(
+                    /* module= */ module,
+                    /* op=     */ BinaryenMulInt64(),
+                    /* left=   */ h,
+                    /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(5))
+                );
+                block += BinaryenLocalSet(
+                    /* module= */ module,
+                    /* index=  */ BinaryenLocalGetGetIndex(h),
+                    /* value=  */ Mul
+                );
+            }
+        }
+    }
+
+    return WasmBitMixMurmur3{}.emit(module, fn, block, h);
+}

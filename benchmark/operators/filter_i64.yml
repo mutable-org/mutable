@@ -5,7 +5,7 @@ readonly: yes
 pattern: '^Execute query:.*'
 configurations:
     Interpreter: --backend Interpreter
-    Wasm-col:    --backend WasmV8 --store ColumnStore
+    WebAssembly: --backend WasmV8 --store ColumnStore
 label: 'Selectivity'
 tables: [ 'Attribute_i64' ]
 cases:

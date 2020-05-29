@@ -419,14 +419,13 @@ def generate_html(commit, results):
                         labels_benchmark.add(chart_x_label)
 
                         # Produce combined chart for all configurations of the same experiment
-                        measurements_experiment['ident'] = measurements_experiment['experiment'] + ' ' + measurements_experiment['name']
                         num_cases = len(measurements_experiment['case'].unique())
                         chart_width = 30 * num_cases
 
-                        selection = altair.selection_multi(fields=['ident'], bind='legend')
+                        selection = altair.selection_multi(fields=['name'], bind='legend')
                         base = altair.Chart(measurements_experiment, width=chart_width).encode(
                             x = altair.X('case:N', title=' | '.join(sorted(labels_benchmark))),
-                            color = altair.Color('ident:N', title=None, legend=None)
+                            color = altair.Color('name:N', title=None, legend=None)
                         )
                         line = base.mark_line().encode(
                             y = altair.Y('mean(time)', title='Time (ms)'),
@@ -438,8 +437,8 @@ def generate_html(commit, results):
                         )
                         point = base.mark_point().encode(
                             y = altair.Y('mean(time)', title=None),
-                            color = altair.Color('ident:N', title=None),
-                            shape = altair.Shape('ident:N', title='Experiments'),
+                            color = altair.Color('name:N', title=None),
+                            shape = altair.Shape('name:N', title=None),
                             opacity = altair.condition(selection, altair.value(1), altair.value(.3))
                         )
                         chart = (line + band + point).resolve_scale(

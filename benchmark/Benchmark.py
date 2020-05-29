@@ -340,13 +340,13 @@ def generate_html(commit, results):
                         for suite, benchmarks in results.items():
                             with tag('div', id=suite, klass='suite'):
                                 doc.line('h2', suite)
-                                for benchmark, data in benchmarks.items():
-                                    experiments, yml = data
+                                for benchmark, experiments in benchmarks.items():
                                     with tag('div', id=f'{suite}_{benchmark}', klass='benchmark'):
                                         doc.line('h3', benchmark)
                                         with tag('div', klass='charts'):
                                             # Emit cards with the charts and further information
-                                            for experiment, configs in experiments.items():
+                                            for experiment, data in experiments.items():
+                                                configs, yml = data
                                                 with tag('div', klass='card', style='width: auto;'):
                                                     with tag('div', klass='card-header'):
                                                         text(experiment)
@@ -402,11 +402,11 @@ def generate_html(commit, results):
                 pass
 
             for suite, benchmarks in results.items():
-                for benchmark, data in benchmarks.items():
-                    experiments, yml = data
+                for benchmark, experiments in benchmarks.items():
                     measurements_benchmark = None
                     labels_benchmark = set()
-                    for experiment, configs in experiments.items():
+                    for experiment, data in experiments.items():
+                        configs, yml = data
                         measurements_experiment = None
                         labels_experiment = set()
                         for config, measurements in configs.items():
@@ -634,11 +634,11 @@ if __name__ == '__main__':
 
             # Add to benchmark results
             suite = results.get(yml['suite'], dict())
-            benchmark, _ = suite.get(yml['benchmark'], (dict(), None))
-            experiment = benchmark.get(experiment_name, dict())
+            benchmark = suite.get(yml['benchmark'], dict())
+            experiment, _ = benchmark.get(experiment_name, (dict(), None))
             experiment[config_name] = measurements
-            benchmark[experiment_name] = experiment
-            suite[yml['benchmark']] = (benchmark, yml)
+            benchmark[experiment_name] = (experiment, yml)
+            suite[yml['benchmark']] = benchmark
             results[yml['suite']] = suite
 
         num_benchmarks_passed += 1
@@ -670,11 +670,11 @@ if __name__ == '__main__':
 
                 # Add to benchmark results
                 suite = results.get(yml['suite'], dict())
-                benchmark, _ = suite.get(yml['benchmark'], (dict(), None))
-                experiment = benchmark[experiment_name]
+                benchmark = suite.get(yml['benchmark'], dict())
+                experiment, _ = benchmark.get(experiment_name, (dict(), None))
                 experiment[name] = measurements
-                benchmark[experiment_name] = experiment
-                suite[yml['benchmark']] = (benchmark, yml)
+                benchmark[experiment_name] = (experiment, yml)
+                suite[yml['benchmark']] = benchmark
                 results[yml['suite']] = suite
 
                 stream.close()

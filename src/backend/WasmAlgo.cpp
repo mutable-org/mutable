@@ -802,3 +802,356 @@ BinaryenExpressionRef WasmHashMumur3_64A::emit(BinaryenModuleRef module, Functio
 
     return WasmBitMixMurmur3{}.emit(module, fn, block, h);
 }
+
+
+/*======================================================================================================================
+ * WasmRefCountingHashTable
+ *====================================================================================================================*/
+
+BinaryenExpressionRef WasmRefCountingHashTable::create_table(BlockBuilder &block, BinaryenExpressionRef b_addr,
+                                                             std::size_t num_buckets) const
+{
+    num_buckets = ceil_to_pow_2(num_buckets);
+
+    /*----- Address. -------------------------------------------------------------------------------------------------*/
+    block += BinaryenLocalSet(
+        /* module= */ module,
+        /* index=  */ BinaryenLocalGetGetIndex(b_addr_),
+        /* value=  */ b_addr
+    );
+
+    /*----- Mask. ----------------------------------------------------------------------------------------------------*/
+    block += BinaryenLocalSet(
+        /* module= */ module,
+        /* index=  */ BinaryenLocalGetGetIndex(b_mask_),
+        /* value=  */ BinaryenConst(module, BinaryenLiteralInt32(num_buckets - 1))
+    );
+
+    /*----- Compute end of hash table. -------------------------------------------------------------------------------*/
+    return BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ b_addr,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(num_buckets * entry_size_))
+    );
+}
+
+void WasmRefCountingHashTable::clear_table(BlockBuilder &block,
+                                           BinaryenExpressionRef b_begin, BinaryenExpressionRef b_end) const
+{
+    auto b_induction = fn.add_local(BinaryenTypeInt32());
+    block += BinaryenLocalSet(
+        /* module= */ module,
+        /* index=  */ BinaryenLocalGetGetIndex(b_induction),
+        /* value=  */ b_begin
+    );
+    auto b_loop_cond = BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenLtUInt32(),
+        /* left=   */ b_induction,
+        /* right=  */ b_end
+    );
+
+    constexpr const char *loop_name = "clear_table";
+    BlockBuilder loop_body(module, "clear_table.body");
+
+    /*----- Clear entry. ---------------------------------------------------------------------------------------------*/
+    loop_body += BinaryenStore(
+        /* module= */ module,
+        /* bytes=  */ REFERENCE_SIZE,
+        /* offset= */ 0,
+        /* align=  */ 0,
+        /* ptr=    */ b_induction,
+        /* value=  */ BinaryenConst(module, BinaryenLiteralInt32(0)),
+        /* type=   */ BinaryenTypeInt32()
+    );
+
+    /*----- Advance induction variable. ------------------------------------------------------------------------------*/
+    auto b_inc = BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ b_induction,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size_))
+    );
+    loop_body += BinaryenLocalSet(
+        /* module= */ module,
+        /* index=  */ BinaryenLocalGetGetIndex(b_induction),
+        /* value=  */ b_inc
+    );
+    loop_body += BinaryenBreak(
+        /* module=    */ module,
+        /* name=      */ loop_name,
+        /* condition= */ b_loop_cond,
+        /* value=     */ nullptr
+    );
+
+    /*----- Create loop and loop header. -----------------------------------------------------------------------------*/
+    auto b_loop = BinaryenLoop(
+        /* module= */ module,
+        /* name=   */ loop_name,
+        /* body=   */ loop_body.finalize()
+    );
+    block += BinaryenIf(
+        /* module=    */ module,
+        /* condition= */ b_loop_cond,
+        /* ifTrue=    */ b_loop,
+        /* ifFalse=   */ nullptr
+    );
+}
+
+BinaryenExpressionRef WasmRefCountingHashTable::hash_to_bucket(BinaryenExpressionRef b_hash) const
+{
+    auto b_bucket_index = BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenAndInt32(),
+        /* left=   */ b_hash,
+        /* right=  */ b_mask_
+    );
+    auto b_bucket_offset = BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenMulInt32(),
+        /* left=   */ b_bucket_index,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size_))
+    );
+    return BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ b_addr_,
+        /* right=  */ b_bucket_offset
+    );
+}
+
+std::pair<BinaryenExpressionRef, BinaryenExpressionRef>
+WasmRefCountingHashTable::find_in_bucket(BlockBuilder &block, BinaryenExpressionRef b_bucket_addr,
+                                         const std::vector<BinaryenExpressionRef> &key) const
+{
+    insist(key.size() <= struc.schema.num_entries(), "incorrect number of key values");
+
+    const char *loop_name = "find_in_bucket.loop";
+
+    /*----- Create local runner . ------------------------------------------------------------------------------------*/
+    auto b_runner = fn.add_local(BinaryenTypeInt32());
+    block += BinaryenLocalSet(
+        /* module= */ module,
+        /* index=  */ BinaryenLocalGetGetIndex(b_runner),
+        /* value=  */ b_bucket_addr
+    );
+
+    auto b_table_size = BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ b_mask_,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(1))
+    );
+
+    auto b_table_size_in_bytes = BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenMulInt32(),
+        /* left=   */ b_table_size,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size_))
+    );
+
+    /*----- Initialize step counter. ---------------------------------------------------------------------------------*/
+    auto b_step = fn.add_local(BinaryenTypeInt32());
+    block += BinaryenLocalSet(
+        /* module= */ module,
+        /* index=  */ BinaryenLocalGetGetIndex(b_step),
+        /* value=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size_))
+    );
+
+    /*----- Advance to next slot. ------------------------------------------------------------------------------------*/
+    BlockBuilder advance(module, "find_in_bucket.step");
+    {
+        auto b_runner_inc = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ b_runner,
+            /* right=  */ b_step
+        );
+        auto b_runner_wrapped = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenSubInt32(),
+            /* left=   */ b_runner_inc,
+            /* right=  */ b_table_size_in_bytes
+        );
+        auto b_table_end = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ b_addr_,
+            /* right=  */ b_table_size_in_bytes
+        );
+        auto b_is_overflow = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenGeUInt32(),
+            /* left=   */ b_runner_inc,
+            /* right=  */ b_table_end
+        );
+        auto b_runner_upd = BinaryenSelect(
+            /* module=    */ module,
+            /* condition= */ b_is_overflow,
+            /* ifTrue=    */ b_runner_wrapped,
+            /* ifFalse=   */ b_runner_inc,
+            /* type=      */ BinaryenTypeInt32()
+        );
+        advance += BinaryenLocalSet(
+            /* module= */ module,
+            /* index=  */ BinaryenLocalGetGetIndex(b_runner),
+            /* value=  */ b_runner_upd
+        );
+
+        auto b_step_inc = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ b_step,
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size_))
+        );
+        advance += BinaryenLocalSet(
+            /* module= */ module,
+            /* index=  */ BinaryenLocalGetGetIndex(b_step),
+            /* value=  */ b_step_inc
+        );
+        advance += BinaryenBreak(
+            /* module=    */ module,
+            /* name=      */ loop_name,
+            /* condition= */ nullptr,
+            /* value=     */ nullptr
+        );
+    }
+
+    /*----- Get reference count from bucket. -------------------------------------------------------------------------*/
+    auto b_ref_count = BinaryenLoad(
+        /* module= */ module,
+        /* bytes=  */ REFERENCE_SIZE,
+        /* signed= */ false,
+        /* offset= */ 0,
+        /* align=  */ 0,
+        /* type=   */ BinaryenTypeInt32(),
+        /* ptr=    */ b_runner
+    );
+
+    /*----- Check whether bucket is occupied. ------------------------------------------------------------------------*/
+    auto b_is_occupied = BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenNeInt32(),
+        /* left=   */ b_ref_count,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(0))
+    );
+
+    /*----- Compare keys. --------------------------------------------------------------------------------------------*/
+    BinaryenExpressionRef b_keys_not_equal = nullptr;
+    {
+        auto ld_key = struc.create_load_context(b_runner, /* offset= */ REFERENCE_SIZE);
+        std::size_t idx = 0;
+        for (auto b_key_find : key) {
+            auto &e = struc.schema[idx++];
+            auto b_key_bucket = ld_key[e.id];
+            auto b_cmp = WasmCompare::Ne(module, *e.type, b_key_bucket, b_key_find);
+
+            if (b_keys_not_equal) {
+                b_keys_not_equal = BinaryenBinary(
+                    /* module= */ module,
+                    /* op=     */ BinaryenOrInt32(),
+                    /* left=   */ b_keys_not_equal,
+                    /* right=  */ b_cmp
+                );
+            } else {
+                b_keys_not_equal = b_cmp;
+            }
+        }
+    }
+
+    auto b_if_key_equal = BinaryenIf(
+        /* module=    */ module,
+        /* condition= */ b_keys_not_equal,
+        /* ifTrue=    */ advance.finalize(), // key not equal, continue search
+        /* ifFalse=   */ nullptr // hit, break loop
+    );
+    auto b_if_occupied = BinaryenIf(
+        /* module=    */ module,
+        /* condition= */ b_is_occupied,
+        /* ifTrue=    */ b_if_key_equal, // slot occupied, compare key
+        /* ifFalse=   */ nullptr // miss, break loop
+    );
+    block += BinaryenLoop(
+        /* module= */ module,
+        /* in=     */ loop_name,
+        /* body=   */ b_if_occupied
+    );
+
+    return std::make_pair(b_runner, b_step);
+}
+
+BinaryenExpressionRef WasmRefCountingHashTable::is_slot_empty(BinaryenExpressionRef b_slot_addr) const
+{
+    auto b_ref_count = BinaryenLoad(
+        /* module= */ module,
+        /* bytes=  */ REFERENCE_SIZE,
+        /* signed= */ false,
+        /* offset= */ 0,
+        /* align=  */ 0,
+        /* type=   */ BinaryenTypeInt32(),
+        /* ptr=    */ b_slot_addr
+    );
+    return BinaryenUnary(
+        /* module= */ module,
+        /* op=     */ BinaryenEqZInt32(),
+        /* value=  */ b_ref_count
+    );
+}
+
+void WasmRefCountingHashTable::emplace(BlockBuilder &block,
+                                       BinaryenExpressionRef b_bucket_addr, BinaryenExpressionRef b_steps,
+                                       BinaryenExpressionRef b_slot_addr,
+                                       const std::vector<BinaryenExpressionRef> &key) const
+{
+    insist(key.size() <= struc.schema.num_entries(), "incorrect number of key values");
+
+    /*----- Update bucket probe length. ------------------------------------------------------------------------------*/
+    block += BinaryenStore(
+        /* module= */ module,
+        /* bytes=  */ REFERENCE_SIZE,
+        /* offset= */ 0,
+        /* align=  */ 0,
+        /* ptr=    */ b_bucket_addr,
+        /* value=  */ b_steps,
+        /* type=   */ BinaryenTypeInt32()
+    );
+
+    /*----- Set slot as occupied. ------------------------------------------------------------------------------------*/
+    block += BinaryenStore(
+        /* module= */ module,
+        /* bytes=  */ REFERENCE_SIZE,
+        /* offset= */ 0,
+        /* align=  */ 0,
+        /* ptr=    */ b_slot_addr,
+        /* value=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size_)),
+        /* type=   */ BinaryenTypeInt32()
+    );
+
+    /*----- Write key to slot. ---------------------------------------------------------------------------------------*/
+    std::size_t idx = 0;
+    for (auto b_key : key)
+        block += struc.store(b_slot_addr, struc.schema[idx++].id, b_key, /* offset= */ REFERENCE_SIZE);
+}
+
+WasmCGContext WasmRefCountingHashTable::load_from_slot(BinaryenExpressionRef b_slot_addr) const
+{
+    return struc.create_load_context(b_slot_addr, /* offset= */ REFERENCE_SIZE);
+}
+
+BinaryenExpressionRef WasmRefCountingHashTable::store_value_to_slot(BinaryenExpressionRef b_slot_addr,
+                                                                    Schema::Identifier id,
+                                                                    BinaryenExpressionRef value) const
+{
+    return struc.store(b_slot_addr, id, value, /* offset= */ REFERENCE_SIZE);
+}
+
+BinaryenExpressionRef WasmRefCountingHashTable::compute_next_slot(BinaryenExpressionRef b_slot_addr) const
+{
+    return BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ b_slot_addr,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size_))
+    );
+}

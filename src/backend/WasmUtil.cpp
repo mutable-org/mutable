@@ -1,6 +1,7 @@
 #include "backend/WasmUtil.hpp"
 
 #include "backend/Interpreter.hpp"
+#include <limits>
 
 
 using namespace db;
@@ -502,6 +503,156 @@ BinaryenExpressionRef WasmCompare::emit(FunctionBuilder &fn, BlockBuilder &block
     return b_cmp;
 }
 
+BinaryenExpressionRef WasmCompare::Eq(BinaryenModuleRef module, const Type &ty,
+                                      BinaryenExpressionRef left, BinaryenExpressionRef right)
+{
+    struct V : ConstTypeVisitor
+    {
+        BinaryenModuleRef module;
+        BinaryenExpressionRef left, right, cmp;
+
+        V(BinaryenModuleRef module, BinaryenExpressionRef left, BinaryenExpressionRef right)
+            : module(module)
+            , left(left)
+            , right(right)
+        { }
+
+        using ConstTypeVisitor::operator();
+        void operator()(Const<ErrorType>&) { unreachable("not allowed"); }
+        void operator()(Const<Boolean>&) {
+            cmp = BinaryenBinary(
+                /* module= */ module,
+                /* op=     */ BinaryenEqInt32(),
+                /* left=   */ left,
+                /* right=  */ right
+            );
+        }
+        void operator()(Const<CharacterSequence>&) { unreachable("not supported"); }
+        void operator()(Const<Numeric> &ty) {
+            switch (ty.kind) {
+                case Numeric::N_Int:
+                    if (ty.size() <= 32) {
+                        cmp = BinaryenBinary(
+                            /* module= */ module,
+                            /* op=     */ BinaryenEqInt32(),
+                            /* left=   */ left,
+                            /* right=  */ right
+                        );
+                    } else {
+                        cmp = BinaryenBinary(
+                            /* module= */ module,
+                            /* op=     */ BinaryenEqInt64(),
+                            /* left=   */ left,
+                            /* right=  */ right
+                        );
+                    }
+                    break;
+
+                case Numeric::N_Decimal:
+                    unreachable("not supported");
+
+                case Numeric::N_Float:
+                    if (ty.size() == 32) {
+                        cmp = BinaryenBinary(
+                            /* module= */ module,
+                            /* op=     */ BinaryenEqFloat32(),
+                            /* left=   */ left,
+                            /* right=  */ right
+                        );
+                    } else {
+                        cmp = BinaryenBinary(
+                            /* module= */ module,
+                            /* op=     */ BinaryenEqFloat64(),
+                            /* left=   */ left,
+                            /* right=  */ right
+                        );
+                    }
+                    break;
+            }
+        }
+        void operator()(Const<FnType>&) { unreachable("not allowed"); }
+    };
+
+    V v(module, left, right);
+    v(ty);
+    return v.cmp;
+}
+
+BinaryenExpressionRef WasmCompare::Ne(BinaryenModuleRef module, const Type &ty,
+                                      BinaryenExpressionRef left, BinaryenExpressionRef right)
+{
+    struct V : ConstTypeVisitor
+    {
+        BinaryenModuleRef module;
+        BinaryenExpressionRef left, right, cmp;
+
+        V(BinaryenModuleRef module, BinaryenExpressionRef left, BinaryenExpressionRef right)
+            : module(module)
+            , left(left)
+            , right(right)
+        { }
+
+        using ConstTypeVisitor::operator();
+        void operator()(Const<ErrorType>&) { unreachable("not allowed"); }
+        void operator()(Const<Boolean>&) {
+            cmp = BinaryenBinary(
+                /* module= */ module,
+                /* op=     */ BinaryenNeInt32(),
+                /* left=   */ left,
+                /* right=  */ right
+            );
+        }
+        void operator()(Const<CharacterSequence>&) { unreachable("not supported"); }
+        void operator()(Const<Numeric> &ty) {
+            switch (ty.kind) {
+                case Numeric::N_Int:
+                    if (ty.size() <= 32) {
+                        cmp = BinaryenBinary(
+                            /* module= */ module,
+                            /* op=     */ BinaryenNeInt32(),
+                            /* left=   */ left,
+                            /* right=  */ right
+                        );
+                    } else {
+                        cmp = BinaryenBinary(
+                            /* module= */ module,
+                            /* op=     */ BinaryenNeInt64(),
+                            /* left=   */ left,
+                            /* right=  */ right
+                        );
+                    }
+                    break;
+
+                case Numeric::N_Decimal:
+                    unreachable("not supported");
+
+                case Numeric::N_Float:
+                    if (ty.size() == 32) {
+                        cmp = BinaryenBinary(
+                            /* module= */ module,
+                            /* op=     */ BinaryenNeFloat32(),
+                            /* left=   */ left,
+                            /* right=  */ right
+                        );
+                    } else {
+                        cmp = BinaryenBinary(
+                            /* module= */ module,
+                            /* op=     */ BinaryenNeFloat64(),
+                            /* left=   */ left,
+                            /* right=  */ right
+                        );
+                    }
+                    break;
+            }
+        }
+        void operator()(Const<FnType>&) { unreachable("not allowed"); }
+    };
+
+    V v(module, left, right);
+    v(ty);
+    return v.cmp;
+}
+
 
 /*======================================================================================================================
  * WasmSwap
@@ -535,3 +686,54 @@ void WasmSwap::emit(BlockBuilder &block, const WasmStruct &struc,
         block += struc.store(b_second, attr.id, b_swap);
     }
 }
+
+
+/*======================================================================================================================
+ * WasmLimits
+ *====================================================================================================================*/
+
+#define WASM_LIMIT(EXTERNAL_NAME, INTERNAL_NAME) \
+BinaryenLiteral WasmLimits::EXTERNAL_NAME(const Type &type) \
+{ \
+    struct V : ConstTypeVisitor \
+    { \
+        BinaryenLiteral literal; \
+        using ConstTypeVisitor::operator(); \
+        void operator()(Const<ErrorType>&) { unreachable("not allowed"); } \
+        void operator()(Const<Boolean>&) { literal = BinaryenLiteralInt32(std::numeric_limits<bool>::INTERNAL_NAME()); } \
+        void operator()(Const<CharacterSequence>&) { unreachable("not supported"); } \
+        void operator()(Const<Numeric> &ty) { \
+            switch (ty.kind) { \
+                case Numeric::N_Int: \
+                    if (ty.size() <= 32) \
+                        literal = BinaryenLiteralInt32(std::numeric_limits<int32_t>::INTERNAL_NAME()); \
+                    else \
+                        literal = BinaryenLiteralInt64(std::numeric_limits<int64_t>::INTERNAL_NAME()); \
+                    break; \
+\
+                case Numeric::N_Decimal: \
+                    unreachable("not supported"); \
+\
+                case Numeric::N_Float: \
+                    if (ty.size() <= 32) \
+                        literal = BinaryenLiteralFloat32(std::numeric_limits<float>::INTERNAL_NAME()); \
+                    else \
+                        literal = BinaryenLiteralFloat64(std::numeric_limits<double>::INTERNAL_NAME()); \
+                    break; \
+            } \
+        } \
+        void operator()(Const<FnType>&) { unreachable("not allowed"); } \
+    }; \
+\
+    V v; \
+    v(type); \
+    return v.literal; \
+}
+
+WASM_LIMIT(min, min);
+WASM_LIMIT(lowest, lowest);
+WASM_LIMIT(max, max);
+WASM_LIMIT(NaN, quiet_NaN);
+WASM_LIMIT(infinity, infinity);
+
+#undef WASM_LIMIT

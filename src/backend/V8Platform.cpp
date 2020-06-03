@@ -31,7 +31,11 @@ void print(const v8::FunctionCallbackInfo<v8::Value> &info)
     for (int i = 0; i != info.Length(); ++i) {
         v8::HandleScope handle_scope(info.GetIsolate());
         if (i != 0) std::cout << ',';
-        std::cout << *v8::String::Utf8Value(info.GetIsolate(), info[i]);
+        v8::Local<v8::Value> v = info[i];
+        if (v->IsInt32())
+            std::cout << "0x" << std::hex << uint32_t(v.As<v8::Int32>()->Value()) << std::dec;
+        else
+            std::cout << *v8::String::Utf8Value(info.GetIsolate(), v);
     }
     std::cout << std::endl;
 }
@@ -56,10 +60,11 @@ struct print_value : ConstTypeVisitor
     void operator()(Const<Numeric> &n) override {
         switch (n.kind) {
             case Numeric::N_Int:
-                if (n.size() <= 32)
+                if (n.size() <= 32) {
                     out << *reinterpret_cast<const int32_t*>(ptr);
-                else
+                } else {
                     out << *reinterpret_cast<const int64_t*>(ptr);
+                }
                 break;
 
             case Numeric::N_Float:
@@ -234,6 +239,7 @@ void V8Platform::execute(const Operator &plan)
     args_t args { v8::Int32::New(isolate_, wasm_context.id), };
     const uint32_t head_of_heap =
         run->Call(context, context->Global(), 1, args).ToLocalChecked().As<v8::Int32>()->Value();
+
 
     /* Compute the size of the heap in bytes. */
     const uint32_t heap_size = head_of_heap - wasm_context.heap;

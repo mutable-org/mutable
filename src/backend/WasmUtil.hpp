@@ -12,6 +12,8 @@
 
 namespace db {
 
+struct Type;
+
 inline BinaryenType get_binaryen_type(const Type *ty)
 {
     insist(not ty->is_error());
@@ -211,7 +213,7 @@ struct WasmStruct
 
     std::size_t offset(std::size_t idx) const { insist(idx < schema.num_entries()); return offsets_[idx]; }
 
-    WasmCGContext create_load_context(BinaryenExpressionRef b_ptr) const {
+    WasmCGContext create_load_context(BinaryenExpressionRef b_ptr, std::size_t struc_offset = 0) const {
         WasmCGContext context(module_);
         std::size_t idx = 0;
         for (auto &attr : schema) {
@@ -223,8 +225,8 @@ struct WasmStruct
                 /* module= */ module_,
                 /* bytes=  */ size_in_bytes,
                 /* signed= */ true,
-                /* offset= */ offset(idx++),
-                /* align=  */ 0,
+                /* offset= */ offset(idx++) + struc_offset,
+                /* align=  */ struc_offset % size_in_bytes ? 1 : 0,
                 /* type=   */ b_attr_type,
                 /* ptr=    */ b_ptr
             );
@@ -233,7 +235,8 @@ struct WasmStruct
         return context;
     }
 
-    BinaryenExpressionRef store(BinaryenExpressionRef b_ptr, Schema::Identifier id, BinaryenExpressionRef b_val) const {
+    BinaryenExpressionRef store(BinaryenExpressionRef b_ptr, Schema::Identifier id, BinaryenExpressionRef b_val,
+                                std::size_t struc_offset = 0) const {
         std::size_t idx = 0;
         for (auto &attr : schema) {
             if (attr.id == id) {
@@ -241,8 +244,8 @@ struct WasmStruct
                 return BinaryenStore(
                     /* module= */ module_,
                     /* bytes=  */ size_in_bytes,
-                    /* offset= */ offset(idx),
-                    /* align=  */ 0,
+                    /* offset= */ offset(idx) + struc_offset,
+                    /* align=  */ struc_offset % size_in_bytes ? 1 : 0,
                     /* ptr=    */ b_ptr,
                     /* value=  */ b_val,
                     /* type=   */ get_binaryen_type(attr.type)
@@ -349,6 +352,8 @@ struct FunctionBuilder
     /** Returns the function body. */
     const BlockBuilder & block() const { return block_; }
 
+    const char * name() const { return name_; }
+
     /** Add a fresh local variable to the function and return a `BinaryenLocalGet` expression to access it. */
     BinaryenExpressionRef add_local(BinaryenType ty) {
         std::size_t idx = BinaryenTypeArity(parameter_type_) + locals_.size();
@@ -375,6 +380,11 @@ struct WasmCompare
 
     BinaryenExpressionRef emit(FunctionBuilder &fn, BlockBuilder &block,
                                const WasmCGContext &left, const WasmCGContext &right);
+
+    static BinaryenExpressionRef Eq(BinaryenModuleRef module, const Type &ty,
+                                    BinaryenExpressionRef left, BinaryenExpressionRef right);
+    static BinaryenExpressionRef Ne(BinaryenModuleRef module, const Type &ty,
+                                    BinaryenExpressionRef left, BinaryenExpressionRef right);
 };
 
 struct WasmSwap
@@ -388,5 +398,57 @@ struct WasmSwap
     void emit(BlockBuilder &block, const WasmStruct &struc,
               BinaryenExpressionRef b_first, BinaryenExpressionRef b_second);
 };
+
+struct WasmLimits
+{
+    static BinaryenLiteral min(const Type &type);
+    static BinaryenLiteral lowest(const Type &type);
+    static BinaryenLiteral max(const Type &type);
+    static BinaryenLiteral NaN(const Type &type);
+    static BinaryenLiteral infinity(const Type &type);
+};
+
+
+template<typename T>
+BinaryenLiteral wasm_constant(const T &val, const Type &type)
+{
+    struct V : ConstTypeVisitor
+    {
+        const T &value;
+        BinaryenLiteral literal;
+
+        V(const T &value) : value(value) { }
+
+        using ConstTypeVisitor::operator();
+        void operator()(Const<ErrorType>&) { unreachable("not allowed"); }
+        void operator()(Const<Boolean>&) { literal = BinaryenLiteralInt32(value); }
+        void operator()(Const<CharacterSequence>&) { unreachable("not supported"); }
+        void operator()(Const<Numeric> &ty) {
+            switch (ty.kind) {
+                case Numeric::N_Int:
+                    if (ty.size() == 32)
+                        literal = BinaryenLiteralInt32(value);
+                    else
+                        literal = BinaryenLiteralInt64(value);
+                    break;
+
+                case Numeric::N_Decimal:
+                    unreachable("not supported");
+
+                case Numeric::N_Float:
+                    if (ty.size() == 32)
+                        literal = BinaryenLiteralFloat32(value);
+                    else
+                        literal = BinaryenLiteralFloat64(value);
+                    break;
+            }
+        }
+        void operator()(Const<FnType>&) { unreachable("not allowed"); }
+    };
+
+    V v(val);
+    v(type);
+    return v.literal;
+}
 
 }

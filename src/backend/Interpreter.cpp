@@ -20,6 +20,8 @@ using namespace db;
  * Declaration of operator data.
  *====================================================================================================================*/
 
+namespace {
+
 struct ScanData : OperatorData
 {
     StackMachine loader;
@@ -269,6 +271,8 @@ struct FilterData : OperatorData
         filter.emit_St_Tup_b(0, 0);
     }
 };
+
+}
 
 
 /*======================================================================================================================

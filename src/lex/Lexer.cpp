@@ -113,7 +113,7 @@ Token Lexer::read_number()
 {
     bool is_float = false;
     bool empty = true;
-    enum { Oct, Dec, Hex, Err } is, has;
+    enum { Oct, Dec, Hex } is, has;
 
     /*-- Prefix ----------------------*/
     is = Dec;
@@ -141,7 +141,7 @@ Token Lexer::read_number()
 
         /*-- sequence after dot ------*/
         if      (is == Dec) { if (is_dec(c_)) empty = false; while (is_dec(c_)) push(); }
-        else if (is == Hex) { if (is_hex(c_)) empty = false; while (is_hex(c_)) push(); }
+        else { insist(is == Hex); if (is_hex(c_)) empty = false; while (is_hex(c_)) push(); }
     }
 
     /*-- exponent part ---------------*/
@@ -167,7 +167,6 @@ Token Lexer::read_number()
         case Oct: tt = TK_OCT_INT; break;
         case Dec: tt = is_float ? TK_DEC_FLOAT : TK_DEC_INT; break;
         case Hex: tt = is_float ? TK_HEX_FLOAT : TK_HEX_INT; break;
-        default: unreachable("invalid numeric type");
     }
     return Token(start_, internalize(), tt);
 }

@@ -74,6 +74,7 @@ TEST_CASE("Lexer::next()", "[core][lex][unit]")
             { "7e+9", TK_DEC_FLOAT, "7e+9", TK_EOF },
             { "8e-5", TK_DEC_FLOAT, "8e-5", TK_EOF },
             { "01234567e1", TK_DEC_FLOAT, "01234567e1", TK_EOF },
+            { "01234567E1", TK_DEC_FLOAT, "01234567E1", TK_EOF },
             { "9012345678.0123456789e+9876543210", TK_DEC_FLOAT, "9012345678.0123456789e+9876543210", TK_EOF },
             { "0xa0123456789bcdef.", TK_HEX_FLOAT, "0xa0123456789bcdef.", TK_EOF },
             { "0xb0123456789acdef.0123456789abcdef", TK_HEX_FLOAT, "0xb0123456789acdef.0123456789abcdef", TK_EOF },
@@ -103,9 +104,12 @@ TEST_CASE("Lexer::next()", "[core][lex][unit]")
             /* string literals */
             { "\"this is a string literal\"", TK_STRING_LITERAL, "\"this is a string literal\"", TK_EOF },
             { "\"this is valid \\\"too\\\"!\"", TK_STRING_LITERAL, "\"this is valid \\\"too\\\"!\"", TK_EOF },
-            { "\"this is strange \\ but valid!\"", TK_STRING_LITERAL, "\"this is strange \\ but valid!\"", TK_EOF },
+            { "\"this is valid \\n too!\"", TK_STRING_LITERAL, "\"this is valid \\n too!\"", TK_EOF },
+            { "\"this is valid \\t too!\"", TK_STRING_LITERAL, "\"this is valid \\t too!\"", TK_EOF },
+            { "\"this is valid \\\\ too!\"", TK_STRING_LITERAL, "\"this is valid \\\\ too!\"", TK_EOF },
+            { "\"this is \n not a string literal\"", TK_STRING_LITERAL, "\"this is \n not a string literal\"", TK_EOF },
 
-            /* keywords and identifiers */
+                /* keywords and identifiers */
             { "SELECT attr", TK_Select, "SELECT", TK_IDENTIFIER },
             { "attr FROM", TK_IDENTIFIER, "attr", TK_From },
             { "FROM A", TK_From, "FROM", TK_IDENTIFIER },
@@ -114,7 +118,7 @@ TEST_CASE("Lexer::next()", "[core][lex][unit]")
               "abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789", TK_EOF },
             { "_____", TK_IDENTIFIER, "_____", TK_EOF },
             { "_0", TK_IDENTIFIER, "_0", TK_EOF },
-            { "_l", TK_IDENTIFIER, "_l", TK_EOF }
+            { "_l", TK_IDENTIFIER, "_l", TK_EOF },
         };
 
         for (auto e : expr) {
@@ -168,7 +172,10 @@ TEST_CASE("Lexer::next()", "[core][lex][unit]")
                 { "9ef", "9e", TK_IDENTIFIER },
                 { "0xfpa", "0xfp", TK_IDENTIFIER },
                 { "0xfp", "0xfp", TK_EOF },
-                { "0xg", "0x", TK_IDENTIFIER }
+                { "0xg", "0x", TK_IDENTIFIER },
+                /* invalid string literals */
+                { "\"this is not a string literal", "\"this is not a string literal", TK_EOF },
+                { "\"this is \\x not a string literal\"", "\"this is \\x not a string literal\"", TK_EOF },
             };
 
             for (auto e : expr) {

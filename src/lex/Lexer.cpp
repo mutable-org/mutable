@@ -174,14 +174,40 @@ Token Lexer::read_number()
 Token Lexer::read_string_literal()
 {
     push(); // initial '"'
+    bool invalid = false;
     while (EOF != c_ and '"' != c_) {
         if (c_ == '\\') { // escape character
             push();
-            if (c_ == '"') // valid escape sequence
-                push();
-        } else
+            switch (c_) {
+                default:
+                    /* invalid escape sequence */
+                    invalid = true;
+                    /* fallthrough */
+                case '"':
+                case '\\':
+                case 'n':
+                case 't':
+                    /* valid escape sequence */
+                    push();
+            }
+        } else {
             push();
+        }
     }
+
+    if ('"' != c_) {
+        const auto str = internalize();
+        diag.e(start_) << "unterminated string literal '" << str << "'\n";
+        return Token(start_, str, TK_ERROR);
+    }
+
     push(); // terminal '"'
-    return Token(start_, internalize(), TK_STRING_LITERAL);
+    const auto str = internalize();
+
+    if (invalid) {
+        diag.e(start_) << "invalid escape sequence in string literal '" << str << "'\n";
+        return Token(start_, str, TK_ERROR);
+    }
+
+    return Token(start_, str, TK_STRING_LITERAL);
 }

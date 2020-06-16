@@ -4,6 +4,7 @@
 #include "globals.hpp"
 #include "parse/AST.hpp"
 #include "parse/ASTVisitor.hpp"
+#include "util/container/RefCountingHashMap.hpp"
 #include "util/fn.hpp"
 #include <algorithm>
 #include <cerrno>
@@ -100,7 +101,7 @@ struct SimpleHashJoinData : JoinData
     bool is_probe_phase = false; ///< determines whether tuples are used to *build* or *probe* the hash table
     StackMachine build_key; ///< extracts the key of the build input
     StackMachine probe_key; ///< extracts the key of the probe input
-    std::unordered_multimap<Tuple, Tuple> ht; ///< hash table on build input
+    RefCountingHashMap<Tuple, Tuple> ht; ///< hash table on build input
 
     Schema key_schema; ///< the `Schema` of the `key`
     Tuple key; ///< `Tuple` to hold the key
@@ -109,6 +110,7 @@ struct SimpleHashJoinData : JoinData
         : JoinData(op)
         , build_key(op.child(0)->schema())
         , probe_key(op.child(1)->schema())
+        , ht(1024)
     {
         /* Decompose the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. */
         auto &pred = op.predicate();
@@ -425,17 +427,17 @@ void Pipeline::operator()(const JoinOperator &op)
                 for (auto &t : block_) {
                     args[1] = &t;
                     data->probe_key(args);
-                    auto [it, end] = data->ht.equal_range(*args[0]);
                     pipeline.block_.fill();
-                    for (; it != end; ++it, ++i) {
+                    data->ht.for_all(*args[0], [&](const std::pair<const Tuple, Tuple> &v) {
                         if (i == pipeline.block_.capacity()) {
                             pipeline.push(*op.parent());
                             i = 0;
                         }
 
-                        pipeline.block_[i].insert(it->second, 0, num_entries_build);
+                        pipeline.block_[i].insert(v.second, 0, num_entries_build);
                         pipeline.block_[i].insert(t, num_entries_build, num_entries_probe);
-                    }
+                        ++i;
+                    });
                 }
 
                 if (i != 0) {
@@ -448,7 +450,7 @@ void Pipeline::operator()(const JoinOperator &op)
                 for (auto &t : block_) {
                     args[1] = &t;
                     data->build_key(args);
-                    data->ht.emplace(args[0]->clone(data->key_schema), t.clone(tuple_schema));
+                    data->ht.insert_with_duplicates(args[0]->clone(data->key_schema), t.clone(tuple_schema));
                 }
             }
         }

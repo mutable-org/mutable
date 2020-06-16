@@ -3,6 +3,11 @@
 # Make coverage build
 mkdir -p build/coverage
 cd build/coverage
+
+find . -iname '*.gcov' -exec rm {} \;
+find . -iname '*.gcno' -exec rm {} \;
+find . -iname '*.gcda' -exec rm {} \;
+
 cmake -G Ninja \
     -DCMAKE_BUILD_TYPE=Debug \
     -DCMAKE_C_COMPILER=clang \
@@ -10,6 +15,7 @@ cmake -G Ninja \
     -DCMAKE_C_FLAGS_DEBUG=--coverage \
     -DCMAKE_CXX_FLAGS_DEBUG=--coverage \
     ../..
+ninja clean
 ninja
 
 # Produce gcov alias for llvm-cov gcov

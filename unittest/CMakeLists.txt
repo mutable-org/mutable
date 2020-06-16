@@ -17,6 +17,9 @@ add_executable(
     util/PositionTest.cpp
     util/StringPoolTest.cpp
 
+    # util/container
+    util/container/RefCountingHashMapTest.cpp
+
     # lex
     lex/LexerTest.cpp
     lex/TokenTest.cpp

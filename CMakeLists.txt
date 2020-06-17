@@ -102,7 +102,7 @@ add_dependencies(binaryen Binaryen)
 set(WITH_V8 FALSE CACHE BOOL "Enable the V8 platform.")
 if(${WITH_V8})
 set(V8_VERSION "8.0.368")
-set(V8_BUILD_ARGS "is_clang=true is_component_build=false v8_monolithic=true treat_warnings_as_errors=false v8_use_external_startup_data=false use_sysroot=false use_custom_libcxx=false linux_use_bundled_binutils=false clang_use_chrome_plugins=false target_cpu=\"x64\"")
+set(V8_BUILD_ARGS "is_clang=true is_component_build=false v8_monolithic=true treat_warnings_as_errors=false v8_use_external_startup_data=false use_sysroot=false use_custom_libcxx=false clang_use_chrome_plugins=false target_cpu=\"x64\"")
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Building V8 in debug mode")
     set(V8_BUILD_ARGS "${V8_BUILD_ARGS} is_debug=true use_debug_fission=true")
@@ -118,7 +118,7 @@ ExternalProject_Add(
     DOWNLOAD_COMMAND fetch --force v8
     COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/"
     COMMAND git remote add -f mutable git@gitlab.cs.uni-saarland.de:bigdata/mutable/v8.git || true
-    COMMAND git checkout ad945bd745c95801d5581d2baa2ba750a360203a
+    COMMAND git checkout 6bc75c95d46842a50396f295c185622dc20b05fd
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/third_party/depot_tools/gclient sync
     UPDATE_COMMAND ":"
     CONFIGURE_COMMAND gn gen . --root=${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8 --args=${V8_BUILD_ARGS}

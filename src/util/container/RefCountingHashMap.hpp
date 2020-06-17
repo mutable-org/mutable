@@ -186,8 +186,10 @@ struct RefCountingHashMap
     }
 
     ~RefCountingHashMap() {
-        for (auto p = table_, end = table_ + capacity_; p != end; ++p)
-            p->~entry_type();
+        for (auto p = table_, end = table_ + capacity_; p != end; ++p) {
+            if (p->probe_length != 0)
+                p->~entry_type();
+        }
         free(table_);
     }
 

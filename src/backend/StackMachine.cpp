@@ -1500,6 +1500,7 @@ void StackMachine::dump(std::ostream &out) const
         switch (opc) {
             /* Opcodes with *two* operands. */
             case Opcode::Ld_Tup:
+            case Opcode::St_Tup_Null:
             case Opcode::St_Tup_i:
             case Opcode::St_Tup_f:
             case Opcode::St_Tup_d:

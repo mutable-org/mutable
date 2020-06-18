@@ -97,6 +97,17 @@ ceil_to_pow_2(T f)
     return ceil_to_pow_2((unsigned long) std::ceil(f));
 }
 
+template<typename T>
+typename std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T>, T>
+round_up_to_multiple(T val, T factor)
+{
+    if (val == 0) return val;
+    insist(factor != 0);
+    T d = val / factor;
+    T differ = (d * factor) != val;
+    return (d + differ) * factor;
+}
+
 /** Short version of dynamic_cast that works for pointers and references. */
 template<typename T, typename U>
 T * cast(U *u) { return dynamic_cast<T*>(u); }

@@ -42,6 +42,17 @@ TEST_CASE("ceil_to_pow_2", "[core][util][fn]")
     CHECK(u63 == ceil_to_pow_2(u63));
 }
 
+TEST_CASE("round_up_to_multiple", "[core][util][fn]")
+{
+    CHECK(0 == round_up_to_multiple(0U, 1U));
+    CHECK(1 == round_up_to_multiple(1U, 1U));
+    CHECK(2 == round_up_to_multiple(2U, 1U));
+    CHECK(0 == round_up_to_multiple(0U, 2U));
+    CHECK(2 == round_up_to_multiple(1U, 2U));
+    CHECK(2 == round_up_to_multiple(2U, 2U));
+    CHECK(4 == round_up_to_multiple(3U, 2U));
+}
+
 TEST_CASE("powi", "[core][util][fn]")
 {
     REQUIRE(powi(4, 0) == 1);

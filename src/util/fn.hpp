@@ -70,19 +70,19 @@ struct StrEqualWithNull
 };
 
 template<typename T>
-inline
-typename std::enable_if<std::is_integral<T>::value and std::is_unsigned<T>::value and
-                        sizeof(T) <= sizeof(unsigned long long), T>::type
+typename std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T> and sizeof(T) <= sizeof(unsigned long long), T>
 ceil_to_pow_2(T n)
 {
     /* Count leading zeros. */
     int lz;
-    if (sizeof(T) <= sizeof(unsigned)) {
+    if constexpr (sizeof(T) <= sizeof(unsigned)) {
         lz = __builtin_clz(n - 1U);
-    } else if (sizeof(T) <= sizeof(unsigned long)) {
+    } else if constexpr (sizeof(T) <= sizeof(unsigned long)) {
         lz = __builtin_clzl(n - 1UL);
-    } else if (sizeof(T) <= sizeof(unsigned long long)) {
+    } else if constexpr (sizeof(T) <= sizeof(unsigned long long)) {
         lz = __builtin_clzll(n - 1ULL);
+    } else {
+        static_assert(sizeof(T) > sizeof(unsigned long long), "unsupported width of integral type");
     }
 
     T ceiled = T(1) << (8 * sizeof(T) - lz);
@@ -91,7 +91,6 @@ ceil_to_pow_2(T n)
     return ceiled;
 }
 template<typename T>
-inline
 typename std::enable_if<std::is_floating_point<T>::value, T>::type
 ceil_to_pow_2(T f)
 {

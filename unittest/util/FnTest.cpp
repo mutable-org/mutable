@@ -31,15 +31,15 @@ TEST_CASE("ceil_to_pow_2", "[core][util][fn]")
     uint32_t u31 = 1U << 31;
     uint64_t u63 = 1UL << 63;
 
-    REQUIRE(1 == ceil_to_pow_2(1U));
-    REQUIRE(2 == ceil_to_pow_2(2U));
-    REQUIRE(4 == ceil_to_pow_2(3U));
-    REQUIRE(4 == ceil_to_pow_2(4U));
-    REQUIRE(8 == ceil_to_pow_2(5U));
-    REQUIRE(u31 == ceil_to_pow_2(u31 - 1U));
-    REQUIRE(u31 == ceil_to_pow_2(u31));
-    REQUIRE(u63 == ceil_to_pow_2(u63 - 1UL));
-    REQUIRE(u63 == ceil_to_pow_2(u63));
+    CHECK(1 == ceil_to_pow_2(1U));
+    CHECK(2 == ceil_to_pow_2(2U));
+    CHECK(4 == ceil_to_pow_2(3U));
+    CHECK(4 == ceil_to_pow_2(4U));
+    CHECK(8 == ceil_to_pow_2(5U));
+    CHECK(u31 == ceil_to_pow_2(u31 - 1U));
+    CHECK(u31 == ceil_to_pow_2(u31));
+    CHECK(u63 == ceil_to_pow_2(u63 - 1UL));
+    CHECK(u63 == ceil_to_pow_2(u63));
 }
 
 TEST_CASE("powi", "[core][util][fn]")

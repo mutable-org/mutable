@@ -193,6 +193,7 @@ struct GroupingData : OperatorData
             std::vector<const Type*> arg_types;
             for (auto arg : fe->args) {
                 sm.emit(*arg, 1);
+                sm.emit_Cast(agg->type(), arg->type()); // cast argument type to aggregate type, e.g. f32 to f64 for SUM
                 sm.emit_St_Tup(0, arg_idx++, arg->type());
                 arg_types.push_back(arg->type());
             }

@@ -4,7 +4,8 @@ benchmark: group_by-single
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:
-    Interpreter: --backend Interpreter
+    Interpreter:                 --backend Interpreter
+    "WebAssembly (ColumnStore)": --backend WasmV8 --store ColumnStore
 label: 'Scale factor'
 tables: [ 'Distinct_i32' ]
 cases:

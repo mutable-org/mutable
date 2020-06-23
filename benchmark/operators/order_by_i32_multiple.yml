@@ -4,9 +4,9 @@ benchmark: order_by-multiple
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:
-    Interpreter:                --backend Interpreter
-    WebAssembly_RowStore:       --backend WasmV8 --store RowStore
-    WebAssembly_ColumnStore:    --backend WasmV8 --store ColumnStore
+    Interpreter:                 --backend Interpreter
+    "WebAssembly (RowStore)":    --backend WasmV8 --store RowStore
+    "WebAssembly (ColumnStore)": --backend WasmV8 --store ColumnStore
 label: 'Number of attributes to order by'
 tables: [ 'Distinct_i32' ]
 cases:

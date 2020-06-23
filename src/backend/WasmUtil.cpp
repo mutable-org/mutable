@@ -77,18 +77,25 @@ void WasmCGContext::operator()(const ErrorExpr&) { unreachable("no errors at thi
 
 void WasmCGContext::operator()(const Designator &e)
 {
-    auto t = e.target();
-    if (auto pe = std::get_if<const Expr*>(&t)) {
-        (*this)(**pe);
-    } else if (auto pa = std::get_if<const Attribute*>(&t)) {
-        auto &attr = **pa;
-        Schema::Identifier id(attr.table.name, attr.name);
-        auto it = values_.find(id);
-        insist(it != values_.end(), "no value for the given designator");
-        expr_ = it->second;
-    } else {
-        unreachable("designator must have a valid target");
+    /* Search with fully qualified name. */
+    auto it = values_.find({e.table_name.text, e.attr_name.text});
+    /* Search with unqualified name. */
+    if (it == values_.end())
+        it = values_.find({nullptr, e.attr_name.text});
+    /* Search with target name. */
+    if (it == values_.end()) {
+        auto t = e.target();
+        if (auto pe = std::get_if<const Expr*>(&t)) {
+            return (*this)(**pe);
+        } else {
+            auto pa = std::get_if<const Attribute*>(&t);
+            auto &attr = **pa;
+            insist(pa, "Target is neither an expression nor an attribute");
+            it = values_.find({attr.table.name, attr.name});
+        }
     }
+    insist(it != values_.end(), "no value for the given designator");
+    expr_ = it->second;
 }
 
 void WasmCGContext::operator()(const Constant &e)

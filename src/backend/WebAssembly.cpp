@@ -20,6 +20,28 @@ using namespace db;
  * Code generation helper classes
  *====================================================================================================================*/
 
+namespace {
+
+struct GroupingData : OperatorData
+{
+    WasmStruct *struc = nullptr;
+    WasmHashTable *HT = nullptr;
+    BinaryenExpressionRef b_begin;
+    BinaryenExpressionRef b_end;
+
+    ~GroupingData() {
+        delete HT;
+        delete struc;
+    }
+};
+
+struct SortingData : OperatorData
+{
+    BinaryenExpressionRef b_data_begin;
+};
+
+}
+
 /** Compiles a physical plan to WebAssembly. */
 struct WasmCodeGen : ConstOperatorVisitor
 {
@@ -338,13 +360,8 @@ void WasmCodeGen::operator()(const GroupingOperator &op)
 
 void WasmCodeGen::operator()(const SortingOperator &op)
 {
-    /* Save the current head of heap as the beginning of the data to sort. */
-    auto b_data_begin = add_local(BinaryenTypeInt32());
-    main_.block() += BinaryenLocalSet(
-        /* module= */ module(),
-        /* index=  */ BinaryenLocalGetGetIndex(b_data_begin),
-        /* value=  */ head_of_heap()
-    );
+    auto data = new SortingData();
+    op.data(data);
 
     (*this)(*op.child(0));
 
@@ -377,7 +394,7 @@ void WasmCodeGen::operator()(const SortingOperator &op)
 
     /*----- Generate sorting algorithm and invoke with start and end of data segment. --------------------------------*/
     WasmQuickSort qsort(op.child(0)->schema(), op.order_by(), WasmPartitionBranchless{});
-    BinaryenExpressionRef qsort_args[] = { b_data_begin, b_data_end };
+    BinaryenExpressionRef qsort_args[] = { data->b_data_begin, b_data_end };
     auto b_qsort = qsort.emit(module());
     main_.block() += BinaryenCall(
         /* module=      */ module(),
@@ -409,7 +426,7 @@ void WasmCodeGen::operator()(const SortingOperator &op)
             /* offset= */ offset,
             /* align=  */ 0,
             /* type=   */ get_binaryen_type(attr.type),
-            /* ptr=    */ b_data_begin
+            /* ptr=    */ data->b_data_begin
         );
         pipeline.context().add(attr.id, b_val);
 
@@ -427,12 +444,12 @@ void WasmCodeGen::operator()(const SortingOperator &op)
     auto b_inc = BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenAddInt32(),
-        /* left=   */ b_data_begin,
+        /* left=   */ data->b_data_begin,
         /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(offset))
     );
     loop_body += BinaryenLocalSet(
         /* module= */ module(),
-        /* index=  */ BinaryenLocalGetGetIndex(b_data_begin),
+        /* index=  */ BinaryenLocalGetGetIndex(data->b_data_begin),
         /* value=  */ b_inc
     );
 
@@ -441,7 +458,7 @@ void WasmCodeGen::operator()(const SortingOperator &op)
     auto b_loop_cond = BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenLtSInt32(),
-        /* left=   */ b_data_begin,
+        /* left=   */ data->b_data_begin,
         /* right=  */ b_data_end
     );
     loop_body += BinaryenBreak(
@@ -726,6 +743,16 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
 
 void WasmPipelineCG::operator()(const SortingOperator &op)
 {
+    auto data = as<SortingData>(op.data());
+
+    /* Save the current head of heap as the beginning of the data to sort. */
+    data->b_data_begin = CG.fn().add_local(BinaryenTypeInt32());
+    CG.fn().block() += BinaryenLocalSet(
+        /* module= */ module(),
+        /* index=  */ BinaryenLocalGetGetIndex(data->b_data_begin),
+        /* value=  */ CG.head_of_heap()
+    );
+
     /* Append current tuple to consecutive memory of tuples to sort. */
     std::size_t offset = 0;
     std::size_t alignment = 0;

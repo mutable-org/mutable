@@ -660,7 +660,8 @@ void WasmPipelineCG::operator()(const ProjectionOperator &op)
     auto p = op.projections().begin();
     for (auto &e : op.schema()) {
         if (not context().has(e.id))
-            context().add(e.id, context().compile(*p++->first));
+            context().add(e.id, context().compile(*p->first));
+        ++p;
     }
     (*this)(*op.parent());
 }

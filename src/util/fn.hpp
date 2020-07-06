@@ -261,9 +261,9 @@ template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
 /** This function implements the 64-bit finalizer of Murmur3_x64 by Austin Appleby, available at
- * https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp.  We use the optimized constants found by David
+ * https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp .  We use the optimized constants found by David
  * Stafford, in particular the values for `Mix01`, as reported at
- * http://zimbry.blogspot.com/2011/09/better-bit-mixing-improving-on.html.
+ * http://zimbry.blogspot.com/2011/09/better-bit-mixing-improving-on.html .
  *
  * @param v     the value to mix
  * @return      the mixed bits

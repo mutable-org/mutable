@@ -3,6 +3,7 @@
 #include "backend/StackMachine.hpp"
 #include "catalog/Type.hpp"
 #include "util/fn.hpp"
+#include "storage/Linearization.hpp"
 #include <algorithm>
 #include <exception>
 #include <fstream>
@@ -32,6 +33,12 @@ RowStore::RowStore(const Table &table)
     compute_offsets();
     capacity_ = ALLOCATION_SIZE / (row_size_ / 8);
     data_ = allocator.allocate(ALLOCATION_SIZE);
+
+    /* Initialize linearization. */
+    auto lin = std::make_unique<Linearization>(Linearization::CreateInfiniteSequence(table.size()));
+    for (auto &attr : table)
+        lin->add_sequence(offset(attr), attr.type->size(), attr);
+    linearization(std::move(lin));
 }
 
 RowStore::~RowStore()

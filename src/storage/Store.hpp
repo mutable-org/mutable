@@ -1,6 +1,7 @@
 #pragma once
 
 #include "catalog/Type.hpp"
+#include "storage/Linearization.hpp"
 #include "util/macro.hpp"
 #include <algorithm>
 #include <filesystem>
@@ -133,6 +134,7 @@ struct Store
 
     private:
     const Table &table_; ///< the table defining this store's schema
+    std::unique_ptr<Linearization> lin_; ///< the linearization describing the layout of this store
 
     protected:
     Store(const Table &table) : table_(table) { }
@@ -143,7 +145,11 @@ struct Store
     virtual ~Store() { }
 
     const Table & table() const { return table_; }
+    const Linearization & linearization() const { insist(bool(lin_)); return *lin_; }
+    protected:
+    void linearization(std::unique_ptr<Linearization> lin) { lin_ = std::move(lin); }
 
+    public:
     /** Return the number of rows in this store. */
     virtual std::size_t num_rows() const = 0;
 

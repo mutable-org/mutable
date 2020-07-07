@@ -1,6 +1,7 @@
 #include "storage/ColumnStore.hpp"
 
 #include "backend/StackMachine.hpp"
+#include "storage/Linearization.hpp"
 
 
 using namespace db;
@@ -31,6 +32,12 @@ ColumnStore::ColumnStore(const Table &table)
 
     insist(columns_.size() == table.size() + 1);
     capacity_ = (ALLOCATION_SIZE * 8) / max_attr_size;
+
+    /* Initialize linearization. */
+    auto lin = std::make_unique<Linearization>(Linearization::CreateInfiniteSequence(table.size()));
+    for (auto &attr : table)
+        lin->add_sequence(0, attr.type->size(), attr);
+    linearization(std::move(lin));
 }
 
 ColumnStore::~ColumnStore() { }

@@ -178,8 +178,7 @@ struct RefCountingHashMap
 
         /* Allocate and initialize table. */
         table_ = allocate(capacity_);
-        for (auto p = table_, end = table_ + capacity_; p != end; ++p)
-            new (p) entry_type();
+        initialize();
 
         /* Compute high watermark. */
         watermark_high_ = capacity_ * max_load_factor_;
@@ -341,68 +340,40 @@ struct RefCountingHashMap
     private:
     void rehash(std::size_t new_capacity) {
         insist((new_capacity & (new_capacity - 1)) == 0, "not a power of 2");
+        insist(size_ <= watermark_high_, "there are more elements to rehash than the high watermark allows");
 
-        /* Find first element in optimal slot. */
-        auto p = table_;
-        while (masked(h_(p->value.first)) != std::size_t(p - table_)) ++p;
-        insist(masked(h_(p->value.first)) == std::size_t(p - table_),
-               "the found slot does not contain an element in its optimal slot");
-
-        std::size_t old_capacity = capacity_;
+        auto old_table = table_;
+        table_ = allocate(new_capacity);
+        auto old_capacity = capacity_;
         capacity_ = new_capacity;
-        const auto rehash_start = p;
+        size_ = 0;
+        initialize();
 
-        do {
-            if (p->probe_length) {
-                /* Clear entry. */
-                p->probe_length = 0;
-                // auto [key, value] = p->value;
-
-                /* Re-insert with quadratic probing w/o reference counting. */
-                auto hash = h_(p->value.first);
-                auto index = masked(hash);
-                entry_type *bucket = table_ + index;
-                decltype(entry_type::probe_length) step = 1;
-                while (table_[index].probe_length != 0) {
-                    index = masked(index + step);
-                    ++step;
-                }
-
-                table_[index].probe_length = 1;
-                auto &key_ref = const_cast<key_type&>(p->value.first); // XXX: hack around the `const key_type`
-                new (&table_[index].value) value_type(std::move(key_ref), std::move(p->value.second));
-                bucket->probe_length = std::max(bucket->probe_length, step);
+        for (auto runner = old_table, end = old_table + old_capacity; runner != end; ++runner) {
+            if (runner->probe_length) {
+                auto &key_ref = const_cast<key_type&>(runner->value.first); // hack around the `const key_type`
+                insert_with_duplicates(std::move(key_ref), std::move(runner->value.second));
             }
+        }
 
-            ++p;
-            if (unlikely(p == table_ + old_capacity))
-                p = table_;
-        } while (p != rehash_start);
+        free(old_table);
     }
 
     public:
     void rehash() { rehash(capacity_); }
 
     void resize(std::size_t new_capacity) {
-        if (new_capacity < size())
-            throw std::invalid_argument("new capacity must not be smaller than the number of elements in the table");
-
+        new_capacity = std::max<decltype(new_capacity)>(new_capacity, std::ceil(size() / max_load_factor()));
         new_capacity = ceil_to_pow_2(new_capacity);
-        watermark_high_ = new_capacity * max_load_factor_;
-        if (new_capacity == capacity_) {
-            return; // nothing to be done
-        } else if (new_capacity > capacity_) {
-            table_ = allocate(new_capacity, table_); // grow array
-            for (auto p = table_ + capacity_, end = table_ + new_capacity; p != end; ++p)
-                p->probe_length = 0; // initialize new slots
+
+        if (new_capacity != capacity_) {
+            watermark_high_ = new_capacity * max_load_factor();
+            insist(watermark_high() >= size());
             rehash(new_capacity);
-        } else {
-            rehash(new_capacity);
-            table_ = allocate(new_capacity, table_); // shrink array
         }
     }
 
-    void shrink_to_fit() { resize(size_ + 1); }
+    void shrink_to_fit() { resize(size()); }
 
     friend std::ostream & operator<<(std::ostream &out, const RefCountingHashMap &map) {
         size_type log2 = 64 - __builtin_clzl(map.capacity()) - 1;
@@ -427,6 +398,11 @@ struct RefCountingHashMap
         if (p == nullptr)
             throw std::runtime_error("allocation failed");
         return p;
+    }
+
+    void initialize() {
+        for (auto runner = table_, end = table_ + capacity_; runner != end; ++runner)
+            new (runner) entry_type();
     }
 };
 

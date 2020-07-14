@@ -1,5 +1,6 @@
-#include "util/container/RefCountingHashMap.hpp"
 #include "catch.hpp"
+
+#include "util/container/RefCountingHashMap.hpp"
 #include <set>
 
 
@@ -529,29 +530,23 @@ TEST_CASE("RefCountingHashMap", "[core][util][container]")
         map.insert_without_duplicates(1, 1);
         map.insert_without_duplicates(3, 3);
         map.insert_without_duplicates(24, 0);
-        map.insert_without_duplicates(17, 0);
 
         SECTION("less than size")
         {
-            REQUIRE_THROWS_AS(map.resize(4), std::invalid_argument);
-        }
-
-        SECTION("less than capacity")
-        {
-            map.resize(8);
-            REQUIRE(map.size() == 6);
+            map.resize(4);
+            REQUIRE(map.size() == 5);
             REQUIRE(map.capacity() == 8);
             CHECK(map.count(1) == 1);
             CHECK(map.count(3) == 1);
             CHECK(map.count(8) == 1);
             CHECK(map.count(16) == 1);
             CHECK(map.count(24) == 1);
-            CHECK(map.count(17) == 1);
         }
 
-        SECTION("equals to capacity")
+        SECTION("exceeding max load factor")
         {
-            map.resize(16);
+            map.insert_without_duplicates(17, 0);
+            map.resize(8); // desired capacity 8 would not satisfy max load factor
             REQUIRE(map.size() == 6);
             REQUIRE(map.capacity() == 16);
             CHECK(map.count(1) == 1);
@@ -562,17 +557,58 @@ TEST_CASE("RefCountingHashMap", "[core][util][container]")
             CHECK(map.count(17) == 1);
         }
 
+        SECTION("less than capacity")
+        {
+            map.resize(8);
+            REQUIRE(map.size() == 5);
+            REQUIRE(map.capacity() == 8);
+            CHECK(map.count(1) == 1);
+            CHECK(map.count(3) == 1);
+            CHECK(map.count(8) == 1);
+            CHECK(map.count(16) == 1);
+            CHECK(map.count(24) == 1);
+        }
+
+        SECTION("equals to capacity")
+        {
+            map.resize(16);
+            REQUIRE(map.size() == 5);
+            REQUIRE(map.capacity() == 16);
+            CHECK(map.count(1) == 1);
+            CHECK(map.count(3) == 1);
+            CHECK(map.count(8) == 1);
+            CHECK(map.count(16) == 1);
+            CHECK(map.count(24) == 1);
+        }
+
         SECTION("equals greater than capacity")
         {
             map.resize(17);
-            REQUIRE(map.size() == 6);
+            REQUIRE(map.size() == 5);
             REQUIRE(map.capacity() == 32);
             CHECK(map.count(1) == 1);
             CHECK(map.count(3) == 1);
             CHECK(map.count(8) == 1);
             CHECK(map.count(16) == 1);
             CHECK(map.count(24) == 1);
-            CHECK(map.count(17) == 1);
         }
+    }
+
+    SECTION("insert into potential hole after resize")
+    {
+        map_type map(8);
+        map.max_load_factor(1.f);
+
+        map.insert_without_duplicates(0, 0);    // slot 0
+
+        map.insert_without_duplicates(15, 0);   // slot 7
+        map.insert_without_duplicates(7, 0);    // slot 2, slot 7 and slot 0 are occupied
+
+        map.resize(16);
+
+        map.insert_without_duplicates(7, 1);    // slot 7
+        map.insert_without_duplicates(23, 0);   // slot 10, slot 7 and slot 8 are occupied
+
+        CHECK(map.count(7) == 1);
     }
 }

@@ -195,6 +195,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             auto &T = DB.get_table(S->table_name.text);
 
             DSVReader R(T, diag);
+            if (S->rows) R.num_rows = strtol(S->rows.text, nullptr, 10);
             if (S->delimiter) R.delimiter = unescape(S->delimiter.text)[1];
             if (S->escape) R.escape = unescape(S->escape.text)[1];
             if (S->quote) R.quote = unescape(S->quote.text)[1];

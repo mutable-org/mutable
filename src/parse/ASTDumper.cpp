@@ -352,6 +352,8 @@ void ASTDumper::operator()(Const<DSVImportStmt> &s)
 
     ++indent_;
     indent() << s.path.text << " (" << s.path.pos << ')';
+    if (s.rows)
+        indent() << "rows " << s.rows.text << " (" << s.rows.pos << ')';
     if (s.delimiter)
         indent() << "delimiter " << s.delimiter.text << " (" << s.delimiter.pos << ')';
     if (s.has_header)

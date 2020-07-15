@@ -25,6 +25,7 @@ struct Reader
 /** A reader for delimiter separated value (DSV) files. */
 struct DSVReader : Reader, ConstTypeVisitor
 {
+    std::size_t num_rows;
     char delimiter;
     char escape;
     char quote;
@@ -41,6 +42,7 @@ struct DSVReader : Reader, ConstTypeVisitor
 
     public:
     DSVReader(const Table &table, Diagnostic &diag,
+              std::size_t num_rows = std::numeric_limits<decltype(num_rows)>::max(),
               char delimiter = ',',
               char escape = '\\',
               char quote = '\"',

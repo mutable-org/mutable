@@ -652,6 +652,7 @@ struct DSVImportStmt : ImportStmt
     Token delimiter;
     Token escape;
     Token quote;
+    Token rows;
     bool has_header = false;
     bool skip_header = false;
 

@@ -370,6 +370,17 @@ Stmt * Parser::parse_ImportStmt()
             stmt.path = token();
             ok = ok and expect(TK_STRING_LITERAL);
 
+            /* Read the number of rows to read. */
+            if (accept(TK_Rows)) {
+                stmt.rows = token();
+                if (token() == TK_DEC_INT or token() == TK_OCT_INT) {
+                    consume();
+                } else {
+                    diag.e(token().pos) << "expected a decimal integer, got " << token().text << '\n';
+                    ok = false;
+                }
+            }
+
             /* Read the delimiter, escape character, and quote character. */
             if (accept(TK_Delimiter)) {
                 stmt.delimiter = token();

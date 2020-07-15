@@ -262,6 +262,8 @@ void ASTPrinter::operator()(Const<DeleteStmt> &s)
 void ASTPrinter::operator()(Const<DSVImportStmt> &s)
 {
     out << "IMPORT INTO " << s.table_name.text << " DSV " << s.path.text;
+    if (s.rows)
+        out << " ROWS " << s.rows.text;
     if (s.delimiter)
         out << " DELIMITER " << s.delimiter.text;
     if (s.has_header)

@@ -16,12 +16,11 @@ using namespace db;
 
 
 DSVReader::DSVReader(const Table &table, Diagnostic &diag,
-          char delimiter,
-          char escape,
-          char quote,
-          bool has_header,
-          bool skip_header)
+                     std::size_t num_rows,
+                     char delimiter, char escape, char quote,
+                     bool has_header, bool skip_header)
     : Reader(table, diag)
+    , num_rows(num_rows)
     , delimiter(delimiter)
     , escape(escape)
     , quote(quote)
@@ -75,13 +74,16 @@ void DSVReader::operator()(std::istream &in, const char *name)
     }
 
     /*----- Read data. -----------------------------------------------------------------------------------------------*/
-    while (in.good()) {
+    std::size_t idx = 0;
+    while (in.good() and idx < num_rows) {
+        ++idx;
         row = store.append();
         for (std::size_t i = 0; i != columns.size(); ++i) {
             auto col = columns[i];
             if (i != 0 and not accept(delimiter)) {
                 diag.e(pos) << "Expected a delimiter (" << delimiter << ").\n";
                 discard_row();
+                --idx;
                 store.drop(); // drop the unfinished row
                 goto end_of_row;
             }

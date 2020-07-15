@@ -5,6 +5,7 @@ readonly: yes
 pattern: '^Execute query:.*'
 configurations:
     Interpreter: --backend Interpreter
+    "WebAssembly (ColumnStore)": --backend WasmV8 --store ColumnStore
 label: 'Number of distinct values'
 tables: [ 'Distinct_i32' ]
 cases:

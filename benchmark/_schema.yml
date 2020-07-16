@@ -7,6 +7,15 @@ pattern: str()
 args: str(required=False)
 configurations: map(str(), required=False)
 label: str(required=False)
-tables: list(str(), required=True)
-cases: map()
+tables: include('table_list')
+cases: map(any(str(), include('case')), key=any())
 compare_to: map(required=False)
+---
+table:
+    name: str()
+    sf: num(min=0, max=1)
+table_list:
+    list(any(str(), include('table')), required=True)
+case:
+    query: str()
+    tables: include('table_list')

@@ -41,6 +41,26 @@ in_red   = lambda x: f'{Fore.RED}{x}{Style.RESET_ALL}'
 in_green = lambda x: f'{Fore.GREEN}{x}{Style.RESET_ALL}'
 in_bold  = lambda x: f'{Style.BRIGHT}{x}{Style.RESET_ALL}'
 
+def count_lines(filename):
+    count = 0
+    with open(filename, 'r') as f:
+        for l in f:
+            count += 1
+    return count
+
+def import_tables(path_to_data, tables):
+    imports = list()
+    for tbl in tables:
+        if isinstance(tbl, str):
+            imports.append(f'IMPORT INTO {tbl} DSV "{os.path.join(path_to_data, tbl + ".csv")}" HAS HEADER SKIP HEADER;')
+        else:
+            name = tbl['name']
+            sf = tbl['sf']
+            path_to_file = os.path.join(path_to_data, name + '.csv')
+            rows = count_lines(path_to_file) - 1
+            imports.append(f'IMPORT INTO {name} DSV "{path_to_file}" ROWS {int(sf * rows)} HAS HEADER SKIP HEADER;')
+    return imports
+
 
 #=======================================================================================================================
 # Validate a YAML file given a YAML schema file (with yamale)
@@ -156,19 +176,21 @@ def run_configuration(experiment, name, config, yml):
 
     # Produce code to load data into tables
     path_to_data = os.path.join('benchmark', yml['suite'], 'data')
-    imports = '\n'.join(map(
-        lambda tbl: f'IMPORT INTO {tbl} DSV "{os.path.join(path_to_data, tbl + ".csv")}" HAS HEADER SKIP HEADER;',
-        yml['tables']
-    ))
+    imports = import_tables(path_to_data, yml['tables'])
+
+    if is_readonly:
+        for case in cases.values():
+            is_readonly = is_readonly and isinstance(case, str)
 
     try:
         if is_readonly:
+            import_str = '\n'.join(imports)
             timeout = DEFAULT_TIMEOUT + NUM_RUNS * TIMEOUT_PER_CASE * len(cases)
             combined_query = list()
-            combined_query.append(imports)
+            combined_query.append(import_str)
             for case in cases.values():
                 if args.verbose:
-                    print_command(command, imports + '\n' + case, '    ')
+                    print_command(command, import_str + '\n' + case, '    ')
                 combined_query.extend([case] * NUM_RUNS)
             query = '\n'.join(combined_query)
             try:
@@ -186,17 +208,26 @@ def run_configuration(experiment, name, config, yml):
                         durations.pop(0)
         else:
             timeout = DEFAULT_TIMEOUT + NUM_RUNS * TIMEOUT_PER_CASE
-            for case, query_str in cases.items():
+            for case, query in cases.items():
+                case_imports = imports.copy()
+                if isinstance(query, str):
+                    query_str = query
+                else:
+                    query_str = query['query']
+                    case_imports.extend(import_tables(path_to_data, query['tables']))
+                import_str = '\n'.join(case_imports)
+
+                query_str = import_str + '\n' + query_str
                 if args.verbose:
-                    print_command(command, imports + '\n' + query_str, '    ')
+                    print_command(command, query_str, '    ')
                 try:
                     durations = benchmark_query(command, query_str, yml['pattern'], timeout)
                 except BenchmarkTimeoutException as ex:
                     tqdm.write(str(ex))
-                    measurements.loc[len(measurements)] = [ suite, benchmark, experiment, name, config, case, timeout * 1000 ]
+                    measurements.loc[len(measurements)] = [ version, suite, benchmark, experiment, name, config, case, timeout * 1000 ]
                 else:
                     for dur in durations:
-                        measurements.loc[len(measurements)] = [ suite, benchmark, experiment, name, config, case, dur ]
+                        measurements.loc[len(measurements)] = [ version, suite, benchmark, experiment, name, config, case, dur ]
     except BenchmarkError as ex:
         tqdm.write(str(ex))
 

@@ -8,17 +8,61 @@ configurations:
 label: 'Scale factor'
 tables: [ 'Relation' ]
 cases:
-    0.0: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid AND R.id <      0 AND S.id <      0;
-    0.1: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid AND R.id <  10000 AND S.id <  10000;
-    0.2: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid AND R.id <  20000 AND S.id <  20000;
-    0.3: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid AND R.id <  30000 AND S.id <  30000;
-    0.4: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid AND R.id <  40000 AND S.id <  40000;
-    0.5: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid AND R.id <  50000 AND S.id <  50000;
-    0.6: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid AND R.id <  60000 AND S.id <  60000;
-    0.7: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid AND R.id <  70000 AND S.id <  70000;
-    0.8: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid AND R.id <  80000 AND S.id <  80000;
-    0.9: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid AND R.id <  90000 AND S.id <  90000;
-    1.0: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid AND R.id < 100000 AND S.id < 100000;
+    0.0:
+        query: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.0
+    0.1:
+        query: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.1
+    0.2:
+        query: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.2
+    0.3:
+        query: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.3
+    0.4:
+        query: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.4
+    0.5:
+        query: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.5
+    0.6:
+        query: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.6
+    0.7:
+        query: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.7
+    0.8:
+        query: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.8
+    0.9:
+        query: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.9
+    1.0:
+        query: SELECT R.id, S.id FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   1.0
 compare_to:
     'DuckDB': 'benchmark/operators/equi_join_i32_single_duckdb.sh'
     'PostgreSQL': 'benchmark/operators/equi_join_i32_single_postgresql.sh'

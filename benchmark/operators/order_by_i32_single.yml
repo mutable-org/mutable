@@ -10,17 +10,61 @@ configurations:
 label: 'Scale factor'
 tables: [ 'Distinct_i32' ]
 cases:
-    0.0: SELECT id FROM Distinct_i32 WHERE n100000 < -2147483647 ORDER BY n100000;
-    0.1: SELECT id FROM Distinct_i32 WHERE n100000 < -1717986918 ORDER BY n100000;
-    0.2: SELECT id FROM Distinct_i32 WHERE n100000 < -1288490188 ORDER BY n100000;
-    0.3: SELECT id FROM Distinct_i32 WHERE n100000 <  -858993459 ORDER BY n100000;
-    0.4: SELECT id FROM Distinct_i32 WHERE n100000 <  -429496729 ORDER BY n100000;
-    0.5: SELECT id FROM Distinct_i32 WHERE n100000 <           0 ORDER BY n100000;
-    0.6: SELECT id FROM Distinct_i32 WHERE n100000 <   429496729 ORDER BY n100000;
-    0.7: SELECT id FROM Distinct_i32 WHERE n100000 <   858993459 ORDER BY n100000;
-    0.8: SELECT id FROM Distinct_i32 WHERE n100000 <  1288490188 ORDER BY n100000;
-    0.9: SELECT id FROM Distinct_i32 WHERE n100000 <  1717986918 ORDER BY n100000;
-    1.0: SELECT id FROM Distinct_i32 WHERE n100000 <  2147483647 ORDER BY n100000;
+    0.0:
+        query: SELECT id FROM Distinct_i32 ORDER BY n100000;
+        tables:
+            - name: 'Distinct_i32'
+              sf:   0.0
+    0.1:
+        query: SELECT id FROM Distinct_i32 ORDER BY n100000;
+        tables:
+            - name: 'Distinct_i32'
+              sf:   0.1
+    0.2:
+        query: SELECT id FROM Distinct_i32 ORDER BY n100000;
+        tables:
+            - name: 'Distinct_i32'
+              sf:   0.2
+    0.3:
+        query: SELECT id FROM Distinct_i32 ORDER BY n100000;
+        tables:
+            - name: 'Distinct_i32'
+              sf:   0.3
+    0.4:
+        query: SELECT id FROM Distinct_i32 ORDER BY n100000;
+        tables:
+            - name: 'Distinct_i32'
+              sf:   0.4
+    0.5:
+        query: SELECT id FROM Distinct_i32 ORDER BY n100000;
+        tables:
+            - name: 'Distinct_i32'
+              sf:   0.5
+    0.6:
+        query: SELECT id FROM Distinct_i32 ORDER BY n100000;
+        tables:
+            - name: 'Distinct_i32'
+              sf:   0.6
+    0.7:
+        query: SELECT id FROM Distinct_i32 ORDER BY n100000;
+        tables:
+            - name: 'Distinct_i32'
+              sf:   0.7
+    0.8:
+        query: SELECT id FROM Distinct_i32 ORDER BY n100000;
+        tables:
+            - name: 'Distinct_i32'
+              sf:   0.8
+    0.9:
+        query: SELECT id FROM Distinct_i32 ORDER BY n100000;
+        tables:
+            - name: 'Distinct_i32'
+              sf:   0.9
+    1.0:
+        query: SELECT id FROM Distinct_i32 ORDER BY n100000;
+        tables:
+            - name: 'Distinct_i32'
+              sf:   1.0
 compare_to:
     'DuckDB': 'benchmark/operators/order_by_i32_single_duckdb.sh'
     'PostgreSQL': 'benchmark/operators/order_by_i32_single_postgresql.sh'

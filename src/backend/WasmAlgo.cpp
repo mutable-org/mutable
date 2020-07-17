@@ -783,7 +783,7 @@ BinaryenExpressionRef WasmHashMumur3_64A::emit(BinaryenModuleRef module, Functio
                 );
             }
 
-            // h = h * 5
+            // h = h * 5 + 0xe6546b64
             {
                 auto Mul = BinaryenBinary(
                     /* module= */ module,
@@ -791,12 +791,33 @@ BinaryenExpressionRef WasmHashMumur3_64A::emit(BinaryenModuleRef module, Functio
                     /* left=   */ h,
                     /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(5))
                 );
+                auto Add = BinaryenBinary(
+                    /* module= */ module,
+                    /* op=     */ BinaryenAddInt64(),
+                    /* left=   */ Mul,
+                    /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(0xe6546b64ULL))
+                );
                 block += BinaryenLocalSet(
                     /* module= */ module,
                     /* index=  */ BinaryenLocalGetGetIndex(h),
-                    /* value=  */ Mul
+                    /* value=  */ Add
                 );
             }
+        }
+
+        // h = h ^ len
+        {
+            auto Xor = BinaryenBinary(
+                /* module= */ module,
+                /* op=     */ BinaryenXorInt64(),
+                /* left=   */ h,
+                /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(values.size()))
+            );
+            block += BinaryenLocalSet(
+                /* module= */ module,
+                /* index=  */ BinaryenLocalGetGetIndex(h),
+                /* value=  */ Xor
+            );
         }
     }
 

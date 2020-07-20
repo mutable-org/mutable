@@ -199,27 +199,29 @@ struct WasmRefCountingHashTable : WasmHashTable
     static constexpr std::size_t REFERENCE_SIZE = 4; ///< 4 bytes for reference counting
 
     private:
-    BinaryenExpressionRef b_addr_; ///< the address of the hash table
-    BinaryenExpressionRef b_mask_; ///< the mask used to compute a slot address in the table, i.e. capacity * entry_size
+    WasmVariable addr_; ///< the address of the hash table
+    WasmVariable mask_; ///< the mask used to compute a slot address in the table, i.e. capacity * entry_size
     std::size_t entry_size_; ///< the size in bytes of a table entry, that is the key-value pair and meta data
 
     public:
     WasmRefCountingHashTable(BinaryenModuleRef module, FunctionBuilder &fn, const WasmStruct &struc)
         : WasmHashTable(module, fn, struc)
-        , entry_size_(round_up_to_multiple<std::size_t>(REFERENCE_SIZE + struc.size(), 4))
-    {
-        b_addr_ = fn.add_local(BinaryenTypeInt32());
-        b_mask_ = fn.add_local(BinaryenTypeInt32());
-    }
-
-    /** Create a WasmHashTable instance from an existing hash table. */
-    WasmRefCountingHashTable(BinaryenModuleRef module, FunctionBuilder &fn, const WasmStruct &struc,
-                             BinaryenExpressionRef b_addr, BinaryenExpressionRef b_mask)
-        : WasmHashTable(module, fn, struc)
-        , b_addr_(b_addr)
-        , b_mask_(b_mask)
+        , addr_(fn, BinaryenTypeInt32())
+        , mask_(fn, BinaryenTypeInt32())
         , entry_size_(round_up_to_multiple<std::size_t>(REFERENCE_SIZE + struc.size(), 4))
     { }
+
+    /** Create a WasmHashTable instance from an existing hash table. */
+    WasmRefCountingHashTable(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
+                             const WasmStruct &struc, BinaryenExpressionRef b_addr, BinaryenExpressionRef b_mask)
+        : WasmHashTable(module, fn, struc)
+        , addr_(fn, BinaryenTypeInt32())
+        , mask_(fn, BinaryenTypeInt32())
+        , entry_size_(round_up_to_multiple<std::size_t>(REFERENCE_SIZE + struc.size(), 4))
+    {
+        addr_.set(block, b_addr);
+        mask_.set(block, b_mask);
+    }
 
     BinaryenExpressionRef create_table(BlockBuilder &block,
                                        BinaryenExpressionRef b_addr, std::size_t num_buckets) const override;
@@ -245,8 +247,8 @@ struct WasmRefCountingHashTable : WasmHashTable
 
     BinaryenExpressionRef compute_next_slot(BinaryenExpressionRef b_slot_addr) const override;
 
-    BinaryenExpressionRef addr() const { return b_addr_; }
-    BinaryenExpressionRef mask() const { return b_mask_; }
+    const WasmVariable & addr() const { return addr_; }
+    const WasmVariable & mask() const { return mask_; }
 
     std::size_t entry_size() const { return entry_size_; }
 };

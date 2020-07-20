@@ -129,68 +129,55 @@ BinaryenExpressionRef WasmPartitionBranchless::emit(BinaryenModuleRef module, Fu
 {
     WasmSwap wasm_swap(module, fn);
     WasmCompare comparator(module, struc, order);
-    const char *loop_name = "partition_branchless";
-    const char *body_name = "partition_branchless.body";
-    BlockBuilder loop_body(module, body_name);
 
-    /*----- Copy begin and end. --------------------------------------------------------------------------------------*/
-    {
-        auto b_begin_local = fn.add_local(BinaryenTypeInt32());
-        block += BinaryenLocalSet(
-            /* module= */ module,
-            /* index=  */ BinaryenLocalGetGetIndex(b_begin_local),
-            /* value=  */ b_begin
-        );
-        b_begin = b_begin_local;
+    /*----- Initialize left and right cursor. ------------------------------------------------------------------------*/
+    WasmVariable left(fn, BinaryenTypeInt32());
+    left.set(block, b_begin);
 
-        auto b_end_local = fn.add_local(BinaryenTypeInt32());
-        block += BinaryenLocalSet(
-            /* module= */ module,
-            /* index=  */ BinaryenLocalGetGetIndex(b_end_local),
-            /* value=  */ b_end
-        );
-        b_end = b_end_local;
-    }
+    WasmVariable right(fn, BinaryenTypeInt32());
+    right.set(block, b_end);
 
-    /*----- Offset end by one.  (This can be dropped when negative offsets are supported.) ---------------------------*/
+    /*----- Create loop. ---------------------------------------------------------------------------------------------*/
+    WasmDoWhile loop(module, "partition_branchless.loop", BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenLtUInt32(),
+        /* left=   */ left,
+        /* right=  */ right
+    ));
+
+    /*----- Offset right by one.  (This can be dropped when negative offsets are supported.) -------------------------*/
     auto b_last = BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenAddInt32(),
-        /* left=   */ b_end,
+        /* left=   */ right,
         /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(-struc.size()))
     );
 
     /*----- Create load context for left, right, and pivot. ----------------------------------------------------------*/
-    auto load_context_left  = struc.create_load_context(b_begin);
+    auto load_context_left  = struc.create_load_context(left);
     auto load_context_right = struc.create_load_context(b_last);
     auto load_context_pivot = struc.create_load_context(b_pivot);
 
     /*----- Load values from pivot. ----------------------------------------------------------------------------------*/
     WasmCGContext value_context_pivot(module);
     for (auto &attr : struc.schema) {
-        BinaryenType b_attr_type = get_binaryen_type(attr.type);
-
-        auto b_tmp_pivot = fn.add_local(b_attr_type);
-        block += BinaryenLocalSet(
-            /* module= */ module,
-            /* index=  */ BinaryenLocalGetGetIndex(b_tmp_pivot),
-            /* value=  */ load_context_pivot.get_value(attr.id)
-        );
-        value_context_pivot.add(attr.id, b_tmp_pivot);
+        WasmVariable tmp(fn, get_binaryen_type(attr.type));
+        tmp.set(block, load_context_pivot.get_value(attr.id));
+        value_context_pivot.add(attr.id, tmp);
     }
 
     /*----- Swap left and right tuple. -------------------------------------------------------------------------------*/
-    wasm_swap.emit(loop_body, struc, b_begin, b_last);
+    wasm_swap.emit(loop, struc, left, b_last);
 
     /*----- Compare left and right tuples to pivot. ------------------------------------------------------------------*/
-    auto b_cmp_left  = comparator.emit(fn, loop_body, load_context_left,  value_context_pivot);
+    auto b_cmp_left  = comparator.emit(fn, loop, load_context_left,  value_context_pivot);
     auto b_left_is_ok = BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenLeSInt32(),
         /* left=   */ b_cmp_left,
         /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(0))
     );
-    auto b_cmp_right = comparator.emit(fn, loop_body, load_context_right, value_context_pivot);
+    auto b_cmp_right = comparator.emit(fn, loop, load_context_right, value_context_pivot);
     auto b_right_is_ok = BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenGeSInt32(),
@@ -198,7 +185,7 @@ BinaryenExpressionRef WasmPartitionBranchless::emit(BinaryenModuleRef module, Fu
         /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(0))
     );
 
-    /* Advance begin cursor. */
+    /* Advance left cursor. */
     {
         auto b_delta_begin = BinaryenSelect(
             /* module=    */ module,
@@ -207,20 +194,15 @@ BinaryenExpressionRef WasmPartitionBranchless::emit(BinaryenModuleRef module, Fu
             /* ifFalse=   */ BinaryenConst(module, BinaryenLiteralInt32(0)),
             /* type=      */ BinaryenTypeInt32()
         );
-        auto b_begin_upd = BinaryenBinary(
+        left.set(loop, BinaryenBinary(
             /* module= */ module,
             /* op=     */ BinaryenAddInt32(),
-            /* left=   */ b_begin,
+            /* left=   */ left,
             /* right=  */ b_delta_begin
-        );
-        loop_body += BinaryenLocalSet(
-            /* module= */ module,
-            /* index=  */ BinaryenLocalGetGetIndex(b_begin),
-            /* value=  */ b_begin_upd
-        );
+        ));
     }
 
-    /* Advance end cursor. */
+    /* Advance right cursor. */
     {
         auto b_delta_end = BinaryenSelect(
             /* module=    */ module,
@@ -229,40 +211,16 @@ BinaryenExpressionRef WasmPartitionBranchless::emit(BinaryenModuleRef module, Fu
             /* ifFalse=   */ BinaryenConst(module, BinaryenLiteralInt32(0)),
             /* type=      */ BinaryenTypeInt32()
         );
-        auto b_end_upd = BinaryenBinary(
+        right.set(loop, BinaryenBinary(
             /* module= */ module,
             /* op=     */ BinaryenAddInt32(),
-            /* left=   */ b_end,
+            /* left=   */ right,
             /* right=  */ b_delta_end
-        );
-        loop_body += BinaryenLocalSet(
-            /* module= */ module,
-            /* index=  */ BinaryenLocalGetGetIndex(b_end),
-            /* value=  */ b_end_upd
-        );
+        ));
     }
 
-    /*----- Create loop header. --------------------------------------------------------------------------------------*/
-    auto b_loop_cond = BinaryenBinary(
-        /* module= */ module,
-        /* op=     */ BinaryenLtUInt32(),
-        /* left=   */ b_begin,
-        /* right=  */ b_end
-    );
-    loop_body += BinaryenBreak(
-        /* module=    */ module,
-        /* name=      */ loop_name,
-        /* condition= */ b_loop_cond,
-        /* value=     */ nullptr
-    );
-
-    block += BinaryenLoop(
-        /* module= */ module,
-        /* in=     */ loop_name,
-        /* body=   */ loop_body.finalize()
-    );
-
-    return b_begin;
+    block += loop.finalize();
+    return left();
 }
 
 
@@ -309,15 +267,19 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
         /* left=   */ b_end,
         /* right=  */ b_begin
     );
-
-    BlockBuilder loop_body(module, "qsort_loop.body");
-
     const auto b_last = BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ b_end,
         /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(-tuple.size()))
     );
+
+    WasmWhile loop(module, (fn_name + ".loop").c_str(), BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenGtSInt32(),
+        /* left=   */ b_delta,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(2 * tuple.size()))
+    ));
 
     /*----- Compute middle of data. ----------------------------------------------------------------------------------*/
     const auto b_size = BinaryenBinary(
@@ -338,27 +300,22 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
         /* left=   */ b_half,
         /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(tuple.size()))
     );
-    const auto b_mid_addr = BinaryenBinary(
+    WasmVariable mid(fn, BinaryenTypeInt32());
+    mid.set(loop, BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ b_begin,
         /* right=  */ b_offset_mid
-    );
-    const auto b_mid = fn.add_local(BinaryenTypeInt32());
-    loop_body += BinaryenLocalSet(
-        /* module= */ module,
-        /* index=  */ BinaryenLocalGetGetIndex(b_mid),
-        /* value=  */ b_mid_addr
-    );
+    ));
 
     auto load_context_left  = tuple.create_load_context(b_begin);
-    auto load_context_mid   = tuple.create_load_context(b_mid);
+    auto load_context_mid   = tuple.create_load_context(mid);
     auto load_context_right = tuple.create_load_context(b_last);
 
     /*----- Compare three elements pairwise. -------------------------------------------------------------------------*/
-    auto b_cmp_left_mid   = comparator.emit(fn, loop_body, load_context_left, load_context_mid);
-    auto b_cmp_left_right = comparator.emit(fn, loop_body, load_context_left, load_context_right);
-    auto b_cmp_mid_right  = comparator.emit(fn, loop_body, load_context_mid,  load_context_right);
+    auto b_cmp_left_mid   = comparator.emit(fn, loop, load_context_left, load_context_mid);
+    auto b_cmp_left_right = comparator.emit(fn, loop, load_context_left, load_context_right);
+    auto b_cmp_mid_right  = comparator.emit(fn, loop, load_context_mid,  load_context_right);
 
     auto b_left_le_mid = BinaryenBinary(
         /* module= */ module,
@@ -381,7 +338,7 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
 
     /*----- Swap pivot to front. -------------------------------------------------------------------------------------*/
     BlockBuilder block_swap_left_mid(module);
-    wasm_swap.emit(block_swap_left_mid, tuple, b_begin, b_mid);
+    wasm_swap.emit(block_swap_left_mid, tuple, b_begin, mid);
     BlockBuilder block_swap_left_right(module);
     wasm_swap.emit(block_swap_left_right, tuple, b_begin, b_last);
     block_swap_left_mid.name("if_0_true-swap_left_mid");
@@ -418,7 +375,7 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
         /* ifTrue=    */ b_if_1,
         /* ifFalse=   */ b_if_3
     );
-    loop_body += b_if_4;
+    loop += b_if_4;
 
     /*----- Partition range begin + 1 to end using begin as pivot. ---------------------------------------------------*/
     auto b_begin_plus_one = BinaryenBinary(
@@ -431,27 +388,23 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
     auto b_partition = partition.emit(
         /* module=      */ module,
         /* fn=          */ fn,
-        /* block=       */ loop_body,
+        /* block=       */ loop,
         /* struc=       */ tuple,
         /* order=       */ order,
         /* b_begin=     */ b_begin_plus_one,
         /* b_end=       */ b_end,
         /* b_pivot=     */ b_begin
     );
-    loop_body += BinaryenLocalSet(
-        /* module= */ module,
-        /* index=  */ BinaryenLocalGetGetIndex(b_mid),
-        /* value=  */ b_partition
-    );
+    mid.set(loop, b_partition);
 
     /*----- Patch mid pointer, if necessary. -------------------------------------------------------------------------*/
     auto b_mid_minus_one = BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenAddInt32(),
-        /* left=   */ b_mid,
+        /* left=   */ mid,
         /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(-tuple.size()))
     );
-    wasm_swap.emit(loop_body, tuple, b_begin, b_mid_minus_one);
+    wasm_swap.emit(loop, tuple, b_begin, b_mid_minus_one);
 
     /*----- Recurse right, if necessary. -----------------------------------------------------------------------------*/
     {
@@ -459,7 +412,7 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
             /* module= */ module,
             /* op=     */ BinaryenSubInt32(),
             /* left=   */ b_end,
-            /* right=  */ b_mid
+            /* right=  */ mid
         );
         auto b_recurse_right_cond = BinaryenBinary(
             /* module= */ module,
@@ -467,7 +420,7 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
             /* left=   */ b_delta_right,
             /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(2 * tuple.size()))
         );
-        BinaryenExpressionRef args[] = { b_mid, b_end };
+        BinaryenExpressionRef args[] = { mid, b_end };
         auto b_recurse_right = BinaryenCall(
             /* module=      */ module,
             /* target=      */ fn_name.c_str(),
@@ -475,7 +428,7 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
             /* numOperands= */ 2,
             /* returnType=  */ BinaryenTypeNone()
         );
-        loop_body += BinaryenIf(
+        loop += BinaryenIf(
             /* module=    */ module,
             /* condition= */ b_recurse_right_cond,
             /* ifTrue=    */ b_recurse_right,
@@ -484,39 +437,14 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
     }
 
     /*----- Update end pointer. --------------------------------------------------------------------------------------*/
-    loop_body += BinaryenLocalSet(
+    loop += BinaryenLocalSet(
         /* module= */ module,
         /* index=  */ BinaryenLocalGetGetIndex(b_end),
         /* value=  */ b_mid_minus_one
     );
 
-    /*----- Emit loop header. ----------------------------------------------------------------------------------------*/
-    auto b_loop_cond = BinaryenBinary(
-        /* module= */ module,
-        /* op=     */ BinaryenGtSInt32(),
-        /* left=   */ b_delta,
-        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(2 * tuple.size()))
-    );
-    loop_body += BinaryenBreak(
-        /* module=    */ module,
-        /* name=      */ "qsort_loop",
-        /* condition= */ b_loop_cond,
-        /* value=     */ nullptr
-    );
-
-    auto b_loop = BinaryenLoop(
-        /* module= */ module,
-        /* in=     */ "qsort_loop",
-        /* body=   */ loop_body.finalize()
-    );
-
-    /*----- Emit loop entry. -----------------------------------------------------------------------------------------*/
-    fn.block() += BinaryenIf(
-        /* module=    */ module,
-        /* condition= */ b_loop_cond,
-        /* ifTrue=    */ b_loop,
-        /* ifFalse=   */ nullptr
-    );
+    /*----- Emit loop. -----------------------------------------------------------------------------------------------*/
+    fn.block() += loop.finalize();
 
     /*----- Handle the case where end - begin == 2. ------------------------------------------------------------------*/
     {
@@ -569,12 +497,11 @@ BinaryenExpressionRef WasmBitMixMurmur3::emit(BinaryenModuleRef module, Function
     /* Taken from https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp by Austin Appleby.  We use the
      * optimized constants found by David Stafford, in particular the values for `Mix01`, as reported at
      * http://zimbry.blogspot.com/2011/09/better-bit-mixing-improving-on.html. */
-
     insist(BinaryenExpressionGetType(bits) == BinaryenTypeInt64(), "WasmBitMix expects a 64-bit integer");
 
-    auto v = fn.add_local(BinaryenTypeInt64());
+    WasmVariable v(fn, BinaryenTypeInt64());
 
-    // v = v ^ (v >> 31)
+    /* v = v ^ (v >> 31) */
     {
         auto Shr = BinaryenBinary(
             /* module= */ module,
@@ -582,35 +509,23 @@ BinaryenExpressionRef WasmBitMixMurmur3::emit(BinaryenModuleRef module, Function
             /* left=   */ bits,
             /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(31))
         );
-        auto Xor = BinaryenBinary(
+        v.set(block, BinaryenBinary(
             /* module= */ module,
             /* op=     */ BinaryenXorInt64(),
             /* left=   */ bits,
             /* right=  */ Shr
-        );
-        block += BinaryenLocalSet(
-            /* module= */ module,
-            /* index=  */ BinaryenLocalGetGetIndex(v),
-            /* value=  */ Xor
-        );
+        ));
     }
 
-    // v = v * 0x7fb5d329728ea185ULL
-    {
-        auto Mul = BinaryenBinary(
-            /* module= */ module,
-            /* op=     */ BinaryenMulInt64(),
-            /* left=   */ v,
-            /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(0x7fb5d329728ea185ULL))
-        );
-        block += BinaryenLocalSet(
-            /* module= */ module,
-            /* index=  */ BinaryenLocalGetGetIndex(v),
-            /* value=  */ Mul
-        );
-    }
+    /* v = v * 0x7fb5d329728ea185ULL */
+    v.set(block, BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenMulInt64(),
+        /* left=   */ v,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(0x7fb5d329728ea185ULL))
+    ));
 
-    // v = v ^ (v >> 27)
+    /* v = v ^ (v >> 27) */
     {
         auto Shr = BinaryenBinary(
             /* module= */ module,
@@ -618,35 +533,23 @@ BinaryenExpressionRef WasmBitMixMurmur3::emit(BinaryenModuleRef module, Function
             /* left=   */ v,
             /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(27))
         );
-        auto Xor = BinaryenBinary(
+        v.set(block, BinaryenBinary(
             /* module= */ module,
             /* op=     */ BinaryenXorInt64(),
             /* left=   */ v,
             /* right=  */ Shr
-        );
-        block += BinaryenLocalSet(
-            /* module= */ module,
-            /* index=  */ BinaryenLocalGetGetIndex(v),
-            /* value=  */ Xor
-        );
+        ));
     }
 
-    // v = v * 0x81dadef4bc2dd44dULL
-    {
-        auto Mul = BinaryenBinary(
-            /* module= */ module,
-            /* op=     */ BinaryenMulInt64(),
-            /* left=   */ v,
-            /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(0x81dadef4bc2dd44dULL))
-        );
-        block += BinaryenLocalSet(
-            /* module= */ module,
-            /* index=  */ BinaryenLocalGetGetIndex(v),
-            /* value=  */ Mul
-        );
-    }
+    /* v = v * 0x81dadef4bc2dd44dULL */
+    v.set(block, BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenMulInt64(),
+        /* left=   */ v,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(0x81dadef4bc2dd44dULL))
+    ));
 
-    // v = v ^ (v >> 33)
+    /* v = v ^ (v >> 33) */
     {
         auto Shr = BinaryenBinary(
             /* module= */ module,
@@ -654,17 +557,12 @@ BinaryenExpressionRef WasmBitMixMurmur3::emit(BinaryenModuleRef module, Function
             /* left=   */ v,
             /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(33))
         );
-        auto Xor = BinaryenBinary(
+        v.set(block, BinaryenBinary(
             /* module= */ module,
             /* op=     */ BinaryenXorInt64(),
             /* left=   */ v,
             /* right=  */ Shr
-        );
-        block += BinaryenLocalSet(
-            /* module= */ module,
-            /* index=  */ BinaryenLocalGetGetIndex(v),
-            /* value=  */ Xor
-        );
+        ));
     }
 
     return v;
@@ -680,110 +578,62 @@ BinaryenExpressionRef WasmHashMumur3_64A::emit(BinaryenModuleRef module, Functio
 {
     /* Inspired by https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp by Austin Appleby.  We use
      * constants from MurmurHash2_64 as reported on https://sites.google.com/site/murmurhash/. */
-
     insist(values.size() != 0, "cannot compute the hash of an empty sequence of values");
-
     const auto m = BinaryenConst(module, BinaryenLiteralInt64(0xc6a4a7935bd1e995LLU));
-    BinaryenExpressionRef h = fn.add_local(BinaryenTypeInt64());
 
+    WasmVariable h(fn, BinaryenTypeInt64());
     if (values.size() == 1) {
         /* In case of a single 64-bit value, we just run the bit mixer. */
-        block += BinaryenLocalSet(
-            /* module= */ module,
-            /* index=  */ BinaryenLocalGetGetIndex(h),
-            /* value=  */ reinterpret(module, values[0], BinaryenTypeInt64())
-        );
+        h.set(block, reinterpret(module, values[0], BinaryenTypeInt64()));
     } else {
-        //  uint64_t h = seed ^ (len * m)
-        block += BinaryenLocalSet(
-            /* module= */ module,
-            /* index=  */ BinaryenLocalGetGetIndex(h),
-            /* value=  */ BinaryenConst(module, BinaryenLiteralInt64(0xc6a4a7935bd1e995LLU * values.size()))
-        );
-        BinaryenExpressionRef k = fn.add_local(BinaryenTypeInt64());
+        /*  uint64_t h = seed ^ (len * m) */
+        h.set(block, BinaryenConst(module, BinaryenLiteralInt64(0xc6a4a7935bd1e995LLU * values.size())));
+
+        WasmVariable k(fn, BinaryenTypeInt64());
         for (auto val : values) {
-            block += BinaryenLocalSet(
+            k.set(block, reinterpret(module, val, BinaryenTypeInt64()));
+
+            /* k = k * m */
+            k.set(block, BinaryenBinary(
                 /* module= */ module,
-                /* index=  */ BinaryenLocalGetGetIndex(k),
-                /* value=  */ reinterpret(module, val, BinaryenTypeInt64())
-            );
+                /* op=     */ BinaryenMulInt64(),
+                /* left=   */ k,
+                /* right=  */ m
+            ));
 
-            // k = k * m
-            {
-                auto Mul = BinaryenBinary(
-                    /* module= */ module,
-                    /* op=     */ BinaryenMulInt64(),
-                    /* left=   */ k,
-                    /* right=  */ m
-                );
-                block += BinaryenLocalSet(
-                    /* module= */ module,
-                    /* index=  */ BinaryenLocalGetGetIndex(k),
-                    /* value=  */ Mul
-                );
-            }
+            /* k = ROTL32(k, 47); */
+            k.set(block, BinaryenBinary(
+                /* module= */ module,
+                /* op=     */ BinaryenRotLInt64(),
+                /* left=   */ k,
+                /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(47))
+            ));
 
-            // k = ROTL32(k, 47);
-            {
-                auto Rot = BinaryenBinary(
-                    /* module= */ module,
-                    /* op=     */ BinaryenRotLInt64(),
-                    /* left=   */ k,
-                    /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(47))
-                );
-                block += BinaryenLocalSet(
-                    /* module= */ module,
-                    /* index=  */ BinaryenLocalGetGetIndex(k),
-                    /* value=  */ Rot
-                );
-            }
+            /* k = k * m */
+            k.set(block, BinaryenBinary(
+                /* module= */ module,
+                /* op=     */ BinaryenMulInt64(),
+                /* left=   */ k,
+                /* right=  */ m
+            ));
 
-            // k = k * m
-            {
-                auto Mul = BinaryenBinary(
-                    /* module= */ module,
-                    /* op=     */ BinaryenMulInt64(),
-                    /* left=   */ k,
-                    /* right=  */ m
-                );
-                block += BinaryenLocalSet(
-                    /* module= */ module,
-                    /* index=  */ BinaryenLocalGetGetIndex(k),
-                    /* value=  */ Mul
-                );
-            }
+            /* h = h ^ k; */
+            h.set(block, BinaryenBinary(
+                /* module= */ module,
+                /* op=     */ BinaryenXorInt64(),
+                /* left=   */ h,
+                /* right=  */ k
+            ));
 
-            // h = h ^ k;
-            {
-                auto Xor = BinaryenBinary(
-                    /* module= */ module,
-                    /* op=     */ BinaryenXorInt64(),
-                    /* left=   */ h,
-                    /* right=  */ k
-                );
-                block += BinaryenLocalSet(
-                    /* module= */ module,
-                    /* index=  */ BinaryenLocalGetGetIndex(h),
-                    /* value=  */ Xor
-                );
-            }
+            /* h = ROTL32(h, 45); */
+            h.set(block, BinaryenBinary(
+                /* module= */ module,
+                /* op=     */ BinaryenRotLInt64(),
+                /* left=   */ h,
+                /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(45))
+            ));
 
-            // h = ROTL32(h, 45);
-            {
-                auto Rot = BinaryenBinary(
-                    /* module= */ module,
-                    /* op=     */ BinaryenRotLInt64(),
-                    /* left=   */ h,
-                    /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(45))
-                );
-                block += BinaryenLocalSet(
-                    /* module= */ module,
-                    /* index=  */ BinaryenLocalGetGetIndex(h),
-                    /* value=  */ Rot
-                );
-            }
-
-            // h = h * 5 + 0xe6546b64
+            /* h = h * 5 + 0xe6546b64 */
             {
                 auto Mul = BinaryenBinary(
                     /* module= */ module,
@@ -791,34 +641,22 @@ BinaryenExpressionRef WasmHashMumur3_64A::emit(BinaryenModuleRef module, Functio
                     /* left=   */ h,
                     /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(5))
                 );
-                auto Add = BinaryenBinary(
+                h.set(block, BinaryenBinary(
                     /* module= */ module,
                     /* op=     */ BinaryenAddInt64(),
                     /* left=   */ Mul,
                     /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(0xe6546b64ULL))
-                );
-                block += BinaryenLocalSet(
-                    /* module= */ module,
-                    /* index=  */ BinaryenLocalGetGetIndex(h),
-                    /* value=  */ Add
-                );
+                ));
             }
         }
 
-        // h = h ^ len
-        {
-            auto Xor = BinaryenBinary(
-                /* module= */ module,
-                /* op=     */ BinaryenXorInt64(),
-                /* left=   */ h,
-                /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(values.size()))
-            );
-            block += BinaryenLocalSet(
-                /* module= */ module,
-                /* index=  */ BinaryenLocalGetGetIndex(h),
-                /* value=  */ Xor
-            );
-        }
+        /* h = h ^ len */
+        h.set(block, BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenXorInt64(),
+            /* left=   */ h,
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(values.size()))
+        ));
     }
 
     return WasmBitMixMurmur3{}.emit(module, fn, block, h);
@@ -833,91 +671,51 @@ BinaryenExpressionRef WasmRefCountingHashTable::create_table(BlockBuilder &block
                                                              std::size_t num_buckets) const
 {
     num_buckets = ceil_to_pow_2(num_buckets);
+    addr_.set(block, b_addr);
+    mask_.set(block, BinaryenConst(module, BinaryenLiteralInt32(num_buckets - 1)));
 
-    /*----- Address. -------------------------------------------------------------------------------------------------*/
-    block += BinaryenLocalSet(
-        /* module= */ module,
-        /* index=  */ BinaryenLocalGetGetIndex(b_addr_),
-        /* value=  */ b_addr
-    );
-
-    /*----- Mask. ----------------------------------------------------------------------------------------------------*/
-    block += BinaryenLocalSet(
-        /* module= */ module,
-        /* index=  */ BinaryenLocalGetGetIndex(b_mask_),
-        /* value=  */ BinaryenConst(module, BinaryenLiteralInt32(num_buckets - 1))
-    );
-
-    /*----- Compute end of hash table. -------------------------------------------------------------------------------*/
+    /*----- Return end of hash table. --------------------------------------------------------------------------------*/
     return BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenAddInt32(),
-        /* left=   */ b_addr,
-        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(num_buckets * entry_size_))
+        /* left=   */ addr_,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(num_buckets * entry_size()))
     );
 }
 
 void WasmRefCountingHashTable::clear_table(BlockBuilder &block,
                                            BinaryenExpressionRef b_begin, BinaryenExpressionRef b_end) const
 {
-    auto b_induction = fn.add_local(BinaryenTypeInt32());
-    block += BinaryenLocalSet(
-        /* module= */ module,
-        /* index=  */ BinaryenLocalGetGetIndex(b_induction),
-        /* value=  */ b_begin
-    );
-    auto b_loop_cond = BinaryenBinary(
+    WasmVariable induction(fn, BinaryenTypeInt32());
+    induction.set(block, b_begin);
+
+    WasmWhile loop(module, "clear_table.loop", BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenLtUInt32(),
-        /* left=   */ b_induction,
+        /* left=   */ induction,
         /* right=  */ b_end
-    );
-
-    constexpr const char *loop_name = "clear_table";
-    BlockBuilder loop_body(module, "clear_table.body");
+    ));
 
     /*----- Clear entry. ---------------------------------------------------------------------------------------------*/
-    loop_body += BinaryenStore(
+    loop += BinaryenStore(
         /* module= */ module,
         /* bytes=  */ REFERENCE_SIZE,
         /* offset= */ 0,
         /* align=  */ 0,
-        /* ptr=    */ b_induction,
+        /* ptr=    */ induction,
         /* value=  */ BinaryenConst(module, BinaryenLiteralInt32(0)),
         /* type=   */ BinaryenTypeInt32()
     );
 
     /*----- Advance induction variable. ------------------------------------------------------------------------------*/
-    auto b_inc = BinaryenBinary(
+    induction.set(loop, BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenAddInt32(),
-        /* left=   */ b_induction,
+        /* left=   */ induction,
         /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size_))
-    );
-    loop_body += BinaryenLocalSet(
-        /* module= */ module,
-        /* index=  */ BinaryenLocalGetGetIndex(b_induction),
-        /* value=  */ b_inc
-    );
-    loop_body += BinaryenBreak(
-        /* module=    */ module,
-        /* name=      */ loop_name,
-        /* condition= */ b_loop_cond,
-        /* value=     */ nullptr
-    );
+    ));
 
-    /*----- Create loop and loop header. -----------------------------------------------------------------------------*/
-    auto b_loop = BinaryenLoop(
-        /* module= */ module,
-        /* name=   */ loop_name,
-        /* body=   */ loop_body.finalize()
-    );
-    block += BinaryenIf(
-        /* module=    */ module,
-        /* condition= */ b_loop_cond,
-        /* ifTrue=    */ b_loop,
-        /* ifFalse=   */ nullptr
-    );
+    block += loop.finalize();
 }
 
 BinaryenExpressionRef WasmRefCountingHashTable::hash_to_bucket(BinaryenExpressionRef b_hash) const
@@ -926,18 +724,18 @@ BinaryenExpressionRef WasmRefCountingHashTable::hash_to_bucket(BinaryenExpressio
         /* module= */ module,
         /* op=     */ BinaryenAndInt32(),
         /* left=   */ b_hash,
-        /* right=  */ b_mask_
+        /* right=  */ mask_
     );
     auto b_bucket_offset = BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenMulInt32(),
         /* left=   */ b_bucket_index,
-        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size_))
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size()))
     );
     return BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenAddInt32(),
-        /* left=   */ b_addr_,
+        /* left=   */ addr_,
         /* right=  */ b_bucket_offset
     );
 }
@@ -947,47 +745,39 @@ WasmRefCountingHashTable::find_in_bucket(BlockBuilder &block, BinaryenExpression
                                          const std::vector<BinaryenExpressionRef> &key) const
 {
     insist(key.size() <= struc.schema.num_entries(), "incorrect number of key values");
-
-    const char *loop_name = "find_in_bucket.loop";
+    WasmLoop loop(module, "find_in_bucket.loop");
 
     /*----- Create local runner . ------------------------------------------------------------------------------------*/
-    auto b_runner = fn.add_local(BinaryenTypeInt32());
-    block += BinaryenLocalSet(
-        /* module= */ module,
-        /* index=  */ BinaryenLocalGetGetIndex(b_runner),
-        /* value=  */ b_bucket_addr
-    );
+    WasmVariable runner(fn, BinaryenTypeInt32());
+    runner.set(block, b_bucket_addr);
 
     auto b_table_size = BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenAddInt32(),
-        /* left=   */ b_mask_,
+        /* left=   */ mask_,
         /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(1))
     );
 
-    auto b_table_size_in_bytes = BinaryenBinary(
+    WasmVariable b_table_size_in_bytes(fn, BinaryenTypeInt32());
+    b_table_size_in_bytes.set(block, BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenMulInt32(),
         /* left=   */ b_table_size,
         /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size_))
-    );
+    ));
 
     /*----- Initialize step counter. ---------------------------------------------------------------------------------*/
-    auto b_step = fn.add_local(BinaryenTypeInt32());
-    block += BinaryenLocalSet(
-        /* module= */ module,
-        /* index=  */ BinaryenLocalGetGetIndex(b_step),
-        /* value=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size_))
-    );
+    WasmVariable step(fn, BinaryenTypeInt32());
+    step.set(block, BinaryenConst(module, BinaryenLiteralInt32(entry_size_)));
 
     /*----- Advance to next slot. ------------------------------------------------------------------------------------*/
-    BlockBuilder advance(module, "find_in_bucket.step");
+    BlockBuilder advance(module, "find_in_bucket.loop.body.step");
     {
         auto b_runner_inc = BinaryenBinary(
             /* module= */ module,
             /* op=     */ BinaryenAddInt32(),
-            /* left=   */ b_runner,
-            /* right=  */ b_step
+            /* left=   */ runner,
+            /* right=  */ step
         );
         auto b_runner_wrapped = BinaryenBinary(
             /* module= */ module,
@@ -998,7 +788,7 @@ WasmRefCountingHashTable::find_in_bucket(BlockBuilder &block, BinaryenExpression
         auto b_table_end = BinaryenBinary(
             /* module= */ module,
             /* op=     */ BinaryenAddInt32(),
-            /* left=   */ b_addr_,
+            /* left=   */ addr_,
             /* right=  */ b_table_size_in_bytes
         );
         auto b_is_overflow = BinaryenBinary(
@@ -1014,29 +804,15 @@ WasmRefCountingHashTable::find_in_bucket(BlockBuilder &block, BinaryenExpression
             /* ifFalse=   */ b_runner_inc,
             /* type=      */ BinaryenTypeInt32()
         );
-        advance += BinaryenLocalSet(
-            /* module= */ module,
-            /* index=  */ BinaryenLocalGetGetIndex(b_runner),
-            /* value=  */ b_runner_upd
-        );
+        runner.set(advance, b_runner_upd);
 
-        auto b_step_inc = BinaryenBinary(
+        step.set(advance, BinaryenBinary(
             /* module= */ module,
             /* op=     */ BinaryenAddInt32(),
-            /* left=   */ b_step,
+            /* left=   */ step,
             /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size_))
-        );
-        advance += BinaryenLocalSet(
-            /* module= */ module,
-            /* index=  */ BinaryenLocalGetGetIndex(b_step),
-            /* value=  */ b_step_inc
-        );
-        advance += BinaryenBreak(
-            /* module=    */ module,
-            /* name=      */ loop_name,
-            /* condition= */ nullptr,
-            /* value=     */ nullptr
-        );
+        ));
+        advance += loop.continu();
     }
 
     /*----- Get reference count from bucket. -------------------------------------------------------------------------*/
@@ -1047,7 +823,7 @@ WasmRefCountingHashTable::find_in_bucket(BlockBuilder &block, BinaryenExpression
         /* offset= */ 0,
         /* align=  */ 0,
         /* type=   */ BinaryenTypeInt32(),
-        /* ptr=    */ b_runner
+        /* ptr=    */ runner
     );
 
     /*----- Check whether bucket is occupied. ------------------------------------------------------------------------*/
@@ -1061,7 +837,7 @@ WasmRefCountingHashTable::find_in_bucket(BlockBuilder &block, BinaryenExpression
     /*----- Compare keys. --------------------------------------------------------------------------------------------*/
     BinaryenExpressionRef b_keys_not_equal = nullptr;
     {
-        auto ld_key = struc.create_load_context(b_runner, /* offset= */ REFERENCE_SIZE);
+        auto ld_key = struc.create_load_context(runner, /* offset= */ REFERENCE_SIZE);
         std::size_t idx = 0;
         for (auto b_key_find : key) {
             auto &e = struc.schema[idx++];
@@ -1087,19 +863,15 @@ WasmRefCountingHashTable::find_in_bucket(BlockBuilder &block, BinaryenExpression
         /* ifTrue=    */ advance.finalize(), // key not equal, continue search
         /* ifFalse=   */ nullptr // hit, break loop
     );
-    auto b_if_occupied = BinaryenIf(
+    loop += BinaryenIf(
         /* module=    */ module,
         /* condition= */ b_is_occupied,
         /* ifTrue=    */ b_if_key_equal, // slot occupied, compare key
         /* ifFalse=   */ nullptr // miss, break loop
     );
-    block += BinaryenLoop(
-        /* module= */ module,
-        /* in=     */ loop_name,
-        /* body=   */ b_if_occupied
-    );
+    block += loop.finalize();
 
-    return std::make_pair(b_runner, b_step);
+    return std::make_pair(runner(), step());
 }
 
 BinaryenExpressionRef WasmRefCountingHashTable::is_slot_empty(BinaryenExpressionRef b_slot_addr) const

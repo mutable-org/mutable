@@ -239,22 +239,22 @@ struct WasmStruct
                                 std::size_t struc_offset = 0) const {
         std::size_t idx = 0;
         for (auto &attr : schema) {
-            if (attr.id == id) {
-                const std::size_t size_in_bytes = attr.type->size() < 8 ? 1 : attr.type->size() / 8;
-                return BinaryenStore(
-                    /* module= */ module_,
-                    /* bytes=  */ size_in_bytes,
-                    /* offset= */ offset(idx) + struc_offset,
-                    /* align=  */ struc_offset % size_in_bytes ? 1 : 0,
-                    /* ptr=    */ b_ptr,
-                    /* value=  */ b_val,
-                    /* type=   */ get_binaryen_type(attr.type)
-                );
-                break;
-            }
+            if (attr.id == id) break;
             ++idx;
         }
-        unreachable("unknown identifier");
+        insist(idx < schema.num_entries(), "unknown identifier");
+
+        auto &attr = schema[idx];
+        const std::size_t size_in_bytes = attr.type->size() < 8 ? 1 : attr.type->size() / 8;
+        return BinaryenStore(
+            /* module= */ module_,
+            /* bytes=  */ size_in_bytes,
+            /* offset= */ offset(idx) + struc_offset,
+            /* align=  */ struc_offset % size_in_bytes ? 1 : 0,
+            /* ptr=    */ b_ptr,
+            /* value=  */ b_val,
+            /* type=   */ get_binaryen_type(attr.type)
+        );
     }
 
     void dump(std::ostream &out) const;
@@ -287,6 +287,8 @@ struct BlockBuilder
     BlockBuilder(const BlockBuilder&) = delete;
     BlockBuilder(BlockBuilder &&other) { swap(*this, other); }
     ~BlockBuilder() { free((void*) name_); }
+
+    BinaryenModuleRef module() const { return module_; }
 
     BlockBuilder & operator=(BlockBuilder other) { swap(*this, other); return *this; }
 
@@ -359,6 +361,111 @@ struct FunctionBuilder
         std::size_t idx = BinaryenTypeArity(parameter_type_) + locals_.size();
         locals_.push_back(ty);
         return BinaryenLocalGet(module_, idx, ty);
+    }
+};
+
+struct WasmVariable
+{
+    private:
+    BinaryenExpressionRef b_var_;
+
+    public:
+    WasmVariable(FunctionBuilder &fn, BinaryenType ty) :
+        b_var_(fn.add_local(ty))
+    { }
+
+    WasmVariable(const WasmVariable&) = delete;
+    WasmVariable(WasmVariable&&) = default;
+
+    const WasmVariable & set(BlockBuilder &block, BinaryenExpressionRef b_expr) const {
+        block += BinaryenLocalSet(
+            /* module= */ block.module(),
+            /* index=  */ BinaryenLocalGetGetIndex(b_var_),
+            /* value=  */ b_expr
+        );
+        return *this;
+    }
+
+    BinaryenExpressionRef operator()() const { return b_var_; }
+
+    operator BinaryenExpressionRef() const { return b_var_; }
+};
+
+struct WasmLoop
+{
+    private:
+    BlockBuilder body_;
+    const char *name_;
+
+    public:
+    WasmLoop(BinaryenModuleRef module, const char *name)
+        : body_(module, (std::string(name) + ".body").c_str())
+        , name_(strdupn(notnull(name)))
+    { }
+
+    virtual ~WasmLoop() { free((void*) name_); }
+
+    BlockBuilder & body() { return body_; }
+    const BlockBuilder & body() const { return body_; }
+    void name(const char *name) { free((void*) name_); name_ = strdupn(name); }
+    const char * name() const { return name_; }
+
+    operator BlockBuilder&() { return body(); }
+
+    WasmLoop & operator+=(BinaryenExpressionRef b_expr) { body() += b_expr; return *this; }
+
+    BinaryenExpressionRef continu(BinaryenExpressionRef condition = nullptr) {
+        return BinaryenBreak(
+            /* module=    */ body().module(),
+            /* name=      */ name(),
+            /* condition= */ condition,
+            /* value=     */ nullptr
+        );
+    }
+
+    virtual BinaryenExpressionRef finalize() {
+        return BinaryenLoop(
+            /* module= */ body().module(),
+            /* name=   */ name(),
+            /* body=   */ body().finalize()
+        );
+    }
+};
+
+struct WasmDoWhile : WasmLoop
+{
+    private:
+    BinaryenExpressionRef condition_;
+
+    public:
+    WasmDoWhile(BinaryenModuleRef module, const char *name, BinaryenExpressionRef condition)
+        : WasmLoop(module, name)
+        , condition_(condition)
+    { }
+
+    BinaryenExpressionRef condition() const { return condition_; }
+
+    virtual BinaryenExpressionRef finalize() {
+        body() += continu(condition());
+        return WasmLoop::finalize();
+    }
+};
+
+struct WasmWhile : WasmDoWhile
+{
+    public:
+    WasmWhile(BinaryenModuleRef module, const char *name, BinaryenExpressionRef condition)
+        : WasmDoWhile(module, name, condition)
+    { }
+
+    BinaryenExpressionRef finalize() override {
+        auto loop = WasmDoWhile::finalize();
+        return BinaryenIf(
+            /* module=    */ body().module(),
+            /* condition= */ condition(),
+            /* ifTrue=    */ loop,
+            /* ifFalse=   */ nullptr
+        );
     }
 };
 

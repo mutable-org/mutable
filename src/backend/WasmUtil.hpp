@@ -121,7 +121,7 @@ struct WasmCGContext : ConstASTExprVisitor
     BinaryenModuleRef module_; ///< the module
     ///> Maps `Schema::Identifier`s to `BinaryenExpressionRef`s that evaluate to 0 if NULL and 1 otherwise
     std::unordered_map<Schema::Identifier, BinaryenExpressionRef> nulls_;
-    ///> Maps `Schema::Identifier`s to `BinaryenExpressionRef`s thatr evaluate to the current value
+    ///> Maps `Schema::Identifier`s to `BinaryenExpressionRef`s that evaluate to the current value
     std::unordered_map<Schema::Identifier, BinaryenExpressionRef> values_;
 
     BinaryenExpressionRef expr_; ///< a temporary used for recursive construction of expressions

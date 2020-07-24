@@ -26,14 +26,10 @@ struct GroupingData : OperatorData
 {
     WasmStruct *struc = nullptr;
     WasmHashTable *HT = nullptr;
-    WasmVariable begin;
-    WasmVariable end;
-    WasmVariable watermark_high;
+    WasmVariable watermark_high; ///< stores the maximum number of entries before growing the table is required
 
     GroupingData(FunctionBuilder &fn)
-        : begin(fn, BinaryenTypeInt32())
-        , end(fn, BinaryenTypeInt32())
-        , watermark_high(fn, BinaryenTypeInt32())
+        : watermark_high(fn, BinaryenTypeInt32())
     { }
 
     ~GroupingData() {
@@ -360,16 +356,40 @@ void WasmCodeGen::operator()(const GroupingOperator &op)
 
     (*this)(*op.child(0));
 
+    auto HT = as<WasmRefCountingHashTable>(data->HT);
     WasmPipelineCG pipeline(*this);
+
+    /*----- Initialize runner at start of hash table. ----------------------------------------------------------------*/
     WasmVariable induction(fn(), BinaryenTypeInt32());
-    induction.set(main_.block(), data->begin);
+    induction.set(main_.block(), HT->addr());
+
+    /*----- Compute end of hash table. -------------------------------------------------------------------------------*/
+    WasmVariable end(fn(), BinaryenTypeInt32());
+    auto b_size = BinaryenBinary(
+        /* module= */ module(),
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ HT->mask(),
+        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
+    );
+    auto b_size_in_bytes = BinaryenBinary(
+        /* module= */ module(),
+        /* op=     */ BinaryenMulInt32(),
+        /* left=   */ b_size,
+        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size()))
+    );
+    end.set(main_.block(), BinaryenBinary(
+        /* module= */ module(),
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ HT->addr(),
+        /* right=  */ b_size_in_bytes
+    ));
 
     /*----- Create new pipeline starting at `GroupingOperator`. ------------------------------------------------------*/
     WasmWhile loop(module(), "group_by.foreach", BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenLtUInt32(),
         /* left=   */ induction,
-        /* right=  */ data->end
+        /* right=  */ end
     ));
 
     /*----- Advance to first occupied slot. --------------------------------------------------------------------------*/
@@ -380,7 +400,7 @@ void WasmCodeGen::operator()(const GroupingOperator &op)
             /* module= */ module(),
             /* op=     */ BinaryenLtUInt32(),
             /* left=   */ induction,
-            /* right=  */ data->end
+            /* right=  */ end
         );
         auto b_slot_is_empty = data->HT->is_slot_empty(induction);
         advance_to_first += BinaryenIf(
@@ -415,7 +435,7 @@ void WasmCodeGen::operator()(const GroupingOperator &op)
             /* module= */ module(),
             /* op=     */ BinaryenLtUInt32(),
             /* left=   */ induction,
-            /* right=  */ data->end
+            /* right=  */ end
         );
         auto b_slot_is_empty = data->HT->is_slot_empty(induction);
         advance += BinaryenIf(
@@ -737,26 +757,25 @@ void WasmPipelineCG::operator()(const LimitOperator &op)
 
 void WasmPipelineCG::operator()(const GroupingOperator &op)
 {
-    auto data = as<GroupingData>(op.data());
     WasmHashMumur3_64A hasher;
+    auto data = as<GroupingData>(op.data());
+    data->struc = new WasmStruct(module(), op.schema());
 
     /*----- Allocate hash table. -------------------------------------------------------------------------------------*/
     constexpr uint32_t INITIAL_CAPACITY = 32;
-    data->struc = new WasmStruct(module(), op.schema());
     data->HT = new WasmRefCountingHashTable(module(), CG.fn(), *data->struc);
     auto HT = as<WasmRefCountingHashTable>(data->HT);
 
-    data->begin.set(CG.fn().block(), CG.head_of_heap());
-    auto b_HT_end = HT->create_table(CG.fn().block(), CG.head_of_heap(), INITIAL_CAPACITY);
-    data->end.set(CG.fn().block(), b_HT_end);
+    WasmVariable end(CG.fn(), BinaryenTypeInt32());
+    end.set(CG.fn().block(), HT->create_table(CG.fn().block(), CG.head_of_heap(), INITIAL_CAPACITY));
     data->watermark_high.set(CG.fn().block(), BinaryenConst(module(), BinaryenLiteralInt32(8 * INITIAL_CAPACITY / 10)));
 
     /*----- Update head of heap. -------------------------------------------------------------------------------------*/
-    CG.head_of_heap().set(CG.fn().block(), data->end);
+    CG.head_of_heap().set(CG.fn().block(), end);
     CG.align_head_of_heap();
 
     /*----- Initialize hash table. -----------------------------------------------------------------------------------*/
-    HT->clear_table(CG.fn().block(), data->begin, data->end);
+    HT->clear_table(CG.fn().block(), HT->addr(), end);
 
     /*----- Create a counter for the number of groups. ---------------------------------------------------------------*/
     WasmVariable num_groups(CG.fn(), BinaryenTypeInt32());
@@ -1001,24 +1020,20 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
     );
 
     /*----- Compute the mask for the new size. -----------------------------------------------------------------------*/
-    auto b_mask_new = CG.fn().add_local(BinaryenTypeInt32());
-    perform_rehash += BinaryenLocalSet(
+    WasmVariable mask_new(CG.fn(), BinaryenTypeInt32());
+    mask_new.set(perform_rehash, BinaryenBinary(
         /* module= */ module(),
-        /* index=  */ BinaryenLocalGetGetIndex(b_mask_new),
-        /* value=  */ BinaryenBinary(
-                          /* module= */ module(),
-                          /* op=     */ BinaryenAddInt32(),
-                          /* left=   */ b_mask_x2,
-                          /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
-                      )
-    );
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ b_mask_x2,
+        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
+    ));
 
     /*----- Compute new hash table size. -----------------------------------------------------------------------------*/
     auto b_size_in_bytes_old = BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenSubInt32(),
-        /* left=   */ data->end,
-        /* right=  */ data->begin
+        /* left=   */ end,
+        /* right=  */ HT->addr()
     );
     auto b_size_in_bytes_new = BinaryenBinary(
         /* module= */ module(),
@@ -1028,32 +1043,22 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
     );
 
     /*----- Allocate new hash table. ---------------------------------------------------------------------------------*/
-    auto b_HT_new_begin = CG.fn().add_local(BinaryenTypeInt32());
-    perform_rehash += BinaryenLocalSet(
+    WasmVariable begin_new(CG.fn(), BinaryenTypeInt32());
+    begin_new.set(perform_rehash, CG.head_of_heap());
+    CG.head_of_heap().set(perform_rehash, BinaryenBinary(
         /* module= */ module(),
-        /* index=  */ BinaryenLocalGetGetIndex(b_HT_new_begin),
-        /* value=  */ CG.head_of_heap()
-    );
-    auto b_HT_new_end = CG.fn().add_local(BinaryenTypeInt32());
-    perform_rehash += BinaryenLocalSet(
-        /* module= */ module(),
-        /* index=  */ BinaryenLocalGetGetIndex(b_HT_new_end),
-        /* value=  */ BinaryenBinary(
-                          /* module= */ module(),
-                          /* op=     */ BinaryenAddInt32(),
-                          /* left=   */ b_HT_new_begin,
-                          /* right=  */ b_size_in_bytes_new
-                      )
-    );
-    CG.head_of_heap().set(perform_rehash, b_HT_new_end);
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ begin_new,
+        /* right=  */ b_size_in_bytes_new
+    ));
     CG.align_head_of_heap(perform_rehash);
 
     /*----- Rehash to double size. -----------------------------------------------------------------------------------*/
     BinaryenExpressionRef rehash_args[4] = {
         /* addr_old= */ HT->addr(),
         /* mask_old= */ HT->mask(),
-        /* addr_new= */ b_HT_new_begin,
-        /* mask_new= */ b_mask_new
+        /* addr_new= */ begin_new,
+        /* mask_new= */ mask_new
     };
     perform_rehash += BinaryenCall(
         /* module=      */ module(),
@@ -1064,10 +1069,8 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
     );
 
     /*----- Update hash table and grouping data. ---------------------------------------------------------------------*/
-    HT->addr().set(perform_rehash, b_HT_new_begin);
-    HT->mask().set(perform_rehash, b_mask_new);
-    data->begin.set(perform_rehash, b_HT_new_begin);
-    data->end.set(perform_rehash, b_HT_new_end);
+    HT->addr().set(perform_rehash, begin_new);
+    HT->mask().set(perform_rehash, mask_new);
 
     /*----- Update high watermark. -----------------------------------------------------------------------------------*/
     auto b_size_new = BinaryenBinary(

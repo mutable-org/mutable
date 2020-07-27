@@ -563,80 +563,36 @@ void WasmPipelineCG::operator()(const ScanOperator &op)
     auto &table = op.store().table();
     std::ostringstream oss;
 
+    /*----- Get the number of rows in the scanned table. -------------------------------------------------------------*/
+    oss << table.name << "_num_rows";
+    auto b_num_rows = CG.add_import(oss.str(), BinaryenTypeInt32());
+
+    WasmVariable induction(CG.fn(), BinaryenTypeInt32()); // initialized to 0
+
     oss.str("");
     oss << "scan_" << table.name;
-    auto loop_name = oss.str();
-    oss << ".body";
-    auto body_name = oss.str();
-    BlockBuilder loop_body(module(), body_name.c_str());
-
-    /*----- Create induction variable. -------------------------------------------------------------------------------*/
-    auto b_induction_var = CG.add_local(BinaryenTypeInt32());
-
-    /*----- Import table size. ---------------------------------------------------------------------------------------*/
-    oss.str("");
-    oss << table.name << "_num_rows";
-    auto table_size = oss.str();
-    BinaryenAddGlobalImport(
-        /* module=             */ module(),
-        /* internalName=       */ table_size.c_str(),
-        /* externalModuleName= */ "env",
-        /* externalBaseName=   */ table_size.c_str(),
-        /* type=               */ BinaryenTypeInt32(),
-        /* mutable=            */ false
-    );
-    auto b_table_size = BinaryenGlobalGet(
-        /* module= */ module(),
-        /* name=   */ table_size.c_str(),
-        /* type=   */ BinaryenTypeInt32()
-    );
-
-    swap(block_, loop_body);
-    /*----- Generate code to access attributes and emit code for the rest of the pipeline. ---------------------------*/
-    WasmStoreCG store(*this, op);
-    store(op.store());
-    swap(block_, loop_body);
-
-    /*----- Increment induction variable. ----------------------------------------------------------------------------*/
-    auto b_inc_induction_var = BinaryenBinary(
-        /* module= */ module(),
-        /* op=     */ BinaryenAddInt32(),
-        /* left=   */ b_induction_var,
-        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
-    );
-    loop_body += BinaryenLocalSet(
-        /* module= */ module(),
-        /* index=  */ BinaryenLocalGetGetIndex(b_induction_var),
-        /* value=  */ b_inc_induction_var
-    );
-
-    /*----- Create loop header. --------------------------------------------------------------------------------------*/
-    /* if (induction_var < table_size) continue; else break; */
-    auto b_loop_cond = BinaryenBinary(
+    WasmWhile loop(module(), oss.str().c_str(), BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenLtUInt32(),
-        /* left=   */ b_induction_var,
-        /* right=  */ b_table_size
-    );
-    loop_body += BinaryenBreak(
-        /* module=    */ module(),
-        /* name=      */ loop_name.c_str(),
-        /* condition= */ b_loop_cond,
-        /* value=     */ nullptr
-    );
+        /* left=   */ induction,
+        /* right=  */ b_num_rows
+    ));
 
-    /*----- Create loop. ---------------------------------------------------------------------------------------------*/
-    auto b_loop = BinaryenLoop(
+    /*----- Generate code to access attributes and emit code for the rest of the pipeline. ---------------------------*/
+    swap(block_, loop);
+    WasmStoreCG store(*this, op);
+    store(op.store());
+    swap(block_, loop);
+
+    /*----- Increment induction variable. ----------------------------------------------------------------------------*/
+    induction.set(loop, BinaryenBinary(
         /* module= */ module(),
-        /* in=     */ loop_name.c_str(),
-        /* body=   */ loop_body.finalize()
-    );
-    block_ += BinaryenIf(
-        /* module=    */ module(),
-        /* condition= */ b_loop_cond,
-        /* ifTrue=    */ b_loop,
-        /* ifFalse=   */ nullptr
-    );
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ induction,
+        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
+    ));
+
+    block_ += loop.finalize();
 }
 
 void WasmPipelineCG::operator()(const CallbackOperator &op)

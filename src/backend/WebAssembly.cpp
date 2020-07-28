@@ -395,7 +395,7 @@ void WasmCodeGen::operator()(const GroupingOperator &op)
 
     /*----- Advance to first occupied slot. --------------------------------------------------------------------------*/
     {
-        WasmLoop advance_to_first(module(), "groupby.advance_to_first");
+        WasmLoop advance_to_first(module(), "group_by.advance_to_first");
         induction.set(advance_to_first, data->HT->compute_next_slot(induction));
         auto b_in_bounds = BinaryenBinary(
             /* module= */ module(),
@@ -787,82 +787,62 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
             /* left=   */ b_size_old,
             /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT_old.entry_size()))
         );
-        auto b_table_end_old = fn_rehash.add_local(BinaryenTypeInt32());
-        fn_rehash.block() += BinaryenLocalSet(
+        WasmVariable table_end_old(fn_rehash, BinaryenTypeInt32());
+        table_end_old.set(fn_rehash.block(), BinaryenBinary(
             /* module= */ module(),
-            /* index=  */ BinaryenLocalGetGetIndex(b_table_end_old),
-            /* value=  */ BinaryenBinary(
-                              /* module= */ module(),
-                              /* op=     */ BinaryenAddInt32(),
-                              /* left=   */ b_addr_old,
-                              /* right=  */ b_size_in_bytes_old
-                          )
-        );
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ b_addr_old,
+            /* right=  */ b_size_in_bytes_old
+        ));
 
         /*----- Initialize a runner to traverse the old hash table. --------------------------------------------------*/
-        auto b_runner = fn_rehash.add_local(BinaryenTypeInt32());
-        fn_rehash.block() += BinaryenLocalSet(
-            /* module= */ module(),
-            /* index=  */ BinaryenLocalGetGetIndex(b_runner),
-            /* value=  */ b_addr_old
-        );
+        WasmVariable runner(fn_rehash, BinaryenTypeInt32());
+        runner.set(fn_rehash.block(), b_addr_old);
 
         /*----- Advance to first occupied slot. ----------------------------------------------------------------------*/
         {
-            BlockBuilder next(module());
-
-            next += BinaryenLocalSet(
-                /* module= */ module(),
-                /* index=  */ BinaryenLocalGetGetIndex(b_runner),
-                /* value=  */ HT_old.compute_next_slot(b_runner)
-            );
+            WasmLoop next(module(), "rehash.advance_to_first");
+            runner.set(next, HT_old.compute_next_slot(runner));
 
             auto b_in_bounds = BinaryenBinary(
                 /* module= */ module(),
                 /* op=     */ BinaryenLtUInt32(),
-                /* left=   */ b_runner,
-                /* right=  */ b_table_end_old
+                /* left=   */ runner,
+                /* right=  */ table_end_old
             );
-            auto b_slot_is_empty = HT_old.is_slot_empty(b_runner);
+            auto b_slot_is_empty = HT_old.is_slot_empty(runner);
 
-            auto b_if_slot_empty = BinaryenBreak(
-                /* module=    */ module(),
-                /* name=      */ "groupby.advance_to_first",
-                /* condition= */ b_slot_is_empty,
-                /* value=     */ nullptr
-            );
             next += BinaryenIf(
                 /* module=    */ module(),
                 /* condition= */ b_in_bounds,
-                /* ifTrue=    */ b_if_slot_empty,
+                /* ifTrue=    */ next.continu(b_slot_is_empty),
                 /* ifFalse=   */ nullptr
             );
 
-            auto b_loop_advance = BinaryenLoop(
-                /* module= */ module(),
-                /* in=     */ "groupby.advance_to_first",
-                /* body=   */ next.finalize()
-            );
             fn_rehash.block() += BinaryenIf(
                 /* module=    */ module(),
                 /* condition= */ b_slot_is_empty,
-                /* ifTrue=    */ b_loop_advance,
+                /* ifTrue=    */ next.finalize(),
                 /* ifFalse=   */ nullptr
             );
         }
 
         /*----- Iterate over all entries in the old hash table. ------------------------------------------------------*/
-        const char *loop_name = "rehash.foreach";
-        BlockBuilder loop_body(module(), "rehash.foreach.body");
+        WasmDoWhile for_each(module(), "rehash.for_each", BinaryenBinary(
+            /* module= */ module(),
+            /* op=     */ BinaryenLtUInt32(),
+            /* left=   */ runner,
+            /* right=  */ table_end_old
+        ));
 
         /*----- Re-insert the current element in the new hash table. -------------------------------------------------*/
         {
             /*----- Compute grouping key. ----------------------------------------------------------------------------*/
-            auto ld = HT_old.load_from_slot(b_runner);
+            auto ld = HT_old.load_from_slot(runner);
             std::vector<BinaryenExpressionRef> key;
             for (auto grp : op.group_by()) {
                 auto k = fn_rehash.add_local(get_binaryen_type(grp->type()));
-                loop_body += BinaryenLocalSet(
+                for_each += BinaryenLocalSet(
                     /* module= */ module(),
                     /* index=  */ BinaryenLocalGetGetIndex(k),
                     /* value=  */ ld.compile(*grp)
@@ -871,7 +851,7 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
             }
 
             /*----- Compute group hash. ------------------------------------------------------------------------------*/
-            auto b_hash = hasher.emit(module(), fn_rehash, loop_body, key);
+            auto b_hash = hasher.emit(module(), fn_rehash, for_each, key);
             auto b_hash_i32 = BinaryenUnary(
                 /* module= */ module(),
                 /* op=     */ BinaryenWrapInt64(),
@@ -879,103 +859,58 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
             );
 
             /*----- Compute address of bucket. -----------------------------------------------------------------------*/
-            auto b_bucket_addr = fn_rehash.add_local(BinaryenTypeInt32());
-            loop_body += BinaryenLocalSet(
-                /* module= */ module(),
-                /* index=  */ BinaryenLocalGetGetIndex(b_bucket_addr),
-                /* value=  */ HT_new.hash_to_bucket(b_hash_i32)
-            );
+            WasmVariable bucket_addr(fn_rehash, BinaryenTypeInt32());
+            bucket_addr.set(for_each,  HT_new.hash_to_bucket(b_hash_i32));
 
             /*----- Locate entry with key `key` in the bucket, or end of bucket if no such key exists. ---------------*/
-            auto [ b_slot_addr, b_steps ] = HT_new.find_in_bucket(loop_body, b_bucket_addr, key);
+            auto [ b_slot_addr, b_steps ] = HT_new.find_in_bucket(for_each, bucket_addr, key);
 
             /*----- Create new entry in new hash table. --------------------------------------------------------------*/
-            HT_new.emplace(loop_body, b_bucket_addr, b_steps, b_slot_addr, key);
+            HT_new.emplace(for_each, bucket_addr, b_steps, b_slot_addr, key);
 
             /*----- Copy group payload. ------------------------------------------------------------------------------*/
             for (std::size_t i = 0; i != op.aggregates().size(); ++i) {
                 auto e = op.schema()[op.group_by().size() + i];
-                loop_body += HT_new.store_value_to_slot(b_slot_addr, e.id, ld.get_value(e.id));
+                for_each += HT_new.store_value_to_slot(b_slot_addr, e.id, ld.get_value(e.id));
             }
         }
 
         /*----- Advance to next occupied slot. -----------------------------------------------------------------------*/
         {
-            BlockBuilder next(module());
-
-            next += BinaryenLocalSet(
-                /* module= */ module(),
-                /* index=  */ BinaryenLocalGetGetIndex(b_runner),
-                /* value=  */ HT_new.compute_next_slot(b_runner)
-            );
+            WasmLoop next(module(), "rehash.for_each.advance");
+            runner.set(next, HT_old.compute_next_slot(runner));
 
             auto b_in_bounds = BinaryenBinary(
                 /* module= */ module(),
                 /* op=     */ BinaryenLtUInt32(),
-                /* left=   */ b_runner,
-                /* right=  */ b_table_end_old
+                /* left=   */ runner,
+                /* right=  */ table_end_old
             );
-            auto b_slot_is_empty = HT_new.is_slot_empty(b_runner);
+            auto b_slot_is_empty = HT_old.is_slot_empty(runner);
 
-            auto b_if_slot_empty = BinaryenBreak(
-                /* module=    */ module(),
-                /* name=      */ "groupby.advance",
-                /* condition= */ b_slot_is_empty,
-                /* value=     */ nullptr
-            );
             next += BinaryenIf(
                 /* module=    */ module(),
                 /* condition= */ b_in_bounds,
-                /* ifTrue=    */ b_if_slot_empty,
+                /* ifTrue=    */ next.continu(b_slot_is_empty),
                 /* ifFalse=   */ nullptr
             );
-
-            auto b_loop_advance = BinaryenLoop(
-                /* module= */ module(),
-                /* in=     */ "groupby.advance",
-                /* body=   */ next.finalize()
-            );
-            loop_body += b_loop_advance;
+            for_each += next.finalize();
         }
 
-        /*----- Create loop header. ----------------------------------------------------------------------------------*/
-        {
-            auto b_loop_cond = BinaryenBinary(
-                /* module= */ module(),
-                /* op=     */ BinaryenLtUInt32(),
-                /* left=   */ b_runner,
-                /* right=  */ b_table_end_old
-            );
-            loop_body += BinaryenBreak(
-                /* module=    */ module(),
-                /* name=      */ loop_name,
-                /* condition= */ b_loop_cond,
-                /* value=     */ nullptr
-            );
-        }
-
-        /*----- Create loop. -----------------------------------------------------------------------------------------*/
-        auto b_loop = BinaryenLoop(
-            /* module= */ module(),
-            /* in=     */ loop_name,
-            /* body=   */ loop_body.finalize()
-        );
-        fn_rehash.block() += b_loop;
-
+        fn_rehash.block() += for_each.finalize();
         fn_rehash.finalize();
     }
 
-    /*----- Emit code to resize the hash table. ----------------------------------------------------------------------*/
-    BlockBuilder perform_rehash(module(), "groupby.rehash");
+    /*----- Create code block to resize the hash table. --------------------------------------------------------------*/
+    BlockBuilder perform_rehash(module(), "group_by.rehash");
 
+    /*----- Compute the mask for the new size. -----------------------------------------------------------------------*/
     auto b_mask_x2 = BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenShlInt32(),
         /* left=   */ HT->mask(),
         /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
     );
-
-    /*----- Compute the mask for the new size. -----------------------------------------------------------------------*/
     WasmVariable mask_new(CG.fn(), BinaryenTypeInt32());
     mask_new.set(perform_rehash, BinaryenBinary(
         /* module= */ module(),
@@ -985,17 +920,18 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
     ));
 
     /*----- Compute new hash table size. -----------------------------------------------------------------------------*/
-    auto b_size_in_bytes_old = BinaryenBinary(
+    auto b_size_new = BinaryenBinary(
         /* module= */ module(),
-        /* op=     */ BinaryenSubInt32(),
-        /* left=   */ end,
-        /* right=  */ HT->addr()
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ mask_new,
+        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
+
     );
     auto b_size_in_bytes_new = BinaryenBinary(
         /* module= */ module(),
-        /* op=     */ BinaryenShlInt32(),
-        /* left=   */ b_size_in_bytes_old,
-        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
+        /* op=     */ BinaryenMulInt32(),
+        /* left=   */ b_size_new,
+        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size()))
     );
 
     /*----- Allocate new hash table. ---------------------------------------------------------------------------------*/
@@ -1029,13 +965,6 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
     HT->mask().set(perform_rehash, mask_new);
 
     /*----- Update high watermark. -----------------------------------------------------------------------------------*/
-    auto b_size_new = BinaryenBinary(
-        /* module= */ module(),
-        /* op=     */ BinaryenAddInt32(),
-        /* left=   */ HT->mask(),
-        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
-
-    );
     data->watermark_high.set(perform_rehash, BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenDivUInt32(),
@@ -1083,15 +1012,11 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
     );
 
     /*----- Compute address of bucket. -------------------------------------------------------------------------------*/
-    auto b_bucket_addr = CG.fn().add_local(BinaryenTypeInt32());
-    block_ += BinaryenLocalSet(
-        /* module= */ module(),
-        /* index=  */ BinaryenLocalGetGetIndex(b_bucket_addr),
-        /* value=  */ data->HT->hash_to_bucket(b_hash_i32)
-    );
+    WasmVariable bucket_addr(CG.fn(), BinaryenTypeInt32());
+    bucket_addr.set(block_, data->HT->hash_to_bucket(b_hash_i32));
 
     /*----- Locate entry with key `key` in the bucket, or end of bucket if no such key exists. -----------------------*/
-    auto [ b_slot_addr, b_steps ] = data->HT->find_in_bucket(block_, b_bucket_addr, key);
+    auto [ b_slot_addr, b_steps ] = data->HT->find_in_bucket(block_, bucket_addr, key);
 
     /*----- Create or update the group. ------------------------------------------------------------------------------*/
     BlockBuilder create_group(module(), "group_by.create_group");
@@ -1105,7 +1030,7 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
     ));
 
     auto ld_slot = data->HT->load_from_slot(b_slot_addr);
-    data->HT->emplace(create_group, b_bucket_addr, b_steps, b_slot_addr, key);
+    data->HT->emplace(create_group, bucket_addr, b_steps, b_slot_addr, key);
 
     for (std::size_t i = 0; i != op.aggregates().size(); ++i) {
         auto e = op.schema()[op.group_by().size() + i];

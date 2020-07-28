@@ -353,6 +353,7 @@ void WasmCodeGen::operator()(const GroupingOperator &op)
 {
     auto data = new GroupingData(fn());
     op.data(data);
+    data->struc = new WasmStruct(module(), op.schema());
 
     (*this)(*op.child(0));
 
@@ -715,7 +716,6 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
 {
     WasmHashMumur3_64A hasher;
     auto data = as<GroupingData>(op.data());
-    data->struc = new WasmStruct(module(), op.schema());
 
     /*----- Allocate hash table. -------------------------------------------------------------------------------------*/
     constexpr uint32_t INITIAL_CAPACITY = 32;

@@ -667,13 +667,13 @@ void WasmPipelineCG::operator()(const LimitOperator &op)
     swap(this->block_, within_limits_block);
 
     /* Declare a new counter.  Will be initialized to 0. */
-    auto b_count = CG.add_local(BinaryenTypeInt32());
+    WasmVariable count(CG.fn(), BinaryenTypeInt32());
 
     /* Check whether the pipeline has exceeded the limit. */
     auto b_cond_exceeds_limits = BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenGeSInt32(),
-        /* lhs=    */ b_count,
+        /* lhs=    */ count,
         /* rhs=    */ BinaryenConst(module(), BinaryenLiteralInt32(op.limit() + op.offset()))
     );
 
@@ -689,7 +689,7 @@ void WasmPipelineCG::operator()(const LimitOperator &op)
     auto b_cond_within_limits = BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenGeSInt32(),
-        /* lhs=    */ b_count,
+        /* lhs=    */ count,
         /* rhs=    */ BinaryenConst(module(), BinaryenLiteralInt32(op.offset()))
     );
     block_ += BinaryenIf(
@@ -699,17 +699,12 @@ void WasmPipelineCG::operator()(const LimitOperator &op)
         /* ifFalse= */ nullptr
     );
 
-    auto b_inc = BinaryenBinary(
+    count.set(block_, BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenAddInt32(),
-        /* lhs=    */ b_count,
+        /* lhs=    */ count,
         /* rhs=    */ BinaryenConst(module(), BinaryenLiteralInt32(1))
-    );
-    block_ += BinaryenLocalSet(
-        /* module= */ module(),
-        /* index=  */ BinaryenLocalGetGetIndex(b_count),
-        /* value=  */ b_inc
-    );
+    ));
 }
 
 void WasmPipelineCG::operator()(const GroupingOperator &op)

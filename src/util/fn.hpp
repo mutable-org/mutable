@@ -108,6 +108,28 @@ round_up_to_multiple(T val, T factor)
     return (d + differ) * factor;
 }
 
+template<typename T>
+typename std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T> and sizeof(T) <= sizeof(unsigned long long), T>
+log2_floor(T n)
+{
+    if constexpr (sizeof(T) <= sizeof(unsigned)) {
+        return sizeof(T) * 8 - __builtin_clz(n) - 1;
+    } else if constexpr (sizeof(T) <= sizeof(unsigned long)) {
+        return sizeof(T) * 8 - __builtin_clzl(n) - 1;
+    } else if constexpr (sizeof(T) <= sizeof(unsigned long long)) {
+        return sizeof(T) * 8 - __builtin_clzll(n) - 1;
+    } else {
+        static_assert(sizeof(T) > sizeof(unsigned long long), "unsupported width of integral type");
+    }
+}
+
+template<typename T>
+typename std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T> and sizeof(T) <= sizeof(unsigned long long), T>
+log2_ceil(T n)
+{
+    return log2_floor(n - T(1)) + T(1);
+}
+
 /** Short version of dynamic_cast that works for pointers and references. */
 template<typename T, typename U>
 T * cast(U *u) { return dynamic_cast<T*>(u); }

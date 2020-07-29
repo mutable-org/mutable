@@ -376,7 +376,7 @@ struct RefCountingHashMap
     void shrink_to_fit() { resize(size()); }
 
     friend std::ostream & operator<<(std::ostream &out, const RefCountingHashMap &map) {
-        size_type log2 = 64 - __builtin_clzl(map.capacity()) - 1;
+        size_type log2 = log2_ceil(map.capacity());
         size_type log10 = size_type(std::ceil(double(log2) / 3.322));
         for (size_type i = 0; i != map.capacity_; ++i) {
             auto &entry = map.table_[i];

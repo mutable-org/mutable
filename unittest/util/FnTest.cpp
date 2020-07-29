@@ -53,6 +53,31 @@ TEST_CASE("round_up_to_multiple", "[core][util][fn]")
     CHECK(4 == round_up_to_multiple(3U, 2U));
 }
 
+TEST_CASE("log2", "[core][util][fn]")
+{
+    SECTION("floor")
+    {
+        CHECK( 0 == log2_floor(1U));
+        CHECK( 1 == log2_floor(2U));
+        CHECK( 1 == log2_floor(3U));
+        CHECK( 2 == log2_floor(4U));
+        CHECK( 9 == log2_floor(1023U));
+        CHECK(10 == log2_floor(1024U));
+        CHECK(10 == log2_floor(1025U));
+    }
+
+    SECTION("ceil")
+    {
+        CHECK( 0 == log2_ceil(1U));
+        CHECK( 1 == log2_ceil(2U));
+        CHECK( 2 == log2_ceil(3U));
+        CHECK( 2 == log2_ceil(4U));
+        CHECK(10 == log2_ceil(1023U));
+        CHECK(10 == log2_ceil(1024U));
+        CHECK(11 == log2_ceil(1025U));
+    }
+}
+
 TEST_CASE("powi", "[core][util][fn]")
 {
     REQUIRE(powi(4, 0) == 1);

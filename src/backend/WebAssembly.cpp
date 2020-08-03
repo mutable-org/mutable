@@ -40,11 +40,16 @@ struct GroupingData : OperatorData
 
 struct SortingData : OperatorData
 {
+    WasmStruct *struc = nullptr;
     WasmVariable begin;
 
     SortingData(FunctionBuilder &fn)
         : begin(fn, BinaryenTypeInt32())
     { }
+
+    ~SortingData() {
+        delete struc;
+    }
 };
 
 }
@@ -455,6 +460,7 @@ void WasmCodeGen::operator()(const GroupingOperator &op)
 void WasmCodeGen::operator()(const SortingOperator &op)
 {
     auto data = new SortingData(fn());
+    data->struc = new WasmStruct(module(), op.child(0)->schema());
     op.data(data);
 
     (*this)(*op.child(0));
@@ -486,30 +492,9 @@ void WasmCodeGen::operator()(const SortingOperator &op)
     ));
 
     /*----- Emit code for data accesses. -----------------------------------------------------------------------------*/
-    std::size_t offset = 0;
-    std::size_t alignment = 0;
-    for (auto &attr : op.child(0)->schema()) {
-        const std::size_t size_in_bytes = attr.type->size() < 8 ? 1 : attr.type->size() / 8;
-        alignment = std::max(alignment, size_in_bytes);
-        if (offset % size_in_bytes)
-            offset += size_in_bytes - (offset % size_in_bytes); // self-align
-
-
-        auto b_val = BinaryenLoad(
-            /* module= */ module(),
-            /* bytes=  */ size_in_bytes,
-            /* signed= */ true,
-            /* offset= */ offset,
-            /* align=  */ 0,
-            /* type=   */ get_binaryen_type(attr.type),
-            /* ptr=    */ data->begin
-        );
-        pipeline.context().add(attr.id, b_val);
-
-        offset += size_in_bytes;
-    }
-    if (offset % alignment)
-        offset += alignment - (offset % alignment); // align tuple
+    auto ld = data->struc->create_load_context(data->begin);
+    for (auto &attr : op.child(0)->schema())
+        pipeline.context().add(attr.id, ld.get_value(attr.id));
 
     /*----- Emit code for rest of the pipeline. ----------------------------------------------------------------------*/
     swap(pipeline.block_, loop);
@@ -521,7 +506,7 @@ void WasmCodeGen::operator()(const SortingOperator &op)
         /* module= */ module(),
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ data->begin,
-        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(offset))
+        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(data->struc->size()))
     ));
 
     main_.block() += loop.finalize();
@@ -1253,37 +1238,15 @@ void WasmPipelineCG::operator()(const SortingOperator &op)
     /* Save the current head of heap as the beginning of the data to sort. */
     data->begin.set(CG.fn().block(), CG.head_of_heap());
 
-    /* Append current tuple to consecutive memory of tuples to sort. */
-    std::size_t offset = 0;
-    std::size_t alignment = 0;
-    auto &S = op.child(0)->schema();
-    for (auto &attr : S) {
-        const std::size_t size_in_bytes = attr.type->size() < 8 ? 1 : attr.type->size() / 8;
-        alignment = std::max(alignment, size_in_bytes);
-        if (offset % size_in_bytes)
-            offset += size_in_bytes - (offset % size_in_bytes); // self-align
-
-        auto b_val = context()[attr.id];
-        block_ += BinaryenStore(
-            /* module= */ module(),
-            /* bytes=  */ size_in_bytes,
-            /* offset= */ offset,
-            /* align=  */ 0,
-            /* ptr=    */ CG.head_of_heap(),
-            /* value=  */ b_val,
-            /* type=   */ BinaryenExpressionGetType(b_val)
-        );
-        offset += size_in_bytes;
-    }
-    if (offset % alignment)
-        offset += alignment - (offset % alignment); // align tuple
+    for (auto &attr : op.child(0)->schema())
+        block_ += data->struc->store(CG.head_of_heap(), attr.id, context()[attr.id]);
 
     /* Advance head of heap. */
     CG.head_of_heap().set(block_, BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ CG.head_of_heap(),
-        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(offset))
+        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(data->struc->size()))
     ));
 }
 

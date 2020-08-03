@@ -289,6 +289,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="""Run integration tests on mutable. Note that the
                                                     build direcory is assumed to be build/debug.""")
     parser.add_argument('-a', '--all', help='require optional tests to pass', action='store_true')
+    parser.add_argument('-r', '--required-only', help='run only required tests', action='store_true')
     parser.add_argument('-v', '--verbose', help='increase output verbosity', action='store_true')
     parser.add_argument('-d', '--debug', help='print debug commands for failed test cases', action='store_true')
     args = parser.parse_args()
@@ -338,6 +339,9 @@ if __name__ == '__main__':
         test_case.query = yml_test_case['query']
         test_case.required = yml_test_case['required']
         test_case.stages = yml_test_case['stages']
+
+        if args.required_only and not test_case.required:
+            continue
 
         # Validate dataset location
         if not location_valid(test_case):

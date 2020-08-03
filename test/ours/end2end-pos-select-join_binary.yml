@@ -1,11 +1,10 @@
-description: join binary
+description: binary join
 db: ours
 query: |
-    SELECT R.key, S.key FROM R, S WHERE R.key = S.fkey AND R.key < 10 ORDER BY R.key, S.key;
+    SELECT R.key, S.key FROM R, S WHERE R.key = S.fkey;
 required: YES
 
 stages:
-
     lexer:
         out: |
             -:1:1: SELECT TK_Select
@@ -28,22 +27,7 @@ stages:
             -:1:45: S TK_IDENTIFIER
             -:1:46: . TK_DOT
             -:1:47: fkey TK_IDENTIFIER
-            -:1:52: AND TK_And
-            -:1:56: R TK_IDENTIFIER
-            -:1:57: . TK_DOT
-            -:1:58: key TK_IDENTIFIER
-            -:1:62: < TK_LESS
-            -:1:64: 10 TK_DEC_INT
-            -:1:67: ORDER TK_Order
-            -:1:73: BY TK_By
-            -:1:76: R TK_IDENTIFIER
-            -:1:77: . TK_DOT
-            -:1:78: key TK_IDENTIFIER
-            -:1:81: , TK_COMMA
-            -:1:83: S TK_IDENTIFIER
-            -:1:84: . TK_DOT
-            -:1:85: key TK_IDENTIFIER
-            -:1:88: ; TK_SEMICOL
+            -:1:51: ; TK_SEMICOL
         err: NULL
         num_err: 0
         returncode: 0
@@ -52,8 +36,7 @@ stages:
         out: |
             SELECT R.key, S.key
             FROM R, S
-            WHERE ((R.key = S.fkey) AND (R.key < 10))
-            ORDER BY R.key ASC, S.key ASC;
+            WHERE (R.key = S.fkey);
         err: NULL
         num_err: 0
         returncode: 0
@@ -66,14 +49,106 @@ stages:
 
     end2end:
         out: |
-            2,19
-            2,25
-            3,75
+            74,0
+            70,1
             5,2
+            90,3
             6,4
-            7,50
-            7,70
+            60,5
+            88,6
+            73,7
+            89,8
+            83,9
+            22,10
+            17,11
+            65,12
+            85,13
+            53,14
+            25,15
+            92,16
+            93,17
+            28,18
+            2,19
+            73,20
+            44,21
+            71,22
+            85,23
+            99,24
+            2,25
+            21,26
             8,27
+            89,28
+            87,29
+            67,30
+            91,31
+            29,32
+            79,33
+            71,34
+            48,35
+            50,36
+            88,37
+            37,38
+            88,39
+            42,40
+            53,41
+            43,42
+            25,43
+            40,44
+            65,45
+            62,46
+            58,47
+            31,48
+            26,49
+            7,50
+            11,51
+            54,52
+            58,53
+            89,54
+            11,55
+            19,56
+            36,57
+            67,58
+            50,59
+            83,60
+            20,61
+            80,62
+            49,63
+            28,64
+            63,65
+            39,66
+            17,67
+            98,68
+            41,69
+            7,70
+            42,71
+            82,72
+            62,73
+            30,74
+            3,75
+            78,76
+            12,77
+            93,78
+            95,79
+            56,80
+            13,81
+            26,82
+            61,83
+            33,84
+            87,85
+            27,86
+            58,87
+            52,88
+            43,89
+            52,90
+            58,91
+            33,92
+            16,93
+            13,94
+            24,95
+            73,96
+            71,97
+            79,98
+            99,99
         err: NULL
         num_err: 0
         returncode: 0

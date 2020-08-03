@@ -1,0 +1,68 @@
+description: binary join with filter
+db: ours
+query: |
+    SELECT R.key, S.key FROM R, S WHERE R.key = S.fkey AND R.key < 10;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: R TK_IDENTIFIER
+            -:1:9: . TK_DOT
+            -:1:10: key TK_IDENTIFIER
+            -:1:13: , TK_COMMA
+            -:1:15: S TK_IDENTIFIER
+            -:1:16: . TK_DOT
+            -:1:17: key TK_IDENTIFIER
+            -:1:21: FROM TK_From
+            -:1:26: R TK_IDENTIFIER
+            -:1:27: , TK_COMMA
+            -:1:29: S TK_IDENTIFIER
+            -:1:31: WHERE TK_Where
+            -:1:37: R TK_IDENTIFIER
+            -:1:38: . TK_DOT
+            -:1:39: key TK_IDENTIFIER
+            -:1:43: = TK_EQUAL
+            -:1:45: S TK_IDENTIFIER
+            -:1:46: . TK_DOT
+            -:1:47: fkey TK_IDENTIFIER
+            -:1:52: AND TK_And
+            -:1:56: R TK_IDENTIFIER
+            -:1:57: . TK_DOT
+            -:1:58: key TK_IDENTIFIER
+            -:1:62: < TK_LESS
+            -:1:64: 10 TK_DEC_INT
+            -:1:66: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT R.key, S.key
+            FROM R, S
+            WHERE ((R.key = S.fkey) AND (R.key < 10));
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            5,2
+            6,4
+            2,19
+            2,25
+            8,27
+            7,50
+            7,70
+            3,75
+        err: NULL
+        num_err: 0
+        returncode: 0

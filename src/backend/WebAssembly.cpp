@@ -52,6 +52,23 @@ struct SortingData : OperatorData
     }
 };
 
+struct SimpleHashJoinData : OperatorData
+{
+    WasmStruct *struc = nullptr;
+    WasmHashTable *HT = nullptr;
+    WasmVariable watermark_high; ///< stores the maximum number of entries before growing the table is required
+    bool is_build_phase = true;
+
+    SimpleHashJoinData(FunctionBuilder &fn)
+        : watermark_high(fn, BinaryenTypeInt32())
+    { }
+
+    ~SimpleHashJoinData() {
+        delete HT;
+        delete struc;
+    }
+};
+
 }
 
 /** Compiles a physical plan to WebAssembly. */
@@ -339,9 +356,24 @@ void WasmCodeGen::operator()(const FilterOperator &op) { (*this)(*op.child(0)); 
 
 void WasmCodeGen::operator()(const JoinOperator &op)
 {
-    // TODO implement
-    for (auto c : op.children())
-        (*this)(*c);
+    switch (op.algo()) {
+        default:
+            unreachable("not implemented");
+
+        case JoinOperator::J_SimpleHashJoin: {
+            insist(op.children().size() == 2, "SimpleHashJoin is a binary operation and expects exactly two children");
+            auto &build = *op.child(0);
+            auto &probe = *op.child(1);
+
+            auto data = new SimpleHashJoinData(fn());
+            op.data(data);
+            data->struc = new WasmStruct(module(), build.schema());
+
+            (*this)(build);
+            data->is_build_phase = false;
+            (*this)(probe);
+        }
+    }
 }
 
 void WasmCodeGen::operator()(const ProjectionOperator &op)
@@ -629,7 +661,678 @@ void WasmPipelineCG::operator()(const FilterOperator &op)
 
 void WasmPipelineCG::operator()(const JoinOperator &op)
 {
-    (*this)(*op.parent());
+    switch (op.algo()) {
+        default:
+            unreachable("not implemented");
+
+        case JoinOperator::J_SimpleHashJoin: {
+            WasmHashMumur3_64A hasher;
+            auto data = as<SimpleHashJoinData>(op.data());
+
+            /*----- Decompose the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----------------*/
+            auto &pred = op.predicate();
+            insist(pred.size() == 1, "invalid predicate for simple hash join");
+            auto &clause = pred[0];
+            insist(clause.size() == 1, "invalid predicate for simple hash join");
+            auto &literal = clause[0];
+            insist(not literal.negative(), "invalid predicate for simple hash join");
+            auto binary = as<const BinaryExpr>(literal.expr());
+            insist(binary->tok == TK_EQUAL, "invalid predicate for simple hash join");
+            auto first = as<const Designator>(binary->lhs);
+            auto second = as<const Designator>(binary->rhs);
+            auto [build, probe] = op.child(0)->schema().has({first->get_table_name(), first->attr_name.text}) ?
+                                  std::make_pair(first, second) : std::make_pair(second, first);
+
+            if (data->is_build_phase) {
+                auto key_id = Schema::Identifier(build->table_name.text, build->attr_name.text);
+                auto key = context().get_value(key_id);
+
+                /*----- Allocate hash table. -------------------------------------------------------------------------*/
+                constexpr uint32_t INITIAL_CAPACITY = 32;
+                data->HT = new WasmRefCountingHashTable(module(), CG.fn(), *data->struc);
+                auto HT = as<WasmRefCountingHashTable>(data->HT);
+
+                WasmVariable end(CG.fn(), BinaryenTypeInt32());
+                end.set(CG.fn().block(), HT->create_table(CG.fn().block(), CG.head_of_heap(), INITIAL_CAPACITY));
+                data->watermark_high.set(CG.fn().block(),
+                                         BinaryenConst(module(), BinaryenLiteralInt32(8 * INITIAL_CAPACITY / 10)));
+
+                /*----- Update head of heap. -------------------------------------------------------------------------*/
+                CG.head_of_heap().set(CG.fn().block(), end);
+                CG.align_head_of_heap();
+
+                /*----- Initialize hash table. -----------------------------------------------------------------------*/
+                HT->clear_table(CG.fn().block(), HT->addr(), end);
+
+                /*----- Create a counter for the number of entries. --------------------------------------------------*/
+                WasmVariable num_entries(CG.fn(), BinaryenTypeInt32());
+                num_entries.set(CG.fn().block(), BinaryenConst(module(), BinaryenLiteralInt32(0)));
+
+                /*----- Emit a function to perform the rehashing. ----------------------------------------------------*/
+                std::vector<BinaryenType> rehash_params;
+                rehash_params.reserve(4);
+                rehash_params.push_back(BinaryenTypeInt32()); // 0: addr
+                rehash_params.push_back(BinaryenTypeInt32()); // 1: mask
+                rehash_params.push_back(BinaryenTypeInt32()); // 2: new addr
+                rehash_params.push_back(BinaryenTypeInt32()); // 3: new mask
+                FunctionBuilder fn_rehash(module(), "WasmRefCountingHashTable.rehash", BinaryenTypeNone(), rehash_params);
+                {
+                    WasmRefCountingHashTable HT_old(
+                        /* module= */ module(),
+                        /* fn=     */ fn_rehash,
+                        /* block=  */ fn_rehash.block(),
+                        /* struc=  */ HT->struc,
+                        /* b_addr= */ BinaryenLocalGet(module(), 0, BinaryenTypeInt32()),
+                        /* b_mask= */ BinaryenLocalGet(module(), 1, BinaryenTypeInt32())
+                    );
+
+                    WasmRefCountingHashTable HT_new(
+                        /* module= */ module(),
+                        /* fn=     */ fn_rehash,
+                        /* block=  */ fn_rehash.block(),
+                        /* struc=  */ HT->struc,
+                        /* b_addr= */ BinaryenLocalGet(module(), 2, BinaryenTypeInt32()),
+                        /* b_mask= */ BinaryenLocalGet(module(), 3, BinaryenTypeInt32())
+                    );
+
+                    /*----- Compute properties of old hash table. ----------------------------------------------------*/
+                    auto b_addr_old = BinaryenLocalGet(
+                        /* module= */ module(),
+                        /* index=  */ 0,
+                        /* type=   */ BinaryenTypeInt32()
+                    );
+                    auto b_mask_old = BinaryenLocalGet(
+                        /* module= */ module(),
+                        /* index=  */ 1,
+                        /* type=   */ BinaryenTypeInt32()
+                    );
+                    auto b_size_old = BinaryenBinary(
+                        /* module= */ module(),
+                        /* op=     */ BinaryenAddInt32(),
+                        /* left=   */ b_mask_old,
+                        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
+                    );
+                    auto b_size_in_bytes_old = BinaryenBinary(
+                        /* module= */ module(),
+                        /* op=     */ BinaryenMulInt32(),
+                        /* left=   */ b_size_old,
+                        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT_old.entry_size()))
+                    );
+                    WasmVariable table_end_old(fn_rehash, BinaryenTypeInt32());
+                    table_end_old.set(fn_rehash.block(), BinaryenBinary(
+                        /* module= */ module(),
+                        /* op=     */ BinaryenAddInt32(),
+                        /* left=   */ b_addr_old,
+                        /* right=  */ b_size_in_bytes_old
+                    ));
+
+                    /*----- Initialize a runner to traverse the old hash table. --------------------------------------*/
+                    WasmVariable runner(fn_rehash, BinaryenTypeInt32());
+                    runner.set(fn_rehash.block(), b_addr_old);
+
+                    /*----- Advance to first occupied slot. ----------------------------------------------------------*/
+                    {
+                        WasmLoop next(module(), "rehash.advance_to_first");
+                        runner.set(next, HT_old.compute_next_slot(runner));
+
+                        auto b_in_bounds = BinaryenBinary(
+                            /* module= */ module(),
+                            /* op=     */ BinaryenLtUInt32(),
+                            /* left=   */ runner,
+                            /* right=  */ table_end_old
+                        );
+                        auto b_slot_is_empty = HT_old.is_slot_empty(runner);
+
+                        next += BinaryenIf(
+                            /* module=    */ module(),
+                            /* condition= */ b_in_bounds,
+                            /* ifTrue=    */ next.continu(b_slot_is_empty),
+                            /* ifFalse=   */ nullptr
+                        );
+
+                        fn_rehash.block() += BinaryenIf(
+                            /* module=    */ module(),
+                            /* condition= */ b_slot_is_empty,
+                            /* ifTrue=    */ next.finalize(),
+                            /* ifFalse=   */ nullptr
+                        );
+                    }
+
+                    /*----- Iterate over all entries in the old hash table. ------------------------------------------*/
+                    WasmDoWhile for_each(module(), "rehash.for_each", BinaryenBinary(
+                        /* module= */ module(),
+                        /* op=     */ BinaryenLtUInt32(),
+                        /* left=   */ runner,
+                        /* right=  */ table_end_old
+                    ));
+
+                    /*----- Re-insert the current element in the new hash table. -------------------------------------*/
+                    {
+                        /*----- Get join key. ------------------------------------------------------------------------*/
+                        auto ld = HT_old.load_from_slot(runner);
+                        auto key = ld.get_value(key_id);
+
+                        /*----- Compute hash. ------------------------------------------------------------------------*/
+                        auto b_hash = hasher.emit(module(), fn_rehash, for_each, { key });
+                        auto b_hash_i32 = BinaryenUnary(
+                            /* module= */ module(),
+                            /* op=     */ BinaryenWrapInt64(),
+                            /* value=  */ b_hash
+                        );
+
+                        /*----- Compute address of bucket. -----------------------------------------------------------*/
+                        WasmVariable bucket_addr(fn_rehash, BinaryenTypeInt32());
+                        bucket_addr.set(for_each,  HT_new.hash_to_bucket(b_hash_i32));
+
+                        /*----- Load steps in bucket. ----------------------------------------------------------------*/
+                        WasmVariable steps(fn_rehash, BinaryenTypeInt32());
+                        steps.set(for_each, HT_new.get_bucket_ref_count(bucket_addr));
+
+                        WasmVariable slot_addr(fn_rehash, BinaryenTypeInt32());
+                        BlockBuilder bucket_create(module(), "rehash.for_each.bucket_create");
+                        BlockBuilder bucket_insert(module(), "rehash.for_each.bucket_insert");
+
+                        /*----- If the bucket is empty, initialize it. -----------------------------------------------*/
+                        HT_new.emplace(bucket_create, bucket_addr,
+                                       BinaryenConst(module(), BinaryenLiteralInt32(HT_new.entry_size())),
+                                       bucket_addr, { key });
+                        slot_addr.set(bucket_create, bucket_addr);
+
+                        /*----- Compute end of hash table. -----------------------------------------------------------*/
+                        auto b_size_new = BinaryenBinary(
+                            /* module= */ module(),
+                            /* op=     */ BinaryenAddInt32(),
+                            /* left=   */ HT_new.mask(),
+                            /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
+                        );
+                        WasmVariable table_size_in_bytes_new(fn_rehash, BinaryenTypeInt32());
+                        table_size_in_bytes_new.set(bucket_insert, BinaryenBinary(
+                            /* module= */ module(),
+                            /* op=     */ BinaryenMulInt32(),
+                            /* left=   */ b_size_new,
+                            /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT_new.entry_size()))
+                        ));
+                        auto b_table_end_new = BinaryenBinary(
+                            /* module= */ module(),
+                            /* op=     */ BinaryenAddInt32(),
+                            /* left=   */ HT_new.addr(),
+                            /* right=  */ table_size_in_bytes_new
+                        );
+
+                        /*----- If the bucket is not empty, append to it. --------------------------------------------*/
+                        {
+                            /*----- Evaluate formula for Gaussian sum to compute the end of the bucket ---------------*/
+                            WasmVariable probe_len(fn_rehash, BinaryenTypeInt32());
+                            probe_len.set(bucket_insert, BinaryenBinary(
+                                /* module= */ module(),
+                                /* op=     */ BinaryenDivUInt32(),
+                                /* left=   */ steps,
+                                /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT_new.entry_size()))
+                            ));
+                            auto b_square = BinaryenBinary(
+                                /* module= */ module(),
+                                /* op=     */ BinaryenMulInt32(),
+                                /* left=   */ probe_len,
+                                /* right=  */ probe_len
+                            );
+                            auto b_sum = BinaryenBinary(
+                                /* module= */ module(),
+                                /* op=     */ BinaryenAddInt32(),
+                                /* left=   */ b_square,
+                                /* right=  */ probe_len
+                            );
+                            auto b_gauss = BinaryenBinary(
+                                /* module= */ module(),
+                                /* op=     */ BinaryenShrUInt32(),
+                                /* left=   */ b_sum,
+                                /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
+                            );
+                            auto b_dist_in_bytes = BinaryenBinary(
+                                /* module= */ module(),
+                                /* op=     */ BinaryenMulInt32(),
+                                /* left=   */ b_gauss,
+                                /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT_new.entry_size()))
+                            );
+                            slot_addr.set(bucket_insert, BinaryenBinary(
+                                /* module= */ module(),
+                                /* op=     */ BinaryenAddInt32(),
+                                /* left=   */ bucket_addr,
+                                /* right=  */ b_dist_in_bytes
+                            ));
+                            auto b_exceeds_table = BinaryenBinary(
+                                /* module= */ module(),
+                                /* op=     */ BinaryenGeUInt32(),
+                                /* left=   */ slot_addr,
+                                /* right=  */ b_table_end_new
+                            );
+                            auto b_slot_addr_wrapped = BinaryenBinary(
+                                /* module= */ module(),
+                                /* op=     */ BinaryenSubInt32(),
+                                /* left=   */ slot_addr,
+                                /* right=  */ table_size_in_bytes_new
+                            );
+                            slot_addr.set(bucket_insert, BinaryenSelect(
+                                /* module=    */ module(),
+                                /* condition= */ b_exceeds_table,
+                                /* ifTrue=    */ b_slot_addr_wrapped,
+                                /* ifFalse=   */ slot_addr,
+                                /* type=      */ BinaryenTypeInt32()
+                            ));
+                        }
+
+                        /*----- Find next free slot in bucket. -------------------------------------------------------*/
+                        WasmWhile find_slot(module(), "rehash.for_each.bucket_insert.find_slot",
+                                            HT_new.get_bucket_ref_count(slot_addr));
+                        {
+                            steps.set(find_slot, BinaryenBinary(
+                                /* module= */ module(),
+                                /* op=     */ BinaryenAddInt32(),
+                                /* left=   */ steps,
+                                /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT_new.entry_size()))
+                            ));
+                            slot_addr.set(find_slot, BinaryenBinary(
+                                /* module= */ module(),
+                                /* op=     */ BinaryenAddInt32(),
+                                /* left=   */ slot_addr,
+                                /* right=  */ steps
+                            ));
+                            auto b_exceeds_table = BinaryenBinary(
+                                /* module= */ module(),
+                                /* op=     */ BinaryenGeUInt32(),
+                                /* left=   */ slot_addr,
+                                /* right=  */ b_table_end_new
+                            );
+                            auto b_slot_addr_wrapped = BinaryenBinary(
+                                /* module= */ module(),
+                                /* op=     */ BinaryenSubInt32(),
+                                /* left=   */ slot_addr,
+                                /* right=  */ table_size_in_bytes_new
+                            );
+                            slot_addr.set(find_slot, BinaryenSelect(
+                                /* module=    */ module(),
+                                /* condition= */ b_exceeds_table,
+                                /* ifTrue=    */ b_slot_addr_wrapped,
+                                /* ifFalse=   */ slot_addr,
+                                /* type=      */ BinaryenTypeInt32()
+                            ));
+                        }
+                        bucket_insert += find_slot.finalize();
+
+                        /*----- Place tuple in slot. -----------------------------------------------------------------*/
+                        steps.set(bucket_insert, BinaryenBinary(
+                            /* module= */ module(),
+                            /* op=     */ BinaryenAddInt32(),
+                            /* left=   */ steps,
+                            /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT_new.entry_size()))
+                        ));
+                        HT_new.emplace(bucket_insert, bucket_addr, steps, slot_addr, { key });
+
+                        /*----- Create conditional jump based on whether the bucket is empty. ------------------------*/
+                        for_each += BinaryenIf(
+                            /* module=    */ module(),
+                            /* condition= */ HT_new.get_bucket_ref_count(bucket_addr),
+                            /* ifTrue=    */ bucket_insert.finalize(),
+                            /* ifFalse=   */ bucket_create.finalize()
+                        );
+
+                        /*---- Write payload. ------------------------------------------------------------------------*/
+                        for (auto attr : op.child(0)->schema())
+                            for_each += HT_new.store_value_to_slot(slot_addr, attr.id, ld.get_value(attr.id));
+                    }
+
+                    /*----- Advance to next occupied slot. -----------------------------------------------------------*/
+                    {
+                        WasmLoop next(module(), "rehash.for_each.advance");
+                        runner.set(next, HT_old.compute_next_slot(runner));
+
+                        auto b_in_bounds = BinaryenBinary(
+                            /* module= */ module(),
+                            /* op=     */ BinaryenLtUInt32(),
+                            /* left=   */ runner,
+                            /* right=  */ table_end_old
+                        );
+                        auto b_slot_is_empty = HT_old.is_slot_empty(runner);
+
+                        next += BinaryenIf(
+                            /* module=    */ module(),
+                            /* condition= */ b_in_bounds,
+                            /* ifTrue=    */ next.continu(b_slot_is_empty),
+                            /* ifFalse=   */ nullptr
+                        );
+                        for_each += next.finalize();
+                    }
+
+                    fn_rehash.block() += for_each.finalize();
+                    fn_rehash.finalize();
+                }
+
+                /*----- Create code block to resize the hash table. --------------------------------------------------*/
+                BlockBuilder perform_rehash(module(), "join.build.rehash");
+
+                /*----- Compute the mask for the new size. -----------------------------------------------------------*/
+                auto b_mask_x2 = BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenShlInt32(),
+                    /* left=   */ HT->mask(),
+                    /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
+                );
+                WasmVariable mask_new(CG.fn(), BinaryenTypeInt32());
+                mask_new.set(perform_rehash, BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenAddInt32(),
+                    /* left=   */ b_mask_x2,
+                    /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
+                ));
+
+                /*----- Compute new hash table size. -----------------------------------------------------------------*/
+                auto b_size_new = BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenAddInt32(),
+                    /* left=   */ mask_new,
+                    /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
+
+                );
+                auto b_size_in_bytes_new = BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenMulInt32(),
+                    /* left=   */ b_size_new,
+                    /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size()))
+                );
+
+                /*----- Allocate new hash table. ---------------------------------------------------------------------*/
+                WasmVariable begin_new(CG.fn(), BinaryenTypeInt32());
+                begin_new.set(perform_rehash, CG.head_of_heap());
+                CG.head_of_heap().set(perform_rehash, BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenAddInt32(),
+                    /* left=   */ begin_new,
+                    /* right=  */ b_size_in_bytes_new
+                ));
+                CG.align_head_of_heap(perform_rehash);
+
+                /*----- Rehash to double size. -----------------------------------------------------------------------*/
+                BinaryenExpressionRef rehash_args[4] = {
+                    /* addr_old= */ HT->addr(),
+                    /* mask_old= */ HT->mask(),
+                    /* addr_new= */ begin_new,
+                    /* mask_new= */ mask_new
+                };
+                perform_rehash += BinaryenCall(
+                    /* module=      */ module(),
+                    /* target=      */ fn_rehash.name(),
+                    /* operands=    */ rehash_args,
+                    /* numOperands= */ ARR_SIZE(rehash_args),
+                    /* returnType=  */ BinaryenTypeNone()
+                );
+
+                /*----- Update hash table. ---------------------------------------------------------------------------*/
+                HT->addr().set(perform_rehash, begin_new);
+                HT->mask().set(perform_rehash, mask_new);
+
+                /*----- Update high watermark. -----------------------------------------------------------------------*/
+                data->watermark_high.set(perform_rehash, BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenDivUInt32(),
+                    /* left=   */ BinaryenBinary(
+                                      /* module= */ module(),
+                                      /* op=     */ BinaryenMulInt32(),
+                                      /* left=   */ b_size_new,
+                                      /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(8))
+                    ),
+                    /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(10))
+                ));
+
+                /*----- Perform resizing to twice the capacity when the high watermark is reached. -------------------*/
+                auto b_has_reached_watermark = BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenGeUInt32(),
+                    /* left=   */ num_entries,
+                    /* right=  */ data->watermark_high
+                );
+                block_ += BinaryenIf(
+                    /* module=    */ module(),
+                    /* condition= */ b_has_reached_watermark,
+                    /* ifTrue=    */ perform_rehash.finalize(),
+                    /* ifFalse=   */ nullptr
+                );
+
+                /*----- Compute hash. --------------------------------------------------------------------------------*/
+                auto b_hash = hasher.emit(module(), CG.fn(), block_, { key });
+                auto b_hash_i32 = BinaryenUnary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenWrapInt64(),
+                    /* value=  */ b_hash
+                );
+
+                /*----- Compute address of bucket. -------------------------------------------------------------------*/
+                WasmVariable bucket_addr(CG.fn(), BinaryenTypeInt32());
+                bucket_addr.set(block_,  HT->hash_to_bucket(b_hash_i32));
+
+                /*----- Load steps in bucket. ------------------------------------------------------------------------*/
+                WasmVariable steps(CG.fn(), BinaryenTypeInt32());
+                steps.set(block_, HT->get_bucket_ref_count(bucket_addr));
+
+                WasmVariable slot_addr(CG.fn(), BinaryenTypeInt32());
+                BlockBuilder bucket_create(module(), "join.build.bucket_create");
+                BlockBuilder bucket_insert(module(), "join.build.bucket_insert");
+
+                /*----- If the bucket is empty, initialize it. -------------------------------------------------------*/
+                HT->emplace(bucket_create, bucket_addr,
+                            BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size())),
+                            bucket_addr, { key });
+                slot_addr.set(bucket_create, bucket_addr);
+
+                /*----- Compute end of hash table. -------------------------------------------------------------------*/
+                auto b_size = BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenAddInt32(),
+                    /* left=   */ HT->mask(),
+                    /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
+                );
+                WasmVariable table_size_in_bytes(CG.fn(), BinaryenTypeInt32());
+                table_size_in_bytes.set(bucket_insert, BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenMulInt32(),
+                    /* left=   */ b_size,
+                    /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size()))
+                ));
+                auto b_table_end = BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenAddInt32(),
+                    /* left=   */ HT->addr(),
+                    /* right=  */ table_size_in_bytes
+                );
+
+                /*----- If the bucket is not empty, append to it. ----------------------------------------------------*/
+                {
+                    /*----- Evaluate formula for Gaussian sum to compute the end of the bucket -----------------------*/
+                    WasmVariable probe_len(CG.fn(), BinaryenTypeInt32());
+                    probe_len.set(bucket_insert, BinaryenBinary(
+                        /* module= */ module(),
+                        /* op=     */ BinaryenDivUInt32(),
+                        /* left=   */ steps,
+                        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size()))
+                    ));
+                    auto b_square = BinaryenBinary(
+                        /* module= */ module(),
+                        /* op=     */ BinaryenMulInt32(),
+                        /* left=   */ probe_len,
+                        /* right=  */ probe_len
+                    );
+                    auto b_sum = BinaryenBinary(
+                        /* module= */ module(),
+                        /* op=     */ BinaryenAddInt32(),
+                        /* left=   */ b_square,
+                        /* right=  */ probe_len
+                    );
+                    auto b_gauss = BinaryenBinary(
+                        /* module= */ module(),
+                        /* op=     */ BinaryenShrUInt32(),
+                        /* left=   */ b_sum,
+                        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
+                    );
+                    auto b_dist_in_bytes = BinaryenBinary(
+                        /* module= */ module(),
+                        /* op=     */ BinaryenMulInt32(),
+                        /* left=   */ b_gauss,
+                        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size()))
+                    );
+                    slot_addr.set(bucket_insert, BinaryenBinary(
+                        /* module= */ module(),
+                        /* op=     */ BinaryenAddInt32(),
+                        /* left=   */ bucket_addr,
+                        /* right=  */ b_dist_in_bytes
+                    ));
+                    auto b_exceeds_table = BinaryenBinary(
+                        /* module= */ module(),
+                        /* op=     */ BinaryenGeUInt32(),
+                        /* left=   */ slot_addr,
+                        /* right=  */ b_table_end
+                    );
+                    auto b_slot_addr_wrapped = BinaryenBinary(
+                        /* module= */ module(),
+                        /* op=     */ BinaryenSubInt32(),
+                        /* left=   */ slot_addr,
+                        /* right=  */ table_size_in_bytes
+                    );
+                    slot_addr.set(bucket_insert, BinaryenSelect(
+                        /* module=    */ module(),
+                        /* condition= */ b_exceeds_table,
+                        /* ifTrue=    */ b_slot_addr_wrapped,
+                        /* ifFalse=   */ slot_addr,
+                        /* type=      */ BinaryenTypeInt32()
+                    ));
+                }
+
+                /*----- Find next free slot in bucket. ---------------------------------------------------------------*/
+                WasmWhile find_slot(module(), "join.build.find_slot", HT->get_bucket_ref_count(slot_addr));
+                {
+                    steps.set(find_slot, BinaryenBinary(
+                        /* module= */ module(),
+                        /* op=     */ BinaryenAddInt32(),
+                        /* left=   */ steps,
+                        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size()))
+                    ));
+                    slot_addr.set(find_slot, BinaryenBinary(
+                        /* module= */ module(),
+                        /* op=     */ BinaryenAddInt32(),
+                        /* left=   */ slot_addr,
+                        /* right=  */ steps
+                    ));
+                    auto b_exceeds_table = BinaryenBinary(
+                        /* module= */ module(),
+                        /* op=     */ BinaryenGeUInt32(),
+                        /* left=   */ slot_addr,
+                        /* right=  */ b_table_end
+                    );
+                    auto b_slot_addr_wrapped = BinaryenBinary(
+                        /* module= */ module(),
+                        /* op=     */ BinaryenSubInt32(),
+                        /* left=   */ slot_addr,
+                        /* right=  */ table_size_in_bytes
+                    );
+                    slot_addr.set(find_slot, BinaryenSelect(
+                        /* module=    */ module(),
+                        /* condition= */ b_exceeds_table,
+                        /* ifTrue=    */ b_slot_addr_wrapped,
+                        /* ifFalse=   */ slot_addr,
+                        /* type=      */ BinaryenTypeInt32()
+                    ));
+                }
+                bucket_insert += find_slot.finalize();
+
+                /*----- Place tuple in slot. -------------------------------------------------------------------------*/
+                steps.set(bucket_insert, BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenAddInt32(),
+                    /* left=   */ steps,
+                    /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size()))
+                ));
+                HT->emplace(bucket_insert, bucket_addr, steps, slot_addr, { key });
+
+                /*----- Create conditional jump based on whether the bucket is empty. --------------------------------*/
+                block_ += BinaryenIf(
+                    /* module=    */ module(),
+                    /* condition= */ HT->get_bucket_ref_count(bucket_addr),
+                    /* ifTrue=    */ bucket_insert.finalize(),
+                    /* ifFalse=   */ bucket_create.finalize()
+                );
+
+                /*---- Write payload. --------------------------------------------------------------------------------*/
+                for (auto attr : op.child(0)->schema())
+                    block_ += HT->store_value_to_slot(slot_addr, attr.id, context().get_value(attr.id));
+
+                num_entries.set(block_, BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenAddInt32(),
+                    /* left=   */ num_entries,
+                    /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
+                ));
+            } else {
+                auto HT = as<WasmRefCountingHashTable>(data->HT);
+                auto key = context().get_value({probe->table_name.text, probe->attr_name.text});
+
+                /*----- Compute hash. --------------------------------------------------------------------------------*/
+                auto b_hash = hasher.emit(module(), CG.fn(), block_, { key });
+                auto b_hash_i32 = BinaryenUnary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenWrapInt64(),
+                    /* value=  */ b_hash
+                );
+
+                /*----- Compute address of bucket. -------------------------------------------------------------------*/
+                WasmVariable bucket_addr(CG.fn(), BinaryenTypeInt32());
+                bucket_addr.set(block_,  HT->hash_to_bucket(b_hash_i32));
+
+                /*----- Iterate over all entries in the bucket and compare the key. ----------------------------------*/
+                WasmVariable slot_addr(CG.fn(), BinaryenTypeInt32());
+                slot_addr.set(block_, bucket_addr);
+                WasmVariable step(CG.fn(), BinaryenTypeInt32());
+                step.set(block_, BinaryenConst(module(), BinaryenLiteralInt32(0)));
+                auto b_ref_count = HT->get_bucket_ref_count(bucket_addr);
+                WasmWhile loop(module(), "join.probe", BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenLtUInt32(),
+                    /* left=   */ step,
+                    /* right=  */ b_ref_count
+                ));
+
+                /*----- Load values from HT. -------------------------------------------------------------------------*/
+                auto ld = HT->load_from_slot(slot_addr);
+                for (auto &attr : op.child(0)->schema())
+                    context().add(attr.id, ld.get_value(attr.id));
+
+                /*----- Check whether the key of the entry in the bucket equals the probe key. -----------------------*/
+                auto b_is_key_equal = HT->compare_key(slot_addr, { key });
+                BlockBuilder keys_equal(module(), "join.probe.match");
+
+                swap(block_, keys_equal);
+                (*this)(*op.parent());
+                swap(block_, keys_equal);
+
+                loop += BinaryenIf(
+                    /* module=    */ module(),
+                    /* condition= */ b_is_key_equal,
+                    /* ifTrue=    */ keys_equal.finalize(),
+                    /* ifFalse=   */ nullptr
+                );
+
+                step.set(loop, BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenAddInt32(),
+                    /* left=   */ step,
+                    /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size()))
+                ));
+                slot_addr.set(loop, BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenAddInt32(),
+                    /* left=   */ slot_addr,
+                    /* right=  */ step
+                ));
+                block_ += loop.finalize();
+            }
+        }
+    }
 }
 
 void WasmPipelineCG::operator()(const ProjectionOperator &op)

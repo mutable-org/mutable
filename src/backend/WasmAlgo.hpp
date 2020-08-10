@@ -176,6 +176,9 @@ struct WasmHashTable
     /** Evaluates to `1` iff the slot is empty (i.e. not occupied). */
     virtual BinaryenExpressionRef is_slot_empty(BinaryenExpressionRef b_slot_addr) const = 0;
 
+    virtual BinaryenExpressionRef compare_key(BinaryenExpressionRef b_slot_addr,
+                                              const std::vector<BinaryenExpressionRef> &key) const = 0;
+
     /** Inserts a new entry into the bucket at `b_bucket_addr` by updating the bucket's probe length to `b_steps`,
      * marking the slot at `b_slot_addr` occupied, and placing the key in this slot. */
     virtual void emplace(BlockBuilder &block,
@@ -187,7 +190,7 @@ struct WasmHashTable
 
     /** Creates a `BinaryenExpressionRef` to store the value `b_value` as position `id` in the slot at `b_slot_addr`. */
     virtual BinaryenExpressionRef store_value_to_slot(BinaryenExpressionRef b_slot_addr, Schema::Identifier id,
-                                              BinaryenExpressionRef b_value) const = 0;
+                                                      BinaryenExpressionRef b_value) const = 0;
 
     /** Given the address of a slot `b_slot_addr`, compute the address of the next slot.  That is, the address of the
      * slot immediately after `b_slot_addr`. */
@@ -236,6 +239,9 @@ struct WasmRefCountingHashTable : WasmHashTable
 
     BinaryenExpressionRef is_slot_empty(BinaryenExpressionRef b_slot_addr) const override;
 
+    BinaryenExpressionRef compare_key(BinaryenExpressionRef b_slot_addr,
+                                      const std::vector<BinaryenExpressionRef> &key) const override;
+
     void emplace(BlockBuilder &block,
                  BinaryenExpressionRef b_bucket_addr, BinaryenExpressionRef b_steps,
                  BinaryenExpressionRef b_slot_addr, const std::vector<BinaryenExpressionRef> &key) const override;
@@ -251,6 +257,8 @@ struct WasmRefCountingHashTable : WasmHashTable
     const WasmVariable & mask() const { return mask_; }
 
     std::size_t entry_size() const { return entry_size_; }
+
+    BinaryenExpressionRef get_bucket_ref_count(BinaryenExpressionRef b_bucket_addr) const;
 };
 
 }

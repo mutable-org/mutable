@@ -892,6 +892,33 @@ BinaryenExpressionRef WasmRefCountingHashTable::is_slot_empty(BinaryenExpression
     );
 }
 
+BinaryenExpressionRef WasmRefCountingHashTable::compare_key(BinaryenExpressionRef b_slot_addr,
+                                                            const std::vector<BinaryenExpressionRef> &key) const
+{
+    BinaryenExpressionRef b_keys_equal = nullptr;
+    {
+        auto ld_key = struc.create_load_context(b_slot_addr, /* offset= */ REFERENCE_SIZE);
+        std::size_t idx = 0;
+        for (auto b_key_find : key) {
+            auto &e = struc.schema[idx++];
+            auto b_key_bucket = ld_key[e.id];
+            auto b_cmp = WasmCompare::Eq(module, *e.type, b_key_bucket, b_key_find);
+
+            if (b_keys_equal) {
+                b_keys_equal = BinaryenBinary(
+                    /* module= */ module,
+                    /* op=     */ BinaryenAndInt32(),
+                    /* left=   */ b_keys_equal,
+                    /* right=  */ b_cmp
+                );
+            } else {
+                b_keys_equal = b_cmp;
+            }
+        }
+    }
+    return b_keys_equal;
+}
+
 void WasmRefCountingHashTable::emplace(BlockBuilder &block,
                                        BinaryenExpressionRef b_bucket_addr, BinaryenExpressionRef b_steps,
                                        BinaryenExpressionRef b_slot_addr,
@@ -946,5 +973,18 @@ BinaryenExpressionRef WasmRefCountingHashTable::compute_next_slot(BinaryenExpres
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ b_slot_addr,
         /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size_))
+    );
+}
+
+BinaryenExpressionRef WasmRefCountingHashTable::get_bucket_ref_count(BinaryenExpressionRef b_bucket_addr) const
+{
+    return BinaryenLoad(
+        /* module= */ module,
+        /* bytes=  */ REFERENCE_SIZE,
+        /* signed= */ false,
+        /* offset= */ 0,
+        /* align=  */ 0,
+        /* type=   */ BinaryenTypeInt32(),
+        /* ptr=    */ b_bucket_addr
     );
 }

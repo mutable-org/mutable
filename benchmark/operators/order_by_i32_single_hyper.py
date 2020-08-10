@@ -1,5 +1,6 @@
 #!/bin/env python3
 
+import numpy
 import time
 from tableauhyperapi import HyperProcess, Telemetry, Connection, CreateMode, NOT_NULLABLE, NULLABLE, SqlType, \
         TableDefinition, Inserter, escape_name, escape_string_literal, HyperException, TableName
@@ -7,46 +8,46 @@ from tableauhyperapi import HyperProcess, Telemetry, Connection, CreateMode, NOT
 if __name__ == '__main__':
     with HyperProcess(telemetry=Telemetry.DO_NOT_SEND_USAGE_DATA_TO_TABLEAU) as hyper:
         with Connection(endpoint=hyper.endpoint, database='benchmark.hyper', create_mode=CreateMode.CREATE_AND_REPLACE) as connection:
-            table_def = TableDefinition(
-                table_name='Distinct_i32',
-                columns=[
-                    TableDefinition.Column('id',      SqlType.int(), NOT_NULLABLE),
-                    TableDefinition.Column('n1',      SqlType.int(), NOT_NULLABLE),
-                    TableDefinition.Column('n10',     SqlType.int(), NOT_NULLABLE),
-                    TableDefinition.Column('n100',    SqlType.int(), NOT_NULLABLE),
-                    TableDefinition.Column('n1000',   SqlType.int(), NOT_NULLABLE),
-                    TableDefinition.Column('n10000',  SqlType.int(), NOT_NULLABLE),
-                    TableDefinition.Column('n100000', SqlType.int(), NOT_NULLABLE),
-                ]
-            )
-
-            times = list()
-            queries = [
-                f'SELECT id FROM {table_def.table_name} WHERE n100000 < -2147483647 ORDER BY n100000',
-                f'SELECT id FROM {table_def.table_name} WHERE n100000 < -1717986918 ORDER BY n100000',
-                f'SELECT id FROM {table_def.table_name} WHERE n100000 < -1288490188 ORDER BY n100000',
-                f'SELECT id FROM {table_def.table_name} WHERE n100000 <  -858993459 ORDER BY n100000',
-                f'SELECT id FROM {table_def.table_name} WHERE n100000 <  -429496729 ORDER BY n100000',
-                f'SELECT id FROM {table_def.table_name} WHERE n100000 <           0 ORDER BY n100000',
-                f'SELECT id FROM {table_def.table_name} WHERE n100000 <   429496729 ORDER BY n100000',
-                f'SELECT id FROM {table_def.table_name} WHERE n100000 <   858993459 ORDER BY n100000',
-                f'SELECT id FROM {table_def.table_name} WHERE n100000 <  1288490188 ORDER BY n100000',
-                f'SELECT id FROM {table_def.table_name} WHERE n100000 <  1717986918 ORDER BY n100000',
-                f'SELECT id FROM {table_def.table_name} WHERE n100000 <  2147483647 ORDER BY n100000',
+            columns = [
+                TableDefinition.Column('id',      SqlType.int(), NOT_NULLABLE),
+                TableDefinition.Column('n1',      SqlType.int(), NOT_NULLABLE),
+                TableDefinition.Column('n10',     SqlType.int(), NOT_NULLABLE),
+                TableDefinition.Column('n100',    SqlType.int(), NOT_NULLABLE),
+                TableDefinition.Column('n1000',   SqlType.int(), NOT_NULLABLE),
+                TableDefinition.Column('n10000',  SqlType.int(), NOT_NULLABLE),
+                TableDefinition.Column('n100000', SqlType.int(), NOT_NULLABLE),
             ]
 
-            for q in queries:
-                if connection.catalog.has_table(table_def.table_name):
-                    connection.execute_command(f'DROP TABLE {table_def.table_name}')
-                connection.catalog.create_table(table_def)
-                num_rows = connection.execute_command(f'COPY {table_def.table_name} FROM \'benchmark/operators/data/Distinct_i32.csv\' WITH DELIMITER \',\' CSV HEADER')
+            table_tmp = TableDefinition(
+                table_name='tmp',
+                columns=columns
+            )
+            connection.catalog.create_table(table_tmp)
+            connection.execute_command(f'COPY {table_tmp.table_name} FROM \'benchmark/operators/data/Distinct_i32.csv\' WITH DELIMITER \',\' CSV HEADER')
+            num_rows = connection.execute_scalar_query(f'SELECT COUNT(*) FROM {table_tmp.table_name}')
+
+            table_def = TableDefinition(
+                table_name='Distinct_i32',
+                columns=columns
+            )
+            connection.catalog.create_table(table_def)
+
+            query = f'SELECT id FROM {table_def.table_name} ORDER BY n100000'
+            scale_factors = numpy.linspace(0, 1, num=11)
+            times = list()
+
+            for sf in scale_factors:
+                connection.execute_command(f'INSERT INTO {table_def.table_name} SELECT * FROM {table_tmp.table_name} LIMIT {int(num_rows * sf)}')
+
                 begin = time.time_ns()
-                with connection.execute_query(q) as result:
+                with connection.execute_query(query) as result:
                     i = 0
                     for row in result:
                         i += 1
                 end = time.time_ns()
                 times.append(end - begin)
+
+                connection.execute_command(f'DELETE FROM {table_def.table_name}')
 
             for t in times:
                 print(t / 1e6) # in milliseconds

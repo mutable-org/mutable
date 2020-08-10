@@ -8,7 +8,7 @@ configurations:
     'WebAssembly (RowStore)':    --backend WasmV8 --store RowStore
     'WebAssembly (ColumnStore)': --backend WasmV8 --store ColumnStore
 label: 'Scale factor'
-tables: [ 'Distinct_i32' ]
+tables: [ ]
 cases:
     0.0:
         query: SELECT id FROM Distinct_i32 ORDER BY n100000;

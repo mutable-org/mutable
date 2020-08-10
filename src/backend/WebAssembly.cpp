@@ -341,7 +341,7 @@ WasmModule WasmCodeGen::compile(const Operator &plan)
 void WasmCodeGen::operator()(const ScanOperator &op)
 {
     std::ostringstream oss;
-    oss << "scan_" << op.store().table().name;
+    oss << "scan_" << op.alias();
     const std::string name = oss.str();
     main_.block() += WasmPipelineCG::compile(op, *this, name.c_str());
 }
@@ -578,17 +578,17 @@ void WasmPipelineCG::emit_write_results(const Schema &schema)
 
 void WasmPipelineCG::operator()(const ScanOperator &op)
 {
-    auto &table = op.store().table();
     std::ostringstream oss;
 
     /*----- Get the number of rows in the scanned table. -------------------------------------------------------------*/
+    auto & table = op.store().table();
     oss << table.name << "_num_rows";
     auto b_num_rows = CG.add_import(oss.str(), BinaryenTypeInt32());
 
     WasmVariable induction(CG.fn(), BinaryenTypeInt32()); // initialized to 0
 
     oss.str("");
-    oss << "scan_" << table.name;
+    oss << "scan_" << op.alias();
     WasmWhile loop(module(), oss.str().c_str(), BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenLtUInt32(),

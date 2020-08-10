@@ -187,10 +187,12 @@ struct ScanOperator : Producer
 {
     private:
     const Store &store_;
+    const char *alias_;
 
     public:
     ScanOperator(const Store &store, const char *alias)
         : store_(store)
+        , alias_(notnull(alias))
     {
         auto &S = schema();
         for (auto &attr : store.table())
@@ -198,6 +200,7 @@ struct ScanOperator : Producer
     }
 
     const Store & store() const { return store_; }
+    const char * alias() const { return alias_; }
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;

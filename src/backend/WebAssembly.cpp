@@ -688,14 +688,17 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
                 auto key = context().get_value(key_id);
 
                 /*----- Allocate hash table. -------------------------------------------------------------------------*/
-                constexpr uint32_t INITIAL_CAPACITY = 32;
+                uint32_t initial_capacity = 32;
+                if (auto scan = cast<ScanOperator>(op.child(0))) /// XXX: hack for pre-allocation
+                    initial_capacity = ceil_to_pow_2<decltype(initial_capacity)>(scan->store().num_rows() / .8);
+
                 data->HT = new WasmRefCountingHashTable(module(), CG.fn(), *data->struc);
                 auto HT = as<WasmRefCountingHashTable>(data->HT);
 
                 WasmVariable end(CG.fn(), BinaryenTypeInt32());
-                end.set(CG.fn().block(), HT->create_table(CG.fn().block(), CG.head_of_heap(), INITIAL_CAPACITY));
+                end.set(CG.fn().block(), HT->create_table(CG.fn().block(), CG.head_of_heap(), initial_capacity));
                 data->watermark_high.set(CG.fn().block(),
-                                         BinaryenConst(module(), BinaryenLiteralInt32(8 * INITIAL_CAPACITY / 10)));
+                                         BinaryenConst(module(), BinaryenLiteralInt32(8 * initial_capacity / 10)));
 
                 /*----- Update head of heap. -------------------------------------------------------------------------*/
                 CG.head_of_heap().set(CG.fn().block(), end);
@@ -1401,13 +1404,16 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
     auto data = as<GroupingData>(op.data());
 
     /*----- Allocate hash table. -------------------------------------------------------------------------------------*/
-    constexpr uint32_t INITIAL_CAPACITY = 32;
+    uint32_t initial_capacity = 32;
+    if (auto scan = cast<ScanOperator>(op.child(0))) /// XXX: hack for pre-allocation
+        initial_capacity = ceil_to_pow_2<decltype(initial_capacity)>(scan->store().num_rows() / .8);
+
     data->HT = new WasmRefCountingHashTable(module(), CG.fn(), *data->struc);
     auto HT = as<WasmRefCountingHashTable>(data->HT);
 
     WasmVariable end(CG.fn(), BinaryenTypeInt32());
-    end.set(CG.fn().block(), HT->create_table(CG.fn().block(), CG.head_of_heap(), INITIAL_CAPACITY));
-    data->watermark_high.set(CG.fn().block(), BinaryenConst(module(), BinaryenLiteralInt32(8 * INITIAL_CAPACITY / 10)));
+    end.set(CG.fn().block(), HT->create_table(CG.fn().block(), CG.head_of_heap(), initial_capacity));
+    data->watermark_high.set(CG.fn().block(), BinaryenConst(module(), BinaryenLiteralInt32(8 * initial_capacity / 10)));
 
     /*----- Update head of heap. -------------------------------------------------------------------------------------*/
     CG.head_of_heap().set(CG.fn().block(), end);

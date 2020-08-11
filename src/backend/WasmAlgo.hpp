@@ -199,6 +199,10 @@ struct WasmHashTable
     virtual BinaryenExpressionRef insert_with_duplicates(BlockBuilder &block,
                                                          BinaryenExpressionRef b_hash,
                                                          const std::vector<BinaryenExpressionRef> &key) const = 0;
+
+    virtual BinaryenExpressionRef insert_without_duplicates(BlockBuilder &block,
+                                                            BinaryenExpressionRef b_hash,
+                                                            const std::vector<BinaryenExpressionRef> &key) const = 0;
 };
 
 struct WasmRefCountingHashTable : WasmHashTable
@@ -267,6 +271,10 @@ struct WasmRefCountingHashTable : WasmHashTable
     BinaryenExpressionRef insert_with_duplicates(BlockBuilder &block,
                                                  BinaryenExpressionRef b_hash,
                                                  const std::vector<BinaryenExpressionRef> &key) const override;
+
+    BinaryenExpressionRef insert_without_duplicates(BlockBuilder &block,
+                                                    BinaryenExpressionRef b_hash,
+                                                    const std::vector<BinaryenExpressionRef> &key) const override;
 };
 
 }

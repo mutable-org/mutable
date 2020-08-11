@@ -1141,3 +1141,31 @@ BinaryenExpressionRef WasmRefCountingHashTable::insert_with_duplicates(BlockBuil
 
     return slot_addr;
 }
+
+BinaryenExpressionRef WasmRefCountingHashTable::insert_without_duplicates(BlockBuilder &block,
+                                                                          BinaryenExpressionRef b_hash,
+                                                                          const std::vector<BinaryenExpressionRef> &key)
+    const
+{
+    /*----- Compute address of bucket. -------------------------------------------------------------------------------*/
+    WasmVariable bucket_addr(fn, BinaryenTypeInt32());
+    bucket_addr.set(block, hash_to_bucket(b_hash));
+
+    /*----- Locate entry with key `key` in the bucket, or end of bucket if no such key exists. -----------------------*/
+    auto [ b_slot_addr, b_steps ] = find_in_bucket(block, bucket_addr, key);
+
+    BlockBuilder insert(module, "insert.new_entry");
+
+    /*----- Create new entry in new hash table. ----------------------------------------------------------------------*/
+    emplace(insert, bucket_addr, b_steps, b_slot_addr, key);
+
+    /*----- Create conditional branch depending on whether `key` already exists in the bucket. -----------------------*/
+    block += BinaryenIf(
+        /* module=    */ module,
+        /* condition= */ is_slot_empty(b_slot_addr),
+        /* ifTrue=    */ insert.finalize(),
+        /* ifFalse=   */ nullptr
+    );
+
+    return b_slot_addr;
+}

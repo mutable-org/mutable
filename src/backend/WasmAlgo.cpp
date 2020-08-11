@@ -1169,3 +1169,154 @@ BinaryenExpressionRef WasmRefCountingHashTable::insert_without_duplicates(BlockB
 
     return b_slot_addr;
 }
+
+BinaryenFunctionRef WasmRefCountingHashTable::rehash(WasmHash &hasher,
+                                                     const std::vector<Schema::Identifier> &key_ids,
+                                                     const std::vector<Schema::Identifier> &payload_ids) const
+{
+    /*----- Create rehashing function. -------------------------------------------------------------------------------*/
+    std::vector<BinaryenType> fn_rehash_params;
+    fn_rehash_params.reserve(4);
+    fn_rehash_params.push_back(BinaryenTypeInt32()); // 0: old addr
+    fn_rehash_params.push_back(BinaryenTypeInt32()); // 1: old mask
+    fn_rehash_params.push_back(BinaryenTypeInt32()); // 2: new addr
+    fn_rehash_params.push_back(BinaryenTypeInt32()); // 3: new mask
+    FunctionBuilder fn_rehash(module, "WasmRefCountingHashTable::rehash", BinaryenTypeNone(), fn_rehash_params);
+    WasmRefCountingHashTable HT_old(
+        /* module= */ module,
+        /* fn=     */ fn_rehash,
+        /* block=  */ fn_rehash.block(),
+        /* struc=  */ struc,
+        /* b_addr= */ BinaryenLocalGet(module, 0, BinaryenTypeInt32()),
+        /* b_mask= */ BinaryenLocalGet(module, 1, BinaryenTypeInt32())
+    );
+
+    WasmRefCountingHashTable HT_new(
+        /* module= */ module,
+        /* fn=     */ fn_rehash,
+        /* block=  */ fn_rehash.block(),
+        /* struc=  */ struc,
+        /* b_addr= */ BinaryenLocalGet(module, 2, BinaryenTypeInt32()),
+        /* b_mask= */ BinaryenLocalGet(module, 3, BinaryenTypeInt32())
+    );
+
+    /*----- Compute properties of old hash table. ----------------------------------------------------*/
+    auto b_addr_old = BinaryenLocalGet(
+        /* module= */ module,
+        /* index=  */ 0,
+        /* type=   */ BinaryenTypeInt32()
+    );
+    auto b_mask_old = BinaryenLocalGet(
+        /* module= */ module,
+        /* index=  */ 1,
+        /* type=   */ BinaryenTypeInt32()
+    );
+    auto b_size_old = BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ b_mask_old,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(1))
+    );
+    auto b_size_in_bytes_old = BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenMulInt32(),
+        /* left=   */ b_size_old,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(HT_old.entry_size()))
+    );
+    WasmVariable table_end_old(fn_rehash, BinaryenTypeInt32());
+    table_end_old.set(fn_rehash.block(), BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ b_addr_old,
+        /* right=  */ b_size_in_bytes_old
+    ));
+
+    /*----- Initialize a runner to traverse the old hash table. --------------------------------------*/
+    WasmVariable runner(fn_rehash, BinaryenTypeInt32());
+    runner.set(fn_rehash.block(), b_addr_old);
+
+    /*----- Advance to first occupied slot. ----------------------------------------------------------*/
+    {
+        WasmLoop next(module, "rehash.advance_to_first");
+        runner.set(next, HT_old.compute_next_slot(runner));
+
+        auto b_in_bounds = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenLtUInt32(),
+            /* left=   */ runner,
+            /* right=  */ table_end_old
+        );
+        auto b_slot_is_empty = HT_old.is_slot_empty(runner);
+
+        next += BinaryenIf(
+            /* module=    */ module,
+            /* condition= */ b_in_bounds,
+            /* ifTrue=    */ next.continu(b_slot_is_empty),
+            /* ifFalse=   */ nullptr
+        );
+
+        fn_rehash.block() += BinaryenIf(
+            /* module=    */ module,
+            /* condition= */ b_slot_is_empty,
+            /* ifTrue=    */ next.finalize(),
+            /* ifFalse=   */ nullptr
+        );
+    }
+
+    /*----- Iterate over all entries in the old hash table. ------------------------------------------*/
+    WasmDoWhile for_each(module, "rehash.for_each", BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenLtUInt32(),
+        /* left=   */ runner,
+        /* right=  */ table_end_old
+    ));
+
+    /*----- Re-insert the current element in the new hash table. -------------------------------------*/
+    {
+        /*----- Get join key. ------------------------------------------------------------------------*/
+        auto ld = HT_old.load_from_slot(runner);
+        std::vector<BinaryenExpressionRef> key;
+        for (auto kid : key_ids)
+            key.push_back(ld.get_value(kid));
+
+        /*----- Compute hash. ------------------------------------------------------------------------*/
+        auto b_hash = hasher.emit(module, fn_rehash, for_each, key);
+        auto b_hash_i32 = BinaryenUnary(
+            /* module= */ module,
+            /* op=     */ BinaryenWrapInt64(),
+            /* value=  */ b_hash
+        );
+
+        /*----- Re-insert the element. ---------------------------------------------------------------*/
+        auto slot_addr = HT_new.insert_with_duplicates(for_each, b_hash_i32, key);
+
+        /*---- Write payload. ------------------------------------------------------------------------*/
+        for (auto pid : payload_ids)
+            for_each += HT_new.store_value_to_slot(slot_addr, pid, ld.get_value(pid));
+    }
+
+    /*----- Advance to next occupied slot. -----------------------------------------------------------*/
+    {
+        WasmLoop next(module, "rehash.for_each.advance");
+        runner.set(next, HT_old.compute_next_slot(runner));
+
+        auto b_in_bounds = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenLtUInt32(),
+            /* left=   */ runner,
+            /* right=  */ table_end_old
+        );
+        auto b_slot_is_empty = HT_old.is_slot_empty(runner);
+
+        next += BinaryenIf(
+            /* module=    */ module,
+            /* condition= */ b_in_bounds,
+            /* ifTrue=    */ next.continu(b_slot_is_empty),
+            /* ifFalse=   */ nullptr
+        );
+        for_each += next.finalize();
+    }
+
+    fn_rehash.block() += for_each.finalize();
+    return fn_rehash.finalize();
+}

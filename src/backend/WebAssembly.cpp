@@ -687,6 +687,13 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
                 auto key_id = Schema::Identifier(build->table_name.text, build->attr_name.text);
                 auto key = context().get_value(key_id);
 
+                /*----- Compute payload ids. -------------------------------------------------------------------------*/
+                std::vector<Schema::Identifier> payload_ids;
+                for (auto attr : op.child(0)->schema()) {
+                    if (attr.id != key_id)
+                        payload_ids.push_back(attr.id);
+                }
+
                 /*----- Allocate hash table. -------------------------------------------------------------------------*/
                 uint32_t initial_capacity = 32;
                 if (auto scan = cast<ScanOperator>(op.child(0))) /// XXX: hack for pre-allocation
@@ -711,153 +718,7 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
                 WasmVariable num_entries(CG.fn(), BinaryenTypeInt32());
                 num_entries.set(CG.fn().block(), BinaryenConst(module(), BinaryenLiteralInt32(0)));
 
-                /*----- Emit a function to perform the rehashing. ----------------------------------------------------*/
-                std::vector<BinaryenType> rehash_params;
-                rehash_params.reserve(4);
-                rehash_params.push_back(BinaryenTypeInt32()); // 0: addr
-                rehash_params.push_back(BinaryenTypeInt32()); // 1: mask
-                rehash_params.push_back(BinaryenTypeInt32()); // 2: new addr
-                rehash_params.push_back(BinaryenTypeInt32()); // 3: new mask
-                FunctionBuilder fn_rehash(module(), "WasmRefCountingHashTable.rehash", BinaryenTypeNone(), rehash_params);
-                {
-                    WasmRefCountingHashTable HT_old(
-                        /* module= */ module(),
-                        /* fn=     */ fn_rehash,
-                        /* block=  */ fn_rehash.block(),
-                        /* struc=  */ HT->struc,
-                        /* b_addr= */ BinaryenLocalGet(module(), 0, BinaryenTypeInt32()),
-                        /* b_mask= */ BinaryenLocalGet(module(), 1, BinaryenTypeInt32())
-                    );
-
-                    WasmRefCountingHashTable HT_new(
-                        /* module= */ module(),
-                        /* fn=     */ fn_rehash,
-                        /* block=  */ fn_rehash.block(),
-                        /* struc=  */ HT->struc,
-                        /* b_addr= */ BinaryenLocalGet(module(), 2, BinaryenTypeInt32()),
-                        /* b_mask= */ BinaryenLocalGet(module(), 3, BinaryenTypeInt32())
-                    );
-
-                    /*----- Compute properties of old hash table. ----------------------------------------------------*/
-                    auto b_addr_old = BinaryenLocalGet(
-                        /* module= */ module(),
-                        /* index=  */ 0,
-                        /* type=   */ BinaryenTypeInt32()
-                    );
-                    auto b_mask_old = BinaryenLocalGet(
-                        /* module= */ module(),
-                        /* index=  */ 1,
-                        /* type=   */ BinaryenTypeInt32()
-                    );
-                    auto b_size_old = BinaryenBinary(
-                        /* module= */ module(),
-                        /* op=     */ BinaryenAddInt32(),
-                        /* left=   */ b_mask_old,
-                        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
-                    );
-                    auto b_size_in_bytes_old = BinaryenBinary(
-                        /* module= */ module(),
-                        /* op=     */ BinaryenMulInt32(),
-                        /* left=   */ b_size_old,
-                        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT_old.entry_size()))
-                    );
-                    WasmVariable table_end_old(fn_rehash, BinaryenTypeInt32());
-                    table_end_old.set(fn_rehash.block(), BinaryenBinary(
-                        /* module= */ module(),
-                        /* op=     */ BinaryenAddInt32(),
-                        /* left=   */ b_addr_old,
-                        /* right=  */ b_size_in_bytes_old
-                    ));
-
-                    /*----- Initialize a runner to traverse the old hash table. --------------------------------------*/
-                    WasmVariable runner(fn_rehash, BinaryenTypeInt32());
-                    runner.set(fn_rehash.block(), b_addr_old);
-
-                    /*----- Advance to first occupied slot. ----------------------------------------------------------*/
-                    {
-                        WasmLoop next(module(), "rehash.advance_to_first");
-                        runner.set(next, HT_old.compute_next_slot(runner));
-
-                        auto b_in_bounds = BinaryenBinary(
-                            /* module= */ module(),
-                            /* op=     */ BinaryenLtUInt32(),
-                            /* left=   */ runner,
-                            /* right=  */ table_end_old
-                        );
-                        auto b_slot_is_empty = HT_old.is_slot_empty(runner);
-
-                        next += BinaryenIf(
-                            /* module=    */ module(),
-                            /* condition= */ b_in_bounds,
-                            /* ifTrue=    */ next.continu(b_slot_is_empty),
-                            /* ifFalse=   */ nullptr
-                        );
-
-                        fn_rehash.block() += BinaryenIf(
-                            /* module=    */ module(),
-                            /* condition= */ b_slot_is_empty,
-                            /* ifTrue=    */ next.finalize(),
-                            /* ifFalse=   */ nullptr
-                        );
-                    }
-
-                    /*----- Iterate over all entries in the old hash table. ------------------------------------------*/
-                    WasmDoWhile for_each(module(), "rehash.for_each", BinaryenBinary(
-                        /* module= */ module(),
-                        /* op=     */ BinaryenLtUInt32(),
-                        /* left=   */ runner,
-                        /* right=  */ table_end_old
-                    ));
-
-                    /*----- Re-insert the current element in the new hash table. -------------------------------------*/
-                    {
-                        /*----- Get join key. ------------------------------------------------------------------------*/
-                        auto ld = HT_old.load_from_slot(runner);
-                        auto key = ld.get_value(key_id);
-
-                        /*----- Compute hash. ------------------------------------------------------------------------*/
-                        auto b_hash = hasher.emit(module(), fn_rehash, for_each, { key });
-                        auto b_hash_i32 = BinaryenUnary(
-                            /* module= */ module(),
-                            /* op=     */ BinaryenWrapInt64(),
-                            /* value=  */ b_hash
-                        );
-
-                        /*----- Re-insert the element. ---------------------------------------------------------------*/
-                        auto slot_addr = HT_new.insert_with_duplicates(for_each, b_hash_i32, { key });
-
-                        /*---- Write payload. ------------------------------------------------------------------------*/
-                        for (auto attr : op.child(0)->schema())
-                            for_each += HT_new.store_value_to_slot(slot_addr, attr.id, ld.get_value(attr.id));
-                    }
-
-                    /*----- Advance to next occupied slot. -----------------------------------------------------------*/
-                    {
-                        WasmLoop next(module(), "rehash.for_each.advance");
-                        runner.set(next, HT_old.compute_next_slot(runner));
-
-                        auto b_in_bounds = BinaryenBinary(
-                            /* module= */ module(),
-                            /* op=     */ BinaryenLtUInt32(),
-                            /* left=   */ runner,
-                            /* right=  */ table_end_old
-                        );
-                        auto b_slot_is_empty = HT_old.is_slot_empty(runner);
-
-                        next += BinaryenIf(
-                            /* module=    */ module(),
-                            /* condition= */ b_in_bounds,
-                            /* ifTrue=    */ next.continu(b_slot_is_empty),
-                            /* ifFalse=   */ nullptr
-                        );
-                        for_each += next.finalize();
-                    }
-
-                    fn_rehash.block() += for_each.finalize();
-                    fn_rehash.finalize();
-                }
-
-                /*----- Create code block to resize the hash table. --------------------------------------------------*/
+                /*----- Create code block to resize the hash table when the high watermark is reached. ---------------*/
                 BlockBuilder perform_rehash(module(), "join.build.rehash");
 
                 /*----- Compute the mask for the new size. -----------------------------------------------------------*/
@@ -902,6 +763,7 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
                 CG.align_head_of_heap(perform_rehash);
 
                 /*----- Rehash to double size. -----------------------------------------------------------------------*/
+                auto b_fn_rehash = HT->rehash(hasher, { key_id }, payload_ids);
                 BinaryenExpressionRef rehash_args[4] = {
                     /* addr_old= */ HT->addr(),
                     /* mask_old= */ HT->mask(),
@@ -910,7 +772,7 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
                 };
                 perform_rehash += BinaryenCall(
                     /* module=      */ module(),
-                    /* target=      */ fn_rehash.name(),
+                    /* target=      */ BinaryenFunctionGetName(b_fn_rehash),
                     /* operands=    */ rehash_args,
                     /* numOperands= */ ARR_SIZE(rehash_args),
                     /* returnType=  */ BinaryenTypeNone()
@@ -1097,6 +959,7 @@ void WasmPipelineCG::operator()(const LimitOperator &op)
 
 void WasmPipelineCG::operator()(const GroupingOperator &op)
 {
+    auto &C = Catalog::Get();
     WasmHashMumur3_64A hasher;
     auto data = as<GroupingData>(op.data());
 
@@ -1123,161 +986,19 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
     WasmVariable num_groups(CG.fn(), BinaryenTypeInt32());
     num_groups.set(CG.fn().block(), BinaryenConst(module(), BinaryenLiteralInt32(0)));
 
-    /*----- Emit a function to perform the rehashing. ----------------------------------------------------------------*/
-    std::vector<BinaryenType> rehash_params;
-    rehash_params.reserve(4);
-    rehash_params.push_back(BinaryenTypeInt32()); // 0: addr
-    rehash_params.push_back(BinaryenTypeInt32()); // 1: mask
-    rehash_params.push_back(BinaryenTypeInt32()); // 2: new addr
-    rehash_params.push_back(BinaryenTypeInt32()); // 3: new mask
-    FunctionBuilder fn_rehash(module(), "WasmRefCountingHashTable.rehash", BinaryenTypeNone(), rehash_params);
+    /*----- Compute group and aggregate ids. -------------------------------------------------------------------------*/
+    std::vector<Schema::Identifier> grp_ids;
+    std::vector<Schema::Identifier> agg_ids;
     {
-        WasmRefCountingHashTable HT_old(
-            /* module= */ module(),
-            /* fn=     */ fn_rehash,
-            /* block=  */ fn_rehash.block(),
-            /* struc=  */ HT->struc,
-            /* b_addr= */ BinaryenLocalGet(module(), 0, BinaryenTypeInt32()),
-            /* b_mask= */ BinaryenLocalGet(module(), 1, BinaryenTypeInt32())
-        );
-
-        WasmRefCountingHashTable HT_new(
-            /* module= */ module(),
-            /* fn=     */ fn_rehash,
-            /* block=  */ fn_rehash.block(),
-            /* struc=  */ HT->struc,
-            /* b_addr= */ BinaryenLocalGet(module(), 2, BinaryenTypeInt32()),
-            /* b_mask= */ BinaryenLocalGet(module(), 3, BinaryenTypeInt32())
-        );
-
-        /*----- Compute properties of old hash table. ----------------------------------------------------------------*/
-        auto b_addr_old = BinaryenLocalGet(
-            /* module= */ module(),
-            /* index=  */ 0,
-            /* type=   */ BinaryenTypeInt32()
-        );
-        auto b_mask_old = BinaryenLocalGet(
-            /* module= */ module(),
-            /* index=  */ 1,
-            /* type=   */ BinaryenTypeInt32()
-        );
-        auto b_size_old = BinaryenBinary(
-            /* module= */ module(),
-            /* op=     */ BinaryenAddInt32(),
-            /* left=   */ b_mask_old,
-            /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
-        );
-        auto b_size_in_bytes_old = BinaryenBinary(
-            /* module= */ module(),
-            /* op=     */ BinaryenMulInt32(),
-            /* left=   */ b_size_old,
-            /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT_old.entry_size()))
-        );
-        WasmVariable table_end_old(fn_rehash, BinaryenTypeInt32());
-        table_end_old.set(fn_rehash.block(), BinaryenBinary(
-            /* module= */ module(),
-            /* op=     */ BinaryenAddInt32(),
-            /* left=   */ b_addr_old,
-            /* right=  */ b_size_in_bytes_old
-        ));
-
-        /*----- Initialize a runner to traverse the old hash table. --------------------------------------------------*/
-        WasmVariable runner(fn_rehash, BinaryenTypeInt32());
-        runner.set(fn_rehash.block(), b_addr_old);
-
-        /*----- Advance to first occupied slot. ----------------------------------------------------------------------*/
-        {
-            WasmLoop next(module(), "rehash.advance_to_first");
-            runner.set(next, HT_old.compute_next_slot(runner));
-
-            auto b_in_bounds = BinaryenBinary(
-                /* module= */ module(),
-                /* op=     */ BinaryenLtUInt32(),
-                /* left=   */ runner,
-                /* right=  */ table_end_old
-            );
-            auto b_slot_is_empty = HT_old.is_slot_empty(runner);
-
-            next += BinaryenIf(
-                /* module=    */ module(),
-                /* condition= */ b_in_bounds,
-                /* ifTrue=    */ next.continu(b_slot_is_empty),
-                /* ifFalse=   */ nullptr
-            );
-
-            fn_rehash.block() += BinaryenIf(
-                /* module=    */ module(),
-                /* condition= */ b_slot_is_empty,
-                /* ifTrue=    */ next.finalize(),
-                /* ifFalse=   */ nullptr
-            );
+        std::size_t i = 0;
+        for (; i != op.group_by().size(); ++i) {
+            auto grp = op.schema()[i];
+            grp_ids.push_back(grp.id);
         }
-
-        /*----- Iterate over all entries in the old hash table. ------------------------------------------------------*/
-        WasmDoWhile for_each(module(), "rehash.for_each", BinaryenBinary(
-            /* module= */ module(),
-            /* op=     */ BinaryenLtUInt32(),
-            /* left=   */ runner,
-            /* right=  */ table_end_old
-        ));
-
-        /*----- Re-insert the current element in the new hash table. -------------------------------------------------*/
-        {
-            /*----- Compute grouping key. ----------------------------------------------------------------------------*/
-            auto ld = HT_old.load_from_slot(runner);
-            std::vector<BinaryenExpressionRef> key;
-            for (auto grp : op.group_by()) {
-                auto k = fn_rehash.add_local(get_binaryen_type(grp->type()));
-                for_each += BinaryenLocalSet(
-                    /* module= */ module(),
-                    /* index=  */ BinaryenLocalGetGetIndex(k),
-                    /* value=  */ ld.compile(*grp)
-                );
-                key.push_back(k);
-            }
-
-            /*----- Compute group hash. ------------------------------------------------------------------------------*/
-            auto b_hash = hasher.emit(module(), fn_rehash, for_each, key);
-            auto b_hash_i32 = BinaryenUnary(
-                /* module= */ module(),
-                /* op=     */ BinaryenWrapInt64(),
-                /* value=  */ b_hash
-            );
-
-            /*----- Re-insert the current element in the new hash table. ---------------------------------------------*/
-            auto slot_addr = HT_new.insert_with_duplicates(for_each, b_hash_i32, key);
-
-            /*----- Copy group payload. ------------------------------------------------------------------------------*/
-            for (std::size_t i = 0; i != op.aggregates().size(); ++i) {
-                auto e = op.schema()[op.group_by().size() + i];
-                for_each += HT_new.store_value_to_slot(slot_addr, e.id, ld.get_value(e.id));
-            }
+        for (std::size_t end = i + op.aggregates().size(); i != end; ++i) {
+            auto agg = op.schema()[i];
+            agg_ids.push_back(agg.id);
         }
-
-        /*----- Advance to next occupied slot. -----------------------------------------------------------------------*/
-        {
-            WasmLoop next(module(), "rehash.for_each.advance");
-            runner.set(next, HT_old.compute_next_slot(runner));
-
-            auto b_in_bounds = BinaryenBinary(
-                /* module= */ module(),
-                /* op=     */ BinaryenLtUInt32(),
-                /* left=   */ runner,
-                /* right=  */ table_end_old
-            );
-            auto b_slot_is_empty = HT_old.is_slot_empty(runner);
-
-            next += BinaryenIf(
-                /* module=    */ module(),
-                /* condition= */ b_in_bounds,
-                /* ifTrue=    */ next.continu(b_slot_is_empty),
-                /* ifFalse=   */ nullptr
-            );
-            for_each += next.finalize();
-        }
-
-        fn_rehash.block() += for_each.finalize();
-        fn_rehash.finalize();
     }
 
     /*----- Create code block to resize the hash table. --------------------------------------------------------------*/
@@ -1325,6 +1046,7 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
     CG.align_head_of_heap(perform_rehash);
 
     /*----- Rehash to double size. -----------------------------------------------------------------------------------*/
+    auto b_fn_rehash = HT->rehash(hasher, grp_ids, agg_ids);
     BinaryenExpressionRef rehash_args[4] = {
         /* addr_old= */ HT->addr(),
         /* mask_old= */ HT->mask(),
@@ -1333,7 +1055,7 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
     };
     perform_rehash += BinaryenCall(
         /* module=      */ module(),
-        /* target=      */ fn_rehash.name(),
+        /* target=      */ BinaryenFunctionGetName(b_fn_rehash),
         /* operands=    */ rehash_args,
         /* numOperands= */ ARR_SIZE(rehash_args),
         /* returnType=  */ BinaryenTypeNone()

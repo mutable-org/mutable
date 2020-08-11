@@ -195,6 +195,10 @@ struct WasmHashTable
     /** Given the address of a slot `b_slot_addr`, compute the address of the next slot.  That is, the address of the
      * slot immediately after `b_slot_addr`. */
     virtual BinaryenExpressionRef compute_next_slot(BinaryenExpressionRef b_slot_addr) const = 0;
+
+    virtual BinaryenExpressionRef insert_with_duplicates(BlockBuilder &block,
+                                                         BinaryenExpressionRef b_hash,
+                                                         const std::vector<BinaryenExpressionRef> &key) const = 0;
 };
 
 struct WasmRefCountingHashTable : WasmHashTable
@@ -259,6 +263,10 @@ struct WasmRefCountingHashTable : WasmHashTable
     std::size_t entry_size() const { return entry_size_; }
 
     BinaryenExpressionRef get_bucket_ref_count(BinaryenExpressionRef b_bucket_addr) const;
+
+    BinaryenExpressionRef insert_with_duplicates(BlockBuilder &block,
+                                                 BinaryenExpressionRef b_hash,
+                                                 const std::vector<BinaryenExpressionRef> &key) const override;
 };
 
 }

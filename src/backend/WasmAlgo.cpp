@@ -988,3 +988,165 @@ BinaryenExpressionRef WasmRefCountingHashTable::get_bucket_ref_count(BinaryenExp
         /* ptr=    */ b_bucket_addr
     );
 }
+
+BinaryenExpressionRef WasmRefCountingHashTable::insert_with_duplicates(BlockBuilder &block,
+                                                                       BinaryenExpressionRef b_hash,
+                                                                       const std::vector<BinaryenExpressionRef> &key)
+    const
+{
+    /*----- Compute address of bucket. -------------------------------------------------------------------------------*/
+    WasmVariable bucket_addr(fn, BinaryenTypeInt32());
+    bucket_addr.set(block, hash_to_bucket(b_hash));
+
+    /*----- Load steps in bucket. ------------------------------------------------------------------------------------*/
+    WasmVariable steps(fn, BinaryenTypeInt32());
+    steps.set(block, get_bucket_ref_count(bucket_addr));
+
+    WasmVariable slot_addr(fn, BinaryenTypeInt32());
+    BlockBuilder bucket_create(module, "insert.create_bucket");
+    BlockBuilder bucket_insert(module, "insert.append_to_bucket");
+
+    /*----- If the bucket is empty, initialize it. -------------------------------------------------------------------*/
+    // TODO remove this by moving after bucket_create/bucket_insert
+    emplace(bucket_create, bucket_addr, BinaryenConst(module, BinaryenLiteralInt32(entry_size())), bucket_addr, {key});
+    slot_addr.set(bucket_create, bucket_addr);
+
+    /*----- Compute end of hash table. -------------------------------------------------------------------------------*/
+    auto b_size = BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ mask(),
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(1))
+    );
+    WasmVariable table_size_in_bytes(fn, BinaryenTypeInt32());
+    table_size_in_bytes.set(bucket_insert, BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenMulInt32(),
+        /* left=   */ b_size,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size()))
+    ));
+    auto b_table_end = BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ addr(),
+        /* right=  */ table_size_in_bytes
+    );
+
+    {
+        /*----- Evaluate formula for Gaussian sum to compute the end of the bucket -----------------------------------*/
+        WasmVariable probe_len(fn, BinaryenTypeInt32());
+        probe_len.set(bucket_insert, BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenDivUInt32(),
+            /* left=   */ steps,
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size()))
+        ));
+        auto b_square = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenMulInt32(),
+            /* left=   */ probe_len,
+            /* right=  */ probe_len
+        );
+        auto b_sum = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ b_square,
+            /* right=  */ probe_len
+        );
+        auto b_gauss = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenShrUInt32(),
+            /* left=   */ b_sum,
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(1))
+        );
+
+        /*----- Compute the end of the bucket. -----------------------------------------------------------------------*/
+        auto b_dist_in_bytes = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenMulInt32(),
+            /* left=   */ b_gauss,
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size()))
+        );
+        slot_addr.set(bucket_insert, BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ bucket_addr,
+            /* right=  */ b_dist_in_bytes
+        ));
+        auto b_exceeds_table = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenGeUInt32(),
+            /* left=   */ slot_addr,
+            /* right=  */ b_table_end
+        );
+        auto b_slot_addr_wrapped = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenSubInt32(),
+            /* left=   */ slot_addr,
+            /* right=  */ table_size_in_bytes
+        );
+        slot_addr.set(bucket_insert, BinaryenSelect(
+            /* module=    */ module,
+            /* condition= */ b_exceeds_table,
+            /* ifTrue=    */ b_slot_addr_wrapped,
+            /* ifFalse=   */ slot_addr,
+            /* type=      */ BinaryenTypeInt32()
+        ));
+    }
+
+    /*----- Find next free slot in bucket. ---------------------------------------------------------------------------*/
+    WasmWhile find_slot(module, "insert.append_to_bucket.find_slot", get_bucket_ref_count(slot_addr));
+    {
+        steps.set(find_slot, BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ steps,
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size()))
+        ));
+        slot_addr.set(find_slot, BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ slot_addr,
+            /* right=  */ steps
+        ));
+        auto b_exceeds_table = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenGeUInt32(),
+            /* left=   */ slot_addr,
+            /* right=  */ b_table_end
+        );
+        auto b_slot_addr_wrapped = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenSubInt32(),
+            /* left=   */ slot_addr,
+            /* right=  */ table_size_in_bytes
+        );
+        slot_addr.set(find_slot, BinaryenSelect(
+            /* module=    */ module,
+            /* condition= */ b_exceeds_table,
+            /* ifTrue=    */ b_slot_addr_wrapped,
+            /* ifFalse=   */ slot_addr,
+            /* type=      */ BinaryenTypeInt32()
+        ));
+    }
+    bucket_insert += find_slot.finalize();
+
+    /*----- Place tuple in slot. -------------------------------------------------------------------------------------*/
+    steps.set(bucket_insert, BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ steps,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size()))
+    ));
+    emplace(bucket_insert, bucket_addr, steps, slot_addr, { key });
+
+    /*----- Create conditional jump based on whether the bucket is empty. --------------------------------------------*/
+    block += BinaryenIf(
+        /* module=    */ module,
+        /* condition= */ get_bucket_ref_count(bucket_addr),
+        /* ifTrue=    */ bucket_insert.finalize(),
+        /* ifFalse=   */ bucket_create.finalize()
+    );
+
+    return slot_addr;
+}

@@ -876,19 +876,10 @@ WasmRefCountingHashTable::find_in_bucket(BlockBuilder &block, BinaryenExpression
 
 BinaryenExpressionRef WasmRefCountingHashTable::is_slot_empty(BinaryenExpressionRef b_slot_addr) const
 {
-    auto b_ref_count = BinaryenLoad(
-        /* module= */ module,
-        /* bytes=  */ REFERENCE_SIZE,
-        /* signed= */ false,
-        /* offset= */ 0,
-        /* align=  */ 0,
-        /* type=   */ BinaryenTypeInt32(),
-        /* ptr=    */ b_slot_addr
-    );
     return BinaryenUnary(
         /* module= */ module,
         /* op=     */ BinaryenEqZInt32(),
-        /* value=  */ b_ref_count
+        /* value=  */ get_bucket_ref_count(b_slot_addr)
     );
 }
 

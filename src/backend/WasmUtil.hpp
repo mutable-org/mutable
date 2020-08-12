@@ -237,14 +237,7 @@ struct WasmStruct
 
     BinaryenExpressionRef store(BinaryenExpressionRef b_ptr, Schema::Identifier id, BinaryenExpressionRef b_val,
                                 std::size_t struc_offset = 0) const {
-        std::size_t idx = 0;
-        for (auto &attr : schema) {
-            if (attr.id == id) break;
-            ++idx;
-        }
-        insist(idx < schema.num_entries(), "unknown identifier");
-
-        auto &attr = schema[idx];
+        auto [idx, attr] = schema[id];
         const std::size_t size_in_bytes = attr.type->size() < 8 ? 1 : attr.type->size() / 8;
         return BinaryenStore(
             /* module= */ module_,

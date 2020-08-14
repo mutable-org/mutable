@@ -653,13 +653,11 @@ void Sema::operator()(Const<SelectClause> &c)
         auto &stmt = as<const SelectStmt>(Ctx.stmt);
 
         if (stmt.group_by) {
-            std::ostringstream oss;
             auto group_by = as<const GroupByClause>(stmt.group_by);
             for (auto expr : group_by->group_by) {
-                oss << *expr;
-                auto str = C.pool(oss.str().c_str());
-                oss.str("");
-                Ctx.results.emplace(str, expr);
+                auto d = make_designator(expr, expr);
+                c.expansion.push_back(d);
+                Ctx.results.emplace(d->attr_name.text, d);
             }
         } else if (stmt.having) {
             diag.w(c.select_all.pos) << "The '*' has no meaning in this query.  Did you forget the GROUP BY clause?.\n";
@@ -668,19 +666,18 @@ void Sema::operator()(Const<SelectClause> &c)
                 if (auto ptr = std::get_if<const Table*>(&src.second)) {
                     auto &tbl = **ptr;
                     for (auto &attr : tbl) {
-                        Token dot(c.select_all.pos, dot_str, TK_DOT);
-                        Token table_name(c.select_all.pos, tbl.name, TK_IDENTIFIER);
-                        Token attr_name(c.select_all.pos, attr.name, TK_IDENTIFIER);
-                        auto e = new Designator(dot, table_name, attr_name);
-                        e->target_ = &attr;
-                        e->type_ = attr.type;
-                        c.expansion.push_back(e);
-                        Ctx.results.emplace(attr.name, e);
+                        auto d = make_designator(c.select_all.pos, tbl.name, attr.name, &attr, attr.type);
+                        c.expansion.push_back(d);
+                        Ctx.results.emplace(attr.name, d);
                     }
                 } else {
                     auto &exprs = std::get<SemaContext::named_expr_table>(src.second);
-                    for (auto &named_expr : exprs)
-                        Ctx.results.emplace(named_expr.first, named_expr.second);
+                    for (auto &named_expr : exprs) {
+                        auto d = make_designator(c.select_all.pos, src.first, named_expr.first, named_expr.second,
+                                                 named_expr.second->type());
+                        c.expansion.push_back(d);
+                        Ctx.results.emplace(named_expr.first, d);
+                    }
                 }
             }
         }

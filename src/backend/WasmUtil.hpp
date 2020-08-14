@@ -6,9 +6,24 @@
 #include <binaryen-c.h>
 #include <cstring>
 #include <iostream>
+#include <sstream>
 #include <utility>
 #include <vector>
 
+
+namespace {
+
+inline const char * mkname(const char *name, const char *fallback) {
+    insist(fallback, "fallback name must not be nullptr");
+    static uint32_t id = 0;
+    std::ostringstream oss;
+    if (name) oss << name;
+    else      oss << fallback;
+    oss << '_' << id++;
+    return strdup(oss.str().c_str());
+}
+
+}
 
 namespace db {
 
@@ -274,9 +289,10 @@ struct BlockBuilder
     public:
     BlockBuilder(BinaryenModuleRef module, const char *name = nullptr)
         : module_(module)
-        , name_(strdupn(name))
+        , name_(mkname(name, "block"))
         , return_type_(BinaryenTypeAuto())
     { }
+
     BlockBuilder(const BlockBuilder&) = delete;
     BlockBuilder(BlockBuilder &&other) { swap(*this, other); }
     ~BlockBuilder() { free((void*) name_); }
@@ -288,10 +304,17 @@ struct BlockBuilder
     void add(BinaryenExpressionRef expr) { exprs_.push_back(expr); }
     BlockBuilder & operator+=(BinaryenExpressionRef expr) { add(expr); return *this; }
 
-    void name(const char *name) { free((void*) name_); name_ = strdupn(name); }
+    /** Returns the block's name. */
     const char * name() const { return name_; }
 
     void set_return_type(BinaryenType ty) { return_type_ = ty; }
+
+    BlockBuilder clone(const char *name) const {
+        BlockBuilder blk(module_, name);
+        blk.exprs_ = this->exprs_;
+        blk.return_type_ = this->return_type_;
+        return blk;
+    }
 
     BinaryenExpressionRef finalize() {
         return BinaryenBlock(
@@ -387,20 +410,21 @@ struct WasmVariable
 struct WasmLoop
 {
     private:
+    const char *name_ = nullptr;
     BlockBuilder body_;
-    const char *name_;
 
     public:
-    WasmLoop(BinaryenModuleRef module, const char *name)
-        : body_(module, (std::string(name) + ".body").c_str())
-        , name_(strdupn(notnull(name)))
+    WasmLoop(BinaryenModuleRef module, const char *name = nullptr)
+        : name_(mkname(name, "loop"))
+        , body_(module, (std::string(name_) + ".body").c_str())
     { }
 
     virtual ~WasmLoop() { free((void*) name_); }
 
     BlockBuilder & body() { return body_; }
     const BlockBuilder & body() const { return body_; }
-    void name(const char *name) { free((void*) name_); name_ = strdupn(name); }
+
+    /** Return the loop's name. */
     const char * name() const { return name_; }
 
     operator BlockBuilder&() { return body(); }

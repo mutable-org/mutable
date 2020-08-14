@@ -337,17 +337,15 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
     );
 
     /*----- Swap pivot to front. -------------------------------------------------------------------------------------*/
-    BlockBuilder block_swap_left_mid(module);
-    wasm_swap.emit(block_swap_left_mid, tuple, b_begin, mid);
-    BlockBuilder block_swap_left_right(module);
-    wasm_swap.emit(block_swap_left_right, tuple, b_begin, b_last);
-    block_swap_left_mid.name("if_0_true-swap_left_mid");
-    block_swap_left_right.name("if_0_false-swap_left_right");
+    BlockBuilder block_swap_left_mid_0(module, "if_0_true-swap_left_mid");
+    wasm_swap.emit(block_swap_left_mid_0, tuple, b_begin, mid);
+    BlockBuilder block_swap_left_right_0(module, "if_0_false-swap_left_right");
+    wasm_swap.emit(block_swap_left_right_0, tuple, b_begin, b_last);
     auto b_if_0 = BinaryenIf(
         /* module=    */ module,
         /* condition= */ b_mid_le_right,
-        /* ifTrue=    */ block_swap_left_mid.finalize(),
-        /* ifFalse=   */ block_swap_left_right.finalize()
+        /* ifTrue=    */ block_swap_left_mid_0.finalize(),
+        /* ifFalse=   */ block_swap_left_right_0.finalize()
     );
     auto b_if_1 = BinaryenIf(
         /* module=    */ module,
@@ -355,19 +353,19 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
         /* ifTrue=    */ b_if_0,
         /* ifFalse=   */ BlockBuilder(module, "if_1_false-noop").finalize()
     );
-    block_swap_left_right.name("if_2_false-swap_left_right");
+    auto block_swap_left_right_2 = block_swap_left_right_0.clone("if_2_false-swap_left_right");
     auto b_if_2 = BinaryenIf(
         /* module=    */ module,
         /* condition= */ b_left_le_right,
         /* ifTrue=    */ BlockBuilder(module, "if_2_true-noop").finalize(),
-        /* ifFalse=   */ block_swap_left_right.finalize()
+        /* ifFalse=   */ block_swap_left_right_2.finalize()
     );
-    block_swap_left_mid.name("if_3_false-swap_left_mid");
+    auto block_swap_left_mid_3 = block_swap_left_mid_0.clone("if_3_false-swap_left_mid");
     auto b_if_3 = BinaryenIf(
         /* module=    */ module,
         /* condition= */ b_mid_le_right,
         /* ifTrue=    */ b_if_2,
-        /* ifFalse=   */ block_swap_left_mid.finalize()
+        /* ifFalse=   */ block_swap_left_mid_3.finalize()
     );
     auto b_if_4 = BinaryenIf(
         /* module=    */ module,

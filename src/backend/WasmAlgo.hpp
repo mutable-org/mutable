@@ -3,6 +3,7 @@
 #include "backend/WasmUtil.hpp"
 #include "parse/AST.hpp"
 #include <binaryen-c.h>
+#include <unordered_map>
 #include <vector>
 
 
@@ -217,6 +218,7 @@ struct WasmRefCountingHashTable : WasmHashTable
     WasmVariable addr_; ///< the address of the hash table
     WasmVariable mask_; ///< the mask used to compute a slot address in the table, i.e. capacity * entry_size
     std::size_t entry_size_; ///< the size in bytes of a table entry, that is the key-value pair and meta data
+    mutable BinaryenFunctionRef fn_rehash_ = nullptr; ///< the rehashing function for this hash table
 
     public:
     WasmRefCountingHashTable(BinaryenModuleRef module, FunctionBuilder &fn, const WasmStruct &struc)

@@ -1172,6 +1172,19 @@ BinaryenFunctionRef WasmRefCountingHashTable::rehash(WasmHash &hasher,
                                                      const std::vector<Schema::Identifier> &key_ids,
                                                      const std::vector<Schema::Identifier> &payload_ids) const
 {
+    if (fn_rehash_) return fn_rehash_;
+
+    std::ostringstream oss;
+    oss << "WasmRefCountingHashTable::rehash_keys";
+    for (auto k : key_ids)
+        oss << '_' << k;
+    if (not payload_ids.empty()) {
+        oss << "_payload";
+        for (auto p : payload_ids)
+            oss << '_' << p;
+    }
+    const std::string name = oss.str();
+
     /*----- Create rehashing function. -------------------------------------------------------------------------------*/
     std::vector<BinaryenType> fn_rehash_params;
     fn_rehash_params.reserve(4);
@@ -1179,7 +1192,7 @@ BinaryenFunctionRef WasmRefCountingHashTable::rehash(WasmHash &hasher,
     fn_rehash_params.push_back(BinaryenTypeInt32()); // 1: old mask
     fn_rehash_params.push_back(BinaryenTypeInt32()); // 2: new addr
     fn_rehash_params.push_back(BinaryenTypeInt32()); // 3: new mask
-    FunctionBuilder fn_rehash(module, "WasmRefCountingHashTable::rehash", BinaryenTypeNone(), fn_rehash_params);
+    FunctionBuilder fn_rehash(module, name.c_str(), BinaryenTypeNone(), fn_rehash_params);
     WasmRefCountingHashTable HT_old(
         /* module= */ module,
         /* fn=     */ fn_rehash,
@@ -1316,5 +1329,5 @@ BinaryenFunctionRef WasmRefCountingHashTable::rehash(WasmHash &hasher,
     }
 
     fn_rehash.block() += for_each.finalize();
-    return fn_rehash.finalize();
+    return fn_rehash_ = fn_rehash.finalize();
 }

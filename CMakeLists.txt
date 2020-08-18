@@ -119,6 +119,7 @@ ExternalProject_Add(
     DOWNLOAD_COMMAND fetch --force v8
     COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/"
     COMMAND git remote add -f mutable git@gitlab.cs.uni-saarland.de:bigdata/mutable/v8.git || true
+    COMMAND git fetch mutable
     COMMAND git checkout 6bc75c95d46842a50396f295c185622dc20b05fd
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/third_party/depot_tools/gclient sync
     UPDATE_COMMAND ":"

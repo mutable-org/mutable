@@ -132,6 +132,7 @@ add_definitions(-DWITH_V8)
 include_directories(SYSTEM third-party/v8/v8/include)
 add_library(v8 STATIC IMPORTED)
 set_target_properties(v8 PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/third-party/src/V8-build/obj/libv8_monolith.a")
+add_dependencies(v8 V8)
 endif()
 
 # SpiderMonkey - Mozilla's JavaScript and WebAssembly Engine (used in Firefox)

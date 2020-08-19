@@ -422,6 +422,12 @@ int main(int argc, const char **argv)
         nullptr, "--benchmark",                             /* Short, Long      */
         "run queries in benchmark mode",                    /* Description      */
         [&](bool) { Options::Get().benchmark = true; });    /* Callback         */
+#if WITH_V8
+    ADD(int, Options::Get().cdt_port, 0,                  /* Type, Var, Init  */
+        nullptr, "--CDT",                                   /* Short, Long      */
+        "specify the port for debugging via ChomeDevTools", /* Description      */
+        [&](int port) { Options::Get().cdt_port = port; }); /* Callback         */
+#endif
 
     /*----- Select store implementation ------------------------------------------------------------------------------*/
     ADD(const char *, Options::Get().store,                 /* Type, Var        */

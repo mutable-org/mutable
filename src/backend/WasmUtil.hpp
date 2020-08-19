@@ -325,6 +325,9 @@ struct BlockBuilder
             /* type=        */ return_type_
         );
     }
+
+    void dump(std::ostream &out) const;
+    void dump() const;
 };
 
 /** Helper class to construct WASM functions. */
@@ -378,6 +381,9 @@ struct FunctionBuilder
         locals_.push_back(ty);
         return BinaryenLocalGet(module_, idx, ty);
     }
+
+    void dump(std::ostream &out) const;
+    void dump() const;
 };
 
 struct WasmVariable

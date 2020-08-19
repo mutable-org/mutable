@@ -3,19 +3,77 @@
 #include "catalog/Schema.hpp"
 #include "globals.hpp"
 #include "IR/Tuple.hpp"
+#include "sockpp/tcp_acceptor.h"
 #include "storage/ColumnStore.hpp"
 #include "storage/RowStore.hpp"
 #include "storage/Store.hpp"
-
 #include <chrono>
-
-
-#define V8STR(str) ( v8::String::NewFromUtf8(this->isolate_, (str)).ToLocalChecked() )
+#include <cstdint>
+#include <cstdlib>
+#include <fstream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <thread>
 
 
 using namespace db;
 using args_t = v8::Local<v8::Value>[];
 
+
+void v8_helper::V8InspectorClientImpl::register_context(v8::Local<v8::Context> context)
+{
+    std::string ctx_name("query");
+    inspector_->contextCreated(
+        v8_inspector::V8ContextInfo(
+            context,
+            1,
+            v8_helper::make_string_view(ctx_name)
+        )
+    );
+}
+
+void v8_helper::V8InspectorClientImpl::deregister_context(v8::Local<v8::Context> context)
+{
+    inspector_->contextDestroyed(context);
+}
+
+void v8_helper::V8InspectorClientImpl::on_message(std::string_view sv)
+{
+    v8_inspector::StringView msg(reinterpret_cast<const uint8_t*>(sv.data()), sv.length());
+
+    auto Ctx = isolate_->GetCurrentContext();
+    v8::HandleScope handle_scope(isolate_);
+    auto obj = v8_helper::parse_json(isolate_, sv);
+
+    session_->dispatchProtocolMessage(msg);
+
+    if (not obj.IsEmpty()) {
+        auto method = obj->Get(Ctx, v8_helper::to_v8_string(isolate_, "method")).ToLocalChecked();
+        auto method_name = v8_helper::to_std_string(isolate_, method);
+
+        if (method_name == "Runtime.runIfWaitingForDebugger") {
+            std::string reason("CDT");
+            session_->schedulePauseOnNextStatement(v8_helper::make_string_view(reason),
+                                                   v8_helper::make_string_view(reason));
+            waitFrontendMessageOnPause();
+            code_(); // execute the code to debug
+        }
+    }
+}
+
+void v8_helper::V8InspectorClientImpl::runMessageLoopOnPause(int)
+{
+    static bool is_nested = false;
+    if (is_nested) return;
+
+    is_terminated_ = false;
+    is_nested = true;
+    while (not is_terminated_ and conn_->wait_on_message())
+        while (v8::platform::PumpMessageLoop(V8Platform::platform(), isolate_)) { }
+    is_terminated_ = true;
+    is_nested = false;
+}
 
 /*======================================================================================================================
  * V8 Callback Functions
@@ -136,12 +194,12 @@ struct EnvGen : ConstStoreVisitor
         }
 
         /* Add table address to env. */
-        DISCARD env_->Set(Ctx, V8STR(table.name), v8::Int32::New(isolate_, ptr));
+        DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, table.name), v8::Int32::New(isolate_, ptr));
 
         /* Add table size (num_rows) to env. */
         std::ostringstream oss;
         oss << table.name << "_num_rows";
-        DISCARD env_->Set(Ctx, V8STR(oss.str().c_str()), v8::Int32::New(isolate_, table.store().num_rows()));
+        DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, oss.str()), v8::Int32::New(isolate_, table.store().num_rows()));
     }
 
     void operator()(const ColumnStore &s) override {
@@ -150,7 +208,7 @@ struct EnvGen : ConstStoreVisitor
         auto &table = s.table();
 
         /* Add "table_name: num_rows" mapping to env. */
-        DISCARD env_->Set(Ctx, V8STR(table.name), v8::Int32::New(isolate_, table.store().num_rows()));
+        DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, table.name), v8::Int32::New(isolate_, table.store().num_rows()));
 
         for (auto &attr : table) {
             oss.str("");
@@ -169,7 +227,7 @@ struct EnvGen : ConstStoreVisitor
             }
 
             /* Add column address to env. */
-            DISCARD env_->Set(Ctx, V8STR(env_name.c_str()), v8::Int32::New(isolate_, ptr));
+            DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, env_name), v8::Int32::New(isolate_, ptr));
         }
 
         // TODO add null bitmap column
@@ -177,7 +235,7 @@ struct EnvGen : ConstStoreVisitor
         /* Add table size (num_rows) to env. */
         oss.str("");
         oss << table.name << "_num_rows";
-        DISCARD env_->Set(Ctx, V8STR(oss.str().c_str()), v8::Int32::New(isolate_, table.store().num_rows()));
+        DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, oss.str()), v8::Int32::New(isolate_, table.store().num_rows()));
     }
 };
 
@@ -201,10 +259,15 @@ V8Platform::V8Platform()
     v8::Isolate::CreateParams create_params;
     create_params.array_buffer_allocator = allocator_ = v8::ArrayBuffer::Allocator::NewDefaultAllocator();
     isolate_ = v8::Isolate::New(create_params);
+
+    /* If a debugging port is specified, set up the inspector. */
+    if (Options::Get().cdt_port > 0)
+        inspector_ = std::make_unique<v8_helper::V8InspectorClientImpl>(Options::Get().cdt_port, isolate_);
 }
 
 V8Platform::~V8Platform()
 {
+    inspector_.reset();
     isolate_->Dispose();
     delete allocator_;
 }
@@ -216,14 +279,20 @@ void V8Platform::execute(const Operator &plan)
     /* Create required V8 scopes. */
     v8::Isolate::Scope isolate_scope(isolate_);
     v8::HandleScope handle_scope(isolate_); // tracks and disposes of all object handles
-    v8::Local<v8::Context> context = v8::Context::New(isolate_);
+
+    /* Create global template and context. */
+    v8::Local<v8::ObjectTemplate> global_template = v8::ObjectTemplate::New(isolate_);
+    auto run_query = v8::FunctionTemplate::New(isolate_);
+    global_template->Set(isolate_, "run_query", run_query);
+    v8::Local<v8::Context> context = v8::Context::New(isolate_, /* extensions= */ nullptr, global_template);
     v8::Context::Scope context_scope(context);
 
     auto &wasm_context = Create_Wasm_Context(WASM_MAX_MEMORY);
 
     /* Create the import object for instantiating the WebAssembly module. */
     auto imports = v8::Object::New(isolate_);
-    DISCARD imports->Set(context, V8STR("env"), create_env(wasm_context, plan));
+    auto env = create_env(wasm_context, plan);
+    DISCARD imports->Set(context, mkstr("env"), env);
 
     /* Create a WebAssembly instance object. */
     auto instance = instantiate(module, imports);
@@ -232,14 +301,36 @@ void V8Platform::execute(const Operator &plan)
     v8::SetWasmInstanceRawMemory(instance, wasm_context.vm.as<uint8_t*>(), wasm_context.vm.size());
 
     /* Get the exports of the created WebAssembly instance. */
-    auto exports = instance->Get(context, V8STR("exports")).ToLocalChecked().As<v8::Object>();
-    auto run = exports->Get(context, V8STR("run")).ToLocalChecked().As<v8::Function>();
+    auto exports = instance->Get(context, mkstr("exports")).ToLocalChecked().As<v8::Object>();
+    auto run = exports->Get(context, mkstr("run")).ToLocalChecked().As<v8::Function>();
+
+    if (bool(inspector_)) {
+        inspector_->register_context(context);
+        inspector_->start([&]() {
+            /* Create JS script file that instantiates the Wasm module and invokes `run()`. */
+            auto filename = create_js_debug_script(module, env);
+            /* Create a `v8::Script` for that JS file. */
+            std::ifstream js_in(filename);
+            std::string js(std::istreambuf_iterator<char>(js_in), std::istreambuf_iterator<char>{});
+            v8::Local<v8::String> js_src = mkstr(js);
+            std::string path = std::string("file://./") + filename;
+            v8::ScriptOrigin js_origin = v8::ScriptOrigin(mkstr(path));
+            auto script = v8::Script::Compile(context, js_src, &js_origin);
+            if (script.IsEmpty())
+                throw std::runtime_error("failed to compile script");
+            /* Execute the `v8::Script`. */
+            auto result = script.ToLocalChecked()->Run(context);
+            if (result.IsEmpty())
+                throw std::runtime_error("execution failed");
+        });
+        inspector_->deregister_context(context);
+        return;
+    }
 
     /* Invoke the exported function `run` of the module. */
     args_t args { v8::Int32::New(isolate_, wasm_context.id), };
     const uint32_t head_of_heap =
         run->Call(context, context->Global(), 1, args).ToLocalChecked().As<v8::Int32>()->Value();
-
 
     /* Compute the size of the heap in bytes. */
     const uint32_t heap_size = head_of_heap - wasm_context.heap;
@@ -322,13 +413,13 @@ v8::Local<v8::WasmModuleObject> V8Platform::instantiate(const WasmModule &module
     auto buffer = v8::ArrayBuffer::New(isolate_, std::move(bs));
     args_t module_args { buffer };
 
-    auto wasm = Ctx->Global()->Get(Ctx, V8STR("WebAssembly")).ToLocalChecked().As<v8::Object>(); // WebAssembly class
-    auto wasm_module = wasm->Get(Ctx, V8STR("Module")).ToLocalChecked().As<v8::Object>()
+    auto wasm = Ctx->Global()->Get(Ctx, mkstr("WebAssembly")).ToLocalChecked().As<v8::Object>(); // WebAssembly class
+    auto wasm_module = wasm->Get(Ctx, mkstr("Module")).ToLocalChecked().As<v8::Object>()
                            ->CallAsConstructor(Ctx, 1, module_args).ToLocalChecked().As<v8::Object>();
     free(binary_addr);
 
     args_t instance_args { wasm_module, imports };
-    return wasm->Get(Ctx, V8STR("Instance")).ToLocalChecked().As<v8::Object>()
+    return wasm->Get(Ctx, mkstr("Instance")).ToLocalChecked().As<v8::Object>()
                ->CallAsConstructor(Ctx, 2, instance_args).ToLocalChecked().As<v8::WasmModuleObject>();
 }
 
@@ -347,13 +438,13 @@ v8::Local<v8::Object> V8Platform::create_env(WasmContext &wasm_context, const Op
     mem_.map(remaining, 0, wasm_context.vm, head_of_heap);
 
     /* Import next free page, usable for heap allcoations. */
-    DISCARD env->Set(Ctx, V8STR("head_of_heap"), v8::Int32::New(isolate_, head_of_heap));
+    DISCARD env->Set(Ctx, mkstr("head_of_heap"), v8::Int32::New(isolate_, head_of_heap));
     wasm_context.heap = head_of_heap;
 
     /* Add printing functions to environment. */
 #define ADD_FUNC(FUNC) { \
     auto func = v8::Function::New(Ctx, (FUNC)).ToLocalChecked(); \
-    DISCARD env->Set(Ctx, V8STR(#FUNC), func); \
+    DISCARD env->Set(Ctx, mkstr(#FUNC), func); \
 }
     ADD_FUNC(print);
 #undef ADD_FUNC
@@ -369,16 +460,63 @@ v8::Local<v8::Object> V8Platform::create_env(WasmContext &wasm_context, const Op
     return env;
 }
 
-v8::Local<v8::String> V8Platform::to_json(v8::Local<v8::Value> val) const
+v8::Local<v8::String> V8Platform::mkstr(const std::string &str) const
 {
-    auto Ctx = isolate_->GetCurrentContext();
-    auto json = Ctx->Global()->Get(Ctx, V8STR("JSON")).ToLocalChecked().As<v8::Object>();
-    auto stringify = json->Get(Ctx, V8STR("stringify")).ToLocalChecked().As<v8::Function>();
-    v8::Local<v8::Value> args[] = { val };
-    return stringify->Call(Ctx, Ctx->Global(), 1, args).ToLocalChecked().As<v8::String>();
+    return v8_helper::to_v8_string(isolate_, str);
 }
 
-#undef V8STR
+v8::Local<v8::String> V8Platform::to_json(v8::Local<v8::Value> val) const
+{
+    return v8_helper::to_json(isolate_, val);
+}
+
+std::string V8Platform::create_js_debug_script(const WasmModule &module, v8::Local<v8::Object> env)
+{
+    std::ostringstream oss;
+
+    auto binary = module.binary();
+
+    std::string env_str = *v8::String::Utf8Value(isolate_, to_json(env));
+    env_str.insert(env_str.length() - 1, ", \"print\": function (arg) { console.log(arg); }");
+
+    /* Construct import object. */
+    oss << "\
+let importObject = { \"env\": " << env_str << " };\n\
+const bytes = Uint8Array.from([";
+    for (auto p = binary.first, end = p + binary.second; p != end; ++p) {
+        if (p != binary.first) oss << ", ";
+        oss << unsigned(*p);
+    }
+    /* Emit code to instantiate module and invoke exported `run()` function. */
+    oss << "]);\n\
+WebAssembly.compile(bytes).then(module => {\n\
+    const instance = new WebAssembly.Instance(module, importObject);\n\
+    const result = instance.exports.run();\n\
+    console.log('result = ', result);\n\
+});\n\
+debugger;";
+
+    /* Create a new temporary file. */
+    char name[] = "query.js.XXXXXX";
+    int fd = mkostemp(name, O_WRONLY | O_CREAT | O_TRUNC);
+    if (fd == -1)
+        throw std::runtime_error("failed to create a temporary file");
+    auto file = fdopen(fd, "w");
+    if (not file)
+        throw std::runtime_error(strerror(errno));
+    std::cerr << "Creating debug JS script " << name << std::endl;
+
+    /* Write the JS code to instantiate the module and invoke `run()` to the temporary file. */
+    auto src = oss.str();
+    if (fwrite(src.c_str(), 1, src.length(), file) != src.length())
+        throw std::runtime_error("failed to write JS script");
+    if (fflush(file))
+        throw std::runtime_error(strerror(errno));
+    fclose(file);
+
+    /* Return the name of the temporary file. */
+    return std::string(name);
+}
 
 
 /*======================================================================================================================

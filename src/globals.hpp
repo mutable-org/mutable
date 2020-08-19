@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 
 /** Singleton class representing options provided as command line argument to the binaries. */
 struct Options
@@ -33,6 +35,11 @@ struct Options
     const char *store;
     const char *plan_enumerator;
     const char *backend;
+
+#if WITH_V8
+    /* Specify the port for debugging via ChromeDevTools (CDT). */
+    int16_t cdt_port = -1;
+#endif
 
     private:
     Options() = default;

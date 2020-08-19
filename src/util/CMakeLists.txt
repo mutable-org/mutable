@@ -10,4 +10,5 @@ add_library(
     Position.cpp
     terminal.cpp
     Timer.cpp
+    WebSocketServer.cpp
     )

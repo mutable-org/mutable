@@ -309,6 +309,19 @@ WasmModule WasmCodeGen::compile(const Operator &plan)
         /* type=   */ BinaryenTypeInt32()
     );
 
+#if 0
+    {
+        BinaryenExpressionRef args[] = { codegen.num_tuples() };
+        codegen.main_.block() += BinaryenCall(
+            /* module=      */ module.ref(),
+            /* target=      */ "print",
+            /* operands=    */ args,
+            /* numOperands= */ 1,
+            /* returnType=  */ BinaryenTypeNone()
+        );
+    }
+#endif
+
     /*----- Return the new head of heap . ----------------------------------------------------------------------------*/
     codegen.main_.block() += codegen.head_of_heap();
 

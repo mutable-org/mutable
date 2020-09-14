@@ -186,7 +186,8 @@ struct V8Platform : WasmPlatform
     /** Converts any V8 value to JSON. */
     v8::Local<v8::String> to_json(v8::Local<v8::Value> val) const;
     /** Create a JavaScript document for debugging via CDT. */
-    std::string create_js_debug_script(const WasmModule &module, v8::Local<v8::Object> env);
+    std::string create_js_debug_script(const Operator &plan, const WasmModule &module, v8::Local<v8::Object> env,
+                                       const WasmPlatform::WasmContext &wasm_context);
 };
 
 }

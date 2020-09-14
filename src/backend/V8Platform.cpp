@@ -20,6 +20,10 @@ using namespace db;
 using args_t = v8::Local<v8::Value>[];
 
 
+/*======================================================================================================================
+ * v8_helper
+ *====================================================================================================================*/
+
 void v8_helper::V8InspectorClientImpl::register_context(v8::Local<v8::Context> context)
 {
     std::string ctx_name("query");
@@ -95,6 +99,18 @@ void print(const v8::FunctionCallbackInfo<v8::Value> &info)
             std::cout << *v8::String::Utf8Value(info.GetIsolate(), v);
     }
     std::cout << std::endl;
+}
+
+void set_wasm_instance_raw_memory(const v8::FunctionCallbackInfo<v8::Value> &info)
+{
+    v8::Local<v8::WasmModuleObject> wasm_instance = info[0].As<v8::WasmModuleObject>();
+    v8::Local<v8::Int32> wasm_context_id = info[1].As<v8::Int32>();
+
+    auto &wasm_context = WasmPlatform::Get_Wasm_Context_By_ID(wasm_context_id->Value());
+    std::cerr << "Setting Wasm instance raw memory of the given instance to the VM of Wasm context "
+              << wasm_context_id->Value() << " at " << wasm_context.vm.addr() << " of " << wasm_context.vm.size()
+              << " bytes" << std::endl;
+    v8::SetWasmInstanceRawMemory(wasm_instance, wasm_context.vm.as<uint8_t*>(), wasm_context.vm.size());
 }
 
 struct print_value : ConstTypeVisitor
@@ -280,10 +296,9 @@ void V8Platform::execute(const Operator &plan)
     v8::HandleScope handle_scope(isolate_); // tracks and disposes of all object handles
 
     /* Create global template and context. */
-    v8::Local<v8::ObjectTemplate> global_template = v8::ObjectTemplate::New(isolate_);
-    auto run_query = v8::FunctionTemplate::New(isolate_);
-    global_template->Set(isolate_, "run_query", run_query);
-    v8::Local<v8::Context> context = v8::Context::New(isolate_, /* extensions= */ nullptr, global_template);
+    v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate_);
+    global->Set(isolate_, "set_wasm_instance_raw_memory", v8::FunctionTemplate::New(isolate_, set_wasm_instance_raw_memory));
+    v8::Local<v8::Context> context = v8::Context::New(isolate_, /* extensions= */ nullptr, global);
     v8::Context::Scope context_scope(context);
 
     auto &wasm_context = Create_Wasm_Context(WASM_MAX_MEMORY);
@@ -307,7 +322,7 @@ void V8Platform::execute(const Operator &plan)
         inspector_->register_context(context);
         inspector_->start([&]() {
             /* Create JS script file that instantiates the Wasm module and invokes `run()`. */
-            auto filename = create_js_debug_script(module, env);
+            auto filename = create_js_debug_script(plan, module, env, wasm_context);
             /* Create a `v8::Script` for that JS file. */
             std::ifstream js_in(filename);
             std::string js(std::istreambuf_iterator<char>(js_in), std::istreambuf_iterator<char>{});
@@ -330,6 +345,8 @@ void V8Platform::execute(const Operator &plan)
     args_t args { v8::Int32::New(isolate_, wasm_context.id), };
     const uint32_t head_of_heap =
         run->Call(context, context->Global(), 1, args).ToLocalChecked().As<v8::Int32>()->Value();
+
+    std::cerr << "head_of_heap is " << head_of_heap << std::endl;
 
     /* Compute the size of the heap in bytes. */
     const uint32_t heap_size = head_of_heap - wasm_context.heap;
@@ -469,7 +486,8 @@ v8::Local<v8::String> V8Platform::to_json(v8::Local<v8::Value> val) const
     return v8_helper::to_json(isolate_, val);
 }
 
-std::string V8Platform::create_js_debug_script(const WasmModule &module, v8::Local<v8::Object> env)
+std::string V8Platform::create_js_debug_script(const Operator &plan, const WasmModule &module,
+                                               v8::Local<v8::Object> env, const WasmPlatform::WasmContext &wasm_context)
 {
     std::ostringstream oss;
 
@@ -490,8 +508,9 @@ const bytes = Uint8Array.from([";
     oss << "]);\n\
 WebAssembly.compile(bytes).then(module => {\n\
     const instance = new WebAssembly.Instance(module, importObject);\n\
-    const result = instance.exports.run();\n\
-    console.log('result = ', result);\n\
+    set_wasm_instance_raw_memory(instance, " << wasm_context.id << ");\n\
+    const head_of_heap = instance.exports.run();\n\
+    console.log('head of heap is', head_of_heap);\n\
 });\n\
 debugger;";
 

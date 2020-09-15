@@ -3,7 +3,6 @@
 #include "catalog/Schema.hpp"
 #include "globals.hpp"
 #include "IR/Tuple.hpp"
-#include "sockpp/tcp_acceptor.h"
 #include "storage/ColumnStore.hpp"
 #include "storage/RowStore.hpp"
 #include "storage/Store.hpp"

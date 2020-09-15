@@ -1,6 +1,6 @@
 add_library(
     parse
-    STATIC
+    OBJECT
     AST.cpp
     ASTDot.cpp
     ASTDumper.cpp
@@ -8,4 +8,4 @@ add_library(
     ASTVisitor.cpp
     Parser.cpp
     Sema.cpp
-    )
+)

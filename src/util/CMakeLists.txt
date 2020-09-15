@@ -1,6 +1,6 @@
 add_library(
     util
-    STATIC
+    OBJECT
     ADT.cpp
     ArgParser.cpp
     Diagnostic.cpp
@@ -11,4 +11,4 @@ add_library(
     terminal.cpp
     Timer.cpp
     WebSocketServer.cpp
-    )
+)

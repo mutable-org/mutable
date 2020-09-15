@@ -1,5 +1,5 @@
 add_library(
     io
-    STATIC
+    OBJECT
     DSVReader.cpp
-    )
+)

@@ -7,20 +7,38 @@ add_subdirectory(io)
 add_subdirectory(IR)
 add_subdirectory(backend)
 
-add_library(db INTERFACE)
-target_link_libraries(db INTERFACE backend IR io storage parse lex catalog util)
+add_library(
+    ${PROJECT_NAME}
+    globals.cpp
+    $<TARGET_OBJECTS:backend>
+    $<TARGET_OBJECTS:IR>
+    $<TARGET_OBJECTS:io>
+    $<TARGET_OBJECTS:storage>
+    $<TARGET_OBJECTS:parse>
+    $<TARGET_OBJECTS:lex>
+    $<TARGET_OBJECTS:catalog>
+    $<TARGET_OBJECTS:util>
+)
+target_link_libraries(${PROJECT_NAME} PRIVATE binaryen ${Boost_LIBRARIES} dl)
+if (${WITH_V8})
+    target_link_libraries(${PROJECT_NAME} PRIVATE v8)
+endif()
+if(${WITH_SPIDERMONKEY})
+    target_link_libraries(${PROJECT_NAME} PRIVATE spidermonkey)
+endif()
 
-add_executable(lex-bin lex.cpp)
-target_link_libraries(lex-bin lex util)
+add_executable(lex-bin lex.cpp globals.cpp)
+target_link_libraries(lex-bin $<TARGET_OBJECTS:lex> $<TARGET_OBJECTS:util>)
 set_target_properties(lex-bin PROPERTIES OUTPUT_NAME lex)
 
-add_executable(parse-bin parse.cpp)
-target_link_libraries(parse-bin parse lex catalog util)
+add_executable(parse-bin parse.cpp globals.cpp)
+target_link_libraries(parse-bin $<TARGET_OBJECTS:parse> $<TARGET_OBJECTS:lex> $<TARGET_OBJECTS:catalog> $<TARGET_OBJECTS:util>)
 set_target_properties(parse-bin PROPERTIES OUTPUT_NAME parse)
 
 add_executable(check-bin check.cpp globals.cpp)
-target_link_libraries(check-bin parse lex catalog util)
+target_link_libraries(check-bin $<TARGET_OBJECTS:parse> $<TARGET_OBJECTS:lex> $<TARGET_OBJECTS:catalog> $<TARGET_OBJECTS:util>)
 set_target_properties(check-bin PROPERTIES OUTPUT_NAME check)
 
-add_executable(shell shell.cpp globals.cpp)
-target_link_libraries(shell ${CMAKE_THREAD_LIBS_INIT} dl replxx db)
+add_executable(shell shell.cpp)
+add_dependencies(shell Replxx)
+target_link_libraries(shell ${CMAKE_THREAD_LIBS_INIT} replxx ${PROJECT_NAME})

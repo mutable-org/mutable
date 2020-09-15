@@ -1,6 +1,6 @@
 add_library(
     IR
-    STATIC
+    OBJECT
     CNF.cpp
     Operator.cpp
     OperatorDot.cpp
@@ -9,4 +9,4 @@ add_library(
     PlanEnumerator.cpp
     QueryGraph.cpp
     Tuple.cpp
-    )
+)

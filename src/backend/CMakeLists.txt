@@ -1,4 +1,4 @@
-SET(
+set(
     BACKEND_SOURCES
     Backend.cpp
     Interpreter.cpp
@@ -6,19 +6,20 @@ SET(
     WasmAlgo.cpp
     WasmUtil.cpp
     WebAssembly.cpp
-    )
-
-SET(BACKEND_LIBRARIES binaryen)
+)
 
 if(${WITH_V8})
-    SET(BACKEND_SOURCES ${BACKEND_SOURCES} V8Platform.cpp)
-    SET(BACKEND_LIBRARIES ${BACKEND_LIBRARIES} v8 sockpp)
+    set(BACKEND_SOURCES ${BACKEND_SOURCES} V8Platform.cpp)
 endif()
-
 if(${WITH_SPIDERMONKEY})
-    SET(BACKEND_SOURCES ${BACKEND_SOURCES} SpiderMonkeyPlatform.cpp)
-    SET(BACKEND_LIBRARIES ${BACKEND_LIBRARIES} spidermonkey)
+    set(BACKEND_SOURCES ${BACKEND_SOURCES} SpiderMonkeyPlatform.cpp)
 endif()
 
-add_library(backend STATIC ${BACKEND_SOURCES})
-target_link_libraries(backend ${BACKEND_LIBRARIES})
+add_library(backend OBJECT ${BACKEND_SOURCES})
+add_dependencies(backend Binaryen)
+if(${WITH_V8})
+    add_dependencies(backend V8)
+endif()
+if(${WITH_SPIDERMONKEY})
+    add_dependencies(backend SpiderMonkey)
+endif()

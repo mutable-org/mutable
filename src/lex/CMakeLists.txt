@@ -1,6 +1,6 @@
 add_library(
     lex
-    STATIC
+    OBJECT
     Lexer.cpp
     Token.cpp
-    )
+)

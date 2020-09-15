@@ -1,8 +1,8 @@
 add_library(
     storage
-    STATIC
+    OBJECT
     ColumnStore.cpp
     Linearization.cpp
     RowStore.cpp
     Store.cpp
-    )
+)

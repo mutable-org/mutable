@@ -130,7 +130,7 @@ if(${WITH_V8})
         PREFIX third-party
         DOWNLOAD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8"
         SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8"
-        DOWNLOAD_COMMAND fetch --force v8
+        DOWNLOAD_COMMAND fetch --force v8 || true
         COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/"
         COMMAND git remote add -f mutable git@gitlab.cs.uni-saarland.de:bigdata/mutable/v8.git || true
         COMMAND git fetch mutable

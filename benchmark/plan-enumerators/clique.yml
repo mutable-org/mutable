@@ -12,6 +12,7 @@ configurations:
     TDbasic:        '--plan-enumerator TDbasic'
     TDMinCutAGaT:   '--plan-enumerator TDMinCutAGaT'
 label: 'Number of joins'
+tables: [ ]
 cases:
     2:  SELECT
             *

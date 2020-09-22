@@ -134,7 +134,7 @@ if(${WITH_V8})
         COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/"
         COMMAND git remote add -f mutable git@gitlab.cs.uni-saarland.de:bigdata/mutable/v8.git || true
         COMMAND git fetch mutable
-        COMMAND git checkout d281a9226cfb682817ce0ec8f7f152879f7035a9
+        COMMAND git checkout 7e542d3cbd49ae9e5bb07f1b70e136fd75362191
         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/third_party/depot_tools/gclient sync
         UPDATE_COMMAND ""
         CONFIGURE_COMMAND gn gen . --root=${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8 --args=${V8_BUILD_ARGS}

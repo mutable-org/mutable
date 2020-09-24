@@ -4,7 +4,6 @@
 #include "util/WebSocketServer.hpp"
 #include "WebAssembly.hpp"
 #include <libplatform/libplatform.h>
-#include <thread>
 #include <v8-inspector.h>
 #include <v8.h>
 

@@ -28,15 +28,15 @@ if(${WITH_SPIDERMONKEY})
 endif()
 
 add_executable(lex-bin lex.cpp globals.cpp)
-target_link_libraries(lex-bin $<TARGET_OBJECTS:lex> $<TARGET_OBJECTS:util>)
+target_link_libraries(lex-bin ${PROJECT_NAME})
 set_target_properties(lex-bin PROPERTIES OUTPUT_NAME lex)
 
 add_executable(parse-bin parse.cpp globals.cpp)
-target_link_libraries(parse-bin $<TARGET_OBJECTS:parse> $<TARGET_OBJECTS:lex> $<TARGET_OBJECTS:catalog> $<TARGET_OBJECTS:util>)
+target_link_libraries(parse-bin ${PROJECT_NAME})
 set_target_properties(parse-bin PROPERTIES OUTPUT_NAME parse)
 
 add_executable(check-bin check.cpp globals.cpp)
-target_link_libraries(check-bin $<TARGET_OBJECTS:parse> $<TARGET_OBJECTS:lex> $<TARGET_OBJECTS:catalog> $<TARGET_OBJECTS:util>)
+target_link_libraries(check-bin ${PROJECT_NAME})
 set_target_properties(check-bin PROPERTIES OUTPUT_NAME check)
 
 add_executable(shell shell.cpp)

@@ -996,8 +996,6 @@ BinaryenExpressionRef WasmRefCountingHashTable::insert_with_duplicates(BlockBuil
     BlockBuilder bucket_insert(module, "insert.append_to_bucket");
 
     /*----- If the bucket is empty, initialize it. -------------------------------------------------------------------*/
-    // TODO remove this by moving after bucket_create/bucket_insert
-    emplace(bucket_create, bucket_addr, BinaryenConst(module, BinaryenLiteralInt32(entry_size())), bucket_addr, {key});
     slot_addr.set(bucket_create, bucket_addr);
 
     /*----- Compute end of hash table. -------------------------------------------------------------------------------*/
@@ -1092,29 +1090,29 @@ BinaryenExpressionRef WasmRefCountingHashTable::insert_with_duplicates(BlockBuil
             /* left=   */ steps,
             /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size()))
         ));
-        slot_addr.set(find_slot, BinaryenBinary(
+        auto b_slot_addr_inc = BinaryenBinary(
             /* module= */ module,
             /* op=     */ BinaryenAddInt32(),
             /* left=   */ slot_addr,
             /* right=  */ steps
-        ));
+        );
         auto b_exceeds_table = BinaryenBinary(
             /* module= */ module,
             /* op=     */ BinaryenGeUInt32(),
-            /* left=   */ slot_addr,
+            /* left=   */ b_slot_addr_inc,
             /* right=  */ b_table_end
         );
         auto b_slot_addr_wrapped = BinaryenBinary(
             /* module= */ module,
             /* op=     */ BinaryenSubInt32(),
-            /* left=   */ slot_addr,
+            /* left=   */ b_slot_addr_inc,
             /* right=  */ table_size_in_bytes
         );
         slot_addr.set(find_slot, BinaryenSelect(
             /* module=    */ module,
             /* condition= */ b_exceeds_table,
             /* ifTrue=    */ b_slot_addr_wrapped,
-            /* ifFalse=   */ slot_addr,
+            /* ifFalse=   */ b_slot_addr_inc,
             /* type=      */ BinaryenTypeInt32()
         ));
     }
@@ -1127,7 +1125,6 @@ BinaryenExpressionRef WasmRefCountingHashTable::insert_with_duplicates(BlockBuil
         /* left=   */ steps,
         /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size()))
     ));
-    emplace(bucket_insert, bucket_addr, steps, slot_addr, { key });
 
     /*----- Create conditional jump based on whether the bucket is empty. --------------------------------------------*/
     block += BinaryenIf(
@@ -1136,7 +1133,8 @@ BinaryenExpressionRef WasmRefCountingHashTable::insert_with_duplicates(BlockBuil
         /* ifTrue=    */ bucket_insert.finalize(),
         /* ifFalse=   */ bucket_create.finalize()
     );
-
+    /* After finding the next free slot in the bucket, place the key in that slot. */
+    emplace(block, bucket_addr, steps, slot_addr, { key });
     return slot_addr;
 }
 

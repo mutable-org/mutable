@@ -892,17 +892,57 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
                     /* ifFalse=   */ nullptr
                 );
 
+                /*----- Compute size and end of table to handle wrap around. -----------------------------------------*/
+                auto b_size = BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenAddInt32(),
+                    /* left=   */ HT->mask(),
+                    /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
+                );
+                WasmVariable table_size_in_bytes(CG.fn(), BinaryenTypeInt32());
+                table_size_in_bytes.set(block_, BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenMulInt32(),
+                    /* left=   */ b_size,
+                    /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size()))
+                ));
+                auto b_table_end = BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenAddInt32(),
+                    /* left=   */ HT->addr(),
+                    /* right=  */ table_size_in_bytes
+                );
+
                 step.set(loop, BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenAddInt32(),
                     /* left=   */ step,
                     /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size()))
                 ));
-                slot_addr.set(loop, BinaryenBinary(
+                auto b_slot_addr_inc = BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenAddInt32(),
                     /* left=   */ slot_addr,
                     /* right=  */ step
+                );
+                auto b_exceeds_table = BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenGeUInt32(),
+                    /* left=   */ b_slot_addr_inc,
+                    /* right=  */ b_table_end
+                );
+                auto b_slot_addr_wrapped = BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenSubInt32(),
+                    /* left=   */ b_slot_addr_inc,
+                    /* right=  */ table_size_in_bytes
+                );
+                slot_addr.set(loop, BinaryenSelect(
+                    /* module=    */ module(),
+                    /* condition= */ b_exceeds_table,
+                    /* ifTrue=    */ b_slot_addr_wrapped,
+                    /* ifFalse=   */ b_slot_addr_inc,
+                    /* type=      */ BinaryenTypeInt32()
                 ));
                 block_ += loop.finalize();
             }

@@ -216,7 +216,7 @@ struct WasmRefCountingHashTable : WasmHashTable
 
     private:
     WasmVariable addr_; ///< the address of the hash table
-    WasmVariable mask_; ///< the mask used to compute a slot address in the table, i.e. capacity * entry_size
+    WasmVariable mask_; ///< the mask used to compute a slot address in the table, i.e. capacity - 1
     std::size_t entry_size_; ///< the size in bytes of a table entry, that is the key-value pair and meta data
     mutable BinaryenFunctionRef fn_rehash_ = nullptr; ///< the rehashing function for this hash table
 

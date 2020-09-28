@@ -1,0 +1,158 @@
+description: Binary join with curious schema.
+db: ours
+query: |
+    SELECT T.key, S.key, S.fkey FROM S, T WHERE T.key = S.fkey;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: T TK_IDENTIFIER
+            -:1:9: . TK_DOT
+            -:1:10: key TK_IDENTIFIER
+            -:1:13: , TK_COMMA
+            -:1:15: S TK_IDENTIFIER
+            -:1:16: . TK_DOT
+            -:1:17: key TK_IDENTIFIER
+            -:1:20: , TK_COMMA
+            -:1:22: S TK_IDENTIFIER
+            -:1:23: . TK_DOT
+            -:1:24: fkey TK_IDENTIFIER
+            -:1:29: FROM TK_From
+            -:1:34: S TK_IDENTIFIER
+            -:1:35: , TK_COMMA
+            -:1:37: T TK_IDENTIFIER
+            -:1:39: WHERE TK_Where
+            -:1:45: T TK_IDENTIFIER
+            -:1:46: . TK_DOT
+            -:1:47: key TK_IDENTIFIER
+            -:1:51: = TK_EQUAL
+            -:1:53: S TK_IDENTIFIER
+            -:1:54: . TK_DOT
+            -:1:55: fkey TK_IDENTIFIER
+            -:1:59: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT T.key, S.key, S.fkey
+            FROM S, T
+            WHERE (T.key = S.fkey);
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            2,19,2
+            2,25,2
+            3,75,3
+            5,2,5
+            6,4,6
+            7,50,7
+            7,70,7
+            8,27,8
+            11,51,11
+            11,55,11
+            12,77,12
+            13,81,13
+            13,94,13
+            16,93,16
+            17,11,17
+            17,67,17
+            19,56,19
+            20,61,20
+            21,26,21
+            22,10,22
+            24,95,24
+            25,15,25
+            25,43,25
+            26,49,26
+            26,82,26
+            27,86,27
+            28,18,28
+            28,64,28
+            29,32,29
+            30,74,30
+            31,48,31
+            33,84,33
+            33,92,33
+            36,57,36
+            37,38,37
+            39,66,39
+            40,44,40
+            41,69,41
+            42,40,42
+            42,71,42
+            43,42,43
+            43,89,43
+            44,21,44
+            48,35,48
+            49,63,49
+            50,36,50
+            50,59,50
+            52,88,52
+            52,90,52
+            53,14,53
+            53,41,53
+            54,52,54
+            56,80,56
+            58,47,58
+            58,53,58
+            58,87,58
+            58,91,58
+            60,5,60
+            61,83,61
+            62,46,62
+            62,73,62
+            63,65,63
+            65,12,65
+            65,45,65
+            67,30,67
+            67,58,67
+            70,1,70
+            71,22,71
+            71,34,71
+            71,97,71
+            73,7,73
+            73,20,73
+            73,96,73
+            74,0,74
+            78,76,78
+            79,33,79
+            79,98,79
+            80,62,80
+            82,72,82
+            83,9,83
+            83,60,83
+            85,13,85
+            85,23,85
+            87,29,87
+            87,85,87
+            88,6,88
+            88,37,88
+            88,39,88
+            89,8,89
+            89,28,89
+            89,54,89
+            90,3,90
+            91,31,91
+            92,16,92
+            93,17,93
+            93,78,93
+            95,79,95
+            98,68,98
+            99,24,99
+            99,99,99
+        err: NULL
+        num_err: 0
+        returncode: 0

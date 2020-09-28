@@ -178,13 +178,16 @@ struct WasmHashTable
     virtual BinaryenExpressionRef is_slot_empty(BinaryenExpressionRef b_slot_addr) const = 0;
 
     virtual BinaryenExpressionRef compare_key(BinaryenExpressionRef b_slot_addr,
+                                              const std::vector<Schema::Identifier> &IDs,
                                               const std::vector<BinaryenExpressionRef> &key) const = 0;
 
     /** Inserts a new entry into the bucket at `b_bucket_addr` by updating the bucket's probe length to `b_steps`,
      * marking the slot at `b_slot_addr` occupied, and placing the key in this slot. */
     virtual void emplace(BlockBuilder &block,
                          BinaryenExpressionRef b_bucket_addr, BinaryenExpressionRef b_steps,
-                         BinaryenExpressionRef b_slot_addr, const std::vector<BinaryenExpressionRef> &key) const = 0;
+                         BinaryenExpressionRef b_slot_addr,
+                         const std::vector<Schema::Identifier> &IDs,
+                         const std::vector<BinaryenExpressionRef> &key) const = 0;
 
     /** Creates a `WasmCGContext` to load values from the slot at `b_slot_addr`. */
     virtual WasmCGContext load_from_slot(BinaryenExpressionRef b_slot_addr) const = 0;
@@ -199,10 +202,12 @@ struct WasmHashTable
 
     virtual BinaryenExpressionRef insert_with_duplicates(BlockBuilder &block,
                                                          BinaryenExpressionRef b_hash,
+                                                         const std::vector<Schema::Identifier> &IDs,
                                                          const std::vector<BinaryenExpressionRef> &key) const = 0;
 
     virtual BinaryenExpressionRef insert_without_duplicates(BlockBuilder &block,
                                                             BinaryenExpressionRef b_hash,
+                                                            const std::vector<Schema::Identifier> &IDs,
                                                             const std::vector<BinaryenExpressionRef> &key) const = 0;
 
     virtual BinaryenFunctionRef rehash(WasmHash &hasher,
@@ -254,11 +259,14 @@ struct WasmRefCountingHashTable : WasmHashTable
     BinaryenExpressionRef is_slot_empty(BinaryenExpressionRef b_slot_addr) const override;
 
     BinaryenExpressionRef compare_key(BinaryenExpressionRef b_slot_addr,
+                                      const std::vector<Schema::Identifier> &IDs,
                                       const std::vector<BinaryenExpressionRef> &key) const override;
 
     void emplace(BlockBuilder &block,
                  BinaryenExpressionRef b_bucket_addr, BinaryenExpressionRef b_steps,
-                 BinaryenExpressionRef b_slot_addr, const std::vector<BinaryenExpressionRef> &key) const override;
+                 BinaryenExpressionRef b_slot_addr,
+                 const std::vector<Schema::Identifier> &IDs,
+                 const std::vector<BinaryenExpressionRef> &key) const override;
 
     WasmCGContext load_from_slot(BinaryenExpressionRef b_slot_addr) const override;
 
@@ -276,10 +284,12 @@ struct WasmRefCountingHashTable : WasmHashTable
 
     BinaryenExpressionRef insert_with_duplicates(BlockBuilder &block,
                                                  BinaryenExpressionRef b_hash,
+                                                 const std::vector<Schema::Identifier> &IDs,
                                                  const std::vector<BinaryenExpressionRef> &key) const override;
 
     BinaryenExpressionRef insert_without_duplicates(BlockBuilder &block,
                                                     BinaryenExpressionRef b_hash,
+                                                    const std::vector<Schema::Identifier> &IDs,
                                                     const std::vector<BinaryenExpressionRef> &key) const override;
 
     BinaryenFunctionRef rehash(WasmHash &hasher,

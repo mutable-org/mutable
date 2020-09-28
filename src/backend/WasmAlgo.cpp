@@ -882,16 +882,18 @@ BinaryenExpressionRef WasmRefCountingHashTable::is_slot_empty(BinaryenExpression
 }
 
 BinaryenExpressionRef WasmRefCountingHashTable::compare_key(BinaryenExpressionRef b_slot_addr,
+                                                            const std::vector<Schema::Identifier> &IDs,
                                                             const std::vector<BinaryenExpressionRef> &key) const
 {
     BinaryenExpressionRef b_keys_equal = nullptr;
     {
         auto ld_key = struc.create_load_context(b_slot_addr, /* offset= */ REFERENCE_SIZE);
         std::size_t idx = 0;
-        for (auto b_key_find : key) {
-            auto &e = struc.schema[idx++];
-            auto b_key_bucket = ld_key[e.id];
-            auto b_cmp = WasmCompare::Eq(module, *e.type, b_key_bucket, b_key_find);
+        auto key_it = key.begin();
+        for (auto id : IDs) {
+            auto ty = struc.schema[id].second.type;
+            auto b_key_bucket = ld_key[id];
+            auto b_cmp = WasmCompare::Eq(module, *ty, b_key_bucket, *key_it);
 
             if (b_keys_equal) {
                 b_keys_equal = BinaryenBinary(
@@ -911,9 +913,11 @@ BinaryenExpressionRef WasmRefCountingHashTable::compare_key(BinaryenExpressionRe
 void WasmRefCountingHashTable::emplace(BlockBuilder &block,
                                        BinaryenExpressionRef b_bucket_addr, BinaryenExpressionRef b_steps,
                                        BinaryenExpressionRef b_slot_addr,
+                                       const std::vector<Schema::Identifier> &IDs,
                                        const std::vector<BinaryenExpressionRef> &key) const
 {
     insist(key.size() <= struc.schema.num_entries(), "incorrect number of key values");
+    insist(IDs.size() == key.size(), "number of identifiers and length of key must be equal");
 
     /*----- Update bucket probe length. ------------------------------------------------------------------------------*/
     block += BinaryenStore(
@@ -938,9 +942,10 @@ void WasmRefCountingHashTable::emplace(BlockBuilder &block,
     );
 
     /*----- Write key to slot. ---------------------------------------------------------------------------------------*/
-    std::size_t idx = 0;
-    for (auto b_key : key)
-        block += struc.store(b_slot_addr, struc.schema[idx++].id, b_key, /* offset= */ REFERENCE_SIZE);
+    auto id = IDs.begin();
+    auto k = key.begin();
+    while (id != IDs.end())
+        block += struc.store(b_slot_addr, *id++, *k++, /* offset= */ REFERENCE_SIZE);
 }
 
 WasmCGContext WasmRefCountingHashTable::load_from_slot(BinaryenExpressionRef b_slot_addr) const
@@ -980,6 +985,7 @@ BinaryenExpressionRef WasmRefCountingHashTable::get_bucket_ref_count(BinaryenExp
 
 BinaryenExpressionRef WasmRefCountingHashTable::insert_with_duplicates(BlockBuilder &block,
                                                                        BinaryenExpressionRef b_hash,
+                                                                       const std::vector<Schema::Identifier> &IDs,
                                                                        const std::vector<BinaryenExpressionRef> &key)
     const
 {
@@ -1134,12 +1140,13 @@ BinaryenExpressionRef WasmRefCountingHashTable::insert_with_duplicates(BlockBuil
         /* ifFalse=   */ bucket_create.finalize()
     );
     /* After finding the next free slot in the bucket, place the key in that slot. */
-    emplace(block, bucket_addr, steps, slot_addr, { key });
+    emplace(block, bucket_addr, steps, slot_addr, IDs, key);
     return slot_addr;
 }
 
 BinaryenExpressionRef WasmRefCountingHashTable::insert_without_duplicates(BlockBuilder &block,
                                                                           BinaryenExpressionRef b_hash,
+                                                                          const std::vector<Schema::Identifier> &IDs,
                                                                           const std::vector<BinaryenExpressionRef> &key)
     const
 {
@@ -1153,7 +1160,7 @@ BinaryenExpressionRef WasmRefCountingHashTable::insert_without_duplicates(BlockB
     BlockBuilder insert(module, "insert.new_entry");
 
     /*----- Create new entry in new hash table. ----------------------------------------------------------------------*/
-    emplace(insert, bucket_addr, b_steps, b_slot_addr, key);
+    emplace(insert, bucket_addr, b_steps, b_slot_addr, IDs, key);
 
     /*----- Create conditional branch depending on whether `key` already exists in the bucket. -----------------------*/
     block += BinaryenIf(
@@ -1297,7 +1304,7 @@ BinaryenFunctionRef WasmRefCountingHashTable::rehash(WasmHash &hasher,
         );
 
         /*----- Re-insert the element. ---------------------------------------------------------------*/
-        auto slot_addr = HT_new.insert_with_duplicates(for_each, b_hash_i32, key);
+        auto slot_addr = HT_new.insert_with_duplicates(for_each, b_hash_i32, key_ids, key);
 
         /*---- Write payload. ------------------------------------------------------------------------*/
         for (auto pid : payload_ids)

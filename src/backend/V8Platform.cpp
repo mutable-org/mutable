@@ -345,8 +345,6 @@ void V8Platform::execute(const Operator &plan)
     const uint32_t head_of_heap =
         run->Call(context, context->Global(), 1, args).ToLocalChecked().As<v8::Int32>()->Value();
 
-    std::cerr << "head_of_heap is " << head_of_heap << std::endl;
-
     /* Compute the size of the heap in bytes. */
     const uint32_t heap_size = head_of_heap - wasm_context.heap;
 
@@ -509,7 +507,13 @@ WebAssembly.compile(bytes).then(module => {\n\
     const instance = new WebAssembly.Instance(module, importObject);\n\
     set_wasm_instance_raw_memory(instance, " << wasm_context.id << ");\n\
     const head_of_heap = instance.exports.run();\n\
-    console.log('head of heap is', head_of_heap);\n\
+    console.log('The head of heap is at byte offset %i.', head_of_heap);\n\
+    const heap_size = head_of_heap - " << wasm_context.heap << ";\n\
+    console.log('There are %i bytes on the heap.', heap_size);\n\
+    var df = new DataView(instance.exports.memory.buffer);\n\
+    const num_tuples = df.getUint32(head_of_heap, true);\n\
+    console.log('The result set contains %i tuples.', num_tuples);\n\
+    debugger;\n\
 });\n\
 debugger;";
 

@@ -383,6 +383,35 @@ void WasmCodeGen::operator()(const JoinOperator &op)
             data->struc = new WasmStruct(module(), build.schema());
 
             (*this)(build);
+
+#if 1
+            /*----- Verify the number of entries in the hash table. --------------------------------------------------*/
+            /* Compute end of HT. */
+            auto HT = as<WasmRefCountingHashTable>(data->HT);
+            auto b_table_size = BinaryenBinary(module(), BinaryenAddInt32(), HT->mask(),
+                                               BinaryenConst(module(), BinaryenLiteralInt32(1)));
+            auto b_table_size_in_bytes = BinaryenBinary(module(), BinaryenMulInt32(), b_table_size,
+                                                        BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size())));
+            WasmVariable table_end(fn(), BinaryenTypeInt32());
+            table_end.set(fn().block(), BinaryenBinary(module(), BinaryenAddInt32(), HT->addr(), b_table_size_in_bytes));
+
+            /* Count occupied slots in HT. */
+            WasmVariable counter(fn(), BinaryenTypeInt32());
+            WasmVariable runner(fn(), BinaryenTypeInt32());
+            runner.set(fn().block(), HT->addr());
+            WasmWhile for_each(module(), "SHJ.for_each", BinaryenBinary(module(), BinaryenLtUInt32(), runner, table_end));
+            auto b_is_occupied = BinaryenBinary(module(), BinaryenNeInt32(), HT->get_bucket_ref_count(runner), BinaryenConst(module(), BinaryenLiteralInt32(0)));
+            counter.set(for_each, BinaryenBinary(module(), BinaryenAddInt32(), counter, b_is_occupied));
+            runner.set(for_each, BinaryenBinary(module(), BinaryenAddInt32(), runner, BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size()))));
+            fn().block() += for_each.finalize();
+
+            /* Print number of occupied slots. */
+            {
+                BinaryenExpressionRef args[] = { counter() };
+                fn().block() += BinaryenCall(module(), "print", args, 1, BinaryenTypeNone());
+            }
+#endif
+
             data->is_build_phase = false;
             (*this)(probe);
         }
@@ -696,14 +725,16 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
             auto [build, probe] = op.child(0)->schema().has({first->get_table_name(), first->attr_name.text}) ?
                                   std::make_pair(first, second) : std::make_pair(second, first);
 
+            Schema::Identifier build_key_id(build->table_name.text, build->attr_name.text);
+            Schema::Identifier probe_key_id(probe->table_name.text, probe->attr_name.text);
+
             if (data->is_build_phase) {
-                auto key_id = Schema::Identifier(build->table_name.text, build->attr_name.text);
-                auto key = context().get_value(key_id);
+                auto key = context().get_value(build_key_id);
 
                 /*----- Compute payload ids. -------------------------------------------------------------------------*/
                 std::vector<Schema::Identifier> payload_ids;
                 for (auto attr : op.child(0)->schema()) {
-                    if (attr.id != key_id)
+                    if (attr.id != build_key_id)
                         payload_ids.push_back(attr.id);
                 }
 
@@ -776,7 +807,7 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
                 CG.align_head_of_heap(perform_rehash);
 
                 /*----- Rehash to double size. -----------------------------------------------------------------------*/
-                auto b_fn_rehash = HT->rehash(hasher, { key_id }, payload_ids);
+                auto b_fn_rehash = HT->rehash(hasher, { build_key_id }, payload_ids);
                 BinaryenExpressionRef rehash_args[4] = {
                     /* addr_old= */ HT->addr(),
                     /* mask_old= */ HT->mask(),
@@ -831,7 +862,7 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
                 );
 
                 /*----- Insert the element. --------------------------------------------------------------------------*/
-                auto slot_addr = HT->insert_with_duplicates(block_, b_hash_i32, { key });
+                auto slot_addr = HT->insert_with_duplicates(block_, b_hash_i32, { build_key_id }, { key });
 
                 /*---- Write payload. --------------------------------------------------------------------------------*/
                 for (auto attr : op.child(0)->schema())
@@ -845,7 +876,7 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
                 ));
             } else {
                 auto HT = as<WasmRefCountingHashTable>(data->HT);
-                auto key = context().get_value({probe->table_name.text, probe->attr_name.text});
+                auto key = context().get_value(probe_key_id);
 
                 /*----- Compute hash. --------------------------------------------------------------------------------*/
                 auto b_hash = hasher.emit(module(), CG.fn(), block_, { key });
@@ -877,8 +908,9 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
                 for (auto &attr : op.child(0)->schema())
                     context().add(attr.id, ld.get_value(attr.id));
 
-                /*----- Check whether the key of the entry in the bucket equals the probe key. -----------------------*/
-                auto b_is_key_equal = HT->compare_key(slot_addr, { key });
+                /*----- Check whether the key of the entry in the bucket -- identified by `build_key_id` -- equals the
+                 * probe key. ----------------------------------------------------------------------------------------*/
+                auto b_is_key_equal = HT->compare_key(slot_addr, { build_key_id }, { key });
                 BlockBuilder keys_equal(module(), "join.probe.match");
 
                 swap(block_, keys_equal);
@@ -1015,6 +1047,10 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
     auto &C = Catalog::Get();
     WasmHashMumur3_64A hasher;
     auto data = as<GroupingData>(op.data());
+
+    std::vector<Schema::Identifier> key_IDs;
+    for (std::size_t i = 0; i != op.group_by().size(); ++i)
+        key_IDs.push_back(op.schema()[i].id);
 
     /*----- Allocate hash table. -------------------------------------------------------------------------------------*/
     uint32_t initial_capacity = 32;
@@ -1184,7 +1220,7 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
     ));
 
     auto ld_slot = data->HT->load_from_slot(b_slot_addr);
-    data->HT->emplace(create_group, bucket_addr, b_steps, b_slot_addr, key);
+    data->HT->emplace(create_group, bucket_addr, b_steps, b_slot_addr, key_IDs, key);
 
     for (std::size_t i = 0; i != op.aggregates().size(); ++i) {
         auto e = op.schema()[op.group_by().size() + i];

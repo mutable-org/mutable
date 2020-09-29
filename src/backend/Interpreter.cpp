@@ -697,6 +697,8 @@ void Interpreter::operator()(const JoinOperator &op)
         case JoinOperator::J_SimpleHashJoin: {
             auto data = new SimpleHashJoinData(op);
             op.data(data);
+            if (auto scan = cast<ScanOperator>(op.child(0))) /// XXX: hack for pre-allocation
+                data->ht.resize(scan->store().num_rows());
             op.child(0)->accept(*this); // build HT on LHS
             data->is_probe_phase = true;
             op.child(1)->accept(*this); // probe HT with RHS

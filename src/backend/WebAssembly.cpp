@@ -384,7 +384,7 @@ void WasmCodeGen::operator()(const JoinOperator &op)
 
             (*this)(build);
 
-#if 1
+#if 0
             /*----- Verify the number of entries in the hash table. --------------------------------------------------*/
             /* Compute end of HT. */
             auto HT = as<WasmRefCountingHashTable>(data->HT);

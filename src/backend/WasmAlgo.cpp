@@ -989,9 +989,34 @@ BinaryenExpressionRef WasmRefCountingHashTable::insert_with_duplicates(BlockBuil
                                                                        const std::vector<BinaryenExpressionRef> &key)
     const
 {
-    /*----- Compute address of bucket. -------------------------------------------------------------------------------*/
+#if 0
+    {
+        BinaryenExpressionRef args[] = { BinaryenConst(module, BinaryenLiteralInt32(0xABCD)) };
+        block += BinaryenCall(module, "print", args, 1, BinaryenTypeNone());
+    }
+#endif
+
+    /*----- Compute index and address of bucket. ---------------------------------------------------------------------*/
+    WasmVariable bucket_index(fn, BinaryenTypeInt32());
+    bucket_index.set(block, BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenAndInt32(),
+        /* left=   */ b_hash,
+        /* right=  */ mask()
+    ));
+    auto b_bucket_offset = BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenMulInt32(),
+        /* left=   */ bucket_index,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size()))
+    );
     WasmVariable bucket_addr(fn, BinaryenTypeInt32());
-    bucket_addr.set(block, hash_to_bucket(b_hash));
+    bucket_addr.set(block, BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ addr_,
+        /* right=  */ b_bucket_offset
+    ));
 
     /*----- Load steps in bucket. ------------------------------------------------------------------------------------*/
     WasmVariable steps(fn, BinaryenTypeInt32());
@@ -1005,25 +1030,21 @@ BinaryenExpressionRef WasmRefCountingHashTable::insert_with_duplicates(BlockBuil
     slot_addr.set(bucket_create, bucket_addr);
 
     /*----- Compute end of hash table. -------------------------------------------------------------------------------*/
-    auto b_size = BinaryenBinary(
-        /* module= */ module,
-        /* op=     */ BinaryenAddInt32(),
-        /* left=   */ mask(),
-        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(1))
-    );
     WasmVariable table_size_in_bytes(fn, BinaryenTypeInt32());
-    table_size_in_bytes.set(bucket_insert, BinaryenBinary(
-        /* module= */ module,
-        /* op=     */ BinaryenMulInt32(),
-        /* left=   */ b_size,
-        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size()))
-    ));
-    auto b_table_end = BinaryenBinary(
-        /* module= */ module,
-        /* op=     */ BinaryenAddInt32(),
-        /* left=   */ addr(),
-        /* right=  */ table_size_in_bytes
-    );
+    {
+        auto b_size = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ mask(),
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(1))
+        );
+        table_size_in_bytes.set(bucket_insert, BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenMulInt32(),
+            /* left=   */ b_size,
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size()))
+        ));
+    }
 
     {
         /*----- Evaluate formula for Gaussian sum to compute the end of the bucket -----------------------------------*/
@@ -1046,44 +1067,41 @@ BinaryenExpressionRef WasmRefCountingHashTable::insert_with_duplicates(BlockBuil
             /* left=   */ b_square,
             /* right=  */ probe_len
         );
-        auto b_gauss = BinaryenBinary(
+        auto b_distance = BinaryenBinary(
             /* module= */ module,
             /* op=     */ BinaryenShrUInt32(),
             /* left=   */ b_sum,
             /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(1))
         );
-
-        /*----- Compute the end of the bucket. -----------------------------------------------------------------------*/
-        auto b_dist_in_bytes = BinaryenBinary(
+        auto b_slot_index = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ bucket_index,
+            /* right=  */ b_distance
+        );
+        auto b_slot_index_wrapped = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenAndInt32(),
+            /* left=   */ b_slot_index,
+            /* right=  */ mask()
+        );
+#if 0
+        {
+            BinaryenExpressionRef args[] = { b_slot_index_wrapped };
+            bucket_insert += BinaryenCall(module, "print", args, 1, BinaryenTypeNone());
+        }
+#endif
+        auto b_slot_offset_in_bytes = BinaryenBinary(
             /* module= */ module,
             /* op=     */ BinaryenMulInt32(),
-            /* left=   */ b_gauss,
+            /* left=   */ b_slot_index_wrapped,
             /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(entry_size()))
         );
         slot_addr.set(bucket_insert, BinaryenBinary(
             /* module= */ module,
             /* op=     */ BinaryenAddInt32(),
-            /* left=   */ bucket_addr,
-            /* right=  */ b_dist_in_bytes
-        ));
-        auto b_exceeds_table = BinaryenBinary(
-            /* module= */ module,
-            /* op=     */ BinaryenGeUInt32(),
-            /* left=   */ slot_addr,
-            /* right=  */ b_table_end
-        );
-        auto b_slot_addr_wrapped = BinaryenBinary(
-            /* module= */ module,
-            /* op=     */ BinaryenSubInt32(),
-            /* left=   */ slot_addr,
-            /* right=  */ table_size_in_bytes
-        );
-        slot_addr.set(bucket_insert, BinaryenSelect(
-            /* module=    */ module,
-            /* condition= */ b_exceeds_table,
-            /* ifTrue=    */ b_slot_addr_wrapped,
-            /* ifFalse=   */ slot_addr,
-            /* type=      */ BinaryenTypeInt32()
+            /* left=   */ addr(),
+            /* right=  */ b_slot_offset_in_bytes
         ));
     }
 
@@ -1101,6 +1119,12 @@ BinaryenExpressionRef WasmRefCountingHashTable::insert_with_duplicates(BlockBuil
             /* op=     */ BinaryenAddInt32(),
             /* left=   */ slot_addr,
             /* right=  */ steps
+        );
+        auto b_table_end = BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ addr(),
+            /* right=  */ table_size_in_bytes
         );
         auto b_exceeds_table = BinaryenBinary(
             /* module= */ module,
@@ -1124,7 +1148,6 @@ BinaryenExpressionRef WasmRefCountingHashTable::insert_with_duplicates(BlockBuil
     }
     bucket_insert += find_slot.finalize();
 
-    /*----- Place tuple in slot. -------------------------------------------------------------------------------------*/
     steps.set(bucket_insert, BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenAddInt32(),
@@ -1139,7 +1162,19 @@ BinaryenExpressionRef WasmRefCountingHashTable::insert_with_duplicates(BlockBuil
         /* ifTrue=    */ bucket_insert.finalize(),
         /* ifFalse=   */ bucket_create.finalize()
     );
-    /* After finding the next free slot in the bucket, place the key in that slot. */
+
+#if 0
+    {
+        BinaryenExpressionRef args[] = { slot_addr };
+        block += BinaryenCall(module, "print", args, 1, BinaryenTypeNone());
+    }
+    {
+        BinaryenExpressionRef args[] = { BinaryenConst(module, BinaryenLiteralInt32(0xDCBA)) };
+        block += BinaryenCall(module, "print", args, 1, BinaryenTypeNone());
+    }
+#endif
+
+    /*----- After finding the next free slot in the bucket, place the key in that slot. ------------------------------*/
     emplace(block, bucket_addr, steps, slot_addr, IDs, key);
     return slot_addr;
 }
@@ -1216,12 +1251,7 @@ BinaryenFunctionRef WasmRefCountingHashTable::rehash(WasmHash &hasher,
         /* b_mask= */ BinaryenLocalGet(module, 3, BinaryenTypeInt32())
     );
 
-    /*----- Compute properties of old hash table. ----------------------------------------------------*/
-    auto b_addr_old = BinaryenLocalGet(
-        /* module= */ module,
-        /* index=  */ 0,
-        /* type=   */ BinaryenTypeInt32()
-    );
+    /*----- Compute properties of old hash table. --------------------------------------------------------------------*/
     auto b_mask_old = BinaryenLocalGet(
         /* module= */ module,
         /* index=  */ 1,
@@ -1243,15 +1273,15 @@ BinaryenFunctionRef WasmRefCountingHashTable::rehash(WasmHash &hasher,
     table_end_old.set(fn_rehash.block(), BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenAddInt32(),
-        /* left=   */ b_addr_old,
+        /* left=   */ HT_old.addr(),
         /* right=  */ b_size_in_bytes_old
     ));
 
-    /*----- Initialize a runner to traverse the old hash table. --------------------------------------*/
+    /*----- Initialize a runner to traverse the old hash table. ------------------------------------------------------*/
     WasmVariable runner(fn_rehash, BinaryenTypeInt32());
-    runner.set(fn_rehash.block(), b_addr_old);
+    runner.set(fn_rehash.block(), HT_old.addr());
 
-    /*----- Advance to first occupied slot. ----------------------------------------------------------*/
+    /*----- Advance to first occupied slot. --------------------------------------------------------------------------*/
     {
         WasmLoop next(module, "rehash.advance_to_first");
         runner.set(next, HT_old.compute_next_slot(runner));
@@ -1279,7 +1309,7 @@ BinaryenFunctionRef WasmRefCountingHashTable::rehash(WasmHash &hasher,
         );
     }
 
-    /*----- Iterate over all entries in the old hash table. ------------------------------------------*/
+    /*----- Iterate over all entries in the old hash table. ----------------------------------------------------------*/
     WasmDoWhile for_each(module, "rehash.for_each", BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenLtUInt32(),
@@ -1287,15 +1317,17 @@ BinaryenFunctionRef WasmRefCountingHashTable::rehash(WasmHash &hasher,
         /* right=  */ table_end_old
     ));
 
-    /*----- Re-insert the current element in the new hash table. -------------------------------------*/
+    /*----- Re-insert the current element in the new hash table. -----------------------------------------------------*/
     {
-        /*----- Get join key. ------------------------------------------------------------------------*/
+        /* NOTE: Invariant is that on entry to the loop body, runner points to an occupied slot. */
+
+        /*----- Get join key. ----------------------------------------------------------------------------------------*/
         auto ld = HT_old.load_from_slot(runner);
         std::vector<BinaryenExpressionRef> key;
         for (auto kid : key_ids)
             key.push_back(ld.get_value(kid));
 
-        /*----- Compute hash. ------------------------------------------------------------------------*/
+        /*----- Compute hash. ----------------------------------------------------------------------------------------*/
         auto b_hash = hasher.emit(module, fn_rehash, for_each, key);
         auto b_hash_i32 = BinaryenUnary(
             /* module= */ module,
@@ -1303,15 +1335,15 @@ BinaryenFunctionRef WasmRefCountingHashTable::rehash(WasmHash &hasher,
             /* value=  */ b_hash
         );
 
-        /*----- Re-insert the element. ---------------------------------------------------------------*/
+        /*----- Re-insert the element. -------------------------------------------------------------------------------*/
         auto slot_addr = HT_new.insert_with_duplicates(for_each, b_hash_i32, key_ids, key);
 
-        /*---- Write payload. ------------------------------------------------------------------------*/
+        /*---- Write payload. ----------------------------------------------------------------------------------------*/
         for (auto pid : payload_ids)
             for_each += HT_new.store_value_to_slot(slot_addr, pid, ld.get_value(pid));
     }
 
-    /*----- Advance to next occupied slot. -----------------------------------------------------------*/
+    /*----- Advance to next occupied slot. ---------------------------------------------------------------------------*/
     {
         WasmLoop next(module, "rehash.for_each.advance");
         runner.set(next, HT_old.compute_next_slot(runner));

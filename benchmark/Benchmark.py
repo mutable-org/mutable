@@ -109,17 +109,18 @@ def benchmark_query(command, query, pattern, timeout):
 
     if process.returncode or len(err):
         query = query.encode('unicode_escape').decode()
-        out = '\n'.join(out.split('\n')[-20:])
+        outstr = '\n'.join(out.split('\n')[-20:])
         tqdm.write(f'''\
 Unexpected failure during execution of benchmark "{path_to_file}" with return code {process.returncode}:
 $ echo -e "{query}" | {' '.join(cmd)}
 ===== stdout =====
-{out}
+{outstr}
 ===== stderr =====
 {err}
 ==================
 ''')
-        raise BenchmarkError(f'Benchmark failed with return code {process.returncode}.')
+        if process.returncode:
+            raise BenchmarkError(f'Benchmark failed with return code {process.returncode}.')
 
     # Parse `out` for timings
     durations = list()

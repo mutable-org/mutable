@@ -700,6 +700,9 @@ if __name__ == '__main__':
                         time
                     ]
 
+                # Write to CSV file
+                measurements.to_csv(output_csv_file, index=False, header=False, mode='a')
+
                 # Add to benchmark results
                 suite = results.get(yml['suite'], dict())
                 benchmark = suite.get(yml['benchmark'], dict())

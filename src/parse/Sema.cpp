@@ -102,11 +102,6 @@ void Sema::operator()(Const<Designator> &e)
                         }
                     } catch (std::out_of_range) {
                         /* This source table has no attribute of that name.  OK, continue. */
-                    } catch (std::invalid_argument) {
-                        /* attribute identifier is ambiguous */
-                        diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text << " is ambiguous.\n";
-                        e.type_ = Type::Get_Error();
-                        return;
                     }
                 } else if (auto T = std::get_if<SemaContext::named_expr_table>(&src.second)) {
                     const SemaContext::named_expr_table &tbl = *T;

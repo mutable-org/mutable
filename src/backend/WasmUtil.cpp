@@ -90,8 +90,8 @@ void WasmCGContext::operator()(const Designator &e)
             return (*this)(**pe);
         } else {
             auto pa = std::get_if<const Attribute*>(&t);
-            auto &attr = **pa;
             insist(pa, "Target is neither an expression nor an attribute");
+            auto &attr = **pa;
             it = values_.find({attr.table.name, attr.name});
         }
     }

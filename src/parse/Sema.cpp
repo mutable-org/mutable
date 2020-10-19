@@ -1101,17 +1101,17 @@ void Sema::operator()(Const<InsertStmt> &s)
 {
     RequireContext RCtx(this, s);
     Catalog &C = Catalog::Get();
+
     if (not C.has_database_in_use()) {
         diag.e(s.table_name.pos) << "No database in use.\n";
         return;
     }
-
     auto &DB = C.get_database_in_use();
 
     const Table *tbl;
     try {
         tbl = &DB.get_table(s.table_name.text);
-    } catch (std::invalid_argument) {
+    } catch (std::out_of_range) {
         diag.e(s.table_name.pos) << "Table " << s.table_name.text << " does not exist in database " << DB.name << ".\n";
         return;
     }

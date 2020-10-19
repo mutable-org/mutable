@@ -1175,6 +1175,11 @@ void Sema::operator()(Const<DSVImportStmt> &s)
 {
     RequireContext RCtx(this, s);
     auto &C = Catalog::Get();
+
+    if (not C.has_database_in_use()) {
+        diag.e(s.table_name.pos) << "No database selected\n";
+        return;
+    }
     auto &DB = C.get_database_in_use();
 
     try {

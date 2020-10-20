@@ -1,6 +1,7 @@
 #pragma once
 
 #include "catalog/Schema.hpp"
+#include "IR/Tuple.hpp"
 #include "storage/Store.hpp"
 #include "util/Diagnostic.hpp"
 #include <iostream>
@@ -37,8 +38,8 @@ struct DSVReader : Reader, ConstTypeVisitor
     char c;
     std::istream *in = nullptr;
     std::vector<char> buf;
-    std::unique_ptr<Store::Row> row;
-    const Attribute *attr = nullptr;
+    Tuple tup; ///< intermediate tuple to store values of a row
+    std::size_t col_idx;
 
     public:
     DSVReader(const Table &table, Diagnostic &diag,

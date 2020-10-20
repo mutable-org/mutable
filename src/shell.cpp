@@ -1,4 +1,5 @@
 #include "backend/Backend.hpp"
+#include "backend/Interpreter.hpp"
 #include "backend/StackMachine.hpp"
 #include "backend/WebAssembly.hpp"
 #include "catalog/CostFunction.hpp"
@@ -157,13 +158,19 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             auto &DB = C.get_database_in_use();
             auto &T = DB.get_table(I->table_name.text);
             auto &store = T.store();
-            std::vector<const Attribute*> attrs;
-            for (auto &attr : T) attrs.push_back(&attr);
-            auto W = store.writer(attrs); // append values
-            std::vector<const Type*> tuple_schema;
-            for (auto attr : attrs) tuple_schema.push_back(attr->type);
-            Tuple tup(tuple_schema);
-            Tuple none;
+
+            /* Compute table schema. */
+            Schema S;
+            for (auto &attr : T) S.add({T.name, attr.name}, attr.type);
+
+            /* Compile stack machine. */
+            auto W = Interpreter::compile_store(S, store.linearization());
+            // std::cerr << "Writer StackMachine:\n";
+            // W.dump();
+            // std::cerr << '\n';
+            Tuple tup(S);
+
+            /* Write all tuples to the store. */
             for (auto &t : I->tuples) {
                 StackMachine get_tuple(Schema{});
                 for (std::size_t i = 0; i != t.size(); ++i) {
@@ -179,14 +186,13 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
 
                         case InsertStmt::I_Expr:
                             get_tuple.emit(*v.second);
-                            get_tuple.emit_Cast(tuple_schema[i], v.second->type());
-                            get_tuple.emit_St_Tup(0, i, tuple_schema[i]);
+                            get_tuple.emit_Cast(S[i].type, v.second->type());
+                            get_tuple.emit_St_Tup(0, i, S[i].type);
                             break;
                     }
                 }
                 Tuple *args[] = { &tup };
                 get_tuple(args);
-                W.set(0, store.num_rows());
                 store.append();
                 W(args);
             }

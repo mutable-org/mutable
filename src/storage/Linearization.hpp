@@ -33,19 +33,22 @@ struct Linearization
 
         struct entry
         {
-            uint32_t offset;
+            uint64_t offset;
             uint32_t stride;
             uintptr_t seq;
 
-            entry(uint32_t offset, uint32_t stride, uintptr_t seq)
+            entry(uint64_t offset, uint32_t stride, uintptr_t seq)
                 : offset(offset), stride(stride), seq(seq)
             { }
 
+            /** Returns `true` iff the sequence is a sequence of null bitmap values. */
+            bool is_null_bitmap() const { return seq == reinterpret_cast<uintptr_t>(nullptr); }
+
             /** Returns `true` iff the sequence is a sequence of `Attribute` values. */
-            bool is_attribute() const { return seq & 0x1UL; }
+            bool is_attribute() const { return seq != reinterpret_cast<uintptr_t>(nullptr) and seq & 0x1UL; }
 
             /** Returns `true` iff the sequence is a sequence of `Linearization`s. */
-            bool is_linearization() const { return not is_attribute(); }
+            bool is_linearization() const { return seq != reinterpret_cast<uintptr_t>(nullptr) and not (seq & 0x1UL); }
 
             const Attribute & as_attribute() const {
                 insist(is_attribute(), "not a pointer to Attribute");
@@ -84,9 +87,9 @@ struct Linearization
     std::size_t num_tuples_; ///< number of tuples, 0 means infinite
     std::size_t size_ = 0; ///< number of sequences
     std::size_t capacity_; ///< maximal number of sequences this linearization can handle
-    uint32_t *offsets_ = nullptr; ///< offsets of the sequences, specified in bits
-    uint32_t *strides_ = nullptr; ///< strides of the sequences, specified in bits
-    uintptr_t *sequences_ = nullptr; ///< array of nested `Linearization`s or `Attribute`s, LSB is 1 iff an `Attribute` is stored
+    uint64_t *offsets_ = nullptr; ///< offsets of the sequences, specified in bits for attributes and bytes for sequences
+    uint32_t *strides_ = nullptr; ///< strides of the sequences, specified in bits for attributes and bytes for sequences
+    uintptr_t *sequences_ = nullptr; ///< array of nested `Linearization`s or `Attribute`s, 0 iff the null bitmap is stored, LSB is 1 iff an `Attribute` is stored
 
     public:
     static Linearization CreateInfiniteSequence(std::size_t num_sequences) {
@@ -102,7 +105,7 @@ struct Linearization
     Linearization(std::size_t num_sequences, std::size_t num_tuples)
         : num_tuples_(num_tuples)
         , capacity_(num_sequences)
-        , offsets_(new uint32_t[num_sequences])
+        , offsets_(new uint64_t[num_sequences])
         , strides_(new uint32_t[num_sequences])
         , sequences_(new uintptr_t[num_sequences]())
     { }
@@ -127,11 +130,18 @@ struct Linearization
     std::size_t num_tuples() const { return num_tuples_; }
     std::size_t num_sequences() const { return size_; }
 
+    /** Returns `true` iff the sequence at index `idx` is a sequence of null bitmap values. */
+    bool is_null_bitmap(std::size_t idx) const { return sequences_[idx] == reinterpret_cast<uintptr_t>(nullptr); }
+
     /** Returns `true` iff the sequence at index `idx` is a sequence of `Attribute` values. */
-    bool is_attribute(std::size_t idx) const { return sequences_[idx] & 0x1UL; }
+    bool is_attribute(std::size_t idx) const {
+        return sequences_[idx] != reinterpret_cast<uintptr_t>(nullptr) and sequences_[idx] & 0x1UL;
+    }
 
     /** Returns `true` iff the sequence at index `idx` is a sequence of `Linearization`s. */
-    bool is_linearization(std::size_t idx) const { return not is_attribute(idx); }
+    bool is_linearization(std::size_t idx) const {
+        return sequences_[idx] != reinterpret_cast<uintptr_t>(nullptr) and not (sequences_[idx] & 0x1UL);
+    }
 
     iterator begin() { return iterator(*this, 0); }
     iterator end()   { return iterator(*this, size_); }
@@ -140,20 +150,36 @@ struct Linearization
     const_iterator cbegin() const { return begin(); }
     const_iterator cend()   const { return end(); }
 
-    void add_sequence(uint32_t offset, uint32_t stride, std::unique_ptr<Linearization> lin) {
+    void add_sequence(uint64_t offset_in_bytes, uint32_t stride_in_bytes, std::unique_ptr<Linearization> lin) {
         insist(size_ < capacity_, "maximum capacity reached");
+        insist(lin->num_tuples_ != 0, "cannot add infinite sequence");
+        insist(this->num_tuples_ % lin->num_tuples_ == 0);
+        // XXX: Why not support this?
+        // for (auto e : *this)
+        //     insist(e.is_linearization(), "cannot mix attributes and sequences");
         auto idx = size_++;
-        offsets_[idx] = offset;
-        strides_[idx] = stride;
+        offsets_[idx] = offset_in_bytes;
+        strides_[idx] = stride_in_bytes;
         sequences_[idx] = reinterpret_cast<uintptr_t>(lin.release());
     }
 
-    void add_sequence(uint32_t offset, uint32_t stride, const Attribute &attr) {
+    void add_sequence(uint64_t offset_in_bits, uint32_t stride_in_bits, const Attribute &attr) {
+        insist(size_ < capacity_, "maximum capacity reached");
+        // XXX: Why not support this?
+        // for (auto e : *this)
+        //     insist(e.is_attribute(), "cannot mix attributes and sequences");
+        auto idx = size_++;
+        offsets_[idx] = offset_in_bits;
+        strides_[idx] = stride_in_bits;
+        sequences_[idx] = reinterpret_cast<uintptr_t>(&attr) | 0x1UL;
+    }
+
+    void add_null_bitmap(uint64_t offset_in_bits, uint32_t stride_in_bits) {
         insist(size_ < capacity_, "maximum capacity reached");
         auto idx = size_++;
-        offsets_[idx] = offset;
-        strides_[idx] = stride;
-        sequences_[idx] = reinterpret_cast<uintptr_t>(&attr) | 0x1UL;
+        offsets_[idx] = offset_in_bits;
+        strides_[idx] = stride_in_bits;
+        sequences_[idx] = reinterpret_cast<uintptr_t>(nullptr);
     }
 
     friend std::ostream & operator<<(std::ostream &out, const Linearization &lin) {
@@ -166,7 +192,6 @@ struct Linearization
 
     private:
     void print(std::ostream &out, unsigned indentation = 0) const;
-    std::ostream & indent(std::ostream &out, unsigned indentation) const;
 };
 
 }

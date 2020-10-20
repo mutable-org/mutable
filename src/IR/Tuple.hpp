@@ -41,7 +41,12 @@ struct Value
     val_t val_;
 
     public:
-    Value() { memset(&val_, 0, sizeof(val_)); } // initialize with 0 bytes
+    Value() {
+        memset(&val_, 0, sizeof(val_)); // initialize with 0 bytes
+#ifndef NDEBUG
+        type = VNone;
+#endif
+    }
 
     template<typename T>
     Value(T val) : Value() {

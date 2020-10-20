@@ -555,10 +555,78 @@ void StackMachine::emit(const cnf::CNF &cnf, std::size_t tuple_id)
     }
 }
 
+void StackMachine::emit_Ld(const Type *ty)
+{
+    insist(not ty->is_boolean(), "to access a boolean use `emit_Ld_b(offset)`");
+
+    if (auto n = cast<const Numeric>(ty)) {
+        switch (n->kind) {
+            case Numeric::N_Int:
+            case Numeric::N_Decimal: {
+                switch (n->size()) {
+                    default: unreachable("illegal type");
+                    case  8: emit_Ld_i8();  break;
+                    case 16: emit_Ld_i16(); break;
+                    case 32: emit_Ld_i32(); break;
+                    case 64: emit_Ld_i64(); break;
+                }
+                break;
+            }
+
+            case Numeric::N_Float: {
+                if (n->size() == 32)
+                    emit_Ld_f();
+                else
+                    emit_Ld_d();
+                break;
+            }
+        }
+    } else if (auto cs = cast<const CharacterSequence>(ty)) {
+        emit_Ld_s(cs->length);
+    } else {
+        unreachable("illegal type");
+    }
+}
+
+void StackMachine::emit_St(const Type *ty)
+{
+    insist(not ty->is_boolean(), "to access a boolean use `emit_St_b(offset)`");
+
+    if (auto n = cast<const Numeric>(ty)) {
+        switch (n->kind) {
+            case Numeric::N_Int:
+            case Numeric::N_Decimal: {
+                switch (n->size()) {
+                    default: unreachable("illegal type");
+                    case  8: emit_St_i8();  break;
+                    case 16: emit_St_i16(); break;
+                    case 32: emit_St_i32(); break;
+                    case 64: emit_St_i64(); break;
+                }
+                break;
+            }
+
+            case Numeric::N_Float: {
+                if (n->size() == 32)
+                    emit_St_f();
+                else
+                    emit_St_d();
+                break;
+            }
+        }
+    } else if (auto cs = cast<const CharacterSequence>(ty)) {
+        emit_St_s(cs->length + cs->is_varying);
+    } else {
+        unreachable("illegal type");
+    }
+}
+
 void StackMachine::emit_St_Tup(std::size_t tuple_id, std::size_t index, const Type *ty)
 {
     if (ty->is_none()) {
         emit_St_Tup_Null(tuple_id, index);
+    } else if (auto cs = cast<const CharacterSequence>(ty)) {
+        emit_St_Tup_s(tuple_id, index, cs->length);
     } else {
         std::ostringstream oss;
         oss << "St_Tup" << tystr(as<const PrimitiveType>(ty));
@@ -685,6 +753,9 @@ void StackMachine::emit_Cast(const Type *to_ty, const Type *from_ty)
                 }
                 break;
         }
+    } else if (auto cs_from = cast<const CharacterSequence>(from_ty)) {
+        insist(to_ty->is_character_sequence()); // XXX any checks necessary?
+        return; // nothing to be done
     }
 
     unreachable("unsupported conversion");
@@ -760,7 +831,11 @@ Pop:
     NEXT;
 
 Push_Null:
-    PUSH(0, true);
+    PUSH(Value(), true);
+    NEXT;
+
+Dup:
+    PUSH(TOP, TOP_IS_NULL);
     NEXT;
 
 
@@ -818,9 +893,17 @@ NEXT;
 St_Tup_s: {
     std::size_t tuple_id = std::size_t(*op_++);
     std::size_t index = std::size_t(*op_++);
+    std::size_t length = std::size_t(*op_++);
     auto &t = *tuples[tuple_id];
-    t.not_null(index);
-    strcpy(reinterpret_cast<char*>(t[index].as_p()), reinterpret_cast<char*>(TOP.as_p()));
+    if (TOP_IS_NULL)
+        t.null(index);
+    else {
+        t.not_null(index);
+        char *dst = reinterpret_cast<char*>(t[index].as_p());
+        char *src = reinterpret_cast<char*>(TOP.as_p());
+        strncpy(dst, reinterpret_cast<char*>(src), length);
+        dst[length] = 0; // always add terminating NUL byte, no matter whether this is a CHAR or VARCHAR
+    }
 }
 NEXT;
 
@@ -900,329 +983,85 @@ NEXT;
  * Storage Access Operations
  *====================================================================================================================*/
 
-/*----- Load from row store ------------------------------------------------------------------------------------------*/
-#define PREPARE \
-    insist(top_ >= 3); \
-\
-    /* Get value bit offset. */ \
-    auto value_off = std::size_t(TOP.as_i()); \
-    const std::size_t bytes = value_off / 8; \
+/*----- Load from memory ---------------------------------------------------------------------------------------------*/
+
+#define LOAD(TO_TYPE, FROM_TYPE) { \
+    insist(top_ >= 1); \
+    uintptr_t ptr = TOP.as_i(); \
+    TOP = (TO_TYPE)(*reinterpret_cast<FROM_TYPE*>(ptr)); \
+} \
+NEXT
+
+Ld_i8:  LOAD(int64_t, int8_t);
+Ld_i16: LOAD(int64_t, int16_t);
+Ld_i32: LOAD(int64_t, int32_t);
+Ld_i64: LOAD(int64_t, int64_t);
+Ld_f:   LOAD(float,   float);
+Ld_d:   LOAD(double,  double);
+
+Ld_s: {
+    insist(top_ >= 1);
+    uint64_t length = uint64_t(*op_++);
+    uintptr_t ptr = TOP.as_i();
+    strncpy(reinterpret_cast<char*>(p_mem), reinterpret_cast<char*>(ptr), length);
+    p_mem[length] = 0; // always add terminating NUL byte, no matter whether this is a CHAR or VARCHAR
+    TOP = p_mem; // a pointer
+    p_mem += length + 1;
+}
+NEXT;
+
+Ld_b: {
+    insist(top_ >= 1);
+    uint64_t mask = uint64_t(*op_++);
+    uintptr_t ptr = TOP.as_i();
+    TOP = bool(*reinterpret_cast<uint8_t*>(ptr) & mask);
+}
+NEXT;
+
+#undef LOAD
+
+/*----- Store to memory ----------------------------------------------------------------------------------------------*/
+
+#define STORE(TO_TYPE, FROM_TYPE) { \
+    insist(top_ >= 2); \
+    TO_TYPE val = TOP.as<FROM_TYPE>(); \
     POP(); \
-\
-    /* Get null bit offset. */ \
-    auto null_off = std::size_t(TOP.as_i()); \
+    uintptr_t ptr = TOP.as_i(); \
+    *reinterpret_cast<TO_TYPE*>(ptr) = val; \
     POP(); \
-\
-    /* Row address. */ \
-    auto addr = reinterpret_cast<uint8_t*>(TOP.as_i());
+} \
+NEXT
 
-#define PREPARE_LOAD \
-    PREPARE \
-\
-    /* Check if null. */ \
-    { \
-        const std::size_t bytes = null_off / 8; \
-        const std::size_t bits = null_off % 8; \
-        bool is_null = not bool((*(addr + bytes) >> bits) & 0x1); \
-        TOP_IS_NULL = is_null; \
-        if (is_null) \
-            NEXT; \
-    } \
+St_i8:  STORE(int8_t,  int64_t);
+St_i16: STORE(int16_t, int64_t);
+St_i32: STORE(int32_t, int64_t);
+St_i64: STORE(int64_t, int64_t);
+St_f:   STORE(float,   float);
+St_d:   STORE(double,  double);
 
-Ld_RS_i8: {
-    PREPARE_LOAD;
-    TOP = int64_t(*reinterpret_cast<int8_t*>(addr + bytes));
-}
-NEXT;
-
-Ld_RS_i16: {
-    PREPARE_LOAD;
-    TOP = int64_t(*reinterpret_cast<int16_t*>(addr + bytes));
-}
-NEXT;
-
-Ld_RS_i32: {
-    PREPARE_LOAD;
-    TOP = int64_t(*reinterpret_cast<int32_t*>(addr + bytes));
-}
-NEXT;
-
-Ld_RS_i64: {
-    PREPARE_LOAD;
-    TOP = *reinterpret_cast<int64_t*>(addr + bytes);
-}
-NEXT;
-
-Ld_RS_f: {
-    PREPARE_LOAD;
-    TOP = *reinterpret_cast<float*>(addr + bytes);
-}
-NEXT;
-
-Ld_RS_d: {
-    PREPARE_LOAD;
-    TOP = *reinterpret_cast<double*>(addr + bytes);
-}
-NEXT;
-
-Ld_RS_s: {
-    auto len = TOP.as_i();
+St_s: {
+    insist(top_ >= 2);
+    uint64_t length = uint64_t(*op_++);
+    char *str = reinterpret_cast<char*>(TOP.as_p());
     POP();
-    PREPARE_LOAD;
-    strncpy(reinterpret_cast<char*>(p_mem), reinterpret_cast<char*>(addr + bytes), len);
-    p_mem[len] = 0; // terminating NUL byte
-    TOP = p_mem;
-    p_mem += len + 1;
-}
-NEXT;
-
-Ld_RS_b: {
-    PREPARE_LOAD;
-    const std::size_t bits = value_off % 8;
-    TOP = bool((*reinterpret_cast<uint8_t*>(addr + bytes) >> bits) & 0x1);
-}
-NEXT;
-
-#undef PREPARE_LOAD
-
-#define PREPARE_STORE(TYPE) \
-    PREPARE \
-    POP(); \
-\
-    /* Set null bit. */ \
-    { \
-        const std::size_t bytes = null_off / 8; \
-        const std::size_t bits = null_off % 8; \
-        bool is_null = TOP_IS_NULL; \
-        setbit(addr + bytes, not is_null, bits); \
-        if (is_null) { \
-            POP(); \
-            NEXT; \
-        } \
-    } \
-\
-    auto val = TOP; \
+    char *dst = reinterpret_cast<char*>(static_cast<uintptr_t>(TOP.as_i()));
     POP();
-
-St_RS_i8: {
-    PREPARE_STORE(int64_t);
-    auto p = reinterpret_cast<int8_t*>(addr + bytes);
-    *p = val.as_i();;
+    strncpy(dst, str, length);
 }
 NEXT;
 
-St_RS_i16: {
-    PREPARE_STORE(int64_t);
-    auto p = reinterpret_cast<int16_t*>(addr + bytes);
-    *p = val.as_i();
-}
-NEXT;
-
-St_RS_i32: {
-    PREPARE_STORE(int64_t);
-    auto p = reinterpret_cast<int32_t*>(addr + bytes);
-    *p = val.as_i();
-}
-NEXT;
-
-St_RS_i64: {
-    PREPARE_STORE(int64_t);
-    auto p = reinterpret_cast<int64_t*>(addr + bytes);
-    *p = val.as_i();
-}
-NEXT;
-
-St_RS_f: {
-    PREPARE_STORE(float);
-    auto p = reinterpret_cast<float*>(addr + bytes);
-    *p = val.as_f();
-}
-NEXT;
-
-St_RS_d: {
-    PREPARE_STORE(double);
-    auto p = reinterpret_cast<double*>(addr + bytes);
-    *p = val.as_d();
-}
-NEXT;
-
-St_RS_s: {
-    /* TODO not yet supported */
+St_b: {
+    insist(top_ >= 2);
+    uint64_t bit_offset = uint64_t(*op_++);
+    bool val = TOP.as_b();
     POP();
-    PREPARE_STORE(char);
-    (void) bytes;
-    (void) val;
-}
-NEXT;
-
-St_RS_b: {
-    PREPARE_STORE(bool);
-    const auto bits = value_off % 8;
-    setbit(addr + bytes, val.as_b(), bits);
-}
-NEXT;
-
-#undef PREPARE_STORE
-
-#undef PREPARE
-
-/*----- Load from column store ---------------------------------------------------------------------------------------*/
-#define PREPARE(TYPE) \
-    insist(top_ >= 4); \
-\
-    /* Get attribute id. */ \
-    auto attr_id = std::size_t(TOP.as_i()); \
-    POP(); \
-\
-    /* Get address of value column. */ \
-    TYPE *value_col_addr = reinterpret_cast<TYPE*>(uintptr_t(TOP.as_i())); \
-    POP(); \
-\
-    /* Get address of null bitmap column. */ \
-    int64_t *null_bitmap_col_addr = reinterpret_cast<int64_t*>(uintptr_t(TOP.as_i())); \
-    POP(); \
-\
-    /* Get row id. */ \
-    auto row_id = std::size_t(TOP.as_i());
-
-#define PREPARE_LOAD(TYPE) \
-    PREPARE(TYPE) \
-\
-    /* Check if null. */ \
-    bool is_null = not ((null_bitmap_col_addr[row_id] >> attr_id) & 0x1); \
-    TOP_IS_NULL = is_null;
-
-Ld_CS_i8: {
-    PREPARE_LOAD(int8_t);
-    TOP = int64_t(value_col_addr[row_id]);
-}
-NEXT;
-
-Ld_CS_i16: {
-    PREPARE_LOAD(int16_t);
-    TOP = int64_t(value_col_addr[row_id]);
-}
-NEXT;
-
-Ld_CS_i32: {
-    PREPARE_LOAD(int32_t);
-    TOP = int64_t(value_col_addr[row_id]);
-}
-NEXT;
-
-Ld_CS_i64: {
-    PREPARE_LOAD(int64_t);
-    TOP = int64_t(value_col_addr[row_id]);
-}
-NEXT;
-
-Ld_CS_f: {
-    PREPARE_LOAD(float);
-    TOP = float(value_col_addr[row_id]);
-}
-NEXT;
-
-Ld_CS_d: {
-    PREPARE_LOAD(double);
-    TOP = double(value_col_addr[row_id]);
-}
-NEXT;
-
-Ld_CS_s: {
-    auto len = TOP.as_i();
+    uintptr_t ptr = TOP.as_i();
+    setbit(reinterpret_cast<uint8_t*>(ptr), val, bit_offset);
     POP();
-    PREPARE_LOAD(char);
-    auto str = value_col_addr + (len + 1) * row_id;
-    strncpy(reinterpret_cast<char*>(p_mem), reinterpret_cast<char*>(str), len);
-    p_mem[len] = 0; // terminating NUL byte
-    TOP = p_mem;
-    p_mem += len + 1;
 }
 NEXT;
 
-Ld_CS_b: {
-    PREPARE_LOAD(uint8_t);
-    const std::size_t bytes = row_id / 8;
-    const std::size_t bits = row_id % 8;
-    TOP = bool((value_col_addr[bytes] >> bits) & 0x1);
-}
-NEXT;
-
-#undef PREPARE_LOAD
-
-#define PREPARE_STORE(TO_TYPE, FROM_TYPE) \
-    PREPARE(TO_TYPE); \
-    POP(); \
-\
-    /* Set null bit. */ \
-    { \
-        bool is_null = TOP_IS_NULL; \
-        setbit(&null_bitmap_col_addr[row_id], not is_null, attr_id); \
-        if (is_null) { \
-            POP(); \
-            NEXT; \
-        } \
-    } \
-\
-    auto val = TOP; \
-    POP();
-
-St_CS_i8: {
-    PREPARE_STORE(int8_t, int64_t);
-    value_col_addr[row_id] = val.as_i();
-}
-NEXT;
-
-St_CS_i16: {
-    PREPARE_STORE(int16_t, int64_t);
-    value_col_addr[row_id] = val.as_i();
-}
-NEXT;
-
-St_CS_i32: {
-    PREPARE_STORE(int32_t, int64_t);
-    value_col_addr[row_id] = val.as_i();
-}
-NEXT;
-
-St_CS_i64: {
-    PREPARE_STORE(int64_t, int64_t);
-    value_col_addr[row_id] = val.as_i();
-}
-NEXT;
-
-St_CS_f: {
-    PREPARE_STORE(float, float);
-    value_col_addr[row_id] = val.as_f();
-}
-NEXT;
-
-St_CS_d: {
-    PREPARE_STORE(double, double);
-    value_col_addr[row_id] = val.as_d();
-}
-NEXT;
-
-St_CS_s: {
-    /* TODO not yet supported */
-    POP();
-    PREPARE_STORE(char, char);
-    (void) value_col_addr;
-    (void) val;
-}
-NEXT;
-
-St_CS_b: {
-    PREPARE_STORE(bool, bool);
-    const auto bytes = row_id / 8;
-    const auto bits = row_id % 8;
-    setbit(value_col_addr + bytes, val.as_b(), bits);
-}
-NEXT;
-
-#undef PREPARE_STORE
-
-#undef PREPARE
+#undef STORE
 
 
 /*======================================================================================================================
@@ -1252,9 +1091,6 @@ Inc: UNARY(++, int64_t);
 
 /* Integral decrement. */
 Dec: UNARY(--, int64_t);
-
-/* Bitwise negation */
-Neg_i: UNARY(~, int64_t);
 
 /* Arithmetic negation */
 Minus_i: UNARY(-, int64_t);
@@ -1316,6 +1152,50 @@ NEXT;
 
 
 /*======================================================================================================================
+ * Bitwise operations
+ *====================================================================================================================*/
+
+/* Bitwise negation */
+Neg_i: UNARY(~, int64_t);
+
+/* Bitwise And */
+And_i: BINARY(std::bit_and{}, int64_t);
+
+/* Bitwise Or */
+Or_i: BINARY(std::bit_or{}, int64_t);
+
+/* Bitwise Xor */
+Xor_i: BINARY(std::bit_xor{}, int64_t);
+
+/* Shift left. */
+ShL_i: {
+    insist(top_ >= 1);
+    std::size_t count = std::size_t(*op_++);
+    uint64_t val = TOP.as<int64_t>();
+    TOP = uint64_t(val << count);
+}
+NEXT;
+
+/* Shift logical right. */
+ShR_i: {
+    insist(top_ >= 1);
+    std::size_t count = std::size_t(*op_++);
+    uint64_t val = TOP.as<int64_t>(); // unsigned integer for logical shift
+    TOP = uint64_t(val >> count);
+}
+NEXT;
+
+/* Shift arithmetical right. */
+SAR_i: {
+    insist(top_ >= 1);
+    std::size_t count = std::size_t(*op_++);
+    int64_t val = TOP.as<int64_t>(); // signed integer for arithmetical shift
+    TOP = uint64_t(val >> count);
+}
+NEXT;
+
+
+/*======================================================================================================================
  * Logical operations
  *====================================================================================================================*/
 
@@ -1352,6 +1232,20 @@ NEXT;
 /*======================================================================================================================
  * Comparison operations
  *====================================================================================================================*/
+
+EqZ_i: {
+    insist(top_ >= 1);
+    uint64_t val = TOP.as<int64_t>();
+    TOP = val == 0;
+}
+NEXT;
+
+NEZ_i: {
+    insist(top_ >= 1);
+    uint64_t val = TOP.as<int64_t>();
+    TOP = val != 0;
+}
+NEXT;
 
 Eq_i: BINARY(std::equal_to{}, int64_t);
 Eq_f: BINARY(std::equal_to{}, float);
@@ -1435,6 +1329,36 @@ NEXT;
 
 
 /*======================================================================================================================
+ * Selection operation
+ *====================================================================================================================*/
+
+Sel: {
+    insist(top_ >= 3);
+    bool cond_is_null = null_bits_[top_ - 3UL];
+
+    if (cond_is_null) {
+        values_[top_ - 3UL] = values_[top_ - 2UL]; // pick any value
+        null_bits_[top_ - 3UL] = true;
+        POP();
+        POP();
+        NEXT;
+    }
+
+    bool cond = values_[top_ - 3UL].as_b();
+    if (cond) {
+        values_[top_ - 3UL] = values_[top_ - 2UL];
+        null_bits_[top_ - 3UL] = null_bits_[top_ - 2UL];
+    } else {
+        values_[top_ - 3UL] = TOP;
+        null_bits_[top_ - 3UL] = TOP_IS_NULL;
+    }
+    POP();
+    POP();
+}
+NEXT;
+
+
+/*======================================================================================================================
  * Intrinsic functions
  *====================================================================================================================*/
 
@@ -1461,18 +1385,6 @@ Cast_d_f: UNARY((double), float);
 
 Stop:
     const_cast<StackMachine*>(this)->ops.pop_back(); // terminating Stop
-
-#if 0
-    for (std::size_t i = 0; i != top_; ++i) {
-        if (auto cs = cast<const CharacterSequence>(out_schema[i])) {
-            out->not_null(i);
-            strncpy((*out)[i].as<char*>(), values_[i].as<char*>(), cs->length);
-            (*out)[i].as<char*>()[cs->length] = 0; // terminating NUL byte
-        } else {
-            out->set(i, values_[i], null_bits_[i]);
-        }
-    }
-#endif
 
     op_ = ops.cbegin();
     top_ = 0;
@@ -1504,13 +1416,18 @@ void StackMachine::dump(std::ostream &out) const
         out << "[0x" << std::hex << std::setfill('0') << std::setw(4) << i << std::dec << "]: "
             << StackMachine::OPCODE_TO_STR[static_cast<std::size_t>(opc)];
         switch (opc) {
+            /* Opcodes with *three* operands. */
+            case Opcode::St_Tup_s:
+                ++i;
+                out << ' ' << static_cast<int64_t>(ops[i]);
+                /* fall through */
+
             /* Opcodes with *two* operands. */
             case Opcode::Ld_Tup:
             case Opcode::St_Tup_Null:
             case Opcode::St_Tup_i:
             case Opcode::St_Tup_f:
             case Opcode::St_Tup_d:
-            case Opcode::St_Tup_s:
             case Opcode::St_Tup_b:
             case Opcode::Putc:
                 ++i;
@@ -1525,6 +1442,10 @@ void StackMachine::dump(std::ostream &out) const
             case Opcode::Print_d:
             case Opcode::Print_s:
             case Opcode::Print_b:
+            case Opcode::Ld_s:
+            case Opcode::Ld_b:
+            case Opcode::St_s:
+            case Opcode::St_b:
                 ++i;
                 out << ' ' << static_cast<int64_t>(ops[i]);
                 /* fall through */

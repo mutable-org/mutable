@@ -1,6 +1,7 @@
 #pragma once
 
 #include "backend/Backend.hpp"
+#include "backend/StackMachine.hpp"
 #include "catalog/Schema.hpp"
 #include "IR/Operator.hpp"
 #include "IR/OperatorVisitor.hpp"
@@ -255,6 +256,9 @@ struct Interpreter : Backend, ConstOperatorVisitor
         }
         insist(errno == 0, "constant could not be parsed");
     }
+
+    static StackMachine compile_load(const Schema &S, const Linearization &L, std::size_t row_id = 0);
+    static StackMachine compile_store(const Schema &S, const Linearization &L, std::size_t row_id = 0);
 };
 
 }

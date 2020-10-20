@@ -38,7 +38,7 @@ Stmt * get_Stmt(const char *sql)
  * Test StackMachine.
  *====================================================================================================================*/
 
-TEST_CASE("StackMachine", "[core][backend][stackmachine]")
+TEST_CASE("StackMachine/Expressions", "[core][backend]")
 {
     using std::to_string;
     using decimal = int64_t;
@@ -312,4 +312,68 @@ TEST_CASE("StackMachine", "[core][backend][stackmachine]")
     TEST("col_decimal < col_double",  "binary/logical/</decimal,double",  RES == (col_decimal_val / 100.0 < col_double_val));
 
 #undef TEST
+}
+
+TEST_CASE("StackMachine/Sel", "[core][backend]")
+{
+    StackMachine SM;
+    Tuple res({ Type::Get_Integer(Type::TY_Scalar, 4) });
+    Tuple *args[] = { &res };
+
+    SECTION("select first")
+    {
+        SM.add_and_emit_load(true);
+        SM.add_and_emit_load(42);
+        SM.add_and_emit_load(13);
+        SM.emit_Sel();
+        SM.emit_St_Tup_i(0, 0);
+        SM(args);
+        REQUIRE(not res.is_null(0));
+        REQUIRE(res[0].as_i() == 42);
+    }
+
+    SECTION("select second")
+    {
+        SM.add_and_emit_load(false);
+        SM.add_and_emit_load(42);
+        SM.add_and_emit_load(13);
+        SM.emit_Sel();
+        SM.emit_St_Tup_i(0, 0);
+        SM(args);
+        REQUIRE(not res.is_null(0));
+        REQUIRE(res[0].as_i() == 13);
+    }
+
+    SECTION("select with NULL condition")
+    {
+        SM.emit_Push_Null();
+        SM.add_and_emit_load(42);
+        SM.add_and_emit_load(13);
+        SM.emit_Sel();
+        SM.emit_St_Tup_i(0, 0);
+        SM(args);
+        REQUIRE(res.is_null(0));
+    }
+
+    SECTION("select first that is NULL")
+    {
+        SM.add_and_emit_load(true);
+        SM.emit_Push_Null();
+        SM.add_and_emit_load(13);
+        SM.emit_Sel();
+        SM.emit_St_Tup_i(0, 0);
+        SM(args);
+        REQUIRE(res.is_null(0));
+    }
+
+    SECTION("select second that is NULL")
+    {
+        SM.add_and_emit_load(false);
+        SM.add_and_emit_load(42);
+        SM.emit_Push_Null();
+        SM.emit_Sel();
+        SM.emit_St_Tup_i(0, 0);
+        SM(args);
+        REQUIRE(res.is_null(0));
+    }
 }

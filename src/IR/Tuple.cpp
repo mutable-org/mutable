@@ -78,7 +78,7 @@ Tuple::Tuple(const Schema &S)
     std::size_t additional_bytes = 0;
     for (auto &e : S) {
         if (auto cs = cast<const CharacterSequence>(e.type))
-            additional_bytes += cs->size() / 8;
+            additional_bytes += cs->length + 1;
     }
     values_ = (Value*) malloc(S.num_entries() * sizeof(Value) + additional_bytes);
     uint8_t *p = reinterpret_cast<uint8_t*>(values_) + S.num_entries() * sizeof(Value);
@@ -86,7 +86,7 @@ Tuple::Tuple(const Schema &S)
         if (auto cs = cast<const CharacterSequence>(S[i].type)) {
             new (&values_[i]) Value(p);
             *p = '\0'; // terminating NUL byte
-            p += cs->size() / 8;
+            p += cs->length + 1;
         } else {
             new (&values_[i]) Value();
         }
@@ -102,14 +102,14 @@ Tuple::Tuple(std::vector<const Type*> types)
     std::size_t additional_bytes = 0;
     for (auto &ty : types) {
         if (auto cs = cast<const CharacterSequence>(ty))
-            additional_bytes += cs->size() / 8;
+            additional_bytes += cs->length + 1;
     }
     values_ = (Value*) malloc(types.size() * sizeof(Value) + additional_bytes);
     uint8_t *p = reinterpret_cast<uint8_t*>(values_) + types.size() * sizeof(Value);
     for (std::size_t i = 0; i != types.size(); ++i) {
         if (auto cs = cast<const CharacterSequence>(types[i])) {
             new (&values_[i]) Value(p);
-            p += cs->size() / 8;
+            p += cs->length + 1;
         } else {
             new (&values_[i]) Value();
         }

@@ -249,9 +249,15 @@ struct CharacterSequence : PrimitiveType
 
     bool operator==(const Type &other) const override;
 
-    /** Returns the number of bits required to store a sequence of `length` many characters and a terminating NUL byte.
-     */
-    uint32_t size() const override { return 8 * (length + 1); }
+    /** Returns the number of bits required to store a sequence of `length` many characters.  For VARCHAR(N), a NUL byte
+     * is appended.  For CHAR(N), all trailing places up to N-1 are filled with NUL bytes.  A CHAR(N) with a string of
+     * length N has no terminating NUL byte.  */
+    uint32_t size() const override {
+        if (is_varying)
+            return 8 * (length + 1);
+        else
+            return 8 * length;
+    }
 
     uint32_t alignment() const override { return 8; }
 

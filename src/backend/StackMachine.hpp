@@ -26,7 +26,9 @@ struct StackMachine
 #define DB_OPCODE(CODE, ...) CODE,
 #include "tables/Opcodes.tbl"
 #undef DB_OPCODE
+        Last
     };
+    static_assert(uint64_t(Opcode::Last) < (1UL << (sizeof(Opcode) * 8)), "too many opcodes");
 
     using index_t = std::size_t;
 
@@ -109,18 +111,23 @@ struct StackMachine
      * with the index of the context value.  The macro will expand to the method `emit_Ld_Ctx(uint8_t idx)`, that first
      * appends the `Ld_Ctx` opcode to the opcode sequence and then appends the `idx` parameter to the opcode sequence.
      */
-#define SELECT(XXX, _1, _2, FN, ...) FN(__VA_ARGS__)
+#define SELECT(XXX, _1, _2, _3, FN, ...) FN(__VA_ARGS__)
 #define ARGS_0(XXX, ...)
 #define ARGS_1(I, XXX, ARG0, ...) uint8_t ARG0
 #define ARGS_2(I, II, XXX, ARG0, ARG1, ...) uint8_t ARG0, uint8_t ARG1
-#define ARGS(...) SELECT(__VA_ARGS__, ARGS_2, ARGS_1, ARGS_0, __VA_ARGS__)
+#define ARGS_3(I, II, III, XXX, ARG0, ARG1, ARG2, ...) uint8_t ARG0, uint8_t ARG1, uint8_t ARG2
+#define ARGS(...) SELECT(__VA_ARGS__, ARGS_3, ARGS_2, ARGS_1, ARGS_0, __VA_ARGS__)
 #define PUSH_0(XXX, ...)
 #define PUSH_1(I, XXX, ARG0, ...) \
     ops.push_back(static_cast<Opcode>((ARG0)));
 #define PUSH_2(I, II, XXX, ARG0, ARG1, ...) \
     ops.push_back(static_cast<Opcode>((ARG0))); \
     ops.push_back(static_cast<Opcode>((ARG1)));
-#define PUSH(...) SELECT(__VA_ARGS__, PUSH_2, PUSH_1, PUSH_0, __VA_ARGS__)
+#define PUSH_3(I, II, III, XXX, ARG0, ARG1, ARG2, ...) \
+    ops.push_back(static_cast<Opcode>((ARG0))); \
+    ops.push_back(static_cast<Opcode>((ARG1))); \
+    ops.push_back(static_cast<Opcode>((ARG2)));
+#define PUSH(...) SELECT(__VA_ARGS__, PUSH_3, PUSH_2, PUSH_1, PUSH_0, __VA_ARGS__)
 
 #define DB_OPCODE(CODE, DELTA, ...) \
     void emit_ ## CODE ( ARGS(XXX, ##__VA_ARGS__) ) { \
@@ -146,6 +153,12 @@ struct StackMachine
 
     /** Append the given opcode to the opcode sequence. */
     void emit(Opcode opc) { ops.push_back(opc); }
+
+    /** Emit a `Ld_X` instruction based on `Type` `ty`, e.g.\ `Ld_i32` for 4 byte integral types. */
+    void emit_Ld(const Type *ty);
+
+    /** Emit a `St_X` instruction based on `Type` `ty`, e.g.\ `St_i32` for 4 byte integral types. */
+    void emit_St(const Type *ty);
 
     /** Emit a `St_Tup_X` instruction based on `Type` `ty`, e.g.\ `St_Tup_i` for integral `Type`s. */
     void emit_St_Tup(std::size_t tuple_id, std::size_t index, const Type *ty);

@@ -29,6 +29,9 @@ DB_OPCODE(Pop, -1)
 /** Push NULL to top of the stack. */
 DB_OPCODE(Push_Null, +1)
 
+/** Duplicate the top entry of the stack. */
+DB_OPCODE(Dup, +1)
+
 
 /*======================================================================================================================
  * Context Access Operations
@@ -57,7 +60,7 @@ DB_OPCODE(St_Tup_f, 0, tuple_id, index)
 /** Store the current top-of-stack into a tuple. */
 DB_OPCODE(St_Tup_d, 0, tuple_id, index)
 /** Store the current top-of-stack into a tuple. */
-DB_OPCODE(St_Tup_s, 0, tuple_id, index)
+DB_OPCODE(St_Tup_s, 0, tuple_id, index, length)
 /** Store the current top-of-stack into a tuple. */
 DB_OPCODE(St_Tup_b, 0, tuple_id, index)
 
@@ -66,10 +69,10 @@ DB_OPCODE(St_Tup_b, 0, tuple_id, index)
  * I/O Operations
  *====================================================================================================================*/
 
-/** Writes the character `chr` to the `std::ostream` instance referenced by the `index`-th slot in the context. */
+/* Writes the character `chr` to the `std::ostream` instance referenced by the `index`-th slot in the context. */
 DB_OPCODE(Putc, 0, index, chr)
 
-/* Print a value to the std::ostream instance referenced by the index-th slot in the context. */
+/* Print a value to the `std::ostream` instance referenced by the `index`-th slot in the context. */
 DB_OPCODE(Print_i, 0, index)
 DB_OPCODE(Print_f, 0, index)
 DB_OPCODE(Print_d, 0, index)
@@ -81,49 +84,27 @@ DB_OPCODE(Print_b, 0, index)
  * Storage Access Operations
  *====================================================================================================================*/
 
-/*----- Load from row store ------------------------------------------------------------------------------------------*/
+/*----- Load from memory ---------------------------------------------------------------------------------------------*/
 
-DB_OPCODE(Ld_RS_i8,  -2)
-DB_OPCODE(Ld_RS_i16, -2)
-DB_OPCODE(Ld_RS_i32, -2)
-DB_OPCODE(Ld_RS_i64, -2)
-DB_OPCODE(Ld_RS_f,   -2)
-DB_OPCODE(Ld_RS_d,   -2)
-DB_OPCODE(Ld_RS_s,   -3)
-DB_OPCODE(Ld_RS_b,   -2)
+DB_OPCODE(Ld_i8,  0)
+DB_OPCODE(Ld_i16, 0)
+DB_OPCODE(Ld_i32, 0)
+DB_OPCODE(Ld_i64, 0)
+DB_OPCODE(Ld_f,   0)
+DB_OPCODE(Ld_d,   0)
+DB_OPCODE(Ld_s,   0, length)
+DB_OPCODE(Ld_b,   0, mask)
 
-/*----- Store to row store -------------------------------------------------------------------------------------------*/
+/*----- Store to memory ----------------------------------------------------------------------------------------------*/
 
-DB_OPCODE(St_RS_i8,  -3)
-DB_OPCODE(St_RS_i16, -3)
-DB_OPCODE(St_RS_i32, -3)
-DB_OPCODE(St_RS_i64, -3)
-DB_OPCODE(St_RS_f,   -3)
-DB_OPCODE(St_RS_d,   -3)
-DB_OPCODE(St_RS_s,   -4)
-DB_OPCODE(St_RS_b,   -3)
-
-/*----- Load from column store ---------------------------------------------------------------------------------------*/
-
-DB_OPCODE(Ld_CS_i8,  -3)
-DB_OPCODE(Ld_CS_i16, -3)
-DB_OPCODE(Ld_CS_i32, -3)
-DB_OPCODE(Ld_CS_i64, -3)
-DB_OPCODE(Ld_CS_f,   -3)
-DB_OPCODE(Ld_CS_d,   -3)
-DB_OPCODE(Ld_CS_s,   -4)
-DB_OPCODE(Ld_CS_b,   -3)
-
-/*----- Store to column store ----------------------------------------------------------------------------------------*/
-
-DB_OPCODE(St_CS_i8,  -4)
-DB_OPCODE(St_CS_i16, -4)
-DB_OPCODE(St_CS_i32, -4)
-DB_OPCODE(St_CS_i64, -4)
-DB_OPCODE(St_CS_f,   -4)
-DB_OPCODE(St_CS_d,   -4)
-DB_OPCODE(St_CS_s,   -5)
-DB_OPCODE(St_CS_b,   -4)
+DB_OPCODE(St_i8,  -2)
+DB_OPCODE(St_i16, -2)
+DB_OPCODE(St_i32, -2)
+DB_OPCODE(St_i64, -2)
+DB_OPCODE(St_f,   -2)
+DB_OPCODE(St_d,   -2)
+DB_OPCODE(St_s,   -2, length)
+DB_OPCODE(St_b,   -2, bit_offset)
 
 
 /*======================================================================================================================
@@ -134,9 +115,6 @@ DB_OPCODE(St_CS_b,   -4)
 DB_OPCODE(Inc, 0)
 /* Integral decrement. */
 DB_OPCODE(Dec, 0)
-
-/* Bitwise negation */
-DB_OPCODE(Neg_i, 0)
 
 /* Arithmetic negation */
 DB_OPCODE(Minus_i, 0)
@@ -166,9 +144,31 @@ DB_OPCODE(Div_d, -1)
 /* Modulo divide two values. */
 DB_OPCODE(Mod_i, -1)
 
-/* Concatenate two strings. */
-DB_OPCODE(Cat_s, -1)
 
+/*======================================================================================================================
+ * Bitwise operations
+ *====================================================================================================================*/
+
+/* Bitwise negation */
+DB_OPCODE(Neg_i, 0)
+
+/* Bitwise And */
+DB_OPCODE(And_i, -1)
+
+/* Bitwise Or */
+DB_OPCODE(Or_i, -1)
+
+/* Bitwise Xor */
+DB_OPCODE(Xor_i, -1)
+
+/* Shift left. */
+DB_OPCODE(ShL_i, 0, count)
+
+/* Shift logical right. */
+DB_OPCODE(ShR_i, 0, count)
+
+/* Shift arithmetical right. */
+DB_OPCODE(SAR_i, 0, count)
 
 /*======================================================================================================================
  * Logical operations
@@ -178,15 +178,30 @@ DB_OPCODE(Cat_s, -1)
 DB_OPCODE(Not_b, 0)
 
 /* Logical and. */
-DB_OPCODE(And_b, 0)
+DB_OPCODE(And_b, -1)
 
 /* Logical or. */
-DB_OPCODE(Or_b, 0)
+DB_OPCODE(Or_b, -1)
+
+
+/*======================================================================================================================
+ * String manipulation operations
+ *====================================================================================================================*/
+
+/* Concatenate two strings. */
+DB_OPCODE(Cat_s, -1)
 
 
 /*======================================================================================================================
  * Comparison operations
  *====================================================================================================================*/
+
+/* Test for NULL. */
+DB_OPCODE(Is_Null, 0)
+/* Test equal to zero. */
+DB_OPCODE(EqZ_i, 0)
+/* Test not equal to zero. */
+DB_OPCODE(NEZ_i, 0)
 
 DB_OPCODE(Eq_i, -1)
 DB_OPCODE(Eq_f, -1)
@@ -232,10 +247,16 @@ DB_OPCODE(Like_expr, -1)
 
 
 /*======================================================================================================================
- * Intrinsic functions
+ * Selection operation
  *====================================================================================================================*/
 
-DB_OPCODE(Is_Null, 0)
+/* Select one of two values based on a boolean. */
+DB_OPCODE(Sel, -2)
+
+
+/*======================================================================================================================
+ * Type conversion
+ *====================================================================================================================*/
 
 /* Cast to int. */
 DB_OPCODE(Cast_i_f, 0)

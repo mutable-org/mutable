@@ -38,7 +38,7 @@ TEST_CASE("Type/CharacterSequence", "[core][catalog][type]")
         const CharacterSequence *chr42 = Type::Get_Char(Type::TY_Scalar, 42);
         CHECK(not chr42->is_varying);
         CHECK(chr42->length == 42);
-        CHECK(chr42->size() == 43 * 8);
+        CHECK(chr42->size() == 42 * 8);
     }
 
     SECTION("VARCHAR(N)")

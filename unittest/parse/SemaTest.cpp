@@ -1879,7 +1879,6 @@ TEST_CASE("Sema/Statements/UseDatabase", "[core][parse][sema]")
         Sema sema(diag);
         sema(*stmt);
 
-        std::cout << err.str() << std::endl;
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
         delete stmt;
@@ -2528,7 +2527,6 @@ TEST_CASE("Sema/Statements/DSVImport", "[core][parse][sema]")
                 SKIP HEADER;");
             Parser parser(lexer);
             ImportStmt *stmt = as<ImportStmt>(parser.parse());
-            std::cout << err.str() << std::endl;
             REQUIRE(diag.num_errors() == 0);
             REQUIRE(err.str().empty());
             Sema sema(diag);
@@ -2545,7 +2543,6 @@ TEST_CASE("Sema/Statements/DSVImport", "[core][parse][sema]")
                 DELIMITER \",,\";");
             Parser parser(lexer);
             ImportStmt *stmt = as<ImportStmt>(parser.parse());
-            std::cout << err.str() << std::endl;
             REQUIRE(diag.num_errors() == 0);
             REQUIRE(err.str().empty());
             Sema sema(diag);
@@ -2562,7 +2559,6 @@ TEST_CASE("Sema/Statements/DSVImport", "[core][parse][sema]")
                 QUOTE \"''\";");
             Parser parser(lexer);
             ImportStmt *stmt = as<ImportStmt>(parser.parse());
-            std::cout << err.str() << std::endl;
             REQUIRE(diag.num_errors() == 0);
             REQUIRE(err.str().empty());
             Sema sema(diag);
@@ -2579,7 +2575,6 @@ TEST_CASE("Sema/Statements/DSVImport", "[core][parse][sema]")
                 ESCAPE \"||\";");
             Parser parser(lexer);
             ImportStmt *stmt = as<ImportStmt>(parser.parse());
-            std::cout << err.str() << std::endl;
             REQUIRE(diag.num_errors() == 0);
             REQUIRE(err.str().empty());
             Sema sema(diag);
@@ -2597,7 +2592,6 @@ TEST_CASE("Sema/Statements/DSVImport", "[core][parse][sema]")
                 QUOTE \",\";");
             Parser parser(lexer);
             ImportStmt *stmt = as<ImportStmt>(parser.parse());
-            std::cout << err.str() << std::endl;
             REQUIRE(diag.num_errors() == 0);
             REQUIRE(err.str().empty());
             Sema sema(diag);
@@ -2613,7 +2607,6 @@ TEST_CASE("Sema/Statements/DSVImport", "[core][parse][sema]")
             LEXER("IMPORT INTO mytable DSV \"test\" SKIP HEADER;");
             Parser parser(lexer);
             ImportStmt *stmt = as<ImportStmt>(parser.parse());
-            std::cout << err.str() << std::endl;
             REQUIRE(diag.num_errors() == 0);
             REQUIRE(err.str().empty());
             Sema sema(diag);

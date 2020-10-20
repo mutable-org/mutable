@@ -14,17 +14,6 @@
 using namespace db;
 
 
-#ifndef NDEBUG
-static constexpr std::size_t ALLOCATION_SIZE = 1UL << 30; ///< 1 GiB
-#else
-static constexpr std::size_t ALLOCATION_SIZE = 1UL << 37; ///< 128 GiB
-#endif
-
-
-/*======================================================================================================================
- * RowStore
- *====================================================================================================================*/
-
 RowStore::RowStore(const Table &table)
     : Store(table)
     , offsets_(new uint32_t[table.size() + 1]) // add one slot for the offset of the meta data
@@ -35,157 +24,18 @@ RowStore::RowStore(const Table &table)
     data_ = allocator.allocate(ALLOCATION_SIZE);
 
     /* Initialize linearization. */
-    auto lin = std::make_unique<Linearization>(Linearization::CreateInfiniteSequence(table.size()));
+    auto lin = std::make_unique<Linearization>(Linearization::CreateInfiniteSequence(1));
+    auto child = std::make_unique<Linearization>(Linearization::CreateFiniteSequence(table.size() + 1, 1));
     for (auto &attr : table)
-        lin->add_sequence(offset(attr), attr.type->size(), attr);
+        child->add_sequence(offset(attr), 0, attr);
+    child->add_null_bitmap(offset(table.size()), 0);
+    lin->add_sequence(uintptr_t(memory().addr()), row_size_ / 8, std::move(child));
     linearization(std::move(lin));
 }
 
 RowStore::~RowStore()
 {
     delete[] offsets_;
-}
-
-StackMachine RowStore::loader(const Schema &schema) const
-{
-    StackMachine sm;
-    std::size_t out_idx = 0;
-
-    /* Add address of store to initial state. */
-    auto addr_idx = sm.add(int64_t(data_.as<uintptr_t>()));
-
-    /* Add row size to context. */
-    auto row_size_idx = sm.add(int64_t(row_size_/8));
-
-    for (auto &e : schema) {
-        auto &attr = table().at(e.id.name);
-
-        /* Load row address to stack. */
-        sm.emit_Ld_Ctx(addr_idx);
-
-        /* Load null bit offset to stack. */
-        const std::size_t null_off = offset(table().size()) + attr.id;
-        sm.add_and_emit_load(int64_t(null_off));
-
-        /* Load value bit offset to stack. */
-        const std::size_t value_off = offset(attr.id);
-        sm.add_and_emit_load(int64_t(value_off));
-
-        /* Emit load from store instruction. */
-        auto ty = attr.type;
-        if (ty->is_boolean()) {
-            sm.emit_Ld_RS_b();
-        } else if (auto n = cast<const Numeric>(ty)) {
-            switch (n->kind) {
-                case Numeric::N_Int:
-                case Numeric::N_Decimal: {
-                    switch (n->size()) {
-                        default: unreachable("illegal type");
-                        case  8: sm.emit_Ld_RS_i8();  break;
-                        case 16: sm.emit_Ld_RS_i16(); break;
-                        case 32: sm.emit_Ld_RS_i32(); break;
-                        case 64: sm.emit_Ld_RS_i64(); break;
-                    }
-                    break;
-                }
-
-                case Numeric::N_Float: {
-                    if (n->size() == 32)
-                        sm.emit_Ld_RS_f();
-                    else
-                        sm.emit_Ld_RS_d();
-                    break;
-                }
-            }
-        } else if (auto cs = cast<const CharacterSequence>(ty)) {
-            sm.add_and_emit_load(int64_t(cs->length));
-            sm.emit_Ld_RS_s();
-        } else {
-            unreachable("illegal type");
-        }
-        sm.emit_St_Tup(0, out_idx++, attr.type);
-    }
-
-    /* Update row address. */
-    sm.emit_Ld_Ctx(addr_idx);
-    sm.emit_Ld_Ctx(row_size_idx);
-    sm.emit_Add_i();
-    sm.emit_Upd_Ctx(addr_idx);
-
-    return sm;
-}
-
-StackMachine RowStore::writer(const std::vector<const Attribute*> &attrs) const
-{
-    Schema in;
-    for (auto attr : attrs)
-        in.add({"attr"}, attr->type);
-    StackMachine sm(in);
-
-    /* Get row id.  Allocate a slot in the context, that is to be set from the user of this StackMachine. */
-    sm.add_and_emit_load(int64_t(0));
-
-    /* Get row size in bytes. */
-    sm.add_and_emit_load(int64_t(row_size_/8));
-
-    sm.emit_Mul_i(); // multiply row size (in bytes) and row id to compute row offset
-    sm.add_and_emit_load(int64_t(data_.as<uintptr_t>())); // load store base addr
-    sm.emit_Add_i(); // add row offset to base address to compute row addr
-    auto row_addr_idx = sm.add(int64_t(0)); // allocate slot for row addr
-    sm.emit_Upd_Ctx(row_addr_idx);
-
-    uint8_t tuple_idx = 0;
-    for (auto attr : attrs) {
-        if (not attr) continue; // skip nullptr
-
-        /* Load the next value to the stack. */
-        sm.emit_Ld_Tup(0, tuple_idx++);
-
-        /* Load row address to stack. */
-        sm.emit_Ld_Ctx(row_addr_idx);
-
-        /* Load null bit offset to stack. */
-        const std::size_t null_off = offset(table().size()) + attr->id;
-        sm.add_and_emit_load(int64_t(null_off));
-
-        /* Load value bit offset to stack. */
-        const std::size_t value_off = offset(attr->id);
-        sm.add_and_emit_load(int64_t(value_off));
-
-        /* Emit store to store instruction. */
-        auto ty = attr->type;
-        if (ty->is_boolean()) {
-            sm.emit_St_RS_b();
-        } else if (auto n = cast<const Numeric>(ty)) {
-            switch (n->kind) {
-                case Numeric::N_Int:
-                case Numeric::N_Decimal:
-                    switch (n->size()) {
-                        default: unreachable("illegal type");
-                        case  8: sm.emit_St_RS_i8();  break;
-                        case 16: sm.emit_St_RS_i16(); break;
-                        case 32: sm.emit_St_RS_i32(); break;
-                        case 64: sm.emit_St_RS_i64(); break;
-                    }
-                    break;
-
-                case Numeric::N_Float: {
-                    if (n->size() == 32)
-                        sm.emit_St_RS_f();
-                    else
-                        sm.emit_St_RS_d();
-                    break;
-                }
-            }
-        } else if (auto cs = cast<const CharacterSequence>(ty)) {
-            sm.add_and_emit_load(int64_t(cs->length));
-            sm.emit_St_RS_s();
-        } else {
-            unreachable("illegal type");
-        }
-    }
-
-    return sm;
 }
 
 void RowStore::compute_offsets()

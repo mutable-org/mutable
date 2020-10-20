@@ -1,5 +1,7 @@
 #include "io/Reader.hpp"
 
+#include "backend/Interpreter.hpp"
+#include "backend/StackMachine.hpp"
 #include "storage/Store.hpp"
 #include "util/macro.hpp"
 #include <cctype>
@@ -33,6 +35,17 @@ void DSVReader::operator()(std::istream &in, const char *name)
 {
     auto &C = Catalog::Get();
     auto &store = table.store();
+
+    /* Compute table schema. */
+    Schema S;
+    for (auto &attr : table) S.add({table.name, attr.name}, attr.type);
+
+    /* Compile stack machine. */
+    auto W = Interpreter::compile_store(S, store.linearization());
+
+    /* Allocate intermediate tuple. */
+    tup = Tuple(S);
+
     std::vector<const Attribute*> columns; ///< maps column offset to attribute
     this->in = &in;
     c = '\n';
@@ -77,7 +90,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
     std::size_t idx = 0;
     while (in.good() and idx < num_rows) {
         ++idx;
-        row = store.append();
+        store.append();
         for (std::size_t i = 0; i != columns.size(); ++i) {
             auto col = columns[i];
             if (i != 0 and not accept(delimiter)) {
@@ -89,14 +102,12 @@ void DSVReader::operator()(std::istream &in, const char *name)
             }
 
             if (col) { // current cell should be read
-                if (c == delimiter) {
-                    row->setnull(*col);
+                if (c == delimiter) { // NULL
+                    tup.null(col->id);
                     continue; // keep delimiter (expected at beginning of each loop)
-
                 }
-                attr = col;
-                auto ty = col->type;
-                (*this)(*ty);
+                col_idx = col->id;
+                (*this)(*col->type);
             } else {
                 discard_cell();
             }
@@ -105,6 +116,9 @@ end_of_row:
         if (c != EOF and c != '\n') {
             diag.e(pos) << "Expected end of row.\n";
             discard_row();
+        } else {
+            Tuple *args[] = { &tup };
+            W(args); // write tuple to store
         }
         insist(c == EOF or c == '\n');
         step();
@@ -120,9 +134,9 @@ void DSVReader::operator()(Const<Boolean>&)
     while (c != EOF and c != '\n' and c != delimiter) { push(); }
     buf.push_back(0);
     if (streq("TRUE", &buf[0]))
-        row->set(*attr, true);
+        tup.set(col_idx, true);
     else if (streq("FALSE", &buf[0]))
-        row->set(*attr, false);
+        tup.set(col_idx, false);
     else
         diag.e(pos) << "Expected TRUE or FALSE.\n";
 }
@@ -169,7 +183,9 @@ void DSVReader::operator()(Const<CharacterSequence>&)
         }
     }
     buf.push_back(0);
-    row->set(*attr, std::string(buf.begin(), buf.end()));
+
+    Catalog &C = Catalog::Get();
+    tup.set(col_idx, C.pool(&buf[0]));
 }
 
 void DSVReader::operator()(Const<Numeric> &ty)
@@ -177,7 +193,7 @@ void DSVReader::operator()(Const<Numeric> &ty)
     switch (ty.kind) {
         case Numeric::N_Int: {
             int64_t i = read_int();
-            row->set(*attr, i);
+            tup.set(col_idx, i);
             break;
         }
 
@@ -201,7 +217,7 @@ void DSVReader::operator()(Const<Numeric> &ty)
                 while (is_dec(c)) { step(); }
                 d += d >= 0 ? post_dot : -post_dot;
             }
-            row->set(*attr, d);
+            tup.set(col_idx, d);
             break;
         }
 
@@ -213,7 +229,10 @@ void DSVReader::operator()(Const<Numeric> &ty)
             auto after = in->tellg();
             pos.column += after - before - 1;
             step(); // get the next character (hopefully delimiter)
-            row->set(*attr, d);
+            if (ty.is_float())
+                tup.set(col_idx, float(d));
+            else
+                tup.set(col_idx, d);
             break;
         }
     }

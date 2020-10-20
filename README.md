@@ -15,6 +15,7 @@ striving for competitive performance with state-of-the-art systems.
 - [Joris Nix](https://bigdata.uni-saarland.de/people/nix.php) <<joris.nix@bigdata.uni-saarland.de>>
 - [Jens Dittrich](https://bigdata.uni-saarland.de/people/dittrich.php) <<jens.dittrich@bigdata.uni-saarland.de>>
 - Luca Gretscher <<s8lugret@stud.uni-saarland.de>>
+- Tobias Kopp <<s8tokopp@stud.uni-saarland.de>>
 
 
 ## License

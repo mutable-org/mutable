@@ -1,9 +1,12 @@
 #include "catch.hpp"
 
 #include "util/fn.hpp"
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
-
+#include <ctime>
+#include <sstream>
+#include <string>
 
 TEST_CASE("streq", "[core][util][fn]")
 {
@@ -118,28 +121,276 @@ TEST_CASE("pattern_to_regex", "[core][util][fn]")
     std::string s1 = "abcd";
     std::string s2 = "defg";
     std::string s3 = "\"+";
+    std::string s4 = "[]";
+    std::string s5 = "()";
+    std::string s6 = "{}";
+    std::string s7 = ".*+^?|$";
+    std::string s8 = "\\\\";
 
-    auto r1 = std::regex("abcd");
-    auto r1_ = pattern_to_regex("abcd");
+    SECTION("abcd")
+    {
+        auto r1 = std::regex("abcd");
+        auto r1_ = pattern_to_regex("abcd");
 
-    REQUIRE(std::regex_match(s1, r1) == std::regex_match(s1, r1_));
-    REQUIRE(std::regex_match(s2, r1) == std::regex_match(s2, r1_));
+        REQUIRE(std::regex_match(s1, r1) == std::regex_match(s1, r1_));
+        REQUIRE(std::regex_match(s2, r1) == std::regex_match(s2, r1_));
+    }
 
-    auto r2 = std::regex("...d");
-    auto r2_ = pattern_to_regex("___d");
+    SECTION("...d")
+    {
+        auto r2 = std::regex("...d");
+        auto r2_ = pattern_to_regex("___d");
 
-    REQUIRE(std::regex_match(s1, r2) == std::regex_match(s1, r2_));
-    REQUIRE(std::regex_match(s2, r2) == std::regex_match(s2, r2_));
+        REQUIRE(std::regex_match(s1, r2) == std::regex_match(s1, r2_));
+        REQUIRE(std::regex_match(s2, r2) == std::regex_match(s2, r2_));
+    }
 
-    auto r3 = std::regex("(.*)d(.*)");
-    auto r3_ = pattern_to_regex("%d%");
+    SECTION("%")
+    {
+        auto r3 = std::regex("(.*)d(.*)");
+        auto r3_ = pattern_to_regex("%d%");
 
-    REQUIRE(std::regex_match(s1, r3) == std::regex_match(s1, r3_));
-    REQUIRE(std::regex_match(s2, r3) == std::regex_match(s2, r3_));
+        REQUIRE(std::regex_match(s1, r3) == std::regex_match(s1, r3_));
+        REQUIRE(std::regex_match(s2, r3) == std::regex_match(s2, r3_));
+    }
 
-    auto r4 = std::regex("\".");
-    auto r4_ = pattern_to_regex("\"_");
+    SECTION("_ to .")
+    {
+        auto r4 = std::regex("\".");
+        auto r4_ = pattern_to_regex("\"_");
 
-    REQUIRE(std::regex_match(s2, r4) == std::regex_match(s2, r4_));
-    REQUIRE(std::regex_match(s3, r4) == std::regex_match(s3, r4_));
+        REQUIRE(std::regex_match(s2, r4) == std::regex_match(s2, r4_));
+        REQUIRE(std::regex_match(s3, r4) == std::regex_match(s3, r4_));
+    }
+
+    SECTION("Add backslashes on []")
+    {
+        auto r5 = std::regex("\\[\\]");
+        auto r5_ = pattern_to_regex("[]");
+
+        REQUIRE(std::regex_match(s1, r5) == std::regex_match(s1, r5_));
+        REQUIRE(std::regex_match(s4, r5) == std::regex_match(s4, r5_));
+    }
+
+    SECTION("Add backslashes on ()")
+    {
+        auto r6 = std::regex("\\(\\)");
+        auto r6_ = pattern_to_regex("()");
+
+        REQUIRE(std::regex_match(s1, r6) == std::regex_match(s1, r6_));
+        REQUIRE(std::regex_match(s5, r6) == std::regex_match(s5, r6_));
+    }
+
+    SECTION("Add backslashes on {}")
+    {
+        auto r7 = std::regex("\\{\\}");
+        auto r7_ = pattern_to_regex("{}");
+
+        REQUIRE(std::regex_match(s1, r7) == std::regex_match(s1, r7_));
+        REQUIRE(std::regex_match(s6, r7) == std::regex_match(s6, r7_));
+    }
+
+    SECTION("Add backslashes on . * + ^ ? | $")
+    {
+        auto r8 = std::regex("\\.\\*\\+\\^\\?\\|\\$");
+        auto r8_ = pattern_to_regex(".*+^?|$");
+
+        REQUIRE(std::regex_match(s1, r8) == std::regex_match(s1, r8_));
+        REQUIRE(std::regex_match(s7, r8) == std::regex_match(s7, r8_));
+    }
+
+    SECTION("Add backslashes with specified escape char")
+    {
+        auto r9 = std::regex("\\b");
+        auto r9_ = pattern_to_regex("ab", false, 'a');
+
+        REQUIRE(std::regex_match(s1, r9) == std::regex_match(s1, r9_));
+        REQUIRE(std::regex_match(s7, r9) == std::regex_match(s7, r9_));
+    }
+
+    SECTION("Add backslashes on \\")
+    {
+        auto r10 = std::regex("\\\\");
+        auto r10_ = pattern_to_regex("\\");
+
+        REQUIRE(std::regex_match(s1, r10) == std::regex_match(s1, r10_));
+        REQUIRE(std::regex_match(s8, r10) == std::regex_match(s8, r10_));
+    }
+}
+
+TEST_CASE("get_home_path", "[core][util][fn]")
+{
+#if __linux || __APPLE__
+    char *homepath = getenv("HOME");            // Get original HOME path
+    const std::string str("Hello, World");
+    setenv("HOME", str.c_str(), 1);             // Replace value of HOME
+    const std::string gotten = get_home_path();
+    REQUIRE(str == gotten);                     // Check wether get_home_path() returns the correct string
+    setenv("HOME", homepath, 1);                // Restore original HOME path
+#elif _WIN32
+    // TODO implement test case
+#else
+    /* no test available */
+#endif
+}
+
+TEST_CASE("isspace", "[core][util][fn]")
+{
+    SECTION("5 spaces with length 5")
+    {
+        auto string = "     ";
+        REQUIRE(isspace(string, 5));
+    }
+
+    SECTION("10 spaces with length 5")
+    {
+        auto string = "          ";
+        REQUIRE(isspace(string, 5));
+    }
+
+    SECTION("4 spaces, 1 nonspace, length 5")
+    {
+        auto string = "  x  ";
+        REQUIRE(not isspace(string, 5));
+    }
+
+    SECTION("String containing nonspace, but length is shorter")
+    {
+        auto string = "  x";
+        REQUIRE(isspace(string, 2));
+    }
+
+    SECTION("Empty string")
+    {
+        auto string = "";
+        REQUIRE(isspace(string, 0));
+    }
+
+    SECTION("Trailing spaces")
+    {
+        auto string = "test     ";
+        REQUIRE(not isspace(string, 9));
+    }
+
+    SECTION("Spaces in the middle")
+    {
+        auto string = "a    b";
+        REQUIRE(not isspace(string, 5));
+    }
+
+    SECTION("Given length is longer than string length")
+    {
+        auto string = "     ";
+        REQUIRE(not isspace(string, 10));
+    }
+}
+
+TEST_CASE("replace_all", "[core][util][fn]")
+{
+    SECTION("Replace all b with t")
+    {
+        auto s1 = "abcbbxyzba";
+        auto s2 = "b";
+        auto s3 = "t";
+        REQUIRE(replace_all(s1, s2, s3) == "atcttxyzta");
+    }
+
+    SECTION("Replace all b with sql")
+    {
+        auto s1 = "abcbbxyzba";
+        auto s2 = "b";
+        auto s3 = "sql";
+        REQUIRE(replace_all(s1, s2, s3) == "asqlcsqlsqlxyzsqla");
+    }
+
+    SECTION("Replace all abc with space")
+    {
+        auto s1 = "xyzabcabcueabcuqabc6ab!";
+        auto s2 = "abc";
+        auto s3 = " ";
+        REQUIRE(replace_all(s1, s2, s3) == "xyz  ue uq 6ab!");
+    }
+
+    SECTION("Replace all 5 with 33")
+    {
+        auto s1 = "5 + 5 = 66";
+        auto s2 = "5";
+        auto s3 = "33";
+        REQUIRE(replace_all(s1, s2, s3) == "33 + 33 = 66");
+    }
+
+    SECTION("Replace all == with .")
+    {
+        auto s1 = "c=f====e2==dE===2=====x";
+        auto s2 = "==";
+        auto s3 = ".";
+        REQUIRE(replace_all(s1, s2, s3) == "c=f..e2.dE.=2..=x");
+    }
+}
+
+TEST_CASE("TimePoint to human readable", "[core][util][fn]")
+{
+    auto check_human_readable = [](const std::string &str) -> void {
+        for (std::string::size_type i = 0, end = str.length(); i != end; ++i) {
+            switch(i) {
+                /* digits */
+                case 0:
+                case 1:
+                case 3:
+                case 4:
+                case 6:
+                case 7:
+                case 9:
+                case 10:
+                case 11:
+                    CHECK(isdigit(str[i]));
+                    break;
+
+                /* colon delimiter */
+                case 2:
+                case 5:
+                    CHECK(str[i] == ':');
+                    break;
+
+                /* dot delimiter */
+                case 8:
+                    CHECK(str[i] == '.');
+                    break;
+
+                /* space before time zone */
+                case 12:
+                    CHECK(str[i] == ' ');
+                    break;
+
+                /* time zone */
+                case 13:
+                    CHECK(str[i] == '(');
+                    for (++i; i != end and str[i] != ')'; ++i)
+                        CHECK(isalpha(str[i]));
+                    CHECK(str[i] == ')');
+                    break;
+
+                default:
+                    FAIL("unexpected trailing symbols");
+                    break;
+            }
+        }
+    };
+
+    using Clock = std::chrono::high_resolution_clock;
+    using TimePoint = std::chrono::time_point<Clock>;
+
+    TimePoint tp;
+    SECTION("01:00:00.000 (CET)")
+    {
+        tp = TimePoint();
+    }
+    SECTION("01:00:04.000 (CET)")
+    {
+        tp = TimePoint(std::chrono::seconds(4));
+    }
+
+    std::ostringstream oss;
+    oss << tp;
+    check_human_readable(oss.str());
 }

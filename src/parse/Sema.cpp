@@ -822,10 +822,15 @@ void Sema::operator()(Const<SelectClause> &c)
         }
 
         if (s.second) {
-            /* With alias. */
+            /* Expression with alias. */
             Ctx.results.emplace(s.second.text, s.first);
+        } else if (auto d = cast<const Designator>(s.first)) {
+            /* Expression is a designator.  Simply reuse the name without table prefix. */
+            Ctx.results.emplace(d->attr_name.text, s.first);
         } else {
-            /* Without alias.  Print expression as string to get a name. Use '$const' as prefix for constants. */
+            insist(not is<const Designator>(s.first));
+            /* Expression without alias.  Print expression as string to get a name.  Use '$const' as prefix for
+             * constants. */
             std::ostringstream oss;
             if (e.is_constant())
                 oss << "$const" << const_counter++;

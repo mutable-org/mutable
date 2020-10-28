@@ -1,0 +1,11 @@
+description: Lexer sanity check.
+db: ours
+query: '?'
+required: YES
+
+stages:
+    lexer:
+        out: NULL
+        err: NULL
+        num_err: 1
+        returncode: 1

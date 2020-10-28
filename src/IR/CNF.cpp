@@ -101,6 +101,7 @@ std::ostream & operator<<(std::ostream &out, const Predicate &pred)
     if (pred.negative())
         out << '-';
     ASTPrinter print(out);
+    print.expand_nested_queries(false);
     print(*pred.expr());
     return out;
 }
@@ -116,7 +117,9 @@ std::ostream & operator<<(std::ostream &out, const Clause &clause)
 
 std::ostream & operator<<(std::ostream &out, const CNF &cnf)
 {
-    if (cnf.size() == 1)
+    if (cnf.empty())
+        out << "TRUE";
+    else if (cnf.size() == 1)
         out << cnf[0];
     else {
         for (auto it = cnf.begin(); it != cnf.end(); ++it) {
@@ -169,6 +172,7 @@ struct CNFGenerator : ConstASTExprVisitor
     void operator()(Const<FnApplicationExpr> &e);
     void operator()(Const<UnaryExpr> &e);
     void operator()(Const<BinaryExpr> &e);
+    void operator()(Const<QueryExpr> &e);
 };
 
 void CNFGenerator::operator()(Const<ErrorExpr> &e)
@@ -234,6 +238,11 @@ void CNFGenerator::operator()(Const<BinaryExpr> &e)
         /* This expression is a literal. */
         result_ = CNF({Clause({Predicate::Create(&e, is_negative_)})});
     }
+}
+
+void CNFGenerator::operator()(Const<QueryExpr> &e)
+{
+    result_ = CNF({Clause({Predicate::Create(&e, is_negative_)})});
 }
 
 CNF to_CNF(const Expr &e)

@@ -59,6 +59,7 @@ struct db::StackMachineBuilder : ConstASTExprVisitor
     void operator()(Const<FnApplicationExpr> &e) override;
     void operator()(Const<UnaryExpr> &e) override;
     void operator()(Const<BinaryExpr> &e) override;
+    void operator()(Const<QueryExpr> &e) override;
 };
 
 std::unordered_map<std::string, std::regex> StackMachineBuilder::regexes_;
@@ -496,6 +497,14 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
             stack_machine_.emit_Or_b();
             break;
     }
+}
+
+void StackMachineBuilder::operator()(Const<QueryExpr> &e) {
+    /* Given the query expression, identify the position of its value in the tuple.  */
+    Catalog &C = Catalog::Get();
+    std::size_t idx(schema_[{e.alias(), C.pool("$res")}].first);
+    insist(idx < schema_.num_entries(), "index out of bounds");
+    stack_machine_.emit_Ld_Tup(tuple_id, idx);
 }
 
 

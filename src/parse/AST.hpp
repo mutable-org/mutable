@@ -38,6 +38,7 @@ struct Stmt;
 struct Expr
 {
     friend struct Sema;
+    friend struct GetCorrelationInfo;
 
     Token tok;
 
@@ -45,13 +46,15 @@ struct Expr
     const Type *type_ = nullptr; ///> the type of an expression, determined by the semantic analysis
 
     public:
-    Expr(Token tok) : tok(tok) { }
+    explicit Expr(Token tok) : tok(tok) { }
+    Expr(Token tok, const Type *type) : tok(tok), type_(type) { }
     virtual ~Expr() { }
 
-    const Type * type() const { return notnull(type_); }
+    virtual const Type * type() const { return notnull(type_); }
     bool has_type() const { return type_ != nullptr; }
 
     virtual bool is_constant() const = 0;
+    virtual bool is_correlated() const = 0;
 
     virtual bool operator==(const Expr &other) const = 0;
     bool operator!=(const Expr &other) const { return not operator==(other); }
@@ -80,12 +83,13 @@ struct ErrorExpr : Expr
 {
     explicit ErrorExpr(Token tok) : Expr(tok) { }
 
-    bool is_constant() const { return false; }
+    bool is_constant() const override { return false; }
+    bool is_correlated() const override { return false; }
 
-    bool operator==(const Expr &other) const;
+    bool operator==(const Expr &other) const override;
 
-    void accept(ASTExprVisitor &v);
-    void accept(ConstASTExprVisitor &v) const;
+    void accept(ASTExprVisitor &v) override;
+    void accept(ConstASTExprVisitor &v) const override;
 };
 
 /** A designator.  Identifies an attribute, optionally preceeded by a table name, a named expression, or a function. */
@@ -93,27 +97,42 @@ struct Designator : Expr
 {
     friend struct Sema;
 
+    using target_type = std::variant<std::monostate, const Expr*, const Attribute*>;
     Token table_name;
     Token attr_name;
     private:
-    using target_type = std::variant<std::monostate, const Expr*, const Attribute*>;
     target_type target_; ///< the target that is referenced by this designator
+    bool is_correlated_ = false; ///< indicates whether this designator is correlated
 
     public:
     explicit Designator(Token attr_name) : Expr(attr_name), attr_name(attr_name) { }
 
     Designator(Token dot, Token table_name, Token attr_name) : Expr(dot), table_name(table_name), attr_name(attr_name) { }
+    Designator(Token dot, Token table_name, Token attr_name, const Type *type, target_type target)
+        : Expr(dot, type), table_name(table_name), attr_name(attr_name), target_(target) { }
 
-    bool is_constant() const {
+    /** Return the type of this designator. Change into its scalar version iff correlated. */
+    const Type * type() const override {
+        if (auto pt = cast<const PrimitiveType>(Expr::type()); pt and is_correlated_)
+            return pt->as_scalar();
+        else
+            return Expr::type();
+    }
+
+    bool is_constant() const override {
         if (auto e = std::get_if<const Expr*>(&target_))
             return (*e)->is_constant();
         return false;
     }
 
-    bool operator==(const Expr &other) const;
+    bool is_correlated() const override { return is_correlated_; }
+    /** Removes `is_correlated` flag to indicate that this designator has been decorrelated. */
+    void decorrelate() const { const_cast<Designator*>(this)->is_correlated_ = false; }
 
-    void accept(ASTExprVisitor &v);
-    void accept(ConstASTExprVisitor &v) const;
+    bool operator==(const Expr &other) const override;
+
+    void accept(ASTExprVisitor &v) override;
+    void accept(ConstASTExprVisitor &v) const override;
 
     bool has_explicit_table_name() const { return bool(table_name); }
     bool is_identifier() const { return not has_explicit_table_name(); }
@@ -133,12 +152,13 @@ struct Constant : Expr
 {
     Constant(Token tok) : Expr(tok) { }
 
-    bool is_constant() const { return true; }
+    bool is_constant() const override { return true; }
+    bool is_correlated() const override { return false; }
 
-    bool operator==(const Expr &other) const;
+    bool operator==(const Expr &other) const override;
 
-    void accept(ASTExprVisitor &v);
-    void accept(ConstASTExprVisitor &v) const;
+    void accept(ASTExprVisitor &v) override;
+    void accept(ConstASTExprVisitor &v) const override;
 
     bool is_null() const { return tok.type == TK_Null; }
     bool is_number() const { return is_integer() or is_float(); }
@@ -171,15 +191,16 @@ struct FnApplicationExpr : PostfixExpr
     FnApplicationExpr(Token lpar, Expr *fn, std::vector<Expr*> args) : PostfixExpr(lpar), fn(fn), args(args) { }
     ~FnApplicationExpr();
 
-    bool is_constant() const { return false; }
+    bool is_constant() const override { return false; }
+    bool is_correlated() const override { return false; } // TODO correlated function arguments are not yet supported
 
-    bool operator==(const Expr &other) const;
+    bool operator==(const Expr &other) const override;
 
     bool has_function() const { return func_; }
     const Function & get_function() const { insist(func_); return *func_; }
 
-    void accept(ASTExprVisitor &v);
-    void accept(ConstASTExprVisitor &v) const;
+    void accept(ASTExprVisitor &v) override;
+    void accept(ConstASTExprVisitor &v) const override;
 };
 
 /** A unary expression: "+e", "-e", "~e", "NOT e". */
@@ -190,13 +211,14 @@ struct UnaryExpr : Expr
     UnaryExpr(Token op, Expr *expr) : Expr(op), expr(notnull(expr)) { }
     ~UnaryExpr() { delete expr; }
 
-    bool is_constant() const { return expr->is_constant(); }
+    bool is_constant() const override { return expr->is_constant(); }
+    bool is_correlated() const override { return expr->is_correlated(); }
     Token op() const { return tok; }
 
-    bool operator==(const Expr &other) const;
+    bool operator==(const Expr &other) const override;
 
-    void accept(ASTExprVisitor &v);
-    void accept(ConstASTExprVisitor &v) const;
+    void accept(ASTExprVisitor &v) override;
+    void accept(ConstASTExprVisitor &v) const override;
 };
 
 /** A binary expression.  This includes all arithmetic and logical binary operations. */
@@ -208,13 +230,46 @@ struct BinaryExpr : Expr
     BinaryExpr(Token op, Expr *lhs, Expr *rhs) : Expr(op), lhs(notnull(lhs)), rhs(notnull(rhs)) { }
     ~BinaryExpr() { delete lhs; delete rhs; }
 
-    bool is_constant() const { return lhs->is_constant() and rhs->is_constant(); }
+    bool is_constant() const override { return lhs->is_constant() and rhs->is_constant(); }
+    bool is_correlated() const override { return lhs->is_correlated() or rhs->is_correlated(); }
     Token op() const { return tok; }
 
-    bool operator==(const Expr &other) const;
+    bool operator==(const Expr &other) const override;
 
-    void accept(ASTExprVisitor &v);
-    void accept(ConstASTExprVisitor &v) const;
+    void accept(ASTExprVisitor &v) override;
+    void accept(ConstASTExprVisitor &v) const override;
+};
+
+/** A query expression for nested queries. */
+struct QueryExpr : Expr
+{
+    Stmt *query;
+
+    private:
+    const char *alias_; ///> the alias that is used for this query expression
+
+    public:
+    QueryExpr(Token op, Stmt *query) : Expr(op), query(notnull(query)), alias_(make_unique_alias()) { }
+    ~QueryExpr();
+
+    bool is_constant() const override;
+    bool is_correlated() const override;
+
+    bool operator==(const Expr &other) const override;
+
+    void accept(ASTExprVisitor &v) override;
+    void accept(ConstASTExprVisitor &v) const override;
+
+    const char * alias() const { return alias_; }
+
+    private:
+    static const char * make_unique_alias() {
+        static uint64_t id(0);
+        std::ostringstream oss;
+        oss << "q_" << id++;
+        Catalog &C = Catalog::Get();
+        return C.pool(oss.str().c_str());
+    }
 };
 
 #define DB_AST_EXPR_LIST(X) \
@@ -223,7 +278,8 @@ struct BinaryExpr : Expr
     X(Constant) \
     X(FnApplicationExpr) \
     X(UnaryExpr) \
-    X(BinaryExpr)
+    X(BinaryExpr) \
+    X(QueryExpr)
 
 
 /*======================================================================================================================
@@ -252,8 +308,8 @@ struct ErrorClause : Clause
 {
     ErrorClause(Token tok) : Clause(tok) { }
 
-    void accept(ASTClauseVisitor &v);
-    void accept(ConstASTClauseVisitor &v) const;
+    void accept(ASTClauseVisitor &v) override;
+    void accept(ConstASTClauseVisitor &v) const override;
 };
 
 struct SelectClause : Clause
@@ -262,7 +318,7 @@ struct SelectClause : Clause
 
     std::vector<select_type> select;
     Token select_all;
-    std::vector<Expr*> expansion; ///> list of expressions expanded from `SELECT *`
+    std::vector<const Expr*> expansion; ///> list of expressions expanded from `SELECT *`
 
     SelectClause(Token tok, std::vector<select_type> select, Token select_all)
         : Clause(tok)
@@ -271,8 +327,8 @@ struct SelectClause : Clause
     { }
     ~SelectClause();
 
-    void accept(ASTClauseVisitor &v);
-    void accept(ConstASTClauseVisitor &v) const;
+    void accept(ASTClauseVisitor &v) override;
+    void accept(ConstASTClauseVisitor &v) const override;
 };
 
 struct FromClause : Clause
@@ -301,8 +357,8 @@ struct FromClause : Clause
     FromClause(Token tok, std::vector<from_type> from) : Clause(tok), from(from) { }
     ~FromClause();
 
-    void accept(ASTClauseVisitor &v);
-    void accept(ConstASTClauseVisitor &v) const;
+    void accept(ASTClauseVisitor &v) override;
+    void accept(ConstASTClauseVisitor &v) const override;
 };
 
 struct WhereClause : Clause
@@ -312,8 +368,8 @@ struct WhereClause : Clause
     WhereClause(Token tok, Expr *where) : Clause(tok), where(notnull(where)) { }
     ~WhereClause();
 
-    void accept(ASTClauseVisitor &v);
-    void accept(ConstASTClauseVisitor &v) const;
+    void accept(ASTClauseVisitor &v) override;
+    void accept(ConstASTClauseVisitor &v) const override;
 };
 
 struct GroupByClause : Clause
@@ -323,8 +379,8 @@ struct GroupByClause : Clause
     GroupByClause(Token tok, std::vector<Expr*> group_by) : Clause(tok), group_by(group_by) { }
     ~GroupByClause();
 
-    void accept(ASTClauseVisitor &v);
-    void accept(ConstASTClauseVisitor &v) const;
+    void accept(ASTClauseVisitor &v) override;
+    void accept(ConstASTClauseVisitor &v) const override;
 };
 
 struct HavingClause : Clause
@@ -334,8 +390,8 @@ struct HavingClause : Clause
     HavingClause(Token tok, Expr *having) : Clause(tok), having(having) { }
     ~HavingClause();
 
-    void accept(ASTClauseVisitor &v);
-    void accept(ConstASTClauseVisitor &v) const;
+    void accept(ASTClauseVisitor &v) override;
+    void accept(ConstASTClauseVisitor &v) const override;
 };
 
 struct OrderByClause : Clause
@@ -347,8 +403,8 @@ struct OrderByClause : Clause
     OrderByClause(Token tok, std::vector<order_type> order_by) : Clause(tok), order_by(order_by) { }
     ~OrderByClause();
 
-    void accept(ASTClauseVisitor &v);
-    void accept(ConstASTClauseVisitor &v) const;
+    void accept(ASTClauseVisitor &v) override;
+    void accept(ConstASTClauseVisitor &v) const override;
 };
 
 struct LimitClause : Clause
@@ -358,8 +414,8 @@ struct LimitClause : Clause
 
     LimitClause(Token tok, Token limit, Token offset) : Clause(tok), limit(limit), offset(offset) { }
 
-    void accept(ASTClauseVisitor &v);
-    void accept(ConstASTClauseVisitor &v) const;
+    void accept(ASTClauseVisitor &v) override;
+    void accept(ConstASTClauseVisitor &v) const override;
 };
 
 #define DB_AST_CLAUSE_LIST(X) \
@@ -394,24 +450,24 @@ struct PrimaryKeyConstraint : Constraint
 {
     PrimaryKeyConstraint(Token tok) : Constraint(tok) { }
 
-    void accept(ASTConstraintVisitor &v);
-    void accept(ConstASTConstraintVisitor &v) const;
+    void accept(ASTConstraintVisitor &v) override;
+    void accept(ConstASTConstraintVisitor &v) const override;
 };
 
 struct UniqueConstraint : Constraint
 {
     UniqueConstraint(Token tok) : Constraint(tok) { }
 
-    void accept(ASTConstraintVisitor &v);
-    void accept(ConstASTConstraintVisitor &v) const;
+    void accept(ASTConstraintVisitor &v) override;
+    void accept(ConstASTConstraintVisitor &v) const override;
 };
 
 struct NotNullConstraint : Constraint
 {
     NotNullConstraint(Token tok) : Constraint(tok) { }
 
-    void accept(ASTConstraintVisitor &v);
-    void accept(ConstASTConstraintVisitor &v) const;
+    void accept(ASTConstraintVisitor &v) override;
+    void accept(ConstASTConstraintVisitor &v) const override;
 };
 
 struct CheckConditionConstraint : Constraint
@@ -422,8 +478,8 @@ struct CheckConditionConstraint : Constraint
 
     ~CheckConditionConstraint() { delete cond; }
 
-    void accept(ASTConstraintVisitor &v);
-    void accept(ConstASTConstraintVisitor &v) const;
+    void accept(ASTConstraintVisitor &v) override;
+    void accept(ConstASTConstraintVisitor &v) const override;
 };
 
 struct ReferenceConstraint : Constraint
@@ -445,8 +501,8 @@ struct ReferenceConstraint : Constraint
         , on_delete(action)
     { }
 
-    void accept(ASTConstraintVisitor &v);
-    void accept(ConstASTConstraintVisitor &v) const;
+    void accept(ASTConstraintVisitor &v) override;
+    void accept(ConstASTConstraintVisitor &v) const override;
 };
 
 #define DB_AST_CONSTRAINT_LIST(X) \
@@ -484,8 +540,8 @@ struct ErrorStmt : Stmt
 
     explicit ErrorStmt(Token tok) : tok(tok) { }
 
-    void accept(ASTStmtVisitor &v);
-    void accept(ConstASTStmtVisitor &v) const;
+    void accept(ASTStmtVisitor &v) override;
+    void accept(ConstASTStmtVisitor &v) const override;
 };
 
 struct EmptyStmt : Stmt
@@ -494,8 +550,8 @@ struct EmptyStmt : Stmt
 
     explicit EmptyStmt(Token tok) : tok(tok) { }
 
-    void accept(ASTStmtVisitor &v);
-    void accept(ConstASTStmtVisitor &v) const;
+    void accept(ASTStmtVisitor &v) override;
+    void accept(ConstASTStmtVisitor &v) const override;
 };
 
 struct CreateDatabaseStmt : Stmt
@@ -504,8 +560,8 @@ struct CreateDatabaseStmt : Stmt
 
     explicit CreateDatabaseStmt(Token database_name) : database_name(database_name) { }
 
-    void accept(ASTStmtVisitor &v);
-    void accept(ConstASTStmtVisitor &v) const;
+    void accept(ASTStmtVisitor &v) override;
+    void accept(ConstASTStmtVisitor &v) const override;
 };
 
 struct UseDatabaseStmt : Stmt
@@ -514,8 +570,8 @@ struct UseDatabaseStmt : Stmt
 
     explicit UseDatabaseStmt(Token database_name) : database_name(database_name) { }
 
-    void accept(ASTStmtVisitor &v);
-    void accept(ConstASTStmtVisitor &v) const;
+    void accept(ASTStmtVisitor &v) override;
+    void accept(ConstASTStmtVisitor &v) const override;
 };
 
 struct CreateTableStmt : Stmt
@@ -551,8 +607,8 @@ struct CreateTableStmt : Stmt
             delete a;
     }
 
-    void accept(ASTStmtVisitor &v);
-    void accept(ConstASTStmtVisitor &v) const;
+    void accept(ASTStmtVisitor &v) override;
+    void accept(ConstASTStmtVisitor &v) const override;
 };
 
 /** A SQL select statement. */
@@ -582,8 +638,8 @@ struct SelectStmt : Stmt
         , limit(limit)
     { }
 
-    void accept(ASTStmtVisitor &v);
-    void accept(ConstASTStmtVisitor &v) const;
+    void accept(ASTStmtVisitor &v) override;
+    void accept(ConstASTStmtVisitor &v) const override;
 
     ~SelectStmt();
 };
@@ -601,8 +657,8 @@ struct InsertStmt : Stmt
     InsertStmt(Token table_name, std::vector<tuple_t> tuples) : table_name(table_name), tuples(tuples) { }
     ~InsertStmt();
 
-    void accept(ASTStmtVisitor &v);
-    void accept(ConstASTStmtVisitor &v) const;
+    void accept(ASTStmtVisitor &v) override;
+    void accept(ConstASTStmtVisitor &v) const override;
 };
 
 /** A SQL update statement. */
@@ -622,8 +678,8 @@ struct UpdateStmt : Stmt
 
     ~UpdateStmt();
 
-    void accept(ASTStmtVisitor &v);
-    void accept(ConstASTStmtVisitor &v) const;
+    void accept(ASTStmtVisitor &v) override;
+    void accept(ConstASTStmtVisitor &v) const override;
 };
 
 /** A SQL delete statement. */
@@ -635,8 +691,8 @@ struct DeleteStmt : Stmt
     DeleteStmt(Token table_name, Clause *where) : table_name(table_name), where(where) { }
     ~DeleteStmt();
 
-    void accept(ASTStmtVisitor &v);
-    void accept(ConstASTStmtVisitor &v) const;
+    void accept(ASTStmtVisitor &v) override;
+    void accept(ConstASTStmtVisitor &v) const override;
 };
 
 /** A SQL import statement. */
@@ -656,8 +712,8 @@ struct DSVImportStmt : ImportStmt
     bool has_header = false;
     bool skip_header = false;
 
-    void accept(ASTStmtVisitor &v);
-    void accept(ConstASTStmtVisitor &v) const;
+    void accept(ASTStmtVisitor &v) override;
+    void accept(ConstASTStmtVisitor &v) const override;
 };
 
 #define DB_AST_STMT_LIST(X) \

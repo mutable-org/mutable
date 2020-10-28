@@ -22,6 +22,11 @@ FnApplicationExpr::~FnApplicationExpr()
         delete arg;
 }
 
+QueryExpr::~QueryExpr()
+{
+    delete query;
+}
+
 /*===== Clause =======================================================================================================*/
 
 SelectClause::~SelectClause()
@@ -96,6 +101,37 @@ DeleteStmt::~DeleteStmt()
 }
 
 /*======================================================================================================================
+ * QueryExpr
+ *====================================================================================================================*/
+
+bool QueryExpr::is_constant() const
+{
+    auto stmt = as<const SelectStmt>(query);
+    if (stmt->from) return false;
+    auto select = as<const SelectClause>(stmt->select);
+    for (const auto &s : select->select) {
+        if (not s.first->is_constant())
+            return false;
+    }
+    return true;
+}
+
+bool QueryExpr::is_correlated() const
+{
+    /* Correlation is only valid in the where- or having-clause */
+    auto stmt = as<const SelectStmt>(query);
+    if (stmt->where) {
+        auto where = as<const WhereClause>(stmt->where);
+        if (where->where->is_correlated()) return true;
+    }
+    if (stmt->having) {
+        auto having = as<const HavingClause>(stmt->having);
+        if (having->having->is_correlated()) return true;
+    }
+    return false;
+}
+
+/*======================================================================================================================
  * operator==
  *====================================================================================================================*/
 
@@ -148,6 +184,8 @@ bool BinaryExpr::operator==(const Expr &o) const
     return *this->lhs == *other->lhs and *this->rhs == *other->rhs;
 }
 
+bool QueryExpr::operator==(const Expr&) const { unreachable("not implemented"); }
+
 
 /*======================================================================================================================
  * get_required
@@ -186,6 +224,8 @@ struct GetRequired : ConstASTExprVisitor
     void operator()(Const<UnaryExpr> &e) { (*this)(*e.expr); }
 
     void operator()(Const<BinaryExpr> &e) { (*this)(*e.lhs); (*this)(*e.rhs); }
+
+    void operator()(Const<QueryExpr>&) { /* TODO: implement */ }
 };
 
 Schema Expr::get_required() const
@@ -202,18 +242,21 @@ Schema Expr::get_required() const
 
 std::ostream & db::operator<<(std::ostream &out, const Expr &e) {
     ASTPrinter p(out);
+    p.expand_nested_queries(false);
     p(e);
     return out;
 }
 
 std::ostream & db::operator<<(std::ostream &out, const Clause &c) {
     ASTPrinter p(out);
+    p.expand_nested_queries(false);
     p(c);
     return out;
 }
 
 std::ostream & db::operator<<(std::ostream &out, const Stmt &s) {
     ASTPrinter p(out);
+    p.expand_nested_queries(false);
     p(s);
     return out;
 }

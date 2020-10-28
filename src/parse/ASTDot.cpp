@@ -151,6 +151,21 @@ void ASTDot::operator()(Const<BinaryExpr> &e)
     indent() << id(e) << EDGE << id(*e.rhs) << ';';
 }
 
+void ASTDot::operator()(Const<QueryExpr> &e)
+{
+    (*this)(*e.query);
+    indent() << id(e) << " [label=<QueryExpr";
+
+    if (e.has_type()) {
+        std::ostringstream oss;
+        oss << *e.type();
+        out << "<FONT POINT-SIZE=\"11\"><I> : " << html_escape(oss.str()) << "</I></FONT>";
+    }
+
+    out << ">];";
+    indent() << id(e) << EDGE << id(*e.query) << ';';
+}
+
 
 /*--- Clauses --------------------------------------------------------------------------------------------------------*/
 

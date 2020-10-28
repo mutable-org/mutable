@@ -20,21 +20,35 @@ void Sema::operator()(Const<ErrorExpr> &e)
 void Sema::operator()(Const<Designator> &e)
 {
     Catalog &C = Catalog::Get();
-    SemaContext &Ctx = get_context();
+    SemaContext *current_ctx = &get_context();
+    decltype(contexts_)::reverse_iterator found_ctx; // the context where the designator is found
     bool is_result = false;
 
     /* If the designator references an attribute of a table, search for it. */
     if (e.table_name) {
         /* Find the source table first and then locate the target inside this table. */
         SemaContext::source_type src;
-        try {
-            src = Ctx.sources.at(e.table_name.text);
-        } catch (std::out_of_range) {
-            diag.e(e.table_name.pos) << "Source table " << e.table_name.text << " not found. "
-                                        "Maybe you forgot to specify it in the FROM clause?\n";
+        bool is_correlated = false;
+
+        /* Search all contexts, starting with the innermost and advancing outwards. */
+        auto it = contexts_.rbegin();
+        for (auto end = contexts_.rend(); it != end; ++it) {
+            try {
+                src = (*it)->sources.at(e.table_name.text);
+                break;
+            } catch (std::out_of_range) {
+                /* The source is not found in this context so iterate over the entire stack. */
+            }
+        }
+
+        if (it == contexts_.rend()) {
+            diag.e(e.table_name.pos) << "Source table " << e.table_name.text
+                                     << " not found. Maybe you forgot to specify it in the FROM clause?\n";
             e.type_ = Type::Get_Error();
             return;
         }
+        is_correlated = it != contexts_.rbegin();
+        found_ctx = it;
 
         /* Find the target inside the source table. */
         Designator::target_type target;
@@ -70,65 +84,79 @@ void Sema::operator()(Const<Designator> &e)
             unreachable("invalid variant");
         }
         e.target_ = target;
+        e.is_correlated_ = is_correlated;
     } else {
         /* No table name was specified.  The designator references either a result or a named expression.  Search the
          * named expressions first, because they overrule attribute names. */
-        if (auto [begin, end] = Ctx.results.equal_range(e.attr_name.text);
-            Ctx.stage > SemaContext::S_Select and std::distance(begin, end) == 1)
+        if (auto [begin, end] = current_ctx->results.equal_range(e.attr_name.text);
+            current_ctx->stage > SemaContext::S_Select and std::distance(begin, end) == 1)
         {
             /* Found a named expression. */
             e.target_ = begin->second;
+            e.is_correlated_ = false;
             is_result = true;
-        }
-        else
-        {
+            found_ctx = contexts_.rbegin(); // iterator to the current context
+        } else {
             /* Since no table was explicitly specified, we must search *all* sources for the attribute. */
             Designator::target_type target;
             const char *alias = nullptr;
-            for (auto &src : Ctx.sources) {
-                if (auto T = std::get_if<const Table*>(&src.second)) {
-                    const Table &tbl = **T;
-                    try {
-                        const Attribute &A = tbl[e.attr_name.text];
-                        if (not std::holds_alternative<std::monostate>(target)) {
-                            /* ambiguous attribute name */
+
+            /* Search all contexts, starting with the innermost and advancing outwards. */
+            bool is_correlated = false;
+            for (auto it = contexts_.rbegin(), end = contexts_.rend(); it != end; ++it) {
+                for (auto &src : (*it)->sources) {
+                    if (auto T = std::get_if<const Table *>(&src.second)) {
+                        const Table &tbl = **T;
+                        try {
+                            const Attribute &A = tbl[e.attr_name.text];
+                            if (not std::holds_alternative<std::monostate>(target)) {
+                                /* ambiguous attribute name */
+                                diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text
+                                                        << " is ambiguous.\n";
+                                // TODO print names of conflicting tables
+                                e.type_ = Type::Get_Error();
+                                return;
+                            } else {
+                                target = &A; // we found an attribute of that name in the source tables
+                                alias = src.first;
+                                is_correlated = it != contexts_.rbegin();
+                                found_ctx = it;
+                            }
+                        } catch (std::out_of_range) {
+                            /* This source table has no attribute of that name.  OK, continue. */
+                        }
+                    } else if (auto T = std::get_if<SemaContext::named_expr_table>(&src.second)) {
+                        const SemaContext::named_expr_table &tbl = *T;
+                        auto [begin, end] = tbl.equal_range(e.attr_name.text);
+                        if (begin == end) {
+                            /* This source table has no attribute of that name.  OK, continue. */
+                        } else if (std::distance(begin, end) > 1) {
                             diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text << " is ambiguous.\n";
-                            // TODO print names of conflicting tables
                             e.type_ = Type::Get_Error();
                             return;
                         } else {
-                            target = &A; // we found an attribute of that name in the source tables
-                            alias = src.first;
+                            insist(std::distance(begin, end) == 1);
+                            if (not std::holds_alternative<std::monostate>(target)) {
+                                /* ambiguous attribute name */
+                                diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text
+                                                        << " is ambiguous.\n";
+                                // TODO print names of conflicting tables
+                                e.type_ = Type::Get_Error();
+                                return;
+                            } else {
+                                target = begin->second; // we found an attribute of that name in the source tables
+                                alias = src.first;
+                                is_correlated = it != contexts_.rbegin();
+                                found_ctx = it;
+                            }
                         }
-                    } catch (std::out_of_range) {
-                        /* This source table has no attribute of that name.  OK, continue. */
-                    }
-                } else if (auto T = std::get_if<SemaContext::named_expr_table>(&src.second)) {
-                    const SemaContext::named_expr_table &tbl = *T;
-                    auto [begin, end] = tbl.equal_range(e.attr_name.text);
-                    if (begin == end) {
-                        /* This source table has no attribute of that name.  OK, continue. */
-                    } else if (std::distance(begin, end) > 1) {
-                        diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text << " is ambiguous.\n";
-                        e.type_ = Type::Get_Error();
-                        return;
                     } else {
-                        insist(std::distance(begin, end) == 1);
-                        Expr *E = begin->second;
-                        if (not std::holds_alternative<std::monostate>(target)) {
-                            /* ambiguous attribute name */
-                            diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text << " is ambiguous.\n";
-                            // TODO print names of conflicting tables
-                            e.type_ = Type::Get_Error();
-                            return;
-                        } else {
-                            target = E; // we found an attribute of that name in the source tables
-                            alias = src.first;
-                        }
+                        unreachable("invalid variant");
                     }
-                } else {
-                    unreachable("invalid variant");
                 }
+                /* If we found target of the designator, abort searching contexts further outside. */
+                if (not std::holds_alternative<std::monostate>(target))
+                    break;
             }
 
             /* If this designator could not be resolved, emit an error and abort further semantic analysis. */
@@ -140,6 +168,7 @@ void Sema::operator()(Const<Designator> &e)
 
             e.target_ = target;
             e.table_name.text = alias; // set the deduced table name of this designator
+            e.is_correlated_ = is_correlated;
         }
     }
 
@@ -156,9 +185,25 @@ void Sema::operator()(Const<Designator> &e)
     if (not is_result)
         e.type_ = pt->as_vectorial();
 
-    switch (Ctx.stage) {
+    /* Check if any context between current context and found context is in stage `S_FROM`. */
+    for (auto it = contexts_.rbegin(); it != found_ctx; ++it) {
+        if ((*it)->stage == SemaContext::S_From) {
+            /* The designator is correlated and occurs in a nested query in the FROM. Emit an error. */
+            diag.e(e.attr_name.pos) << "Correlated attributes are not allowed in the FROM clause.\n";
+            e.type_ = Type::Get_Error();
+            return;
+        }
+    }
+
+    switch ((*found_ctx)->stage) {
         default:
             unreachable("designator not allowed in this stage");
+
+        case SemaContext::S_From:
+            /* The designator is correlated and occurs in a nested query in the FROM. Emit an error. */
+            diag.e(e.attr_name.pos) << "Correlated attributes are not allowed in the FROM clause.\n";
+            e.type_ = Type::Get_Error();
+            return;
 
         case SemaContext::S_Where:
         case SemaContext::S_GroupBy:
@@ -166,11 +211,11 @@ void Sema::operator()(Const<Designator> &e)
             break;
 
         case SemaContext::S_Having:
-        case SemaContext::S_OrderBy:
         case SemaContext::S_Select:
+        case SemaContext::S_OrderBy:
             /* Detect whether we grouped by this designator.  In that case, convert the type to scalar and redirect the
              * target to the grouping key. */
-            for (auto grp : Ctx.group_keys) {
+            for (auto grp : (*found_ctx)->group_keys) {
                 Designator *d = cast<Designator>(grp);
                 if (d and d->target() == e.target()) {
                     /* The grouping key and this designator reference the same attribute. */
@@ -245,8 +290,14 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
     insist(not d->type_, "This identifier has already been analyzed.");
 
     /* Analyze arguments. */
-    for (auto arg : e.args)
+    for (auto arg : e.args) {
         (*this)(*arg);
+        if (arg->is_correlated()) {
+            diag.e(arg->tok.pos) << "Argument " << *arg << " is correlated (not yet supported).\n";
+            e.type_ = Type::Get_Error();
+            return;
+        }
+    }
 
     /* Lookup the function. */
     try {
@@ -626,6 +677,71 @@ void Sema::operator()(Const<BinaryExpr> &e)
     }
 }
 
+void Sema::operator()(Const<QueryExpr> &e)
+{
+    insist(is<SelectStmt>(*e.query), "nested statements are always select statements");
+
+    SemaContext &Ctx = get_context();
+
+    /* Evaluate the nested statement in a fresh sema context. */
+    push_context(*e.query);
+    (*this)(*e.query);
+    insist(not contexts_.empty());
+    SemaContext inner_ctx = pop_context();
+
+    /* TODO an EXISTS operator allows multiple results */
+    if (1 != inner_ctx.results.size()) {
+        diag.e(e.tok.pos) << "Invalid expression:\n" << e << ",\nnested statement must return a single column.\n";
+        e.type_ = Type::Get_Error();
+        return;
+    }
+    insist(1 == inner_ctx.results.size());
+    auto res = inner_ctx.results.begin()->second;
+
+    if (not res->type()->is_primitive()) {
+        diag.e(e.tok.pos) << "Invalid expression:\n" << e << ",\nnested statement must return a primitive value.\n";
+        e.type_ = Type::Get_Error();
+        return;
+    }
+    auto *pt = as<const PrimitiveType>(res->type_);
+    e.type_ = pt;
+
+    switch (Ctx.stage) {
+        default: {
+            diag.e(e.tok.pos) << "Nested statements are not allowed in this stage.\n";
+            e.type_ = Type::Get_Error();
+            return;
+        }
+        case SemaContext::S_Where:
+        case SemaContext::S_Having:
+            /* TODO The result must not be a single scalar value in general. */
+
+        case SemaContext::S_Select: {
+            /* The result of the nested query must be a single scalar value. */
+
+            if (not pt->is_scalar()) {
+                diag.e(e.tok.pos) << "Invalid expression:\n" << e
+                                   << ",\nnested statement must return a scalar value.\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
+
+            auto is_fn = is<FnApplicationExpr>(res);
+            auto is_const = res->is_constant();
+            auto *q = as<const SelectStmt>(e.query);
+            /* The result is a single value iff it is a constant and there is no from clause or
+             * iff it is an aggregate and there is no group_by clause. */
+            if (not(is_const and not q->from) and not(is_fn and not q->group_by)) {
+                diag.e(e.tok.pos) << "Invalid expression:\n" << e
+                                   << ",\nnested statement must return a single value.\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
+            break;
+        }
+    }
+}
+
 /*===== Clause =======================================================================================================*/
 
 void Sema::operator()(Const<ErrorClause>&)
@@ -638,10 +754,10 @@ void Sema::operator()(Const<SelectClause> &c)
     SemaContext &Ctx = get_context();
     Ctx.stage = SemaContext::S_Select;
     Catalog &C = Catalog::Get();
-    auto dot_str = C.pool(".");
 
     bool has_vector = false;
     bool has_scalar = false;
+    uint64_t const_counter = 0;
 
     if (c.select_all) {
         /* Expand the `SELECT *` by creating dummy expressions for all accessible values of all sources. */
@@ -651,6 +767,9 @@ void Sema::operator()(Const<SelectClause> &c)
             auto group_by = as<const GroupByClause>(stmt.group_by);
             for (auto expr : group_by->group_by) {
                 auto d = make_designator(expr, expr);
+                insist(d->type()->is_error() or d->type()->is_primitive());
+                if (auto ty = cast<const PrimitiveType>(d->type()))
+                    d->type_ = ty->as_scalar();
                 c.expansion.push_back(d);
                 Ctx.results.emplace(d->attr_name.text, d);
             }
@@ -689,11 +808,14 @@ void Sema::operator()(Const<SelectClause> &c)
             s.first = d;
         } else {
             (*this)(*s.first);
+            if (s.first->is_correlated() and not is<QueryExpr>(s.first))
+                diag.e(s.first->tok.pos) << *s.first << " is correlated (not yet supported).\n";
         }
 
         auto &e = *s.first;
         if (e.type()->is_error()) continue;
-        if (not e.is_constant()) { // constants can be broadcast from scalar to vectorial
+        /* Constants and scalar values of nested queries can be broadcast from scalar to vectorial. */
+        if (not e.is_constant() and not is<QueryExpr>(e)) {
             auto pt = as<const PrimitiveType>(e.type());
             has_vector = has_vector or pt->is_vectorial();
             has_scalar = has_scalar or pt->is_scalar();
@@ -703,10 +825,12 @@ void Sema::operator()(Const<SelectClause> &c)
             /* With alias. */
             Ctx.results.emplace(s.second.text, s.first);
         } else {
-            if (e.is_constant()) continue;
-            /* Without alias.  Print expression as string to get a name. */
+            /* Without alias.  Print expression as string to get a name. Use '$const' as prefix for constants. */
             std::ostringstream oss;
-            oss << *s.first;
+            if (e.is_constant())
+                oss << "$const" << const_counter++;
+            else
+                oss << *s.first;
             Ctx.results.emplace(C.pool(oss.str().c_str()), s.first);
         }
     }
@@ -731,7 +855,16 @@ void Sema::operator()(Const<FromClause> &c)
                 const Table &T = DB.get_table(name->text);
                 Token table_name = table.alias ? table.alias : *name; // FROM name AS alias ?
                 auto res = Ctx.sources.emplace(table_name.text, &T);
-                if (not res.second)
+                /* Check if the table name is already in use in other contexts. */
+                bool unique = true;
+                for (std::size_t i = 0; i < contexts_.size() - 1; ++i) {
+                    if (contexts_[i]->stage == SemaContext::S_From) continue;
+                    if (contexts_[i]->sources.find(table_name.text) != contexts_[i]->sources.end()) {
+                        unique = false;
+                        break;
+                    }
+                }
+                if (not res.second or not unique)
                     diag.e(table_name.pos) << "Table name " << table_name.text << " already in use.\n";
                 table.table_ = &T;
             } catch (std::out_of_range) {
@@ -754,7 +887,16 @@ void Sema::operator()(Const<FromClause> &c)
                 auto e = r.second;
                 e->type_ = as<const PrimitiveType>(e->type())->as_vectorial();
             }
-            if (not res.second) {
+            /* Check if the table name is already in use in other contexts. */
+            bool unique = true;
+            for (std::size_t i = 0; i < contexts_.size() - 1; ++i) {
+                if (contexts_[i]->stage == SemaContext::S_From) continue;
+                if (contexts_[i]->sources.find(table.alias.text) != contexts_[i]->sources.end()) {
+                    unique = false;
+                    break;
+                }
+            }
+            if (not res.second or not unique) {
                 diag.e(table.alias.pos) << "Table name " << table.alias.text << " already in use.\n";
                 return;
             }
@@ -791,6 +933,9 @@ void Sema::operator()(Const<GroupByClause> &c)
 
     for (auto expr : c.group_by) {
         (*this)(*expr);
+
+        if (expr->is_correlated())
+            diag.e(expr->tok.pos) << *expr << " is correlated (not yet supported).\n";
 
         /* Skip errors. */
         if (expr->type()->is_error())
@@ -853,6 +998,9 @@ void Sema::operator()(Const<OrderByClause> &c)
         Expr *e = o.first;
         (*this)(*e);
 
+        if (e->is_correlated())
+            diag.e(e->tok.pos) << *e << " is correlated (not yet supported).\n";
+
         if (e->type()->is_error()) continue;
         auto pt = as<const PrimitiveType>(e->type());
 
@@ -870,6 +1018,7 @@ void Sema::operator()(Const<OrderByClause> &c)
                 if (*grp == *e) { // the expression is a grouping key
                     /* Replace expression by a designator pointing to the grouping key. */
                     auto d = make_designator(o.first, grp);
+                    d->type_ = as<const PrimitiveType>(d->type())->as_scalar();
                     delete o.first;
                     o.first = d;
                     goto ok;
@@ -1005,6 +1154,7 @@ void Sema::operator()(Const<CreateTableStmt> &s)
                     error = true;
                 }
                 has_primary_key = true;
+                T->add_primary_key(attr->name.text);
             }
 
             if (is<UniqueConstraint>(c)) {

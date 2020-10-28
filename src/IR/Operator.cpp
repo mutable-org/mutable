@@ -57,11 +57,11 @@ GroupingOperator::GroupingOperator(std::vector<const Expr*> group_by,
     auto &C = Catalog::Get();
     auto &S = schema();
     for (auto e : group_by) {
-        auto ty = e->type();
+        auto pt = as<const PrimitiveType>(e->type());
         std::ostringstream oss;
         oss << *e;
         auto alias = C.pool(oss.str().c_str());
-        S.add(alias, ty);
+        S.add(alias, pt->as_scalar());
     }
 
     for (auto e : aggregates) {

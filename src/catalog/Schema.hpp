@@ -18,6 +18,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <util/ADT.hpp>
 
 
 namespace db {
@@ -241,6 +242,7 @@ struct Table
     table_type attrs_; ///< the attributes of this table, maintained as a sorted set
     std::unordered_map<const char*, table_type::size_type> name_to_attr_; ///< maps attribute names to attributes
     std::unique_ptr<Store> store_; ///< the store backing this table; may be `nullptr`
+    SmallBitset primary_key_; ///< the primary key of this table, maintained as a `SmallBitset` over attribute id's
 
     public:
     Table(const char *name) : name(name) { }
@@ -274,6 +276,20 @@ struct Table
     Store & store() const { return *store_; }
     /** Sets the backing store for this table.  `new_store` must not be `nullptr`. */
     void store(std::unique_ptr<Store> new_store) { using std::swap; swap(store_, new_store); }
+
+    /** Returns all attributes forming the primary key. */
+    std::vector<const Attribute*> primary_key() const {
+        std::vector<const Attribute*> res;
+        for (auto id : primary_key_)
+            res.push_back(&at(id));
+        return res;
+    }
+    /** Adds an attribute with the given `name` to the primary key of this table. Throws `std::out_of_range` if no
+     * attribute with the given `name` exists. */
+    void add_primary_key(const char *name) {
+        auto &attr = at(name);
+        primary_key_.set(attr.id);
+    }
 
     /** Adds a new attribute with the given `name` and `type` to the table.  Throws `std::invalid_argument` if the
      * `name` is already in use. */

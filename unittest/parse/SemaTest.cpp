@@ -2625,3 +2625,150 @@ TEST_CASE("Sema/Statements/DSVImport", "[core][parse][sema]")
         }
     }
 }
+
+TEST_CASE("Sema/Nested Queries", "[core][parse][sema]")
+{
+    Catalog::Clear();
+
+    /* Create a dummy DB and three dummy tables with a vector attribute. */
+    Catalog &Cat = Catalog::Get();
+    const char *db_name = "mydb";
+    auto &DB = Cat.add_database(db_name);
+    Cat.set_database_in_use(DB);
+    auto &A = DB.add_table(Cat.pool("A"));
+    auto &B = DB.add_table(Cat.pool("B"));
+    auto &C = DB.add_table(Cat.pool("C"));
+    A.push_back(Cat.pool("v"), Type::Get_Integer(Type::TY_Vector, 4));
+    B.push_back(Cat.pool("v"), Type::Get_Integer(Type::TY_Vector, 4));
+    C.push_back(Cat.pool("w"), Type::Get_Integer(Type::TY_Vector, 4));
+
+    SECTION("Uncorrelated Queries")
+    {
+        const char* queries[] = {
+            "SELECT 42, (SELECT 17);",
+            "SELECT 42, (SELECT MIN(v) FROM A);",
+            "SELECT v, (SELECT MIN(A.v) FROM A) FROM B;",
+            "SELECT v FROM B WHERE v = (SELECT 17);",
+            "SELECT v FROM B WHERE v != (SELECT MIN(A.v) FROM A);",
+            "SELECT v FROM B WHERE v != (SELECT MIN(w) FROM C);",
+            "SELECT v FROM B GROUP BY v HAVING v < (SELECT 17);",
+            "SELECT v FROM B GROUP BY v HAVING v >= (SELECT MIN(A.v) FROM A);",
+            "SELECT v FROM B GROUP BY v HAVING v >= (SELECT MIN(w) FROM C);",
+        };
+
+        for (auto q : queries) {
+            LEXER(q);
+            Parser parser(lexer);
+            SelectStmt *stmt = as<SelectStmt>(parser.parse());
+            CHECK(diag.num_errors() == 0);
+            CHECK(err.str().empty());
+            Sema sema(diag);
+            sema(*stmt);
+
+            if (diag.num_errors() != 0 or not err.str().empty())
+                std::cerr << "ERROR for input \"" << q << "\": " << err.str() << std::endl;
+            CHECK(diag.num_errors() == 0);
+            CHECK(err.str().empty());
+
+            delete stmt;
+        }
+    }
+
+    SECTION("Correlated Queries")
+    {
+        const char* queries[] = {
+            "SELECT 42, (SELECT MIN(A.v) FROM A WHERE A.v = B.v) FROM B;",
+            "SELECT v FROM B WHERE v != (SELECT MIN(A.v) FROM A WHERE A.v = B.v);",
+            "SELECT v FROM B GROUP BY v HAVING v >= (SELECT MIN(A.v) FROM A WHERE A.v = B.v);",
+            "SELECT 42, (SELECT MIN(w) FROM C WHERE w = v) FROM B;",
+            "SELECT v FROM B WHERE v != (SELECT MIN(w) FROM C WHERE w = v);",
+            "SELECT v FROM B GROUP BY v HAVING v >= (SELECT MIN(w) FROM C WHERE w = v);",
+        };
+
+        for (auto q : queries) {
+            LEXER(q);
+            Parser parser(lexer);
+            SelectStmt *stmt = as<SelectStmt>(parser.parse());
+            CHECK(diag.num_errors() == 0);
+            CHECK(err.str().empty());
+            Sema sema(diag);
+            sema(*stmt);
+
+            if (diag.num_errors() != 0 or not err.str().empty())
+                std::cerr << "ERROR for input \"" << q << "\": " << err.str() << std::endl;
+            CHECK(diag.num_errors() == 0);
+            CHECK(err.str().empty());
+
+            delete stmt;
+        }
+    }
+
+    SECTION("Santity tests")
+    {
+        const char* queries[] = {
+            /* invalid number of columns */
+            "SELECT 42, (SELECT 17, 29);",
+            "SELECT v FROM B WHERE v = (SELECT 17, 29);",
+            "SELECT v FROM B GROUP BY v HAVING v = (SELECT 17, 29);",
+
+            /* no single scalar value */
+            "SELECT 42, (SELECT 17 FROM A);",
+            "SELECT 42, (SELECT v FROM A);",
+            "SELECT 42, (SELECT MIN(v) FROM A GROUP BY v);",
+            "SELECT v FROM B WHERE v = (SELECT A.v FROM A);",
+            "SELECT v FROM B WHERE v = (SELECT MIN(A.v) FROM A GROUP BY A.v);",
+            "SELECT v FROM B GROUP BY v HAVING v = (SELECT A.v FROM A);",
+            "SELECT v FROM B GROUP BY v HAVING v = (SELECT MIN(A.v) FROM A GROUP BY A.v);",
+
+            /* invalid reference to outer table */
+            "SELECT 42, (SELECT MIN(A.v) FROM A WHERE A.v = B.v) FROM A;",
+            "SELECT v FROM A WHERE v != (SELECT MIN(A.v) FROM A WHERE A.v = B.v);",
+            "SELECT v FROM A GROUP BY v HAVING v >= (SELECT MIN(A.v) FROM A WHERE A.v = B.v);",
+
+            /* dublicate table name */
+            "SELECT v FROM A WHERE v = (SELECT MIN(A.v) FROM A WHERE A.v = A.v);",
+            "SELECT v FROM A WHERE v = (SELECT MIN(A.v) FROM B AS A WHERE A.v = A.v);",
+
+            /* ambiguous designator */
+            "SELECT 42, (SELECT MIN(v) FROM A WHERE A.v = B.v) FROM A;",
+            "SELECT v FROM A WHERE v != (SELECT MIN(v) FROM A WHERE A.v = B.v);",
+            "SELECT v FROM A GROUP BY v HAVING v >= (SELECT MIN(v) FROM A WHERE A.v = B.v);",
+
+            /* invalid position for correlation */
+            "SELECT 42, (SELECT B.v) FROM B;",
+            "SELECT 42, (SELECT MIN(B.v) FROM A WHERE A.v = B.v) FROM B;",
+            "SELECT 42, (SELECT MIN(A.v) FROM A WHERE A.v = B.v GROUP BY B.v) FROM B;",
+            "SELECT 42, (SELECT MIN(A.v) FROM A WHERE A.v = B.v ORDER BY B.v) FROM B;",
+            "SELECT v FROM B WHERE v != (SELECT B.v);",
+            "SELECT v FROM B WHERE v != (SELECT MIN(B.v) FROM A WHERE A.v = B.v);",
+            "SELECT v FROM B WHERE v != (SELECT MIN(A.v) FROM A WHERE A.v = B.v GROUP BY B.v);",
+            "SELECT v FROM B WHERE v != (SELECT MIN(A.v) FROM A WHERE A.v = B.v ORDER BY B.v);",
+            "SELECT v FROM B GROUP BY v HAVING v >= (SELECT B.v);",
+            "SELECT v FROM B GROUP BY v HAVING v >= (SELECT MIN(B.v) FROM A WHERE A.v = B.v);",
+            "SELECT v FROM B GROUP BY v HAVING v >= (SELECT MIN(A.v) FROM A WHERE A.v = B.v GROUP BY B.v);",
+            "SELECT v FROM B GROUP BY v HAVING v >= (SELECT MIN(A.v) FROM A WHERE A.v = B.v ORDER BY B.v);",
+            "SELECT 42 FROM B, (SELECT MIN(A.v) AS min FROM A WHERE A.v = B.v) AS Q WHERE B.v = Q.min;",
+
+            /* invalid position for nested query */
+            "SELECT v FROM B GROUP BY (SELECT 17);",
+            "SELECT v FROM B ORDER BY (SELECT 17);",
+        };
+
+        for (auto q : queries) {
+            LEXER(q);
+            Parser parser(lexer);
+            SelectStmt *stmt = as<SelectStmt>(parser.parse());
+            CHECK(diag.num_errors() == 0);
+            CHECK(err.str().empty());
+            Sema sema(diag);
+            sema(*stmt);
+
+            if (diag.num_errors() == 0)
+                std::cerr << "UNEXPECTED PASS for input \"" << q << '"' << std::endl;
+            CHECK_FALSE(diag.num_errors() == 0);
+            CHECK_FALSE(err.str().empty());
+
+            delete stmt;
+        }
+    }
+}

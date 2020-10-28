@@ -592,7 +592,7 @@ Clause * Parser::parse_LimitClause()
 Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
 {
     /*
-     * primary-expression::= designator | constant | '(' expression ')' ;
+     * primary-expression ::= designator | constant | '(' expression ')' | '(' select-statement ')' ;
      * unary-expression ::= [ '+' | '-' | '~' ] postfix-expression ;
      * logical-not-expression ::= 'NOT' logical-not-expression | comparative-expression ;
      */
@@ -614,7 +614,10 @@ Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
             break;
         case TK_LPAR:
             consume();
-            lhs = parse_Expr();
+            if (token().type == TK_Select)
+                lhs = new QueryExpr(token(), parse_SelectStmt());
+            else
+                lhs = parse_Expr();
             expect(TK_RPAR);
             break;
 

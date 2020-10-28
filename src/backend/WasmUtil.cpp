@@ -368,6 +368,14 @@ void WasmCGContext::operator()(const BinaryExpr &e)
 #undef CMP
 }
 
+void WasmCGContext::operator()(const QueryExpr &e) {
+    /* Search with fully qualified name. */
+    Catalog &C = Catalog::Get();
+    auto it = values_.find({e.alias(), C.pool("$res")});
+    insist(it != values_.end(), "no value for the given designator");
+    expr_ = it->second;
+}
+
 
 /*======================================================================================================================
  * WasmStruct

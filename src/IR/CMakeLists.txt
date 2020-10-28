@@ -9,4 +9,5 @@ add_library(
     PlanEnumerator.cpp
     QueryGraph.cpp
     Tuple.cpp
+    QueryGraph2SQL.cpp
 )

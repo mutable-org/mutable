@@ -73,6 +73,15 @@ void ASTDumper::operator()(Const<BinaryExpr> &e)
     --indent_;
 }
 
+void ASTDumper::operator()(Const<QueryExpr> &e)
+{
+    indent() << "QueryExpr";
+    if (e.has_type()) out << " of type " << *e.type();
+    ++indent_;
+    (*this)(*e.query);
+    --indent_;
+}
+
 
 /*===== Clause =======================================================================================================*/
 

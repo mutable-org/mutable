@@ -42,7 +42,7 @@ namespace {
     }
 
     bool find_Proj(const std::vector<std::pair<const Expr *, const char *>> &vec,
-                   std::pair<const Expr *, const char*> &p) {
+                   const std::pair<const Expr *, const char*> &p) {
         auto end = vec.end();
         for (auto begin = vec.begin(); begin != end; ++begin) {
             auto pair = *begin;
@@ -90,7 +90,8 @@ namespace {
 
 TEST_CASE("DataSource", "[core][IR][unit]")
 {
-    DataSource ds(1, "one");
+    auto graph = new QueryGraph();
+    auto &ds = graph->add_source("one", Table("tbl"));
 
     Position pos("test");
     Designator DA(Token(pos, "A", TK_IDENTIFIER));
@@ -106,7 +107,7 @@ TEST_CASE("DataSource", "[core][IR][unit]")
     cnf::CNF B({CB}); // B
 
     SECTION("check initial values") {
-        REQUIRE(ds.id() == 1);
+        REQUIRE(ds.id() == 0);
         REQUIRE(streq(ds.alias(),"one"));
         REQUIRE_FALSE(contains(ds.filter(), CA));
         REQUIRE_FALSE(contains(ds.filter(), CB));
@@ -130,6 +131,8 @@ TEST_CASE("DataSource", "[core][IR][unit]")
         REQUIRE(contains(ds.filter(), CA));
         REQUIRE(contains(ds.filter(), CB));
     }
+
+    delete graph;
 }
 
 /*======================================================================================================================
@@ -1056,7 +1059,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
     auto c_A_val = C.pool("A_val");
     auto c_pos = C.pool("pos");
     auto c_dot = C.pool(".");
-    auto c_eq = C.pool("==");
+    auto c_eq = C.pool("=");
+    auto c_neq = C.pool("!=");
     auto c_no = C.pool("NOT");
     auto c_lpar = C.pool("(");
     auto c_0 = C.pool("0");
@@ -1070,16 +1074,19 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
     tableA.push_back(c_id, Type::Get_Integer(Type::TY_Vector, 4));
     tableA.push_back(c_val, Type::Get_Integer(Type::TY_Vector, 4));
     tableA.push_back(c_bool, Type::Get_Boolean(Type::TY_Vector));
+    tableA.add_primary_key(c_id);
 
     auto &tableB = DB.add_table(c_B);
     tableB.push_back(c_id, Type::Get_Integer(Type::TY_Vector, 4));
     tableB.push_back(c_val, Type::Get_Integer(Type::TY_Vector, 4));
     tableB.push_back(c_bool, Type::Get_Boolean(Type::TY_Vector));
+    tableB.add_primary_key(c_id);
 
     auto &tableC = DB.add_table(c_C);
     tableC.push_back(c_id, Type::Get_Integer(Type::TY_Vector, 4));
     tableC.push_back(c_val, Type::Get_Integer(Type::TY_Vector, 4));
     tableC.push_back(c_bool, Type::Get_Boolean(Type::TY_Vector));
+    tableC.add_primary_key(c_id);
 
     // create common objects
     Position pos(c_pos);
@@ -1972,7 +1979,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
         }
     }
 
-    SECTION("test subqueries in FROM clause") {
+    SECTION("test nested queries in FROM clause") {
         Token eq(pos, c_eq, TK_EQUAL);
         Token no(pos, c_no, TK_Not);
         Designator *A_id = new Designator(dot, Token(pos, c_A, TK_IDENTIFIER),
@@ -2029,6 +2036,511 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             delete stmt;
 
         }
+    }
+
+    SECTION("test nested queries in WHERE clause")
+    {
+        Token eq(pos, c_eq, TK_EQUAL);
+        Token neq(pos, c_neq, TK_BANG_EQUAL);
+        Designator A_id(dot, Token(pos, c_A, TK_IDENTIFIER),
+                       Token(pos, c_id, TK_IDENTIFIER));
+        Designator A_val(dot, Token(pos, c_A, TK_IDENTIFIER),
+                         Token(pos, c_val, TK_IDENTIFIER));
+        Designator A_bool(dot, Token(pos, c_A, TK_IDENTIFIER),
+                          Token(pos, c_bool, TK_IDENTIFIER));
+        Designator B_id(dot, Token(pos, c_B, TK_IDENTIFIER),
+                        Token(pos, c_id, TK_IDENTIFIER));
+        Designator C_id(dot, Token(pos, c_C, TK_IDENTIFIER),
+                        Token(pos, c_id, TK_IDENTIFIER));
+        Designator C_val(dot, Token(pos, c_C, TK_IDENTIFIER),
+                         Token(pos, c_val, TK_IDENTIFIER));
+
+        SECTION("test simple non-correlated subquery")
+        {
+            const char *query = "SELECT id \
+                                 FROM A \
+                                 WHERE val = (SELECT MIN(B.val) \
+                                              FROM B);";
+            auto stmt = get_Stmt(query);
+            auto graph = QueryGraph::Build(*stmt);
+
+            auto sources = graph->sources();
+            auto joins = graph->joins();
+
+            REQUIRE(graph->group_by().empty());
+            REQUIRE(graph->aggregates().empty());
+            REQUIRE(graph->order_by().empty());
+            REQUIRE(graph->limit().limit == 0);
+            REQUIRE(graph->projections().size() == 1);
+            REQUIRE_FALSE(graph->projection_is_anti());
+
+            REQUIRE(sources.size() == 2);
+            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->joins().size() == 1);
+            REQUIRE(sources[0]->filter().empty());
+            REQUIRE(is<const BaseTable>(sources[0]));
+            REQUIRE(sources[1]->joins().size() == 1);
+            REQUIRE(sources[1]->filter().empty());
+            REQUIRE(is<const Query>(sources[1]));
+
+            REQUIRE(joins.size() == 1);
+            auto where = cast<const BinaryExpr>(joins[0]->condition()[0][0].expr());
+            REQUIRE(where);
+            REQUIRE(*where->lhs == A_val);
+            auto q = cast<QueryExpr>(where->rhs);
+            REQUIRE(q);
+
+            delete stmt;
+        }
+
+        SECTION("test simple correlated subquery with equi-predicate")
+        {
+            const char *query = "SELECT id \
+                                 FROM A \
+                                 WHERE val = (SELECT MIN(B.val) \
+                                              FROM B \
+                                              WHERE A.id = B.id);";
+            auto stmt = get_Stmt(query);
+            auto graph = QueryGraph::Build(*stmt);
+
+            auto sources = graph->sources();
+            auto joins = graph->joins();
+
+            REQUIRE(graph->group_by().empty());
+            REQUIRE(graph->aggregates().empty());
+            REQUIRE(graph->order_by().empty());
+            REQUIRE(graph->limit().limit == 0);
+            REQUIRE(graph->projections().size() == 1);
+            REQUIRE_FALSE(graph->projection_is_anti());
+
+            REQUIRE(sources.size() == 2);
+            REQUIRE(is<const BaseTable>(sources[0]));
+            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->filter().empty());
+            REQUIRE(sources[0]->joins().size() == 1);
+            auto q = cast<const Query>(sources[1]);
+            REQUIRE(q);
+            REQUIRE(q->joins().size() == 1);
+            REQUIRE(q->query_graph()->sources().size() == 1);
+            REQUIRE(q->query_graph()->sources()[0]->filter().empty());
+            REQUIRE(q->query_graph()->group_by().size() == 1);
+            REQUIRE(*q->query_graph()->group_by()[0] == B_id);
+            REQUIRE(q->query_graph()->projections().size() == 2);
+            REQUIRE_FALSE(q->query_graph()->projection_is_anti());
+
+            REQUIRE(joins.size() == 1);
+            auto where_0 = cast<const BinaryExpr>(joins[0]->condition()[0][0].expr());
+            REQUIRE(where_0);
+            REQUIRE(*where_0->lhs == A_val);
+            auto qExpr = cast<QueryExpr>(where_0->rhs);
+            REQUIRE(qExpr);
+            auto where_1 = cast<const BinaryExpr>(joins[0]->condition()[1][0].expr());
+            REQUIRE(where_1);
+            REQUIRE(*where_1->lhs == A_id);
+            REQUIRE(where_1->op().type == TK_EQUAL);
+            auto des = cast<Designator>(where_1->rhs);
+            REQUIRE(des);
+            REQUIRE(streq(des->attr_name.text, "B.id"));
+            REQUIRE(*std::get<const Expr*>(des->target()) == *q->query_graph()->projections()[1].first);
+
+            delete stmt;
+        }
+
+        SECTION("test simple correlated subquery with non-equi-predicate")
+        {
+            const char *query = "SELECT id \
+                                 FROM A \
+                                 WHERE val = (SELECT MIN(B.val) AS min \
+                                              FROM B \
+                                              WHERE A.id != B.id);";
+            auto stmt = get_Stmt(query);
+            auto graph = QueryGraph::Build(*stmt);
+
+            REQUIRE(graph->group_by().empty());
+            REQUIRE(graph->aggregates().empty());
+            REQUIRE(graph->order_by().empty());
+            REQUIRE(graph->limit().limit == 0);
+            REQUIRE(graph->projections().size() == 1);
+            REQUIRE_FALSE(graph->projection_is_anti());
+
+            REQUIRE(graph->sources().size() == 1);
+            auto q = cast<const Query>(graph->sources()[0]);
+            REQUIRE(q);
+            REQUIRE(q->joins().empty());
+            auto where_0 = cast<const BinaryExpr>(q->filter()[0][0].expr());
+            REQUIRE(where_0);
+            REQUIRE(streq(to_string(*where_0->lhs).c_str(), "A.val"));
+            auto qExpr = cast<QueryExpr>(where_0->rhs);
+            REQUIRE(qExpr);
+            auto q_graph = q->query_graph();
+            REQUIRE(q_graph->sources().size() == 2);
+            REQUIRE(q_graph->joins().size() == 1);
+            auto where_1 = cast<const BinaryExpr>(q_graph->joins()[0]->condition()[0][0].expr());
+            REQUIRE(where_1);
+            REQUIRE(*where_1->lhs == A_id);
+            REQUIRE(where_1->op().type == TK_BANG_EQUAL);
+            auto des = cast<Designator>(where_1->rhs);
+            REQUIRE(des);
+            REQUIRE(des->attr_name.text == c_id);
+            REQUIRE(std::get<const Attribute*>(des->target())->table.name == c_B);
+            REQUIRE(q_graph->group_by().size() == 2);
+            REQUIRE(*q_graph->group_by()[0] == A_id);
+            REQUIRE(*q_graph->group_by()[1] == A_val);
+            REQUIRE(q_graph->aggregates().size() == 1);
+            REQUIRE(q_graph->projections().size() == 1);
+            REQUIRE(q_graph->projection_is_anti());
+
+            delete stmt;
+        }
+
+        SECTION("test expansion of `SELECT *`")
+        {
+            const char *query = "SELECT * \
+                                 FROM A \
+                                 WHERE val = (SELECT MIN(B.val) \
+                                              FROM B \
+                                              WHERE A.id = B.id);";
+            auto stmt = get_Stmt(query);
+            auto graph = QueryGraph::Build(*stmt);
+
+            REQUIRE(graph->projections().size() == 3);
+            REQUIRE_FALSE(graph->projection_is_anti());
+            REQUIRE(find_Proj(graph->projections(), std::pair<const Expr*, const char*>(&A_id, nullptr)));
+            REQUIRE(find_Proj(graph->projections(), std::pair<const Expr*, const char*>(&A_val, nullptr)));
+            REQUIRE(find_Proj(graph->projections(), std::pair<const Expr*, const char*>(&A_bool, nullptr)));
+
+            delete stmt;
+        }
+
+        SECTION("test primary key provisioning")
+        {
+            const char *query = "SELECT val \
+                                 FROM (SELECT val, bool FROM A) AS Q \
+                                 WHERE val = (SELECT MIN(B.val) \
+                                              FROM B \
+                                              WHERE Q.bool != B.bool);";
+            auto stmt = get_Stmt(query);
+            auto graph = QueryGraph::Build(*stmt);
+
+            REQUIRE(graph->sources().size() == 1);
+            auto q = cast<const Query>(graph->sources()[0]);
+            REQUIRE(q);
+            auto q_graph = q->query_graph();
+            REQUIRE(q_graph->sources().size() == 2);
+            REQUIRE(q_graph->group_by().size() == 2);
+            REQUIRE(*q_graph->group_by()[0] == A_id);
+            REQUIRE(q_graph->aggregates().size() == 1);
+            REQUIRE(q_graph->projections().size() == 1);
+            REQUIRE(q_graph->projection_is_anti());
+            auto Q = cast<const Query>(q_graph->sources()[1]);
+            REQUIRE(Q);
+            REQUIRE(streq(Q->alias(), "Q"));
+            auto Q_graph = Q->query_graph();
+            REQUIRE(Q_graph->projections().size() == 3);
+            REQUIRE(*Q_graph->projections()[2].first == A_id);
+
+            delete stmt;
+        }
+
+        SECTION("test HAVING and equi-predicate")
+        {
+            const char *query = "SELECT id \
+                                 FROM A \
+                                 WHERE val = (SELECT MIN(B.val) \
+                                              FROM B \
+                                              WHERE A.id = B.id \
+                                              HAVING MAX(B.val) > 1);";
+            auto stmt = get_Stmt(query);
+            auto graph = QueryGraph::Build(*stmt);
+
+            auto sources = graph->sources();
+            auto joins = graph->joins();
+
+            REQUIRE(graph->group_by().empty());
+            REQUIRE(graph->aggregates().empty());
+            REQUIRE(graph->order_by().empty());
+            REQUIRE(graph->limit().limit == 0);
+            REQUIRE(graph->projections().size() == 1);
+            REQUIRE_FALSE(graph->projection_is_anti());
+
+            REQUIRE(sources.size() == 2);
+            REQUIRE(is<const BaseTable>(sources[0]));
+            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->filter().empty());
+            REQUIRE(sources[0]->joins().size() == 1);
+            auto q = cast<const Query>(sources[1]);
+            REQUIRE(q);
+            REQUIRE(q->joins().size() == 1);
+            REQUIRE(q->query_graph()->sources().size() == 1);
+            REQUIRE_FALSE(q->query_graph()->sources()[0]->filter().empty());
+            REQUIRE_FALSE(q->query_graph()->grouping());
+            REQUIRE(q->query_graph()->projections().size() == 2);
+            REQUIRE_FALSE(q->query_graph()->projection_is_anti());
+            auto having = cast<const Query>(q->query_graph()->sources()[0]);
+            REQUIRE(having);
+            REQUIRE(having->joins().empty());
+            REQUIRE(having->query_graph()->sources().size() == 1);
+            REQUIRE(having->query_graph()->sources()[0]->filter().empty());
+            REQUIRE(having->query_graph()->group_by().size() == 1);
+            REQUIRE(*having->query_graph()->group_by()[0] == B_id);
+            REQUIRE(having->query_graph()->projections().empty());
+            REQUIRE_FALSE(having->query_graph()->projection_is_anti());
+
+            REQUIRE(joins.size() == 1);
+            auto where_0 = cast<const BinaryExpr>(joins[0]->condition()[0][0].expr());
+            REQUIRE(where_0);
+            REQUIRE(*where_0->lhs == A_val);
+            auto qExpr = cast<QueryExpr>(where_0->rhs);
+            REQUIRE(qExpr);
+            auto where_1 = cast<const BinaryExpr>(joins[0]->condition()[1][0].expr());
+            REQUIRE(where_1);
+            REQUIRE(*where_1->lhs == A_id);
+            REQUIRE(where_1->op().type == TK_EQUAL);
+            auto des = cast<Designator>(where_1->rhs);
+            REQUIRE(des);
+            REQUIRE(streq(des->attr_name.text, "B.id"));
+            REQUIRE(*std::get<const Expr*>(des->target()) == *q->query_graph()->projections()[1].first);
+
+            delete stmt;
+        }
+
+        SECTION("test HAVING and non-equi-predicate")
+        {
+            const char *query = "SELECT id \
+                                 FROM A \
+                                 WHERE val = (SELECT MIN(B.val) AS min \
+                                              FROM B \
+                                              WHERE A.id != B.id \
+                                              HAVING MAX(B.val) > 1);";
+            auto stmt = get_Stmt(query);
+            auto graph = QueryGraph::Build(*stmt);
+
+            REQUIRE(graph->group_by().empty());
+            REQUIRE(graph->aggregates().empty());
+            REQUIRE(graph->order_by().empty());
+            REQUIRE(graph->limit().limit == 0);
+            REQUIRE(graph->projections().size() == 1);
+            REQUIRE_FALSE(graph->projection_is_anti());
+
+            REQUIRE(graph->sources().size() == 1);
+            auto q = cast<const Query>(graph->sources()[0]);
+            REQUIRE(q);
+            REQUIRE(q->joins().empty());
+            auto where_0 = cast<const BinaryExpr>(q->filter()[0][0].expr());
+            REQUIRE(where_0);
+            REQUIRE(streq(to_string(*where_0->lhs).c_str(), "A.val"));
+            auto qExpr = cast<QueryExpr>(where_0->rhs);
+            REQUIRE(qExpr);
+            auto q_graph = q->query_graph();
+            REQUIRE(q_graph->sources().size() == 1);
+            REQUIRE(q_graph->joins().empty());
+            REQUIRE_FALSE(q_graph->grouping());
+            REQUIRE(q_graph->projections().size() == 1);
+            REQUIRE(q_graph->projection_is_anti());
+            auto having = cast<const Query>(q_graph->sources()[0]);
+            REQUIRE(having);
+            auto having_graph = having->query_graph();
+            REQUIRE(having_graph->sources().size() == 2);
+            REQUIRE(having_graph->joins().size() == 1);
+            auto where_1 = cast<const BinaryExpr>(having_graph->joins()[0]->condition()[0][0].expr());
+            REQUIRE(where_1);
+            REQUIRE(*where_1->lhs == A_id);
+            REQUIRE(where_1->op().type == TK_BANG_EQUAL);
+            auto des = cast<Designator>(where_1->rhs);
+            REQUIRE(des);
+            REQUIRE(des->attr_name.text == c_id);
+            REQUIRE(std::get<const Attribute*>(des->target())->table.name == c_B);
+            REQUIRE(having_graph->group_by().size() == 2);
+            REQUIRE(*having_graph->group_by()[0] == A_id);
+            REQUIRE(*having_graph->group_by()[1] == A_val);
+            REQUIRE(having_graph->aggregates().size() == 2);
+            REQUIRE(having_graph->projections().empty());
+            REQUIRE_FALSE(having_graph->projection_is_anti());
+
+            delete stmt;
+        }
+
+        SECTION("test HAVING with non-equi-predicate")
+        {
+            const char *query = "SELECT id \
+                                 FROM A \
+                                 WHERE val = (SELECT MIN(B.val) AS min \
+                                              FROM B \
+                                              HAVING MAX(B.val) > A.id);";
+            auto stmt = get_Stmt(query);
+            auto graph = QueryGraph::Build(*stmt);
+
+            auto sources = graph->sources();
+            auto joins = graph->joins();
+
+            REQUIRE(graph->group_by().empty());
+            REQUIRE(graph->aggregates().empty());
+            REQUIRE(graph->order_by().empty());
+            REQUIRE(graph->limit().limit == 0);
+            REQUIRE(graph->projections().size() == 1);
+            REQUIRE_FALSE(graph->projection_is_anti());
+
+            REQUIRE(sources.size() == 2);
+            REQUIRE(is<const BaseTable>(sources[0]));
+            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->filter().empty());
+            REQUIRE(sources[0]->joins().size() == 1);
+            auto q = cast<const Query>(sources[1]);
+            REQUIRE(q);
+            REQUIRE(q->joins().size() == 1);
+            REQUIRE(q->query_graph()->sources().size() == 1);
+            REQUIRE(q->query_graph()->sources()[0]->filter().empty());
+            REQUIRE(is<const Query>(q->query_graph()->sources()[0]));
+            REQUIRE_FALSE(q->query_graph()->grouping());
+            REQUIRE(q->query_graph()->projections().size() == 2);
+            REQUIRE_FALSE(q->query_graph()->projection_is_anti());
+
+            REQUIRE(joins.size() == 1);
+            auto where_0 = cast<const BinaryExpr>(joins[0]->condition()[0][0].expr());
+            REQUIRE(where_0);
+            REQUIRE(*where_0->lhs == A_val);
+            auto qExpr = cast<QueryExpr>(where_0->rhs);
+            REQUIRE(qExpr);
+            auto where_1 = cast<const BinaryExpr>(joins[0]->condition()[1][0].expr());
+            REQUIRE(where_1);
+            REQUIRE(streq(to_string(*where_1).c_str(), "(MAX(B.val) > A.id)"));
+
+            delete stmt;
+        }
+
+        SECTION("test multiple correlated subquery with equi-predicate")
+        {
+            const char *query = "SELECT id \
+                                 FROM A \
+                                 WHERE val = (SELECT MAX(C.val) \
+                                              FROM C \
+                                              WHERE C.id != (SELECT MIN(B.val) \
+                                                             FROM B \
+                                                             WHERE A.id = B.id));";
+            auto stmt = get_Stmt(query);
+            auto graph = QueryGraph::Build(*stmt);
+
+            auto sources = graph->sources();
+            auto joins = graph->joins();
+
+            REQUIRE(graph->group_by().empty());
+            REQUIRE(graph->aggregates().empty());
+            REQUIRE(graph->order_by().empty());
+            REQUIRE(graph->limit().limit == 0);
+            REQUIRE(graph->projections().size() == 1);
+            REQUIRE_FALSE(graph->projection_is_anti());
+
+            REQUIRE(sources.size() == 2);
+            REQUIRE(is<const BaseTable>(sources[0]));
+            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->filter().empty());
+            REQUIRE(sources[0]->joins().size() == 1);
+            auto q1 = cast<const Query>(sources[1]);
+            REQUIRE(q1);
+            REQUIRE(q1->joins().size() == 1);
+            REQUIRE(q1->query_graph()->sources().size() == 2);
+            REQUIRE(is<const BaseTable>(q1->query_graph()->sources()[0]));
+            REQUIRE(q1->query_graph()->sources()[0]->alias() == c_C);
+            REQUIRE(q1->query_graph()->sources()[0]->filter().empty());
+            REQUIRE(q1->query_graph()->sources()[0]->joins().size() == 1);
+            REQUIRE(q1->query_graph()->group_by().size() == 1);
+            REQUIRE(q1->query_graph()->projections().size() == 2);
+            REQUIRE_FALSE(q1->query_graph()->projection_is_anti());
+            auto q2 = cast<const Query>(q1->query_graph()->sources()[1]);
+            REQUIRE(q2);
+            REQUIRE(q2->joins().size() == 1);
+            REQUIRE(q2->query_graph()->sources().size() == 1);
+            REQUIRE(q2->query_graph()->sources()[0]->filter().empty());
+            REQUIRE(q2->query_graph()->group_by().size() == 1);
+            REQUIRE(*q2->query_graph()->group_by()[0] == B_id);
+            REQUIRE(q2->query_graph()->projections().size() == 2);
+            REQUIRE_FALSE(q2->query_graph()->projection_is_anti());
+
+            REQUIRE(joins.size() == 1);
+            auto where_0 = cast<const BinaryExpr>(joins[0]->condition()[0][0].expr());
+            REQUIRE(where_0);
+            REQUIRE(*where_0->lhs == A_val);
+            auto qExpr = cast<QueryExpr>(where_0->rhs);
+            REQUIRE(qExpr);
+            auto where_1 = cast<const BinaryExpr>(joins[0]->condition()[1][0].expr());
+            REQUIRE(where_1);
+            REQUIRE(*where_1->lhs == A_id);
+            REQUIRE(where_1->op().type == TK_EQUAL);
+            auto des = cast<Designator>(where_1->rhs);
+            REQUIRE(des);
+            REQUIRE(*std::get<const Expr*>(des->target()) == *q1->query_graph()->projections()[1].first);
+
+            delete stmt;
+        }
+
+        SECTION("test multiple correlated subquery with non-equi-predicate")
+        {
+            const char *query = "SELECT id \
+                                 FROM A \
+                                 WHERE val = (SELECT MAX(C.val) \
+                                              FROM C \
+                                              WHERE C.id != (SELECT MIN(B.val) \
+                                                             FROM B \
+                                                             WHERE A.id != B.id));";
+            auto stmt = get_Stmt(query);
+            auto graph = QueryGraph::Build(*stmt);
+
+            REQUIRE(graph->group_by().empty());
+            REQUIRE(graph->aggregates().empty());
+            REQUIRE(graph->order_by().empty());
+            REQUIRE(graph->limit().limit == 0);
+            REQUIRE(graph->projections().size() == 1);
+            REQUIRE_FALSE(graph->projection_is_anti());
+
+            REQUIRE(graph->sources().size() == 1);
+            auto q1 = cast<const Query>(graph->sources()[0]);
+            REQUIRE(q1);
+            REQUIRE(q1->joins().empty());
+            auto where_0 = cast<const BinaryExpr>(q1->filter()[0][0].expr());
+            REQUIRE(where_0);
+            REQUIRE(streq(to_string(*where_0->lhs).c_str(), "A.val"));
+            REQUIRE(is<QueryExpr>(where_0->rhs));
+
+            auto q1_graph = q1->query_graph();
+            REQUIRE(q1_graph->sources().size() == 1);
+            REQUIRE(q1_graph->joins().empty());
+            REQUIRE(q1_graph->group_by().size() == 2);
+            REQUIRE(streq(to_string(*q1_graph->group_by()[0]).c_str(), "A.id"));
+            REQUIRE(streq(to_string(*q1_graph->group_by()[1]).c_str(), "A.val"));
+            REQUIRE(q1_graph->aggregates().size() == 1);
+            REQUIRE(q1_graph->projections().size() == 1);
+            REQUIRE(q1_graph->projection_is_anti());
+            auto q2 = cast<const Query>(q1_graph->sources()[0]);
+            REQUIRE(q2);
+            REQUIRE(q2->joins().empty());
+            auto where_2 = cast<const BinaryExpr>(q2->filter()[0][0].expr());
+            REQUIRE(where_2);
+            REQUIRE(streq(to_string(*where_2->lhs).c_str(), "C.id"));
+            REQUIRE(is<QueryExpr>(where_2->rhs));
+
+            auto q2_graph = q2->query_graph();
+            REQUIRE(q2_graph->sources().size() == 3);
+            REQUIRE(q2_graph->joins().size() == 1);
+            REQUIRE(q2_graph->group_by().size() == 4);
+            REQUIRE(streq(to_string(*q2_graph->group_by()[0]).c_str(), "C.id"));
+            REQUIRE(streq(to_string(*q2_graph->group_by()[1]).c_str(), "C.val"));
+            REQUIRE(streq(to_string(*q2_graph->group_by()[2]).c_str(), "A.id"));
+            REQUIRE(streq(to_string(*q2_graph->group_by()[3]).c_str(), "A.val"));
+            REQUIRE(q2_graph->aggregates().size() == 1);
+            REQUIRE(q2_graph->projections().size() == 1);
+            REQUIRE(q2_graph->projection_is_anti());
+            auto where_1 = cast<const BinaryExpr>(q2_graph->joins()[0]->condition()[0][0].expr());
+            REQUIRE(where_1);
+            REQUIRE(streq(to_string(*where_1->lhs).c_str(), "A.id"));
+            REQUIRE(where_1->op().type == TK_BANG_EQUAL);
+            auto des = cast<Designator>(where_1->rhs);
+            REQUIRE(des);
+            REQUIRE(des->attr_name.text == c_id);
+            REQUIRE(std::get<const Attribute*>(des->target())->table.name == c_B);
+
+            delete stmt;
+        }
+
     }
 
     Catalog::Clear();

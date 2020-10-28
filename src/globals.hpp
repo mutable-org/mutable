@@ -24,6 +24,7 @@ struct Options
     bool astdot;
     bool graph;
     bool graphdot;
+    bool graph2sql;
     bool plan;
     bool plandot;
     bool dryrun;

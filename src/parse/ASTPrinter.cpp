@@ -27,10 +27,11 @@ void ASTPrinter::operator()(Const<Constant> &e)
 
 void ASTPrinter::operator()(Const<FnApplicationExpr> &e)
 {
-    out << *e.fn << '(';
+    (*this)(*e.fn);
+    out << '(';
     for (auto it = e.args.cbegin(), end = e.args.cend(); it != end; ++it) {
         if (it != e.args.cbegin()) out << ", ";
-        out << **it;
+        (*this)(**it);
     }
     out << ')';
 }
@@ -39,12 +40,28 @@ void ASTPrinter::operator()(Const<UnaryExpr> &e)
 {
     out << '(' << e.op().text;
     if (e.op() == TK_Not) out << ' ';
-    out << *e.expr << ')';
+    (*this)(*e.expr);
+    out << ')';
 }
 
 void ASTPrinter::operator()(Const<BinaryExpr> &e)
 {
-    out << '(' << *e.lhs << ' ' << e.op().text << ' ' << *e.rhs << ')';
+    out << '(';
+    (*this)(*e.lhs);
+    out << ' ' << e.op().text << ' ';
+    (*this)(*e.rhs);
+    out << ')';
+}
+
+void ASTPrinter::operator()(Const<QueryExpr> &e)
+{
+    if (expand_nested_queries_) {
+        out << '(';
+        (*this)(*e.query);
+        out << ')';
+    } else {
+        out << e.alias() << ".$res";
+    }
 }
 
 /*===== Clause =======================================================================================================*/

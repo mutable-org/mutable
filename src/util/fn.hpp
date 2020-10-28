@@ -228,6 +228,21 @@ bool contains(const H &haystack, const N &needle)
     return find(begin(haystack), end(haystack), needle) != end(haystack);
 }
 
+/** Checks whether first and second are equal considering permutations. */
+template<typename T, typename U>
+bool equal(const T &first, const U &second)
+{
+    for (auto t : first) {
+        if (not contains(second, t))
+            return false;
+    }
+    for (auto t : second) {
+        if (not contains(first, t))
+            return false;
+    }
+    return true;
+}
+
 /** Checks whether `subset` is a subset of `set`. */
 template<typename Container, typename Set>
 bool subset(const Container &subset, const Set &set)

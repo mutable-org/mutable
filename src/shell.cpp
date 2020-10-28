@@ -112,6 +112,10 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
                 query_graph->dot(dot.stream());
                 dot.show("graph", is_stdin, "fdp");
             }
+            if (Options::Get().graph2sql) {
+                query_graph->sql(std::cout);
+                std::cout.flush();
+            }
 
             std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::Create(Options::Get().plan_enumerator);
             CostFunction cf([](CostFunction::Subproblem left, CostFunction::Subproblem right, int, const PlanTable &T) {
@@ -406,6 +410,10 @@ int main(int argc, const char **argv)
         nullptr, "--graphdot",                              /* Short, Long      */
         "dot the computed query graph",                     /* Description      */
         [&](bool) { Options::Get().graphdot = true; });     /* Callback         */
+    ADD(bool, Options::Get().graph2sql, false,               /* Type, Var, Init  */
+        nullptr, "--graph2sql",                             /* Short, Long      */
+        "translate the computed query graph into SQL",      /* Description      */
+        [&](bool) { Options::Get().graph2sql = true; });    /* Callback         */
     ADD(bool, Options::Get().plan, false,                   /* Type, Var, Init  */
         nullptr, "--plan",                                  /* Short, Long      */
         "emit the chosen execution plan",                   /* Description      */

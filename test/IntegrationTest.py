@@ -271,14 +271,7 @@ COMMAND = {
     'end2end': end2end_command,
 }
 
-BINARIES_DIR = os.path.join(os.getcwd(), 'build', 'debug', 'bin')
-BINARIES = {
-    'lex': os.path.join(BINARIES_DIR, 'lex'),
-    'parse': os.path.join(BINARIES_DIR, 'parse'),
-    'check': os.path.join(BINARIES_DIR, 'check'),
-    'shell': os.path.join(BINARIES_DIR, 'shell'),
-}
-
+BINARIES = dict()
 
 #-----------------------------------------------------------------------------------------------------------------------
 # MAIN ROUTINE
@@ -292,10 +285,19 @@ if __name__ == '__main__':
     parser.add_argument('-r', '--required-only', help='run only required tests', action='store_true')
     parser.add_argument('-v', '--verbose', help='increase output verbosity', action='store_true')
     parser.add_argument('-d', '--debug', help='print debug commands for failed test cases', action='store_true')
+    parser.add_argument('build_path', help='Path to the build directory.  Defaults to \'build/debug\'.',
+                        default=os.path.join('build', 'debug'), type=str, metavar='PATH', nargs='?')
     args = parser.parse_args()
 
     # Check if interactive terminal
     is_interactive = True if 'TERM' in os.environ else False
+
+    # Locate build directory and binaries
+    binaries_dir = os.path.join(args.build_path, 'bin')
+    BINARIES['lex']   = os.path.join(binaries_dir, 'lex')
+    BINARIES['parse'] = os.path.join(binaries_dir, 'parse')
+    BINARIES['check'] = os.path.join(binaries_dir, 'check')
+    BINARIES['shell'] = os.path.join(binaries_dir, 'shell')
 
     # Set up counters
     stage_counter = dict()

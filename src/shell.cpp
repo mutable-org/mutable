@@ -90,7 +90,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
     Parser parser(lexer);
 
     while (parser.token()) {
-        Timer timer;
+        Timer &timer = C.timer();
         auto stmt = parser.parse();
         if (Options::Get().echo)
             std::cout << *stmt << std::endl;
@@ -225,6 +225,7 @@ next:
         if (Options::Get().times) {
             std::cout << timer;
             std::cout.flush();
+            timer.clear();
         }
     }
 

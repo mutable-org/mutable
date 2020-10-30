@@ -55,6 +55,9 @@ struct Timer
         return *it;
     }
 
+    /** Erase all `Measurement`s from this `Timer`. */
+    void clear() { measurements_.clear(); }
+
     private:
     /** Start a new `Measurement` with the name `name`.  Returns the ID assigned to that `Measurement`. */
     std::size_t start(std::string name) {

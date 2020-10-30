@@ -6,6 +6,7 @@
 #include "storage/ColumnStore.hpp"
 #include "storage/RowStore.hpp"
 #include "storage/Store.hpp"
+#include "util/Timer.hpp"
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -288,7 +289,8 @@ V8Platform::~V8Platform()
 
 void V8Platform::execute(const Operator &plan)
 {
-    auto module = compile(plan);
+    Catalog &C = Catalog::Get();
+    auto module = TIME_EXPR(compile(plan), "Compile to WebAssembly", C.timer());
 
     /* Create required V8 scopes. */
     v8::Isolate::Scope isolate_scope(isolate_);
@@ -308,7 +310,7 @@ void V8Platform::execute(const Operator &plan)
     DISCARD imports->Set(context, mkstr("env"), env);
 
     /* Create a WebAssembly instance object. */
-    auto instance = instantiate(module, imports);
+    auto instance = TIME_EXPR(instantiate(module, imports), "Compile Wasm to machine code", C.timer());
 
     /* Set the underlying memory for the instance. */
     v8::SetWasmInstanceRawMemory(instance, wasm_context.vm.as<uint8_t*>(), wasm_context.vm.size());

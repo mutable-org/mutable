@@ -550,12 +550,9 @@ void StackMachine::emit(const cnf::CNF &cnf, std::size_t tuple_id)
             if (pred_it != C.cbegin())
                 ops.push_back(StackMachine::Opcode::Or_b);
         }
-        if (clause_it != std::prev(cnf.cend()))
-            ops.push_back(StackMachine::Opcode::Stop_False); // a single false clause renders the CNF false
         if (clause_it != cnf.cbegin())
             ops.push_back(StackMachine::Opcode::And_b);
     }
-    out_schema.push_back(Type::Get_Boolean(Type::TY_Vector));
 }
 
 void StackMachine::emit_St_Tup(std::size_t tuple_id, std::size_t index, const Type *ty)

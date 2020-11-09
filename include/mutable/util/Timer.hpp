@@ -47,11 +47,16 @@ struct Timer
     auto cend()   const { return measurements_.cend(); }
 
     auto & measurements() const { return measurements_; }
-    auto & get(std::size_t i) const { insist(i < measurements_.size()); return measurements_[i]; }
+    auto & get(std::size_t i) const {
+        if (i >= measurements_.size())
+            throw m::out_of_range("index i out of bounds");
+        return measurements_[i];
+    }
     auto & get(const std::string &name) const {
         auto it = std::find_if(measurements_.begin(), measurements_.end(),
                                [&](auto &elem) { return elem.name == name; });
-        insist(it != measurements_.end(), "a measurement with that name does not exist");
+        if (it == measurements_.end())
+            throw m::out_of_range("a measurement with that name does not exist");
         return *it;
     }
 
@@ -65,7 +70,8 @@ struct Timer
                                [&](auto &elem) { return elem.name == name; });
 
         if (it != measurements_.end()) { // overwrite existing, finished measurement
-            insist(it->end != time_point(), "a measurement with that name is already in progress");
+            if (it->end == time_point())
+                throw m::invalid_argument("a measurement with that name is already in progress");
             it->begin = clock::now();
             it->end = time_point();
             return std::distance(measurements_.begin(), it);
@@ -79,15 +85,18 @@ struct Timer
 
     /** Stops the `Measurement` with the given ID. */
     void stop(std::size_t id) {
-        insist (id < measurements_.size(), "id out of bounds");
+        if (id >= measurements_.size())
+            throw m::out_of_range("id out of bounds");
         auto &ref = measurements_[id];
-        insist(ref.end == time_point(), "cannot stop that measurement because it has already been stopped");
+        if (ref.end != time_point())
+            throw m::invalid_argument("cannot stop that measurement because it has already been stopped");
         ref.end = clock::now();
     }
 
     /** Erase a `Measurement` from this `Timer`. */
     void erase(std::size_t id) {
-        insist (id < measurements_.size(), "id out of bounds");
+        if (id >= measurements_.size())
+            throw m::out_of_range("id out of bounds");
         auto &ref = measurements_[id];
         ref.begin = ref.end = time_point();
     }

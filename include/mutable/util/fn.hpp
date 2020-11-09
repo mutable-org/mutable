@@ -1,5 +1,6 @@
 #pragma once
 
+#include "mutable/util/exception.hpp"
 #include "mutable/util/macro.hpp"
 #include <algorithm>
 #include <cctype>
@@ -103,7 +104,8 @@ typename std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T>, T>
 round_up_to_multiple(T val, T factor)
 {
     if (val == 0) return val;
-    insist(factor != 0);
+    if (factor == 0)
+        throw m::invalid_argument("factor must not be 0");
     T d = val / factor;
     T differ = (d * factor) != val;
     return (d + differ) * factor;
@@ -167,9 +169,11 @@ inline std::string quote(const std::string &str) { return std::string("\"") + st
 inline std::string unquote(const std::string &str, char quote = '"')
 {
     using std::next, std::prev;
-    insist(str.length() >= 2); // two quotes
+    if (str.length() < 2)
+        throw m::invalid_argument("string must be at least two quotes long"); // two quotes
     if (str[0] != quote) return str; // nothing to do
-    insist(*str.rbegin() == quote, "unmatched opening quote");
+    if (*str.rbegin() != quote)
+        throw m::invalid_argument("unmatched opening quote");
     return std::string(next(str.begin()), prev(str.end())); // return substring str[1:-1]
 }
 

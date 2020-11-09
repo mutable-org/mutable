@@ -35,7 +35,8 @@ struct Schema
         const char *name; ///< the name of this `Identifier`
 
         Identifier(const char *prefix, const char *name) : prefix(prefix) , name(name) {
-            insist(prefix == nullptr or strlen(prefix) > 0, "prefix must not be the empty string");
+            if (prefix != nullptr and strlen(prefix) == 0)
+                throw invalid_argument("prefix must not be the empty string");
         }
         Identifier(const char *name) : prefix(nullptr), name(name) { }
 
@@ -83,7 +84,8 @@ struct Schema
         else
             pred = [&](entry_type &e) -> bool { return e.id.name == id.name; }; // match unqualified
         auto it = std::find_if(begin(), end(), pred);
-        insist(it == end() or std::find_if(std::next(it), end(), pred) == end(), "duplicate entry; lookup ambiguous");
+        if (it != end() and std::find_if(std::next(it), end(), pred) != end())
+            throw invalid_argument("duplicate identifier, lookup ambiguous");
         return it;
     }
     /** Returns an iterator to the entry with the given `Identifier` `id`, or `end()` if no such entry exists.  */
@@ -94,14 +96,16 @@ struct Schema
 
     /** Returns the entry at index `idx`. */
     const entry_type & operator[](std::size_t idx) const {
-        insist(idx < entries_.size(), "index out of bounds");
+        if (idx >= entries_.size())
+            throw out_of_range("index out of bounds");
         return entries_[idx];
     }
 
     /** Returns a `std::pair` of the index and a reference to the entry with `Identifier` `id`. */
     std::pair<std::size_t, const entry_type&> operator[](Identifier id) const {
         auto pos = find(id);
-        insist(pos != end(), "identifier not found");
+        if (pos == end())
+            throw out_of_range("identifier not found");
         return { std::distance(begin(), pos), *pos };
     }
 
@@ -152,7 +156,8 @@ inline Schema operator&(const Schema &left, const Schema &right)
     for (auto &e : left) {
         auto it = right.find(e.id);
         if (it != right.end()) {
-            insist(e.type == it->type, "type mismatch");
+            if (e.type != it->type)
+                throw invalid_argument("type mismatch");
             res.add(e.id, e.type);
         }
     }
@@ -189,7 +194,8 @@ struct Attribute
             , type(notnull(type))
             , name(notnull(name))
     {
-        insist(type->is_vectorial()); // attributes are always of vectorial type
+        if (not type->is_vectorial())
+            throw invalid_argument("attributes must be of vectorial type");
     }
 
     public:
@@ -236,7 +242,8 @@ struct Table
 
     /** Returns the attribute with the given `id`. */
     const Attribute & at(std::size_t id) const {
-        insist(id < attrs_.size(), "id out of bounds");
+        if (id >= attrs_.size())
+            throw out_of_range("id out of bounds");
         auto &attr = attrs_[id];
         insist(attr.id == id, "attribute ID mismatch");
         return attr;

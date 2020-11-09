@@ -70,7 +70,8 @@ struct Store
     const Table &table() const { return table_; }
 
     const Linearization &linearization() const {
-        insist(bool(lin_));
+        if (not bool(lin_))
+            throw runtime_error("no linearization provided");
         return *lin_;
     }
 

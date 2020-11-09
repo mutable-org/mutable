@@ -1,5 +1,6 @@
 #pragma once
 
+#include "mutable/util/exception.hpp"
 #include "mutable/util/fn.hpp"
 #include "mutable/util/macro.hpp"
 #include <algorithm>
@@ -37,7 +38,8 @@ struct SmallBitset
 
     /** Set the `offset`-th bit to `val`. */
     void set(std::size_t offset, bool val) {
-        insist(offset < CAPACITY, "offset is out-of-bounds");
+        if (offset >= CAPACITY)
+            throw m::out_of_range("offset is out of bounds");
         setbit(&bits_, val, offset);
     }
 
@@ -49,7 +51,8 @@ struct SmallBitset
 
     /** Returns `true` iff the `offset`-th bit is set to `1`. */
     bool contains(std::size_t offset) const {
-        insist(offset < CAPACITY, "offset is out-of-bounds");
+        if (offset >= CAPACITY)
+            throw m::out_of_range("offset is out of bounds");
         return (bits_ >> offset) & 0b1;
     }
 

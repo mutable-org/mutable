@@ -1,5 +1,6 @@
 #pragma once
 
+#include "mutable/util/exception.hpp"
 #include "mutable/util/macro.hpp"
 #include <cstdint>
 #include <memory>
@@ -51,12 +52,14 @@ struct Linearization
             bool is_linearization() const { return seq != reinterpret_cast<uintptr_t>(nullptr) and not (seq & 0x1UL); }
 
             const Attribute & as_attribute() const {
-                insist(is_attribute(), "not a pointer to Attribute");
+                if (not is_attribute())
+                    throw runtime_error("not an attribute");
                 return *reinterpret_cast<Attribute*>(seq & ~0x1UL);
             }
 
             Linearization & as_linearization() const {
-                insist(is_linearization(), "not a pointer to Linearization");
+                if (not is_linearization())
+                    throw runtime_error("not a linearization");
                 return *reinterpret_cast<Linearization*>(seq);
             }
         };
@@ -96,7 +99,8 @@ struct Linearization
         return Linearization(num_sequences, 0);
     }
     static Linearization CreateFiniteSequence(std::size_t num_sequences, std::size_t num_tuples) {
-        insist(num_tuples != 0, "Finite sequences have to contain at least 1 tuple.");
+        if (num_tuples == 0)
+            throw invalid_argument("Finite sequences must contain at least 1 tuple.");
         return Linearization(num_sequences, num_tuples);
     }
 
@@ -151,12 +155,17 @@ struct Linearization
     const_iterator cend()   const { return end(); }
 
     void add_sequence(uint64_t offset_in_bytes, uint32_t stride_in_bytes, std::unique_ptr<Linearization> lin) {
-        insist(size_ < capacity_, "maximum capacity reached");
-        insist(lin->num_tuples_ != 0, "cannot add infinite sequence");
-        insist(this->num_tuples_ % lin->num_tuples_ == 0);
+        if (size_ == capacity_)
+            throw out_of_range("maximum capacity reached");
+        if (lin->num_tuples_ == 0)
+            throw invalid_argument("cannot add an infinite sequence");
+        if (this->num_tuples_ % lin->num_tuples_ != 0)
+            throw invalid_argument("the number of tuples of the sequence to add must be a proper divisor of the "
+                                   "number of tuples of the sequence being added to");
         // XXX: Why not support this?
         // for (auto e : *this)
-        //     insist(e.is_linearization(), "cannot mix attributes and sequences");
+        //     if (not e.is_linearization())
+        //         throw invalid_argument("cannot mix attributes and sequences");
         auto idx = size_++;
         offsets_[idx] = offset_in_bytes;
         strides_[idx] = stride_in_bytes;
@@ -164,10 +173,12 @@ struct Linearization
     }
 
     void add_sequence(uint64_t offset_in_bits, uint32_t stride_in_bits, const Attribute &attr) {
-        insist(size_ < capacity_, "maximum capacity reached");
+        if (size_ == capacity_)
+            throw out_of_range("maximum capacity reached");
         // XXX: Why not support this?
         // for (auto e : *this)
-        //     insist(e.is_attribute(), "cannot mix attributes and sequences");
+        //     if (not e.is_attribute())
+        //         throw invalid_argument("cannot mix attributes and sequences");
         auto idx = size_++;
         offsets_[idx] = offset_in_bits;
         strides_[idx] = stride_in_bits;
@@ -175,7 +186,8 @@ struct Linearization
     }
 
     void add_null_bitmap(uint64_t offset_in_bits, uint32_t stride_in_bits) {
-        insist(size_ < capacity_, "maximum capacity reached");
+        if (size_ == capacity_)
+            throw out_of_range("maximum capacity reached");
         auto idx = size_++;
         offsets_[idx] = offset_in_bits;
         strides_[idx] = stride_in_bits;

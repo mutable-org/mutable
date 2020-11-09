@@ -88,9 +88,6 @@ void m::execute_query(const Stmt &stmt)
 
         /* Compile stack machine. */
         auto W = Interpreter::compile_store(S, store.linearization());
-        // std::cerr << "Writer StackMachine:\n";
-        // W.dump();
-        // std::cerr << '\n';
         Tuple tup(S);
 
         /* Write all tuples to the store. */

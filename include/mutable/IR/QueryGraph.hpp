@@ -34,7 +34,8 @@ struct DataSource
 
     protected:
     DataSource(std::size_t id, const char *alias) : alias_(alias), id_(id) {
-        insist(not alias or strlen(alias) != 0, "if the data source has an alias, it must not be empty");
+        if (alias and strlen(alias) == 0)
+            throw invalid_argument("if the data source has an alias, it must not be empty");
     }
 
     public:
@@ -59,7 +60,8 @@ struct DataSource
     private:
     void remove_join(Join *join) {
         auto it = std::find(joins_.begin(), joins_.end(), join);
-        insist(it != joins_.end(), "given join not found");
+        if (it == joins_.end())
+            throw invalid_argument("given join not found");
         joins_.erase(it);
     }
 
@@ -223,7 +225,8 @@ struct QueryGraph
     private:
     void remove_join(Join *join) {
         auto it = std::find(joins_.begin(), joins_.end(), join);
-        insist(it != joins_.end(), "given join not found");
+        if (it == joins_.end())
+            throw invalid_argument("given join not found");
         joins_.erase(it);
     }
 
@@ -247,10 +250,11 @@ struct AdjacencyMatrix
 {
     private:
     SmallBitset m_[SmallBitset::CAPACITY]; ///< matrix entries
+    std::size_t num_sources_; ///< the number of sources of the `QueryGraph` represented by this matrix
 
     public:
     AdjacencyMatrix() { }
-    AdjacencyMatrix(const QueryGraph &query_graph)
+    AdjacencyMatrix(const QueryGraph &query_graph) : num_sources_(query_graph.sources().size())
     {
         /* Iterate over all joins in the query graph. */
         for (auto join : query_graph.joins()) {
@@ -264,19 +268,19 @@ struct AdjacencyMatrix
 
     }
 
-    /** Set the bit in row `i` and offset `j` to to one. */
+    /** Set the bit in row `i` and offset `j` to one. */
     void set(std::size_t i, std::size_t j) {
-        insist(i < SmallBitset::CAPACITY, "offset is out-of-bounds");
-        insist(j < SmallBitset::CAPACITY, "offset is out-of-bounds");
+        if (i > num_sources_ or j > num_sources_)
+            throw out_of_range("offset is out-of-bounds");
         m_[i].set(j);
     }
     /** Set the bit in row `i` and offset `j` and the symmetric bit to one. */
     void set_bidirectional(std::size_t i, std::size_t j) { set(i, j); set(j, i); }
 
-    /** Get the bit in row `i` and offset `j` to to one. */
+    /** Get the bit in row `i` and offset `j` to one. */
     bool get(std::size_t i, std::size_t j) const {
-        insist(i < SmallBitset::CAPACITY, "offset is out-of-bounds");
-        insist(j < SmallBitset::CAPACITY, "offset is out-of-bounds");
+        if (i > num_sources_ or j > num_sources_)
+            throw out_of_range("offset is out-of-bounds");
         return m_[i].contains(j);
     }
 

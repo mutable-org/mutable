@@ -200,7 +200,8 @@ struct FnApplicationExpr : PostfixExpr {
 
     bool has_function() const { return func_; }
     const Function &get_function() const {
-        insist(func_);
+        if (not func_)
+            throw runtime_error("no function provided");
         return *func_;
     }
 

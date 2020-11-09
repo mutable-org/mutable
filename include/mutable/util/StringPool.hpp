@@ -22,7 +22,8 @@ struct StringPool
         auto it = table_.find(str);
         if (table_.end() == it) {
             auto copy = strdup(str);
-            insist(copy, "strdup(str) failed and returned NULL");
+            if (not copy)
+                throw runtime_error("strdup(str) failed and returned NULL");
             it = table_.emplace_hint(it, copy);
             insist(streq(*it, str), "the pooled string differs from the original");
         }

@@ -103,15 +103,18 @@ struct Consumer : virtual Operator
 
     /** Adds a `child` to this `Consumer` and updates this `Consumer`s schema accordingly. */
     virtual void add_child(Producer *child) {
-        insist(child);
+        if (not child)
+            throw invalid_argument("no child given");
         children_.push_back(child);
         child->parent(this);
         schema() += child->schema();
     }
     /** Sets the `i`-th `child` of this `Consumer`.  Forces a recomputation of this `Consumer`s schema. */
     virtual Producer * set_child(Producer *child, std::size_t i) {
-        insist(child);
-        insist(i < children_.size());
+        if (not child)
+            throw invalid_argument("no child given");
+        if (i >= children_.size())
+            throw out_of_range("index i out of bounds");
         auto old = children_[i];
         children_[i] = child;
         child->parent(this);
@@ -129,7 +132,11 @@ struct Consumer : virtual Operator
     const std::vector<Producer*> & children() const { return children_; }
 
     /** Returns the `i`-th child of this `Consumer`. */
-    Producer * child(std::size_t i) const { insist(i < children_.size()); return children_[i]; }
+    Producer * child(std::size_t i) const {
+        if (i >= children_.size())
+            throw out_of_range("index i out of bounds");
+        return children_[i];
+    }
 
     void print_recursive(std::ostream &out, unsigned depth) const override;
 
@@ -270,7 +277,8 @@ struct ProjectionOperator : Producer, Consumer
 
     /*----- Override child setters to *NOT* modify the computed schema! ----------------------------------------------*/
     virtual void add_child(Producer *child) override {
-        insist(child);
+        if (not child)
+            throw invalid_argument("no child given");
         children().push_back(child);
         child->parent(this);
 
@@ -344,13 +352,16 @@ struct GroupingOperator : Producer, Consumer
 
     /*----- Override child setters to *NOT* modify the computed schema! ----------------------------------------------*/
     virtual void add_child(Producer *child) override {
-        insist(child);
+        if (not child)
+            throw invalid_argument("no child given");
         children().push_back(child);
         child->parent(this);
     }
     virtual Producer * set_child(Producer *child, std::size_t i) override {
-        insist(child);
-        insist(i < children().size());
+        if (not child)
+            throw invalid_argument("no child given");
+        if (i >= children().size())
+            throw out_of_range("index i out of bounds");
         auto old = children()[i];
         children()[i] = child;
         child->parent(this);

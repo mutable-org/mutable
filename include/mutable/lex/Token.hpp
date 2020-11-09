@@ -1,12 +1,11 @@
 #pragma once
 
+#include "mutable/lex/TokenType.hpp"
+#include "mutable/util/macro.hpp"
+#include "mutable/util/Position.hpp"
 
-#include "lex/TokenType.hpp"
-#include "util/macro.hpp"
-#include "util/Position.hpp"
 
-
-namespace db {
+namespace m {
 
 struct Token
 {

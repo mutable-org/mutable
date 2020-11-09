@@ -1,15 +1,14 @@
 #include "catch.hpp"
 
-#include "IR/CNF.hpp"
+#include "mutable/IR/CNF.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "testutil.hpp"
-#include "util/fn.hpp"
-#include <algorithm>
+#include "mutable/util/fn.hpp"
 #include <sstream>
 
-using namespace db;
-using namespace db::cnf;
+using namespace m;
+using namespace m::cnf;
 
 
 /*======================================================================================================================

@@ -1,7 +1,7 @@
 #include "util/DotTool.hpp"
 
-#include "util/fn.hpp"
-#include "util/macro.hpp"
+#include "mutable/util/fn.hpp"
+#include "mutable/util/macro.hpp"
 #include <cstdio>
 #include <fstream>
 #include <graphviz/gvc.h>
@@ -17,7 +17,7 @@
 #endif
 
 
-using namespace db;
+using namespace m;
 
 
 #define SYMBOLS(X) \

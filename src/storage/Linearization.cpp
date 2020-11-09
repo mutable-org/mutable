@@ -1,11 +1,11 @@
-#include "storage/Linearization.hpp"
+#include "mutable/storage/Linearization.hpp"
 
 #include "catalog/Schema.hpp"
 #include <cmath>
 #include <iomanip>
 
 
-using namespace db;
+using namespace m;
 
 
 namespace {

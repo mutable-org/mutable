@@ -5,7 +5,7 @@
 #include <unordered_set>
 
 
-namespace db {
+namespace m {
 
 template<typename T, typename Hash>
 struct dereference_hash

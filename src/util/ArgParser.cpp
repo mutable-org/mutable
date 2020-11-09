@@ -5,10 +5,10 @@
 #include <string>
 
 
-using namespace db;
+using namespace m;
 
 
-namespace db {
+namespace m {
 
 template<>
 void ArgParser::OptionImpl<bool>::parse(const char **&) const

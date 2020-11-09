@@ -1,9 +1,9 @@
 #pragma once
 
-#include "IR/Operator.hpp"
+#include "mutable/IR/Operator.hpp"
 
 
-namespace db {
+namespace m {
 
 template<bool C>
 struct TheOperatorVisitor

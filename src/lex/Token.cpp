@@ -1,7 +1,7 @@
-#include "lex/Token.hpp"
+#include "mutable/lex/Token.hpp"
 
 
-using namespace db;
+using namespace m;
 
 
 void Token::dump() const { dump(std::cerr); }

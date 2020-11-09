@@ -3,13 +3,13 @@
 #include <istream>
 #include <unordered_map>
 #include <vector>
-#include "lex/Token.hpp"
-#include "lex/TokenType.hpp"
+#include "mutable/lex/Token.hpp"
+#include "mutable/lex/TokenType.hpp"
 #include "util/Diagnostic.hpp"
-#include "util/StringPool.hpp"
+#include "mutable/util/StringPool.hpp"
 
 
-namespace db {
+namespace m {
 
 struct Lexer
 {

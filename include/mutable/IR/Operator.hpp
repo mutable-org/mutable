@@ -1,9 +1,9 @@
 #pragma once
 
-#include "catalog/Schema.hpp"
-#include "IR/CNF.hpp"
-#include "storage/Store.hpp"
-#include "util/macro.hpp"
+#include "mutable/catalog/Schema.hpp"
+#include "mutable/IR/CNF.hpp"
+#include "mutable/storage/Store.hpp"
+#include "mutable/util/macro.hpp"
 #include <functional>
 #include <iostream>
 #include <unordered_map>
@@ -12,7 +12,7 @@
 #include <vector>
 
 
-namespace db {
+namespace m {
 
 // forward declare the Operator visitor
 template<bool C>
@@ -22,7 +22,7 @@ using ConstOperatorVisitor = TheOperatorVisitor<true>;
 
 struct Tuple;
 
-/** This interface is used to attach data to `db::Operator` instances. */
+/** This interface is used to attach data to `m::Operator` instances. */
 struct OperatorData
 {
     virtual ~OperatorData() = 0;

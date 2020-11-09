@@ -1,25 +1,29 @@
 #pragma once
 
-#include "catalog/Schema.hpp"
-#include "lex/Token.hpp"
+#include "mutable/catalog/Schema.hpp"
+#include "mutable/lex/Token.hpp"
 #include <iostream>
 #include <variant>
 #include <vector>
 
 
-namespace db {
+namespace m {
 
 // forward declare the AST visitors
-template<bool C> struct TheASTExprVisitor;
+template<bool C>
+struct TheASTExprVisitor;
 using ASTExprVisitor = TheASTExprVisitor<false>;
 using ConstASTExprVisitor = TheASTExprVisitor<true>;
-template<bool C> struct TheASTClauseVisitor;
+template<bool C>
+struct TheASTClauseVisitor;
 using ASTClauseVisitor = TheASTClauseVisitor<false>;
 using ConstASTClauseVisitor = TheASTClauseVisitor<true>;
-template<bool C> struct TheASTConstraintVisitor;
+template<bool C>
+struct TheASTConstraintVisitor;
 using ASTConstraintVisitor = TheASTConstraintVisitor<false>;
 using ConstASTConstraintVisitor = TheASTConstraintVisitor<true>;
-template<bool C> struct TheASTStmtVisitor;
+template<bool C>
+struct TheASTStmtVisitor;
 using ASTStmtVisitor = TheASTStmtVisitor<false>;
 using ConstASTStmtVisitor = TheASTStmtVisitor<true>;
 
@@ -31,12 +35,11 @@ struct Table;
 struct Stmt;
 
 /*======================================================================================================================
- * Expressions
- *====================================================================================================================*/
+* Expressions
+*====================================================================================================================*/
 
 /** An expression. */
-struct Expr
-{
+struct Expr {
     friend struct Sema;
     friend struct GetCorrelationInfo;
 
@@ -70,7 +73,8 @@ struct Expr
     void dump(std::ostream &out) const;
     void dump() const;
 
-    friend std::ostream & operator<<(std::ostream &out, const Expr &e);
+    friend std::ostream &operator<<(std::ostream &out, const Expr &e);
+
     friend std::string to_string(const Expr &e) {
         std::ostringstream oss;
         oss << e;
@@ -79,9 +83,8 @@ struct Expr
 };
 
 /** The error expression.  Used when the parser encountered a syntactical error. */
-struct ErrorExpr : Expr
-{
-    explicit ErrorExpr(Token tok) : Expr(tok) { }
+struct ErrorExpr : Expr {
+    explicit ErrorExpr(Token tok) : Expr(tok) {}
 
     bool is_constant() const override { return false; }
     bool is_correlated() const override { return false; }
@@ -93,8 +96,7 @@ struct ErrorExpr : Expr
 };
 
 /** A designator.  Identifies an attribute, optionally preceeded by a table name, a named expression, or a function. */
-struct Designator : Expr
-{
+struct Designator : Expr {
     friend struct Sema;
 
     using target_type = std::variant<std::monostate, const Expr*, const Attribute*>;
@@ -106,7 +108,6 @@ struct Designator : Expr
 
     public:
     explicit Designator(Token attr_name) : Expr(attr_name), attr_name(attr_name) { }
-
     Designator(Token dot, Token table_name, Token attr_name) : Expr(dot), table_name(table_name), attr_name(attr_name) { }
     Designator(Token dot, Token table_name, Token attr_name, const Type *type, target_type target)
         : Expr(dot, type), table_name(table_name), attr_name(attr_name), target_(target) { }
@@ -138,7 +139,7 @@ struct Designator : Expr
     bool is_identifier() const { return not has_explicit_table_name(); }
 
     bool has_table_name() const { return table_name.text != nullptr; }
-    const char * get_table_name() const {
+    const char *get_table_name() const {
         insist(table_name.text != nullptr,
                "if the table name was not explicitly provided, semantic analysis must deduce it first");
         return table_name.text;
@@ -148,9 +149,8 @@ struct Designator : Expr
 };
 
 /** A constant: a string literal or a numeric constant. */
-struct Constant : Expr
-{
-    Constant(Token tok) : Expr(tok) { }
+struct Constant : Expr {
+    Constant(Token tok) : Expr(tok) {}
 
     bool is_constant() const override { return true; }
     bool is_correlated() const override { return false; }
@@ -161,34 +161,36 @@ struct Constant : Expr
     void accept(ConstASTExprVisitor &v) const override;
 
     bool is_null() const { return tok.type == TK_Null; }
+
     bool is_number() const { return is_integer() or is_float(); }
+
     bool is_integer() const {
         return tok.type == TK_OCT_INT or
                tok.type == TK_DEC_INT or
                tok.type == TK_HEX_FLOAT;
     }
+
     bool is_float() const { return tok.type == TK_DEC_FLOAT or tok.type == TK_HEX_FLOAT; }
+
     bool is_string() const { return tok.type == TK_STRING_LITERAL; }
 };
 
 /** A postfix expression. */
-struct PostfixExpr : Expr
-{
-    PostfixExpr(Token tok) : Expr(tok) { }
+struct PostfixExpr : Expr {
+    PostfixExpr(Token tok) : Expr(tok) {}
 };
 
 /** A function application. */
-struct FnApplicationExpr : PostfixExpr
-{
+struct FnApplicationExpr : PostfixExpr {
     friend struct Sema;
 
     Expr *fn;
-    std::vector<Expr*> args;
+    std::vector<Expr *> args;
     private:
     const Function *func_ = nullptr;
 
     public:
-    FnApplicationExpr(Token lpar, Expr *fn, std::vector<Expr*> args) : PostfixExpr(lpar), fn(fn), args(args) { }
+    FnApplicationExpr(Token lpar, Expr *fn, std::vector<Expr *> args) : PostfixExpr(lpar), fn(fn), args(args) {}
     ~FnApplicationExpr();
 
     bool is_constant() const override { return false; }
@@ -197,18 +199,20 @@ struct FnApplicationExpr : PostfixExpr
     bool operator==(const Expr &other) const override;
 
     bool has_function() const { return func_; }
-    const Function & get_function() const { insist(func_); return *func_; }
+    const Function &get_function() const {
+        insist(func_);
+        return *func_;
+    }
 
     void accept(ASTExprVisitor &v) override;
     void accept(ConstASTExprVisitor &v) const override;
 };
 
 /** A unary expression: "+e", "-e", "~e", "NOT e". */
-struct UnaryExpr : Expr
-{
+struct UnaryExpr : Expr {
     Expr *expr;
 
-    UnaryExpr(Token op, Expr *expr) : Expr(op), expr(notnull(expr)) { }
+    UnaryExpr(Token op, Expr *expr) : Expr(op), expr(notnull(expr)) {}
     ~UnaryExpr() { delete expr; }
 
     bool is_constant() const override { return expr->is_constant(); }
@@ -222,13 +226,15 @@ struct UnaryExpr : Expr
 };
 
 /** A binary expression.  This includes all arithmetic and logical binary operations. */
-struct BinaryExpr : Expr
-{
+struct BinaryExpr : Expr {
     Expr *lhs;
     Expr *rhs;
 
-    BinaryExpr(Token op, Expr *lhs, Expr *rhs) : Expr(op), lhs(notnull(lhs)), rhs(notnull(rhs)) { }
-    ~BinaryExpr() { delete lhs; delete rhs; }
+    BinaryExpr(Token op, Expr *lhs, Expr *rhs) : Expr(op), lhs(notnull(lhs)), rhs(notnull(rhs)) {}
+    ~BinaryExpr() {
+        delete lhs;
+        delete rhs;
+    }
 
     bool is_constant() const override { return lhs->is_constant() and rhs->is_constant(); }
     bool is_correlated() const override { return lhs->is_correlated() or rhs->is_correlated(); }
@@ -281,7 +287,6 @@ struct QueryExpr : Expr
     X(BinaryExpr) \
     X(QueryExpr)
 
-
 /*======================================================================================================================
  * Clauses
  *====================================================================================================================*/
@@ -321,9 +326,9 @@ struct SelectClause : Clause
     std::vector<const Expr*> expansion; ///> list of expressions expanded from `SELECT *`
 
     SelectClause(Token tok, std::vector<select_type> select, Token select_all)
-        : Clause(tok)
-        , select(select)
-        , select_all(select_all)
+            : Clause(tok)
+            , select(select)
+            , select_all(select_all)
     { }
     ~SelectClause();
 
@@ -495,10 +500,10 @@ struct ReferenceConstraint : Constraint
     OnDeleteAction on_delete;
 
     ReferenceConstraint(Token tok, Token table_name, Token attr_name, OnDeleteAction action)
-        : Constraint(tok)
-        , table_name(table_name)
-        , attr_name(attr_name)
-        , on_delete(action)
+            : Constraint(tok)
+            , table_name(table_name)
+            , attr_name(attr_name)
+            , on_delete(action)
     { }
 
     void accept(ASTConstraintVisitor &v) override;
@@ -583,9 +588,9 @@ struct CreateTableStmt : Stmt
         std::vector<Constraint*> constraints;
 
         attribute_definition(Token name, const Type *type, std::vector<Constraint*> constraints)
-            : name(name)
-            , type(type)
-            , constraints(constraints)
+                : name(name)
+                , type(type)
+                , constraints(constraints)
         { }
 
         ~attribute_definition() {
@@ -598,8 +603,8 @@ struct CreateTableStmt : Stmt
     std::vector<attribute_definition*> attributes;
 
     CreateTableStmt(Token table_name, std::vector<attribute_definition*> attributes)
-        : table_name(table_name)
-        , attributes(attributes)
+            : table_name(table_name)
+            , attributes(attributes)
     { }
 
     ~CreateTableStmt() {
@@ -629,13 +634,13 @@ struct SelectStmt : Stmt
                Clause *having,
                Clause *order_by,
                Clause *limit)
-        : select(notnull(select))
-        , from(from)
-        , where(where)
-        , group_by(group_by)
-        , having(having)
-        , order_by(order_by)
-        , limit(limit)
+            : select(notnull(select))
+            , from(from)
+            , where(where)
+            , group_by(group_by)
+            , having(having)
+            , order_by(order_by)
+            , limit(limit)
     { }
 
     void accept(ASTStmtVisitor &v) override;
@@ -671,9 +676,9 @@ struct UpdateStmt : Stmt
     Clause *where = nullptr;
 
     UpdateStmt(Token table_name, std::vector<set_type> set, Clause *where)
-        : table_name(table_name)
-        , set(set)
-        , where(where)
+            : table_name(table_name)
+            , set(set)
+            , where(where)
     { }
 
     ~UpdateStmt();

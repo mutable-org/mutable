@@ -1,8 +1,8 @@
 #include "catch.hpp"
 
 #include "backend/StackMachine.hpp"
-#include "catalog/Type.hpp"
-#include "IR/CNF.hpp"
+#include "mutable/catalog/Type.hpp"
+#include "mutable/IR/CNF.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "testutil.hpp"
@@ -11,7 +11,7 @@
 #include <string>
 
 
-using namespace db;
+using namespace m;
 
 
 /*======================================================================================================================

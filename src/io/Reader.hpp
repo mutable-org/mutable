@@ -1,13 +1,13 @@
 #pragma once
 
 #include "catalog/Schema.hpp"
+#include "mutable/storage/Store.hpp"
 #include "IR/Tuple.hpp"
-#include "storage/Store.hpp"
 #include "util/Diagnostic.hpp"
 #include <iostream>
 
 
-namespace db {
+namespace m {
 
 /** An interface for all readers.  A reader takes input from a stream (file, network, etc.), matches it to the schema of
  * a table, and inserts the data into the table's store. */

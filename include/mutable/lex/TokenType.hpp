@@ -4,12 +4,12 @@
 #include <iostream>
 
 
-namespace db {
+namespace m {
 
 enum TokenType
 {
 #define DB_TOKENTYPE(tok) TK_##tok,
-#include "tables/TokenType.tbl"
+#include "mutable/tables/TokenType.tbl"
 #undef DB_TOKENTYPE
 };
 
@@ -30,12 +30,12 @@ inline char const * get_name(const TokenType tt)
             return "constant";
 
 #define DB_KEYWORD(tt, name) case TK_ ## tt:
-#include "tables/Keywords.tbl"
+#include "mutable/tables/Keywords.tbl"
 #undef DB_KEYWORD
             return "keyword";
 
 #define DB_OPERATOR(tt) case TK_ ## tt:
-#include "tables/Operators.tbl"
+#include "mutable/tables/Operators.tbl"
 #undef DB_OPERATOR
             return "punctuator";
     }
@@ -45,7 +45,7 @@ inline std::ostream & operator<<(std::ostream &os, const TokenType tt)
 {
     switch (tt) {
 #define DB_TOKENTYPE(tok) case TK_ ## tok: return os << "TK_"#tok;
-#include "tables/TokenType.tbl"
+#include "mutable/tables/TokenType.tbl"
 #undef DB_TOKENTYPE
     }
 }
@@ -54,7 +54,7 @@ inline std::string to_string(const TokenType tt)
 {
     switch (tt) {
 #define DB_TOKENTYPE(tok) case TK_ ## tok: return "TK_"#tok;
-#include "tables/TokenType.tbl"
+#include "mutable/tables/TokenType.tbl"
 #undef DB_TOKENTYPE
     }
 }

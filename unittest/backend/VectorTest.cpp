@@ -3,7 +3,7 @@
 #include "backend/Vector.hpp"
 
 
-using namespace db;
+using namespace m;
 
 
 TEST_CASE("Vector", "[core][backend][vector]")

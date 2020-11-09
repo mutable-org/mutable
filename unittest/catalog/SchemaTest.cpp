@@ -1,7 +1,7 @@
 #include "catch.hpp"
 
 #include "catalog/Schema.hpp"
-#include "util/fn.hpp"
+#include "mutable/util/fn.hpp"
 #include <cmath>
 #include <cstring>
 #include <sstream>
@@ -9,7 +9,7 @@
 #include <string>
 
 
-using namespace db;
+using namespace m;
 
 
 namespace {

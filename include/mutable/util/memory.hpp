@@ -1,18 +1,12 @@
 #pragma once
 
-#include "util/fn.hpp"
+#include "mutable/util/fn.hpp"
 #include <cstdint>
 #include <iostream>
 #include <memory>
 
 
 namespace rewire {
-
-constexpr std::size_t Pagesize = PAGESIZE;
-
-constexpr std::size_t Is_Page_Aligned(std::size_t n) { return (n & (Pagesize - 1UL)) == 0; }
-
-constexpr std::size_t Ceil_To_Next_Page(std::size_t n) { return ((n - 1UL) | (Pagesize - 1UL)) + 1UL; }
 
 struct Memory;
 

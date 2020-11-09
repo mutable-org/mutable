@@ -1,9 +1,9 @@
 #include "catch.hpp"
 
-#include "lex/Token.hpp"
+#include "mutable/lex/Token.hpp"
 
 
-using namespace db;
+using namespace m;
 
 
 TEST_CASE("Token c'tor", "[core][lex][unit]")

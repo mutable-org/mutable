@@ -7,7 +7,7 @@
 #include <type_traits>
 
 
-namespace db {
+namespace m {
 
 struct Schema;
 struct Type;
@@ -313,9 +313,9 @@ struct Tuple
 namespace std {
 
 template<>
-struct hash<db::Value>
+struct hash<m::Value>
 {
-    uint64_t operator()(db::Value val) const {
+    uint64_t operator()(m::Value val) const {
         /* Inspired by FNV-1a 64 bit. */
         uint64_t hash = 0xcbf29ce484222325;
         for (uint64_t *p = reinterpret_cast<uint64_t*>(&val.val_), *end = p + sizeof(val.val_) / sizeof(uint64_t);
@@ -329,10 +329,10 @@ struct hash<db::Value>
 };
 
 template<>
-struct hash<db::Tuple>
+struct hash<m::Tuple>
 {
-    uint64_t operator()(const db::Tuple &tup) const {
-        std::hash<db::Value> h;
+    uint64_t operator()(const m::Tuple &tup) const {
+        std::hash<m::Value> h;
         auto mask = SmallBitset(~tup.null_mask_);
         uint64_t hash = 0;
         for (auto idx : mask) {

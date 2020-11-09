@@ -5,11 +5,11 @@
 #include "parse/Sema.hpp"
 #include "testutil.hpp"
 #include "util/Diagnostic.hpp"
-#include "util/fn.hpp"
+#include "mutable/util/fn.hpp"
 #include <iostream>
 
 
-using namespace db;
+using namespace m;
 
 
 TEST_CASE("Sema c'tor", "[core][parse][sema]")

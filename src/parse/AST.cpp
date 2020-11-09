@@ -1,4 +1,4 @@
-#include "parse/AST.hpp"
+#include "mutable/parse/AST.hpp"
 
 #include "catalog/Schema.hpp"
 #include "parse/ASTDot.hpp"
@@ -6,7 +6,7 @@
 #include "parse/ASTPrinter.hpp"
 
 
-using namespace db;
+using namespace m;
 
 
 /*======================================================================================================================
@@ -240,21 +240,21 @@ Schema Expr::get_required() const
  * Stream printing
  *====================================================================================================================*/
 
-std::ostream & db::operator<<(std::ostream &out, const Expr &e) {
+std::ostream & m::operator<<(std::ostream &out, const Expr &e) {
     ASTPrinter p(out);
     p.expand_nested_queries(false);
     p(e);
     return out;
 }
 
-std::ostream & db::operator<<(std::ostream &out, const Clause &c) {
+std::ostream & m::operator<<(std::ostream &out, const Clause &c) {
     ASTPrinter p(out);
     p.expand_nested_queries(false);
     p(c);
     return out;
 }
 
-std::ostream & db::operator<<(std::ostream &out, const Stmt &s) {
+std::ostream & m::operator<<(std::ostream &out, const Stmt &s) {
     ASTPrinter p(out);
     p.expand_nested_queries(false);
     p(s);

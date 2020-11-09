@@ -1,9 +1,9 @@
-#include "IR/PlanEnumerator.hpp"
+#include "mutable/IR/PlanEnumerator.hpp"
 
 #include "IR/Optimizer.hpp"
-#include "IR/QueryGraph.hpp"
+#include "mutable/IR/QueryGraph.hpp"
 #include "util/ADT.hpp"
-#include "util/fn.hpp"
+#include "mutable/util/fn.hpp"
 #include <unordered_set>
 #include <queue>
 
@@ -13,18 +13,18 @@
 #endif
 
 
-using namespace db;
+using namespace m;
 
 const std::unordered_map<std::string, PlanEnumerator::kind_t> PlanEnumerator::STR_TO_KIND = {
 #define DB_PLAN_ENUMERATOR(NAME, _) { #NAME,  PlanEnumerator::PE_ ## NAME },
-#include "tables/PlanEnumerator.tbl"
+#include "mutable/tables/PlanEnumerator.tbl"
 #undef DB_PLAN_ENUMERATOR
 };
 
 std::unique_ptr<PlanEnumerator> PlanEnumerator::Create(PlanEnumerator::kind_t kind) {
     switch(kind) {
 #define DB_PLAN_ENUMERATOR(NAME, _) case PE_ ## NAME: return Create ## NAME();
-#include "tables/PlanEnumerator.tbl"
+#include "mutable/tables/PlanEnumerator.tbl"
 #undef DB_PLAN_ENUMERATOR
     }
 }
@@ -530,5 +530,5 @@ void TDMinCutAGaT::operator()(const QueryGraph &G, const CostFunction &cf, PlanT
     std::unique_ptr<PlanEnumerator> PlanEnumerator::Create ## NAME() { \
         return std::make_unique<NAME>(); \
     }
-#include "tables/PlanEnumerator.tbl"
+#include "mutable/tables/PlanEnumerator.tbl"
 #undef DB_PLAN_ENUMERATOR

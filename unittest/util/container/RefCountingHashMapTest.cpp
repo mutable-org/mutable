@@ -4,7 +4,7 @@
 #include <set>
 
 
-using namespace db;
+using namespace m;
 
 
 TEST_CASE("RefCountingHashMap", "[core][util][container]")

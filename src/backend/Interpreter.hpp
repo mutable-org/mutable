@@ -1,16 +1,16 @@
 #pragma once
 
-#include "backend/Backend.hpp"
+#include "mutable/backend/Backend.hpp"
 #include "backend/StackMachine.hpp"
 #include "catalog/Schema.hpp"
-#include "IR/Operator.hpp"
-#include "IR/OperatorVisitor.hpp"
+#include "mutable/IR/Operator.hpp"
+#include "mutable/IR/OperatorVisitor.hpp"
 #include "IR/Tuple.hpp"
-#include "util/macro.hpp"
+#include "mutable/util/macro.hpp"
 #include <unordered_map>
 
 
-namespace db {
+namespace m {
 
 /** A block of size `N` contains `N` tuples.  */
 template<std::size_t N>

@@ -1,7 +1,7 @@
-#include "util/Position.hpp"
+#include "mutable/util/Position.hpp"
 
 
-using namespace db;
+using namespace m;
 
 
 void Position::dump() const { dump(std::cerr); }

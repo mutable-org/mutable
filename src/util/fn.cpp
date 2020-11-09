@@ -1,4 +1,4 @@
-#include "util/fn.hpp"
+#include "mutable/util/fn.hpp"
 
 #if __linux
 #include <sys/types.h>
@@ -79,4 +79,12 @@ void exec(const char *executable, std::initializer_list<const char*> args)
         execv(executable, c_args);
     }
 #endif
+}
+
+std::size_t get_pagesize()
+{
+    static std::size_t pagesize(0);
+    if (0 == pagesize)
+        pagesize = sysconf(_SC_PAGESIZE);
+    return pagesize;
 }

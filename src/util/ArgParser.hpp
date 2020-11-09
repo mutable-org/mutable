@@ -2,14 +2,14 @@
 
 
 #include "util/Diagnostic.hpp"
-#include "util/macro.hpp"
-#include "util/StringPool.hpp"
+#include "mutable/util/macro.hpp"
+#include "mutable/util/StringPool.hpp"
 #include <functional>
 #include <unordered_map>
 #include <vector>
 
 
-namespace db {
+namespace m {
 
 /** A parser for command line arguments.  Automates the parsing of command line arguments such as short options `-s`,
  * long options `--long`, and positional arguments.  Can print a nicely formatted help message with a synopsis and

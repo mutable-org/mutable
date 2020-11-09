@@ -1,10 +1,10 @@
 #pragma once
 
-#include "parse/ASTVisitor.hpp"
+#include "mutable/parse/ASTVisitor.hpp"
 #include <iostream>
 
 
-namespace db {
+namespace m {
 
 /** Implements printing the AST in dot language. */
 struct ASTDot : ConstASTVisitor

@@ -5,7 +5,7 @@
 #include "IR/Tuple.hpp"
 #include "storage/ColumnStore.hpp"
 #include "storage/RowStore.hpp"
-#include "storage/Store.hpp"
+#include "mutable/storage/Store.hpp"
 #include "util/Timer.hpp"
 #include <chrono>
 #include <cstdint>
@@ -16,7 +16,7 @@
 #include <string_view>
 
 
-using namespace db;
+using namespace m;
 using args_t = v8::Local<v8::Value>[];
 
 
@@ -198,10 +198,10 @@ struct EnvGen : ConstStoreVisitor
         auto &table = s.table();
 
         /* Map entire row store to WebAssembly linear memory. */
-        const auto ptr = rewire::Pagesize * next_page_;
+        const auto ptr = get_pagesize() * next_page_;
         const auto bytes = s.num_rows() * s.row_size() / 8;
-        const auto aligned_bytes = rewire::Ceil_To_Next_Page(bytes);
-        const auto num_pages = aligned_bytes / rewire::Pagesize;
+        const auto aligned_bytes = Ceil_To_Next_Page(bytes);
+        const auto num_pages = aligned_bytes / get_pagesize();
         auto &mem = s.memory();
         if (aligned_bytes) {
             mem.map(aligned_bytes, 0, wasm_context_.vm, ptr);
@@ -231,10 +231,10 @@ struct EnvGen : ConstStoreVisitor
             auto env_name = oss.str();
 
             /* Map next column into WebAssembly linear memory. */
-            const auto ptr = rewire::Pagesize * next_page_;
+            const auto ptr = get_pagesize() * next_page_;
             const auto bytes = s.num_rows() * attr.type->size() / 8;
-            const auto aligned_bytes = rewire::Ceil_To_Next_Page(bytes);
-            const auto num_pages = aligned_bytes / rewire::Pagesize;
+            const auto aligned_bytes = Ceil_To_Next_Page(bytes);
+            const auto num_pages = aligned_bytes / get_pagesize();
             auto &mem = s.memory(attr.id);
             if (aligned_bytes) {
                 mem.map(aligned_bytes, 0, wasm_context_.vm, ptr);
@@ -448,7 +448,7 @@ v8::Local<v8::Object> V8Platform::create_env(WasmContext &wasm_context, const Op
         G(it->second->store());
 
     /* Map the remaining address space to the output buffer. */
-    auto head_of_heap = G.get_next_page() * rewire::Pagesize;
+    auto head_of_heap = G.get_next_page() * get_pagesize();
     const auto remaining = wasm_context.vm.size() - head_of_heap;
     mem_.map(remaining, 0, wasm_context.vm, head_of_heap);
 

@@ -1,10 +1,10 @@
 #include "catch.hpp"
 
 #include "storage/ColumnStore.hpp"
-#include "storage/Store.hpp"
+#include "mutable/storage/Store.hpp"
 
 
-using namespace db;
+using namespace m;
 
 
 TEST_CASE("ColumnStore", "[core][storage][columnstore]")

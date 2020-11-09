@@ -1,7 +1,7 @@
-#include "catalog/Type.hpp"
+#include "mutable/catalog/Type.hpp"
 
 
-using namespace db;
+using namespace m;
 
 
 
@@ -17,7 +17,7 @@ Pool<Type> Type::types_;
 
 void Type::dump() const { dump(std::cerr); }
 
-const Numeric * db::arithmetic_join(const Numeric *lhs, const Numeric *rhs)
+const Numeric * m::arithmetic_join(const Numeric *lhs, const Numeric *rhs)
 {
     static constexpr double LOG_2_OF_10 = 3.321928094887362; ///> factor to convert count of decimal digits to binary digits
 

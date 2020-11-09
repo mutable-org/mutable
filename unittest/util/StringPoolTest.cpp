@@ -1,9 +1,9 @@
 #include "catch.hpp"
 
-#include "util/StringPool.hpp"
+#include "mutable/util/StringPool.hpp"
 
 
-using namespace db;
+using namespace m;
 
 
 TEST_CASE("StringPool c'tor", "[core][util][stringpool]")

@@ -1,10 +1,10 @@
 #include "storage/ColumnStore.hpp"
 
 #include "backend/StackMachine.hpp"
-#include "storage/Linearization.hpp"
+#include "mutable/storage/Linearization.hpp"
 
 
-using namespace db;
+using namespace m;
 
 
 ColumnStore::ColumnStore(const Table &table)

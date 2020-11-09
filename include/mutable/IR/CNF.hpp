@@ -1,18 +1,18 @@
 #pragma once
 
-#include "parse/ASTVisitor.hpp"
+#include "mutable/parse/ASTVisitor.hpp"
 #include <cstdint>
 #include <iostream>
 #include <vector>
 
 
-namespace db {
+namespace m {
 
 struct Expr;
 
 namespace cnf {
 
-/** A `Predicate` contains a `db::Expr` of `db::Boolean` type in either *positive* or *negative* form. */
+/** A `Predicate` contains a `m::Expr` of `m::Boolean` type in either *positive* or *negative* form. */
 struct Predicate
 {
     private:
@@ -31,27 +31,27 @@ struct Predicate
     /** Returns `true` iff this `Predicate` is *negative*. */
     bool negative() const { return literal_ & 0x1UL; }
 
-    /** Returns the `db::Expr` within this `Predicate`. */
+    /** Returns the `m::Expr` within this `Predicate`. */
     const Expr * expr() const { return reinterpret_cast<const Expr*>(literal_ & ~0b11UL); }
-    /** Returns the `db::Expr` within this `Predicate`. */
+    /** Returns the `m::Expr` within this `Predicate`. */
     const Expr * operator*() const { return expr(); }
-    /** Returns the `db::Expr` within this `Predicate`. */
+    /** Returns the `m::Expr` within this `Predicate`. */
     const Expr * operator->() const { return expr(); }
 
     /** Returns a negated version of this `Predicate`, i.e.\ if this `Predicate` is *positive*, the returned `Predicate`
      * is *negative*. */
     Predicate operator!() const { return Predicate(literal_ ^ 0x1UL); }
 
-    /** Returns `true` iff `other` is equal to `this`.  Two `Predicate`s are equal, iff they have the same `db::Expr`
+    /** Returns `true` iff `other` is equal to `this`.  Two `Predicate`s are equal, iff they have the same `m::Expr`
      * and the same *sign*. */
     bool operator==(Predicate other) const {
         return this->negative() == other.negative() and *this->expr() == *other.expr();
     }
     /** Returns `true` iff `other` is not equal to `this`.  Two `Predicate`s are equal, iff they have the same
-     * `db::Expr` and the same *sign*. */
+     * `m::Expr` and the same *sign*. */
     bool operator!=(Predicate other) const { return not operator==(other); }
 
-    /** Compare `Predicate`s by the location of their referenced `db::Expr` in memory and their sign.  Negative
+    /** Compare `Predicate`s by the location of their referenced `m::Expr` in memory and their sign.  Negative
      * `Predicate`s are larger than positive `Predicate`s of the same expression. */
     bool operator<(Predicate other) const { return this->literal_ < other.literal_; }
 
@@ -62,7 +62,7 @@ struct Predicate
     void dump() const;
 };
 
-/** A `Clause` represents a **disjunction** of `db::Predicate`s. */
+/** A `Clause` represents a **disjunction** of `m::cnf::Predicate`s. */
 struct Clause : public std::vector<Predicate>
 {
     using std::vector<Predicate>::vector; // c'tor
@@ -117,7 +117,7 @@ struct CNF : public std::vector<Clause>
     void dump() const;
 };
 
-/** Returns the **logical or** of two `cnf::Clause`s, i.e.\ the disjunction of the `db::Predicate`s of `lhs` and `rhs`.
+/** Returns the **logical or** of two `cnf::Clause`s, i.e.\ the disjunction of the `m::Predicate`s of `lhs` and `rhs`.
  */
 Clause operator||(const Clause &lhs, const Clause &rhs);
 
@@ -140,10 +140,10 @@ CNF operator!(const Clause &clause);
  * (https://en.wikipedia.org/wiki/De_Morgan%27s_laws): *¬(P ∧ Q) ↔ ¬P ∨ ¬Q*. */
 CNF operator!(const CNF &cnf);
 
-/** Converts the `db::Boolean` `db::Expr` `e` to a `cnf::CNF`. */
+/** Converts the `m::Boolean` `m::Expr` `e` to a `cnf::CNF`. */
 CNF to_CNF(const Expr &e);
-/** Converts the `db::Boolean` `db::Expr` of `c` to a `cnf::CNF`. */
-CNF get_CNF(const db::Clause &c);
+/** Converts the `m::Boolean` `m::Expr` of `c` to a `cnf::CNF`. */
+CNF get_CNF(const m::Clause &c);
 
 
 }

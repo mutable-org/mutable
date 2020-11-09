@@ -1,9 +1,9 @@
 #include "io/Reader.hpp"
 
+#include "mutable/storage/Store.hpp"
+#include "mutable/util/macro.hpp"
 #include "backend/Interpreter.hpp"
 #include "backend/StackMachine.hpp"
-#include "storage/Store.hpp"
-#include "util/macro.hpp"
 #include <cctype>
 #include <cerrno>
 #include <exception>
@@ -14,7 +14,7 @@
 #include <variant>
 
 
-using namespace db;
+using namespace m;
 
 
 DSVReader::DSVReader(const Table &table, Diagnostic &diag,

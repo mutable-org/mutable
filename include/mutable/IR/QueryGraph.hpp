@@ -1,13 +1,13 @@
 #pragma once
 
-#include "IR/CNF.hpp"
-#include "util/ADT.hpp"
+#include "mutable/IR/CNF.hpp"
+#include "mutable/util/ADT.hpp"
 #include <cstring>
 #include <memory>
 #include <vector>
 
 
-namespace db {
+namespace m {
 
 struct DataSource;
 struct Join;
@@ -15,9 +15,9 @@ struct QueryGraph;
 struct Stmt;
 struct GetCorrelationInfo;
 
-/** A `DataSource` in a `db::QueryGraph`.  Represents something that can be evaluated to a sequence of tuples,
+/** A `DataSource` in a `m::QueryGraph`.  Represents something that can be evaluated to a sequence of tuples,
  * optionally filtered by a filter condition.  A `DataSource` can be joined with one or more other `DataSource`s by a
- * `db::Join`. */
+ * `m::Join`. */
 struct DataSource
 {
     friend struct QueryGraph;
@@ -48,9 +48,9 @@ struct DataSource
     cnf::CNF filter() const { return filter_; }
     /** Adds `filter` to the current filter of this `DataSource` by logical conjunction. */
     void update_filter(cnf::CNF filter) { filter_ = filter_ and filter; }
-    /** Adds `join` to the set of `db::Join`s of this `DataSource`. */
+    /** Adds `join` to the set of `m::Join`s of this `DataSource`. */
     void add_join(Join *join) { joins_.emplace_back(join); }
-    /** Returns a reference to the `db::Join`s using this `DataSource`. */
+    /** Returns a reference to the `m::Join`s using this `DataSource`. */
     const auto & joins() const { return joins_; }
 
     /** Returns `true` iff the data source is correlated. */
@@ -68,7 +68,7 @@ struct DataSource
     bool operator!=(const DataSource &other) const { return not operator==(other); }
 };
 
-/** A `BaseTable` is a `db::DataSource` that is materialized and stored persistently by the database system. */
+/** A `BaseTable` is a `m::DataSource` that is materialized and stored persistently by the database system. */
 struct BaseTable : DataSource
 {
     friend struct QueryGraph;
@@ -83,14 +83,14 @@ struct BaseTable : DataSource
     public:
     ~BaseTable();
 
-    /** Returns a reference to the `db::Table` providing the tuples. */
+    /** Returns a reference to the `m::Table` providing the tuples. */
     const Table & table() const { return table_; }
 
     bool is_correlated() const override { return false; };
 };
 
-/** A `Query` in a `db::QueryGraph` is a `db::DataSource` that represents a nested query.  As such, a `Query` contains a
- * `db::QueryGraph`.  A `Query` must be evaluated to acquire its sequence of tuples. */
+/** A `Query` in a `m::QueryGraph` is a `m::DataSource` that represents a nested query.  As such, a `Query` contains a
+ * `m::QueryGraph`.  A `Query` must be evaluated to acquire its sequence of tuples. */
 struct Query : DataSource
 {
     friend struct QueryGraph;
@@ -103,13 +103,13 @@ struct Query : DataSource
     public:
     ~Query();
 
-    /** Returns a reference to the internal `db::QueryGraph`. */
+    /** Returns a reference to the internal `m::QueryGraph`. */
     QueryGraph * query_graph() const { return query_graph_; }
 
     bool is_correlated() const override;
 };
 
-/** A `Join` in a `db::QueryGraph` combines `db::DataSource`s by a join condition. */
+/** A `Join` in a `m::QueryGraph` combines `m::DataSource`s by a join condition. */
 struct Join
 {
     using sources_t = std::vector<DataSource*>;
@@ -125,7 +125,7 @@ struct Join
     cnf::CNF condition() const { return condition_; }
     /** Adds `condition` to the current condition of this `Join` by logical conjunction. */
     void update_condition(cnf::CNF update) { condition_ = condition_ and update; }
-    /** Returns a reference to the joined `db::DataSource`s. */
+    /** Returns a reference to the joined `m::DataSource`s. */
     const sources_t & sources() const { return sources_; }
 
     bool operator==(const Join &other) const {

@@ -3,10 +3,10 @@
 
 #include <cstdarg>
 #include <cstdio>
-#include "util/Position.hpp"
+#include "mutable/util/Position.hpp"
 
 
-namespace db {
+namespace m {
 
 struct Diagnostic
 {

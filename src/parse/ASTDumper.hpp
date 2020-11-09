@@ -1,9 +1,9 @@
-#include "parse/ASTVisitor.hpp"
+#include "mutable/parse/ASTVisitor.hpp"
 
-#include "util/macro.hpp"
+#include "mutable/util/macro.hpp"
 
 
-namespace db {
+namespace m {
 
 /** Dumps a textual representation of the AST to an output stream. */
 struct ASTDumper : ConstASTVisitor

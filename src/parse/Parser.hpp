@@ -2,13 +2,13 @@
 
 
 #include "lex/Lexer.hpp"
-#include "lex/Token.hpp"
-#include "lex/TokenType.hpp"
-#include "parse/AST.hpp"
+#include "mutable/lex/Token.hpp"
+#include "mutable/lex/TokenType.hpp"
+#include "mutable/parse/AST.hpp"
 #include "util/Diagnostic.hpp"
 
 
-namespace db {
+namespace m {
 
 struct Parser
 {

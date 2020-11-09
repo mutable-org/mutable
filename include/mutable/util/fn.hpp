@@ -1,6 +1,6 @@
 #pragma once
 
-#include "util/macro.hpp"
+#include "mutable/util/macro.hpp"
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -15,6 +15,7 @@
 #include <sstream>
 #include <type_traits>
 #include <variant>
+#include <unistd.h>
 
 
 inline bool streq(const char *first, const char *second) { return 0 == strcmp(first, second); }
@@ -428,3 +429,12 @@ auto sum_wo_overflow(N0 n0, N1 n1, Numbers... numbers)
 
 /** A wrapper around `strdup()` that permits `nullptr`. */
 inline const char * strdupn(const char *str) { return str ? strdup(str) : nullptr; }
+
+/** Returns the page size of the system. */
+std::size_t get_pagesize();
+
+/** Returns `true` iff `n` is a integral multiple of the page size (in bytes). */
+inline std::size_t Is_Page_Aligned(std::size_t n) { return (n & (get_pagesize() - 1UL)) == 0; }
+
+/** Returns the smallest integral multiple of the page size (in bytes) greater than or equals to `n`. */
+inline std::size_t Ceil_To_Next_Page(std::size_t n) { return ((n - 1UL) | (get_pagesize() - 1UL)) + 1UL; }

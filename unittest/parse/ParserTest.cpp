@@ -4,10 +4,10 @@
 #include "parse/ASTPrinter.hpp"
 #include "parse/Parser.hpp"
 #include "testutil.hpp"
-#include "util/fn.hpp"
+#include "mutable/util/fn.hpp"
 
 
-using namespace db;
+using namespace m;
 
 
 /*======================================================================================================================

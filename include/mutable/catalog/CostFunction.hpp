@@ -1,9 +1,9 @@
 #pragma once
 
-#include "IR/QueryGraph.hpp"
+#include "mutable/IR/QueryGraph.hpp"
 
 
-namespace db {
+namespace m {
 
 struct PlanTable;
 

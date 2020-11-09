@@ -3,7 +3,7 @@
 #include "lex/Lexer.hpp"
 #include "util/Diagnostic.hpp"
 #include "catalog/Schema.hpp"
-#include "util/StringPool.hpp"
+#include "mutable/util/StringPool.hpp"
 #include <sstream>
 #include <string>
 

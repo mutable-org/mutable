@@ -1,13 +1,12 @@
-#include "IR/CNF.hpp"
+#include "mutable/IR/CNF.hpp"
 
-#include "catalog/Schema.hpp"
-#include "parse/AST.hpp"
+#include "mutable/parse/AST.hpp"
 #include "parse/ASTPrinter.hpp"
-#include "util/fn.hpp"
-#include "util/macro.hpp"
+#include "mutable/util/fn.hpp"
+#include "mutable/util/macro.hpp"
 
 
-namespace db {
+namespace m {
 
 namespace cnf {
 
@@ -153,7 +152,7 @@ void CNF::dump() const { dump(std::cerr); }
  * CNF Generator
  *====================================================================================================================*/
 
-/** Helper class to convert `db::Expr` and `db::Clause` to `cnf::CNF`. */
+/** Helper class to convert `m::Expr` and `m::Clause` to `cnf::CNF`. */
 struct CNFGenerator : ConstASTExprVisitor
 {
     private:

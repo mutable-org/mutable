@@ -1,21 +1,21 @@
-#include "backend/Backend.hpp"
+#include "mutable/backend/Backend.hpp"
 #include "backend/Interpreter.hpp"
 #include "backend/StackMachine.hpp"
 #include "backend/WebAssembly.hpp"
-#include "catalog/CostFunction.hpp"
+#include "mutable/catalog/CostFunction.hpp"
 #include "catalog/Schema.hpp"
 #include "globals.hpp"
 #include "io/Reader.hpp"
 #include "IR/Optimizer.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
-#include "storage/Store.hpp"
+#include "mutable/storage/Store.hpp"
 #include "util/ArgParser.hpp"
 #include "util/DotTool.hpp"
-#include "util/fn.hpp"
+#include "mutable/util/fn.hpp"
 #include "util/glyphs.hpp"
 #include "util/terminal.hpp"
-#include "util/Timer.hpp"
+#include "mutable/util/Timer.hpp"
 #include <cerrno>
 #include <cstdlib>
 #include <fstream>
@@ -34,7 +34,7 @@
 #endif
 
 
-using namespace db;
+using namespace m;
 using Replxx = replxx::Replxx;
 
 
@@ -274,7 +274,7 @@ Replxx::completions_t hook_completion(const std::string &prefix, int &context_le
 {
     static constexpr const char *KW[] = {
 #define DB_KEYWORD(tt, name) #name,
-#include "tables/Keywords.tbl"
+#include "mutable/tables/Keywords.tbl"
 #undef DB_KEYWORD
     };
 
@@ -296,7 +296,7 @@ void hook_highlighter(const std::string &context, Replxx::colors_t &colors)
         /* Keywords */
 #define DB_KEYWORD(tt, name)\
         { #name, Replxx::Color::BROWN },
-#include "tables/Keywords.tbl"
+#include "mutable/tables/Keywords.tbl"
 #undef DB_KEYWORD
         /* Operators */
         { "\\(",  Replxx::Color::NORMAL},
@@ -342,7 +342,7 @@ Replxx::hints_t hook_hint(const std::string &prefix, int &context_len, Replxx::C
 {
     static constexpr const char *KW[] = {
 #define DB_KEYWORD(tt, name) #name,
-#include "tables/Keywords.tbl"
+#include "mutable/tables/Keywords.tbl"
 #undef DB_KEYWORD
     };
 
@@ -523,7 +523,7 @@ int main(int argc, const char **argv)
         std::cout << "List of available stores:";
         constexpr std::pair<const char*, const char*> stores[] = {
 #define DB_STORE(NAME, DESCR) { #NAME, DESCR },
-#include "tables/Store.tbl"
+#include "mutable/tables/Store.tbl"
 #undef DB_STORE
         };
         std::size_t max_len = 0;
@@ -538,7 +538,7 @@ int main(int argc, const char **argv)
         std::cout << "List of available backends:";
         constexpr std::pair<const char*, const char*> backends[] = {
 #define DB_BACKEND(NAME, DESCR) { #NAME, DESCR },
-#include "tables/Backend.tbl"
+#include "mutable/tables/Backend.tbl"
 #undef DB_BACKEND
         };
         std::size_t max_len = 0;
@@ -553,7 +553,7 @@ int main(int argc, const char **argv)
         std::cout << "List of available plan enumerators:";
         constexpr std::pair<const char*, const char*> PE[] = {
 #define DB_PLAN_ENUMERATOR(NAME, DESCR) { #NAME, DESCR },
-#include "tables/PlanEnumerator.tbl"
+#include "mutable/tables/PlanEnumerator.tbl"
 #undef DB_PLAN_ENUMERATOR
         };
         std::size_t max_len = 0;

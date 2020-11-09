@@ -1,15 +1,15 @@
 #include "catch.hpp"
 
-#include "IR/QueryGraph.hpp"
+#include "mutable/IR/QueryGraph.hpp"
 #include "IR/QueryGraph.cpp"
 #include "catalog/Schema.hpp"
-#include "catalog/Type.hpp"
+#include "mutable/catalog/Type.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "testutil.hpp"
 #include "util/ADT.hpp"
 
-using namespace db;
+using namespace m;
 
 /*======================================================================================================================
  * Helper funtctions for test setup.
@@ -117,7 +117,7 @@ TEST_CASE("DataSource", "[core][IR][unit]")
     SECTION("check added filter and join")
     {
         ds.update_filter(A);
-        db::Join joi(A, std::vector<DataSource(*)>());
+        m::Join joi(A, std::vector<DataSource(*)>());
         ds.add_join(&joi);
         REQUIRE(contains(ds.filter(), CA));
         REQUIRE_FALSE(contains(ds.filter(), CB));

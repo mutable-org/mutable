@@ -1,7 +1,7 @@
 #pragma once
 
-#include "util/fn.hpp"
-#include "util/macro.hpp"
+#include "mutable/util/fn.hpp"
+#include "mutable/util/macro.hpp"
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -15,7 +15,7 @@
 #include <utility>
 
 
-namespace db {
+namespace m {
 
 
 /*======================================================================================================================

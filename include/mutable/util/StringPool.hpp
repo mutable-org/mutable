@@ -1,11 +1,11 @@
 #pragma once
 
-#include "util/macro.hpp"
-#include "util/fn.hpp"
+#include "mutable/util/macro.hpp"
+#include "mutable/util/fn.hpp"
 #include <unordered_set>
 
 
-namespace db {
+namespace m {
 
 struct StringPool
 {

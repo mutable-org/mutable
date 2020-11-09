@@ -1,9 +1,9 @@
-#include "IR/Operator.hpp"
+#include "mutable/IR/Operator.hpp"
 
 #include "OperatorDot.hpp"
 
 
-using namespace db;
+using namespace m;
 
 
 OperatorData::~OperatorData() { }

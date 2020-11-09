@@ -45,5 +45,5 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
         # backend
         backend/StackMachineTest.cpp
     )
-    target_link_libraries(unittest mutable)
+    target_link_libraries(unittest ${PROJECT_NAME})
 endif()

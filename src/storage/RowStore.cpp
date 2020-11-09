@@ -1,9 +1,9 @@
 #include "storage/RowStore.hpp"
 
 #include "backend/StackMachine.hpp"
-#include "catalog/Type.hpp"
-#include "util/fn.hpp"
-#include "storage/Linearization.hpp"
+#include "mutable/catalog/Type.hpp"
+#include "mutable/util/fn.hpp"
+#include "mutable/storage/Linearization.hpp"
 #include <algorithm>
 #include <exception>
 #include <fstream>
@@ -11,7 +11,7 @@
 #include <typeinfo>
 
 
-using namespace db;
+using namespace m;
 
 
 RowStore::RowStore(const Table &table)

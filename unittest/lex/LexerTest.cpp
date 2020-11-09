@@ -4,7 +4,7 @@
 #include "lex/Lexer.cpp"
 #include "testutil.hpp"
 
-using namespace db;
+using namespace m;
 
 TEST_CASE("Lexer::has_next()", "[core][lex][unit]")
 {

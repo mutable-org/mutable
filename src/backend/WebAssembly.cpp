@@ -3,17 +3,17 @@
 #include "backend/Interpreter.hpp"
 #include "backend/WasmAlgo.hpp"
 #include "backend/WasmUtil.hpp"
-#include "IR/CNF.hpp"
+#include "mutable/IR/CNF.hpp"
 #include "storage/ColumnStore.hpp"
 #include "storage/RowStore.hpp"
-#include "storage/Store.hpp"
+#include "mutable/storage/Store.hpp"
 #include <binaryen-c.h>
 #include <exception>
 #include <sstream>
 #include <unordered_map>
 
 
-using namespace db;
+using namespace m;
 
 
 /*======================================================================================================================
@@ -1636,7 +1636,7 @@ std::pair<uint8_t*, std::size_t> WasmModule::binary() const
     return std::make_pair(reinterpret_cast<uint8_t*>(result.binary), result.binaryBytes);
 }
 
-std::ostream & db::operator<<(std::ostream &out, const WasmModule &module)
+std::ostream & m::operator<<(std::ostream &out, const WasmModule &module)
 {
     auto result = BinaryenModuleAllocateAndWriteText(module.ref_);
     out << result;

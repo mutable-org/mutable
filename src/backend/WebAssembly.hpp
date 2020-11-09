@@ -1,11 +1,11 @@
 #pragma once
 
-#include "backend/Backend.hpp"
+#include "mutable/backend/Backend.hpp"
 #include "catalog/Schema.hpp"
-#include "IR/Operator.hpp"
-#include "IR/OperatorVisitor.hpp"
-#include "parse/ASTVisitor.hpp"
-#include "util/macro.hpp"
+#include "mutable/IR/Operator.hpp"
+#include "mutable/IR/OperatorVisitor.hpp"
+#include "mutable/parse/ASTVisitor.hpp"
+#include "mutable/util/macro.hpp"
 #include <unordered_map>
 
 
@@ -16,7 +16,7 @@ struct Expression;
 
 }
 
-namespace db {
+namespace m {
 
 /** A `WasmModule` is a wrapper around a [**Binaryen**] (https://github.com/WebAssembly/binaryen) `wasm::Module`. */
 struct WasmModule

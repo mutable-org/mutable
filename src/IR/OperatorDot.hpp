@@ -1,9 +1,9 @@
 #pragma once
 
-#include "IR/OperatorVisitor.hpp"
+#include "mutable/IR/OperatorVisitor.hpp"
 
 
-namespace db {
+namespace m {
 
 struct OperatorDot : ConstOperatorVisitor
 {

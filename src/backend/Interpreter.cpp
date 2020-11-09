@@ -1,10 +1,10 @@
 #include "backend/Interpreter.hpp"
 
 #include "globals.hpp"
-#include "parse/AST.hpp"
-#include "parse/ASTVisitor.hpp"
+#include "mutable/parse/AST.hpp"
+#include "mutable/parse/ASTVisitor.hpp"
 #include "util/container/RefCountingHashMap.hpp"
-#include "util/fn.hpp"
+#include "mutable/util/fn.hpp"
 #include <algorithm>
 #include <cerrno>
 #include <cstdlib>
@@ -12,7 +12,7 @@
 #include <type_traits>
 
 
-using namespace db;
+using namespace m;
 
 
 /*======================================================================================================================

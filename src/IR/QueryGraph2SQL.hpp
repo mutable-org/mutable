@@ -1,8 +1,8 @@
-#include "parse/ASTVisitor.hpp"
-#include "CNF.hpp"
+#include "mutable/parse/ASTVisitor.hpp"
+#include "mutable/IR/CNF.hpp"
 
 
-namespace db {
+namespace m {
 
 struct QueryGraph;
 

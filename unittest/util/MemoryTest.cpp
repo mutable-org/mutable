@@ -1,6 +1,6 @@
 #include "catch.hpp"
 
-#include "util/memory.hpp"
+#include "mutable/util/memory.hpp"
 
 
 using namespace rewire;
@@ -23,7 +23,7 @@ TEST_CASE("rewire::Memory/c'tor", "[core][util][memory]")
 
 TEST_CASE("rewire::LinearAllocator", "[core][util][memory]")
 {
-    constexpr std::size_t INTS_PER_PAGE = PAGESIZE / sizeof(int);
+    std::size_t INTS_PER_PAGE = get_pagesize() / sizeof(int);
 
     LinearAllocator A;
 
@@ -54,14 +54,14 @@ TEST_CASE("rewire::LinearAllocator", "[core][util][memory]")
             p_mem[i] = i;
 
         {
-            AddressSpace vm(4 * PAGESIZE); // 4 pages
-            mem.map(PAGESIZE, PAGESIZE, vm, 0); // map mem page 1 to vm page 0
+            AddressSpace vm(4 * get_pagesize()); // 4 pages
+            mem.map(get_pagesize(), get_pagesize(), vm, 0); // map mem page 1 to vm page 0
             {
                 auto p_vm = reinterpret_cast<int*>(vm.addr());
                 for (int i = 0; i != INTS_PER_PAGE; ++i)
                     REQUIRE(p_vm[i] == INTS_PER_PAGE + i);
             }
-            mem.map(PAGESIZE, 0, vm, PAGESIZE); // map mem page 0 to vm page 1
+            mem.map(get_pagesize(), 0, vm, get_pagesize()); // map mem page 0 to vm page 1
             {
                 auto p_vm = reinterpret_cast<int*>(vm.addr());
                 for (int i = 0; i != INTS_PER_PAGE; ++i)

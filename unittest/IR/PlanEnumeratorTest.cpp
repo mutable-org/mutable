@@ -1,17 +1,17 @@
 #include "catch.hpp"
 
-#include "catalog/CostFunction.hpp"
+#include "mutable/catalog/CostFunction.hpp"
 #include "catalog/Schema.hpp"
-#include "catalog/Type.hpp"
+#include "mutable/catalog/Type.hpp"
 #include "IR/Optimizer.hpp"
-#include "IR/PlanEnumerator.hpp"
+#include "mutable/IR/PlanEnumerator.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
-#include "storage/Store.hpp"
+#include "mutable/storage/Store.hpp"
 #include "testutil.hpp"
 #include "util/ADT.hpp"
 
-using namespace db;
+using namespace m;
 
 
 /*======================================================================================================================

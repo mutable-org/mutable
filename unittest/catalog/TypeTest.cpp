@@ -1,7 +1,7 @@
 #include "catch.hpp"
 
-#include "catalog/Type.hpp"
-#include "util/fn.hpp"
+#include "mutable/catalog/Type.hpp"
+#include "mutable/util/fn.hpp"
 #include <cmath>
 #include <cstring>
 #include <sstream>
@@ -9,7 +9,7 @@
 #include <string>
 
 
-using namespace db;
+using namespace m;
 
 
 TEST_CASE("Type/PrimitiveType c'tor", "[core][catalog][type]")

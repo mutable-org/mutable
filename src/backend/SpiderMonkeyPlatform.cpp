@@ -4,7 +4,7 @@
 #include "js/Initialization.h"
 
 
-using namespace db;
+using namespace m;
 
 
 bool SpiderMonkeyPlatform::is_init_ = false;

@@ -1,10 +1,10 @@
 #include "catch.hpp"
 
-#include "util/Position.hpp"
+#include "mutable/util/Position.hpp"
 #include <cstring>
 
 
-using namespace db;
+using namespace m;
 
 
 TEST_CASE("Position c'tor", "[core][util][Position]")

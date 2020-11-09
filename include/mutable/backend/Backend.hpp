@@ -5,17 +5,17 @@
 #include <unordered_map>
 
 
-namespace db {
+namespace m {
 
 struct Operator;
 
 /** Defines the interface of all execution `Backend`s.  Provides factory methods to create particular `Backend`
- * instances, e.g.\ an `db::Interpreter`.  */
+ * instances, e.g.\ an `m::Interpreter`.  */
 struct Backend
 {
     enum kind_t {
 #define DB_BACKEND(NAME, _) B_ ## NAME,
-#include "tables/Backend.tbl"
+#include "mutable/tables/Backend.tbl"
 #undef DB_BACKEND
     };
 
@@ -28,7 +28,7 @@ struct Backend
 
 #define DB_BACKEND(NAME, _) \
     static std::unique_ptr<Backend> Create ## NAME();
-#include "tables/Backend.tbl"
+#include "mutable/tables/Backend.tbl"
 #undef DB_BACKEND
 
     virtual ~Backend() { }

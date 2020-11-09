@@ -9,6 +9,7 @@ add_subdirectory(backend)
 
 add_library(
     ${PROJECT_NAME}
+    mutable.cpp
     globals.cpp
     $<TARGET_OBJECTS:backend>
     $<TARGET_OBJECTS:IR>

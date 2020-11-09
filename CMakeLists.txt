@@ -22,6 +22,9 @@ set(Boost_USE_MULTITHREADED ON)
 find_package(Boost COMPONENTS system REQUIRED)
 
 # Build flags
+cmake_policy(SET CMP0063 NEW)
+set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
 set(EXECUTABLE_OUTPUT_PATH      "${PROJECT_BINARY_DIR}/bin")
 set(LIBRARY_OUTPUT_PATH         "${PROJECT_BINARY_DIR}/lib")
 
@@ -30,15 +33,9 @@ if(APPLE)
     execute_process(COMMAND sysctl -n hw.cachelinesize
         OUTPUT_VARIABLE LEVEL1_DCACHE_LINESIZE
         OUTPUT_STRIP_TRAILING_WHITESPACE)
-    execute_process(COMMAND sysctl -n hw.pagesize
-        OUTPUT_VARIABLE PAGESIZE
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
 else()
     execute_process(COMMAND getconf LEVEL1_DCACHE_LINESIZE
         OUTPUT_VARIABLE LEVEL1_DCACHE_LINESIZE
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
-    execute_process(COMMAND getconf PAGESIZE
-        OUTPUT_VARIABLE PAGESIZE
         OUTPUT_STRIP_TRAILING_WHITESPACE)
 endif()
 
@@ -190,6 +187,6 @@ if(${WITH_SPIDERMONKEY})
 endif()
 
 # Directories
-include_directories(src)
+include_directories(include src)
 add_subdirectory(src)
 add_subdirectory(unittest)

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "catalog/Type.hpp"
-#include "storage/Linearization.hpp"
-#include "util/macro.hpp"
+#include "mutable/catalog/Type.hpp"
+#include "mutable/storage/Linearization.hpp"
+#include "mutable/util/macro.hpp"
 #include <algorithm>
 #include <filesystem>
 #include <functional>
@@ -15,22 +15,25 @@
 #include <variant>
 
 
-namespace db {
+namespace m {
 
 struct Attribute;
 struct Schema;
 struct StackMachine;
 struct Table;
+struct RowStore;
+struct ColumnStore;
 
-template<bool C> struct TheStoreVisitor;
+template<bool C>
+struct TheStoreVisitor;
 using StoreVisitor = TheStoreVisitor<false>;
 using ConstStoreVisitor = TheStoreVisitor<true>;
 
 /** Reports an erroneous access to an attribute's value that is set to NULL. */
-struct null_error : std::logic_error
-{
-    null_error(const std::string &str) : logic_error(str) { }
-    null_error(const char *str) : logic_error(str) { }
+struct null_error : std::logic_error {
+    null_error(const std::string &str) : logic_error(str) {}
+
+    null_error(const char *str) : logic_error(str) {}
 };
 
 /** Defines a generic store interface. */
@@ -38,7 +41,7 @@ struct Store
 {
     enum kind_t {
 #define DB_STORE(NAME, _) S_ ## NAME,
-#include "tables/Store.tbl"
+#include "mutable/tables/Store.tbl"
 #undef DB_STORE
     };
 
@@ -46,6 +49,7 @@ struct Store
 
     /** Create a `Store` instance given the kind of store. */
     static std::unique_ptr<Store> Create(kind_t kind, const Table &table);
+
     /** Create a `Store` instance given the name of a store. */
     static std::unique_ptr<Store> Create(const char *kind, const Table &table) {
         return Create(STR_TO_KIND.at(kind), table);
@@ -53,7 +57,7 @@ struct Store
 
 #define DB_STORE(NAME, _) \
     static std::unique_ptr<Store> Create ## NAME(const Table &table);
-#include "tables/Store.tbl"
+#include "mutable/tables/Store.tbl"
 #undef DB_STORE
 
     private:
@@ -61,15 +65,22 @@ struct Store
     std::unique_ptr<Linearization> lin_; ///< the linearization describing the layout of this store
 
     protected:
-    Store(const Table &table) : table_(table) { }
+    Store(const Table &table) : table_(table) {}
 
     public:
-    Store(const Store&) = delete;
-    Store(Store&&) = default;
-    virtual ~Store() { }
+    Store(const Store &) = delete;
 
-    const Table & table() const { return table_; }
-    const Linearization & linearization() const { insist(bool(lin_)); return *lin_; }
+    Store(Store &&) = default;
+
+    virtual ~Store() {}
+
+    const Table &table() const { return table_; }
+
+    const Linearization &linearization() const {
+        insist(bool(lin_));
+        return *lin_;
+    }
+
     protected:
     void linearization(std::unique_ptr<Linearization> lin) { lin_ = std::move(lin); }
 
@@ -85,15 +96,14 @@ struct Store
 
     /** Accept a store visitor. */
     virtual void accept(StoreVisitor &v) = 0;
+
     /** Accept a store visitor. */
     virtual void accept(ConstStoreVisitor &v) const = 0;
 
     virtual void dump(std::ostream &out) const = 0;
+
     void dump() const;
 };
-
-struct RowStore;
-struct ColumnStore;
 
 template<bool C>
 struct TheStoreVisitor
@@ -109,8 +119,5 @@ struct TheStoreVisitor
     virtual void operator()(Const<RowStore> &s) = 0;
     virtual void operator()(Const<ColumnStore> &s) = 0;
 };
-
-using StoreVisitor = TheStoreVisitor<false>;
-using ConstStoreVisitor = TheStoreVisitor<true>;
 
 }

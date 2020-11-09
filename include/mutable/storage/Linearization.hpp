@@ -1,12 +1,12 @@
 #pragma once
 
-#include "util/macro.hpp"
+#include "mutable/util/macro.hpp"
 #include <cstdint>
 #include <memory>
 #include <type_traits>
 
 
-namespace db {
+namespace m {
 
 struct Attribute;
 

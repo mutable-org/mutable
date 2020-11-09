@@ -1,11 +1,9 @@
 #include "lex/Lexer.hpp"
-#include "lex/Token.hpp"
-#include "lex/TokenType.hpp"
 #include "parse/ASTPrinter.hpp"
 #include "parse/Parser.hpp"
 #include "util/ArgParser.hpp"
 #include "util/Diagnostic.hpp"
-#include "util/fn.hpp"
+#include "mutable/util/fn.hpp"
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
@@ -13,7 +11,7 @@
 #include <iostream>
 
 
-using namespace db;
+using namespace m;
 
 
 void usage(std::ostream &out, const char *name)

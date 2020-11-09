@@ -8,7 +8,7 @@
 #define id(X) q(std::hex << &X << std::dec) // convert virtual address to identifier
 
 
-using namespace db;
+using namespace m;
 
 
 ASTDot::ASTDot(std::ostream &out, int i)

@@ -5,7 +5,7 @@
 #include <cstdint>
 
 
-namespace db {
+namespace m {
 
 namespace cnf {
     struct CNF;

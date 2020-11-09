@@ -1,9 +1,9 @@
 #include "catch.hpp"
 
-#include "util/Pool.hpp"
+#include "mutable/util/Pool.hpp"
 
 
-using namespace db;
+using namespace m;
 
 
 TEST_CASE("Pool c'tor", "[core][util][pool]")

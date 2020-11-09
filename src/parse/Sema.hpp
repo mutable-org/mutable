@@ -1,13 +1,13 @@
 #pragma once
 
 #include "catalog/Schema.hpp"
-#include "parse/ASTVisitor.hpp"
+#include "mutable/parse/ASTVisitor.hpp"
 #include "util/Diagnostic.hpp"
 #include <unordered_map>
 #include <vector>
 
 
-namespace db {
+namespace m {
 
 struct Sema : ASTExprVisitor, ASTClauseVisitor, ASTStmtVisitor
 {

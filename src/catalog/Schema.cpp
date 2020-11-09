@@ -1,13 +1,16 @@
 #include "catalog/Schema.hpp"
 
-#include "util/fn.hpp"
+#include "globals.hpp"
+#include "mutable/util/fn.hpp"
+#include "storage/ColumnStore.hpp"
+#include "storage/RowStore.hpp"
 #include <algorithm>
 #include <cmath>
 #include <iterator>
 #include <stdexcept>
 
 
-using namespace db;
+using namespace m;
 
 
 /*======================================================================================================================
@@ -103,16 +106,29 @@ Catalog::Catalog()
     auto res = standard_functions_.emplace(name, new Function(name, Function::FN_ ## NAME, Function::KIND)); \
     insist(res.second, "function already defined"); \
 }
-#include "tables/Functions.tbl"
+#include "mutable/tables/Functions.tbl"
 #undef DB_FUNCTION
+
+    /* Initialize stores. */
+#define DB_STORE(NAME, _) { \
+    auto name = pool(#NAME); \
+    auto res = store_factories_.emplace(name, new ConcreteStoreFactory<NAME>()); \
+    insist(res.second, "store already defined"); \
+}
+#include "mutable/tables/Store.tbl"
+#undef DB_STORE
+    insist(store_factories_.size() != 0);
+    default_store(store_factories_.begin()->first); // set default store
 }
 
 Catalog::~Catalog()
 {
-    for (auto s : databases_)
-        delete s.second;
+    for (auto db : databases_)
+        delete db.second;
     for (auto fn : standard_functions_)
         delete fn.second;
+    for (auto sf : store_factories_)
+        delete sf.second;
 }
 
 Catalog Catalog::the_catalog_;
@@ -132,4 +148,17 @@ void Catalog::drop_database(const char *name) {
         throw std::invalid_argument("Database of that name does not exist.");
     delete it->second;
     databases_.erase(it);
+}
+
+std::unique_ptr<Store> Catalog::create_store(const char *name, const Table &tbl) const
+{
+    name = pool(name);
+    auto it = store_factories_.find(name);
+    if (it == store_factories_.end()) throw std::invalid_argument("store not found");
+    return it->second->make(tbl);
+}
+
+std::unique_ptr<Store> Catalog::create_store(const Table &tbl) const {
+    insist(default_store_, "there must always be a default store");
+    return default_store_->make(tbl);
 }

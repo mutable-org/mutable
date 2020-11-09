@@ -1,11 +1,11 @@
 #pragma once
 
 #include "catalog/Schema.hpp"
-#include "storage/Store.hpp"
-#include "util/memory.hpp"
+#include "mutable/storage/Store.hpp"
+#include "mutable/util/memory.hpp"
 
 
-namespace db {
+namespace m {
 
 /** This class implements a row store. */
 struct RowStore : Store

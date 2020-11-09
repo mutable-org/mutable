@@ -5,7 +5,7 @@
 #include <regex>
 
 
-using namespace db;
+using namespace m;
 
 
 /*======================================================================================================================
@@ -33,7 +33,7 @@ const char * tystr(const PrimitiveType *ty) {
  * StackMachineBuilder
  *====================================================================================================================*/
 
-struct db::StackMachineBuilder : ConstASTExprVisitor
+struct m::StackMachineBuilder : ConstASTExprVisitor
 {
     private:
     StackMachine &stack_machine_;

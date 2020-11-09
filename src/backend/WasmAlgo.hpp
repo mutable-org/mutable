@@ -1,13 +1,13 @@
 #pragma once
 
 #include "backend/WasmUtil.hpp"
-#include "parse/AST.hpp"
+#include "mutable/parse/AST.hpp"
 #include <binaryen-c.h>
 #include <unordered_map>
 #include <vector>
 
 
-namespace db {
+namespace m {
 
 /*======================================================================================================================
  * WasmPartition

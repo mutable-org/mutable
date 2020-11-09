@@ -1,17 +1,17 @@
-#include "IR/QueryGraph.hpp"
+#include "mutable/IR/QueryGraph.hpp"
 
 #include "catalog/Schema.hpp"
-#include "parse/AST.hpp"
+#include "mutable/parse/AST.hpp"
 #include "parse/ASTDumper.hpp"
-#include "parse/ASTVisitor.hpp"
+#include "mutable/parse/ASTVisitor.hpp"
+#include "mutable/util/macro.hpp"
 #include "IR/QueryGraph2SQL.hpp"
-#include "util/macro.hpp"
 #include <set>
 #include <unordered_map>
 #include <utility>
 
 
-using namespace db;
+using namespace m;
 
 struct Decorrelation;
 
@@ -266,7 +266,7 @@ auto get_queries(const cnf::Clause &clause)
 }
 
 /** Helper structure to compute and provide primary keys. */
-struct db::GetPrimaryKey
+struct m::GetPrimaryKey
 {
 private:
     std::vector<const Expr*> primary_keys_; ///< a list of all primary keys
@@ -587,7 +587,7 @@ struct ReplaceDesignators : ConstASTExprVisitor
 };
 
 /** Helper structure to extract correlation information of a `cnf:CNF` formula. */
-struct db::GetCorrelationInfo : ConstASTExprVisitor
+struct m::GetCorrelationInfo : ConstASTExprVisitor
 {
     friend struct Decorrelation;
 
@@ -817,7 +817,7 @@ struct db::GetCorrelationInfo : ConstASTExprVisitor
 };
 
 /** The method that decorrelates a `Query` in a `QueryGraph`. */
-struct db::Decorrelation
+struct m::Decorrelation
 {
     private:
     using graphs_t = std::pair<QueryGraph*, Query*>; ///> `first` is the graph of `second`
@@ -1174,7 +1174,7 @@ struct db::Decorrelation
  * An AST Visitor that constructs the query graph.
  *====================================================================================================================*/
 
-struct db::GraphBuilder : ConstASTStmtVisitor
+struct m::GraphBuilder : ConstASTStmtVisitor
 {
     private:
     std::unique_ptr<QueryGraph> graph_; ///< the constructed query graph

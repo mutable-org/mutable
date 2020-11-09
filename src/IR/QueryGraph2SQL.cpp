@@ -1,9 +1,9 @@
 #include "IR/QueryGraph2SQL.hpp"
 
-#include "IR/QueryGraph.hpp"
+#include "mutable/IR/QueryGraph.hpp"
 
 
-using namespace db;
+using namespace m;
 
 void QueryGraph2SQL::translate(const QueryGraph *graph)
 {
@@ -111,7 +111,7 @@ void QueryGraph2SQL::translate(const QueryGraph *graph)
     }
 }
 
-void QueryGraph2SQL::insert_projection(const db::Expr *e)
+void QueryGraph2SQL::insert_projection(const m::Expr *e)
 {
     /* Translate the given `Expr` recursively. Set `after_grouping` because we want to insert a projection for the
      * output of the grouping operator. */

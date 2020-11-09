@@ -15,9 +15,9 @@ DB_TOKENTYPE(HEX_FLOAT)
 DB_TOKENTYPE(DEC_FLOAT)
 
 #define DB_KEYWORD(a,b) DB_TOKENTYPE(a)
-#include "tables/Keywords.tbl"
+#include "mutable/tables/Keywords.tbl"
 #undef DB_KEYWORD
 
 #define DB_OPERATOR(a) DB_TOKENTYPE(a)
-#include "tables/Operators.tbl"
+#include "mutable/tables/Operators.tbl"
 #undef DB_OPERATOR

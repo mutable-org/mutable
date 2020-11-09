@@ -4,7 +4,7 @@
 #include "jsapi.h"
 
 
-namespace db {
+namespace m {
 
 struct SpiderMonkeyPlatform : WasmPlatform
 {

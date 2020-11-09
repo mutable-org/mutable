@@ -1,10 +1,10 @@
 #include "IR/Tuple.hpp"
 
 #include "catalog/Schema.hpp"
-#include "catalog/Type.hpp"
+#include "mutable/catalog/Type.hpp"
 
 
-using namespace db;
+using namespace m;
 
 
 /*======================================================================================================================

@@ -10,12 +10,12 @@ struct DotTool
 {
     static constexpr const char *DEFAULT_LAYOUT_ALGORITHM = "dot";
 
-    db::Diagnostic &diag;
+    m::Diagnostic &diag;
     private:
     std::stringstream stream_;
 
     public:
-    DotTool(db::Diagnostic &diag);
+    DotTool(m::Diagnostic &diag);
 
     template<typename T>
     friend DotTool & operator<<(DotTool &dot, const T &t) { dot.stream_ << t; return dot; }

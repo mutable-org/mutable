@@ -1,7 +1,7 @@
-#include "parse/ASTVisitor.hpp"
+#include "mutable/parse/ASTVisitor.hpp"
 
 
-namespace db {
+namespace m {
 
 /** Pretty-prints the AST in SQL. */
 struct ASTPrinter : ConstASTVisitor

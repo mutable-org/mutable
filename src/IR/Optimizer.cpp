@@ -1,10 +1,10 @@
 #include "IR/Optimizer.hpp"
 
-#include "IR/Operator.hpp"
-#include "storage/Store.hpp"
+#include "mutable/IR/Operator.hpp"
+#include "mutable/storage/Store.hpp"
 
 
-using namespace db;
+using namespace m;
 
 
 /** Returns `true` iff the given join predicate in `cnf::CNF` formula is an equi-join. */

@@ -1,8 +1,8 @@
 #pragma once
 
 #include "catalog/Schema.hpp"
-#include "catalog/Type.hpp"
-#include "IR/CNF.hpp"
+#include "mutable/catalog/Type.hpp"
+#include "mutable/IR/CNF.hpp"
 #include <binaryen-c.h>
 #include <cstring>
 #include <iostream>
@@ -25,7 +25,7 @@ inline const char * mkname(const char *name, const char *fallback) {
 
 }
 
-namespace db {
+namespace m {
 
 struct Type;
 

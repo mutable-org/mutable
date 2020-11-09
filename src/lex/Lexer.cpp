@@ -6,13 +6,13 @@
 #define UNDO(CHR) { in.putback(c_); c_ = CHR; pos_.column--; }
 
 
-using namespace db;
+using namespace m;
 
 
 void Lexer::initialize_keywords()
 {
 #define DB_KEYWORD(tok, text) keywords_.emplace(pool(#text), TK_##tok);
-#include "tables/Keywords.tbl"
+#include "mutable/tables/Keywords.tbl"
 #undef DB_KEYWORD
 }
 

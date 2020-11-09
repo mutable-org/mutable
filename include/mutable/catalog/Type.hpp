@@ -1,14 +1,14 @@
 #pragma once
 
-#include "util/fn.hpp"
-#include "util/macro.hpp"
-#include "util/Pool.hpp"
+#include "mutable/util/fn.hpp"
+#include "mutable/util/macro.hpp"
+#include "mutable/util/Pool.hpp"
 #include <exception>
 #include <functional>
 #include <vector>
 
 
-namespace db {
+namespace m {
 
 struct ErrorType;
 struct NoneType;
@@ -50,11 +50,11 @@ struct Type
 
     bool is_error() const { return (void*) this == Get_Error(); }
     bool is_none() const { return (void*) this == Get_None(); }
-    /** Returns `true` iff this `Type` is a `db::PrimitiveType`. */
+    /** Returns `true` iff this `Type` is a `m::PrimitiveType`. */
     bool is_primitive() const { return is<const PrimitiveType>(this); }
     bool is_boolean() const { return is<const Boolean>(this); }
     bool is_character_sequence() const { return is<const CharacterSequence>(this); }
-    /** Returns `true` iff this `Type` is a `db::Numeric` type. */
+    /** Returns `true` iff this `Type` is a `m::Numeric` type. */
     bool is_numeric() const { return is<const Numeric>(this); }
     bool is_integral() const;
     bool is_decimal() const;
@@ -87,25 +87,25 @@ struct Type
     }
 
     /*----- Type factory methods -------------------------------------------------------------------------------------*/
-    /** Returns a `db::ErrorType`. */
+    /** Returns a `m::ErrorType`. */
     static const ErrorType * Get_Error();
-    /** Returns a `db::NoneType`. */
+    /** Returns a `m::NoneType`. */
     static const NoneType * Get_None();
-    /** Returns a `db::Boolean` type of the given `category`. */
+    /** Returns a `m::Boolean` type of the given `category`. */
     static const Boolean * Get_Boolean(category_t category);
-    /** Returns a `db::CharacterSequence` type of the given `category` and fixed `length`. */
+    /** Returns a `m::CharacterSequence` type of the given `category` and fixed `length`. */
     static const CharacterSequence * Get_Char(category_t category, std::size_t length);
-    /** Returns a `db::CharacterSequence` type of the given `category` and varying `length`. */
+    /** Returns a `m::CharacterSequence` type of the given `category` and varying `length`. */
     static const CharacterSequence * Get_Varchar(category_t category, std::size_t length);
-    /** Returns a `db::Numeric` type for decimals of given `category`, decimal `digits`, and `scale`. */
+    /** Returns a `m::Numeric` type for decimals of given `category`, decimal `digits`, and `scale`. */
     static const Numeric * Get_Decimal(category_t category, unsigned digits, unsigned scale);
-    /** Returns a `db::Numeric` type for integrals of given `category` and `num_bytes` bytes. */
+    /** Returns a `m::Numeric` type for integrals of given `category` and `num_bytes` bytes. */
     static const Numeric * Get_Integer(category_t category, unsigned num_bytes);
-    /** Returns a `db::Numeric` type of given `category` for 32 bit floating-points. */
+    /** Returns a `m::Numeric` type of given `category` for 32 bit floating-points. */
     static const Numeric * Get_Float(category_t category);
-    /** Returns a `db::Numeric` type of given `category` for 64 bit floating-points. */
+    /** Returns a `m::Numeric` type of given `category` for 64 bit floating-points. */
     static const Numeric * Get_Double(category_t category);
-    /** Returns a `db::FnType` for a function with parameter types `parameter_types` and return type `return_type`. */
+    /** Returns a `m::FnType` for a function with parameter types `parameter_types` and return type `return_type`. */
     static const FnType * Get_Function(const Type *return_type, std::vector<const Type*> parameter_types);
 };
 
@@ -119,17 +119,17 @@ bool is_comparable(const Type *first, const Type *second);
 
 namespace std {
 
-template<>
-struct hash<db::Type>
-{
-    uint64_t operator()(const db::Type &type) const { return type.hash(); }
-};
+    template<>
+    struct hash<m::Type>
+    {
+        uint64_t operator()(const m::Type &type) const { return type.hash(); }
+    };
 
 }
 
-namespace db {
+namespace m {
 
-/** `PrimitiveType`s represent `db::Type`s of values. */
+/** `PrimitiveType`s represent `m::Type`s of values. */
 struct PrimitiveType : Type
 {
     category_t category; ///< whether this type is scalar or vector
@@ -151,7 +151,7 @@ struct PrimitiveType : Type
     virtual const PrimitiveType * as_vectorial() const = 0;
 };
 
-/** This `db::Type` is assigned when parsing of a data type fails or when semantic analysis detects a type error. */
+/** This `m::Type` is assigned when parsing of a data type fails or when semantic analysis detects a type error. */
 struct ErrorType: Type
 {
     friend struct Type;
@@ -174,7 +174,7 @@ struct ErrorType: Type
     void dump(std::ostream &out) const override;
 };
 
-/** A `db::Type` that represents the absence of any other type.  Used to represent the type of `NULL`. */
+/** A `m::Type` that represents the absence of any other type.  Used to represent the type of `NULL`. */
 struct NoneType: Type
 {
     friend struct Type;
@@ -236,9 +236,9 @@ struct CharacterSequence : PrimitiveType
 
     private:
     CharacterSequence(category_t category, std::size_t length, bool is_varying)
-        : PrimitiveType(category)
-        , length(length)
-        , is_varying(is_varying)
+            : PrimitiveType(category)
+            , length(length)
+            , is_varying(is_varying)
     { }
 
     public:
@@ -284,7 +284,7 @@ struct Numeric : PrimitiveType
 
 #define kind_t(X) X(N_Int), X(N_Float), X(N_Decimal)
     DECLARE_ENUM(kind_t) kind; ///< the kind of numeric type
-    private:
+private:
     static constexpr const char *KIND_TO_STR_[] = { ENUM_TO_STR(kind_t) };
 #undef kind_t
     public:
@@ -299,10 +299,10 @@ struct Numeric : PrimitiveType
 
     private:
     Numeric(category_t category, kind_t kind, unsigned precision, unsigned scale)
-        : PrimitiveType(category)
-        , kind(kind)
-        , precision(precision)
-        , scale(scale)
+            : PrimitiveType(category)
+            , kind(kind)
+            , precision(precision)
+            , scale(scale)
     { }
 
     public:
@@ -344,8 +344,8 @@ struct FnType : Type
 
     private:
     FnType(const Type *return_type, std::vector<const Type*> parameter_types)
-        : return_type(notnull(return_type))
-        , parameter_types(parameter_types)
+            : return_type(notnull(return_type))
+            , parameter_types(parameter_types)
     { }
 
     public:
@@ -363,43 +363,43 @@ struct FnType : Type
     void dump(std::ostream &out) const override;
 };
 
-/* Given two `db::Numeric` types, compute the `db::Numeric` type that is at least as precise as either of them. */
+/* Given two `m::Numeric` types, compute the `m::Numeric` type that is at least as precise as either of them. */
 const Numeric * arithmetic_join(const Numeric *lhs, const Numeric *rhs);
 
 }
 
-inline bool db::Type::is_integral() const {
+inline bool m::Type::is_integral() const {
     if (auto n = cast<const Numeric>(this))
         return n->kind == Numeric::N_Int;
     return false;
 }
 
-inline bool db::Type::is_decimal() const {
+inline bool m::Type::is_decimal() const {
     if (auto n = cast<const Numeric>(this))
         return n->kind == Numeric::N_Decimal;
     return false;
 }
 
-inline bool db::Type::is_floating_point() const {
+inline bool m::Type::is_floating_point() const {
     if (auto n = cast<const Numeric>(this))
         return n->kind == Numeric::N_Float;
     return false;
 }
 
-inline bool db::Type::is_float() const {
+inline bool m::Type::is_float() const {
     if (auto n = cast<const Numeric>(this))
         return n->kind == Numeric::N_Float and n->precision == 32;
     return false;
 }
 
-inline bool db::Type::is_double() const {
+inline bool m::Type::is_double() const {
     if (auto n = cast<const Numeric>(this))
         return n->kind == Numeric::N_Float and n->precision == 64;
     return false;
 }
 
 template<typename T>
-bool db::is_convertible(const Type *ty) {
+bool m::is_convertible(const Type *ty) {
     /* Boolean */
     if constexpr (std::is_same_v<T, bool>)
         return is<const Boolean>(ty);
@@ -415,16 +415,16 @@ bool db::is_convertible(const Type *ty) {
     return false;
 }
 
-inline bool db::is_comparable(const Type *first, const Type *second) {
+inline bool m::is_comparable(const Type *first, const Type *second) {
     if (first->is_boolean() and second->is_boolean()) return true;
     if (first->is_character_sequence() and second->is_character_sequence()) return true;
     if (first->is_numeric() and second->is_numeric()) return true;
     return false;
 }
 
-namespace db {
+namespace m {
 
-/** The `db::Type` visitor. */
+/** The `m::Type` visitor. */
 template<bool C>
 struct TheTypeVisitor
 {

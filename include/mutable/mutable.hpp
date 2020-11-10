@@ -27,6 +27,7 @@
 #include "mutable/util/Position.hpp"
 #include "mutable/util/StringPool.hpp"
 #include "mutable/util/Timer.hpp"
+#include <filesystem>
 
 
 namespace m {
@@ -36,5 +37,19 @@ std::unique_ptr<Stmt> query_from_string(const std::string&);
 
 /** Optimizes and executes the given `Stmt`. */
 void execute_query(const Stmt&);
+
+/** Loads a CSV file into a `Table`.
+ *
+ * @param table         the table to load the data into
+ * @param path          the path to the CSV file
+ * @param num_rows      the number of rows to load from the CSV file
+ * @param has_header    whether the CSV file contains a header
+ * @param skip_header   whether to ignore the header
+ */
+void load_from_CSV(Table &table,
+                   const std::filesystem::path &path,
+                   std::size_t num_rows = std::numeric_limits<std::size_t>::max(),
+                   bool has_header = false,
+                   bool skip_header = false);
 
 }

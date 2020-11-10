@@ -151,3 +151,29 @@ void m::execute_query(const Stmt &stmt)
     std::cout.flush();
     std::cerr.flush();
 }
+
+void m::load_from_CSV(Table &table, const std::filesystem::path &path, std::size_t num_rows, bool has_header,
+                      bool skip_header)
+{
+    Catalog &C = Catalog::Get();
+    std::ostringstream out, err;
+    Diagnostic diag(false, out, err);
+    insist(diag.num_errors() == 0);
+    insist(err.str().empty());
+
+    DSVReader R(table, diag, num_rows, ',', '\\', '\"', has_header, skip_header);
+
+    errno = 0;
+    std::ifstream file(path);
+    if (not file) {
+        diag.e(Position(path.c_str())) << "Could not open file '" << path << '\'';
+        if (errno)
+            diag.err() << ": " << strerror(errno);
+        diag.err() << std::endl;
+    } else {
+        R(file, path.c_str());
+    }
+
+    if (diag.num_errors() != 0)
+        throw runtime_error(err.str());
+}

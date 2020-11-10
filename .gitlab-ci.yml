@@ -5,8 +5,9 @@
 # Define the stages of the pipeline.
 stages:
     - check
-    - build
+    - build:debug
     - test
+    - build:release
     - report
 
 
@@ -21,11 +22,11 @@ check:syntax:
 
 
 #-----------------------------------------------------------------------------------------------------------------------
-# BUILD
+# DEBUG BUILD
 #-----------------------------------------------------------------------------------------------------------------------
 
-build:linux-amd64:
-    stage: build
+build:debug:linux-amd64:
+    stage: build:debug
     tags:
         - linux
         - amd64
@@ -39,8 +40,8 @@ build:linux-amd64:
             - "build/debug/bin/"
         expire_in: 1 day
 
-build:macos-amd64:
-    stage: build
+build:debug:macos-amd64:
+    stage: build:debug
     tags:
         - macos
         - amd64
@@ -65,7 +66,7 @@ unittest:linux-amd64:
         - linux
         - amd64
     needs:
-        - job: "build:linux-amd64"
+        - job: "build:debug:linux-amd64"
           artifacts: true
     script: build/debug/bin/unittest \[core\]
 
@@ -75,7 +76,7 @@ unittest:macos-amd64:
         - macos
         - amd64
     needs:
-        - job: "build:macos-amd64"
+        - job: "build:debug:macos-amd64"
           artifacts: true
     script: build/debug/bin/unittest \[core\]
 
@@ -85,7 +86,7 @@ integrationtest:linux-amd64:
         - linux
         - amd64
     needs:
-        - job: "build:linux-amd64"
+        - job: "build:debug:linux-amd64"
           artifacts: true
     script:
         - pip3 install --user --upgrade colorama pyyaml yamale tqdm
@@ -97,11 +98,68 @@ integrationtest:macos-amd64:
         - macos
         - amd64
     needs:
-        - job: "build:macos-amd64"
+        - job: "build:debug:macos-amd64"
           artifacts: true
     script:
         - pip3 install --user --upgrade colorama pyyaml yamale tqdm
         - python3 test/IntegrationTest.py --verbose --debug
+
+
+#-----------------------------------------------------------------------------------------------------------------------
+# RELEASE BUILD
+#-----------------------------------------------------------------------------------------------------------------------
+
+build:release:linux-amd64:
+    stage: build:release
+    tags:
+        - linux
+        - amd64
+    script:
+        - mkdir -p build/release
+        - cd build/release
+        - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ../..
+        - ninja
+        - cd ../..
+        - mkdir mutable
+        - cp -r include/ mutable
+        - mkdir mutable/lib
+        - cp build/release/lib/libmutable.a mutable/lib
+    needs:
+        - job: "unittest:linux-amd64"
+        - job: "integrationtest:linux-amd64"
+    artifacts:
+        paths:
+            - "mutable"
+        expire_in: 1 day
+    only:
+        - master
+        - /release/i
+
+build:release:macos-amd64:
+    stage: build:release
+    tags:
+        - macos
+        - amd64
+    script:
+        - mkdir -p build/release
+        - cd build/release
+        - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ../..
+        - ninja
+        - cd ../..
+        - mkdir mutable
+        - cp -r include/ mutable
+        - mkdir mutable/lib
+        - cp build/release/lib/libmutable.a mutable/lib
+    needs:
+        - job: "unittest:macos-amd64"
+        - job: "integrationtest:macos-amd64"
+    artifacts:
+        paths:
+            - "mutable"
+        expire_in: 1 day
+    only:
+        - master
+        - /release/i
 
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -124,7 +182,7 @@ report:coverage:
     stage: report
     tags:
         - nginx
-    needs: [ "build:linux-amd64" ]
+    needs: [ "build:debug:linux-amd64" ]
     script:
         - ./coverage.sh
         - rm -rf /srv/http/mutable/coverage

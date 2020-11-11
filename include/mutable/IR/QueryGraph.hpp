@@ -99,7 +99,9 @@ struct Query : DataSource
     QueryGraph *query_graph_; ///< query graph of the sub-query
 
     private:
-    Query(std::size_t id, const char *alias, QueryGraph *query_graph) : DataSource(id, alias), query_graph_(query_graph) { }
+    Query(std::size_t id, const char *alias, QueryGraph *query_graph)
+        : DataSource(id, alias), query_graph_(query_graph)
+    { }
     public:
     ~Query();
 

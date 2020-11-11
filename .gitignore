@@ -1,6 +1,7 @@
 build*/
 doxy/html/
 doxy/latex/
+doxy-api/
 third-party/
 coverage/
 catch.xml

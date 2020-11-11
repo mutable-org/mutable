@@ -141,7 +141,7 @@ TEST_CASE("DataSource", "[core][IR][unit]")
 
 TEST_CASE("AdjacencyMatrix/Standalone Matrix", "[core][IR][unit]")
 {
-    AdjacencyMatrix adj_mat;
+    AdjacencyMatrix adj_mat(4);
 
     /* Query graph consisting of four relations with four joins edges.
      * (0,2) (0,3) (1,3) (2,3)
@@ -180,8 +180,8 @@ TEST_CASE("AdjacencyMatrix/Standalone Matrix", "[core][IR][unit]")
 
         /* Negative checks. */
         REQUIRE_FALSE(adj_mat.get(0, 1));
-        REQUIRE_FALSE(adj_mat.get(13, 9));
-        REQUIRE_FALSE(adj_mat.get(63, 2));
+        REQUIRE_THROWS_AS(adj_mat.get(13, 9), m::out_of_range);
+        REQUIRE_THROWS_AS(adj_mat.get(63, 2), m::out_of_range);
     }
 
     SECTION("check connectedness of nodes")
@@ -333,7 +333,7 @@ TEST_CASE("AdjacencyMatrix/QueryGraph Matrix", "[core][IR][unit]")
 
 TEST_CASE("AdjacencyMatrix", "[core][IR][unit]")
 {
-    AdjacencyMatrix M;
+    AdjacencyMatrix M(4);
 
     /* Query graph consisting of four relations with two joins edges.
      * (0,2) (0,3)
@@ -520,7 +520,7 @@ TEST_CASE("AdjacencyMatrix/QueryGraph Matrix Negative", "[core][IR][unit]")
 
 TEST_CASE("AdjacencyMatrix/Matrix output", "[core][IR][unit]")
 {
-    AdjacencyMatrix adj_mat;
+    AdjacencyMatrix adj_mat(4);
     std::stringstream out;
 
     SECTION("empty matrix output")

@@ -250,11 +250,12 @@ struct AdjacencyMatrix
 {
     private:
     SmallBitset m_[SmallBitset::CAPACITY]; ///< matrix entries
-    std::size_t num_sources_; ///< the number of sources of the `QueryGraph` represented by this matrix
+    std::size_t num_vertices_ = 0; ///< number of sources of the `QueryGraph` represented by this matrix
 
     public:
     AdjacencyMatrix() { }
-    AdjacencyMatrix(const QueryGraph &query_graph) : num_sources_(query_graph.sources().size())
+    AdjacencyMatrix(std::size_t num_vertices) : num_vertices_(num_vertices) { }
+    AdjacencyMatrix(const QueryGraph &query_graph) : num_vertices_(query_graph.sources().size())
     {
         /* Iterate over all joins in the query graph. */
         for (auto join : query_graph.joins()) {
@@ -270,8 +271,8 @@ struct AdjacencyMatrix
 
     /** Set the bit in row `i` and offset `j` to one. */
     void set(std::size_t i, std::size_t j) {
-        if (i > num_sources_ or j > num_sources_)
-            throw out_of_range("offset is out-of-bounds");
+        if (i >= num_vertices_ or j >= num_vertices_)
+            throw out_of_range("offset is out of bounds");
         m_[i].set(j);
     }
     /** Set the bit in row `i` and offset `j` and the symmetric bit to one. */
@@ -279,8 +280,8 @@ struct AdjacencyMatrix
 
     /** Get the bit in row `i` and offset `j` to one. */
     bool get(std::size_t i, std::size_t j) const {
-        if (i > num_sources_ or j > num_sources_)
-            throw out_of_range("offset is out-of-bounds");
+        if (i >= num_vertices_ or j >= num_vertices_)
+            throw out_of_range("offset is out of bounds");
         return m_[i].contains(j);
     }
 

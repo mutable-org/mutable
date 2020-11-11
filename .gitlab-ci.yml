@@ -178,6 +178,18 @@ report:doxygen:
     only:
         - master
 
+report:doxygen:api:
+    stage: report
+    tags:
+        - nginx
+    script:
+        - doxygen Doxyfile-api
+    artifacts:
+        paths:
+            - "doxy-api/html"
+    only:
+        - master
+
 report:coverage:
     stage: report
     tags:

@@ -28,7 +28,6 @@ using namespace rewire;
 
 Allocator::Allocator()
 {
-    errno = 0;
 #if __linux
     fd_ = memfd_create("rewire_allocator", MFD_CLOEXEC);
 #elif __APPLE__
@@ -120,7 +119,6 @@ Memory LinearAllocator::allocate(std::size_t size)
 #if __linux
     std::size_t min_cap = offset_ + aligned_size;
     if (min_cap > capacity_) {
-        errno = 0;
         if (ftruncate(fd(), min_cap))
             throw std::runtime_error(strerror(errno));
     }
@@ -129,7 +127,6 @@ Memory LinearAllocator::allocate(std::size_t size)
      * Memory has been preallocated because resizing with `ftruncate()` is not supported on macOS.  */
 #endif
 
-    errno = 0;
     void *addr = mmap(nullptr, aligned_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd(), offset_);
     if (addr == MAP_FAILED)
         throw std::runtime_error(strerror(errno));

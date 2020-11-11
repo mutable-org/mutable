@@ -29,13 +29,6 @@ struct TheStoreVisitor;
 using StoreVisitor = TheStoreVisitor<false>;
 using ConstStoreVisitor = TheStoreVisitor<true>;
 
-/** Reports an erroneous access to an attribute's value that is set to NULL. */
-struct null_error : std::logic_error {
-    null_error(const std::string &str) : logic_error(str) {}
-
-    null_error(const char *str) : logic_error(str) {}
-};
-
 /** Defines a generic store interface. */
 struct Store
 {

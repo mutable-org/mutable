@@ -1,9 +1,9 @@
 #include "lex/Lexer.hpp"
+#include "mutable/util/Diagnostic.hpp"
+#include "mutable/util/fn.hpp"
 #include "parse/ASTPrinter.hpp"
 #include "parse/Parser.hpp"
 #include "util/ArgParser.hpp"
-#include "util/Diagnostic.hpp"
-#include "mutable/util/fn.hpp"
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>

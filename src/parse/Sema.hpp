@@ -2,7 +2,7 @@
 
 #include "catalog/Schema.hpp"
 #include "mutable/parse/ASTVisitor.hpp"
-#include "util/Diagnostic.hpp"
+#include "mutable/util/Diagnostic.hpp"
 #include <unordered_map>
 #include <vector>
 

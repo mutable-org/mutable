@@ -1,7 +1,7 @@
 #pragma once
 
 
-#include "util/Diagnostic.hpp"
+#include "mutable/util/Diagnostic.hpp"
 #include "mutable/util/macro.hpp"
 #include "mutable/util/StringPool.hpp"
 #include <functional>

@@ -1,9 +1,9 @@
 #pragma once
 
 #include "catalog/Schema.hpp"
-#include "mutable/storage/Store.hpp"
 #include "IR/Tuple.hpp"
-#include "util/Diagnostic.hpp"
+#include "mutable/storage/Store.hpp"
+#include "mutable/util/Diagnostic.hpp"
 #include <iostream>
 
 

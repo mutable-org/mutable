@@ -19,6 +19,7 @@
 #include "mutable/storage/Linearization.hpp"
 #include "mutable/storage/Store.hpp"
 #include "mutable/util/ADT.hpp"
+#include "mutable/util/Diagnostic.hpp"
 #include "mutable/util/exception.hpp"
 #include "mutable/util/fn.hpp"
 #include "mutable/util/macro.hpp"
@@ -33,10 +34,10 @@
 namespace m {
 
 /** Use lexer, parser and semantic analysis to create a `Stmt` for the given `std::string`. */
-std::unique_ptr<Stmt> query_from_string(const std::string&);
+std::unique_ptr<Stmt> query_from_string(const std::string &query);
 
 /** Optimizes and executes the given `Stmt`. */
-void execute_query(const Stmt&);
+void execute_query(const Stmt &stmt);
 
 /** Loads a CSV file into a `Table`.
  *

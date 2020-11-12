@@ -1,12 +1,12 @@
 #pragma once
 
+#include "mutable/lex/Token.hpp"
+#include "mutable/lex/TokenType.hpp"
+#include "mutable/util/Diagnostic.hpp"
+#include "mutable/util/StringPool.hpp"
 #include <istream>
 #include <unordered_map>
 #include <vector>
-#include "mutable/lex/Token.hpp"
-#include "mutable/lex/TokenType.hpp"
-#include "util/Diagnostic.hpp"
-#include "mutable/util/StringPool.hpp"
 
 
 namespace m {

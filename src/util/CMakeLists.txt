@@ -3,7 +3,6 @@ add_library(
     OBJECT
     ADT.cpp
     ArgParser.cpp
-    Diagnostic.cpp
     DotTool.cpp
     fn.cpp
     memory.cpp

@@ -1,16 +1,16 @@
 #include "mutable/mutable.hpp"
 
+#include "backend/Interpreter.hpp"
+#include "backend/StackMachine.hpp"
+#include "backend/WebAssembly.hpp"
 #include "globals.hpp"
-#include "util/Diagnostic.hpp"
-#include "lex/Lexer.hpp"
-#include "parse/Parser.hpp"
-#include "parse/Sema.hpp"
+#include "io/Reader.hpp"
 #include "IR/Optimizer.hpp"
 #include "IR/Tuple.hpp"
-#include "backend/WebAssembly.hpp"
-#include "backend/StackMachine.hpp"
-#include "backend/Interpreter.hpp"
-#include "io/Reader.hpp"
+#include "lex/Lexer.hpp"
+#include "mutable/util/Diagnostic.hpp"
+#include "parse/Parser.hpp"
+#include "parse/Sema.hpp"
 #include <fstream>
 
 

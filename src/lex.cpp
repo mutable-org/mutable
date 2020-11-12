@@ -1,8 +1,8 @@
 #include "lex/Lexer.hpp"
 #include "mutable/lex/TokenType.hpp"
-#include "util/ArgParser.hpp"
-#include "util/Diagnostic.hpp"
+#include "mutable/util/Diagnostic.hpp"
 #include "mutable/util/fn.hpp"
+#include "util/ArgParser.hpp"
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>

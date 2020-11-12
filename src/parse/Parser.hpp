@@ -5,7 +5,7 @@
 #include "mutable/lex/Token.hpp"
 #include "mutable/lex/TokenType.hpp"
 #include "mutable/parse/AST.hpp"
-#include "util/Diagnostic.hpp"
+#include "mutable/util/Diagnostic.hpp"
 
 
 namespace m {

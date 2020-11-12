@@ -1,6 +1,6 @@
 #pragma once
 
-#include "util/Diagnostic.hpp"
+#include "mutable/util/Diagnostic.hpp"
 #include <sstream>
 
 

@@ -164,7 +164,7 @@ void m::load_from_CSV(Diagnostic &diag, Table &table, const std::filesystem::pat
         throw runtime_error("error while reading CSV file");
 }
 
-void m::execute_file(Diagnostic &diag, std::filesystem::path &path)
+void m::execute_file(Diagnostic &diag, const std::filesystem::path &path)
 {
     diag.clear();
     auto &C = Catalog::Get();

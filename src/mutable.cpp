@@ -135,7 +135,7 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
         }
 
         if (diag.num_errors() != 0)
-            throw backend_exception("error while reading DSV file");
+            throw runtime_error("error while reading DSV file");
     }
 
     std::cout.flush();

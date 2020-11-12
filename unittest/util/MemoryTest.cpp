@@ -33,14 +33,14 @@ TEST_CASE("rewire::LinearAllocator", "[core][util][memory]")
     {
         auto mem0 = A.allocate(1024 * sizeof(int));
         auto pi = mem0.as<int*>();
-        for (int i = 0; i != 1024; ++i)
+        for (std::size_t i = 0; i != 1024; ++i)
             pi[i] = i;
 
         auto mem1 = A.allocate(sizeof(double));
         auto pd = mem1.as<double*>();
         *pd = 3.14159;
 
-        for (int i = 0; i != 1024; ++i)
+        for (std::size_t i = 0; i != 1024; ++i)
             REQUIRE(pi[i] == i);
 
         REQUIRE(*pd == 3.14159);
@@ -50,7 +50,7 @@ TEST_CASE("rewire::LinearAllocator", "[core][util][memory]")
     {
         auto mem = A.allocate(2 * INTS_PER_PAGE * sizeof(int)); // 2 pages
         auto p_mem = mem.as<int*>();
-        for (int i = 0; i != 2 * INTS_PER_PAGE; ++i)
+        for (std::size_t i = 0; i != 2 * INTS_PER_PAGE; ++i)
             p_mem[i] = i;
 
         {
@@ -58,15 +58,15 @@ TEST_CASE("rewire::LinearAllocator", "[core][util][memory]")
             mem.map(get_pagesize(), get_pagesize(), vm, 0); // map mem page 1 to vm page 0
             {
                 auto p_vm = reinterpret_cast<int*>(vm.addr());
-                for (int i = 0; i != INTS_PER_PAGE; ++i)
+                for (std::size_t i = 0; i != INTS_PER_PAGE; ++i)
                     REQUIRE(p_vm[i] == INTS_PER_PAGE + i);
             }
             mem.map(get_pagesize(), 0, vm, get_pagesize()); // map mem page 0 to vm page 1
             {
                 auto p_vm = reinterpret_cast<int*>(vm.addr());
-                for (int i = 0; i != INTS_PER_PAGE; ++i)
+                for (std::size_t i = 0; i != INTS_PER_PAGE; ++i)
                     REQUIRE(p_vm[i] == INTS_PER_PAGE + i);
-                for (int i = 0; i != INTS_PER_PAGE; ++i)
+                for (std::size_t i = 0; i != INTS_PER_PAGE; ++i)
                     REQUIRE(p_vm[INTS_PER_PAGE + i] == i);
             }
         }

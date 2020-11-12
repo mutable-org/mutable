@@ -212,13 +212,14 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             R.has_header = S->has_header;
             R.skip_header = S->skip_header;
 
-            errno = 0;
             std::string filename(S->path.text, 1, strlen(S->path.text) - 2);
+            errno = 0;
             std::ifstream file(filename);
             if (not file) {
+                const auto errsv = errno;
                 diag.e(S->path.pos) << "Could not open file '" << S->path.text << '\'';
-                if (errno)
-                    diag.err() << ": " << strerror(errno);
+                if (errsv)
+                    diag.err() << ": " << strerror(errsv);
                 diag.err() << std::endl;
             } else {
                 TIME_EXPR(R(file, S->path.text), "Read DSV file", timer);

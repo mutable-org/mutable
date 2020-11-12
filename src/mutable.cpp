@@ -11,50 +11,39 @@
 #include "mutable/util/Diagnostic.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
+#include "parse/Sema.hpp"
+#include <cerrno>
 #include <fstream>
 
 
 using namespace m;
 
 
-std::unique_ptr<Stmt> m::query_from_string(const std::string &str)
+std::unique_ptr<Stmt> m::statement_from_string(Diagnostic &diag, const std::string &str)
 {
     Catalog &C = Catalog::Get();
-    std::ostringstream out, err;
-    Diagnostic diag(false, out, err);
-    insist(diag.num_errors() == 0);
-    insist(err.str().empty());
 
     std::istringstream in(str);
-    Lexer lexer(diag, C.get_pool(), "API", in);
+    Lexer lexer(diag, C.get_pool(), "-", in);
     Parser parser(lexer);
-    auto stmt = parser.parse();
-    if (diag.num_errors() != 0) {
-        delete stmt;
-        throw frontend_exception(err.str());
-    }
+    auto stmt = std::unique_ptr<Stmt>(parser.parse());
+    if (diag.num_errors() != 0)
+        throw frontend_exception("syntactic error in statement");
     insist(diag.num_errors() == 0);
-    insist(err.str().empty());
 
     Sema sema(diag);
     sema(*stmt);
-    if (diag.num_errors() != 0) {
-        delete stmt;
-        throw frontend_exception(err.str());
-    }
+    if (diag.num_errors() != 0)
+        throw frontend_exception("semantic error in statement");
     insist(diag.num_errors() == 0);
-    insist(err.str().empty());
 
-    return std::unique_ptr<Stmt>(stmt);
+    return stmt;
 }
 
-void m::execute_query(const Stmt &stmt)
+void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
 {
+    diag.clear();
     Catalog &C = Catalog::Get();
-    std::ostringstream out, err;
-    Diagnostic diag(false, out, err);
-    insist(diag.num_errors() == 0);
-    insist(err.str().empty());
 
     if (is<const SelectStmt>(stmt)) {
         auto query_graph = QueryGraph::Build(stmt);
@@ -132,35 +121,32 @@ void m::execute_query(const Stmt &stmt)
         R.has_header = S->has_header;
         R.skip_header = S->skip_header;
 
+        const auto filename = unquote(S->path.text);
         errno = 0;
-        std::string filename(S->path.text, 1, strlen(S->path.text) - 2);
         std::ifstream file(filename);
         if (not file) {
-            diag.e(S->path.pos) << "Could not open file '" << S->path.text << '\'';
-            if (errno)
-                diag.err() << ": " << strerror(errno);
+            const auto errsv = errno;
+            diag.e(S->path.pos) << "Could not open file '" << filename << '\'';
+            if (errsv)
+                diag.err() << ": " << strerror(errsv);
             diag.err() << std::endl;
         } else {
-            R(file, S->path.text);
+            R(file, filename.c_str());
         }
 
         if (diag.num_errors() != 0)
-            throw backend_exception(err.str());
+            throw backend_exception("error while reading DSV file");
     }
 
     std::cout.flush();
     std::cerr.flush();
 }
 
-void m::load_from_CSV(Table &table, const std::filesystem::path &path, std::size_t num_rows, bool has_header,
-                      bool skip_header)
+void m::load_from_CSV(Diagnostic &diag, Table &table, const std::filesystem::path &path, std::size_t num_rows,
+                      bool has_header, bool skip_header)
 {
+    diag.clear();
     Catalog &C = Catalog::Get();
-    std::ostringstream out, err;
-    Diagnostic diag(false, out, err);
-    insist(diag.num_errors() == 0);
-    insist(err.str().empty());
-
     DSVReader R(table, diag, num_rows, ',', '\\', '\"', has_header, skip_header);
 
     errno = 0;
@@ -175,5 +161,34 @@ void m::load_from_CSV(Table &table, const std::filesystem::path &path, std::size
     }
 
     if (diag.num_errors() != 0)
-        throw runtime_error(err.str());
+        throw runtime_error("error while reading CSV file");
+}
+
+void m::execute_file(Diagnostic &diag, std::filesystem::path &path)
+{
+    diag.clear();
+    auto &C = Catalog::Get();
+
+    errno = 0;
+    std::ifstream in(path);
+    if (not in) {
+        auto errsv = errno;
+        std::cerr << "Could not open '" << path << "'";
+        if (errno)
+            std::cerr << ": " << std::strerror(errsv);
+        std::cerr << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+    Lexer lexer(diag, C.get_pool(), path.c_str(), in);
+    Parser parser(lexer);
+    Sema sema(diag);
+
+    while (parser.token()) {
+        auto stmt = std::unique_ptr<Stmt>(parser.parse());
+        if (diag.num_errors()) return;
+        sema(*stmt);
+        if (diag.num_errors()) return;
+        execute_statement(diag, *stmt);
+    }
 }

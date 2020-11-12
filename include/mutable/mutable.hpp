@@ -20,6 +20,7 @@
 #include "mutable/storage/Store.hpp"
 #include "mutable/util/ADT.hpp"
 #include "mutable/util/Diagnostic.hpp"
+#include "mutable/util/Diagnostic.hpp"
 #include "mutable/util/exception.hpp"
 #include "mutable/util/fn.hpp"
 #include "mutable/util/macro.hpp"
@@ -34,23 +35,34 @@
 namespace m {
 
 /** Use lexer, parser and semantic analysis to create a `Stmt` for the given `std::string`. */
-std::unique_ptr<Stmt> query_from_string(const std::string &query);
+std::unique_ptr<Stmt> statement_from_string(Diagnostic &diag, const std::string &str);
 
 /** Optimizes and executes the given `Stmt`. */
-void execute_query(const Stmt &stmt);
+void execute_statement(Diagnostic &diag, const Stmt &stmt);
 
-/** Loads a CSV file into a `Table`.
+/**
+ * Loads a CSV file into a `Table`.
  *
+ * @param diag          the diagnostic object
  * @param table         the table to load the data into
  * @param path          the path to the CSV file
  * @param num_rows      the number of rows to load from the CSV file
  * @param has_header    whether the CSV file contains a header
  * @param skip_header   whether to ignore the header
  */
-void load_from_CSV(Table &table,
+void load_from_CSV(Diagnostic &diag,
+                   Table &table,
                    const std::filesystem::path &path,
                    std::size_t num_rows = std::numeric_limits<std::size_t>::max(),
                    bool has_header = false,
                    bool skip_header = false);
+
+/**
+ * Execute the SQL file at `path`.
+ *
+ * @param diag  the diagnostic object
+ * @param path  the path to the SQL file
+ */
+void execute_file(Diagnostic &diag, std::filesystem::path &path);
 
 }

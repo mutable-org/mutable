@@ -63,6 +63,6 @@ void load_from_CSV(Diagnostic &diag,
  * @param diag  the diagnostic object
  * @param path  the path to the SQL file
  */
-void execute_file(Diagnostic &diag, std::filesystem::path &path);
+void execute_file(Diagnostic &diag, const std::filesystem::path &path);
 
 }

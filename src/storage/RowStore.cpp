@@ -24,8 +24,8 @@ RowStore::RowStore(const Table &table)
     data_ = allocator.allocate(ALLOCATION_SIZE);
 
     /* Initialize linearization. */
-    auto lin = std::make_unique<Linearization>(Linearization::CreateInfiniteSequence(1));
-    auto child = std::make_unique<Linearization>(Linearization::CreateFiniteSequence(table.size() + 1, 1));
+    auto lin = std::make_unique<Linearization>(Linearization::CreateInfinite(1));
+    auto child = std::make_unique<Linearization>(Linearization::CreateFinite(table.size() + 1, 1));
     for (auto &attr : table)
         child->add_sequence(offset(attr), 0, attr);
     child->add_null_bitmap(offset(table.size()), 0);

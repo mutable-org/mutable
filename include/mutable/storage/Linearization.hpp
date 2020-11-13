@@ -95,10 +95,10 @@ struct Linearization
     uintptr_t *sequences_ = nullptr; ///< array of nested `Linearization`s or `Attribute`s, 0 iff the null bitmap is stored, LSB is 1 iff an `Attribute` is stored
 
     public:
-    static Linearization CreateInfiniteSequence(std::size_t num_sequences) {
+    static Linearization CreateInfinite(std::size_t num_sequences) {
         return Linearization(num_sequences, 0);
     }
-    static Linearization CreateFiniteSequence(std::size_t num_sequences, std::size_t num_tuples) {
+    static Linearization CreateFinite(std::size_t num_sequences, std::size_t num_tuples) {
         if (num_tuples == 0)
             throw invalid_argument("Finite sequences must contain at least 1 tuple.");
         return Linearization(num_sequences, num_tuples);

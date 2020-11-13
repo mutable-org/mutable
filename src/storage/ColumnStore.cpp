@@ -30,20 +30,20 @@ ColumnStore::ColumnStore(const Table &table)
     capacity_ = (ALLOCATION_SIZE * 8) / max_attr_size;
 
     /* Initialize linearization. */
-    auto lin = std::make_unique<Linearization>(Linearization::CreateInfiniteSequence(table.size() + 1));
+    auto lin = std::make_unique<Linearization>(Linearization::CreateInfinite(table.size() + 1));
     for (auto &attr : table) {
         if (attr.type->is_boolean()) {
             /* Pack 8 booleans into a sequence of 1 byte. */
-            auto seq = std::make_unique<Linearization>(Linearization::CreateFiniteSequence(1, 8));
+            auto seq = std::make_unique<Linearization>(Linearization::CreateFinite(1, 8));
             seq->add_sequence(0, 1, attr);
             lin->add_sequence(uintptr_t(memory(attr.id).addr()), 1, std::move(seq));
         } else {
-            auto seq = std::make_unique<Linearization>(Linearization::CreateFiniteSequence(1, 1));
+            auto seq = std::make_unique<Linearization>(Linearization::CreateFinite(1, 1));
             seq->add_sequence(0, 0, attr);
             lin->add_sequence(uintptr_t(memory(attr.id).addr()), attr.type->size() / 8, std::move(seq));
         }
     }
-    auto seq = std::make_unique<Linearization>(Linearization::CreateFiniteSequence(1, 1));
+    auto seq = std::make_unique<Linearization>(Linearization::CreateFinite(1, 1));
     seq->add_null_bitmap(0, 0);
     lin->add_sequence(uintptr_t(memory(table.size()).addr()), (table.size() + 7 ) / 8, std::move(seq));
     linearization(std::move(lin));

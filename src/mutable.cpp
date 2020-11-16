@@ -133,7 +133,7 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
     std::cerr.flush();
 }
 
-void execute_query(Diagnostic&, const SelectStmt &stmt, std::unique_ptr<Consumer> consumer)
+void m::execute_query(Diagnostic&, const SelectStmt &stmt, std::unique_ptr<Consumer> consumer)
 {
     auto query_graph = QueryGraph::Build(stmt);
 

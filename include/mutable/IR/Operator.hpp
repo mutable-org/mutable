@@ -146,8 +146,9 @@ struct Consumer : virtual Operator
 
 struct CallbackOperator : Consumer
 {
-    private:
     using callback_type = std::function<void(const Schema &, const Tuple&)>;
+
+    private:
     callback_type callback_;
 
     public:

@@ -2,7 +2,7 @@
 
 #include "catalog/Schema.hpp"
 #include "globals.hpp"
-#include "IR/Tuple.hpp"
+#include "mutable/IR/Tuple.hpp"
 #include "mutable/storage/Store.hpp"
 #include "mutable/util/Timer.hpp"
 #include "storage/ColumnStore.hpp"

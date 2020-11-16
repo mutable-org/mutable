@@ -1,7 +1,7 @@
 #include "catch.hpp"
 
 #include "catalog/Schema.hpp"
-#include "IR/Tuple.hpp"
+#include "mutable/IR/Tuple.hpp"
 
 
 using namespace m;

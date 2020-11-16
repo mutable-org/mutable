@@ -12,6 +12,7 @@
 #include "mutable/IR/Optimizer.hpp"
 #include "mutable/IR/PlanEnumerator.hpp"
 #include "mutable/IR/QueryGraph.hpp"
+#include "mutable/IR/Tuple.hpp"
 #include "mutable/lex/Token.hpp"
 #include "mutable/lex/TokenType.hpp"
 #include "mutable/parse/AST.hpp"

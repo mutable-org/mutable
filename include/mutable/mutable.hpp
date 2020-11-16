@@ -40,6 +40,9 @@ std::unique_ptr<Stmt> statement_from_string(Diagnostic &diag, const std::string 
 /** Optimizes and executes the given `Stmt`. */
 void execute_statement(Diagnostic &diag, const Stmt &stmt);
 
+/** Optimizes and executes the given `SelectStmt`. */
+void execute_query(Diagnostic &diag, const SelectStmt &stmt, std::unique_ptr<Consumer> consumer);
+
 /**
  * Loads a CSV file into a `Table`.
  *

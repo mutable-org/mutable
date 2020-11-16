@@ -48,24 +48,15 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
     if (is<const SelectStmt>(stmt)) {
         auto query_graph = QueryGraph::Build(stmt);
 
-        std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::Create("DPccp");
+        std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::CreateDPccp();
         CostFunction cf([](CostFunction::Subproblem left, CostFunction::Subproblem right, int, const PlanTable &T) {
             return sum_wo_overflow(T[left].cost, T[right].cost, T[left].size, T[right].size);
         });
         Optimizer Opt(*pe, cf);
         auto optree = Opt(*query_graph);
 
-        std::unique_ptr<Consumer> plan;
-        auto print = [&](const Schema &S, const Tuple &t) { t.print(std::cout, S); std::cout << '\n'; };
-#if 0
-        plan = std::make_unique<CallbackOperator>(print);
-#else
-        plan = std::make_unique<PrintOperator>(std::cout);
-#endif
-        plan->add_child(optree.release());
-
         auto backend = Backend::Create("Interpreter");
-        backend->execute(*plan);
+        backend->execute(*optree);
     } else if (auto I = cast<const InsertStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
         auto &T = DB.get_table(I->table_name.text);
@@ -142,11 +133,27 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
     std::cerr.flush();
 }
 
+void execute_query(Diagnostic&, const SelectStmt &stmt, std::unique_ptr<Consumer> consumer)
+{
+    auto query_graph = QueryGraph::Build(stmt);
+
+    std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::CreateDPccp();
+    CostFunction cf([](CostFunction::Subproblem left, CostFunction::Subproblem right, int, const PlanTable &T) {
+        return sum_wo_overflow(T[left].cost, T[right].cost, T[left].size, T[right].size);
+    });
+    Optimizer Opt(*pe, cf);
+    auto optree = Opt(*query_graph);
+
+    consumer->add_child(optree.release());
+
+    auto backend = Backend::Create("Interpreter");
+    backend->execute(*consumer);
+}
+
 void m::load_from_CSV(Diagnostic &diag, Table &table, const std::filesystem::path &path, std::size_t num_rows,
                       bool has_header, bool skip_header)
 {
     diag.clear();
-    Catalog &C = Catalog::Get();
     DSVReader R(table, diag, num_rows, ',', '\\', '\"', has_header, skip_header);
 
     errno = 0;

@@ -55,8 +55,11 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
         Optimizer Opt(*pe, cf);
         auto optree = Opt(*query_graph);
 
+        PrintOperator print(std::cout);
+        print.add_child(optree.release());
+
         auto backend = Backend::Create("Interpreter");
-        backend->execute(*optree);
+        backend->execute(print);
     } else if (auto I = cast<const InsertStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
         auto &T = DB.get_table(I->table_name.text);

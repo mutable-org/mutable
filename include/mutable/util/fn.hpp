@@ -75,6 +75,8 @@ template<typename T>
 typename std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T> and sizeof(T) <= sizeof(unsigned long long), T>
 ceil_to_pow_2(T n)
 {
+    if (n <= 1) return 1;
+
     /* Count leading zeros. */
     int lz;
     if constexpr (sizeof(T) <= sizeof(unsigned)) {
@@ -130,7 +132,7 @@ template<typename T>
 typename std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T> and sizeof(T) <= sizeof(unsigned long long), T>
 log2_ceil(T n)
 {
-    return log2_floor(n - T(1)) + T(1);
+    return n <= 1 ? 0 : log2_floor(n - T(1)) + T(1);
 }
 
 /** Short version of dynamic_cast that works for pointers and references. */

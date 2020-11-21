@@ -10,8 +10,8 @@
 #include <iterator>
 #include <limits>
 #include <map>
+#include <memory>
 #include <string>
-#include <variant>
 
 
 using namespace m;
@@ -40,8 +40,9 @@ void DSVReader::operator()(std::istream &in, const char *name)
     Schema S;
     for (auto &attr : table) S.add({table.name, attr.name}, attr.type);
 
-    /* Compile stack machine. */
-    auto W = Interpreter::compile_store(S, store.linearization());
+    /* Declare reference to the `StackMachine` for the current `Linearization`. */
+    std::unique_ptr<StackMachine> W;
+    const Linearization *lin = nullptr;
 
     /* Allocate intermediate tuple. */
     tup = Tuple(S);
@@ -117,8 +118,13 @@ end_of_row:
             diag.e(pos) << "Expected end of row.\n";
             discard_row();
         } else {
+            if (lin != &store.linearization()) {
+                /* The linearization was updated, recompile stack machine. */
+                W = std::make_unique<StackMachine>(Interpreter::compile_store(S, store.linearization()));
+                lin = &store.linearization();
+            }
             Tuple *args[] = { &tup };
-            W(args); // write tuple to store
+            (*W)(args); // write tuple to store
         }
         insist(c == EOF or c == '\n');
         step();

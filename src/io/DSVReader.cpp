@@ -103,7 +103,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
             }
 
             if (col) { // current cell should be read
-                if (c == delimiter) { // NULL
+                if ((i == columns.size() - 1 and c == '\n') or (i < columns.size() - 1 and c == delimiter)) { // NULL
                     tup.null(col->id);
                     continue; // keep delimiter (expected at beginning of each loop)
                 }

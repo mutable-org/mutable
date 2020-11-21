@@ -20,7 +20,7 @@ using namespace m;
  *====================================================================================================================*/
 
 /** Compile a `StackMachine` to load the attributes in `Schema` `S` using a given `Linearization`. */
-StackMachine Interpreter::compile_load(const Schema &S, const Linearization &L, std::size_t)
+StackMachine Interpreter::compile_load(const Schema &S, const Linearization &L, std::size_t row_id)
 {
     StackMachine SM; // the `StackMachine` to compile
 
@@ -44,27 +44,31 @@ StackMachine Interpreter::compile_load(const Schema &S, const Linearization &L, 
     {
         /* Compuate location of NULL bitmap. */
         uintptr_t null_bitmap_offset = reinterpret_cast<uintptr_t>(nullptr);
-        auto find_null_bitmap = [&](const Linearization &L) -> void {
-            auto find_null_bitmap_impl = [&](const Linearization &L, uintptr_t offset, auto &find_null_bitmap_ref) -> void {
+        auto find_null_bitmap = [&](const Linearization &L, std::size_t row_id) -> void {
+            auto find_null_bitmap_impl = [&](const Linearization &L, uintptr_t offset, std::size_t row_id, auto &find_null_bitmap_ref) -> void {
                 for (auto e : L) {
                     if (e.is_null_bitmap()) {
                         insist(not null_bitmap_info, "there must be at most one null bitmap in the linearization");
-                        null_bitmap_offset = offset * 8 + e.offset;
+                        null_bitmap_offset = offset * 8 + e.offset + row_id * e.stride;
                     } else if (e.is_linearization()) {
-                        find_null_bitmap_ref(e.as_linearization(), offset + e.offset, find_null_bitmap_ref);
+                        auto &lin = e.as_linearization();
+                        insist(lin.num_tuples() != 0);
+                        const std::size_t lin_id = row_id / lin.num_tuples();
+                        const std::size_t inner_row_id = row_id % lin.num_tuples();
+                        find_null_bitmap_ref(e.as_linearization(), offset + e.offset + e.stride * lin_id, inner_row_id, find_null_bitmap_ref);
                     }
                 }
             };
-            find_null_bitmap_impl(L, 0, find_null_bitmap_impl);
+            find_null_bitmap_impl(L, 0, row_id, find_null_bitmap_impl);
         };
-        find_null_bitmap(L);
+        find_null_bitmap(L, row_id);
         null_bitmap_info.id = SM.add(null_bitmap_offset / 8); // add NULL bitmap address to context
         null_bitmap_info.bit_offset = null_bitmap_offset % 8;
     }
 
     /* Emit code for attribute access and pointer increment. */
     auto compile_load_rec = [&](const Linearization &L) -> void {
-        auto compile_rec_impl = [&](const Linearization &L, uintptr_t offset, auto &compile_rec_ref) -> void {
+        auto compile_rec_impl = [&](const Linearization &L, uintptr_t offset, std::size_t row_id, auto &compile_rec_ref) -> void {
             for (auto e : L) {
                 if (e.is_null_bitmap()) {
                     /* nothing to be done */
@@ -74,8 +78,8 @@ StackMachine Interpreter::compile_load(const Schema &S, const Linearization &L, 
                     /* Locate the attribute in the operator schema. */
                     if (auto it = S.find(attr.name); it != S.end()) {
                         uint64_t idx = std::distance(S.begin(), it); // get attribute index in schema
-                        const std::size_t byte_offset = e.offset / 8;
-                        const std::size_t bit_offset = e.offset % 8;
+                        const std::size_t byte_offset = (e.offset + row_id * e.stride) / 8;
+                        const std::size_t bit_offset = (e.offset + row_id * e.stride) % 8;
                         insist(not bit_offset or attr.type->is_boolean(), "only booleans may not be byte aligned");
 
                         const std::size_t byte_stride = e.stride / 8;
@@ -83,9 +87,6 @@ StackMachine Interpreter::compile_load(const Schema &S, const Linearization &L, 
                         insist(not bit_stride or attr.type->is_boolean(), "only booleans may not be byte aligned");
                         insist(bit_stride == 0 or byte_stride == 0, "the stride must be a whole multiple of a byte or "
                                                                     "less than a byte");
-
-                        insist(bit_offset == 0 or bit_stride == 0, "either the attribute is aligned at a whole byte or "
-                                                                   "the stride is a whole multuple of a byte");
 
                         /* Get NULL bit. */
                         if (null_bitmap_info) {
@@ -107,13 +108,12 @@ StackMachine Interpreter::compile_load(const Schema &S, const Linearization &L, 
 
                         if (bit_stride) {
                             insist(attr.type->is_boolean(), "only booleans may not be byte aligned");
-                            insist(bit_offset == 0);
 
                             /* Load byte with the respective value. */
                             SM.emit_Ld_i8();
 
                             /* Introduce mask. */
-                            auto mask_id = SM.add_and_emit_load(uint64_t(0x1));
+                            auto mask_id = SM.add_and_emit_load(uint64_t(0x1UL << bit_offset));
 
                             /* Apply mask and convert to bool. */
                             SM.emit_And_i();
@@ -179,11 +179,15 @@ StackMachine Interpreter::compile_load(const Schema &S, const Linearization &L, 
 
                     }
                 } else {
-                    compile_rec_ref(e.as_linearization(), offset + e.offset, compile_rec_ref);
+                    auto &lin = e.as_linearization();
+                    insist(lin.num_tuples() != 0);
+                    const std::size_t lin_id = row_id / lin.num_tuples();
+                    const std::size_t inner_row_id = row_id % lin.num_tuples();
+                    compile_rec_ref(e.as_linearization(), offset + e.offset + e.stride * lin_id, inner_row_id, compile_rec_ref);
                 }
             }
         };
-        compile_rec_impl(L, 0, compile_rec_impl);
+        compile_rec_impl(L, 0, row_id, compile_rec_impl);
     };
     compile_load_rec(L);
 
@@ -276,7 +280,7 @@ StackMachine Interpreter::compile_load(const Schema &S, const Linearization &L, 
 }
 
 /** Compile a `StackMachine` to store a tuple of `Schema` `S` using a given `Linearization`. */
-StackMachine Interpreter::compile_store(const Schema &S, const Linearization &L, std::size_t)
+StackMachine Interpreter::compile_store(const Schema &S, const Linearization &L, std::size_t row_id)
 {
     StackMachine SM; // the `StackMachine` to compile
 
@@ -300,27 +304,32 @@ StackMachine Interpreter::compile_store(const Schema &S, const Linearization &L,
     {
         /* Compuate location of NULL bitmap. */
         uintptr_t null_bitmap_offset = reinterpret_cast<uintptr_t>(nullptr);
-        auto find_null_bitmap = [&](const Linearization &L) -> void {
-            auto find_null_bitmap_impl = [&](const Linearization &L, uintptr_t offset, auto &find_null_bitmap_ref) -> void {
+        auto find_null_bitmap = [&](const Linearization &L, std::size_t row_id) -> void {
+            auto find_null_bitmap_impl = [&](const Linearization &L, uintptr_t offset, std::size_t row_id, auto &find_null_bitmap_ref) -> void {
                 for (auto e : L) {
                     if (e.is_null_bitmap()) {
                         insist(not null_bitmap_info, "there must be at most one null bitmap in the linearization");
+                        insist(row_id == 0, "there is onle one null bitmap per entire row");
                         null_bitmap_offset = offset * 8 + e.offset;
                     } else if (e.is_linearization()) {
-                        find_null_bitmap_ref(e.as_linearization(), offset + e.offset, find_null_bitmap_ref);
+                        auto &lin = e.as_linearization();
+                        insist(lin.num_tuples() != 0);
+                        const std::size_t lin_id = row_id / lin.num_tuples();
+                        const std::size_t inner_row_id = row_id % lin.num_tuples();
+                        find_null_bitmap_ref(e.as_linearization(), offset + e.offset + e.stride * lin_id, inner_row_id, find_null_bitmap_ref);
                     }
                 }
             };
-            find_null_bitmap_impl(L, 0, find_null_bitmap_impl);
+            find_null_bitmap_impl(L, 0, row_id, find_null_bitmap_impl);
         };
-        find_null_bitmap(L);
+        find_null_bitmap(L, row_id);
         null_bitmap_info.id = SM.add(null_bitmap_offset / 8); // add NULL bitmap address to context
         null_bitmap_info.bit_offset = null_bitmap_offset % 8;
     }
 
     /* Emit code for attribute access and pointer increment. */
     auto compile_store_rec = [&](const Linearization &L) -> void {
-        auto compile_rec_impl = [&](const Linearization &L, uintptr_t offset, auto &compile_rec_ref) -> void {
+        auto compile_rec_impl = [&](const Linearization &L, uintptr_t offset, std::size_t row_id, auto &compile_rec_ref) -> void {
             for (auto e : L) {
                 if (e.is_null_bitmap()) {
                     /* nothing to be done */
@@ -330,8 +339,8 @@ StackMachine Interpreter::compile_store(const Schema &S, const Linearization &L,
                     /* Locate the attribute in the operator schema. */
                     if (auto it = S.find(attr.name); it != S.end()) {
                         uint64_t idx = std::distance(S.begin(), it); // get attribute index in schema
-                        const std::size_t byte_offset = e.offset / 8;
-                        const std::size_t bit_offset = e.offset % 8;
+                        const std::size_t byte_offset = (e.offset + row_id * e.stride) / 8;
+                        const std::size_t bit_offset = (e.offset + row_id * e.stride) % 8;
                         insist(not bit_offset or attr.type->is_boolean(), "only booleans may not be byte aligned");
 
                         const std::size_t byte_stride = e.stride / 8;
@@ -339,9 +348,6 @@ StackMachine Interpreter::compile_store(const Schema &S, const Linearization &L,
                         insist(not bit_stride or attr.type->is_boolean(), "only booleans may not be byte aligned");
                         insist(bit_stride == 0 or byte_stride == 0, "the stride must be a whole multiple of a byte or "
                                                                     "less than a byte");
-
-                        insist(bit_offset == 0 or bit_stride == 0, "either the attribute is aligned at a whole byte or "
-                                                                   "the stride is a whole multuple of a byte");
 
                         /* Set NULL bit. */
                         if (null_bitmap_info) {
@@ -369,7 +375,6 @@ StackMachine Interpreter::compile_store(const Schema &S, const Linearization &L,
 
                         if (bit_stride) {
                             insist(attr.type->is_boolean(), "only booleans may not be byte aligned");
-                            insist(bit_offset == 0);
 
                             /* Duplicate address because it is required twice to load and store. */
                             SM.emit_Dup();
@@ -381,7 +386,7 @@ StackMachine Interpreter::compile_store(const Schema &S, const Linearization &L,
                             SM.emit_Ld_Tup(0, idx); // boolean
 
                             /* Introduce bit offset. */
-                            auto mask_id = SM.add_and_emit_load(uint64_t(0x1));
+                            auto mask_id = SM.add_and_emit_load(uint64_t(0x1UL << bit_offset));
 
                             /* Select mask as single shifted bit or zero based on the value to store. */
                             SM.add_and_emit_load(uint64_t(0)); // neutral element of Or
@@ -438,12 +443,15 @@ StackMachine Interpreter::compile_store(const Schema &S, const Linearization &L,
 
                     }
                 } else {
-                    insist(e.is_linearization());
-                    compile_rec_ref(e.as_linearization(), offset + e.offset, compile_rec_ref);
+                    auto &lin = e.as_linearization();
+                    insist(lin.num_tuples() != 0);
+                    const std::size_t lin_id = row_id / lin.num_tuples();
+                    std::size_t inner_row_id = row_id % lin.num_tuples();
+                    compile_rec_ref(e.as_linearization(), offset + e.offset + e.stride * lin_id, inner_row_id, compile_rec_ref);
                 }
             }
         };
-        compile_rec_impl(L, 0, compile_rec_impl);
+        compile_rec_impl(L, 0, row_id, compile_rec_impl);
     };
     compile_store_rec(L);
 

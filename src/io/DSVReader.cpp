@@ -120,7 +120,7 @@ end_of_row:
         } else {
             if (lin != &store.linearization()) {
                 /* The linearization was updated, recompile stack machine. */
-                W = std::make_unique<StackMachine>(Interpreter::compile_store(S, store.linearization()));
+                W = std::make_unique<StackMachine>(Interpreter::compile_store(S, store.linearization(), store.num_rows() - 1));
                 lin = &store.linearization();
             }
             Tuple *args[] = { &tup };

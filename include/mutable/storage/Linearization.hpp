@@ -159,6 +159,8 @@ struct Linearization
             throw out_of_range("maximum capacity reached");
         if (lin->num_tuples_ == 0)
             throw invalid_argument("cannot add an infinite sequence");
+        if (num_tuples_ == 1 and stride_in_bytes != 0)
+            throw invalid_argument("cannot add sequence with stride in a sequence of 1 tuple");
         if (this->num_tuples_ % lin->num_tuples_ != 0)
             throw invalid_argument("the number of tuples of the sequence to add must be a proper divisor of the "
                                    "number of tuples of the sequence being added to");
@@ -175,6 +177,8 @@ struct Linearization
     void add_sequence(uint64_t offset_in_bits, uint32_t stride_in_bits, const Attribute &attr) {
         if (size_ == capacity_)
             throw out_of_range("maximum capacity reached");
+        if (num_tuples_ == 1 and stride_in_bits != 0)
+            throw invalid_argument("cannot add attribute with stride in a sequence of 1 tuple");
         // XXX: Why not support this?
         // for (auto e : *this)
         //     if (not e.is_attribute())
@@ -188,6 +192,8 @@ struct Linearization
     void add_null_bitmap(uint64_t offset_in_bits, uint32_t stride_in_bits) {
         if (size_ == capacity_)
             throw out_of_range("maximum capacity reached");
+        if (num_tuples_ == 1 and stride_in_bits != 0)
+            throw invalid_argument("cannot add null bitmap with stride in a sequence of 1 tuple");
         auto idx = size_++;
         offsets_[idx] = offset_in_bits;
         strides_[idx] = stride_in_bits;

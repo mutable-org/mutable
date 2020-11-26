@@ -43,6 +43,7 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
         storage/RowStoreTest.cpp
 
         # backend
+        backend/InterpreterTest.cpp
         backend/StackMachineTest.cpp
     )
     target_link_libraries(unittest ${PROJECT_NAME})

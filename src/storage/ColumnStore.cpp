@@ -2,6 +2,7 @@
 
 #include "backend/StackMachine.hpp"
 #include "mutable/storage/Linearization.hpp"
+#include <numeric>
 
 
 using namespace m;
@@ -43,9 +44,19 @@ ColumnStore::ColumnStore(const Table &table)
             lin->add_sequence(uintptr_t(memory(attr.id).addr()), attr.type->size() / 8, std::move(seq));
         }
     }
+#if 0
+    /* Pad null bitmap to next byte to reserve space for possible added columns. */
     auto seq = std::make_unique<Linearization>(Linearization::CreateFinite(1, 1));
     seq->add_null_bitmap(0, 0);
     lin->add_sequence(uintptr_t(memory(table.size()).addr()), (table.size() + 7 ) / 8, std::move(seq));
+#else
+    /* Pack null bitmaps consecutively to save space. */
+    const std::size_t bits_per_pack = std::lcm(table.size(), 8); // least common multiple
+    const std::size_t num_bitmaps_per_pack = bits_per_pack / table.size();
+    auto seq = std::make_unique<Linearization>(Linearization::CreateFinite(1, num_bitmaps_per_pack));
+    seq->add_null_bitmap(0, num_bitmaps_per_pack == 1 ? 0 : table.size());
+    lin->add_sequence(uintptr_t(memory(table.size()).addr()), bits_per_pack / 8, std::move(seq));
+#endif
     linearization(std::move(lin));
 }
 

@@ -1172,8 +1172,18 @@ Or_i: BINARY(std::bit_or{}, int64_t);
 /* Bitwise Xor */
 Xor_i: BINARY(std::bit_xor{}, int64_t);
 
-/* Shift left. */
+/* Shift left - with operand on stack. */
 ShL_i: {
+    insist(top_ >= 2);
+    uint64_t count = TOP.as<int64_t>();
+    POP();
+    uint64_t val = TOP.as<int64_t>();
+    TOP = uint64_t(val << count);
+}
+NEXT;
+
+/* Shift left immediate - with operand as argument. */
+ShLi_i: {
     insist(top_ >= 1);
     std::size_t count = std::size_t(*op_++);
     uint64_t val = TOP.as<int64_t>();
@@ -1181,8 +1191,8 @@ ShL_i: {
 }
 NEXT;
 
-/* Shift logical right. */
-ShR_i: {
+/* Shift logical right immediate - with operand as argument. */
+ShRi_i: {
     insist(top_ >= 1);
     std::size_t count = std::size_t(*op_++);
     uint64_t val = TOP.as<int64_t>(); // unsigned integer for logical shift
@@ -1190,8 +1200,8 @@ ShR_i: {
 }
 NEXT;
 
-/* Shift arithmetical right. */
-SAR_i: {
+/* Shift arithmetical right - with operand as argument. */
+SARi_i: {
     insist(top_ >= 1);
     std::size_t count = std::size_t(*op_++);
     int64_t val = TOP.as<int64_t>(); // signed integer for arithmetical shift

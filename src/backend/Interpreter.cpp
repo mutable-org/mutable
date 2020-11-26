@@ -34,36 +34,44 @@ StackMachine Interpreter::compile_load(const Schema &S, const Linearization &L, 
 
     struct {
         std::size_t id = -1UL; ///< context id
+        std::size_t offset_id = -1UL; ///< offset id to keep track of current adjustable bit offset in case of a bit stride
         uintptr_t bit_offset; ///< in bits
+        uint64_t bit_stride; ///< in bits
+        uint64_t num_tuples; ///< number of tuples of the linearization in which the null bitmap is stored
+        std::size_t row_id; ///< the row id within the linearization in which the null bitmap is stored
 
         operator bool() { return id != -1UL; }
+        bool adjustable_offset() { return offset_id != -1UL; }
     } null_bitmap_info;
 
     std::unordered_map<decltype(Attribute::id), std::size_t> attr2id;
 
-    {
-        /* Compuate location of NULL bitmap. */
-        uintptr_t null_bitmap_offset = reinterpret_cast<uintptr_t>(nullptr);
-        auto find_null_bitmap = [&](const Linearization &L, std::size_t row_id) -> void {
-            auto find_null_bitmap_impl = [&](const Linearization &L, uintptr_t offset, std::size_t row_id, auto &find_null_bitmap_ref) -> void {
-                for (auto e : L) {
-                    if (e.is_null_bitmap()) {
-                        insist(not null_bitmap_info, "there must be at most one null bitmap in the linearization");
-                        null_bitmap_offset = offset * 8 + e.offset + row_id * e.stride;
-                    } else if (e.is_linearization()) {
-                        auto &lin = e.as_linearization();
-                        insist(lin.num_tuples() != 0);
-                        const std::size_t lin_id = row_id / lin.num_tuples();
-                        const std::size_t inner_row_id = row_id % lin.num_tuples();
-                        find_null_bitmap_ref(e.as_linearization(), offset + e.offset + e.stride * lin_id, inner_row_id, find_null_bitmap_ref);
-                    }
+    /* Compute location of NULL bitmap. */
+    auto find_null_bitmap = [&](const Linearization &L, std::size_t row_id) -> void {
+        auto find_null_bitmap_impl = [&](const Linearization &L, uintptr_t offset, std::size_t row_id, auto &find_null_bitmap_ref) -> void {
+            for (auto e : L) {
+                if (e.is_null_bitmap()) {
+                    insist(not null_bitmap_info, "there must be at most one null bitmap in the linearization");
+                    uintptr_t null_bitmap_offset = offset * 8 + e.offset + row_id * e.stride;
+                    null_bitmap_info.id = SM.add(null_bitmap_offset / 8); // add NULL bitmap address to context
+                    null_bitmap_info.bit_offset = null_bitmap_offset % 8;
+                    null_bitmap_info.bit_stride = e.stride;
+                    null_bitmap_info.num_tuples = L.num_tuples();
+                    null_bitmap_info.row_id = row_id;
+                } else if (e.is_linearization()) {
+                    auto &lin = e.as_linearization();
+                    insist(lin.num_tuples() != 0);
+                    const std::size_t lin_id = row_id / lin.num_tuples();
+                    const std::size_t inner_row_id = row_id % lin.num_tuples();
+                    find_null_bitmap_ref(e.as_linearization(), offset + e.offset + e.stride * lin_id, inner_row_id, find_null_bitmap_ref);
                 }
-            };
-            find_null_bitmap_impl(L, 0, row_id, find_null_bitmap_impl);
+            }
         };
-        find_null_bitmap(L, row_id);
-        null_bitmap_info.id = SM.add(null_bitmap_offset / 8); // add NULL bitmap address to context
-        null_bitmap_info.bit_offset = null_bitmap_offset % 8;
+        find_null_bitmap_impl(L, 0, row_id, find_null_bitmap_impl);
+    };
+    find_null_bitmap(L, row_id);
+    if (null_bitmap_info and null_bitmap_info.bit_stride) {
+        null_bitmap_info.offset_id = SM.add(null_bitmap_info.bit_offset); // add NULL bitmap offset to context
     }
 
     /* Emit code for attribute access and pointer increment. */
@@ -90,16 +98,48 @@ StackMachine Interpreter::compile_load(const Schema &S, const Linearization &L, 
 
                         /* Get NULL bit. */
                         if (null_bitmap_info) {
-                            const std::size_t bit_offset = null_bitmap_info.bit_offset + attr.id;
-                            if (bit_offset < 8) {
-                                SM.emit_Ld_Ctx(null_bitmap_info.id);
-                                SM.emit_Ld_b(0x1U << bit_offset);
+                            if (not null_bitmap_info.bit_stride) {
+                                /* No bit stride means the NULL bitmap only advances with parent sequence. */
+                                const std::size_t bit_offset = null_bitmap_info.bit_offset + attr.id;
+                                if (bit_offset < 8) {
+                                    SM.emit_Ld_Ctx(null_bitmap_info.id);
+                                    SM.emit_Ld_b(0x1U << bit_offset);
+                                } else {
+                                    /* advance to respective byte */
+                                    SM.emit_Ld_Ctx(null_bitmap_info.id);
+                                    SM.add_and_emit_load(uint64_t(bit_offset / 8));
+                                    SM.emit_Add_i();
+                                    SM.emit_Ld_b(0x1U << (bit_offset % 8));
+                                }
                             } else {
-                                /* advance to respective byte */
-                                SM.emit_Ld_Ctx(null_bitmap_info.id);
-                                SM.add_and_emit_load(uint64_t(bit_offset / 8));
+                                /* With bit stride. Use adjustable offset instead of fixed offset. */
+                                insist(null_bitmap_info.adjustable_offset());
+
+                                /* Load entire byte that contains the NULL bit. */
+                                SM.emit_Ld_Ctx(null_bitmap_info.offset_id);
+                                SM.add_and_emit_load(attr.id);
                                 SM.emit_Add_i();
-                                SM.emit_Ld_b(0x1U << (bit_offset % 8));
+                                SM.emit_SARi_i(3); // (adj_offset + attr.id) / 8
+                                SM.emit_Ld_Ctx(null_bitmap_info.id);
+                                SM.emit_Add_i();
+                                SM.emit_Ld_i8();
+
+                                /* Initialize mask. */
+                                SM.add_and_emit_load(uint64_t(1));
+
+                                /* Compute offset of NULL bit. */
+                                SM.emit_Ld_Ctx(null_bitmap_info.offset_id);
+                                SM.add_and_emit_load(attr.id);
+                                SM.emit_Add_i();
+                                SM.add_and_emit_load(uint64_t(0b111));
+                                SM.emit_And_i(); // (adj_offset + attr.id) % 8
+
+                                /* Shift mask by offset. */
+                                SM.emit_ShL_i();
+
+                                /* Apply mask and cast to boolean. */
+                                SM.emit_And_i();
+                                SM.emit_NEZ_i();
                             }
                         }
 
@@ -130,7 +170,7 @@ StackMachine Interpreter::compile_load(const Schema &S, const Linearization &L, 
 
                             /* Update the mask. */
                             SM.emit_Ld_Ctx(mask_id);
-                            SM.emit_ShL_i(1);
+                            SM.emit_ShLi_i(1);
                             SM.emit_Upd_Ctx(mask_id);
 
                             /* Check whether we are in the 8th iteration and reset mask. */
@@ -191,9 +231,53 @@ StackMachine Interpreter::compile_load(const Schema &S, const Linearization &L, 
     };
     compile_load_rec(L);
 
+    /* If the NULL bitmap has a stride, advance the adjustable offset accordingly. */
+    if (null_bitmap_info and null_bitmap_info.bit_stride) {
+        insist(null_bitmap_info.adjustable_offset());
+        insist(null_bitmap_info.num_tuples != 1);
+
+        /* Update adjustable offset. */
+        SM.emit_Ld_Ctx(null_bitmap_info.offset_id);
+        SM.add_and_emit_load(null_bitmap_info.bit_stride);
+        SM.emit_Add_i();
+        SM.emit_Upd_Ctx(null_bitmap_info.offset_id);
+        SM.emit_Pop();
+
+        /* Check whether we are in the last iteration and advance to correct byte. */
+        auto counter_id = SM.add_and_emit_load(uint64_t(null_bitmap_info.row_id));
+        SM.emit_Inc();
+        SM.emit_Upd_Ctx(counter_id);
+        SM.add_and_emit_load(null_bitmap_info.num_tuples);
+        SM.emit_NE_i();
+        SM.emit_Dup(); SM.emit_Dup(); // triple outcome for later use
+        SM.emit_Not_b(); // negate outcome of check
+        SM.emit_Cast_i_b(); // convert to int
+        SM.emit_Ld_Ctx(null_bitmap_info.offset_id);
+        SM.emit_SARi_i(3); // corresponds div 8
+        SM.emit_Mul_i();
+        SM.emit_Ld_Ctx(null_bitmap_info.id);
+        SM.emit_Add_i();
+        SM.emit_Upd_Ctx(null_bitmap_info.id); // id <- counter != num_tuples ? id : id + adj_offset / 8
+        SM.emit_Pop();
+
+        /* If we were in the last iteration, reset adjustable offset. */
+        SM.emit_Cast_i_b(); // convert outcome of previous check to int
+        SM.emit_Ld_Ctx(null_bitmap_info.offset_id);
+        SM.emit_Mul_i();
+        SM.emit_Upd_Ctx(null_bitmap_info.offset_id);
+        SM.emit_Pop();
+
+        /* If we were in the last iteration, reset the counter. */
+        SM.emit_Cast_i_b(); // convert outcome of previous check to int
+        SM.emit_Ld_Ctx(counter_id);
+        SM.emit_Mul_i();
+        SM.emit_Upd_Ctx(counter_id);
+        SM.emit_Pop();
+    }
+
     /* Emit code to gap strides. */
-    auto compile_stride_rec = [&](const Linearization &L) -> void {
-        auto compile_rec_impl = [&](const Linearization &L, auto &compile_rec_ref) -> void {
+    auto compile_stride_rec = [&](const Linearization &L, std::size_t row_id) -> void {
+        auto compile_rec_impl = [&](const Linearization &L, std::size_t row_id, auto &compile_rec_ref) -> void {
             for (auto e : L) {
                 if (e.is_null_bitmap() or e.is_attribute()) {
                     std::size_t offset_id;
@@ -243,7 +327,7 @@ StackMachine Interpreter::compile_load(const Schema &S, const Linearization &L, 
                     }
                 } else {
                     /* Initialize counter and emit increment. */
-                    auto counter_id = SM.add_and_emit_load(int64_t(0)); // introduce counter to track iteration count
+                    auto counter_id = SM.add_and_emit_load(int64_t(row_id)); // introduce counter to track iteration count
                     SM.emit_Inc();
                     SM.emit_Upd_Ctx(counter_id);
                     SM.emit_Pop(); // XXX: not needed if recursion cleans up stack properly
@@ -254,7 +338,8 @@ StackMachine Interpreter::compile_load(const Schema &S, const Linearization &L, 
                         .num_tuples = e.as_linearization().num_tuples(),
                         .stride = e.stride
                     });
-                    compile_rec_ref(e.as_linearization(), compile_rec_ref);
+                    const std::size_t inner_row_id = row_id % e.as_linearization().num_tuples();
+                    compile_rec_ref(e.as_linearization(), inner_row_id, compile_rec_ref);
                     stride_info_stack.pop_back();
 
                     /* Reset counter if iteration is whole multiple of num_tuples. */
@@ -272,9 +357,9 @@ StackMachine Interpreter::compile_load(const Schema &S, const Linearization &L, 
                 }
             }
         };
-        compile_rec_impl(L, compile_rec_impl);
+        compile_rec_impl(L, row_id, compile_rec_impl);
     };
-    compile_stride_rec(L);
+    compile_stride_rec(L, row_id);
 
     return SM;
 }
@@ -294,37 +379,44 @@ StackMachine Interpreter::compile_store(const Schema &S, const Linearization &L,
 
     struct {
         std::size_t id = -1UL; ///< context id
-        uintptr_t bit_offset; ///< in bits
+        std::size_t offset_id = -1UL; ///< offset id to keep track of current adjustable bit offset in case of a bit stride
+        uintptr_t bit_offset; ///< fixed offset, in bits
+        uint64_t bit_stride; ///< in bits
+        uint64_t num_tuples; ///< number of tuples of the linearization in which the null bitmap is stored
+        std::size_t row_id; ///< the row id within the linearization in which the null bitmap is stored
 
         operator bool() { return id != -1UL; }
+        bool adjustable_offset() { return offset_id != -1UL; }
     } null_bitmap_info;
 
     std::unordered_map<decltype(Attribute::id), std::size_t> attr2id;
 
-    {
-        /* Compuate location of NULL bitmap. */
-        uintptr_t null_bitmap_offset = reinterpret_cast<uintptr_t>(nullptr);
-        auto find_null_bitmap = [&](const Linearization &L, std::size_t row_id) -> void {
-            auto find_null_bitmap_impl = [&](const Linearization &L, uintptr_t offset, std::size_t row_id, auto &find_null_bitmap_ref) -> void {
-                for (auto e : L) {
-                    if (e.is_null_bitmap()) {
-                        insist(not null_bitmap_info, "there must be at most one null bitmap in the linearization");
-                        insist(row_id == 0, "there is onle one null bitmap per entire row");
-                        null_bitmap_offset = offset * 8 + e.offset;
-                    } else if (e.is_linearization()) {
-                        auto &lin = e.as_linearization();
-                        insist(lin.num_tuples() != 0);
-                        const std::size_t lin_id = row_id / lin.num_tuples();
-                        const std::size_t inner_row_id = row_id % lin.num_tuples();
-                        find_null_bitmap_ref(e.as_linearization(), offset + e.offset + e.stride * lin_id, inner_row_id, find_null_bitmap_ref);
-                    }
+    /* Compute location of NULL bitmap. */
+    auto find_null_bitmap = [&](const Linearization &L, std::size_t row_id) -> void {
+        auto find_null_bitmap_impl = [&](const Linearization &L, uintptr_t offset, std::size_t row_id, auto &find_null_bitmap_ref) -> void {
+            for (auto e : L) {
+                if (e.is_null_bitmap()) {
+                    insist(not null_bitmap_info, "there must be at most one null bitmap in the linearization");
+                    uintptr_t null_bitmap_offset = offset * 8 + e.offset + row_id * e.stride;
+                    null_bitmap_info.id = SM.add(null_bitmap_offset / 8); // add NULL bitmap address to context
+                    null_bitmap_info.bit_offset = null_bitmap_offset % 8;
+                    null_bitmap_info.bit_stride = e.stride;
+                    null_bitmap_info.num_tuples = L.num_tuples();
+                    null_bitmap_info.row_id = row_id;
+                } else if (e.is_linearization()) {
+                    auto &lin = e.as_linearization();
+                    insist(lin.num_tuples() != 0);
+                    const std::size_t lin_id = row_id / lin.num_tuples();
+                    const std::size_t inner_row_id = row_id % lin.num_tuples();
+                    find_null_bitmap_ref(e.as_linearization(), offset + e.offset + e.stride * lin_id, inner_row_id, find_null_bitmap_ref);
                 }
-            };
-            find_null_bitmap_impl(L, 0, row_id, find_null_bitmap_impl);
+            }
         };
-        find_null_bitmap(L, row_id);
-        null_bitmap_info.id = SM.add(null_bitmap_offset / 8); // add NULL bitmap address to context
-        null_bitmap_info.bit_offset = null_bitmap_offset % 8;
+        find_null_bitmap_impl(L, 0, row_id, find_null_bitmap_impl);
+    };
+    find_null_bitmap(L, row_id);
+    if (null_bitmap_info and null_bitmap_info.bit_stride) {
+        null_bitmap_info.offset_id = SM.add(null_bitmap_info.bit_offset); // add NULL bitmap offset to context
     }
 
     /* Emit code for attribute access and pointer increment. */
@@ -351,22 +443,76 @@ StackMachine Interpreter::compile_store(const Schema &S, const Linearization &L,
 
                         /* Set NULL bit. */
                         if (null_bitmap_info) {
-                            const std::size_t bit_offset = null_bitmap_info.bit_offset + attr.id;
-                            if (bit_offset < 8) {
-                                SM.emit_Ld_Ctx(null_bitmap_info.id);
-                                SM.emit_Ld_Tup(0, idx);
-                                SM.emit_Is_Null();
-                                SM.emit_Not_b();
-                                SM.emit_St_b(bit_offset);
+                            if (not null_bitmap_info.bit_stride) {
+                                /* No bit stride means the NULL bitmap only advances with parent sequence. */
+                                const std::size_t bit_offset = null_bitmap_info.bit_offset + attr.id;
+                                if (bit_offset < 8) {
+                                    SM.emit_Ld_Ctx(null_bitmap_info.id);
+                                    SM.emit_Ld_Tup(0, idx);
+                                    SM.emit_Is_Null();
+                                    SM.emit_Not_b();
+                                    SM.emit_St_b(bit_offset);
+                                } else {
+                                    /* Advance to respective byte. */
+                                    SM.emit_Ld_Ctx(null_bitmap_info.id);
+                                    SM.add_and_emit_load(uint64_t(bit_offset / 8));
+                                    SM.emit_Add_i();
+                                    SM.emit_Ld_Tup(0, idx);
+                                    SM.emit_Is_Null();
+                                    SM.emit_Not_b();
+                                    SM.emit_St_b(bit_offset % 8);
+                                }
                             } else {
-                                /* advance to respective byte */
-                                SM.emit_Ld_Ctx(null_bitmap_info.id);
-                                SM.add_and_emit_load(uint64_t(bit_offset / 8));
+                                /* With bit stride. Use adjustable offset instead of fixed offset. */
+                                insist(null_bitmap_info.adjustable_offset());
+
+                                /* Create variables for address and mask in context. */
+                                auto address_id = SM.add(uint64_t(0));
+                                auto mask_id = SM.add(uint64_t(0));
+
+                                /* Compute address to store. */
+                                SM.emit_Ld_Ctx(null_bitmap_info.offset_id);
+                                SM.add_and_emit_load(attr.id);
                                 SM.emit_Add_i();
+                                SM.emit_SARi_i(3); // (adj_offset + attr.id) / 8
+                                SM.emit_Ld_Ctx(null_bitmap_info.id);
+                                SM.emit_Add_i();
+                                SM.emit_Upd_Ctx(address_id);
+
+                                /* Test whether value equals NULL. */
                                 SM.emit_Ld_Tup(0, idx);
                                 SM.emit_Is_Null();
-                                SM.emit_Not_b();
-                                SM.emit_St_b(bit_offset % 8);
+
+                                /* Initialize mask. */
+                                SM.add_and_emit_load(uint64_t(1));
+
+                                /* Compute offset to store. */
+                                SM.emit_Ld_Ctx(null_bitmap_info.offset_id);
+                                SM.add_and_emit_load(attr.id);
+                                SM.emit_Add_i();
+                                SM.add_and_emit_load(uint64_t(0b111));
+                                SM.emit_And_i(); // (adj_offset + attr.id) % 8
+
+                                /* Shift mask by offset. */
+                                SM.emit_ShL_i();
+                                SM.emit_Upd_Ctx(mask_id);
+
+                                /* Load byte and set NULL bit to 0. */
+                                SM.emit_Neg_i(); // negate mask which is currently on stack
+                                SM.emit_Ld_Ctx(address_id);
+                                SM.emit_Ld_i8();
+                                SM.emit_And_i(); // in case of NULL
+
+                                /* Load byte and set NULL bit to 1. */
+                                SM.emit_Ld_Ctx(mask_id);
+                                SM.emit_Ld_Ctx(address_id);
+                                SM.emit_Ld_i8();
+                                SM.emit_Or_i(); // in case of not NULL
+
+                                SM.emit_Sel(); // select the respective modified byte
+
+                                /* Write entire byte back to the store. */
+                                SM.emit_St_i8();
                             }
                         }
 
@@ -401,7 +547,7 @@ StackMachine Interpreter::compile_store(const Schema &S, const Linearization &L,
 
                             /* Update the mask. */
                             SM.emit_Ld_Ctx(mask_id);
-                            SM.emit_ShL_i(1);
+                            SM.emit_ShLi_i(1);
                             SM.emit_Upd_Ctx(mask_id);
 
                             /* Check whether we are in the 8th iteration and reset mask. */
@@ -456,9 +602,53 @@ StackMachine Interpreter::compile_store(const Schema &S, const Linearization &L,
     };
     compile_store_rec(L);
 
+    /* If the NULL bitmap has a stride, advance the adjustable offset accordingly. */
+    if (null_bitmap_info and null_bitmap_info.bit_stride) {
+        insist(null_bitmap_info.adjustable_offset());
+        insist(null_bitmap_info.num_tuples != 1);
+
+        /* Update adjustable offset. */
+        SM.emit_Ld_Ctx(null_bitmap_info.offset_id);
+        SM.add_and_emit_load(null_bitmap_info.bit_stride);
+        SM.emit_Add_i();
+        SM.emit_Upd_Ctx(null_bitmap_info.offset_id);
+        SM.emit_Pop();
+
+        /* Check whether we are in the last iteration and advance to correct byte. */
+        auto counter_id = SM.add_and_emit_load(uint64_t(null_bitmap_info.row_id));
+        SM.emit_Inc();
+        SM.emit_Upd_Ctx(counter_id);
+        SM.add_and_emit_load(null_bitmap_info.num_tuples);
+        SM.emit_NE_i();
+        SM.emit_Dup(); SM.emit_Dup(); // triple outcome for later use
+        SM.emit_Not_b(); // negate outcome of check
+        SM.emit_Cast_i_b(); // convert to int
+        SM.emit_Ld_Ctx(null_bitmap_info.offset_id);
+        SM.emit_SARi_i(3); // corresponds div 8
+        SM.emit_Mul_i();
+        SM.emit_Ld_Ctx(null_bitmap_info.id);
+        SM.emit_Add_i();
+        SM.emit_Upd_Ctx(null_bitmap_info.id); // id <- counter != num_tuples ? id : id + adj_offset / 8
+        SM.emit_Pop();
+
+        /* If we were in the last iteration, reset adjustable offset. */
+        SM.emit_Cast_i_b(); // convert outcome of previous check to int
+        SM.emit_Ld_Ctx(null_bitmap_info.offset_id);
+        SM.emit_Mul_i();
+        SM.emit_Upd_Ctx(null_bitmap_info.offset_id);
+        SM.emit_Pop();
+
+        /* If we were in the last iteration, reset the counter. */
+        SM.emit_Cast_i_b(); // convert outcome of previous check to int
+        SM.emit_Ld_Ctx(counter_id);
+        SM.emit_Mul_i();
+        SM.emit_Upd_Ctx(counter_id);
+        SM.emit_Pop();
+    }
+
     /* Emit code to gap strides. */
-    auto compile_stride_rec = [&](const Linearization &L) -> void {
-        auto compile_rec_impl = [&](const Linearization &L, auto &compile_rec_ref) -> void {
+    auto compile_stride_rec = [&](const Linearization &L, std::size_t row_id) -> void {
+        auto compile_rec_impl = [&](const Linearization &L, std::size_t row_id, auto &compile_rec_ref) -> void {
             for (auto e : L) {
                 if (e.is_null_bitmap() or e.is_attribute()) {
                     std::size_t offset_id;
@@ -510,7 +700,7 @@ StackMachine Interpreter::compile_store(const Schema &S, const Linearization &L,
                     insist(e.is_linearization());
 
                     /* Initialize counter and emit increment. */
-                    auto counter_id = SM.add_and_emit_load(int64_t(0)); // introduce counter to track iteration count
+                    auto counter_id = SM.add_and_emit_load(int64_t(row_id)); // introduce counter to track iteration count
                     SM.emit_Inc();
                     SM.emit_Upd_Ctx(counter_id);
                     SM.emit_Pop(); // XXX: not needed if recursion cleans up stack properly
@@ -521,7 +711,8 @@ StackMachine Interpreter::compile_store(const Schema &S, const Linearization &L,
                         .num_tuples = e.as_linearization().num_tuples(),
                         .stride = e.stride
                     });
-                    compile_rec_ref(e.as_linearization(), compile_rec_ref);
+                    const std::size_t inner_row_id = row_id % e.as_linearization().num_tuples();
+                    compile_rec_ref(e.as_linearization(), inner_row_id, compile_rec_ref);
                     stride_info_stack.pop_back();
 
                     /* Reset counter if iteration is whole multiple of num_tuples. */
@@ -539,9 +730,9 @@ StackMachine Interpreter::compile_store(const Schema &S, const Linearization &L,
                 }
             }
         };
-        compile_rec_impl(L, compile_rec_impl);
+        compile_rec_impl(L, row_id, compile_rec_impl);
     };
-    compile_stride_rec(L);
+    compile_stride_rec(L, row_id);
 
     return SM;
 }

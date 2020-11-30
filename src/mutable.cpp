@@ -65,12 +65,12 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
         auto &T = DB.get_table(I->table_name.text);
         auto &store = T.store();
 
+        std::unique_ptr<StackMachine> W;
+        const Linearization *lin = nullptr;
+
         /* Compute table schema. */
         Schema S;
         for (auto &attr : T) S.add({T.name, attr.name}, attr.type);
-
-        /* Compile stack machine. */
-        auto W = Interpreter::compile_store(S, store.linearization());
         Tuple tup(S);
 
         /* Write all tuples to the store. */
@@ -97,7 +97,12 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
             Tuple *args[] = { &tup };
             get_tuple(args);
             store.append();
-            W(args);
+            if (lin != &store.linearization()) {
+                /* The linearization was updated, recompile stack machine. */
+                W = std::make_unique<StackMachine>(Interpreter::compile_store(S, store.linearization(), store.num_rows() - 1));
+                lin = &store.linearization();
+            }
+            (*W)(args);
         }
     } else if (auto S = cast<const CreateTableStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();

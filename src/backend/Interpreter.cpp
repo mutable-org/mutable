@@ -376,24 +376,25 @@ StackMachine Interpreter::compile_store(const Schema &S, const Linearization &L,
                         if (bit_stride) {
                             insist(attr.type->is_boolean(), "only booleans may not be byte aligned");
 
-                            /* Duplicate address because it is required twice to load and store. */
-                            SM.emit_Dup();
-
-                            /* Load byte where to store the value. */
-                            SM.emit_Ld_i8();
-
-                            /* Get the value from the tuple. */
+                            /* Load value to stack. */
                             SM.emit_Ld_Tup(0, idx); // boolean
 
-                            /* Introduce bit offset. */
-                            auto mask_id = SM.add_and_emit_load(uint64_t(0x1UL << bit_offset));
+                            auto mask_id = SM.add(uint64_t(0x1UL << bit_offset));
 
-                            /* Select mask as single shifted bit or zero based on the value to store. */
-                            SM.add_and_emit_load(uint64_t(0)); // neutral element of Or
-                            SM.emit_Sel();
+                            /* Load byte and set bit to 1. */
+                            SM.emit_Ld_Ctx(offset_id);
+                            SM.emit_Ld_i8();
+                            SM.emit_Ld_Ctx(mask_id);
+                            SM.emit_Or_i(); // in case of TRUE
 
-                            /* Store bit in byte by bitwise or with the selected mask. */
-                            SM.emit_Or_i();
+                            /* Load byte and set bit to 0. */
+                            SM.emit_Ld_Ctx(offset_id);
+                            SM.emit_Ld_i8();
+                            SM.emit_Ld_Ctx(mask_id);
+                            SM.emit_Neg_i(); // negate mask
+                            SM.emit_And_i(); // in case of FALSE
+
+                            SM.emit_Sel(); // select the respective modified byte
 
                             /* Write entire byte back to the store. */
                             SM.emit_St_i8();

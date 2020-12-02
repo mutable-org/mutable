@@ -40,6 +40,7 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
 
         # storage
         storage/ColumnStoreTest.cpp
+        storage/PaxStoreTest.cpp
         storage/RowStoreTest.cpp
 
         # backend

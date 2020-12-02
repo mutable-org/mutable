@@ -1024,6 +1024,7 @@ NEXT;
 
 #define STORE(TO_TYPE, FROM_TYPE) { \
     insist(top_ >= 2); \
+    if (TOP_IS_NULL) { POP(); POP(); NEXT; } \
     TO_TYPE val = TOP.as<FROM_TYPE>(); \
     POP(); \
     uintptr_t ptr = TOP.as_i(); \
@@ -1042,6 +1043,8 @@ St_d:   STORE(double,  double);
 St_s: {
     insist(top_ >= 2);
     uint64_t length = uint64_t(*op_++);
+    if (TOP_IS_NULL) { POP(); POP(); NEXT; }
+
     char *str = reinterpret_cast<char*>(TOP.as_p());
     POP();
     char *dst = reinterpret_cast<char*>(static_cast<uintptr_t>(TOP.as_i()));
@@ -1053,6 +1056,8 @@ NEXT;
 St_b: {
     insist(top_ >= 2);
     uint64_t bit_offset = uint64_t(*op_++);
+    if (TOP_IS_NULL) { POP(); POP(); NEXT; }
+
     bool val = TOP.as_b();
     POP();
     uintptr_t ptr = TOP.as_i();

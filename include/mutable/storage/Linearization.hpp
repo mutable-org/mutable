@@ -57,7 +57,7 @@ struct Linearization
                 return *reinterpret_cast<Attribute*>(seq & ~0x1UL);
             }
 
-            Linearization & as_linearization() const {
+            reference_type & as_linearization() const {
                 if (not is_linearization())
                     throw runtime_error("not a linearization");
                 return *reinterpret_cast<Linearization*>(seq);

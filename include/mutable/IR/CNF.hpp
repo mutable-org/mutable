@@ -12,7 +12,7 @@ struct Expr;
 
 namespace cnf {
 
-/** A `Predicate` contains a `m::Expr` of `m::Boolean` type in either *positive* or *negative* form. */
+/** A `Predicate` contains a `Expr` of `Boolean` type in either *positive* or *negative* form. */
 struct Predicate
 {
     private:
@@ -31,27 +31,27 @@ struct Predicate
     /** Returns `true` iff this `Predicate` is *negative*. */
     bool negative() const { return literal_ & 0x1UL; }
 
-    /** Returns the `m::Expr` within this `Predicate`. */
+    /** Returns the `Expr` within this `Predicate`. */
     const Expr * expr() const { return reinterpret_cast<const Expr*>(literal_ & ~0b11UL); }
-    /** Returns the `m::Expr` within this `Predicate`. */
+    /** Returns the `Expr` within this `Predicate`. */
     const Expr * operator*() const { return expr(); }
-    /** Returns the `m::Expr` within this `Predicate`. */
+    /** Returns the `Expr` within this `Predicate`. */
     const Expr * operator->() const { return expr(); }
 
     /** Returns a negated version of this `Predicate`, i.e.\ if this `Predicate` is *positive*, the returned `Predicate`
      * is *negative*. */
     Predicate operator!() const { return Predicate(literal_ ^ 0x1UL); }
 
-    /** Returns `true` iff `other` is equal to `this`.  Two `Predicate`s are equal, iff they have the same `m::Expr`
+    /** Returns `true` iff `other` is equal to `this`.  Two `Predicate`s are equal, iff they have the same `Expr`
      * and the same *sign*. */
     bool operator==(Predicate other) const {
         return this->negative() == other.negative() and *this->expr() == *other.expr();
     }
     /** Returns `true` iff `other` is not equal to `this`.  Two `Predicate`s are equal, iff they have the same
-     * `m::Expr` and the same *sign*. */
+     * `Expr` and the same *sign*. */
     bool operator!=(Predicate other) const { return not operator==(other); }
 
-    /** Compare `Predicate`s by the location of their referenced `m::Expr` in memory and their sign.  Negative
+    /** Compare `Predicate`s by the location of their referenced `Expr` in memory and their sign.  Negative
      * `Predicate`s are larger than positive `Predicate`s of the same expression. */
     bool operator<(Predicate other) const { return this->literal_ < other.literal_; }
 
@@ -62,7 +62,7 @@ struct Predicate
     void dump() const;
 };
 
-/** A `Clause` represents a **disjunction** of `m::cnf::Predicate`s. */
+/** A `cnf::Clause` represents a **disjunction** of `Predicate`s. */
 struct Clause : public std::vector<Predicate>
 {
     using std::vector<Predicate>::vector; // c'tor
@@ -117,18 +117,18 @@ struct CNF : public std::vector<Clause>
     void dump() const;
 };
 
-/** Returns the **logical or** of two `cnf::Clause`s, i.e.\ the disjunction of the `m::Predicate`s of `lhs` and `rhs`.
+/** Returns the **logical or** of two `cnf::Clause`s, i.e.\ the disjunction of the `Predicate`s of `lhs` and `rhs`.
  */
 Clause operator||(const Clause &lhs, const Clause &rhs);
 
-/** Returns the **logical and** of two `cnf::Clause`s, i.e.\ a `cnf::CNF` with the two `cnf::Clause`s `lhs` and `rhs`.
+/** Returns the **logical and** of two `cnf::Clause`s, i.e.\ a `CNF` with the two `cnf::Clause`s `lhs` and `rhs`.
  */
 CNF operator&&(const Clause &lhs, const Clause &rhs);
 
-/** Returns the **logical and** of two `cnf::CNF`s, i.e.\ the conjunction of the `cnf::Clause`s of `lhs` and `rhs`. */
+/** Returns the **logical and** of two `CNF`s, i.e.\ the conjunction of the `cnf::Clause`s of `lhs` and `rhs`. */
 CNF operator&&(const CNF &lhs, const CNF &rhs);
 
-/** Returns the **logical or** of two `cnf::CNF`s.  It is computed using the [*distributive law* from Boolean
+/** Returns the **logical or** of two `CNF`s.  It is computed using the [*distributive law* from Boolean
  * algebra](https://en.wikipedia.org/wiki/Distributive_property): *P ∨ (Q ∧ R) ↔ ((P ∨ Q) ∧ (P ∨ R))* */
 CNF operator||(const CNF &lhs, const CNF &rhs);
 
@@ -136,13 +136,13 @@ CNF operator||(const CNF &lhs, const CNF &rhs);
  * (https://en.wikipedia.org/wiki/De_Morgan%27s_laws): *¬(P ∨ Q) ↔ ¬P ∧ ¬Q*. */
 CNF operator!(const Clause &clause);
 
-/** Returns the **logical negation** of a `cnf::CNF`.  It is computed using [De Morgan's laws]
+/** Returns the **logical negation** of a `CNF`.  It is computed using [De Morgan's laws]
  * (https://en.wikipedia.org/wiki/De_Morgan%27s_laws): *¬(P ∧ Q) ↔ ¬P ∨ ¬Q*. */
 CNF operator!(const CNF &cnf);
 
-/** Converts the `m::Boolean` `m::Expr` `e` to a `cnf::CNF`. */
+/** Converts the `Boolean` `Expr` `e` to a `CNF`. */
 CNF to_CNF(const Expr &e);
-/** Converts the `m::Boolean` `m::Expr` of `c` to a `cnf::CNF`. */
+/** Converts the `Boolean` `Expr` of `c` to a `CNF`. */
 CNF get_CNF(const m::Clause &c);
 
 

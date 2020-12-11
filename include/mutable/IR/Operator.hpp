@@ -22,7 +22,7 @@ using ConstOperatorVisitor = TheOperatorVisitor<true>;
 
 struct Tuple;
 
-/** This interface is used to attach data to `m::Operator` instances. */
+/** This interface is used to attach data to `Operator` instances. */
 struct OperatorData
 {
     virtual ~OperatorData() = 0;

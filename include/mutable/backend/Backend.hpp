@@ -10,7 +10,7 @@ namespace m {
 struct Operator;
 
 /** Defines the interface of all execution `Backend`s.  Provides factory methods to create particular `Backend`
- * instances, e.g.\ an `m::Interpreter`.  */
+ * instances, e.g.\ an `Interpreter`.  */
 struct Backend
 {
     enum kind_t {

@@ -70,7 +70,7 @@ bool m::type_check(const Attribute &attr) {
 
 namespace std {
 
-/** Specializes `std::hash<T>` for `m::Attribute`. */
+/** Specializes `std::hash<T>` for `Attribute`. */
 template<>
 struct hash<m::Attribute>
 {

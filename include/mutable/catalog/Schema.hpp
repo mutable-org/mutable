@@ -332,7 +332,7 @@ struct Function
 #undef kind_t
 };
 
-/** A `Database` is a set of `m::Table`s, `m::Function`s, and `m::Statistics`. */
+/** A `Database` is a set of `Table`s, `Function`s, and `Statistics`. */
 struct Database
 {
     friend struct Catalog;
@@ -375,9 +375,9 @@ struct Database
     }
 
     /*===== Functions ================================================================================================*/
-    /** Returns a reference to the `m::Function` with the given `name`.  First searches this `Database` instance.  If
-     * no `m::Function` with the given `name` is found, searches the global `m::Catalog`.  Throws
-     * `std::invalid_argument` if no `m::Function` with the given `name` exists. */
+    /** Returns a reference to the `Function` with the given `name`.  First searches this `Database` instance.  If no
+     * `Function` with the given `name` is found, searches the global `Catalog`.  Throws `std::invalid_argument` if no
+     * `Function` with the given `name` exists. */
     const Function * get_function(const char *name) const;
 };
 
@@ -493,8 +493,8 @@ struct Catalog
     void unset_database_in_use() { database_in_use_ = nullptr; }
 
     /*===== Functions ================================================================================================*/
-    /** Returns a reference to the `m::Function` with the given `name`.  Throws `std::out_of_range` if no such
-     * `Function` exists. */
+    /** Returns a reference to the `Function` with the given `name`.  Throws `std::out_of_range` if no such `Function`
+     * exists. */
     const Function * get_function(const char *name) const { return standard_functions_.at(name); }
 
     /*===== Stores ===================================================================================================*/

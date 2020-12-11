@@ -50,11 +50,11 @@ struct Type
 
     bool is_error() const { return (void*) this == Get_Error(); }
     bool is_none() const { return (void*) this == Get_None(); }
-    /** Returns `true` iff this `Type` is a `m::PrimitiveType`. */
+    /** Returns `true` iff this `Type` is a `PrimitiveType`. */
     bool is_primitive() const { return is<const PrimitiveType>(this); }
     bool is_boolean() const { return is<const Boolean>(this); }
     bool is_character_sequence() const { return is<const CharacterSequence>(this); }
-    /** Returns `true` iff this `Type` is a `m::Numeric` type. */
+    /** Returns `true` iff this `Type` is a `Numeric` type. */
     bool is_numeric() const { return is<const Numeric>(this); }
     bool is_integral() const;
     bool is_decimal() const;
@@ -87,25 +87,25 @@ struct Type
     }
 
     /*----- Type factory methods -------------------------------------------------------------------------------------*/
-    /** Returns a `m::ErrorType`. */
+    /** Returns a `ErrorType`. */
     static const ErrorType * Get_Error();
-    /** Returns a `m::NoneType`. */
+    /** Returns a `NoneType`. */
     static const NoneType * Get_None();
-    /** Returns a `m::Boolean` type of the given `category`. */
+    /** Returns a `Boolean` type of the given `category`. */
     static const Boolean * Get_Boolean(category_t category);
-    /** Returns a `m::CharacterSequence` type of the given `category` and fixed `length`. */
+    /** Returns a `CharacterSequence` type of the given `category` and fixed `length`. */
     static const CharacterSequence * Get_Char(category_t category, std::size_t length);
-    /** Returns a `m::CharacterSequence` type of the given `category` and varying `length`. */
+    /** Returns a `CharacterSequence` type of the given `category` and varying `length`. */
     static const CharacterSequence * Get_Varchar(category_t category, std::size_t length);
-    /** Returns a `m::Numeric` type for decimals of given `category`, decimal `digits`, and `scale`. */
+    /** Returns a `Numeric` type for decimals of given `category`, decimal `digits`, and `scale`. */
     static const Numeric * Get_Decimal(category_t category, unsigned digits, unsigned scale);
-    /** Returns a `m::Numeric` type for integrals of given `category` and `num_bytes` bytes. */
+    /** Returns a `Numeric` type for integrals of given `category` and `num_bytes` bytes. */
     static const Numeric * Get_Integer(category_t category, unsigned num_bytes);
-    /** Returns a `m::Numeric` type of given `category` for 32 bit floating-points. */
+    /** Returns a `Numeric` type of given `category` for 32 bit floating-points. */
     static const Numeric * Get_Float(category_t category);
-    /** Returns a `m::Numeric` type of given `category` for 64 bit floating-points. */
+    /** Returns a `Numeric` type of given `category` for 64 bit floating-points. */
     static const Numeric * Get_Double(category_t category);
-    /** Returns a `m::FnType` for a function with parameter types `parameter_types` and return type `return_type`. */
+    /** Returns a `FnType` for a function with parameter types `parameter_types` and return type `return_type`. */
     static const FnType * Get_Function(const Type *return_type, std::vector<const Type*> parameter_types);
 };
 
@@ -129,7 +129,7 @@ namespace std {
 
 namespace m {
 
-/** `PrimitiveType`s represent `m::Type`s of values. */
+/** `PrimitiveType`s represent `Type`s of values. */
 struct PrimitiveType : Type
 {
     category_t category; ///< whether this type is scalar or vector
@@ -151,7 +151,7 @@ struct PrimitiveType : Type
     virtual const PrimitiveType * as_vectorial() const = 0;
 };
 
-/** This `m::Type` is assigned when parsing of a data type fails or when semantic analysis detects a type error. */
+/** This `Type` is assigned when parsing of a data type fails or when semantic analysis detects a type error. */
 struct ErrorType: Type
 {
     friend struct Type;
@@ -174,7 +174,7 @@ struct ErrorType: Type
     void dump(std::ostream &out) const override;
 };
 
-/** A `m::Type` that represents the absence of any other type.  Used to represent the type of `NULL`. */
+/** A `Type` that represents the absence of any other type.  Used to represent the type of `NULL`. */
 struct NoneType: Type
 {
     friend struct Type;
@@ -363,7 +363,7 @@ struct FnType : Type
     void dump(std::ostream &out) const override;
 };
 
-/* Given two `m::Numeric` types, compute the `m::Numeric` type that is at least as precise as either of them. */
+/* Given two `Numeric` types, compute the `Numeric` type that is at least as precise as either of them. */
 const Numeric * arithmetic_join(const Numeric *lhs, const Numeric *rhs);
 
 }
@@ -424,7 +424,7 @@ inline bool m::is_comparable(const Type *first, const Type *second) {
 
 namespace m {
 
-/** The `m::Type` visitor. */
+/** The `Type` visitor. */
 template<bool C>
 struct TheTypeVisitor
 {

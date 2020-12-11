@@ -152,7 +152,7 @@ void CNF::dump() const { dump(std::cerr); }
  * CNF Generator
  *====================================================================================================================*/
 
-/** Helper class to convert `m::Expr` and `m::Clause` to `cnf::CNF`. */
+/** Helper class to convert `Expr` and `Clause` to `cnf::CNF`. */
 struct CNFGenerator : ConstASTExprVisitor
 {
     private:

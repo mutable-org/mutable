@@ -218,9 +218,6 @@ struct Tuple
     void null(std::size_t idx) {
         INBOUNDS(idx);
         null_mask_.set(idx);
-#ifndef NDEBUG
-        new (&values_[idx]) Value(); // erase old value, clear type
-#endif
     }
 
     /** Sets all `Value`s of this `Tuple` to `NULL`. */

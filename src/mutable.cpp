@@ -64,13 +64,8 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
         auto &DB = C.get_database_in_use();
         auto &T = DB.get_table(I->table_name.text);
         auto &store = T.store();
-
-        std::unique_ptr<StackMachine> W;
-        const Linearization *lin = nullptr;
-
-        /* Compute table schema. */
-        Schema S;
-        for (auto &attr : T) S.add({T.name, attr.name}, attr.type);
+        StoreWriter W(store);
+        auto &S = W.schema();
         Tuple tup(S);
 
         /* Write all tuples to the store. */
@@ -96,13 +91,7 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
             }
             Tuple *args[] = { &tup };
             get_tuple(args);
-            store.append();
-            if (lin != &store.linearization()) {
-                /* The linearization was updated, recompile stack machine. */
-                W = std::make_unique<StackMachine>(Interpreter::compile_store(S, store.linearization(), store.num_rows() - 1));
-                lin = &store.linearization();
-            }
-            (*W)(args);
+            W.append(tup);
         }
     } else if (auto S = cast<const CreateTableStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
@@ -206,4 +195,23 @@ void m::execute_file(Diagnostic &diag, const std::filesystem::path &path)
         if (diag.num_errors()) return;
         execute_statement(diag, *stmt);
     }
+}
+
+m::StoreWriter::StoreWriter(Store &store)
+    : store_(store)
+{
+    for (auto &attr : store.table())
+        S.add({attr.table.name, attr.name}, attr.type);
+}
+
+void m::StoreWriter::append(const Tuple &tup) const
+{
+    store_.append();
+    if (lin_ != &store_.linearization()) {
+        lin_ = &store_.linearization();
+        writer_ = std::make_unique<m::StackMachine>(m::Interpreter::compile_store(S, *lin_, store_.num_rows() - 1));
+    }
+
+    Tuple *args[] = { const_cast<Tuple*>(&tup) };
+    (*writer_)(args);
 }

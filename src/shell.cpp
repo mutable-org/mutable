@@ -1,21 +1,22 @@
-#include "mutable/backend/Backend.hpp"
 #include "backend/Interpreter.hpp"
 #include "backend/StackMachine.hpp"
 #include "backend/WebAssembly.hpp"
-#include "mutable/catalog/CostFunction.hpp"
 #include "catalog/Schema.hpp"
 #include "globals.hpp"
 #include "io/Reader.hpp"
 #include "IR/Optimizer.hpp"
+#include "mutable/backend/Backend.hpp"
+#include "mutable/catalog/CostFunction.hpp"
+#include "mutable/mutable.hpp"
+#include "mutable/storage/Store.hpp"
+#include "mutable/util/fn.hpp"
+#include "mutable/util/Timer.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
-#include "mutable/storage/Store.hpp"
 #include "util/ArgParser.hpp"
 #include "util/DotTool.hpp"
-#include "mutable/util/fn.hpp"
 #include "util/glyphs.hpp"
 #include "util/terminal.hpp"
-#include "mutable/util/Timer.hpp"
 #include <cerrno>
 #include <cstdlib>
 #include <fstream>
@@ -158,13 +159,8 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             auto &DB = C.get_database_in_use();
             auto &T = DB.get_table(I->table_name.text);
             auto &store = T.store();
-
-            std::unique_ptr<StackMachine> W;
-            const Linearization *lin = nullptr;
-
-            /* Compute table schema. */
-            Schema S;
-            for (auto &attr : T) S.add({T.name, attr.name}, attr.type);
+            StoreWriter W(store);
+            auto &S = W.schema();
             Tuple tup(S);
 
             /* Write all tuples to the store. */
@@ -190,13 +186,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
                 }
                 Tuple *args[] = { &tup };
                 get_tuple(args);
-                store.append();
-                if (lin != &store.linearization()) {
-                    /* The linearization was updated, recompile stack machine. */
-                    W = std::make_unique<StackMachine>(Interpreter::compile_store(S, store.linearization(), store.num_rows() - 1));
-                    lin = &store.linearization();
-                }
-                (*W)(args);
+                W.append(tup);
             }
         } else if (auto S = cast<CreateTableStmt>(stmt)) {
             auto &DB = C.get_database_in_use();

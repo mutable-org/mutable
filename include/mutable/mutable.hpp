@@ -69,4 +69,23 @@ void load_from_CSV(Diagnostic &diag,
  */
 void execute_file(Diagnostic &diag, const std::filesystem::path &path);
 
+/** This class provides direct write access to the contents of a `Store`.  */
+struct StoreWriter
+{
+    private:
+    Store &store_; ///< the store to access
+    Schema S; ///< the schema of the tuples to read/write
+    mutable std::unique_ptr<m::StackMachine> writer_; ///< the writing `StackMachine`
+    mutable const m::Linearization *lin_ = nullptr; ///< the last seen `Linearization`; used to observe updates
+
+    public:
+    StoreWriter(Store &store);
+
+    /** Returns the `Schema` of `Tuple`s to write. */
+    const Schema & schema() const { return S; }
+
+    /** Appends `tup` to the store. */
+    void append(const Tuple &tup) const;
+};
+
 }

@@ -204,6 +204,8 @@ m::StoreWriter::StoreWriter(Store &store)
         S.add({attr.table.name, attr.name}, attr.type);
 }
 
+m::StoreWriter::~StoreWriter() { }
+
 void m::StoreWriter::append(const Tuple &tup) const
 {
     store_.append();

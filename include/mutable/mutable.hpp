@@ -80,6 +80,7 @@ struct StoreWriter
 
     public:
     StoreWriter(Store &store);
+    ~StoreWriter();
 
     /** Returns the `Schema` of `Tuple`s to write. */
     const Schema & schema() const { return S; }

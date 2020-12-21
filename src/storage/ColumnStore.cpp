@@ -44,8 +44,8 @@ ColumnStore::ColumnStore(const Table &table)
             lin->add_sequence(uintptr_t(memory(attr.id).addr()), attr.type->size() / 8, std::move(seq));
         }
     }
-#if 0
-    /* Pad null bitmap to next byte to reserve space for possible added columns. */
+#if 1
+    /* Pad null bitmap to next byte. */
     auto seq = std::make_unique<Linearization>(Linearization::CreateFinite(1, 1));
     seq->add_null_bitmap(0, 0);
     lin->add_sequence(uintptr_t(memory(table.size()).addr()), (table.size() + 7 ) / 8, std::move(seq));

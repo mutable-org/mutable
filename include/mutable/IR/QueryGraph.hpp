@@ -268,16 +268,16 @@ struct AdjacencyMatrix
 
     }
 
-    /** Set the bit in row `i` and offset `j` to one. */
+    /** Set the bit in row `i` at offset `j` to one. */
     void set(std::size_t i, std::size_t j) {
         if (i >= num_vertices_ or j >= num_vertices_)
             throw out_of_range("offset is out of bounds");
         m_[i].set(j);
     }
-    /** Set the bit in row `i` and offset `j` and the symmetric bit to one. */
+    /** Set the bit in row `i` at offset `j` and the symmetric bit to one. */
     void set_bidirectional(std::size_t i, std::size_t j) { set(i, j); set(j, i); }
 
-    /** Get the bit in row `i` and offset `j` to one. */
+    /** Get the bit in row `i` at offset `j`. */
     bool get(std::size_t i, std::size_t j) const {
         if (i >= num_vertices_ or j >= num_vertices_)
             throw out_of_range("offset is out of bounds");

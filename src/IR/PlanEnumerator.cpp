@@ -219,6 +219,37 @@ void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTabl
 }
 
 /*======================================================================================================================
+ * DPsizeSub
+ *====================================================================================================================*/
+
+/** Computes the join order using size-based dynamic programming. */
+struct DPsizeSub final : PlanEnumerator
+{
+    void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
+};
+
+void DPsizeSub::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
+{
+    auto &sources = G.sources();
+    std::size_t n = sources.size();
+    AdjacencyMatrix M(G);
+
+    /* Process all subplans of size greater than one. */
+    for (std::size_t s = 2; s <= n; ++s) {
+        for (auto S = GospersHack::enumerate_all(s, n); S; ++S) { // enumerate all subsets of size `s`
+            if (not M.is_connected(*S)) continue; // not connected? -> skip
+            for (Subproblem O(least_subset(*S)); O != *S; O = Subproblem(next_subset(O, *S))) {
+                Subproblem Comp = *S - O;
+                insist(M.is_connected(O, Comp), "implied by S inducing a connected subgraph");
+                if (not M.is_connected(O)) continue; // not connected? -> skip
+                if (not M.is_connected(Comp)) continue; // not connected? -> skip
+                PT.update(cf, O, Comp, 0);
+            }
+        }
+    }
+}
+
+/*======================================================================================================================
  * DPsub
  *====================================================================================================================*/
 

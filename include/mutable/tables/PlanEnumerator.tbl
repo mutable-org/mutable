@@ -8,6 +8,7 @@
 // DB_PLAN_ENUMERATOR( DummyPlanEnumerator,    "picks a valid join order at random" )
 DB_PLAN_ENUMERATOR( DPsize,                 "size-based subproblem enumeration" )
 DB_PLAN_ENUMERATOR( DPsizeOpt,              "optimized DPsize: does not enumerate symmetric subproblems" )
+DB_PLAN_ENUMERATOR( DPsizeSub,              "DPsize with enumeration of subset complement pairs" )
 DB_PLAN_ENUMERATOR( DPsub,                  "subset-based subproblem enumeration" )
 DB_PLAN_ENUMERATOR( DPsubOpt,               "optimized DPsub: does not enumerate symmetric subproblems" )
 DB_PLAN_ENUMERATOR( DPccp,                  "enumerates connected subgraph complement pairs" )

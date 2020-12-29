@@ -9,6 +9,7 @@ configurations:
     DPsizeOpt:      '--plan-enumerator DPsizeOpt'
     DPsub:          '--plan-enumerator DPsub'
     DPsubOpt:       '--plan-enumerator DPsubOpt'
+    DPsizeSub:      '--plan-enumerator DPsizeSub'
     TDbasic:        '--plan-enumerator TDbasic'
     TDMinCutAGaT:   '--plan-enumerator TDMinCutAGaT'
 label: 'Number of joins'

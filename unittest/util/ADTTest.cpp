@@ -2,6 +2,10 @@
 
 #include "util/ADT.hpp"
 
+
+using namespace m;
+
+
 TEST_CASE("SmallBitset", "[unit]")
 {
     SmallBitset S;
@@ -12,12 +16,12 @@ TEST_CASE("SmallBitset", "[unit]")
     SECTION("setting and checking bits")
     {
         S.set(0);
-        REQUIRE(S == 1);
+        REQUIRE(S == SmallBitset(1UL));
         REQUIRE(S.size() == 1);
         S.set(2);
-        REQUIRE(S == 5);
+        REQUIRE(S == SmallBitset(5UL));
         S.set(2);
-        REQUIRE(S == 5);
+        REQUIRE(S == SmallBitset(5UL));
         REQUIRE(S.size() == 2);
         REQUIRE(not S.empty());
         REQUIRE(S.contains(0));
@@ -32,7 +36,7 @@ TEST_CASE("SmallBitset", "[unit]")
 
         REQUIRE((S1 | S2) == S1);
         REQUIRE((S1 & S2) == S2);
-        REQUIRE((S1 - S2) == 4);
+        REQUIRE((S1 - S2) == SmallBitset(4UL));
         REQUIRE((S - S2) == S);
     }
 
@@ -48,30 +52,42 @@ TEST_CASE("SmallBitset", "[unit]")
 
 TEST_CASE("GospersHack", "[unit]")
 {
-    uint64_t n = 5;
-    uint64_t k = 3;
-
     SECTION("factory methods")
     {
-        GospersHack S1 = GospersHack::enumerate_all(k, n);
-        REQUIRE(*S1 == 7);
+        GospersHack S1 = GospersHack::enumerate_all(3UL, 5UL); // 3 of 5
+        REQUIRE(*S1 == SmallBitset(7UL));
         REQUIRE(S1);
 
-        GospersHack S2 = GospersHack::enumerate_from(SmallBitset(14), 5);
-        REQUIRE(*S2 == 14);
+        GospersHack S2 = GospersHack::enumerate_from(SmallBitset(14UL), 5UL); // 14 = 0b01110
+        REQUIRE(*S2 == SmallBitset(14UL));
         REQUIRE(S2);
     }
 
     SECTION("enumerating subsets")
     {
-        n = 4;
-        k = 3;
-        GospersHack S = GospersHack::enumerate_all(k, n);
-        REQUIRE(*S == 7);
-        REQUIRE(*(++S) == 11);
-        REQUIRE(*(++S) == 13);
-        REQUIRE(*(++S) == 14);
+        GospersHack S = GospersHack::enumerate_all(3UL, 4UL); // 3 of 4
+        REQUIRE(*S == SmallBitset(7UL));        // 0b0111
+        REQUIRE(*(++S) == SmallBitset(11UL));   // 0b1011
+        REQUIRE(*(++S) == SmallBitset(13UL));   // 0b1101
+        REQUIRE(*(++S) == SmallBitset(14UL));   // 0b1110
         REQUIRE(not ++S);
     }
-
 }
+
+TEST_CASE("SmallBitset/least_subset", "[core][util][fn]")
+{
+    SmallBitset set(10UL); // 0b1010 <=> { 2, 8 }
+    REQUIRE(least_subset(set) == SmallBitset(2UL));
+}
+
+
+TEST_CASE("SmallBitset/next_subset", "[core][util][fn]")
+{
+    SmallBitset set(10UL); // 0b1010 <=> { 2, 8 }
+
+    REQUIRE(next_subset(SmallBitset(0UL), set) == SmallBitset(2UL));
+    REQUIRE(next_subset(SmallBitset(2UL), set) == SmallBitset(8UL));
+    REQUIRE(next_subset(SmallBitset(8UL), set) == set);
+    REQUIRE(next_subset(SmallBitset(10UL), set) == SmallBitset(0UL));
+}
+

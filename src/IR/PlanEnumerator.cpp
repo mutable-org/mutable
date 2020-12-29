@@ -292,7 +292,7 @@ void DPsubOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable
         if (S.size() == 1) continue; // no non-empty and strict subset of S -> skip
         if (not M.is_connected(S)) continue;
         /* Compute break condition to avoid enumerating symmetric subproblems. */
-        uint64_t offset = S.capacity() - __builtin_clzl(S);
+        uint64_t offset = S.capacity() - __builtin_clzl(uint64_t(S));
         insist(offset != 0, "invalid subproblem offset");
         Subproblem limit(1UL << (offset - 1));
         for (Subproblem S1(least_subset(S)); S1 != limit; S1 = Subproblem(next_subset(S1, S))) {
@@ -340,8 +340,8 @@ struct DPccp final : PlanEnumerator
 void DPccp::enumerate_cmp(const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &cf, PlanTable &PT,
                           Subproblem S1) const
 {
-    std::size_t min = least_subset(S1); // node in `S1` with the lowest ID
-    Subproblem Bmin((min << 1) - 1); // all nodes 'smaller' than `min`
+    SmallBitset min = least_subset(S1); // node in `S1` with the lowest ID
+    Subproblem Bmin((uint64_t(min) << 1UL) - 1UL); // all nodes 'smaller' than `min`
     Subproblem X(Bmin | S1); // exclude `S1` and all nodes with a lower ID than the smallest node in `S1`
 
     Subproblem N = M.neighbors(S1) - X;
@@ -370,7 +370,7 @@ void DPccp::enumerate_cmp(const QueryGraph &G, const AdjacencyMatrix &M, const C
 
             Subproblem N = M.neighbors(S) - X;
             /* Iterate over all subsets `sub` in `N` */
-            for (Subproblem sub(least_subset(N)); sub != 0; sub = Subproblem(next_subset(sub, N))) {
+            for (Subproblem sub(least_subset(N)); bool(sub); sub = Subproblem(next_subset(sub, N))) {
                 /* Connected subgraph `S` expanded by `sub` constitutes a new connected subgraph.  For each of those
                  * connected subgraphs, do not consider the neighborhood `N` in addition to the existing set of excluded
                  * nodes. */
@@ -400,7 +400,7 @@ void DPccp::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &P
 
             Subproblem N = M.neighbors(S) - X;
             /* Iterate over all subsets `sub` in `N` */
-            for (Subproblem sub(least_subset(N)); sub != 0; sub = Subproblem(next_subset(sub, N)))
+            for (Subproblem sub(least_subset(N)); bool(sub); sub = Subproblem(next_subset(sub, N)))
                 /* Connected subgraph `S` expanded by `sub` constitutes a new connected subgraph.  For each of those
                  * connected subgraphs, do not consider the neighborhood `N` in addition to the existing set of excluded
                  * nodes. */
@@ -434,7 +434,9 @@ void TDbasic::PlanGen(const QueryGraph &G, const CostFunction &cf, PlanTable &PT
         for (Subproblem sub(least_subset(S)); sub != S; sub = Subproblem(next_subset(sub, S))) {
             Subproblem complement = S - sub;
             /* Check for valid connected subgraph complement pair. */
-            if (least_subset(sub) < least_subset(complement) and M.is_connected(sub) and M.is_connected(complement)){
+            if (uint64_t(least_subset(sub)) < uint64_t(least_subset(complement)) and
+                M.is_connected(sub) and M.is_connected(complement))
+            {
                 /* Process `sub` and `complement` recursively. */
                 PlanGen(G, cf, PT, M, sub);
                 PlanGen(G, cf, PT, M, complement);

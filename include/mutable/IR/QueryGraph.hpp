@@ -288,11 +288,14 @@ struct AdjacencyMatrix
     SmallBitset reachable(SmallBitset src) const {
         SmallBitset R_old(0);
         SmallBitset R_new(src);
-        while (auto R = R_new - R_old) {
+        for (;;) {
+            auto R = R_new - R_old;
+            if (R.empty()) goto exit;
             R_old = R_new;
             for (auto x : R)
                 R_new |= m_[x]; // add all nodes reachable from node `x` to the set of reachable nodes
         }
+exit:
         return R_new;
     }
 
@@ -301,11 +304,14 @@ struct AdjacencyMatrix
     SmallBitset reachable(SmallBitset src, SmallBitset S) const {
         SmallBitset R_old(0);
         SmallBitset R_new(src & S);
-        while (auto R = R_new - R_old) {
+        for (;;) {
+            auto R = R_new - R_old;
+            if (R.empty()) goto exit;
             R_old = R_new;
             for (auto x : R)
                 R_new |= m_[x] & S; // add all nodes in `S` reachable from node `x` to the set of reachable nodes
         }
+exit:
         return R_new;
     }
 
@@ -329,7 +335,7 @@ struct AdjacencyMatrix
             neighbors = neighbors | m_[it];
         /* Intersect `left` with the neighbors of `right`.  If the result is non-empty, `left` and `right` are
          * immediately connected by a join. */
-        return left & neighbors;
+        return not (left & neighbors).empty();
     }
 
     friend std::ostream & operator<<(std::ostream &out, const AdjacencyMatrix &m) {

@@ -333,7 +333,7 @@ struct hash<m::Tuple>
 {
     uint64_t operator()(const m::Tuple &tup) const {
         std::hash<m::Value> h;
-        auto mask = SmallBitset(~tup.null_mask_);
+        auto mask = m::SmallBitset(~tup.null_mask_);
         uint64_t hash = 0;
         for (auto idx : mask) {
             hash ^= h(tup[idx]);

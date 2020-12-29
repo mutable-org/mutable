@@ -7,6 +7,8 @@
 #include <iostream>
 
 
+namespace m {
+
 /** Implements a small and efficient set over integers in the range of `0` to `63` (including). */
 struct SmallBitset
 {
@@ -72,7 +74,13 @@ struct SmallBitset
     auto cend() const { return end(); }
 
     /** Convert the `SmallBitset` type to `uint64_t`. */
-    operator uint64_t() const { return bits_; }
+    explicit operator uint64_t() const { return bits_; }
+    explicit operator bool() const { return not empty(); }
+
+    bool operator==(SmallBitset other) const { return this->bits_ == other.bits_; }
+    bool operator!=(SmallBitset other) const { return not operator==(other); }
+
+    SmallBitset operator~() const { return SmallBitset(~bits_); }
 
     /** Returns `true` if the set represented by `this` is a subset of `other`, i.e.\ `this` ⊆ `other`. */
     bool is_subset(SmallBitset other) const { return this->bits_ == (other.bits_ & this->bits_); }
@@ -96,17 +104,26 @@ struct SmallBitset
 
     /** Write a textual representation of `s` to `out`. */
     friend std::ostream & operator<<(std::ostream &out, SmallBitset s) {
-        for (uint64_t mask = 1UL << (SmallBitset::CAPACITY - 1); mask; mask >>= 1)
-            out << bool(s & SmallBitset(mask));
+        for (uint64_t i = CAPACITY; i --> 0;)
+            out << s.contains(i);
         return out;
     }
 
     /** Print a textual representation of `this` with `size` bits to `out`. */
     void print_fixed_length(std::ostream &out, std::size_t size) const {
-        for (uint64_t mask = 1UL << (size - 1); mask; mask >>= 1)
-            out << bool(*this & SmallBitset(mask));
+        for (uint64_t i = size; i --> 0;)
+            out << contains(i);
     }
 
     void dump(std::ostream &out) const;
     void dump() const;
 };
+
+
+/** Returns the least subset of a given `set`, i.e.\ the set represented by the lowest 1 bit. */
+inline SmallBitset least_subset(SmallBitset S) { return SmallBitset(uint64_t(S) & -uint64_t(S)); }
+
+/** Returns the next subset of a given `subset` and `set. */
+inline SmallBitset next_subset(SmallBitset subset, SmallBitset set) { return SmallBitset(uint64_t(subset) - uint64_t(set)) & set; }
+
+}

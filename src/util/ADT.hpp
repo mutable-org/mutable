@@ -3,6 +3,8 @@
 #include "mutable/util/ADT.hpp"
 
 
+namespace m {
+
 /** A sorted list of elements.  Allows duplicates. */
 template<typename T>
 struct sorted_list
@@ -53,7 +55,7 @@ struct sorted_list
 struct GospersHack
 {
     private:
-    uint64_t set_;
+    SmallBitset set_;
     uint64_t limit_;
 
     GospersHack() { }
@@ -62,32 +64,37 @@ struct GospersHack
     /** Create an instance of `GospersHack` that enumerates all subsets of size `k` of a set of `n` elements. */
     static GospersHack enumerate_all(uint64_t k, uint64_t n) {
         insist(k <= n, "invalid enumeration");
+        insist(n < 64, "n exceeds range");
         GospersHack GH;
-        GH.set_ = (1UL << k) - 1;
+        GH.set_ = SmallBitset((1UL << k) - 1);
         GH.limit_ = 1UL << n;
         return GH;
     }
     /** Create an instance of `GospersHack` that enumerates all remaining subsets of a set of `n` elements, starting at
      * subset `set`. */
     static GospersHack enumerate_from(SmallBitset set, uint64_t n) {
+        insist(n < 64, "n exceeds range");
         GospersHack GH;
         GH.set_ = set;
         GH.limit_ = 1UL << n;
-        insist(set <= GH.limit_, "set exceeds the limit");
+        insist(uint64_t(set) <= GH.limit_, "set exceeds the limit");
         return GH;
     }
 
     /** Advance to the next subset. */
     GospersHack & operator++() {
-        uint64_t c = set_ & -set_;
-        uint64_t r = set_ + c;
-        set_ = (((r ^ set_) >> 2) / c) | r;
+        uint64_t s(set_);
+        uint64_t c = s & -s;
+        uint64_t r = s + c;
+        set_ = SmallBitset((((r ^ s) >> 2) / c) | r);
         return *this;
     }
 
     /** Returns `false` iff all subsets have been enumerated. */
-    operator bool() const { return set_ < limit_; }
+    operator bool() const { return uint64_t(set_) < limit_; }
 
     /** Returns the current subset. */
     SmallBitset operator*() const { return SmallBitset(set_); }
 };
+
+}

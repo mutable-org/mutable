@@ -51,7 +51,7 @@ struct PlanTable {
     public:
     explicit PlanTable(std::size_t num_sources)
             : cost_table_(new entry_type[1UL << num_sources]()), num_sources_(num_sources) {
-        cost_table_[Subproblem(0)] = {Subproblem(0), Subproblem(0), 1, 0};
+        cost_table_[0] = {Subproblem(0), Subproblem(0), 1, 0};
     }
 
     PlanTable(const PlanTable &) = delete;
@@ -68,16 +68,16 @@ struct PlanTable {
     std::size_t num_sources() const { return num_sources_; }
 
     /** Returns the entry for a given subproblem.  (`s` may be empty.) */
-    entry_type &at(Subproblem s) { return cost_table_[s]; }
+    entry_type & at(Subproblem s) { insist(uint64_t(s) < (1UL << num_sources_)); return cost_table_[uint64_t(s)]; }
 
     /** Returns the entry for a given subproblem. */
-    const entry_type &at(Subproblem s) const { return const_cast<PlanTable *>(this)->at(s); }
+    const entry_type & at(Subproblem s) const { return const_cast<PlanTable*>(this)->at(s); }
 
     /** Returns the entry for a given subproblem. */
-    entry_type &operator[](Subproblem s) { return at(s); }
+    entry_type & operator[](Subproblem s) { return at(s); }
 
     /** Returns the entry for a given subproblem. */
-    const entry_type &operator[](Subproblem s) const { return at(s); }
+    const entry_type & operator[](Subproblem s) const { return at(s); }
 
     /** Returns true iff all entries of both plan tables are equal. */
     bool operator==(const PlanTable &other) const {
@@ -92,7 +92,6 @@ struct PlanTable {
     /** Returns true iff at least one entry in both plan tables is not equal. */
     bool operator!=(const PlanTable &other) const { return not(*this == other); }
 
-
     /** Returns the entry for the final plan. */
     const entry_type &get_final() const { return at(Subproblem((1UL << num_sources_) - 1)); }
 
@@ -102,8 +101,8 @@ struct PlanTable {
     /** Returns true iff the `PlanTable` has a plan for the subproblem specified by `S`. */
     bool has_plan(Subproblem S) const {
         if (S.size() == 1) return true;
-        if (at(S).left != 0) {
-            insist(at(S).right != 0);
+        if (not at(S).left.empty()) {
+            insist(not at(S).right.empty());
             return true;
         }
         return false;
@@ -148,7 +147,7 @@ struct PlanTable {
             sub.print_fixed_length(out, num_sources);
             out << "\t";
             if (PT.at(sub).cost == std::numeric_limits<uint64_t>::max() and
-                PT.at(sub).left == 0 and PT.at(sub).right == 0) {
+                PT.at(sub).left.empty() and PT.at(sub).right.empty()) {
                 out << std::setw(size_len) << "-" << "\t";
                 out << std::setw(cost_len) << "-" << "\t";
                 out << std::setw(sub_len) << "-" << "\t";
@@ -156,8 +155,8 @@ struct PlanTable {
             } else {
                 out << std::setw(size_len) << PT.at(sub).size << "\t";
                 out << std::setw(cost_len) << PT.at(sub).cost << "\t";
-                out << std::setw(sub_len) << (uint64_t) PT.at(sub).left << "\t";
-                out << std::setw(sub_len) << (uint64_t) PT.at(sub).right << "\n";
+                out << std::setw(sub_len) << uint64_t(PT.at(sub).left) << "\t";
+                out << std::setw(sub_len) << uint64_t(PT.at(sub).right) << "\n";
             }
         }
         return out;

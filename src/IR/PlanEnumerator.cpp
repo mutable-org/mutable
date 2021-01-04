@@ -300,9 +300,9 @@ void DPsubOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable
             ++inner_counter;
 #endif
             Subproblem S2 = S - S1; // = S \ S1;
+            insist(M.is_connected(S1, S2), "implied by S inducing a connected subgraph");
             if (not M.is_connected(S1)) continue; // not connected? -> skip
             if (not M.is_connected(S2)) continue; // not connected? -> skip
-            if (not M.is_connected(S1, S2)) continue; // not connected? -> skip
 #if PE_COUNTER
             ++csg_cmp_pair_counter;
 #endif

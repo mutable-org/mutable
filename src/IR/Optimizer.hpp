@@ -1,6 +1,6 @@
 #pragma once
 
-#include "mutable/IR/Optimizer.hpp"
+#include "mutable/IR/PlanTable.hpp"
 
 
 namespace m {

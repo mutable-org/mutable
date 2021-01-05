@@ -5,12 +5,7 @@
 #include "globals.hpp"
 #include "io/Reader.hpp"
 #include "IR/Optimizer.hpp"
-#include "mutable/backend/Backend.hpp"
-#include "mutable/catalog/CostFunction.hpp"
 #include "mutable/mutable.hpp"
-#include "mutable/storage/Store.hpp"
-#include "mutable/util/fn.hpp"
-#include "mutable/util/Timer.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "util/ArgParser.hpp"
@@ -33,6 +28,14 @@
 #elif __APPLE__
 #include <unistd.h>
 #endif
+
+
+/* forward declarations */
+namespace m {
+
+struct PlanTable;
+
+}
 
 
 using namespace m;

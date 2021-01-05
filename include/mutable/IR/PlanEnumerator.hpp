@@ -38,7 +38,7 @@ struct PlanEnumerator
 #undef DB_PLAN_ENUMERATOR
 
     /** Enumerate subplans and fill plan table. */
-    virtual void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const = 0;
+    virtual void operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const = 0;
 };
 
 }

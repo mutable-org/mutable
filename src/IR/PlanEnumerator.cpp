@@ -36,7 +36,7 @@ std::unique_ptr<PlanEnumerator> PlanEnumerator::Create(PlanEnumerator::kind_t ki
 /** Computes an arbitrary join order (deterministically). */
 struct DummyPlanEnumerator final : PlanEnumerator
 {
-    void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
+    void operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const override;
 };
 
 void DummyPlanEnumerator::operator()(const QueryGraph&, const CostFunction&, PlanTable&) const

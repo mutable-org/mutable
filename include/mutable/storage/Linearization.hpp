@@ -164,10 +164,6 @@ struct Linearization
         if (this->num_tuples_ % lin->num_tuples_ != 0)
             throw invalid_argument("the number of tuples of the sequence to add must be a proper divisor of the "
                                    "number of tuples of the sequence being added to");
-        // XXX: Why not support this?
-        // for (auto e : *this)
-        //     if (not e.is_linearization())
-        //         throw invalid_argument("cannot mix attributes and sequences");
         auto idx = size_++;
         offsets_[idx] = offset_in_bytes;
         strides_[idx] = stride_in_bytes;
@@ -179,10 +175,6 @@ struct Linearization
             throw out_of_range("maximum capacity reached");
         if (num_tuples_ == 1 and stride_in_bits != 0)
             throw invalid_argument("cannot add attribute with stride in a sequence of 1 tuple");
-        // XXX: Why not support this?
-        // for (auto e : *this)
-        //     if (not e.is_attribute())
-        //         throw invalid_argument("cannot mix attributes and sequences");
         auto idx = size_++;
         offsets_[idx] = offset_in_bits;
         strides_[idx] = stride_in_bits;

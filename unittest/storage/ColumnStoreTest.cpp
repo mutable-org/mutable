@@ -30,7 +30,8 @@ TEST_CASE("ColumnStore", "[core][storage][columnstore]")
         16 + // i2
         8  + // i1
         24 + // char3
-        2;   // b0 & b1
+        2 +  // b0 & b1
+        10;  // bitmap
 
     ColumnStore store(table);
 

@@ -26,6 +26,9 @@ ColumnStore::ColumnStore(const Table &table)
 
     /* Allocate a column for the null bitmap. */
     columns_.emplace_back(allocator.allocate(ALLOCATION_SIZE));
+    uint32_t size = table.size();
+    row_size_ += size;
+    max_attr_size = std::max(max_attr_size, size);
 
     insist(columns_.size() == table.size() + 1);
     capacity_ = (ALLOCATION_SIZE * 8) / max_attr_size;

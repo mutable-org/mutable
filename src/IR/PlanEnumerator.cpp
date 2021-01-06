@@ -1,11 +1,11 @@
 #include "mutable/IR/PlanEnumerator.hpp"
 
-#include "IR/Optimizer.hpp"
+#include "mutable/IR/PlanTable.hpp"
 #include "mutable/IR/QueryGraph.hpp"
-#include "util/ADT.hpp"
 #include "mutable/util/fn.hpp"
-#include <unordered_set>
+#include "util/ADT.hpp"
 #include <queue>
+#include <unordered_set>
 
 
 #ifndef PE_COUNTER

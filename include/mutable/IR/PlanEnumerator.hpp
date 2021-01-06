@@ -10,6 +10,7 @@
 
 namespace m {
 
+/* forward declarations */
 struct PlanTable;
 
 /** An interface for all plan enumerators. */

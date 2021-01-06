@@ -4,7 +4,6 @@
 #include "catalog/Schema.hpp"
 #include "globals.hpp"
 #include "io/Reader.hpp"
-#include "IR/Optimizer.hpp"
 #include "mutable/mutable.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"

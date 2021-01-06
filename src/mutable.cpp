@@ -5,7 +5,6 @@
 #include "backend/WebAssembly.hpp"
 #include "globals.hpp"
 #include "io/Reader.hpp"
-#include "IR/Optimizer.hpp"
 #include "lex/Lexer.hpp"
 #include "mutable/IR/Tuple.hpp"
 #include "mutable/util/Diagnostic.hpp"

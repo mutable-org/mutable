@@ -4,6 +4,8 @@
 #include <sstream>
 
 
+namespace m {
+
 /** This class enables direct rendering of dot output (e.g. that of `ASTDot`).  It uses the graphviz library to render
  * the dot output directly to PDF. */
 struct DotTool
@@ -36,3 +38,5 @@ struct DotTool
      */
     void show(const char *name, bool interactive, const char *algo = DEFAULT_LAYOUT_ALGORITHM);
 };
+
+}

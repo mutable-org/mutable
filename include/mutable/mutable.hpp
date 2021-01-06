@@ -23,6 +23,7 @@
 #include "mutable/util/ADT.hpp"
 #include "mutable/util/Diagnostic.hpp"
 #include "mutable/util/Diagnostic.hpp"
+#include "mutable/util/DotTool.hpp"
 #include "mutable/util/exception.hpp"
 #include "mutable/util/fn.hpp"
 #include "mutable/util/macro.hpp"

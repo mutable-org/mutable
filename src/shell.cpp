@@ -8,7 +8,6 @@
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "util/ArgParser.hpp"
-#include "util/DotTool.hpp"
 #include "util/glyphs.hpp"
 #include "util/terminal.hpp"
 #include <cerrno>

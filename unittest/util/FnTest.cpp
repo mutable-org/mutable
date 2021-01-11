@@ -94,7 +94,7 @@ TEST_CASE("powi", "[core][util][fn]")
 TEST_CASE("sum_wo_overflow", "[core][util][fn]")
 {
     uint64_t UL_MAX = std::numeric_limits<uint64_t>::max();
-    uint64_t U_MAX = std::numeric_limits<uint64_t>::max();
+    uint64_t U_MAX = std::numeric_limits<uint32_t>::max();
 
     REQUIRE(sum_wo_overflow(5U, 10U) == 15U);
     REQUIRE(sum_wo_overflow(UL_MAX, 10U) == UL_MAX);
@@ -104,6 +104,19 @@ TEST_CASE("sum_wo_overflow", "[core][util][fn]")
     REQUIRE(sum_wo_overflow((1UL << 63), 5U, (1UL << 63), 1U) == UL_MAX);
     REQUIRE(sum_wo_overflow(UL_MAX, U_MAX) == UL_MAX);
     REQUIRE(sum_wo_overflow(UL_MAX - 1, 1U) == UL_MAX);
+}
+
+TEST_CASE("prod_wo_overflow", "[core][util][fn]")
+{
+    uint64_t UL_MAX = std::numeric_limits<uint64_t>::max();
+    uint64_t U_MAX = std::numeric_limits<uint32_t>::max();
+
+    REQUIRE(prod_wo_overflow(5U, 10U) == 50U);
+    REQUIRE(prod_wo_overflow(UL_MAX, 42U) == UL_MAX);
+    REQUIRE(prod_wo_overflow(UL_MAX, UL_MAX) == UL_MAX);
+    REQUIRE(prod_wo_overflow(U_MAX, U_MAX) == 18446744065119617025UL);
+    REQUIRE(prod_wo_overflow(1UL << 32, U_MAX) == 18446744069414584320UL);
+    REQUIRE(prod_wo_overflow(1UL << 32, 1UL << 32) == UL_MAX);
 }
 
 TEST_CASE("pattern_to_regex", "[core][util][fn]")

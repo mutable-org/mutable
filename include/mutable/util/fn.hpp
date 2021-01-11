@@ -398,6 +398,7 @@ inline bool isspace(const char *s) { return isspace(s, strlen(s)); }
 
 void exec(const char *executable, std::initializer_list<const char*> args);
 
+/*--- Add without overflow; clamp at max value. ----------------------------------------------------------------------*/
 template<typename T, typename U>
 auto add_wo_overflow(T left, U right)
 {
@@ -426,6 +427,37 @@ template<typename N0, typename N1, typename... Numbers>
 auto sum_wo_overflow(N0 n0, N1 n1, Numbers... numbers)
 {
     return sum_wo_overflow(add_wo_overflow(n0, n1), numbers...);
+}
+
+/*--- Multiply without overflow; clamp at max value. -----------------------------------------------------------------*/
+template<typename T, typename U>
+auto mul_wo_overflow(T left, U right)
+{
+    static_assert(std::is_integral_v<T>, "LHS must be an integral type");
+    static_assert(std::is_integral_v<U>, "RHS must be an integral type");
+
+    static_assert(not std::is_signed_v<T>, "LHS must be unsigned");
+    static_assert(not std::is_signed_v<U>, "RHS must be unsigned");
+
+    using CT = std::common_type_t<T, U>;
+    CT res;
+    if (__builtin_mul_overflow(CT(left), CT(right), &res))
+        return std::numeric_limits<CT>::max();
+    return res;
+}
+
+template<typename N0, typename N1>
+auto prod_wo_overflow(N0 n0, N1 n1)
+{
+    return mul_wo_overflow(n0, n1);
+}
+
+/** Returns the product of the given parameters. In case the multiplication overflows, the maximal numeric value for the
+ * common type is returned.*/
+template<typename N0, typename N1, typename... Numbers>
+auto prod_wo_overflow(N0 n0, N1 n1, Numbers... numbers)
+{
+    return prod_wo_overflow(prod_wo_overflow(n0, n1), numbers...);
 }
 
 /** A wrapper around `strdup()` that permits `nullptr`. */

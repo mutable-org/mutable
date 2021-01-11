@@ -4,6 +4,7 @@
 #include "mutable/IR/Operator.hpp"
 #include "mutable/IR/PlanEnumerator.hpp"
 #include "mutable/IR/QueryGraph.hpp"
+#include "mutable/util/fn.hpp"
 
 
 namespace m {
@@ -115,7 +116,7 @@ struct PlanTable {
             entry.cost = cost;
             entry.left = left;
             entry.right = right;
-            entry.size = at(left).size * at(right).size; // TODO use statistics module to estimate selectivity
+            entry.size = prod_wo_overflow(at(left).size, at(right).size); // TODO use statistics module to estimate selectivity
         }
     }
 

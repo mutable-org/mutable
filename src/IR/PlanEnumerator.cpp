@@ -78,58 +78,38 @@ struct DPsizeOpt final : PlanEnumerator
 
 void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
 {
-    constexpr uint64_t MAX = std::numeric_limits<uint64_t>::max();
     auto &sources = G.sources();
     std::size_t n = sources.size();
     AdjacencyMatrix M(G);
 
-#if PE_COUNTER
-    std::size_t inner_counter = 0;
-    std::size_t csg_cmp_pair_counter = 0;
-#endif
-
     /* Process all subplans of size greater than one. */
     for (std::size_t s = 2; s <= n; ++s) {
-        std::size_t m = s/2 + 1;
-        for (std::size_t s1 = 1; s1 < /*s*/m; ++s1) {
+        std::size_t m = s / 2; // division with rounding down
+        for (std::size_t s1 = 1; s1 <= m; ++s1) {
             std::size_t s2 = s - s1;
             /* Check for all combinations of subsets if they are valid joins and if so, forward the combination to the
              * plan table. */
-            if (s1 == s2) { // if subproblems of equal size
-                /* Use optimized version of DPsize.*/
+            if (s1 == s2) { // exploit commutativity of join: if A⋈ B is possible, so is B⋈ A
                 for (auto S1 = GospersHack::enumerate_all(s1, n); S1; ++S1) { // enumerate all subsets of size `s1`
-                    if (PT[*S1].cost == MAX) continue; // subproblem not considered, i.e. no join exists -> skip
+                    if (not M.is_connected(*S1)) continue; // subproblem not connected -> skip
                     GospersHack S2 = GospersHack::enumerate_from(*S1, n);
-                    for (++S2; S2; ++S2) { // consider only the subsets following S1
-                        if (PT[*S2].cost == MAX) continue; // subproblem not considered, i.e. no join exists -> skip
-#if PE_COUNTER
-                        ++inner_counter;
-#endif
-                        if (*S1 & *S2) continue; // not disjoint? -> skip
-                        if (not M.is_connected(*S1, *S2)) continue; // not connected? -> skip
-#if PE_COUNTER
-                        ++csg_cmp_pair_counter;
-#endif
-                        /* Consider symmetry of subproblems. */
+                    for (++S2; S2; ++S2) { // enumerate only the subsets following S1
+                        if (not M.is_connected(*S2)) continue; // subproblem not connected -> skip
+                        if (*S1 & *S2) continue; // subproblems not disjoint -> skip
+                        if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
+                        /* Exploit commutativity of join. */
                         PT.update(cf, *S1, *S2, 0);
                         PT.update(cf, *S2, *S1, 0);
                     }
                 }
             } else {
-                /* Standard version. */
                 for (auto S1 = GospersHack::enumerate_all(s1, n); S1; ++S1) { // enumerate all subsets of size `s1`
-                    if (PT[*S1].cost == MAX) continue; // subproblem not considered, i.e. no join exists -> skip
+                    if (not M.is_connected(*S1)) continue; // subproblem not connected -> skip
                     for (auto S2 = GospersHack::enumerate_all(s2, n); S2; ++S2) { // enumerate all subsets of size `s2`
-                        if (PT[*S2].cost == MAX) continue; // subproblem not considered, i.e. no join exists -> skip
-#if PE_COUNTER
-                        ++inner_counter;
-#endif
-                        if (*S1 & *S2) continue; // not disjoint? -> skip
-                        if (not M.is_connected(Subproblem(*S1), Subproblem(*S2))) continue; // not connected? -> skip
-#if PE_COUNTER
-                        ++csg_cmp_pair_counter;
-#endif
-                        /* Consider symmetry of subproblems. */
+                        if (not M.is_connected(*S2)) continue; // subproblem not connected -> skip
+                        if (*S1 & *S2) continue; // subproblems not disjoint -> skip
+                        if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
+                        /* Exploit commutativity of join. */
                         PT.update(cf, *S1, *S2, 0);
                         PT.update(cf, *S2, *S1, 0);
                     }
@@ -137,13 +117,6 @@ void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTabl
             }
         }
     }
-#if PE_COUNTER
-    std::cout << "DPsizeOpt:\n";
-    std::cout << "  inner_counter: " << inner_counter << "\n";
-    std::cout << "  csg_cmp_pair_counter: " << csg_cmp_pair_counter << "\n";
-    /* OnoLohmanCounter corresponds to `csg_cmp_pair_counter` because symmetric subproblems are already excluded. */
-    std::cout << "  OnoLohmanCounter (#cpp): " << csg_cmp_pair_counter << std::endl;
-#endif
 }
 
 /*======================================================================================================================

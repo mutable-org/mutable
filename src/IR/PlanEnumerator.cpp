@@ -102,11 +102,6 @@ void DPsize::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &
     std::size_t n = sources.size();
     AdjacencyMatrix M(G);
 
-#if PE_COUNTER
-    std::size_t inner_counter = 0;
-    std::size_t csg_cmp_pair_counter = 0;
-#endif
-
     /* Process all subplans of size greater than one. */
     for (std::size_t s = 2; s <= n; ++s) {
         for (std::size_t s1 = 1; s1 < s; ++s1) {
@@ -114,26 +109,16 @@ void DPsize::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &
             /* Check for all combinations of subsets if they are valid joins and if so, forward the combination to the
              * plan table. */
             for (auto S1 = GospersHack::enumerate_all(s1, n); S1; ++S1) { // enumerate all subsets of size `s1`
+                if (not M.is_connected(*S1)) continue; // subproblem S1 not connected -> skip
                 for (auto S2 = GospersHack::enumerate_all(s2, n); S2; ++S2) { // enumerate all subsets of size `s - s1`
-#if PE_COUNTER
-                    ++inner_counter;
-#endif
-                    if (*S1 & *S2) continue; // not disjoint? -> skip
-                    if (not M.is_connected(*S1, *S2)) continue; // not connected? -> skip
-#if PE_COUNTER
-                    ++csg_cmp_pair_counter;
-#endif
+                    if (not M.is_connected(*S2)) continue; // subproblem S2 not connected -> skip
+                    if (*S1 & *S2) continue; // subproblems not disjoint -> skip
+                    if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
                     PT.update(cf, *S1, *S2, 0);
                 }
             }
         }
     }
-#if PE_COUNTER
-    std::cout << "DPsize:\n";
-    std::cout << "  inner_counter: " << inner_counter << "\n";
-    std::cout << "  csg_cmp_pair_counter: " << csg_cmp_pair_counter << "\n";
-    std::cout << "  OnoLohmanCounter (#cpp): " << csg_cmp_pair_counter/2 << std::endl;
-#endif
 }
 
 /*======================================================================================================================

@@ -5,6 +5,8 @@
 #include "mutable/IR/PlanEnumerator.hpp"
 #include "mutable/IR/QueryGraph.hpp"
 #include "mutable/util/fn.hpp"
+#include <cmath>
+#include <iomanip>
 
 
 namespace m {
@@ -126,43 +128,7 @@ struct PlanTable {
         return os.str();
     }
 
-    friend std::ostream &operator<<(std::ostream &out, const PlanTable &PT) {
-        std::size_t num_sources = PT.num_sources();
-        std::size_t n = 1UL << num_sources;
-
-        /* Compute max length of columns. */
-        auto &entry = PT.get_final();
-        uint64_t size_len = std::max<uint64_t>(std::to_string(entry.size).length(), 4);
-        uint64_t cost_len = std::max<uint64_t>(std::to_string(entry.cost).length(), 4);
-        uint64_t sub_len = std::max<uint64_t>(std::to_string(n).length(), 5);
-
-        out << "Plan Table:\n";
-        out << std::setw(num_sources) << "Sub" << "\t";
-        out << std::setw(size_len) << "Size" << "\t";
-        out << std::setw(cost_len) << "Cost" << "\t";
-        out << std::setw(sub_len) << "Left" << "\t";
-        out << std::setw(sub_len) << "Right" << "\n";
-
-        for (std::size_t i = 1; i < n; ++i) {
-            Subproblem sub(i);
-            sub.print_fixed_length(out, num_sources);
-            out << "\t";
-            if (PT.at(sub).cost == std::numeric_limits<uint64_t>::max() and
-                PT.at(sub).left.empty() and PT.at(sub).right.empty()) {
-                out << std::setw(size_len) << "-" << "\t";
-                out << std::setw(cost_len) << "-" << "\t";
-                out << std::setw(sub_len) << "-" << "\t";
-                out << std::setw(sub_len) << "-" << "\n";
-            } else {
-                out << std::setw(size_len) << PT.at(sub).size << "\t";
-                out << std::setw(cost_len) << PT.at(sub).cost << "\t";
-                out << std::setw(sub_len) << uint64_t(PT.at(sub).left) << "\t";
-                out << std::setw(sub_len) << uint64_t(PT.at(sub).right) << "\n";
-            }
-        }
-        return out;
-    }
-
+    friend std::ostream &operator<<(std::ostream &out, const PlanTable &PT);
     void dump(std::ostream &out) const;
     void dump() const;
 };

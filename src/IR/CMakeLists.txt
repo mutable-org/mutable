@@ -7,6 +7,7 @@ add_library(
     OperatorVisitor.cpp
     Optimizer.cpp
     PlanEnumerator.cpp
+    PlanTable.cpp
     QueryGraph.cpp
     Tuple.cpp
     QueryGraph2SQL.cpp

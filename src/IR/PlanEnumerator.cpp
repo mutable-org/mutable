@@ -8,12 +8,8 @@
 #include <unordered_set>
 
 
-#ifndef PE_COUNTER
-#define PE_COUNTER 0
-#endif
-
-
 using namespace m;
+
 
 const std::unordered_map<std::string, PlanEnumerator::kind_t> PlanEnumerator::STR_TO_KIND = {
 #define DB_PLAN_ENUMERATOR(NAME, _) { #NAME,  PlanEnumerator::PE_ ## NAME },
@@ -138,12 +134,12 @@ void DPsizeSub::operator()(const QueryGraph &G, const CostFunction &cf, PlanTabl
     /* Process all subplans of size greater than one. */
     for (std::size_t s = 2; s <= n; ++s) {
         for (auto S = GospersHack::enumerate_all(s, n); S; ++S) { // enumerate all subsets of size `s`
-            if (not M.is_connected(*S)) continue; // not connected? -> skip
+            if (not M.is_connected(*S)) continue; // not connected -> skip
             for (Subproblem O(least_subset(*S)); O != *S; O = Subproblem(next_subset(O, *S))) {
                 Subproblem Comp = *S - O;
                 insist(M.is_connected(O, Comp), "implied by S inducing a connected subgraph");
-                if (not M.is_connected(O)) continue; // not connected? -> skip
-                if (not M.is_connected(Comp)) continue; // not connected? -> skip
+                if (not PT.has_plan(O)) continue; // not connected -> skip
+                if (not PT.has_plan(Comp)) continue; // not connected -> skip
                 PT.update(cf, O, Comp, 0);
             }
         }
@@ -163,38 +159,21 @@ struct DPsub final : PlanEnumerator
 void DPsub::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
 {
     auto &sources = G.sources();
-    std::size_t n = sources.size();
-    AdjacencyMatrix M(G);
-
-#if PE_COUNTER
-    std::size_t inner_counter = 0;
-    std::size_t csg_cmp_pair_counter = 0;
-#endif
+    const std::size_t n = sources.size();
+    const AdjacencyMatrix M(G);
 
     for (std::size_t i = 1, end = 1UL << n; i < end; ++i) {
         Subproblem S(i);
         if (S.size() == 1) continue; // no non-empty and strict subset of S -> skip
-        if (not M.is_connected(S)) continue; // not connected? -> skip
+        if (not M.is_connected(S)) continue; // not connected -> skip
         for (Subproblem S1(least_subset(S)); S1 != S; S1 = Subproblem(next_subset(S1, S))) {
-#if PE_COUNTER
-            ++inner_counter;
-#endif
-            Subproblem S2 = S - S1; // = S \ S1;
+            Subproblem S2 = S - S1;
             insist(M.is_connected(S1, S2), "implied by S inducing a connected subgraph");
-            if (not M.is_connected(S1)) continue; // not connected? -> skip
-            if (not M.is_connected(S2)) continue; // not connected? -> skip
-#if PE_COUNTER
-            ++csg_cmp_pair_counter;
-#endif
+            if (not PT.has_plan(S1)) continue; // not connected -> skip
+            if (not PT.has_plan(S2)) continue; // not connected -> skip
             PT.update(cf, S1, S2, 0);
         }
     }
-#if PE_COUNTER
-    std::cout << "DPsub:\n";
-    std::cout << "  inner_counter: " << inner_counter << "\n";
-    std::cout << "  csg_cmp_pair_counter: " << csg_cmp_pair_counter << "\n";
-    std::cout << "  OnoLohmanCounter (#cpp): " << csg_cmp_pair_counter/2 << std::endl;
-#endif
 }
 
 /*======================================================================================================================
@@ -211,13 +190,8 @@ struct DPsubOpt final : PlanEnumerator
 void DPsubOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
 {
     auto &sources = G.sources();
-    std::size_t n = sources.size();
-    AdjacencyMatrix M(G);
-
-#if PE_COUNTER
-    std::size_t inner_counter = 0;
-    std::size_t csg_cmp_pair_counter = 0;
-#endif
+    const std::size_t n = sources.size();
+    const AdjacencyMatrix M(G);
 
     for (std::size_t i = 1, end = 1UL << n; i < end; ++i) {
         Subproblem S(i);
@@ -228,38 +202,22 @@ void DPsubOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable
         insist(offset != 0, "invalid subproblem offset");
         Subproblem limit(1UL << (offset - 1));
         for (Subproblem S1(least_subset(S)); S1 != limit; S1 = Subproblem(next_subset(S1, S))) {
-#if PE_COUNTER
-            ++inner_counter;
-#endif
             Subproblem S2 = S - S1; // = S \ S1;
             insist(M.is_connected(S1, S2), "implied by S inducing a connected subgraph");
-            if (not M.is_connected(S1)) continue; // not connected? -> skip
-            if (not M.is_connected(S2)) continue; // not connected? -> skip
-#if PE_COUNTER
-            ++csg_cmp_pair_counter;
-#endif
-            /* Consider symmetry of subproblems. */
+            if (not PT.has_plan(S1)) continue; // not connected -> skip
+            if (not PT.has_plan(S2)) continue; // not connected -> skip
+            /* Exploit commutativity of join. */
             PT.update(cf, S1, S2, 0);
             PT.update(cf, S2, S1, 0);
         }
     }
-#if PE_COUNTER
-    std::cout << "DPsubOpt:\n";
-    std::cout << "  inner_counter: " << inner_counter << "\n";
-    std::cout << "  csg_cmp_pair_counter: " << csg_cmp_pair_counter << "\n";
-    std::cout << "  OnoLohmanCounter (#cpp): " << csg_cmp_pair_counter << std::endl;
-#endif
 }
 
 /*======================================================================================================================
  * DPccp
  *====================================================================================================================*/
 
-#if PE_COUNTER
-std::size_t ccp = 0;
-#endif
-
-/** Computes the join order using connected subgraph complement pairs (ccp). */
+/** Computes the join order using connected subgraph complement pairs (CCP). */
 struct DPccp final : PlanEnumerator
 {
     /** For each connected subgraph (csg) `S1` of `G`, enumerate all complement connected subgraphs,
@@ -293,9 +251,6 @@ void DPccp::enumerate_cmp(const QueryGraph &G, const AdjacencyMatrix &M, const C
         while (not Q.empty()) {
             auto [S, X] = Q.front();
             Q.pop();
-#if PE_COUNTER
-            ++ccp;
-#endif
             /* Update `PlanTable` with connected subgraph complement pair (S1, S). */
             PT.update(cf, S1, S, 0);
             PT.update(cf, S, S1, 0);
@@ -315,8 +270,8 @@ void DPccp::enumerate_cmp(const QueryGraph &G, const AdjacencyMatrix &M, const C
 void DPccp::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
 {
     auto &sources = G.sources();
-    std::size_t n = sources.size();
-    AdjacencyMatrix M(G);
+    const std::size_t n = sources.size();
+    const AdjacencyMatrix M(G);
 
     /* Process subgraphs in breadth-first order.  The queue contains pairs of connected subgraphs and the corresponding
      * set of nodes to exclude. */
@@ -339,11 +294,6 @@ void DPccp::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &P
                 Q.emplace(std::make_pair(S | sub, X | N));
         }
     }
-
-#if PE_COUNTER
-    std::cout << "DPccp:\n";
-    std::cout << "  #ccp: " << ccp << "\n";
-#endif
 }
 
 /*======================================================================================================================

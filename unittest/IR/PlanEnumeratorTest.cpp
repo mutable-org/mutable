@@ -11,6 +11,7 @@
 #include "testutil.hpp"
 #include "util/ADT.hpp"
 
+
 using namespace m;
 
 
@@ -118,8 +119,6 @@ TEST_CASE("PlanEnumerator", "[core][IR][planenumerator]")
     CostFunction CF([](CostFunction::Subproblem left, CostFunction::Subproblem right, int, const PlanTable &T) {
         return sum_wo_overflow(T[left].cost, T[right].cost, T[left].size, T[right].size);
     });
-
-    constexpr uint64_t MAX = std::numeric_limits<uint64_t>::max();
 
     SECTION("DPsize")
     {

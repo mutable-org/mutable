@@ -48,9 +48,9 @@ void DPsize::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &
             /* Check for all combinations of subsets if they are valid joins and if so, forward the combination to the
              * plan table. */
             for (auto S1 = GospersHack::enumerate_all(s1, n); S1; ++S1) { // enumerate all subsets of size `s1`
-                if (not M.is_connected(*S1)) continue; // subproblem S1 not connected -> skip
+                if (not PT.has_plan(*S1)) continue; // subproblem S1 not connected -> skip
                 for (auto S2 = GospersHack::enumerate_all(s2, n); S2; ++S2) { // enumerate all subsets of size `s - s1`
-                    if (not M.is_connected(*S2)) continue; // subproblem S2 not connected -> skip
+                    if (not PT.has_plan(*S2)) continue; // subproblem S2 not connected -> skip
                     if (*S1 & *S2) continue; // subproblems not disjoint -> skip
                     if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
                     PT.update(cf, *S1, *S2, 0);
@@ -87,10 +87,10 @@ void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTabl
              * plan table. */
             if (s1 == s2) { // exploit commutativity of join: if A⋈ B is possible, so is B⋈ A
                 for (auto S1 = GospersHack::enumerate_all(s1, n); S1; ++S1) { // enumerate all subsets of size `s1`
-                    if (not M.is_connected(*S1)) continue; // subproblem not connected -> skip
+                    if (not PT.has_plan(*S1)) continue; // subproblem not connected -> skip
                     GospersHack S2 = GospersHack::enumerate_from(*S1, n);
                     for (++S2; S2; ++S2) { // enumerate only the subsets following S1
-                        if (not M.is_connected(*S2)) continue; // subproblem not connected -> skip
+                        if (not PT.has_plan(*S2)) continue; // subproblem not connected -> skip
                         if (*S1 & *S2) continue; // subproblems not disjoint -> skip
                         if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
                         /* Exploit commutativity of join. */
@@ -100,9 +100,9 @@ void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTabl
                 }
             } else {
                 for (auto S1 = GospersHack::enumerate_all(s1, n); S1; ++S1) { // enumerate all subsets of size `s1`
-                    if (not M.is_connected(*S1)) continue; // subproblem not connected -> skip
+                    if (not PT.has_plan(*S1)) continue; // subproblem not connected -> skip
                     for (auto S2 = GospersHack::enumerate_all(s2, n); S2; ++S2) { // enumerate all subsets of size `s2`
-                        if (not M.is_connected(*S2)) continue; // subproblem not connected -> skip
+                        if (not PT.has_plan(*S2)) continue; // subproblem not connected -> skip
                         if (*S1 & *S2) continue; // subproblems not disjoint -> skip
                         if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
                         /* Exploit commutativity of join. */

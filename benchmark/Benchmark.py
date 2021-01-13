@@ -20,8 +20,8 @@ import yaml
 
 
 NUM_RUNS        = 5
-DEFAULT_TIMEOUT = 120 # 2 minutes
-TIMEOUT_PER_CASE = 30 # 30 seconds
+DEFAULT_TIMEOUT = 30  # seconds
+TIMEOUT_PER_CASE = 10 # seconds
 MUTABLE_BINARY  = os.path.join('build', 'release', 'bin', 'shell')
 YML_SCHEMA      = os.path.join('benchmark', '_schema.yml')
 

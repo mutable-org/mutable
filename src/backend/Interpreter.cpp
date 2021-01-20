@@ -327,7 +327,8 @@ StackMachine Interpreter::compile_load(const Schema &S, const Linearization &L, 
                     }
                 } else {
                     /* Initialize counter and emit increment. */
-                    auto counter_id = SM.add_and_emit_load(int64_t(row_id)); // introduce counter to track iteration count
+                    const std::size_t inner_row_id = row_id % e.as_linearization().num_tuples();
+                    const auto counter_id = SM.add_and_emit_load(inner_row_id); // introduce counter to track iteration count
                     SM.emit_Inc();
                     SM.emit_Upd_Ctx(counter_id);
                     SM.emit_Pop(); // XXX: not needed if recursion cleans up stack properly
@@ -338,11 +339,11 @@ StackMachine Interpreter::compile_load(const Schema &S, const Linearization &L, 
                         .num_tuples = e.as_linearization().num_tuples(),
                         .stride = e.stride
                     });
-                    const std::size_t inner_row_id = row_id % e.as_linearization().num_tuples();
                     compile_rec_ref(e.as_linearization(), inner_row_id, compile_rec_ref);
                     stride_info_stack.pop_back();
 
                     /* Reset counter if iteration is whole multiple of num_tuples. */
+                    insist(e.as_linearization().num_tuples() != 0, "must not be an infinite sequence");
                     if (e.as_linearization().num_tuples() != 1) {
                         SM.emit_Ld_Ctx(counter_id); // XXX: not needed if recursion cleans up stack properly
                         SM.add_and_emit_load(e.as_linearization().num_tuples());
@@ -700,7 +701,8 @@ StackMachine Interpreter::compile_store(const Schema &S, const Linearization &L,
                     insist(e.is_linearization());
 
                     /* Initialize counter and emit increment. */
-                    auto counter_id = SM.add_and_emit_load(int64_t(row_id)); // introduce counter to track iteration count
+                    const std::size_t inner_row_id = row_id % e.as_linearization().num_tuples();
+                    const auto counter_id = SM.add_and_emit_load(inner_row_id); // introduce counter to track iteration count
                     SM.emit_Inc();
                     SM.emit_Upd_Ctx(counter_id);
                     SM.emit_Pop(); // XXX: not needed if recursion cleans up stack properly
@@ -711,11 +713,11 @@ StackMachine Interpreter::compile_store(const Schema &S, const Linearization &L,
                         .num_tuples = e.as_linearization().num_tuples(),
                         .stride = e.stride
                     });
-                    const std::size_t inner_row_id = row_id % e.as_linearization().num_tuples();
                     compile_rec_ref(e.as_linearization(), inner_row_id, compile_rec_ref);
                     stride_info_stack.pop_back();
 
                     /* Reset counter if iteration is whole multiple of num_tuples. */
+                    insist(e.as_linearization().num_tuples() != 0, "must not be an infinite sequence");
                     if (e.as_linearization().num_tuples() != 1) {
                         SM.emit_Ld_Ctx(counter_id); // XXX: not needed if recursion cleans up stack properly
                         SM.add_and_emit_load(e.as_linearization().num_tuples());

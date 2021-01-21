@@ -257,8 +257,25 @@ struct Interpreter : Backend, ConstOperatorVisitor
         insist(errno == 0, "constant could not be parsed");
     }
 
-    static StackMachine compile_load(const Schema &S, const Linearization &L, std::size_t row_id = 0);
-    static StackMachine compile_store(const Schema &S, const Linearization &L, std::size_t row_id = 0);
+    /** Compile a `StackMachine` to load a tuple of `Schema` `S` using a given `Linearization`.
+     *
+     * @param S        the `Schema` of the tuple to load to, specifying the attributes to load
+     * @param L        the `Linearization` of the `Store` we are loading from
+     * @param row_id   the ID of the *first* row to load from
+     * @param tuple_id the ID of the tuple to load to
+     */
+    static StackMachine compile_load(const Schema &S, const Linearization &L, std::size_t row_id = 0,
+                                     std::size_t tuple_id = 0);
+
+    /** Compile a `StackMachine` to store a tuple of `Schema` `S` using a given `Linearization`.
+     *
+     * @param S        the `Schema` of the tuple to store, specifying the attributes to store
+     * @param L        the `Linearization` of the `Store` we are storing to
+     * @param row_id   the ID of the *first* row to store to
+     * @param tuple_id the ID of the tuple to store
+     */
+    static StackMachine compile_store(const Schema &S, const Linearization &L, std::size_t row_id = 0,
+                                      std::size_t tuple_id = 0);
 };
 
 }

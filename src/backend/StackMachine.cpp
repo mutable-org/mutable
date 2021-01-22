@@ -722,7 +722,7 @@ void StackMachine::emit_Cast(const Type *to_ty, const Type *from_ty)
             case Numeric::N_Decimal:
                 switch (n_to->kind) {
                     case Numeric::N_Int: /* decimal -> int */
-                        add_and_emit_load(powi(10L, n_to->scale));
+                        add_and_emit_load(powi(10L, n_from->scale));
                         emit_Div_i();
                         return;
 

@@ -2,6 +2,7 @@
 
 from colorama import Fore, Back, Style
 from git import Repo
+from pandas.api.types import is_numeric_dtype
 from tqdm import tqdm
 from yattag import Doc, indent
 import altair
@@ -451,12 +452,13 @@ def generate_html(commit, results):
                         labels_benchmark.add(chart_x_label)
 
                         # Produce combined chart for all configurations of the same experiment
+                        is_case_numeric = is_numeric_dtype(measurements_experiment['case'])
                         num_cases = len(measurements_experiment['case'].unique())
                         chart_width = 30 * num_cases
 
                         selection = altair.selection_multi(fields=['name'], bind='legend')
                         base = altair.Chart(measurements_experiment, width=chart_width).encode(
-                            x = altair.X('case:N', title=' | '.join(sorted(labels_benchmark))),
+                            x = altair.X('case:Q' if is_case_numeric else 'case:N', title=' | '.join(sorted(labels_benchmark))),
                             color = altair.Color('name:N', title=None, legend=None)
                         )
                         line = base.mark_line().encode(
@@ -476,7 +478,7 @@ def generate_html(commit, results):
                         chart = (line + band + point).resolve_scale(
                             color='independent',
                             shape='independent'
-                        ).add_selection(selection).interactive()
+                        ).add_selection(selection).interactive(bind_x=False)
 
                         with tag('script', type='text/javascript'):
                             text(f'var spec = {chart.to_json()};')
@@ -516,7 +518,7 @@ def generate_html(commit, results):
                         chart = (line + band + point).resolve_scale(
                             color='independent',
                             shape='independent'
-                        ).add_selection(selection).interactive()
+                        ).add_selection(selection).interactive(bind_x=False)
 
                         with tag('script', type='text/javascript'):
                             text(f'var spec = {chart.to_json()};')

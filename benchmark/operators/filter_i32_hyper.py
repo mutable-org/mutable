@@ -21,6 +21,8 @@ if __name__ == '__main__':
             times = list()
             queries = [
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < -2147483647',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < -2104533975',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < -1932735283',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < -1717986918',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < -1288490188',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <  -858993459',
@@ -30,6 +32,8 @@ if __name__ == '__main__':
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <   858993459',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <  1288490188',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <  1717986918',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <  1932735283',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <  2104533975',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <  2147483647',
             ]
 

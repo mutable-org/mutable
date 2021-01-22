@@ -19,17 +19,21 @@ if __name__ == '__main__':
 
             times = list()
             queries = [
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.0',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.1',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.2',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.3',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.4',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.5',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.6',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.7',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.8',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.9',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 1.0',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.00',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.01',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.05',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.10',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.20',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.30',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.40',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.50',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.60',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.70',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.80',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.90',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.95',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.99',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 1.00',
             ]
 
             for q in queries:

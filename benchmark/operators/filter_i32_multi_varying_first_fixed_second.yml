@@ -1,7 +1,7 @@
 description: |
-    Range filter on attribute of type INT(4) with varying selectivity of the first predicate and fixed selectivity of
-    the second predicate.
-suite: operators
+    Range filter on attribute of type INT(4) with varying selectivity of the first predicate and 1% selectivity of the
+    second predicate.
+suite: wip
 benchmark: 'filter-multiple'
 readonly: yes
 pattern: '^Execute query:.*'
@@ -12,18 +12,20 @@ configurations:
 label: 'Selectivity'
 tables: [ 'Attribute_i32' ]
 cases:
-    0.0: SELECT 1 FROM Attribute_i32 WHERE val < -2147483647 AND val <           0;
-    0.1: SELECT 1 FROM Attribute_i32 WHERE val < -1717986918 AND val > -2147483647;
-    0.2: SELECT 1 FROM Attribute_i32 WHERE val < -1288490188 AND val > -1717986918;
-    0.3: SELECT 1 FROM Attribute_i32 WHERE val <  -858993459 AND val > -1288490188;
-    0.4: SELECT 1 FROM Attribute_i32 WHERE val <  -429496729 AND val >  -858993459;
-    0.5: SELECT 1 FROM Attribute_i32 WHERE val <           0 AND val >  -429496729;
-    0.6: SELECT 1 FROM Attribute_i32 WHERE val <   429496729 AND val >           0;
-    0.7: SELECT 1 FROM Attribute_i32 WHERE val <   858993459 AND val >   429496729;
-    0.8: SELECT 1 FROM Attribute_i32 WHERE val <  1288490188 AND val >   858993459;
-    0.9: SELECT 1 FROM Attribute_i32 WHERE val <  1717986918 AND val >  1288490188;
-    1.0: SELECT 1 FROM Attribute_i32 WHERE val <  2147483647 AND val >  1717986918;
+    0.01: SELECT 1 FROM Attribute_i32 WHERE -2104533975 < val AND val < -2061584302;
+    0.05: SELECT 1 FROM Attribute_i32 WHERE -1932735283 < val AND val < -1889785610;
+    0.10: SELECT 1 FROM Attribute_i32 WHERE -1717986918 < val AND val < -1675037245;
+    0.20: SELECT 1 FROM Attribute_i32 WHERE -1288490188 < val AND val < -1245540515;
+    0.30: SELECT 1 FROM Attribute_i32 WHERE  -858993459 < val AND val <  -816043786;
+    0.40: SELECT 1 FROM Attribute_i32 WHERE  -429496729 < val AND val <  -386547056;
+    0.50: SELECT 1 FROM Attribute_i32 WHERE           0 < val AND val <    42949672;
+    0.60: SELECT 1 FROM Attribute_i32 WHERE   429496729 < val AND val <   472446402;
+    0.70: SELECT 1 FROM Attribute_i32 WHERE   858993459 < val AND val <   901943132;
+    0.80: SELECT 1 FROM Attribute_i32 WHERE  1288490188 < val AND val <  1331439861;
+    0.90: SELECT 1 FROM Attribute_i32 WHERE  1717986918 < val AND val <  1760936591;
+    0.95: SELECT 1 FROM Attribute_i32 WHERE  1932735283 < val AND val <  1975684956;
+    0.99: SELECT 1 FROM Attribute_i32 WHERE  2104533975 < val AND val <  2147483647;
 compare_to:
     'DuckDB':     'benchmark/operators/filter_i32_multi_varying_first_fixed_second_duckdb.sh'
-    # 'PostgreSQL': 'benchmark/operators/filter_i32_multi_varying_first_fixed_second_postgresql.sh'
-    # 'HyPer':      'benchmark/operators/filter_i32_multi_varying_first_fixed_second_hyper.py'
+    'PostgreSQL': 'benchmark/operators/filter_i32_multi_varying_first_fixed_second_postgresql.sh'
+    'HyPer':      'benchmark/operators/filter_i32_multi_varying_first_fixed_second_hyper.py'

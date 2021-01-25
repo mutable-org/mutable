@@ -1,0 +1,31 @@
+description: |
+    Two onesided range filters on attributes of type INT(4) with varying selectivity of the first predicate and 1%
+    selectivity of the second predicate.
+suite: operators
+benchmark: filter-multi
+readonly: yes
+pattern: '^Execute query:.*'
+configurations:
+    Interpreter:                 --backend Interpreter
+    'WebAssembly (RowStore)':    --backend WasmV8 --store RowStore
+    'WebAssembly (ColumnStore)': --backend WasmV8 --store ColumnStore
+label: 'Selectivity'
+tables: [ 'Attributes_multi_i32' ]
+cases:
+    0.01: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -2147483647 AND a1 < -2104533975;
+    0.05: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -1932735283 AND a1 < -2104533975;
+    0.10: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -1717986918 AND a1 < -2104533975;
+    0.20: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -1288490188 AND a1 < -2104533975;
+    0.30: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  -858993459 AND a1 < -2104533975;
+    0.40: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  -429496729 AND a1 < -2104533975;
+    0.50: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <           0 AND a1 < -2104533975;
+    0.60: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <   429496729 AND a1 < -2104533975;
+    0.70: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <   858993459 AND a1 < -2104533975;
+    0.80: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  1288490188 AND a1 < -2104533975;
+    0.90: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  1717986918 AND a1 < -2104533975;
+    0.95: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  1932735283 AND a1 < -2104533975;
+    0.99: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  2104533975 AND a1 < -2104533975;
+compare_to:
+    'DuckDB':     'benchmark/operators/filter_multi_i32_varying_first_fixed_second_duckdb.sh'
+    'PostgreSQL': 'benchmark/operators/filter_multi_i32_varying_first_fixed_second_postgresql.sh'
+    'HyPer':      'benchmark/operators/filter_multi_i32_varying_first_fixed_second_hyper.py'

@@ -1,6 +1,6 @@
 description: Filter on attribute of type FLOAT.
 suite: operators
-benchmark: filter
+benchmark: filter-onesided
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:
@@ -25,6 +25,6 @@ cases:
     0.99: SELECT 1 FROM Attribute_f WHERE val < 0.99;
     1.00: SELECT 1 FROM Attribute_f WHERE val < 1.00;
 compare_to:
-    'DuckDB': 'benchmark/operators/filter_f_duckdb.sh'
-    'PostgreSQL': 'benchmark/operators/filter_f_postgresql.sh'
-    'HyPer': 'benchmark/operators/filter_f_hyper.py'
+    'DuckDB': 'benchmark/operators/filter_range_onesided_f_duckdb.sh'
+    'PostgreSQL': 'benchmark/operators/filter_range_onesided_f_postgresql.sh'
+    'HyPer': 'benchmark/operators/filter_range_onesided_f_hyper.py'

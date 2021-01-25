@@ -1,6 +1,6 @@
 description: Filter on attribute of type INT(4).
 suite: operators
-benchmark: filter
+benchmark: filter-onesided
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:
@@ -26,6 +26,6 @@ cases:
     0.99: SELECT 1 FROM Attribute_i32 WHERE val <  2104533975;
     1.00: SELECT 1 FROM Attribute_i32 WHERE val <  2147483647;
 compare_to:
-    'DuckDB': 'benchmark/operators/filter_i32_duckdb.sh'
-    'PostgreSQL': 'benchmark/operators/filter_i32_postgresql.sh'
-    'HyPer': 'benchmark/operators/filter_i32_hyper.py'
+    'DuckDB': 'benchmark/operators/filter_range_onesided_i32_duckdb.sh'
+    'PostgreSQL': 'benchmark/operators/filter_range_onesided_i32_postgresql.sh'
+    'HyPer': 'benchmark/operators/filter_range_onesided_i32_hyper.py'

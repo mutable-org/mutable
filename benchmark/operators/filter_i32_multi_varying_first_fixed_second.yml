@@ -1,7 +1,7 @@
 description: |
     Range filter on attribute of type INT(4) with varying selectivity of the first predicate and 1% selectivity of the
     second predicate.
-suite: wip
+suite: operators
 benchmark: 'filter-multiple'
 readonly: yes
 pattern: '^Execute query:.*'

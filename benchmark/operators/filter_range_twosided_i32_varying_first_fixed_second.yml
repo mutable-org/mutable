@@ -1,6 +1,6 @@
 description: |
-    Range filter on attribute of type INT(4) with varying selectivity of the first predicate and 1% selectivity of the
-    second predicate.
+    Twosided range filter on attribute of type INT(4) with varying selectivity of the first predicate and 1% selectivity
+    of the second predicate.
 suite: operators
 benchmark: filter-twosided
 readonly: yes

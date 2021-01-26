@@ -1,5 +1,6 @@
 description: |
-    Two range filters on attributes of type INT(4) with simultaneously varying selectivity of both predicates equally.
+    Two one-sided range filters on attributes of type INT(4) with simultaneously varying selectivity of both predicates
+    equally.
 suite: operators
 benchmark: filter-multi
 readonly: yes

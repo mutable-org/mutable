@@ -1,5 +1,5 @@
 description: |
-    Two onesided range filters on attributes of type INT(4) with varying selectivity of the first predicate and 1%
+    Two one-sided range filters on attributes of type INT(4) with varying selectivity of the first predicate and 1%
     selectivity of the second predicate.
 suite: operators
 benchmark: filter-multi

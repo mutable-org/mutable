@@ -1,4 +1,4 @@
-description: Filter on attribute of type FLOAT.
+description: One-sided range filter on attribute of type FLOAT.
 suite: operators
 benchmark: filter-onesided
 readonly: yes

@@ -1,4 +1,4 @@
-description: Filter on attribute of type INT(4).
+description: One-sided range filter on attribute of type INT(4).
 suite: operators
 benchmark: filter-onesided
 readonly: yes

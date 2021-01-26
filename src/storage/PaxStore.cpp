@@ -68,7 +68,7 @@ void PaxStore::compute_block_offsets()
     off += num_attrs; // reserve space for the NULL bitmap
     uint32_t row_size_ = off;
 
-#if 0
+#if 1
     /* Compute number of rows within a PAX block. Consider worst case padding of 7 bits (because each column within
      * a PAX block must be byte-aligned) for every possibly not byte-aligned attribute column. Null bitmap column is
      * ignored since it is the last column. */

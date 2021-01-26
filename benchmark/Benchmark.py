@@ -201,7 +201,7 @@ def run_configuration(experiment, name, config, yml):
                 tqdm.write(str(ex))
                 # Add timeout durations
                 for case in cases.keys():
-                    measurements.loc[len(measurements)] = [ version, suite, benchmark, experiment, name, config, case, timeout * 1000 ]
+                    measurements.loc[len(measurements)] = [ version, suite, benchmark, experiment, name, config, case, TIMEOUT_PER_CASE * 1000 ]
             else:
                 # Add measured times
                 for case in cases.keys():
@@ -226,7 +226,7 @@ def run_configuration(experiment, name, config, yml):
                     durations = benchmark_query(command, query_str, yml['pattern'], timeout)
                 except BenchmarkTimeoutException as ex:
                     tqdm.write(str(ex))
-                    measurements.loc[len(measurements)] = [ version, suite, benchmark, experiment, name, config, case, timeout * 1000 ]
+                    measurements.loc[len(measurements)] = [ version, suite, benchmark, experiment, name, config, case, TIMEOUT_PER_CASE * 1000 ]
                 else:
                     for dur in durations:
                         measurements.loc[len(measurements)] = [ version, suite, benchmark, experiment, name, config, case, dur ]

@@ -20,19 +20,19 @@ if __name__ == '__main__':
 
             times = list()
             queries = [
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE -2104533975 < val AND val < -2061584302',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE -1932735283 < val AND val < -1889785610',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE -1717986918 < val AND val < -1675037245',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE -2104533974 < val AND val < -2061584301',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE -1932735282 < val AND val < -1889785609',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE -1717986917 < val AND val < -1675037244',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE -1288490188 < val AND val < -1245540515',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE  -858993459 < val AND val <  -816043786',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE  -858993458 < val AND val <  -816043785',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE  -429496729 < val AND val <  -386547056',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE           0 < val AND val <    42949672',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE   429496729 < val AND val <   472446402',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE   858993459 < val AND val <   901943132',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE   858993458 < val AND val <   901943131',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE  1288490188 < val AND val <  1331439861',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE  1717986918 < val AND val <  1760936591',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE  1932735283 < val AND val <  1975684956',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE  2104533975 < val AND val <  2147483647',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE  1717986917 < val AND val <  1760936590',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE  1932735282 < val AND val <  1975684955',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE  2104533974 < val AND val <  2147483647',
             ]
 
             for q in queries:

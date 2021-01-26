@@ -12,19 +12,19 @@ configurations:
 label: 'Selectivity'
 tables: [ 'Attribute_i32' ]
 cases:
-    0.01: SELECT 1 FROM Attribute_i32 WHERE -2104533975 < val AND val < -2061584302;
-    0.05: SELECT 1 FROM Attribute_i32 WHERE -1932735283 < val AND val < -1889785610;
-    0.10: SELECT 1 FROM Attribute_i32 WHERE -1717986918 < val AND val < -1675037245;
+    0.01: SELECT 1 FROM Attribute_i32 WHERE -2104533974 < val AND val < -2061584301;
+    0.05: SELECT 1 FROM Attribute_i32 WHERE -1932735282 < val AND val < -1889785609;
+    0.10: SELECT 1 FROM Attribute_i32 WHERE -1717986917 < val AND val < -1675037244;
     0.20: SELECT 1 FROM Attribute_i32 WHERE -1288490188 < val AND val < -1245540515;
-    0.30: SELECT 1 FROM Attribute_i32 WHERE  -858993459 < val AND val <  -816043786;
+    0.30: SELECT 1 FROM Attribute_i32 WHERE  -858993458 < val AND val <  -816043785;
     0.40: SELECT 1 FROM Attribute_i32 WHERE  -429496729 < val AND val <  -386547056;
     0.50: SELECT 1 FROM Attribute_i32 WHERE           0 < val AND val <    42949672;
     0.60: SELECT 1 FROM Attribute_i32 WHERE   429496729 < val AND val <   472446402;
-    0.70: SELECT 1 FROM Attribute_i32 WHERE   858993459 < val AND val <   901943132;
+    0.70: SELECT 1 FROM Attribute_i32 WHERE   858993458 < val AND val <   901943131;
     0.80: SELECT 1 FROM Attribute_i32 WHERE  1288490188 < val AND val <  1331439861;
-    0.90: SELECT 1 FROM Attribute_i32 WHERE  1717986918 < val AND val <  1760936591;
-    0.95: SELECT 1 FROM Attribute_i32 WHERE  1932735283 < val AND val <  1975684956;
-    0.99: SELECT 1 FROM Attribute_i32 WHERE  2104533975 < val AND val <  2147483647;
+    0.90: SELECT 1 FROM Attribute_i32 WHERE  1717986917 < val AND val <  1760936590;
+    0.95: SELECT 1 FROM Attribute_i32 WHERE  1932735282 < val AND val <  1975684955;
+    0.99: SELECT 1 FROM Attribute_i32 WHERE  2104533974 < val AND val <  2147483647;
 compare_to:
     'DuckDB':     'benchmark/operators/filter_range_twosided_i32_varying_first_fixed_second_duckdb.sh'
     'PostgreSQL': 'benchmark/operators/filter_range_twosided_i32_varying_first_fixed_second_postgresql.sh'

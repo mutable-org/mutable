@@ -23,19 +23,19 @@ if __name__ == '__main__':
 
             times = list()
             queries = [
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 < -2147483647 AND a1 < -2104533975',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 < -1932735283 AND a1 < -2104533975',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 < -1717986918 AND a1 < -2104533975',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 < -1288490188 AND a1 < -2104533975',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 <  -858993459 AND a1 < -2104533975',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 <  -429496729 AND a1 < -2104533975',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 <           0 AND a1 < -2104533975',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 <   429496729 AND a1 < -2104533975',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 <   858993459 AND a1 < -2104533975',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 <  1288490188 AND a1 < -2104533975',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 <  1717986918 AND a1 < -2104533975',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 <  1932735283 AND a1 < -2104533975',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 <  2104533975 AND a1 < -2104533975',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 < -2104533974 AND a1 < -2104533974',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 < -1932735282 AND a1 < -2104533974',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 < -1717986917 AND a1 < -2104533974',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 < -1288490188 AND a1 < -2104533974',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 <  -858993458 AND a1 < -2104533974',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 <  -429496729 AND a1 < -2104533974',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 <           0 AND a1 < -2104533974',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 <   429496729 AND a1 < -2104533974',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 <   858993458 AND a1 < -2104533974',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 <  1288490188 AND a1 < -2104533974',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 <  1717986917 AND a1 < -2104533974',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 <  1932735282 AND a1 < -2104533974',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE a0 <  2104533974 AND a1 < -2104533974',
             ]
 
             for q in queries:

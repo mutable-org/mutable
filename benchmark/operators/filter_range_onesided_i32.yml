@@ -10,21 +10,19 @@ configurations:
 label: 'Selectivity'
 tables: [ 'Attribute_i32' ]
 cases:
-    0.00: SELECT 1 FROM Attribute_i32 WHERE val < -2147483647;
-    0.01: SELECT 1 FROM Attribute_i32 WHERE val < -2104533975;
-    0.05: SELECT 1 FROM Attribute_i32 WHERE val < -1932735283;
-    0.10: SELECT 1 FROM Attribute_i32 WHERE val < -1717986918;
+    0.01: SELECT 1 FROM Attribute_i32 WHERE val < -2104533974;
+    0.05: SELECT 1 FROM Attribute_i32 WHERE val < -1932735282;
+    0.10: SELECT 1 FROM Attribute_i32 WHERE val < -1717986917;
     0.20: SELECT 1 FROM Attribute_i32 WHERE val < -1288490188;
-    0.30: SELECT 1 FROM Attribute_i32 WHERE val <  -858993459;
+    0.30: SELECT 1 FROM Attribute_i32 WHERE val <  -858993458;
     0.40: SELECT 1 FROM Attribute_i32 WHERE val <  -429496729;
     0.50: SELECT 1 FROM Attribute_i32 WHERE val <           0;
     0.60: SELECT 1 FROM Attribute_i32 WHERE val <   429496729;
-    0.70: SELECT 1 FROM Attribute_i32 WHERE val <   858993459;
+    0.70: SELECT 1 FROM Attribute_i32 WHERE val <   858993458;
     0.80: SELECT 1 FROM Attribute_i32 WHERE val <  1288490188;
-    0.90: SELECT 1 FROM Attribute_i32 WHERE val <  1717986918;
-    0.95: SELECT 1 FROM Attribute_i32 WHERE val <  1932735283;
-    0.99: SELECT 1 FROM Attribute_i32 WHERE val <  2104533975;
-    1.00: SELECT 1 FROM Attribute_i32 WHERE val <  2147483647;
+    0.90: SELECT 1 FROM Attribute_i32 WHERE val <  1717986917;
+    0.95: SELECT 1 FROM Attribute_i32 WHERE val <  1932735282;
+    0.99: SELECT 1 FROM Attribute_i32 WHERE val <  2104533974;
 compare_to:
     'DuckDB': 'benchmark/operators/filter_range_onesided_i32_duckdb.sh'
     'PostgreSQL': 'benchmark/operators/filter_range_onesided_i32_postgresql.sh'

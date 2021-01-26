@@ -12,19 +12,19 @@ configurations:
 label: 'Selectivity'
 tables: [ 'Attributes_multi_i32' ]
 cases:
-    0.01: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -2147483647 AND a1 < -2104533975;
-    0.05: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -1932735283 AND a1 < -2104533975;
-    0.10: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -1717986918 AND a1 < -2104533975;
-    0.20: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -1288490188 AND a1 < -2104533975;
-    0.30: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  -858993459 AND a1 < -2104533975;
-    0.40: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  -429496729 AND a1 < -2104533975;
-    0.50: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <           0 AND a1 < -2104533975;
-    0.60: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <   429496729 AND a1 < -2104533975;
-    0.70: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <   858993459 AND a1 < -2104533975;
-    0.80: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  1288490188 AND a1 < -2104533975;
-    0.90: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  1717986918 AND a1 < -2104533975;
-    0.95: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  1932735283 AND a1 < -2104533975;
-    0.99: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  2104533975 AND a1 < -2104533975;
+    0.01: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -2104533974 AND a1 < -2104533974;
+    0.05: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -1932735282 AND a1 < -2104533974;
+    0.10: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -1717986917 AND a1 < -2104533974;
+    0.20: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -1288490188 AND a1 < -2104533974;
+    0.30: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  -858993458 AND a1 < -2104533974;
+    0.40: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  -429496729 AND a1 < -2104533974;
+    0.50: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <           0 AND a1 < -2104533974;
+    0.60: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <   429496729 AND a1 < -2104533974;
+    0.70: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <   858993458 AND a1 < -2104533974;
+    0.80: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  1288490188 AND a1 < -2104533974;
+    0.90: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  1717986917 AND a1 < -2104533974;
+    0.95: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  1932735282 AND a1 < -2104533974;
+    0.99: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  2104533974 AND a1 < -2104533974;
 compare_to:
     'DuckDB':     'benchmark/operators/filter_multi_i32_varying_first_fixed_second_duckdb.sh'
     'PostgreSQL': 'benchmark/operators/filter_multi_i32_varying_first_fixed_second_postgresql.sh'

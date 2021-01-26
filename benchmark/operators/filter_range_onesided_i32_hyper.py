@@ -20,21 +20,19 @@ if __name__ == '__main__':
 
             times = list()
             queries = [
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < -2147483647',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < -2104533975',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < -1932735283',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < -1717986918',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < -2104533974',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < -1932735282',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < -1717986917',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < -1288490188',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <  -858993459',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <  -858993458',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <  -429496729',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <           0',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <   429496729',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <   858993459',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <   858993458',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <  1288490188',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <  1717986918',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <  1932735283',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <  2104533975',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <  2147483647',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <  1717986917',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <  1932735282',
+                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val <  2104533974',
             ]
 
             for q in queries:

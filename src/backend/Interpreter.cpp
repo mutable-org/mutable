@@ -53,6 +53,7 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
     } null_bitmap_info;
 
     std::unordered_map<decltype(Attribute::id), std::size_t> attr2id;
+    std::unordered_map<decltype(Attribute::id), std::size_t> attr2mask;
 
     /* Compute location of NULL bitmap. */
     auto find_null_bitmap = [&](const Linearization &L, std::size_t row_id) -> void {
@@ -117,7 +118,7 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                                         SM.emit_Not_b();
                                         SM.emit_St_b(bit_offset);
                                     } else {
-                                        SM.emit_Ld_b(0x1U << bit_offset);
+                                        SM.emit_Ld_b(0x1UL << bit_offset);
                                     }
                                 } else {
                                     /* Advance to respective byte. */
@@ -130,7 +131,7 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                                         SM.emit_Not_b();
                                         SM.emit_St_b(bit_offset % 8);
                                     } else {
-                                        SM.emit_Ld_b(0x1U << (bit_offset % 8));
+                                        SM.emit_Ld_b(0x1UL << (bit_offset % 8));
                                     }
                                 }
                             } else {
@@ -163,7 +164,7 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                                 }
 
                                 /* Initialize mask. */
-                                SM.add_and_emit_load(uint64_t(1));
+                                SM.add_and_emit_load(uint64_t(0x1UL));
 
                                 /* Compute offset of NULL bit. */
                                 SM.emit_Ld_Ctx(null_bitmap_info.offset_id);
@@ -216,7 +217,8 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                             }
 
                             /* Introduce mask. */
-                            const auto mask_id = SM.add(uint64_t(0x1UL << bit_offset));
+                            const std::size_t mask_id = SM.add(uint64_t(0x1UL << bit_offset));
+                            attr2mask[attr.id] = mask_id;
 
                             if constexpr (IsStore) {
                                 /* Load byte and set bit to 1. */
@@ -258,10 +260,10 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                             SM.emit_Upd_Ctx(mask_id);
 
                             /* Check whether we are in the 8th iteration and reset mask. */
-                            SM.add_and_emit_load(uint64_t(0x1) << 8);
+                            SM.add_and_emit_load(uint64_t(0x1UL) << 8);
                             SM.emit_Eq_i();
                             SM.emit_Dup(); // duplicate outcome for later use
-                            SM.add_and_emit_load(uint64_t(0x1));
+                            SM.add_and_emit_load(uint64_t(0x1UL));
                             SM.emit_Ld_Ctx(mask_id);
                             SM.emit_Sel();
                             SM.emit_Upd_Ctx(mask_id); // mask <- mask == 256 ? 1 : mask
@@ -378,10 +380,14 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
             for (auto e : L) {
                 if (e.is_null_bitmap() or e.is_attribute()) {
                     std::size_t offset_id;
+                    std::size_t mask_id = -1UL;
                     if (e.is_null_bitmap()) {
                         offset_id = null_bitmap_info.id;
+                        mask_id = null_bitmap_info.offset_id;
                     } else if (auto it = attr2id.find(e.as_attribute().id); it != attr2id.end()) {
                         offset_id = it->second;
+                        if (auto it = attr2mask.find(e.as_attribute().id); it != attr2mask.end())
+                            mask_id = it->second;
                     } else {
                         continue; // nothing to be done
                     }
@@ -397,9 +403,54 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
 
                         /* Perform stride jump, if necessary. */
                         if (stride_remaining) {
-                            const std::size_t byte_stride = stride_remaining / 8;
-                            insist(stride_remaining % 8 == 0, "strides that are not a whole multiple of a byte are not supported");
+                            std::size_t byte_stride = stride_remaining / 8;
+                            const std::size_t bit_stride = stride_remaining % 8;
 
+                            if (bit_stride) {
+                                insist(e.is_null_bitmap() or e.as_attribute().type->is_boolean(),
+                                       "only the null bitmap or booleans may cause not byte aligned stride jumps");
+                                insist(not e.is_null_bitmap() or null_bitmap_info.adjustable_offset(),
+                                       "only null bitmaps with adjustable offset may cause not byte aligned stride jumps");
+                                insist(mask_id != -1UL);
+
+                                /* Reset mask. */
+                                if (e.is_null_bitmap()) {
+                                    /* Reset adjustable bit offset to 0. */
+                                    if (info.num_tuples != 1) {
+                                        /* Check whether counter equals num_tuples. */
+                                        SM.emit_Ld_Ctx(info.counter_id);
+                                        SM.add_and_emit_load(int64_t(info.num_tuples));
+                                        SM.emit_NE_i();
+                                        SM.emit_Cast_i_b();
+                                    } else {
+                                        SM.add_and_emit_load(uint64_t(0));
+                                    }
+                                    SM.emit_Ld_Ctx(mask_id);
+                                    SM.emit_Mul_i();
+                                    SM.emit_Upd_Ctx(mask_id);
+                                    SM.emit_Pop();
+                                } else {
+                                    /* Reset mask to 0x1UL to access first bit again. */
+                                    if (info.num_tuples != 1) {
+                                        /* Check whether counter equals num_tuples. */
+                                        SM.emit_Ld_Ctx(info.counter_id);
+                                        SM.add_and_emit_load(int64_t(info.num_tuples));
+                                        SM.emit_Eq_i();
+                                        SM.add_and_emit_load(uint64_t(0x1UL));
+                                        SM.emit_Ld_Ctx(mask_id);
+                                        SM.emit_Sel();
+                                    } else {
+                                        SM.add_and_emit_load(uint64_t(0x1UL));
+                                    }
+                                    SM.emit_Upd_Ctx(mask_id);
+                                    SM.emit_Pop();
+                                }
+
+                                /* Ceil to next entire byte. */
+                                ++byte_stride;
+                            }
+
+                            /* Advance pointer. */
                             if (info.num_tuples != 1) {
                                 /* Check whether counter equals num_tuples. */
                                 SM.emit_Ld_Ctx(info.counter_id);

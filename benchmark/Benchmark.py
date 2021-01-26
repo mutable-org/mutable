@@ -559,16 +559,18 @@ $(function () {
         }
     };
 
-    headlines.click(function () { toggle_suite($(this).closest('.suite')); });
+    if (headlines.length > 1) {
+        headlines.click(function () { toggle_suite($(this).closest('.suite')); });
 
-    var nav_links = $('.nav-link[href^="#"]');
-    nav_links.click(function () {
-        var target = $(document).find($(this).attr('href'));
-        if (!target.is(':visible'))
-            toggle_suite(target.closest('.suite'));
-    });
+        var nav_links = $('.nav-link[href^="#"]');
+        nav_links.click(function () {
+            var target = $(document).find($(this).attr('href'));
+            if (!target.is(':visible'))
+                toggle_suite(target.closest('.suite'));
+        });
 
-    headlines.click();
+        headlines.click();
+    }
 });
 ''')
 

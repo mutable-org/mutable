@@ -11,7 +11,7 @@ if __name__ == '__main__':
             table_def = TableDefinition(
                 table_name='Attributes_multi_i32',
                 columns=[
-                    TableDefinition.Column('id',  SqlType.int(), NOT_NULLABLE),
+                    TableDefinition.Column('id', SqlType.int(), NOT_NULLABLE),
                     TableDefinition.Column('a0', SqlType.int(), NOT_NULLABLE),
                     TableDefinition.Column('a1', SqlType.int(), NOT_NULLABLE),
                     TableDefinition.Column('a2', SqlType.int(), NOT_NULLABLE),

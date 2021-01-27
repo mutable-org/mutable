@@ -61,9 +61,8 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
             for (auto e : L) {
                 if (e.is_null_bitmap()) {
                     insist(not null_bitmap_info, "there must be at most one null bitmap in the linearization");
-                    const uintptr_t null_bitmap_offset = offset * 8 + e.offset + row_id * e.stride;
-                    null_bitmap_info.id = SM.add(null_bitmap_offset / 8); // add NULL bitmap address to context
-                    null_bitmap_info.bit_offset = null_bitmap_offset % 8;
+                    null_bitmap_info.id = SM.add(reinterpret_cast<void*>(offset + (e.offset + row_id * e.stride) / 8)); // add NULL bitmap address to context
+                    null_bitmap_info.bit_offset = (e.offset + row_id * e.stride) % 8;
                     null_bitmap_info.bit_stride = e.stride;
                     null_bitmap_info.num_tuples = L.num_tuples();
                     null_bitmap_info.row_id = row_id;

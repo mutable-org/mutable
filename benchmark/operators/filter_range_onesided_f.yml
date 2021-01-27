@@ -8,7 +8,6 @@ configurations:
 label: 'Selectivity'
 tables: [ 'Attribute_f' ]
 cases:
-    0.00: SELECT 1 FROM Attribute_f WHERE val < 0.00;
     0.01: SELECT 1 FROM Attribute_f WHERE val < 0.01;
     0.05: SELECT 1 FROM Attribute_f WHERE val < 0.05;
     0.10: SELECT 1 FROM Attribute_f WHERE val < 0.10;
@@ -22,7 +21,6 @@ cases:
     0.90: SELECT 1 FROM Attribute_f WHERE val < 0.90;
     0.95: SELECT 1 FROM Attribute_f WHERE val < 0.95;
     0.99: SELECT 1 FROM Attribute_f WHERE val < 0.99;
-    1.00: SELECT 1 FROM Attribute_f WHERE val < 1.00;
 compare_to:
     'DuckDB': 'benchmark/operators/filter_range_onesided_f_duckdb.sh'
     'PostgreSQL': 'benchmark/operators/filter_range_onesided_f_postgresql.sh'

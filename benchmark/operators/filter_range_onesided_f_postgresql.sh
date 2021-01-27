@@ -10,7 +10,6 @@ CREATE DATABASE benchmark_tmp;
 CREATE TABLE Attribute_f ( id INT, val REAL );
 \copy Attribute_f FROM 'benchmark/operators/data/Attribute_f.csv' WITH DELIMITER ',' CSV HEADER;
 \timing on
-SELECT COUNT(*) FROM Attribute_f WHERE val < 0.00;
 SELECT COUNT(*) FROM Attribute_f WHERE val < 0.01;
 SELECT COUNT(*) FROM Attribute_f WHERE val < 0.05;
 SELECT COUNT(*) FROM Attribute_f WHERE val < 0.10;
@@ -24,5 +23,4 @@ SELECT COUNT(*) FROM Attribute_f WHERE val < 0.80;
 SELECT COUNT(*) FROM Attribute_f WHERE val < 0.90;
 SELECT COUNT(*) FROM Attribute_f WHERE val < 0.95;
 SELECT COUNT(*) FROM Attribute_f WHERE val < 0.99;
-SELECT COUNT(*) FROM Attribute_f WHERE val < 1.00;
 EOF

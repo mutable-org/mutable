@@ -7,15 +7,17 @@ DUCKDB=duckdb_cli
 CREATE TABLE Attribute_d ( id INT, val DOUBLE );
 COPY Attribute_d FROM 'benchmark/operators/data/Attribute_d.csv' ( HEADER );
 .timer on
-SELECT COUNT(*) FROM Attribute_d WHERE val < 0.0;
-SELECT COUNT(*) FROM Attribute_d WHERE val < 0.1;
-SELECT COUNT(*) FROM Attribute_d WHERE val < 0.2;
-SELECT COUNT(*) FROM Attribute_d WHERE val < 0.3;
-SELECT COUNT(*) FROM Attribute_d WHERE val < 0.4;
-SELECT COUNT(*) FROM Attribute_d WHERE val < 0.5;
-SELECT COUNT(*) FROM Attribute_d WHERE val < 0.6;
-SELECT COUNT(*) FROM Attribute_d WHERE val < 0.7;
-SELECT COUNT(*) FROM Attribute_d WHERE val < 0.8;
-SELECT COUNT(*) FROM Attribute_d WHERE val < 0.9;
-SELECT COUNT(*) FROM Attribute_d WHERE val < 1.0;
+SELECT COUNT(*) FROM Attribute_d WHERE val < 0.01;
+SELECT COUNT(*) FROM Attribute_d WHERE val < 0.05;
+SELECT COUNT(*) FROM Attribute_d WHERE val < 0.10;
+SELECT COUNT(*) FROM Attribute_d WHERE val < 0.20;
+SELECT COUNT(*) FROM Attribute_d WHERE val < 0.30;
+SELECT COUNT(*) FROM Attribute_d WHERE val < 0.40;
+SELECT COUNT(*) FROM Attribute_d WHERE val < 0.50;
+SELECT COUNT(*) FROM Attribute_d WHERE val < 0.60;
+SELECT COUNT(*) FROM Attribute_d WHERE val < 0.70;
+SELECT COUNT(*) FROM Attribute_d WHERE val < 0.80;
+SELECT COUNT(*) FROM Attribute_d WHERE val < 0.90;
+SELECT COUNT(*) FROM Attribute_d WHERE val < 0.95;
+SELECT COUNT(*) FROM Attribute_d WHERE val < 0.99;
 EOF

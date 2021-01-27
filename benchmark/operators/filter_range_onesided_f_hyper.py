@@ -19,7 +19,6 @@ if __name__ == '__main__':
 
             times = list()
             queries = [
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.00',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.01',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.05',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.10',
@@ -33,7 +32,6 @@ if __name__ == '__main__':
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.90',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.95',
                 f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 0.99',
-                f'SELECT COUNT(*) FROM {table_def.table_name} WHERE val < 1.00',
             ]
 
             for q in queries:

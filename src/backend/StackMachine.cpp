@@ -854,6 +854,7 @@ NEXT;
 Upd_Ctx: {
     std::size_t idx = static_cast<std::size_t>(*op_++);
     insist(idx < context_.size(), "index out of bounds");
+    insist(context_[idx].type == TOP.type, "incompatible types");
     const_cast<StackMachine*>(this)->context_[idx] = TOP;
 }
 NEXT;
@@ -987,8 +988,8 @@ NEXT;
 
 #define LOAD(TO_TYPE, FROM_TYPE) { \
     insist(top_ >= 1); \
-    uintptr_t ptr = TOP.as_i(); \
-    TOP = (TO_TYPE)(*reinterpret_cast<FROM_TYPE*>(ptr)); \
+    const void *ptr = TOP.as_p(); \
+    TOP = (TO_TYPE)(*reinterpret_cast<const FROM_TYPE*>(ptr)); \
 } \
 NEXT
 
@@ -1002,7 +1003,7 @@ Ld_d:   LOAD(double,  double);
 Ld_s: {
     insist(top_ >= 1);
     uint64_t length = uint64_t(*op_++);
-    uintptr_t ptr = TOP.as_i();
+    void *ptr = TOP.as_p();
     strncpy(reinterpret_cast<char*>(p_mem), reinterpret_cast<char*>(ptr), length);
     p_mem[length] = 0; // always add terminating NUL byte, no matter whether this is a CHAR or VARCHAR
     TOP = p_mem; // a pointer
@@ -1013,7 +1014,7 @@ NEXT;
 Ld_b: {
     insist(top_ >= 1);
     uint64_t mask = uint64_t(*op_++);
-    uintptr_t ptr = TOP.as_i();
+    void *ptr = TOP.as_p();
     TOP = bool(*reinterpret_cast<uint8_t*>(ptr) & mask);
 }
 NEXT;
@@ -1027,7 +1028,7 @@ NEXT;
     if (TOP_IS_NULL) { POP(); POP(); NEXT; } \
     TO_TYPE val = TOP.as<FROM_TYPE>(); \
     POP(); \
-    uintptr_t ptr = TOP.as_i(); \
+    void *ptr = TOP.as_p(); \
     *reinterpret_cast<TO_TYPE*>(ptr) = val; \
     POP(); \
 } \
@@ -1047,7 +1048,7 @@ St_s: {
 
     char *str = reinterpret_cast<char*>(TOP.as_p());
     POP();
-    char *dst = reinterpret_cast<char*>(static_cast<uintptr_t>(TOP.as_i()));
+    char *dst = reinterpret_cast<char*>(TOP.as_p());
     POP();
     strncpy(dst, str, length);
 }
@@ -1060,7 +1061,7 @@ St_b: {
 
     bool val = TOP.as_b();
     POP();
-    uintptr_t ptr = TOP.as_i();
+    void *ptr = TOP.as_p();
     setbit(reinterpret_cast<uint8_t*>(ptr), val, bit_offset);
     POP();
 }
@@ -1106,6 +1107,16 @@ Minus_d: UNARY(-, double);
 Add_i: BINARY(std::plus{}, int64_t);
 Add_f: BINARY(std::plus{}, float);
 Add_d: BINARY(std::plus{}, double);
+Add_p: {
+    insist(top_ >= 2);
+    void *rhs = TOP.as_p();
+    POP();
+    const uint64_t lhs = TOP.as<int64_t>();
+    bool is_lhs_null = TOP_IS_NULL;
+    TOP = lhs + reinterpret_cast<uint8_t*>(rhs);
+    TOP_IS_NULL = TOP_IS_NULL or is_lhs_null;
+}
+NEXT;
 
 /* Subtract two values. */
 Sub_i: BINARY(std::minus{}, int64_t);

@@ -121,9 +121,9 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                                     }
                                 } else {
                                     /* Advance to respective byte. */
-                                    SM.emit_Ld_Ctx(null_bitmap_info.id);
                                     SM.add_and_emit_load(uint64_t(bit_offset / 8));
-                                    SM.emit_Add_i();
+                                    SM.emit_Ld_Ctx(null_bitmap_info.id);
+                                    SM.emit_Add_p();
                                     if constexpr (IsStore) {
                                         SM.emit_Ld_Tup(tuple_id, idx);
                                         SM.emit_Is_Null();
@@ -140,7 +140,7 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                                 /* Create variables for address and mask in context. Only used for storing.*/
                                 std::size_t address_id, mask_id;
                                 if constexpr (IsStore) {
-                                    address_id = SM.add(uint64_t(0));
+                                    address_id = SM.add(reinterpret_cast<void*>(0));
                                     mask_id = SM.add(uint64_t(0));
                                 }
 
@@ -150,7 +150,7 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                                 SM.emit_Add_i();
                                 SM.emit_SARi_i(3); // (adj_offset + attr.id) / 8
                                 SM.emit_Ld_Ctx(null_bitmap_info.id);
-                                SM.emit_Add_i();
+                                SM.emit_Add_p();
                                 if constexpr (IsStore)
                                     SM.emit_Upd_Ctx(address_id); // store address in context
                                 else
@@ -201,7 +201,7 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                             }
                         }
 
-                        const std::size_t offset_id = SM.add_and_emit_load(int64_t(offset + byte_offset)); // attribute pointer
+                        const std::size_t offset_id = SM.add_and_emit_load(reinterpret_cast<void*>(offset + byte_offset)); // attribute pointer
                         attr2id[attr.id] = offset_id;
 
                         if (bit_stride) {
@@ -271,7 +271,7 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                             /* If the mask was reset, advance to the next byte. */
                             SM.emit_Cast_i_b(); // convert outcome of previous check to int
                             SM.emit_Ld_Ctx(offset_id);
-                            SM.emit_Add_i();
+                            SM.emit_Add_p();
                             SM.emit_Upd_Ctx(offset_id);
                             SM.emit_Pop();
                         } else {
@@ -305,9 +305,9 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                             insist(not bit_stride);
                             if (byte_stride) {
                                 /* Advance the attribute pointer by the attribute's stride. */
-                                SM.emit_Ld_Ctx(offset_id);
                                 SM.add_and_emit_load(int64_t(byte_stride));
-                                SM.emit_Add_i();
+                                SM.emit_Ld_Ctx(offset_id);
+                                SM.emit_Add_p();
                                 SM.emit_Upd_Ctx(offset_id);
                                 SM.emit_Pop();
                             }
@@ -354,7 +354,7 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
         SM.emit_SARi_i(3); // corresponds div 8
         SM.emit_Mul_i();
         SM.emit_Ld_Ctx(null_bitmap_info.id);
-        SM.emit_Add_i();
+        SM.emit_Add_p();
         SM.emit_Upd_Ctx(null_bitmap_info.id); // id <- counter != num_tuples ? id : id + adj_offset / 8
         SM.emit_Pop();
 
@@ -463,7 +463,7 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                                 SM.add_and_emit_load(byte_stride);
                             }
                             SM.emit_Ld_Ctx(offset_id);
-                            SM.emit_Add_i();
+                            SM.emit_Add_p();
                             SM.emit_Upd_Ctx(offset_id);
                             SM.emit_Pop();
                         }

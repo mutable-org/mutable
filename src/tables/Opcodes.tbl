@@ -125,6 +125,7 @@ DB_OPCODE(Minus_d, 0)
 DB_OPCODE(Add_i, -1)
 DB_OPCODE(Add_f, -1)
 DB_OPCODE(Add_d, -1)
+DB_OPCODE(Add_p, -1)
 
 /* Subtract two values. */
 DB_OPCODE(Sub_i, -1)

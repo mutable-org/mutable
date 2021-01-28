@@ -52,6 +52,17 @@ after:
         case '"':
             return read_string_literal();
 
+        case 'd': {
+            step();
+            if (c_ == '\'') {
+                buf_.push_back('d'); // add prefix 'd'
+                return read_date_or_datetime();
+            } else {
+                UNDO('d');
+                return read_keyword_or_identifier();
+            }
+        }
+
         /* Punctuators */
 #define LEX(chr, text, tt, SUB) case chr: step(); switch (c_) { SUB } return Token(start_, text, tt);
 #define GUESS(first, SUB) case first: step(); switch (c_) { SUB } UNDO(first); break;
@@ -210,4 +221,45 @@ Token Lexer::read_string_literal()
     }
 
     return Token(start_, str, TK_STRING_LITERAL);
+}
+
+Token Lexer::read_date_or_datetime()
+{
+    push(); // initial '''
+    bool invalid = false;
+    bool datetime = false;
+
+#define DIGITS(num) for (auto i = 0; i < num; ++i) if (is_dec(c_)) push(); else invalid = true;
+    accept('-'); // for years BC
+    DIGITS(4); // year
+    invalid &= accept('-');
+    DIGITS(2); // month
+    invalid &= accept('-');
+    DIGITS(2); // day
+
+    if (accept(' ')) {
+        datetime = true;
+        DIGITS(2) // hours
+        invalid &= accept(':');
+        DIGITS(2); // minutes
+        invalid &= accept(':');
+        DIGITS(2); // seconds
+    }
+#undef DIGITS
+
+    if ('\'' != c_) {
+        const auto str = internalize();
+        diag.e(start_) << "unterminated " << (datetime ? "datetime" : "date") << " '" << str << "'\n";
+        return Token(start_, str, TK_ERROR);
+    }
+
+    push(); // terminal '''
+    const auto str = internalize();
+
+    if (invalid) {
+        diag.e(start_) << "invalid symbol in " << (datetime ? "datetime" : "date") << " '" << str << "'\n";
+        return Token(start_, str, TK_ERROR);
+    }
+
+    return Token(start_, str, datetime ? TK_DATE_TIME : TK_DATE);
 }

@@ -1,0 +1,44 @@
+description: where equal datetime
+db: ours
+query: |
+    SELECT key FROM D WHERE rdatetime = d'-1655-01-08 06:42:42';
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: key TK_IDENTIFIER
+            -:1:12: FROM TK_From
+            -:1:17: D TK_IDENTIFIER
+            -:1:19: WHERE TK_Where
+            -:1:25: rdatetime TK_IDENTIFIER
+            -:1:35: = TK_EQUAL
+            -:1:37: d'-1655-01-08 06:42:42' TK_DATE_TIME
+            -:1:60: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT key
+            FROM D
+            WHERE (rdatetime = d'-1655-01-08 06:42:42');
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            6
+        err: NULL
+        num_err: 0
+        returncode: 0

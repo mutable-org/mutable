@@ -53,6 +53,37 @@ TEST_CASE("Sema/Expressions", "[core][parse][sema]")
         { ".1", Type::Get_Double(Type::TY_Scalar) },
         { "0xC0F.F33", Type::Get_Double(Type::TY_Scalar) },
 
+        /* date constants */
+        { "d'2000-03-14'", Type::Get_Date(m::Type::TY_Scalar) },
+        { "d'-2000-03-14'", Type::Get_Date(m::Type::TY_Scalar) },
+        { "d'0001-01-01'", Type::Get_Date(m::Type::TY_Scalar) },
+        { "d'9999-12-31'", Type::Get_Date(m::Type::TY_Scalar) },
+        { "d'9999-02-29'", Type::Get_Date(m::Type::TY_Scalar) },
+        { "d'9999-04-30'", Type::Get_Date(m::Type::TY_Scalar) },
+        { "d'0000-01-01'", Type::Get_Error() },
+        { "d'0001-00-01'", Type::Get_Error() },
+        { "d'0001-13-01'", Type::Get_Error() },
+        { "d'0001-01-00'", Type::Get_Error() },
+        { "d'9999-12-32'", Type::Get_Error() },
+        { "d'9999-02-30'", Type::Get_Error() },
+        { "d'9999-04-31'", Type::Get_Error() },
+
+        /* datetime constants */
+        { "d'2000-03-14 17:54:38'", Type::Get_Datetime(m::Type::TY_Scalar) },
+        { "d'-2000-03-14 17:54:38'", Type::Get_Datetime(m::Type::TY_Scalar) },
+        { "d'2000-03-14 00:00:00'", Type::Get_Datetime(m::Type::TY_Scalar) },
+        { "d'2000-03-14 23:59:59'", Type::Get_Datetime(m::Type::TY_Scalar) },
+        { "d'0000-01-01 00:00:00'", Type::Get_Error() },
+        { "d'0001-00-01 00:00:00'", Type::Get_Error() },
+        { "d'0001-13-01 00:00:00'", Type::Get_Error() },
+        { "d'0001-01-00 00:00:00'", Type::Get_Error() },
+        { "d'9999-12-32 00:00:00'", Type::Get_Error() },
+        { "d'9999-02-30 00:00:00'", Type::Get_Error() },
+        { "d'9999-04-31 00:00:00'", Type::Get_Error() },
+        { "d'2000-03-14 24:00:00'", Type::Get_Error() },
+        { "d'2000-03-14 23:60:00'", Type::Get_Error() },
+        { "d'2000-03-14 23:59:60'", Type::Get_Error() },
+
         /* unary expressions */
         { "~42", Type::Get_Integer(Type::TY_Scalar, 4) },
         { "+42", Type::Get_Integer(Type::TY_Scalar, 4) },
@@ -117,6 +148,10 @@ TEST_CASE("Sema/Expressions", "[core][parse][sema]")
         { "42 + TRUE", Type::Get_Error() },
         { "\"Hello, World\" + 42", Type::Get_Error() },
         { "42 + \"Hello, World\"", Type::Get_Error() },
+        { "42 + d'1993-02-24'", Type::Get_Error() },
+        { "d'1993-02-24' + d'3421-11-26'", Type::Get_Error() },
+        { "42 + d'3942-12-11 23:45:36'", Type::Get_Error() },
+        { "d'3942-12-11 23:45:36' + d'1134-01-30 13:45:51'", Type::Get_Error() },
 
         { "\"Hello, World\" + NULL", Type::Get_Error() },
         { "NULL + \"Hello, World\"", Type::Get_Error() },
@@ -128,6 +163,8 @@ TEST_CASE("Sema/Expressions", "[core][parse][sema]")
         { "42 >= 1337", Type::Get_Boolean(Type::TY_Scalar) },
         { "42 = 1337", Type::Get_Boolean(Type::TY_Scalar) },
         { "42 != 1337", Type::Get_Boolean(Type::TY_Scalar) },
+        { "d'1993-02-24' < d'3421-11-26'", Type::Get_Boolean(m::Type::TY_Scalar) },
+        { "d'3942-12-11 23:45:36' = d'1134-01-30 13:45:51'", Type::Get_Boolean(m::Type::TY_Scalar) },
         { "3.14 < 0x80000000", Type::Get_Boolean(Type::TY_Scalar) },
         { "0x80000000 = NULL", Type::Get_Error() },
         { "0x80000000 < NULL", Type::Get_Error() },
@@ -156,6 +193,8 @@ TEST_CASE("Sema/Expressions", "[core][parse][sema]")
         { "\"text\" = TRUE", Type::Get_Error() },
         { "42 = \"text\"", Type::Get_Error() },
         { "\"text\" = 42", Type::Get_Error() },
+        { "d'1993-02-24' < 42", Type::Get_Error() },
+        { "d'3942-12-11 23:45:36' = 17", Type::Get_Error() },
 
         { "\"text\" LIKE \"pattern\"", Type::Get_Boolean(Type::TY_Scalar) },
         { "\"text\" LIKE \"pattern\" .. \"other\"", Type::Get_Boolean(Type::TY_Scalar) },
@@ -1952,6 +1991,8 @@ TEST_CASE("Sema/Statements/CreateTable", "[core][parse][sema]")
                 x INT(4), \
                 y FLOAT, \
                 z DECIMAL(10, 2), \
+                da DATE, \
+                dt DATETIME, \
                 vc VARCHAR(42), \
                 c CHAR(13), \
                 b BOOL, \

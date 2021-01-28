@@ -322,29 +322,105 @@ inline uint64_t murmur3_64(uint64_t v)
     return v;
 }
 
-/** Print `std::chrono::time_point` in human-readable format. */
-template<typename Clock, typename Duration>
-std::ostream & operator<<(std::ostream &out, std::chrono::time_point<Clock, Duration> tp)
+namespace m {
+
+struct put_tm
 {
-    using namespace std::chrono;
-    time_t time;
-    if constexpr (std::is_same_v<Clock, system_clock>) {
-        time = system_clock::to_time_t(tp); // convert the clock's time_point to std::time_t
-    } else {
-        /* The time point cannot directly be converted to time_t.  To do so, we first must relate the time point in
-         * Clock to a time point in the system_clock. */
-        auto tpc_now = Clock::now();
-        auto sys_now = system_clock::now();
-        auto tp_sys = time_point_cast<system_clock::duration>(tp - tpc_now + sys_now);
-        time = system_clock::to_time_t(tp_sys);
+    private:
+    std::tm tm_;
+
+    public:
+    put_tm(std::tm tm) : tm_(tm) { }
+
+    friend std::ostream & operator<<(std::ostream &out, const put_tm &pt) {
+        using std::setw;
+        const auto oldfill = out.fill('0');
+        const auto oldflags = out.flags();
+        out << std::internal;
+        if (pt.tm_.tm_year < -1900)
+            out << '-' << setw(4) << -(pt.tm_.tm_year + 1900);
+        else
+            out << setw(4) << pt.tm_.tm_year + 1900;
+        out << '-'
+            << setw(2) << pt.tm_.tm_mon + 1 << '-'
+            << setw(2) << pt.tm_.tm_mday << ' '
+            << setw(2) << pt.tm_.tm_hour << ':'
+            << setw(2) << pt.tm_.tm_min << ':'
+            << setw(2) << pt.tm_.tm_sec;
+        out.flags(oldflags);
+        out.fill(oldfill);
+        return out;
     }
-    auto tm = std::localtime(&time); // convert the given time since epoch to local calendar time
-    auto oldfill = out.fill('0');
-    out << std::put_time(tm, "%T.") << std::setw(3)
-        << duration_cast<milliseconds>(tp.time_since_epoch()).count() % 1000
-        << std::put_time(tm, " (%Z)");
-    out.fill(oldfill);
-    return out;
+};
+
+struct get_tm
+{
+    private:
+    std::tm &tm_;
+
+    public:
+    get_tm(std::tm &tm) : tm_(tm) { }
+
+    friend std::istream & operator>>(std::istream &in, get_tm gt) {
+        in >> gt.tm_.tm_year;
+        if (in and in.peek() == '-') in.get(); else return in;
+        in >> gt.tm_.tm_mon;
+        if (in and in.peek() == '-') in.get(); else return in;
+        in >> gt.tm_.tm_mday;
+        if (in and in.peek() == ' ') in.get(); else return in;
+        in >> gt.tm_.tm_hour;
+        if (in and in.peek() == ':') in.get(); else return in;
+        in >> gt.tm_.tm_min;
+        if (in and in.peek() == ':') in.get(); else return in;
+        in >> gt.tm_.tm_sec;
+
+        gt.tm_.tm_year -= 1900;
+        gt.tm_.tm_mon -= 1;
+        return in;
+    }
+};
+
+template<typename Clock, typename Duration>
+struct put_timepoint
+{
+    private:
+    std::chrono::time_point<Clock, Duration> tp_;
+    bool utc_;
+
+    public:
+    put_timepoint(std::chrono::time_point<Clock, Duration> tp, bool utc = false) : tp_(tp), utc_(utc) { }
+
+    /** Print the given `std::chrono::time_point` in the given format. */
+    friend std::ostream & operator<<(std::ostream &out, const put_timepoint &ptp) {
+        using namespace std::chrono;
+        time_t time;
+
+        /* Convert `std::chrono::time_point` to `std::time_t`. */
+        if constexpr (std::is_same_v<Clock, system_clock>) {
+            time = system_clock::to_time_t(ptp.tp_); // convert the clock's time_point to std::time_t
+        } else {
+            /* The time point cannot directly be converted to time_t.  To do so, we first must relate the time point in
+             * `Clock` to a time point in the `system_clock`. */
+            auto tpc_now = Clock::now();
+            auto sys_now = system_clock::now();
+            auto tp_sys = time_point_cast<system_clock::duration>(ptp.tp_ - tpc_now + sys_now);
+            time = system_clock::to_time_t(tp_sys);
+        }
+
+        /* Convert `std::time_t` to `std::tm`. */
+        std::tm tm;
+        std::tm *chk;
+        if (ptp.utc_)
+            chk = gmtime_r(&time, &tm); // convert the given `time_t` to UTC `std::tm`
+        else
+            chk = localtime_r(&time, &tm); // convert the given `time_t` to local `std::tm`
+        insist(chk == &tm);
+
+        /* Print `std::tm`. */
+        return out << put_tm(tm);
+    }
+};
+
 }
 
 /* Template class definition to concatenate more types to std::variant. */

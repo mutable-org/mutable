@@ -1,5 +1,6 @@
 #include "catch.hpp"
 
+#include "backend/Interpreter.hpp"
 #include "backend/StackMachine.hpp"
 #include "mutable/catalog/Type.hpp"
 #include "mutable/IR/CNF.hpp"
@@ -117,6 +118,8 @@ TEST_CASE("StackMachine/Expressions", "[core][backend]")
     TEST("13.37", "constant/double", RES == 13.37);
     TEST("TRUE", "constant/bool", RES == true);
     TEST("\"Hello, World!\"", "constant/char", streq(RES.as<char*>(), "Hello, World!"));
+    TEST("d'1970-01-01'", "constant/date", RES == (1970 << 9) | (1 << 5) | 1);
+    TEST("d'1970-01-01 01:00:00'", "constant/datetime", RES == 3600);
 
     /* Designators */
     TEST("col_int64_t", "designator/attr/int64_t", RES == col_int64_t_val);
@@ -1110,6 +1113,76 @@ TEST_CASE("StackMachine/IO/Print_b", "[core][backend]")
         SM.emit_Print_b(idx);
         SM(args);
         REQUIRE(oss.str() == "FALSE");
+    }
+}
+
+TEST_CASE("StackMachine/IO/Print_date", "[core][backend]")
+{
+    StackMachine SM;
+    Tuple res({ Type::Get_Date(Type::TY_Scalar) });
+    Tuple *args[] = { &res };
+    std::ostringstream oss;
+
+    SECTION("Print the date on top of stack (NULL)")
+    {
+        std::size_t idx = SM.add(&oss);
+        SM.emit_Push_Null();
+        SM.emit_Print_date(idx);
+        SM(args);
+        REQUIRE(oss.str() == "NULL");
+    }
+
+    SECTION("Print the date on top of stack (2042-11-17)")
+    {
+        std::size_t idx = SM.add(&oss);
+        SM.add_and_emit_load(Interpreter::eval(Constant(Token(Position("pos"), "d'2042-11-17'", TK_DATE))));
+        SM.emit_Print_date(idx);
+        SM(args);
+        REQUIRE(oss.str() == "2042-11-17");
+    }
+
+    SECTION("Print the date on top of stack (-2042-11-17)")
+    {
+        std::size_t idx = SM.add(&oss);
+        SM.add_and_emit_load(Interpreter::eval(Constant(Token(Position("pos"), "d'-2042-11-17'", TK_DATE))));
+        SM.emit_Print_date(idx);
+        SM(args);
+        REQUIRE(oss.str() == "-2042-11-17");
+    }
+}
+
+TEST_CASE("StackMachine/IO/Print_datetime", "[core][backend]")
+{
+    StackMachine SM;
+    Tuple res({ Type::Get_Date(Type::TY_Scalar) });
+    Tuple *args[] = { &res };
+    std::ostringstream oss;
+
+    SECTION("Print the datetime on top of stack (NULL)")
+    {
+        std::size_t idx = SM.add(&oss);
+        SM.emit_Push_Null();
+        SM.emit_Print_datetime(idx);
+        SM(args);
+        REQUIRE(oss.str() == "NULL");
+    }
+
+    SECTION("Print the datetime on top of stack (2042-11-17 12:34:56)")
+    {
+        std::size_t idx = SM.add(&oss);
+        SM.add_and_emit_load(Interpreter::eval(Constant(Token(Position("pos"), "d'2042-11-17 12:34:56'", TK_DATE_TIME))));
+        SM.emit_Print_datetime(idx);
+        SM(args);
+        REQUIRE(oss.str() == "2042-11-17 12:34:56");
+    }
+
+    SECTION("Print the datetime on top of stack (-2042-11-17 12:34:56)")
+    {
+        std::size_t idx = SM.add(&oss);
+        SM.add_and_emit_load(Interpreter::eval(Constant(Token(Position("pos"), "d'-2042-11-17 12:34:56'", TK_DATE_TIME))));
+        SM.emit_Print_datetime(idx);
+        SM(args);
+        REQUIRE(oss.str() == "-2042-11-17 12:34:56");
     }
 }
 

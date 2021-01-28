@@ -8,6 +8,10 @@
 #include <sstream>
 #include <string>
 
+
+using namespace m;
+
+
 TEST_CASE("streq", "[core][util][fn]")
 {
     const char *s0 = "Hello, World";
@@ -334,66 +338,52 @@ TEST_CASE("replace_all", "[core][util][fn]")
 TEST_CASE("TimePoint to human readable", "[core][util][fn]")
 {
     auto check_human_readable = [](const std::string &str) -> void {
-        for (std::string::size_type i = 0, end = str.length(); i != end; ++i) {
-            switch(i) {
-                /* digits */
-                case 0:
-                case 1:
-                case 3:
-                case 4:
-                case 6:
-                case 7:
-                case 9:
-                case 10:
-                case 11:
-                    CHECK(isdigit(str[i]));
-                    break;
+        auto it = str.begin();
+        REQUIRE(it != str.end());
 
-                /* colon delimiter */
-                case 2:
-                case 5:
-                    CHECK(str[i] == ':');
-                    break;
+        /* Sign */
+        if (*it == '-') ++it;
 
-                /* dot delimiter */
-                case 8:
-                    CHECK(str[i] == '.');
-                    break;
+#define CHECK_DECIMAL \
+        REQUIRE(it != str.end()); \
+        CHECK(is_dec(*it++))
+#define CHECK_CHAR(chr)  \
+        REQUIRE(it != str.end()); \
+        CHECK(chr == *it++)
 
-                /* space before time zone */
-                case 12:
-                    CHECK(str[i] == ' ');
-                    break;
+        CHECK_DECIMAL; CHECK_DECIMAL; CHECK_DECIMAL; CHECK_DECIMAL;     // year
+        CHECK_CHAR('-');
+        CHECK_DECIMAL; CHECK_DECIMAL;                                   // month
+        CHECK_CHAR('-');
+        CHECK_DECIMAL; CHECK_DECIMAL;                                   // day of month
+        CHECK_CHAR(' ');
+        CHECK_DECIMAL; CHECK_DECIMAL;                                   // hour
+        CHECK_CHAR(':');
+        CHECK_DECIMAL; CHECK_DECIMAL;                                   // minute
+        CHECK_CHAR(':');
+        CHECK_DECIMAL; CHECK_DECIMAL;                                   // second
 
-                /* time zone */
-                case 13:
-                    CHECK(str[i] == '(');
-                    for (++i; i != end and str[i] != ')'; ++i)
-                        CHECK(isalpha(str[i]));
-                    CHECK(str[i] == ')');
-                    break;
+#undef CHECK_CHAR
+#undef CHECK_DECIMAL
 
-                default:
-                    FAIL("unexpected trailing symbols");
-                    break;
-            }
-        }
+        CHECK(it == str.end());
     };
 
     using Clock = std::chrono::high_resolution_clock;
     using TimePoint = std::chrono::time_point<Clock>;
 
     TimePoint tp;
-    SECTION("01:00:00.000 (CET)")
+    SECTION("1970-01-01 01:00:00")
     {
         tp = TimePoint();
     }
-    SECTION("01:00:04.000 (CET)")
+    SECTION("1970-01-01 01:00:04")
     {
         tp = TimePoint(std::chrono::seconds(4));
     }
 
     std::ostringstream oss;
-    oss << tp;
+    oss << put_timepoint(tp);
+    std::cerr << oss.str() << std::endl;
     check_human_readable(oss.str());
 }

@@ -78,6 +78,8 @@ DB_OPCODE(Print_f, 0, index)
 DB_OPCODE(Print_d, 0, index)
 DB_OPCODE(Print_s, 0, index)
 DB_OPCODE(Print_b, 0, index)
+DB_OPCODE(Print_date, 0, index)
+DB_OPCODE(Print_datetime, 0, index)
 
 
 /*======================================================================================================================

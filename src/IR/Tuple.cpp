@@ -1,7 +1,9 @@
 #include "mutable/IR/Tuple.hpp"
 
 #include "catalog/Schema.hpp"
-#include "mutable/catalog/Type.hpp"
+#include <ctime>
+#include <mutable/catalog/Type.hpp>
+#include <mutable/util/fn.hpp>
 
 
 using namespace m;
@@ -27,6 +29,25 @@ struct value_printer : ConstTypeVisitor
     void operator()(Const<CharacterSequence>&) override {
         std::string str(reinterpret_cast<char*>(val_.as_p()));
         out_ << '"' << escape(str) << '"';
+    }
+
+    void operator()(Const<Date>&) override {
+        const int32_t date = val_.as_i(); // signed because year is signed
+        const auto oldfill = out_.fill('0');
+        const auto oldfmt = out_.flags();
+        out_ << std::internal
+             << std::setw(date >> 9 > 0 ? 4 : 5) << (date >> 9) << '-'
+             << std::setw(2) << ((date >> 5) & 0xF) << '-'
+             << std::setw(2) << (date & 0x1F);
+        out_.fill(oldfill);
+        out_.flags(oldfmt);
+    }
+
+    void operator()(Const<DateTime>&) override {
+        const time_t time = val_.as_i();
+        std::tm tm;
+        gmtime_r(&time, &tm);
+        out_ << put_tm(tm);
     }
 
     void operator()(Const<Numeric> &n) override {

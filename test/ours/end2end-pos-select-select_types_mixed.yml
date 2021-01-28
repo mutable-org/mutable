@@ -1,7 +1,7 @@
 description: select types mixed
 db: ours
 query: |
-    SELECT 42, 13.37, "Hello, wolrd!", TRUE, NULL;
+    SELECT 42, 13.37, "Hello, wolrd!", TRUE, d'2001-09-28', d'2001-09-28 20:38:40', NULL;
 required: YES
 
 stages:
@@ -17,15 +17,19 @@ stages:
             -:1:34: , TK_COMMA
             -:1:36: TRUE TK_True
             -:1:40: , TK_COMMA
-            -:1:42: NULL TK_Null
-            -:1:46: ; TK_SEMICOL
+            -:1:42: d'2001-09-28' TK_DATE
+            -:1:55: , TK_COMMA
+            -:1:57: d'2001-09-28 20:38:40' TK_DATE_TIME
+            -:1:79: , TK_COMMA
+            -:1:81: NULL TK_Null
+            -:1:85: ; TK_SEMICOL
         err: NULL
         num_err: 0
         returncode: 0
 
     parser:
         out: |
-            SELECT 42, 13.37, "Hello, wolrd!", TRUE, NULL;
+            SELECT 42, 13.37, "Hello, wolrd!", TRUE, d'2001-09-28', d'2001-09-28 20:38:40', NULL;
         err: NULL
         num_err: 0
         returncode: 0
@@ -38,7 +42,7 @@ stages:
 
     end2end:
         out: |
-            42,13.37,"Hello, wolrd!",TRUE,NULL
+            42,13.37,"Hello, wolrd!",TRUE,2001-09-28,2001-09-28 20:38:40,NULL
         err: NULL
         num_err: 0
         returncode: 0

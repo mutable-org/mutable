@@ -54,7 +54,6 @@ std::string unescape(const std::string &str, char esc, char quote)
     return res;
 }
 
-/** Escapes special characters in a string to be printable in HTML documents.  Primarily used for DOT. */
 std::string html_escape(std::string str)
 {
     str = replace_all(str, "&", "&amp;");

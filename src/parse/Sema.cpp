@@ -248,6 +248,74 @@ void Sema::operator()(Const<Constant> &e)
             e.type_ = Type::Get_Char(Type::TY_Scalar, strlen(e.tok.text) - 2); // without quotes
             break;
 
+        case TK_DATE: {
+            int year, month, day;
+            sscanf(e.tok.text, "d'%d-%d-%d'", &year, &month, &day);
+            if (year == 0) {
+                diag.e(e.tok.pos) << e << " has invalid year (after year -1 (1 BC) follows year 1 (1 AD)).\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
+            if (month < 1 or month > 12) {
+                diag.e(e.tok.pos) << e << " has invalid month.\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
+            if (day < 1 or (month == 2 and day > 29)
+                or ((month == 4 or month == 6 or month == 9 or month == 11) and day > 30)
+                or ((month == 1 or month == 3 or month == 5 or month == 7 or month == 8 or month == 10 or month == 12)
+                    and day > 31)) {
+                diag.e(e.tok.pos) << e << " has invalid day.\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
+            e.type_ = Type::Get_Date(Type::TY_Scalar);
+            break;
+        }
+
+        case TK_DATE_TIME: {
+            int year, month, day, hour, minute, second;
+            sscanf(e.tok.text, "d'%d-%d-%d %d:%d:%d'", &year, &month, &day, &hour, &minute, &second);
+            if (year == 0) {
+                diag.e(e.tok.pos) << e << " has invalid year (after year -1 (1 BC) follows year 1 (1 AD)).\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
+            if (month < 1 or month > 12) {
+                diag.e(e.tok.pos) << e << " has invalid month.\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
+            if (day < 1 or (month == 2 and day > 29)
+                or ((month == 4 or month == 6 or month == 9 or month == 11) and day > 30)
+                or ((month == 1 or month == 3 or month == 5 or month == 7 or month == 8 or month == 10 or month == 12)
+                    and day > 31)) {
+                diag.e(e.tok.pos) << e << " has invalid day.\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
+            insist(hour >= 0);
+            if (hour > 23) {
+                diag.e(e.tok.pos) << e << " has invalid hour.\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
+            insist(minute >= 0);
+            if (minute > 59) {
+                diag.e(e.tok.pos) << e << " has invalid minute.\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
+            insist(second >= 0);
+            if (second > 59) {
+                diag.e(e.tok.pos) << e << " has invalid second.\n";
+                e.type_ = Type::Get_Error();
+                return;
+            }
+            e.type_ = Type::Get_Datetime(Type::TY_Scalar);
+            break;
+        }
+
         case TK_True:
         case TK_False:
             e.type_ = Type::Get_Boolean(Type::TY_Scalar);
@@ -599,6 +667,38 @@ void Sema::operator()(Const<BinaryExpr> &e)
                 auto ty_rhs = cast<const CharacterSequence>(e.rhs->type());
                 if (not ty_lhs or not ty_rhs) {
                     diag.e(e.op().pos) << "Invalid expression " << e << ", both operands must be strings.\n";
+                    e.type_ = Type::Get_Error();
+                    return;
+                }
+                insist(ty_lhs);
+                insist(ty_rhs);
+
+                /* Scalar and scalar yield a scalar.  Otherwise, expression yields a vectorial. */
+                Type::category_t c = std::max(ty_lhs->category, ty_rhs->category);
+
+                /* Comparisons always have boolean type. */
+                e.type_ = Type::Get_Boolean(c);
+            } else if (auto ty_lhs = cast<const Date>(e.lhs->type())) {
+                /* Verify that both operands are dates. */
+                auto ty_rhs = cast<const Date>(e.rhs->type());
+                if (not ty_lhs or not ty_rhs) {
+                    diag.e(e.op().pos) << "Invalid expression " << e << ", both operands must be dates.\n";
+                    e.type_ = Type::Get_Error();
+                    return;
+                }
+                insist(ty_lhs);
+                insist(ty_rhs);
+
+                /* Scalar and scalar yield a scalar.  Otherwise, expression yields a vectorial. */
+                Type::category_t c = std::max(ty_lhs->category, ty_rhs->category);
+
+                /* Comparisons always have boolean type. */
+                e.type_ = Type::Get_Boolean(c);
+            } else if (auto ty_lhs = cast<const DateTime>(e.lhs->type())) {
+                /* Verify that both operands are datetimes. */
+                auto ty_rhs = cast<const DateTime>(e.rhs->type());
+                if (not ty_lhs or not ty_rhs) {
+                    diag.e(e.op().pos) << "Invalid expression " << e << ", both operands must be datetimes.\n";
                     e.type_ = Type::Get_Error();
                     return;
                 }
@@ -1286,10 +1386,15 @@ void Sema::operator()(Const<InsertStmt> &s)
             switch (v.first) {
                 case InsertStmt::I_Expr: {
                     (*this)(*v.second);
+                    if (v.second->type()->is_error()) continue;
                     auto ty = as<const PrimitiveType>(v.second->type());
                     if (ty->is_boolean() and attr.type->is_boolean())
                         break;
                     if (ty->is_character_sequence() and attr.type->is_character_sequence())
+                        break;
+                    if (ty->is_date() and attr.type->is_date())
+                        break;
+                    if (ty->is_date_time() and attr.type->is_date_time())
                         break;
                     if (ty->is_numeric() and attr.type->is_numeric())
                         break;

@@ -1,0 +1,53 @@
+description: where greater date
+db: ours
+query: |
+    SELECT key FROM D WHERE rdate > d'-1167-12-14' ORDER BY key;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: key TK_IDENTIFIER
+            -:1:12: FROM TK_From
+            -:1:17: D TK_IDENTIFIER
+            -:1:19: WHERE TK_Where
+            -:1:25: rdate TK_IDENTIFIER
+            -:1:31: > TK_GREATER
+            -:1:33: d'-1167-12-14' TK_DATE
+            -:1:48: ORDER TK_Order
+            -:1:54: BY TK_By
+            -:1:57: key TK_IDENTIFIER
+            -:1:60: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT key
+            FROM D
+            WHERE (rdate > d'-1167-12-14')
+            ORDER BY key ASC;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            0
+            2
+            5
+            6
+            8
+            9
+        err: NULL
+        num_err: 0
+        returncode: 0

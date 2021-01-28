@@ -1,0 +1,44 @@
+description: where equal date
+db: ours
+query: |
+    SELECT key FROM D WHERE rdate = d'4236-04-04';
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: key TK_IDENTIFIER
+            -:1:12: FROM TK_From
+            -:1:17: D TK_IDENTIFIER
+            -:1:19: WHERE TK_Where
+            -:1:25: rdate TK_IDENTIFIER
+            -:1:31: = TK_EQUAL
+            -:1:33: d'4236-04-04' TK_DATE
+            -:1:46: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT key
+            FROM D
+            WHERE (rdate = d'4236-04-04');
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            2
+        err: NULL
+        num_err: 0
+        returncode: 0

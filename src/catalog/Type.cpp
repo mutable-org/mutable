@@ -85,6 +85,20 @@ const CharacterSequence * Type::Get_Varchar(category_t category, std::size_t len
     return static_cast<const CharacterSequence*>(types_(CharacterSequence(category, length, true)));
 }
 
+const Date * Type::Get_Date(category_t category)
+{
+    static Date d_scalar(Type::TY_Scalar);
+    static Date d_vector(Type::TY_Vector);
+    return category == TY_Scalar ? &d_scalar : &d_vector;
+}
+
+const DateTime * Type::Get_Datetime(category_t category)
+{
+    static DateTime dt_scalar(Type::TY_Scalar);
+    static DateTime dt_vector(Type::TY_Vector);
+    return category == TY_Scalar ? &dt_scalar : &dt_vector;
+}
+
 const Numeric * Type::Get_Decimal(category_t category, unsigned digits, unsigned scale)
 {
     return static_cast<const Numeric*>(types_(Numeric(category, Numeric::N_Decimal, digits, scale)));
@@ -119,6 +133,8 @@ ACCEPT(ErrorType);
 ACCEPT(NoneType);
 ACCEPT(Boolean);
 ACCEPT(CharacterSequence);
+ACCEPT(Date);
+ACCEPT(DateTime);
 ACCEPT(Numeric);
 ACCEPT(FnType);
 #undef ACCEPT
@@ -140,6 +156,20 @@ bool CharacterSequence::operator==(const Type &other) const
 {
     if (auto o = dynamic_cast<const CharacterSequence*>(&other))
         return this->category == o->category and this->is_varying == o->is_varying and this->length == o->length;
+    return false;
+}
+
+bool Date::operator==(const Type &other) const
+{
+    if (auto o = dynamic_cast<const Date*>(&other))
+        return this->category == o->category;
+    return false;
+}
+
+bool DateTime::operator==(const Type &other) const
+{
+    if (auto o = dynamic_cast<const DateTime*>(&other))
+        return this->category == o->category;
     return false;
 }
 
@@ -172,12 +202,16 @@ uint64_t ErrorType::hash() const { return 0; }
 
 uint64_t NoneType::hash() const { return -1UL; }
 
-uint64_t Boolean::hash() const { return uint64_t(category); }
+uint64_t Boolean::hash() const { return 0b10UL | uint64_t(category); }
 
 uint64_t CharacterSequence::hash() const
 {
     return uint64_t(length) << 2 | uint64_t(is_varying) << 1 | uint64_t(category);
 }
+
+uint64_t Date::hash() const { return 0b100UL | uint64_t(category); }
+
+uint64_t DateTime::hash() const { return 0b1000UL | uint64_t(category); }
 
 uint64_t Numeric::hash() const
 {
@@ -194,16 +228,9 @@ uint64_t FnType::hash() const
 
 /*===== Scalar & Vector Conversion ===================================================================================*/
 
-const PrimitiveType * Boolean::as_scalar() const
-{
-    if (is_scalar()) return this;
-    return Type::Get_Boolean(TY_Scalar);
-}
-const PrimitiveType * Boolean::as_vectorial() const
-{
-    if (is_vectorial()) return this;
-    return Type::Get_Boolean(TY_Vector);
-}
+const PrimitiveType * Boolean::as_scalar() const { return Type::Get_Boolean(TY_Scalar); }
+
+const PrimitiveType * Boolean::as_vectorial() const { return Type::Get_Boolean(TY_Vector); }
 
 const PrimitiveType * CharacterSequence::as_scalar() const
 {
@@ -215,6 +242,14 @@ const PrimitiveType * CharacterSequence::as_vectorial() const
     if (is_vectorial()) return this;
     return static_cast<const CharacterSequence*>(types_(CharacterSequence(TY_Vector, length, is_varying)));
 }
+
+const PrimitiveType * Date::as_scalar() const { return Type::Get_Date(TY_Scalar); }
+
+const PrimitiveType * Date::as_vectorial() const { return Type::Get_Date(TY_Vector); }
+
+const PrimitiveType * DateTime::as_scalar() const { return Type::Get_Datetime(TY_Scalar); }
+
+const PrimitiveType * DateTime::as_vectorial() const { return Type::Get_Datetime(TY_Vector); }
 
 const PrimitiveType * Numeric::as_scalar() const
 {
@@ -237,6 +272,10 @@ void CharacterSequence::print(std::ostream &out) const
 {
     out << ( is_varying ? "VARCHAR" : "CHAR" ) << '(' << length << ')';
 }
+
+void Date::print(std::ostream &out) const { out << "DATE"; }
+
+void DateTime::print(std::ostream &out) const { out << "DATETIME"; }
 
 void Numeric::print(std::ostream &out) const
 {
@@ -283,6 +322,16 @@ void CharacterSequence::dump(std::ostream &out) const
 {
     out << "CharacterSequence{ category = " << CATEGORY_TO_STR_[category] << ", is_varying = "
         << (is_varying ? "true" : "false") << ", length = " << length << " }" << std::endl;
+}
+
+void Date::dump(std::ostream &out) const
+{
+    out << "Date{ category = " << CATEGORY_TO_STR_[category] << " }" << std::endl;
+}
+
+void DateTime::dump(std::ostream &out) const
+{
+    out << "DateTime{ category = " << CATEGORY_TO_STR_[category] << " }" << std::endl;
 }
 
 void Numeric::dump(std::ostream &out) const

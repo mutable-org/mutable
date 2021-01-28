@@ -1,7 +1,9 @@
 #include "backend/StackMachine.hpp"
 
 #include "backend/Interpreter.hpp"
+#include <ctime>
 #include <functional>
+#include <mutable/util/fn.hpp>
 #include <regex>
 
 
@@ -18,6 +20,10 @@ const char * tystr(const PrimitiveType *ty) {
         return "_b";
     if (ty->is_character_sequence())
         return "_s";
+    if (ty->is_date())
+        return "_i";
+    if (ty->is_date_time())
+        return "_i";
     auto n = as<const Numeric>(ty);
     switch (n->kind) {
         case Numeric::N_Int:
@@ -583,6 +589,10 @@ void StackMachine::emit_Ld(const Type *ty)
         }
     } else if (auto cs = cast<const CharacterSequence>(ty)) {
         emit_Ld_s(cs->length);
+    } else if (auto d = cast<const Date>(ty)) {
+        emit_Ld_i32();
+    } else if (auto dt = cast<const DateTime>(ty)) {
+        emit_Ld_i64();
     } else {
         unreachable("illegal type");
     }
@@ -616,6 +626,10 @@ void StackMachine::emit_St(const Type *ty)
         }
     } else if (auto cs = cast<const CharacterSequence>(ty)) {
         emit_St_s(cs->length + cs->is_varying);
+    } else if (auto d = cast<const Date>(ty)) {
+        emit_St_i32();
+    } else if (auto dt = cast<const DateTime>(ty)) {
+        emit_St_i64();
     } else {
         unreachable("illegal type");
     }
@@ -642,6 +656,12 @@ void StackMachine::emit_Print(std::size_t ostream_index, const Type *ty)
     if (ty->is_none()) {
         emit_Push_Null();
         emit_Print_i(ostream_index);
+    } else if (ty->is_date()) {
+        emit(StackMachine::STR_TO_OPCODE.at("Print_date"));
+        emit(static_cast<Opcode>(ostream_index));
+    } else if (ty->is_date_time()) {
+        emit(StackMachine::STR_TO_OPCODE.at("Print_datetime"));
+        emit(static_cast<Opcode>(ostream_index));
     } else {
         std::ostringstream oss;
         oss << "Print" << tystr(as<const PrimitiveType>(ty));
@@ -932,32 +952,32 @@ NEXT;
 Putc: {
     std::size_t index = std::size_t(*op_++);
     unsigned char chr = (unsigned char)(*op_++);
-    std::ostream *out = reinterpret_cast<std::ostream*>(context_[index].as_p());
-    (*out) << chr;
+    std::ostream &out = *reinterpret_cast<std::ostream*>(context_[index].as_p());
+    out << chr;
 }
 NEXT;
 
 Print_i: {
     insist(top_ >= 1);
     std::size_t index = std::size_t(*op_++);
-    std::ostream *out = reinterpret_cast<std::ostream*>(context_[index].as_p());
+    std::ostream &out = *reinterpret_cast<std::ostream*>(context_[index].as_p());
     if (TOP_IS_NULL)
-        (*out) << "NULL";
+        out << "NULL";
     else
-        (*out) << TOP.as_i();
+        out << TOP.as_i();
 }
 NEXT;
 
 Print_f: {
     insist(top_ >= 1);
     std::size_t index = std::size_t(*op_++);
-    std::ostream *out = reinterpret_cast<std::ostream*>(context_[index].as_p());
+    std::ostream &out = *reinterpret_cast<std::ostream*>(context_[index].as_p());
     if (TOP_IS_NULL) {
-        (*out) << "NULL";
+        out << "NULL";
     } else {
-        const auto old_precision = out->precision(std::numeric_limits<float>::max_digits10 - 1);
-        (*out) << TOP.as_f();
-        out->precision(old_precision);
+        const auto old_precision = out.precision(std::numeric_limits<float>::max_digits10 - 1);
+        out << TOP.as_f();
+        out.precision(old_precision);
     }
 }
 NEXT;
@@ -965,13 +985,13 @@ NEXT;
 Print_d: {
     insist(top_ >= 1);
     std::size_t index = std::size_t(*op_++);
-    std::ostream *out = reinterpret_cast<std::ostream*>(context_[index].as_p());
+    std::ostream &out = *reinterpret_cast<std::ostream*>(context_[index].as_p());
     if (TOP_IS_NULL) {
-        (*out) << "NULL";
+        out << "NULL";
     } else {
-        const auto old_precision = out->precision(std::numeric_limits<double>::max_digits10 - 1);
-        (*out) << TOP.as_d();
-        out->precision(old_precision);
+        const auto old_precision = out.precision(std::numeric_limits<double>::max_digits10 - 1);
+        out << TOP.as_d();
+        out.precision(old_precision);
     }
 }
 NEXT;
@@ -979,12 +999,12 @@ NEXT;
 Print_s: {
     insist(top_ >= 1);
     std::size_t index = std::size_t(*op_++);
-    std::ostream *out = reinterpret_cast<std::ostream*>(context_[index].as_p());
+    std::ostream &out = *reinterpret_cast<std::ostream*>(context_[index].as_p());
     if (TOP_IS_NULL) {
-        (*out) << "NULL";
+        out << "NULL";
     } else {
         const char *str = reinterpret_cast<char*>(TOP.as_p());
-        (*out) << '"' << str << '"';
+        out << '"' << str << '"';
     }
 }
 NEXT;
@@ -992,11 +1012,44 @@ NEXT;
 Print_b: {
     insist(top_ >= 1);
     std::size_t index = std::size_t(*op_++);
-    std::ostream *out = reinterpret_cast<std::ostream*>(context_[index].as_p());
+    std::ostream &out = *reinterpret_cast<std::ostream*>(context_[index].as_p());
     if (TOP_IS_NULL)
-        (*out) << "NULL";
+        out << "NULL";
     else
-        (*out) << (TOP.as_b() ? "TRUE" : "FALSE");
+        out << (TOP.as_b() ? "TRUE" : "FALSE");
+}
+NEXT;
+
+Print_date: {
+    std::size_t index = std::size_t(*op_++);
+    std::ostream &out = *reinterpret_cast<std::ostream*>(context_[index].as_p());
+    if (TOP_IS_NULL) {
+        out << "NULL";
+    } else {
+        const int32_t date = TOP.as_i(); // signed because year is signed
+        const auto oldfill = out.fill('0');
+        const auto oldfmt = out.flags();
+        out << std::internal
+            << std::setw(date >> 9 > 0 ? 4 : 5) << (date >> 9) << '-'
+            << std::setw(2) << ((date >> 5) & 0xF) << '-'
+            << std::setw(2) << (date & 0x1F);
+        out.fill(oldfill);
+        out.flags(oldfmt);
+    }
+}
+NEXT;
+
+Print_datetime: {
+    std::size_t index = std::size_t(*op_++);
+    std::ostream &out = *reinterpret_cast<std::ostream*>(context_[index].as_p());
+    if (TOP_IS_NULL) {
+        out << "NULL";
+    } else {
+        const time_t time = TOP.as_i();
+        std::tm tm;
+        gmtime_r(&time, &tm);
+        out << put_tm(tm);
+    }
 }
 NEXT;
 

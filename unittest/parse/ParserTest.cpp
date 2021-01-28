@@ -241,6 +241,8 @@ TEST_CASE("Parser::parse_Expr()", "[core][parse][unit]")
             { "0x1", "0x1", TK_EOF },
             { "0.", "0.", TK_EOF },
             { "0xA.", "0xA.", TK_EOF },
+            { "d'2021-01-29'", "d'2021-01-29'", TK_EOF },
+            { "d'2021-01-29 12:17:49'", "d'2021-01-29 12:17:49'", TK_EOF },
         };
 
         for (auto triple : triples)
@@ -400,6 +402,26 @@ TEST_CASE("Parser::parse_data_type()", "[core][parse][unit]")
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
         REQUIRE(type == Type::Get_Varchar(Type::TY_Scalar, 42));
+    }
+
+    SECTION("Date")
+    {
+        LEXER("DATE");
+        Parser parser(lexer);
+        const Type *type = parser.parse_data_type();
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        REQUIRE(type == Type::Get_Date(Type::TY_Scalar));
+    }
+
+    SECTION("Datetime")
+    {
+        LEXER("DATETIME");
+        Parser parser(lexer);
+        const Type *type = parser.parse_data_type();
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        REQUIRE(type == Type::Get_Datetime(Type::TY_Scalar));
     }
 
     SECTION("Int(N)")

@@ -10,6 +10,8 @@
 #include <vector>
 
 
+namespace m {
+
 /** Collect timings of events. */
 struct Timer
 {
@@ -114,7 +116,7 @@ struct Timer
             if (m.begin == time_point()) continue; // measurement has been removed
             out << m.name << ": ";
             if (m.end == time_point()) {
-                out << "started at " << m.begin << ", not finished\n";
+                out << "started at " << put_timepoint(m.begin) << ", not finished\n";
             } else {
                 out << duration_cast<microseconds>(m.end - m.begin).count() / 1e3 << " ms\n";
             }
@@ -143,3 +145,5 @@ struct Timer
 }
 #define TIME_THIS(DESCR, TIMER) \
     auto PASTE(__timer_, __COUNTER__) = (TIMER).create_timing((DESCR));
+
+}

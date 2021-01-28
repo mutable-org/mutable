@@ -109,6 +109,10 @@ void WasmCGContext::operator()(const Constant &e)
         literal = BinaryenLiteralInt32(value.as_b());
     } else if (ty->is_character_sequence()) {
         unreachable("not yet implemented");
+    } else if (ty->is_date()) {
+        literal = BinaryenLiteralInt32(value.as_i());
+    } else if (ty->is_date_time()) {
+        literal = BinaryenLiteralInt64(value.as_i());
     } else if (auto n = cast<const Numeric>(ty)) {
         switch (n->kind) {
             case Numeric::N_Int:
@@ -268,27 +272,38 @@ void WasmCGContext::operator()(const BinaryExpr &e)
 
 #define CMP(OP, OPS) \
 { \
-    auto n_lhs = as<const Numeric>(e.lhs->type()); \
-    auto n_rhs = as<const Numeric>(e.rhs->type()); \
-    auto n = arithmetic_join(n_lhs, n_rhs); \
-    lhs = convert(module(), std::move(lhs), n_lhs, n); \
-    rhs = convert(module(), std::move(rhs), n_rhs, n); \
-    switch (n->kind) { \
-        case Numeric::N_Int: \
-        case Numeric::N_Decimal: { \
-            if (n->size() <= 32) \
-                BINARY_OP(OPS, Int32); \
-            else \
-                BINARY_OP(OPS, Int64); \
-            break; \
+    if (e.lhs->type()->is_numeric()) { \
+        insist(e.rhs->type()->is_numeric()); \
+        auto n_lhs = as<const Numeric>(e.lhs->type()); \
+        auto n_rhs = as<const Numeric>(e.rhs->type()); \
+        auto n = arithmetic_join(n_lhs, n_rhs); \
+        lhs = convert(module(), std::move(lhs), n_lhs, n); \
+        rhs = convert(module(), std::move(rhs), n_rhs, n); \
+        switch (n->kind) { \
+            case Numeric::N_Int: \
+            case Numeric::N_Decimal: { \
+                if (n->size() <= 32) \
+                    BINARY_OP(OPS, Int32); \
+                else \
+                    BINARY_OP(OPS, Int64); \
+                break; \
+            } \
+            case Numeric::N_Float: \
+                if (n->precision == 32) \
+                    BINARY_OP(OP, Float32); \
+                else \
+                    BINARY_OP(OP, Float64); \
+                break; \
         } \
-\
-        case Numeric::N_Float: \
-            if (n->precision == 32) \
-                BINARY_OP(OP, Float32); \
-            else \
-                BINARY_OP(OP, Float64); \
-            break; \
+        break; \
+    } else if (e.lhs->type()->is_date()) { \
+        insist(e.rhs->type()->is_date()); \
+        BINARY_OP(OPS, Int32); \
+    } else if (e.lhs->type()->is_date_time()) { \
+        insist(e.rhs->type()->is_date_time()); \
+        BINARY_OP(OPS, Int64); \
+    } else { \
+        unreachable("invalid type"); \
     } \
     break; \
 }
@@ -366,7 +381,8 @@ void WasmCGContext::operator()(const BinaryExpr &e)
 #undef CMP
 }
 
-void WasmCGContext::operator()(const QueryExpr &e) {
+void WasmCGContext::operator()(const QueryExpr &e)
+{
     /* Search with fully qualified name. */
     Catalog &C = Catalog::Get();
     auto it = values_.find({e.alias(), C.pool("$res")});
@@ -527,6 +543,22 @@ WasmTemporary WasmCompare::Eq(BinaryenModuleRef module, const Type &ty, WasmTemp
             );
         }
         void operator()(Const<CharacterSequence>&) { unreachable("not supported"); }
+        void operator()(Const<Date>&) {
+            cmp = BinaryenBinary(
+                    /* module= */ module,
+                    /* op=     */ BinaryenEqInt32(),
+                    /* left=   */ left,
+                    /* right=  */ right
+            );
+        }
+        void operator()(Const<DateTime>&) {
+            cmp = BinaryenBinary(
+                    /* module= */ module,
+                    /* op=     */ BinaryenEqInt64(),
+                    /* left=   */ left,
+                    /* right=  */ right
+            );
+        }
         void operator()(Const<Numeric> &ty) {
             switch (ty.kind) {
                 case Numeric::N_Int:
@@ -604,6 +636,22 @@ WasmTemporary WasmCompare::Ne(BinaryenModuleRef module, const Type &ty,
             );
         }
         void operator()(Const<CharacterSequence>&) { unreachable("not supported"); }
+        void operator()(Const<Date>&) {
+            cmp = BinaryenBinary(
+                    /* module= */ module,
+                    /* op=     */ BinaryenNeInt32(),
+                    /* left=   */ left,
+                    /* right=  */ right
+            );
+        }
+        void operator()(Const<DateTime>&) {
+            cmp = BinaryenBinary(
+                    /* module= */ module,
+                    /* op=     */ BinaryenNeInt64(),
+                    /* left=   */ left,
+                    /* right=  */ right
+            );
+        }
         void operator()(Const<Numeric> &ty) {
             switch (ty.kind) {
                 case Numeric::N_Int:
@@ -707,6 +755,8 @@ BinaryenLiteral WasmLimits::EXTERNAL_NAME(const Type &type) \
         void operator()(Const<ErrorType>&) { unreachable("not allowed"); } \
         void operator()(Const<Boolean>&) { literal = BinaryenLiteralInt32(std::numeric_limits<bool>::INTERNAL_NAME()); } \
         void operator()(Const<CharacterSequence>&) { unreachable("not supported"); } \
+        void operator()(Const<Date>&) { literal = BinaryenLiteralInt32(std::numeric_limits<int32_t>::INTERNAL_NAME()); } \
+        void operator()(Const<DateTime>&) { literal = BinaryenLiteralInt64(std::numeric_limits<int64_t>::INTERNAL_NAME()); } \
         void operator()(Const<Numeric> &ty) { \
             switch (ty.kind) { \
                 case Numeric::N_Int: \

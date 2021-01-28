@@ -7,6 +7,8 @@
 #include "mutable/IR/OperatorVisitor.hpp"
 #include "mutable/IR/Tuple.hpp"
 #include "mutable/util/macro.hpp"
+#include <cerrno>
+#include <ctime>
 #include <unordered_map>
 
 
@@ -245,6 +247,44 @@ struct Interpreter : Backend, ConstOperatorVisitor
                 std::string str(c.tok.text);
                 auto substr = interpret(str);
                 return Catalog::Get().pool(substr.c_str()); // return internalized string by reference
+            }
+
+            /* Date */
+            case TK_DATE: {
+                int year, month, day;
+                if (3 != sscanf(c.tok.text, "d'%d-%d-%d'", &year, &month, &day))
+                    unreachable("invalid date");
+                return int32_t(year << 9 | month << 5 | day);
+            }
+
+            /* Datetime */
+            case TK_DATE_TIME: {
+                /* Extract date time from string. */
+                std::string str_datetime(c.tok.text);
+                std::istringstream ss(str_datetime.substr(2, str_datetime.length() - 3));
+
+                /* Parse date time. */
+                std::tm tm;
+                ss >> get_tm(tm);
+                insist(not ss.fail(), "failed to parse date time");
+
+#if defined(__APPLE__)
+                /* Adapt tm_year such that it is non-negative (i.e. >= 1900) since timegm() cannot handle these cases. */
+                constexpr long SECONDS_PER_400_YEAR_CYCLE = 12622780800L;
+                int cycles = tm.tm_year < 0 ? -tm.tm_year / 400 + 1 : 0;
+                tm.tm_year += cycles * 400;
+                insist(tm.tm_year >= 0);
+#endif
+
+                /* Convert date time from std::tm to time_t (seconds since epoch). */
+                const time_t time = timegm(&tm);
+                insist(time != -1, "datetime out of bounds");
+
+#if defined(__APPLE__)
+                return int64_t(time - cycles * SECONDS_PER_400_YEAR_CYCLE);
+#else
+                return int64_t(time);
+#endif
             }
 
             /* Boolean */

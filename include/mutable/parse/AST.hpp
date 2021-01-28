@@ -173,6 +173,10 @@ struct Constant : Expr {
     bool is_float() const { return tok.type == TK_DEC_FLOAT or tok.type == TK_HEX_FLOAT; }
 
     bool is_string() const { return tok.type == TK_STRING_LITERAL; }
+
+    bool is_date() const { return tok.type == TK_DATE; }
+
+    bool is_datetime() const { return tok.type == TK_DATE_TIME; }
 };
 
 /** A postfix expression. */

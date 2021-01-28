@@ -109,7 +109,7 @@ TEST_CASE("Lexer::next()", "[core][lex][unit]")
             { "\"this is valid \\\\ too!\"", TK_STRING_LITERAL, "\"this is valid \\\\ too!\"", TK_EOF },
             { "\"this is \n not a string literal\"", TK_STRING_LITERAL, "\"this is \n not a string literal\"", TK_EOF },
 
-                /* keywords and identifiers */
+            /* keywords and identifiers */
             { "SELECT attr", TK_Select, "SELECT", TK_IDENTIFIER },
             { "attr FROM", TK_IDENTIFIER, "attr", TK_From },
             { "FROM A", TK_From, "FROM", TK_IDENTIFIER },
@@ -119,6 +119,21 @@ TEST_CASE("Lexer::next()", "[core][lex][unit]")
             { "_____", TK_IDENTIFIER, "_____", TK_EOF },
             { "_0", TK_IDENTIFIER, "_0", TK_EOF },
             { "_l", TK_IDENTIFIER, "_l", TK_EOF },
+            { "d", TK_IDENTIFIER, "d", TK_EOF },
+
+            /* date constants */
+            { "d'2021-01-29'", TK_DATE, "d'2021-01-29'", TK_EOF },
+            { "d'-2021-01-29'", TK_DATE, "d'-2021-01-29'", TK_EOF },
+            { "d'0099-17-49'", TK_DATE, "d'0099-17-49'", TK_EOF },
+            { "date'2021-01-29'", TK_IDENTIFIER, "date", TK_ERROR },
+            { "d2021-01-29'", TK_IDENTIFIER, "d2021", TK_MINUS },
+
+            /* datetime constants */
+            { "d'2021-01-29 12:17:49'", TK_DATE_TIME, "d'2021-01-29 12:17:49'", TK_EOF },
+            { "d'-2021-01-29 12:17:49'", TK_DATE_TIME, "d'-2021-01-29 12:17:49'", TK_EOF },
+            { "d'0099-17-49 29:93:67'", TK_DATE_TIME, "d'0099-17-49 29:93:67'", TK_EOF },
+            { "date'2021-01-29 12:17:49'", TK_IDENTIFIER, "date", TK_ERROR },
+            { "d2021-01-29 12:17:49'", TK_IDENTIFIER, "d2021", TK_MINUS },
         };
 
         for (auto e : expr) {
@@ -173,9 +188,33 @@ TEST_CASE("Lexer::next()", "[core][lex][unit]")
                 { "0xfpa", "0xfp", TK_IDENTIFIER },
                 { "0xfp", "0xfp", TK_EOF },
                 { "0xg", "0x", TK_IDENTIFIER },
+
                 /* invalid string literals */
                 { "\"this is not a string literal", "\"this is not a string literal", TK_EOF },
                 { "\"this is \\x not a string literal\"", "\"this is \\x not a string literal\"", TK_EOF },
+
+                /* invalid date constants */
+                { "'2021-01-29'", "'", TK_DEC_INT },
+                { "d'2021-01-29", "d'2021-01-29", TK_EOF },
+                { "d'2021-1-29'", "d'2021-1-29'", TK_EOF },
+                { "d'2021-01-1'", "d'2021-01-1'", TK_EOF },
+                { "d'221-01-29'", "d'221-01-29'", TK_EOF },
+                { "d'02021-01-29'", "d'02021-01", TK_MINUS },
+                { "d'2021-01-029'", "d'2021-01-02", TK_DEC_INT },
+                { "d'2021:01-29'", "d'2021", TK_ERROR },
+                { "d'2021-01:29'", "d'2021-01", TK_ERROR },
+
+                /* invalid datetime constants */
+                { "'2021-01-29 12:17:49'", "'", TK_DEC_INT },
+                { "d'2021-01-29 12:17:49", "d'2021-01-29 12:17:49", TK_EOF },
+                { "d'2021-01-29 1:17:49'", "d'2021-01-29 1:17:49'", TK_EOF },
+                { "d'2021-01-29 12:1:49'", "d'2021-01-29 12:1:49'", TK_EOF },
+                { "d'2021-01-29 12:17:9'", "d'2021-01-29 12:17:9'", TK_EOF },
+                { "d'2021-01-29 012:17:49'", "d'2021-01-29 012:17", TK_ERROR },
+                { "d'2021-01-29 12:17:049'", "d'2021-01-29 12:17:04", TK_DEC_INT },
+                { "d'2021-01-29 12-17:49'", "d'2021-01-29 12", TK_MINUS },
+                { "d'2021-01-29 12:17-49'", "d'2021-01-29 12:17", TK_MINUS },
+                { "d'2021-01-29,12:17:49'", "d'2021-01-29", TK_COMMA },
             };
 
             for (auto e : expr) {

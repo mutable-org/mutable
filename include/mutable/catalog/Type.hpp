@@ -15,6 +15,8 @@ struct NoneType;
 struct PrimitiveType;
 struct Boolean;
 struct CharacterSequence;
+struct Date;
+struct DateTime;
 struct Numeric;
 struct FnType;
 
@@ -54,6 +56,8 @@ struct Type
     bool is_primitive() const { return is<const PrimitiveType>(this); }
     bool is_boolean() const { return is<const Boolean>(this); }
     bool is_character_sequence() const { return is<const CharacterSequence>(this); }
+    bool is_date() const { return is<const Date>(this); }
+    bool is_date_time() const { return is<const DateTime>(this); }
     /** Returns `true` iff this `Type` is a `Numeric` type. */
     bool is_numeric() const { return is<const Numeric>(this); }
     bool is_integral() const;
@@ -97,6 +101,10 @@ struct Type
     static const CharacterSequence * Get_Char(category_t category, std::size_t length);
     /** Returns a `CharacterSequence` type of the given `category` and varying `length`. */
     static const CharacterSequence * Get_Varchar(category_t category, std::size_t length);
+    /** Returns a `Date` type of the given `category`. */
+    static const Date * Get_Date(category_t category);
+    /** Returns a `DateTime` type of the given `category`. */
+    static const DateTime * Get_Datetime(category_t category);
     /** Returns a `Numeric` type for decimals of given `category`, decimal `digits`, and `scale`. */
     static const Numeric * Get_Decimal(category_t category, unsigned digits, unsigned scale);
     /** Returns a `Numeric` type for integrals of given `category` and `num_bytes` bytes. */
@@ -112,7 +120,8 @@ struct Type
 template<typename T>
 bool is_convertible(const Type *attr);
 
-/** Returns true iff both types have the same `PrimitiveType`, i.e. `Boolean`, `CharacterSequence`, or `Numeric`. */
+/** Returns true iff both types have the same `PrimitiveType`, i.e. `Boolean`, `CharacterSequence`, `Date`, `DateTime`,
+ * or `Numeric`. */
 bool is_comparable(const Type *first, const Type *second);
 
 }
@@ -271,6 +280,64 @@ struct CharacterSequence : PrimitiveType
     virtual const PrimitiveType *as_vectorial() const override;
 };
 
+/** The date type. */
+struct Date : PrimitiveType
+{
+    friend struct Type;
+
+    private:
+    Date(category_t category) : PrimitiveType(category) { }
+
+    public:
+    Date(Date&&) = default;
+
+    void accept(TypeVisitor &v) override;
+    void accept(ConstTypeVisitor &v) const override;
+
+    bool operator==(const Type &other) const override;
+
+    uint32_t size() const override { return 32; }
+    uint32_t alignment() const override { return 32; }
+
+    uint64_t hash() const override;
+
+    void print(std::ostream &out) const override;
+    using Type::dump;
+    void dump(std::ostream &out) const override;
+
+    virtual const PrimitiveType *as_scalar() const override;
+    virtual const PrimitiveType *as_vectorial() const override;
+};
+
+/** The date type. */
+struct DateTime : PrimitiveType
+{
+    friend struct Type;
+
+    private:
+    DateTime(category_t category) : PrimitiveType(category) { }
+
+    public:
+    DateTime(DateTime&&) = default;
+
+    void accept(TypeVisitor &v) override;
+    void accept(ConstTypeVisitor &v) const override;
+
+    bool operator==(const Type &other) const override;
+
+    uint32_t size() const override { return 64; }
+    uint32_t alignment() const override { return 64; }
+
+    uint64_t hash() const override;
+
+    void print(std::ostream &out) const override;
+    using Type::dump;
+    void dump(std::ostream &out) const override;
+
+    virtual const PrimitiveType *as_scalar() const override;
+    virtual const PrimitiveType *as_vectorial() const override;
+};
+
 /** The numeric type represents integer and floating-point types of different precision and scale. */
 struct Numeric : PrimitiveType
 {
@@ -418,6 +485,8 @@ bool m::is_convertible(const Type *ty) {
 inline bool m::is_comparable(const Type *first, const Type *second) {
     if (first->is_boolean() and second->is_boolean()) return true;
     if (first->is_character_sequence() and second->is_character_sequence()) return true;
+    if (first->is_date() and second->is_date()) return true;
+    if (first->is_date_time() and second->is_date_time()) return true;
     if (first->is_numeric() and second->is_numeric()) return true;
     return false;
 }
@@ -440,6 +509,8 @@ struct TheTypeVisitor
     virtual void operator()(Const<ErrorType> &ty) = 0;
     virtual void operator()(Const<Boolean> &ty) = 0;
     virtual void operator()(Const<CharacterSequence> &ty) = 0;
+    virtual void operator()(Const<Date> &ty) = 0;
+    virtual void operator()(Const<DateTime> &ty) = 0;
     virtual void operator()(Const<Numeric> &ty) = 0;
     virtual void operator()(Const<FnType> &ty) = 0;
 };

@@ -1,0 +1,36 @@
+description: select date
+db: ours
+query: |
+    SELECT d'2001-09-28';
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: d'2001-09-28' TK_DATE
+            -:1:21: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT d'2001-09-28';
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            2001-09-28
+        err: NULL
+        num_err: 0
+        returncode: 0

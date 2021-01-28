@@ -23,6 +23,13 @@ CREATE TABLE T (
     rstring CHAR(15)
 );
 
+CREATE TABLE D (
+    key INT(2),
+    rdate DATE,
+    rdatetime DATETIME
+);
+
 IMPORT INTO R DSV "test/ours/data/R.csv" SKIP HEADER;
 IMPORT INTO S DSV "test/ours/data/S.csv" SKIP HEADER;
 IMPORT INTO T DSV "test/ours/data/T.csv" SKIP HEADER;
+IMPORT INTO D DSV "test/ours/data/D.csv" SKIP HEADER;

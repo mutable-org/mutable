@@ -605,6 +605,8 @@ Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
         case TK_True:
         case TK_False:
         case TK_STRING_LITERAL:
+        case TK_DATE:
+        case TK_DATE_TIME:
         case TK_OCT_INT:
         case TK_DEC_INT:
         case TK_HEX_INT:
@@ -730,6 +732,16 @@ const Type * Parser::parse_data_type()
             }
             return is_varying ? Type::Get_Varchar(Type::TY_Scalar, length) : Type::Get_Char(Type::TY_Scalar, length);
         }
+
+        /* DATE */
+        case TK_Date:
+            consume();
+            return Type::Get_Date(Type::TY_Scalar);
+
+        /* DATETIME */
+        case TK_Datetime:
+            consume();
+            return Type::Get_Datetime(Type::TY_Scalar);
 
         /* 'INT' '(' decimal-constant ')' */
         case TK_Int: {

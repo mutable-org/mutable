@@ -10,6 +10,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
+#include <ctime>
 #include <fstream>
 #include <stdexcept>
 #include <string>
@@ -129,6 +130,25 @@ struct print_value : ConstTypeVisitor
     void operator()(Const<Boolean>&) override { out << (*reinterpret_cast<const uint8_t*>(ptr) ? "TRUE" : "FALSE"); }
 
     void operator()(Const<CharacterSequence>&) override { unreachable("not implemented"); }
+
+    void operator()(Const<Date>&) override {
+        const int32_t date = *reinterpret_cast<const int32_t*>(ptr); // signed because year is signed
+        const auto oldfill = out.fill('0');
+        const auto oldfmt = out.flags();
+        out << std::internal
+            << std::setw(date >> 9 > 0 ? 4 : 5) << (date >> 9) << '-'
+            << std::setw(2) << ((date >> 5) & 0xF) << '-'
+            << std::setw(2) << (date & 0x1F);
+        out.fill(oldfill);
+        out.flags(oldfmt);
+    }
+
+    void operator()(Const<DateTime>&) override {
+        const time_t time = *reinterpret_cast<const int64_t*>(ptr);
+        std::tm tm;
+        gmtime_r(&time, &tm);
+        out << put_tm(tm);
+    }
 
     void operator()(Const<Numeric> &n) override {
         switch (n.kind) {

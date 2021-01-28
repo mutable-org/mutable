@@ -752,10 +752,25 @@ void StackMachine::emit_Cast(const Type *to_ty, const Type *from_ty)
                         return;
                 }
                 break;
+
         }
     } else if (auto cs_from = cast<const CharacterSequence>(from_ty)) {
         insist(to_ty->is_character_sequence()); // XXX any checks necessary?
         return; // nothing to be done
+    } else if (auto b_from = cast<const Boolean>(from_ty)) {
+        auto n_to = as<const Numeric>(to);
+
+        insist(to_ty->is_numeric());
+        switch (n_to->kind) {
+            case Numeric::N_Int: /* bool -> int */
+                emit_Cast_i_b();
+                return;
+
+            case Numeric::N_Float:
+            case Numeric::N_Decimal:
+                unreachable("unsupported conversion");
+        }
+
     }
 
     unreachable("unsupported conversion");

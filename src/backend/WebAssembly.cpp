@@ -9,6 +9,7 @@
 #include "mutable/storage/Store.hpp"
 #include <binaryen-c.h>
 #include <exception>
+#include <regex>
 #include <sstream>
 #include <unordered_map>
 
@@ -1053,9 +1054,45 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
         key_IDs.push_back(op.schema()[i].id);
 
     /*----- Allocate hash table. -------------------------------------------------------------------------------------*/
-    uint32_t initial_capacity = 32;
-    if (auto scan = cast<ScanOperator>(op.child(0))) /// XXX: hack for pre-allocation
-        initial_capacity = ceil_to_pow_2<decltype(initial_capacity)>(scan->store().num_rows() / .8);
+    uint32_t initial_capacity = 0;
+
+    /*--- XXX: Crude hack to do pre-allocation in benchmarks. --------------------------------------------------------*/
+    if (not op.group_by().empty()) {
+        std::size_t num_groups_est = 1;
+        for (auto expr : op.group_by()) {
+            if (auto d = cast<const Designator>(expr)) {
+                std::regex reg_is_distinct("n\\d+");
+                if (std::regex_match(d->attr_name.text, reg_is_distinct)) {
+                    errno = 0;
+                    unsigned num_distinct_values = strtol(d->attr_name.text + 1, nullptr, 10);
+                    if (errno) {
+                        const auto errsv = errno;
+                        std::cerr << "failed to parse number of distinct values: " << strerror(errsv) << std::endl;
+                        goto estimation_abort;
+                    } else {
+                        num_groups_est = mul_wo_overflow(num_groups_est, num_distinct_values);
+                    }
+                }
+            } else {
+                goto estimation_abort;
+            }
+        }
+        if (num_groups_est > 1e9)
+            initial_capacity = 1UL << 30;
+        else
+            initial_capacity = ceil_to_pow_2<decltype(initial_capacity)>(num_groups_est / .8);
+    }
+
+estimation_abort:
+    if (auto scan = cast<ScanOperator>(op.child(0))) { // XXX: hack for pre-allocation
+        if (initial_capacity == 0)
+            initial_capacity = ceil_to_pow_2<decltype(initial_capacity)>(scan->store().num_rows() / .8);
+        else
+            initial_capacity = std::min(initial_capacity, ceil_to_pow_2<decltype(initial_capacity)>(scan->store().num_rows() / .8));
+    }
+
+    if (initial_capacity == 0)
+        initial_capacity = 32;
 
     data->HT = new WasmRefCountingHashTable(module(), CG.fn(), *data->struc);
     auto HT = as<WasmRefCountingHashTable>(data->HT);

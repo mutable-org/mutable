@@ -18,7 +18,7 @@ CREATE DATABASE benchmark_tmp;
 CREATE TABLE Distinct_i32 ( id INT, n1 INT, n10 INT, n100 INT, n1000 INT, n10000 INT, n100000 INT);
 \copy Distinct_i32 FROM PROGRAM 'head -n $((NUM_ROWS * sf / 100)) ${CSV}' WITH DELIMITER ',' CSV HEADER;
 \timing on
-SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n1000) AS T;
+SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n100000) AS T;
 \timing off
 EOF
 done

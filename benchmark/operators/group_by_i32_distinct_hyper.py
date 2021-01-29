@@ -36,9 +36,7 @@ if __name__ == '__main__':
                 num_rows = connection.execute_command(f'COPY {table_def.table_name} FROM \'benchmark/operators/data/Distinct_i32.csv\' WITH DELIMITER \',\' CSV HEADER')
                 begin = time.time_ns()
                 with connection.execute_query(q) as result:
-                    i = 0
-                    for row in result:
-                        i += 1
+                    pass
                 end = time.time_ns()
                 times.append(end - begin)
 

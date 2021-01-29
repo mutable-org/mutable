@@ -32,7 +32,7 @@ if __name__ == '__main__':
             )
             connection.catalog.create_table(table_def)
 
-            query = f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY n1000) AS T'
+            query = f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY n100000) AS T'
             scale_factors = numpy.linspace(0, 1, num=11)
             times = list()
 
@@ -41,9 +41,7 @@ if __name__ == '__main__':
 
                 begin = time.time_ns()
                 with connection.execute_query(query) as result:
-                    i = 0
-                    for row in result:
-                        i += 1
+                    pass
                 end = time.time_ns()
                 times.append(end - begin)
 

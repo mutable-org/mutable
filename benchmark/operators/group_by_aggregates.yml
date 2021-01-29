@@ -1,0 +1,19 @@
+description: Compute varying number of aggregates while grouping.
+suite: operators
+benchmark: group_by-aggregates
+readonly: yes
+pattern: '^Execute query:.*'
+configurations:
+    Interpreter: --backend Interpreter
+    "WebAssembly (ColumnStore)": --backend WasmV8 --store ColumnStore
+label: 'Number of aggregates to compute'
+tables: [ 'Distinct_i32' ]
+cases:
+    1: SELECT MIN(n100000) FROM Distinct_i32 GROUP BY n10;
+    2: SELECT MIN(n100000), MIN(n10000) FROM Distinct_i32 GROUP BY n10;
+    3: SELECT MIN(n100000), MIN(n10000), MIN(n1000) FROM Distinct_i32 GROUP BY n10;
+    4: SELECT MIN(n100000), MIN(n10000), MIN(n1000), MIN(n100) FROM Distinct_i32 GROUP BY n10;
+compare_to:
+    'DuckDB': 'benchmark/operators/group_by_aggregates_duckdb.sh'
+    'PostgreSQL': 'benchmark/operators/group_by_aggregates_postgresql.sh'
+    'HyPer': 'benchmark/operators/group_by_aggregates_hyper.py'

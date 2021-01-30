@@ -33,7 +33,7 @@ if __name__ == '__main__':
             )
             connection.catalog.create_table(table_S)
 
-            query = f'SELECT AVG({table_R.table_name}.fid) FROM {table_R.table_name}, {table_S.table_name} WHERE {table_R.table_name}.id = {table_S.table_name}.fid'
+            query = f'SELECT COUNT(*) FROM {table_R.table_name}, {table_S.table_name} WHERE {table_R.table_name}.id = {table_S.table_name}.fid'
             scale_factors = numpy.linspace(0, 1, num=11)
             times = list()
 

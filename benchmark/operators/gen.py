@@ -3,6 +3,7 @@
 import itertools
 import math
 import multiprocessing
+import numpy
 import os
 import random
 import string
@@ -12,6 +13,7 @@ NUM_TUPLES = 10_000_000
 STRLEN = 10
 OUTPUT_DIR = os.path.join('benchmark', 'operators', 'data')
 NUM_DISTINCT_VALUES = NUM_TUPLES // 10
+JOIN_SELECTIVITY = 1e-8
 
 TYPE_TO_STR = {
         'b':    'BOOL',
@@ -189,9 +191,12 @@ def gen_column(attr, num_tuples):
     random.seed(hash(name))
 
     if 'fid' in name:
-        weights = [ random.randrange(0, 5) for i in range(num_tuples) ]
-        foreign_keys = random.choices(range(num_tuples), weights, k=num_tuples)
-        print(f'  + Generated column {name} of {num_tuples} rows with {len(set(foreign_keys))} distinct foreign keys in the range from 0 to {num_tuples-1}.')
+        num_fids_joining = min(int(JOIN_SELECTIVITY * num_tuples * num_tuples), num_tuples)
+        foreign_keys = [ random.randrange(0, num_tuples) for i in range(num_fids_joining) ]
+        foreign_keys.extend([num_tuples] * (num_tuples - num_fids_joining))
+        assert len(foreign_keys) == num_tuples
+        random.shuffle(foreign_keys)
+        print(f'  + Generated column {name} of {num_tuples} rows with {num_fids_joining} foreign keys with a join partner.')
         return map(str, foreign_keys)
     elif 'id' in name:
         print(f'  + Generated column {name} of {num_tuples} rows with keys from 0 to {num_tuples-1}.')

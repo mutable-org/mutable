@@ -196,10 +196,10 @@ def gen_column(attr, num_tuples):
         foreign_keys.extend([num_tuples] * (num_tuples - num_fids_joining))
         assert len(foreign_keys) == num_tuples
         random.shuffle(foreign_keys)
-        print(f'  + Generated column {name} of {num_tuples} rows with {num_fids_joining} foreign keys with a join partner.')
+        print(f'  + Generated column {name} of {num_tuples:,} rows with {num_fids_joining:,} foreign keys with a join partner.')
         return map(str, foreign_keys)
     elif 'id' in name:
-        print(f'  + Generated column {name} of {num_tuples} rows with keys from 0 to {num_tuples-1}.')
+        print(f'  + Generated column {name} of {num_tuples:,} rows with keys from 0 to {num_tuples-1:,}.')
         return map(str, range(num_tuples))
 
     if ty == 'b':

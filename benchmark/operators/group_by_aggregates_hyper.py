@@ -22,10 +22,10 @@ if __name__ == '__main__':
 
             times = list()
             queries = [
-                f'SELECT MIN(n100000) FROM {table_def.table_name} GROUP BY n10',
-                f'SELECT MIN(n100000), MIN(n10000) FROM {table_def.table_name} GROUP BY n10',
-                f'SELECT MIN(n100000), MIN(n10000), MIN(n1000) FROM {table_def.table_name} GROUP BY n10',
-                f'SELECT MIN(n100000), MIN(n10000), MIN(n1000), MIN(n100) FROM {table_def.table_name} GROUP BY n10',
+                f'SELECT MIN(n10) FROM {table_def.table_name} GROUP BY n100000',
+                f'SELECT MIN(n10), MIN(n100) FROM {table_def.table_name} GROUP BY n100000',
+                f'SELECT MIN(n10), MIN(n100), MIN(n1000) FROM {table_def.table_name} GROUP BY n100000',
+                f'SELECT MIN(n10), MIN(n100), MIN(n1000), MIN(n10000) FROM {table_def.table_name} GROUP BY n100000',
             ]
 
             for q in queries:

@@ -1080,7 +1080,7 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
         if (num_groups_est > 1e9)
             initial_capacity = 1UL << 30;
         else
-            initial_capacity = ceil_to_pow_2<decltype(initial_capacity)>(num_groups_est / .8);
+            initial_capacity = ceil_to_pow_2<decltype(initial_capacity)>(num_groups_est / .7);
     }
 
 estimation_abort:

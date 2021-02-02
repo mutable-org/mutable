@@ -168,11 +168,9 @@ DB_OPCODE(ShL_i, -1)
 /* Shift left immediate - with operand as argument. */
 DB_OPCODE(ShLi_i, 0, count)
 
-/* Shift logical right immediate - with operand as argument. */
-DB_OPCODE(ShRi_i, 0, count)
-
 /* Shift arithmetical right - with operand as argument. */
 DB_OPCODE(SARi_i, 0, count)
+
 
 /*======================================================================================================================
  * Logical operations

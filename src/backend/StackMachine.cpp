@@ -1219,21 +1219,12 @@ ShLi_i: {
 }
 NEXT;
 
-/* Shift logical right immediate - with operand as argument. */
-ShRi_i: {
-    insist(top_ >= 1);
-    std::size_t count = std::size_t(*op_++);
-    uint64_t val = TOP.as<int64_t>(); // unsigned integer for logical shift
-    TOP = uint64_t(val >> count);
-}
-NEXT;
-
 /* Shift arithmetical right - with operand as argument. */
 SARi_i: {
     insist(top_ >= 1);
     std::size_t count = std::size_t(*op_++);
     int64_t val = TOP.as<int64_t>(); // signed integer for arithmetical shift
-    TOP = uint64_t(val >> count);
+    TOP = int64_t(val >> count);
 }
 NEXT;
 

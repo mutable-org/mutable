@@ -752,7 +752,6 @@ void StackMachine::emit_Cast(const Type *to_ty, const Type *from_ty)
                         return;
                 }
                 break;
-
         }
     } else if (auto cs_from = cast<const CharacterSequence>(from_ty)) {
         insist(to_ty->is_character_sequence()); // XXX any checks necessary?
@@ -770,7 +769,6 @@ void StackMachine::emit_Cast(const Type *to_ty, const Type *from_ty)
             case Numeric::N_Decimal:
                 unreachable("unsupported conversion");
         }
-
     }
 
     unreachable("unsupported conversion");
@@ -867,6 +865,7 @@ Ld_Ctx: {
 NEXT;
 
 Upd_Ctx: {
+    insist(top_ >= 1);
     std::size_t idx = static_cast<std::size_t>(*op_++);
     insist(idx < context_.size(), "index out of bounds");
 #ifndef NDEBUG
@@ -939,6 +938,7 @@ Putc: {
 NEXT;
 
 Print_i: {
+    insist(top_ >= 1);
     std::size_t index = std::size_t(*op_++);
     std::ostream *out = reinterpret_cast<std::ostream*>(context_[index].as_p());
     if (TOP_IS_NULL)
@@ -949,6 +949,7 @@ Print_i: {
 NEXT;
 
 Print_f: {
+    insist(top_ >= 1);
     std::size_t index = std::size_t(*op_++);
     std::ostream *out = reinterpret_cast<std::ostream*>(context_[index].as_p());
     if (TOP_IS_NULL) {
@@ -962,6 +963,7 @@ Print_f: {
 NEXT;
 
 Print_d: {
+    insist(top_ >= 1);
     std::size_t index = std::size_t(*op_++);
     std::ostream *out = reinterpret_cast<std::ostream*>(context_[index].as_p());
     if (TOP_IS_NULL) {
@@ -975,6 +977,7 @@ Print_d: {
 NEXT;
 
 Print_s: {
+    insist(top_ >= 1);
     std::size_t index = std::size_t(*op_++);
     std::ostream *out = reinterpret_cast<std::ostream*>(context_[index].as_p());
     if (TOP_IS_NULL) {
@@ -987,6 +990,7 @@ Print_s: {
 NEXT;
 
 Print_b: {
+    insist(top_ >= 1);
     std::size_t index = std::size_t(*op_++);
     std::ostream *out = reinterpret_cast<std::ostream*>(context_[index].as_p());
     if (TOP_IS_NULL)
@@ -1155,6 +1159,8 @@ Mod_i: BINARY(std::modulus{}, int64_t);
 
 /* Concatenate two strings. */
 Cat_s: {
+    insist(top_ >= 2);
+
     bool rhs_is_null = TOP_IS_NULL;
     Value rhs = TOP;
     POP();

@@ -4,10 +4,10 @@
 POSTGRESQL=psql
 
 { ${POSTGRESQL} -U postgres | grep 'Time' | cut -d ' ' -f 2; } << EOF
-set jit=off;
 DROP DATABASE IF EXISTS benchmark_tmp;
 CREATE DATABASE benchmark_tmp;
 \c benchmark_tmp
+set jit=off;
 CREATE TABLE Attribute_i64 ( id INT, val BIGINT );
 \copy Attribute_i64 FROM 'benchmark/operators/data/Attribute_i64.csv' WITH DELIMITER ',' CSV HEADER;
 \timing on

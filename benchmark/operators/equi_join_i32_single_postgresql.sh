@@ -12,10 +12,10 @@ trap 'exit' INT
 for sf in ${SCALE_FACTORS[@]};
 do
     { ${POSTGRESQL} -U postgres | grep 'Time' | cut -d ' ' -f 2; } << EOF
-set jit=off;
 DROP DATABASE IF EXISTS benchmark_tmp;
 CREATE DATABASE benchmark_tmp;
 \c benchmark_tmp
+set jit=off;
 CREATE TABLE Relation ( id INT PRIMARY KEY, fid INT );
 \copy Relation FROM PROGRAM 'head -n $((NUM_ROWS * sf / 100)) ${CSV}' WITH DELIMITER ',' CSV HEADER;
 \timing on

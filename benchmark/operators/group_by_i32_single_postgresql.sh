@@ -12,10 +12,10 @@ trap 'exit' INT
 for sf in ${SCALE_FACTOR[@]};
 do
     { ${POSTGRESQL} -U postgres | grep 'Time' | cut -d ' ' -f 2; } << EOF
-set jit=off;
 DROP DATABASE IF EXISTS benchmark_tmp;
 CREATE DATABASE benchmark_tmp;
 \c benchmark_tmp
+set jit=off;
 CREATE TABLE Distinct_i32 ( id INT, n1 INT, n10 INT, n100 INT, n1000 INT, n10000 INT, n100000 INT);
 \copy Distinct_i32 FROM PROGRAM 'head -n $((NUM_ROWS * sf / 100)) ${CSV}' WITH DELIMITER ',' CSV HEADER;
 \timing on

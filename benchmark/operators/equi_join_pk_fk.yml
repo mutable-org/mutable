@@ -1,0 +1,70 @@
+description: Foreign key join with key of type INT(4).
+suite: operators
+benchmark: equi_join
+readonly: yes
+pattern: '^Execute query:.*'
+configurations:
+    Interpreter:                 --backend Interpreter
+    'WebAssembly (ColumnStore)': --backend WasmV8 --store ColumnStore
+label: 'Scale factor'
+tables: [ ]
+cases:
+    0.0:
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.0
+    0.1:
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.1
+    0.2:
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.2
+    0.3:
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.3
+    0.4:
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.4
+    0.5:
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.5
+    0.6:
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.6
+    0.7:
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.7
+    0.8:
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.8
+    0.9:
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   0.9
+    1.0:
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        tables:
+            - name: 'Relation'
+              sf:   1.0
+compare_to:
+    'DuckDB': 'benchmark/operators/equi_join_pk_fk_duckdb.sh'
+    'PostgreSQL': 'benchmark/operators/equi_join_pk_fk_postgresql.sh'
+    'HyPer': 'benchmark/operators/equi_join_pk_fk_hyper.py'

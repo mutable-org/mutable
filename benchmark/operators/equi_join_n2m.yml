@@ -1,6 +1,6 @@
-description: Equi-join by single attribute of type INT(4).
+description: n-to-m equi-join with a selectivity of 1e-6
 suite: operators
-benchmark: equi_join-single
+benchmark: equi_join
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:
@@ -10,61 +10,61 @@ label: 'Scale factor'
 tables: [ ]
 cases:
     0.0:
-        query: SELECT 1 FROM Relation R, Relation S WHERE S.id = R.fid;
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
               sf:   0.0
     0.1:
-        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
               sf:   0.1
     0.2:
-        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
               sf:   0.2
     0.3:
-        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
               sf:   0.3
     0.4:
-        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
               sf:   0.4
     0.5:
-        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
               sf:   0.5
     0.6:
-        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
               sf:   0.6
     0.7:
-        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
               sf:   0.7
     0.8:
-        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
               sf:   0.8
     0.9:
-        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
               sf:   0.9
     1.0:
-        query: SELECT 1 FROM Relation R, Relation S WHERE R.id = S.fid;
+        query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
               sf:   1.0
 compare_to:
-    'DuckDB': 'benchmark/operators/equi_join_i32_single_duckdb.sh'
-    'PostgreSQL': 'benchmark/operators/equi_join_i32_single_postgresql.sh'
-    'HyPer': 'benchmark/operators/equi_join_i32_single_hyper.py'
+    'DuckDB': 'benchmark/operators/equi_join_n2m_duckdb.sh'
+    'PostgreSQL': 'benchmark/operators/equi_join_n2m_postgresql.sh'
+    'HyPer': 'benchmark/operators/equi_join_n2m_hyper.py'

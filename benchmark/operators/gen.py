@@ -13,7 +13,8 @@ NUM_TUPLES = 10_000_000
 STRLEN = 10
 OUTPUT_DIR = os.path.join('benchmark', 'operators', 'data')
 NUM_DISTINCT_VALUES = NUM_TUPLES // 10
-JOIN_SELECTIVITY = 1e-8
+FKEY_JOIN_SELECTIVITY = 1e-8
+N_M_JOIN_SELECTIVITY = 1e-6
 
 TYPE_TO_STR = {
         'b':    'BOOL',
@@ -72,8 +73,9 @@ SCHEMA = {
     ],
 
     "Relation": [
-        ( "id",     'i32'),
-        ( "fid",    'i32'),
+        ( 'id',     'i32' ),
+        ( 'fid',    'i32' ),
+        ( 'n2m',    'i32' ),
     ],
 
     "Attributes_multi_b": [
@@ -191,7 +193,7 @@ def gen_column(attr, num_tuples):
     random.seed(hash(name))
 
     if 'fid' in name:
-        num_fids_joining = min(int(JOIN_SELECTIVITY * num_tuples * num_tuples), num_tuples)
+        num_fids_joining = min(int(FKEY_JOIN_SELECTIVITY * num_tuples * num_tuples), num_tuples)
         foreign_keys = [ random.randrange(0, num_tuples) for i in range(num_fids_joining) ]
         foreign_keys.extend([num_tuples] * (num_tuples - num_fids_joining))
         assert len(foreign_keys) == num_tuples
@@ -201,8 +203,10 @@ def gen_column(attr, num_tuples):
     elif 'id' in name:
         print(f'  + Generated column {name} of {num_tuples:,} rows with keys from 0 to {num_tuples-1:,}.')
         return map(str, range(num_tuples))
-
-    if ty == 'b':
+    elif 'n2m' in name: # n to m join
+        num_distinct_values = int(round(1 / N_M_JOIN_SELECTIVITY))
+        values = gen_random_int_values(-2**31 + 1, 2**31, num_distinct_values)
+    elif ty == 'b':
         values = [ 'TRUE', 'FALSE' ]
     elif ty == 'f' or ty == 'd':
         values = [ random.random() for i in range(num_distinct_values) ]

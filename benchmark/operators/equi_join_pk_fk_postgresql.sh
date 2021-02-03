@@ -16,7 +16,7 @@ DROP DATABASE IF EXISTS benchmark_tmp;
 CREATE DATABASE benchmark_tmp;
 \c benchmark_tmp
 set jit=off;
-CREATE TABLE Relation ( id INT PRIMARY KEY, fid INT );
+CREATE TABLE Relation ( id INT PRIMARY KEY, fid INT, n2m INT );
 \copy Relation FROM PROGRAM 'head -n $((NUM_ROWS * sf / 100)) ${CSV}' WITH DELIMITER ',' CSV HEADER;
 \timing on
 SELECT COUNT(*) FROM Relation R, Relation S WHERE R.id = S.fid;

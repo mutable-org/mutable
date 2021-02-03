@@ -11,6 +11,7 @@ if __name__ == '__main__':
             columns = [
                 TableDefinition.Column('id',  SqlType.int(), NOT_NULLABLE),
                 TableDefinition.Column('fid', SqlType.int(), NOT_NULLABLE),
+                TableDefinition.Column('n2m', SqlType.int(), NOT_NULLABLE),
             ]
 
             table_tmp = TableDefinition(

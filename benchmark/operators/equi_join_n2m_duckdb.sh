@@ -12,11 +12,11 @@ trap 'exit' INT
 for sf in ${SCALE_FACTORS[@]};
 do
     { ${DUCKDB} | grep 'Run Time' | cut -d ' ' -f 4 | awk '{print $1 * 1000;}'; } << EOF
-CREATE TABLE tmp ( id INT PRIMARY KEY, fid INT );
+CREATE TABLE tmp ( id INT PRIMARY KEY, fid INT, n2m INT );
 COPY tmp FROM '${CSV}' ( HEADER );
-CREATE TABLE Relation ( id INT PRIMARY KEY, fid INT );
+CREATE TABLE Relation ( id INT PRIMARY KEY, fid INT, n2m INT );
 INSERT INTO Relation SELECT * FROM tmp LIMIT $((NUM_ROWS * sf / 100));
 .timer on
-SELECT COUNT(*) FROM Relation R, Relation S WHERE R.id = S.fid;
+SELECT COUNT(*) FROM Relation R, Relation S WHERE R.n2m = S.n2m;
 EOF
 done

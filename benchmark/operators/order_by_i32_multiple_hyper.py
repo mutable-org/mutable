@@ -29,17 +29,15 @@ if __name__ == '__main__':
             ]
 
             for q in queries:
-                if connection.catalog.has_table(table_def.table_name):
-                    connection.execute_command(f'DROP TABLE {table_def.table_name}')
                 connection.catalog.create_table(table_def)
-                num_rows = connection.execute_command(f'COPY {table_def.table_name} FROM \'benchmark/operators/data/Distinct_i32.csv\' WITH DELIMITER \',\' CSV HEADER')
+                connection.execute_command(f'COPY {table_def.table_name} FROM \'benchmark/operators/data/Distinct_i32.csv\' WITH DELIMITER \',\' CSV HEADER')
                 begin = time.time_ns()
                 with connection.execute_query(q) as result:
-                    i = 0
                     for row in result:
-                        i += 1
+                        pass
                 end = time.time_ns()
                 times.append(end - begin)
+                connection.execute_command(f'DROP TABLE {table_def.table_name}')
 
             for t in times:
                 print(t / 1e6) # in milliseconds

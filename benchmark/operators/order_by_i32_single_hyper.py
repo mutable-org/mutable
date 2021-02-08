@@ -30,24 +30,24 @@ if __name__ == '__main__':
                 table_name='Distinct_i32',
                 columns=columns
             )
-            connection.catalog.create_table(table_def)
 
             query = f'SELECT id FROM {table_def.table_name} ORDER BY n100000'
             scale_factors = numpy.linspace(0, 1, num=11)
             times = list()
 
             for sf in scale_factors:
+                connection.catalog.create_table(table_def)
                 connection.execute_command(f'INSERT INTO {table_def.table_name} SELECT * FROM {table_tmp.table_name} LIMIT {int(num_rows * sf)}')
 
                 begin = time.time_ns()
                 with connection.execute_query(query) as result:
-                    i = 0
                     for row in result:
-                        i += 1
+                        pass
                 end = time.time_ns()
                 times.append(end - begin)
 
                 connection.execute_command(f'DELETE FROM {table_def.table_name}')
+                connection.execute_command(f'DROP TABLE {table_def.table_name}')
 
             for t in times:
                 print(t / 1e6) # in milliseconds

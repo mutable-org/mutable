@@ -712,6 +712,7 @@ BinaryenExpressionRef WasmRefCountingHashTable::create_table(BlockBuilder &block
                                                              std::size_t num_buckets) const
 {
     num_buckets = ceil_to_pow_2(num_buckets);
+    insist(num_buckets <= 1UL << 31, "initial capacity exceeds uint32 type");
     addr_.set(block, b_addr);
     mask_.set(block, BinaryenConst(module, BinaryenLiteralInt32(num_buckets - 1)));
 

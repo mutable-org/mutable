@@ -1054,7 +1054,7 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
         key_IDs.push_back(op.schema()[i].id);
 
     /*----- Allocate hash table. -------------------------------------------------------------------------------------*/
-    uint32_t initial_capacity = 0;
+    std::size_t initial_capacity = 0;
 
     /*--- XXX: Crude hack to do pre-allocation in benchmarks. --------------------------------------------------------*/
     if (not op.group_by().empty()) {
@@ -1078,7 +1078,7 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
             }
         }
         if (num_groups_est > 1e9)
-            initial_capacity = 1UL << 30;
+            initial_capacity = 1e9 / .7;
         else
             initial_capacity = ceil_to_pow_2<decltype(initial_capacity)>(num_groups_est / .7);
     }
@@ -1287,7 +1287,7 @@ estimation_abort:
                 auto b_old_val = ld_slot.get_value(e.id);
                 auto n = as<const Numeric>(e.type);
                 switch (n->kind) {
-                    case Numeric::N_Int: {
+                    case Numeric::N_Int:
                         if (n->size() <= 32) {
                             auto b_less = BinaryenBinary(
                                 /* module= */ module(),
@@ -1320,7 +1320,6 @@ estimation_abort:
                             update_group += data->HT->store_value_to_slot(b_slot_addr, e.id, b_new_val);
                         }
                         break;
-                    }
 
                     case Numeric::N_Decimal:
                         unreachable("not implemented");
@@ -1356,7 +1355,7 @@ estimation_abort:
                 auto b_old_val = ld_slot.get_value(e.id);
                 auto n = as<const Numeric>(e.type);
                 switch (n->kind) {
-                    case Numeric::N_Int: {
+                    case Numeric::N_Int:
                         if (n->size() <= 32) {
                             auto b_greater = BinaryenBinary(
                                 /* module= */ module(),
@@ -1389,7 +1388,6 @@ estimation_abort:
                             update_group += data->HT->store_value_to_slot(b_slot_addr, e.id, b_new_val);
                         }
                         break;
-                    }
 
                     case Numeric::N_Decimal:
                         unreachable("not implemented");

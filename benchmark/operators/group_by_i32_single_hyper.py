@@ -41,7 +41,8 @@ if __name__ == '__main__':
 
                 begin = time.time_ns()
                 with connection.execute_query(query) as result:
-                    pass
+                    for row in result:
+                        pass
                 end = time.time_ns()
                 times.append(end - begin)
 

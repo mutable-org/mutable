@@ -22,22 +22,24 @@ if __name__ == '__main__':
 
             times = list()
             queries = [
-                f'SELECT MIN(n10) FROM {table_def.table_name} GROUP BY n100',
-                f'SELECT MIN(n10), MIN(n1000) FROM {table_def.table_name} GROUP BY n100',
-                f'SELECT MIN(n10), MIN(n1000), MIN(n10000) FROM {table_def.table_name} GROUP BY n100',
-                f'SELECT MIN(n10), MIN(n1000), MIN(n10000), MIN(n100000) FROM {table_def.table_name} GROUP BY n100',
+                f'SELECT MIN(n10) FROM {table_def.table_name} GROUP BY n100000',
+                f'SELECT MIN(n10), MIN(n100) FROM {table_def.table_name} GROUP BY n100000',
+                f'SELECT MIN(n10), MIN(n100), MIN(n1000) FROM {table_def.table_name} GROUP BY n100000',
+                f'SELECT MIN(n10), MIN(n100), MIN(n1000), MIN(n10000) FROM {table_def.table_name} GROUP BY n100000',
             ]
 
             for q in queries:
-                if connection.catalog.has_table(table_def.table_name):
-                    connection.execute_command(f'DROP TABLE {table_def.table_name}')
                 connection.catalog.create_table(table_def)
-                num_rows = connection.execute_command(f'COPY {table_def.table_name} FROM \'benchmark/operators/data/Distinct_i32.csv\' WITH DELIMITER \',\' CSV HEADER')
+                connection.execute_command(f'COPY {table_def.table_name} FROM \'benchmark/operators/data/Distinct_i32.csv\' WITH DELIMITER \',\' CSV HEADER')
+
                 begin = time.time_ns()
                 with connection.execute_query(q) as result:
-                    pass
+                    for row in result:
+                        pass
                 end = time.time_ns()
                 times.append(end - begin)
+
+                connection.execute_command(f'DROP TABLE {table_def.table_name}')
 
             for t in times:
                 print(t / 1e6) # in milliseconds

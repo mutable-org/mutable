@@ -577,85 +577,128 @@ BinaryenExpressionRef WasmHashMumur3_64A::emit(BinaryenModuleRef module, Functio
     /* Inspired by https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp by Austin Appleby.  We use
      * constants from MurmurHash2_64 as reported on https://sites.google.com/site/murmurhash/. */
     insist(values.size() != 0, "cannot compute the hash of an empty sequence of values");
-    const auto m = BinaryenConst(module, BinaryenLiteralInt64(0xc6a4a7935bd1e995LLU));
 
-    WasmVariable h(fn, BinaryenTypeInt64());
     if (values.size() == 1) {
         /* In case of a single 64-bit value, we just run the bit mixer. */
-        h.set(block, reinterpret(module, values[0], BinaryenTypeInt64()));
-    } else {
-        /*  uint64_t h = seed ^ (len * m) */
-        h.set(block, BinaryenConst(module, BinaryenLiteralInt64(0xc6a4a7935bd1e995LLU * values.size())));
+        return WasmBitMixMurmur3{}.emit(module, fn, block, reinterpret(module, values[0], BinaryenTypeInt64()));
+    }
 
-        WasmVariable k(fn, BinaryenTypeInt64());
-        for (auto val : values) {
-            k.set(block, reinterpret(module, val, BinaryenTypeInt64()));
+    if (values.size() == 2) {
+        auto left  = values[0];
+        auto right = values[1];
+        auto ty_left  = BinaryenExpressionGetType(left);
+        auto ty_right = BinaryenExpressionGetType(right);
 
-            /* k = k * m */
-            k.set(block, BinaryenBinary(
-                /* module= */ module,
-                /* op=     */ BinaryenMulInt64(),
-                /* left=   */ k,
-                /* right=  */ m
-            ));
+        std::size_t combined_size = 0;
+        combined_size += (ty_left  == BinaryenTypeInt32() or ty_left  == BinaryenTypeFloat32()) ? 32 : 64;
+        combined_size += (ty_right == BinaryenTypeInt32() or ty_right == BinaryenTypeFloat32()) ? 32 : 64;
 
-            /* k = ROTL32(k, 47); */
-            k.set(block, BinaryenBinary(
-                /* module= */ module,
-                /* op=     */ BinaryenRotLInt64(),
-                /* left=   */ k,
-                /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(47))
-            ));
-
-            /* k = k * m */
-            k.set(block, BinaryenBinary(
-                /* module= */ module,
-                /* op=     */ BinaryenMulInt64(),
-                /* left=   */ k,
-                /* right=  */ m
-            ));
-
-            /* h = h ^ k; */
-            h.set(block, BinaryenBinary(
-                /* module= */ module,
-                /* op=     */ BinaryenXorInt64(),
-                /* left=   */ h,
-                /* right=  */ k
-            ));
-
-            /* h = ROTL32(h, 45); */
-            h.set(block, BinaryenBinary(
-                /* module= */ module,
-                /* op=     */ BinaryenRotLInt64(),
-                /* left=   */ h,
-                /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(45))
-            ));
-
-            /* h = h * 5 + 0xe6546b64 */
-            {
-                auto Mul = BinaryenBinary(
-                    /* module= */ module,
-                    /* op=     */ BinaryenMulInt64(),
-                    /* left=   */ h,
-                    /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(5))
-                );
-                h.set(block, BinaryenBinary(
-                    /* module= */ module,
-                    /* op=     */ BinaryenAddInt64(),
-                    /* left=   */ Mul,
-                    /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(0xe6546b64ULL))
-                ));
-            }
+        if (combined_size <= 64) {
+            auto shl = BinaryenBinary(
+                module,
+                BinaryenShlInt64(),
+                reinterpret(module, left, BinaryenTypeInt64()),
+                BinaryenConst(module, BinaryenLiteralInt64(32))
+            );
+            auto combined = BinaryenBinary(
+                module,
+                BinaryenOrInt64(),
+                shl,
+                reinterpret(module, right, BinaryenTypeInt64())
+            );
+            return WasmBitMixMurmur3{}.emit(module, fn, block, combined);
         }
+    }
 
-        /* h = h ^ len */
+#if 0
+    /* Compute combined size of values. */
+    std::size_t combined_size = 0;
+    for (auto v : values) {
+        auto ty = BinaryenExpressionGetType(v);
+        if (ty == BinaryenTypeInt32() or ty == BinaryenTypeFloat32())
+            combined_size += 4;
+        else
+            combined_size += 8;
+    }
+#endif
+
+    /* TODO: When the combined values fit into a qword, combine them first before hashing. */
+
+    /* General Murmur3. */
+    WasmVariable h(fn, BinaryenTypeInt64());
+    const auto m = BinaryenConst(module, BinaryenLiteralInt64(0xc6a4a7935bd1e995LLU));
+
+    /*  uint64_t h = seed ^ (len * m) */
+    h.set(block, BinaryenConst(module, BinaryenLiteralInt64(0xc6a4a7935bd1e995LLU * values.size())));
+
+    WasmVariable k(fn, BinaryenTypeInt64());
+    for (auto val : values) {
+        k.set(block, reinterpret(module, val, BinaryenTypeInt64()));
+
+        /* k = k * m */
+        k.set(block, BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenMulInt64(),
+            /* left=   */ k,
+            /* right=  */ m
+        ));
+
+        /* k = ROTL32(k, 47); */
+        k.set(block, BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenRotLInt64(),
+            /* left=   */ k,
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(47))
+        ));
+
+        /* k = k * m */
+        k.set(block, BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenMulInt64(),
+            /* left=   */ k,
+            /* right=  */ m
+        ));
+
+        /* h = h ^ k; */
         h.set(block, BinaryenBinary(
             /* module= */ module,
             /* op=     */ BinaryenXorInt64(),
             /* left=   */ h,
-            /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(values.size()))
+            /* right=  */ k
         ));
+
+        /* h = ROTL32(h, 45); */
+        h.set(block, BinaryenBinary(
+            /* module= */ module,
+            /* op=     */ BinaryenRotLInt64(),
+            /* left=   */ h,
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(45))
+        ));
+
+        /* h = h * 5 + 0xe6546b64 */
+        {
+            auto Mul = BinaryenBinary(
+                /* module= */ module,
+                /* op=     */ BinaryenMulInt64(),
+                /* left=   */ h,
+                /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(5))
+            );
+            h.set(block, BinaryenBinary(
+                /* module= */ module,
+                /* op=     */ BinaryenAddInt64(),
+                /* left=   */ Mul,
+                /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(0xe6546b64ULL))
+            ));
+        }
     }
+
+    /* h = h ^ len */
+    h.set(block, BinaryenBinary(
+        /* module= */ module,
+        /* op=     */ BinaryenXorInt64(),
+        /* left=   */ h,
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(values.size()))
+    ));
 
     return WasmBitMixMurmur3{}.emit(module, fn, block, h);
 }

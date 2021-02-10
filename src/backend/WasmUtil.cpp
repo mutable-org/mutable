@@ -11,50 +11,50 @@ using namespace m;
  * WasmCGContext
  *====================================================================================================================*/
 
-BinaryenExpressionRef WasmCGContext::compile(const cnf::CNF &cnf) const
+WasmTemporary WasmCGContext::compile(const cnf::CNF &cnf) const
 {
-    BinaryenExpressionRef b_cnf = nullptr;
+    WasmTemporary wasm_cnf;
     for (auto &clause : cnf) {
-        BinaryenExpressionRef b_clause = nullptr;
+        WasmTemporary wasm_clause;
         for (auto &pred : clause) {
             /* Generate code for the literal of the predicate. */
-            auto b_pred = compile(*pred.expr());
+            WasmTemporary wasm_pred = compile(*pred.expr());
             /* If the predicate is negative, negate the outcome by computing `1 - pred`. */
             if (pred.negative()) {
-                b_pred = BinaryenBinary(
+                wasm_pred = BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenSubInt32(),
                     /* left=   */ BinaryenConst(module(), BinaryenLiteralInt32(1)),
-                    /* right=  */ b_pred
+                    /* right=  */ wasm_pred
                 );
             }
             /* Add the predicate to the clause with an `or`. */
-            if (b_clause) {
-                b_clause = BinaryenBinary(
+            if (wasm_clause.is()) {
+                wasm_clause = BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenOrInt32(),
-                    /* left=   */ b_clause,
-                    /* right=  */ b_pred
+                    /* left=   */ wasm_clause,
+                    /* right=  */ wasm_pred
                 );
             } else {
-                b_clause = b_pred;
+                wasm_clause = std::move(wasm_pred);
             }
         }
         /* Add the clause to the CNF with an `and`. */
-        if (b_cnf) {
-            b_cnf = BinaryenBinary(
+        if (wasm_cnf.is()) {
+            wasm_cnf = BinaryenBinary(
                 /* module= */ module(),
                 /* op=     */ BinaryenAndInt32(),
-                /* left=   */ b_cnf,
-                /* right=  */ b_clause
+                /* left=   */ wasm_cnf,
+                /* right=  */ wasm_clause
             );
         } else {
-            b_cnf = b_clause;
+            wasm_cnf = std::move(wasm_clause);
         }
     }
-    insist(b_cnf, "empty CNF?");
+    insist(wasm_cnf.is(), "empty CNF?");
 
-    return b_cnf;
+    return wasm_cnf;
 }
 
 void WasmCGContext::dump(std::ostream &out) const
@@ -63,12 +63,12 @@ void WasmCGContext::dump(std::ostream &out) const
     out << "  null values:\n";
     for (auto &e : nulls_) {
         out << "    " << e.first << ":\n";
-        BinaryenExpressionPrint(e.second);
+        BinaryenExpressionPrint(e.second.clone(module()));
     }
     out << "  attribute values:\n";
     for (auto &e : values_) {
         out << "    " << e.first << ":\n";
-        BinaryenExpressionPrint(e.second);
+        BinaryenExpressionPrint(e.second.clone(module()));
     }
     out << std::endl;
 }
@@ -96,7 +96,7 @@ void WasmCGContext::operator()(const Designator &e)
         }
     }
     insist(it != values_.end(), "no value for the given designator");
-    expr_ = it->second;
+    expr_ = it->second.clone(module());
 }
 
 void WasmCGContext::operator()(const Constant &e)
@@ -228,14 +228,12 @@ void WasmCGContext::operator()(const UnaryExpr &e)
 
 void WasmCGContext::operator()(const BinaryExpr &e)
 {
-    expr_ = nullptr;
     (*this)(*e.lhs);
-    auto lhs = expr_;
-    insist(lhs);
-    expr_ = nullptr;
+    auto lhs = std::move(expr_);
+    insist(lhs.is());
     (*this)(*e.rhs);
-    auto rhs = expr_;
-    insist(rhs);
+    auto rhs = std::move(expr_);
+    insist(rhs.is());
 
 #define BINARY_OP(OP, TYPE) \
     expr_ = BinaryenBinary(/* module= */ module(), \
@@ -246,8 +244,8 @@ void WasmCGContext::operator()(const BinaryExpr &e)
 #define BINARY(OP) \
 { \
     auto n = as<const Numeric>(e.type()); \
-    lhs = convert(module(), lhs, as<const Numeric>(e.lhs->type()), n); \
-    rhs = convert(module(), rhs, as<const Numeric>(e.rhs->type()), n); \
+    lhs = convert(module(), std::move(lhs), as<const Numeric>(e.lhs->type()), n); \
+    rhs = convert(module(), std::move(rhs), as<const Numeric>(e.rhs->type()), n); \
     switch (n->kind) { \
         case Numeric::N_Int: \
         case Numeric::N_Decimal: { \
@@ -273,8 +271,8 @@ void WasmCGContext::operator()(const BinaryExpr &e)
     auto n_lhs = as<const Numeric>(e.lhs->type()); \
     auto n_rhs = as<const Numeric>(e.rhs->type()); \
     auto n = arithmetic_join(n_lhs, n_rhs); \
-    lhs = convert(module(), lhs, n_lhs, n); \
-    rhs = convert(module(), rhs, n_rhs, n); \
+    lhs = convert(module(), std::move(lhs), n_lhs, n); \
+    rhs = convert(module(), std::move(rhs), n_rhs, n); \
     switch (n->kind) { \
         case Numeric::N_Int: \
         case Numeric::N_Decimal: { \
@@ -373,7 +371,7 @@ void WasmCGContext::operator()(const QueryExpr &e) {
     Catalog &C = Catalog::Get();
     auto it = values_.find({e.alias(), C.pool("$res")});
     insist(it != values_.end(), "no value for the given designator");
-    expr_ = it->second;
+    expr_ = it->second.clone(module());
 }
 
 
@@ -426,132 +424,97 @@ void FunctionBuilder::dump() const { dump(std::cerr); }
  * WasmCompare
  *====================================================================================================================*/
 
-BinaryenExpressionRef WasmCompare::emit(FunctionBuilder &fn, BlockBuilder &block,
-                                        const WasmCGContext &left, const WasmCGContext &right)
+WasmTemporary WasmCompare::emit(FunctionBuilder &fn, BlockBuilder &block,
+                                const WasmCGContext &left, const WasmCGContext &right)
 {
-    BinaryenExpressionRef b_cmp = nullptr;
+    WasmTemporary val_cmp;
 
     for (auto &o : order) {
-        auto b_left  = left.compile(*o.first);
-        auto b_right = right.compile(*o.first);
-        BinaryenExpressionRef b_lt, b_gt;
+        WasmVariable val_left (fn, get_binaryen_type(o.first->type()));
+        WasmVariable val_right(fn, get_binaryen_type(o.first->type()));
+        val_left .set(left .compile(*o.first));
+        val_right.set(right.compile(*o.first));
 
+        WasmTemporary val_lt, val_gt;
         auto n = as<const Numeric>(o.first->type());
         switch (n->kind) {
             case Numeric::N_Int:
-            case Numeric::N_Decimal:
-                if (n->size() <= 32) {
-                    b_lt = BinaryenBinary(
-                        /* module= */ module_,
-                        /* op=     */ BinaryenLtSInt32(),
-                        /* left=   */ b_left,
-                        /* right=  */ b_right
-                    );
-                    b_gt = BinaryenBinary(
-                        /* module= */ module_,
-                        /* op=     */ BinaryenGtSInt32(),
-                        /* left=   */ b_left,
-                        /* right=  */ b_right
-                    );
-                } else {
-                    b_lt = BinaryenBinary(
-                        /* module= */ module_,
-                        /* op=     */ BinaryenLtSInt64(),
-                        /* left=   */ b_left,
-                        /* right=  */ b_right
-                    );
-                    b_gt = BinaryenBinary(
-                        /* module= */ module_,
-                        /* op=     */ BinaryenGtSInt64(),
-                        /* left=   */ b_left,
-                        /* right=  */ b_right
-                    );
-                }
+            case Numeric::N_Decimal: {
+                val_lt = BinaryenBinary(
+                    /* module= */ module_,
+                    /* op=     */ n->size() <= 32 ? BinaryenLtSInt32() : BinaryenLtSInt64(),
+                    /* left=   */ val_left,
+                    /* right=  */ val_right
+                );
+                val_gt = BinaryenBinary(
+                    /* module= */ module_,
+                    /* op=     */ n->size() <= 32 ? BinaryenGtSInt32() : BinaryenGtSInt64(),
+                    /* left=   */ val_left,
+                    /* right=  */ val_right
+                );
                 break;
+            }
 
-            case Numeric::N_Float:
-                if (n->size() == 32) {
-                    b_lt = BinaryenBinary(
-                        /* module= */ module_,
-                        /* op=     */ BinaryenLtFloat32(),
-                        /* left=   */ b_left,
-                        /* right=  */ b_right
-                    );
-                    b_gt = BinaryenBinary(
-                        /* module= */ module_,
-                        /* op=     */ BinaryenGtFloat32(),
-                        /* left=   */ b_left,
-                        /* right=  */ b_right
-                    );
-                } else {
-                    b_lt = BinaryenBinary(
-                        /* module= */ module_,
-                        /* op=     */ BinaryenLtFloat64(),
-                        /* left=   */ b_left,
-                        /* right=  */ b_right
-                    );
-                    b_gt = BinaryenBinary(
-                        /* module= */ module_,
-                        /* op=     */ BinaryenGtFloat64(),
-                        /* left=   */ b_left,
-                        /* right=  */ b_right
-                    );
-                }
+            case Numeric::N_Float: {
+                val_lt = BinaryenBinary(
+                    /* module= */ module_,
+                    /* op=     */ n->size() == 32 ? BinaryenLtFloat32() : BinaryenLtFloat64(),
+                    /* left=   */ val_left,
+                    /* right=  */ val_right
+                );
+                val_gt = BinaryenBinary(
+                    /* module= */ module_,
+                    /* op=     */ n->size() == 32 ? BinaryenGtFloat32() : BinaryenGtFloat64(),
+                    /* left=   */ val_left,
+                    /* right=  */ val_right
+                );
                 break;
+            }
         }
 
-        /* Ascending: b_gt - b_lt, Descending: b_lt - b_gt */
-        auto b_sub = BinaryenBinary(
+        /* Ascending: val_gt - val_lt, Descending: val_lt - val_gt */
+        WasmTemporary val_sub = BinaryenBinary(
             /* module= */ module_,
             /* op=     */ BinaryenSubInt32(),
-            /* left=   */ o.second ? b_gt : b_lt,
-            /* right=  */ o.second ? b_lt : b_gt
+            /* left=   */ o.second ? val_gt : val_lt,
+            /* right=  */ o.second ? val_lt : val_gt
         );
-        if (b_cmp) {
+        if (val_cmp.is()) {
             /*----- Update the comparison variable. ------------------------------------------------------------------*/
-            auto b_shifted = BinaryenBinary(
+            WasmTemporary val_shifted = BinaryenBinary(
                 /* module= */ module_,
                 /* op=     */ BinaryenShlInt32(),
-                /* left=   */ b_cmp,
+                /* left=   */ val_cmp,
                 /* right=  */ BinaryenConst(module_, BinaryenLiteralInt32(1))
             );
-            auto b_upd = BinaryenBinary(
+            val_cmp = BinaryenBinary(
                 /* module= */ module_,
                 /* op=     */ BinaryenAddInt32(),
-                /* left=   */ b_shifted,
-                /* right=  */ b_sub
-            );
-            block += BinaryenLocalSet(
-                /* module= */ module_,
-                /* index=  */ BinaryenLocalGetGetIndex(b_cmp),
-                /* value=  */ b_upd
+                /* left=   */ val_shifted,
+                /* right=  */ val_sub
             );
         } else {
-            b_cmp = fn.add_local(BinaryenTypeInt32());
-            block += BinaryenLocalSet(
-                /* module= */ module_,
-                /* index=  */ BinaryenLocalGetGetIndex(b_cmp),
-                /* value=  */ b_sub
-            );
+            val_cmp =  std::move(val_sub);
         }
     }
 
-    return b_cmp;
+    return val_cmp;
 }
 
-BinaryenExpressionRef WasmCompare::Eq(BinaryenModuleRef module, const Type &ty,
-                                      BinaryenExpressionRef left, BinaryenExpressionRef right)
+WasmTemporary WasmCompare::Eq(BinaryenModuleRef module, const Type &ty, WasmTemporary left, WasmTemporary right)
 {
     struct V : ConstTypeVisitor
     {
         BinaryenModuleRef module;
-        BinaryenExpressionRef left, right, cmp;
+        WasmTemporary left, right, cmp;
 
-        V(BinaryenModuleRef module, BinaryenExpressionRef left, BinaryenExpressionRef right)
+        V(BinaryenModuleRef module, WasmTemporary left, WasmTemporary right)
             : module(module)
-            , left(left)
-            , right(right)
+            , left(std::move(left))
+            , right(std::move(right))
         { }
+
+        WasmTemporary get() { return std::move(cmp); }
 
         using ConstTypeVisitor::operator();
         void operator()(Const<ErrorType>&) { unreachable("not allowed"); }
@@ -609,24 +572,26 @@ BinaryenExpressionRef WasmCompare::Eq(BinaryenModuleRef module, const Type &ty,
         void operator()(Const<FnType>&) { unreachable("not allowed"); }
     };
 
-    V v(module, left, right);
+    V v(module, std::move(left), std::move(right));
     v(ty);
-    return v.cmp;
+    return v.get();
 }
 
-BinaryenExpressionRef WasmCompare::Ne(BinaryenModuleRef module, const Type &ty,
-                                      BinaryenExpressionRef left, BinaryenExpressionRef right)
+WasmTemporary WasmCompare::Ne(BinaryenModuleRef module, const Type &ty,
+                                      WasmTemporary left, WasmTemporary right)
 {
     struct V : ConstTypeVisitor
     {
         BinaryenModuleRef module;
-        BinaryenExpressionRef left, right, cmp;
+        WasmTemporary left, right, cmp;
 
-        V(BinaryenModuleRef module, BinaryenExpressionRef left, BinaryenExpressionRef right)
+        V(BinaryenModuleRef module, WasmTemporary left, WasmTemporary right)
             : module(module)
-            , left(left)
-            , right(right)
+            , left(std::move(left))
+            , right(std::move(right))
         { }
+
+        WasmTemporary get() { return std::move(cmp); }
 
         using ConstTypeVisitor::operator();
         void operator()(Const<ErrorType>&) { unreachable("not allowed"); }
@@ -684,9 +649,9 @@ BinaryenExpressionRef WasmCompare::Ne(BinaryenModuleRef module, const Type &ty,
         void operator()(Const<FnType>&) { unreachable("not allowed"); }
     };
 
-    V v(module, left, right);
+    V v(module, std::move(left), std::move(right));
     v(ty);
-    return v.cmp;
+    return v.get();
 }
 
 
@@ -694,11 +659,15 @@ BinaryenExpressionRef WasmCompare::Ne(BinaryenModuleRef module, const Type &ty,
  * WasmSwap
  *====================================================================================================================*/
 
-void WasmSwap::emit(BlockBuilder &block, const WasmStruct &struc,
-                    BinaryenExpressionRef b_first, BinaryenExpressionRef b_second)
+void WasmSwap::emit(BlockBuilder &block, const WasmStruct &struc, WasmTemporary ptr_first, WasmTemporary ptr_second)
 {
-    auto context_first  = struc.create_load_context(b_first);
-    auto context_second = struc.create_load_context(b_second);
+    WasmVariable first (fn, BinaryenTypeInt32());
+    WasmVariable second(fn, BinaryenTypeInt32());
+    block += first .set(std::move(ptr_first ));
+    block += second.set(std::move(ptr_second));
+
+    auto context_first  = struc.create_load_context(first);
+    auto context_second = struc.create_load_context(second);
 
     for (auto &attr : struc.schema) {
         BinaryenType b_attr_type = get_binaryen_type(attr.type);
@@ -708,18 +677,18 @@ void WasmSwap::emit(BlockBuilder &block, const WasmStruct &struc,
         auto it = swap_temp.find(b_attr_type);
         if (it == swap_temp.end())
             it = swap_temp.emplace_hint(it, b_attr_type, fn.add_local(b_attr_type));
-        auto b_swap = it->second;
+        auto idx_swap = it->second;
 
         /* tmp = *first */
         block += BinaryenLocalSet(
             /* module= */ module,
-            /* index=  */ BinaryenLocalGetGetIndex(b_swap),
+            /* index=  */ idx_swap,
             /* value=  */ context_first.get_value(attr.id)
         );
         /* *second = *first */
-        block += struc.store(b_first, attr.id, context_second.get_value(attr.id));
+        block += struc.store(first, attr.id, context_second.get_value(attr.id));
         /* *first = tmp */
-        block += struc.store(b_second, attr.id, b_swap);
+        block += struc.store(second, attr.id, BinaryenLocalGet(module, idx_swap, b_attr_type));
     }
 }
 

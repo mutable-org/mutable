@@ -29,10 +29,9 @@ struct WasmPartition
      * \param b_end     the address one after the last tuple
      * \param b_pivot   the address of the pivot element
      */
-    virtual BinaryenExpressionRef emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                                       const WasmStruct &struc, const std::vector<order_type> &order,
-                                       BinaryenExpressionRef b_begin, BinaryenExpressionRef b_end,
-                                       BinaryenExpressionRef b_pivot) const = 0;
+    virtual WasmTemporary emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
+                               const WasmStruct &struc, const std::vector<order_type> &order,
+                               WasmTemporary begin, WasmTemporary end, WasmTemporary pivot) const = 0;
 };
 
 /** Emits a function to perform partitioning of an array of comparable elements using conditional branches.
@@ -51,10 +50,9 @@ struct WasmPartition
  */
 struct WasmPartitionBranching : WasmPartition
 {
-    BinaryenExpressionRef emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                               const WasmStruct &struc, const std::vector<order_type> &order,
-                               BinaryenExpressionRef b_begin, BinaryenExpressionRef b_end,
-                               BinaryenExpressionRef b_pivot) const override;
+    WasmTemporary emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
+                       const WasmStruct &struc, const std::vector<order_type> &order,
+                       WasmTemporary begin, WasmTemporary end, WasmTemporary pivot) const override;
 };
 
 /** Emits a function to perform partitioning of an array of comparable elements without conditional branches.  This is
@@ -62,10 +60,9 @@ struct WasmPartitionBranching : WasmPartition
  */
 struct WasmPartitionBranchless : WasmPartition
 {
-    BinaryenExpressionRef emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                               const WasmStruct &struc, const std::vector<order_type> &order,
-                               BinaryenExpressionRef b_begin, BinaryenExpressionRef b_end,
-                               BinaryenExpressionRef b_pivot) const override;
+    WasmTemporary emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
+                       const WasmStruct &struc, const std::vector<order_type> &order,
+                       WasmTemporary begin, WasmTemporary end, WasmTemporary pivot) const override;
 };
 
 
@@ -102,14 +99,14 @@ struct WasmBitMix
 {
     virtual ~WasmBitMix() { }
 
-    virtual BinaryenExpressionRef emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                                       BinaryenExpressionRef bits) const = 0;
+    virtual WasmTemporary emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
+                               WasmTemporary bits) const = 0;
 };
 
 struct WasmBitMixMurmur3 : WasmBitMix
 {
-    BinaryenExpressionRef emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                               BinaryenExpressionRef bits) const override;
+    WasmTemporary emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
+                       WasmTemporary bits) const override;
 };
 
 
@@ -121,14 +118,14 @@ struct WasmHash
 {
     virtual ~WasmHash() { }
 
-    virtual BinaryenExpressionRef emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                                       const std::vector<BinaryenExpressionRef> &values) const = 0;
+    virtual WasmTemporary emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
+                               const std::vector<WasmTemporary> &values) const = 0;
 };
 
 struct WasmHashMumur3_64A : WasmHash
 {
-    BinaryenExpressionRef emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                               const std::vector<BinaryenExpressionRef> &values) const override;
+    WasmTemporary emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
+                       const std::vector<WasmTemporary> &values) const override;
 };
 
 
@@ -158,57 +155,52 @@ struct WasmHashTable
      * @param num_buckets   the number of initial buckets to allocate
      * @return              the address immediately after the hash table
      * */
-    virtual BinaryenExpressionRef create_table(BlockBuilder &block,
-                                               BinaryenExpressionRef b_addr, std::size_t num_buckets) const = 0;
+    virtual WasmTemporary create_table(BlockBuilder &block, WasmTemporary addr, std::size_t num_buckets) const = 0;
 
     /** Overwrite each slot in the hash table with `values`. */
-    virtual void clear_table(BlockBuilder &block, BinaryenExpressionRef b_begin, BinaryenExpressionRef b_end) const = 0;
+    virtual void clear_table(BlockBuilder &block, WasmTemporary begin, WasmTemporary end) const = 0;
 
     /** Given the `hash` of an element, returns the location of its preferred bucket in the hash table. */
-    virtual BinaryenExpressionRef hash_to_bucket(BinaryenExpressionRef b_hash) const = 0;
+    virtual WasmTemporary hash_to_bucket(WasmTemporary hash) const = 0;
 
     /** Given a bucket address, locate a key inside the bucket.  Returns the address of the slot where the key is found
      * together with the number of probing steps performed.  If the key is not found, the address of the first slot that
      * is unoccupied is returned instead. */
-    virtual std::pair<BinaryenExpressionRef, BinaryenExpressionRef>
-    find_in_bucket(BlockBuilder &block, BinaryenExpressionRef b_bucket_addr,
-                   const std::vector<BinaryenExpressionRef> &key) const = 0;
+    virtual std::pair<WasmTemporary, WasmTemporary>
+    find_in_bucket(BlockBuilder &block, WasmTemporary b_bucket_addr, const std::vector<WasmTemporary> &key) const = 0;
 
     /** Evaluates to `1` iff the slot is empty (i.e. not occupied). */
-    virtual BinaryenExpressionRef is_slot_empty(BinaryenExpressionRef b_slot_addr) const = 0;
+    virtual WasmTemporary is_slot_empty(WasmTemporary b_slot_addr) const = 0;
 
-    virtual BinaryenExpressionRef compare_key(BinaryenExpressionRef b_slot_addr,
-                                              const std::vector<Schema::Identifier> &IDs,
-                                              const std::vector<BinaryenExpressionRef> &key) const = 0;
+    virtual WasmTemporary compare_key(WasmTemporary slot_addr,
+                                      const std::vector<Schema::Identifier> &IDs,
+                                      const std::vector<WasmTemporary> &key) const = 0;
 
     /** Inserts a new entry into the bucket at `b_bucket_addr` by updating the bucket's probe length to `b_steps`,
      * marking the slot at `b_slot_addr` occupied, and placing the key in this slot. */
-    virtual void emplace(BlockBuilder &block,
-                         BinaryenExpressionRef b_bucket_addr, BinaryenExpressionRef b_steps,
-                         BinaryenExpressionRef b_slot_addr,
-                         const std::vector<Schema::Identifier> &IDs,
-                         const std::vector<BinaryenExpressionRef> &key) const = 0;
+    virtual void emplace(BlockBuilder &block, WasmTemporary bucket_addr, WasmTemporary steps, WasmTemporary slot_addr,
+                         const std::vector<Schema::Identifier> &IDs, const std::vector<WasmTemporary> &key) const = 0;
 
     /** Creates a `WasmCGContext` to load values from the slot at `b_slot_addr`. */
-    virtual WasmCGContext load_from_slot(BinaryenExpressionRef b_slot_addr) const = 0;
+    virtual WasmCGContext load_from_slot(WasmTemporary slot_addr) const = 0;
 
-    /** Creates a `BinaryenExpressionRef` to store the value `b_value` as position `id` in the slot at `b_slot_addr`. */
-    virtual BinaryenExpressionRef store_value_to_slot(BinaryenExpressionRef b_slot_addr, Schema::Identifier id,
-                                                      BinaryenExpressionRef b_value) const = 0;
+    /** Creates a `WasmTemporary` to store the value `b_value` as position `id` in the slot at `b_slot_addr`. */
+    virtual WasmTemporary store_value_to_slot(WasmTemporary slot_addr, Schema::Identifier id,
+                                              WasmTemporary value) const = 0;
 
     /** Given the address of a slot `b_slot_addr`, compute the address of the next slot.  That is, the address of the
      * slot immediately after `b_slot_addr`. */
-    virtual BinaryenExpressionRef compute_next_slot(BinaryenExpressionRef b_slot_addr) const = 0;
+    virtual WasmTemporary compute_next_slot(WasmTemporary slot_addr) const = 0;
 
-    virtual BinaryenExpressionRef insert_with_duplicates(BlockBuilder &block,
-                                                         BinaryenExpressionRef b_hash,
-                                                         const std::vector<Schema::Identifier> &IDs,
-                                                         const std::vector<BinaryenExpressionRef> &key) const = 0;
+    virtual WasmTemporary insert_with_duplicates(BlockBuilder &block,
+                                                 WasmTemporary hash,
+                                                 const std::vector<Schema::Identifier> &IDs,
+                                                 const std::vector<WasmTemporary> &key) const = 0;
 
-    virtual BinaryenExpressionRef insert_without_duplicates(BlockBuilder &block,
-                                                            BinaryenExpressionRef b_hash,
-                                                            const std::vector<Schema::Identifier> &IDs,
-                                                            const std::vector<BinaryenExpressionRef> &key) const = 0;
+    virtual WasmTemporary insert_without_duplicates(BlockBuilder &block,
+                                                    WasmTemporary hash,
+                                                    const std::vector<Schema::Identifier> &IDs,
+                                                    const std::vector<WasmTemporary> &key) const = 0;
 
     virtual BinaryenFunctionRef rehash(WasmHash &hasher,
                                        const std::vector<Schema::Identifier> &key_ids,
@@ -235,62 +227,58 @@ struct WasmRefCountingHashTable : WasmHashTable
 
     /** Create a WasmHashTable instance from an existing hash table. */
     WasmRefCountingHashTable(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                             const WasmStruct &struc, BinaryenExpressionRef b_addr, BinaryenExpressionRef b_mask)
+                             const WasmStruct &struc, WasmTemporary addr, WasmTemporary mask)
         : WasmHashTable(module, fn, struc)
         , addr_(fn, BinaryenTypeInt32())
         , mask_(fn, BinaryenTypeInt32())
         , entry_size_(round_up_to_multiple<std::size_t>(REFERENCE_SIZE + struc.size(), 4))
     {
-        addr_.set(block, b_addr);
-        mask_.set(block, b_mask);
+        block += addr_.set(std::move(addr));
+        block += mask_.set(std::move(mask));
     }
 
-    BinaryenExpressionRef create_table(BlockBuilder &block,
-                                       BinaryenExpressionRef b_addr, std::size_t num_buckets) const override;
+    WasmTemporary create_table(BlockBuilder &block, WasmTemporary addr, std::size_t num_buckets) const override;
 
-    void clear_table(BlockBuilder &block, BinaryenExpressionRef b_begin, BinaryenExpressionRef b_end) const override;
+    void clear_table(BlockBuilder &block, WasmTemporary begin, WasmTemporary end) const override;
 
-    BinaryenExpressionRef hash_to_bucket(BinaryenExpressionRef b_hash) const override;
+    WasmTemporary hash_to_bucket(WasmTemporary hash) const override;
 
-    std::pair<BinaryenExpressionRef, BinaryenExpressionRef>
-    find_in_bucket(BlockBuilder &block, BinaryenExpressionRef b_bucket_addr,
-                   const std::vector<BinaryenExpressionRef> &key) const override;
+    std::pair<WasmTemporary, WasmTemporary>
+    find_in_bucket(BlockBuilder &block, WasmTemporary b_bucket_addr,
+                   const std::vector<WasmTemporary> &key) const override;
 
-    BinaryenExpressionRef is_slot_empty(BinaryenExpressionRef b_slot_addr) const override;
+    WasmTemporary is_slot_empty(WasmTemporary b_slot_addr) const override;
 
-    BinaryenExpressionRef compare_key(BinaryenExpressionRef b_slot_addr,
-                                      const std::vector<Schema::Identifier> &IDs,
-                                      const std::vector<BinaryenExpressionRef> &key) const override;
+    WasmTemporary compare_key(WasmTemporary slot_addr,
+                              const std::vector<Schema::Identifier> &IDs,
+                              const std::vector<WasmTemporary> &key) const override;
 
-    void emplace(BlockBuilder &block,
-                 BinaryenExpressionRef b_bucket_addr, BinaryenExpressionRef b_steps,
-                 BinaryenExpressionRef b_slot_addr,
-                 const std::vector<Schema::Identifier> &IDs,
-                 const std::vector<BinaryenExpressionRef> &key) const override;
+    void emplace(BlockBuilder &block, WasmTemporary bucket_addr, WasmTemporary steps, WasmTemporary slot_addr,
+                 const std::vector<Schema::Identifier> &IDs, const std::vector<WasmTemporary> &key) const override;
 
-    WasmCGContext load_from_slot(BinaryenExpressionRef b_slot_addr) const override;
+    WasmCGContext load_from_slot(WasmTemporary slot_addr) const override;
 
-    BinaryenExpressionRef store_value_to_slot(BinaryenExpressionRef b_slot_addr, Schema::Identifier id,
-                                              BinaryenExpressionRef b_value) const override;
+    WasmTemporary store_value_to_slot(WasmTemporary slot_addr, Schema::Identifier id,
+                                      WasmTemporary value) const override;
 
-    BinaryenExpressionRef compute_next_slot(BinaryenExpressionRef b_slot_addr) const override;
+    WasmTemporary compute_next_slot(WasmTemporary slot_addr) const override;
 
     const WasmVariable & addr() const { return addr_; }
     const WasmVariable & mask() const { return mask_; }
 
     std::size_t entry_size() const { return entry_size_; }
 
-    BinaryenExpressionRef get_bucket_ref_count(BinaryenExpressionRef b_bucket_addr) const;
+    WasmTemporary get_bucket_ref_count(WasmTemporary b_bucket_addr) const;
 
-    BinaryenExpressionRef insert_with_duplicates(BlockBuilder &block,
-                                                 BinaryenExpressionRef b_hash,
-                                                 const std::vector<Schema::Identifier> &IDs,
-                                                 const std::vector<BinaryenExpressionRef> &key) const override;
+    WasmTemporary insert_with_duplicates(BlockBuilder &block,
+                                         WasmTemporary hash,
+                                         const std::vector<Schema::Identifier> &IDs,
+                                         const std::vector<WasmTemporary> &key) const override;
 
-    BinaryenExpressionRef insert_without_duplicates(BlockBuilder &block,
-                                                    BinaryenExpressionRef b_hash,
-                                                    const std::vector<Schema::Identifier> &IDs,
-                                                    const std::vector<BinaryenExpressionRef> &key) const override;
+    WasmTemporary insert_without_duplicates(BlockBuilder &block,
+                                            WasmTemporary hash,
+                                            const std::vector<Schema::Identifier> &IDs,
+                                            const std::vector<WasmTemporary> &key) const override;
 
     BinaryenFunctionRef rehash(WasmHash &hasher,
                                const std::vector<Schema::Identifier> &key_ids,

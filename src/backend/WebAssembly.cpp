@@ -78,7 +78,6 @@ struct WasmCodeGen : ConstOperatorVisitor
     private:
     WasmModule &module_; ///< the WASM module
     FunctionBuilder main_; ///< the main function (or entry)
-    std::unordered_map<std::string, BinaryenExpressionRef> imports_; ///< output locations of columns
     WasmVariable head_of_heap_; ///< address to the head of the heap
     WasmVariable num_tuples_; ///< number of result tuples produced
 
@@ -107,19 +106,12 @@ struct WasmCodeGen : ConstOperatorVisitor
     /** Returns the local variable holding the address to the head of the heap. */
     const WasmVariable & head_of_heap() const { return head_of_heap_; }
 
-    /** Creates a new local and returns an expression accessing this fresh local. */
-    BinaryenExpressionRef add_local(BinaryenType ty) { return main_.add_local(ty); }
+    /** Creates a new local and returns it as a `WasmVariable`. */
+    WasmVariable add_local(BinaryenType ty) { return WasmVariable(main_, ty); }
 
-    /** Adds a global import to the module.  If the import is mutable, the value of the global is copied over into a
-     * fresh local variable.  (This is a work-around, since global imports cannot be mutable.)
-     * \param name          the name of the imported value
-     * \param ty            the type of the imported value
-     * \param is_mutable    whether the imported value is mutable
-     * \returns a BinaryenExpressionRef with the value of the global
-     */
-    BinaryenExpressionRef add_import(std::string name, BinaryenType ty) {
-        auto it = imports_.find(name);
-        if (it == imports_.end()) {
+    /** Adds a global import to the module.  */
+    void import(std::string name, BinaryenType ty) {
+        if (not BinaryenGetGlobal(module(), name.c_str())) {
             BinaryenAddGlobalImport(
                 /* module=             */ module(),
                 /* internalName=       */ name.c_str(),
@@ -128,35 +120,22 @@ struct WasmCodeGen : ConstOperatorVisitor
                 /* type=               */ ty,
                 /* mutable=            */ false
             );
-            auto b_global = BinaryenGlobalGet(
-                /* module= */ module(),
-                /* name=   */ name.c_str(),
-                /* type=   */ ty
-            );
-            it = imports_.emplace_hint(it, name, b_global);
         }
-        return it->second;
     }
 
-    /** Returns the local variable that is initialized with the imported global of the given `name`. */
-    BinaryenExpressionRef get_import(const std::string &name) const {
-        auto it = imports_.find(name);
-        insist(it != imports_.end(), "no import with the given name");
-        return it->second;
+    /** Returns the value of the global with the given `name`. */
+    WasmTemporary get_imported(const std::string &name, BinaryenType ty) const {
+        return BinaryenGlobalGet(module_.ref(), name.c_str(), ty);
     }
 
-    BinaryenExpressionRef inc_num_tuples(int32_t n = 1) {
-        auto b_inc = BinaryenBinary(
+    WasmTemporary inc_num_tuples(int32_t n = 1) {
+        WasmTemporary inc = BinaryenBinary(
             /* module= */ module(),
             /* op=     */ BinaryenAddInt32(),
             /* lhs=    */ num_tuples_,
             /* rhs=    */ BinaryenConst(module(), BinaryenLiteralInt32(n))
         );
-        return BinaryenLocalSet(
-            /* module= */ module(),
-            /* index=  */ BinaryenLocalGetGetIndex(num_tuples_),
-            /* value=  */ b_inc
-        );
+        return num_tuples_.set(std::move(inc));
     }
 
     void align_head_of_heap(BlockBuilder &block) {
@@ -172,7 +151,7 @@ struct WasmCodeGen : ConstOperatorVisitor
             /* left=   */ b_head_inc,
             /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(~(int32_t(WasmPlatform::WASM_ALIGNMENT) - 1)))
         );
-        head_of_heap().set(block, b_head_aligned);
+        block += head_of_heap().set(b_head_aligned);
     }
     void align_head_of_heap() { align_head_of_heap(main_.block()); }
 
@@ -216,7 +195,7 @@ struct WasmPipelineCG : ConstOperatorVisitor
     BinaryenModuleRef module() { return CG.module(); }
 
     /** Compiles the pipeline of the given producer to a WASM block. */
-    static BinaryenExpressionRef compile(const Producer &prod, WasmCodeGen &CG, const char *name) {
+    static WasmTemporary compile(const Producer &prod, WasmCodeGen &CG, const char *name) {
         WasmPipelineCG P(CG, name);
         P(prod);
         return P.block_.finalize();
@@ -294,7 +273,8 @@ WasmModule WasmCodeGen::compile(const Operator &plan)
 #endif
 
     /*----- Set up head of heap. -------------------------------------------------------------------------------------*/
-    codegen.head_of_heap_.set(codegen.main_.block(), codegen.add_import("head_of_heap", BinaryenTypeInt32()));
+    codegen.import("head_of_heap", BinaryenTypeInt32());
+    codegen.main_.block() += codegen.head_of_heap_.set(codegen.get_imported("head_of_heap", BinaryenTypeInt32()));
 
     /*----- Compile plan. --------------------------------------------------------------------------------------------*/
     codegen(plan); // emit code
@@ -330,23 +310,31 @@ WasmModule WasmCodeGen::compile(const Operator &plan)
     codegen.main_.finalize();
     BinaryenAddFunctionExport(module.ref(), "run", "run");
 
-    /*----- Validate module. -----------------------------------------------------------------------------------------*/
+    /*----- Validate module before optimization. ---------------------------------------------------------------------*/
     if (not BinaryenModuleValidate(module.ref())) {
         module.dump();
         throw std::logic_error("invalid module");
     }
 
-#if 0
+#if 1
     /*----- Optimize module. -----------------------------------------------------------------------------------------*/
-#ifdef NDEBUG
-    std::cerr << "WebAssembly before optimization:\n";
-    module.dump();
+#ifndef NDEBUG
+    std::ostringstream dump_before_opt;
+    module.dump(dump_before_opt);
+#endif
     BinaryenSetOptimizeLevel(2); // O2
     BinaryenSetShrinkLevel(0); // shrinking not required
     BinaryenModuleOptimize(module.ref());
-    std::cerr << "WebAssembly after optimization:\n";
-    module.dump();
+
+    /*----- Validate module after optimization. ----------------------------------------------------------------------*/
+    if (not BinaryenModuleValidate(module.ref())) {
+#ifndef NDEBUG
+        std::cerr << "Module invalid after optimization!" << std::endl;
+        std::cerr << "WebAssembly before optimization:\n" << dump_before_opt.str() << std::endl;
+        std::cerr << "WebAssembly after optimization:\n";
 #endif
+        module.dump(std::cerr);
+    }
 #endif
 
     return module;
@@ -442,7 +430,7 @@ void WasmCodeGen::operator()(const GroupingOperator &op)
 
     /*----- Initialize runner at start of hash table. ----------------------------------------------------------------*/
     WasmVariable induction(fn(), BinaryenTypeInt32());
-    induction.set(main_.block(), HT->addr());
+    main_.block() += induction.set(HT->addr());
 
     /*----- Compute end of hash table. -------------------------------------------------------------------------------*/
     WasmVariable end(fn(), BinaryenTypeInt32());
@@ -458,7 +446,7 @@ void WasmCodeGen::operator()(const GroupingOperator &op)
         /* left=   */ b_size,
         /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size()))
     );
-    end.set(main_.block(), BinaryenBinary(
+    main_.block() += end.set(BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ HT->addr(),
@@ -476,23 +464,23 @@ void WasmCodeGen::operator()(const GroupingOperator &op)
     /*----- Advance to first occupied slot. --------------------------------------------------------------------------*/
     {
         WasmLoop advance_to_first(module(), "group_by.advance_to_first");
-        induction.set(advance_to_first, data->HT->compute_next_slot(induction));
+        advance_to_first += induction.set(data->HT->compute_next_slot(induction));
         auto b_in_bounds = BinaryenBinary(
             /* module= */ module(),
             /* op=     */ BinaryenLtUInt32(),
             /* left=   */ induction,
             /* right=  */ end
         );
-        auto b_slot_is_empty = data->HT->is_slot_empty(induction);
+        WasmTemporary is_slot_empty = data->HT->is_slot_empty(induction);
         advance_to_first += BinaryenIf(
             /* module=    */ module(),
             /* condition= */ b_in_bounds,
-            /* ifTrue=    */ advance_to_first.continu(b_slot_is_empty),
+            /* ifTrue=    */ advance_to_first.continu(is_slot_empty.clone(module())),
             /* ifFalse=   */ nullptr
         );
         main_.block() += BinaryenIf(
             /* module=    */ module(),
-            /* condition= */ b_slot_is_empty,
+            /* condition= */ is_slot_empty.clone(module()),
             /* ifTrue=    */ advance_to_first.finalize(),
             /* ifFalse=   */ nullptr
         );
@@ -511,18 +499,18 @@ void WasmCodeGen::operator()(const GroupingOperator &op)
     /*----- Increment induction variable, then advance to next occupied slot. ----------------------------------------*/
     {
         WasmLoop advance(module(), "group_by.foreach.advace");
-        induction.set(advance, data->HT->compute_next_slot(induction));
+        advance += induction.set(data->HT->compute_next_slot(induction));
         auto b_in_bounds = BinaryenBinary(
             /* module= */ module(),
             /* op=     */ BinaryenLtUInt32(),
             /* left=   */ induction,
             /* right=  */ end
         );
-        auto b_slot_is_empty = data->HT->is_slot_empty(induction);
+        WasmTemporary is_slot_empty = data->HT->is_slot_empty(induction);
         advance += BinaryenIf(
             /* module=    */ module(),
             /* condition= */ b_in_bounds,
-            /* ifTrue=    */ advance.continu(b_slot_is_empty),
+            /* ifTrue=    */ advance.continu(std::move(is_slot_empty)),
             /* ifFalse=   */ nullptr
         );
         loop += advance.finalize();
@@ -542,13 +530,13 @@ void WasmCodeGen::operator()(const SortingOperator &op)
 
     /* Save the current head of heap as the end of the data to sort. */
     WasmVariable data_end(fn(), BinaryenTypeInt32());
-    data_end.set(main_.block(), head_of_heap());
+    main_.block() += data_end.set(head_of_heap());
     align_head_of_heap();
 
     /*----- Generate sorting algorithm and invoke with start and end of data segment. --------------------------------*/
     WasmQuickSort qsort(op.child(0)->schema(), op.order_by(), WasmPartitionBranchless{});
     BinaryenExpressionRef qsort_args[] = { data->begin, data_end };
-    auto b_qsort = qsort.emit(module());
+    BinaryenFunctionRef b_qsort = qsort.emit(module());
     main_.block() += BinaryenCall(
         /* module=      */ module(),
         /* target=      */ BinaryenFunctionGetName(b_qsort),
@@ -577,7 +565,7 @@ void WasmCodeGen::operator()(const SortingOperator &op)
     swap(pipeline.block_, loop);
 
     /*----- Increment induction variable. ----------------------------------------------------------------------------*/
-    data->begin.set(loop, BinaryenBinary(
+    loop += data->begin.set(BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ data->begin,
@@ -595,26 +583,26 @@ void WasmCodeGen::operator()(const SortingOperator &op)
 void WasmPipelineCG::emit_write_results(const Schema &schema)
 {
     std::size_t offset = 0;
-    auto &b_out = CG.head_of_heap();
+    const WasmVariable &out = CG.head_of_heap();
     for (auto &attr : schema) {
-        auto value = context()[attr.id];
-        auto bytes = attr.type->size() == 64 ? 8 : 4;
+        WasmTemporary value = context()[attr.id];
+        const uint32_t bytes = attr.type->size() == 64 ? 8 : 4;
         block_ += BinaryenStore(
             /* module= */ module(),
             /* bytes=  */ bytes,
             /* offset= */ offset,
             /* align=  */ 0,
-            /* ptr=    */ b_out,
+            /* ptr=    */ out,
             /* value=  */ value,
             /* type=   */ get_binaryen_type(attr.type)
         );
         offset += 8;
     }
 
-    CG.head_of_heap().set(block_, BinaryenBinary(
+    block_ += CG.head_of_heap().set(BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenAddInt32(),
-        /* left=   */ b_out,
+        /* left=   */ out,
         /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(offset))
     ));
 }
@@ -626,7 +614,8 @@ void WasmPipelineCG::operator()(const ScanOperator &op)
     /*----- Get the number of rows in the scanned table. -------------------------------------------------------------*/
     auto & table = op.store().table();
     oss << table.name << "_num_rows";
-    auto b_num_rows = CG.add_import(oss.str(), BinaryenTypeInt32());
+    CG.import(oss.str(), BinaryenTypeInt32());
+    WasmTemporary num_rows = CG.get_imported(oss.str(), BinaryenTypeInt32());
 
     WasmVariable induction(CG.fn(), BinaryenTypeInt32()); // initialized to 0
 
@@ -636,7 +625,7 @@ void WasmPipelineCG::operator()(const ScanOperator &op)
         /* module= */ module(),
         /* op=     */ BinaryenLtUInt32(),
         /* left=   */ induction,
-        /* right=  */ b_num_rows
+        /* right=  */ num_rows
     ));
 
     /*----- Generate code to access attributes and emit code for the rest of the pipeline. ---------------------------*/
@@ -646,7 +635,7 @@ void WasmPipelineCG::operator()(const ScanOperator &op)
     swap(block_, loop);
 
     /*----- Increment induction variable. ----------------------------------------------------------------------------*/
-    induction.set(loop, BinaryenBinary(
+    loop += induction.set(BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ induction,
@@ -730,7 +719,8 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
             Schema::Identifier probe_key_id(probe->table_name.text, probe->attr_name.text);
 
             if (data->is_build_phase) {
-                auto key = context().get_value(build_key_id);
+                std::vector<WasmTemporary> key;
+                key.emplace_back(context().get_value(build_key_id));
 
                 /*----- Compute payload ids. -------------------------------------------------------------------------*/
                 std::vector<Schema::Identifier> payload_ids;
@@ -748,12 +738,11 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
                 auto HT = as<WasmRefCountingHashTable>(data->HT);
 
                 WasmVariable end(CG.fn(), BinaryenTypeInt32());
-                end.set(CG.fn().block(), HT->create_table(CG.fn().block(), CG.head_of_heap(), initial_capacity));
-                data->watermark_high.set(CG.fn().block(),
-                                         BinaryenConst(module(), BinaryenLiteralInt32(8 * initial_capacity / 10)));
+                CG.fn().block() += end.set(HT->create_table(CG.fn().block(), CG.head_of_heap(), initial_capacity));
+                CG.fn().block() += data->watermark_high.set(BinaryenConst(module(), BinaryenLiteralInt32(8 * initial_capacity / 10)));
 
                 /*----- Update head of heap. -------------------------------------------------------------------------*/
-                CG.head_of_heap().set(CG.fn().block(), end);
+                CG.fn().block() += CG.head_of_heap().set(end);
                 CG.align_head_of_heap();
 
                 /*----- Initialize hash table. -----------------------------------------------------------------------*/
@@ -761,54 +750,54 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
 
                 /*----- Create a counter for the number of entries. --------------------------------------------------*/
                 WasmVariable num_entries(CG.fn(), BinaryenTypeInt32());
-                num_entries.set(CG.fn().block(), BinaryenConst(module(), BinaryenLiteralInt32(0)));
+                CG.fn().block() += num_entries.set(BinaryenConst(module(), BinaryenLiteralInt32(0)));
 
                 /*----- Create code block to resize the hash table when the high watermark is reached. ---------------*/
                 BlockBuilder perform_rehash(module(), "join.build.rehash");
 
                 /*----- Compute the mask for the new size. -----------------------------------------------------------*/
-                auto b_mask_x2 = BinaryenBinary(
+                WasmTemporary mask_x2 = BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenShlInt32(),
                     /* left=   */ HT->mask(),
                     /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
                 );
                 WasmVariable mask_new(CG.fn(), BinaryenTypeInt32());
-                mask_new.set(perform_rehash, BinaryenBinary(
+                perform_rehash += mask_new.set(BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenAddInt32(),
-                    /* left=   */ b_mask_x2,
+                    /* left=   */ mask_x2,
                     /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
                 ));
 
                 /*----- Compute new hash table size. -----------------------------------------------------------------*/
-                auto b_size_new = BinaryenBinary(
+                WasmTemporary size_new = BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenAddInt32(),
                     /* left=   */ mask_new,
                     /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
 
                 );
-                auto b_size_in_bytes_new = BinaryenBinary(
+                WasmTemporary size_in_bytes_new = BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenMulInt32(),
-                    /* left=   */ b_size_new,
+                    /* left=   */ size_new.clone(module()),
                     /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size()))
                 );
 
                 /*----- Allocate new hash table. ---------------------------------------------------------------------*/
                 WasmVariable begin_new(CG.fn(), BinaryenTypeInt32());
-                begin_new.set(perform_rehash, CG.head_of_heap());
-                CG.head_of_heap().set(perform_rehash, BinaryenBinary(
+                perform_rehash += begin_new.set(CG.head_of_heap());
+                perform_rehash += CG.head_of_heap().set(BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenAddInt32(),
                     /* left=   */ begin_new,
-                    /* right=  */ b_size_in_bytes_new
+                    /* right=  */ size_in_bytes_new
                 ));
                 CG.align_head_of_heap(perform_rehash);
 
                 /*----- Rehash to double size. -----------------------------------------------------------------------*/
-                auto b_fn_rehash = HT->rehash(hasher, { build_key_id }, payload_ids);
+                BinaryenFunctionRef b_fn_rehash = HT->rehash(hasher, { build_key_id }, payload_ids);
                 BinaryenExpressionRef rehash_args[4] = {
                     /* addr_old= */ HT->addr(),
                     /* mask_old= */ HT->mask(),
@@ -824,24 +813,24 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
                 );
 
                 /*----- Update hash table. ---------------------------------------------------------------------------*/
-                HT->addr().set(perform_rehash, begin_new);
-                HT->mask().set(perform_rehash, mask_new);
+                perform_rehash += HT->addr().set(begin_new);
+                perform_rehash += HT->mask().set(mask_new);
 
                 /*----- Update high watermark. -----------------------------------------------------------------------*/
-                data->watermark_high.set(perform_rehash, BinaryenBinary(
+                perform_rehash += data->watermark_high.set(BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenDivUInt32(),
                     /* left=   */ BinaryenBinary(
                                       /* module= */ module(),
                                       /* op=     */ BinaryenMulInt32(),
-                                      /* left=   */ b_size_new,
+                                      /* left=   */ size_new,
                                       /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(8))
                     ),
                     /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(10))
                 ));
 
                 /*----- Perform resizing to twice the capacity when the high watermark is reached. -------------------*/
-                auto b_has_reached_watermark = BinaryenBinary(
+                WasmTemporary has_reached_watermark = BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenGeUInt32(),
                     /* left=   */ num_entries,
@@ -849,27 +838,27 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
                 );
                 block_ += BinaryenIf(
                     /* module=    */ module(),
-                    /* condition= */ b_has_reached_watermark,
+                    /* condition= */ has_reached_watermark,
                     /* ifTrue=    */ perform_rehash.finalize(),
                     /* ifFalse=   */ nullptr
                 );
 
                 /*----- Compute hash. --------------------------------------------------------------------------------*/
-                auto b_hash = hasher.emit(module(), CG.fn(), block_, { key });
-                auto b_hash_i32 = BinaryenUnary(
+                WasmTemporary hash = hasher.emit(module(), CG.fn(), block_, key);
+                WasmTemporary hash_i32 = BinaryenUnary(
                     /* module= */ module(),
                     /* op=     */ BinaryenWrapInt64(),
-                    /* value=  */ b_hash
+                    /* value=  */ hash
                 );
 
                 /*----- Insert the element. --------------------------------------------------------------------------*/
-                auto slot_addr = HT->insert_with_duplicates(block_, b_hash_i32, { build_key_id }, { key });
+                auto slot_addr = HT->insert_with_duplicates(block_, std::move(hash_i32), { build_key_id }, key);
 
                 /*---- Write payload. --------------------------------------------------------------------------------*/
                 for (auto attr : op.child(0)->schema())
-                    block_ += HT->store_value_to_slot(slot_addr, attr.id, context().get_value(attr.id));
+                    block_ += HT->store_value_to_slot(std::move(slot_addr), attr.id, context().get_value(attr.id));
 
-                num_entries.set(block_, BinaryenBinary(
+                block_ += num_entries.set(BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenAddInt32(),
                     /* left=   */ num_entries,
@@ -877,31 +866,32 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
                 ));
             } else {
                 auto HT = as<WasmRefCountingHashTable>(data->HT);
-                auto key = context().get_value(probe_key_id);
+                std::vector<WasmTemporary> key;
+                key.emplace_back(context().get_value(probe_key_id));
 
                 /*----- Compute hash. --------------------------------------------------------------------------------*/
-                auto b_hash = hasher.emit(module(), CG.fn(), block_, { key });
-                auto b_hash_i32 = BinaryenUnary(
+                WasmTemporary hash = hasher.emit(module(), CG.fn(), block_, key);
+                WasmTemporary hash_i32 = BinaryenUnary(
                     /* module= */ module(),
                     /* op=     */ BinaryenWrapInt64(),
-                    /* value=  */ b_hash
+                    /* value=  */ hash
                 );
 
                 /*----- Compute address of bucket. -------------------------------------------------------------------*/
                 WasmVariable bucket_addr(CG.fn(), BinaryenTypeInt32());
-                bucket_addr.set(block_,  HT->hash_to_bucket(b_hash_i32));
+                block_ += bucket_addr.set(HT->hash_to_bucket(std::move(hash_i32)));
 
                 /*----- Iterate over all entries in the bucket and compare the key. ----------------------------------*/
                 WasmVariable slot_addr(CG.fn(), BinaryenTypeInt32());
-                slot_addr.set(block_, bucket_addr);
+                block_ += slot_addr.set(bucket_addr);
                 WasmVariable step(CG.fn(), BinaryenTypeInt32());
-                step.set(block_, BinaryenConst(module(), BinaryenLiteralInt32(0)));
-                auto b_ref_count = HT->get_bucket_ref_count(bucket_addr);
+                block_ += step.set(BinaryenConst(module(), BinaryenLiteralInt32(0)));
+                WasmTemporary ref_count = HT->get_bucket_ref_count(bucket_addr);
                 WasmWhile loop(module(), "join.probe", BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenLtUInt32(),
                     /* left=   */ step,
-                    /* right=  */ b_ref_count
+                    /* right=  */ ref_count
                 ));
 
                 /*----- Load values from HT. -------------------------------------------------------------------------*/
@@ -911,7 +901,7 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
 
                 /*----- Check whether the key of the entry in the bucket -- identified by `build_key_id` -- equals the
                  * probe key. ----------------------------------------------------------------------------------------*/
-                auto b_is_key_equal = HT->compare_key(slot_addr, { build_key_id }, { key });
+                WasmTemporary is_key_equal = HT->compare_key(slot_addr, { build_key_id }, key);
                 BlockBuilder keys_equal(module(), "join.probe.match");
 
                 swap(block_, keys_equal);
@@ -920,61 +910,62 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
 
                 loop += BinaryenIf(
                     /* module=    */ module(),
-                    /* condition= */ b_is_key_equal,
+                    /* condition= */ is_key_equal,
                     /* ifTrue=    */ keys_equal.finalize(),
                     /* ifFalse=   */ nullptr
                 );
 
                 /*----- Compute size and end of table to handle wrap around. -----------------------------------------*/
-                auto b_size = BinaryenBinary(
+                WasmTemporary size = BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenAddInt32(),
                     /* left=   */ HT->mask(),
                     /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
                 );
                 WasmVariable table_size_in_bytes(CG.fn(), BinaryenTypeInt32());
-                table_size_in_bytes.set(block_, BinaryenBinary(
+                block_ += table_size_in_bytes.set(BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenMulInt32(),
-                    /* left=   */ b_size,
+                    /* left=   */ size,
                     /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size()))
                 ));
-                auto b_table_end = BinaryenBinary(
+                WasmTemporary table_end = BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenAddInt32(),
                     /* left=   */ HT->addr(),
                     /* right=  */ table_size_in_bytes
                 );
 
-                step.set(loop, BinaryenBinary(
+                loop += step.set(BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenAddInt32(),
                     /* left=   */ step,
                     /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size()))
                 ));
-                auto b_slot_addr_inc = BinaryenBinary(
+                WasmVariable slot_addr_inc(CG.fn(), BinaryenTypeInt32());
+                loop += slot_addr_inc.set(BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenAddInt32(),
                     /* left=   */ slot_addr,
                     /* right=  */ step
-                );
-                auto b_exceeds_table = BinaryenBinary(
+                ));
+                WasmTemporary exceeds_table = BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenGeUInt32(),
-                    /* left=   */ b_slot_addr_inc,
-                    /* right=  */ b_table_end
+                    /* left=   */ slot_addr_inc,
+                    /* right=  */ table_end
                 );
-                auto b_slot_addr_wrapped = BinaryenBinary(
+                WasmTemporary slot_addr_wrapped = BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenSubInt32(),
-                    /* left=   */ b_slot_addr_inc,
+                    /* left=   */ slot_addr_inc,
                     /* right=  */ table_size_in_bytes
                 );
-                slot_addr.set(loop, BinaryenSelect(
+                loop += slot_addr.set(BinaryenSelect(
                     /* module=    */ module(),
-                    /* condition= */ b_exceeds_table,
-                    /* ifTrue=    */ b_slot_addr_wrapped,
-                    /* ifFalse=   */ b_slot_addr_inc,
+                    /* condition= */ exceeds_table,
+                    /* ifTrue=    */ slot_addr_wrapped,
+                    /* ifFalse=   */ slot_addr_inc,
                     /* type=      */ BinaryenTypeInt32()
                 ));
                 block_ += loop.finalize();
@@ -1006,7 +997,7 @@ void WasmPipelineCG::operator()(const LimitOperator &op)
     WasmVariable count(CG.fn(), BinaryenTypeInt32());
 
     /* Check whether the pipeline has exceeded the limit. */
-    auto b_cond_exceeds_limits = BinaryenBinary(
+    WasmTemporary cond_exceeds_limits = BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenGeSInt32(),
         /* lhs=    */ count,
@@ -1017,12 +1008,12 @@ void WasmPipelineCG::operator()(const LimitOperator &op)
     block_ += BinaryenBreak(
         /* module= */ module(),
         /* name=   */ block_.name(),
-        /* cond=   */ b_cond_exceeds_limits,
+        /* cond=   */ cond_exceeds_limits,
         /* value=  */ nullptr
     );
 
     /* Check whether the pipeline is within the limits. */
-    auto b_cond_within_limits = BinaryenBinary(
+    WasmTemporary cond_within_limits = BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenGeSInt32(),
         /* lhs=    */ count,
@@ -1030,12 +1021,12 @@ void WasmPipelineCG::operator()(const LimitOperator &op)
     );
     block_ += BinaryenIf(
         /* module=  */ module(),
-        /* cond=    */ b_cond_within_limits,
+        /* cond=    */ cond_within_limits,
         /* ifTrue=  */ within_limits_block.finalize(),
         /* ifFalse= */ nullptr
     );
 
-    count.set(block_, BinaryenBinary(
+    block_ += count.set(BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenAddInt32(),
         /* lhs=    */ count,
@@ -1045,7 +1036,6 @@ void WasmPipelineCG::operator()(const LimitOperator &op)
 
 void WasmPipelineCG::operator()(const GroupingOperator &op)
 {
-    auto &C = Catalog::Get();
     WasmHashMumur3_64A hasher;
     auto data = as<GroupingData>(op.data());
 
@@ -1098,11 +1088,11 @@ estimation_abort:
     auto HT = as<WasmRefCountingHashTable>(data->HT);
 
     WasmVariable end(CG.fn(), BinaryenTypeInt32());
-    end.set(CG.fn().block(), HT->create_table(CG.fn().block(), CG.head_of_heap(), initial_capacity));
-    data->watermark_high.set(CG.fn().block(), BinaryenConst(module(), BinaryenLiteralInt32(8 * initial_capacity / 10)));
+    CG.fn().block() += end.set(HT->create_table(CG.fn().block(), CG.head_of_heap(), initial_capacity));
+    CG.fn().block() += data->watermark_high.set(BinaryenConst(module(), BinaryenLiteralInt32(8 * initial_capacity / 10)));
 
     /*----- Update head of heap. -------------------------------------------------------------------------------------*/
-    CG.head_of_heap().set(CG.fn().block(), end);
+    CG.fn().block() += CG.head_of_heap().set(end);
     CG.align_head_of_heap();
 
     /*----- Initialize hash table. -----------------------------------------------------------------------------------*/
@@ -1110,7 +1100,7 @@ estimation_abort:
 
     /*----- Create a counter for the number of groups. ---------------------------------------------------------------*/
     WasmVariable num_groups(CG.fn(), BinaryenTypeInt32());
-    num_groups.set(CG.fn().block(), BinaryenConst(module(), BinaryenLiteralInt32(0)));
+    CG.fn().block() += num_groups.set(BinaryenConst(module(), BinaryenLiteralInt32(0)));
 
     /*----- Compute group and aggregate ids. -------------------------------------------------------------------------*/
     std::vector<Schema::Identifier> grp_ids;
@@ -1131,48 +1121,49 @@ estimation_abort:
     BlockBuilder perform_rehash(module(), "group_by.rehash");
 
     /*----- Compute the mask for the new size. -----------------------------------------------------------------------*/
-    auto b_mask_x2 = BinaryenBinary(
+    WasmTemporary mask_x2 = BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenShlInt32(),
         /* left=   */ HT->mask(),
         /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
     );
     WasmVariable mask_new(CG.fn(), BinaryenTypeInt32());
-    mask_new.set(perform_rehash, BinaryenBinary(
+    perform_rehash += mask_new.set(BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenAddInt32(),
-        /* left=   */ b_mask_x2,
+        /* left=   */ mask_x2,
         /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
     ));
 
     /*----- Compute new hash table size. -----------------------------------------------------------------------------*/
-    auto b_size_new = BinaryenBinary(
+    WasmVariable size_new(CG.fn(), BinaryenTypeInt32());
+    perform_rehash += size_new.set(BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ mask_new,
         /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
 
-    );
-    auto b_size_in_bytes_new = BinaryenBinary(
+    ));
+    WasmTemporary size_in_bytes_new = BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenMulInt32(),
-        /* left=   */ b_size_new,
+        /* left=   */ size_new,
         /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size()))
     );
 
     /*----- Allocate new hash table. ---------------------------------------------------------------------------------*/
     WasmVariable begin_new(CG.fn(), BinaryenTypeInt32());
-    begin_new.set(perform_rehash, CG.head_of_heap());
-    CG.head_of_heap().set(perform_rehash, BinaryenBinary(
+    perform_rehash += begin_new.set(CG.head_of_heap());
+    perform_rehash += CG.head_of_heap().set(BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ begin_new,
-        /* right=  */ b_size_in_bytes_new
+        /* right=  */ size_in_bytes_new
     ));
     CG.align_head_of_heap(perform_rehash);
 
     /*----- Rehash to double size. -----------------------------------------------------------------------------------*/
-    auto b_fn_rehash = HT->rehash(hasher, grp_ids, agg_ids);
+    BinaryenFunctionRef b_fn_rehash = HT->rehash(hasher, grp_ids, agg_ids);
     BinaryenExpressionRef rehash_args[4] = {
         /* addr_old= */ HT->addr(),
         /* mask_old= */ HT->mask(),
@@ -1188,24 +1179,24 @@ estimation_abort:
     );
 
     /*----- Update hash table and grouping data. ---------------------------------------------------------------------*/
-    HT->addr().set(perform_rehash, begin_new);
-    HT->mask().set(perform_rehash, mask_new);
+    perform_rehash += HT->addr().set(begin_new);
+    perform_rehash += HT->mask().set(mask_new);
 
     /*----- Update high watermark. -----------------------------------------------------------------------------------*/
-    data->watermark_high.set(perform_rehash, BinaryenBinary(
+    perform_rehash += data->watermark_high.set(BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenDivUInt32(),
         /* left=   */ BinaryenBinary(
                           /* module= */ module(),
                           /* op=     */ BinaryenMulInt32(),
-                          /* left=   */ b_size_new,
+                          /* left=   */ size_new,
                           /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(8))
         ),
         /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(10))
     ));
 
     /*----- Perform resizing to twice the capacity when the high watermark is reached. -------------------------------*/
-    auto b_has_reached_watermark = BinaryenBinary(
+    WasmTemporary has_reached_watermark = BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenGeUInt32(),
         /* left=   */ num_groups,
@@ -1213,51 +1204,46 @@ estimation_abort:
     );
     block_ += BinaryenIf(
         /* module=    */ module(),
-        /* condition= */ b_has_reached_watermark,
+        /* condition= */ has_reached_watermark,
         /* ifTrue=    */ perform_rehash.finalize(),
         /* ifFalse=   */ nullptr
     );
 
     /*----- Compute grouping key. ------------------------------------------------------------------------------------*/
-    std::vector<BinaryenExpressionRef> key;
-    for (auto grp : op.group_by()) {
-        auto k = CG.fn().add_local(get_binaryen_type(grp->type()));
-        block_ += BinaryenLocalSet(
-            /* module= */ module(),
-            /* index=  */ BinaryenLocalGetGetIndex(k),
-            /* value=  */ context().compile(*grp)
-        );
-        key.push_back(k);
-    }
+    std::vector<WasmTemporary> key;
+    for (auto grp : op.group_by())
+        key.emplace_back(context().compile(*grp));
 
     /*----- Compute hash. --------------------------------------------------------------------------------------------*/
-    auto b_hash = hasher.emit(module(), CG.fn(), block_, key);
-    auto b_hash_i32 = BinaryenUnary(
+    WasmTemporary hash = hasher.emit(module(), CG.fn(), block_, key);
+    WasmTemporary hash_i32 = BinaryenUnary(
         /* module= */ module(),
         /* op=     */ BinaryenWrapInt64(),
-        /* value=  */ b_hash
+        /* value=  */ hash
     );
 
     /*----- Compute address of bucket. -------------------------------------------------------------------------------*/
     WasmVariable bucket_addr(CG.fn(), BinaryenTypeInt32());
-    bucket_addr.set(block_, data->HT->hash_to_bucket(b_hash_i32));
+    block_ += bucket_addr.set(data->HT->hash_to_bucket(std::move(hash_i32)));
 
     /*----- Locate entry with key `key` in the bucket, or end of bucket if no such key exists. -----------------------*/
-    auto [ b_slot_addr, b_steps ] = data->HT->find_in_bucket(block_, bucket_addr, key);
+    auto [ slot_addr_found, steps_found ] = data->HT->find_in_bucket(block_, bucket_addr, key);
+    WasmVariable slot_addr(CG.fn(), BinaryenTypeInt32());
+    block_ += slot_addr.set(std::move(slot_addr));
 
     /*----- Create or update the group. ------------------------------------------------------------------------------*/
     BlockBuilder create_group(module(), "group_by.create_group");
     BlockBuilder update_group(module(), "group_by.update");
 
-    num_groups.set(create_group, BinaryenBinary(
+    create_group += num_groups.set(BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ num_groups,
         /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
     ));
 
-    auto ld_slot = data->HT->load_from_slot(b_slot_addr);
-    data->HT->emplace(create_group, bucket_addr, b_steps, b_slot_addr, key_IDs, key);
+    auto ld_slot = data->HT->load_from_slot(slot_addr);
+    data->HT->emplace(create_group, bucket_addr, std::move(steps_found), slot_addr, key_IDs, key);
 
     for (std::size_t i = 0; i != op.aggregates().size(); ++i) {
         auto e = op.schema()[op.group_by().size() + i];
@@ -1270,10 +1256,8 @@ estimation_abort:
         /*----- Emit code to evaluate arguments. ---------------------------------------------------------------------*/
         insist(fn_expr->args.size() <= 1, "unsupported aggregate with more than one argument");
         std::vector<BinaryenExpressionRef> args;
-        for (auto arg : fn_expr->args) {
-            auto eval_arg = context().compile(*arg);
-            args.push_back(eval_arg);
-        }
+        for (auto arg : fn_expr->args)
+            args.emplace_back(context().compile(*arg));
 
         switch (fn.fnid) {
             default:
@@ -1281,44 +1265,44 @@ estimation_abort:
 
             case Function::FN_MIN: {
                 insist(args.size() == 1, "aggregate function expects exactly one argument");
-                create_group += data->HT->store_value_to_slot(b_slot_addr, e.id, args[0]);
+                create_group += data->HT->store_value_to_slot(slot_addr, e.id, args[0]);
                 WasmVariable val(CG.fn(), get_binaryen_type(e.type));
-                val.set(update_group, args[0]);
+                update_group += val.set(BinaryenExpressionCopy(args[0], module()));
                 WasmVariable old_val(CG.fn(), get_binaryen_type(e.type));
-                old_val.set(update_group, ld_slot.get_value(e.id));
+                update_group += old_val.set(ld_slot.get_value(e.id));
                 auto n = as<const Numeric>(e.type);
                 switch (n->kind) {
                     case Numeric::N_Int:
                         if (n->size() <= 32) {
-                            auto b_less = BinaryenBinary(
+                            WasmTemporary less = BinaryenBinary(
                                 /* module= */ module(),
                                 /* op=     */ BinaryenLtSInt32(),
                                 /* left=   */ old_val,
                                 /* right=  */ val
                             );
-                            auto b_new_val = BinaryenSelect(
+                            WasmTemporary new_val = BinaryenSelect(
                                 /* module=    */ module(),
-                                /* condition= */ b_less,
+                                /* condition= */ less,
                                 /* ifTrue=    */ old_val,
                                 /* ifFalse=   */ val,
                                 /* type=      */ BinaryenTypeInt32()
                             );
-                            update_group += data->HT->store_value_to_slot(b_slot_addr, e.id, b_new_val);
+                            update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
                         } else {
-                            auto b_less = BinaryenBinary(
+                            WasmTemporary less = BinaryenBinary(
                                 /* module= */ module(),
                                 /* op=     */ BinaryenLtSInt64(),
                                 /* left=   */ old_val,
                                 /* right=  */ val
                             );
-                            auto b_new_val = BinaryenSelect(
+                            WasmTemporary new_val = BinaryenSelect(
                                 /* module=    */ module(),
-                                /* condition= */ b_less,
+                                /* condition= */ less,
                                 /* ifTrue=    */ old_val,
                                 /* ifFalse=   */ val,
                                 /* type=      */ BinaryenTypeInt64()
                             );
-                            update_group += data->HT->store_value_to_slot(b_slot_addr, e.id, b_new_val);
+                            update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
                         }
                         break;
 
@@ -1327,21 +1311,21 @@ estimation_abort:
 
                     case Numeric::N_Float:
                         if (n->size() == 32) {
-                            auto b_new_val = BinaryenBinary(
+                            WasmTemporary new_val = BinaryenBinary(
                                 /* module= */ module(),
                                 /* op=     */ BinaryenMinFloat32(),
                                 /* left=   */ old_val,
                                 /* right=  */ val
                             );
-                            update_group += data->HT->store_value_to_slot(b_slot_addr, e.id, b_new_val);
+                            update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
                         } else {
-                            auto b_new_val = BinaryenBinary(
+                            WasmTemporary new_val = BinaryenBinary(
                                 /* module= */ module(),
                                 /* op=     */ BinaryenMinFloat64(),
                                 /* left=   */ old_val,
                                 /* right=  */ val
                             );
-                            update_group += data->HT->store_value_to_slot(b_slot_addr, e.id, b_new_val);
+                            update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
                         }
                         break;
                 }
@@ -1350,44 +1334,44 @@ estimation_abort:
 
             case Function::FN_MAX: {
                 insist(args.size() == 1, "aggregate function expects exactly one argument");
-                create_group += data->HT->store_value_to_slot(b_slot_addr, e.id, args[0]);
+                create_group += data->HT->store_value_to_slot(slot_addr, e.id, args[0]);
                 WasmVariable val(CG.fn(), get_binaryen_type(e.type));
-                val.set(update_group, args[0]);
+                update_group += val.set(BinaryenExpressionCopy(args[0], module()));
                 WasmVariable old_val(CG.fn(), get_binaryen_type(e.type));
-                old_val.set(update_group, ld_slot.get_value(e.id));
+                update_group += old_val.set(ld_slot.get_value(e.id));
                 auto n = as<const Numeric>(e.type);
                 switch (n->kind) {
                     case Numeric::N_Int:
                         if (n->size() <= 32) {
-                            auto b_greater = BinaryenBinary(
+                            WasmTemporary greater = BinaryenBinary(
                                 /* module= */ module(),
                                 /* op=     */ BinaryenGtSInt32(),
                                 /* left=   */ old_val,
                                 /* right=  */ val
                             );
-                            auto b_new_val = BinaryenSelect(
+                            WasmTemporary new_val = BinaryenSelect(
                                 /* module=    */ module(),
-                                /* condition= */ b_greater,
+                                /* condition= */ greater,
                                 /* ifTrue=    */ old_val,
                                 /* ifFalse=   */ val,
                                 /* type=      */ BinaryenTypeInt32()
                             );
-                            update_group += data->HT->store_value_to_slot(b_slot_addr, e.id, b_new_val);
+                            update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
                         } else {
-                            auto b_greater = BinaryenBinary(
+                            WasmTemporary greater = BinaryenBinary(
                                 /* module= */ module(),
                                 /* op=     */ BinaryenGtSInt64(),
                                 /* left=   */ old_val,
                                 /* right=  */ val
                             );
-                            auto b_new_val = BinaryenSelect(
+                            WasmTemporary new_val = BinaryenSelect(
                                 /* module=    */ module(),
-                                /* condition= */ b_greater,
+                                /* condition= */ greater,
                                 /* ifTrue=    */ old_val,
                                 /* ifFalse=   */ val,
                                 /* type=      */ BinaryenTypeInt32()
                             );
-                            update_group += data->HT->store_value_to_slot(b_slot_addr, e.id, b_new_val);
+                            update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
                         }
                         break;
 
@@ -1396,21 +1380,21 @@ estimation_abort:
 
                     case Numeric::N_Float:
                         if (n->size() == 32) {
-                            auto b_new_val = BinaryenBinary(
+                            WasmTemporary new_val = BinaryenBinary(
                                 /* module= */ module(),
                                 /* op=     */ BinaryenMaxFloat32(),
                                 /* left=   */ old_val,
                                 /* right=  */ val
                             );
-                            update_group += data->HT->store_value_to_slot(b_slot_addr, e.id, b_new_val);
+                            update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
                         } else {
-                            auto b_new_val = BinaryenBinary(
+                            WasmTemporary new_val = BinaryenBinary(
                                 /* module= */ module(),
                                 /* op=     */ BinaryenMaxFloat64(),
                                 /* left=   */ old_val,
                                 /* right=  */ val
                             );
-                            update_group += data->HT->store_value_to_slot(b_slot_addr, e.id, b_new_val);
+                            update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
                         }
                         break;
                 }
@@ -1423,15 +1407,15 @@ estimation_abort:
                 auto n = as<const Numeric>(fn_expr->args[0]->type());
                 switch (n->kind) {
                     case Numeric::N_Int: {
-                        auto b_extd = convert(module(), args[0], n, Type::Get_Integer(Type::TY_Vector, 8));
-                        create_group += data->HT->store_value_to_slot(b_slot_addr, e.id, b_extd);
-                        auto b_new_val = BinaryenBinary(
+                        WasmTemporary extd = convert(module(), args[0], n, Type::Get_Integer(Type::TY_Vector, 8));
+                        create_group += data->HT->store_value_to_slot(slot_addr, e.id, extd.clone(module()));
+                        WasmTemporary new_val = BinaryenBinary(
                             /* module= */ module(),
                             /* op=     */ BinaryenAddInt64(),
                             /* left=   */ b_old_val,
-                            /* right=  */ b_extd
+                            /* right=  */ extd
                         );
-                        update_group += data->HT->store_value_to_slot(b_slot_addr, e.id, b_new_val);
+                        update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
                         break;
                     }
 
@@ -1439,15 +1423,15 @@ estimation_abort:
                         unreachable("not implemented");
 
                     case Numeric::N_Float:
-                        auto b_extd = convert(module(), args[0], n, Type::Get_Double(Type::TY_Vector));
-                        create_group += data->HT->store_value_to_slot(b_slot_addr, e.id, b_extd);
-                        auto b_new_val = BinaryenBinary(
+                        WasmTemporary extd = convert(module(), args[0], n, Type::Get_Double(Type::TY_Vector));
+                        create_group += data->HT->store_value_to_slot(slot_addr, e.id, extd.clone(module()));
+                        WasmTemporary new_val = BinaryenBinary(
                             /* module= */ module(),
                             /* op=     */ BinaryenAddFloat64(),
                             /* left=   */ b_old_val,
-                            /* right=  */ b_extd
+                            /* right=  */ extd
                         );
-                        update_group += data->HT->store_value_to_slot(b_slot_addr, e.id, b_new_val);
+                        update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
                         break;
                 }
                 break;
@@ -1455,16 +1439,16 @@ estimation_abort:
 
             case Function::FN_COUNT: {
                 if (args.size() == 0) {
-                    create_group += data->HT->store_value_to_slot(b_slot_addr, e.id,
+                    create_group += data->HT->store_value_to_slot(slot_addr, e.id,
                                                                   BinaryenConst(module(), BinaryenLiteralInt64(1)));
-                    auto b_old_val = ld_slot.get_value(e.id);
-                    auto b_new_val = BinaryenBinary(
+                    WasmTemporary old_val = ld_slot.get_value(e.id);
+                    WasmTemporary new_val = BinaryenBinary(
                         /* module= */ module(),
                         /* op=     */ BinaryenAddInt64(),
-                        /* left=   */ b_old_val,
+                        /* left=   */ old_val,
                         /* right=  */ BinaryenConst(module(), BinaryenLiteralInt64(1))
                     );
-                    update_group += data->HT->store_value_to_slot(b_slot_addr, e.id, b_new_val);
+                    update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
                 } else {
                     // TODO verify if NULL
                     unreachable("not yet supported");
@@ -1476,7 +1460,7 @@ estimation_abort:
 
     block_ += BinaryenIf(
         /* module=    */ module(),
-        /* condition= */ data->HT->is_slot_empty(b_slot_addr),
+        /* condition= */ data->HT->is_slot_empty(slot_addr),
         /* ifTrue=    */ create_group.finalize(),
         /* ifFalse=   */ update_group.finalize()
     );
@@ -1487,13 +1471,13 @@ void WasmPipelineCG::operator()(const SortingOperator &op)
     auto data = as<SortingData>(op.data());
 
     /* Save the current head of heap as the beginning of the data to sort. */
-    data->begin.set(CG.fn().block(), CG.head_of_heap());
+    CG.fn().block() += data->begin.set(CG.head_of_heap());
 
     for (auto &attr : op.child(0)->schema())
         block_ += data->struc->store(CG.head_of_heap(), attr.id, context()[attr.id]);
 
     /* Advance head of heap. */
-    CG.head_of_heap().set(block_, BinaryenBinary(
+    block_ += CG.head_of_heap().set(BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ CG.head_of_heap(),
@@ -1513,7 +1497,8 @@ void WasmStoreCG::operator()(const RowStore &store)
 
     /*----- Import table address. ------------------------------------------------------------------------------------*/
     WasmVariable row_addr(pipeline.CG.fn(), BinaryenTypeInt32());
-    row_addr.set(pipeline.CG.fn().block(), pipeline.CG.add_import(table.name, BinaryenTypeInt32()));
+    pipeline.CG.import(table.name, BinaryenTypeInt32());
+    pipeline.CG.fn().block() += row_addr.set(pipeline.CG.get_imported(table.name, BinaryenTypeInt32()));
 
     /*----- Generate code to access null bitmap and value of all required attributes. --------------------------------*/
     const auto null_bitmap_offset = store.offset(table.size());
@@ -1526,39 +1511,40 @@ void WasmStoreCG::operator()(const RowStore &store)
             const auto qwords = null_bit_offset / 32;
             const auto bits = null_bit_offset % 32;
 
-            auto b_null_bitmap_addr = BinaryenBinary(
+            WasmTemporary null_bitmap_addr = BinaryenBinary(
                 /* module= */ pipeline.module(),
                 /* op=     */ BinaryenAddInt32(),
                 /* left=   */ row_addr,
                 /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(qwords))
             );
-            auto b_qword = BinaryenLoad(
+            WasmTemporary qword = BinaryenLoad(
                 /* module= */ pipeline.module(),
                 /* bytes=  */ 4,
                 /* signed= */ false,
                 /* offset= */ 0,
                 /* align=  */ 0,
                 /* type=   */ BinaryenTypeInt32(),
-                /* ptr=    */ b_null_bitmap_addr
+                /* ptr=    */ null_bitmap_addr
             );
-            auto b_shr = BinaryenBinary(
+            WasmTemporary shr = BinaryenBinary(
                 /* module= */ pipeline.module(),
                 /* op=     */ BinaryenShrUInt32(),
-                /* left=   */ b_qword,
+                /* left=   */ qword,
                 /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(bits))
             );
-            auto b_isnull = BinaryenBinary(
+            WasmTemporary is_null = BinaryenBinary(
                 /* module= */ pipeline.module(),
                 /* op=     */ BinaryenAndInt32(),
-                /* left=   */ b_shr,
+                /* left=   */ shr,
                 /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(1))
             );
             // TODO add to context nulls
+            (void) is_null;
         }
 
         /*----- Generate code for value access. ----------------------------------------------------------------------*/
         if (attr.type->size() < 8) {
-            auto b_byte = BinaryenLoad(
+            WasmTemporary byte = BinaryenLoad(
                 /* module= */ pipeline.module(),
                 /* bytes=  */ 1,
                 /* signed= */ false,
@@ -1567,21 +1553,21 @@ void WasmStoreCG::operator()(const RowStore &store)
                 /* type=   */ BinaryenTypeInt32(),
                 /* ptr=    */ row_addr
             );
-            auto b_shifted = BinaryenBinary(
+            WasmTemporary shifted = BinaryenBinary(
                 /* module= */ pipeline.module(),
                 /* op=     */ BinaryenShrUInt32(),
-                /* lhs=    */ b_byte,
+                /* lhs=    */ byte,
                 /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(store.offset(attr.id) % 8))
             );
-            auto b_value = BinaryenBinary(
+            WasmTemporary value = BinaryenBinary(
                 /* module= */ pipeline.module(),
                 /* op=     */ BinaryenAndInt32(),
-                /* lhs=    */ b_shifted,
+                /* lhs=    */ shifted,
                 /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32((1 << attr.type->size()) - 1))
             );
-            pipeline.context().add(e.id, b_value);
+            pipeline.context().add(e.id, std::move(value));
         } else {
-            auto b_value = BinaryenLoad(
+            WasmTemporary value = BinaryenLoad(
                 /* module= */ pipeline.module(),
                 /* bytes=  */ attr.type->size() / 8,
                 /* signed= */ true,
@@ -1590,7 +1576,7 @@ void WasmStoreCG::operator()(const RowStore &store)
                 /* type=   */ get_binaryen_type(attr.type),
                 /* ptr=    */ row_addr
             );
-            pipeline.context().add(e.id, b_value);
+            pipeline.context().add(e.id, std::move(value));
         }
     }
 
@@ -1598,7 +1584,7 @@ void WasmStoreCG::operator()(const RowStore &store)
     pipeline(*op.parent());
 
     /*----- Emit code to advance to next row. ------------------------------------------------------------------------*/
-    row_addr.set(pipeline.block_, BinaryenBinary(
+    pipeline.block_ += row_addr.set(BinaryenBinary(
         /* module= */ pipeline.module(),
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ row_addr,
@@ -1625,12 +1611,13 @@ void WasmStoreCG::operator()(const ColumnStore &store)
 
         /*----- Import column address. -------------------------------------------------------------------------------*/
         auto &col_addr = col_addrs.emplace_back(pipeline.CG.fn(), BinaryenTypeInt32());
-        col_addr.set(pipeline.CG.fn().block(), pipeline.CG.add_import(name, BinaryenTypeInt32()));
+        pipeline.CG.import(name, BinaryenTypeInt32());
+        pipeline.CG.fn().block() += col_addr.set(pipeline.CG.get_imported(name, BinaryenTypeInt32()));
 
         if (attr.type->size() < 8) {
             unreachable("not implemented");
         } else {
-            auto b_value = BinaryenLoad(
+            WasmTemporary value = BinaryenLoad(
                 /* module=  */ pipeline.module(),
                 /* bytes=   */ attr.type->size() / 8,
                 /* signed=  */ true,
@@ -1639,7 +1626,7 @@ void WasmStoreCG::operator()(const ColumnStore &store)
                 /* type=    */ get_binaryen_type(attr.type),
                 /* ptr=     */ col_addr
             );
-            pipeline.context().add(e.id, b_value);
+            pipeline.context().add(e.id, std::move(value));
         }
     }
 
@@ -1653,7 +1640,7 @@ void WasmStoreCG::operator()(const ColumnStore &store)
         auto &col_addr = *col_addr_it++;
         const auto attr_size = std::max<std::size_t>(1, attr.type->size() / 8);
 
-        col_addr.set(pipeline.block_, BinaryenBinary(
+        pipeline.block_ += col_addr.set(BinaryenBinary(
             /* module= */ pipeline.module(),
             /* op=     */ BinaryenAddInt32(),
             /* left=   */ col_addr,

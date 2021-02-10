@@ -13,13 +13,15 @@
 
 namespace {
 
+/** Create a unique name from `name` by appending a unique identifier.  If `name` is `nullptr`, use `fallback` instead.
+ */
 inline const char * mkname(const char *name, const char *fallback) {
     insist(fallback, "fallback name must not be nullptr");
     static uint32_t id = 0;
     std::ostringstream oss;
     if (name) oss << name;
-    else      oss << fallback;
-    oss << '_' << id++;
+    else      oss << fallback; oss
+    << '_' << id++;
     return strdup(oss.str().c_str());
 }
 
@@ -29,6 +31,7 @@ namespace m {
 
 struct Type;
 
+/** Returns the `BinaryenType` that corresponds to mu*t*able's `Type` `ty`. */
 inline BinaryenType get_binaryen_type(const Type *ty)
 {
     insist(not ty->is_error());
@@ -52,8 +55,44 @@ inline BinaryenType get_binaryen_type(const Type *ty)
     unreachable("unsupported type");
 }
 
-inline BinaryenExpressionRef convert(BinaryenModuleRef module, BinaryenExpressionRef expr,
-                                     const Type *original, const Type *target)
+/** Manages the lifetime of a `BinaryenExpressionRef`.  Ensures that the `BinaryenExpressionRef` has at most one user.
+ * The semantics of this class are similar to that of `std::unique_ptr`.  */
+struct WasmTemporary
+{
+    friend void swap(WasmTemporary &first, WasmTemporary &second) {
+        std::swap(first.ref_, second.ref_);
+    }
+
+    private:
+    BinaryenExpressionRef ref_ = nullptr;
+
+    public:
+    WasmTemporary() { }
+    WasmTemporary(BinaryenExpressionRef ref) : ref_(notnull(ref)) { }
+    ~WasmTemporary() { /* nothing to be done */ }
+
+    WasmTemporary(const WasmTemporary&) = delete;
+    WasmTemporary(WasmTemporary &&other) : WasmTemporary() { swap(*this, other); }
+
+    WasmTemporary & operator=(WasmTemporary other) {
+        insist(other.ref_, "cannot assign nullptr");
+        swap(*this, other);
+        return *this;
+    }
+
+    operator BinaryenExpressionRef() { insist(ref_); auto tmp = ref_; ref_ = nullptr; return tmp; }
+
+    /** Returns true iff there is a `BinaryenExpressionRef` attached to `this`. */
+    bool is() const { return ref_ != nullptr; }
+
+    /** Returns the type of the attached `BinaryenExpressionRef`. */
+    BinaryenType type() const { insist(ref_); return BinaryenExpressionGetType(ref_); }
+
+    /** Returns a fresh `WasmTemporary` with a *deep copy* of the attached `BinaryenExpressionRef`. */
+    WasmTemporary clone(BinaryenModuleRef module) const { insist(ref_); return BinaryenExpressionCopy(ref_, module); }
+};
+
+inline WasmTemporary convert(BinaryenModuleRef module, WasmTemporary expr, const Type *original, const Type *target)
 {
 #define CONVERT(CONVERSION) BinaryenUnary(module, Binaryen##CONVERSION(), expr)
     auto O = as<const Numeric>(original);
@@ -109,11 +148,10 @@ inline BinaryenExpressionRef convert(BinaryenModuleRef module, BinaryenExpressio
 #undef CONVERT
 };
 
-inline BinaryenExpressionRef reinterpret(BinaryenModuleRef module, const BinaryenExpressionRef expr,
-                                         const BinaryenType target)
+inline WasmTemporary reinterpret(BinaryenModuleRef module, WasmTemporary expr, const BinaryenType target)
 {
 #define CONVERT(CONVERSION, EXPR) BinaryenUnary(module, Binaryen##CONVERSION(), EXPR)
-    const BinaryenType original = BinaryenExpressionGetType(expr);
+    const BinaryenType original = expr.type();
     if (original == target) return expr;
 
     if (target == BinaryenTypeInt64()) {
@@ -134,12 +172,12 @@ struct WasmCGContext : ConstASTExprVisitor
 {
     private:
     BinaryenModuleRef module_; ///< the module
-    ///> Maps `Schema::Identifier`s to `BinaryenExpressionRef`s that evaluate to 0 if NULL and 1 otherwise
-    std::unordered_map<Schema::Identifier, BinaryenExpressionRef> nulls_;
-    ///> Maps `Schema::Identifier`s to `BinaryenExpressionRef`s that evaluate to the current value
-    std::unordered_map<Schema::Identifier, BinaryenExpressionRef> values_;
+    ///> Maps `Schema::Identifier`s to `WasmTemporary`s that evaluate to 0 if NULL and 1 otherwise
+    std::unordered_map<Schema::Identifier, WasmTemporary> nulls_;
+    ///> Maps `Schema::Identifier`s to `WasmTemporary`s that evaluate to the current value
+    std::unordered_map<Schema::Identifier, WasmTemporary> values_;
 
-    BinaryenExpressionRef expr_; ///< a temporary used for recursive construction of expressions
+    mutable WasmTemporary expr_; ///< a temporary used for recursive construction of expressions
 
     public:
     WasmCGContext(BinaryenModuleRef module) : module_(module) { }
@@ -150,33 +188,33 @@ struct WasmCGContext : ConstASTExprVisitor
 
     bool has(Schema::Identifier id) const { return values_.find(id) != values_.end(); }
 
-    void add(Schema::Identifier id, BinaryenExpressionRef val) {
-        auto res = values_.emplace(id, val);
+    void add(Schema::Identifier id, WasmTemporary val) {
+        auto res = values_.emplace(id, std::move(val));
         insist(res.second, "duplicate ID");
     }
 
-    BinaryenExpressionRef get_null(Schema::Identifier id) const {
+    WasmTemporary get_null(Schema::Identifier id) const {
         auto it = nulls_.find(id);
         insist(it != nulls_.end(), "no entry for identifier");
-        return it->second;
+        return it->second.clone(module());
     }
 
-    BinaryenExpressionRef get_value(Schema::Identifier id) const {
+    WasmTemporary get_value(Schema::Identifier id) const {
         auto it = values_.find(id);
         insist(it != values_.end(), "no entry for identifier");
-        return it->second;
+        return it->second.clone(module());
     }
 
-    BinaryenExpressionRef operator[](Schema::Identifier id) const { return get_value(id); }
+    WasmTemporary operator[](Schema::Identifier id) const { return get_value(id); }
 
-    /** Compiles an AST expression to a `BinaryenExpressionRef`. */
-    BinaryenExpressionRef compile(const Expr &e) const {
+    /** Compiles an AST expression to a `WasmTemporary`. */
+    WasmTemporary compile(const Expr &e) const {
         const_cast<WasmCGContext*>(this)->operator()(e);
-        return expr_;
+        return std::move(expr_);
     }
 
-    /** Compiles a `cnf::CNF` to a `BinaryenExpressionRef`.  (Without short-circuit evaluation!) */
-    BinaryenExpressionRef compile(const cnf::CNF &cnf) const;
+    /** Compiles a `cnf::CNF` to a `WasmTemporary`.  (Without short-circuit evaluation!) */
+    WasmTemporary compile(const cnf::CNF &cnf) const;
 
     void dump(std::ostream &out) const;
     void dump() const;
@@ -228,7 +266,7 @@ struct WasmStruct
 
     std::size_t offset(std::size_t idx) const { insist(idx < schema.num_entries()); return offsets_[idx]; }
 
-    WasmCGContext create_load_context(BinaryenExpressionRef b_ptr, std::size_t struc_offset = 0) const {
+    WasmCGContext create_load_context(WasmTemporary ptr, std::size_t struc_offset = 0) const {
         WasmCGContext context(module_);
         std::size_t idx = 0;
         for (auto &attr : schema) {
@@ -236,22 +274,22 @@ struct WasmStruct
             BinaryenType b_attr_type = get_binaryen_type(attr.type);
 
             /*----- Load value from struct.  -------------------------------------------------------------------------*/
-            auto b_val = BinaryenLoad(
+            WasmTemporary val = BinaryenLoad(
                 /* module= */ module_,
                 /* bytes=  */ size_in_bytes,
                 /* signed= */ true,
                 /* offset= */ offset(idx++) + struc_offset,
                 /* align=  */ struc_offset % size_in_bytes ? 1 : 0,
                 /* type=   */ b_attr_type,
-                /* ptr=    */ b_ptr
+                /* ptr=    */ ptr.clone(module_)
             );
-            context.add(attr.id, b_val);
+            context.add(attr.id, std::move(val));
         }
         return context;
     }
 
-    BinaryenExpressionRef store(BinaryenExpressionRef b_ptr, Schema::Identifier id, BinaryenExpressionRef b_val,
-                                std::size_t struc_offset = 0) const {
+    WasmTemporary store(WasmTemporary ptr, Schema::Identifier id, WasmTemporary val,
+                        std::size_t struc_offset = 0) const {
         auto [idx, attr] = schema[id];
         const std::size_t size_in_bytes = attr.type->size() < 8 ? 1 : attr.type->size() / 8;
         return BinaryenStore(
@@ -259,8 +297,8 @@ struct WasmStruct
             /* bytes=  */ size_in_bytes,
             /* offset= */ offset(idx) + struc_offset,
             /* align=  */ struc_offset % size_in_bytes ? 1 : 0,
-            /* ptr=    */ b_ptr,
-            /* value=  */ b_val,
+            /* ptr=    */ ptr,
+            /* value=  */ val,
             /* type=   */ get_binaryen_type(attr.type)
         );
     }
@@ -301,29 +339,33 @@ struct BlockBuilder
 
     BlockBuilder & operator=(BlockBuilder other) { swap(*this, other); return *this; }
 
-    void add(BinaryenExpressionRef expr) { exprs_.push_back(expr); }
-    BlockBuilder & operator+=(BinaryenExpressionRef expr) { add(expr); return *this; }
+    BlockBuilder & add(WasmTemporary expr) { exprs_.emplace_back(expr); return *this; }
+    BlockBuilder & operator+=(WasmTemporary expr) { return add(std::move(expr)); }
 
     /** Returns the block's name. */
     const char * name() const { return name_; }
 
     void set_return_type(BinaryenType ty) { return_type_ = ty; }
 
-    BlockBuilder clone(const char *name) const {
-        BlockBuilder blk(module_, name);
-        blk.exprs_ = this->exprs_;
+    BlockBuilder clone(const char *name = nullptr) const {
+        BlockBuilder blk(module_, name ? name : this->name());
         blk.return_type_ = this->return_type_;
+        blk.exprs_.reserve(this->exprs_.size());
+        for (auto &e : this->exprs_)
+            blk.add(BinaryenExpressionCopy(e, module())); // deep copy every expr
         return blk;
     }
 
-    BinaryenExpressionRef finalize() {
-        return BinaryenBlock(
+    WasmTemporary finalize() {
+        WasmTemporary blk = BinaryenBlock(
             /* module=      */ module_,
             /* name=        */ name_,
             /* children=    */ &exprs_[0],
             /* numChildren= */ exprs_.size(),
             /* type=        */ return_type_
         );
+        exprs_.clear();
+        return blk;
     }
 
     void dump(std::ostream &out) const;
@@ -368,6 +410,9 @@ struct FunctionBuilder
         );
     }
 
+    /** Returns the module. */
+    BinaryenModuleRef module() const { return module_; }
+
     /** Returns the function body. */
     BlockBuilder & block() { return block_; }
     /** Returns the function body. */
@@ -375,11 +420,11 @@ struct FunctionBuilder
 
     const char * name() const { return name_; }
 
-    /** Add a fresh local variable to the function and return a `BinaryenLocalGet` expression to access it. */
-    BinaryenExpressionRef add_local(BinaryenType ty) {
+    /** Add a fresh local variable to the function and return its index. */
+    std::size_t add_local(BinaryenType ty) {
         std::size_t idx = BinaryenTypeArity(parameter_type_) + locals_.size();
         locals_.push_back(ty);
-        return BinaryenLocalGet(module_, idx, ty);
+        return idx;
     }
 
     void dump(std::ostream &out) const;
@@ -389,28 +434,38 @@ struct FunctionBuilder
 struct WasmVariable
 {
     private:
-    BinaryenExpressionRef b_var_;
+    BinaryenModuleRef module_;
+    BinaryenType ty_;
+    std::size_t var_idx_;
 
     public:
-    WasmVariable(FunctionBuilder &fn, BinaryenType ty) :
-        b_var_(fn.add_local(ty))
+    WasmVariable(FunctionBuilder &fn, BinaryenType ty)
+        : module_(fn.module())
+        , ty_(ty)
+        , var_idx_(fn.add_local(ty))
+    { }
+
+    WasmVariable(BinaryenModuleRef module, BinaryenType ty, std::size_t idx)
+        : module_(module)
+        , ty_(ty)
+        , var_idx_(idx)
     { }
 
     WasmVariable(const WasmVariable&) = delete;
     WasmVariable(WasmVariable&&) = default;
 
-    const WasmVariable & set(BlockBuilder &block, BinaryenExpressionRef b_expr) const {
-        block += BinaryenLocalSet(
-            /* module= */ block.module(),
-            /* index=  */ BinaryenLocalGetGetIndex(b_var_),
-            /* value=  */ b_expr
+    WasmTemporary set(WasmTemporary expr) const {
+        return BinaryenLocalSet(
+            /* module= */ module_,
+            /* index=  */ var_idx_,
+            /* value=  */ expr
         );
-        return *this;
     }
 
-    BinaryenExpressionRef operator()() const { return b_var_; }
+    WasmTemporary get() const { return BinaryenLocalGet(module_, var_idx_, ty_); }
 
-    operator BinaryenExpressionRef() const { return b_var_; }
+    operator WasmTemporary() const { return get(); }
+    operator BinaryenExpressionRef() const { return get(); }
 };
 
 struct WasmLoop
@@ -435,18 +490,19 @@ struct WasmLoop
 
     operator BlockBuilder&() { return body(); }
 
-    WasmLoop & operator+=(BinaryenExpressionRef b_expr) { body() += b_expr; return *this; }
+    WasmLoop & add(WasmTemporary expr) { body().add(std::move(expr)); return *this; }
+    WasmLoop & operator+=(WasmTemporary expr) { return add(std::move(expr)); }
 
-    BinaryenExpressionRef continu(BinaryenExpressionRef condition = nullptr) {
+    WasmTemporary continu(WasmTemporary condition = WasmTemporary()) {
         return BinaryenBreak(
             /* module=    */ body().module(),
             /* name=      */ name(),
-            /* condition= */ condition,
+            /* condition= */ condition.is() ? BinaryenExpressionRef(condition) : nullptr,
             /* value=     */ nullptr
         );
     }
 
-    virtual BinaryenExpressionRef finalize() {
+    virtual WasmTemporary finalize() {
         return BinaryenLoop(
             /* module= */ body().module(),
             /* name=   */ name(),
@@ -458,17 +514,17 @@ struct WasmLoop
 struct WasmDoWhile : WasmLoop
 {
     private:
-    BinaryenExpressionRef condition_;
+    WasmTemporary condition_;
 
     public:
-    WasmDoWhile(BinaryenModuleRef module, const char *name, BinaryenExpressionRef condition)
+    WasmDoWhile(BinaryenModuleRef module, const char *name, WasmTemporary condition)
         : WasmLoop(module, name)
-        , condition_(condition)
+        , condition_(std::move(condition))
     { }
 
-    BinaryenExpressionRef condition() const { return condition_; }
+    WasmTemporary condition() const { return condition_.clone(body().module()); }
 
-    virtual BinaryenExpressionRef finalize() {
+    virtual WasmTemporary finalize() {
         body() += continu(condition());
         return WasmLoop::finalize();
     }
@@ -477,11 +533,11 @@ struct WasmDoWhile : WasmLoop
 struct WasmWhile : WasmDoWhile
 {
     public:
-    WasmWhile(BinaryenModuleRef module, const char *name, BinaryenExpressionRef condition)
-        : WasmDoWhile(module, name, condition)
+    WasmWhile(BinaryenModuleRef module, const char *name, WasmTemporary condition)
+        : WasmDoWhile(module, name, std::move(condition))
     { }
 
-    BinaryenExpressionRef finalize() override {
+    WasmTemporary finalize() override {
         auto loop = WasmDoWhile::finalize();
         return BinaryenIf(
             /* module=    */ body().module(),
@@ -508,25 +564,21 @@ struct WasmCompare
         , order(order)
     { }
 
-    BinaryenExpressionRef emit(FunctionBuilder &fn, BlockBuilder &block,
-                               const WasmCGContext &left, const WasmCGContext &right);
+    WasmTemporary emit(FunctionBuilder &fn, BlockBuilder &block, const WasmCGContext &left, const WasmCGContext &right);
 
-    static BinaryenExpressionRef Eq(BinaryenModuleRef module, const Type &ty,
-                                    BinaryenExpressionRef left, BinaryenExpressionRef right);
-    static BinaryenExpressionRef Ne(BinaryenModuleRef module, const Type &ty,
-                                    BinaryenExpressionRef left, BinaryenExpressionRef right);
+    static WasmTemporary Eq(BinaryenModuleRef module, const Type &ty, WasmTemporary left, WasmTemporary right);
+    static WasmTemporary Ne(BinaryenModuleRef module, const Type &ty, WasmTemporary left, WasmTemporary right);
 };
 
 struct WasmSwap
 {
     BinaryenModuleRef module;
     FunctionBuilder &fn;
-    std::unordered_map<BinaryenType, BinaryenExpressionRef> swap_temp;
+    std::unordered_map<BinaryenType, std::size_t> swap_temp;
 
     WasmSwap(BinaryenModuleRef module, FunctionBuilder &fn) : module(module) , fn(fn) { }
 
-    void emit(BlockBuilder &block, const WasmStruct &struc,
-              BinaryenExpressionRef b_first, BinaryenExpressionRef b_second);
+    void emit(BlockBuilder &block, const WasmStruct &struc, WasmTemporary ptr_first, WasmTemporary ptr_second);
 };
 
 struct WasmLimits

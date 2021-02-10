@@ -28,13 +28,13 @@ if __name__ == '__main__':
                 f'SELECT SUM(n100), SUM(n1000), SUM(n10000), SUM(n100000) FROM {table_def.table_name} GROUP BY n10',
             ]
 
-            connection.catalog.create_table(table_def)
-            connection.execute_command(f'COPY {table_def.table_name} FROM \'benchmark/operators/data/Distinct_i32.csv\' WITH DELIMITER \',\' CSV HEADER')
-            for q in queries:
-                with connection.execute_query(f'EXPLAIN (ANALYZE, VERBOSE) {q}') as result:
-                    for row in result:
-                        print(row[0])
-            connection.execute_command(f'DROP TABLE {table_def.table_name}')
+            #  connection.catalog.create_table(table_def)
+            #  connection.execute_command(f'COPY {table_def.table_name} FROM \'benchmark/operators/data/Distinct_i32.csv\' WITH DELIMITER \',\' CSV HEADER')
+            #  for q in queries:
+            #      with connection.execute_query(f'EXPLAIN (ANALYZE, VERBOSE) {q}') as result:
+            #          for row in result:
+            #              print(row[0])
+            #  connection.execute_command(f'DROP TABLE {table_def.table_name}')
 
             for q in queries:
                 connection.catalog.create_table(table_def)

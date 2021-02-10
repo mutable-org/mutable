@@ -1284,7 +1284,8 @@ estimation_abort:
                 create_group += data->HT->store_value_to_slot(b_slot_addr, e.id, args[0]);
                 WasmVariable val(CG.fn(), get_binaryen_type(e.type));
                 val.set(update_group, args[0]);
-                auto b_old_val = ld_slot.get_value(e.id);
+                WasmVariable old_val(CG.fn(), get_binaryen_type(e.type));
+                old_val.set(update_group, ld_slot.get_value(e.id));
                 auto n = as<const Numeric>(e.type);
                 switch (n->kind) {
                     case Numeric::N_Int:
@@ -1292,13 +1293,13 @@ estimation_abort:
                             auto b_less = BinaryenBinary(
                                 /* module= */ module(),
                                 /* op=     */ BinaryenLtSInt32(),
-                                /* left=   */ b_old_val,
+                                /* left=   */ old_val,
                                 /* right=  */ val
                             );
                             auto b_new_val = BinaryenSelect(
                                 /* module=    */ module(),
                                 /* condition= */ b_less,
-                                /* ifTrue=    */ b_old_val,
+                                /* ifTrue=    */ old_val,
                                 /* ifFalse=   */ val,
                                 /* type=      */ BinaryenTypeInt32()
                             );
@@ -1307,13 +1308,13 @@ estimation_abort:
                             auto b_less = BinaryenBinary(
                                 /* module= */ module(),
                                 /* op=     */ BinaryenLtSInt64(),
-                                /* left=   */ b_old_val,
+                                /* left=   */ old_val,
                                 /* right=  */ val
                             );
                             auto b_new_val = BinaryenSelect(
                                 /* module=    */ module(),
                                 /* condition= */ b_less,
-                                /* ifTrue=    */ b_old_val,
+                                /* ifTrue=    */ old_val,
                                 /* ifFalse=   */ val,
                                 /* type=      */ BinaryenTypeInt64()
                             );
@@ -1329,7 +1330,7 @@ estimation_abort:
                             auto b_new_val = BinaryenBinary(
                                 /* module= */ module(),
                                 /* op=     */ BinaryenMinFloat32(),
-                                /* left=   */ b_old_val,
+                                /* left=   */ old_val,
                                 /* right=  */ val
                             );
                             update_group += data->HT->store_value_to_slot(b_slot_addr, e.id, b_new_val);
@@ -1337,7 +1338,7 @@ estimation_abort:
                             auto b_new_val = BinaryenBinary(
                                 /* module= */ module(),
                                 /* op=     */ BinaryenMinFloat64(),
-                                /* left=   */ b_old_val,
+                                /* left=   */ old_val,
                                 /* right=  */ val
                             );
                             update_group += data->HT->store_value_to_slot(b_slot_addr, e.id, b_new_val);
@@ -1352,7 +1353,8 @@ estimation_abort:
                 create_group += data->HT->store_value_to_slot(b_slot_addr, e.id, args[0]);
                 WasmVariable val(CG.fn(), get_binaryen_type(e.type));
                 val.set(update_group, args[0]);
-                auto b_old_val = ld_slot.get_value(e.id);
+                WasmVariable old_val(CG.fn(), get_binaryen_type(e.type));
+                old_val.set(update_group, ld_slot.get_value(e.id));
                 auto n = as<const Numeric>(e.type);
                 switch (n->kind) {
                     case Numeric::N_Int:
@@ -1360,13 +1362,13 @@ estimation_abort:
                             auto b_greater = BinaryenBinary(
                                 /* module= */ module(),
                                 /* op=     */ BinaryenGtSInt32(),
-                                /* left=   */ b_old_val,
+                                /* left=   */ old_val,
                                 /* right=  */ val
                             );
                             auto b_new_val = BinaryenSelect(
                                 /* module=    */ module(),
                                 /* condition= */ b_greater,
-                                /* ifTrue=    */ b_old_val,
+                                /* ifTrue=    */ old_val,
                                 /* ifFalse=   */ val,
                                 /* type=      */ BinaryenTypeInt32()
                             );
@@ -1375,13 +1377,13 @@ estimation_abort:
                             auto b_greater = BinaryenBinary(
                                 /* module= */ module(),
                                 /* op=     */ BinaryenGtSInt64(),
-                                /* left=   */ b_old_val,
+                                /* left=   */ old_val,
                                 /* right=  */ val
                             );
                             auto b_new_val = BinaryenSelect(
                                 /* module=    */ module(),
                                 /* condition= */ b_greater,
-                                /* ifTrue=    */ b_old_val,
+                                /* ifTrue=    */ old_val,
                                 /* ifFalse=   */ val,
                                 /* type=      */ BinaryenTypeInt32()
                             );
@@ -1397,7 +1399,7 @@ estimation_abort:
                             auto b_new_val = BinaryenBinary(
                                 /* module= */ module(),
                                 /* op=     */ BinaryenMaxFloat32(),
-                                /* left=   */ b_old_val,
+                                /* left=   */ old_val,
                                 /* right=  */ val
                             );
                             update_group += data->HT->store_value_to_slot(b_slot_addr, e.id, b_new_val);
@@ -1405,7 +1407,7 @@ estimation_abort:
                             auto b_new_val = BinaryenBinary(
                                 /* module= */ module(),
                                 /* op=     */ BinaryenMaxFloat64(),
-                                /* left=   */ b_old_val,
+                                /* left=   */ old_val,
                                 /* right=  */ val
                             );
                             update_group += data->HT->store_value_to_slot(b_slot_addr, e.id, b_new_val);

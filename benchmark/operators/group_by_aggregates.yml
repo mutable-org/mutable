@@ -9,10 +9,10 @@ configurations:
 label: 'Number of aggregates to compute'
 tables: [ 'Distinct_i32' ]
 cases:
-    1: SELECT MIN(n10) FROM Distinct_i32 GROUP BY n100000;
-    2: SELECT MIN(n10), MIN(n100) FROM Distinct_i32 GROUP BY n100000;
-    3: SELECT MIN(n10), MIN(n100), MIN(n1000) FROM Distinct_i32 GROUP BY n100000;
-    4: SELECT MIN(n10), MIN(n100), MIN(n1000), MIN(n10000) FROM Distinct_i32 GROUP BY n100000;
+    1: SELECT SUM(n100) FROM Distinct_i32 GROUP BY n10;
+    2: SELECT SUM(n100), SUM(n1000) FROM Distinct_i32 GROUP BY n10;
+    3: SELECT SUM(n100), SUM(n1000), SUM(n10000) FROM Distinct_i32 GROUP BY n10;
+    4: SELECT SUM(n100), SUM(n1000), SUM(n10000), SUM(n100000) FROM Distinct_i32 GROUP BY n10;
 compare_to:
     'DuckDB': 'benchmark/operators/group_by_aggregates_duckdb.sh'
     'PostgreSQL': 'benchmark/operators/group_by_aggregates_postgresql.sh'

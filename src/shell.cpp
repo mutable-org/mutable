@@ -146,10 +146,12 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             }
             plan->add_child(optree.release());
 
+#if WITH_V8
             if (Options::Get().dryrun and strneq("Wasm", Options::Get().backend, 4)) {
                 WasmModule wasm = TIME_EXPR(WasmPlatform::compile(*plan), "Compile to WebAssembly", timer);
                 wasm.dump(std::cout);
             }
+#endif
 
             if (not Options::Get().dryrun) {
                 auto backend = Backend::Create(Options::Get().backend);

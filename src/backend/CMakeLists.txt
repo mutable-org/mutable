@@ -3,10 +3,15 @@ set(
     Backend.cpp
     Interpreter.cpp
     StackMachine.cpp
-    WasmAlgo.cpp
-    WasmUtil.cpp
-    WebAssembly.cpp
 )
+
+if (${WITH_V8} OR ${WITH_SPIDERMONKEY})
+    set(BACKEND_SOURCES ${BACKEND_SOURCES}
+        WasmAlgo.cpp
+        WasmUtil.cpp
+        WebAssembly.cpp
+    )
+endif()
 
 if(${WITH_V8})
     set(BACKEND_SOURCES ${BACKEND_SOURCES} V8Platform.cpp)

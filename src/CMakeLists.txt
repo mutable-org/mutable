@@ -28,16 +28,27 @@ if(${WITH_SPIDERMONKEY})
     target_link_libraries(${PROJECT_NAME} PRIVATE spidermonkey)
 endif()
 
-add_executable(lex-bin lex.cpp globals.cpp)
-target_link_libraries(lex-bin ${PROJECT_NAME})
+add_library(
+    frontend
+    globals.cpp
+    $<TARGET_OBJECTS:storage>
+    $<TARGET_OBJECTS:parse>
+    $<TARGET_OBJECTS:lex>
+    $<TARGET_OBJECTS:catalog>
+    $<TARGET_OBJECTS:util>
+)
+
+
+add_executable(lex-bin lex.cpp)
+target_link_libraries(lex-bin frontend)
 set_target_properties(lex-bin PROPERTIES OUTPUT_NAME lex)
 
-add_executable(parse-bin parse.cpp globals.cpp)
-target_link_libraries(parse-bin ${PROJECT_NAME})
+add_executable(parse-bin parse.cpp)
+target_link_libraries(parse-bin frontend)
 set_target_properties(parse-bin PROPERTIES OUTPUT_NAME parse)
 
-add_executable(check-bin check.cpp globals.cpp)
-target_link_libraries(check-bin ${PROJECT_NAME})
+add_executable(check-bin check.cpp)
+target_link_libraries(check-bin frontend)
 set_target_properties(check-bin PROPERTIES OUTPUT_NAME check)
 
 add_executable(shell shell.cpp)

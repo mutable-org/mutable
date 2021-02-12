@@ -1279,6 +1279,8 @@ estimation_abort:
                             /* left=   */ old_val,
                             /* right=  */ val
                         );
+#if 1
+                        /* Compute MIN via select. */
                         WasmTemporary new_val = BinaryenSelect(
                             /* module=    */ module(),
                             /* condition= */ less,
@@ -1287,6 +1289,16 @@ estimation_abort:
                             /* type=      */ n->size() <= 32 ? BinaryenTypeInt32() : BinaryenTypeInt64()
                         );
                         update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
+#else
+                        /* Compute MIN via conditional branch. */
+                        WasmTemporary upd = data->HT->store_value_to_slot(slot_addr, e.id, std::move(val));
+                        update_group += BinaryenIf(
+                            /* module=    */ module(),
+                            /* condition= */ less,
+                            /* ifTrue=    */ upd,
+                            /* ifFalse=   */ nullptr
+                        );
+#endif
                         break;
                     }
 
@@ -1323,6 +1335,8 @@ estimation_abort:
                             /* left=   */ old_val,
                             /* right=  */ val
                         );
+#if 1
+                        /* Compute MAX via select. */
                         WasmTemporary new_val = BinaryenSelect(
                             /* module=    */ module(),
                             /* condition= */ greater,
@@ -1331,6 +1345,16 @@ estimation_abort:
                             /* type=      */ n->size() <= 32 ? BinaryenTypeInt32() : BinaryenTypeInt64()
                         );
                         update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
+#else
+                        /* Compute MAX via conditional branch. */
+                        WasmTemporary upd = data->HT->store_value_to_slot(slot_addr, e.id, std::move(val));
+                        update_group += BinaryenIf(
+                            /* module=    */ module(),
+                            /* condition= */ greater,
+                            /* ifTrue=    */ upd,
+                            /* ifFalse=   */ nullptr
+                        );
+#endif
                         break;
                     }
 

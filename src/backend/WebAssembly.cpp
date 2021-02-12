@@ -1272,62 +1272,37 @@ estimation_abort:
                 update_group += old_val.set(ld_slot.get_value(e.id));
                 auto n = as<const Numeric>(e.type);
                 switch (n->kind) {
-                    case Numeric::N_Int:
-                        if (n->size() <= 32) {
-                            WasmTemporary less = BinaryenBinary(
-                                /* module= */ module(),
-                                /* op=     */ BinaryenLtSInt32(),
-                                /* left=   */ old_val,
-                                /* right=  */ val
-                            );
-                            WasmTemporary new_val = BinaryenSelect(
-                                /* module=    */ module(),
-                                /* condition= */ less,
-                                /* ifTrue=    */ old_val,
-                                /* ifFalse=   */ val,
-                                /* type=      */ BinaryenTypeInt32()
-                            );
-                            update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
-                        } else {
-                            WasmTemporary less = BinaryenBinary(
-                                /* module= */ module(),
-                                /* op=     */ BinaryenLtSInt64(),
-                                /* left=   */ old_val,
-                                /* right=  */ val
-                            );
-                            WasmTemporary new_val = BinaryenSelect(
-                                /* module=    */ module(),
-                                /* condition= */ less,
-                                /* ifTrue=    */ old_val,
-                                /* ifFalse=   */ val,
-                                /* type=      */ BinaryenTypeInt64()
-                            );
-                            update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
-                        }
+                    case Numeric::N_Int: {
+                        WasmTemporary less = BinaryenBinary(
+                            /* module= */ module(),
+                            /* op=     */ n->size() <= 32 ? BinaryenLtSInt32() : BinaryenLtSInt64(),
+                            /* left=   */ old_val,
+                            /* right=  */ val
+                        );
+                        WasmTemporary new_val = BinaryenSelect(
+                            /* module=    */ module(),
+                            /* condition= */ less,
+                            /* ifTrue=    */ old_val,
+                            /* ifFalse=   */ val,
+                            /* type=      */ n->size() <= 32 ? BinaryenTypeInt32() : BinaryenTypeInt64()
+                        );
+                        update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
                         break;
+                    }
 
                     case Numeric::N_Decimal:
                         unreachable("not implemented");
 
-                    case Numeric::N_Float:
-                        if (n->size() == 32) {
-                            WasmTemporary new_val = BinaryenBinary(
-                                /* module= */ module(),
-                                /* op=     */ BinaryenMinFloat32(),
-                                /* left=   */ old_val,
-                                /* right=  */ val
-                            );
-                            update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
-                        } else {
-                            WasmTemporary new_val = BinaryenBinary(
-                                /* module= */ module(),
-                                /* op=     */ BinaryenMinFloat64(),
-                                /* left=   */ old_val,
-                                /* right=  */ val
-                            );
-                            update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
-                        }
+                    case Numeric::N_Float: {
+                        WasmTemporary new_val = BinaryenBinary(
+                            /* module= */ module(),
+                            /* op=     */ n->size() == 32 ? BinaryenMinFloat32() : BinaryenMinFloat64(),
+                            /* left=   */ old_val,
+                            /* right=  */ val
+                        );
+                        update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
                         break;
+                    }
                 }
                 break;
             }
@@ -1341,62 +1316,37 @@ estimation_abort:
                 update_group += old_val.set(ld_slot.get_value(e.id));
                 auto n = as<const Numeric>(e.type);
                 switch (n->kind) {
-                    case Numeric::N_Int:
-                        if (n->size() <= 32) {
-                            WasmTemporary greater = BinaryenBinary(
-                                /* module= */ module(),
-                                /* op=     */ BinaryenGtSInt32(),
-                                /* left=   */ old_val,
-                                /* right=  */ val
-                            );
-                            WasmTemporary new_val = BinaryenSelect(
-                                /* module=    */ module(),
-                                /* condition= */ greater,
-                                /* ifTrue=    */ old_val,
-                                /* ifFalse=   */ val,
-                                /* type=      */ BinaryenTypeInt32()
-                            );
-                            update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
-                        } else {
-                            WasmTemporary greater = BinaryenBinary(
-                                /* module= */ module(),
-                                /* op=     */ BinaryenGtSInt64(),
-                                /* left=   */ old_val,
-                                /* right=  */ val
-                            );
-                            WasmTemporary new_val = BinaryenSelect(
-                                /* module=    */ module(),
-                                /* condition= */ greater,
-                                /* ifTrue=    */ old_val,
-                                /* ifFalse=   */ val,
-                                /* type=      */ BinaryenTypeInt32()
-                            );
-                            update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
-                        }
+                    case Numeric::N_Int: {
+                        WasmTemporary greater = BinaryenBinary(
+                            /* module= */ module(),
+                            /* op=     */ n->size() <= 32 ? BinaryenGtSInt32() : BinaryenGtSInt64(),
+                            /* left=   */ old_val,
+                            /* right=  */ val
+                        );
+                        WasmTemporary new_val = BinaryenSelect(
+                            /* module=    */ module(),
+                            /* condition= */ greater,
+                            /* ifTrue=    */ old_val,
+                            /* ifFalse=   */ val,
+                            /* type=      */ n->size() <= 32 ? BinaryenTypeInt32() : BinaryenTypeInt64()
+                        );
+                        update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
                         break;
+                    }
 
                     case Numeric::N_Decimal:
                         unreachable("not implemented");
 
-                    case Numeric::N_Float:
-                        if (n->size() == 32) {
-                            WasmTemporary new_val = BinaryenBinary(
-                                /* module= */ module(),
-                                /* op=     */ BinaryenMaxFloat32(),
-                                /* left=   */ old_val,
-                                /* right=  */ val
-                            );
-                            update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
-                        } else {
-                            WasmTemporary new_val = BinaryenBinary(
-                                /* module= */ module(),
-                                /* op=     */ BinaryenMaxFloat64(),
-                                /* left=   */ old_val,
-                                /* right=  */ val
-                            );
-                            update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
-                        }
+                    case Numeric::N_Float: {
+                        WasmTemporary new_val = BinaryenBinary(
+                            /* module= */ module(),
+                            /* op=     */ n->size() == 32 ? BinaryenMaxFloat32() : BinaryenMaxFloat64(),
+                            /* left=   */ old_val,
+                            /* right=  */ val
+                        );
+                        update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
                         break;
+                    }
                 }
                 break;
             }

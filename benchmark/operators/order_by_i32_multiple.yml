@@ -10,7 +10,7 @@ configurations:
 label: 'Number of attributes to order by'
 tables: [ 'Distinct_i32' ]
 cases:
-    1: SELECT id FROM Distinct_i32 ORDER BY n10000;
+    1: SELECT id FROM Distinct_i32 ORDER BY n100000;
     2: SELECT id FROM Distinct_i32 ORDER BY n10000, n1000;
     3: SELECT id FROM Distinct_i32 ORDER BY n10000, n1000, n100;
     4: SELECT id FROM Distinct_i32 ORDER BY n10000, n1000, n100, n10;

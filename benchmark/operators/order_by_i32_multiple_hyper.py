@@ -22,7 +22,7 @@ if __name__ == '__main__':
 
             times = list()
             queries = [
-                f'SELECT id FROM {table_def.table_name} ORDER BY n10000',
+                f'SELECT id FROM {table_def.table_name} ORDER BY n100000',
                 f'SELECT id FROM {table_def.table_name} ORDER BY n10000, n1000',
                 f'SELECT id FROM {table_def.table_name} ORDER BY n10000, n1000, n100',
                 f'SELECT id FROM {table_def.table_name} ORDER BY n10000, n1000, n100, n10',

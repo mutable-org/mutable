@@ -13,7 +13,7 @@ set jit=off;
 CREATE TABLE Distinct_i32 ( id INT, n1 INT, n10 INT, n100 INT, n1000 INT, n10000 INT, n100000 INT);
 \copy Distinct_i32 FROM '${CSV}' WITH DELIMITER ',' CSV HEADER;
 \timing on
-SELECT id FROM Distinct_i32 ORDER BY n10000;
+SELECT id FROM Distinct_i32 ORDER BY n100000;
 \timing off
 DROP TABLE Distinct_i32;
 

@@ -384,6 +384,5 @@ TEST_CASE("TimePoint to human readable", "[core][util][fn]")
 
     std::ostringstream oss;
     oss << put_timepoint(tp);
-    std::cerr << oss.str() << std::endl;
     check_human_readable(oss.str());
 }

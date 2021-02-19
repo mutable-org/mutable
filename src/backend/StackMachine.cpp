@@ -747,8 +747,7 @@ void StackMachine::emit_Cast(const Type *to_ty, const Type *from_ty)
                         return;
 
                     case Numeric::N_Decimal: { /* decimal -> decimal */
-                        unreachable("not implemented");
-                        auto delta = n_to->scale - n_from->scale;
+                        const int delta = n_to->scale - n_from->scale;
                         if (delta > 0) {        /* decimal of lower scale to decimal of higher scale */
                             add_and_emit_load(powi(10L, delta));
                             emit_Mul_i();

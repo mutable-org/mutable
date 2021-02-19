@@ -695,6 +695,36 @@ TEST_CASE("StackMachine/emit_Cast", "[core][backend]")
         REQUIRE(res[2] == (double) 31410/10000);
     }
 
+    SECTION("decimal(10,2) -> decimal(10,1)")
+    {
+        SM.add_and_emit_load(314);
+        SM.emit_Cast(Type::Get_Decimal(Type::TY_Scalar, 10, 1), Type::Get_Decimal(Type::TY_Scalar, 10, 2));
+        SM.emit_St_Tup_i(0, 0);
+        SM(args);
+        REQUIRE(not res.is_null(0));
+        REQUIRE(res[0] == 31);
+    }
+
+    SECTION("decimal(10,2) -> decimal(10,2)")
+    {
+        SM.add_and_emit_load(314);
+        SM.emit_Cast(Type::Get_Decimal(Type::TY_Scalar, 10, 2), Type::Get_Decimal(Type::TY_Scalar, 10, 2));
+        SM.emit_St_Tup_i(0, 0);
+        SM(args);
+        REQUIRE(not res.is_null(0));
+        REQUIRE(res[0] == 314);
+    }
+
+    SECTION("decimal(10,2) -> decimal(10,3)")
+    {
+        SM.add_and_emit_load(314);
+        SM.emit_Cast(Type::Get_Decimal(Type::TY_Scalar, 10, 3), Type::Get_Decimal(Type::TY_Scalar, 10, 2));
+        SM.emit_St_Tup_i(0, 0);
+        SM(args);
+        REQUIRE(not res.is_null(0));
+        REQUIRE(res[0] == 3140);
+    }
+
     SECTION("CharacterSequence -> CharacterSequence (nothing to be done)")
     {
         SM.add_and_emit_load(42);

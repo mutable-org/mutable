@@ -1256,7 +1256,7 @@ estimation_abort:
 
         /*----- Emit code to evaluate arguments. ---------------------------------------------------------------------*/
         insist(fn_expr->args.size() <= 1, "unsupported aggregate with more than one argument");
-        std::vector<BinaryenExpressionRef> args;
+        std::vector<WasmTemporary> args;
         for (auto arg : fn_expr->args)
             args.emplace_back(context().compile(*arg));
 
@@ -1266,9 +1266,9 @@ estimation_abort:
 
             case Function::FN_MIN: {
                 insist(args.size() == 1, "aggregate function expects exactly one argument");
-                create_group += data->HT->store_value_to_slot(slot_addr, e.id, args[0]);
+                create_group += data->HT->store_value_to_slot(slot_addr, e.id, args[0].clone(module()));
                 WasmVariable val(CG.fn(), get_binaryen_type(e.type));
-                update_group += val.set(BinaryenExpressionCopy(args[0], module()));
+                update_group += val.set(args[0].clone(module()));
                 WasmVariable old_val(CG.fn(), get_binaryen_type(e.type));
                 update_group += old_val.set(ld_slot.get_value(e.id));
                 auto n = as<const Numeric>(e.type);
@@ -1322,9 +1322,9 @@ estimation_abort:
 
             case Function::FN_MAX: {
                 insist(args.size() == 1, "aggregate function expects exactly one argument");
-                create_group += data->HT->store_value_to_slot(slot_addr, e.id, args[0]);
+                create_group += data->HT->store_value_to_slot(slot_addr, e.id, args[0].clone(module()));
                 WasmVariable val(CG.fn(), get_binaryen_type(e.type));
-                update_group += val.set(BinaryenExpressionCopy(args[0], module()));
+                update_group += val.set(args[0].clone(module()));
                 WasmVariable old_val(CG.fn(), get_binaryen_type(e.type));
                 update_group += old_val.set(ld_slot.get_value(e.id));
                 auto n = as<const Numeric>(e.type);
@@ -1382,7 +1382,7 @@ estimation_abort:
                 auto n = as<const Numeric>(fn_expr->args[0]->type());
                 switch (n->kind) {
                     case Numeric::N_Int: {
-                        WasmTemporary extd = convert(module(), args[0], n, Type::Get_Integer(Type::TY_Vector, 8));
+                        WasmTemporary extd = convert(module(), std::move(args[0]), n, Type::Get_Integer(Type::TY_Vector, 8));
                         create_group += data->HT->store_value_to_slot(slot_addr, e.id, extd.clone(module()));
                         WasmTemporary new_val = BinaryenBinary(
                             /* module= */ module(),
@@ -1398,7 +1398,7 @@ estimation_abort:
                         unreachable("not implemented");
 
                     case Numeric::N_Float:
-                        WasmTemporary extd = convert(module(), args[0], n, Type::Get_Double(Type::TY_Vector));
+                        WasmTemporary extd = convert(module(), std::move(args[0]), n, Type::Get_Double(Type::TY_Vector));
                         create_group += data->HT->store_value_to_slot(slot_addr, e.id, extd.clone(module()));
                         WasmTemporary new_val = BinaryenBinary(
                             /* module= */ module(),

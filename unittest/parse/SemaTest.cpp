@@ -689,6 +689,46 @@ TEST_CASE("Sema/Expressions/Functions", "[core][parse][sema]")
         REQUIRE(err.str().empty());
         delete stmt;
     }
+
+    SECTION("AVG with int argument")
+    {
+        LEXER("SELECT AVG(v) FROM mytable;");
+        Parser parser(lexer);
+        SelectStmt *stmt = as<SelectStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        auto &selects = as<SelectClause>(stmt->select)->select;
+        REQUIRE(selects.size() == 1);
+        auto &avg = selects[0];
+        REQUIRE(avg.first->type()->is_double());
+
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        delete stmt;
+    }
+
+    SECTION("AVG with float argument")
+    {
+        LEXER("SELECT AVG(f) FROM mytable;");
+        Parser parser(lexer);
+        SelectStmt *stmt = as<SelectStmt>(parser.parse());
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        Sema sema(diag);
+        sema(*stmt);
+
+        auto &selects = as<SelectClause>(stmt->select)->select;
+        REQUIRE(selects.size() == 1);
+        auto &avg = selects[0];
+        REQUIRE(avg.first->type()->is_double());
+
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        delete stmt;
+    }
 }
 
 TEST_CASE("Sema/Expressions/Designator", "[core][parse][sema]")

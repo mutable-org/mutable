@@ -428,10 +428,16 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
                     unreachable("Invalid function");
 
                 case Function::FN_MIN:
-                case Function::FN_MAX:
-                case Function::FN_AVG: {
-                    /* MIN/MAX/AVG maintain type */
+                case Function::FN_MAX: {
+                    /* MIN/MAX maintain type */
                     e.type_ = arg_type->as_scalar();
+                    d->type_ = Type::Get_Function(e.type_, { arg->type() });
+                    break;
+                }
+
+                case Function::FN_AVG: {
+                    /* AVG always uses double precision floating-point */
+                    e.type_ = Type::Get_Double(Type::TY_Scalar);
                     d->type_ = Type::Get_Function(e.type_, { arg->type() });
                     break;
                 }

@@ -64,7 +64,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
     };
 
     /*----- Handle header information. -------------------------------------------------------------------------------*/
-    if (has_header) {
+    if (has_header and not skip_header) {
         while (c != EOF and c != '\n') {
             auto name = read_cell();
             const Attribute *attr = nullptr;

@@ -1229,7 +1229,7 @@ estimation_abort:
     /*----- Locate entry with key `key` in the bucket, or end of bucket if no such key exists. -----------------------*/
     auto [ slot_addr_found, steps_found ] = data->HT->find_in_bucket(block_, bucket_addr, key);
     WasmVariable slot_addr(CG.fn(), BinaryenTypeInt32());
-    block_ += slot_addr.set(std::move(slot_addr));
+    block_ += slot_addr.set(std::move(slot_addr_found));
 
     /*----- Create or update the group. ------------------------------------------------------------------------------*/
     BlockBuilder create_group(module(), "group_by.create_group");

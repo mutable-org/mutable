@@ -232,27 +232,36 @@ struct WasmStruct
     private:
     BinaryenModuleRef module_;
     std::size_t size_; ///< the size in bytes of the struct
-    std::size_t *offsets_; ///< stores the offsets within the structure
+    std::vector<std::size_t> offsets_; ///< stores the offsets within the structure
     public:
     const Schema &schema; ///< the schema of the struct
 
-    WasmStruct(BinaryenModuleRef module, const Schema &schema)
+    WasmStruct(BinaryenModuleRef module, const Schema &schema,
+               std::initializer_list<const Type*> additional_fields = {})
         : module_(module)
-        , offsets_(new std::size_t[schema.num_entries()])
         , schema(schema)
     {
         /*----- Compute struct size. ---------------------------------------------------------------------------------*/
         std::size_t offset = 0;
         std::size_t alignment = 0;
-        std::size_t idx = 0;
         for (auto &attr : schema) {
             const std::size_t size_in_bytes = attr.type->size() < 8 ? 1 : attr.type->size() / 8;
             alignment = std::max(alignment, size_in_bytes);
             if (offset % size_in_bytes)
                 offset += size_in_bytes - (offset % size_in_bytes); // self-align
-            offsets_[idx++] = offset;
+            offsets_.push_back(offset);
             offset += size_in_bytes;
         }
+        insist(offsets_.size() == schema.num_entries());
+        for (auto ty : additional_fields) {
+            const std::size_t size_in_bytes = ty->size() < 8 ? 1 : ty->size() / 8;
+            alignment = std::max(alignment, size_in_bytes);
+            if (offset % size_in_bytes)
+                offset += size_in_bytes - (offset % size_in_bytes); // self-align
+            offsets_.push_back(offset);
+            offset += size_in_bytes;
+        }
+        insist(offsets_.size() == schema.num_entries() + additional_fields.size());
         if (offset % alignment)
             offset += alignment - (offset % alignment);
         size_ = offset;
@@ -260,11 +269,9 @@ struct WasmStruct
 
     WasmStruct(const WasmStruct&) = delete;
 
-    ~WasmStruct() { delete[] offsets_; }
-
     std::size_t size() const { return size_; }
 
-    std::size_t offset(std::size_t idx) const { insist(idx < schema.num_entries()); return offsets_[idx]; }
+    std::size_t offset(std::size_t idx) const { insist(idx < offsets_.size()); return offsets_[idx]; }
 
     WasmCGContext create_load_context(WasmTemporary ptr, std::size_t struc_offset = 0) const {
         WasmCGContext context(module_);

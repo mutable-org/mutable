@@ -403,6 +403,13 @@ void WasmStruct::dump(std::ostream &out) const
         out << "\n  " << idx << ": " << attr.id << " of type " << *attr.type << " at offset " << offset(idx);
         ++idx;
     }
+    if (idx < offsets_.size()) {
+        out << "\nadditional fields:";
+        while (idx < offsets_.size()) {
+            out << "\n  " << idx << ": offset " << offset(idx);
+            ++idx;
+        }
+    }
     out << std::endl;
 }
 void WasmStruct::dump() const { dump(std::cerr); }

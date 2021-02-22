@@ -28,6 +28,7 @@ struct GroupingData : OperatorData
     WasmStruct *struc = nullptr;
     WasmHashTable *HT = nullptr;
     WasmVariable watermark_high; ///< stores the maximum number of entries before growing the table is required
+    bool needs_running_count; ///< whether we must count the elements per group during grouping
 
     GroupingData(FunctionBuilder &fn)
         : watermark_high(fn, BinaryenTypeInt32())
@@ -421,7 +422,25 @@ void WasmCodeGen::operator()(const GroupingOperator &op)
 {
     auto data = new GroupingData(fn());
     op.data(data);
-    data->struc = new WasmStruct(module(), op.schema());
+
+    data->needs_running_count = false;
+    for (auto agg : op.aggregates()) {
+        auto fe = as<const FnApplicationExpr>(agg);
+        switch (fe->get_function().fnid) {
+            default:
+                continue;
+
+            case Function::FN_AVG:
+                data->needs_running_count = true;
+                goto exit;
+        }
+    }
+exit:
+
+    if (data->needs_running_count)
+        data->struc = new WasmStruct(module(), op.schema(), { Type::Get_Integer(Type::TY_Scalar, 8) }); // with counter
+    else
+        data->struc = new WasmStruct(module(), op.schema()); // without counter
 
     (*this)(*op.child(0));
 
@@ -1243,6 +1262,43 @@ estimation_failed:;
     auto ld_slot = data->HT->load_from_slot(slot_addr);
     data->HT->emplace(create_group, bucket_addr, std::move(steps_found), slot_addr, key_IDs, key);
 
+    if (data->needs_running_count) {
+        create_group += BinaryenStore(
+            /* module= */ module(),
+            /* bytes=  */ 4,
+            /* offset= */ WasmRefCountingHashTable::REFERENCE_SIZE + data->struc->offset(op.schema().num_entries()),
+            /* align=  */ 0,
+            /* ptr=    */ slot_addr,
+            /* value=  */ BinaryenConst(module(), BinaryenLiteralInt32(1)),
+            /* type=   */ BinaryenTypeInt32()
+        );
+
+        WasmTemporary old_count = BinaryenLoad(
+            /* module= */ module(),
+            /* bytes=  */ 4,
+            /* signed= */ false,
+            /* offset= */ WasmRefCountingHashTable::REFERENCE_SIZE + data->struc->offset(op.schema().num_entries()),
+            /* align=  */ 0,
+            /* type=   */ BinaryenTypeInt32(),
+            /* ptr=    */ slot_addr
+        );
+        WasmTemporary new_count = BinaryenBinary(
+            /* module= */ module(),
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ old_count,
+            /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
+        );
+        update_group += BinaryenStore(
+            /* module= */ module(),
+            /* bytes=  */ 4,
+            /* offset= */ WasmRefCountingHashTable::REFERENCE_SIZE + data->struc->offset(op.schema().num_entries()),
+            /* align=  */ 0,
+            /* ptr=    */ slot_addr,
+            /* value=  */ new_count,
+            /* type=   */ BinaryenTypeInt32()
+        );
+    }
+
     for (std::size_t i = 0; i != op.aggregates().size(); ++i) {
         auto e = op.schema()[op.group_by().size() + i];
         auto agg = op.aggregates()[i];
@@ -1406,6 +1462,44 @@ estimation_failed:;
                         update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_val));
                         break;
                 }
+                break;
+            }
+
+            case Function::FN_AVG: {
+                insist(args.size() == 1, "aggregate function expects exactly one argument");
+                /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming Vol 2, section
+                 * 4.2.2. */
+                WasmTemporary argument = convert(module(), std::move(args[0]), fn_expr->args[0]->type(), Type::Get_Double(Type::TY_Scalar));
+                create_group += data->HT->store_value_to_slot(slot_addr, e.id, argument.clone(module()));
+                WasmTemporary old_avg = ld_slot.get_value(e.id);
+                WasmTemporary delta_absolute = BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenSubFloat64(),
+                    /* left=   */ argument,
+                    /* right=  */ old_avg.clone(module())
+                );
+                WasmTemporary running_count = BinaryenLoad(
+                    /* module= */ module(),
+                    /* bytes=  */ 4,
+                    /* signed= */ false,
+                    /* offset= */ WasmRefCountingHashTable::REFERENCE_SIZE + data->struc->offset(op.schema().num_entries()),
+                    /* align=  */ 0,
+                    /* type=   */ BinaryenTypeInt32(),
+                    /* ptr=    */ slot_addr
+                );
+                WasmTemporary delta_relative = BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenDivFloat64(),
+                    /* left=   */ delta_absolute,
+                    /* right=  */ BinaryenUnary(module(), BinaryenConvertSInt32ToFloat64(), running_count)
+                );
+                WasmTemporary new_avg = BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenAddFloat64(),
+                    /* left=   */ old_avg,
+                    /* right=  */ delta_relative
+                );
+                update_group += data->HT->store_value_to_slot(slot_addr, e.id, std::move(new_avg));
                 break;
             }
 

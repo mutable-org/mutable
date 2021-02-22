@@ -852,11 +852,12 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
                 );
 
                 /*----- Insert the element. --------------------------------------------------------------------------*/
-                auto slot_addr = HT->insert_with_duplicates(block_, std::move(hash_i32), { build_key_id }, key);
+                WasmVariable slot_addr(CG.fn(), BinaryenTypeInt32());
+                block_ += slot_addr.set(HT->insert_with_duplicates(block_, std::move(hash_i32), { build_key_id }, key));
 
                 /*---- Write payload. --------------------------------------------------------------------------------*/
                 for (auto attr : op.child(0)->schema())
-                    block_ += HT->store_value_to_slot(std::move(slot_addr), attr.id, context().get_value(attr.id));
+                    block_ += HT->store_value_to_slot(slot_addr, attr.id, context().get_value(attr.id));
 
                 block_ += num_entries.set(BinaryenBinary(
                     /* module= */ module(),

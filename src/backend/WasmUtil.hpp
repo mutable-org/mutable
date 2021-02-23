@@ -52,6 +52,9 @@ inline BinaryenType get_binaryen_type(const Type *ty)
         }
     }
 
+    if (ty->is_date()) return BinaryenTypeInt32();
+    if (ty->is_date_time()) return BinaryenTypeInt64();
+
     unreachable("unsupported type");
 }
 

@@ -434,38 +434,30 @@ void WasmCodeGen::operator()(const GroupingOperator &op)
 
     /*----- Compute end of hash table. -------------------------------------------------------------------------------*/
     WasmVariable end(fn(), BinaryenTypeInt32());
-    auto b_size = BinaryenBinary(
+    WasmTemporary size = BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ HT->mask(),
         /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
     );
-    auto b_size_in_bytes = BinaryenBinary(
+    WasmTemporary size_in_bytes = BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenMulInt32(),
-        /* left=   */ b_size,
+        /* left=   */ size,
         /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(HT->entry_size()))
     );
     main_.block() += end.set(BinaryenBinary(
         /* module= */ module(),
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ HT->addr(),
-        /* right=  */ b_size_in_bytes
-    ));
-
-    /*----- Create new pipeline starting at `GroupingOperator`. ------------------------------------------------------*/
-    WasmWhile loop(module(), "group_by.foreach", BinaryenBinary(
-        /* module= */ module(),
-        /* op=     */ BinaryenLtUInt32(),
-        /* left=   */ induction,
-        /* right=  */ end
+        /* right=  */ size_in_bytes
     ));
 
     /*----- Advance to first occupied slot. --------------------------------------------------------------------------*/
     {
         WasmLoop advance_to_first(module(), "group_by.advance_to_first");
         advance_to_first += induction.set(data->HT->compute_next_slot(induction));
-        auto b_in_bounds = BinaryenBinary(
+        WasmTemporary is_in_bounds = BinaryenBinary(
             /* module= */ module(),
             /* op=     */ BinaryenLtUInt32(),
             /* left=   */ induction,
@@ -474,7 +466,7 @@ void WasmCodeGen::operator()(const GroupingOperator &op)
         WasmTemporary is_slot_empty = data->HT->is_slot_empty(induction);
         advance_to_first += BinaryenIf(
             /* module=    */ module(),
-            /* condition= */ b_in_bounds,
+            /* condition= */ is_in_bounds,
             /* ifTrue=    */ advance_to_first.continu(is_slot_empty.clone(module())),
             /* ifFalse=   */ nullptr
         );
@@ -485,6 +477,14 @@ void WasmCodeGen::operator()(const GroupingOperator &op)
             /* ifFalse=   */ nullptr
         );
     }
+
+    /*----- Create new pipeline starting at `GroupingOperator`. ------------------------------------------------------*/
+    WasmWhile loop(module(), "group_by.foreach", BinaryenBinary(
+        /* module= */ module(),
+        /* op=     */ BinaryenLtUInt32(),
+        /* left=   */ induction,
+        /* right=  */ end
+    ));
 
     /*----- Emit code for data accesses. -----------------------------------------------------------------------------*/
     auto ld = data->HT->load_from_slot(induction);
@@ -500,7 +500,7 @@ void WasmCodeGen::operator()(const GroupingOperator &op)
     {
         WasmLoop advance(module(), "group_by.foreach.advace");
         advance += induction.set(data->HT->compute_next_slot(induction));
-        auto b_in_bounds = BinaryenBinary(
+        WasmTemporary is_in_bounds = BinaryenBinary(
             /* module= */ module(),
             /* op=     */ BinaryenLtUInt32(),
             /* left=   */ induction,
@@ -509,7 +509,7 @@ void WasmCodeGen::operator()(const GroupingOperator &op)
         WasmTemporary is_slot_empty = data->HT->is_slot_empty(induction);
         advance += BinaryenIf(
             /* module=    */ module(),
-            /* condition= */ b_in_bounds,
+            /* condition= */ is_in_bounds,
             /* ifTrue=    */ advance.continu(std::move(is_slot_empty)),
             /* ifFalse=   */ nullptr
         );

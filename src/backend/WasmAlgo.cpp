@@ -1361,7 +1361,7 @@ BinaryenFunctionRef WasmRefCountingHashTable::rehash(WasmHash &hasher,
     }
 
     /*----- Iterate over all entries in the old hash table. ----------------------------------------------------------*/
-    WasmDoWhile for_each(module, "rehash.for_each", BinaryenBinary(
+    WasmWhile for_each(module, "rehash.for_each", BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenLtUInt32(),
         /* left=   */ runner,

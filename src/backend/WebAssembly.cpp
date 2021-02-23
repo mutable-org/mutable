@@ -1049,32 +1049,29 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
 
     /*--- XXX: Crude hack to do pre-allocation in benchmarks. --------------------------------------------------------*/
     if (not op.group_by().empty()) {
+        std::regex reg_is_distinct("n\\d+");
         std::size_t num_groups_est = 1;
         for (auto expr : op.group_by()) {
             if (auto d = cast<const Designator>(expr)) {
-                std::regex reg_is_distinct("n\\d+");
                 if (std::regex_match(d->attr_name.text, reg_is_distinct)) {
                     errno = 0;
                     unsigned num_distinct_values = strtol(d->attr_name.text + 1, nullptr, 10);
-                    if (errno) {
-                        const auto errsv = errno;
-                        std::cerr << "failed to parse number of distinct values: " << strerror(errsv) << std::endl;
-                        goto estimation_abort;
-                    } else {
+                    if (not errno) {
                         num_groups_est = mul_wo_overflow(num_groups_est, num_distinct_values);
+                        continue;
                     }
                 }
-            } else {
-                goto estimation_abort;
             }
+            goto estimation_failed;
         }
+
         if (num_groups_est > 1e9)
             initial_capacity = 1e9 / .7;
         else
             initial_capacity = ceil_to_pow_2<decltype(initial_capacity)>(num_groups_est / .7);
+estimation_failed:;
     }
 
-estimation_abort:
     if (auto scan = cast<ScanOperator>(op.child(0))) { // XXX: hack for pre-allocation
         if (initial_capacity == 0)
             initial_capacity = ceil_to_pow_2<decltype(initial_capacity)>(scan->store().num_rows() / .8);

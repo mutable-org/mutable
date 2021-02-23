@@ -448,8 +448,8 @@ WasmTemporary WasmCompare::emit(FunctionBuilder &fn, BlockBuilder &block,
     for (auto &o : order) {
         WasmVariable val_left (fn, get_binaryen_type(o.first->type()));
         WasmVariable val_right(fn, get_binaryen_type(o.first->type()));
-        val_left .set(left .compile(*o.first));
-        val_right.set(right.compile(*o.first));
+        block += val_left .set(left .compile(*o.first));
+        block += val_right.set(right.compile(*o.first));
 
         WasmTemporary val_lt, val_gt;
         auto n = as<const Numeric>(o.first->type());

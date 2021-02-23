@@ -1,0 +1,67 @@
+Table Timestamps {
+  id int [pk, increment]
+  commit text
+  timestamp timestamptz
+  host text
+
+  Indexes {
+    (timestamp, host) [unique]
+  }
+}
+
+Table Measurements {
+  id int [pk, increment]
+  timepoint int [ref: - Timestamps.id]
+  experiment int [ref: - Experiments.id]
+  benchmark int [ref: - Experiments.benchmark]
+  suite int [ref: - Experiments.suite]
+  config int [ref: - Configurations.id]
+  case text
+  value float
+}
+
+Table Experiments {
+  id int [increment]
+  benchmark int [ref: - Benchmarks.id]
+  suite int [ref: - Benchmarks.suite]
+  name text
+  version int
+  description text
+  is_read_only bool
+  label text
+
+  Indexes {
+    (id, benchmark, suite) [pk]
+    (name, version) [unique]
+  }
+}
+
+Table Configurations {
+  id int [pk, increment]
+  name text
+  parameters text
+
+  Indexes {
+    (name, parameters) [unique]
+  }
+}
+
+Table Benchmarks {
+  id int [increment]
+  suite int [ref: - Suites.id]
+  name text
+
+  Indexes {
+    (id, suite) [pk]
+    (suite, name) [unique]
+  }
+}
+
+Table Suites {
+  id int [pk, increment]
+  name text
+
+  Indexes {
+    name [unique]
+  }
+}

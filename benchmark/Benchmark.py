@@ -18,6 +18,8 @@ import subprocess
 import time
 import yamale
 import yaml
+import json
+import MySQLdb
 
 
 NUM_RUNS        = 5
@@ -580,6 +582,163 @@ $(function () {
 
 
 #=======================================================================================================================
+# Generate a .pgsql file to load the results into the database
+#=======================================================================================================================
+def escape(input_str):
+    escaped = MySQLdb.escape_string(str(input_str))
+    return escaped.decode('utf-8')
+
+
+def generate_pgsql(commit, results):
+    _, nodename, *_ = os.uname()
+    now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')        # Date in ISO 8601
+
+    # Open and truncate output file
+    with open('benchmark.pgsql', 'w') as output_sql_file:
+        # Define functions used to insert rows (if unique constraints not yet inserted)
+        output_sql_file.write(f'''\
+CREATE FUNCTION insert_suite(text)
+RETURNS void
+LANGUAGE SQL
+AS $func$
+    INSERT INTO "Suites" (name)
+    SELECT $1
+    WHERE NOT $1 IN (SELECT name FROM "Suites")
+$func$;
+
+CREATE FUNCTION insert_benchmark(int, text)
+RETURNS void
+LANGUAGE SQL
+AS $func$
+    INSERT INTO "Benchmarks" (suite, name)
+    SELECT $1, $2
+    WHERE NOT ($1, $2) IN (SELECT suite, name FROM "Benchmarks");
+$func$;
+
+CREATE FUNCTION insert_configuration(text, text)
+RETURNS void
+LANGUAGE SQL
+AS $func$
+    INSERT INTO "Configurations" (name, parameters)
+    SELECT $1, $2
+    WHERE NOT ($1, $2) IN (SELECT name, parameters FROM "Configurations");
+$func$;
+
+CREATE FUNCTION insert_timestamp(text, timestamptz, text)
+RETURNS void
+LANGUAGE SQL
+AS $func$
+    INSERT INTO "Timestamps" (commit, timestamp, host)
+    SELECT $1, $2, $3
+    WHERE NOT ($2, $3) IN (SELECT timestamp, host FROM "Timestamps");
+$func$;
+
+CREATE FUNCTION insert_experiment(int, int, text, int, text, bool, text)
+RETURNS void
+LANGUAGE SQL
+AS $func$
+    INSERT INTO "Experiments" (benchmark, suite, name, version, description, is_read_only, label)
+    SELECT $1, $2, $3, $4, $5, $6, $7
+    WHERE NOT ($3, $4) (SELECT name, version FROM "Experiments");
+$func$;
+
+DO$$
+DECLARE timestamp_id integer;
+DECLARE suite_id integer;
+DECLARE benchmark_id integer;
+DECLARE experiment_id integer;
+DECLARE configuration_id integer;
+BEGIN
+    -- Get timestamp
+    PERFORM insert_timestamp('{escape(commit)}', '{escape(now)}', '{escape(nodename)}');
+    SELECT id FROM "Timestamps"
+    WHERE commit='{escape(commit)}'
+      AND timestamp='{escape(now)}'
+      AND host='{escape(nodename)}'
+    INTO timestamp_id;
+''')
+
+        for suite, benchmarks in results.items():
+            # Insert Suite
+            output_sql_file.write(f'''
+    -- Get suite
+    PERFORM insert_suite('{escape(suite)}');
+    SELECT id FROM "Suites"
+    WHERE name='{escape(suite)}'
+    INTO suite_id;
+''')
+
+            for benchmark, experiments in benchmarks.items():
+                output_sql_file.write(f'''
+    -- Get benchmark
+    PERFORM insert_benchmark(suite_id, '{escape(benchmark)}');
+    SELECT id FROM "Benchmarks"
+    WHERE suite=suite_id
+      AND name='{escape(benchmark)}'
+    INTO benchmark_id;
+''')
+
+                for experiment, data in experiments.items():
+                    configs, yml = data
+                    version = int(yml.get('version', 1))
+                    description = str(yml['description'])
+                    read_only = 'TRUE' if (str(yml['readonly']) == 'yes') else 'FALSE'
+                    label = str(yml['label'])
+                    experiment_params = None
+                    if 'args' in yml and yml['args']:
+                        experiment_params = yml['args']
+
+                    output_sql_file.write(f'''
+    -- Get experiment
+    PERFORM insert_experiment(benchmark_id, suite_id, '{escape(experiment)}', {version}, '{escape(description)}', {read_only}, '{escape(label)}');
+    SELECT id FROM "Experiments"
+    WHERE benchmark=benchmark_id
+      AND suite=suite_id
+      AND name='{escape(experiment)}'
+      AND version={version}
+    INTO experiment_id;
+''')
+                    for config, measurements in configs.items():
+                        config_params = measurements['config'].unique()
+                        assert len(config_params) == 1
+                        parameters = list()
+                        if experiment_params:
+                            parameters.append(experiment_params)
+                        if config_params[0]:
+                            parameters.append(config_params[0])
+                        output_sql_file.write(f'''
+    -- Get config
+    PERFORM insert_configuration('{escape(config)}', '{escape(" ".join(parameters))}');
+    SELECT id FROM "Configurations"
+    WHERE name='{escape(config)}'
+      AND parameters='{escape(" ".join(parameters))}'
+    INTO configuration_id;
+
+    -- Write measurements
+    --  timestamp:  ('{commit}', '{now}', '{nodename}')
+    --  suite:      '{suite}'
+    --  benchmark:  '{benchmark}'
+    --  experiment: '{experiment}'
+    --  config:     '{config}'
+    INSERT INTO "Measurements"
+    VALUES
+''')
+
+                        insert = lambda case, time: ' '*8 + f'(default, timestamp_id, experiment_id, benchmark_id, suite_id, configuration_id, {case}, {time})'
+                        values = [ insert(row[0], row[1]) for row in zip(measurements['case'], measurements['time']) ]
+                        output_sql_file.write(',\n'.join(values))
+                        output_sql_file.write(';\n')
+
+        output_sql_file.write('''
+    DROP FUNCTION insert_timestamp;
+    DROP FUNCTION insert_suite;
+    DROP FUNCTION insert_benchmark;
+    DROP FUNCTION insert_configuration;
+    DROP FUNCTION insert_experiment;
+END$$;''')
+
+
+#=======================================================================================================================
 # main
 #=======================================================================================================================
 if __name__ == '__main__':
@@ -589,12 +748,14 @@ if __name__ == '__main__':
     parser.add_argument('suite', nargs='*', help='a benchmark suite to be run')
     parser.add_argument('--html', help='Generate static HTML report', dest='html', default=False, action='store_true')
     parser.add_argument('--no-compare', help='Skip comparison to other systems', dest='compare', default=True, action='store_false')
-    parser.add_argument('-o', '--output',
-                        help='Specify file to write measurement in CSV format (defaults to \'benchmark.csv\')',
-                        dest='output', metavar='FILE.csv', default=None, action='store')
+    parser.add_argument('-o', '--output', dest='output', metavar='FILE.csv', default=None, action='store',
+                        help='Specify file to write measurement in CSV format (defaults to \'benchmark.csv\')')
     parser.add_argument('--args', help='provide additional arguments to pass through to the binary', dest='binargs',
                                   metavar='ARGS', default=None, action='store')
     parser.add_argument('-v', '--verbose', help='verbose output', dest='verbose', default=False, action='store_true')
+    parser.add_argument('--pgsql', dest='pgsql', default=False, action='store_true',
+                        help='create a .pgsql file with instructions to insert measurement results into a PostgreSQL '
+                             'database')
     args = parser.parse_args()
 
     # Check whether we are interactive
@@ -720,6 +881,10 @@ if __name__ == '__main__':
 
     if args.html:
         generate_html(commit, results)
+
+    # Create .pgsql file
+    if args.pgsql:
+        generate_pgsql(commit, results)
 
     # Close event log
     log.clear()

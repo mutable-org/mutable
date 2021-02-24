@@ -375,6 +375,10 @@ int main(int argc, const char **argv)
         "-h", "--help",                                     /* Short, Long      */
         "prints this help message",                         /* Description      */
         [&](bool) { Options::Get().show_help = true; });    /* Callback         */
+    ADD(bool, Options::Get().show_version, false,           /* Type, Var, Init  */
+        nullptr, "--version",                               /* Short, Long      */
+        "shows version information",                        /* Description      */
+        [&](bool) { Options::Get().show_version = true; }); /* Callback         */
     /* Shell configuration */
     ADD(bool, Options::Get().has_color, false,              /* Type, Var, Init  */
         nullptr, "--color",                                 /* Short, Long      */
@@ -512,6 +516,29 @@ int main(int argc, const char **argv)
         usage(std::cout, argv[0]);
         std::cout << "WHERE\n";
         AP.print_args(stdout);
+        std::exit(EXIT_SUCCESS);
+    }
+
+    if (Options::Get().show_version) {
+        if (term_has_color)
+            std::cout << "mu" << Diagnostic::ITALIC << 't' << Diagnostic::RESET << "able";
+        else
+            std::cout << "mutable";
+        std::cout << "\n© 2021, Big Data Analytics Group";
+        auto &v = version::get();
+        std::cout << "\nversion " << v.GIT_REV;
+        if (not streq(v.GIT_BRANCH, ""))
+            std::cout << " (" << v.GIT_BRANCH << ')';
+        std::cout << "\nAuthors: \
+Immanuel Haffner\
+, Joris Nix\
+, Marcel Maltry\
+, Luca Gretscher\
+, Tobias Kopp\
+, Jonas Lauermann\
+, Felix Brinkmann\
+";
+        std::cout << std::endl;
         std::exit(EXIT_SUCCESS);
     }
 

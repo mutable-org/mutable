@@ -12,6 +12,7 @@ struct Diagnostic
 {
     static constexpr const char *RESET   = "\033[0m";
     static constexpr const char *BOLD    = "\033[1;37m";
+    static constexpr const char *ITALIC  = "\033[3;37m";
     static constexpr const char *NOTE    = "\033[1;2;37m";
     static constexpr const char *WARNING = "\033[1;35m";
     static constexpr const char *ERROR   = "\033[1;31m";

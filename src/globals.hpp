@@ -8,6 +8,7 @@ struct Options
 {
     /* Help */
     bool show_help;
+    bool show_version;
     bool list_stores;
     bool list_plan_enumerators;
     bool list_backends;

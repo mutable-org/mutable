@@ -70,6 +70,31 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS})
 
 
 ########################################################################################################################
+# Get Git Version Information
+########################################################################################################################
+
+SET(GITREV_BARE_FILE    "gitversion.tbl")
+SET(GITREV_BARE_TMP     "gitversion-tmp.tbl")
+SET(GITREV_FILE         "${CMAKE_SOURCE_DIR}/include/mutable/${GITREV_BARE_FILE}")
+SET(GITREV_TMP          "${CMAKE_BINARY_DIR}/${GITREV_BARE_TMP}")
+
+ADD_CUSTOM_COMMAND(
+    OUTPUT ${GITREV_FILE}
+    COMMAND ${CMAKE_COMMAND} -E echo_append "X(GIT_REV, "               >  ${GITREV_TMP}
+    COMMAND ${GIT_EXECUTABLE} rev-parse HEAD | tr -d "\\n"              >> ${GITREV_TMP}
+    COMMAND ${CMAKE_COMMAND} -E echo ")"                                >> ${GITREV_TMP}
+    COMMAND ${CMAKE_COMMAND} -E echo_append "X(GIT_BRANCH, "            >> ${GITREV_TMP}
+    COMMAND ${GIT_EXECUTABLE} rev-parse --abbrev-ref HEAD | tr -d "\\n" >> ${GITREV_TMP}
+    COMMAND ${CMAKE_COMMAND} -E echo ")"                                >> ${GITREV_TMP}
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${GITREV_TMP} ${GITREV_FILE}
+    COMMAND ${CMAKE_COMMAND} -E remove ${GITREV_TMP}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    DEPENDS .git/HEAD .git/index
+    VERBATIM
+)
+add_custom_target(gitversion DEPENDS ${GITREV_FILE})
+
+########################################################################################################################
 # Third-Party
 ########################################################################################################################
 

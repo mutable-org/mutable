@@ -312,10 +312,12 @@ WasmModule WasmCodeGen::compile(const Operator &plan)
     BinaryenAddFunctionExport(module.ref(), "run", "run");
 
     /*----- Validate module before optimization. ---------------------------------------------------------------------*/
+#ifndef NDEBUG
     if (not BinaryenModuleValidate(module.ref())) {
         module.dump();
         throw std::logic_error("invalid module");
     }
+#endif
 
 #if 1
     /*----- Optimize module. -----------------------------------------------------------------------------------------*/
@@ -328,14 +330,14 @@ WasmModule WasmCodeGen::compile(const Operator &plan)
     BinaryenModuleOptimize(module.ref());
 
     /*----- Validate module after optimization. ----------------------------------------------------------------------*/
-    if (not BinaryenModuleValidate(module.ref())) {
 #ifndef NDEBUG
+    if (not BinaryenModuleValidate(module.ref())) {
         std::cerr << "Module invalid after optimization!" << std::endl;
         std::cerr << "WebAssembly before optimization:\n" << dump_before_opt.str() << std::endl;
         std::cerr << "WebAssembly after optimization:\n";
-#endif
         module.dump(std::cerr);
     }
+#endif
 #endif
 
     return module;

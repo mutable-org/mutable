@@ -32,10 +32,17 @@
 #include "mutable/util/Position.hpp"
 #include "mutable/util/StringPool.hpp"
 #include "mutable/util/Timer.hpp"
+#include "mutable/version.hpp"
 #include <filesystem>
 
 
 namespace m {
+
+/** Initializes the mu*t*able library.  Must be called before the library may be used.
+ *
+ * @return `true` on initialization success, `false` otherwise
+ */
+bool init(void);
 
 /** Use lexer, parser and semantic analysis to create a `Stmt` for the given `std::string`. */
 std::unique_ptr<Stmt> statement_from_string(Diagnostic &diag, const std::string &str);

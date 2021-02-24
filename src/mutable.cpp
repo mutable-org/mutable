@@ -18,6 +18,8 @@
 using namespace m;
 
 
+bool init() { return streq(m::version::GIT_REV, m::version::get().GIT_REV); }
+
 std::unique_ptr<Stmt> m::statement_from_string(Diagnostic &diag, const std::string &str)
 {
     Catalog &C = Catalog::Get();

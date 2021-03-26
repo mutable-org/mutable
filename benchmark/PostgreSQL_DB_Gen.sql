@@ -48,17 +48,11 @@ CREATE TABLE "Suites" (
 
 ALTER TABLE "Measurements" ADD FOREIGN KEY ("timepoint") REFERENCES "Timestamps" ("id");
 
-ALTER TABLE "Measurements" ADD FOREIGN KEY ("experiment") REFERENCES "Experiments" ("id");
-
-ALTER TABLE "Measurements" ADD FOREIGN KEY ("benchmark") REFERENCES "Experiments" ("benchmark");
-
-ALTER TABLE "Measurements" ADD FOREIGN KEY ("suite") REFERENCES "Experiments" ("suite");
-
 ALTER TABLE "Measurements" ADD FOREIGN KEY ("config") REFERENCES "Configurations" ("id");
 
-ALTER TABLE "Experiments" ADD FOREIGN KEY ("benchmark") REFERENCES "Benchmarks" ("id");
+ALTER TABLE "Measurements" ADD FOREIGN KEY ("experiment", "benchmark", "suite") REFERENCES "Experiments" ("id", "benchmark", "suite");
 
-ALTER TABLE "Experiments" ADD FOREIGN KEY ("suite") REFERENCES "Benchmarks" ("suite");
+ALTER TABLE "Experiments" ADD FOREIGN KEY ("benchmark", "suite") REFERENCES "Benchmarks" ("id", "suite");
 
 ALTER TABLE "Benchmarks" ADD FOREIGN KEY ("suite") REFERENCES "Suites" ("id");
 

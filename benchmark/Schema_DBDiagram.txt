@@ -11,19 +11,20 @@ Table Timestamps {
 
 Table Measurements {
   id int [pk, increment]
-  timepoint int [ref: - Timestamps.id]
-  experiment int [ref: - Experiments.id]
-  benchmark int [ref: - Experiments.benchmark]
-  suite int [ref: - Experiments.suite]
-  config int [ref: - Configurations.id]
+  timepoint int [ref: > Timestamps.id]
+  experiment int
+  benchmark int
+  suite int
+  config int [ref: > Configurations.id]
   case text
   value float
 }
+Ref: Measurements.(experiment, benchmark, suite) > Experiments.(id, benchmark, suite)
 
 Table Experiments {
   id int [increment]
-  benchmark int [ref: - Benchmarks.id]
-  suite int [ref: - Benchmarks.suite]
+  benchmark int
+  suite int
   name text
   version int
   description text
@@ -35,6 +36,7 @@ Table Experiments {
     (name, version) [unique]
   }
 }
+Ref: Experiments.(benchmark, suite) > Benchmarks.(id, suite)
 
 Table Configurations {
   id int [pk, increment]
@@ -48,7 +50,7 @@ Table Configurations {
 
 Table Benchmarks {
   id int [increment]
-  suite int [ref: - Suites.id]
+  suite int [ref: > Suites.id]
   name text
 
   Indexes {

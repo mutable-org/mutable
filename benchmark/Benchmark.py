@@ -639,15 +639,16 @@ LANGUAGE SQL
 AS $func$
     INSERT INTO "Experiments" (benchmark, suite, name, version, description, is_read_only, label)
     SELECT $1, $2, $3, $4, $5, $6, $7
-    WHERE NOT ($3, $4) (SELECT name, version FROM "Experiments");
+    WHERE NOT ($3, $4) IN (SELECT name, version FROM "Experiments");
 $func$;
 
 DO$$
-DECLARE timestamp_id integer;
-DECLARE suite_id integer;
-DECLARE benchmark_id integer;
-DECLARE experiment_id integer;
-DECLARE configuration_id integer;
+DECLARE
+    timestamp_id integer;
+    suite_id integer;
+    benchmark_id integer;
+    experiment_id integer;
+    configuration_id integer;
 BEGIN
     -- Get timestamp
     PERFORM insert_timestamp('{escape(commit)}', '{escape(now)}', '{escape(nodename)}');

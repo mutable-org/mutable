@@ -642,7 +642,7 @@ AS $func$
     WHERE NOT ($3, $4) IN (SELECT name, version FROM "Experiments");
 $func$;
 
-DO$$
+DO $$
 DECLARE
     timestamp_id integer;
     suite_id integer;

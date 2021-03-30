@@ -726,7 +726,8 @@ BEGIN
     VALUES
 ''')
 
-                        insert = lambda case, time: ' '*8 + f'(default, timestamp_id, experiment_id, benchmark_id, suite_id, configuration_id, {case}, {"NaN" if math.isnan(time) else time})'
+                        with_nan = lambda flt: "'NaN'" if math.isnan(flt) else flt
+                        insert = lambda case, time: ' '*8 + f'(default, timestamp_id, experiment_id, benchmark_id, suite_id, configuration_id, {case}, {with_nan(time)})'
                         values = [ insert(row[0], row[1]) for row in zip(measurements['case'], measurements['time']) ]
                         output_sql_file.write(',\n'.join(values))
                         output_sql_file.write(';\n')

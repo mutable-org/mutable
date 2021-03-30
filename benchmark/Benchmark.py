@@ -728,10 +728,9 @@ BEGIN
                         insert = lambda case, time: ' '*8 + f'(default, timestamp_id, experiment_id, benchmark_id, suite_id, configuration_id, {case}, {time})'
                         values = [ insert(row[0], row[1]) for row in zip(measurements['case'], measurements['time']) ]
                         output_sql_file.write(',\n'.join(values))
-                        output_sql_file.write(';')
+                        output_sql_file.write(';\n')
 
-        output_sql_file.write('''
-END$$;''')
+        output_sql_file.write('END$$;')
 
 
 #=======================================================================================================================

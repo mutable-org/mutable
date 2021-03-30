@@ -597,7 +597,7 @@ def generate_pgsql(commit, results):
     with open('benchmark.pgsql', 'w') as output_sql_file:
         # Define functions used to insert rows (if unique constraints not yet inserted)
         output_sql_file.write(f'''\
-CREATE FUNCTION insert_suite(text)
+CREATE OR REPLACE FUNCTION insert_suite(text)
 RETURNS void
 LANGUAGE SQL
 AS $func$
@@ -606,7 +606,7 @@ AS $func$
     WHERE NOT $1 IN (SELECT name FROM "Suites")
 $func$;
 
-CREATE FUNCTION insert_benchmark(int, text)
+CREATE OR REPLACE FUNCTION insert_benchmark(int, text)
 RETURNS void
 LANGUAGE SQL
 AS $func$
@@ -615,7 +615,7 @@ AS $func$
     WHERE NOT ($1, $2) IN (SELECT suite, name FROM "Benchmarks");
 $func$;
 
-CREATE FUNCTION insert_configuration(text, text)
+CREATE OR REPLACE FUNCTION insert_configuration(text, text)
 RETURNS void
 LANGUAGE SQL
 AS $func$
@@ -624,7 +624,7 @@ AS $func$
     WHERE NOT ($1, $2) IN (SELECT name, parameters FROM "Configurations");
 $func$;
 
-CREATE FUNCTION insert_timestamp(text, timestamptz, text)
+CREATE OR REPLACE FUNCTION insert_timestamp(text, timestamptz, text)
 RETURNS void
 LANGUAGE SQL
 AS $func$
@@ -633,7 +633,7 @@ AS $func$
     WHERE NOT ($2, $3) IN (SELECT timestamp, host FROM "Timestamps");
 $func$;
 
-CREATE FUNCTION insert_experiment(int, int, text, int, text, bool, text)
+CREATE OR REPLACE FUNCTION insert_experiment(int, int, text, int, text, bool, text)
 RETURNS void
 LANGUAGE SQL
 AS $func$
@@ -728,14 +728,9 @@ BEGIN
                         insert = lambda case, time: ' '*8 + f'(default, timestamp_id, experiment_id, benchmark_id, suite_id, configuration_id, {case}, {time})'
                         values = [ insert(row[0], row[1]) for row in zip(measurements['case'], measurements['time']) ]
                         output_sql_file.write(',\n'.join(values))
-                        output_sql_file.write(';\n')
+                        output_sql_file.write(';')
 
         output_sql_file.write('''
-    DROP FUNCTION insert_timestamp;
-    DROP FUNCTION insert_suite;
-    DROP FUNCTION insert_benchmark;
-    DROP FUNCTION insert_configuration;
-    DROP FUNCTION insert_experiment;
 END$$;''')
 
 

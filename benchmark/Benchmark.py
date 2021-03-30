@@ -10,6 +10,9 @@ import argparse
 import datetime
 import glob
 import itertools
+import json
+import math
+import MySQLdb
 import numpy
 import os
 import pandas
@@ -18,8 +21,6 @@ import subprocess
 import time
 import yamale
 import yaml
-import json
-import MySQLdb
 
 
 NUM_RUNS        = 5
@@ -725,7 +726,7 @@ BEGIN
     VALUES
 ''')
 
-                        insert = lambda case, time: ' '*8 + f'(default, timestamp_id, experiment_id, benchmark_id, suite_id, configuration_id, {case}, {time})'
+                        insert = lambda case, time: ' '*8 + f'(default, timestamp_id, experiment_id, benchmark_id, suite_id, configuration_id, {case}, {"NaN" if math.isnan(time) else time})'
                         values = [ insert(row[0], row[1]) for row in zip(measurements['case'], measurements['time']) ]
                         output_sql_file.write(',\n'.join(values))
                         output_sql_file.write(';\n')

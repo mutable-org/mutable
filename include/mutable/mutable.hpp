@@ -3,6 +3,7 @@
 #include "mutable/mutable-config.hpp"
 
 #include "mutable/backend/Backend.hpp"
+#include "mutable/catalog/CardinalityEstimator.hpp"
 #include "mutable/catalog/CostFunction.hpp"
 #include "mutable/catalog/Schema.hpp"
 #include "mutable/catalog/Type.hpp"

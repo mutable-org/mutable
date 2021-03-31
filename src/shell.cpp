@@ -4,6 +4,7 @@
 #include "catalog/Schema.hpp"
 #include "globals.hpp"
 #include "io/Reader.hpp"
+#include "IR/PDDL.hpp"
 #include "mutable/mutable.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
@@ -23,6 +24,7 @@
 
 #if __linux
 #include <unistd.h>
+
 #elif __APPLE__
 #include <unistd.h>
 #endif
@@ -119,10 +121,26 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
                 query_graph->sql(std::cout);
                 std::cout.flush();
             }
+            if (Options::Get().pddl) {
+                std::filesystem::path domain_path = Options::Get().pddl;
+                domain_path.append("domain/");
+
+                std::filesystem::path problem_path = Options::Get().pddl;
+                problem_path.append("problem/");
+
+                PDDLGenerator PDDL(Catalog::Get().get_database_in_use().cardinality_estimator(), diag);
+                PDDL.generate_files(*query_graph.get(), Options::Get().pddl_actions, domain_path, problem_path);
+            }
 
             std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::Create(Options::Get().plan_enumerator);
-            CostFunction cf([](CostFunction::Subproblem left, CostFunction::Subproblem right, int, const PlanTable &T) {
-                return sum_wo_overflow(T[left].cost, T[right].cost, T[left].size, T[right].size);
+            CostFunction cf([](CostFunction::Subproblem left, CostFunction::Subproblem right, OperatorKind, const PlanTable &T) {
+                auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
+                return sum_wo_overflow(
+                    T[left].cost,
+                    T[right].cost,
+                    CE.predict_cardinality(*T[left].model),
+                    CE.predict_cardinality(*T[right].model)
+                );
             });
             Optimizer Opt(*pe.get(), cf);
             auto optree = TIME_EXPR(Opt(*query_graph.get()), "Compute the query plan", timer);
@@ -371,6 +389,7 @@ int main(int argc, const char **argv)
         std::function<void(TYPE)> callback = CALLBACK;\
         AP.add(SHORT, LONG, DESCR, callback);\
     }
+    /*----- Help message ---------------------------------------------------------------------------------------------*/
     ADD(bool, Options::Get().show_help, false,              /* Type, Var, Init  */
         "-h", "--help",                                     /* Short, Long      */
         "prints this help message",                         /* Description      */
@@ -380,6 +399,7 @@ int main(int argc, const char **argv)
         "shows version information",                        /* Description      */
         [&](bool) { Options::Get().show_version = true; }); /* Callback         */
     /* Shell configuration */
+    /*----- Shell configuration --------------------------------------------------------------------------------------*/
     ADD(bool, Options::Get().has_color, false,              /* Type, Var, Init  */
         nullptr, "--color",                                 /* Short, Long      */
         "use colors",                                       /* Description      */
@@ -438,6 +458,7 @@ int main(int argc, const char **argv)
         "run queries in benchmark mode",                    /* Description      */
         [&](bool) { Options::Get().benchmark = true; });    /* Callback         */
 #if WITH_V8
+    /*----- Enable Chrome DevTools debugging via web socket ----------------------------------------------------------*/
     ADD(int, Options::Get().cdt_port, 0,                  /* Type, Var, Init  */
         nullptr, "--CDT",                                   /* Short, Long      */
         "specify the port for debugging via ChomeDevTools", /* Description      */
@@ -509,6 +530,51 @@ int main(int argc, const char **argv)
         /* Callback */
         [&](bool) { Options::Get().list_backends = true; }
     );
+    /*----- Select cardinality estimator -----------------------------------------------------------------------------*/
+    ADD(const char *, Options::Get().cardinality_estimator,       /* Type, Var        */
+        "CartesianProductEstimator",                              /* Init             */
+        nullptr, "--cardinality-estimator",                       /* Short, Long      */
+        "specify the cardinality estimator",                      /* Description      */
+        /* Callback         */
+        [&](const char *str) {
+            if (CardinalityEstimator::STR_TO_KIND.find(str) == CardinalityEstimator::STR_TO_KIND.end()) {
+                std::cerr << "There is no cardinality estimator with the name \"" << str << "\"." << std::endl;
+                AP.print_args(stderr);
+                std::exit(EXIT_FAILURE);
+            }
+            Options::Get().cardinality_estimator = str;
+        }
+    );
+
+    ADD(bool, Options::Get().list_cardinality_estimators, false,    /* Type, Var, Init  */
+        nullptr, "--list-cardinality-estimators",                   /* Short, Long      */
+        "list all available cardinality estimators",                /* Description      */
+        /* Callback */
+        [&](bool) { Options::Get().list_cardinality_estimators = true; }
+    );
+    ADD(bool, Options::Get().show_injected_cardinalities_example, false,            /* Type, Var, Init  */
+        nullptr, "--show-cardinality-example",                                      /* Short, Long      */
+        "show example input for injected cardinalities",                            /* Description      */
+        [&](bool) { Options::Get().show_injected_cardinalities_example = true; }    /* Callback         */
+    );
+    ADD(const char *, Options::Get().injected_cardinalities_file, nullptr,          /* Type, Var, Init  */
+        nullptr, "--use-cardinality-file",                                          /* Short, Long      */
+        "specify file with cardinalities to inject",                                /* Description      */
+        [&](const char *str) { Options::Get().injected_cardinalities_file = str; }  /* Callback         */
+    );
+    /*------ PDDL Generation -----------------------------------------------------------------------------------------*/
+    ADD(const char *, Options::Get().pddl, nullptr,                     /* Type, Var, Init  */
+        nullptr, "--pddl",                                              /* Short, Long      */
+        /* Description      */
+        "generate PDDL files for the query, as a parameter specify where to save the PDDL files",
+        [&](const char *str) { Options::Get().pddl = str; }             /* Callback         */
+    );
+    ADD(int, Options::Get().pddl_actions, 4,                                /* Type, Var, Init  */
+        nullptr, "--pddl-actions",                                          /* Short, Long      */
+        /* Description      */
+        "specify the number of actions used for the PDDL files (2,3 or 4), 0 will create all 3 models",
+        [&](int number) { Options::Get().pddl_actions = number; }           /* Callback         */
+    );
 #undef ADD
     AP.parse_args(argc, argv);
 
@@ -539,6 +605,31 @@ Immanuel Haffner\
 , Felix Brinkmann\
 ";
         std::cout << std::endl;
+        std::exit(EXIT_SUCCESS);
+    }
+
+    //TODO put this in an extra method/all into one std::cout << ?
+    if (Options::Get().show_injected_cardinalities_example) {
+        std::cout << "Estimator-File-Format:\n";
+        std::cout << "The estimator file has to be a valid json file of the form:\n";
+        std::cout << "{\n\t<database1>: {\n";
+        std::cout << "\t\t <subproblem1>: <size>,\n";
+        std::cout << "\t\t <subproblem2>: <size>,\n";
+        std::cout << "\t\t\t :\n";
+        std::cout << "\t},\n";
+        std::cout << "\t<database2>: {\n";
+        std::cout << "\t\t <subproblem1>: <size>,\n";
+        std::cout << "\t\t <subproblem2>: <size>,\n";
+        std::cout << "\t\t\t :\n";
+        std::cout << "\t},\n";
+        std::cout << "\t    :\n";
+        std::cout << "},\n";
+        std::cout << "WHERE \n";
+        std::cout << "<database> = Name of the database \n";
+        //TODO enforce this in the input file or be able to create this format?
+        std::cout << "<subproblem> = String containing all the names of the contained relations, alphabetically sorted, "
+                     "comma-seperated, without whitespaces \n";
+        std::cout << "<size> = Size of the <subproblem>\n";
         std::exit(EXIT_SUCCESS);
     }
 
@@ -584,6 +675,49 @@ Immanuel Haffner\
         for (auto pe : PE)
             std::cout << "\n    " << std::setw(max_len) << std::left << pe.first << "    -    " << pe.second;
         std::cout << std::endl;
+        std::exit(EXIT_SUCCESS);
+    }
+
+    if (Options::Get().list_cardinality_estimators) {
+        std::cout << "List of available cardinality estimators:";
+        constexpr std::pair<const char*, const char*> CE[] = {
+#define DB_CARDINALITY_ESTIMATOR(NAME, DESCR) { #NAME, DESCR },
+#include "mutable/tables/CardinalityEstimator.tbl"
+#undef DB_CARDINALITY_ESTIMATOR
+        };
+        std::size_t max_len = 0;
+        for (auto ce : CE) max_len = std::max(max_len, strlen(ce.first));
+        for (auto ce : CE)
+            std::cout << "\n    " << std::setw(max_len) << std::left << ce.first << "    -    " << ce.second;
+        std::cout << std::endl;
+        std::exit(EXIT_SUCCESS);
+    }
+
+    if (Options::Get().show_injected_cardinalities_example) {
+        std::cout << "\
+Example for injected cardinalities file:\n\
+{\n\
+    database1: [\n\
+            {\n\
+                \"relations\": [\"A\", \"B\", ...],\n\
+                \"size\": 150\n\
+            },\n\
+            {\n\
+                \"relations\": [\"C\", \"A\", ...],\n\
+                \"size\": 100\n\
+            },\n\
+    },\n\
+    database2: [\n\
+            {\n\
+                \"relations\": [\"customers\"],\n\
+                \"size\": 1000\n\
+            },\n\
+            {\n\
+                \"relations\": [\"customers\", \"orders\", ...],\n\
+                \"size\": 50\n\
+            },\n\
+    },\n\
+}\n";
         std::exit(EXIT_SUCCESS);
     }
 

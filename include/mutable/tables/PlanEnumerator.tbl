@@ -13,3 +13,4 @@ DB_PLAN_ENUMERATOR( DPsubOpt,               "optimized DPsub: does not enumerate
 DB_PLAN_ENUMERATOR( DPccp,                  "enumerates connected subgraph complement pairs" )
 DB_PLAN_ENUMERATOR( TDbasic,                "basic top-down join enumeration using generate-and-test partitioning" )
 DB_PLAN_ENUMERATOR( TDMinCutAGaT,           "top-down join enumeration using minimal graph cuts and advanced generate-and-test partitioning" )
+DB_PLAN_ENUMERATOR( AIPlanning,             "using AI Planning for efficient search space pruning and plan enumeration" )

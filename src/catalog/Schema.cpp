@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iterator>
+#include <mutable/catalog/CardinalityEstimator.hpp>
 #include <stdexcept>
 
 
@@ -73,6 +74,13 @@ void Function::dump(std::ostream &out) const
 Database::Database(const char *name)
     : name(name)
 {
+
+    //TODO how to incorporate the injected file, pass as argument or do that inside the estimator?
+    //TODO currently a workaround for the Integration Tests, maybe find a different solution?
+    if (Options::Get().cardinality_estimator)
+        cardinality_estimator_ = CardinalityEstimator::Create(Options::Get().cardinality_estimator, name);
+    else
+        cardinality_estimator_ = std::make_unique<CartesianProductEstimator>();
 }
 
 Database::~Database()
@@ -120,7 +128,19 @@ Catalog::Catalog()
 #undef DB_STORE
     insist(store_factories_.size() != 0);
     default_store(store_factories_.begin()->first); // set default store
+
+    /* Initialize cardinality estimators. */
+#define DB_CARDINALITY_ESTIMATOR(NAME, _) { \
+    auto name = pool(#NAME); \
+    auto res = cardinality_estimator_factories_.emplace(name, new ConcreteCardinalityEstimatorFactory<NAME>()); \
+    insist(res.second, "cardinality estimator already defined"); \
 }
+#include "mutable/tables/CardinalityEstimator.tbl"
+#undef DB_CARDINALITY_ESTIMATOR
+    insist(cardinality_estimator_factories_.size() != 0);
+    default_cardinality_estimator(cardinality_estimator_factories_.begin()->first); // set default cardinality estimator
+}
+
 
 Catalog::~Catalog()
 {
@@ -128,20 +148,20 @@ Catalog::~Catalog()
         delete db.second;
     for (auto fn : standard_functions_)
         delete fn.second;
-    for (auto sf : store_factories_)
-        delete sf.second;
 }
 
 Catalog Catalog::the_catalog_;
 
-Database & Catalog::add_database(const char *name) {
+Database & Catalog::add_database(const char *name)
+{
     auto it = databases_.find(name);
     if (it != databases_.end()) throw std::invalid_argument("database with that name already exist");
     it = databases_.emplace_hint(it, name, new Database(name));
     return *it->second;
 }
 
-void Catalog::drop_database(const char *name) {
+void Catalog::drop_database(const char *name)
+{
     if (has_database_in_use() and get_database_in_use().name == name)
         throw std::invalid_argument("Cannot drop database; currently in use.");
     auto it = databases_.find(name);
@@ -159,7 +179,22 @@ std::unique_ptr<Store> Catalog::create_store(const char *name, const Table &tbl)
     return it->second->make(tbl);
 }
 
-std::unique_ptr<Store> Catalog::create_store(const Table &tbl) const {
+std::unique_ptr<Store> Catalog::create_store(const Table &tbl) const
+{
     insist(default_store_, "there must always be a default store");
     return default_store_->make(tbl);
+}
+
+std::unique_ptr<CardinalityEstimator> Catalog::create_cardinality_estimator(const char *name) const
+{
+    name = pool(name);
+    auto it = cardinality_estimator_factories_.find(name);
+    if (it == cardinality_estimator_factories_.end()) throw std::invalid_argument("estimator not found");
+    return it->second->make();
+}
+
+std::unique_ptr<CardinalityEstimator> Catalog::create_cardinality_estimator() const
+{
+    insist(default_cardinality_estimator_, "there must always be a default cardinality estimator");
+    return default_cardinality_estimator_->make();
 }

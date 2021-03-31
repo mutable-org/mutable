@@ -35,6 +35,7 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
         IR/TupleTest.cpp
 
         # catalog
+        catalog/CardinalityEstimatorTest.cpp
         catalog/SchemaTest.cpp
         catalog/TypeTest.cpp
 

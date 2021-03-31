@@ -31,8 +31,11 @@ std::unique_ptr<Producer> Optimizer::operator()(const QueryGraph &G) const
 
 std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryGraph &G) const
 {
+    PlanTable plan_table(G);
     const auto num_sources = G.sources().size();
-    PlanTable plan_table(num_sources);
+    auto &C = Catalog::Get();
+    auto &DB = C.get_database_in_use();
+    auto &CE = DB.cardinality_estimator();
 
     if (num_sources == 0)
         return { std::make_unique<ProjectionOperator>(G.projections()), std::move(plan_table) };
@@ -43,9 +46,9 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
         Subproblem s(1UL << ds->id());
         if (auto bt = cast<const BaseTable>(ds)) {
             /* Produce a scan for base tables. */
-            auto &store = bt->table().store();
             plan_table[s].cost = 0;
-            plan_table[s].size = store.num_rows();
+            plan_table[s].model = CE.estimate_scan(G, s);
+            auto &store = bt->table().store();
             source_plans[ds->id()] = new ScanOperator(store, bt->alias());
         }
         else {
@@ -60,10 +63,10 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
                 S.add({Q->alias(), e.id.name}, e.type);
             sub_plan->schema() = S;
 
-            /* Update the plan table with the size and cost of the nested query and save the plan in the array of source
-             * plans. */
+            /* Update the plan table with the `DataModel` and cost of the nested query and save the plan in the array of
+             * source plans. */
             plan_table[s].cost = sub.cost;
-            plan_table[s].size = sub.size;
+            plan_table[s].model = std::move(sub.model);
             source_plans[ds->id()] = sub_plan.release();
         }
         /* Apply filter, if any. */
@@ -71,14 +74,20 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
             auto filter = new FilterOperator(ds->filter());
             filter->add_child(source_plans[ds->id()]);
             source_plans[ds->id()] = filter;
+            auto new_model = CE.estimate_filter(*plan_table[s].model, filter->filter());
+            plan_table[s].model = std::move(new_model);
         }
     }
 
     optimize_locally(G, plan_table);
     auto plan = construct_plan(G, plan_table, source_plans).release();
+    auto &entry = plan_table.get_final();
 
     /* Perform grouping */
     if (not G.group_by().empty() or not G.aggregates().empty()) {
+        /* Compute `DataModel` after grouping. */
+        auto new_model = CE.estimate_grouping(*entry.model, G.group_by()); // TODO provide aggregates
+        entry.model = std::move(new_model);
         // TODO pick "best" algorithm
         auto group_by = new GroupingOperator(G.group_by(), G.aggregates(), GroupingOperator::G_Hashing);
         group_by->add_child(plan);
@@ -87,6 +96,7 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
 
     /* Perform ordering */
     if (not G.order_by().empty()) {
+        // TODO estimate data model
         auto order_by = new SortingOperator(G.order_by());
         order_by->add_child(plan);
         plan = order_by;
@@ -94,6 +104,7 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
 
     /* Perform projection */
     if (not G.projections().empty() or G.projection_is_anti()) {
+        // TODO estimate data model
         auto projection = new ProjectionOperator(G.projections(), G.projection_is_anti());
         projection->add_child(plan);
         plan = projection;
@@ -101,6 +112,10 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
 
     /* Limit. */
     if (G.limit().limit or G.limit().offset) {
+        /* Compute `DataModel` after limit. */
+        auto new_model = CE.estimate_limit(*entry.model, G.limit().limit, G.limit().offset);
+        entry.model = std::move(new_model);
+        // TODO estimate data model
         auto limit = new LimitOperator(G.limit().limit, G.limit().offset);
         limit->add_child(plan);
         plan = limit;

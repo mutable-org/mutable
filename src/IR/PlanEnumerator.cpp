@@ -1,11 +1,11 @@
 #include "mutable/IR/PlanEnumerator.hpp"
 
-#include "mutable/IR/PlanTable.hpp"
-#include "mutable/IR/QueryGraph.hpp"
-#include "mutable/util/fn.hpp"
 #include "util/ADT.hpp"
+#include <mutable/IR/PlanTable.hpp>
+#include <mutable/IR/QueryGraph.hpp>
+#include <mutable/util/fn.hpp>
 #include <queue>
-#include <unordered_set>
+#include <globals.hpp>
 
 
 using namespace m;
@@ -53,7 +53,7 @@ void DPsize::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &
                     if (not PT.has_plan(*S2)) continue; // subproblem S2 not connected -> skip
                     if (*S1 & *S2) continue; // subproblems not disjoint -> skip
                     if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
-                    PT.update(cf, *S1, *S2, 0);
+                    PT.update(cf, *S1, *S2, OperatorKind::JoinOperator);
                 }
             }
         }
@@ -94,8 +94,8 @@ void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTabl
                         if (*S1 & *S2) continue; // subproblems not disjoint -> skip
                         if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
                         /* Exploit commutativity of join. */
-                        PT.update(cf, *S1, *S2, 0);
-                        PT.update(cf, *S2, *S1, 0);
+                        PT.update(cf, *S1, *S2, OperatorKind::JoinOperator);
+                        PT.update(cf, *S2, *S1, OperatorKind::JoinOperator);
                     }
                 }
             } else {
@@ -106,8 +106,8 @@ void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTabl
                         if (*S1 & *S2) continue; // subproblems not disjoint -> skip
                         if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
                         /* Exploit commutativity of join. */
-                        PT.update(cf, *S1, *S2, 0);
-                        PT.update(cf, *S2, *S1, 0);
+                        PT.update(cf, *S1, *S2, OperatorKind::JoinOperator);
+                        PT.update(cf, *S2, *S1, OperatorKind::JoinOperator);
                     }
                 }
             }
@@ -140,7 +140,7 @@ void DPsizeSub::operator()(const QueryGraph &G, const CostFunction &cf, PlanTabl
                 insist(M.is_connected(O, Comp), "implied by S inducing a connected subgraph");
                 if (not PT.has_plan(O)) continue; // not connected -> skip
                 if (not PT.has_plan(Comp)) continue; // not connected -> skip
-                PT.update(cf, O, Comp, 0);
+                PT.update(cf, O, Comp, OperatorKind::JoinOperator);
             }
         }
     }
@@ -171,7 +171,7 @@ void DPsub::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &P
             insist(M.is_connected(S1, S2), "implied by S inducing a connected subgraph");
             if (not PT.has_plan(S1)) continue; // not connected -> skip
             if (not PT.has_plan(S2)) continue; // not connected -> skip
-            PT.update(cf, S1, S2, 0);
+            PT.update(cf, S1, S2, OperatorKind::JoinOperator);
         }
     }
 }
@@ -207,8 +207,8 @@ void DPsubOpt::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable
             if (not PT.has_plan(S1)) continue; // not connected -> skip
             if (not PT.has_plan(S2)) continue; // not connected -> skip
             /* Exploit commutativity of join. */
-            PT.update(cf, S1, S2, 0);
-            PT.update(cf, S2, S1, 0);
+            PT.update(cf, S1, S2, OperatorKind::JoinOperator);
+            PT.update(cf, S2, S1, OperatorKind::JoinOperator);
         }
     }
 }
@@ -252,8 +252,8 @@ void DPccp::enumerate_cmp(const QueryGraph &G, const AdjacencyMatrix &M, const C
             auto [S, X] = Q.front();
             Q.pop();
             /* Update `PlanTable` with connected subgraph complement pair (S1, S). */
-            PT.update(cf, S1, S, 0);
-            PT.update(cf, S, S1, 0);
+            PT.update(cf, S1, S, OperatorKind::JoinOperator);
+            PT.update(cf, S, S1, OperatorKind::JoinOperator);
 
             Subproblem N = M.neighbors(S) - X;
             /* Iterate over all subsets `sub` in `N` */
@@ -324,8 +324,8 @@ void TDbasic::PlanGen(const QueryGraph &G, const CostFunction &cf, PlanTable &PT
                 PlanGen(G, cf, PT, M, complement);
 
                 /* Update `PlanTable`. */
-                PT.update(cf, sub, complement, 0);
-                PT.update(cf, complement, sub, 0);
+                PT.update(cf, sub, complement, OperatorKind::JoinOperator);
+                PT.update(cf, complement, sub, OperatorKind::JoinOperator);
             }
         }
     }
@@ -382,8 +382,8 @@ void TDMinCutAGaT::MinCutAGaT(const QueryGraph &G, const CostFunction &cf, PlanT
                        Subproblem(least_subset(cmpl)));
 
             /* Update `PlanTable`. */
-            PT.update(cf, e.C, cmpl, 0);
-            PT.update(cf, cmpl, e.C, 0);
+            PT.update(cf, e.C, cmpl, OperatorKind::JoinOperator);
+            PT.update(cf, cmpl, e.C, OperatorKind::JoinOperator);
 
             T_tmp = Subproblem(0);
         } else T_tmp = e.C;
@@ -408,6 +408,25 @@ void TDMinCutAGaT::operator()(const QueryGraph &G, const CostFunction &cf, PlanT
     AdjacencyMatrix M(G);
 
     MinCutAGaT(G, cf, PT, M, Subproblem((1UL << n) - 1), Subproblem(1), Subproblem(0), Subproblem(1));
+}
+
+
+/*======================================================================================================================
+ * AIPlanning
+ *====================================================================================================================*/
+
+/** Computes the join order using an AI Planning approach */
+struct AIPlanning final : PlanEnumerator
+{
+    void operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const override;
+};
+
+void AIPlanning::operator()(const QueryGraph &G, const CostFunction &cf, PlanTable &PT) const
+{
+    DPccp *dummyPE = new DPccp();
+    DPccp dummy = *dummyPE;
+    dummy(G, cf, PT);
+    delete dummyPE;
 }
 
 #define DB_PLAN_ENUMERATOR(NAME, _) \

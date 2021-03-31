@@ -1,8 +1,8 @@
 #pragma once
 
-#include "mutable/catalog/Schema.hpp"
-#include "mutable/lex/Token.hpp"
 #include <iostream>
+#include <mutable/catalog/Schema.hpp>
+#include <mutable/lex/Token.hpp>
 #include <variant>
 #include <vector>
 

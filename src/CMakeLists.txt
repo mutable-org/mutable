@@ -33,13 +33,13 @@ endif()
 add_library(
     frontend
     globals.cpp
+    $<TARGET_OBJECTS:IR>
     $<TARGET_OBJECTS:storage>
     $<TARGET_OBJECTS:parse>
     $<TARGET_OBJECTS:lex>
     $<TARGET_OBJECTS:catalog>
     $<TARGET_OBJECTS:util>
 )
-
 
 add_executable(lex-bin lex.cpp)
 target_link_libraries(lex-bin frontend)

@@ -1,19 +1,20 @@
 #pragma once
 
-#include "mutable/catalog/Type.hpp"
-#include "mutable/storage/Store.hpp"
-#include "mutable/util/fn.hpp"
-#include "mutable/util/macro.hpp"
-#include "mutable/util/memory.hpp"
-#include "mutable/util/Pool.hpp"
-#include "mutable/util/StringPool.hpp"
-#include "mutable/util/Timer.hpp"
-#include "mutable/util/ADT.hpp"
 #include <cmath>
 #include <exception>
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <mutable/catalog/CardinalityEstimator.hpp>
+#include <mutable/catalog/Type.hpp>
+#include <mutable/storage/Store.hpp>
+#include <mutable/util/ADT.hpp>
+#include <mutable/util/fn.hpp>
+#include <mutable/util/macro.hpp>
+#include <mutable/util/memory.hpp>
+#include <mutable/util/Pool.hpp>
+#include <mutable/util/StringPool.hpp>
+#include <mutable/util/Timer.hpp>
 #include <sstream>
 #include <string>
 #include <type_traits>
@@ -342,6 +343,7 @@ struct Database
     private:
     std::unordered_map<const char*, Table*> tables_; ///< the tables of this database
     std::unordered_map<const char*, Function*> functions_; ///< functions defined in this database
+    std::unique_ptr<CardinalityEstimator> cardinality_estimator_; ///< the `CardinalityEstimator` of this `Database`
 
     private:
     Database(const char *name);
@@ -379,6 +381,16 @@ struct Database
      * `Function` with the given `name` is found, searches the global `Catalog`.  Throws `std::invalid_argument` if no
      * `Function` with the given `name` exists. */
     const Function * get_function(const char *name) const;
+
+    /*===== Statistics ===============================================================================================*/
+    /** Sets the `CardinalityEstimator` of this `Database`.  Returns the old `CardinalityEstimator`.
+     *
+     * @return the old `CardinalityEstimator`, may be `nullptr`
+     */
+    std::unique_ptr<CardinalityEstimator> cardinality_estimator(std::unique_ptr<CardinalityEstimator> CE) {
+        auto old = std::move(cardinality_estimator_); cardinality_estimator_ = std::move(CE); return old;
+    }
+    const CardinalityEstimator & cardinality_estimator() const { return *cardinality_estimator_; }
 };
 
 /*======================================================================================================================
@@ -399,8 +411,23 @@ struct ConcreteStoreFactory : StoreFactory
 {
     static_assert(std::is_base_of_v<m::Store, T>, "not a subclass of Store");
 
-    std::unique_ptr<Store> make(const Table &tbl) const override {
-        return std::make_unique<T>(tbl);
+    std::unique_ptr<Store> make(const Table &tbl) const override { return std::make_unique<T>(tbl); }
+};
+
+struct CardinalityEstimatorFactory
+{
+    virtual ~CardinalityEstimatorFactory() { }
+
+    virtual std::unique_ptr<CardinalityEstimator> make() const = 0;
+};
+
+template<typename T>
+struct ConcreteCardinalityEstimatorFactory : CardinalityEstimatorFactory
+{
+    static_assert(std::is_base_of_v<m::CardinalityEstimator, T>, "not a subclass of CardinalityEstimator");
+
+    std::unique_ptr<CardinalityEstimator> make() const override {
+        return std::make_unique<T>();
     }
 };
 
@@ -423,9 +450,12 @@ struct Catalog
     Timer timer_; ///< a global timer
 
     /*----- Factories ------------------------------------------------------------------------------------------------*/
-    std::unordered_map<const char*, StoreFactory*> store_factories_; ///< store factories to create new stores
+    std::unordered_map<const char*, std::unique_ptr<StoreFactory>> store_factories_; ///< store factories to create new stores
+    std::unordered_map<const char*, std::unique_ptr<CardinalityEstimatorFactory>> cardinality_estimator_factories_; ///< cardinality
+    ///< estimator factories to create new cardinality estimators
 
     StoreFactory *default_store_ = nullptr; ///< the default store to use
+    CardinalityEstimatorFactory *default_cardinality_estimator_ = nullptr; ///< the default cardinality estimator to use
 
     private:
     Catalog();
@@ -512,11 +542,34 @@ struct Catalog
         name = pool(name);
         auto it = store_factories_.find(name);
         if (it == store_factories_.end()) throw std::invalid_argument("store not found");
-        default_store_ = it->second;
+        default_store_ = it->second.get();
     }
 
     std::unique_ptr<Store> create_store(const char *name, const Table &tbl) const;
     std::unique_ptr<Store> create_store(const Table &tbl) const;
+
+    /*===== CardinalityEstimators ===================================================================================================*/
+    /** Registers a new `CardinalityEstimator` with the given `name`. */
+    template<typename T>
+    void register_cardinality_estimator(const char *name) {
+        name = pool(name);
+        auto it = cardinality_estimator_factories_.find(name);
+        if (it != cardinality_estimator_factories_.end())
+            throw std::invalid_argument("cardinality estimator with that name already exists");
+        cardinality_estimator_factories_.emplace_hint(it, name, new ConcreteCardinalityEstimatorFactory<T>());
+    }
+
+    /** Sets `name` as the default cardinality estimator to use. */
+    void default_cardinality_estimator(const char *name) {
+        name = pool(name);
+        auto it = cardinality_estimator_factories_.find(name);
+        if (it == cardinality_estimator_factories_.end())
+            throw std::invalid_argument("cardinality estimator not found");
+        default_cardinality_estimator_ = it->second.get();
+    }
+
+    std::unique_ptr<CardinalityEstimator> create_cardinality_estimator(const char *name) const;
+    std::unique_ptr<CardinalityEstimator> create_cardinality_estimator() const;
 };
 
 }

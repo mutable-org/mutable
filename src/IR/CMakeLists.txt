@@ -6,9 +6,10 @@ add_library(
     OperatorDot.cpp
     OperatorVisitor.cpp
     Optimizer.cpp
+    PDDL.cpp
     PlanEnumerator.cpp
     PlanTable.cpp
     QueryGraph.cpp
-    Tuple.cpp
     QueryGraph2SQL.cpp
+    Tuple.cpp
 )

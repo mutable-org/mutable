@@ -12,6 +12,8 @@ struct Options
     bool list_stores;
     bool list_plan_enumerators;
     bool list_backends;
+    bool list_cardinality_estimators;
+    bool show_injected_cardinalities_example;
 
     /* Shell configuration */
     bool has_color;
@@ -37,6 +39,10 @@ struct Options
     const char *store;
     const char *plan_enumerator;
     const char *backend;
+    const char *cardinality_estimator;
+    const char *injected_cardinalities_file;
+    const char *pddl;
+    int pddl_actions;
 
 #if WITH_V8
     /* Specify the port for debugging via ChromeDevTools (CDT). */

@@ -1,6 +1,8 @@
 #pragma once
 
-#include "mutable/IR/PlanTable.hpp"
+#include <mutable/catalog/CostFunction.hpp>
+#include <mutable/IR/PlanEnumerator.hpp>
+#include <mutable/IR/PlanTable.hpp>
 
 
 namespace m {

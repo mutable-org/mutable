@@ -1,13 +1,13 @@
 #include "catch.hpp"
 
-#include "mutable/IR/QueryGraph.hpp"
-#include "IR/QueryGraph.cpp"
-#include "catalog/Schema.hpp"
-#include "mutable/catalog/Type.hpp"
-#include "parse/Parser.hpp"
-#include "parse/Sema.hpp"
-#include "testutil.hpp"
-#include "util/ADT.hpp"
+#include <mutable/IR/QueryGraph.hpp>
+#include <IR/QueryGraph.cpp>
+#include <catalog/Schema.hpp>
+#include <mutable/catalog/Type.hpp>
+#include <parse/Parser.hpp>
+#include <parse/Sema.hpp>
+#include <testutil.hpp>
+#include <util/ADT.hpp>
 
 using namespace m;
 

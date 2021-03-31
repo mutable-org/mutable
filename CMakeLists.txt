@@ -1,8 +1,9 @@
-cmake_minimum_required(VERSION 3.2.3)
+cmake_minimum_required(VERSION 3.11)
 
 project("mutable" C CXX)
 
 include(ExternalProject)
+include(FetchContent)
 enable_testing()
 
 OPTION(BUILD_SHARED_LIBS "Build mutable as a shared library" OFF)
@@ -94,6 +95,7 @@ ADD_CUSTOM_COMMAND(
 )
 add_custom_target(gitversion DEPENDS ${GITREV_FILE})
 
+
 ########################################################################################################################
 # Third-Party
 ########################################################################################################################
@@ -134,6 +136,15 @@ include_directories(SYSTEM third-party/binaryen/src)
 add_library(binaryen STATIC IMPORTED)
 set_target_properties(binaryen PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/third-party/src/Binaryen-build/lib/libbinaryen.a")
 add_dependencies(binaryen Binaryen)
+
+# nlohmann_json - A simple, header-only JSON parser
+FetchContent_Populate(
+    Json
+    GIT_REPOSITORY https://github.com/ArthurSonzogni/nlohmann_json_cmake_fetchcontent.git
+    GIT_TAG "v3.9.0"
+    SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/json"
+)
+include_directories(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/third-party/json/include")
 
 # V8 - Google's JavaScript and WebAssembly Engine (used in Chrome, Node.js)
 if(${WITH_V8})

@@ -26,7 +26,7 @@ struct DataSource
     private:
     cnf::CNF filter_; ///< filter condition on this data source
     std::vector<Join*> joins_; ///< joins with this data source
-    const char *alias_; ///< the alias of this data source
+    const char *alias_; ///< the alias of this data source, `nullptr` if this data source has no alias
     std::size_t id_; ///< unique identifier of this data source within its query graph
 
     bool decorrelated_ = true; ///< indicates whether this source is already decorrelated

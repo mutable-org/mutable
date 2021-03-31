@@ -417,4 +417,11 @@ struct SortingOperator : Producer, Consumer
     X(GroupingOperator) \
     X(SortingOperator)
 
+enum class OperatorKind
+{
+#define X(Kind) Kind,
+    DB_OPERATOR_LIST(X)
+#undef X
+};
+
 }

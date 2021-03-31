@@ -1,0 +1,9 @@
+/* vim: set filetype=cpp: */
+
+#ifndef DB_CARDINALITY_ESTIMATOR
+#error "define DB_CARDINALITY_ESTIMATOR(NAME, DESCR) before including this file"
+#endif
+
+/*                       NAME               | Description */
+DB_CARDINALITY_ESTIMATOR( CartesianProductEstimator,      "estimates cardinalities as Cartesian product" )
+DB_CARDINALITY_ESTIMATOR( InjectionCardinalityEstimator,  "estimates cardinalities based on a JSON file" )

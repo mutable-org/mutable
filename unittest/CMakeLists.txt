@@ -29,9 +29,9 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
         parse/SemaTest.cpp
 
         # IR
-        IR/QueryGraphTest.cpp
         IR/CNFTest.cpp
         IR/PlanEnumeratorTest.cpp
+        IR/QueryGraphTest.cpp
         IR/TupleTest.cpp
 
         # catalog

@@ -93,7 +93,7 @@ def run_command(command, query):
         process.terminate()
         try:
             ret = process.wait(0.01) # wait 10 ms
-        except TimeoutExpired:
+        except subprocess.TimeoutExpired:
             process.kill()
 
 

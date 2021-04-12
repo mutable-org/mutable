@@ -263,6 +263,7 @@ struct CollectStringLiterals : ConstOperatorVisitor, ConstASTExprVisitor
             (*this)(*g);
         recurse(op);
     }
+    void operator()(const AggregationOperator &op) override { recurse(op); }
     void operator()(const SortingOperator &op) override { recurse(op); }
 
     /*----- Expr -----------------------------------------------------------------------------------------------------*/

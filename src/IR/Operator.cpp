@@ -73,6 +73,20 @@ GroupingOperator::GroupingOperator(std::vector<const Expr*> group_by,
     }
 }
 
+AggregationOperator::AggregationOperator(std::vector<const Expr*> aggregates)
+    : aggregates_(aggregates)
+{
+    auto &C = Catalog::Get();
+    auto &S = schema();
+    for (auto e : aggregates) {
+        auto ty = e->type();
+        std::ostringstream oss;
+        oss << *e;
+        auto alias = C.pool(oss.str().c_str());
+        S.add(alias, ty);
+    }
+}
+
 /*======================================================================================================================
  * Print
  *====================================================================================================================*/
@@ -153,6 +167,16 @@ void GroupingOperator::print(std::ostream &out) const
         out << **it;
     }
     out << "] [";
+    for (auto it = aggregates_.begin(), end = aggregates_.end(); it != end; ++it) {
+        if (it != aggregates_.begin()) out << ", ";
+        out << **it;
+    }
+    out << ']';
+}
+
+void AggregationOperator::print(std::ostream &out) const
+{
+    out << "AggregationOperator [";
     for (auto it = aggregates_.begin(), end = aggregates_.end(); it != end; ++it) {
         if (it != aggregates_.begin()) out << ", ";
         out << **it;
@@ -255,6 +279,15 @@ void SchemaMinimizer::operator()(Const<GroupingOperator> &op)
         required |= Agg->get_required();
     (*this)(*op.child(0));
     /* Schema of grouping operator does not change. */
+}
+
+void SchemaMinimizer::operator()(Const<AggregationOperator> &op)
+{
+    required = Schema(); // the AggregationOperator doesn't care what later operators require
+    for (auto &agg : op.aggregates())
+        required |= agg->get_required();
+    (*this)(*op.child(0));
+    /* Schema of AggregationOperator does not change. */
 }
 
 void SchemaMinimizer::operator()(Const<SortingOperator> &op)

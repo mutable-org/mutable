@@ -84,7 +84,7 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
     auto &entry = plan_table.get_final();
 
     /* Perform grouping */
-    if (not G.group_by().empty() or not G.aggregates().empty()) {
+    if (not G.group_by().empty()) {
         /* Compute `DataModel` after grouping. */
         auto new_model = CE.estimate_grouping(*entry.model, G.group_by()); // TODO provide aggregates
         entry.model = std::move(new_model);
@@ -92,6 +92,12 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
         auto group_by = new GroupingOperator(G.group_by(), G.aggregates(), GroupingOperator::G_Hashing);
         group_by->add_child(plan);
         plan = group_by;
+    } else if (not G.aggregates().empty()) {
+        /* Compute `DataModel` after grouping. */
+        // TODO compute data model
+        auto agg = new AggregationOperator(G.aggregates());
+        agg->add_child(plan);
+        plan = agg;
     }
 
     /* Perform ordering */

@@ -709,6 +709,40 @@ struct GroupingData : OperatorData
     }
 };
 
+struct AggregationData : OperatorData
+{
+    Pipeline pipeline;
+    Tuple aggregates;
+    std::vector<StackMachine> compute_aggregate_arguments; ///< StackMachines to compute the argumetns of aggregations
+    std::vector<Tuple> args; ///< tuple used to hold the computed arguments
+
+    AggregationData(const AggregationOperator &op)
+        : pipeline(op.schema())
+    {
+        std::vector<const Type*> types;
+        for (auto &e : op.schema())
+            types.push_back(e.type);
+        types.push_back(Type::Get_Integer(Type::TY_Scalar, 8)); // add nth_tuple counter
+        aggregates = Tuple(std::move(types));
+        aggregates.set(op.schema().num_entries(), 0L); // initialize running count
+
+        for (auto agg : op.aggregates()) {
+            auto fe = as<const FnApplicationExpr>(agg);
+            std::size_t arg_idx = 0;
+            StackMachine sm(op.child(0)->schema());
+            std::vector<const Type*> arg_types;
+            for (auto arg : fe->args) {
+                sm.emit(*arg, 1);
+                sm.emit_Cast(agg->type(), arg->type()); // cast argument type to aggregate type, e.g. f32 to f64 for SUM
+                sm.emit_St_Tup(0, arg_idx++, arg->type());
+                arg_types.push_back(arg->type());
+            }
+            args.emplace_back(Tuple(arg_types));
+            compute_aggregate_arguments.emplace_back(std::move(sm));
+        }
+    }
+};
+
 struct HashBasedGroupingData : GroupingData
 {
     /** Callable to compute the hash of the keys of a tuple. */
@@ -1160,6 +1194,97 @@ void Pipeline::operator()(const GroupingOperator &op)
     }
 }
 
+void Pipeline::operator()(const AggregationOperator &op)
+{
+    auto data = as<AggregationData>(op.data());
+    auto &nth_tuple = data->aggregates[op.schema().num_entries()].as_i();
+
+    for (auto &tuple : block_) {
+        for (std::size_t i = 0, end = op.aggregates().size(); i != end; ++i) {
+            auto &aggregate_arguments = data->args[i];
+            Tuple *args[] = { &aggregate_arguments, &tuple };
+            data->compute_aggregate_arguments[i](args);
+
+            auto fe = as<const FnApplicationExpr>(op.aggregates()[i]);
+            auto ty = fe->type();
+            auto &fn = fe->get_function();
+
+            bool agg_is_null = data->aggregates.is_null(i);
+            auto &val = data->aggregates[i];
+
+            switch (fn.fnid) {
+                default:
+                    unreachable("function kind not implemented");
+
+                case Function::FN_UDF:
+                    unreachable("UDFs not yet supported");
+
+                case Function::FN_COUNT:
+                    if (fe->args.size() == 0) { // COUNT(*)
+                        val.as_i() += 1;
+                    } else { // COUNT(x) aka. count not NULL
+                        val.as_i() += not aggregate_arguments.is_null(0);
+                    }
+                    break;
+
+                case Function::FN_SUM: {
+                    auto n = as<const Numeric>(ty);
+                    if (aggregate_arguments.is_null(0)) continue; // skip NULL
+                    if (n->is_floating_point())
+                        val.as_d() += aggregate_arguments[0].as_d();
+                    else
+                        val.as_i() += aggregate_arguments[0].as_i();
+                    break;
+                }
+
+                case Function::FN_AVG: {
+                    if (aggregate_arguments.is_null(0)) continue; // skip NULL
+                    /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming Vol 2,
+                     * section 4.2.2. */
+                    val.as_d() += (aggregate_arguments[0].as_d() - val.as_d()) / nth_tuple;
+                    break;
+                }
+
+                case Function::FN_MIN: {
+                    using std::min;
+                    if (aggregate_arguments.is_null(0)) continue; // skip NULL
+                    if (agg_is_null) {
+                        data->aggregates.set(i, aggregate_arguments[0]);
+                        continue;
+                    }
+
+                    auto n = as<const Numeric>(ty);
+                    if (n->is_float())
+                        val.as_f() = min(val.as_f(), aggregate_arguments[0].as_f());
+                    else if (n->is_double())
+                        val.as_d() = min(val.as_d(), aggregate_arguments[0].as_d());
+                    else
+                        val.as_i() = min(val.as_i(), aggregate_arguments[0].as_i());
+                    break;
+                }
+
+                case Function::FN_MAX: {
+                    using std::max;
+                    if (aggregate_arguments.is_null(0)) continue; // skip NULL
+                    if (agg_is_null) {
+                        data->aggregates.set(i, aggregate_arguments[0]);
+                        continue;
+                    }
+
+                    auto n = as<const Numeric>(ty);
+                    if (n->is_float())
+                        val.as_f() = max(val.as_f(), aggregate_arguments[0].as_f());
+                    else if (n->is_double())
+                        val.as_d() = max(val.as_d(), aggregate_arguments[0].as_d());
+                    else
+                        val.as_i() = max(val.as_i(), aggregate_arguments[0].as_i());
+                    break;
+                }
+            }
+        }
+    }
+}
+
 void Pipeline::operator()(const SortingOperator &op)
 {
     /* cache all tuples for sorting */
@@ -1300,6 +1425,61 @@ void Interpreter::operator()(const GroupingOperator &op)
             break;
         }
     }
+}
+
+void Interpreter::operator()(const AggregationOperator &op)
+{
+    op.data(new AggregationData(op));
+    auto data = as<AggregationData>(op.data());
+
+    /* Initialize aggregates. */
+    for (std::size_t i = 0, end = op.aggregates().size(); i != end; ++i) {
+        auto fe = as<const FnApplicationExpr>(op.aggregates()[i]);
+        auto ty = fe->type();
+        auto &fn = fe->get_function();
+
+        switch (fn.fnid) {
+            default:
+                unreachable("function kind not implemented");
+
+            case Function::FN_UDF:
+                unreachable("UDFs not yet supported");
+
+            case Function::FN_COUNT:
+                data->aggregates.set(i, 0); // initialize
+                break;
+
+            case Function::FN_SUM: {
+                auto n = as<const Numeric>(ty);
+                if (n->is_floating_point())
+                    data->aggregates.set(i, 0.); // double precision
+                else
+                    data->aggregates.set(i, 0L); // int64
+                break;
+            }
+
+            case Function::FN_AVG: {
+                if (ty->is_floating_point())
+                    data->aggregates.set(i, 0.); // double precision
+                else
+                    data->aggregates.set(i, 0L); // int64
+                break;
+            }
+
+            case Function::FN_MIN:
+            case Function::FN_MAX: {
+                data->aggregates.null(i); // initialize to NULL
+                break;
+            }
+        }
+    }
+    op.child(0)->accept(*this);
+
+    using std::swap;
+    data->pipeline.block_.clear();
+    data->pipeline.block_.mask(1UL);
+    swap(data->pipeline.block_[0], data->aggregates);
+    data->pipeline.push(*op.parent());
 }
 
 void Interpreter::operator()(const SortingOperator &op)

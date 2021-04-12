@@ -113,6 +113,20 @@ void OperatorDot::operator()(Const<GroupingOperator> &op)
         << "    " << id(*op.child(0)) << EDGE << id(op) << ";\n";
 }
 
+void OperatorDot::operator()(Const<AggregationOperator> &op)
+{
+    (*this)(*op.child(0));
+    out << "    " << id(op) << " [label=<<B>Γ</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">";
+    const auto &A = op.aggregates();
+    for (auto it = A.begin(); it != A.end(); ++it) {
+        if (it != A.begin()) out << ", ";
+        out << **it;
+    }
+
+    out << "</FONT></SUB>>];\n"
+        << "    " << id(*op.child(0)) << EDGE << id(op) << ";\n";
+}
+
 void OperatorDot::operator()(Const<SortingOperator> &op)
 {
     (*this)(*op.child(0));

@@ -1225,6 +1225,21 @@ struct GroupingData : OperatorData
     }
 };
 
+struct AggregationData : OperatorData
+{
+    std::vector<WasmVariable> aggregates;
+
+    AggregationData(FunctionBuilder &fn, const AggregationOperator &op) {
+        aggregates.reserve(op.schema().num_entries() + 1);
+        for (std::size_t i = 0; i != op.schema().num_entries(); ++i) {
+            auto &e = op.schema()[i];
+            insist(not e.type->is_character_sequence());
+            aggregates.emplace_back(fn, get_binaryen_type(e.type));
+        }
+        aggregates.emplace_back(fn, BinaryenTypeInt32()); // running count
+    }
+};
+
 struct SortingData : OperatorData
 {
     WasmStruct *struc = nullptr;
@@ -1458,6 +1473,22 @@ exit:
     }
 
     pipeline.block_ += loop.finalize();
+    module().main().block() += pipeline.block_.finalize();
+}
+
+void WasmPlanCG::operator()(const AggregationOperator &op)
+{
+    op.data(new AggregationData(module().main(), op));
+    auto data = as<AggregationData>(op.data());
+
+    (*this)(*op.child(0));
+
+    WasmPipelineCG pipeline(*this);
+    for (std::size_t i = 0; i != op.schema().num_entries(); ++i) {
+        pipeline.context().add(op.schema()[i].id, data->aggregates[i]);
+    }
+
+    pipeline(*op.parent());
     module().main().block() += pipeline.block_.finalize();
 }
 
@@ -2458,6 +2489,195 @@ estimation_failed:;
         /* ifTrue=    */ create_group.finalize(),
         /* ifFalse=   */ update_group.finalize()
     );
+}
+
+void WasmPipelineCG::operator()(const AggregationOperator &op)
+{
+    auto data = as<AggregationData>(op.data());
+
+    /*----- Increment running count. ---------------------------------------------------------------------------------*/
+    WasmVariable &running_count = data->aggregates.back();
+    block_ += running_count.set(BinaryenBinary(
+        /* module= */ module(),
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ running_count,
+        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
+    ));
+
+    /* Emit code to initialize and update aggregates. */
+    for (std::size_t i = 0; i != op.schema().num_entries(); ++i) {
+        auto fn_expr = as<const FnApplicationExpr>(op.aggregates()[i]);
+        auto &fn = fn_expr->get_function();
+        insist(fn.kind == Function::FN_Aggregate, "not an aggregation function");
+
+        auto &agg_ty = *fn_expr->type();
+        auto &agg_val = data->aggregates[i];
+
+        switch (fn.fnid) {
+            default:
+                unreachable("unsupported aggregate function");
+
+            case Function::FN_MIN: {
+                auto &n = as<const Numeric>(agg_ty);
+                auto &arg = *fn_expr->args[0];
+
+                /*----- Initialize aggregate. ------------------------------------------------------------------------*/
+                // TODO initialize with NULL
+                module().main().block() += agg_val.set(BinaryenConst(module(), WasmLimits::max(*fn_expr->type())));
+
+                /*----- Update aggregate. ----------------------------------------------------------------------------*/
+                WasmVariable new_val(module().main(), get_binaryen_type(&agg_ty));
+                block_ += new_val.set(context().compile(block_, arg));
+                switch (n.kind) {
+                    case Numeric::N_Int: {
+                        WasmTemporary is_less = BinaryenBinary(
+                            /* module= */ module(),
+                            /* op=     */ n.size() <= 32 ? BinaryenLtSInt32() : BinaryenLtSInt64(),
+                            /* left=   */ new_val,
+                            /* right=  */ agg_val
+                        );
+                        block_ += agg_val.set(BinaryenSelect(
+                            /* module=    */ module(),
+                            /* condition= */ is_less,
+                            /* ifTrue=    */ new_val,
+                            /* ifFalse=   */ agg_val,
+                            /* type=      */ n.size() <= 32 ? BinaryenTypeInt32() : BinaryenTypeInt64()
+                        ));
+                        break;
+                    }
+
+                    case Numeric::N_Decimal:
+                        unreachable("not implemented");
+
+                    case Numeric::N_Float:
+                        block_ += agg_val.set(BinaryenBinary(
+                            /* module= */ module(),
+                            /* op=     */ n.size() <= 32 ? BinaryenMinFloat32() : BinaryenMinFloat64(),
+                            /* left=   */ new_val,
+                            /* right=  */ agg_val
+                        ));
+                        break;
+                }
+                break;
+            }
+
+            case Function::FN_MAX: {
+                auto &n = as<const Numeric>(agg_ty);
+                auto &arg = *fn_expr->args[0];
+
+                /*----- Initialize aggregate. ------------------------------------------------------------------------*/
+                // TODO initialize with NULL
+                module().main().block() += agg_val.set(BinaryenConst(module(), WasmLimits::lowest(*fn_expr->type())));
+
+                /*----- Update aggregate. ----------------------------------------------------------------------------*/
+                WasmVariable new_val(module().main(), get_binaryen_type(&agg_ty));
+                block_ += new_val.set(context().compile(block_, arg));
+                switch (n.kind) {
+                    case Numeric::N_Int: {
+                        WasmTemporary is_greater = BinaryenBinary(
+                            /* module= */ module(),
+                            /* op=     */ n.size() <= 32 ? BinaryenGtSInt32() : BinaryenGtSInt64(),
+                            /* left=   */ new_val,
+                            /* right=  */ agg_val
+                        );
+                        block_ += agg_val.set(BinaryenSelect(
+                            /* module=    */ module(),
+                            /* condition= */ is_greater,
+                            /* ifTrue=    */ new_val,
+                            /* ifFalse=   */ agg_val,
+                            /* type=      */ n.size() <= 32 ? BinaryenTypeInt32() : BinaryenTypeInt64()
+                        ));
+                        break;
+                    }
+
+                    case Numeric::N_Decimal:
+                        unreachable("not implemented");
+
+                    case Numeric::N_Float:
+                        block_ += agg_val.set(BinaryenBinary(
+                            /* module= */ module(),
+                            /* op=     */ n.size() <= 32 ? BinaryenMaxFloat32() : BinaryenMaxFloat64(),
+                            /* left=   */ new_val,
+                            /* right=  */ agg_val
+                        ));
+                        break;
+                }
+                break;
+            }
+
+            case Function::FN_SUM: {
+                auto &n = as<const Numeric>(agg_ty);
+                auto &arg = *fn_expr->args[0];
+                WasmTemporary new_val = context().compile(block_, arg);
+
+                switch (n.kind) {
+                    case Numeric::N_Int:
+                    case Numeric::N_Decimal:
+                        module().main().block() += agg_val.set(BinaryenConst(module(), BinaryenLiteralInt64(0)));
+                        block_ += agg_val.set(BinaryenBinary(
+                            /* module= */ module(),
+                            /* op=     */ BinaryenAddInt64(),
+                            /* left=   */ agg_val,
+                            /* right=  */ convert(module(), std::move(new_val), arg.type(), &agg_ty)
+                        ));
+                        break;
+
+                    case Numeric::N_Float:
+                        module().main().block() += agg_val.set(BinaryenConst(module(), BinaryenLiteralFloat64(0.)));
+                        block_ += agg_val.set(BinaryenBinary(
+                            /* module= */ module(),
+                            /* op=     */ BinaryenAddFloat64(),
+                            /* left=   */ agg_val,
+                            /* right=  */ convert(module(), std::move(new_val), arg.type(), Type::Get_Double(Type::TY_Vector))
+                        ));
+                        break;
+                }
+                break;
+            }
+
+            case Function::FN_AVG: {
+                /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming Vol 2, section
+                 * 4.2.2. */
+                auto &arg = *fn_expr->args[0];
+                WasmTemporary new_val = context().compile(block_, arg);
+                module().main().block() += agg_val.set(BinaryenConst(module(), BinaryenLiteralFloat64(0.)));
+                WasmTemporary val_converted = convert(module(), std::move(new_val), arg.type(), Type::Get_Double(Type::TY_Vector));
+
+                WasmTemporary absolute_delta = BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenSubFloat64(),
+                    /* left=   */ val_converted,
+                    /* right=  */ agg_val
+                );
+                WasmTemporary relative_delta = BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenDivFloat64(),
+                    /* left=   */ absolute_delta,
+                    /* right=  */ BinaryenUnary(module(), BinaryenConvertUInt32ToFloat64(), running_count)
+                );
+                block_ += agg_val.set(BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenAddFloat64(),
+                    /* left=   */ agg_val,
+                    /* right=  */ relative_delta
+                ));
+                break;
+            }
+
+            case Function::FN_COUNT: {
+                auto &n = as<const Numeric>(agg_ty);
+                module().main().block() += agg_val.set(BinaryenConst(module(), BinaryenLiteralInt64(0)));
+                // TODO check for NULL values
+                block_ += agg_val.set(BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenAddInt64(),
+                    /* left=   */ agg_val,
+                    /* right=  */ BinaryenConst(module(), BinaryenLiteralInt64(1))
+                ));
+                break;
+            }
+        }
+    }
 }
 
 void WasmPipelineCG::operator()(const SortingOperator &op)

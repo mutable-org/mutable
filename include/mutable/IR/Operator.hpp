@@ -385,6 +385,41 @@ struct GroupingOperator : Producer, Consumer
 #undef algorithm
 };
 
+struct AggregationOperator : Producer, Consumer
+{
+    private:
+    std::vector<const Expr*> aggregates_; ///< the aggregates to compute
+
+    public:
+    AggregationOperator(std::vector<const Expr*> aggregates);
+
+    /*----- Override child setters to *NOT* modify the computed schema! ----------------------------------------------*/
+    virtual void add_child(Producer *child) override {
+        if (not child)
+            throw invalid_argument("no child given");
+        children().push_back(child);
+        child->parent(this);
+    }
+    virtual Producer * set_child(Producer *child, std::size_t i) override {
+        if (not child)
+            throw invalid_argument("no child given");
+        if (i >= children().size())
+            throw out_of_range("index i out of bounds");
+        auto old = children()[i];
+        children()[i] = child;
+        child->parent(this);
+        return old;
+    }
+
+    const auto & aggregates() const { return aggregates_; }
+
+    void accept(OperatorVisitor &v) override;
+    void accept(ConstOperatorVisitor &v) const override;
+
+    private:
+    void print(std::ostream &out) const override;
+};
+
 struct SortingOperator : Producer, Consumer
 {
     /** A list of expressions to sort by.  True means ascending, false means descending. */
@@ -415,6 +450,7 @@ struct SortingOperator : Producer, Consumer
     X(ProjectionOperator) \
     X(LimitOperator) \
     X(GroupingOperator) \
+    X(AggregationOperator) \
     X(SortingOperator)
 
 enum class OperatorKind

@@ -162,7 +162,14 @@ inline WasmTemporary convert(BinaryenModuleRef module, WasmTemporary expr, const
                 return CONVERT(ConvertSInt32ToFloat64); // i32 to f64
         }
         if (O->is_decimal()) {
-            unreachable("not implemented");
+            WasmTemporary val = O->size() == 64 ? CONVERT(ConvertSInt64ToFloat64)  // i64 to f64
+                                                : CONVERT(ConvertSInt32ToFloat64); // i32 to f64
+            return BinaryenBinary(
+                /* module= */ module,
+                /* op=     */ BinaryenDivFloat64(),
+                /* left=   */ val,
+                /* right=  */ BinaryenConst(module, BinaryenLiteralFloat64(pow(10., O->scale)))
+            );
         }
     }
 
@@ -241,6 +248,26 @@ inline WasmTemporary convert(BinaryenModuleRef module, WasmTemporary expr, const
                 );
             }
             return expr;
+        }
+
+        if (O->is_floating_point()) {
+            if (O->size() == 64) {
+                expr = BinaryenBinary(
+                    /* module= */ module,
+                    /* op=     */ BinaryenMulFloat64(),
+                    /* left=   */ expr,
+                    /* right=  */ BinaryenConst(module, BinaryenLiteralFloat64(pow(10., O->scale)))
+                );
+                return T->size() == 64 ? CONVERT(TruncSFloat64ToInt64) : CONVERT(TruncSFloat64ToInt32);
+            } else {
+                expr = BinaryenBinary(
+                    /* module= */ module,
+                    /* op=     */ BinaryenMulFloat32(),
+                    /* left=   */ expr,
+                    /* right=  */ BinaryenConst(module, BinaryenLiteralFloat32(powf(10.f, O->scale)))
+                );
+                return T->size() == 64 ? CONVERT(TruncSFloat32ToInt64) : CONVERT(TruncSFloat32ToInt32);
+            }
         }
     }
 

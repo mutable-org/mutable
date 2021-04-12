@@ -12,14 +12,13 @@ using namespace m;
  * WasmPartitionBranching
  *====================================================================================================================*/
 
-WasmTemporary WasmPartitionBranching::emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                                           const WasmStruct &struc, const std::vector<order_type> &order,
+WasmTemporary WasmPartitionBranching::emit(FunctionBuilder &fn, BlockBuilder &block,
+                                           const WasmStructCGContext &context, const std::vector<order_type> &order,
                                            WasmTemporary begin, WasmTemporary end, WasmTemporary pivot) const
 {
-    (void) module;
     (void) fn;
     (void) block;
-    (void) struc;
+    (void) context;
     (void) order;
     (void) begin;
     (void) end;
@@ -121,13 +120,13 @@ WasmTemporary WasmPartitionBranching::emit(BinaryenModuleRef module, FunctionBui
  * WasmPartitionBranchless
  *====================================================================================================================*/
 
-WasmTemporary WasmPartitionBranchless::emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                                                    const WasmStruct &struc, const std::vector<order_type> &order,
-                                                    WasmTemporary begin, WasmTemporary end,
-                                                    WasmTemporary pivot) const
+WasmTemporary WasmPartitionBranchless::emit(FunctionBuilder &fn, BlockBuilder &block,
+                                            const WasmStructCGContext &context, const std::vector<order_type> &order,
+                                            WasmTemporary begin, WasmTemporary end,
+                                            WasmTemporary pivot) const
 {
-    WasmSwap wasm_swap(module, fn);
-    WasmCompare comparator(module, struc, order);
+    WasmSwap wasm_swap(fn);
+    WasmCompare comparator(fn, order);
 
     /*----- Initialize left and right cursor. ------------------------------------------------------------------------*/
     WasmVariable left(fn, BinaryenTypeInt32());
@@ -137,8 +136,8 @@ WasmTemporary WasmPartitionBranchless::emit(BinaryenModuleRef module, FunctionBu
     block += right.set(std::move(end));
 
     /*----- Create loop. ---------------------------------------------------------------------------------------------*/
-    WasmDoWhile loop(module, "partition_branchless.loop", BinaryenBinary(
-        /* module= */ module,
+    WasmDoWhile loop(fn.module(), "partition_branchless.loop", BinaryenBinary(
+        /* module= */ fn.module(),
         /* op=     */ BinaryenLtUInt32(),
         /* left=   */ left,
         /* right=  */ right
@@ -146,72 +145,57 @@ WasmTemporary WasmPartitionBranchless::emit(BinaryenModuleRef module, FunctionBu
 
     /*----- Offset right by one.  (This can be dropped when negative offsets are supported.) -------------------------*/
     WasmTemporary last = BinaryenBinary(
-        /* module= */ module,
+        /* module= */ fn.module(),
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ right,
-        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(-struc.size()))
+        /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(-context.struc.size_in_bytes()))
     );
-
-    /*----- Create load context for left, right, and pivot. ----------------------------------------------------------*/
-    auto load_context_left  = struc.create_load_context(left);
-    auto load_context_right = struc.create_load_context(last.clone(module));
-    auto load_context_pivot = struc.create_load_context(std::move(pivot));
-
-    /*----- Load values from pivot. ----------------------------------------------------------------------------------*/
-    WasmCGContext value_context_pivot(module);
-    for (auto &attr : struc.schema) {
-        WasmVariable tmp(fn, get_binaryen_type(attr.type));
-        block += tmp.set(load_context_pivot.get_value(attr.id));
-        value_context_pivot.add(attr.id, tmp);
-    }
 
     /*----- Swap left and right tuple. -------------------------------------------------------------------------------*/
-    wasm_swap.emit(loop, struc, left, std::move(last));
+    wasm_swap.emit(loop, context.struc, left, last.clone(fn.module()));
 
-    /*----- Compare left and right tuples to pivot. ------------------------------------------------------------------*/
-    WasmTemporary cmp_left  = comparator.emit(fn, loop, load_context_left,  value_context_pivot);
-    WasmTemporary left_is_ok = BinaryenBinary(
-        /* module= */ module,
-        /* op=     */ BinaryenLeSInt32(),
-        /* left=   */ cmp_left,
-        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(0))
-    );
-    WasmTemporary cmp_right = comparator.emit(fn, loop, load_context_right, value_context_pivot);
-    WasmTemporary right_is_ok = BinaryenBinary(
-        /* module= */ module,
-        /* op=     */ BinaryenGeSInt32(),
-        /* left=   */ cmp_right,
-        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(0))
-    );
-
-    /* Advance left cursor. */
+    /*----- Compare left and right tuples to pivot and advance cursors. ----------------------------------------------*/
     {
+        WasmTemporary cmp_left = comparator.emit(loop, context, left, pivot.clone(fn.module()));
+        WasmTemporary left_is_ok = BinaryenBinary(
+            /* module= */ fn.module(),
+            /* op=     */ BinaryenLeSInt32(),
+            /* left=   */ cmp_left,
+            /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(0))
+        );
+        WasmTemporary cmp_right = comparator.emit(loop, context, std::move(last), std::move(pivot));
+        WasmTemporary right_is_ok = BinaryenBinary(
+            /* module= */ fn.module(),
+            /* op=     */ BinaryenGeSInt32(),
+            /* left=   */ cmp_right,
+            /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(0))
+        );
+
+        /* Advance left cursor. */
         WasmTemporary delta_begin = BinaryenSelect(
-            /* module=    */ module,
+            /* module=    */ fn.module(),
             /* condition= */ left_is_ok,
-            /* ifTrue=    */ BinaryenConst(module, BinaryenLiteralInt32(struc.size())),
-            /* ifFalse=   */ BinaryenConst(module, BinaryenLiteralInt32(0)),
+            /* ifTrue=    */ BinaryenConst(fn.module(), BinaryenLiteralInt32(context.struc.size_in_bytes())),
+            /* ifFalse=   */ BinaryenConst(fn.module(), BinaryenLiteralInt32(0)),
             /* type=      */ BinaryenTypeInt32()
         );
         loop += left.set(BinaryenBinary(
-            /* module= */ module,
+            /* module= */ fn.module(),
             /* op=     */ BinaryenAddInt32(),
             /* left=   */ left,
             /* right=  */ delta_begin
         ));
-    }
 
-    /* Advance right cursor. */
-    {
+        /* Advance right cursor. */
         WasmTemporary delta_end = BinaryenSelect(
-            /* module=    */ module,
+            /* module=    */ fn.module(),
             /* condition= */ right_is_ok,
-            /* ifTrue=    */ BinaryenConst(module, BinaryenLiteralInt32(-struc.size())),
-            /* ifFalse=   */ BinaryenConst(module, BinaryenLiteralInt32(0)),
+            /* ifTrue=    */ BinaryenConst(fn.module(), BinaryenLiteralInt32(-context.struc.size_in_bytes())),
+            /* ifFalse=   */ BinaryenConst(fn.module(), BinaryenLiteralInt32(0)),
             /* type=      */ BinaryenTypeInt32()
         );
         loop += right.set(BinaryenBinary(
-            /* module= */ module,
+            /* module= */ fn.module(),
             /* op=     */ BinaryenAddInt32(),
             /* left=   */ right,
             /* right=  */ delta_end
@@ -227,14 +211,14 @@ WasmTemporary WasmPartitionBranchless::emit(BinaryenModuleRef module, FunctionBu
  * WasmQuickSort
  *====================================================================================================================*/
 
-WasmQuickSort::WasmQuickSort(const Schema &schema, const std::vector<order_type> &order,
+WasmQuickSort::WasmQuickSort(WasmModuleCG &module, const std::vector<order_type> &order,
                              const WasmPartition &partitioning)
-    : schema(schema)
+    : module(module)
     , order(order)
     , partitioning(partitioning)
 { }
 
-BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
+BinaryenFunctionRef WasmQuickSort::emit(WasmStructCGContext &context) const
 {
     std::ostringstream oss;
     oss << "qsort";
@@ -245,9 +229,8 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
     std::vector<BinaryenType> param_types = { /* begin= */ BinaryenTypeInt32(), /* end= */ BinaryenTypeInt32() };
     FunctionBuilder fn(module, fn_name.c_str(), BinaryenTypeNone(), param_types);
 
-    WasmStruct tuple(module, schema);
-    WasmCompare comparator(module, tuple, order);
-    WasmSwap wasm_swap(module, fn);
+    WasmCompare comparator(fn, order);
+    WasmSwap wasm_swap(fn);
 
     /* Get parameters. */
     WasmVariable begin(module, BinaryenTypeInt32(), 0);
@@ -263,14 +246,14 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
         /* module= */ module,
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ end,
-        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(-tuple.size()))
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(-context.struc.size_in_bytes()))
     );
 
     WasmWhile loop(module, (fn_name + ".loop").c_str(), BinaryenBinary(
         /* module= */ module,
         /* op=     */ BinaryenGtSInt32(),
         /* left=   */ delta.clone(module),
-        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(2 * tuple.size()))
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(2 * context.struc.size_in_bytes()))
     ));
 
     /*----- Compute middle of data. ----------------------------------------------------------------------------------*/
@@ -280,7 +263,7 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
             /* module= */ module,
             /* op=     */ BinaryenDivUInt32(),
             /* left=   */ delta.clone(module),
-            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(tuple.size()))
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(context.struc.size_in_bytes()))
         );
         WasmTemporary half_the_count = BinaryenBinary(
             /* module= */ module,
@@ -292,7 +275,7 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
             /* module= */ module,
             /* op=     */ BinaryenMulInt32(),
             /* left=   */ half_the_count,
-            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(tuple.size()))
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(context.struc.size_in_bytes()))
         );
         loop += mid.set(BinaryenBinary(
             /* module= */ module,
@@ -303,14 +286,14 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
     }
 
     /* Create load contexts for the first/last/middle element. */
-    auto load_context_left  = tuple.create_load_context(begin);
-    auto load_context_mid   = tuple.create_load_context(mid);
-    auto load_context_right = tuple.create_load_context(last.clone(module));
+    // auto load_context_left  = tuple.create_load_context(fn, begin);
+    // auto load_context_mid   = tuple.create_load_context(fn, mid);
+    // auto load_context_right = tuple.create_load_context(fn, last.clone(module));
 
     /*----- Compare three elements pairwise. -------------------------------------------------------------------------*/
-    WasmTemporary cmp_left_mid   = comparator.emit(fn, loop, load_context_left, load_context_mid);
-    WasmTemporary cmp_left_right = comparator.emit(fn, loop, load_context_left, load_context_right);
-    WasmTemporary cmp_mid_right  = comparator.emit(fn, loop, load_context_mid,  load_context_right);
+    WasmTemporary cmp_left_mid   = comparator.emit(loop, context, begin, mid);
+    WasmTemporary cmp_left_right = comparator.emit(loop, context, begin, last.clone(module));
+    WasmTemporary cmp_mid_right  = comparator.emit(loop, context, mid, last.clone(module));
 
     WasmTemporary left_le_mid = BinaryenBinary(
         /* module= */ module,
@@ -332,10 +315,14 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
     );
 
     /*----- Swap pivot to front. -------------------------------------------------------------------------------------*/
-    BlockBuilder swap_left_mid(module, "swap_left_mid");
-    wasm_swap.emit(swap_left_mid, tuple, begin, mid);
-    BlockBuilder swap_left_right(module, "swap_left_right");
-    wasm_swap.emit(swap_left_right, tuple, begin, last.clone(module));
+    BlockBuilder swap_left_mid_0(module, "swap_left_mid");
+    BlockBuilder swap_left_mid_1(module, "swap_left_mid");
+    wasm_swap.emit(swap_left_mid_0, context.struc, begin, mid);
+    wasm_swap.emit(swap_left_mid_1, context.struc, begin, mid);
+    BlockBuilder swap_left_right_0(module, "swap_left_right");
+    BlockBuilder swap_left_right_1(module, "swap_left_right");
+    wasm_swap.emit(swap_left_right_0, context.struc, begin, last.clone(module));
+    wasm_swap.emit(swap_left_right_1, context.struc, begin, last.clone(module));
     /*
      *  if (left <= mid) {                  // if_4
      *      if (left <= right) {            // if_1
@@ -361,8 +348,8 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
     WasmTemporary if_0 = BinaryenIf(
         /* module=    */ module,
         /* condition= */ mid_le_right.clone(module),
-        /* ifTrue=    */ swap_left_mid.clone().finalize(),
-        /* ifFalse=   */ swap_left_right.clone().finalize()
+        /* ifTrue=    */ swap_left_mid_0.finalize(),
+        /* ifFalse=   */ swap_left_right_0.finalize()
     );
     WasmTemporary if_1 = BinaryenIf(
         /* module=    */ module,
@@ -374,13 +361,13 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
         /* module=    */ module,
         /* condition= */ left_le_right.clone(module),
         /* ifTrue=    */ BinaryenNop(module), // no-op
-        /* ifFalse=   */ swap_left_right.finalize()
+        /* ifFalse=   */ swap_left_right_1.finalize()
     );
     WasmTemporary if_3 = BinaryenIf(
         /* module=    */ module,
         /* condition= */ mid_le_right.clone(module),
         /* ifTrue=    */ if_2,
-        /* ifFalse=   */ swap_left_mid.finalize()
+        /* ifFalse=   */ swap_left_mid_1.finalize()
     );
     WasmTemporary if_4 = BinaryenIf(
         /* module=    */ module,
@@ -395,18 +382,17 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
         /* module= */ module,
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ begin,
-        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(tuple.size()))
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(context.struc.size_in_bytes()))
     );
     WasmPartitionBranchless partition;
     WasmTemporary pos_partition = partition.emit(
-        /* module=      */ module,
-        /* fn=          */ fn,
-        /* block=       */ loop,
-        /* struc=       */ tuple,
-        /* order=       */ order,
-        /* b_begin=     */ std::move(begin_plus_one),
-        /* b_end=       */ end,
-        /* b_pivot=     */ begin
+        /* fn=      */ fn,
+        /* block=   */ loop,
+        /* context= */ context,
+        /* order=   */ order,
+        /* begin=   */ std::move(begin_plus_one),
+        /* end=     */ end,
+        /* pivot=   */ begin
     );
     loop += mid.set(std::move(pos_partition));
 
@@ -415,9 +401,9 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
         /* module= */ module,
         /* op=     */ BinaryenAddInt32(),
         /* left=   */ mid,
-        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(-tuple.size()))
+        /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(-context.struc.size_in_bytes()))
     );
-    wasm_swap.emit(loop, tuple, begin, mid_minus_one.clone(module));
+    wasm_swap.emit(loop, context.struc, begin, mid_minus_one.clone(module));
 
     /*----- Recurse right, if necessary. -----------------------------------------------------------------------------*/
     {
@@ -431,7 +417,7 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
             /* module= */ module,
             /* op=     */ BinaryenGeSInt32(),
             /* left=   */ delta_right,
-            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(2 * tuple.size()))
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(2 * context.struc.size_in_bytes()))
         );
         BinaryenExpressionRef args[] = { mid, end };
         WasmTemporary recurse_right = BinaryenCall(
@@ -458,12 +444,12 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
     /*----- Handle the case where end - begin == 2. ------------------------------------------------------------------*/
     {
         BlockBuilder block_swap(module);
-        wasm_swap.emit(block_swap, tuple, begin, last.clone(module));
+        wasm_swap.emit(block_swap, context.struc, begin, last.clone(module));
 
         BlockBuilder block_compare(module);
-        auto load_context_first  = tuple.create_load_context(begin);
-        auto load_context_second = tuple.create_load_context(last.clone(module));
-        WasmTemporary compare = comparator.emit(fn, block_compare, load_context_first, load_context_second);
+        // auto load_context_first  = tuple.create_load_context(fn, begin);
+        // auto load_context_second = tuple.create_load_context(fn, last.clone(module));
+        WasmTemporary compare = comparator.emit(block_compare, context, begin, last.clone(fn.module()));
         WasmTemporary cond_swap = BinaryenBinary(
             /* module= */ module,
             /* op=     */ BinaryenGtSInt32(),
@@ -481,7 +467,7 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
             /* module= */ module,
             /* op=     */ BinaryenEqInt32(),
             /* left=   */ delta.clone(module),
-            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(2 * tuple.size()))
+            /* right=  */ BinaryenConst(module, BinaryenLiteralInt32(2 * context.struc.size_in_bytes()))
         );
         fn.block() += BinaryenIf(
             /* module=    */ module,
@@ -500,7 +486,7 @@ BinaryenFunctionRef WasmQuickSort::emit(BinaryenModuleRef module) const
  * WasmBitMixMurmur3
  *====================================================================================================================*/
 
-WasmTemporary WasmBitMixMurmur3::emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
+WasmTemporary WasmBitMixMurmur3::emit(WasmModuleCG &module, FunctionBuilder &fn, BlockBuilder &block,
                                       WasmTemporary the_bits) const
 {
     /* Taken from https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp by Austin Appleby.  We use the
@@ -584,52 +570,41 @@ WasmTemporary WasmBitMixMurmur3::emit(BinaryenModuleRef module, FunctionBuilder 
  * WasmHashMumur64A
  *====================================================================================================================*/
 
-WasmTemporary WasmHashMumur3_64A::emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                                       const std::vector<WasmTemporary> &values) const
+WasmTemporary WasmHashMumur3_64A::emit(WasmModuleCG &module, FunctionBuilder &fn, BlockBuilder &block,
+                                       const std::vector<element_type> &values) const
 {
     /* Inspired by https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp by Austin Appleby.  We use
      * constants from MurmurHash2_64 as reported on https://sites.google.com/site/murmurhash/. */
     insist(values.size() != 0, "cannot compute the hash of an empty sequence of values");
 
     if (values.size() == 1) {
-        /* In case of a single 64-bit value, we just run the bit mixer. */
-        return WasmBitMixMurmur3{}.emit(module, fn, block, reinterpret(module, values[0].clone(module), BinaryenTypeInt64()));
-    }
-
-    if (values.size() == 2) {
-        WasmTemporary left  = values[0].clone(module);
-        WasmTemporary right = values[1].clone(module);
-
-        std::size_t combined_size = 0;
-        combined_size += (left.type()  == BinaryenTypeInt32() or left.type()  == BinaryenTypeFloat32()) ? 32 : 64;
-        combined_size += (right.type() == BinaryenTypeInt32() or right.type() == BinaryenTypeFloat32()) ? 32 : 64;
-
-        if (combined_size <= 64) {
-            WasmTemporary shl = BinaryenBinary(
-                module,
-                BinaryenShlInt64(),
-                reinterpret(module, std::move(left), BinaryenTypeInt64()),
-                BinaryenConst(module, BinaryenLiteralInt64(32))
-            );
-            WasmTemporary combined = BinaryenBinary(
-                module,
-                BinaryenOrInt64(),
-                shl,
-                reinterpret(module, std::move(right), BinaryenTypeInt64())
-            );
-            return WasmBitMixMurmur3{}.emit(module, fn, block, std::move(combined));
+        if (auto cs = cast<const CharacterSequence>(&values[0].second)) {
+            return wasm_emit_strhash(fn, block, values[0].first.clone(fn.module()), *cs);
+        } else {
+            /* In case of a single 64-bit value, we just run the bit mixer. */
+            return WasmBitMixMurmur3{}.emit(module, fn, block,
+                                            reinterpret(module, values[0].first.clone(module), BinaryenTypeInt64()));
         }
     }
 
 #if 0
-    /* Compute combined size of values. */
-    std::size_t combined_size = 0;
-    for (auto v : values) {
-        auto ty = BinaryenExpressionGetType(v);
-        if (ty == BinaryenTypeInt32() or ty == BinaryenTypeFloat32())
-            combined_size += 4;
-        else
-            combined_size += 8;
+    if (values.size() == 2 and values[0].second.size() + values[1].second.size() <= 64) {
+        WasmTemporary left  = values[0].first.clone(module);
+        WasmTemporary right = values[1].first.clone(module);
+
+        WasmTemporary shl = BinaryenBinary(
+            module,
+            BinaryenShlInt64(),
+            reinterpret(module, std::move(left), BinaryenTypeInt64()),
+            BinaryenConst(module, BinaryenLiteralInt64(values[0].second.size()))
+        );
+        WasmTemporary combined = BinaryenBinary(
+            module,
+            BinaryenOrInt64(),
+            shl,
+            reinterpret(module, std::move(right), BinaryenTypeInt64())
+        );
+        return WasmBitMixMurmur3{}.emit(module, fn, block, std::move(combined));
     }
 #endif
 
@@ -644,7 +619,11 @@ WasmTemporary WasmHashMumur3_64A::emit(BinaryenModuleRef module, FunctionBuilder
 
     WasmVariable k(fn, BinaryenTypeInt64());
     for (auto &val : values) {
-        block += k.set(reinterpret(module, val.clone(module), BinaryenTypeInt64()));
+        if (auto cs = cast<const CharacterSequence>(&val.second)) {
+            wasm_emit_strhash(fn, block, val.first.clone(module), *cs);
+        } else {
+            block += k.set(reinterpret(module, val.first.clone(module), BinaryenTypeInt64()));
+        }
 
         /* k = k * m */
         block += k.set(BinaryenBinary(
@@ -888,30 +867,13 @@ WasmRefCountingHashTable::find_in_bucket(BlockBuilder &block, WasmTemporary buck
     );
 
     /*----- Compare keys. --------------------------------------------------------------------------------------------*/
-    WasmTemporary keys_not_equal;
-    {
-        auto ld_key = struc.create_load_context(runner, /* offset= */ REFERENCE_SIZE);
-        std::size_t idx = 0;
-        for (auto &part_of_key : key) {
-            auto &e = struc.schema[idx++];
-            WasmTemporary key_in_bucket = ld_key[e.id];
-            WasmTemporary cmp = WasmCompare::Ne(module, *e.type, std::move(key_in_bucket), part_of_key.clone(module));
+    WasmTemporary keys_not_equal = BinaryenUnary(
+        /* module= */ module,
+        /* op=     */ BinaryenEqZInt32(),
+        /* value=  */ compare_key(loop, runner, key)
+    );
 
-            if (keys_not_equal.is()) {
-                keys_not_equal = BinaryenBinary(
-                    /* module= */ module,
-                    /* op=     */ BinaryenOrInt32(),
-                    /* left=   */ keys_not_equal,
-                    /* right=  */ cmp
-                );
-            } else {
-                keys_not_equal = std::move(cmp);
-            }
-        }
-    }
-    insist(keys_not_equal.is());
-
-    WasmTemporary if_key_equal = BinaryenIf(
+    WasmTemporary if_keys_not_equal = BinaryenIf(
         /* module=    */ module,
         /* condition= */ keys_not_equal,
         /* ifTrue=    */ advance.finalize(), // key not equal, continue search
@@ -920,7 +882,7 @@ WasmRefCountingHashTable::find_in_bucket(BlockBuilder &block, WasmTemporary buck
     loop += BinaryenIf(
         /* module=    */ module,
         /* condition= */ is_occupied,
-        /* ifTrue=    */ if_key_equal, // slot occupied, compare key
+        /* ifTrue=    */ if_keys_not_equal, // slot occupied, compare key
         /* ifFalse=   */ nullptr // miss, break loop
     );
     block += loop.finalize();
@@ -937,21 +899,23 @@ WasmTemporary WasmRefCountingHashTable::is_slot_empty(WasmTemporary slot_addr) c
     );
 }
 
-WasmTemporary WasmRefCountingHashTable::compare_key(WasmTemporary slot_addr,
-                                                    const std::vector<Schema::Identifier> &IDs,
+WasmTemporary WasmRefCountingHashTable::compare_key(BlockBuilder &block, WasmTemporary slot_addr,
                                                     const std::vector<WasmTemporary> &key) const
 {
-    insist(not IDs.empty());
-    insist(IDs.size() == key.size());
+    insist(key.size() == this->key().size());
 
     WasmTemporary keys_equal;
     {
-        auto ld_key = struc.create_load_context(std::move(slot_addr), /* offset= */ REFERENCE_SIZE);
         auto key_it = key.begin();
-        for (auto id : IDs) {
-            auto ty = struc.schema[id].second.type;
-            WasmTemporary key_in_bucket = ld_key[id];
-            WasmTemporary cmp = WasmCompare::Eq(module, *ty, std::move(key_in_bucket), key_it++->clone(module));
+        for (auto key_index : this->key()) {
+            auto &ty = struc.type(key_index);
+            WasmTemporary key_in_bucket = struc.load(fn, slot_addr.clone(fn.module()), key_index, REFERENCE_SIZE);
+            WasmTemporary cmp;
+            if (auto cs = cast<const CharacterSequence>(&ty)) {
+                cmp = WasmStrcmp::Eq(fn, block, *cs, *cs, std::move(key_in_bucket), key_it->clone(fn.module()));
+            } else {
+                cmp = WasmCompare::Eq(fn, ty, std::move(key_in_bucket), key_it->clone(module));
+            }
 
             if (keys_equal.is()) {
                 keys_equal = BinaryenBinary(
@@ -963,17 +927,16 @@ WasmTemporary WasmRefCountingHashTable::compare_key(WasmTemporary slot_addr,
             } else {
                 keys_equal = std::move(cmp);
             }
+            ++key_it;
         }
     }
     return keys_equal;
 }
 
 void WasmRefCountingHashTable::emplace(BlockBuilder &block, WasmTemporary bucket_addr, WasmTemporary steps,
-                                       WasmTemporary slot_addr, const std::vector<Schema::Identifier> &IDs,
-                                       const std::vector<WasmTemporary> &key) const
+                                       WasmTemporary slot_addr, const std::vector<WasmTemporary> &key) const
 {
-    insist(key.size() <= struc.schema.num_entries(), "incorrect number of key values");
-    insist(IDs.size() == key.size(), "number of identifiers and length of key must be equal");
+    insist(key.size() <= this->key().size(), "incorrect number of key values");
 
     /*----- Update bucket probe length. ------------------------------------------------------------------------------*/
     block += BinaryenStore(
@@ -998,22 +961,27 @@ void WasmRefCountingHashTable::emplace(BlockBuilder &block, WasmTemporary bucket
     );
 
     /*----- Write key to slot. ---------------------------------------------------------------------------------------*/
-    auto id = IDs.begin();
     auto key_it = key.begin();
-    while (id != IDs.end())
-        block += struc.store(slot_addr.clone(module), *id++, key_it++->clone(module), /* offset= */ REFERENCE_SIZE);
+    for (auto key_index : this->key()) {
+        auto &ty = struc.type(key_index);
+        if (auto cs = cast<const CharacterSequence>(&ty)) {
+            WasmStrncpy{fn}.emit(block, struc.load(fn, slot_addr.clone(module), key_index, REFERENCE_SIZE), key_it->clone(module), cs->length);
+        } else {
+            struc.store(fn, block, slot_addr.clone(module), key_index, key_it->clone(module), REFERENCE_SIZE);
+        }
+        ++key_it;
+    }
 }
 
-WasmCGContext WasmRefCountingHashTable::load_from_slot(WasmTemporary slot_addr) const
+WasmEnvironment WasmRefCountingHashTable::load_from_slot(WasmTemporary slot_addr) const
 {
-    return struc.create_load_context(std::move(slot_addr), /* offset= */ REFERENCE_SIZE);
+    return struc.create_load_context(fn, std::move(slot_addr), /* offset= */ REFERENCE_SIZE);
 }
 
-WasmTemporary WasmRefCountingHashTable::store_value_to_slot(WasmTemporary slot_addr,
-                                                            Schema::Identifier id,
-                                                            WasmTemporary value) const
+void WasmRefCountingHashTable::store_value_to_slot(BlockBuilder &block, WasmTemporary slot_addr, std::size_t idx,
+                                                   WasmTemporary value) const
 {
-    return struc.store(std::move(slot_addr), id, std::move(value), /* offset= */ REFERENCE_SIZE);
+    struc.store(fn, block, std::move(slot_addr), idx, std::move(value), /* offset= */ REFERENCE_SIZE);
 }
 
 WasmTemporary WasmRefCountingHashTable::compute_next_slot(WasmTemporary slot_addr) const
@@ -1041,7 +1009,6 @@ WasmTemporary WasmRefCountingHashTable::get_bucket_ref_count(WasmTemporary bucke
 
 WasmTemporary WasmRefCountingHashTable::insert_with_duplicates(BlockBuilder &block,
                                                                WasmTemporary hash,
-                                                               const std::vector<Schema::Identifier> &IDs,
                                                                const std::vector<WasmTemporary> &key)
     const
 {
@@ -1226,13 +1193,12 @@ WasmTemporary WasmRefCountingHashTable::insert_with_duplicates(BlockBuilder &blo
 #endif
 
     /*----- After finding the next free slot in the bucket, place the key in that slot. ------------------------------*/
-    emplace(block, bucket_addr, steps, slot_addr, IDs, key);
+    emplace(block, bucket_addr, steps, slot_addr, key);
     return slot_addr;
 }
 
 WasmTemporary WasmRefCountingHashTable::insert_without_duplicates(BlockBuilder &block,
                                                                   WasmTemporary hash,
-                                                                  const std::vector<Schema::Identifier> &IDs,
                                                                   const std::vector<WasmTemporary> &key)
     const
 {
@@ -1246,7 +1212,7 @@ WasmTemporary WasmRefCountingHashTable::insert_without_duplicates(BlockBuilder &
     BlockBuilder insert(module, "insert.new_entry");
 
     /*----- Create new entry in new hash table. ----------------------------------------------------------------------*/
-    emplace(insert, bucket_addr, std::move(steps_found), slot_addr_found.clone(module), IDs, key);
+    emplace(insert, bucket_addr, std::move(steps_found), slot_addr_found.clone(module), key);
 
     /*----- Create conditional branch depending on whether `key` already exists in the bucket. -----------------------*/
     block += BinaryenIf(
@@ -1259,21 +1225,13 @@ WasmTemporary WasmRefCountingHashTable::insert_without_duplicates(BlockBuilder &
     return std::move(slot_addr_found);
 }
 
-BinaryenFunctionRef WasmRefCountingHashTable::rehash(WasmHash &hasher,
-                                                     const std::vector<Schema::Identifier> &key_ids,
-                                                     const std::vector<Schema::Identifier> &payload_ids) const
+BinaryenFunctionRef WasmRefCountingHashTable::rehash(WasmHash &hasher) const
 {
+    static unsigned counter;
     if (fn_rehash_) return fn_rehash_;
 
     std::ostringstream oss;
-    oss << "WasmRefCountingHashTable::rehash_keys";
-    for (auto k : key_ids)
-        oss << '_' << k;
-    if (not payload_ids.empty()) {
-        oss << "_payload";
-        for (auto p : payload_ids)
-            oss << '_' << p;
-    }
+    oss << "WasmRefCountingHashTable::rehash_" << counter++;
     const std::string name = oss.str();
 
     /*----- Create rehashing function. -------------------------------------------------------------------------------*/
@@ -1290,7 +1248,8 @@ BinaryenFunctionRef WasmRefCountingHashTable::rehash(WasmHash &hasher,
         /* block=  */ fn_rehash.block(),
         /* struc=  */ struc,
         /* b_addr= */ BinaryenLocalGet(module, 0, BinaryenTypeInt32()),
-        /* b_mask= */ BinaryenLocalGet(module, 1, BinaryenTypeInt32())
+        /* b_mask= */ BinaryenLocalGet(module, 1, BinaryenTypeInt32()),
+        /* key=    */ key()
     );
 
     WasmRefCountingHashTable HT_new(
@@ -1299,7 +1258,8 @@ BinaryenFunctionRef WasmRefCountingHashTable::rehash(WasmHash &hasher,
         /* block=  */ fn_rehash.block(),
         /* struc=  */ struc,
         /* b_addr= */ BinaryenLocalGet(module, 2, BinaryenTypeInt32()),
-        /* b_mask= */ BinaryenLocalGet(module, 3, BinaryenTypeInt32())
+        /* b_mask= */ BinaryenLocalGet(module, 3, BinaryenTypeInt32()),
+        /* key=    */ key()
     );
 
     /*----- Compute properties of old hash table. --------------------------------------------------------------------*/
@@ -1373,13 +1333,16 @@ BinaryenFunctionRef WasmRefCountingHashTable::rehash(WasmHash &hasher,
         /* NOTE: Invariant is that on entry to the loop body, runner points to an occupied slot. */
 
         /*----- Get key. ---------------------------------------------------------------------------------------------*/
-        auto ld = HT_old.load_from_slot(runner);
+        std::vector<WasmHash::element_type> hash_values;
         std::vector<WasmTemporary> key;
-        for (auto kid : key_ids)
-            key.emplace_back(ld.get_value(kid));
+        for (auto key_index : this->key()) {
+            WasmTemporary value = struc.load(fn_rehash, runner, key_index, REFERENCE_SIZE);
+            key.emplace_back(value.clone(module));
+            hash_values.emplace_back(std::move(value), struc.type(key_index));
+        }
 
         /*----- Compute hash. ----------------------------------------------------------------------------------------*/
-        WasmTemporary hash = hasher.emit(module, fn_rehash, for_each, key);
+        WasmTemporary hash = hasher.emit(module, fn_rehash, for_each, hash_values);
         WasmTemporary hash_i32 = BinaryenUnary(
             /* module= */ module,
             /* op=     */ BinaryenWrapInt64(),
@@ -1387,11 +1350,13 @@ BinaryenFunctionRef WasmRefCountingHashTable::rehash(WasmHash &hasher,
         );
 
         /*----- Re-insert the element. -------------------------------------------------------------------------------*/
-        WasmTemporary slot_addr = HT_new.insert_with_duplicates(for_each, std::move(hash_i32), key_ids, key);
+        WasmTemporary slot_addr = HT_new.insert_with_duplicates(for_each, std::move(hash_i32), key);
 
         /*---- Write payload. ----------------------------------------------------------------------------------------*/
-        for (auto pid : payload_ids)
-            for_each += HT_new.store_value_to_slot(slot_addr.clone(module), pid, ld.get_value(pid));
+        for (auto payload_index : this->payload()) {
+            WasmTemporary value = struc.load(fn_rehash, runner, payload_index, REFERENCE_SIZE);
+            struc.store(fn_rehash, for_each, runner, payload_index, std::move(value), REFERENCE_SIZE);
+        }
     }
 
     /*----- Advance to next occupied slot. ---------------------------------------------------------------------------*/

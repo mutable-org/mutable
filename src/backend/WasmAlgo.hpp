@@ -29,8 +29,8 @@ struct WasmPartition
      * \param b_end     the address one after the last tuple
      * \param b_pivot   the address of the pivot element
      */
-    virtual WasmTemporary emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                               const WasmStruct &struc, const std::vector<order_type> &order,
+    virtual WasmTemporary emit(FunctionBuilder &fn, BlockBuilder &block,
+                               const WasmStructCGContext &context, const std::vector<order_type> &order,
                                WasmTemporary begin, WasmTemporary end, WasmTemporary pivot) const = 0;
 };
 
@@ -50,8 +50,8 @@ struct WasmPartition
  */
 struct WasmPartitionBranching : WasmPartition
 {
-    WasmTemporary emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                       const WasmStruct &struc, const std::vector<order_type> &order,
+    WasmTemporary emit(FunctionBuilder &fn, BlockBuilder &block,
+                       const WasmStructCGContext &context, const std::vector<order_type> &order,
                        WasmTemporary begin, WasmTemporary end, WasmTemporary pivot) const override;
 };
 
@@ -60,8 +60,8 @@ struct WasmPartitionBranching : WasmPartition
  */
 struct WasmPartitionBranchless : WasmPartition
 {
-    WasmTemporary emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                       const WasmStruct &struc, const std::vector<order_type> &order,
+    WasmTemporary emit(FunctionBuilder &fn, BlockBuilder &block,
+                       const WasmStructCGContext &context, const std::vector<order_type> &order,
                        WasmTemporary begin, WasmTemporary end, WasmTemporary pivot) const override;
 };
 
@@ -74,11 +74,11 @@ struct WasmQuickSort
 {
     using order_type = std::pair<const Expr*, bool>;
 
-    const Schema &schema; ///< the schema of tuples to sort
+    WasmModuleCG &module; ///< the schema of tuples to sort
     const std::vector<order_type> &order; ///< the attributes to sort by
     const WasmPartition &partitioning; ///< the partitioning function
 
-    WasmQuickSort(const Schema &schema, const std::vector<order_type> &order, const WasmPartition &partitioning);
+    WasmQuickSort(WasmModuleCG &module, const std::vector<order_type> &order, const WasmPartition &partitioning);
 
     /** Emits a function to sort a sequence of tuples using the Quicksort algorithm.  This is an implementation in
      * WebAssembly of our `qsort` algorithm in 'util/algorithms.hpp'.
@@ -87,7 +87,7 @@ struct WasmQuickSort
      * @param b_begin   the expression evaluating to the beginning of the sequence
      * @param b_end     the expression evaluating to the end of the sequence
      */
-    BinaryenFunctionRef emit(BinaryenModuleRef module) const;
+    BinaryenFunctionRef emit(WasmStructCGContext &context) const;
 };
 
 
@@ -99,13 +99,13 @@ struct WasmBitMix
 {
     virtual ~WasmBitMix() { }
 
-    virtual WasmTemporary emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
+    virtual WasmTemporary emit(WasmModuleCG &module, FunctionBuilder &fn, BlockBuilder &block,
                                WasmTemporary bits) const = 0;
 };
 
 struct WasmBitMixMurmur3 : WasmBitMix
 {
-    WasmTemporary emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
+    WasmTemporary emit(WasmModuleCG &module, FunctionBuilder &fn, BlockBuilder &block,
                        WasmTemporary bits) const override;
 };
 
@@ -116,16 +116,18 @@ struct WasmBitMixMurmur3 : WasmBitMix
 
 struct WasmHash
 {
+    using element_type = std::pair<WasmTemporary, const Type&>;
+
     virtual ~WasmHash() { }
 
-    virtual WasmTemporary emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                               const std::vector<WasmTemporary> &values) const = 0;
+    virtual WasmTemporary emit(WasmModuleCG &module, FunctionBuilder &fn, BlockBuilder &block,
+                               const std::vector<element_type> &values) const = 0;
 };
 
 struct WasmHashMumur3_64A : WasmHash
 {
-    WasmTemporary emit(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                       const std::vector<WasmTemporary> &values) const override;
+    WasmTemporary emit(WasmModuleCG &module, FunctionBuilder &fn, BlockBuilder &block,
+                       const std::vector<element_type> &values) const override;
 };
 
 
@@ -135,18 +137,44 @@ struct WasmHashMumur3_64A : WasmHash
 
 struct WasmHashTable
 {
-    BinaryenModuleRef module;
+    WasmModuleCG &module;
     FunctionBuilder &fn;
     const WasmStruct &struc; ///< the structure of elements in the hash table
+    private:
+    std::vector<WasmStruct::index_type> key_; ///< the indices of all key fields
+    std::vector<WasmStruct::index_type> payload_; ///< the indices of all payload fields
 
     public:
-    WasmHashTable(BinaryenModuleRef module, FunctionBuilder &fn, const WasmStruct &struc)
+    WasmHashTable(WasmModuleCG &module, FunctionBuilder &fn, const WasmStruct &struc,
+                  std::vector<WasmStruct::index_type> key)
         : module(module)
         , fn(fn)
         , struc(struc)
-    { }
+        , key_(std::move(key))
+    {
+        /* Compute payload as complement of `key_`. */
+        auto key_it = key_.begin();
+        for (WasmStruct::index_type i = 0; i != struc.num_entries(); ++i) {
+            while (key_it != key_.end() and *key_it < i) ++key_it;
+            if (key_it != key_.end() and *key_it == i) continue;
+            payload_.push_back(i);
+        }
+#if 0
+        std::cerr << "keys:";
+        for (auto k : key_) std::cerr << ' ' << k;
+        std::cerr << "\npayloads:";
+        for (auto p : payload_) std::cerr << ' ' << p;
+        std::cerr << std::endl;
+#endif
+    }
 
     virtual ~WasmHashTable() { }
+
+    /** Returns a `std::vector` of indices of the key fields. */
+    const std::vector<WasmStruct::index_type> & key() const { return key_; }
+
+    /** Returns a `std::vector` of indices of the payload fields. */
+    const std::vector<WasmStruct::index_type> & payload() const { return payload_; }
 
     /** Create a fresh hash table at the address `begin` with `num_buckets` number of buckets.
      *
@@ -172,39 +200,32 @@ struct WasmHashTable
     /** Evaluates to `1` iff the slot is empty (i.e. not occupied). */
     virtual WasmTemporary is_slot_empty(WasmTemporary b_slot_addr) const = 0;
 
-    virtual WasmTemporary compare_key(WasmTemporary slot_addr,
-                                      const std::vector<Schema::Identifier> &IDs,
+    virtual WasmTemporary compare_key(BlockBuilder &block, WasmTemporary slot_addr,
                                       const std::vector<WasmTemporary> &key) const = 0;
 
     /** Inserts a new entry into the bucket at `b_bucket_addr` by updating the bucket's probe length to `b_steps`,
      * marking the slot at `b_slot_addr` occupied, and placing the key in this slot. */
     virtual void emplace(BlockBuilder &block, WasmTemporary bucket_addr, WasmTemporary steps, WasmTemporary slot_addr,
-                         const std::vector<Schema::Identifier> &IDs, const std::vector<WasmTemporary> &key) const = 0;
+                         const std::vector<WasmTemporary> &key) const = 0;
 
-    /** Creates a `WasmCGContext` to load values from the slot at `b_slot_addr`. */
-    virtual WasmCGContext load_from_slot(WasmTemporary slot_addr) const = 0;
+    /** Creates a `WasmEnvironment` to load values from the slot at `b_slot_addr`. */
+    virtual WasmEnvironment load_from_slot(WasmTemporary slot_addr) const = 0;
 
-    /** Creates a `WasmTemporary` to store the value `b_value` as position `id` in the slot at `b_slot_addr`. */
-    virtual WasmTemporary store_value_to_slot(WasmTemporary slot_addr, Schema::Identifier id,
-                                              WasmTemporary value) const = 0;
+    /** Emits code to store the value `value` to the `idx`-th field in the slot at `b_slot_addr`. */
+    virtual void store_value_to_slot(BlockBuilder &block, WasmTemporary slot_addr, std::size_t idx,
+                                     WasmTemporary value) const = 0;
 
     /** Given the address of a slot `b_slot_addr`, compute the address of the next slot.  That is, the address of the
      * slot immediately after `b_slot_addr`. */
     virtual WasmTemporary compute_next_slot(WasmTemporary slot_addr) const = 0;
 
-    virtual WasmTemporary insert_with_duplicates(BlockBuilder &block,
-                                                 WasmTemporary hash,
-                                                 const std::vector<Schema::Identifier> &IDs,
+    virtual WasmTemporary insert_with_duplicates(BlockBuilder &block, WasmTemporary hash,
                                                  const std::vector<WasmTemporary> &key) const = 0;
 
-    virtual WasmTemporary insert_without_duplicates(BlockBuilder &block,
-                                                    WasmTemporary hash,
-                                                    const std::vector<Schema::Identifier> &IDs,
+    virtual WasmTemporary insert_without_duplicates(BlockBuilder &block, WasmTemporary hash,
                                                     const std::vector<WasmTemporary> &key) const = 0;
 
-    virtual BinaryenFunctionRef rehash(WasmHash &hasher,
-                                       const std::vector<Schema::Identifier> &key_ids,
-                                       const std::vector<Schema::Identifier> &payload_ids) const = 0;
+    virtual BinaryenFunctionRef rehash(WasmHash &hasher) const = 0;
 };
 
 struct WasmRefCountingHashTable : WasmHashTable
@@ -218,20 +239,22 @@ struct WasmRefCountingHashTable : WasmHashTable
     mutable BinaryenFunctionRef fn_rehash_ = nullptr; ///< the rehashing function for this hash table
 
     public:
-    WasmRefCountingHashTable(BinaryenModuleRef module, FunctionBuilder &fn, const WasmStruct &struc)
-        : WasmHashTable(module, fn, struc)
+    WasmRefCountingHashTable(WasmModuleCG &module, FunctionBuilder &fn, const WasmStruct &struc,
+                             std::vector<WasmStruct::index_type> key)
+        : WasmHashTable(module, fn, struc, std::move(key))
         , addr_(fn, BinaryenTypeInt32())
         , mask_(fn, BinaryenTypeInt32())
-        , entry_size_(round_up_to_multiple<std::size_t>(REFERENCE_SIZE + struc.size(), 4))
+        , entry_size_(round_up_to_multiple<std::size_t>(REFERENCE_SIZE + struc.size_in_bytes(), 4))
     { }
 
     /** Create a WasmHashTable instance from an existing hash table. */
-    WasmRefCountingHashTable(BinaryenModuleRef module, FunctionBuilder &fn, BlockBuilder &block,
-                             const WasmStruct &struc, WasmTemporary addr, WasmTemporary mask)
-        : WasmHashTable(module, fn, struc)
+    WasmRefCountingHashTable(WasmModuleCG &module, FunctionBuilder &fn, BlockBuilder &block,
+                             const WasmStruct &struc, WasmTemporary addr, WasmTemporary mask,
+                             std::vector<WasmStruct::index_type> key)
+        : WasmHashTable(module, fn, struc, std::move(key))
         , addr_(fn, BinaryenTypeInt32())
         , mask_(fn, BinaryenTypeInt32())
-        , entry_size_(round_up_to_multiple<std::size_t>(REFERENCE_SIZE + struc.size(), 4))
+        , entry_size_(round_up_to_multiple<std::size_t>(REFERENCE_SIZE + struc.size_in_bytes(), 4))
     {
         block += addr_.set(std::move(addr));
         block += mask_.set(std::move(mask));
@@ -249,17 +272,16 @@ struct WasmRefCountingHashTable : WasmHashTable
 
     WasmTemporary is_slot_empty(WasmTemporary b_slot_addr) const override;
 
-    WasmTemporary compare_key(WasmTemporary slot_addr,
-                              const std::vector<Schema::Identifier> &IDs,
+    WasmTemporary compare_key(BlockBuilder &block, WasmTemporary slot_addr,
                               const std::vector<WasmTemporary> &key) const override;
 
     void emplace(BlockBuilder &block, WasmTemporary bucket_addr, WasmTemporary steps, WasmTemporary slot_addr,
-                 const std::vector<Schema::Identifier> &IDs, const std::vector<WasmTemporary> &key) const override;
+                 const std::vector<WasmTemporary> &key) const override;
 
-    WasmCGContext load_from_slot(WasmTemporary slot_addr) const override;
+    WasmEnvironment load_from_slot(WasmTemporary slot_addr) const override;
 
-    WasmTemporary store_value_to_slot(WasmTemporary slot_addr, Schema::Identifier id,
-                                      WasmTemporary value) const override;
+    void store_value_to_slot(BlockBuilder &block, WasmTemporary slot_addr, std::size_t idx,
+                             WasmTemporary value) const override;
 
     WasmTemporary compute_next_slot(WasmTemporary slot_addr) const override;
 
@@ -272,17 +294,12 @@ struct WasmRefCountingHashTable : WasmHashTable
 
     WasmTemporary insert_with_duplicates(BlockBuilder &block,
                                          WasmTemporary hash,
-                                         const std::vector<Schema::Identifier> &IDs,
                                          const std::vector<WasmTemporary> &key) const override;
 
-    WasmTemporary insert_without_duplicates(BlockBuilder &block,
-                                            WasmTemporary hash,
-                                            const std::vector<Schema::Identifier> &IDs,
+    WasmTemporary insert_without_duplicates(BlockBuilder &block, WasmTemporary hash,
                                             const std::vector<WasmTemporary> &key) const override;
 
-    BinaryenFunctionRef rehash(WasmHash &hasher,
-                               const std::vector<Schema::Identifier> &key_ids,
-                               const std::vector<Schema::Identifier> &payload_ids) const override;
+    BinaryenFunctionRef rehash(WasmHash &hasher) const override;
 };
 
 }

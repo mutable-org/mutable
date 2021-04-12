@@ -92,7 +92,7 @@ struct Linearization
     std::size_t capacity_; ///< maximal number of sequences this linearization can handle
     uint64_t *offsets_ = nullptr; ///< offsets of the sequences, specified in bits for attributes and bytes for sequences
     uint32_t *strides_ = nullptr; ///< strides of the sequences, specified in bits for attributes and bytes for sequences
-    uintptr_t *sequences_ = nullptr; ///< array of nested `Linearization`s or `Attribute`s, 0 iff the null bitmap is stored, LSB is 1 iff an `Attribute` is stored
+    uintptr_t *sequences_ = nullptr; ///< array of nested `Linearization`s or `Attribute`s, `nullptr` iff the null bitmap is stored, LSB is 1 iff an `Attribute` is stored
 
     public:
     static Linearization CreateInfinite(std::size_t num_sequences) {

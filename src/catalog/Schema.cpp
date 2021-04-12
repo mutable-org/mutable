@@ -42,6 +42,14 @@ void Attribute::dump() const { dump(std::cerr); }
  * Table
  *====================================================================================================================*/
 
+Schema Table::schema() const
+{
+    Schema S;
+    for (auto &attr : *this)
+        S.add({this->name, attr.name}, attr.type);
+    return S;
+}
+
 void Table::dump(std::ostream &out) const
 {
     out << "Table `" << name << '`';

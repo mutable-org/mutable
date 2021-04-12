@@ -299,7 +299,7 @@ struct ProjectionOperator : Producer, Consumer
         unreachable("not supported by ProjectionOperator");
     }
 
-    const auto & projections() const { return projections_; }
+    const std::vector<projection_type> & projections() const { return projections_; }
     bool is_anti() const { return is_anti_; }
 
     void accept(OperatorVisitor &v) override;

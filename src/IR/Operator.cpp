@@ -230,12 +230,14 @@ void SchemaMinimizer::operator()(Const<JoinOperator> &op)
 
 void SchemaMinimizer::operator()(Const<ProjectionOperator> &op)
 {
+    // FIXME simply adding all projections is not correct for *nested* projection operators
     required = Schema();
     if (op.is_anti())
         required |= op.child(0)->schema();
     for (auto &p : op.projections())
         required |= p.first->get_required();
-    (*this)(*op.child(0));
+    if (not const_cast<const ProjectionOperator&>(op).children().empty())
+        (*this)(*op.child(0));
 }
 
 void SchemaMinimizer::operator()(Const<LimitOperator> &op)

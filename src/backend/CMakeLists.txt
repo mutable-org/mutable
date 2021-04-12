@@ -2,6 +2,7 @@ set(
     BACKEND_SOURCES
     Backend.cpp
     Interpreter.cpp
+    RuntimeStruct.cpp
     StackMachine.cpp
 )
 

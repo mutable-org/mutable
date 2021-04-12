@@ -93,6 +93,7 @@ struct Memory
     }
 
     Memory() { }
+    Memory(void *addr, std::size_t size) : addr_(addr), size_(size) { }
     ~Memory() { if (allocator_) allocator().deallocate(*this); }
     Memory(const Memory&) = delete;
     Memory(Memory &&other) { swap(*this, other); }
@@ -100,7 +101,7 @@ struct Memory
     Memory & operator=(Memory &&other) { swap(*this, other); return *this; }
 
     /** Returns a reference to the allocator that created this allocation. */
-    Allocator & allocator() const { return * allocator_; }
+    Allocator & allocator() const { insist(allocator_); return *allocator_; }
     /** Returns a pointer to the beginning of the virtual address space where this allocation is mapped to. */
     void * addr() const { return addr_; }
     /** Returns the size in bytes of this allocation. */

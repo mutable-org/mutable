@@ -1,14 +1,15 @@
 #pragma once
 
-#include "mutable/backend/Backend.hpp"
 #include "catalog/Schema.hpp"
-#include "mutable/IR/Operator.hpp"
-#include "mutable/IR/OperatorVisitor.hpp"
-#include "mutable/parse/ASTVisitor.hpp"
-#include "mutable/util/macro.hpp"
+#include <mutable/backend/Backend.hpp>
+#include <mutable/IR/Operator.hpp>
+#include <mutable/IR/OperatorVisitor.hpp>
+#include <mutable/parse/ASTVisitor.hpp>
+#include <mutable/util/macro.hpp>
 #include <unordered_map>
 
 
+/* Forward declaration of Binaryen classes. */
 namespace wasm {
 
 struct Module;
@@ -46,7 +47,7 @@ struct WasmModule
     void dump() const;
 };
 
-/** A `WasmPlatform` provides an environment to execute WebAssembly modules. */
+/** A `WasmPlatform` provides an environment to compile and execute WebAssembly modules. */
 struct WasmPlatform
 {
     /** the size of a WebAssembly memory page, 64 KiB. */
@@ -55,9 +56,6 @@ struct WasmPlatform
     static constexpr std::size_t WASM_MAX_MEMORY = (1UL << 32) - (1UL << 16);
     /** The alignment that is suitable for all built-in types. */
     static constexpr std::size_t WASM_ALIGNMENT = 8;
-
-    /** The size of the module's output buffer in tuples. */
-    static constexpr std::size_t NUM_TUPLES_OUTPUT_BUFFER = 32;
 
     /** A `WasmContext` holds associated information of a WebAssembly module instance. */
     struct WasmContext
@@ -97,24 +95,31 @@ struct WasmPlatform
         return it->second;
     }
 
-    /** Compiles the `plan` to a `WasmModule`. */
-    static WasmModule compile(const Operator &plan);
-
+    WasmPlatform() = default;
     virtual ~WasmPlatform() { }
+    WasmPlatform(const WasmPlatform&) = delete;
+    WasmPlatform(WasmPlatform&&) = default;
+
+    /** Compiles the given `plan` for this `WasmPlatform`. */
+    virtual WasmModule compile(const Operator &plan) const = 0;
 
     /** Compiles the given `plan` to a `WasmModule` and executes it on this `WasmPlatform`. */
     virtual void execute(const Operator &plan) = 0;
 };
 
-/** A `Backend` to execute `WasmModule`s on a specific `WasmPlatform`. */
+/** A `Backend` to execute a plan on a specific `WasmPlatform`. */
 struct WasmBackend : Backend
 {
     private:
-    std::unique_ptr<WasmPlatform> platform_;
+    std::unique_ptr<WasmPlatform> platform_; ///< the `WasmPlatform` of this backend
 
     public:
     WasmBackend(std::unique_ptr<WasmPlatform> platform) : platform_(std::move(platform)) { }
 
+    /** Returns this backend's `WasmPlatform`. */
+    const WasmPlatform & platform() const { return *platform_; }
+
+    /** Executes the given `plan` with this backend. */
     void execute(const Operator &plan) const override;
 };
 

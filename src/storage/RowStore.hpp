@@ -51,6 +51,7 @@ struct RowStore : Store
 
     /** Returns the memory of the store. */
     const rewire::Memory & memory() const { return data_; }
+    void memory(rewire::Memory memory) { data_ = std::move(memory); }
 
     void accept(StoreVisitor &v) override { v(*this); }
     void accept(ConstStoreVisitor &v) const override { v(*this); }

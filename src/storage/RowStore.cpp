@@ -40,6 +40,7 @@ RowStore::~RowStore()
 
 void RowStore::compute_offsets()
 {
+    /* TODO: use `PhysicalSchema` with additional bitmap-type to compute offsets. */
     using std::max;
 
     const auto num_attrs = table().size();

@@ -1,0 +1,49 @@
+description: string comparison
+db: ours
+query: |
+    SELECT "abc" = "abc";
+    SELECT "abc" != "abc";
+    SELECT "abc" < "abc";
+    SELECT "abc" > "abc";
+    SELECT "abc" <= "abc";
+    SELECT "abc" >= "abc";
+    SELECT "aac" < "aab";
+    SELECT "aac" > "aab";
+    SELECT "a" < "aa";
+    SELECT "a" > "aa";
+    SELECT "aa" < "a";
+    SELECT "aa" > "a";
+    SELECT "aba" < "aa";
+    SELECT "aba" > "aa";
+    SELECT "ab" < "aaa";
+    SELECT "ab" > "aaa";
+required: YES
+
+stages:
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            TRUE
+            FALSE
+            FALSE
+            FALSE
+            TRUE
+            TRUE
+            FALSE
+            TRUE
+            TRUE
+            FALSE
+            FALSE
+            TRUE
+            FALSE
+            TRUE
+            FALSE
+            TRUE
+        err: NULL
+        num_err: 0
+        returncode: 0

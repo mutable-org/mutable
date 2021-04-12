@@ -1,14 +1,19 @@
 #pragma once
 
-#include "mutable/util/memory.hpp"
+#include "backend/WasmUtil.hpp"
 #include "util/WebSocketServer.hpp"
-#include "WebAssembly.hpp"
 #include <libplatform/libplatform.h>
+#include <mutable/util/memory.hpp>
 #include <v8-inspector.h>
 #include <v8.h>
 
 
 namespace m {
+
+
+/*======================================================================================================================
+ * V8Inspector and helper classes
+ *====================================================================================================================*/
 
 namespace v8_helper {
 
@@ -152,6 +157,11 @@ namespace v8_helper {
 
 }
 
+
+/*======================================================================================================================
+ * V8Platform
+ *====================================================================================================================*/
+
 /** The `V8Platform` is a `WasmPlatform` using [V8, Google's open source high-performance JavaScript and WebAssembly
  * engine] (https://v8.dev/). */
 struct V8Platform : WasmPlatform
@@ -160,7 +170,6 @@ struct V8Platform : WasmPlatform
     static std::unique_ptr<v8::Platform> PLATFORM_;
     v8::ArrayBuffer::Allocator *allocator_ = nullptr;
     v8::Isolate *isolate_ = nullptr;
-    rewire::Memory mem_; ///< heap memory of the Wasm module
 
     /*----- Objects for remote debugging via CDT. --------------------------------------------------------------------*/
     std::unique_ptr<v8_helper::V8InspectorClientImpl> inspector_;
@@ -173,6 +182,7 @@ struct V8Platform : WasmPlatform
 
     static v8::Platform * platform() { insist(bool(PLATFORM_)); return PLATFORM_.get(); }
 
+    WasmModule compile(const Operator &plan) const override;
     void execute(const Operator &plan) override;
 
     private:
@@ -185,7 +195,7 @@ struct V8Platform : WasmPlatform
     /** Converts any V8 value to JSON. */
     v8::Local<v8::String> to_json(v8::Local<v8::Value> val) const;
     /** Create a JavaScript document for debugging via CDT. */
-    std::string create_js_debug_script(const Operator &plan, const WasmModule &module, v8::Local<v8::Object> env,
+    std::string create_js_debug_script(const WasmModule &module, v8::Local<v8::Object> env,
                                        const WasmPlatform::WasmContext &wasm_context);
 };
 

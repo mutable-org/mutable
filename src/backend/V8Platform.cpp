@@ -1,10 +1,8 @@
 #include "V8Platform.hpp"
 
+#include "backend/Interpreter.hpp"
 #include "catalog/Schema.hpp"
 #include "globals.hpp"
-#include "mutable/IR/Tuple.hpp"
-#include "mutable/storage/Store.hpp"
-#include "mutable/util/Timer.hpp"
 #include "storage/ColumnStore.hpp"
 #include "storage/RowStore.hpp"
 #include <chrono>
@@ -12,9 +10,14 @@
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
+#include <mutable/IR/Tuple.hpp>
+#include <mutable/storage/Store.hpp>
+#include <mutable/util/Timer.hpp>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 
 
 using namespace m;
@@ -22,7 +25,7 @@ using args_t = v8::Local<v8::Value>[];
 
 
 /*======================================================================================================================
- * v8_helper
+ * V8Inspector and helper classes
  *====================================================================================================================*/
 
 void v8_helper::V8InspectorClientImpl::register_context(v8::Local<v8::Context> context)
@@ -79,11 +82,14 @@ void v8_helper::V8InspectorClientImpl::runMessageLoopOnPause(int)
     is_nested = false;
 }
 
+
 /*======================================================================================================================
  * V8 Callback Functions
  *
  * Functions to be called from the WebAssembly module to give control flow and pass data to the host.
  *====================================================================================================================*/
+
+namespace {
 
 void print(const v8::FunctionCallbackInfo<v8::Value> &info)
 {
@@ -108,93 +114,24 @@ void set_wasm_instance_raw_memory(const v8::FunctionCallbackInfo<v8::Value> &inf
     v8::Local<v8::Int32> wasm_context_id = info[1].As<v8::Int32>();
 
     auto &wasm_context = WasmPlatform::Get_Wasm_Context_By_ID(wasm_context_id->Value());
+#ifndef NDEBUG
     std::cerr << "Setting Wasm instance raw memory of the given instance to the VM of Wasm context "
               << wasm_context_id->Value() << " at " << wasm_context.vm.addr() << " of " << wasm_context.vm.size()
               << " bytes" << std::endl;
+#endif
     v8::SetWasmInstanceRawMemory(wasm_instance, wasm_context.vm.as<uint8_t*>(), wasm_context.vm.size());
 }
 
-struct print_value : ConstTypeVisitor
-{
-    using base = ConstTypeVisitor;
-
-    std::ostream &out;
-    const uint64_t *ptr;
-
-    print_value(std::ostream &out, const uint64_t *ptr) : out(out), ptr(ptr) { }
-
-    using base::operator();
-
-    void operator()(Const<ErrorType>&) override { unreachable("Value cannot have error type"); }
-
-    void operator()(Const<Boolean>&) override { out << (*reinterpret_cast<const uint8_t*>(ptr) ? "TRUE" : "FALSE"); }
-
-    void operator()(Const<CharacterSequence>&) override { unreachable("not implemented"); }
-
-    void operator()(Const<Date>&) override {
-        const int32_t date = *reinterpret_cast<const int32_t*>(ptr); // signed because year is signed
-        const auto oldfill = out.fill('0');
-        const auto oldfmt = out.flags();
-        out << std::internal
-            << std::setw(date >> 9 > 0 ? 4 : 5) << (date >> 9) << '-'
-            << std::setw(2) << ((date >> 5) & 0xF) << '-'
-            << std::setw(2) << (date & 0x1F);
-        out.fill(oldfill);
-        out.flags(oldfmt);
-    }
-
-    void operator()(Const<DateTime>&) override {
-        const time_t time = *reinterpret_cast<const int64_t*>(ptr);
-        std::tm tm;
-        gmtime_r(&time, &tm);
-        out << put_tm(tm);
-    }
-
-    void operator()(Const<Numeric> &n) override {
-        switch (n.kind) {
-            case Numeric::N_Int:
-                if (n.size() <= 32) {
-                    out << *reinterpret_cast<const int32_t*>(ptr);
-                } else {
-                    out << *reinterpret_cast<const int64_t*>(ptr);
-                }
-                break;
-
-            case Numeric::N_Float:
-                if (n.size() == 32) {
-                    const auto old_precision = out.precision(std::numeric_limits<float>::max_digits10 - 1);
-                    out << *reinterpret_cast<const float*>(ptr);
-                    out.precision(old_precision);
-                } else {
-                    const auto old_precision = out.precision(std::numeric_limits<double>::max_digits10 - 1);
-                    out << *reinterpret_cast<const double*>(ptr);
-                    out.precision(old_precision);
-                }
-                break;
-
-            case Numeric::N_Decimal: {
-                auto i = *reinterpret_cast<const int64_t*>(ptr);
-                auto factor = powi(10, n.scale);
-                auto pre = i / factor;
-                auto post = i % factor;
-                out << pre << '.';
-                auto old_fill = out.fill('0');
-                out << std::setw(n.scale) << post;
-                out.fill(old_fill);
-                break;
-            }
-        }
-    }
-
-    void operator()(Const<FnType>&) override { unreachable("FnType is not a value"); }
-};
+}
 
 
 /*======================================================================================================================
- * V8Platform
+ * V8Platform helper classes
  *====================================================================================================================*/
 
-struct EnvGen : ConstStoreVisitor
+namespace {
+
+struct Store2Wasm : ConstStoreVisitor
 {
     private:
     v8::Isolate *isolate_;
@@ -203,7 +140,7 @@ struct EnvGen : ConstStoreVisitor
     std::size_t next_page_ = 0;
 
     public:
-    EnvGen(v8::Isolate *isolate, v8::Local<v8::Object> env, const WasmPlatform::WasmContext &wasm_context)
+    Store2Wasm(v8::Isolate *isolate, v8::Local<v8::Object> env, const WasmPlatform::WasmContext &wasm_context)
         : isolate_(isolate)
         , env_(env)
         , wasm_context_(wasm_context)
@@ -274,10 +211,85 @@ struct EnvGen : ConstStoreVisitor
     }
 };
 
+struct CollectStringLiterals : ConstOperatorVisitor, ConstASTExprVisitor
+{
+    private:
+    std::unordered_set<const char*> literals_; ///< the collected literals
+
+    public:
+    static std::vector<const char*> Collect(const Operator &plan) {
+        CollectStringLiterals CSL;
+        CSL(plan);
+        return std::vector<const char*>(CSL.literals_.begin(), CSL.literals_.end());
+    }
+
+    private:
+    CollectStringLiterals() = default;
+
+    using ConstOperatorVisitor::operator();
+    using ConstASTExprVisitor::operator();
+    void recurse(const Consumer &C) {
+        for (auto &c : C.children())
+            (*this)(*c);
+    }
+
+    /*----- Operator -------------------------------------------------------------------------------------------------*/
+    void operator()(const ScanOperator&) override { /* nothing to be done */ }
+    void operator()(const CallbackOperator &op) override { recurse(op); }
+    void operator()(const PrintOperator &op) override { recurse(op); }
+    void operator()(const NoOpOperator &op) override { recurse(op); }
+    void operator()(const FilterOperator &op) override {
+        for (auto &c : op.filter()) {
+            for (auto &p : c)
+                (*this)(*p.expr());
+        }
+        recurse(op);
+    }
+    void operator()(const JoinOperator &op) override {
+        for (auto &c : op.predicate()) {
+            for (auto &p : c)
+                (*this)(*p.expr());
+        }
+        recurse(op);
+    }
+    void operator()(const ProjectionOperator &op) override {
+        for (auto &p : op.projections())
+            (*this)(*p.first);
+        recurse(op);
+    }
+    void operator()(const LimitOperator &op) override { recurse(op); }
+    void operator()(const GroupingOperator &op) override {
+        for (auto &g : op.group_by())
+            (*this)(*g);
+        recurse(op);
+    }
+    void operator()(const SortingOperator &op) override { recurse(op); }
+
+    /*----- Expr -----------------------------------------------------------------------------------------------------*/
+    void operator()(const ErrorExpr&) override { unreachable("no errors at this stage"); }
+    void operator()(const Designator&) override { /* nothing to be done */ }
+    void operator()(const Constant &e) override {
+        if (e.is_string()) {
+            auto s = Interpreter::eval(e);
+            literals_.emplace(s.as<const char*>());
+        }
+    }
+    void operator()(const FnApplicationExpr&) override { /* nothing to be done */ } // XXX can string literals be arguments?
+    void operator()(const UnaryExpr &e) override { (*this)(*e.expr); }
+    void operator()(const BinaryExpr &e) override { (*this)(*e.lhs); (*this)(*e.rhs); }
+    void operator()(const QueryExpr&) override { unreachable("unexpected QueryExpr"); }
+};
+
+}
+
+
+/*======================================================================================================================
+ * V8Platform
+ *====================================================================================================================*/
+
 std::unique_ptr<v8::Platform> V8Platform::PLATFORM_(nullptr);
 
 V8Platform::V8Platform()
-    : mem_(Catalog::Get().allocator().allocate(1UL << 32)) // 2 GiB
 {
     if (PLATFORM_ == nullptr) {
         PLATFORM_ = v8::platform::NewDefaultPlatform();
@@ -307,6 +319,180 @@ V8Platform::~V8Platform()
     delete allocator_;
 }
 
+WasmModule V8Platform::compile(const Operator &plan) const
+{
+    WasmModule module; // fresh module
+    BinaryenModuleSetFeatures(module.ref(), BinaryenFeatureBulkMemory());
+
+    WasmModuleCG codegen(/* module= */ module, /* main= */ "run");
+
+    /*----- Set up head of heap. -------------------------------------------------------------------------------------*/
+    codegen.import("head_of_heap", BinaryenTypeInt32());
+    codegen.main().block() += codegen.head_of_heap().set(codegen.get_imported("head_of_heap", BinaryenTypeInt32()));
+    codegen.main().block() += codegen.literals().set(codegen.head_of_heap());
+
+    /*----- Collect all string literals. -----------------------------------------------------------------------------*/
+    auto literals = CollectStringLiterals::Collect(plan);
+
+    /*----- Create data segments for literals. -----------------------------------------------------------------------*/
+    const std::size_t num_literals = literals.size();
+    int8_t *segments_passive = new int8_t[num_literals]();
+    std::fill_n(segments_passive, num_literals, true);
+
+    std::vector<BinaryenExpressionRef> segment_offsets;
+    segment_offsets.reserve(num_literals);
+    std::vector<BinaryenIndex> segment_sizes;
+    segment_sizes.reserve(num_literals);
+
+    std::size_t current_offset = 0;
+    for (auto l : literals) {
+        codegen.add_literal(l, current_offset);
+        const auto len = strlen(l);
+        segment_offsets.emplace_back(nullptr);
+        segment_sizes.emplace_back(len);
+        current_offset += len;
+    }
+
+    /*----- Add memory. ----------------------------------------------------------------------------------------------*/
+    BinaryenSetMemory(
+        /* module=         */ codegen,
+        /* initial=        */ 1,
+        /* maximum=        */ WasmPlatform::WASM_MAX_MEMORY / WasmPlatform::WASM_PAGE_SIZE, // allowed maximum
+        /* exportName=     */ "memory",
+        /* segments=       */ &literals[0],
+        /* segmentPassive= */ segments_passive,
+        /* segmentOffsets= */ &segment_offsets[0],
+        /* segmentSizes=   */ &segment_sizes[0],
+        /* numSegments=    */ literals.size(),
+        /* shared=         */ 0
+    );
+
+    for (std::size_t i = 0; i != literals.size(); ++i) {
+        const auto literal = literals[i];
+        const auto size = segment_sizes[i];
+        const auto offset = codegen.get_literal_offset(literal);
+        WasmTemporary dest = BinaryenBinary(
+            /* module= */ codegen,
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ codegen.literals(),
+            /* right=  */ BinaryenConst(codegen, BinaryenLiteralInt32(offset))
+        );
+        codegen.main().block() += BinaryenMemoryInit(
+            /* module=  */ codegen,
+            /* segment= */ i,
+            /* dest=    */ dest,
+            /* offset=  */ BinaryenConst(codegen, BinaryenLiteralInt32(0)),
+            /* size=    */ BinaryenConst(codegen, BinaryenLiteralInt32(size))
+        );
+    }
+
+    delete[] segments_passive;
+
+    codegen.main().block() += codegen.head_of_heap().set(BinaryenBinary(
+        /* module= */ codegen,
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ codegen.head_of_heap(),
+        /* right=  */ BinaryenConst(codegen, BinaryenLiteralInt32(current_offset))
+    ));
+    codegen.main().block() += codegen.align_head_of_heap();
+
+#if 1
+    /*----- Add print function. --------------------------------------------------------------------------------------*/
+    std::vector<BinaryenType> print_param_types;
+    print_param_types.push_back(BinaryenTypeInt32());
+
+    BinaryenAddFunctionImport(
+        /* module=             */ codegen,
+        /* internalName=       */ "print",
+        /* externalModuleName= */ "env",
+        /* externalBaseName=   */ "print",
+        /* params=             */ BinaryenTypeCreate(&print_param_types[0], print_param_types.size()),
+        /* results=            */ BinaryenTypeNone()
+    );
+#endif
+
+    /*----- Compile plan. --------------------------------------------------------------------------------------------*/
+    codegen.compile(plan); // emit code
+
+    /*----- Write number of results. ---------------------------------------------------------------------------------*/
+    {
+        /* Align head of heap to 4-byte address. */
+        WasmTemporary head_inc = BinaryenBinary(
+            /* module= */ codegen,
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ codegen.head_of_heap(),
+            /* right=  */ BinaryenConst(codegen, BinaryenLiteralInt32(3))
+        );
+        WasmTemporary head_aligned = BinaryenBinary(
+            /* module= */ codegen,
+            /* op=     */ BinaryenAndInt32(),
+            /* left=   */ head_inc,
+            /* right=  */ BinaryenConst(codegen, BinaryenLiteralInt32(~3U))
+        );
+        codegen.main().block() += codegen.head_of_heap().set(std::move(head_aligned));
+        codegen.main().block() += BinaryenStore(
+            /* module= */ codegen,
+            /* bytes=  */ 4,
+            /* offset= */ 0,
+            /* align=  */ 0,
+            /* ptr=    */ codegen.head_of_heap(),
+            /* value=  */ codegen.num_tuples(),
+            /* type=   */ BinaryenTypeInt32()
+        );
+    }
+
+#if 0
+    {
+        BinaryenExpressionRef args[] = { codegen.num_tuples() };
+        codegen.main().block() += BinaryenCall(
+            /* module=      */ codegen,
+            /* target=      */ "print",
+            /* operands=    */ args,
+            /* numOperands= */ 1,
+            /* returnType=  */ BinaryenTypeNone()
+        );
+    }
+#endif
+
+    /*----- Return the new head of heap . ----------------------------------------------------------------------------*/
+    codegen.main().block() += codegen.head_of_heap();
+
+    /*----- Add function. --------------------------------------------------------------------------------------------*/
+    codegen.main().finalize();
+    BinaryenAddFunctionExport(codegen, "run", "run");
+
+    /*----- Validate module before optimization. ---------------------------------------------------------------------*/
+#ifndef NDEBUG
+    if (not BinaryenModuleValidate(module.ref())) {
+        module.dump();
+        throw std::logic_error("invalid module");
+    }
+#endif
+
+#if 1
+    /*----- Optimize module. -----------------------------------------------------------------------------------------*/
+#ifndef NDEBUG
+    std::ostringstream dump_before_opt;
+    module.dump(dump_before_opt);
+#endif
+    BinaryenSetOptimizeLevel(2); // O2
+    BinaryenSetShrinkLevel(0); // shrinking not required
+    BinaryenModuleOptimize(module.ref());
+
+    /*----- Validate module after optimization. ----------------------------------------------------------------------*/
+#ifndef NDEBUG
+    if (not BinaryenModuleValidate(module.ref())) {
+        std::cerr << "Module invalid after optimization!" << std::endl;
+        std::cerr << "WebAssembly before optimization:\n" << dump_before_opt.str() << std::endl;
+        std::cerr << "WebAssembly after optimization:\n";
+        module.dump(std::cerr);
+    }
+#endif
+#endif
+
+    return module;
+}
+
 void V8Platform::execute(const Operator &plan)
 {
     Catalog &C = Catalog::Get();
@@ -329,6 +515,11 @@ void V8Platform::execute(const Operator &plan)
     auto env = create_env(wasm_context, plan);
     DISCARD imports->Set(context, mkstr("env"), env);
 
+    /* Map the remaining address space to the output buffer. */
+    const auto bytes_remaining = wasm_context.vm.size() - wasm_context.heap;
+    rewire::Memory mem = Catalog::Get().allocator().allocate(bytes_remaining);
+    mem.map(bytes_remaining, 0, wasm_context.vm, wasm_context.heap);
+
     /* Create a WebAssembly instance object. */
     auto instance = TIME_EXPR(instantiate(module, imports), "Compile Wasm to machine code", C.timer());
 
@@ -343,7 +534,7 @@ void V8Platform::execute(const Operator &plan)
         inspector_->register_context(context);
         inspector_->start([&]() {
             /* Create JS script file that instantiates the Wasm module and invokes `run()`. */
-            auto filename = create_js_debug_script(plan, module, env, wasm_context);
+            auto filename = create_js_debug_script(module, env, wasm_context);
             /* Create a `v8::Script` for that JS file. */
             std::ifstream js_in(filename);
             std::string js(std::istreambuf_iterator<char>(js_in), std::istreambuf_iterator<char>{});
@@ -367,65 +558,56 @@ void V8Platform::execute(const Operator &plan)
     const uint32_t head_of_heap =
         run->Call(context, context->Global(), 1, args).ToLocalChecked().As<v8::Int32>()->Value();
 
-    /* Compute the size of the heap in bytes. */
-    const uint32_t heap_size = head_of_heap - wasm_context.heap;
+    /* Get the number of result tuples written. */
+    const uint32_t num_tuples = mem.as<uint32_t*>()[(head_of_heap - wasm_context.heap) / sizeof(uint32_t)];
 
-    /* Compute the number of result tuples written. */
-    const uint32_t num_tuples = mem_.as<uint32_t*>()[heap_size / sizeof(uint32_t)];
+    /* Create physical schema used as data layout. */
+    RuntimeStruct layout(plan.schema()); // TODO: add bitmap-type for null bitmap
+    const std::size_t num_bytes_result_set = layout.size_in_bytes() * num_tuples;
+    const std::size_t remainder = num_bytes_result_set % 4;
+    const std::size_t gap = remainder ? sizeof(uint32_t) - remainder : 0UL;
+    const uint8_t *result_set = mem.as<uint8_t*>() + head_of_heap - wasm_context.heap - gap - num_bytes_result_set;
 
-    /* Compute the beginning of the output buffer, located on the heap. */
-    const uint64_t *output_buffer = reinterpret_cast<uint64_t*>(mem_.as<uint8_t*>() + heap_size - num_tuples * plan.schema().num_entries() * 8);
+    Table RS("$RS");
+    std::ostringstream oss;
+    for (auto &e : plan.schema()) {
+        oss.str("");
+        oss << e.id;
+        RS.push_back(C.pool(oss.str().c_str()), as<const PrimitiveType>(e.type)->as_vectorial());
+    }
+    auto lin = Linearization::CreateInfinite(1);
+    auto child = std::make_unique<Linearization>(Linearization::CreateFinite(RS.size(), 1));
+    for (auto &attr : RS)
+        child->add_sequence(layout.offset(attr.id), 0, attr);
+    lin.add_sequence(uintptr_t(result_set), layout.size_in_bytes(), std::move(child));
+
+    Schema S = RS.schema();
 
     /* Extract results. */
-    auto &S = plan.schema();
     if (auto callback_op = cast<const CallbackOperator>(&plan)) {
-        Tuple tup(plan.schema());
-        for (const uint64_t *ptr = output_buffer, *end = ptr + num_tuples * S.num_entries(); ptr < end;) {
-            for (std::size_t i = 0; i != S.num_entries(); ++i, ++ptr) {
-                auto ty = S[i].type;
-                if (ty->is_boolean()) {
-                    tup.set(i, bool(ptr[0] & 0b1), false);
-                } else if (auto n = cast<const Numeric>(ty)) {
-                    switch (n->kind) {
-                        case Numeric::N_Int:
-                        case Numeric::N_Decimal: {
-                            switch (n->size()) {
-                                case 8:
-                                case 16:
-                                case 32:
-                                    tup.set(i, int64_t(*reinterpret_cast<const int32_t*>(ptr)), false);
-                                    break;
-
-                                case 64:
-                                    tup.set(i, *reinterpret_cast<const int64_t*>(ptr), false);
-                                    break;
-                            }
-                            break;
-                        }
-
-                        case Numeric::N_Float: {
-                            if (n->size() == 32)
-                                tup.set(i, *reinterpret_cast<const float*>(ptr), false);
-                            else
-                                tup.set(i, *reinterpret_cast<const double*>(ptr), false);
-                            break;
-                        }
-                    }
-                } else {
-                    unreachable("unsupported type");
-                }
-            }
+        Tuple tup(S);
+        Tuple *args[] = { &tup };
+        auto loader = Interpreter::compile_load(S, lin);
+        for (std::size_t i = 0; i != num_tuples; ++i) {
+            loader(args);
             callback_op->callback()(S, tup);
             tup.clear();
         }
     } else if (auto print_op = cast<const PrintOperator>(&plan)) {
-        print_value P(print_op->out, output_buffer);
+        Tuple tup(S);
+        Tuple *args[] = { &tup };
+        auto printer = Interpreter::compile_load(S, lin);
+        auto ostream_index = printer.add(&print_op->out);
+        for (std::size_t i = 0; i != S.num_entries(); ++i) {
+            if (i != 0)
+                printer.emit_Putc(ostream_index, ',');
+            printer.emit_Ld_Tup(0, i);
+            printer.emit_Print(ostream_index, S[i].type);
+        }
         for (std::size_t i = 0; i != num_tuples; ++i) {
-            for (std::size_t j = 0; j != S.num_entries(); ++j, ++P.ptr) {
-                if (j != 0) P.out << ',';
-                P(*S[j].type);
-            }
-            P.out << '\n';
+            printer(args);
+            print_op->out << '\n';
+            tup.clear();
         }
         if (not Options::Get().quiet)
             print_op->out << num_tuples << " rows\n";
@@ -460,19 +642,18 @@ v8::Local<v8::WasmModuleObject> V8Platform::instantiate(const WasmModule &module
 
 v8::Local<v8::Object> V8Platform::create_env(WasmContext &wasm_context, const Operator &plan) const
 {
+    (void) plan; // TODO map only tables/indexes that are being accessed
     auto Ctx = isolate_->GetCurrentContext();
+
+    /* Map the entire database into the Wasm module. */
     auto &DB = Catalog::Get().get_database_in_use();
     auto env = v8::Object::New(isolate_);
-    EnvGen G(isolate_, env, wasm_context);
+    Store2Wasm S2W(isolate_, env, wasm_context);
     for (auto it = DB.begin_tables(); it != DB.end_tables(); ++it)
-        G(it->second->store());
-
-    /* Map the remaining address space to the output buffer. */
-    auto head_of_heap = G.get_next_page() * get_pagesize();
-    const auto remaining = wasm_context.vm.size() - head_of_heap;
-    mem_.map(remaining, 0, wasm_context.vm, head_of_heap);
+        S2W(it->second->store());
 
     /* Import next free page, usable for heap allcoations. */
+    auto head_of_heap = S2W.get_next_page() * get_pagesize();
     DISCARD env->Set(Ctx, mkstr("head_of_heap"), v8::Int32::New(isolate_, head_of_heap));
     wasm_context.heap = head_of_heap;
 
@@ -505,8 +686,8 @@ v8::Local<v8::String> V8Platform::to_json(v8::Local<v8::Value> val) const
     return v8_helper::to_json(isolate_, val);
 }
 
-std::string V8Platform::create_js_debug_script(const Operator &plan, const WasmModule &module,
-                                               v8::Local<v8::Object> env, const WasmPlatform::WasmContext &wasm_context)
+std::string V8Platform::create_js_debug_script(const WasmModule &module, v8::Local<v8::Object> env,
+                                               const WasmPlatform::WasmContext &wasm_context)
 {
     std::ostringstream oss;
 

@@ -65,20 +65,23 @@ struct Schema
     std::vector<entry_type> entries_;
 
     public:
+    using iterator = decltype(entries_)::iterator;
+    using const_iterator = decltype(entries_)::const_iterator;
+
     const std::vector<entry_type> & entries() const { return entries_; }
 
-    auto begin() { return entries_.begin(); }
-    auto end()   { return entries_.end(); }
-    auto begin() const { return entries_.cbegin(); }
-    auto end()   const { return entries_.cend(); }
-    auto cbegin() const { return entries_.cbegin(); }
-    auto cend()   const { return entries_.cend(); }
+    iterator begin() { return entries_.begin(); }
+    iterator end()   { return entries_.end(); }
+    const_iterator begin() const { return entries_.cbegin(); }
+    const_iterator end()   const { return entries_.cend(); }
+    const_iterator cbegin() const { return entries_.cbegin(); }
+    const_iterator cend()   const { return entries_.cend(); }
 
     /** Returns the number of entries in this `Schema`. */
-    auto num_entries() const { return entries_.size(); }
+    std::size_t num_entries() const { return entries_.size(); }
 
     /** Returns an iterator to the entry with the given `Identifier` `id`, or `end()` if no such entry exists.  */
-    decltype(entries_)::iterator find(Identifier id) {
+    iterator find(Identifier id) {
         std::function<bool(entry_type&)> pred;
         if (id.prefix)
             pred = [&](entry_type &e) -> bool { return e.id == id; }; // match qualified
@@ -90,7 +93,7 @@ struct Schema
         return it;
     }
     /** Returns an iterator to the entry with the given `Identifier` `id`, or `end()` if no such entry exists.  */
-    decltype(entries_)::const_iterator find(Identifier id) const { return const_cast<Schema*>(this)->find(id); }
+    const_iterator find(Identifier id) const { return const_cast<Schema*>(this)->find(id); }
 
     /** Returns `true` iff this `Schema` contains an entry with `Identifier` `id`. */
     bool has(Identifier id) const { return find(id) != end(); }
@@ -171,6 +174,7 @@ inline Schema operator|(const Schema &left, const Schema &right)
     res |= right;
     return res;
 }
+
 
 /*======================================================================================================================
  * Attribute, Table, Function, Database
@@ -286,6 +290,9 @@ struct Table
             throw std::invalid_argument("attribute name already in use");
         attrs_.emplace_back(Attribute(attrs_.size(), *this, type, name));
     }
+
+    /** Returns a `Schema` for this `Table`. */
+    Schema schema() const;
 
     void dump(std::ostream &out) const;
     void dump() const;

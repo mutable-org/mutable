@@ -433,6 +433,15 @@ struct FnType : Type
 /* Given two `Numeric` types, compute the `Numeric` type that is at least as precise as either of them. */
 const Numeric * arithmetic_join(const Numeric *lhs, const Numeric *rhs);
 
+#define M_TYPE_LIST(X) \
+    X(ErrorType) \
+    X(Boolean) \
+    X(CharacterSequence) \
+    X(Date) \
+    X(DateTime) \
+    X(Numeric) \
+    X(FnType)
+
 }
 
 inline bool m::Type::is_integral() const {
@@ -504,15 +513,29 @@ struct TheTypeVisitor
 
     virtual ~TheTypeVisitor() { }
 
-    /* Expressions */
     void operator()(Const<Type> &ty) { ty.accept(*this); }
-    virtual void operator()(Const<ErrorType> &ty) = 0;
-    virtual void operator()(Const<Boolean> &ty) = 0;
-    virtual void operator()(Const<CharacterSequence> &ty) = 0;
-    virtual void operator()(Const<Date> &ty) = 0;
-    virtual void operator()(Const<DateTime> &ty) = 0;
-    virtual void operator()(Const<Numeric> &ty) = 0;
-    virtual void operator()(Const<FnType> &ty) = 0;
+#define VISIT(TYPE) virtual void operator()(Const<TYPE> &ty) = 0;
+    M_TYPE_LIST(VISIT)
+#undef VISIT
 };
+
+/** A C++17 `std::visit`-style visitor for `Type`. */
+template<typename Visitor>
+auto visit(Visitor &&vis, const Type &ty)
+{
+    struct V : ConstTypeVisitor
+    {
+        Visitor &&vis;
+        V(Visitor &&vis) : vis(std::forward<Visitor>(vis)) { }
+
+        using ConstTypeVisitor::operator();
+#define VISIT(TYPE) void operator()(Const<TYPE> &ty) { vis(ty); }
+        M_TYPE_LIST(VISIT)
+#undef VISIT
+    };
+
+    V v(std::forward<Visitor>(vis));
+    v(ty);
+}
 
 }

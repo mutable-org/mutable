@@ -13,74 +13,55 @@ using namespace m;
   Value
  *====================================================================================================================*/
 
-struct value_printer : ConstTypeVisitor
-{
-    private:
-    std::ostream &out_;
-    Value val_;
-
-    public:
-    value_printer(std::ostream &out, Value val) : out_(out), val_(val) { }
-
-    using ConstTypeVisitor::operator();
-    void operator()(Const<ErrorType>&) override { unreachable("cannot print value of erroneous type"); }
-    void operator()(Const<Boolean>&) override { out_ << (val_.as<bool>() ? "TRUE" : "FALSE"); }
-
-    void operator()(Const<CharacterSequence>&) override {
-        std::string str(reinterpret_cast<char*>(val_.as_p()));
-        out_ << '"' << escape(str) << '"';
-    }
-
-    void operator()(Const<Date>&) override {
-        const int32_t date = val_.as_i(); // signed because year is signed
-        const auto oldfill = out_.fill('0');
-        const auto oldfmt = out_.flags();
-        out_ << std::internal
-             << std::setw(date >> 9 > 0 ? 4 : 5) << (date >> 9) << '-'
-             << std::setw(2) << ((date >> 5) & 0xF) << '-'
-             << std::setw(2) << (date & 0x1F);
-        out_.fill(oldfill);
-        out_.flags(oldfmt);
-    }
-
-    void operator()(Const<DateTime>&) override {
-        const time_t time = val_.as_i();
-        std::tm tm;
-        gmtime_r(&time, &tm);
-        out_ << put_tm(tm);
-    }
-
-    void operator()(Const<Numeric> &n) override {
-        switch (n.kind) {
-            case Numeric::N_Int:
-                out_ << val_.as_i();
-                break;
-
-            case Numeric::N_Decimal: {
-                const int64_t div = powi(10L, n.scale);
-                const int64_t pre = val_.as<int64_t>() / div;
-                const int64_t post = val_.as<int64_t>() % div;
-                out_ << pre << '.';
-                auto old_fill = out_.fill('0');
-                out_ << std::setw(n.scale) << post;
-                out_.fill(old_fill);
-                break;
-            }
-
-            case Numeric::N_Float:
-                if (n.size() == 32)
-                    out_ << val_.as<float>();
-                else
-                    out_ << val_.as<double>();
-                break;
-        }
-    }
-    void operator()(Const<FnType>&) override { unreachable("value cannot have function type"); }
-};
-
 void Value::print(std::ostream &out, const Type &ty) const
 {
-    value_printer(out, *this)(ty);
+    visit(overloaded {
+        [this, &out](const Boolean&) { out << (as_b() ? "TRUE" : "FALSE"); },
+        [this, &out](const CharacterSequence &cs) { out << '"'; out.write(as<const char*>(), cs.length); out << '"'; },
+        [this, &out](const Date&) {
+            const int32_t date = as_i(); // signed because year is signed
+            const auto oldfill = out.fill('0');
+            const auto oldfmt = out.flags();
+            out << std::internal
+                << std::setw(date >> 9 > 0 ? 4 : 5) << (date >> 9) << '-'
+                << std::setw(2) << ((date >> 5) & 0xF) << '-'
+                << std::setw(2) << (date & 0x1F);
+            out.fill(oldfill);
+            out.flags(oldfmt);
+        },
+        [this, &out](const DateTime&) {
+            const time_t time = as_i();
+            std::tm tm;
+            gmtime_r(&time, &tm);
+            out << put_tm(tm);
+        },
+        [this, &out](const Numeric &n) {
+            switch (n.kind) {
+                case Numeric::N_Int:
+                    out << as_i();
+                    break;
+
+                case Numeric::N_Decimal: {
+                    const int64_t div = powi(10L, n.scale);
+                    const int64_t pre = as_i() / div;
+                    const int64_t post = as_i() % div;
+                    out << pre << '.';
+                    auto old_fill = out.fill('0');
+                    out << std::setw(n.scale) << post;
+                    out.fill(old_fill);
+                    break;
+                }
+
+                case Numeric::N_Float:
+                    if (n.size() == 32)
+                        out << as_f();
+                    else
+                        out << as_d();
+                    break;
+            }
+        },
+        [](auto&) { unreachable("invalid value type"); }
+    }, ty);
 }
 
 void Value::dump(std::ostream &out) const { out << *this << std::endl; }

@@ -741,45 +741,34 @@ struct WasmLimits
 };
 
 template<typename T>
-BinaryenLiteral wasm_constant(const T &val, const Type &type)
+BinaryenLiteral wasm_constant(const T &val, const Type &ty)
 {
-    struct V : ConstTypeVisitor
-    {
-        const T &value;
-        BinaryenLiteral literal;
-
-        V(const T &value) : value(value) { }
-
-        using ConstTypeVisitor::operator();
-        void operator()(Const<ErrorType>&) { unreachable("not allowed"); }
-        void operator()(Const<Boolean>&) { literal = BinaryenLiteralInt32(value); }
-        void operator()(Const<CharacterSequence>&) { unreachable("not supported"); }
-        void operator()(Const<Numeric> &ty) {
-            switch (ty.kind) {
+    BinaryenLiteral literal;
+    visit(overloaded {
+        [&val, &literal](const Boolean&) { literal = BinaryenLiteralInt32(bool(val)); },
+        [&val, &literal](const Numeric &n) {
+            switch (n.kind) {
                 case Numeric::N_Int:
-                    if (ty.size() == 32)
-                        literal = BinaryenLiteralInt32(value);
+                    if (n.size() <= 32)
+                        literal = BinaryenLiteralInt32(int32_t(val));
                     else
-                        literal = BinaryenLiteralInt64(value);
+                        literal = BinaryenLiteralInt64(int64_t(val));
                     break;
 
                 case Numeric::N_Decimal:
                     unreachable("not supported");
 
                 case Numeric::N_Float:
-                    if (ty.size() == 32)
-                        literal = BinaryenLiteralFloat32(value);
+                    if (n.size() == 32)
+                        literal = BinaryenLiteralFloat32(float(val));
                     else
-                        literal = BinaryenLiteralFloat64(value);
+                        literal = BinaryenLiteralFloat64(double(val));
                     break;
             }
-        }
-        void operator()(Const<FnType>&) { unreachable("not allowed"); }
-    };
-
-    V v(val);
-    v(type);
-    return v.literal;
+        },
+        [](auto&) { unreachable("unsupported type"); }
+    }, ty);
+    return literal;
 }
 
 struct WasmModuleCG

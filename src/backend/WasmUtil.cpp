@@ -1143,53 +1143,63 @@ void WasmSwap::swap_string(BlockBuilder &block, const CharacterSequence &ty,
  * WasmLimits
  *====================================================================================================================*/
 
-#define WASM_LIMIT(EXTERNAL_NAME, INTERNAL_NAME) \
-BinaryenLiteral WasmLimits::EXTERNAL_NAME(const Type &type) \
-{ \
-    struct V : ConstTypeVisitor \
-    { \
-        BinaryenLiteral literal; \
-        using ConstTypeVisitor::operator(); \
-        void operator()(Const<ErrorType>&) { unreachable("not allowed"); } \
-        void operator()(Const<Boolean>&) { literal = BinaryenLiteralInt32(std::numeric_limits<bool>::INTERNAL_NAME()); } \
-        void operator()(Const<CharacterSequence>&) { unreachable("not supported"); } \
-        void operator()(Const<Date>&) { literal = BinaryenLiteralInt32(std::numeric_limits<int32_t>::INTERNAL_NAME()); } \
-        void operator()(Const<DateTime>&) { literal = BinaryenLiteralInt64(std::numeric_limits<int64_t>::INTERNAL_NAME()); } \
-        void operator()(Const<Numeric> &ty) { \
-            switch (ty.kind) { \
-                case Numeric::N_Int: \
-                    if (ty.size() <= 32) \
-                        literal = BinaryenLiteralInt32(std::numeric_limits<int32_t>::INTERNAL_NAME()); \
-                    else \
-                        literal = BinaryenLiteralInt64(std::numeric_limits<int64_t>::INTERNAL_NAME()); \
-                    break; \
-\
-                case Numeric::N_Decimal: \
-                    unreachable("not supported"); \
-\
-                case Numeric::N_Float: \
-                    if (ty.size() <= 32) \
-                        literal = BinaryenLiteralFloat32(std::numeric_limits<float>::INTERNAL_NAME()); \
-                    else \
-                        literal = BinaryenLiteralFloat64(std::numeric_limits<double>::INTERNAL_NAME()); \
-                    break; \
-            } \
-        } \
-        void operator()(Const<FnType>&) { unreachable("not allowed"); } \
-    }; \
-\
-    V v; \
-    v(type); \
-    return v.literal; \
+namespace {
+
+template<typename Visitor>
+BinaryenLiteral __limit(Visitor &&vis, const Type &ty)
+{
+    BinaryenLiteral literal;
+#define LIMIT(WASM_TY, C_TY) \
+    literal = BinaryenLiteral##WASM_TY(vis(std::numeric_limits<C_TY>{}))
+    visit(overloaded {
+        [&literal, &vis] (const Boolean&) { LIMIT(Int32, bool); },
+        [&literal, &vis] (const Date&) { LIMIT(Int32, int32_t); },
+        [&literal, &vis] (const DateTime&) { LIMIT(Int64, int64_t); },
+        [&literal, &vis] (const Numeric &n) {
+            switch (n.kind) {
+                case Numeric::N_Int:
+                    switch (n.size()) {
+                        default:
+                            unreachable("invalid integer type");
+                        case 8:
+                            LIMIT(Int32, int8_t);
+                            break;
+                        case 16:
+                            LIMIT(Int32, int16_t);
+                            break;
+                        case 32:
+                            LIMIT(Int32, int32_t);
+                            break;
+                        case 64:
+                            LIMIT(Int64, int64_t);
+                            break;
+                    }
+                    break;
+
+                case Numeric::N_Decimal:
+                    unreachable("not supported");
+
+                case Numeric::N_Float:
+                    if (n.size() <= 32)
+                        LIMIT(Float32, float);
+                    else
+                        LIMIT(Float64, double);
+                    break;
+            }
+        },
+        [](auto&) { unreachable("invalid type"); },
+    }, ty);
+    return literal;
+#undef LIMIT
 }
 
-WASM_LIMIT(min, min);
-WASM_LIMIT(lowest, lowest);
-WASM_LIMIT(max, max);
-WASM_LIMIT(NaN, quiet_NaN);
-WASM_LIMIT(infinity, infinity);
+}
 
-#undef WASM_LIMIT
+BinaryenLiteral WasmLimits::min(const Type &ty) { return __limit([](auto limits) { return decltype(limits)::min(); }, ty); }
+BinaryenLiteral WasmLimits::max(const Type &ty) { return __limit([](auto limits) { return decltype(limits)::max(); }, ty); }
+BinaryenLiteral WasmLimits::lowest(const Type &ty) { return __limit([](auto limits) { return decltype(limits)::lowest(); }, ty); }
+BinaryenLiteral WasmLimits::NaN(const Type &ty) { return __limit([](auto limits) { return decltype(limits)::quiet_NaN(); }, ty); }
+BinaryenLiteral WasmLimits::infinity(const Type &ty) { return __limit([](auto limits) { return decltype(limits)::infinity(); }, ty); }
 
 
 /*======================================================================================================================

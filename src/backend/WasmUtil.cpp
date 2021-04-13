@@ -739,14 +739,15 @@ WasmTemporary WasmCompare::emit(BlockBuilder &block, const WasmStructCGContext &
 
 WasmTemporary WasmCompare::Cmp(FunctionBuilder &fn, const Type &ty, WasmTemporary left, WasmTemporary right, cmp_op op)
 {
+    WasmTemporary res;
 #define BINARY_OP(OP, TYPE) \
-    cmp_ = BinaryenBinary(/* module= */ fn_.module(), \
-                          /* op=     */ Binaryen ## OP ## TYPE(), \
-                          /* left=   */ left_, \
-                          /* right=  */ right_)
+    res = BinaryenBinary(/* module= */ fn.module(), \
+                         /* op=     */ Binaryen ## OP ## TYPE(), \
+                         /* left=   */ left, \
+                         /* right=  */ right)
 
 #define CMP(TYPE, SIGN, SIZE) \
-    switch (op_) { \
+    switch (op) { \
         case EQ: BINARY_OP(Eq, TYPE ## SIZE); break; \
         case NE: BINARY_OP(Ne, TYPE ## SIZE); break; \
         case LT: BINARY_OP(Lt ## SIGN, TYPE ## SIZE); break; \
@@ -756,53 +757,34 @@ WasmTemporary WasmCompare::Cmp(FunctionBuilder &fn, const Type &ty, WasmTemporar
         default: unreachable("unknown comparison operator"); \
     }
 
-#define CMP_SINT(SIZE) CMP(Int, S, SIZE)
-#define CMP_UINT(SIZE) CMP(Int, U, SIZE)
+#define CMP_SINT(SIZE)  CMP(Int,  S, SIZE)
+#define CMP_UINT(SIZE)  CMP(Int,  U, SIZE)
 #define CMP_FLOAT(SIZE) CMP(Float, , SIZE)
 
-    struct V : ConstTypeVisitor
-    {
-        private:
-        cmp_op op_;
-        FunctionBuilder &fn_;
-        WasmTemporary left_, right_, cmp_;
-
-        public:
-        V(cmp_op op, FunctionBuilder &fn, WasmTemporary left, WasmTemporary right)
-            : op_(op)
-            , fn_(fn)
-            , left_(std::move(left))
-            , right_(std::move(right))
-        { }
-
-        WasmTemporary get() { return std::move(cmp_); }
-
-        using ConstTypeVisitor::operator();
-        void operator()(Const<ErrorType>&) { unreachable("not allowed"); }
-        void operator()(Const<Boolean>&) { CMP_SINT(32) }
-        void operator()(Const<CharacterSequence>&) { unreachable("to compare c-style strings use `WasmStrcmp`"); }
-        void operator()(Const<Date>&) { CMP_SINT(32) }
-        void operator()(Const<DateTime>&) { CMP_SINT(64) }
-        void operator()(Const<Numeric> &ty) {
-            switch (ty.kind) {
+    visit(overloaded {
+        [&fn, &left, &right, op, &res](const Boolean&) { CMP_SINT(32) },
+        [&fn, &left, &right, op, &res](const Date&) { CMP_SINT(32) },
+        [&fn, &left, &right, op, &res](const DateTime&) { CMP_SINT(64) },
+        [&fn, &left, &right, op, &res](const Numeric &n) {
+            switch (n.kind) {
                 case Numeric::N_Int:
                 case Numeric::N_Decimal:
-                    if (ty.size() <= 32)
+                    if (n.size() <= 32)
                         CMP_SINT(32)
                     else
                         CMP_SINT(64)
                     break;
 
                 case Numeric::N_Float:
-                    if (ty.size() == 32)
+                    if (n.size() == 32)
                         CMP_FLOAT(32)
                     else
                         CMP_FLOAT(64)
                     break;
             }
-        }
-        void operator()(Const<FnType>&) { unreachable("not allowed"); }
-    };
+        },
+        [](auto&) { unreachable("unsupported type"); }
+    }, ty);
 
 #undef CMP_FLOAT
 #undef CMP_UINT
@@ -810,9 +792,7 @@ WasmTemporary WasmCompare::Cmp(FunctionBuilder &fn, const Type &ty, WasmTemporar
 #undef CMP
 #undef BINARY_OP
 
-    V v(op, fn, std::move(left), std::move(right));
-    v(ty);
-    return v.get();
+    return res;
 }
 
 

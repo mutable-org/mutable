@@ -811,6 +811,33 @@ WasmTemporary WasmStrcmp::Cmp(FunctionBuilder &fn, BlockBuilder &block,
                               const CharacterSequence &ty_left, const CharacterSequence &ty_right,
                               WasmTemporary _left, WasmTemporary _right)
 {
+    if (ty_left.length == 1 and ty_right.length == 1) {
+        WasmTemporary byte_left = BinaryenLoad(
+            /* module= */ fn.module(),
+            /* bytes=  */ 1,
+            /* signed= */ false,
+            /* offset= */ 0,
+            /* align=  */ 0,
+            /* type=   */ BinaryenTypeInt32(),
+            /* ptr=    */ _left
+        );
+        WasmTemporary byte_right = BinaryenLoad(
+            /* module= */ fn.module(),
+            /* bytes=  */ 1,
+            /* signed= */ false,
+            /* offset= */ 0,
+            /* align=  */ 0,
+            /* type=   */ BinaryenTypeInt32(),
+            /* ptr=    */ _right
+        );
+        return BinaryenBinary(
+            /* module= */ fn.module(),
+            /* op=     */ BinaryenSubInt32(),
+            /* left=   */ byte_left,
+            /* right=  */ byte_right
+        );
+    }
+
     /* Create pointers to track locations of current characters to compare. */
     WasmVariable left(fn, BinaryenTypeInt32());
     block += left.set(std::move(_left));
@@ -924,6 +951,35 @@ WasmTemporary WasmStrcmp::Cmp(FunctionBuilder &fn, BlockBuilder &block,
                               const CharacterSequence &ty_left, const CharacterSequence &ty_right,
                               WasmTemporary left, WasmTemporary right, WasmCompare::cmp_op op)
 {
+    if (ty_left.length == 1 and ty_right.length == 1) {
+        WasmTemporary byte_left = BinaryenLoad(
+            /* module= */ fn.module(),
+            /* bytes=  */ 1,
+            /* signed= */ false,
+            /* offset= */ 0,
+            /* align=  */ 0,
+            /* type=   */ BinaryenTypeInt32(),
+            /* ptr=    */ left
+        );
+        WasmTemporary byte_right = BinaryenLoad(
+            /* module= */ fn.module(),
+            /* bytes=  */ 1,
+            /* signed= */ false,
+            /* offset= */ 0,
+            /* align=  */ 0,
+            /* type=   */ BinaryenTypeInt32(),
+            /* ptr=    */ right
+        );
+        switch (op) {
+            case WasmCompare::EQ: return BinaryenBinary(fn.module(), BinaryenEqInt32(),  byte_left, byte_right);
+            case WasmCompare::NE: return BinaryenBinary(fn.module(), BinaryenNeInt32(),  byte_left, byte_right);
+            case WasmCompare::LT: return BinaryenBinary(fn.module(), BinaryenLtUInt32(), byte_left, byte_right);
+            case WasmCompare::GT: return BinaryenBinary(fn.module(), BinaryenGtUInt32(), byte_left, byte_right);
+            case WasmCompare::LE: return BinaryenBinary(fn.module(), BinaryenLeUInt32(), byte_left, byte_right);
+            case WasmCompare::GE: return BinaryenBinary(fn.module(), BinaryenGeUInt32(), byte_left, byte_right);
+        }
+    }
+
     WasmTemporary delta = Cmp(fn, block, ty_left, ty_right, std::move(left), std::move(right));
     auto zero = BinaryenConst(fn.module(), BinaryenLiteralInt32(0));
     switch (op) {

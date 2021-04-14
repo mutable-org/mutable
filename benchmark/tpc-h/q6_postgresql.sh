@@ -8,7 +8,7 @@ NUM_ROWS=$((NUM_ROWS-1))
 POSTGRESQL=psql
 
 trap 'exit' INT
-{ ${POSTGRESQL} -U postgres ; } << EOF
+{ ${POSTGRESQL} -U postgres | grep 'Time' | cut -d ' ' -f 2; } << EOF
 DROP DATABASE IF EXISTS benchmark_tmp;
 CREATE DATABASE benchmark_tmp;
 \c benchmark_tmp

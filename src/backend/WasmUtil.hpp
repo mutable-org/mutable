@@ -703,6 +703,11 @@ struct WasmStrcmp
         return Cmp(fn, block, ty_left, ty_right, std::move(left), std::move(right), WasmCompare::GE);
     }
 
+    /** Generate code similar to `strcmp`. */
+    static WasmTemporary Cmp(FunctionBuilder &fn, BlockBuilder &block,
+                             const CharacterSequence &ty_left, const CharacterSequence &ty_right,
+                             WasmTemporary left, WasmTemporary right);
+
     private:
     static WasmTemporary Cmp(FunctionBuilder &fn, BlockBuilder &block,
                              const CharacterSequence &ty_left, const CharacterSequence &ty_right,

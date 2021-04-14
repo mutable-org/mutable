@@ -802,13 +802,13 @@ WasmTemporary WasmCompare::Cmp(FunctionBuilder &fn, const Type &ty, WasmTemporar
 
 WasmTemporary WasmStrcmp::Cmp(FunctionBuilder &fn, BlockBuilder &block,
                               const CharacterSequence &ty_left, const CharacterSequence &ty_right,
-                              WasmTemporary left_, WasmTemporary right_, WasmCompare::cmp_op op)
+                              WasmTemporary _left, WasmTemporary _right)
 {
     /* Create pointers to track locations of current characters to compare. */
     WasmVariable left(fn, BinaryenTypeInt32());
-    block += left.set(std::move(left_));
+    block += left.set(std::move(_left));
     WasmVariable right(fn, BinaryenTypeInt32());
-    block += right.set(std::move(right_));
+    block += right.set(std::move(_right));
 
     /* Compute ends of left and right. */
     WasmVariable end_left(fn, BinaryenTypeInt32());
@@ -910,6 +910,14 @@ WasmTemporary WasmStrcmp::Cmp(FunctionBuilder &fn, BlockBuilder &block,
     }
     block += loop.finalize();
 
+    return delta;
+}
+
+WasmTemporary WasmStrcmp::Cmp(FunctionBuilder &fn, BlockBuilder &block,
+                              const CharacterSequence &ty_left, const CharacterSequence &ty_right,
+                              WasmTemporary left, WasmTemporary right, WasmCompare::cmp_op op)
+{
+    WasmTemporary delta = Cmp(fn, block, ty_left, ty_right, std::move(left), std::move(right));
     auto zero = BinaryenConst(fn.module(), BinaryenLiteralInt32(0));
     switch (op) {
         case WasmCompare::EQ: return BinaryenBinary(fn.module(), BinaryenEqInt32(),  delta, zero);

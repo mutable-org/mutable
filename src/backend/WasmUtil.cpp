@@ -999,6 +999,36 @@ WasmTemporary WasmStrcmp::Cmp(FunctionBuilder &fn, BlockBuilder &block,
 
 void WasmStrncpy::emit(BlockBuilder &block, WasmTemporary _dest, WasmTemporary _src, std::size_t count)
 {
+    if (count <= 8) {
+        /* Create pointers to track source and destination location. */
+        WasmVariable dest(fn, BinaryenTypeInt32());
+        block += dest.set(std::move(_dest));
+        WasmVariable src(fn, BinaryenTypeInt32());
+        block += src.set(std::move(_src));
+
+        for (std::size_t i = 0; i != count; ++i) {
+            WasmTemporary byte = BinaryenLoad(
+                /* module= */ fn.module(),
+                /* bytes=  */ 1,
+                /* signed= */ false,
+                /* offset= */ i,
+                /* align=  */ 0,
+                /* type=   */ BinaryenTypeInt32(),
+                /* ptr=    */ src
+            );
+            block += BinaryenStore(
+                /* module= */ fn.module(),
+                /* bytes=  */ 1,
+                /* offset= */ i,
+                /* align=  */ 0,
+                /* ptr=    */ dest,
+                /* value=  */ byte,
+                /* type=   */ BinaryenTypeInt32()
+            );
+        }
+        return;
+    }
+
     if (BinaryenModuleGetFeatures(fn.module()) & BinaryenFeatureBulkMemory()) {
         block += BinaryenMemoryCopy(fn.module(), _dest, _src, BinaryenConst(fn.module(), BinaryenLiteralInt32(count)));
     } else {

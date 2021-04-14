@@ -2862,23 +2862,95 @@ void WasmStoreCG::operator()(const ColumnStore &store)
 WasmTemporary m::wasm_emit_strhash(FunctionBuilder &fn, BlockBuilder &block,
                                    WasmTemporary ptr, const CharacterSequence &ty)
 {
-#if 0
-    uint64_t operator()(const char *c_str, std::size_t len) const {
-        /* FNV-1a 64 bit */
-        uint64_t hash = 0xcbf29ce484222325;
-        for (auto end = c_str + len; c_str != end and *c_str; ++c_str) {
-            hash = hash ^ *c_str;
-            hash = hash * 1099511628211;
+    if (ty.size() <= 64) {
+        std::cerr << "hashing CharacterSequence of length " << ty.length << " by combinding characters into single i64 "
+                     "and bit mixing." << std::endl;
+        /* If the string is shorter than its max. length, it is padded with NUL bytes.  Hence, we can hash the string by
+         * simply combinding all characters into a single i64 and bit mix. */
+        WasmTemporary hash;
+        for (std::size_t i = 0; i != ty.length; ++i) {
+            WasmTemporary next_byte = BinaryenLoad(
+                /* module= */ fn.module(),
+                /* bytes=  */ 1,
+                /* signed= */ false,
+                /* offset= */ i,
+                /* align=  */ 0,
+                /* type=   */ BinaryenTypeInt64(),
+                /* ptr=    */ ptr
+            );
+            if (hash.is()) {
+                WasmTemporary shifted = BinaryenBinary(
+                    /* module= */ fn.module(),
+                    /* op=     */ BinaryenShlInt64(),
+                    /* left=   */ hash,
+                    /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt64(8))
+                );
+                hash = BinaryenBinary(
+                    /* module= */ fn.module(),
+                    /* op=     */ BinaryenOrInt64(),
+                    /* left=   */ shifted,
+                    /* right=  */ next_byte
+                );
+            } else {
+                hash = std::move(next_byte);
+            }
         }
-        return hash;
+        return WasmBitMixMurmur3{}.emit(fn.module(), fn, block, std::move(hash));
     }
-#endif
+
     /* Initialize hash. */
     WasmVariable hash(fn, BinaryenTypeInt64());
     block += hash.set(BinaryenConst(fn.module(), BinaryenLiteralInt64(0xcbf29ce484222325UL)));
 
     WasmVariable byte(fn, BinaryenTypeInt64());
 
+#if 0
+    if (ty.length <= 8) {
+        /* Unroll FNV-1a loop to compute hash. */
+        insist(ty.length >= 1);
+        block += hash.set(BinaryenConst(fn.module(), BinaryenLiteralInt64(0xcbf29ce484222325UL)));
+        for (std::size_t i = 0; i != ty.length; ++i) {
+            WasmTemporary next_byte = BinaryenLoad(
+                /* module= */ fn.module(),
+                /* bytes=  */ 1,
+                /* signed= */ false,
+                /* offset= */ i,
+                /* align=  */ 0,
+                /* type=   */ BinaryenTypeInt64(),
+                /* ptr=    */ ptr
+            );
+            block += byte.set(i == 0 ? std::move(next_byte) : WasmTemporary(BinaryenSelect(
+                /* module= */ fn.module(),
+                /* condition= */ byte,
+                /* ifTrue=    */ next_byte,
+                /* ifFalse=   */ byte,              // byte remains unmodified if byte is NUL
+                /* type=      */ BinaryenTypeInt64()
+            )));
+            WasmTemporary Xor = BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenXorInt64(),
+                /* left=   */ hash,
+                /* right=  */ byte
+            );
+            WasmTemporary Mul = BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenMulInt64(),
+                /* left=   */ Xor,
+                /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt64(0x100000001b3UL))
+            );
+            block += hash.set(BinaryenSelect(
+                /* module=    */ fn.module(),
+                /* condition= */ BinaryenUnary(fn.module(), BinaryenWrapInt64(), byte),
+                /* ifTrue=    */ Mul,
+                /* ifFalse=   */ hash,                  // hash remains unmodified if byte is NUL
+                /* type=      */ BinaryenTypeInt64()
+            ));
+        }
+        return hash;
+    }
+#endif
+
+    /*----- Compute hash using FNV-1a. -------------------------------------------------------------------------------*/
     WasmVariable cursor(fn, BinaryenTypeInt32());
     block += cursor.set(std::move(ptr));
 
@@ -2924,16 +2996,16 @@ WasmTemporary m::wasm_emit_strhash(FunctionBuilder &fn, BlockBuilder &block,
     );
 
     /* Update hash. */
-    loop += hash.set(BinaryenBinary(
+    WasmTemporary Xor = BinaryenBinary(
         /* module= */ fn.module(),
         /* op=     */ BinaryenXorInt64(),
         /* left=   */ hash,
         /* right=  */ byte
-    ));
+    );
     loop += hash.set(BinaryenBinary(
         /* module= */ fn.module(),
         /* op=     */ BinaryenMulInt64(),
-        /* left=   */ hash,
+        /* left=   */ Xor,
         /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt64(0x100000001b3UL))
     ));
 

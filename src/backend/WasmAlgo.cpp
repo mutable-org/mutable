@@ -577,6 +577,65 @@ WasmTemporary WasmHashMumur3_64A::emit(WasmModuleCG &module, FunctionBuilder &fn
      * constants from MurmurHash2_64 as reported on https://sites.google.com/site/murmurhash/. */
     insist(values.size() != 0, "cannot compute the hash of an empty sequence of values");
 
+    std::size_t total_size_in_bits = 0;
+    for (auto &v : values)
+        total_size_in_bits += v.second.size();
+
+    /* If all values can be combined into a single 64-bit value, combine all values and mix. */
+    if (total_size_in_bits <= 64) {
+        WasmTemporary combined;
+        for (auto &v : values) {
+            if (auto cs = cast<const CharacterSequence>(&v.second)) {
+                for (std::size_t i = 0; i != cs->length; ++i) {
+                    WasmTemporary next_byte = BinaryenLoad(
+                        /* module= */ fn.module(),
+                        /* bytes=  */ 1,
+                        /* signed= */ false,
+                        /* offset= */ i,
+                        /* align=  */ 0,
+                        /* type=   */ BinaryenTypeInt64(),
+                        /* ptr=    */ v.first.clone(fn.module())
+                    );
+                    if (combined.is()) {
+                        WasmTemporary shifted = BinaryenBinary(
+                            /* module= */ module,
+                            /* op=     */ BinaryenShlInt64(),
+                            /* left=   */ combined,
+                            /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(8))
+                        );
+                        combined = BinaryenBinary(
+                            /* module= */ module,
+                            /* op=     */ BinaryenOrInt64(),
+                            /* left=   */ shifted,
+                            /* right=  */ next_byte
+                        );
+                    } else {
+                        combined = std::move(next_byte);
+                    }
+                }
+            } else {
+                if (combined.is()) {
+                    WasmTemporary i64 = reinterpret(module, v.first.clone(module), BinaryenTypeInt64());
+                    WasmTemporary shifted = BinaryenBinary(
+                        /* module= */ module,
+                        /* op=     */ BinaryenShlInt64(),
+                        /* left=   */ combined,
+                        /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(v.second.size()))
+                    );
+                    combined = BinaryenBinary(
+                        /* module= */ module,
+                        /* op=     */ BinaryenOrInt64(),
+                        /* left=   */ shifted,
+                        /* right=  */ i64
+                    );
+                } else {
+                    combined = reinterpret(module, v.first.clone(module), BinaryenTypeInt64());
+                }
+            }
+        }
+        return WasmBitMixMurmur3{}.emit(fn.module(), fn, block, std::move(combined));
+    }
+
     if (values.size() == 1) {
         if (auto cs = cast<const CharacterSequence>(&values[0].second)) {
             return wasm_emit_strhash(fn, block, values[0].first.clone(fn.module()), *cs);
@@ -587,29 +646,6 @@ WasmTemporary WasmHashMumur3_64A::emit(WasmModuleCG &module, FunctionBuilder &fn
         }
     }
 
-#if 0
-    if (values.size() == 2 and values[0].second.size() + values[1].second.size() <= 64) {
-        WasmTemporary left  = values[0].first.clone(module);
-        WasmTemporary right = values[1].first.clone(module);
-
-        WasmTemporary shl = BinaryenBinary(
-            module,
-            BinaryenShlInt64(),
-            reinterpret(module, std::move(left), BinaryenTypeInt64()),
-            BinaryenConst(module, BinaryenLiteralInt64(values[0].second.size()))
-        );
-        WasmTemporary combined = BinaryenBinary(
-            module,
-            BinaryenOrInt64(),
-            shl,
-            reinterpret(module, std::move(right), BinaryenTypeInt64())
-        );
-        return WasmBitMixMurmur3{}.emit(module, fn, block, std::move(combined));
-    }
-#endif
-
-    /* TODO: When the combined values fit into a qword, combine them first before hashing. */
-
     /* General Murmur3. */
     WasmVariable h(fn, BinaryenTypeInt64());
     const auto m = BinaryenConst(module, BinaryenLiteralInt64(0xc6a4a7935bd1e995LLU));
@@ -617,60 +653,63 @@ WasmTemporary WasmHashMumur3_64A::emit(WasmModuleCG &module, FunctionBuilder &fn
     /*  uint64_t h = seed ^ (len * m) */
     block += h.set(BinaryenConst(module, BinaryenLiteralInt64(0xc6a4a7935bd1e995LLU * values.size())));
 
-    WasmVariable k(fn, BinaryenTypeInt64());
     for (auto &val : values) {
         if (auto cs = cast<const CharacterSequence>(&val.second)) {
-            wasm_emit_strhash(fn, block, val.first.clone(module), *cs);
+            WasmTemporary strhash = wasm_emit_strhash(fn, block, val.first.clone(module), *cs);
+            block += h.set(BinaryenBinary(
+                /* module= */ module,
+                /* op=     */ BinaryenXorInt64(),
+                /* left=   */ h,
+                /* right=  */ strhash
+            ));
         } else {
-            block += k.set(reinterpret(module, val.first.clone(module), BinaryenTypeInt64()));
-        }
+            WasmTemporary k0 = reinterpret(module, val.first.clone(module), BinaryenTypeInt64());
 
-        /* k = k * m */
-        block += k.set(BinaryenBinary(
-            /* module= */ module,
-            /* op=     */ BinaryenMulInt64(),
-            /* left=   */ k,
-            /* right=  */ m
-        ));
-
-        /* k = ROTL32(k, 47); */
-        block += k.set(BinaryenBinary(
-            /* module= */ module,
-            /* op=     */ BinaryenRotLInt64(),
-            /* left=   */ k,
-            /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(47))
-        ));
-
-        /* k = k * m */
-        block += k.set(BinaryenBinary(
-            /* module= */ module,
-            /* op=     */ BinaryenMulInt64(),
-            /* left=   */ k,
-            /* right=  */ m
-        ));
-
-        /* h = h ^ k; */
-        block += h.set(BinaryenBinary(
-            /* module= */ module,
-            /* op=     */ BinaryenXorInt64(),
-            /* left=   */ h,
-            /* right=  */ k
-        ));
-
-        /* h = ROTL32(h, 45); */
-        block += h.set(BinaryenBinary(
-            /* module= */ module,
-            /* op=     */ BinaryenRotLInt64(),
-            /* left=   */ h,
-            /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(45))
-        ));
-
-        /* h = h * 5 + 0xe6546b64 */
-        {
-            auto Mul = BinaryenBinary(
+            /* k1 = k0 * m */
+            WasmTemporary k1 = BinaryenBinary(
                 /* module= */ module,
                 /* op=     */ BinaryenMulInt64(),
+                /* left=   */ k0,
+                /* right=  */ m
+            );
+
+            /* k2 = ROTL32(k1, 47); */
+            WasmTemporary k2 = BinaryenBinary(
+                /* module= */ module,
+                /* op=     */ BinaryenRotLInt64(),
+                /* left=   */ k1,
+                /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(47))
+            );
+
+            /* k3 = k2 * m */
+            WasmTemporary k3 = BinaryenBinary(
+                /* module= */ module,
+                /* op=     */ BinaryenMulInt64(),
+                /* left=   */ k2,
+                /* right=  */ m
+            );
+
+            /* h0 = h ^ k3; */
+            WasmTemporary h0 = BinaryenBinary(
+                /* module= */ module,
+                /* op=     */ BinaryenXorInt64(),
                 /* left=   */ h,
+                /* right=  */ k3
+            );
+
+            /* h1 = ROTL32(h0, 45); */
+            WasmTemporary h1 = BinaryenBinary(
+                /* module= */ module,
+                /* op=     */ BinaryenRotLInt64(),
+                /* left=   */ h0,
+                /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(45))
+            );
+
+            /* h = h1 * 5 + 0xe6546b64 */
+            WasmTemporary Mul = BinaryenBinary(
+                /* module= */ module,
+                /* op=     */ BinaryenMulInt64(),
+                /* left=   */ h1,
                 /* right=  */ BinaryenConst(module, BinaryenLiteralInt64(5))
             );
             block += h.set(BinaryenBinary(

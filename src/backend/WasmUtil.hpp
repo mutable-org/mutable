@@ -1077,6 +1077,8 @@ inline void WasmModuleCG::compile(const Operator &plan)
  * Codegen functions
  *====================================================================================================================*/
 
+WasmTemporary wasm_emit_signum(FunctionBuilder &fn, BlockBuilder &block, WasmTemporary i32);
+
 WasmTemporary wasm_emit_strhash(FunctionBuilder &fn, BlockBuilder &block,
                                 WasmTemporary ptr, const CharacterSequence &ty);
 

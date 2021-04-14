@@ -698,23 +698,30 @@ WasmTemporary WasmCompare::emit(BlockBuilder &block, const WasmStructCGContext &
         block += val_left .set(context.compile(fn(), block, left .clone(fn().module()), *o.first));
         block += val_right.set(context.compile(fn(), block, right.clone(fn().module()), *o.first));
 
-        WasmTemporary val_lt;
-        WasmTemporary val_gt;
+        WasmTemporary val_sub;
         if (auto cs = cast<const CharacterSequence>(o.first->type())) {
-            val_lt = WasmStrcmp::Lt(fn_, block, *cs, *cs, val_left, val_right);
-            val_gt = WasmStrcmp::Gt(fn_, block, *cs, *cs, val_left, val_right);
+            WasmTemporary delta = WasmStrcmp::Cmp(fn_, block, *cs, *cs, val_left, val_right);
+            if (not o.second) { // to order descending invert sign
+                delta = BinaryenBinary(
+                    /* module= */ fn_.module(),
+                    /* op=     */ BinaryenSubInt32(),
+                    /* left=   */ BinaryenConst(fn_.module(), BinaryenLiteralInt32(0)),
+                    /* right=  */ delta
+                );
+            }
+            val_sub = wasm_emit_signum(fn_, block, std::move(delta));
         } else {
-            val_lt = Lt(fn_, *o.first->type(), val_left, val_right);
-            val_gt = Gt(fn_, *o.first->type(), val_left, val_right);
-        }
+            WasmTemporary val_lt = Lt(fn_, *o.first->type(), val_left, val_right);
+            WasmTemporary val_gt = Gt(fn_, *o.first->type(), val_left, val_right);
 
-        /* Ascending: val_gt - val_lt, Descending: val_lt - val_gt */
-        WasmTemporary val_sub = BinaryenBinary(
-            /* module= */ fn_.module(),
-            /* op=     */ BinaryenSubInt32(),
-            /* left=   */ o.second ? val_gt : val_lt,
-            /* right=  */ o.second ? val_lt : val_gt
-        );
+            /* Ascending: val_gt - val_lt, Descending: val_lt - val_gt */
+            val_sub = BinaryenBinary(
+                /* module= */ fn_.module(),
+                /* op=     */ BinaryenSubInt32(),
+                /* left=   */ o.second ? val_gt : val_lt,
+                /* right=  */ o.second ? val_lt : val_gt
+            );
+        }
         if (val_cmp.is()) {
             /*----- Update the comparison variable. ------------------------------------------------------------------*/
             WasmTemporary val_shifted = BinaryenBinary(
@@ -2866,6 +2873,18 @@ void WasmStoreCG::operator()(const ColumnStore &store)
 /*======================================================================================================================
  * Codegen functions
  *====================================================================================================================*/
+
+WasmTemporary m::wasm_emit_signum(FunctionBuilder &fn, BlockBuilder &block, WasmTemporary _val)
+{
+    const bool is_i32 = _val.type() == BinaryenTypeInt32();
+    WasmVariable val(fn, BinaryenTypeInt32());
+    block += val.set(std::move(_val));
+    WasmTemporary zero = BinaryenConst(fn.module(), BinaryenLiteralInt32(0));
+    WasmTemporary gtz = BinaryenBinary(fn.module(), BinaryenGtSInt32(), val, zero.clone(fn.module()));
+    WasmTemporary ltz = BinaryenBinary(fn.module(), BinaryenLtSInt32(), val, zero);
+    WasmTemporary sign = BinaryenBinary(fn.module(), BinaryenSubInt32(), gtz, ltz);
+    return sign;
+}
 
 WasmTemporary m::wasm_emit_strhash(FunctionBuilder &fn, BlockBuilder &block,
                                    WasmTemporary ptr, const CharacterSequence &ty)

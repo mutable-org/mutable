@@ -34,3 +34,5 @@ cases:
                 l_linestatus;
 compare_to:
     'DuckDB': 'benchmark/tpc-h/q1_duckdb.sh'
+    'PostgreSQL': 'benchmark/tpc-h/q1_postgresql.sh'
+    'HyPer': 'benchmark/tpc-h/q1_hyper.py'

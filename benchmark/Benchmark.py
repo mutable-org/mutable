@@ -18,6 +18,7 @@ import os
 import pandas
 import re
 import subprocess
+import sys
 import time
 import yamale
 import yaml
@@ -248,6 +249,7 @@ def run_configuration(experiment, name, config, yml):
 #=======================================================================================================================
 def perform_experiment(experiment_name, path_to_file):
     tqdm.write(f'Perform benchmarks in \'{path_to_file}\'.')
+    sys.stdout.flush()
 
     # Open file
     with open(path_to_file, 'r') as f:
@@ -805,7 +807,7 @@ if __name__ == '__main__':
 
     # Process experiment files and collect measurements
     for path_to_file in tqdm(benchmark_files, position=0, ncols=80, leave=False,
-                                  bar_format='|{bar}| {n}/{total}', disable=not is_interactive):
+                             bar_format='|{bar}| {n}/{total}', disable=not is_interactive):
         # Log current file
         log.set_description_str(f'Running benchmark "{path_to_file}"'.ljust(80))
 
@@ -841,6 +843,7 @@ if __name__ == '__main__':
         if args.compare:
             for name, script in yml.get('compare_to', dict()).items():
                 tqdm.write(f'` Perform experiment {yml["suite"]}/{yml["benchmark"]}/{experiment_name} in system {name}.')
+                sys.stdout.flush()
                 if not os.path.isfile(script) or not os.access(script, os.X_OK):
                     tqdm.write(f'Error: File "{script}" is not executable.')
                     continue

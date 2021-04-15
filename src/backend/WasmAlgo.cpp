@@ -285,11 +285,6 @@ BinaryenFunctionRef WasmQuickSort::emit(WasmStructCGContext &context) const
         ));
     }
 
-    /* Create load contexts for the first/last/middle element. */
-    // auto load_context_left  = tuple.create_load_context(fn, begin);
-    // auto load_context_mid   = tuple.create_load_context(fn, mid);
-    // auto load_context_right = tuple.create_load_context(fn, last.clone(module));
-
     /*----- Compare three elements pairwise. -------------------------------------------------------------------------*/
     WasmTemporary cmp_left_mid   = comparator.emit(loop, context, begin, mid);
     WasmTemporary cmp_left_right = comparator.emit(loop, context, begin, last.clone(module));
@@ -447,8 +442,6 @@ BinaryenFunctionRef WasmQuickSort::emit(WasmStructCGContext &context) const
         wasm_swap.emit(block_swap, context.struc, begin, last.clone(module));
 
         BlockBuilder block_compare(module);
-        // auto load_context_first  = tuple.create_load_context(fn, begin);
-        // auto load_context_second = tuple.create_load_context(fn, last.clone(module));
         WasmTemporary compare = comparator.emit(block_compare, context, begin, last.clone(fn.module()));
         WasmTemporary cond_swap = BinaryenBinary(
             /* module= */ module,

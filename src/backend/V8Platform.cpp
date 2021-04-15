@@ -298,11 +298,22 @@ V8Platform::V8Platform()
         v8::V8::Initialize();
     }
 
-#if 1
-    v8::V8::SetFlagsFromString("--stack_size 1000000 --no-liftoff --experimental-wasm-simd");
-#else
-    v8::V8::SetFlagsFromString("--no-liftoff --print-wasm-code");
-#endif
+    /*----- Set V8 flags. --------------------------------------------------------------------------------------------*/
+    std::ostringstream flags;
+    flags << "--stack_size 1000000 "
+          << "--no-liftoff ";
+    if (Options::Get().cdt_port > 0) {
+        flags << "--log-all "
+              << "--expose-wasm "
+              << "--trace-wasm "
+              << "--trace-wasm-instances "
+              << "--prof ";
+    } else {
+        flags << "--no-wasm-bounds-checks "
+              << "--no-wasm-stack-checks "
+              << "--experimental-wasm-simd ";
+    }
+    v8::V8::SetFlagsFromString(flags.str().c_str());
 
     v8::Isolate::CreateParams create_params;
     create_params.array_buffer_allocator = allocator_ = v8::ArrayBuffer::Allocator::NewDefaultAllocator();

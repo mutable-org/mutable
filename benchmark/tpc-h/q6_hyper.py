@@ -42,7 +42,7 @@ WHERE
         AND l_quantity < 24;'''
 
             times = list()
-            for i in range(3):
+            for i in range(5):
                 connection.catalog.create_table(table_def)
                 connection.execute_command(f'COPY {table_def.table_name} FROM \'benchmark/tpc-h/data/lineitem.tbl\' WITH DELIMITER \'|\' CSV')
 

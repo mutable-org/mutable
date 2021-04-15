@@ -1001,10 +1001,12 @@ void WasmRefCountingHashTable::emplace(BlockBuilder &block, WasmTemporary bucket
 
     /*----- Write key to slot. ---------------------------------------------------------------------------------------*/
     auto key_it = key.begin();
+    WasmStrncpy strncpy(fn);
     for (auto key_index : this->key()) {
         auto &ty = struc.type(key_index);
         if (auto cs = cast<const CharacterSequence>(&ty)) {
-            WasmStrncpy{fn}.emit(block, struc.load(fn, slot_addr.clone(module), key_index, REFERENCE_SIZE), key_it->clone(module), cs->length);
+            strncpy.emit(block, struc.load(fn, slot_addr.clone(module), key_index, REFERENCE_SIZE),
+                         key_it->clone(module), cs->length);
         } else {
             struc.store(fn, block, slot_addr.clone(module), key_index, key_it->clone(module), REFERENCE_SIZE);
         }

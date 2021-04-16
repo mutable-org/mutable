@@ -615,7 +615,7 @@ void WasmStruct::store(FunctionBuilder &fn, BlockBuilder &block, WasmTemporary p
             /* module= */ fn.module(),
             /* op=     */ BinaryenAddInt32(),
             /* left=   */ ptr,
-            /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(offset(idx) / 8))
+            /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(offset(idx) / 8 + struc_offset))
         );
         /* Copy string to destination. */
         WasmStrncpy wasm_strncpy(fn);

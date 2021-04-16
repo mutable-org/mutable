@@ -1749,6 +1749,9 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
             WasmHashMumur3_64A hasher;
             auto data = as<SimpleHashJoinData>(op.data());
 
+            auto &build_schema = op.child(0)->schema();
+            auto &probe_schema = op.child(1)->schema();
+
             /*----- Decompose the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----------------*/
             auto &pred = op.predicate();
             insist(pred.size() == 1, "invalid predicate for simple hash join");
@@ -1760,26 +1763,26 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
             insist(binary->tok == TK_EQUAL, "invalid predicate for simple hash join");
             auto first = as<const Designator>(binary->lhs);
             auto second = as<const Designator>(binary->rhs);
-            auto [build, probe] = op.child(0)->schema().has({first->get_table_name(), first->attr_name.text}) ?
+            auto [build, probe] = build_schema.has({first->get_table_name(), first->attr_name.text}) ?
                                   std::make_pair(first, second) : std::make_pair(second, first);
 
             Schema::Identifier build_key_id(build->table_name.text, build->attr_name.text);
             Schema::Identifier probe_key_id(probe->table_name.text, probe->attr_name.text);
 
             if (data->is_build_phase) {
-                data->struc = new WasmStruct(op.child(0)->schema());
+                data->struc = new WasmStruct(build_schema);
                 std::vector<WasmTemporary> key;
                 key.emplace_back(context().get_value(build_key_id));
 
                 /*----- Compute payload ids. -------------------------------------------------------------------------*/
                 std::vector<Schema::Identifier> payload_ids;
-                for (auto attr : op.child(0)->schema()) {
+                for (auto attr : build_schema) {
                     if (attr.id != build_key_id)
                         payload_ids.push_back(attr.id);
                 }
 
                 /* Get key field index. */
-                auto [key_index, _] = op.child(0)->schema()[build_key_id];
+                auto [key_index, _] = build_schema[build_key_id];
 
                 /*----- Allocate hash table. -------------------------------------------------------------------------*/
                 uint32_t initial_capacity = 32;
@@ -1911,9 +1914,12 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
                 block_ += slot_addr.set(HT->insert_with_duplicates(block_, std::move(hash_i32), key));
 
                 /*---- Write payload. --------------------------------------------------------------------------------*/
-                std::size_t idx = 0;
-                for (auto attr : op.child(0)->schema())
-                    HT->store_value_to_slot(block_, slot_addr, idx++, context().get_value(attr.id));
+                for (std::size_t i = 0; i != build_schema.num_entries(); ++i) {
+                    if (i != key_index) {
+                        auto &e = build_schema[i];
+                        HT->store_value_to_slot(block_, slot_addr, i, context().get_value(e.id));
+                    }
+                }
 
                 block_ += num_entries.set(BinaryenBinary(
                     /* module= */ module(),
@@ -1955,7 +1961,7 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
 
                 /*----- Load values from HT. -------------------------------------------------------------------------*/
                 auto ld = HT->load_from_slot(slot_addr);
-                for (auto &attr : op.child(0)->schema())
+                for (auto &attr : build_schema)
                     context().add(attr.id, ld.get_value(attr.id));
 
                 /*----- Check whether the key of the entry in the bucket -- identified by `build_key_id` -- equals the

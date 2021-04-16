@@ -2976,8 +2976,6 @@ WasmTemporary m::wasm_emit_strhash(FunctionBuilder &fn, BlockBuilder &block,
                                    WasmTemporary ptr, const CharacterSequence &ty)
 {
     if (ty.size() <= 64) {
-        std::cerr << "hashing CharacterSequence of length " << ty.length << " by combinding characters into single i64 "
-                     "and bit mixing." << std::endl;
         /* If the string is shorter than its max. length, it is padded with NUL bytes.  Hence, we can hash the string by
          * simply combinding all characters into a single i64 and bit mix. */
         WasmTemporary hash;

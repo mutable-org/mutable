@@ -20,17 +20,17 @@ CREATE TABLE Lineitem (
     l_comment       CHAR(44)
 );
 
---  CREATE TABLE PART (
---      p_partkey       INT(4),
---      p_name          VARCHAR(55),
---      p_mfgr          CHAR(25),
---      p_brand         CHAR(10),
---      p_type          VARCHAR(25),
---      p_size          INT(4),
---      p_container     CHAR(10),
---      p_retailprice   DECIMAL(10,2),
---      p_comment       VARCHAR(23)
---  );
+CREATE TABLE Part (
+    p_partkey       INT(4),
+    p_name          CHAR(55),
+    p_mfgr          CHAR(25),
+    p_brand         CHAR(10),
+    p_type          CHAR(25),
+    p_size          INT(4),
+    p_container     CHAR(10),
+    p_retailprice   DECIMAL(10,2),
+    p_comment       CHAR(23)
+);
 
 --  CREATE TABLE SUPPLIER (
 --      s_suppkey       INT(4),
@@ -61,17 +61,17 @@ CREATE TABLE Lineitem (
 --      c_comment       VARCHAR(117)
 --  );
 
---  CREATE TABLE ORDERS (
---      o_orderkey      INT(4),
---      o_custkey       INT(4),
---      o_orderstatus   CHAR(1),
---      o_totalprice    INT(8),
---      o_orderdate     INT(4),
---      o_orderpriority CHAR(15),
---      o_clerk         CHAR(15),
---      o_shippriority  INT(4),
---      o_comment       VARCHAR(80)
---  );
+CREATE TABLE Orders (
+    o_orderkey      INT(4),
+    o_custkey       INT(4),
+    o_orderstatus   CHAR(1),
+    o_totalprice    DECIMAL(10,2),
+    o_orderdate     DATE,
+    o_orderpriority CHAR(15),
+    o_clerk         CHAR(15),
+    o_shippriority  INT(4),
+    o_comment       CHAR(80)
+);
 
 --  CREATE TABLE NATION (
 --      n_nationkey     INT(4),

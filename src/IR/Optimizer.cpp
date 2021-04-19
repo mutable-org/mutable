@@ -21,8 +21,6 @@ bool is_equi_join(const cnf::CNF &cnf)
     return is<const Designator>(binary->lhs) and is<const Designator>(binary->rhs);
 }
 
-void PlanTable::dump(std::ostream &out) const { out << *this << std::endl; }
-void PlanTable::dump() const { dump(std::cerr); }
 
 std::unique_ptr<Producer> Optimizer::operator()(const QueryGraph &G) const
 {

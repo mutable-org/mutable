@@ -50,3 +50,6 @@ std::ostream & m::operator<<(std::ostream &out, const PlanTable &PT)
     }
     return out;
 }
+
+void PlanTable::dump(std::ostream &out) const { out << *this << std::endl; }
+void PlanTable::dump() const { dump(std::cerr); }

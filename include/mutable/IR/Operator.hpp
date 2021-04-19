@@ -226,6 +226,11 @@ struct FilterOperator : Producer, Consumer
     FilterOperator(cnf::CNF filter) : filter_(filter) { }
 
     const cnf::CNF & filter() const { return filter_; }
+    const cnf::CNF filter(cnf::CNF f) {
+        auto old_filter = std::move(filter_);
+        filter_ = std::move(f);
+        return old_filter;
+    }
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;

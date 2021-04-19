@@ -2,10 +2,16 @@
 
 #include "mutable/IR/Operator.hpp"
 #include "mutable/storage/Store.hpp"
+#include <algorithm>
+#include <vector>
 
 
 using namespace m;
 
+
+/*======================================================================================================================
+ * Helper functions
+ *====================================================================================================================*/
 
 /** Returns `true` iff the given join predicate in `cnf::CNF` formula is an equi-join. */
 bool is_equi_join(const cnf::CNF &cnf)
@@ -21,6 +27,105 @@ bool is_equi_join(const cnf::CNF &cnf)
     return is<const Designator>(binary->lhs) and is<const Designator>(binary->rhs);
 }
 
+struct WeightFilterClauses : ConstASTExprVisitor
+{
+    private:
+    std::vector<unsigned> clause_costs_;
+    unsigned weight_;
+
+    public:
+    void operator()(const cnf::CNF &cnf) {
+        for (auto &clause : cnf) {
+            weight_ = 0;
+            for (auto &pred : clause)
+                (*this)(*pred.expr());
+            clause_costs_.push_back(weight_);
+        }
+    }
+    unsigned operator[](std::size_t idx) const { insist(idx < clause_costs_.size()); return clause_costs_[idx]; }
+
+    private:
+    using ConstASTExprVisitor::operator();
+    void operator()(const ErrorExpr &e) { unreachable("no errors at this stage"); }
+
+    void operator()(const Designator &e) {
+        if (auto cs = cast<const CharacterSequence>(e.type()))
+            weight_ += cs->length;
+        else
+            weight_ += 1;
+    }
+
+    void operator()(const Constant &e) {
+        if (auto cs = cast<const CharacterSequence>(e.type()))
+            weight_ += cs->length;
+        else
+            weight_ += 1;
+    }
+
+    void operator()(const FnApplicationExpr &e) {
+        weight_ += 1;
+        for (auto arg : e.args)
+            (*this)(*arg);
+    }
+
+    void operator()(const UnaryExpr &e) { weight_ += 1; (*this)(*e.expr); }
+
+    void operator()(const BinaryExpr &e) { weight_ += 1; (*this)(*e.lhs); (*this)(*e.rhs); }
+
+    void operator()(const QueryExpr &e) { weight_ += 1000; }
+};
+
+std::unique_ptr<FilterOperator> optimize_filter(std::unique_ptr<FilterOperator> filter)
+{
+    WeightFilterClauses W;
+    W(filter->filter());
+    std::vector<std::pair<cnf::Clause, unsigned>> weighted_clauses;
+    weighted_clauses.reserve(filter->filter().size());
+    for (std::size_t i = 0; i != filter->filter().size(); ++i)
+        weighted_clauses.emplace_back(filter->filter()[i], W[i]);
+
+    /* Sort clauses by weight in descending order. */
+    std::sort(weighted_clauses.begin(), weighted_clauses.end(), [](auto &left, auto &right) -> bool {
+        return left.second > right.second;
+    });
+
+    filter->filter(cnf::CNF{});
+    constexpr unsigned MAX_WEIGHT = 12; // equals to 4 comparisons of fixed-length values
+    unsigned w = 0;
+    cnf::CNF cnf;
+    {
+        auto wc = weighted_clauses.back();
+        weighted_clauses.pop_back();
+        cnf.push_back(wc.first);
+        w = wc.second;
+    }
+    while (not weighted_clauses.empty()) {
+        auto wc = weighted_clauses.back();
+        weighted_clauses.pop_back();
+
+        if (w + wc.second <= MAX_WEIGHT) {
+            cnf.push_back(wc.first);
+            w += wc.second;
+        } else {
+            filter->filter(std::move(cnf));
+            cnf = cnf::CNF();
+            auto tmp = std::make_unique<FilterOperator>(cnf::CNF{});
+            tmp->add_child(filter.release());
+            filter = std::move(tmp);
+            cnf.push_back(wc.first);
+            w = wc.second;
+        }
+    }
+    insist(not cnf.empty());
+    filter->filter(std::move(cnf));
+
+    return filter;
+}
+
+
+/*======================================================================================================================
+ * Optimizer
+ *====================================================================================================================*/
 
 std::unique_ptr<Producer> Optimizer::operator()(const QueryGraph &G) const
 {
@@ -69,10 +174,12 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
         }
         /* Apply filter, if any. */
         if (ds->filter().size()) {
-            auto filter = new FilterOperator(ds->filter());
+            auto filter = std::make_unique<FilterOperator>(ds->filter());
+            // auto filter = new FilterOperator(ds->filter());
             filter->add_child(source_plans[ds->id()]);
-            source_plans[ds->id()] = filter;
+            filter = optimize_filter(std::move(filter));
             auto new_model = CE.estimate_filter(*plan_table[s].model, filter->filter());
+            source_plans[ds->id()] = filter.release();
             plan_table[s].model = std::move(new_model);
         }
     }

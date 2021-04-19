@@ -4,8 +4,8 @@ IMPORT INTO Orders DSV "benchmark/tpc-h/data/orders.tbl" DELIMITER "|";
 SELECT
     l_shipmode, COUNT(*)
 FROM
-    Orders,
-    Lineitem
+    Lineitem,
+    Orders
 WHERE
     o_orderkey = l_orderkey
     AND (l_shipmode = "MAIL" OR l_shipmode = "SHIP")
@@ -21,8 +21,8 @@ ORDER BY
 SELECT
     l_shipmode, COUNT(*)
 FROM
-    Orders,
-    Lineitem
+    Lineitem,
+    Orders
 WHERE
     o_orderkey = l_orderkey
     AND (l_shipmode = "MAIL" OR l_shipmode = "SHIP")
@@ -38,8 +38,8 @@ ORDER BY
 SELECT
     l_shipmode, COUNT(*)
 FROM
-    Orders,
-    Lineitem
+    Lineitem,
+    Orders
 WHERE
     o_orderkey = l_orderkey
     AND (l_shipmode = "MAIL" OR l_shipmode = "SHIP")
@@ -55,8 +55,8 @@ ORDER BY
 SELECT
     l_shipmode, COUNT(*)
 FROM
-    Orders,
-    Lineitem
+    Lineitem,
+    Orders
 WHERE
     o_orderkey = l_orderkey
     AND (l_shipmode = "MAIL" OR l_shipmode = "SHIP")
@@ -72,8 +72,8 @@ ORDER BY
 SELECT
     l_shipmode, COUNT(*)
 FROM
-    Orders,
-    Lineitem
+    Lineitem,
+    Orders
 WHERE
     o_orderkey = l_orderkey
     AND (l_shipmode = "MAIL" OR l_shipmode = "SHIP")

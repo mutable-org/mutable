@@ -27,7 +27,7 @@ CREATE TABLE Lineitem (
     l_shipmode      CHAR(10),
     l_comment       CHAR(44)
 );
-COPY Lineitem FROM '${CSV}' ( HEADER, DELIMITER '|' );
+COPY Lineitem FROM '${CSV}' ( DELIMITER '|' );
 .timer on
 SELECT
         l_returnflag,

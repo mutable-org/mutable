@@ -31,7 +31,7 @@ CREATE TABLE Lineitem (
     l_shipmode      CHAR(10),
     l_comment       CHAR(44)
 );
-\copy Lineitem FROM '${CSV}' WITH DELIMITER '|' CSV HEADER;
+\copy Lineitem FROM '${CSV}' WITH DELIMITER '|' CSV;
 \timing on
 SELECT
         SUM(l_extendedprice * l_discount) AS revenue

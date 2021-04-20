@@ -279,7 +279,7 @@ struct CollectStringLiterals : ConstOperatorVisitor, ConstASTExprVisitor
     void operator()(const FnApplicationExpr&) override { /* nothing to be done */ } // XXX can string literals be arguments?
     void operator()(const UnaryExpr &e) override { (*this)(*e.expr); }
     void operator()(const BinaryExpr &e) override { (*this)(*e.lhs); (*this)(*e.rhs); }
-    void operator()(const QueryExpr&) override { unreachable("unexpected QueryExpr"); }
+    void operator()(const QueryExpr&) override { /* nothing to be done */ }
 };
 
 }

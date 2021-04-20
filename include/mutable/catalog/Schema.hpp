@@ -82,11 +82,7 @@ struct Schema
 
     /** Returns an iterator to the entry with the given `Identifier` `id`, or `end()` if no such entry exists.  */
     iterator find(Identifier id) {
-        std::function<bool(entry_type&)> pred;
-        if (id.prefix)
-            pred = [&](entry_type &e) -> bool { return e.id == id; }; // match qualified
-        else
-            pred = [&](entry_type &e) -> bool { return e.id.name == id.name; }; // match unqualified
+        auto pred = [&id](const entry_type &e) -> bool { return e.id == id; }; // match qualified
         auto it = std::find_if(begin(), end(), pred);
         if (it != end() and std::find_if(std::next(it), end(), pred) != end())
             throw invalid_argument("duplicate identifier, lookup ambiguous");

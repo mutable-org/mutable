@@ -134,7 +134,7 @@ struct Designator : Expr
 
     bool is_correlated() const override { return is_correlated_; }
     /** Removes `is_correlated` flag to indicate that this designator has been decorrelated. */
-    void decorrelate() const { const_cast<Designator*>(this)->is_correlated_ = false; }
+    void decorrelate() { is_correlated_ = false; }
 
     bool operator==(const Expr &other) const override;
 

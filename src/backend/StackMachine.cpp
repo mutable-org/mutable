@@ -73,11 +73,7 @@ std::unordered_map<std::string, std::regex> StackMachineBuilder::regexes_;
 void StackMachineBuilder::operator()(Const<Designator> &e)
 {
     /* Given the designator, identify the position of its value in the tuple.  */
-    std::size_t idx;
-    if (e.has_explicit_table_name())
-        idx = schema_[{e.table_name.text, e.attr_name.text}].first;
-    else
-        idx = schema_[{nullptr, e.attr_name.text}].first;
+    auto idx = schema_[{e.table_name.text, e.attr_name.text}].first;
     insist(idx < schema_.num_entries(), "index out of bounds");
     stack_machine_.emit_Ld_Tup(tuple_id, idx);
 }

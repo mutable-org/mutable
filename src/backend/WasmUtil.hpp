@@ -425,6 +425,13 @@ struct WasmExprCompiler : ConstASTExprVisitor
 /** Provides a codegen context for compilation of expressions using locally bound identifiers. */
 struct WasmEnvironment : WasmExprCompiler
 {
+    friend void swap(WasmEnvironment &first, WasmEnvironment &second) {
+        using std::swap;
+
+        swap(first.nulls_, second.nulls_);
+        swap(first.values_, second.values_);
+    }
+
     private:
     ///> Maps `Schema::Identifier`s to `WasmTemporary`s that evaluate to 0 if NULL and 1 otherwise
     std::unordered_map<Schema::Identifier, WasmTemporary> nulls_;
@@ -434,7 +441,9 @@ struct WasmEnvironment : WasmExprCompiler
     public:
     WasmEnvironment(FunctionBuilder &fn) { this->fn(fn); }
     WasmEnvironment(const WasmEnvironment&) = delete;
-    WasmEnvironment(WasmEnvironment&&) = default;
+    WasmEnvironment(WasmEnvironment &&other) { swap(*this, other); }
+
+    WasmEnvironment & operator=(WasmEnvironment other) { swap(*this, other); return *this; }
 
     /** Returns `true` iff this `WasmEnvironment` contains `id`. */
     bool has(Schema::Identifier id) const { return values_.find(id) != values_.end(); }

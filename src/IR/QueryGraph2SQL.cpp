@@ -58,13 +58,19 @@ void QueryGraph2SQL::translate(const QueryGraph *graph)
             if (auto base = cast<BaseTable>(ds)) {
                 auto name = base->table().name;
                 out_ << name;
-                if (not streq(name, ds->alias()))
+                if (name != ds->alias()) {
+                    insist(ds->alias());
                     out_ << " AS " << ds->alias();
+                }
             } else if (auto query = cast<Query>(ds)) {
                 out_ << '(';
                 QueryGraph2SQL trans(out_);
                 trans.translate(query->query_graph());
-                out_ << ") AS " << ds->alias();
+                out_ << ") AS ";
+                if (auto alias = ds->alias())
+                    out_ << alias;
+                else
+                    out_ << make_unique_alias(); // query is anonymous -> alias is never used but required by SQL syntax
             } else {
                 unreachable("invalid variant");
             }

@@ -363,25 +363,9 @@ void WasmEnvironment::operator()(const Designator &e)
     try {
         /* Search with fully qualified name. */
         set(get_value({e.table_name.text, e.attr_name.text}));
-    } catch (std::out_of_range) { try {
-        /* Search with unqualified name. */
-        set(get_value({nullptr, e.attr_name.text}));
     } catch (std::out_of_range) {
-        /* Search with target name. */
-        auto t = e.target();
-        if (auto pe = std::get_if<const Expr*>(&t)) {
-            return (*this)(**pe);
-        } else {
-            auto pa = std::get_if<const Attribute*>(&t);
-            insist(pa, "Target is neither an expression nor an attribute");
-            auto &attr = **pa;
-            try {
-                set(get_value({attr.table.name, attr.name}));
-            } catch (std::out_of_range) {
-                unreachable("Designator could not be resolved");
-            }
-        }
-    } }
+        unreachable("Designator could not be resolved");
+    }
 }
 
 void WasmEnvironment::operator()(const FnApplicationExpr &e)
@@ -437,28 +421,13 @@ void WasmEnvironment::operator()(const QueryExpr &e)
 
 void WasmStructCGContext::operator()(const Designator &e)
 {
-    WasmStruct::index_type idx;
     try {
-        idx = index({e.table_name.text, e.attr_name.text});
-    } catch (std::out_of_range) { try {
-        idx = index({nullptr, e.attr_name.text});
+        /* Search with fully qualified name. */
+        auto idx = index({e.table_name.text, e.attr_name.text});
+        set(struc.load(fn(), base_ptr_.clone(module()), idx, struc_offset_));
     } catch (std::out_of_range) {
-        auto t = e.target();
-        if (auto pe = std::get_if<const Expr*>(&t)) {
-            return (*this)(**pe);
-        } else {
-            auto pa = std::get_if<const Attribute*>(&t);
-            insist(pa, "Target is neither an expression nor an attribute");
-            auto &attr = **pa;
-            try {
-                idx = index({attr.table.name, attr.name});
-            } catch (std::out_of_range) {
-                unreachable("Designator could not be resolved");
-            }
-        }
-    } }
-
-    set(struc.load(fn(), base_ptr_.clone(module()), idx, struc_offset_));
+        unreachable("Designator could not be resolved");
+    }
 }
 
 void WasmStructCGContext::operator()(const FnApplicationExpr &e)
@@ -2041,15 +2010,33 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
 
 void WasmPipelineCG::operator()(const ProjectionOperator &op)
 {
+    WasmEnvironment new_context(module().main());
     auto p = op.projections().begin();
     for (auto &e : op.schema()) {
-        if (not context().has(e.id)) {
-            insist(p != op.projections().end());
-            context().add(e.id, context().compile(block_, *p->first));
+        if (not new_context.has(e.id)) {
+            if (context().has(e.id)) {
+                new_context.add(e.id, context().get_value(e.id));
+            } else {
+                insist(p != op.projections().end());
+                if (auto d = cast<const Designator>(p->first)) {
+                    auto t = d->target(); // consider target of renamed identifier
+                    if (auto expr = std::get_if<const Expr *>(&t)) {
+                        new_context.add(e.id, context().compile(block_, **expr));
+                    } else {
+                        auto attr = std::get_if<const Attribute *>(&t);
+                        insist(attr, "Target is neither an expression nor an attribute");
+                        new_context.add(e.id, context().get_value({(*attr)->table.name, (*attr)->name}));
+                    }
+                } else {
+                    new_context.add(e.id, context().compile(block_, *p->first));
+                }
+            }
         }
         ++p;
     }
+    swap(context(), new_context);
     (*this)(*op.parent());
+    swap(context(), new_context);
 }
 
 void WasmPipelineCG::operator()(const LimitOperator &op)

@@ -91,7 +91,7 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                     auto &attr = e.as_attribute();
 
                     /* Locate the attribute in the operator schema. */
-                    if (auto it = S.find(attr.name); it != S.end()) {
+                    if (auto it = S.find({attr.table.name, attr.name}); it != S.end()) {
                         uint64_t idx = std::distance(S.begin(), it); // get attribute index in schema
                         const std::size_t byte_offset = (e.offset + row_id * e.stride) / 8;
                         const std::size_t bit_offset = (e.offset + row_id * e.stride) % 8;
@@ -824,10 +824,6 @@ void Pipeline::operator()(const ScanOperator &op)
 
     /* Compile StackMachine to load tuples from store. */
     auto loader = Interpreter::compile_load(op.schema(), store.linearization());
-    // store.linearization().dump();
-    // std::cerr << "Loader StackMachine:\n";
-    // loader.dump();
-    // std::cerr << '\n';
 
     const auto remainder = num_rows % block_.capacity();
     std::size_t i = 0;

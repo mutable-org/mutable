@@ -93,6 +93,8 @@ void Sema::operator()(Const<Designator> &e)
         {
             /* Found a named expression. */
             e.target_ = begin->second;
+            if (auto d = cast<Designator>(begin->second); d and d->attr_name.text == e.attr_name.text)
+                e.table_name.text = d->table_name.text;
             e.is_correlated_ = false;
             is_result = true;
             found_ctx = contexts_.rbegin(); // iterator to the current context

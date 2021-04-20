@@ -32,6 +32,8 @@ struct Predicate
     bool negative() const { return literal_ & 0x1UL; }
 
     /** Returns the `Expr` within this `Predicate`. */
+    Expr * expr() { return reinterpret_cast<Expr*>(literal_ & ~0b11UL); }
+    /** Returns the `Expr` within this `Predicate`. */
     const Expr * expr() const { return reinterpret_cast<const Expr*>(literal_ & ~0b11UL); }
     /** Returns the `Expr` within this `Predicate`. */
     const Expr * operator*() const { return expr(); }

@@ -153,18 +153,19 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
             plan_table[s].model = CE.estimate_scan(G, s);
             auto &store = bt->table().store();
             source_plans[ds->id()] = new ScanOperator(store, bt->alias());
-        }
-        else {
+        } else {
             /* Recursively solve nested queries. */
             auto Q = as<const Query>(ds);
             auto [sub_plan, sub_table] = optimize(*Q->query_graph());
             auto &sub = sub_table.get_final();
 
-            /* Prefix every attribute of the nested query with the nested query's alias. */
-            Schema S;
-            for (auto &e : sub_plan->schema())
-                S.add({Q->alias(), e.id.name}, e.type);
-            sub_plan->schema() = S;
+            /* If an alias for the nested query is given, prefix every attribute with the alias. */
+            if (Q->alias()) {
+                Schema S;
+                for (auto &e : sub_plan->schema())
+                    S.add({Q->alias(), e.id.name}, e.type);
+                sub_plan->schema() = S;
+            }
 
             /* Update the plan table with the `DataModel` and cost of the nested query and save the plan in the array of
              * source plans. */

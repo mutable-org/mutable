@@ -149,7 +149,7 @@ struct QueryGraph
 
     private:
     using projection_type = std::pair<const Expr*, const char*>;
-    using order_type = std::pair<const Expr*, bool>; ///> true means ascending, false means descending
+    using order_type = std::pair<const Expr*, bool>; ///< true means ascending, false means descending
 
     std::vector<DataSource*> sources_; ///< collection of all data sources in this query graph
     std::vector<Join*> joins_; ///< collection of all joins in this query graph

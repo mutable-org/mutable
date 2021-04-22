@@ -453,19 +453,6 @@ WasmModule V8Platform::compile(const Operator &plan) const
         );
     }
 
-#if 0
-    {
-        BinaryenExpressionRef args[] = { codegen.num_tuples() };
-        codegen.main().block() += BinaryenCall(
-            /* module=      */ codegen,
-            /* target=      */ "print",
-            /* operands=    */ args,
-            /* numOperands= */ 1,
-            /* returnType=  */ BinaryenTypeNone()
-        );
-    }
-#endif
-
     /*----- Return the new head of heap . ----------------------------------------------------------------------------*/
     codegen.main().block() += codegen.head_of_heap();
 
@@ -676,14 +663,6 @@ v8::Local<v8::Object> V8Platform::create_env(WasmContext &wasm_context, const Op
 }
     ADD_FUNC(print);
 #undef ADD_FUNC
-
-#if 0
-    {
-        auto json = to_json(env);
-        std::cerr << "env: " << *v8::String::Utf8Value(isolate_, json) << '\n';
-        std::cerr.flush();
-    }
-#endif
 
     return env;
 }

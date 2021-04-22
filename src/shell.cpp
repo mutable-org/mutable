@@ -465,6 +465,11 @@ int main(int argc, const char **argv)
         nullptr, "--CDT",                                   /* Short, Long      */
         "specify the port for debugging via ChomeDevTools", /* Description      */
         [&](int port) { Options::Get().cdt_port = port; }); /* Callback         */
+    /*----- Add optimization flag ------------------------------------------------------------------------------------*/
+    ADD(int, Options::Get().wasm_optimization_level, 2,                         /* Type, Var, Init  */
+        "-O", "--wasm-opt",                                                     /* Short, Long      */
+        "set the optimization level for Wasm modules (0, 1, or 2)",             /* Description      */
+        [&](int olevel) { Options::Get().wasm_optimization_level = olevel; });  /* Callback         */
 #endif
 
     /*----- Select store implementation ------------------------------------------------------------------------------*/
@@ -730,6 +735,14 @@ Example for injected cardinalities file:\n\
 #endif
         std::cout << std::endl;
     }
+
+#if WITH_V8
+    if (not (Options::Get().wasm_optimization_level >= 0 and Options::Get().wasm_optimization_level <= 2)) {
+        std::cerr << "level " << Options::Get().wasm_optimization_level << " is not a valid Wasm optimization level"
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+#endif
 
     /* Disable synchronisation between C and C++ I/O (e.g. stdin vs std::cin). */
     std::ios_base::sync_with_stdio(false);

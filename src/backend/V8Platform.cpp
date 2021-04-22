@@ -460,33 +460,34 @@ WasmModule V8Platform::compile(const Operator &plan) const
     codegen.main().finalize();
     BinaryenAddFunctionExport(codegen, "run", "run");
 
-    /*----- Validate module before optimization. ---------------------------------------------------------------------*/
 #ifndef NDEBUG
+    /*----- Validate module before optimization. ---------------------------------------------------------------------*/
     if (not BinaryenModuleValidate(module.ref())) {
         module.dump();
         throw std::logic_error("invalid module");
     }
 #endif
 
-#if 1
     /*----- Optimize module. -----------------------------------------------------------------------------------------*/
 #ifndef NDEBUG
     std::ostringstream dump_before_opt;
     module.dump(dump_before_opt);
 #endif
-    BinaryenSetOptimizeLevel(2); // O2
-    BinaryenSetShrinkLevel(0); // shrinking not required
-    BinaryenModuleOptimize(module.ref());
+    if (Options::Get().wasm_optimization_level) {
+        BinaryenSetOptimizeLevel(Options::Get().wasm_optimization_level);
+        BinaryenSetShrinkLevel(0); // shrinking not required
+        BinaryenModuleOptimize(module.ref());
+    }
 
-    /*----- Validate module after optimization. ----------------------------------------------------------------------*/
 #ifndef NDEBUG
+    /*----- Validate module after optimization. ----------------------------------------------------------------------*/
     if (not BinaryenModuleValidate(module.ref())) {
         std::cerr << "Module invalid after optimization!" << std::endl;
         std::cerr << "WebAssembly before optimization:\n" << dump_before_opt.str() << std::endl;
         std::cerr << "WebAssembly after optimization:\n";
         module.dump(std::cerr);
+        throw std::logic_error("invalid module");
     }
-#endif
 #endif
 
     return module;

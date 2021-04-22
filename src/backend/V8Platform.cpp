@@ -300,8 +300,16 @@ V8Platform::V8Platform()
 
     /*----- Set V8 flags. --------------------------------------------------------------------------------------------*/
     std::ostringstream flags;
-    flags << "--stack_size 1000000 "
-          << "--no-liftoff ";
+    flags << "--stack_size 1000000 ";
+    if (Options::Get().wasm_adaptive) {
+        flags << "--opt "
+              << "--liftoff "
+              << "--wasm-tier-up "
+              << "--wasm-dynamic-tiering "
+              << "--wasm-lazy-compilation ";
+    } else {
+        flags << "--no-liftoff ";
+    }
     if (Options::Get().cdt_port > 0) {
         flags << "--log-all "
               << "--expose-wasm "

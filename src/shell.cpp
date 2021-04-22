@@ -470,6 +470,11 @@ int main(int argc, const char **argv)
         "-O", "--wasm-opt",                                                     /* Short, Long      */
         "set the optimization level for Wasm modules (0, 1, or 2)",             /* Description      */
         [&](int olevel) { Options::Get().wasm_optimization_level = olevel; });  /* Callback         */
+    /*----- Add flag to enable adaptive mode (Liftoff + dynamic tier-up) ---------------------------------------------*/
+    ADD(bool, Options::Get().wasm_adaptive, false,                              /* Type, Var, Init  */
+        nullptr, "--wasm-adaptive",                                             /* Short, Long      */
+        "enable adaptive execution of Wasm with Liftoff and dynamic tier-up",   /* Description      */
+        [&](bool) { Options::Get().wasm_adaptive = true; });                    /* Callback         */
 #endif
 
     /*----- Select store implementation ------------------------------------------------------------------------------*/

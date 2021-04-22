@@ -47,7 +47,8 @@ struct Options
 #if WITH_V8
     /* Specify the port for debugging via ChromeDevTools (CDT). */
     int16_t cdt_port = -1;
-    int wasm_optimization_level;
+    int wasm_optimization_level = 2;
+    bool wasm_adaptive = false;
 #endif
 
     private:

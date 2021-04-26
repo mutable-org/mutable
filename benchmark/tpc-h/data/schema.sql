@@ -50,16 +50,16 @@ CREATE TABLE Part (
 --      ps_comment      VARCHAR(199)
 --  );
 
---  CREATE TABLE CUSTOMER (
---      c_custkey       INT(4),
---      c_name          VARCHAR(25),
---      c_address       VARCHAR(40),
---      c_nationkey     INT(4),
---      c_phone         CHAR(15),
---      c_acctbal       DECIMAL(10,2),
---      c_mktsegment    CHAR(10),
---      c_comment       VARCHAR(117)
---  );
+CREATE TABLE Customer (
+    c_custkey       INT(4),
+    c_name          CHAR(25),
+    c_address       CHAR(40),
+    c_nationkey     INT(4),
+    c_phone         CHAR(15),
+    c_acctbal       DECIMAL(10,2),
+    c_mktsegment    CHAR(10),
+    c_comment       CHAR(117)
+);
 
 CREATE TABLE Orders (
     o_orderkey      INT(4),

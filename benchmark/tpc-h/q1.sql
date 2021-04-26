@@ -1,4 +1,3 @@
---  IMPORT INTO Lineitem DSV "benchmark/tpc-h/data/lineitem.tbl" ROWS 10000 DELIMITER "|";
 IMPORT INTO Lineitem DSV "benchmark/tpc-h/data/lineitem.tbl" DELIMITER "|";
 
 SELECT

@@ -1,8 +1,6 @@
 #!/bin/bash
 
-CSV="benchmark/tpc-h/data/lineitem.tbl"
-NUM_ROWS=$(wc -l "${CSV}" | cut -f 1 -d ' ')
-NUM_ROWS=$((NUM_ROWS-1))
+LINEITEM="benchmark/tpc-h/data/lineitem.tbl"
 
 # Define path to PostgreSQL CLI
 POSTGRESQL=psql
@@ -31,7 +29,7 @@ CREATE TABLE Lineitem (
     l_shipmode      CHAR(10),
     l_comment       CHAR(44)
 );
-\copy Lineitem FROM '${CSV}' WITH DELIMITER '|' CSV;
+\copy Lineitem FROM '${LINEITEM}' WITH DELIMITER '|' CSV;
 \timing on
 SELECT
         SUM(l_extendedprice * l_discount) AS revenue

@@ -466,7 +466,7 @@ int main(int argc, const char **argv)
         "specify the port for debugging via ChomeDevTools", /* Description      */
         [&](int port) { Options::Get().cdt_port = port; }); /* Callback         */
     /*----- Add optimization flag ------------------------------------------------------------------------------------*/
-    ADD(int, Options::Get().wasm_optimization_level, 2,                         /* Type, Var, Init  */
+    ADD(int, Options::Get().wasm_optimization_level, 0,                         /* Type, Var, Init  */
         "-O", "--wasm-opt",                                                     /* Short, Long      */
         "set the optimization level for Wasm modules (0, 1, or 2)",             /* Description      */
         [&](int olevel) { Options::Get().wasm_optimization_level = olevel; });  /* Callback         */

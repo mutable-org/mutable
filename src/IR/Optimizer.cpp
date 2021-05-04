@@ -189,7 +189,7 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
     auto plan = construct_plan(G, plan_table, source_plans).release();
     auto &entry = plan_table.get_final();
 
-    /* Perform grouping */
+    /* Perform grouping. */
     if (not G.group_by().empty()) {
         /* Compute `DataModel` after grouping. */
         auto new_model = CE.estimate_grouping(*entry.model, G.group_by()); // TODO provide aggregates
@@ -206,15 +206,24 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
         plan = agg;
     }
 
-    /* Perform ordering */
+    /* Perform ordering. */
     if (not G.order_by().empty()) {
+        /* Perform additional projection to provide all attributes needed to perform ordering. */
+        if (auto needed_projections = compute_needed_projections(G.projections(), G.order_by());
+            not needed_projections.empty())
+        {
+            // TODO estimate data model
+            auto projection = new ProjectionOperator(needed_projections, true);
+            projection->add_child(plan);
+            plan = projection;
+        }
         // TODO estimate data model
         auto order_by = new SortingOperator(G.order_by());
         order_by->add_child(plan);
         plan = order_by;
     }
 
-    /* Perform projection */
+    /* Perform projection. */
     if (not G.projections().empty() or G.projection_is_anti()) {
         // TODO estimate data model
         auto projection = new ProjectionOperator(G.projections(), G.projection_is_anti());
@@ -295,4 +304,59 @@ Optimizer::construct_plan(const QueryGraph &G, PlanTable &plan_table, Producer *
     };
 
     return std::unique_ptr<Producer>(construct_recursive(Subproblem((1UL << G.sources().size()) - 1)));
+}
+
+std::vector<Optimizer::projection_type>
+Optimizer::compute_needed_projections(const std::vector<projection_type> &projections,
+                                      const std::vector<order_type> &order_by) const
+{
+    struct GetDesignatorTargets : ConstASTExprVisitor
+    {
+        private:
+        std::vector<std::pair<const Designator*, const Expr*>> designator_targets;
+
+        public:
+        GetDesignatorTargets() { }
+
+        std::vector<std::pair<const Designator*, const Expr*>> get() { return std::move(designator_targets); }
+
+        void compute(const std::vector<order_type> &order_by) {
+            for (auto &p : order_by)
+                (*this)(*p.first);
+        }
+
+        private:
+        using ConstASTExprVisitor::operator();
+        void operator()(Const<ErrorExpr>&) override { unreachable("order by must not contain errors"); }
+        void operator()(Const<Designator> &e) override {
+            if (not e.table_name.text) {
+                auto target = e.target();
+                if (auto t = std::get_if<const Expr*>(&target))
+                    designator_targets.emplace_back(&e, *t);
+            }
+        }
+        void operator()(Const<Constant>&) override { /* nothing to be done */ }
+        void operator()(Const<FnApplicationExpr>&) override { unreachable("unexpected FnApplicationExpr"); }
+        void operator()(Const<UnaryExpr> &e) override { (*this)(*e.expr); }
+        void operator()(Const<BinaryExpr> &e) override { (*this)(*e.lhs); (*this)(*e.rhs); }
+        void operator()(Const<QueryExpr>&) override { unreachable("unexpected QueryExpr"); }
+    };
+
+    /* Compute all expression targets of designators without table name in `order_by`. */
+    GetDesignatorTargets GDT;
+    GDT.compute(order_by);
+    auto designator_targets = GDT.get();
+
+    /* Choose all `projections` which are needed by `order_by`, i.e. those which are target and create the needed
+     * attribute name by renaming. */
+    std::vector<projection_type> needed_projections;
+    for (auto &p : projections) {
+        auto pred = [&p](const std::pair<const Designator*, const Expr*> &des_target) -> bool {
+            return des_target.second == p.first and des_target.first->attr_name.text == p.second;
+        };
+        if (std::find_if(designator_targets.begin(), designator_targets.end(), pred) != designator_targets.end())
+            needed_projections.push_back(p);
+    }
+
+    return needed_projections;
 }

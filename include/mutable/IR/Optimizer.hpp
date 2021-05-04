@@ -17,6 +17,8 @@ namespace m {
 struct Optimizer
 {
     using Subproblem = QueryGraph::Subproblem;
+    using projection_type = QueryGraph::projection_type;
+    using order_type = QueryGraph::order_type;
 
     private:
     const PlanEnumerator &pe_;
@@ -31,6 +33,7 @@ struct Optimizer
     /** Apply this optimizer to the given query graph to compute an operator tree. */
     std::unique_ptr<Producer> operator()(const QueryGraph &G) const;
 
+    private:
     /** Recursively computes and constructs an optimial plan for the given query graph.  */
     std::pair<std::unique_ptr<Producer>, PlanTable> optimize(const QueryGraph &G) const;
 
@@ -39,6 +42,10 @@ struct Optimizer
 
     /** Constructs an operator tree given a solved plan table and the plans to compute the data sources of the query. */
     std::unique_ptr<Producer> construct_plan(const QueryGraph &G, PlanTable &plan_table, Producer **source_plans) const;
+
+    /** Returns all `projections` which are needed by `order_by`. */
+    std::vector<projection_type> compute_needed_projections(const std::vector<projection_type> &projections,
+                                                            const std::vector<order_type> &order_by) const;
 };
 
 }

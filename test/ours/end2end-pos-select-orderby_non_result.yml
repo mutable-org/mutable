@@ -1,0 +1,142 @@
+description: orderby non result
+db: ours
+query: |
+    SELECT key FROM R ORDER BY fkey;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: key TK_IDENTIFIER
+            -:1:12: FROM TK_From
+            -:1:17: R TK_IDENTIFIER
+            -:1:19: ORDER TK_Order
+            -:1:25: BY TK_By
+            -:1:28: fkey TK_IDENTIFIER
+            -:1:32: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT key
+            FROM R
+            ORDER BY fkey ASC;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            6
+            61
+            68
+            20
+            4
+            43
+            77
+            90
+            75
+            76
+            11
+            41
+            31
+            8
+            35
+            12
+            94
+            50
+            59
+            38
+            63
+            96
+            57
+            85
+            84
+            27
+            72
+            80
+            36
+            81
+            98
+            92
+            79
+            60
+            65
+            42
+            49
+            14
+            17
+            53
+            97
+            48
+            44
+            46
+            93
+            45
+            56
+            64
+            52
+            39
+            3
+            58
+            83
+            66
+            86
+            2
+            54
+            29
+            78
+            23
+            89
+            34
+            22
+            1
+            32
+            25
+            73
+            82
+            21
+            62
+            18
+            5
+            74
+            55
+            99
+            40
+            30
+            87
+            0
+            7
+            16
+            67
+            9
+            10
+            91
+            70
+            24
+            33
+            28
+            26
+            71
+            47
+            13
+            51
+            69
+            37
+            19
+            15
+            95
+            88
+        err: NULL
+        num_err: 0
+        returncode: 0

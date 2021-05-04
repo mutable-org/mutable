@@ -1,0 +1,148 @@
+description: orderby result
+db: ours
+query: |
+    SELECT key, key + fkey AS sum FROM R ORDER BY sum;
+required: YES
+
+stages:
+
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: key TK_IDENTIFIER
+            -:1:11: , TK_COMMA
+            -:1:13: key TK_IDENTIFIER
+            -:1:17: + TK_PLUS
+            -:1:19: fkey TK_IDENTIFIER
+            -:1:24: AS TK_As
+            -:1:27: sum TK_IDENTIFIER
+            -:1:31: FROM TK_From
+            -:1:36: R TK_IDENTIFIER
+            -:1:38: ORDER TK_Order
+            -:1:44: BY TK_By
+            -:1:47: sum TK_IDENTIFIER
+            -:1:50: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT key, (key + fkey) AS sum
+            FROM R
+            ORDER BY sum ASC;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            6,7
+            4,8
+            11,18
+            8,18
+            12,23
+            20,24
+            31,41
+            14,44
+            35,46
+            27,47
+            43,48
+            3,48
+            17,49
+            41,50
+            38,50
+            2,50
+            1,58
+            36,60
+            50,62
+            61,63
+            42,70
+            59,71
+            68,71
+            23,74
+            57,75
+            63,76
+            22,77
+            49,78
+            29,78
+            44,79
+            5,79
+            0,81
+            39,82
+            48,82
+            75,82
+            46,82
+            76,83
+            77,83
+            45,85
+            25,85
+            53,85
+            18,87
+            60,87
+            7,88
+            21,89
+            34,89
+            32,91
+            65,92
+            72,93
+            52,93
+            9,94
+            10,95
+            56,97
+            90,97
+            16,99
+            54,102
+            80,103
+            84,103
+            85,103
+            13,104
+            58,105
+            81,105
+            64,105
+            94,105
+            79,106
+            30,109
+            24,110
+            15,111
+            96,112
+            66,113
+            19,114
+            26,115
+            28,116
+            92,119
+            40,119
+            33,121
+            98,124
+            78,128
+            83,130
+            97,130
+            62,131
+            93,131
+            55,132
+            37,132
+            86,133
+            47,138
+            73,138
+            51,142
+            89,144
+            74,148
+            82,148
+            67,151
+            70,156
+            69,161
+            71,161
+            87,167
+            91,177
+            99,177
+            88,187
+            95,193
+        err: NULL
+        num_err: 0
+        returncode: 0

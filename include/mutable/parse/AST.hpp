@@ -42,7 +42,8 @@ struct Stmt;
 *====================================================================================================================*/
 
 /** An expression. */
-struct Expr {
+struct Expr
+{
     friend struct Sema;
     friend struct GetCorrelationInfo;
 
@@ -94,7 +95,8 @@ struct Expr {
 };
 
 /** The error expression.  Used when the parser encountered a syntactical error. */
-struct ErrorExpr : Expr {
+struct ErrorExpr : Expr
+{
     explicit ErrorExpr(Token tok) : Expr(tok) {}
 
     bool is_constant() const override { return false; }
@@ -107,7 +109,8 @@ struct ErrorExpr : Expr {
 };
 
 /** A designator.  Identifies an attribute, optionally preceeded by a table name, a named expression, or a function. */
-struct Designator : Expr {
+struct Designator : Expr
+{
     friend struct Sema;
 
     using target_type = std::variant<std::monostate, const Expr*, const Attribute*>;
@@ -160,7 +163,8 @@ struct Designator : Expr {
 };
 
 /** A constant: a string literal or a numeric constant. */
-struct Constant : Expr {
+struct Constant : Expr
+{
     Constant(Token tok) : Expr(tok) {}
 
     bool is_constant() const override { return true; }
@@ -191,12 +195,14 @@ struct Constant : Expr {
 };
 
 /** A postfix expression. */
-struct PostfixExpr : Expr {
+struct PostfixExpr : Expr
+{
     PostfixExpr(Token tok) : Expr(tok) {}
 };
 
 /** A function application. */
-struct FnApplicationExpr : PostfixExpr {
+struct FnApplicationExpr : PostfixExpr
+{
     friend struct Sema;
 
     Expr *fn;
@@ -225,7 +231,8 @@ struct FnApplicationExpr : PostfixExpr {
 };
 
 /** A unary expression: "+e", "-e", "~e", "NOT e". */
-struct UnaryExpr : Expr {
+struct UnaryExpr : Expr
+{
     Expr *expr;
 
     UnaryExpr(Token op, Expr *expr) : Expr(op), expr(notnull(expr)) {}
@@ -242,7 +249,8 @@ struct UnaryExpr : Expr {
 };
 
 /** A binary expression.  This includes all arithmetic and logical binary operations. */
-struct BinaryExpr : Expr {
+struct BinaryExpr : Expr
+{
     Expr *lhs;
     Expr *rhs;
 

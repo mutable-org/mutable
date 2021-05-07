@@ -100,36 +100,6 @@ DeleteStmt::~DeleteStmt()
     delete where;
 }
 
-/*======================================================================================================================
- * QueryExpr
- *====================================================================================================================*/
-
-bool QueryExpr::is_constant() const
-{
-    auto stmt = as<const SelectStmt>(query);
-    if (stmt->from) return false;
-    auto select = as<const SelectClause>(stmt->select);
-    for (const auto &s : select->select) {
-        if (not s.first->is_constant())
-            return false;
-    }
-    return true;
-}
-
-bool QueryExpr::is_correlated() const
-{
-    /* Correlation is only valid in the where- or having-clause */
-    auto stmt = as<const SelectStmt>(query);
-    if (stmt->where) {
-        auto where = as<const WhereClause>(stmt->where);
-        if (where->where->is_correlated()) return true;
-    }
-    if (stmt->having) {
-        auto having = as<const HavingClause>(stmt->having);
-        if (having->having->is_correlated()) return true;
-    }
-    return false;
-}
 
 /*======================================================================================================================
  * operator==()
@@ -309,3 +279,35 @@ void Stmt::dump(std::ostream &out) const
     out << std::endl;
 }
 void Stmt::dump() const { dump(std::cerr); }
+
+
+/*======================================================================================================================
+ * QueryExpr
+ *====================================================================================================================*/
+
+bool QueryExpr::is_constant() const
+{
+    auto stmt = as<const SelectStmt>(query);
+    if (stmt->from) return false;
+    auto select = as<const SelectClause>(stmt->select);
+    for (const auto &s : select->select) {
+        if (not s.first->is_constant())
+            return false;
+    }
+    return true;
+}
+
+bool QueryExpr::is_correlated() const
+{
+    /* Correlation is only valid in a WHERE- or HAVING-clause */
+    auto stmt = as<const SelectStmt>(query);
+    if (stmt->where) {
+        auto where = as<const WhereClause>(stmt->where);
+        if (where->where->is_correlated()) return true;
+    }
+    if (stmt->having) {
+        auto having = as<const HavingClause>(stmt->having);
+        if (having->having->is_correlated()) return true;
+    }
+    return false;
+}

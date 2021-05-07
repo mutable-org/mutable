@@ -9,7 +9,8 @@
 
 namespace m {
 
-// forward declare the AST visitors
+/*----- forward declarations -----------------------------------------------------------------------------------------*/
+// AST visitors
 template<bool C>
 struct TheASTExprVisitor;
 using ASTExprVisitor = TheASTExprVisitor<false>;
@@ -27,12 +28,14 @@ struct TheASTStmtVisitor;
 using ASTStmtVisitor = TheASTStmtVisitor<false>;
 using ConstASTStmtVisitor = TheASTStmtVisitor<true>;
 
+// classes
 struct Type;
 struct Function;
 struct Sema;
 struct Attribute;
 struct Table;
 struct Stmt;
+
 
 /*======================================================================================================================
 * Expressions
@@ -43,20 +46,27 @@ struct Expr {
     friend struct Sema;
     friend struct GetCorrelationInfo;
 
-    Token tok;
+    Token tok; ///< the token of the expression; serves as an anchor to locate the expression in the source
 
     private:
-    const Type *type_ = nullptr; ///> the type of an expression, determined by the semantic analysis
+    const Type *type_ = nullptr; ///< the type of an expression, determined by the semantic analysis
 
     public:
     explicit Expr(Token tok) : tok(tok) { }
     Expr(Token tok, const Type *type) : tok(tok), type_(type) { }
     virtual ~Expr() { }
 
+    /** Returns the `Type` of this `Expr`.  Assumes that the `Expr` has been assigned a `Type` by the `Sema`. */
     virtual const Type * type() const { return notnull(type_); }
+    /** Returns true iff this `Expr` has been assigned a `Type`, most likely by `Sema`. */
     bool has_type() const { return type_ != nullptr; }
 
+    /** Returns true iff this `Expr` is constant, i.e. consists only of constatns and can be evaluated at compilation
+     * time. */
     virtual bool is_constant() const = 0;
+
+    /** Returns true iff this `Expr` is correlated, i.e. contains a free variable.  A free variable is a `Designator`
+     * that is not bound to an `Attribute` or `Value` within the query but defined by an outer, enclosing query. */
     virtual bool is_correlated() const = 0;
 
     virtual bool operator==(const Expr &other) const = 0;
@@ -68,18 +78,19 @@ struct Expr {
     /** Returns a `Schema` instance containing all required definitions (of `Attribute`s and other `Designator`s). */
     Schema get_required() const;
 
+    /** Writes a Graphivz dot representation of this `Expr` to `out`.  Used to render ASTs with Graphivz. */
     void dot(std::ostream &out) const;
 
-    void dump(std::ostream &out) const;
-    void dump() const;
-
-    friend std::ostream &operator<<(std::ostream &out, const Expr &e);
+    friend std::ostream & operator<<(std::ostream &out, const Expr &e);
 
     friend std::string to_string(const Expr &e) {
         std::ostringstream oss;
         oss << e;
         return oss.str();
     }
+
+    void dump(std::ostream &out) const;
+    void dump() const;
 };
 
 /** The error expression.  Used when the parser encountered a syntactical error. */
@@ -291,6 +302,7 @@ struct QueryExpr : Expr
     X(UnaryExpr) \
     X(BinaryExpr) \
     X(QueryExpr)
+
 
 /*======================================================================================================================
  * Clauses

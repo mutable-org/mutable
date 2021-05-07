@@ -132,56 +132,55 @@ bool QueryExpr::is_correlated() const
 }
 
 /*======================================================================================================================
- * operator==
+ * operator==()
  *====================================================================================================================*/
 
 bool ErrorExpr::operator==(const Expr &o) const { return cast<const ErrorExpr>(&o) != nullptr; }
 
 bool Designator::operator==(const Expr &o) const
 {
-    auto other = cast<const Designator>(&o);
-    if (not other) return false;
-    if (this->has_explicit_table_name() or other->has_explicit_table_name())
-        return this->table_name.text == other->table_name.text and
-               this->attr_name.text == other->attr_name.text;
-    else
-        return this->attr_name.text == other->attr_name.text;
+    if (auto other = cast<const Designator>(&o)) {
+        if (this->has_explicit_table_name() or other->has_explicit_table_name())
+            return this->table_name.text == other->table_name.text and this->attr_name.text == other->attr_name.text;
+        else
+            return this->attr_name.text == other->attr_name.text;
+    }
+    return false;
 }
 
 bool Constant::operator==(const Expr &o) const
 {
-    auto other = cast<const Constant>(&o);
-    if (not other) return false;
-    return this->tok.text == other->tok.text;
+    if (auto other = cast<const Constant>(&o))
+        return this->tok.text == other->tok.text;
+    return false;
 }
 
 bool FnApplicationExpr::operator==(const Expr &o) const
 {
-    auto other = cast<const FnApplicationExpr>(&o);
-    if (not other) return false;
-    if (*this->fn != *other->fn) return false;
-    if (this->args.size() != other->args.size()) return false;
-    for (std::size_t i = 0, end = this->args.size(); i != end; ++i) {
-        if (*this->args[i] != *other->args[i])
-            return false;
+    if (auto other = cast<const FnApplicationExpr>(&o)) {
+        if (*this->fn != *other->fn) return false;
+        if (this->args.size() != other->args.size()) return false;
+        for (std::size_t i = 0, end = this->args.size(); i != end; ++i) {
+            if (*this->args[i] != *other->args[i])
+                return false;
+        }
+        return true;
     }
-    return true;
+    return false;
 }
 
 bool UnaryExpr::operator==(const Expr &o) const
 {
-    auto other = cast<const UnaryExpr>(&o);
-    if (not other) return false;
-    if (this->op().text != other->op().text) return false;
-    return *this->expr == *other->expr;
+    if (auto other = cast<const UnaryExpr>(&o))
+        return this->op().text == other->op().text and *this->expr == *other->expr;
+    return false;
 }
 
 bool BinaryExpr::operator==(const Expr &o) const
 {
-    auto other = cast<const BinaryExpr>(&o);
-    if (not other) return false;
-    if (this->op().text != other->op().text) return false;
-    return *this->lhs == *other->lhs and *this->rhs == *other->rhs;
+    if (auto other = cast<const BinaryExpr>(&o))
+        return this->op().text == other->op().text and *this->lhs == *other->lhs and *this->rhs == *other->rhs;
+    return false;
 }
 
 bool QueryExpr::operator==(const Expr&) const { unreachable("not implemented"); }

@@ -8,13 +8,87 @@ using namespace m;
 
 OperatorData::~OperatorData() { }
 
+std::ostream & m::operator<<(std::ostream &out, const Operator &op) {
+    std::vector<unsigned> depth({0}); // stack of indentation depths
+    struct indent {
+        std::ostream &out;
+        const Operator &op;
+        std::vector<unsigned> &depth;
+
+        indent(std::ostream &out, const Operator &op, std::vector<unsigned> &depth) : out(out), op(op), depth(depth) {
+            insist(not depth.empty());
+            const unsigned n = depth.back();
+            depth.pop_back();
+            if (auto c = cast<const Consumer>(&op))
+                depth.insert(depth.end(), c->children().size(), n+1);
+            if (n) out << '\n' << std::string(2 * (n-1), ' ') << "` ";
+        }
+
+        ~indent() { out << ' ' << op.schema(); }
+    };
+    visit(overloaded {
+        [&out, &depth](const CallbackOperator &op) { indent(out, op, depth).out << "CallbackOperator"; },
+        [&out, &depth](const PrintOperator &op) {
+            indent i(out, op, depth);
+            out << "PrintOperator";
+            if (&op.out == &std::cout) out << " to stdout";
+            else if (&op.out == &std::cerr) out << " to stderr";
+        },
+        [&out, &depth](const NoOpOperator &op) { indent(out, op, depth).out << "NoOpOperator"; },
+        [&out, &depth](const ScanOperator &op) {
+            indent(out, op, depth).out << "ScanOperator (" << op.store().table().name << ')';
+        },
+        [&out, &depth](const FilterOperator &op) { indent(out, op, depth).out << "FilterOperator " << op.filter(); },
+        [&out, &depth](const JoinOperator &op) {
+            indent(out, op, depth).out << "JoinOperator " << op.algo_str() << ' ' << op.predicate();
+        },
+        [&out, &depth](const ProjectionOperator &op) { indent(out, op, depth).out << "ProjectionOperator"; },
+        [&out, &depth](const LimitOperator &op) {
+            indent(out, op, depth).out << "LimitOperator " << op.limit() << ", " << op.offset();
+        },
+        [&out, &depth](const GroupingOperator &op) {
+            indent i(out, op, depth);
+            out << "GroupingOperator [";
+            for (auto begin = op.group_by().begin(), it = begin, end = op.group_by().end(); it != end; ++it) {
+                if (it != begin) out << ", ";
+                out << **it;
+            }
+            out << "] [";
+            for (auto begin = op.aggregates().begin(), it = begin, end = op.aggregates().end(); it != end; ++it) {
+                if (it != begin) out << ", ";
+                out << **it;
+            }
+            out << ']';
+        },
+        [&out, &depth](const AggregationOperator &op) {
+            indent i(out, op, depth);
+            out << "AggregationOperator [";
+            for (auto begin = op.aggregates().begin(), it = begin, end = op.aggregates().end(); it != end; ++it) {
+                if (it != begin) out << ", ";
+                out << **it;
+            }
+            out << ']';
+        },
+        [&out, &depth](const SortingOperator &op) {
+            indent i(out, op, depth);
+            out << "SortingOperator [";
+            for (auto begin = op.order_by().begin(), it = begin, end = op.order_by().end(); it != end; ++it) {
+                if (it != begin) out << ", ";
+                out << *it->first << ' ' << (it->second ? "ASC" : "DESC");
+            }
+            out << ']';
+        },
+    }, op, tag<ConstPreOrderOperatorVisitor>());
+    return out;
+}
+
 void Operator::dot(std::ostream &out) const
 {
     OperatorDot D(out);
     D(*this);
 }
 
-void Operator::dump(std::ostream &out) const { print_recursive(out); out << std::endl; }
+void Operator::dump(std::ostream &out) const { out << *this << std::endl; }
 void Operator::dump() const { dump(std::cerr); }
 
 ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections, bool is_anti)
@@ -85,113 +159,6 @@ AggregationOperator::AggregationOperator(std::vector<const Expr*> aggregates)
         auto alias = C.pool(oss.str().c_str());
         S.add(alias, ty);
     }
-}
-
-/*======================================================================================================================
- * Print
- *====================================================================================================================*/
-
-void indent(std::ostream &out, unsigned n)
-{
-    if (n) {
-        out << '\n';
-        while (--n)
-            out << "  ";
-        out << "` ";
-    }
-}
-
-void Operator::print_recursive(std::ostream &out, unsigned depth) const
-{
-    indent(out, depth);
-    print(out);
-    out << " {" << schema() << '}';
-}
-
-void Consumer::print_recursive(std::ostream &out, unsigned depth) const
-{
-    Operator::print_recursive(out, depth);
-    for (auto c : children())
-        c->print_recursive(out, depth + 1);
-}
-
-void CallbackOperator::print(std::ostream &out) const
-{
-    out << "CallbackOperator";
-}
-
-void PrintOperator::print(std::ostream &out) const
-{
-    out << "PrintOperator";
-    if (&this->out == &std::cout)
-        out << " to stdout";
-    else if (&this->out == &std::cerr)
-        out << " to stderr";
-}
-
-void NoOpOperator::print(std::ostream &out) const
-{
-    out << "NoOpOperator";
-}
-
-void ScanOperator::print(std::ostream &out) const
-{
-    out << "ScanOperator (" << store().table().name << ')';
-}
-
-void FilterOperator::print(std::ostream &out) const
-{
-    out << "FilterOperator " << filter_;
-}
-
-void JoinOperator::print(std::ostream &out) const
-{
-    out << "JoinOperator " << algo_str() << " (" << predicate_ << ')';
-}
-
-void ProjectionOperator::print(std::ostream &out) const
-{
-    out << "ProjectionOperator";
-}
-
-void LimitOperator::print(std::ostream &out) const
-{
-    out << "LimitOperator " << limit_ << ", " << offset_;
-}
-
-void GroupingOperator::print(std::ostream &out) const
-{
-    out << "GroupingOperator [";
-    for (auto it = group_by_.begin(), end = group_by_.end(); it != end; ++it) {
-        if (it != group_by_.begin()) out << ", ";
-        out << **it;
-    }
-    out << "] [";
-    for (auto it = aggregates_.begin(), end = aggregates_.end(); it != end; ++it) {
-        if (it != aggregates_.begin()) out << ", ";
-        out << **it;
-    }
-    out << ']';
-}
-
-void AggregationOperator::print(std::ostream &out) const
-{
-    out << "AggregationOperator [";
-    for (auto it = aggregates_.begin(), end = aggregates_.end(); it != end; ++it) {
-        if (it != aggregates_.begin()) out << ", ";
-        out << **it;
-    }
-    out << ']';
-}
-
-void SortingOperator::print(std::ostream &out) const
-{
-    out << "SortingOperator [";
-    for (auto it = order_by_.begin(), end = order_by_.end(); it != end; ++it) {
-        if (it != order_by_.begin()) out << ", ";
-        out << *it->first << ' ' << (it->second ? "ASC" : "DESC");
-    }
-    out << ']';
 }
 
 

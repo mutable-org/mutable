@@ -50,17 +50,11 @@ struct Operator
     virtual void accept(OperatorVisitor &v) = 0;
     virtual void accept(ConstOperatorVisitor &v) const = 0;
 
-    friend std::ostream & operator<<(std::ostream &out, const Operator &op) {
-        op.print_recursive(out);
-        return out;
-    }
+    friend std::ostream & operator<<(std::ostream &out, const Operator &op);
 
     /** Minimizes the `Schema` of this `Operator`.  The `Schema` is reduced to the attributes actually
      * required by ancestors of this `Operator` in the plan. */
     void minimize_schema();
-
-    virtual void print(std::ostream &out) const = 0;
-    virtual void print_recursive(std::ostream &out, unsigned depth = 0) const;
 
     /** Prints a representation of this `Operator` and its descendants in the dot language. */
     void dot(std::ostream &out) const;
@@ -135,8 +129,6 @@ struct Consumer : virtual Operator
         return children_[i];
     }
 
-    void print_recursive(std::ostream &out, unsigned depth) const override;
-
     protected:
     std::vector<Producer*> & children() { return children_; }
 };
@@ -155,9 +147,6 @@ struct CallbackOperator : Consumer
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-
-    private:
-    void print(std::ostream &out) const override;
 };
 
 /** Prints the produced `Tuple`s to a `std::ostream` instance. */
@@ -169,9 +158,6 @@ struct PrintOperator : Consumer
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-
-    private:
-    void print(std::ostream &out) const override;
 };
 
 /** Drops the produced results and outputs only the number of result tuples produced.  This is used for benchmarking. */
@@ -183,9 +169,6 @@ struct NoOpOperator : Consumer
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-
-    private:
-    void print(std::ostream &out) const override;
 };
 
 struct ScanOperator : Producer
@@ -209,9 +192,6 @@ struct ScanOperator : Producer
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-
-    private:
-    void print(std::ostream &out) const override;
 };
 
 struct FilterOperator : Producer, Consumer
@@ -231,9 +211,6 @@ struct FilterOperator : Producer, Consumer
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-
-    private:
-    void print(std::ostream &out) const override;
 };
 
 struct JoinOperator : Producer, Consumer
@@ -261,9 +238,6 @@ struct JoinOperator : Producer, Consumer
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-
-    private:
-    void print(std::ostream &out) const override;
 #undef algorithm
 };
 
@@ -306,9 +280,6 @@ struct ProjectionOperator : Producer, Consumer
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-
-    private:
-    void print(std::ostream &out) const override;
 };
 
 struct LimitOperator : Producer, Consumer
@@ -331,9 +302,6 @@ struct LimitOperator : Producer, Consumer
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-
-    private:
-    void print(std::ostream &out) const override;
 };
 
 struct GroupingOperator : Producer, Consumer
@@ -381,9 +349,6 @@ struct GroupingOperator : Producer, Consumer
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-
-    private:
-    void print(std::ostream &out) const override;
 #undef algorithm
 };
 
@@ -417,9 +382,6 @@ struct AggregationOperator : Producer, Consumer
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-
-    private:
-    void print(std::ostream &out) const override;
 };
 
 struct SortingOperator : Producer, Consumer
@@ -437,9 +399,6 @@ struct SortingOperator : Producer, Consumer
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-
-    private:
-    void print(std::ostream &out) const override;
 };
 
 #define M_OPERATOR_LIST(X) \
@@ -465,12 +424,12 @@ struct ThePreOrderOperatorVisitor : std::conditional_t<C, ConstOperatorVisitor, 
 {
     using super = std::conditional_t<C, ConstOperatorVisitor, OperatorVisitor>;
     template<typename T> using Const = typename super::template Const<T>;
-    void operator()(Const<Operator> &op) { (*this)(op); }
-    void operator()(Const<Producer> &op) { OperatorVisitor::operator()(op); }
-    void operator()(Const<Consumer> &op) {
-        OperatorVisitor::operator()(op);
-        for (auto child : op.children())
-            (*this)(*child);
+    void operator()(Const<Operator> &op) {
+        op.accept(*this);
+        if (auto c = cast<Const<Consumer>>(&op)) {
+            for (auto child : c->children())
+                (*this)(*child);
+        }
     }
 };
 
@@ -479,12 +438,12 @@ struct ThePostOrderOperatorVisitor : std::conditional_t<C, ConstOperatorVisitor,
 {
     using super = std::conditional_t<C, ConstOperatorVisitor, OperatorVisitor>;
     template<typename T> using Const = typename super::template Const<T>;
-    void operator()(Const<Operator> &op) { (*this)(op); }
-    void operator()(Const<Producer> &op) { OperatorVisitor::operator()(op); }
-    void operator()(Const<Consumer> &op) {
-        for (auto child : op.children())
-            (*this)(*child);
-        OperatorVisitor::operator()(op);
+    void operator()(Const<Operator> &op) {
+        if (auto c = cast<Const<Consumer>>(&op)) {
+            for (auto child : c->children())
+                (*this)(*child);
+        }
+        op.accept(*this);
     }
 };
 

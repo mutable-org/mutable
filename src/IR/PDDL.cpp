@@ -386,11 +386,11 @@ void PDDLGenerator::generate_domain_file(std::size_t number_of_relations, std::s
     domain_file_content_ << "\n";
     generate_types();
     domain_file_content_ << "\n";
+    generate_constants(number_of_relations, number_of_actions);
+    domain_file_content_ << "\n";
     generate_predicates();
     domain_file_content_ << "\n";
     generate_functions();
-    domain_file_content_ << "\n";
-    generate_constants(number_of_relations, number_of_actions);
     domain_file_content_ << "\n";
     generate_actions(number_of_actions);
     domain_file_content_ << ")\n";

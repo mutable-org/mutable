@@ -17,6 +17,8 @@ namespace {
 #define _CAT(X, Y) X ## Y
 #define EMPTY()
 #define DEFER1(X) X EMPTY()
+#define COMMA(X) X,
+#define UNPACK(...) __VA_ARGS__
 
 #define EVAL(...)  EVAL1(EVAL1(EVAL1(__VA_ARGS__)))
 #define EVAL1(...) EVAL2(EVAL2(EVAL2(__VA_ARGS__)))

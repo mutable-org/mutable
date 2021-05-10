@@ -458,6 +458,48 @@ struct SortingOperator : Producer, Consumer
 M_DECLARE_VISITOR(OperatorVisitor, Operator, M_OPERATOR_LIST)
 M_DECLARE_VISITOR(ConstOperatorVisitor, const Operator, M_OPERATOR_LIST)
 
+namespace {
+
+template<bool C>
+struct ThePreOrderOperatorVisitor : std::conditional_t<C, ConstOperatorVisitor, OperatorVisitor>
+{
+    using super = std::conditional_t<C, ConstOperatorVisitor, OperatorVisitor>;
+    template<typename T> using Const = typename super::template Const<T>;
+    void operator()(Const<Operator> &op) { (*this)(op); }
+    void operator()(Const<Producer> &op) { OperatorVisitor::operator()(op); }
+    void operator()(Const<Consumer> &op) {
+        OperatorVisitor::operator()(op);
+        for (auto child : op.children())
+            (*this)(*child);
+    }
+};
+
+template<bool C>
+struct ThePostOrderOperatorVisitor : std::conditional_t<C, ConstOperatorVisitor, OperatorVisitor>
+{
+    using super = std::conditional_t<C, ConstOperatorVisitor, OperatorVisitor>;
+    template<typename T> using Const = typename super::template Const<T>;
+    void operator()(Const<Operator> &op) { (*this)(op); }
+    void operator()(Const<Producer> &op) { OperatorVisitor::operator()(op); }
+    void operator()(Const<Consumer> &op) {
+        for (auto child : op.children())
+            (*this)(*child);
+        OperatorVisitor::operator()(op);
+    }
+};
+
+}
+using PreOrderOperatorVisitor = ThePreOrderOperatorVisitor<false>;
+using ConstPreOrderOperatorVisitor = ThePreOrderOperatorVisitor<true>;
+using PostOrderOperatorVisitor = ThePostOrderOperatorVisitor<false>;
+using ConstPostOrderOperatorVisitor = ThePostOrderOperatorVisitor<true>;
+
+M_MAKE_STL_VISITABLE(PreOrderOperatorVisitor, Operator, M_OPERATOR_LIST)
+M_MAKE_STL_VISITABLE(ConstPreOrderOperatorVisitor, const Operator, M_OPERATOR_LIST)
+M_MAKE_STL_VISITABLE(PostOrderOperatorVisitor, Operator, M_OPERATOR_LIST)
+M_MAKE_STL_VISITABLE(ConstPostOrderOperatorVisitor, const Operator, M_OPERATOR_LIST)
+
+
 enum class OperatorKind
 {
 #define X(Kind) Kind,

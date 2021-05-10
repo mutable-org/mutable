@@ -3,7 +3,6 @@ add_library(
     OBJECT
     CNF.cpp
     Operator.cpp
-    OperatorDot.cpp
     Optimizer.cpp
     PDDL.cpp
     PlanEnumerator.cpp

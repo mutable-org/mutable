@@ -3,7 +3,6 @@
 #include "catalog/Schema.hpp"
 #include <mutable/backend/Backend.hpp>
 #include <mutable/IR/Operator.hpp>
-#include <mutable/IR/OperatorVisitor.hpp>
 #include <mutable/parse/AST.hpp>
 #include <mutable/util/macro.hpp>
 #include <unordered_map>

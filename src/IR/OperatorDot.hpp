@@ -1,6 +1,6 @@
 #pragma once
 
-#include "mutable/IR/OperatorVisitor.hpp"
+#include <mutable/IR/Operator.hpp>
 
 
 namespace m {
@@ -18,7 +18,7 @@ struct OperatorDot : ConstOperatorVisitor
 
     using ConstOperatorVisitor::operator();
 #define DECLARE(CLASS) void operator()(Const<CLASS> &op) override;
-    DB_OPERATOR_LIST(DECLARE)
+    M_OPERATOR_LIST(DECLARE)
 #undef DECLARE
 };
 

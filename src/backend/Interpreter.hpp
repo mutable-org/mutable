@@ -2,13 +2,12 @@
 
 #include "backend/StackMachine.hpp"
 #include "catalog/Schema.hpp"
-#include "mutable/backend/Backend.hpp"
-#include "mutable/IR/Operator.hpp"
-#include "mutable/IR/OperatorVisitor.hpp"
-#include "mutable/IR/Tuple.hpp"
-#include "mutable/util/macro.hpp"
 #include <cerrno>
 #include <ctime>
+#include <mutable/backend/Backend.hpp>
+#include <mutable/IR/Operator.hpp>
+#include <mutable/IR/Tuple.hpp>
+#include <mutable/util/macro.hpp>
 #include <unordered_map>
 
 
@@ -198,7 +197,7 @@ struct Pipeline : ConstOperatorVisitor
 
     using ConstOperatorVisitor::operator();
 #define DECLARE(CLASS) void operator()(Const<CLASS> &op) override;
-    DB_OPERATOR_LIST(DECLARE)
+    M_OPERATOR_LIST(DECLARE)
 #undef DECLARE
 };
 
@@ -212,7 +211,7 @@ struct Interpreter : Backend, ConstOperatorVisitor
 
     using ConstOperatorVisitor::operator();
 #define DECLARE(CLASS) void operator()(Const<CLASS> &op) override;
-    DB_OPERATOR_LIST(DECLARE)
+    M_OPERATOR_LIST(DECLARE)
 #undef DECLARE
 
     static Value eval(const Constant &c)

@@ -14,12 +14,9 @@
 
 namespace m {
 
-// forward declare the Operator visitor
-template<bool C>
-struct TheOperatorVisitor;
-using OperatorVisitor = TheOperatorVisitor<false>;
-using ConstOperatorVisitor = TheOperatorVisitor<true>;
-
+// forward declarations
+struct OperatorVisitor;
+struct ConstOperatorVisitor;
 struct Tuple;
 
 /** This interface is used to attach data to `Operator` instances. */
@@ -445,7 +442,7 @@ struct SortingOperator : Producer, Consumer
     void print(std::ostream &out) const override;
 };
 
-#define DB_OPERATOR_LIST(X) \
+#define M_OPERATOR_LIST(X) \
     X(ScanOperator) \
     X(CallbackOperator) \
     X(PrintOperator) \
@@ -458,10 +455,13 @@ struct SortingOperator : Producer, Consumer
     X(AggregationOperator) \
     X(SortingOperator)
 
+M_DECLARE_VISITOR(OperatorVisitor, Operator, M_OPERATOR_LIST)
+M_DECLARE_VISITOR(ConstOperatorVisitor, const Operator, M_OPERATOR_LIST)
+
 enum class OperatorKind
 {
 #define X(Kind) Kind,
-    DB_OPERATOR_LIST(X)
+    M_OPERATOR_LIST(X)
 #undef X
 };
 

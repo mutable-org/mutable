@@ -4,7 +4,6 @@ add_library(
     CNF.cpp
     Operator.cpp
     OperatorDot.cpp
-    OperatorVisitor.cpp
     Optimizer.cpp
     PDDL.cpp
     PlanEnumerator.cpp

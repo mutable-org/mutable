@@ -8,7 +8,7 @@
 #include <iostream>
 #include <mutable/catalog/Type.hpp>
 #include <mutable/IR/CNF.hpp>
-#include <mutable/IR/OperatorVisitor.hpp>
+#include <mutable/IR/Operator.hpp>
 #include <sstream>
 #include <utility>
 #include <vector>
@@ -891,7 +891,7 @@ struct WasmPlanCG : ConstOperatorVisitor
     /*----- OperatorVisitor ------------------------------------------------------------------------------------------*/
     using ConstOperatorVisitor::operator();
 #define DECLARE(CLASS) void operator()(const CLASS &op) override;
-    DB_OPERATOR_LIST(DECLARE)
+    M_OPERATOR_LIST(DECLARE)
 #undef DECLARE
 };
 
@@ -943,7 +943,7 @@ struct WasmPipelineCG : ConstOperatorVisitor
     /* Operators */
     using ConstOperatorVisitor::operator();
 #define DECLARE(CLASS) void operator()(const CLASS &op) override;
-    DB_OPERATOR_LIST(DECLARE)
+    M_OPERATOR_LIST(DECLARE)
 #undef DECLARE
 };
 

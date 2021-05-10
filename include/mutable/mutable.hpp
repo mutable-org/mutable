@@ -10,7 +10,6 @@
 #include <mutable/catalog/Type.hpp>
 #include <mutable/IR/CNF.hpp>
 #include <mutable/IR/Operator.hpp>
-#include <mutable/IR/OperatorVisitor.hpp>
 #include <mutable/IR/Optimizer.hpp>
 #include <mutable/IR/PlanEnumerator.hpp>
 #include <mutable/IR/PlanTable.hpp>

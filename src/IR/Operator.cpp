@@ -194,8 +194,20 @@ void SortingOperator::print(std::ostream &out) const
     out << ']';
 }
 
+
 /*======================================================================================================================
- * minimize_schema
+ * accept()
+ *====================================================================================================================*/
+
+#define ACCEPT(CLASS) \
+    void CLASS::accept(OperatorVisitor &V) { V(*this); } \
+    void CLASS::accept(ConstOperatorVisitor &V) const { V(*this); }
+M_OPERATOR_LIST(ACCEPT)
+#undef ACCEPT
+
+
+/*======================================================================================================================
+ * minimize_schema()
  *====================================================================================================================*/
 
 struct SchemaMinimizer : OperatorVisitor
@@ -207,7 +219,7 @@ struct SchemaMinimizer : OperatorVisitor
     using OperatorVisitor::operator();
 
 #define DECLARE(CLASS) void operator()(Const<CLASS> &op) override;
-    DB_OPERATOR_LIST(DECLARE)
+    M_OPERATOR_LIST(DECLARE)
 #undef DECLARE
 };
 

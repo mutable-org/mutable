@@ -1,8 +1,8 @@
 #pragma once
 
-#include "mutable/parse/ASTVisitor.hpp"
 #include <cstdint>
 #include <iostream>
+#include <mutable/parse/AST.hpp>
 #include <vector>
 
 

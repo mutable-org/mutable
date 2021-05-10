@@ -11,22 +11,14 @@ namespace m {
 
 /*----- forward declarations -----------------------------------------------------------------------------------------*/
 // AST visitors
-template<bool C>
-struct TheASTExprVisitor;
-using ASTExprVisitor = TheASTExprVisitor<false>;
-using ConstASTExprVisitor = TheASTExprVisitor<true>;
-template<bool C>
-struct TheASTClauseVisitor;
-using ASTClauseVisitor = TheASTClauseVisitor<false>;
-using ConstASTClauseVisitor = TheASTClauseVisitor<true>;
-template<bool C>
-struct TheASTConstraintVisitor;
-using ASTConstraintVisitor = TheASTConstraintVisitor<false>;
-using ConstASTConstraintVisitor = TheASTConstraintVisitor<true>;
-template<bool C>
-struct TheASTStmtVisitor;
-using ASTStmtVisitor = TheASTStmtVisitor<false>;
-using ConstASTStmtVisitor = TheASTStmtVisitor<true>;
+struct ASTExprVisitor;
+struct ConstASTExprVisitor;
+struct ASTClauseVisitor;
+struct ConstASTClauseVisitor;
+struct ASTConstraintVisitor;
+struct ConstASTConstraintVisitor;
+struct ASTStmtVisitor;
+struct ConstASTStmtVisitor;
 
 // classes
 struct Type;
@@ -302,7 +294,7 @@ struct QueryExpr : Expr
     }
 };
 
-#define DB_AST_EXPR_LIST(X) \
+#define M_AST_EXPR_LIST(X) \
     X(ErrorExpr) \
     X(Designator) \
     X(Constant) \
@@ -310,6 +302,9 @@ struct QueryExpr : Expr
     X(UnaryExpr) \
     X(BinaryExpr) \
     X(QueryExpr)
+
+M_DECLARE_VISITOR(ASTExprVisitor, Expr, M_AST_EXPR_LIST)
+M_DECLARE_VISITOR(ConstASTExprVisitor, const Expr, M_AST_EXPR_LIST)
 
 
 /*======================================================================================================================
@@ -448,7 +443,7 @@ struct LimitClause : Clause
     void accept(ConstASTClauseVisitor &v) const override;
 };
 
-#define DB_AST_CLAUSE_LIST(X) \
+#define M_AST_CLAUSE_LIST(X) \
     X(ErrorClause) \
     X(SelectClause) \
     X(FromClause) \
@@ -457,6 +452,9 @@ struct LimitClause : Clause
     X(HavingClause) \
     X(OrderByClause) \
     X(LimitClause)
+
+M_DECLARE_VISITOR(ASTClauseVisitor, Clause, M_AST_CLAUSE_LIST)
+M_DECLARE_VISITOR(ConstASTClauseVisitor, const Clause, M_AST_CLAUSE_LIST)
 
 
 /*======================================================================================================================
@@ -535,12 +533,15 @@ struct ReferenceConstraint : Constraint
     void accept(ConstASTConstraintVisitor &v) const override;
 };
 
-#define DB_AST_CONSTRAINT_LIST(X) \
+#define M_AST_CONSTRAINT_LIST(X) \
     X(PrimaryKeyConstraint) \
     X(UniqueConstraint) \
     X(NotNullConstraint) \
     X(CheckConditionConstraint) \
     X(ReferenceConstraint)
+
+M_DECLARE_VISITOR(ASTConstraintVisitor, Constraint, M_AST_CONSTRAINT_LIST)
+M_DECLARE_VISITOR(ConstASTConstraintVisitor, const Constraint, M_AST_CONSTRAINT_LIST)
 
 
 /*======================================================================================================================
@@ -746,7 +747,7 @@ struct DSVImportStmt : ImportStmt
     void accept(ConstASTStmtVisitor &v) const override;
 };
 
-#define DB_AST_STMT_LIST(X) \
+#define M_AST_STMT_LIST(X) \
     X(ErrorStmt) \
     X(EmptyStmt) \
     X(CreateDatabaseStmt) \
@@ -758,10 +759,31 @@ struct DSVImportStmt : ImportStmt
     X(DeleteStmt) \
     X(DSVImportStmt)
 
-#define DB_AST_LIST(X) \
-    DB_AST_EXPR_LIST(X) \
-    DB_AST_CLAUSE_LIST(X) \
-    DB_AST_CONSTRAINT_LIST(X) \
-    DB_AST_STMT_LIST(X)
+M_DECLARE_VISITOR(ASTStmtVisitor, Stmt, M_AST_STMT_LIST)
+M_DECLARE_VISITOR(ConstASTStmtVisitor, const Stmt, M_AST_STMT_LIST)
+
+#define M_AST_LIST(X) \
+    M_AST_EXPR_LIST(X) \
+    M_AST_CLAUSE_LIST(X) \
+    M_AST_CONSTRAINT_LIST(X) \
+    M_AST_STMT_LIST(X)
+
+
+struct ASTVisitor : ASTExprVisitor, ASTClauseVisitor, ASTConstraintVisitor, ASTStmtVisitor
+{
+    template<typename T> using Const = ASTExprVisitor::Const<T>; // resolve ambiguous name lookup
+    using ASTExprVisitor::operator();
+    using ASTClauseVisitor::operator();
+    using ASTConstraintVisitor::operator();
+    using ASTStmtVisitor::operator();
+};
+struct ConstASTVisitor : ConstASTExprVisitor, ConstASTClauseVisitor, ConstASTConstraintVisitor, ConstASTStmtVisitor
+{
+    template<typename T> using Const = ConstASTExprVisitor::Const<T>; // resolve ambiguous name lookup
+    using ConstASTExprVisitor::operator();
+    using ConstASTClauseVisitor::operator();
+    using ConstASTConstraintVisitor::operator();
+    using ConstASTStmtVisitor::operator();
+};
 
 }

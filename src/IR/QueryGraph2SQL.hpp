@@ -1,5 +1,5 @@
-#include "mutable/parse/ASTVisitor.hpp"
-#include "mutable/IR/CNF.hpp"
+#include <mutable/IR/CNF.hpp>
+#include <mutable/parse/AST.hpp>
 
 
 namespace m {
@@ -39,7 +39,7 @@ struct QueryGraph2SQL : private ConstASTExprVisitor
 
     using ConstASTExprVisitor::operator();
 #define DECLARE(CLASS) void operator()(Const<CLASS>&) override;
-    DB_AST_EXPR_LIST(DECLARE)
+    M_AST_EXPR_LIST(DECLARE)
 #undef DECLARE
 
     void operator()(const cnf::Predicate&);

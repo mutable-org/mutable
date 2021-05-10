@@ -1,8 +1,8 @@
 #pragma once
 
 #include "catalog/Schema.hpp"
-#include "mutable/parse/ASTVisitor.hpp"
-#include "mutable/util/Diagnostic.hpp"
+#include <mutable/parse/AST.hpp>
+#include <mutable/util/Diagnostic.hpp>
 #include <unordered_map>
 #include <vector>
 
@@ -73,9 +73,9 @@ struct Sema : ASTExprVisitor, ASTClauseVisitor, ASTStmtVisitor
     using ASTClauseVisitor::operator();
     using ASTStmtVisitor::operator();
 #define DECLARE(CLASS) void operator()(Const<CLASS>&) override;
-    DB_AST_EXPR_LIST(DECLARE)
-    DB_AST_CLAUSE_LIST(DECLARE)
-    DB_AST_STMT_LIST(DECLARE)
+    M_AST_EXPR_LIST(DECLARE)
+    M_AST_CLAUSE_LIST(DECLARE)
+    M_AST_STMT_LIST(DECLARE)
 #undef DECLARE
 
     private:

@@ -5,7 +5,6 @@ add_library(
     ASTDot.cpp
     ASTDumper.cpp
     ASTPrinter.cpp
-    ASTVisitor.cpp
     Parser.cpp
     Sema.cpp
 )

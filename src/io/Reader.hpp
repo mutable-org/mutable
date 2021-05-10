@@ -55,6 +55,7 @@ struct DSVReader : Reader, ConstTypeVisitor
     private:
     using ConstTypeVisitor::operator();
     void operator()(Const<ErrorType> &ty) override;
+    void operator()(Const<NoneType> &ty) override;
     void operator()(Const<Boolean> &ty) override;
     void operator()(Const<CharacterSequence> &ty) override;
     void operator()(Const<Date> &ty) override;

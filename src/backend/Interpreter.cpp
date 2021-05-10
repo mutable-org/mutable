@@ -1,14 +1,13 @@
 #include "backend/Interpreter.hpp"
 
 #include "globals.hpp"
-#include "mutable/parse/AST.hpp"
-#include "mutable/parse/ASTVisitor.hpp"
-#include "util/container/RefCountingHashMap.hpp"
 #include "mutable/util/fn.hpp"
+#include "util/container/RefCountingHashMap.hpp"
 #include <algorithm>
 #include <cerrno>
 #include <cstdlib>
 #include <iterator>
+#include <mutable/parse/AST.hpp>
 #include <type_traits>
 
 

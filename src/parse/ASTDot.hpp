@@ -1,7 +1,7 @@
 #pragma once
 
-#include "mutable/parse/ASTVisitor.hpp"
 #include <iostream>
+#include <mutable/parse/AST.hpp>
 
 
 namespace m {
@@ -27,7 +27,7 @@ struct ASTDot : ConstASTVisitor
 
     using ConstASTVisitor::operator();
 #define DECLARE(CLASS) void operator()(Const<CLASS>&) override;
-    DB_AST_LIST(DECLARE)
+    M_AST_LIST(DECLARE)
 #undef DECLARE
 
     private:

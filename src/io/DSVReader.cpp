@@ -313,6 +313,7 @@ void DSVReader::operator()(Const<Numeric> &ty)
 }
 
 void DSVReader::operator()(Const<ErrorType>&) { unreachable("invalid type"); }
+void DSVReader::operator()(Const<NoneType>&) { unreachable("invalid type"); }
 void DSVReader::operator()(Const<FnType>&) { unreachable("invalid type"); }
 
 int64_t DSVReader::read_int()

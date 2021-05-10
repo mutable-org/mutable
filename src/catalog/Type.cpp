@@ -1,4 +1,4 @@
-#include "mutable/catalog/Type.hpp"
+#include <mutable/catalog/Type.hpp>
 
 
 using namespace m;
@@ -129,14 +129,7 @@ const FnType * Type::Get_Function(const Type *return_type, std::vector<const Typ
 #define ACCEPT(TYPE) \
     void TYPE::accept(TypeVisitor &v) { v(*this); } \
     void TYPE::accept(ConstTypeVisitor &v) const { v(*this); }
-ACCEPT(ErrorType);
-ACCEPT(NoneType);
-ACCEPT(Boolean);
-ACCEPT(CharacterSequence);
-ACCEPT(Date);
-ACCEPT(DateTime);
-ACCEPT(Numeric);
-ACCEPT(FnType);
+M_TYPE_LIST(ACCEPT)
 #undef ACCEPT
 
 /*===== Comparison ===================================================================================================*/

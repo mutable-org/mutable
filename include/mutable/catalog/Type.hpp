@@ -1,10 +1,11 @@
 #pragma once
 
-#include "mutable/util/fn.hpp"
-#include "mutable/util/macro.hpp"
-#include "mutable/util/Pool.hpp"
 #include <exception>
 #include <functional>
+#include <mutable/util/fn.hpp>
+#include <mutable/util/macro.hpp>
+#include <mutable/util/Pool.hpp>
+#include <mutable/util/Visitor.hpp>
 #include <vector>
 
 
@@ -21,10 +22,8 @@ struct Numeric;
 struct FnType;
 
 // forward declare the Type visitor
-template<bool C>
-struct TheTypeVisitor;
-using TypeVisitor = TheTypeVisitor<false>;
-using ConstTypeVisitor = TheTypeVisitor<true>;
+struct TypeVisitor;
+struct ConstTypeVisitor;
 
 /** This class represents types in the SQL type system. */
 struct Type
@@ -435,12 +434,16 @@ const Numeric * arithmetic_join(const Numeric *lhs, const Numeric *rhs);
 
 #define M_TYPE_LIST(X) \
     X(ErrorType) \
+    X(NoneType) \
     X(Boolean) \
     X(CharacterSequence) \
     X(Date) \
     X(DateTime) \
     X(Numeric) \
     X(FnType)
+
+M_DECLARE_VISITOR(TypeVisitor, Type, M_TYPE_LIST)
+M_DECLARE_VISITOR(ConstTypeVisitor, const Type, M_TYPE_LIST)
 
 }
 
@@ -498,44 +501,4 @@ inline bool m::is_comparable(const Type *first, const Type *second) {
     if (first->is_date_time() and second->is_date_time()) return true;
     if (first->is_numeric() and second->is_numeric()) return true;
     return false;
-}
-
-namespace m {
-
-/** The `Type` visitor. */
-template<bool C>
-struct TheTypeVisitor
-{
-    static constexpr bool is_constant = C;
-
-    template<typename T>
-    using Const = std::conditional_t<is_constant, const T, T>;
-
-    virtual ~TheTypeVisitor() { }
-
-    void operator()(Const<Type> &ty) { ty.accept(*this); }
-#define VISIT(TYPE) virtual void operator()(Const<TYPE> &ty) = 0;
-    M_TYPE_LIST(VISIT)
-#undef VISIT
-};
-
-/** A C++17 `std::visit`-style visitor for `Type`. */
-template<typename Visitor>
-auto visit(Visitor &&vis, const Type &ty)
-{
-    struct V : ConstTypeVisitor
-    {
-        Visitor &&vis;
-        V(Visitor &&vis) : vis(std::forward<Visitor>(vis)) { }
-
-        using ConstTypeVisitor::operator();
-#define VISIT(TYPE) void operator()(Const<TYPE> &ty) { vis(ty); }
-        M_TYPE_LIST(VISIT)
-#undef VISIT
-    };
-
-    V v(std::forward<Visitor>(vis));
-    v(ty);
-}
-
 }

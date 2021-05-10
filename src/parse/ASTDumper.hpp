@@ -1,6 +1,6 @@
-#include "mutable/parse/ASTVisitor.hpp"
+#include <mutable/parse/AST.hpp>
 
-#include "mutable/util/macro.hpp"
+#include <mutable/util/macro.hpp>
 
 
 namespace m {
@@ -17,7 +17,7 @@ struct ASTDumper : ConstASTVisitor
 
     using ConstASTVisitor::operator();
 #define DECLARE(CLASS) void operator()(Const<CLASS>&) override;
-    DB_AST_LIST(DECLARE)
+    M_AST_LIST(DECLARE)
 #undef DECLARE
 
     private:

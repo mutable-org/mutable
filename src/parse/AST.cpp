@@ -230,6 +230,7 @@ std::ostream & m::operator<<(std::ostream &out, const Stmt &s) {
     return out;
 }
 
+
 /*======================================================================================================================
  * dot()
  *====================================================================================================================*/
@@ -251,6 +252,7 @@ void Stmt::dot(std::ostream &out) const
     ASTDot dot(out);
     dot(*this);
 }
+
 
 /*======================================================================================================================
  * dump()
@@ -311,3 +313,40 @@ bool QueryExpr::is_correlated() const
     }
     return false;
 }
+
+
+/*======================================================================================================================
+ * accept()
+ *====================================================================================================================*/
+
+/*===== Expressions ==================================================================================================*/
+
+#define ACCEPT(CLASS) \
+    void CLASS::accept(ASTExprVisitor &v)            { v(*this); } \
+    void CLASS::accept(ConstASTExprVisitor &v) const { v(*this); }
+M_AST_EXPR_LIST(ACCEPT)
+#undef ACCEPT
+
+/*===== Clauses ======================================================================================================*/
+
+#define ACCEPT(CLASS) \
+    void CLASS::accept(ASTClauseVisitor &v)            { v(*this); } \
+    void CLASS::accept(ConstASTClauseVisitor &v) const { v(*this); }
+M_AST_CLAUSE_LIST(ACCEPT)
+#undef ACCEPT
+
+/*===== Constraints ==================================================================================================*/
+
+#define ACCEPT_CONSTRAINT(CLASS) \
+    void CLASS::accept(ASTConstraintVisitor &v)            { v(*this); } \
+    void CLASS::accept(ConstASTConstraintVisitor &v) const { v(*this); }
+M_AST_CONSTRAINT_LIST(ACCEPT_CONSTRAINT)
+#undef ACCEPT
+
+/*===== Statements ===================================================================================================*/
+
+#define ACCEPT_STMT(CLASS) \
+    void CLASS::accept(ASTStmtVisitor &v)            { v(*this); } \
+    void CLASS::accept(ConstASTStmtVisitor &v) const { v(*this); }
+M_AST_STMT_LIST(ACCEPT_STMT)
+#undef ACCEPT

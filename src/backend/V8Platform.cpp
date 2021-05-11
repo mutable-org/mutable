@@ -3,8 +3,7 @@
 #include "backend/Interpreter.hpp"
 #include "catalog/Schema.hpp"
 #include "globals.hpp"
-#include "storage/ColumnStore.hpp"
-#include "storage/RowStore.hpp"
+#include "storage/Store.hpp"
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -131,7 +130,7 @@ void set_wasm_instance_raw_memory(const v8::FunctionCallbackInfo<v8::Value> &inf
 
 namespace {
 
-struct Store2Wasm : ConstStoreVisitor
+struct Store2Wasm : InternalConstStoreVisitor
 {
     private:
     v8::Isolate *isolate_;
@@ -148,31 +147,7 @@ struct Store2Wasm : ConstStoreVisitor
 
     std::size_t get_next_page() const { return next_page_; }
 
-    using ConstStoreVisitor::operator();
-
-    void operator()(const RowStore &s) override {
-        auto Ctx = isolate_->GetCurrentContext();
-        auto &table = s.table();
-
-        /* Map entire row store to WebAssembly linear memory. */
-        const auto ptr = get_pagesize() * next_page_;
-        const auto bytes = s.num_rows() * s.row_size() / 8;
-        const auto aligned_bytes = Ceil_To_Next_Page(bytes);
-        const auto num_pages = aligned_bytes / get_pagesize();
-        auto &mem = s.memory();
-        if (aligned_bytes) {
-            mem.map(aligned_bytes, 0, wasm_context_.vm, ptr);
-            next_page_ += num_pages + 1; // "install" a guard page after the mapping to fault on oob
-        }
-
-        /* Add table address to env. */
-        DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, table.name), v8::Int32::New(isolate_, ptr));
-
-        /* Add table size (num_rows) to env. */
-        std::ostringstream oss;
-        oss << table.name << "_num_rows";
-        DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, oss.str()), v8::Int32::New(isolate_, table.store().num_rows()));
-    }
+    using InternalConstStoreVisitor::operator();
 
     void operator()(const ColumnStore &s) override {
         std::ostringstream oss;
@@ -206,6 +181,32 @@ struct Store2Wasm : ConstStoreVisitor
 
         /* Add table size (num_rows) to env. */
         oss.str("");
+        oss << table.name << "_num_rows";
+        DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, oss.str()), v8::Int32::New(isolate_, table.store().num_rows()));
+    }
+
+    void operator()(const PaxStore&) override { unreachable("not supported"); }
+
+    void operator()(const RowStore &s) override {
+        auto Ctx = isolate_->GetCurrentContext();
+        auto &table = s.table();
+
+        /* Map entire row store to WebAssembly linear memory. */
+        const auto ptr = get_pagesize() * next_page_;
+        const auto bytes = s.num_rows() * s.row_size() / 8;
+        const auto aligned_bytes = Ceil_To_Next_Page(bytes);
+        const auto num_pages = aligned_bytes / get_pagesize();
+        auto &mem = s.memory();
+        if (aligned_bytes) {
+            mem.map(aligned_bytes, 0, wasm_context_.vm, ptr);
+            next_page_ += num_pages + 1; // "install" a guard page after the mapping to fault on oob
+        }
+
+        /* Add table address to env. */
+        DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, table.name), v8::Int32::New(isolate_, ptr));
+
+        /* Add table size (num_rows) to env. */
+        std::ostringstream oss;
         oss << table.name << "_num_rows";
         DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, oss.str()), v8::Int32::New(isolate_, table.store().num_rows()));
     }

@@ -1,8 +1,8 @@
 #pragma once
 
 #include "catalog/Schema.hpp"
-#include "mutable/storage/Store.hpp"
-#include "mutable/util/memory.hpp"
+#include <mutable/storage/Store.hpp>
+#include <mutable/util/memory.hpp>
 
 
 namespace m {
@@ -53,8 +53,8 @@ struct RowStore : Store
     const rewire::Memory & memory() const { return data_; }
     void memory(rewire::Memory memory) { data_ = std::move(memory); }
 
-    void accept(StoreVisitor &v) override { v(*this); }
-    void accept(ConstStoreVisitor &v) const override { v(*this); }
+    void accept(StoreVisitor &v) override;
+    void accept(ConstStoreVisitor &v) const override;
 
     void dump(std::ostream &out) const override;
     using Store::dump;

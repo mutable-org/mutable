@@ -1,8 +1,8 @@
 #pragma once
 
 #include "catalog/Schema.hpp"
-#include "mutable/storage/Store.hpp"
-#include "mutable/util/memory.hpp"
+#include <mutable/storage/Store.hpp>
+#include <mutable/util/memory.hpp>
 
 
 namespace m {
@@ -48,8 +48,8 @@ struct ColumnStore : Store
         return columns_[attr_id]; // XXX What if attributes were erased and added again to a table?
     }
 
-    void accept(StoreVisitor &v) override { v(*this); }
-    void accept(ConstStoreVisitor &v) const override { v(*this); }
+    void accept(StoreVisitor &v) override;
+    void accept(ConstStoreVisitor &v) const override;
 
     void dump(std::ostream &out) const override;
     using Store::dump;

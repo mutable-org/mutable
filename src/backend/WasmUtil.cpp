@@ -2792,6 +2792,70 @@ void WasmPipelineCG::operator()(const SortingOperator &op)
  * WasmStoreCG
  *====================================================================================================================*/
 
+void WasmStoreCG::operator()(const ColumnStore &store)
+{
+    std::ostringstream oss;
+    auto &table = store.table();
+
+    /* Import null bitmap column address. */
+    // TODO
+
+    /*----- Generate code to access null bitmap and value of all required attributes. --------------------------------*/
+    std::vector<WasmVariable> col_addrs;
+    for (auto &e : op.schema()) {
+        auto &attr = table[e.id.name];
+
+        oss.str("");
+        oss << table.name << '.' << attr.name;
+        auto name = oss.str();
+
+        /*----- Import column address. -------------------------------------------------------------------------------*/
+        auto &col_addr = col_addrs.emplace_back(pipeline.module().main(), BinaryenTypeInt32());
+        pipeline.module().import(name, BinaryenTypeInt32());
+        pipeline.module().main().block() += col_addr.set(pipeline.module().get_imported(name, BinaryenTypeInt32()));
+
+        if (attr.type->size() < 8) {
+            unreachable("not implemented");
+        } else if (attr.type->is_character_sequence()) {
+            pipeline.context().add(e.id, col_addr);
+        } else {
+            WasmTemporary value = BinaryenLoad(
+                /* module=  */ pipeline.module(),
+                /* bytes=   */ attr.type->size() / 8,
+                /* signed=  */ true,
+                /* offset=  */ 0,
+                /* align=   */ 0,
+                /* type=    */ get_binaryen_type(attr.type),
+                /* ptr=     */ col_addr
+            );
+            pipeline.context().add(e.id, std::move(value));
+        }
+    }
+
+    /*----- Generate code for rest of the pipeline. ------------------------------------------------------------------*/
+    pipeline(*op.parent());
+
+    /*----- Emit code to advance each column address to next row. ----------------------------------------------------*/
+    auto col_addr_it = col_addrs.cbegin();
+    for (auto &e : op.schema()) {
+        auto &attr = table[e.id.name];
+        auto &col_addr = *col_addr_it++;
+        const auto attr_size = std::max<std::size_t>(1, attr.type->size() / 8);
+
+        pipeline.block_ += col_addr.set(BinaryenBinary(
+            /* module= */ pipeline.module(),
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ col_addr,
+            /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(attr_size))
+        ));
+    }
+}
+
+void WasmStoreCG::operator()(const PaxStore&)
+{
+    unreachable("not supported");
+}
+
 void WasmStoreCG::operator()(const RowStore &store)
 {
     std::ostringstream oss;
@@ -2900,65 +2964,6 @@ void WasmStoreCG::operator()(const RowStore &store)
         /* left=   */ row_addr,
         /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(store.row_size() / 8))
     ));
-}
-
-void WasmStoreCG::operator()(const ColumnStore &store)
-{
-    std::ostringstream oss;
-    auto &table = store.table();
-
-    /* Import null bitmap column address. */
-    // TODO
-
-    /*----- Generate code to access null bitmap and value of all required attributes. --------------------------------*/
-    std::vector<WasmVariable> col_addrs;
-    for (auto &e : op.schema()) {
-        auto &attr = table[e.id.name];
-
-        oss.str("");
-        oss << table.name << '.' << attr.name;
-        auto name = oss.str();
-
-        /*----- Import column address. -------------------------------------------------------------------------------*/
-        auto &col_addr = col_addrs.emplace_back(pipeline.module().main(), BinaryenTypeInt32());
-        pipeline.module().import(name, BinaryenTypeInt32());
-        pipeline.module().main().block() += col_addr.set(pipeline.module().get_imported(name, BinaryenTypeInt32()));
-
-        if (attr.type->size() < 8) {
-            unreachable("not implemented");
-        } else if (attr.type->is_character_sequence()) {
-            pipeline.context().add(e.id, col_addr);
-        } else {
-            WasmTemporary value = BinaryenLoad(
-                /* module=  */ pipeline.module(),
-                /* bytes=   */ attr.type->size() / 8,
-                /* signed=  */ true,
-                /* offset=  */ 0,
-                /* align=   */ 0,
-                /* type=    */ get_binaryen_type(attr.type),
-                /* ptr=     */ col_addr
-            );
-            pipeline.context().add(e.id, std::move(value));
-        }
-    }
-
-    /*----- Generate code for rest of the pipeline. ------------------------------------------------------------------*/
-    pipeline(*op.parent());
-
-    /*----- Emit code to advance each column address to next row. ----------------------------------------------------*/
-    auto col_addr_it = col_addrs.cbegin();
-    for (auto &e : op.schema()) {
-        auto &attr = table[e.id.name];
-        auto &col_addr = *col_addr_it++;
-        const auto attr_size = std::max<std::size_t>(1, attr.type->size() / 8);
-
-        pipeline.block_ += col_addr.set(BinaryenBinary(
-            /* module= */ pipeline.module(),
-            /* op=     */ BinaryenAddInt32(),
-            /* left=   */ col_addr,
-            /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(attr_size))
-        ));
-    }
 }
 
 

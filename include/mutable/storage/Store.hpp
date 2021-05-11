@@ -1,16 +1,18 @@
 #pragma once
 
-#include "mutable/catalog/Type.hpp"
-#include "mutable/storage/Linearization.hpp"
-#include "mutable/util/macro.hpp"
-#include <algorithm>
+#include <iostream>
+#include <memory>
+#include <mutable/catalog/Type.hpp>
+#include <mutable/storage/Linearization.hpp>
+#include <mutable/util/macro.hpp>
+#include <mutable/util/Visitor.hpp>
 #include <string>
-#include <type_traits>
 #include <unordered_map>
 
 
 namespace m {
 
+/*----- forward declarations -----------------------------------------------------------------------------------------*/
 struct Attribute;
 struct Schema;
 struct StackMachine;
@@ -18,10 +20,8 @@ struct Table;
 struct RowStore;
 struct ColumnStore;
 
-template<bool C>
-struct TheStoreVisitor;
-using StoreVisitor = TheStoreVisitor<false>;
-using ConstStoreVisitor = TheStoreVisitor<true>;
+struct StoreVisitor;
+struct ConstStoreVisitor;
 
 /** Defines a generic store interface. */
 struct Store
@@ -91,19 +91,13 @@ struct Store
     void dump() const;
 };
 
-template<bool C>
-struct TheStoreVisitor
+struct StoreVisitor : Visitor<StoreVisitor, Store>
 {
-    static constexpr bool is_constant = C;
-
-    template<typename T>
-    using Const = std::conditional_t<is_constant, const T, T>;
-
-    virtual ~TheStoreVisitor() { }
-
-    void operator()(Const<Store> &s) { s.accept(*this); }
-    virtual void operator()(Const<RowStore> &s) = 0;
-    virtual void operator()(Const<ColumnStore> &s) = 0;
+    virtual ~StoreVisitor() { }
+};
+struct ConstStoreVisitor : Visitor<ConstStoreVisitor, const Store>
+{
+    virtual ~ConstStoreVisitor() { }
 };
 
 }

@@ -1,4 +1,4 @@
-#include "mutable/storage/Store.hpp"
+#include "storage/Store.hpp"
 
 #include <cmath>
 
@@ -25,3 +25,14 @@ std::unique_ptr<Store> Store::Create(Store::kind_t kind, const Table &table) {
 }
 
 void Store::dump() const { dump(std::cerr); }
+
+
+/*======================================================================================================================
+ * accept()
+ *====================================================================================================================*/
+
+#define ACCEPT(CLASS) \
+    void CLASS::accept(StoreVisitor &v) { v(*this); } \
+    void CLASS::accept(ConstStoreVisitor &v) const { v(*this); }
+M_STORE_LIST(ACCEPT)
+#undef ACCEPT

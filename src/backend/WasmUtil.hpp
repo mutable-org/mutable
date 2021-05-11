@@ -3,6 +3,7 @@
 #include "backend/RuntimeStruct.hpp"
 #include "backend/WebAssembly.hpp"
 #include "catalog/Schema.hpp"
+#include "storage/Store.hpp"
 #include <binaryen-c.h>
 #include <cstring>
 #include <iostream>
@@ -947,7 +948,7 @@ struct WasmPipelineCG : ConstOperatorVisitor
 #undef DECLARE
 };
 
-struct WasmStoreCG : ConstStoreVisitor
+struct WasmStoreCG : InternalConstStoreVisitor
 {
     WasmPipelineCG &pipeline;
     const Producer &op;
@@ -959,9 +960,10 @@ struct WasmStoreCG : ConstStoreVisitor
 
     ~WasmStoreCG() { }
 
-    using ConstStoreVisitor::operator();
-    void operator()(const RowStore &store) override;
+    using InternalConstStoreVisitor::operator();
     void operator()(const ColumnStore &store) override;
+    void operator()(const PaxStore &store) override;
+    void operator()(const RowStore &store) override;
 };
 
 

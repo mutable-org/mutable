@@ -54,8 +54,8 @@ struct PaxStore : Store
     /** Returns the memory of the store. */
     const rewire::Memory & memory() const { return data_; }
 
-    void accept(StoreVisitor &v) override { v(*this); }
-    void accept(ConstStoreVisitor &v) const override { v(*this); }
+    void accept(StoreVisitor &v) override;
+    void accept(ConstStoreVisitor &v) const override;
 
     void dump(std::ostream &out) const override;
     using Store::dump;

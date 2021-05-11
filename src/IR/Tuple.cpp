@@ -60,7 +60,7 @@ void Value::print(std::ostream &out, const Type &ty) const
                     break;
             }
         },
-        [](auto&) { unreachable("invalid value type"); }
+        [](auto&&) { unreachable("invalid value type"); }
     }, ty);
 }
 

@@ -11,6 +11,8 @@ set(WITH_V8 FALSE CACHE BOOL "Enable the V8 platform.")
 set(WITH_SPIDERMONKEY FALSE CACHE BOOL "Enable the SpiderMonkey platform.")
 
 # Threads
+set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 find_package(Threads REQUIRED)
 
 # Boost
@@ -145,6 +147,15 @@ FetchContent_Populate(
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/json"
 )
 include_directories(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/third-party/json/include")
+
+# Eigen - template library for linear algebra: matrices, vectors, numerical solvers, and related algorithms
+FetchContent_Populate(
+    Eigen
+    GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+    GIT_TAG "3.3.9"
+    SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/eigen"
+)
+include_directories(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/third-party/eigen")
 
 # V8 - Google's JavaScript and WebAssembly Engine (used in Chrome, Node.js)
 if(${WITH_V8})

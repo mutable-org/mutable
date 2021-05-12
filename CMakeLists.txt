@@ -151,7 +151,7 @@ include_directories(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/third-party/json/include
 # Eigen - template library for linear algebra: matrices, vectors, numerical solvers, and related algorithms
 FetchContent_Populate(
     Eigen
-    GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+    GIT_REPOSITORY "https://gitlab.com/libeigen/eigen.git"
     GIT_TAG "3.3.9"
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/eigen"
 )

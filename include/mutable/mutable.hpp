@@ -43,7 +43,7 @@ namespace m {
  */
 bool init(void);
 
-/** Use lexer, parser and semantic analysis to create a `Stmt` for the given `std::string`. */
+/** Use lexer, parser, and semantic analysis to create a `Stmt` from `str`. */
 std::unique_ptr<Stmt> statement_from_string(Diagnostic &diag, const std::string &str);
 
 /** Optimizes and executes the given `Stmt`. */

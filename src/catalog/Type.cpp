@@ -140,35 +140,35 @@ bool NoneType::operator==(const Type &other) const { return is<const NoneType>(&
 
 bool Boolean::operator==(const Type &other) const
 {
-    if (auto o = dynamic_cast<const Boolean*>(&other))
+    if (auto o = cast<const Boolean>(&other))
         return this->category == o->category;
     return false;
 }
 
 bool CharacterSequence::operator==(const Type &other) const
 {
-    if (auto o = dynamic_cast<const CharacterSequence*>(&other))
+    if (auto o = cast<const CharacterSequence>(&other))
         return this->category == o->category and this->is_varying == o->is_varying and this->length == o->length;
     return false;
 }
 
 bool Date::operator==(const Type &other) const
 {
-    if (auto o = dynamic_cast<const Date*>(&other))
+    if (auto o = cast<const Date>(&other))
         return this->category == o->category;
     return false;
 }
 
 bool DateTime::operator==(const Type &other) const
 {
-    if (auto o = dynamic_cast<const DateTime*>(&other))
+    if (auto o = cast<const DateTime>(&other))
         return this->category == o->category;
     return false;
 }
 
 bool Numeric::operator==(const Type &other) const
 {
-    if (auto o = dynamic_cast<const Numeric*>(&other)) {
+    if (auto o = cast<const Numeric>(&other)) {
         return this->category == o->category and
                this->kind == o->kind and
                this->precision == o->precision and
@@ -179,7 +179,7 @@ bool Numeric::operator==(const Type &other) const
 
 bool FnType::operator==(const Type &other) const
 {
-    if (auto o = dynamic_cast<const FnType*>(&other)) {
+    if (auto o = cast<const FnType>(&other)) {
         if (this->return_type != o->return_type) return false; // return types must match
         if (this->parameter_types.size() != o->parameter_types.size()) return false; // parameter count must match
         for (std::size_t i = 0, end = parameter_types.size(); i != end; ++i)

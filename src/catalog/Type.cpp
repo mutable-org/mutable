@@ -208,7 +208,7 @@ uint64_t DateTime::hash() const { return 0b1000UL | uint64_t(category); }
 
 uint64_t Numeric::hash() const
 {
-    return ((uint64_t(precision) << 32) ^ (uint64_t(scale) << 3) ^ (uint64_t(kind) << 1) << uint64_t(category));
+    return ((uint64_t(precision) << 32) ^ (uint64_t(scale) << 3) ^ (uint64_t(kind) << 1)) | uint64_t(category);
 }
 
 uint64_t FnType::hash() const

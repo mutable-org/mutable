@@ -888,8 +888,9 @@ void Sema::operator()(Const<SelectClause> &c)
                 if (auto ptr = std::get_if<const Table*>(&src.second)) {
                     auto &tbl = **ptr;
                     for (auto &attr : tbl) {
-                        auto d = make_designator(c.select_all.pos, tbl.name, attr.name, &attr, attr.type);
+                        auto d = make_designator(c.select_all.pos, src.first, attr.name, &attr, attr.type);
                         c.expansion.push_back(d);
+                        (*this)(*d);
                         Ctx.results.emplace(attr.name, d);
                     }
                 } else {
@@ -898,6 +899,7 @@ void Sema::operator()(Const<SelectClause> &c)
                         auto d = make_designator(c.select_all.pos, src.first, named_expr.first, named_expr.second,
                                                  named_expr.second->type());
                         c.expansion.push_back(d);
+                        (*this)(*d);
                         Ctx.results.emplace(named_expr.first, d);
                     }
                 }

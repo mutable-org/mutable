@@ -1022,7 +1022,7 @@ TEST_CASE("Sema/Expressions/Designator", "[core][parse][sema]")
             Sema sema(diag);
             sema(*stmt);
 
-            REQUIRE(diag.num_errors() == 1);
+            REQUIRE(diag.num_errors() == 3);
             REQUIRE(not err.str().empty());
             delete stmt;
         }
@@ -1040,7 +1040,7 @@ TEST_CASE("Sema/Expressions/Designator", "[core][parse][sema]")
             Sema sema(diag);
             sema(*stmt);
 
-            REQUIRE(diag.num_errors() == 1);
+            REQUIRE(diag.num_errors() == 3);
             REQUIRE(not err.str().empty());
             delete stmt;
         }

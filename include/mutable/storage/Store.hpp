@@ -17,8 +17,6 @@ struct Attribute;
 struct Schema;
 struct StackMachine;
 struct Table;
-struct RowStore;
-struct ColumnStore;
 
 struct StoreVisitor;
 struct ConstStoreVisitor;
@@ -89,15 +87,6 @@ struct Store
 
     virtual void dump(std::ostream &out) const = 0;
     void dump() const;
-};
-
-struct StoreVisitor : Visitor<StoreVisitor, Store>
-{
-    virtual ~StoreVisitor() { }
-};
-struct ConstStoreVisitor : Visitor<ConstStoreVisitor, const Store>
-{
-    virtual ~ConstStoreVisitor() { }
 };
 
 }

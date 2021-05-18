@@ -130,7 +130,7 @@ void set_wasm_instance_raw_memory(const v8::FunctionCallbackInfo<v8::Value> &inf
 
 namespace {
 
-struct Store2Wasm : InternalConstStoreVisitor
+struct Store2Wasm : ConstStoreVisitor
 {
     private:
     v8::Isolate *isolate_;
@@ -147,7 +147,7 @@ struct Store2Wasm : InternalConstStoreVisitor
 
     std::size_t get_next_page() const { return next_page_; }
 
-    using InternalConstStoreVisitor::operator();
+    using ConstStoreVisitor::operator();
 
     void operator()(const ColumnStore &s) override {
         std::ostringstream oss;

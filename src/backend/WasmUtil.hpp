@@ -948,7 +948,7 @@ struct WasmPipelineCG : ConstOperatorVisitor
 #undef DECLARE
 };
 
-struct WasmStoreCG : InternalConstStoreVisitor
+struct WasmStoreCG : ConstStoreVisitor
 {
     WasmPipelineCG &pipeline;
     const Producer &op;
@@ -960,7 +960,7 @@ struct WasmStoreCG : InternalConstStoreVisitor
 
     ~WasmStoreCG() { }
 
-    using InternalConstStoreVisitor::operator();
+    using ConstStoreVisitor::operator();
     void operator()(const ColumnStore &store) override;
     void operator()(const PaxStore &store) override;
     void operator()(const RowStore &store) override;

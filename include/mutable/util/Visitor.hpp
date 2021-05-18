@@ -27,7 +27,7 @@ struct Visitor
     using Const = std::conditional_t<is_const, const T, T>;
 
     /** Visit the object `obj`. */
-    void operator()(base_type &obj) { obj.accept(*static_cast<V*>(this)); }
+    void operator()(base_type &obj) { static_cast<V*>(this)->operator()(obj); }
 };
 
 /*----- Generate a function similar to `std::visit` to easily implement a visitor for the given base class. ----------*/
@@ -55,18 +55,15 @@ struct Visitor
 
 /*----- Declare a visitor to visit the class hierarchy with the given base class and list of subclasses. -------------*/
 #define M_DECLARE_VISIT_METHOD(CLASS) virtual void operator()(Const<CLASS>&) = 0;
-#define M_DECLARE_VISITOR_WITH_BASE(VISITOR_BASE, NAME, BASE_CLASS, CLASS_LIST) \
-    struct NAME : UNPACK VISITOR_BASE \
+#define M_DECLARE_VISITOR(NAME, BASE_CLASS, CLASS_LIST) \
+    struct NAME : Visitor<NAME, BASE_CLASS> \
     { \
-        using super = UNPACK VISITOR_BASE; \
+        using super = Visitor<NAME, BASE_CLASS>; \
         template<typename T> using Const = typename super::Const<T>; \
         virtual ~NAME() {} \
-        using super::operator(); \
+        void operator()(BASE_CLASS &obj) { obj.accept(*this); } \
         CLASS_LIST(M_DECLARE_VISIT_METHOD) \
     }; \
     M_MAKE_STL_VISITABLE(NAME, BASE_CLASS, CLASS_LIST)
-#define M_DECLARE_VISITOR(NAME, BASE_CLASS, CLASS_LIST) \
-    M_DECLARE_VISITOR_WITH_BASE((Visitor<NAME, BASE_CLASS>), NAME, BASE_CLASS, CLASS_LIST)
-
 
 }

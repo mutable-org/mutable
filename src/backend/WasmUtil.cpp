@@ -357,6 +357,7 @@ void WasmEnvironment::dump(std::ostream &out) const
     }
     out << " }" << std::endl;
 }
+void WasmEnvironment::dump() const { dump(std::cerr); }
 
 void WasmEnvironment::operator()(const Designator &e)
 {

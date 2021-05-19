@@ -1,6 +1,8 @@
 #pragma once
 
 
+namespace m {
+
 template<typename T>
 struct some
 {
@@ -12,3 +14,5 @@ struct some
 
 template<>
 struct some<void> { };
+
+}

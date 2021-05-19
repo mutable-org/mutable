@@ -48,30 +48,23 @@ struct WasmHashTable;
 /** Returns the `BinaryenType` that corresponds to mu*t*able's `Type` `ty`. */
 inline BinaryenType get_binaryen_type(const Type *ty)
 {
-    insist(not ty->is_error());
+    return visit(overloaded {
+        [](const Boolean&) { return BinaryenTypeInt32(); },
+        [](const Numeric &n) {
+            switch (n.kind) {
+                case Numeric::N_Int:
+                case Numeric::N_Decimal:
+                    return n.size() <= 32 ? BinaryenTypeInt32() : BinaryenTypeInt64();
 
-    if (ty->is_boolean()) return BinaryenTypeInt32();
-
-    if (auto n = cast<const Numeric>(ty)) {
-        if (n->kind == Numeric::N_Float) {
-            if (n->size() == 32) return BinaryenTypeFloat32();
-            else                 return BinaryenTypeFloat64();
-        }
-
-        switch (n->size()) {
-            case 8:  /* not supported, fall through */
-            case 16: /* not supported, fall through */
-            case 32: return BinaryenTypeInt32();
-            case 64: return BinaryenTypeInt64();
-        }
-    }
-
-    if (ty->is_character_sequence()) return BinaryenTypeInt32();
-
-    if (ty->is_date()) return BinaryenTypeInt32();
-    if (ty->is_date_time()) return BinaryenTypeInt64();
-
-    unreachable("unsupported type");
+                case Numeric::N_Float:
+                    return n.size() <= 32 ? BinaryenTypeFloat32() : BinaryenTypeFloat64();
+            }
+        },
+        [](const CharacterSequence&) { return BinaryenTypeInt32(); },
+        [](const Date&) { return BinaryenTypeInt32(); },
+        [](const DateTime&) { return BinaryenTypeInt64(); },
+        [](auto&&) -> BinaryenType { unreachable("unsupported type"); }
+    }, *ty);
 }
 
 /** Manages the lifetime of a `BinaryenExpressionRef`.  Ensures that the `BinaryenExpressionRef` has at most one user.

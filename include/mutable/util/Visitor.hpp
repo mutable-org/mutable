@@ -30,6 +30,8 @@ struct Visitor
     void operator()(base_type &obj) { static_cast<V*>(this)->operator()(obj); }
 };
 
+}
+
 /*----- Generate a function similar to `std::visit` to easily implement a visitor for the given base class. ----------*/
 #define M_GET_INVOKE_RESULT(CLASS) std::invoke_result_t<Vis, Const<CLASS>&>,
 #define M_MAKE_STL_VISIT_METHOD(CLASS) void operator()(Const<CLASS> &obj) { \
@@ -38,10 +40,10 @@ struct Visitor
 }
 #define M_MAKE_STL_VISITABLE(VISITOR, BASE_CLASS, CLASS_LIST) \
     template<typename Vis> \
-    auto visit(Vis &&vis, BASE_CLASS &obj, tag<VISITOR>&& = tag<VISITOR>()) { \
+    auto visit(Vis &&vis, BASE_CLASS &obj, m::tag<VISITOR>&& = m::tag<VISITOR>()) { \
         struct V : VISITOR { \
             using result_type = std::common_type_t< CLASS_LIST(M_GET_INVOKE_RESULT) std::invoke_result_t<Vis, Const<EVAL(DEFER1(FIRST)(CLASS_LIST(COMMA)))>&> >; \
-            std::optional<some<result_type>> result; \
+            std::optional<m::some<result_type>> result; \
             Vis &&vis; \
             V(Vis &&vis) : vis(std::forward<Vis>(vis)) { } \
             using VISITOR::operator(); \
@@ -56,14 +58,12 @@ struct Visitor
 /*----- Declare a visitor to visit the class hierarchy with the given base class and list of subclasses. -------------*/
 #define M_DECLARE_VISIT_METHOD(CLASS) virtual void operator()(Const<CLASS>&) = 0;
 #define M_DECLARE_VISITOR(NAME, BASE_CLASS, CLASS_LIST) \
-    struct NAME : Visitor<NAME, BASE_CLASS> \
+    struct NAME : m::Visitor<NAME, BASE_CLASS> \
     { \
-        using super = Visitor<NAME, BASE_CLASS>; \
+        using super = m::Visitor<NAME, BASE_CLASS>; \
         template<typename T> using Const = typename super::Const<T>; \
         virtual ~NAME() {} \
         void operator()(BASE_CLASS &obj) { obj.accept(*this); } \
         CLASS_LIST(M_DECLARE_VISIT_METHOD) \
     }; \
     M_MAKE_STL_VISITABLE(NAME, BASE_CLASS, CLASS_LIST)
-
-}

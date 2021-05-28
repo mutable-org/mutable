@@ -112,6 +112,16 @@ struct Schema
     /** Adds a new entry `id` of type `type` to this `Schema`. */
     void add(Identifier id, const Type *type) { entries_.emplace_back(id, type); }
 
+    /** Returns a deduplicated version of `this` `Schema`, i.e. duplicate entries are only contained once.  */
+    Schema deduplicate() const {
+        Schema res;
+        for (auto &e : *this) {
+            if (not res.has(e.id))
+                res.add(e.id, e.type);
+        }
+        return res;
+    }
+
     /** Adds all entries of `other` to `this` `Schema`. */
     Schema & operator+=(const Schema &other) {
         for (auto &e : other)

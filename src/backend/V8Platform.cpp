@@ -571,7 +571,9 @@ void V8Platform::execute(const Operator &plan)
     const uint32_t num_tuples = mem.as<uint32_t*>()[(head_of_heap - wasm_context.heap) / sizeof(uint32_t)];
 
     /* Create physical schema used as data layout. */
-    RuntimeStruct layout(plan.schema()); // TODO: add bitmap-type for null bitmap
+    auto schema = plan.schema();
+    auto deduplicated_schema = schema.deduplicate();
+    RuntimeStruct layout(deduplicated_schema); // TODO: add bitmap-type for null bitmap
     const std::size_t num_bytes_result_set = layout.size_in_bytes() * num_tuples;
     const std::size_t remainder = num_bytes_result_set % 4;
     const std::size_t gap = remainder ? sizeof(uint32_t) - remainder : 0UL;
@@ -579,7 +581,7 @@ void V8Platform::execute(const Operator &plan)
 
     Table RS("$RS");
     std::size_t i = 0;
-    for (auto &e : plan.schema())
+    for (auto &e : deduplicated_schema)
         RS.push_back(C.pool(std::to_string(i++).c_str()), as<const PrimitiveType>(e.type)->as_vectorial());
     auto lin = Linearization::CreateInfinite(1);
     auto child = std::make_unique<Linearization>(Linearization::CreateFinite(RS.size(), 1));
@@ -591,29 +593,60 @@ void V8Platform::execute(const Operator &plan)
 
     /* Extract results. */
     if (auto callback_op = cast<const CallbackOperator>(&plan)) {
-        Tuple tup(S);
-        Tuple *args[] = { &tup };
         auto loader = Interpreter::compile_load(S, lin);
-        for (std::size_t i = 0; i != num_tuples; ++i) {
-            loader(args);
-            callback_op->callback()(S, tup);
-            tup.clear();
+        if (S.num_entries() == schema.num_entries()) {
+            /* No deduplication was performed. */
+            Tuple tup(S);
+            Tuple *args[] = { &tup };
+            for (std::size_t i = 0; i != num_tuples; ++i) {
+                loader(args);
+                callback_op->callback()(S, tup);
+                tup.clear();
+            }
+        } else {
+            /* Deduplication was performed. Compute a `Tuple` with duplicates. */
+            Tuple tup_dedupl(S);
+            Tuple tup_dupl(schema);
+            Tuple *args[] = { &tup_dedupl, &tup_dupl };
+            for (std::size_t i = 0; i != S.num_entries(); ++i) {
+                auto &entry = deduplicated_schema[i];
+                loader.emit_Ld_Tup(0, i);
+                for (std::size_t j = 0; j != schema.num_entries(); ++j) {
+                    auto &e = schema[j];
+                    if (e.id == entry.id) {
+                        insist(e.type == entry.type);
+                        loader.emit_St_Tup(1, j, e.type);
+                    }
+                }
+                loader.emit_Pop();
+            }
+            for (std::size_t i = 0; i != num_tuples; ++i) {
+                loader(args);
+                callback_op->callback()(schema, tup_dupl);
+            }
         }
     } else if (auto print_op = cast<const PrintOperator>(&plan)) {
         Tuple tup(S);
         Tuple *args[] = { &tup };
         auto printer = Interpreter::compile_load(S, lin);
         auto ostream_index = printer.add(&print_op->out);
-        for (std::size_t i = 0; i != S.num_entries(); ++i) {
+        std::size_t old_idx = -1UL;
+        for (std::size_t i = 0; i != schema.num_entries(); ++i) {
             if (i != 0)
                 printer.emit_Putc(ostream_index, ',');
-            printer.emit_Ld_Tup(0, i);
-            printer.emit_Print(ostream_index, S[i].type);
+            auto &e = schema[i];
+            auto idx = deduplicated_schema[e.id].first;
+            if (idx != old_idx) {
+                printer.emit_Pop();
+                printer.emit_Ld_Tup(0, idx);
+                old_idx = idx;
+            }
+            printer.emit_Print(ostream_index, e.type);
         }
+        printer.emit_Pop(); // to remove last loaded value
         for (std::size_t i = 0; i != num_tuples; ++i) {
             printer(args);
             print_op->out << '\n';
-            tup.clear();
         }
         if (not Options::Get().quiet)
             print_op->out << num_tuples << " rows\n";

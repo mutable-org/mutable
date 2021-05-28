@@ -1610,10 +1610,11 @@ void WasmPlanCG::operator()(const SortingOperator &op)
 
 void WasmPipelineCG::emit_write_results(const Schema &schema)
 {
-    const WasmStruct layout(schema); // create Wasm struct used as data layout
+    auto deduplicated_schema = schema.deduplicate();
+    const WasmStruct layout(deduplicated_schema); // create Wasm struct used as data layout
     const WasmVariable &out = module().head_of_heap();
     std::size_t idx = 0;
-    for (auto &attr : schema)
+    for (auto &attr : deduplicated_schema)
         layout.store(module().main(), block_, out, idx++, context()[attr.id]);
 
     WasmTemporary upd_out = BinaryenBinary(

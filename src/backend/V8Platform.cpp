@@ -578,12 +578,9 @@ void V8Platform::execute(const Operator &plan)
     const uint8_t *result_set = mem.as<uint8_t*>() + head_of_heap - wasm_context.heap - gap - num_bytes_result_set;
 
     Table RS("$RS");
-    std::ostringstream oss;
-    for (auto &e : plan.schema()) {
-        oss.str("");
-        oss << e.id;
-        RS.push_back(C.pool(oss.str().c_str()), as<const PrimitiveType>(e.type)->as_vectorial());
-    }
+    std::size_t i = 0;
+    for (auto &e : plan.schema())
+        RS.push_back(C.pool(std::to_string(i++).c_str()), as<const PrimitiveType>(e.type)->as_vectorial());
     auto lin = Linearization::CreateInfinite(1);
     auto child = std::make_unique<Linearization>(Linearization::CreateFinite(RS.size(), 1));
     for (auto &attr : RS)

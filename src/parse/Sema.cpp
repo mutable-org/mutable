@@ -907,12 +907,13 @@ void Sema::operator()(Const<SelectClause> &c)
         }
     }
 
-    for (auto &s : c.select) {
-        auto it = std::find_if(Ctx.group_keys.begin(), Ctx.group_keys.end(),
-                               [=](const Expr *expr) { return *expr == *s.first; });
-        if (it != Ctx.group_keys.end()) { // check if `s.first` is a grouping key
+    for (auto it = c.select.begin(); it != c.select.end(); ++it) {
+        auto &s = *it;
+        auto it_group_keys = std::find_if(Ctx.group_keys.begin(), Ctx.group_keys.end(),
+                                          [=](const Expr *expr) { return *expr == *s.first; });
+        if (it_group_keys != Ctx.group_keys.end()) { // check if `s.first` is a grouping key
             /* Replace expression by a designator pointing to the grouping key. */
-            auto d = make_designator(s.first, *it);
+            auto d = make_designator(s.first, *it_group_keys);
             d->type_ = as<const PrimitiveType>(d->type())->as_scalar();
             delete s.first;
             s.first = d;
@@ -934,6 +935,14 @@ void Sema::operator()(Const<SelectClause> &c)
         if (s.second) {
             /* Expression with alias. */
             Ctx.results.emplace(s.second.text, s.first);
+            auto pred = [&s](const std::pair<Expr*, Token> &sel) { return sel.second.text == s.second.text; };
+            if (auto num = std::count_if(c.select.begin(), it, pred)) {
+                /* Found ambiguous alias which is only allowed without accessing it. This is checked via the `Ctx`
+                 * in which the ambiguous alias is contained. However, make alias unique for later accessing steps. */
+                std::ostringstream oss;
+                oss << s.second.text << "$" << num;
+                s.second.text = C.pool(oss.str().c_str());
+            }
         } else if (auto d = cast<const Designator>(s.first)) {
             /* Expression is a designator.  Simply reuse the name without table prefix. */
             Ctx.results.emplace(d->attr_name.text, s.first);

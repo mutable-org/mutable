@@ -89,15 +89,22 @@ void Sema::operator()(Const<Designator> &e)
         /* No table name was specified.  The designator references either a result or a named expression.  Search the
          * named expressions first, because they overrule attribute names. */
         if (auto [begin, end] = current_ctx->results.equal_range(e.attr_name.text);
-            current_ctx->stage > SemaContext::S_Select and std::distance(begin, end) == 1)
+            current_ctx->stage > SemaContext::S_Select and std::distance(begin, end) >= 1)
         {
             /* Found a named expression. */
-            e.target_ = begin->second;
-            if (auto d = cast<Designator>(begin->second); d and d->attr_name.text == e.attr_name.text)
-                e.table_name.text = d->table_name.text;
-            e.is_correlated_ = false;
-            is_result = true;
-            found_ctx = contexts_.rbegin(); // iterator to the current context
+            if (std::distance(begin, end) > 1) {
+                diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text << " is ambiguous.\n";
+                e.type_ = Type::Get_Error();
+                return;
+            } else {
+                insist(std::distance(begin, end) == 1);
+                e.target_ = begin->second;
+                if (auto d = cast<Designator>(begin->second); d and d->attr_name.text == e.attr_name.text)
+                    e.table_name.text = d->table_name.text;
+                e.is_correlated_ = false;
+                is_result = true;
+                found_ctx = contexts_.rbegin(); // iterator to the current context
+            }
         } else {
             /* Since no table was explicitly specified, we must search *all* sources for the attribute. */
             Designator::target_type target;

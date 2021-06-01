@@ -838,6 +838,51 @@ TEST_CASE("Sema/Expressions/Designator", "[core][parse][sema]")
             delete stmt;
         }
 
+        SECTION("Ambiguous attribute in ORDER BY due to repeatedly selecting")
+        {
+            LEXER("SELECT v, v FROM mytable1 ORDER BY v;");
+            Parser parser(lexer);
+            SelectStmt *stmt = as<SelectStmt>(parser.parse());
+            REQUIRE(diag.num_errors() == 0);
+            REQUIRE(err.str().empty());
+            Sema sema(diag);
+            sema(*stmt);
+
+            REQUIRE(diag.num_errors() == 1);
+            REQUIRE(not err.str().empty());
+            delete stmt;
+        }
+
+        SECTION("Ambiguous attribute in ORDER BY due to anti projection")
+        {
+            LEXER("SELECT *, v FROM mytable1 ORDER BY v;");
+            Parser parser(lexer);
+            SelectStmt *stmt = as<SelectStmt>(parser.parse());
+            REQUIRE(diag.num_errors() == 0);
+            REQUIRE(err.str().empty());
+            Sema sema(diag);
+            sema(*stmt);
+
+            REQUIRE(diag.num_errors() == 1);
+            REQUIRE(not err.str().empty());
+            delete stmt;
+        }
+
+        SECTION("Ambiguous attribute in ORDER BY due to renaming")
+        {
+            LEXER("SELECT v, b AS v FROM mytable1 ORDER BY v;");
+            Parser parser(lexer);
+            SelectStmt *stmt = as<SelectStmt>(parser.parse());
+            REQUIRE(diag.num_errors() == 0);
+            REQUIRE(err.str().empty());
+            Sema sema(diag);
+            sema(*stmt);
+
+            REQUIRE(diag.num_errors() == 1);
+            REQUIRE(not err.str().empty());
+            delete stmt;
+        }
+
         SECTION("Two named expressions used to order")
         {
             LEXER("SELECT v AS V, b AS B FROM mytable1 ORDER BY V ASC, B DESC;");

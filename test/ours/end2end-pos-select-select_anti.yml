@@ -1,7 +1,7 @@
 description: select anti
 db: ours
 query: |
-    SELECT *, key, 42 FROM R ORDER BY key;
+    SELECT *, key, 42 FROM R;
 required: YES
 
 stages:
@@ -16,10 +16,7 @@ stages:
             -:1:16: 42 TK_DEC_INT
             -:1:19: FROM TK_From
             -:1:24: R TK_IDENTIFIER
-            -:1:26: ORDER TK_Order
-            -:1:32: BY TK_By
-            -:1:35: key TK_IDENTIFIER
-            -:1:38: ; TK_SEMICOL
+            -:1:25: ; TK_SEMICOL
         err: NULL
         num_err: 0
         returncode: 0
@@ -27,8 +24,7 @@ stages:
     parser:
         out: |
             SELECT *, key, 42
-            FROM R
-            ORDER BY key ASC;
+            FROM R;
         err: NULL
         num_err: 0
         returncode: 0

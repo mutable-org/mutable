@@ -16,6 +16,8 @@ striving for competitive performance with state-of-the-art systems.
 - [Jens Dittrich](https://bigdata.uni-saarland.de/people/dittrich.php) <<jens.dittrich@bigdata.uni-saarland.de>>
 - Luca Gretscher <<s8lugret@stud.uni-saarland.de>>
 - Tobias Kopp <<s8tokopp@stud.uni-saarland.de>>
+- Jonas Lauermann
+- Felix Brinkmann
 
 
 ## License

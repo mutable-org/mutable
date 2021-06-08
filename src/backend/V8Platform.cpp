@@ -121,6 +121,11 @@ void set_wasm_instance_raw_memory(const v8::FunctionCallbackInfo<v8::Value> &inf
     v8::SetWasmInstanceRawMemory(wasm_instance, wasm_context.vm.as<uint8_t*>(), wasm_context.vm.size());
 }
 
+void throw_invalid_escape_sequence(const v8::FunctionCallbackInfo<v8::Value>&)
+{
+    throw m::runtime_error("invalid escape sequence");
+}
+
 }
 
 
@@ -447,6 +452,16 @@ WasmModule V8Platform::compile(const Operator &plan) const
     );
 #endif
 
+    /*----- Add throw_invalid_escape_sequence function. --------------------------------------------------------------*/
+    BinaryenAddFunctionImport(
+        /* module=             */ codegen,
+        /* internalName=       */ "throw_invalid_escape_sequence",
+        /* externalModuleName= */ "env",
+        /* externalBaseName=   */ "throw_invalid_escape_sequence",
+        /* params=             */ BinaryenTypeCreate(nullptr, 0),
+        /* results=            */ BinaryenTypeNone()
+    );
+
     /*----- Compile plan. --------------------------------------------------------------------------------------------*/
     codegen.compile(plan); // emit code
 
@@ -711,12 +726,13 @@ v8::Local<v8::Object> V8Platform::create_env(WasmContext &wasm_context, const Op
     DISCARD env->Set(Ctx, mkstr("head_of_heap"), v8::Int32::New(isolate_, head_of_heap));
     wasm_context.heap = head_of_heap;
 
-    /* Add printing functions to environment. */
+    /* Add functions to environment. */
 #define ADD_FUNC(FUNC) { \
     auto func = v8::Function::New(Ctx, (FUNC)).ToLocalChecked(); \
     DISCARD env->Set(Ctx, mkstr(#FUNC), func); \
 }
     ADD_FUNC(print);
+    ADD_FUNC(throw_invalid_escape_sequence);
 #undef ADD_FUNC
 
     return env;

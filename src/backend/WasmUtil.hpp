@@ -727,6 +727,17 @@ struct WasmStrncpy
     void emit(BlockBuilder &block, WasmTemporary dest, WasmTemporary src, std::size_t count);
 };
 
+struct WasmLike
+{
+    static WasmTemporary Like(FunctionBuilder &fn, BlockBuilder &block,
+                              const CharacterSequence &ty_str, const CharacterSequence &ty_pattern,
+                              WasmTemporary str, WasmTemporary pattern, const char escape_char = '\\');
+
+    private:
+    static WasmTemporary create_table(FunctionBuilder &fn, BlockBuilder &block, WasmTemporary addr, std::size_t num_entries);
+    static void clear_table(FunctionBuilder &fn, BlockBuilder &block, WasmTemporary begin, WasmTemporary end);
+};
+
 struct WasmSwap
 {
     FunctionBuilder &fn;

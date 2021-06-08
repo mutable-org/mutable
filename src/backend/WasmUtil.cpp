@@ -271,6 +271,13 @@ void WasmExprCompiler::operator()(const BinaryExpr &e)
             break;
         }
 
+        case TK_Like: {
+            auto cs_lhs = as<const CharacterSequence>(ty_lhs);
+            auto cs_rhs = as<const CharacterSequence>(ty_rhs);
+            set(WasmLike::Like(fn(), block(), *cs_lhs, *cs_rhs, std::move(lhs), std::move(rhs)));
+            break;
+        }
+
         case TK_DOTDOT:
             unreachable("not yet supported");
 
@@ -1063,6 +1070,611 @@ void WasmStrncpy::emit(BlockBuilder &block, WasmTemporary _dest, WasmTemporary _
 
         block += loop.finalize();
     }
+}
+
+
+/*======================================================================================================================
+ * WasmLike
+ *====================================================================================================================*/
+
+WasmTemporary WasmLike::Like(FunctionBuilder &fn, BlockBuilder &block,
+                             const CharacterSequence &ty_str, const CharacterSequence &ty_pattern,
+                             WasmTemporary _str, WasmTemporary _pattern, const char escape_char)
+{
+    insist('_' != escape_char and '%' != escape_char, "illegal escape character");
+
+    if (ty_str.length == 0 and ty_pattern.length == 0)
+        return BinaryenConst(fn.module(), BinaryenLiteralInt32(1));
+
+    /*----- Store old head of heap. ----------------------------------------------------------------------------------*/
+    WasmVariable old_head_of_heap(fn, BinaryenTypeInt32());
+    block += old_head_of_heap.set(fn.module().head_of_heap());
+
+    /*----- Allocate space on the heap for the dynamic programming table. --------------------------------------------*/
+    /* Row i and column j is located at old_head_of_heap + (i - 1) * (`ty_str.length` + 1) + (j - 1). */
+    auto num_entries = (ty_str.length + 1) * (ty_pattern.length + 1);
+    WasmVariable end(fn, BinaryenTypeInt32());
+    block += end.set(create_table(fn, block, old_head_of_heap, num_entries));
+    block += fn.module().head_of_heap().set(end);
+    block += fn.module().align_head_of_heap();
+
+    /*----- Initialize table with all entries set to false. ----------------------------------------------------------*/
+    clear_table(fn, block, old_head_of_heap, end);
+
+    /*----- Create pointer to track location of current entry. -------------------------------------------------------*/
+    WasmVariable entry(fn, BinaryenTypeInt32());
+    block += entry.set(old_head_of_heap);
+
+    /*----- Create pointers to track locations of current characters of `_str` and `_pattern`. -----------------------*/
+    WasmVariable str(fn, BinaryenTypeInt32());
+    block += str.set(_str.clone(fn.module()));
+    WasmVariable pattern(fn, BinaryenTypeInt32());
+    block += pattern.set(_pattern.clone(fn.module()));
+
+    /*----- Compute ends of str and pattern. -------------------------------------------------------------------------*/
+    WasmVariable end_str(fn, BinaryenTypeInt32());
+    block += end_str.set(BinaryenBinary(
+        /* module= */ fn.module(),
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ str,
+        /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(ty_str.length))
+    ));
+    WasmVariable end_pattern(fn, BinaryenTypeInt32());
+    block += end_pattern.set(BinaryenBinary(
+        /* module= */ fn.module(),
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ pattern,
+        /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(ty_pattern.length))
+    ));
+
+    /*----- Create variables for the current byte of str and pattern. ------------------------------------------------*/
+    WasmVariable byte_str(fn, BinaryenTypeInt32());
+    WasmVariable byte_pattern(fn, BinaryenTypeInt32());
+
+    /*----- Initialize first column. ---------------------------------------------------------------------------------*/
+    /* Create loop iterating until current byte of pattern is not a `%`-wildcard. */
+    WasmDoWhile init(fn.module(), "Like.init", BinaryenBinary(
+        /* module= */ fn.module(),
+        /* op=     */ BinaryenEqInt32(),
+        /* left=   */ byte_pattern,
+        /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32('%'))
+    ));
+    {
+        /* Load next byte from pattern, if in bounds. */
+        WasmTemporary is_pattern_in_bounds = BinaryenBinary(
+            /* module= */ fn.module(),
+            /* op=     */ BinaryenLtUInt32(),
+            /* left=   */ pattern,
+            /* right=  */ end_pattern
+        );
+        WasmTemporary load_pattern = BinaryenLoad(
+            /* module= */ fn.module(),
+            /* bytes=  */ 1,
+            /* signed= */ false,
+            /* offset= */ 0,
+            /* align=  */ 0,
+            /* type=   */ BinaryenTypeInt32(),
+            /* ptr=    */ pattern
+        );
+        init += byte_pattern.set(BinaryenSelect(
+            /* module=    */ fn.module(),
+            /* condition= */ is_pattern_in_bounds,
+            /* ifTrue=    */ load_pattern,
+            /* ifFalse=   */ BinaryenConst(fn.module(), BinaryenLiteralInt32(0)),
+            /* type=      */ BinaryenTypeInt32()
+        ));
+
+        /* Set current entry to true. */
+        init += BinaryenStore(
+            /* module= */ fn.module(),
+            /* bytes=  */ 1,
+            /* offset= */ 0,
+            /* align=  */ 0,
+            /* ptr=    */ entry,
+            /* value=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(1)),
+            /* type=   */ BinaryenTypeInt32()
+        );
+
+        /* Advance entry to next row. */
+        init += entry.set(BinaryenBinary(
+            /* module= */ fn.module(),
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ entry,
+            /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(ty_str.length + 1))
+        ));
+
+        /* Advance pattern to next byte. */
+        init += pattern.set(BinaryenBinary(
+            /* module= */ fn.module(),
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ pattern,
+            /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(1))
+        ));
+    }
+    block += init.finalize();
+
+    /*----- Compute entire table. ------------------------------------------------------------------------------------*/
+    /* Create variable for the actual length of str. */
+    WasmVariable len_str(fn, BinaryenTypeInt32()); // default initialized to 0
+
+    /* Create flag whether the current byte of pattern is not escaped. */
+    WasmVariable is_not_escaped(fn, BinaryenTypeInt32());
+    block += is_not_escaped.set(BinaryenConst(fn.module(), BinaryenLiteralInt32(true)));
+
+    /* Reset entry to second row and second column. */
+    block += entry.set(BinaryenBinary(
+        /* module= */ fn.module(),
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ old_head_of_heap,
+        /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(ty_str.length + 2))
+    ));
+
+    /* Reset pattern to first character. */
+    block += pattern.set(std::move(_pattern));
+
+    {
+        /* Load first byte from pattern, if in bounds. */
+        WasmTemporary is_pattern_in_bounds = BinaryenBinary(
+            /* module= */ fn.module(),
+            /* op=     */ BinaryenLtUInt32(),
+            /* left=   */ pattern,
+            /* right=  */ end_pattern
+        );
+        WasmTemporary load_pattern = BinaryenLoad(
+            /* module= */ fn.module(),
+            /* bytes=  */ 1,
+            /* signed= */ false,
+            /* offset= */ 0,
+            /* align=  */ 0,
+            /* type=   */ BinaryenTypeInt32(),
+            /* ptr=    */ pattern
+        );
+        block += byte_pattern.set(BinaryenSelect(
+            /* module=    */ fn.module(),
+            /* condition= */ is_pattern_in_bounds,
+            /* ifTrue=    */ load_pattern,
+            /* ifFalse=   */ BinaryenConst(fn.module(), BinaryenLiteralInt32(0)),
+            /* type=      */ BinaryenTypeInt32()
+        ));
+    }
+
+    /* Create loop iterating as long as the current byte of pattern is not NUL. */
+    WasmWhile outer(fn.module(), "Like.outer", byte_pattern);
+    {
+        /* If current byte of pattern is not escaped and equals `escape_char`, advance pattern to next byte and load
+         * it. Additionally, mark this byte as escaped and check for invalid escape sequences. */
+        WasmTemporary is_escape_char = BinaryenBinary(
+            /* module= */ fn.module(),
+            /* op=     */ BinaryenEqInt32(),
+            /* left=   */ byte_pattern,
+            /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(escape_char))
+        );
+        WasmTemporary is_not_escaped_escape_char = BinaryenBinary(
+            /* module= */ fn.module(),
+            /* op=     */ BinaryenAndInt32(),
+            /* left=   */ is_not_escaped,
+            /* right=  */ is_escape_char
+        );
+        BlockBuilder block_if(fn.module(), "Like.if");
+        {
+            /* Advance pattern to next byte. */
+            block_if += pattern.set(BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenAddInt32(),
+                /* left=   */ pattern,
+                /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(1))
+            ));
+
+            /* Load next byte from pattern, if in bounds. */
+            WasmTemporary is_pattern_in_bounds = BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenLtUInt32(),
+                /* left=   */ pattern,
+                /* right=  */ end_pattern
+            );
+            WasmTemporary load_pattern = BinaryenLoad(
+                /* module= */ fn.module(),
+                /* bytes=  */ 1,
+                /* signed= */ false,
+                /* offset= */ 0,
+                /* align=  */ 0,
+                /* type=   */ BinaryenTypeInt32(),
+                /* ptr=    */ pattern
+            );
+            block_if += byte_pattern.set(BinaryenSelect(
+                /* module=    */ fn.module(),
+                /* condition= */ is_pattern_in_bounds,
+                /* ifTrue=    */ load_pattern,
+                /* ifFalse=   */ BinaryenConst(fn.module(), BinaryenLiteralInt32(0)),
+                /* type=      */ BinaryenTypeInt32()
+            ));
+
+            /* Check whether current byte of pattern is a valid escaped character, i.e. `_`, `%` or `escape_char`.
+             * If not, throw an exception. */
+            WasmTemporary byte_pattern_not_equals_underscore = BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenNeInt32(),
+                /* left=   */ byte_pattern,
+                /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32('_'))
+            );
+            WasmTemporary byte_pattern_not_equals_percent = BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenNeInt32(),
+                /* left=   */ byte_pattern,
+                /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32('%'))
+            );
+            WasmTemporary byte_pattern_not_equals_escape_char = BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenNeInt32(),
+                /* left=   */ byte_pattern,
+                /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(escape_char))
+            );
+            WasmTemporary byte_pattern_not_equals_underscore_and_percent_and_escape_char = BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenAndInt32(),
+                /* left=   */ byte_pattern_not_equals_underscore,
+                /* right=  */ BinaryenBinary(
+                    /* module= */ fn.module(),
+                    /* op=     */ BinaryenAndInt32(),
+                    /* left=   */ byte_pattern_not_equals_percent,
+                    /* right=  */ byte_pattern_not_equals_escape_char
+                )
+            );
+            WasmTemporary call_throw_exception = BinaryenCall(
+                /* module=      */ fn.module(),
+                /* target=      */ "throw_invalid_escape_sequence",
+                /* operands=    */ nullptr,
+                /* numOperands= */ 0,
+                /* returnType=  */ BinaryenTypeNone()
+            );
+            block_if += BinaryenIf(
+                /* module=    */ fn.module(),
+                /* condition= */ byte_pattern_not_equals_underscore_and_percent_and_escape_char,
+                /* ifTrue=    */ call_throw_exception,
+                /* ifFalse=   */ nullptr
+            );
+
+            /* Mark current byte of pattern as escaped. */
+            block_if += is_not_escaped.set(BinaryenConst(fn.module(), BinaryenLiteralInt32(false)));
+        }
+        outer += BinaryenIf(
+            /* module=    */ fn.module(),
+            /* condition= */ is_not_escaped_escape_char,
+            /* ifTrue=    */ block_if.finalize(),
+            /* ifFalse=   */ nullptr
+        );
+
+        /* Reset actual length of str. */
+        outer += len_str.set(BinaryenConst(fn.module(), BinaryenLiteralInt32(0)));
+
+        {
+            /* Load first byte from str, if in bounds. */
+            WasmTemporary is_str_in_bounds = BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenLtUInt32(),
+                /* left=   */ str,
+                /* right=  */ end_str
+            );
+            WasmTemporary load_str = BinaryenLoad(
+                /* module= */ fn.module(),
+                /* bytes=  */ 1,
+                /* signed= */ false,
+                /* offset= */ 0,
+                /* align=  */ 0,
+                /* type=   */ BinaryenTypeInt32(),
+                /* ptr=    */ str
+            );
+            outer += byte_str.set(BinaryenSelect(
+                /* module=    */ fn.module(),
+                /* condition= */ is_str_in_bounds,
+                /* ifTrue=    */ load_str,
+                /* ifFalse=   */ BinaryenConst(fn.module(), BinaryenLiteralInt32(0)),
+                /* type=      */ BinaryenTypeInt32()
+            ));
+        }
+
+        /* Create loop iterating as long as the current byte of str is not NUL. */
+        WasmWhile inner(fn.module(), "Like.inner", byte_str);
+        {
+            /* Increment actual length of str. */
+            inner += len_str.set(BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenAddInt32(),
+                /* left=   */ len_str,
+                /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(1))
+            ));
+
+            /* Store above left entry. */
+            WasmTemporary entry_above_left = BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenSubInt32(),
+                /* left=   */ entry,
+                /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(ty_str.length + 2))
+            );
+            WasmTemporary value_above_left = BinaryenLoad(
+                /* module= */ fn.module(),
+                /* bytes=  */ 1,
+                /* signed= */ false,
+                /* offset= */ 0,
+                /* align=  */ 0,
+                /* type=   */ BinaryenTypeInt32(),
+                /* ptr=    */ entry_above_left
+            );
+            WasmTemporary store_above_left = BinaryenStore(
+                /* module= */ fn.module(),
+                /* bytes=  */ 1,
+                /* offset= */ 0,
+                /* align=  */ 0,
+                /* ptr=    */ entry,
+                /* value=  */ value_above_left,
+                /* type=   */ BinaryenTypeInt32()
+            );
+
+            /* Store disjunction of above and left entry. */
+            WasmTemporary entry_above = BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenSubInt32(),
+                /* left=   */ entry,
+                /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(ty_str.length + 1))
+            );
+            WasmTemporary value_above = BinaryenLoad(
+                /* module= */ fn.module(),
+                /* bytes=  */ 1,
+                /* signed= */ false,
+                /* offset= */ 0,
+                /* align=  */ 0,
+                /* type=   */ BinaryenTypeInt32(),
+                /* ptr=    */ entry_above
+            );
+            WasmTemporary entry_left = BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenSubInt32(),
+                /* left=   */ entry,
+                /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(1))
+            );
+            WasmTemporary value_left = BinaryenLoad(
+                /* module= */ fn.module(),
+                /* bytes=  */ 1,
+                /* signed= */ false,
+                /* offset= */ 0,
+                /* align=  */ 0,
+                /* type=   */ BinaryenTypeInt32(),
+                /* ptr=    */ entry_left
+            );
+            WasmTemporary value_above_or_left = BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenOrInt32(),
+                /* left=   */ value_above,
+                /* right=  */ value_left
+            );
+            WasmTemporary store_above_or_left = BinaryenStore(
+                /* module= */ fn.module(),
+                /* bytes=  */ 1,
+                /* offset= */ 0,
+                /* align=  */ 0,
+                /* ptr=    */ entry,
+                /* value=  */ value_above_or_left,
+                /* type=   */ BinaryenTypeInt32()
+            );
+
+            /* Check current bytes of str and pattern, and set entry respectively. */
+            WasmTemporary byte_pattern_equals_underscore = BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenEqInt32(),
+                /* left=   */ byte_pattern,
+                /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32('_'))
+            );
+            WasmTemporary byte_pattern_equals_byte_str = BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenEqInt32(),
+                /* left=   */ byte_pattern,
+                /* right=  */ byte_str
+            );
+            WasmTemporary byte_pattern_equals_percent = BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenEqInt32(),
+                /* left=   */ byte_pattern,
+                /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32('%'))
+            );
+            WasmTemporary not_escaped_byte_pattern_equals_underscore = BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenAndInt32(),
+                /* left=   */ is_not_escaped,
+                /* right=  */ byte_pattern_equals_underscore
+            );
+            WasmTemporary not_escaped_byte_pattern_equals_underscore_or_byte_pattern_equals_byte_str = BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenOrInt32(),
+                /* left=   */ not_escaped_byte_pattern_equals_underscore,
+                /* right=  */ byte_pattern_equals_byte_str
+            );
+            WasmTemporary not_escaped_byte_pattern_equals_percent = BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenAndInt32(),
+                /* left=   */ is_not_escaped,
+                /* right=  */ byte_pattern_equals_percent
+            );
+            inner += BinaryenIf(
+                /* module=    */ fn.module(),
+                /* condition= */ not_escaped_byte_pattern_equals_percent,
+                /* ifTrue=    */ store_above_or_left,
+                /* ifFalse=   */ BinaryenIf(
+                    /* module=    */ fn.module(),
+                    /* condition= */ not_escaped_byte_pattern_equals_underscore_or_byte_pattern_equals_byte_str,
+                    /* ifTrue=    */ store_above_left,
+                    /* ifFalse=   */ nullptr
+                )
+            );
+
+            /* Advance entry to next entry. */
+            inner += entry.set(BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenAddInt32(),
+                /* left=   */ entry,
+                /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(1))
+            ));
+
+            /* Advance str to next byte. */
+            inner += str.set(BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenAddInt32(),
+                /* left=   */ str,
+                /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(1))
+            ));
+
+            /* Load next byte from str, if in bounds. */
+            WasmTemporary is_str_in_bounds = BinaryenBinary(
+                /* module= */ fn.module(),
+                /* op=     */ BinaryenLtUInt32(),
+                /* left=   */ str,
+                /* right=  */ end_str
+            );
+            WasmTemporary load_str = BinaryenLoad(
+                /* module= */ fn.module(),
+                /* bytes=  */ 1,
+                /* signed= */ false,
+                /* offset= */ 0,
+                /* align=  */ 0,
+                /* type=   */ BinaryenTypeInt32(),
+                /* ptr=    */ str
+            );
+            inner += byte_str.set(BinaryenSelect(
+                /* module=    */ fn.module(),
+                /* condition= */ is_str_in_bounds,
+                /* ifTrue=    */ load_str,
+                /* ifFalse=   */ BinaryenConst(fn.module(), BinaryenLiteralInt32(0)),
+                /* type=      */ BinaryenTypeInt32()
+            ));
+        }
+        outer += inner.finalize();
+
+        /* Advance entry to second column in the next row. */
+        WasmTemporary offset = BinaryenBinary(
+            /* module= */ fn.module(),
+            /* op=     */ BinaryenSubInt32(),
+            /* left=   */ BinaryenConst(fn.module(), BinaryenLiteralInt32(ty_str.length + 1)),
+            /* right=  */ len_str
+        );
+        outer += entry.set(BinaryenBinary(
+            /* module= */ fn.module(),
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ entry,
+            /* right=  */ offset
+        ));
+
+        /* Reset str to first character. */
+        outer += str.set(_str.clone(fn.module()));
+
+        /* Advance pattern to next byte. */
+        outer += pattern.set(BinaryenBinary(
+            /* module= */ fn.module(),
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ pattern,
+            /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(1))
+        ));
+
+        /* Load next byte from pattern, if in bounds. */
+        WasmTemporary is_pattern_in_bounds = BinaryenBinary(
+            /* module= */ fn.module(),
+            /* op=     */ BinaryenLtUInt32(),
+            /* left=   */ pattern,
+            /* right=  */ end_pattern
+        );
+        WasmTemporary load_pattern = BinaryenLoad(
+            /* module= */ fn.module(),
+            /* bytes=  */ 1,
+            /* signed= */ false,
+            /* offset= */ 0,
+            /* align=  */ 0,
+            /* type=   */ BinaryenTypeInt32(),
+            /* ptr=    */ pattern
+        );
+        outer += byte_pattern.set(BinaryenSelect(
+            /* module=    */ fn.module(),
+            /* condition= */ is_pattern_in_bounds,
+            /* ifTrue=    */ load_pattern,
+            /* ifFalse=   */ BinaryenConst(fn.module(), BinaryenLiteralInt32(0)),
+            /* type=      */ BinaryenTypeInt32()
+        ));
+
+        /* Reset is_not_escaped to true. */
+        outer += is_not_escaped.set(BinaryenConst(fn.module(), BinaryenLiteralInt32(true)));
+    }
+    block += outer.finalize();
+
+    /*----- Free allocated space. ------------------------------------------------------------------------------------*/
+    block += fn.module().head_of_heap().set(old_head_of_heap);
+
+    /*----- Return result. -------------------------------------------------------------------------------------------*/
+    /* Entry points currently to the second column in the first row after the pattern has ended. Therefore, we have
+     * to go one row up and len_str - 1 columns to the right, i.e. the result is located at
+     * entry - (`ty_str.length` + 1) + len_str - 1 = entry + len_str - (`ty_str.length` + 2). */
+    WasmTemporary offset = BinaryenBinary(
+        /* module= */ fn.module(),
+        /* op=     */ BinaryenSubInt32(),
+        /* left=   */ len_str,
+        /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(ty_str.length + 2))
+    );
+    WasmTemporary result = BinaryenBinary(
+        /* module= */ fn.module(),
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ entry,
+        /* right=  */ offset
+    );
+    return BinaryenLoad(
+        /* module= */ fn.module(),
+        /* bytes=  */ 1,
+        /* signed= */ false,
+        /* offset= */ 0,
+        /* align=  */ 0,
+        /* type=   */ BinaryenTypeInt32(),
+        /* ptr=    */ result
+    );
+}
+
+WasmTemporary WasmLike::create_table(FunctionBuilder &fn, BlockBuilder &block, WasmTemporary addr, std::size_t num_entries)
+{
+    insist(num_entries <= 1UL << 31, "table size exceed uint32 type");
+    return BinaryenBinary(
+        /* module= */ fn.module(),
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ addr,
+        /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(num_entries))
+    );
+}
+
+void WasmLike::clear_table(FunctionBuilder &fn, BlockBuilder &block, WasmTemporary begin, WasmTemporary end)
+{
+    WasmVariable induction(fn, BinaryenTypeInt32());
+    block += induction.set(std::move(begin));
+
+    WasmWhile loop(fn.module(), "Like.clear_table.loop", BinaryenBinary(
+        /* module= */ fn.module(),
+        /* op=     */ BinaryenLtUInt32(),
+        /* left=   */ induction,
+        /* right=  */ std::move(end)
+    ));
+
+    /* Clear entry. */
+    loop += BinaryenStore(
+        /* module= */ fn.module(),
+        /* bytes=  */ 1,
+        /* offset= */ 0,
+        /* align=  */ 0,
+        /* ptr=    */ induction,
+        /* value=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(0)),
+        /* type=   */ BinaryenTypeInt32()
+    );
+
+    /* Advance induction variable. */
+    loop += induction.set(BinaryenBinary(
+        /* module= */ fn.module(),
+        /* op=     */ BinaryenAddInt32(),
+        /* left=   */ induction,
+        /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(1))
+    ));
+
+    block += loop.finalize();
 }
 
 

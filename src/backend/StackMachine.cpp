@@ -1407,9 +1407,8 @@ Like_expr: {
         char *pattern = TOP.as<char*>();
         POP();
         if (not TOP_IS_NULL) {
-            std::regex re(pattern_to_regex(pattern));
             char *str = TOP.as<char*>();
-            TOP = std::regex_match(str, re);
+            TOP = like(str, pattern);
         }
     }
 }

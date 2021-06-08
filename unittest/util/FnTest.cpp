@@ -235,6 +235,93 @@ TEST_CASE("pattern_to_regex", "[core][util][fn]")
     }
 }
 
+TEST_CASE("like", "[core][util][fn]")
+{
+    std::tuple<std::string, std::string, bool> triples[] = {
+        /* { string, pattern, result } */
+
+        /* empty pattern */
+        { "", "", true },
+        { "a", "", false },
+        { " ", "", false },
+
+        /* no wildcards */
+        { "", "a", false },
+        { "a", "a", true },
+        { "A", "a", false },
+        { "a", "A", false },
+        { "b", "a", false },
+        { "abc", "abc", true },
+        { "ab", "abc", false },
+        { "abcd", "abc", false },
+        { "cba", "abc", false },
+        { "\\", "\\\\", true },
+        { "\\a", "\\\\_", true },
+        { "\\ab", "\\\\%", true },
+        { "_", "\\_", true },
+        { "\\a", "\\_", false },
+        { "%", "\\%", true },
+        { "\\ab", "\\%", false },
+
+        /* `_`-wildcard */
+        { "", "_", false },
+        { "a", "_", true },
+        { " ", "_", true },
+        { "aa", "_", false },
+        { "ab", "_", false },
+        { "a", "a_", false },
+        { "ab", "a_", true },
+        { "abc", "a_", false },
+        { "axbyzc", "a_b__c", true },
+        { "axbyc", "a_b__c", false },
+        { "axbyz", "a_b__c", false },
+        { "axbyzcd", "a_b__c", false },
+        { "axcyzc", "a_b__c", false },
+        { "xbyzc", "a_b__c", false },
+        { "axybyzc", "a_b__c", false },
+        { "axbyzqc", "a_b__c", false },
+
+        /* `%`-wildcard */
+        { "", "%", true },
+        { "a", "%", true },
+        { " ", "%", true },
+        { "abc", "%", true },
+        { "", "a%", false },
+        { "a", "a%", true },
+        { "abc", "a%", true },
+        { "b", "a%", false },
+        { "bac", "a%", false },
+        { "abc", "a%b%%c", true },
+        { "axyzbc", "a%b%%c", true },
+        { "abxyzc", "a%b%%c", true },
+        { "axyzbrstc", "a%b%%c", true },
+        { "axyzbrst", "a%b%%c", false },
+        { "axyzbrstcd", "a%b%%c", false },
+        { "axyzcrstc", "a%b%%c", false },
+        { "xyzbrstc", "a%b%%c", false },
+
+        /* complex patterns */
+        { "xabcyzdqe", "%_ab%c__d%e", true },
+        { "rstabuvwcxydqlmke", "%_ab%c__d%e", true },
+        { "abcyzdqe", "%_ab%c__d%e", false },
+        { "xabcydqe", "%_ab%c__d%e", false },
+        { "xabcyzdq", "%_ab%c__d%e", false },
+        { "xyz_u%vw", "%\\__\\%%", true },
+        { "_u%", "%\\__\\%%", true },
+        { "xyz\\uv%abc", "%\\__\\%%", false },
+        { "xyz_u\\vw", "%\\__\\%%", false },
+    };
+
+    for (const auto &[str, pattern, exp] : triples) {
+        auto res = like(str, pattern);
+        CHECK(exp == res);
+        if (exp != res) {
+            std::cerr << "Expected " << (exp ? "" : "no ") << "match for string \"" << str << "\" and pattern \""
+                      << pattern << "\", but got " << (res ? "one." : "none.") << std::endl;
+        }
+    }
+}
+
 TEST_CASE("get_home_path", "[core][util][fn]")
 {
 #if __linux || __APPLE__

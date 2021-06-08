@@ -238,6 +238,9 @@ inline std::regex pattern_to_regex(const char *pattern, const bool optimize = fa
     return optimize ? std::regex(ss.str(), std::regex::optimize) : std::regex(ss.str());
 }
 
+/** Compares a SQL-style LIKE pattern with the given `std::string`. */
+bool like(const std::string &str, const std::string &pattern, const char escape_char = '\\');
+
 /** Checks whether haystack contains needle. */
 template<typename H, typename N>
 bool contains(const H &haystack, const N &needle)

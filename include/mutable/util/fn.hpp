@@ -190,15 +190,26 @@ std::string html_escape(std::string str);
 /** Transforms a SQL-style LIKE pattern into a std::regex. */
 inline std::regex pattern_to_regex(const char *pattern, const bool optimize = false, const char escape_char = '\\')
 {
+    if ('_' == escape_char or '%' == escape_char)
+        throw m::invalid_argument("illegal escape character");
+
     std::stringstream ss;
     for (const char *c = pattern; *c; ++c) {
+        if (*c == escape_char) {
+            ++c;
+            if ('_' == *c or '%' == *c) {
+                /* This is an escaped character of the input SQL pattern. */
+                ss << *c;
+                continue;
+            } else if (escape_char == *c) {
+                /* This is an escaped character of the input SQL pattern. Nothing to be done. Fallthrough. */
+            } else {
+                throw m::runtime_error("invalid escape sequence");
+            }
+        }
         switch (*c) {
             default:
-                if (*c == escape_char) {
-                    ++c;
-                    ss << "\\" << *c;
-                } else
-                    ss << *c;
+                ss << *c;
                 break;
             case '%':
                 ss << "(.*)";

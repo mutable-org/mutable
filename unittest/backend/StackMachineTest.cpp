@@ -3190,7 +3190,7 @@ TEST_CASE("StackMachine/Comparison/Like_expr", "[core][backend]")
     Tuple res({ Type::Get_Boolean(Type::TY_Scalar) });
     Tuple *args[] = { &res };
 
-    SECTION("Top is null")
+    SECTION("Pattern is null")
     {
         SM.add_and_emit_load("sql");
         SM.emit_Push_Null();
@@ -3202,12 +3202,23 @@ TEST_CASE("StackMachine/Comparison/Like_expr", "[core][backend]")
         REQUIRE(res[0].as_b() == true);
     }
 
-    SECTION("Second value is null")
+    SECTION("String is null")
     {
         SM.emit_Push_Null();
         SM.add_and_emit_load("sql");
         SM.emit_Like_expr();
         SM.emit_Is_Null();
+        SM.emit_St_Tup_b(0, 0);
+        SM(args);
+        REQUIRE(not res.is_null(0));
+        REQUIRE(res[0].as_b() == true);
+    }
+
+    SECTION("A match exists")
+    {
+        SM.add_and_emit_load("abc|sql|");
+        SM.add_and_emit_load("%sql_");
+        SM.emit_Like_expr();
         SM.emit_St_Tup_b(0, 0);
         SM(args);
         REQUIRE(not res.is_null(0));
@@ -3216,8 +3227,30 @@ TEST_CASE("StackMachine/Comparison/Like_expr", "[core][backend]")
 
     SECTION("A match does not exist")
     {
-        SM.add_and_emit_load("sql");
-        SM.add_and_emit_load("abc|val|qwert");
+        SM.add_and_emit_load("abc|sql");
+        SM.add_and_emit_load("%sql_");
+        SM.emit_Like_expr();
+        SM.emit_St_Tup_b(0, 0);
+        SM(args);
+        REQUIRE(not res.is_null(0));
+        REQUIRE(res[0].as_b() == false);
+    }
+
+    SECTION("Escaped wildcard match")
+    {
+        SM.add_and_emit_load("abc|sql_");
+        SM.add_and_emit_load("%sql\\_");
+        SM.emit_Like_expr();
+        SM.emit_St_Tup_b(0, 0);
+        SM(args);
+        REQUIRE(not res.is_null(0));
+        REQUIRE(res[0].as_b() == true);
+    }
+
+    SECTION("Escaped wildcard no match")
+    {
+        SM.add_and_emit_load("abc|sql|");
+        SM.add_and_emit_load("%sql\\_");
         SM.emit_Like_expr();
         SM.emit_St_Tup_b(0, 0);
         SM(args);

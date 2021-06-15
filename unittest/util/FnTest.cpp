@@ -132,7 +132,8 @@ TEST_CASE("pattern_to_regex", "[core][util][fn]")
     std::string s5 = "()";
     std::string s6 = "{}";
     std::string s7 = ".*+^?|$";
-    std::string s8 = "\\\\";
+    std::string s8 = "\\";
+    std::string s9 = "_";
 
     SECTION("abcd")
     {
@@ -206,22 +207,31 @@ TEST_CASE("pattern_to_regex", "[core][util][fn]")
         REQUIRE(std::regex_match(s7, r8) == std::regex_match(s7, r8_));
     }
 
-    SECTION("Add backslashes with specified escape char")
+    SECTION("Use specified escape char")
     {
-        auto r9 = std::regex("\\b");
-        auto r9_ = pattern_to_regex("ab", false, 'a');
+        auto r9 = std::regex("_");
+        auto r9_ = pattern_to_regex("a_", false, 'a');
 
         REQUIRE(std::regex_match(s1, r9) == std::regex_match(s1, r9_));
-        REQUIRE(std::regex_match(s7, r9) == std::regex_match(s7, r9_));
+        REQUIRE(std::regex_match(s9, r9) == std::regex_match(s9, r9_));
     }
 
-    SECTION("Add backslashes on \\")
+    SECTION("Escaped \\")
     {
         auto r10 = std::regex("\\\\");
-        auto r10_ = pattern_to_regex("\\");
+        auto r10_ = pattern_to_regex("\\\\");
 
         REQUIRE(std::regex_match(s1, r10) == std::regex_match(s1, r10_));
         REQUIRE(std::regex_match(s8, r10) == std::regex_match(s8, r10_));
+    }
+
+    SECTION("Escaped _")
+    {
+        auto r11 = std::regex("_");
+        auto r11_ = pattern_to_regex("\\_");
+
+        REQUIRE(std::regex_match(s1, r11) == std::regex_match(s1, r11_));
+        REQUIRE(std::regex_match(s9, r11) == std::regex_match(s9, r11_));
     }
 }
 

@@ -1,0 +1,85 @@
+description: LIKE expression with escaped characters in pattern.
+db: ours
+query: |
+    SELECT "_" LIKE "\\_";
+    SELECT "a" LIKE "\\_";
+    SELECT "%" LIKE "\\%";
+    SELECT "abc" LIKE "\\%";
+    SELECT "\\" LIKE "\\\\";
+    SELECT "\\a" LIKE "\\\\_";
+    SELECT "\\abc" LIKE "\\\\%";
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: "_" TK_STRING_LITERAL
+            -:1:12: LIKE TK_Like
+            -:1:17: "\\_" TK_STRING_LITERAL
+            -:1:22: ; TK_SEMICOL
+            -:2:1: SELECT TK_Select
+            -:2:8: "a" TK_STRING_LITERAL
+            -:2:12: LIKE TK_Like
+            -:2:17: "\\_" TK_STRING_LITERAL
+            -:2:22: ; TK_SEMICOL
+            -:3:1: SELECT TK_Select
+            -:3:8: "%" TK_STRING_LITERAL
+            -:3:12: LIKE TK_Like
+            -:3:17: "\\%" TK_STRING_LITERAL
+            -:3:22: ; TK_SEMICOL
+            -:4:1: SELECT TK_Select
+            -:4:8: "abc" TK_STRING_LITERAL
+            -:4:14: LIKE TK_Like
+            -:4:19: "\\%" TK_STRING_LITERAL
+            -:4:24: ; TK_SEMICOL
+            -:5:1: SELECT TK_Select
+            -:5:8: "\\" TK_STRING_LITERAL
+            -:5:13: LIKE TK_Like
+            -:5:18: "\\\\" TK_STRING_LITERAL
+            -:5:24: ; TK_SEMICOL
+            -:6:1: SELECT TK_Select
+            -:6:8: "\\a" TK_STRING_LITERAL
+            -:6:14: LIKE TK_Like
+            -:6:19: "\\\\_" TK_STRING_LITERAL
+            -:6:26: ; TK_SEMICOL
+            -:7:1: SELECT TK_Select
+            -:7:8: "\\abc" TK_STRING_LITERAL
+            -:7:16: LIKE TK_Like
+            -:7:21: "\\\\%" TK_STRING_LITERAL
+            -:7:28: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT ("_" LIKE "\\_");
+            SELECT ("a" LIKE "\\_");
+            SELECT ("%" LIKE "\\%");
+            SELECT ("abc" LIKE "\\%");
+            SELECT ("\\" LIKE "\\\\");
+            SELECT ("\\a" LIKE "\\\\_");
+            SELECT ("\\abc" LIKE "\\\\%");
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    end2end:
+        out: |
+            TRUE
+            FALSE
+            TRUE
+            FALSE
+            TRUE
+            TRUE
+            TRUE
+        err: NULL
+        num_err: 0
+        returncode: 0

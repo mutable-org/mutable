@@ -88,10 +88,10 @@ def init():
     if os.path.isfile(HYPER_LOG_FILE):
         os.remove(HYPER_LOG_FILE)
 
-def load_table(connection :Connection, table_name :str):
+def load_table(connection :Connection, table_name :str, filename :str):
     table_def = table_defs[table_name]
     connection.catalog.create_table(table_def)
-    connection.execute_command(f'COPY {table_def.table_name} FROM \'benchmark/tpc-h/data/{table_name.lower()}.tbl\' WITH DELIMITER \'|\' CSV')
+    connection.execute_command(f'COPY {table_def.table_name} FROM \'{filename}\' WITH DELIMITER \'|\' CSV')
 
 def dispose_table(connection :Connection, table_name :str):
     table_def = table_defs[table_name]
@@ -99,13 +99,13 @@ def dispose_table(connection :Connection, table_name :str):
     connection.execute_command(f'DROP TABLE {table_def.table_name}')
 
 def benchmark_query(connection :Connection, query :str, tables :list):
-    for table_name in tables:
-        load_table(connection, table_name)
+    for table_name, filename in tables:
+        load_table(connection, table_name, filename)
     begin = time.time_ns()
     with connection.execute_query(query) as result:
         pass
     end = time.time_ns()
-    for table_name in tables:
+    for table_name, _ in tables:
         dispose_table(connection, table_name)
     return end - begin
 

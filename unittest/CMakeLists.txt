@@ -48,5 +48,5 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
         backend/InterpreterTest.cpp
         backend/StackMachineTest.cpp
     )
-    target_link_libraries(unittest ${PROJECT_NAME})
+    target_link_libraries(unittest ${PROJECT_NAME} Threads::Threads)
 endif()

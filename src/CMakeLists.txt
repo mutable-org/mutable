@@ -55,4 +55,4 @@ set_target_properties(check-bin PROPERTIES OUTPUT_NAME check)
 
 add_executable(shell shell.cpp)
 add_dependencies(shell Replxx)
-target_link_libraries(shell Threads::Threads replxx ${PROJECT_NAME})
+target_link_libraries(shell replxx ${PROJECT_NAME} Threads::Threads)

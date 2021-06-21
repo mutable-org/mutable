@@ -829,7 +829,7 @@ TEST_CASE("Parser::parse_OrderByClause() sanity tests", "[core][parse][unit]")
             "order BY val",
             "ORDER by val",
             "ORDERBY val",
-            "ORDER BY val,"
+            "ORDER BY val",
             "ORDER BY FROM",
             "ORDER BY 10 : 5 = 2"
         };

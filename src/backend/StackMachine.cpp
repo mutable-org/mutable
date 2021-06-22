@@ -472,7 +472,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
         case TK_Like: {
             if (auto rhs = cast<const Constant>(e.rhs)) {
                 (*this)(*e.lhs);
-                auto pattern = unquote(rhs->tok.text);
+                auto pattern = interpret(rhs->tok.text);
                 auto it = regexes_.find(pattern);
                 if (it == regexes_.end())
                     it = StackMachineBuilder::regexes_.insert({pattern, pattern_to_regex(pattern.c_str(), true)}).first;

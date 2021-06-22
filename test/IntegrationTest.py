@@ -166,7 +166,7 @@ def report(message, stage_name, test_case, symbol):
 
 
 def print_debug_command(test_case, stage_name, command):
-    query = test_case.query.replace('"', '\\"').replace('\n', ' ').strip()
+    query = test_case.query.replace('\\', '\\\\').replace('"', '\\"').replace('\n', ' ').strip()
     tqdm.write(f'     $ echo "{query}" | {" ".join(command)}')
 
 

@@ -237,3 +237,19 @@ endif()
 include_directories(include src)
 add_subdirectory(src)
 add_subdirectory(unittest)
+
+# Tests
+add_custom_target(
+    check
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    DEPENDS shell unittest
+    VERBATIM USES_TERMINAL
+    COMMAND echo "##################"
+    COMMAND echo "### Unit Tests ###"
+    COMMAND echo "##################"
+    COMMAND env ASAN_OPTIONS=detect_stack_use_after_return=1 ${EXECUTABLE_OUTPUT_PATH}/unittest "\[core\]"
+    COMMAND echo "#########################"
+    COMMAND echo "### Integration Tests ###"
+    COMMAND echo "#########################"
+    COMMAND env ASAN_OPTIONS=detect_stack_use_after_return=1 "${CMAKE_CURRENT_SOURCE_DIR}/test/IntegrationTest.py" -r "${PROJECT_BINARY_DIR}"
+)

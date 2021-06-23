@@ -3034,7 +3034,7 @@ TEST_CASE("StackMachine/Comparison/Cmp_i", "[core][backend]")
         SM.emit_St_Tup_i(0, 0);
         SM(args);
         REQUIRE(not res.is_null(0));
-        REQUIRE(res[0].as_i() == 1);
+        REQUIRE(res[0].as_i() > 0);
     }
 
     SECTION("Compare two equal ints")
@@ -3065,7 +3065,7 @@ TEST_CASE("StackMachine/Comparison/Cmp_f", "[core][backend]")
         SM.emit_St_Tup_i(0, 0);
         SM(args);
         REQUIRE(not res.is_null(0));
-        REQUIRE(res[0] == 1);
+        REQUIRE(res[0].as_i() > 0);
     }
 
     SECTION("Compare two equal floats")
@@ -3078,7 +3078,7 @@ TEST_CASE("StackMachine/Comparison/Cmp_f", "[core][backend]")
         SM.emit_St_Tup_i(0, 0);
         SM(args);
         REQUIRE(not res.is_null(0));
-        REQUIRE(res[0] == 0);
+        REQUIRE(res[0].as_i() == 0);
     }
 }
 
@@ -3098,7 +3098,7 @@ TEST_CASE("StackMachine/Comparison/Cmp_d", "[core][backend]")
         SM.emit_St_Tup_i(0, 0);
         SM(args);
         REQUIRE(not res.is_null(0));
-        REQUIRE(res[0] == 1);
+        REQUIRE(res[0].as_i() > 0);
     }
 
     SECTION("Compare two equal doubles")
@@ -3111,7 +3111,7 @@ TEST_CASE("StackMachine/Comparison/Cmp_d", "[core][backend]")
         SM.emit_St_Tup_i(0, 0);
         SM(args);
         REQUIRE(not res.is_null(0));
-        REQUIRE(res[0] == 0);
+        REQUIRE(res[0].as_i() == 0);
     }
 }
 
@@ -3129,7 +3129,7 @@ TEST_CASE("StackMachine/Comparison/Cmp_s", "[core][backend]")
         SM.emit_St_Tup_i(0, 0);
         SM(args);
         REQUIRE(not res.is_null(0));
-        REQUIRE(res[0] == 1);
+        REQUIRE(res[0].as_i() > 0);
     }
 
     SECTION("Compare two equal strings/char-arrays")
@@ -3140,7 +3140,7 @@ TEST_CASE("StackMachine/Comparison/Cmp_s", "[core][backend]")
         SM.emit_St_Tup_i(0, 0);
         SM(args);
         REQUIRE(not res.is_null(0));
-        REQUIRE(res[0] == 0);
+        REQUIRE(res[0].as_i() == 0);
     }
 
     SECTION("Compare two empty strings")
@@ -3151,7 +3151,7 @@ TEST_CASE("StackMachine/Comparison/Cmp_s", "[core][backend]")
         SM.emit_St_Tup_i(0, 0);
         SM(args);
         REQUIRE(not res.is_null(0));
-        REQUIRE(res[0] == 0);
+        REQUIRE(res[0].as_i() == 0);
     }
 }
 
@@ -3169,7 +3169,7 @@ TEST_CASE("StackMachine/Comparison/Cmp_b", "[core][backend]")
         SM.emit_St_Tup_i(0, 0);
         SM(args);
         REQUIRE(not res.is_null(0));
-        REQUIRE(res[0] == 1);
+        REQUIRE(res[0].as_i() > 0);
     }
 
      SECTION("Compare two equal bools")
@@ -3180,7 +3180,7 @@ TEST_CASE("StackMachine/Comparison/Cmp_b", "[core][backend]")
         SM.emit_St_Tup_i(0, 0);
         SM(args);
         REQUIRE(not res.is_null(0));
-        REQUIRE(res[0] == 0);
+        REQUIRE(res[0].as_i() == 0);
     }
 }
 

@@ -254,7 +254,7 @@ void Sema::operator()(Const<Constant> &e)
             break;
 
         case TK_STRING_LITERAL:
-            e.type_ = Type::Get_Char(Type::TY_Scalar, strlen(e.tok.text) - 2); // without quotes
+            e.type_ = Type::Get_Char(Type::TY_Scalar, interpret(e.tok.text).length());
             break;
 
         case TK_DATE: {

@@ -36,23 +36,28 @@ struct Visitor
 #define M_GET_INVOKE_RESULT(CLASS) std::invoke_result_t<Vis, Const<CLASS>&>,
 #define M_MAKE_STL_VISIT_METHOD(CLASS) void operator()(Const<CLASS> &obj) { \
     if constexpr (std::is_same_v<void, result_type>) { vis(obj); } \
-    else { result = vis(obj); } \
+    else { result = m::some<result_type>(vis(obj)); } \
 }
 #define M_MAKE_STL_VISITABLE(VISITOR, BASE_CLASS, CLASS_LIST) \
     template<typename Vis> \
     auto visit(Vis &&vis, BASE_CLASS &obj, m::tag<VISITOR>&& = m::tag<VISITOR>()) { \
         struct V : VISITOR { \
             using result_type = std::common_type_t< CLASS_LIST(M_GET_INVOKE_RESULT) std::invoke_result_t<Vis, Const<EVAL(DEFER1(FIRST)(CLASS_LIST(COMMA)))>&> >; \
-            std::optional<m::some<result_type>> result; \
             Vis &&vis; \
-            V(Vis &&vis) : vis(std::forward<Vis>(vis)) { } \
+            std::optional<m::some<result_type>> result; \
+            V(Vis &&vis) : vis(std::forward<Vis>(vis)), result(std::nullopt) { } \
+            V(const V&) = delete; \
+            V(V&&) = default; \
             using VISITOR::operator(); \
             CLASS_LIST(M_MAKE_STL_VISIT_METHOD) \
         }; \
         V v(std::forward<Vis>(vis)); \
         v(obj); \
-        if constexpr (not std::is_same_v<void, typename V::result_type>) \
-            return *std::move(v.result); \
+        if constexpr (not std::is_same_v<void, typename V::result_type>) { \
+            return std::move(v.result->value); \
+        } else { \
+            return; \
+        } \
     }
 
 /*----- Declare a visitor to visit the class hierarchy with the given base class and list of subclasses. -------------*/

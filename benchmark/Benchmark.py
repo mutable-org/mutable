@@ -704,12 +704,11 @@ BEGIN
 ''')
                     for config, measurements in configs.items():
                         config_params = measurements['config'].unique()
-                        assert len(config_params) == 1
                         parameters = list()
                         if experiment_params:
                             parameters.append(experiment_params)
-                        if config_params[0]:
-                            parameters.append(config_params[0])
+                        if len(config_params) > 0:
+                            parameters.append(' '.join(config_params))
                         output_sql_file.write(f'''
     -- Get config
     PERFORM insert_configuration('{escape(config)}', '{escape(" ".join(parameters))}');

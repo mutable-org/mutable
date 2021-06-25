@@ -43,7 +43,7 @@ struct RefCountingHashMap
     using difference_type   = std::ptrdiff_t;
 
     private:
-    struct __attribute__((packed, aligned)) entry_type
+    struct entry_type
     {
         /** Counts the length of the probe sequence. */
         uint32_t probe_length = 0;

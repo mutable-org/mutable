@@ -67,7 +67,7 @@ endif()
 set(CMAKE_COMPILE_FLAGS             "-W -Wall -pedantic -Wno-variadic-macros -Wno-gnu-zero-variadic-macro-arguments -Wno-gnu-label-as-value -Wno-c++20-designator -Wno-vla-extension")
 set(CMAKE_C_FLAGS                   "${CMAKE_C_FLAGS} ${CMAKE_COMPILE_FLAGS}")
 set(CMAKE_CXX_FLAGS                 "-std=c++17 ${CMAKE_CXX_FLAGS} ${CMAKE_COMPILE_FLAGS}")
-set(CMAKE_CXX_FLAGS_DEBUG           "-ggdb3 -fno-omit-frame-pointer -fno-optimize-sibling-calls -fsanitize=address -fsanitize-address-use-after-scope")
+set(CMAKE_CXX_FLAGS_DEBUG           "-ggdb3 -fno-omit-frame-pointer -fno-optimize-sibling-calls -fsanitize=address,undefined -fno-sanitize=vptr -fsanitize-address-use-after-scope")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "-ggdb3 -fno-omit-frame-pointer -fno-optimize-sibling-calls -O1")
 set(CMAKE_POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS})
 
@@ -247,9 +247,9 @@ add_custom_target(
     COMMAND echo "##################"
     COMMAND echo "### Unit Tests ###"
     COMMAND echo "##################"
-    COMMAND env ASAN_OPTIONS=detect_stack_use_after_return=1 ${EXECUTABLE_OUTPUT_PATH}/unittest "\[core\]"
+    COMMAND env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 ${EXECUTABLE_OUTPUT_PATH}/unittest "\[core\]"
     COMMAND echo "#########################"
     COMMAND echo "### Integration Tests ###"
     COMMAND echo "#########################"
-    COMMAND env ASAN_OPTIONS=detect_stack_use_after_return=1 "${CMAKE_CURRENT_SOURCE_DIR}/test/IntegrationTest.py" -r "${PROJECT_BINARY_DIR}"
+    COMMAND env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 "${CMAKE_CURRENT_SOURCE_DIR}/test/IntegrationTest.py" -r "${PROJECT_BINARY_DIR}"
 )

@@ -253,7 +253,7 @@ struct Interpreter : Backend, ConstOperatorVisitor
                 int year, month, day;
                 if (3 != sscanf(c.tok.text, "d'%d-%d-%d'", &year, &month, &day))
                     unreachable("invalid date");
-                return int32_t(year << 9 | month << 5 | day);
+                return int32_t(unsigned(year) << 9 | month << 5 | day);
             }
 
             /* Datetime */

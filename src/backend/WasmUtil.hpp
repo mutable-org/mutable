@@ -1000,15 +1000,25 @@ WasmStruct::create_load_context(FunctionBuilder &fn, WasmTemporary ptr, std::siz
 
 inline WasmTemporary BlockBuilder::finalize()
 {
-    WasmTemporary blk = BinaryenBlock(
-        /* module=      */ module(),
-        /* name=        */ name_,
-        /* children=    */ &exprs_[0],
-        /* numChildren= */ exprs_.size(),
-        /* type=        */ return_type_
-    );
-    exprs_.clear();
-    return blk;
+    if (exprs_.size() != 0) {
+        WasmTemporary blk = BinaryenBlock(
+            /* module=      */ module(),
+            /* name=        */ name_,
+            /* children=    */ &exprs_[0],
+            /* numChildren= */ exprs_.size(),
+            /* type=        */ return_type_
+        );
+        exprs_.clear();
+        return blk;
+    } else {
+        return BinaryenBlock(
+            /* module=      */ module(),
+            /* name=        */ name_,
+            /* children=    */ nullptr,
+            /* numChildren= */ 0,
+            /* type=        */ return_type_
+        );
+    }
 }
 
 /*----- FunctionBuilder ----------------------------------------------------------------------------------------------*/

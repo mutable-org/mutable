@@ -354,68 +354,83 @@ WasmModule V8Platform::compile(const Operator &plan) const
 
     /*----- Collect all string literals. -----------------------------------------------------------------------------*/
     auto literals = CollectStringLiterals::Collect(plan);
-
-    /*----- Create data segments for literals. -----------------------------------------------------------------------*/
     const std::size_t num_literals = literals.size();
-    int8_t *segments_passive = new int8_t[num_literals]();
-    std::fill_n(segments_passive, num_literals, true);
-
-    std::vector<BinaryenExpressionRef> segment_offsets;
-    segment_offsets.reserve(num_literals);
-    std::vector<BinaryenIndex> segment_sizes;
-    segment_sizes.reserve(num_literals);
-
-    std::size_t current_offset = 0;
-    for (auto l : literals) {
-        codegen.add_literal(l, current_offset);
-        const auto len = strlen(l);
-        segment_offsets.emplace_back(nullptr);
-        segment_sizes.emplace_back(len);
-        current_offset += len;
-    }
 
     /*----- Add memory. ----------------------------------------------------------------------------------------------*/
-    BinaryenSetMemory(
-        /* module=         */ codegen,
-        /* initial=        */ 1,
-        /* maximum=        */ WasmPlatform::WASM_MAX_MEMORY / WasmPlatform::WASM_PAGE_SIZE, // allowed maximum
-        /* exportName=     */ "memory",
-        /* segments=       */ &literals[0],
-        /* segmentPassive= */ segments_passive,
-        /* segmentOffsets= */ &segment_offsets[0],
-        /* segmentSizes=   */ &segment_sizes[0],
-        /* numSegments=    */ literals.size(),
-        /* shared=         */ 0
-    );
+    if (num_literals > 0) {
+        /*----- Create data segments for literals. -------------------------------------------------------------------*/
+        int8_t *segments_passive = new int8_t[num_literals]();
+        std::fill_n(segments_passive, num_literals, true);
 
-    for (std::size_t i = 0; i != literals.size(); ++i) {
-        const auto literal = literals[i];
-        const auto size = segment_sizes[i];
-        const auto offset = codegen.get_literal_offset(literal);
-        WasmTemporary dest = BinaryenBinary(
+        std::vector<BinaryenExpressionRef> segment_offsets;
+        segment_offsets.reserve(num_literals);
+        std::vector<BinaryenIndex> segment_sizes;
+        segment_sizes.reserve(num_literals);
+
+        std::size_t current_offset = 0;
+        for (auto l : literals) {
+            codegen.add_literal(l, current_offset);
+            const auto len = strlen(l);
+            segment_offsets.emplace_back(nullptr);
+            segment_sizes.emplace_back(len);
+            current_offset += len;
+        }
+
+        BinaryenSetMemory(
+            /* module=         */ codegen,
+            /* initial=        */ 1,
+            /* maximum=        */ WasmPlatform::WASM_MAX_MEMORY / WasmPlatform::WASM_PAGE_SIZE, // allowed maximum
+            /* exportName=     */ "memory",
+            /* segments=       */ &literals[0],
+            /* segmentPassive= */ segments_passive,
+            /* segmentOffsets= */ &segment_offsets[0],
+            /* segmentSizes=   */ &segment_sizes[0],
+            /* numSegments=    */ literals.size(),
+            /* shared=         */ 0
+        );
+
+        for (std::size_t i = 0; i != literals.size(); ++i) {
+            const auto literal = literals[i];
+            const auto size = segment_sizes[i];
+            const auto offset = codegen.get_literal_offset(literal);
+            WasmTemporary dest = BinaryenBinary(
+                /* module= */ codegen,
+                /* op=     */ BinaryenAddInt32(),
+                /* left=   */ codegen.literals(),
+                /* right=  */ BinaryenConst(codegen, BinaryenLiteralInt32(offset))
+            );
+            codegen.main().block() += BinaryenMemoryInit(
+                /* module=  */ codegen,
+                /* segment= */ i,
+                /* dest=    */ dest,
+                /* offset=  */ BinaryenConst(codegen, BinaryenLiteralInt32(0)),
+                /* size=    */ BinaryenConst(codegen, BinaryenLiteralInt32(size))
+            );
+        }
+
+        delete[] segments_passive;
+
+        codegen.main().block() += codegen.head_of_heap().set(BinaryenBinary(
             /* module= */ codegen,
             /* op=     */ BinaryenAddInt32(),
-            /* left=   */ codegen.literals(),
-            /* right=  */ BinaryenConst(codegen, BinaryenLiteralInt32(offset))
-        );
-        codegen.main().block() += BinaryenMemoryInit(
-            /* module=  */ codegen,
-            /* segment= */ i,
-            /* dest=    */ dest,
-            /* offset=  */ BinaryenConst(codegen, BinaryenLiteralInt32(0)),
-            /* size=    */ BinaryenConst(codegen, BinaryenLiteralInt32(size))
+            /* left=   */ codegen.head_of_heap(),
+            /* right=  */ BinaryenConst(codegen, BinaryenLiteralInt32(current_offset))
+        ));
+        codegen.main().block() += codegen.align_head_of_heap();
+    } else {
+        BinaryenSetMemory(
+            /* module=         */ codegen,
+            /* initial=        */ 1,
+            /* maximum=        */ WasmPlatform::WASM_MAX_MEMORY / WasmPlatform::WASM_PAGE_SIZE, // allowed maximum
+            /* exportName=     */ "memory",
+            /* segments=       */ nullptr,
+            /* segmentPassive= */ nullptr,
+            /* segmentOffsets= */ nullptr,
+            /* segmentSizes=   */ nullptr,
+            /* numSegments=    */ 0,
+            /* shared=         */ 0
         );
     }
-
-    delete[] segments_passive;
-
-    codegen.main().block() += codegen.head_of_heap().set(BinaryenBinary(
-        /* module= */ codegen,
-        /* op=     */ BinaryenAddInt32(),
-        /* left=   */ codegen.head_of_heap(),
-        /* right=  */ BinaryenConst(codegen, BinaryenLiteralInt32(current_offset))
-    ));
-    codegen.main().block() += codegen.align_head_of_heap();
 
 #if 1
     /*----- Add print function. --------------------------------------------------------------------------------------*/

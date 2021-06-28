@@ -113,11 +113,10 @@ def benchmark_query(command, query, pattern, timeout):
     err = err.decode('latin-1')
 
     if process.returncode or len(err):
-        query = query.encode('unicode_escape').decode()
         outstr = '\n'.join(out.split('\n')[-20:])
         tqdm.write(f'''\
 Unexpected failure during execution of benchmark "{path_to_file}" with return code {process.returncode}:
-$ echo -e "{query}" | {' '.join(cmd)}
+$ echo -e {repr(query)} | {' '.join(cmd)}
 ===== stdout =====
 {outstr}
 ===== stderr =====

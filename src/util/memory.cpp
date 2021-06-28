@@ -64,7 +64,7 @@ AddressSpace::AddressSpace(std::size_t size)
     size_ = aligned_size;
 }
 
-AddressSpace::~AddressSpace() { munmap(addr_, size_); }
+AddressSpace::~AddressSpace() { if (addr_) munmap(addr_, size_); }
 
 
 /*======================================================================================================================

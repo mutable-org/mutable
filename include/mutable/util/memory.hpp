@@ -56,7 +56,7 @@ struct AddressSpace
     AddressSpace(std::size_t size);
     ~AddressSpace();
     AddressSpace(const AddressSpace&) = delete;
-    AddressSpace(AddressSpace &&other) { swap(*this, other); }
+    AddressSpace(AddressSpace &&other) : AddressSpace() { swap(*this, other); }
 
     /** Returns a pointer to the beginning of the virtual address space. */
     void * addr() const { return addr_; }

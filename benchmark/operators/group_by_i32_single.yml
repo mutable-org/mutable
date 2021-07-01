@@ -1,6 +1,7 @@
-description: Group by single attribute of type INT(4).
+description: Group by a single attribute of type INT(4).
 suite: operators
-benchmark: group_by-single
+benchmark: grouping
+name: single INT(4)
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:

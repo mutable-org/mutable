@@ -1,6 +1,7 @@
 description: Group by multiple attributes of type INT(4).
 suite: operators
-benchmark: group_by-multiple
+benchmark: grouping
+name: multiple INT(4)
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:

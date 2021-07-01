@@ -1,6 +1,7 @@
 description: One-sided range filter on attribute of type INT(4).
 suite: operators
-benchmark: filter-onesided
+benchmark: selection-onesided
+name: INT(4)
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:

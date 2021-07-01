@@ -2,7 +2,8 @@ description: |
     Two one-sided range filters on attributes of type INT(4) with simultaneously varying selectivity of both predicates
     equally.
 suite: operators
-benchmark: filter-multi
+benchmark: selection-multiple
+name: both varying
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:

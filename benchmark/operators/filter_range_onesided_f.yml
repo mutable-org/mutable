@@ -1,6 +1,7 @@
 description: One-sided range filter on attribute of type FLOAT.
 suite: operators
-benchmark: filter-onesided
+benchmark: selection-onesided
+name: FLOAT
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:

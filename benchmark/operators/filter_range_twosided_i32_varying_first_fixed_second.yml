@@ -2,7 +2,8 @@ description: |
     Two-sided range filter on attribute of type INT(4) with varying selectivity of the first predicate and 1%
     selectivity of the second predicate.
 suite: operators
-benchmark: filter-twosided
+benchmark: selection-twosided
+name: INT(4), 1%
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:

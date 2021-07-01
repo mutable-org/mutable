@@ -1,6 +1,7 @@
 description: Order by single attribute of type INT(4) and varying number or distinct values.
 suite: operators
-benchmark: order_by-distinct
+benchmark: ordering
+name: distinct INT(4)
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:

@@ -1,6 +1,7 @@
 description: Order by multiple attributes of type INT(4).
 suite: operators
-benchmark: order_by-multiple
+benchmark: ordering
+name: multiple INT(4)
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:

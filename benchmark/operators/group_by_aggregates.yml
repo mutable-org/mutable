@@ -1,6 +1,7 @@
 description: Compute varying number of aggregates while grouping.
 suite: operators
-benchmark: group_by-aggregates
+benchmark: grouping
+name: aggregates
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:

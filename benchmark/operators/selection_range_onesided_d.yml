@@ -1,4 +1,4 @@
-description: One-sided range filter on attribute of type DOUBLE.
+description: One-sided range selection on attribute of type DOUBLE.
 suite: operators
 benchmark: selection-onesided
 name: DOUBLE
@@ -23,6 +23,6 @@ cases:
     0.95: SELECT 1 FROM Attribute_d WHERE val < 0.95;
     0.99: SELECT 1 FROM Attribute_d WHERE val < 0.99;
 compare_to:
-    'DuckDB': 'benchmark/operators/filter_range_onesided_d_duckdb.sh'
-    'PostgreSQL': 'benchmark/operators/filter_range_onesided_d_postgresql.sh'
-    'HyPer': 'benchmark/operators/filter_range_onesided_d_hyper.py'
+    'DuckDB': 'benchmark/operators/selection_range_onesided_d_duckdb.sh'
+    'PostgreSQL': 'benchmark/operators/selection_range_onesided_d_postgresql.sh'
+    'HyPer': 'benchmark/operators/selection_range_onesided_d_hyper.py'

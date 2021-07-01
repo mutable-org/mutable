@@ -1,5 +1,5 @@
 description: |
-    Two one-sided range filters on attributes of type INT(4) with varying selectivity of the first predicate and 1%
+    Two one-sided range selections on attributes of type INT(4) with varying selectivity of the first predicate and 1%
     selectivity of the second predicate.
 suite: operators
 benchmark: selection-multiple
@@ -26,6 +26,6 @@ cases:
     0.95: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  1932735282 AND a1 < -2104533974;
     0.99: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  2104533974 AND a1 < -2104533974;
 compare_to:
-    'DuckDB':     'benchmark/operators/filter_multi_i32_varying_first_fixed_second_duckdb.sh'
-    'PostgreSQL': 'benchmark/operators/filter_multi_i32_varying_first_fixed_second_postgresql.sh'
-    'HyPer':      'benchmark/operators/filter_multi_i32_varying_first_fixed_second_hyper.py'
+    'DuckDB':     'benchmark/operators/selection_multi_i32_varying_first_fixed_second_duckdb.sh'
+    'PostgreSQL': 'benchmark/operators/selection_multi_i32_varying_first_fixed_second_postgresql.sh'
+    'HyPer':      'benchmark/operators/selection_multi_i32_varying_first_fixed_second_hyper.py'

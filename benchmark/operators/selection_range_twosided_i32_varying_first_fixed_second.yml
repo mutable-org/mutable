@@ -1,5 +1,5 @@
 description: |
-    Two-sided range filter on attribute of type INT(4) with varying selectivity of the first predicate and 1%
+    Two-sided range selection on attribute of type INT(4) with varying selectivity of the first predicate and 1%
     selectivity of the second predicate.
 suite: operators
 benchmark: selection-twosided
@@ -26,6 +26,6 @@ cases:
     0.95: SELECT 1 FROM Attribute_i32 WHERE  1932735282 < val AND val <  1975684955;
     0.99: SELECT 1 FROM Attribute_i32 WHERE  2104533974 < val AND val <  2147483647;
 compare_to:
-    'DuckDB':     'benchmark/operators/filter_range_twosided_i32_varying_first_fixed_second_duckdb.sh'
-    'PostgreSQL': 'benchmark/operators/filter_range_twosided_i32_varying_first_fixed_second_postgresql.sh'
-    'HyPer':      'benchmark/operators/filter_range_twosided_i32_varying_first_fixed_second_hyper.py'
+    'DuckDB':     'benchmark/operators/selection_range_twosided_i32_varying_first_fixed_second_duckdb.sh'
+    'PostgreSQL': 'benchmark/operators/selection_range_twosided_i32_varying_first_fixed_second_postgresql.sh'
+    'HyPer':      'benchmark/operators/selection_range_twosided_i32_varying_first_fixed_second_hyper.py'

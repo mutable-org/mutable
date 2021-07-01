@@ -1,4 +1,4 @@
-description: One-sided range filter on attribute of type INT(8).
+description: One-sided range selection on attribute of type INT(8).
 suite: operators
 benchmark: selection-onesided
 name: INT(8)
@@ -21,6 +21,6 @@ cases:
     0.9: SELECT 1 FROM Attribute_i64 WHERE val <  7378697629483821056;
     1.0: SELECT 1 FROM Attribute_i64 WHERE val <  9223372036854775807;
 compare_to:
-    'DuckDB': 'benchmark/operators/filter_range_onesided_i64_duckdb.sh'
-    'PostgreSQL': 'benchmark/operators/filter_range_onesided_i64_postgresql.sh'
-    'HyPer': 'benchmark/operators/filter_range_onesided_i64_hyper.py'
+    'DuckDB': 'benchmark/operators/selection_range_onesided_i64_duckdb.sh'
+    'PostgreSQL': 'benchmark/operators/selection_range_onesided_i64_postgresql.sh'
+    'HyPer': 'benchmark/operators/selection_range_onesided_i64_hyper.py'

@@ -339,6 +339,7 @@ DECLARE
     benchmark_id integer;
     experiment_id integer;
     configuration_id integer;
+    chartconfig_id integer;
 BEGIN
     -- Get timestamp
     PERFORM insert_timestamp('{escape(commit)}', '{escape(now)}', '{escape(nodename)}');
@@ -407,7 +408,7 @@ BEGIN
 
                     output_sql_file.write(f'''
     -- Get experiment
-    PERFORM insert_experiment(benchmark_id, suite_id, '{escape(experiment)}', {version}, '{escape(description)}', {read_only}, '{escape(label)}', chartconfig_id);
+    PERFORM insert_experiment(benchmark_id, suite_id, '{escape(experiment)}', {version}, '{escape(description)}', {read_only}, chartconfig_id);
     SELECT id FROM "Experiments"
     WHERE benchmark=benchmark_id
       AND suite=suite_id

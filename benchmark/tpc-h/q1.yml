@@ -6,7 +6,6 @@ pattern: '^Execute query:.*'
 configurations:
     # Interpreter: --backend Interpreter --store ColumnStore
     'WebAssembly': --backend WasmV8 --store ColumnStore
-label: 'Scale Factor'
 tables: [ ]
 cases:
     1: |

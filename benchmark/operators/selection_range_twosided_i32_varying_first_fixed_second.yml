@@ -9,7 +9,6 @@ pattern: '^Execute query:.*'
 configurations:
     'WebAssembly (RowStore)':    --backend WasmV8 --store RowStore
     'WebAssembly (ColumnStore)': --backend WasmV8 --store ColumnStore
-label: 'Selectivity'
 tables: [ 'Attribute_i32' ]
 cases:
     0.01: SELECT 1 FROM Attribute_i32 WHERE -2104533974 < val AND val < -2061584301;
@@ -29,3 +28,12 @@ compare_to:
     'DuckDB':     'benchmark/operators/selection_range_twosided_i32_varying_first_fixed_second_duckdb.sh'
     'PostgreSQL': 'benchmark/operators/selection_range_twosided_i32_varying_first_fixed_second_postgresql.sh'
     'HyPer':      'benchmark/operators/selection_range_twosided_i32_varying_first_fixed_second_hyper.py'
+chart:
+    x:
+        scale: linear
+        type: Q
+        label: Selectivity
+    y:
+        scale: linear
+        type: Q
+        label: 'Execution time [ms]'

@@ -401,7 +401,6 @@ BEGIN
                     version = int(yml.get('version', 1))
                     description = str(yml['description'])
                     read_only = 'TRUE' if (str(yml['readonly']) == 'yes') else 'FALSE'
-                    label = str(yml['label'])
                     experiment_params = None
                     if 'args' in yml and yml['args']:
                         experiment_params = yml['args']

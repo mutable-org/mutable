@@ -1,12 +1,12 @@
 description: Foreign key join with key of type INT(4).
 suite: operators
 benchmark: equi_join
+name: 'Foreign Key Join'
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:
     Interpreter:                 --backend Interpreter
     'WebAssembly (ColumnStore)': --backend WasmV8 --store ColumnStore
-label: 'Scale factor'
 tables: [ ]
 cases:
     0.0:
@@ -68,3 +68,12 @@ compare_to:
     'DuckDB': 'benchmark/operators/equi_join_pk_fk_duckdb.sh'
     'PostgreSQL': 'benchmark/operators/equi_join_pk_fk_postgresql.sh'
     'HyPer': 'benchmark/operators/equi_join_pk_fk_hyper.py'
+chart:
+    x:
+        scale: linear
+        type: Q
+        label: Scale factor
+    y:
+        scale: linear
+        type: Q
+        label: 'Execution time [ms]'

@@ -6,7 +6,6 @@ readonly: yes
 pattern: '^Execute query:.*'
 configurations:
     WebAssembly: --backend WasmV8 --store ColumnStore
-label: 'Selectivity'
 tables: [ 'Attribute_i64' ]
 cases:
     0.0: SELECT 1 FROM Attribute_i64 WHERE val < -9223372036854775807;
@@ -32,4 +31,4 @@ chart:
     y:
         scale: linear
         type: Q
-        label: Execution time (ms)
+        label: 'Execution time [ms]'

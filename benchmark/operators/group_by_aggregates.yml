@@ -7,7 +7,6 @@ pattern: '^Execute query:.*'
 configurations:
     Interpreter: --backend Interpreter
     "WebAssembly (ColumnStore)": --backend WasmV8 --store ColumnStore
-label: 'Number of aggregates to compute'
 tables: [ 'Distinct_i32' ]
 cases:
     1: SELECT SUM(n100) FROM Distinct_i32 GROUP BY n10;
@@ -18,3 +17,12 @@ compare_to:
     'DuckDB': 'benchmark/operators/group_by_aggregates_duckdb.sh'
     'PostgreSQL': 'benchmark/operators/group_by_aggregates_postgresql.sh'
     'HyPer': 'benchmark/operators/group_by_aggregates_hyper.py'
+chart:
+    x:
+        scale: linear
+        type: O
+        label: Amount of aggregates
+    y:
+        scale: linear
+        type: Q
+        label: 'Execution time [ms]'

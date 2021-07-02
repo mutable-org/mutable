@@ -1,6 +1,7 @@
 description: Plan enumeration of clique queries.
 suite: plan-enumerators
 benchmark: clique
+name: small
 readonly: yes
 pattern: '^Compute the query plan:.*'
 args: --dryrun
@@ -12,7 +13,6 @@ configurations:
     DPsizeSub:      '--plan-enumerator DPsizeSub'
     TDbasic:        '--plan-enumerator TDbasic'
     TDMinCutAGaT:   '--plan-enumerator TDMinCutAGaT'
-label: 'Number of joins'
 tables: [ ]
 cases:
     2:  SELECT

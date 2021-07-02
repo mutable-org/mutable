@@ -283,3 +283,12 @@ cases:
 
             T10.key = T11.fkey
         ;
+chart:
+    x:
+        scale: linear
+        type: O
+        label: Number of relations
+    y:
+        scale: log
+        type: Q
+        label: Optimization time (ms)

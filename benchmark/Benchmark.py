@@ -314,13 +314,22 @@ AS $func$
     WHERE NOT ($2, $3) IN (SELECT timestamp, host FROM "Timestamps");
 $func$;
 
-CREATE OR REPLACE FUNCTION insert_experiment(int, int, text, int, text, bool, text)
+CREATE OR REPLACE FUNCTION insert_experiment(int, int, text, int, text, bool, int)
 RETURNS void
 LANGUAGE SQL
 AS $func$
-    INSERT INTO "Experiments" (benchmark, suite, name, version, description, is_read_only, label)
+    INSERT INTO "Experiments" (benchmark, suite, name, version, description, is_read_only, chart_config)
     SELECT $1, $2, $3, $4, $5, $6, $7
     WHERE NOT ($3, $4) IN (SELECT name, version FROM "Experiments");
+$func$;
+
+CREATE OR REPLACE FUNCTION insert_chartconfig(text, text, text, text, text, text)
+RETURNS void
+LANGUAGE SQL
+AS $func$
+    INSERT INTO "ChartConfig" (scale_x, scale_y, type_x, type_y, label_x, label_y)
+    SELECT $1, $2, $3, $4, $5, $6
+    WHERE NOT ($1, $2, $3, $4, $5, $6) IN (SELECT scale_x, scale_y, type_x, type_y, label_x, label_y FROM "ChartConfig");
 $func$;
 
 DO $$
@@ -362,6 +371,32 @@ BEGIN
 
                 for experiment, data in experiments.items():
                     configs, yml = data
+
+                    chart_config = dict()
+                    if 'chart' in yml:
+                        chart = yml['chart']
+                        for dimension, dimension_config in chart.items():
+                            for attr, val in dimension_config.items():
+                                chart_config[f'{attr}_{dimension}'] = "'{0}'".format(escape(val))
+
+                    chart_scale_x = chart_config.get('scale_x', "'linear'")
+                    chart_scale_y = chart_config.get('scale_y', "'linear'")
+                    chart_type_x  = chart_config.get('type_x',  "'Q'")
+                    chart_type_y  = chart_config.get('type_y',  "'Q'")
+                    chart_label_x = chart_config.get('label_x', "'X'")
+                    chart_label_y = chart_config.get('label_y', "'Y'")
+
+                    output_sql_file.write(f'''
+    -- Get chart configuration
+    PERFORM insert_chartconfig({chart_scale_x}, {chart_scale_y}, {chart_type_x}, {chart_type_y}, {chart_label_x}, {chart_label_y});
+    SELECT id FROM "ChartConfig"
+    WHERE scale_x={chart_scale_x} AND scale_y={chart_scale_y}
+      AND type_x={chart_type_x} AND type_y={chart_type_y}
+      AND label_x={chart_label_x} AND label_y={chart_label_y}
+    INTO chartconfig_id;
+''')
+
+
                     version = int(yml.get('version', 1))
                     description = str(yml['description'])
                     read_only = 'TRUE' if (str(yml['readonly']) == 'yes') else 'FALSE'
@@ -372,7 +407,7 @@ BEGIN
 
                     output_sql_file.write(f'''
     -- Get experiment
-    PERFORM insert_experiment(benchmark_id, suite_id, '{escape(experiment)}', {version}, '{escape(description)}', {read_only}, '{escape(label)}');
+    PERFORM insert_experiment(benchmark_id, suite_id, '{escape(experiment)}', {version}, '{escape(description)}', {read_only}, '{escape(label)}', chartconfig_id);
     SELECT id FROM "Experiments"
     WHERE benchmark=benchmark_id
       AND suite=suite_id

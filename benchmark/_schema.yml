@@ -11,6 +11,7 @@ label: str(required=False)
 tables: include('table_list')
 cases: map(any(str(), include('case')), key=any())
 compare_to: map(required=False)
+chart: include('chart', required=False)
 ---
 table:
     name: str()
@@ -20,3 +21,20 @@ table_list:
 case:
     query: str()
     tables: include('table_list')
+---
+axis:
+    # Kind of scale, one of
+    #   - linear
+    #   - log
+    scale: str(required=False)
+    # Type of data, one of
+    #   - Q quantitative    a continuous real-valued quantity
+    #   - O ordinal         a discrete ordered quantity
+    #   - N nominal         a discrete unordered category
+    #   - T temporal        a time or date value
+    type: str(required=False)
+    # A label for the axis
+    label: str(required=False)
+chart:
+    x: include('axis', required=False)
+    y: include('axis', required=False)

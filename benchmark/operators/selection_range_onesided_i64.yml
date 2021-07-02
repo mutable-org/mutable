@@ -24,3 +24,12 @@ compare_to:
     'DuckDB': 'benchmark/operators/selection_range_onesided_i64_duckdb.sh'
     'PostgreSQL': 'benchmark/operators/selection_range_onesided_i64_postgresql.sh'
     'HyPer': 'benchmark/operators/selection_range_onesided_i64_hyper.py'
+chart:
+    x:
+        scale: linear
+        type: Q
+        label: Selectivity
+    y:
+        scale: linear
+        type: Q
+        label: Execution time (ms)

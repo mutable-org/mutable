@@ -249,3 +249,12 @@ cases:
             T17.key = T18.fkey AND
             T18.key = T19.fkey
         ;
+chart:
+    x:
+        scale: linear
+        type: O
+        label: Number of relations
+    y:
+        scale: log
+        type: Q
+        label: Optimization time (ms)

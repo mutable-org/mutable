@@ -320,7 +320,7 @@ LANGUAGE SQL
 AS $func$
     INSERT INTO "Experiments" (benchmark, suite, name, version, description, is_read_only, chart_config)
     SELECT $1, $2, $3, $4, $5, $6, $7
-    WHERE NOT ($3, $4) IN (SELECT name, version FROM "Experiments");
+    WHERE NOT ($1, $2, $3, $4) IN (SELECT benchmark, suite, name, version FROM "Experiments");
 $func$;
 
 CREATE OR REPLACE FUNCTION insert_chartconfig(text, text, text, text, text, text)

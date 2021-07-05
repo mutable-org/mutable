@@ -1,10 +1,17 @@
 #!/bin/env python3
 
+import sys
+sys.path.insert(0, 'benchmark')
+
+import os
 import time
 from tableauhyperapi import HyperProcess, Telemetry, Connection, CreateMode, NOT_NULLABLE, NULLABLE, SqlType, \
         TableDefinition, Inserter, escape_name, escape_string_literal, HyperException, TableName
 
+import hyperconf
+
 if __name__ == '__main__':
+    hyperconf.init() # prepare for measurements
     with HyperProcess(telemetry=Telemetry.DO_NOT_SEND_USAGE_DATA_TO_TABLEAU) as hyper:
         with Connection(endpoint=hyper.endpoint, database='benchmark.hyper', create_mode=CreateMode.CREATE_AND_REPLACE) as connection:
             table_def = TableDefinition(
@@ -20,7 +27,6 @@ if __name__ == '__main__':
                 ]
             )
 
-            times = list()
             queries = [
                 f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY n10000)                   AS T',
                 f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY n10000, n1000)            AS T',
@@ -28,16 +34,8 @@ if __name__ == '__main__':
                 f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY n10000, n1000, n100, n10) AS T',
             ]
 
-            for q in queries:
-                if connection.catalog.has_table(table_def.table_name):
-                    connection.execute_command(f'DROP TABLE {table_def.table_name}')
-                connection.catalog.create_table(table_def)
-                num_rows = connection.execute_command(f'COPY {table_def.table_name} FROM \'benchmark/operators/data/Distinct_i32.csv\' WITH DELIMITER \',\' CSV HEADER')
-                begin = time.time_ns()
-                with connection.execute_query(q) as result:
-                    pass
-                end = time.time_ns()
-                times.append(end - begin)
+            times = hyperconf.benchmark_execution_times(connection, queries, [
+                    (table_def, 'benchmark/operators/data/Distinct_i32.csv', { 'FORMAT': 'csv', 'DELIMITER': "','", 'HEADER': 1 })
+            ])
 
-            for t in times:
-                print(t / 1e6) # in milliseconds
+            print('\n'.join(map(lambda t: f'{t:.3f}', times)))

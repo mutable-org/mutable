@@ -12,7 +12,7 @@ import time
 HYPER_LOG_FILE = 'hyperd.log'
 
 
-MATCH_SELECT = lambda o: 'v' in o and 'SELECT' in o['v']['query-trunc']
+MATCH_SELECT = lambda o: 'v' in o and str(o['v']['query-trunc']).startswith('SELECT')
 
 custom_settings = {
     'log_timing' : '1',
@@ -88,25 +88,39 @@ def init():
     if os.path.isfile(HYPER_LOG_FILE):
         os.remove(HYPER_LOG_FILE)
 
-def load_table(connection :Connection, table_name :str, filename :str):
-    table_def = table_defs[table_name]
+def load_table(connection :Connection, table, filename :str, **kwargs):
+    if isinstance(table, str):
+        table_def = table_defs[table_name]
+    elif isinstance(table, TableDefinition):
+        table_def = table
+    else:
+        raise TypeError(f'table type {str(type(table))} not supported')
     connection.catalog.create_table(table_def)
-    connection.execute_command(f'COPY {table_def.table_name} FROM \'{filename}\' WITH DELIMITER \'|\' CSV')
+    command = f'COPY {table_def.table_name} FROM \'{filename}\''
+    if kwargs:
+        command += ' WITH (' + ', '.join(map(lambda e: f'{e[0]} {e[1]}', kwargs.items())) + ')'
+    connection.execute_command(command)
 
-def dispose_table(connection :Connection, table_name :str):
-    table_def = table_defs[table_name]
+def dispose_table(connection :Connection, table):
+    if isinstance(table, str):
+        table_def = table_defs[table_name]
+    elif isinstance(table, TableDefinition):
+        table_def = table
+    else:
+        raise TypeError(f'table type {str(type(table))} not supported')
     connection.execute_command(f'DELETE FROM {table_def.table_name}')
     connection.execute_command(f'DROP TABLE {table_def.table_name}')
 
 def benchmark_query(connection :Connection, query :str, tables :list):
-    for table_name, filename in tables:
-        load_table(connection, table_name, filename)
+    for table, filename, kwargs in tables:
+        load_table(connection, table, filename, **kwargs)
     begin = time.time_ns()
     with connection.execute_query(query) as result:
-        pass
+        for row in result:
+            pass # pull each row; this is necessary to evalute a query completely
     end = time.time_ns()
-    for table_name, _ in tables:
-        dispose_table(connection, table_name)
+    for table, _, _ in tables:
+        dispose_table(connection, table)
     return end - begin
 
 def extract_results():
@@ -131,6 +145,17 @@ def filter_results(results :list, attribute_values :dict, matcher :list=list()):
         if match_result(r, attribute_values, matcher):
             matches.append(r)
     return matches
+
+def benchmark_execution_times(connection :Connection, queries :list, tables :list):
+    for q in queries:
+        benchmark_query(connection, q, tables)
+    res = extract_results()
+    matches = filter_results(
+        res,
+        { 'k': 'query-end'},
+        [ MATCH_SELECT ]
+    )
+    return list(map(lambda m: m['v']['execution-time'] * 1000, matches))
 
 if __name__ == '__main__':
     with HyperProcess(telemetry=Telemetry.DO_NOT_SEND_USAGE_DATA_TO_TABLEAU, parameters=custom_settings) as hyper:

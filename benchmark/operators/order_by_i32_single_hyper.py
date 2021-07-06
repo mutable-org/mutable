@@ -44,7 +44,8 @@ if __name__ == '__main__':
             for sf in scale_factors:
                 connection.execute_command(f'INSERT INTO {table_def.table_name} SELECT * FROM {table_tmp.table_name} LIMIT {int(num_rows * sf)}')
                 with connection.execute_query(query) as result:
-                    pass
+                    for row in result:
+                        pass
                 connection.execute_command(f'DELETE FROM {table_def.table_name}')
 
             matches = hyperconf.filter_results(

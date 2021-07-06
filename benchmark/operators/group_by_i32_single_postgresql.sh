@@ -19,7 +19,7 @@ set jit=off;
 CREATE TABLE Distinct_i32 ( id INT, n1 INT, n10 INT, n100 INT, n1000 INT, n10000 INT, n100000 INT);
 \copy Distinct_i32 FROM PROGRAM 'head -n $((NUM_ROWS * sf / 100)) ${CSV}' WITH DELIMITER ',' CSV HEADER;
 \timing on
-SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n100000) AS T;
+SELECT COUNT(DISTINCT n100000) FROM Distinct_i32 AS T;
 \timing off
 EOF
 done

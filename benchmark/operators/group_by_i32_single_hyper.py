@@ -38,13 +38,14 @@ if __name__ == '__main__':
             )
             connection.catalog.create_table(table_def)
 
-            query = f'SELECT COUNT(*) FROM (SELECT DISTINCT n100000 FROM {table_def.table_name}) AS T'
-            scale_factors = numpy.linspace(0, 1, num=11)
+            #  query = f'SELECT COUNT(*) FROM (SELECT DISTINCT n100000 FROM {table_def.table_name}) AS T'
+            query = f'SELECT COUNT(DISTINCT n100000) FROM {table_def.table_name} AS T'
 
-            for sf in scale_factors:
+            for sf in numpy.linspace(0, 1, num=11):
                 connection.execute_command(f'INSERT INTO {table_def.table_name} SELECT * FROM {table_tmp.table_name} LIMIT {int(num_rows * sf)}')
                 with connection.execute_query(query) as result:
-                    pass
+                    for row in result:
+                        pass
                 connection.execute_command(f'DELETE FROM {table_def.table_name}')
 
             matches = hyperconf.filter_results(

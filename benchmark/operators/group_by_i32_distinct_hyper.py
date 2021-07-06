@@ -27,13 +27,23 @@ if __name__ == '__main__':
                 ]
             )
 
+            #  queries = [
+            #      f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY     n10) AS T',
+            #      f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY    n100) AS T',
+            #      f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY   n1000) AS T',
+            #      f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY  n10000) AS T',
+            #      f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY n100000) AS T',
+            #  ]
+
             queries = [
-                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY     n10) AS T',
-                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY    n100) AS T',
-                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY   n1000) AS T',
-                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY  n10000) AS T',
-                f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY n100000) AS T',
+                f'SELECT COUNT(DISTINCT     n10) FROM {table_def.table_name} AS T',
+                f'SELECT COUNT(DISTINCT    n100) FROM {table_def.table_name} AS T',
+                f'SELECT COUNT(DISTINCT   n1000) FROM {table_def.table_name} AS T',
+                f'SELECT COUNT(DISTINCT  n10000) FROM {table_def.table_name} AS T',
+                f'SELECT COUNT(DISTINCT n100000) FROM {table_def.table_name} AS T',
             ]
+
+            print('\n'.join(queries))
 
             times = hyperconf.benchmark_execution_times(connection, queries, [
                     (table_def, 'benchmark/operators/data/Distinct_i32.csv', { 'FORMAT': 'csv', 'DELIMITER': "','", 'HEADER': 1 })

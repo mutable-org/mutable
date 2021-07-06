@@ -34,6 +34,13 @@ if __name__ == '__main__':
                 f'SELECT COUNT(*) FROM (SELECT 1 FROM {table_def.table_name} GROUP BY n10000, n1000, n100, n10) AS T',
             ]
 
+            #  queries = [
+            #      f'SELECT COUNT(DISTINCT n10000)                   FROM {table_def.table_name} AS T',
+            #      f'SELECT COUNT(DISTINCT CONCAT(n10000, n1000))            FROM {table_def.table_name} AS T',
+            #      f'SELECT COUNT(DISTINCT CONCAT(n10000, n1000, n100))      FROM {table_def.table_name} AS T',
+            #      f'SELECT COUNT(DISTINCT CONCAT(n10000, n1000, n100, n10)) FROM {table_def.table_name} AS T',
+            #  ]
+
             times = hyperconf.benchmark_execution_times(connection, queries, [
                     (table_def, 'benchmark/operators/data/Distinct_i32.csv', { 'FORMAT': 'csv', 'DELIMITER': "','", 'HEADER': 1 })
             ])

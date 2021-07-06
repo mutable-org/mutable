@@ -43,8 +43,6 @@ if __name__ == '__main__':
                 f'SELECT COUNT(DISTINCT n100000) FROM {table_def.table_name} AS T',
             ]
 
-            print('\n'.join(queries))
-
             times = hyperconf.benchmark_execution_times(connection, queries, [
                     (table_def, 'benchmark/operators/data/Distinct_i32.csv', { 'FORMAT': 'csv', 'DELIMITER': "','", 'HEADER': 1 })
             ])

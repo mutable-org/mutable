@@ -157,6 +157,15 @@ def benchmark_execution_times(connection :Connection, queries :list, tables :lis
     )
     return list(map(lambda m: m['v']['execution-time'] * 1000, matches))
 
+def median(seq :list):
+    l = len(seq)
+    if l == 0:
+        raise ValueError('cannot compute median of empty sequence')
+    if l == 1:
+        return seq[0]
+    seq = sorted(seq)
+    return (seq[l // 2] + seq[(l-1) // 2]) / 2
+
 if __name__ == '__main__':
     with HyperProcess(telemetry=Telemetry.DO_NOT_SEND_USAGE_DATA_TO_TABLEAU, parameters=custom_settings) as hyper:
         with Connection(endpoint=hyper.endpoint, database='benchmark.hyper', create_mode=CreateMode.CREATE_AND_REPLACE) as connection:

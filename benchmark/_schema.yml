@@ -13,8 +13,11 @@ compare_to: map(required=False)
 chart: include('chart', required=False)
 ---
 table:
-    name: str()
-    sf: num(min=0, max=1)
+    name: str()                             # table name
+    path: str(required=False)               # path to table file
+    sf: num(required=False, min=0, max=1)   # scale factor as portion of file to load; defaults to 1
+    delimiter: str(required=False)          # defaults to ','
+    header: int(required=False)             # 1 if file has header, 0 otherwise; defaults to 0
 table_list:
     list(any(str(), include('table')), required=True)
 case:

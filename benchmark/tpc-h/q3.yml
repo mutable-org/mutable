@@ -1,0 +1,45 @@
+description: TPC-H Query 3
+suite: TPC
+benchmark: TPC-H
+name: Q3
+readonly: yes
+pattern: '^Execute query:.*'
+configurations:
+    'WebAssembly': --backend WasmV8 --store ColumnStore
+tables: [ ]
+cases:
+    1:
+        query: |
+            SELECT
+                    l_orderkey,
+                    SUM(l_extendedprice * (1 - l_discount)) AS revenue,
+                    o_orderdate,
+                    o_shippriority
+            FROM
+                    Customer,
+                    Orders,
+                    Lineitem
+            WHERE
+                    c_mktsegment = "BUILDING"
+                    AND c_custkey = o_custkey
+                    AND l_orderkey = o_orderkey
+                    AND o_orderdate < d'1995-03-15'
+                    AND l_shipdate > d'1995-03-15'
+            GROUP BY
+                    l_orderkey,
+                    o_orderdate,
+                    o_shippriority
+            ORDER BY
+                    revenue DESC,
+                    o_orderdate
+            LIMIT 10;
+        tables:
+            - name: Lineitem
+              path: benchmark/tpc-h/data/lineitem.tbl
+              delimiter: '|'
+            - name: Orders
+              path: benchmark/tpc-h/data/orders.tbl
+              delimiter: '|'
+            - name: Customer
+              path: benchmark/tpc-h/data/customer.tbl
+              delimiter: '|'

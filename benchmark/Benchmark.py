@@ -60,10 +60,16 @@ def import_tables(path_to_data, tables):
             imports.append(f'IMPORT INTO {tbl} DSV "{os.path.join(path_to_data, tbl + ".csv")}" HAS HEADER SKIP HEADER;')
         else:
             name = tbl['name']
-            sf = tbl['sf']
-            path_to_file = os.path.join(path_to_data, name + '.csv')
-            rows = count_lines(path_to_file) - 1
-            imports.append(f'IMPORT INTO {name} DSV "{path_to_file}" ROWS {int(sf * rows)} HAS HEADER SKIP HEADER;')
+            path = tbl.get('path', os.path.join(path_to_data, f'{name}.csv'))
+            sf = float(tbl.get('sf', 1))
+            delimiter = tbl.get('delimiter', ',')
+            header = int(tbl.get('header', 0))
+
+            rows = count_lines(path) - header
+            import_str = f'IMPORT INTO {name} DSV "{path}" ROWS {int(sf * rows)} DELIMITER "{delimiter}"'
+            if header:
+                import_str += ' HAS HEADER SKIP HEADER'
+            imports.append(import_str + ';')
     return imports
 
 

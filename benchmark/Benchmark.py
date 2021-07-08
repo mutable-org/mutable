@@ -86,10 +86,12 @@ def validate_schema(path_to_file, path_to_schema) -> bool:
     return True
 
 
-def print_command(command, query, indent = ''):
+def print_command(command :list, query :str, indent = ''):
+    if command[-1] != '-':
+        command.append('-')
     query_str = query.strip().replace('\n', ' ').replace('"', '\\"')
     command_str = ' '.join(command)
-    tqdm.write(f'{indent}$ echo "{query_str}" | {command_str} -')
+    tqdm.write(f'{indent}$ echo "{query_str}" | {command_str}')
 
 
 #=======================================================================================================================
@@ -121,8 +123,9 @@ def benchmark_query(command, query, pattern, timeout):
     if process.returncode or len(err):
         outstr = '\n'.join(out.split('\n')[-20:])
         tqdm.write(f'''\
-Unexpected failure during execution of benchmark "{path_to_file}" with return code {process.returncode}:
-$ echo -e {repr(query)} | {' '.join(cmd)}
+Unexpected failure during execution of benchmark "{path_to_file}" with return code {process.returncode}:''')
+        print_command(cmd, query)
+        tqdm.write(f'''\
 ===== stdout =====
 {outstr}
 ===== stderr =====

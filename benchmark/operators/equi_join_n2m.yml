@@ -13,56 +13,67 @@ cases:
         query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
+              header: 1
               sf:   0.0
     0.1:
         query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
+              header: 1
               sf:   0.1
     0.2:
         query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
+              header: 1
               sf:   0.2
     0.3:
         query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
+              header: 1
               sf:   0.3
     0.4:
         query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
+              header: 1
               sf:   0.4
     0.5:
         query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
+              header: 1
               sf:   0.5
     0.6:
         query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
+              header: 1
               sf:   0.6
     0.7:
         query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
+              header: 1
               sf:   0.7
     0.8:
         query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
+              header: 1
               sf:   0.8
     0.9:
         query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
+              header: 1
               sf:   0.9
     1.0:
         query: SELECT 1 FROM Relation R, Relation S WHERE R.n2m = S.n2m;
         tables:
             - name: 'Relation'
+              header: 1
               sf:   1.0
 compare_to:
     'DuckDB': 'benchmark/operators/equi_join_n2m_duckdb.sh'

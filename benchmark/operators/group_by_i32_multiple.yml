@@ -7,7 +7,9 @@ pattern: '^Execute query:.*'
 configurations:
     Interpreter: --backend Interpreter
     "WebAssembly (ColumnStore)": --backend WasmV8 --store ColumnStore
-tables: [ 'Distinct_i32' ]
+tables:
+    - name: 'Distinct_i32'
+      header: 1
 cases:
     1: SELECT 1 FROM Distinct_i32 GROUP BY n10000;
     2: SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000;

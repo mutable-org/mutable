@@ -6,7 +6,9 @@ readonly: yes
 pattern: '^Execute query:.*'
 configurations:
     WebAssembly: --backend WasmV8 --store ColumnStore
-tables: [ 'Attribute_d' ]
+tables:
+    - name: 'Attribute_d'
+      header: 1
 cases:
     0.01: SELECT 1 FROM Attribute_d WHERE val < 0.01;
     0.05: SELECT 1 FROM Attribute_d WHERE val < 0.05;

@@ -7,7 +7,9 @@ pattern: '^Execute query:.*'
 configurations:
     Interpreter: --backend Interpreter
     "WebAssembly (ColumnStore)": --backend WasmV8 --store ColumnStore
-tables: [ 'Distinct_i32' ]
+tables:
+    - name: 'Distinct_i32'
+      header: 1
 cases:
     1: SELECT SUM(n100) FROM Distinct_i32 GROUP BY n10;
     2: SELECT SUM(n100), SUM(n1000) FROM Distinct_i32 GROUP BY n10;

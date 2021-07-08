@@ -17,3 +17,5 @@ cases:
             - name: Lineitem
               path: benchmark/tpc-h/data/lineitem.tbl
               delimiter: '|'
+compare_to:
+    'HyPer': 'benchmark/tpc-h/q6_hyper.py'

@@ -18,4 +18,6 @@ cases:
               path: benchmark/tpc-h/data/lineitem.tbl
               delimiter: '|'
 compare_to:
+    'DuckDB': 'benchmark/tpc-h/q6_duckdb.sh'
+    'PostgreSQL': 'benchmark/tpc-h/q6_postgresql.sh'
     'HyPer': 'benchmark/tpc-h/q6_hyper.py'

@@ -582,6 +582,12 @@ if __name__ == '__main__':
 
                     for idx, line in enumerate(stream):
                         time = float(line) # in milliseconds
+                        try:
+                            case = list(yml['cases'].keys())[idx]
+                        except IndexError:
+                            tqdm.write(f'ERROR: System {name} produced more measurements than expected', file=sys.stderr)
+                            break
+
                         measurements.loc[len(measurements)] = [
                             str(commit),
                             date,

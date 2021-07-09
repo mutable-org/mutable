@@ -10,8 +10,8 @@ import glob
 import itertools
 import json
 import math
-import MySQLdb
 import numpy
+import MySQLdb
 import os
 import pandas
 import re
@@ -423,6 +423,8 @@ BEGIN
     INTO experiment_id;
 ''')
                     for config, measurements in configs.items():
+                        if len(measurements['case']) == 0:
+                            continue # no results gathered, skip this section
                         config_params = measurements['config'].unique()
                         parameters = list()
                         if experiment_params:

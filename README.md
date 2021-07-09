@@ -16,8 +16,9 @@ striving for competitive performance with state-of-the-art systems.
 - [Jens Dittrich](https://bigdata.uni-saarland.de/people/dittrich.php) <<jens.dittrich@bigdata.uni-saarland.de>>
 - Luca Gretscher <<s8lugret@stud.uni-saarland.de>>
 - Tobias Kopp <<s8tokopp@stud.uni-saarland.de>>
-- Jonas Lauermann
-- Felix Brinkmann
+- Jonas Lauermann <<s8jolaue@stud.uni-saarland.de>>
+- Felix Brinkmann <<s8febrin@stud.uni-saarland.de>>
+- Til Roth <<s8tiroth@stud.uni-saarland.de>>
 
 
 ## License
@@ -27,6 +28,6 @@ See [the license file](LICENSE) contained in this project.
 ## Important Links
 
 - [Wiki](https://gitlab.cs.uni-saarland.de/bigdata/mutable/mutable/-/wikis/home)
-- [Benchmarks](https://playground.bigdata.uni-saarland.de/cbwebsite/)
+- [Benchmarks](https://mutable.bigdata.uni-saarland.de/)
 - [Documentation](http://deeprig02.cs.uni-saarland.de/mutable/doxy/) (only reachable from within our subnet)
 - [Coverage](http://deeprig02.cs.uni-saarland.de/mutable/coverage/) (only reachable from within our subnet)

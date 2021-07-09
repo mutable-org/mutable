@@ -4,8 +4,6 @@ from colorama import Fore, Back, Style
 from git import Repo
 from pandas.api.types import is_numeric_dtype
 from tqdm import tqdm
-from yattag import Doc, indent
-import altair
 import argparse
 import datetime
 import glob

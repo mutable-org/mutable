@@ -19,6 +19,7 @@ striving for competitive performance with state-of-the-art systems.
 - Jonas Lauermann <<s8jolaue@stud.uni-saarland.de>>
 - Felix Brinkmann <<s8febrin@stud.uni-saarland.de>>
 - Til Roth <<s8tiroth@stud.uni-saarland.de>>
+- Sven Hartz
 
 
 ## License

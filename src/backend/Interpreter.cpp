@@ -1493,18 +1493,28 @@ void Interpreter::operator()(const SortingOperator &op)
 
         /* Emit comparison. */
         auto ty = o.first->type();
-        if (ty->is_boolean())
-            comparator.emit_Cmp_b();
-        else if (ty->is_character_sequence())
-            comparator.emit_Cmp_s();
-        else if (ty->is_integral() or ty->is_decimal())
-            comparator.emit_Cmp_i();
-        else if (ty->is_float())
-            comparator.emit_Cmp_f();
-        else if (ty->is_double())
-            comparator.emit_Cmp_d();
-        else
-            unreachable("invalid type");
+        visit(overloaded {
+            [&comparator](const Boolean&) { comparator.emit_Cmp_b(); },
+            [&comparator](const CharacterSequence&) { comparator.emit_Cmp_s(); },
+            [&comparator](const Numeric &n) {
+                switch (n.kind) {
+                    case Numeric::N_Int:
+                    case Numeric::N_Decimal:
+                        comparator.emit_Cmp_i();
+                        break;
+
+                    case Numeric::N_Float:
+                        if (n.size() <= 32)
+                            comparator.emit_Cmp_f();
+                        else
+                            comparator.emit_Cmp_d();
+                        break;
+                }
+            },
+            [&comparator](const Date&) { comparator.emit_Cmp_i(); },
+            [&comparator](const DateTime&) { comparator.emit_Cmp_i(); },
+            [](auto&&) { insist("invalid type"); }
+        }, *ty);
 
         if (not o.second)
             comparator.emit_Minus_i(); // sort descending

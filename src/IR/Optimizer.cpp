@@ -208,7 +208,7 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
 
     /* Perform ordering. */
     if (not G.order_by().empty()) {
-        /* Perform additional projection to provide all attributes needed to perform ordering. */
+        /* Perform additional projection to provide all attributes needed to perform grouping. */
         if (auto needed_projections = compute_needed_projections(G.projections(), G.order_by());
             not needed_projections.empty())
         {

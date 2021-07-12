@@ -2628,7 +2628,7 @@ void WasmPipelineCG::operator()(const ProjectionOperator &op)
     auto p = op.projections().begin();
     for (auto &e : op.schema()) {
         if (not new_context.has(e.id)) {
-            if (context().has(e.id)) {
+            if (context().has(e.id)) { // migrate compiled expression to new context
                 new_context.add(e.id, context().get_value(e.id));
             } else {
                 insist(p != op.projections().end());
@@ -2636,12 +2636,12 @@ void WasmPipelineCG::operator()(const ProjectionOperator &op)
                     auto t = d->target(); // consider target of renamed identifier
                     if (auto expr = std::get_if<const Expr *>(&t)) {
                         new_context.add(e.id, context().compile(block_, **expr));
-                    } else {
+                    } else { // access renamed attribute
                         auto attr = std::get_if<const Attribute *>(&t);
-                        insist(attr, "Target is neither an expression nor an attribute");
+                        insist(attr, "Target must be an expression or an attribute");
                         new_context.add(e.id, context().get_value({(*attr)->table.name, (*attr)->name}));
                     }
-                } else {
+                } else { // compile entire expression
                     new_context.add(e.id, context().compile(block_, *p->first));
                 }
             }

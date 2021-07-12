@@ -53,41 +53,5 @@ WHERE
         l_partkey = p_partkey
         AND l_shipdate >= date '1995-09-01'
         AND l_shipdate < date '1995-10-01';
-SELECT
-        SUM(l_extendedprice * (1 - l_discount)) AS promo_revenue
-FROM
-        Lineitem,
-        Part
-WHERE
-        l_partkey = p_partkey
-        AND l_shipdate >= date '1995-09-01'
-        AND l_shipdate < date '1995-10-01';
-SELECT
-        SUM(l_extendedprice * (1 - l_discount)) AS promo_revenue
-FROM
-        Lineitem,
-        Part
-WHERE
-        l_partkey = p_partkey
-        AND l_shipdate >= date '1995-09-01'
-        AND l_shipdate < date '1995-10-01';
-SELECT
-        SUM(l_extendedprice * (1 - l_discount)) AS promo_revenue
-FROM
-        Lineitem,
-        Part
-WHERE
-        l_partkey = p_partkey
-        AND l_shipdate >= date '1995-09-01'
-        AND l_shipdate < date '1995-10-01';
-SELECT
-        SUM(l_extendedprice * (1 - l_discount)) AS promo_revenue
-FROM
-        Lineitem,
-        Part
-WHERE
-        l_partkey = p_partkey
-        AND l_shipdate >= date '1995-09-01'
-        AND l_shipdate < date '1995-10-01';
 \timing off
 EOF

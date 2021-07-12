@@ -1,0 +1,33 @@
+description: TPC-H Query 14
+suite: TPC
+benchmark: TPC-H
+name: Q14
+readonly: yes
+pattern: '^Execute query:.*'
+configurations:
+    'WebAssembly': --backend WasmV8 --store ColumnStore
+tables: [ ]
+cases:
+    1:
+        query: |
+            SELECT
+                    SUM(l_extendedprice * (1 - l_discount)) AS promo_revenue
+            FROM
+                    Lineitem,
+                    Part
+            WHERE
+                    l_partkey = p_partkey
+                    AND l_shipdate >= d'1995-09-01'
+                    AND l_shipdate < d'1995-10-01';
+        tables:
+            - name: Lineitem
+              path: benchmark/tpc-h/data/lineitem.tbl
+              delimiter: '|'
+            - name: Part
+              path: benchmark/tpc-h/data/part.tbl
+              delimiter: '|'
+compare_to:
+    'PostgreSQL':           'benchmark/tpc-h/q14_postgresql.sh'
+    'DuckDB':               'benchmark/tpc-h/q14_duckdb.sh'
+    'HyPer (single core)':  'taskset -c 0 benchmark/tpc-h/q14_hyper.py'
+    'HyPer (all cores)':    'benchmark/tpc-h/q14_hyper.py'

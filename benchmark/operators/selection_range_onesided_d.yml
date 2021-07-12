@@ -24,9 +24,10 @@ cases:
     0.95: SELECT 1 FROM Attribute_d WHERE val < 0.95;
     0.99: SELECT 1 FROM Attribute_d WHERE val < 0.99;
 compare_to:
-    'DuckDB': 'benchmark/operators/selection_range_onesided_d_duckdb.sh'
-    'PostgreSQL': 'benchmark/operators/selection_range_onesided_d_postgresql.sh'
-    'HyPer': 'benchmark/operators/selection_range_onesided_d_hyper.py'
+    'PostgreSQL':           'benchmark/operators/selection_range_onesided_d_postgresql.sh'
+    'DuckDB':               'benchmark/operators/selection_range_onesided_d_duckdb.sh'
+    'HyPer (single core)':  'taskset -c 0 benchmark/operators/selection_range_onesided_d_hyper.py'
+    'HyPer (all cores)':    'benchmark/operators/selection_range_onesided_d_hyper.py'
 chart:
     x:
         scale: linear

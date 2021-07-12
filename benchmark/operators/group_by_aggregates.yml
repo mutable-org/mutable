@@ -16,9 +16,10 @@ cases:
     3: SELECT SUM(n100), SUM(n1000), SUM(n10000) FROM Distinct_i32 GROUP BY n10;
     4: SELECT SUM(n100), SUM(n1000), SUM(n10000), SUM(n100000) FROM Distinct_i32 GROUP BY n10;
 compare_to:
-    'DuckDB': 'benchmark/operators/group_by_aggregates_duckdb.sh'
-    'PostgreSQL': 'benchmark/operators/group_by_aggregates_postgresql.sh'
-    'HyPer': 'benchmark/operators/group_by_aggregates_hyper.py'
+    'PostgreSQL':           'benchmark/operators/group_by_aggregates_postgresql.sh'
+    'DuckDB':               'benchmark/operators/group_by_aggregates_duckdb.sh'
+    'HyPer (single core)':  'taskset -c 0 benchmark/operators/group_by_aggregates_hyper.py'
+    'HyPer (all cores)':    'benchmark/operators/group_by_aggregates_hyper.py'
 chart:
     x:
         scale: linear

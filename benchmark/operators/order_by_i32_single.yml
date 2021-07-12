@@ -77,9 +77,10 @@ cases:
               header: 1
               sf:   1.0
 compare_to:
-    'DuckDB': 'benchmark/operators/order_by_i32_single_duckdb.sh'
-    'PostgreSQL': 'benchmark/operators/order_by_i32_single_postgresql.sh'
-    'HyPer': 'benchmark/operators/order_by_i32_single_hyper.py'
+    'PostgreSQL':           'benchmark/operators/order_by_i32_single_postgresql.sh'
+    'DuckDB':               'benchmark/operators/order_by_i32_single_duckdb.sh'
+    'HyPer (single core)':  'taskset -c 0 benchmark/operators/order_by_i32_single_hyper.py'
+    'HyPer (all cores)':    'benchmark/operators/order_by_i32_single_hyper.py'
 chart:
     x:
         scale: linear

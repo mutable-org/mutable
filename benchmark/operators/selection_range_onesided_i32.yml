@@ -24,9 +24,10 @@ cases:
     0.95: SELECT 1 FROM Attribute_i32 WHERE val <  1932735282;
     0.99: SELECT 1 FROM Attribute_i32 WHERE val <  2104533974;
 compare_to:
-    'DuckDB': 'benchmark/operators/selection_range_onesided_i32_duckdb.sh'
-    'PostgreSQL': 'benchmark/operators/selection_range_onesided_i32_postgresql.sh'
-    'HyPer': 'benchmark/operators/selection_range_onesided_i32_hyper.py'
+    'PostgreSQL':           'benchmark/operators/selection_range_onesided_i32_postgresql.sh'
+    'DuckDB':               'benchmark/operators/selection_range_onesided_i32_duckdb.sh'
+    'HyPer (single core)':  'taskset -c 0 benchmark/operators/selection_range_onesided_i32_hyper.py'
+    'HyPer (all cores)':    'benchmark/operators/selection_range_onesided_i32_hyper.py'
 chart:
     x:
         scale: linear

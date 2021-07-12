@@ -76,9 +76,10 @@ cases:
               header: 1
               sf:   1.0
 compare_to:
-    'DuckDB': 'benchmark/operators/equi_join_pk_fk_duckdb.sh'
-    'PostgreSQL': 'benchmark/operators/equi_join_pk_fk_postgresql.sh'
-    'HyPer': 'benchmark/operators/equi_join_pk_fk_hyper.py'
+    'PostgreSQL':           'benchmark/operators/equi_join_pk_fk_postgresql.sh'
+    'DuckDB':               'benchmark/operators/equi_join_pk_fk_duckdb.sh'
+    'HyPer (single core)':  'taskset -c 0 benchmark/operators/equi_join_pk_fk_hyper.py'
+    'HyPer (all cores)':    'benchmark/operators/equi_join_pk_fk_hyper.py'
 chart:
     x:
         scale: linear

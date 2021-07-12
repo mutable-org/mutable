@@ -17,9 +17,10 @@ cases:
     3: SELECT id FROM Distinct_i32 ORDER BY n10000, n1000, n100;
     4: SELECT id FROM Distinct_i32 ORDER BY n10000, n1000, n100, n10;
 compare_to:
-    'DuckDB': 'benchmark/operators/order_by_i32_multiple_duckdb.sh'
-    'PostgreSQL': 'benchmark/operators/order_by_i32_multiple_postgresql.sh'
-    'HyPer': 'benchmark/operators/order_by_i32_multiple_hyper.py'
+    'PostgreSQL':           'benchmark/operators/order_by_i32_multiple_postgresql.sh'
+    'DuckDB':               'benchmark/operators/order_by_i32_multiple_duckdb.sh'
+    'HyPer (single core)':  'taskset -c 0 benchmark/operators/order_by_i32_multiple_hyper.py'
+    'HyPer (all cores)':    'benchmark/operators/order_by_i32_multiple_hyper.py'
 chart:
     x:
         scale: linear

@@ -17,9 +17,10 @@ cases:
     10000:  SELECT 1 FROM Distinct_i32 GROUP BY  n10000;
     100000: SELECT 1 FROM Distinct_i32 GROUP BY n100000;
 compare_to:
-    'DuckDB': 'benchmark/operators/group_by_i32_distinct_duckdb.sh'
-    'PostgreSQL': 'benchmark/operators/group_by_i32_distinct_postgresql.sh'
-    'HyPer': 'benchmark/operators/group_by_i32_distinct_hyper.py'
+    'PostgreSQL':           'benchmark/operators/group_by_i32_distinct_postgresql.sh'
+    'DuckDB':               'benchmark/operators/group_by_i32_distinct_duckdb.sh'
+    'HyPer (single core)':  'taskset -c 0 benchmark/operators/group_by_i32_distinct_hyper.py'
+    'HyPer (all cores)':    'benchmark/operators/group_by_i32_distinct_hyper.py'
 chart:
     x:
         scale: log

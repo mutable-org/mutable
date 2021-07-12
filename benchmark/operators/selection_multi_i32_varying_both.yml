@@ -25,9 +25,10 @@ cases:
     0.95: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  1932735282 AND a1 <  1932735282;
     0.99: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  2104533974 AND a1 <  2104533974;
 compare_to:
-    'DuckDB':     'benchmark/operators/selection_multi_i32_varying_both_duckdb.sh'
-    'PostgreSQL': 'benchmark/operators/selection_multi_i32_varying_both_postgresql.sh'
-    'HyPer':      'benchmark/operators/selection_multi_i32_varying_both_hyper.py'
+    'PostgreSQL':           'benchmark/operators/selection_multi_i32_varying_both_postgresql.sh'
+    'DuckDB':               'benchmark/operators/selection_multi_i32_varying_both_duckdb.sh'
+    'HyPer (single core)':  'taskset -c 0 benchmark/operators/selection_multi_i32_varying_both_hyper.py'
+    'HyPer (all cores)':    'benchmark/operators/selection_multi_i32_varying_both_hyper.py'
 chart:
     x:
         scale: linear

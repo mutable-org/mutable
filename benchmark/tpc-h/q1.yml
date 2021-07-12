@@ -36,6 +36,7 @@ cases:
               path: benchmark/tpc-h/data/lineitem.tbl
               delimiter: '|'
 compare_to:
-    'DuckDB': 'benchmark/tpc-h/q1_duckdb.sh'
-    'PostgreSQL': 'benchmark/tpc-h/q1_postgresql.sh'
-    'HyPer': 'benchmark/tpc-h/q1_hyper.py'
+    'PostgreSQL':           'benchmark/tpc-h/q1_postgresql.sh'
+    'DuckDB':               'benchmark/tpc-h/q1_duckdb.sh'
+    'HyPer (single core)':  'taskset -c 0 benchmark/tpc-h/q1_hyper.py'
+    'HyPer (all cores)':    'benchmark/tpc-h/q1_hyper.py'

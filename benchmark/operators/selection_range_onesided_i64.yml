@@ -20,9 +20,10 @@ cases:
     0.9: SELECT 1 FROM Attribute_i64 WHERE val <  7378697629483821056;
     1.0: SELECT 1 FROM Attribute_i64 WHERE val <  9223372036854775807;
 compare_to:
-    'DuckDB': 'benchmark/operators/selection_range_onesided_i64_duckdb.sh'
-    'PostgreSQL': 'benchmark/operators/selection_range_onesided_i64_postgresql.sh'
-    'HyPer': 'benchmark/operators/selection_range_onesided_i64_hyper.py'
+    'PostgreSQL':           'benchmark/operators/selection_range_onesided_i64_postgresql.sh'
+    'DuckDB':               'benchmark/operators/selection_range_onesided_i64_duckdb.sh'
+    'HyPer (single core)':  'taskset -c 0 benchmark/operators/selection_range_onesided_i64_hyper.py'
+    'HyPer (all cores)':    'benchmark/operators/selection_range_onesided_i64_hyper.py'
 chart:
     x:
         scale: linear

@@ -571,14 +571,18 @@ if __name__ == '__main__':
 
             # Compare to other systems
             if args.compare:
-                for name, script in yml.get('compare_to', dict()).items():
+                for name, command in yml.get('compare_to', dict()).items():
                     tqdm.write(f'` Perform experiment {yml["suite"]}/{yml["benchmark"]}/{experiment_name} in system {name}.')
                     sys.stdout.flush()
-                    if not os.path.isfile(script) or not os.access(script, os.X_OK):
-                        tqdm.write(f'Error: File "{script}" is not executable.')
-                        continue
                     measurements = pandas.DataFrame(columns=['commit', 'date', 'version', 'suite', 'benchmark', 'experiment', 'name', 'config', 'case', 'time'])
-                    stream = os.popen(f'taskset -c 0 {script}')
+                    if os.path.isfile(command):
+                        if not os.access(command, os.X_OK):
+                            tqdm.write(f'Error: File "{command}" is not executable.')
+                            continue
+                        stream = os.popen(f'{command}')
+                    else:
+                        command = command.replace('\'', '\\\'')
+                        stream = os.popen(f'/bin/bash -c \'{command}\'')
 
                     for idx, line in enumerate(stream):
                         time = float(line) # in milliseconds

@@ -27,13 +27,13 @@ std::unique_ptr<Stmt> m::statement_from_string(Diagnostic &diag, const std::stri
     std::istringstream in(str);
     Lexer lexer(diag, C.get_pool(), "-", in);
     Parser parser(lexer);
-    auto stmt = std::unique_ptr<Stmt>(parser.parse());
+    auto stmt = TIME_EXPR(std::unique_ptr<Stmt>(parser.parse()), "Parse the statement", C.timer());
     if (diag.num_errors() != 0)
         throw frontend_exception("syntactic error in statement");
     insist(diag.num_errors() == 0);
 
     Sema sema(diag);
-    sema(*stmt);
+    TIME_EXPR(sema(*stmt), "Semantic analysis", C.timer());
     if (diag.num_errors() != 0)
         throw frontend_exception("semantic error in statement");
     insist(diag.num_errors() == 0);
@@ -47,7 +47,7 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
     Catalog &C = Catalog::Get();
 
     if (is<const SelectStmt>(stmt)) {
-        auto query_graph = QueryGraph::Build(stmt);
+        auto query_graph = TIME_EXPR(QueryGraph::Build(stmt), "Construct the query graph", C.timer());
 
         std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::CreateDPccp();
         CostFunction cf([](CostFunction::Subproblem left, CostFunction::Subproblem right, OperatorKind, const PlanTable &T) {
@@ -60,13 +60,13 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
             );
         });
         Optimizer Opt(*pe, cf);
-        auto optree = Opt(*query_graph);
+        auto optree = TIME_EXPR(Opt(*query_graph), "Compute the query plan", C.timer());
 
         PrintOperator print(std::cout);
         print.add_child(optree.release());
 
         auto backend = Backend::Create("Interpreter");
-        backend->execute(print);
+        TIME_EXPR(backend->execute(print), "Execute the query", C.timer());
     } else if (auto I = cast<const InsertStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
         auto &T = DB.get_table(I->table_name.text);
@@ -76,6 +76,7 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
         Tuple tup(S);
 
         /* Write all tuples to the store. */
+        TIME_THIS("Execute the query", C.timer());
         for (auto &t : I->tuples) {
             StackMachine get_tuple(Schema{});
             for (std::size_t i = 0; i != t.size(); ++i) {
@@ -126,6 +127,7 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
                 diag.err() << ": " << strerror(errsv);
             diag.err() << std::endl;
         } else {
+            TIME_THIS("Read DSV file", C.timer());
             R(file, filename.c_str());
         }
 

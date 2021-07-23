@@ -1917,6 +1917,21 @@ struct SortingData : OperatorData
     }
 };
 
+struct NestedLoopsJoinData : OperatorData
+{
+    std::vector<WasmStruct*> strucs;
+    std::vector<WasmVariable> begins;
+    std::vector<WasmVariable> ends;
+    std::size_t active_child;
+
+    NestedLoopsJoinData(FunctionBuilder &fn) { }
+
+    ~NestedLoopsJoinData() {
+        for (auto struc : strucs)
+            delete struc;
+    }
+};
+
 struct SimpleHashJoinData : OperatorData
 {
     WasmStruct *struc = nullptr;
@@ -1961,7 +1976,38 @@ void WasmPlanCG::operator()(const JoinOperator &op)
 {
     switch (op.algo()) {
         default:
-            unreachable("not implemented");
+            unreachable("Undefined join algorithm.");
+
+        case JoinOperator::J_Undefined:
+        case JoinOperator::J_NestedLoops: {
+            auto num_children = op.children().size();
+            auto data = new NestedLoopsJoinData(module().main());
+            data->strucs.reserve(num_children - 1);
+            data->begins.reserve(num_children - 1);
+            data->ends.reserve(num_children - 1);
+            op.data(data);
+
+            /* Process all children but the right-most one. */
+            for (std::size_t i = 0; i != num_children - 1; ++i) {
+                auto &c = *op.child(i);
+                data->strucs.emplace_back(new WasmStruct(c.schema()));
+                data->begins.emplace_back(module().main(), BinaryenTypeInt32());
+                data->active_child = i;
+                (*this)(c);
+
+                /* Save the current head of heap as the end of the data to join. */
+                data->ends.emplace_back(module().main(), BinaryenTypeInt32());
+                module().main().block()
+                    << data->ends[i].set(module().head_of_heap())
+                    << module().align_head_of_heap();
+            }
+
+            /* Process right-most child. */
+            data->active_child = num_children - 1;
+            (*this)(*op.child(num_children - 1));
+
+            break;
+        }
 
         case JoinOperator::J_SimpleHashJoin: {
             insist(op.children().size() == 2, "SimpleHashJoin is a binary operation and expects exactly two children");
@@ -2326,7 +2372,123 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
 {
     switch (op.algo()) {
         default:
-            unreachable("not implemented");
+            unreachable("Undefined join algorithm.");
+
+        case JoinOperator::J_Undefined:
+        case JoinOperator::J_NestedLoops: {
+            auto num_children = op.children().size();
+            auto data = as<NestedLoopsJoinData>(op.data());
+            auto active_child = data->active_child;
+
+            if (active_child == num_children - 1) {
+                /* This is the right-most child. Combine its produced entry with all combinations of the buffered
+                 * data. */
+
+                /*----- Create variables to keep track of current positions in the buffered data. --------------------*/
+                std::vector<WasmVariable> positions;
+                positions.reserve(num_children - 1);
+                for (std::size_t i = 0; i != active_child; ++i) {
+                    positions.emplace_back(module().main(), BinaryenTypeInt32());
+                    block_ += positions[i].set(data->begins[i]);
+                }
+
+                /*----- Create innermost loop. -----------------------------------------------------------------------*/
+                std::size_t current_child = 0;
+                insist(current_child < active_child);
+                WasmWhile innermost(module(), "join.loop.child0", BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenLtUInt32(),
+                    /* left=   */ positions[current_child],
+                    /* right=  */ data->ends[current_child]
+                ));
+
+                /* Add entries from other children to context. */
+                for (std::size_t i = 0; i != active_child; ++i) {
+                    std::size_t idx = 0;
+                    for (auto &attr : op.child(i)->schema()) {
+                        context().add(attr.id, data->strucs[i]->load(module().main(), positions[i], idx));
+                        ++idx;
+                    }
+                }
+
+                /* Check whether combined entry is a match. If yes, resume with pipeline. */
+                BlockBuilder match(module(), "join.match");
+                swap(block_, match);
+                (*this)(*op.parent());
+                swap(block_, match);
+
+                innermost += BinaryenIf(
+                    /* module=  */ module(),
+                    /* cond=    */ context().compile(block_, op.predicate()),
+                    /* ifTrue=  */ match.finalize(),
+                    /* ifFalse= */ nullptr
+                );
+
+                /* Advance position in buffered data to next entry for this child. */
+                auto entry_size = data->strucs[current_child]->size_in_bytes();
+                innermost += positions[current_child].set(BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenAddInt32(),
+                    /* left=   */ positions[current_child],
+                    /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(entry_size))
+                ));
+
+                WasmWhile *last_loop = &innermost; // to keep track of last inner loop
+                ++current_child; // go to next child
+
+                /*----- Create outer loops. --------------------------------------------------------------------------*/
+                std::ostringstream oss;
+                while (current_child != active_child) {
+                    /* Reset position in buffered data for last child. */
+                    *last_loop += positions[current_child - 1].set(data->begins[current_child - 1]);
+
+                    /* Create next outer loop. */
+                    oss.str("");
+                    oss << "join.loop.child" << current_child;
+                    WasmWhile current_loop(module(), oss.str().c_str(), BinaryenBinary(
+                        /* module= */ module(),
+                        /* op=     */ BinaryenLtUInt32(),
+                        /* left=   */ positions[current_child],
+                        /* right=  */ data->ends[current_child]
+                    ));
+
+                    /* Advance position in buffered data to next entry for this child. */
+                    auto entry_size = data->strucs[current_child]->size_in_bytes();
+                    current_loop += positions[current_child].set(BinaryenBinary(
+                        /* module= */ module(),
+                        /* op=     */ BinaryenAddInt32(),
+                        /* left=   */ positions[current_child],
+                        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(entry_size))
+                    ));
+
+                    current_loop += last_loop->finalize();
+                    last_loop = &current_loop;
+                    ++current_child; // go to next child
+                }
+
+                /*----- Add outermost loop to the current block. -----------------------------------------------------*/
+                block_ += last_loop->finalize();
+            } else {
+                /* This is not the right-most child. Save the current head of heap as the beginning of the data to
+                 * join. */
+                module().main().block() += data->begins[active_child].set(module().head_of_heap());
+
+                /* Save the current results to the designated heap location. */
+                std::size_t idx = 0;
+                for (auto &attr : op.child(active_child)->schema())
+                    data->strucs[active_child]->store(module().main(), block_, module().head_of_heap(),
+                                                      idx++, context()[attr.id]);
+
+                /* Advance head of heap. */
+                block_ += module().head_of_heap().set(BinaryenBinary(
+                    /* module= */ module(),
+                    /* op=     */ BinaryenAddInt32(),
+                    /* left=   */ module().head_of_heap(),
+                    /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(data->strucs[active_child]->size_in_bytes()))
+                ));
+            }
+            break;
+        }
 
         case JoinOperator::J_SimpleHashJoin: {
             WasmHashMumur3_64A hasher;

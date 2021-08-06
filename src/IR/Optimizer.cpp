@@ -154,6 +154,8 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
             auto &store = bt->table().store();
             auto source = new ScanOperator(store, bt->alias());
             source_plans[ds->id()] = source;
+
+            /* Set operator information. */
             auto source_info = std::make_unique<OperatorInformation>();
             source_info->subproblem = s;
             source_info->estimated_cardinality = CE.predict_cardinality(*plan_table[s].model);
@@ -178,6 +180,7 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
             plan_table[s].model = std::move(sub.model);
             source_plans[ds->id()] = sub_plan.release();
         }
+
         /* Apply filter, if any. */
         if (ds->filter().size()) {
             auto filter = std::make_unique<FilterOperator>(ds->filter());
@@ -188,6 +191,7 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
             source_plans[ds->id()] = filter.release();
             plan_table[s].model = std::move(new_model);
         }
+
         /* Set operator information. */
         auto source = source_plans[ds->id()];
         auto source_info = std::make_unique<OperatorInformation>();
@@ -208,12 +212,27 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
         // TODO pick "best" algorithm
         auto group_by = new GroupingOperator(G.group_by(), G.aggregates(), GroupingOperator::G_Hashing);
         group_by->add_child(plan);
+
+        /* Set operator information. */
+        auto info = std::make_unique<OperatorInformation>();
+        info->subproblem = Subproblem((1UL << G.sources().size()) - 1UL);
+        info->estimated_cardinality = CE.predict_cardinality(*entry.model);
+
+        group_by->info(std::move(info));
         plan = group_by;
     } else if (not G.aggregates().empty()) {
         /* Compute `DataModel` after grouping. */
-        // TODO compute data model
+        auto new_model = CE.estimate_grouping(*entry.model, std::vector<const Expr*>());
+        entry.model = std::move(new_model);
         auto agg = new AggregationOperator(G.aggregates());
         agg->add_child(plan);
+
+        /* Set operator information. */
+        auto info = std::make_unique<OperatorInformation>();
+        info->subproblem = Subproblem((1UL << G.sources().size()) - 1UL);
+        info->estimated_cardinality = CE.predict_cardinality(*entry.model);
+
+        agg->info(std::move(info));
         plan = agg;
     }
 

@@ -313,12 +313,30 @@ InjectionCardinalityEstimator::estimate_limit(const DataModel &_data, std::size_
 }
 
 std::unique_ptr<DataModel>
-InjectionCardinalityEstimator::estimate_grouping(const DataModel &_data, const std::vector<const Expr*>&) const
+InjectionCardinalityEstimator::estimate_grouping(const DataModel &_data, const std::vector<const Expr*> &exprs) const
 {
     auto data = as<const InjectionCardinalityDataModel>(_data);
+
     auto model = std::make_unique<InjectionCardinalityDataModel>();
     model->relations_ = data.relations_;
-    model->size_ = data.size_; // this model cannot estimate the effects of grouping
+
+    if (exprs.empty()) {
+        model->size_ = 1;
+        return model;
+    }
+
+    /* Combine grouping keys into an identifier. */
+    std::ostringstream oss;
+    oss << "g";
+    for (auto e : exprs)
+        oss << '#' << *e;
+
+    if (auto it = cardinality_table_.find(oss.str()); it != cardinality_table_.end()) {
+        model->size_ = it->second;
+    } else {
+        model->size_ = data.size_; // this model cannot estimate the effects of grouping
+    }
+
     return model;
 }
 

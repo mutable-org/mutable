@@ -152,7 +152,12 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
             plan_table[s].cost = 0;
             plan_table[s].model = CE.estimate_scan(G, s);
             auto &store = bt->table().store();
-            source_plans[ds->id()] = new ScanOperator(store, bt->alias());
+            auto source = new ScanOperator(store, bt->alias());
+            source_plans[ds->id()] = source;
+            auto source_info = std::make_unique<OperatorInformation>();
+            source_info->subproblem = s;
+            source_info->estimated_cardinality = CE.predict_cardinality(*plan_table[s].model);
+            source->info(std::move(source_info));
         } else {
             /* Recursively solve nested queries. */
             auto Q = as<const Query>(ds);
@@ -183,6 +188,12 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
             source_plans[ds->id()] = filter.release();
             plan_table[s].model = std::move(new_model);
         }
+        /* Set operator information. */
+        auto source = source_plans[ds->id()];
+        auto source_info = std::make_unique<OperatorInformation>();
+        source_info->subproblem = s;
+        source_info->estimated_cardinality = CE.predict_cardinality(*plan_table[s].model); // includes filters, if any
+        source->info(std::move(source_info));
     }
 
     optimize_locally(G, plan_table);
@@ -255,6 +266,10 @@ void Optimizer::optimize_locally(const QueryGraph &G, PlanTable &plan_table) con
 std::unique_ptr<Producer>
 Optimizer::construct_plan(const QueryGraph &G, PlanTable &plan_table, Producer **source_plans) const
 {
+    auto &C = Catalog::Get();
+    auto &DB = C.get_database_in_use();
+    auto &CE = DB.cardinality_estimator();
+
     auto joins = G.joins(); // create a "set" of all joins
 
     /* Use nested lambdas to implement recursive lambda using CPS. */
@@ -287,17 +302,21 @@ Optimizer::construct_plan(const QueryGraph &G, PlanTable &plan_table, Producer *
                 }
 
                 /* Construct the join. */
+                JoinOperator *join;
                 if (sub_plans.size() == 2 and is_equi_join(join_condition)) {
-                    auto join = new JoinOperator(join_condition, JoinOperator::J_SimpleHashJoin);
+                    join = new JoinOperator(join_condition, JoinOperator::J_SimpleHashJoin);
                     for (auto sub_plan : sub_plans)
                         join->add_child(sub_plan);
-                    return join;
                 } else {
-                    auto join = new JoinOperator(join_condition, JoinOperator::J_NestedLoops);
+                    join = new JoinOperator(join_condition, JoinOperator::J_NestedLoops);
                     for (auto sub_plan : sub_plans)
                         join->add_child(sub_plan);
-                    return join;
                 }
+                auto join_info = std::make_unique<OperatorInformation>();
+                join_info->subproblem = s;
+                join_info->estimated_cardinality = CE.predict_cardinality(*plan_table[s].model);
+                join->info(std::move(join_info));
+                return join;
             }
         };
         return construct_plan_impl(s, construct_plan_impl);

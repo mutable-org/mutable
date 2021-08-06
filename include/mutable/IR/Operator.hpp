@@ -2,6 +2,7 @@
 
 #include "mutable/catalog/Schema.hpp"
 #include "mutable/IR/CNF.hpp"
+#include "mutable/IR/QueryGraph.hpp"
 #include "mutable/storage/Store.hpp"
 #include "mutable/util/macro.hpp"
 #include <functional>
@@ -19,7 +20,18 @@ struct OperatorVisitor;
 struct ConstOperatorVisitor;
 struct Tuple;
 
-/** This interface is used to attach data to `Operator` instances. */
+/** This class provides additional information about an `Operator`, e.g. the tables processed by this operator or the
+ * estimated cardinality of its result set. */
+struct OperatorInformation
+{
+    ///> the subproblem processed by this `Operator`'s subplan
+    QueryGraph::Subproblem subproblem;
+
+    ///> the estimated cardinality of the result set of this `Operator`
+    double estimated_cardinality;
+};
+
+/** This interface allows for attaching arbitrary data to `Operator` instances. */
 struct OperatorData
 {
     virtual ~OperatorData() = 0;
@@ -31,6 +43,7 @@ struct Operator
 {
     private:
     Schema schema_; ///< the schema of this `Operator`
+    std::unique_ptr<OperatorInformation> info_; ///< additional information about this `Operator`
     mutable OperatorData *data_ = nullptr; ///< the data object associated to this `Operator`; may be `nullptr`
 
     public:
@@ -40,6 +53,14 @@ struct Operator
     Schema & schema() { return schema_; }
     /** Returns the `Schema` of this `Operator`. */
     const Schema & schema() const { return schema_; }
+
+    bool has_info() const { return bool(info_); }
+    const OperatorInformation & info() const { insist(bool(info_)); return *info_; }
+    std::unique_ptr<OperatorInformation> info(std::unique_ptr<OperatorInformation> new_info) {
+        using std::swap;
+        swap(new_info, info_);
+        return new_info;
+    }
 
     /** Attached `OperatorData` `data` to this `Operator`.  Returns the previously attached `OperatorData`.  May return
      * `nullptr`. */

@@ -22,7 +22,13 @@ std::ostream & m::operator<<(std::ostream &out, const Operator &op) {
             if (n) out << '\n' << std::string(2 * (n-1), ' ') << "` ";
         }
 
-        ~indent() { out << ' ' << op.schema(); }
+        ~indent() {
+            out << ' ' << op.schema();
+            if (op.has_info()) {
+                auto &info = op.info();
+                out << " <" << info.estimated_cardinality << '>';
+            }
+        }
     };
     visit(overloaded {
         [&out, &depth](const CallbackOperator &op) { indent(out, op, depth).out << "CallbackOperator"; },
@@ -34,7 +40,8 @@ std::ostream & m::operator<<(std::ostream &out, const Operator &op) {
         },
         [&out, &depth](const NoOpOperator &op) { indent(out, op, depth).out << "NoOpOperator"; },
         [&out, &depth](const ScanOperator &op) {
-            indent(out, op, depth).out << "ScanOperator (" << op.store().table().name << ')';
+            indent(out, op, depth).out
+                << "ScanOperator (" << op.store().table().name << " AS " << op.alias() << ')';
         },
         [&out, &depth](const FilterOperator &op) { indent(out, op, depth).out << "FilterOperator " << op.filter(); },
         [&out, &depth](const JoinOperator &op) {
@@ -77,6 +84,7 @@ std::ostream & m::operator<<(std::ostream &out, const Operator &op) {
             out << ']';
         },
     }, op, tag<ConstPreOrderOperatorVisitor>());
+
     return out;
 }
 

@@ -5,7 +5,11 @@ name: Q1
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:
-    'WebAssembly': --backend WasmV8 --store ColumnStore
+    'WebAssembly': >-
+      --backend WasmV8
+      --store ColumnStore
+      --cardinality-estimator InjectionCardinalityEstimator
+      --use-cardinality-file benchmark/tpc-h/q1.json
 tables: [ ]
 cases:
     1:

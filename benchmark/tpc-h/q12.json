@@ -1,0 +1,8 @@
+{
+    "tpc_h": [
+      { "relations": ["Lineitem"], "size": 30988 },
+      { "relations": ["Orders"], "size": 600434 },
+      { "relations": ["Lineitem", "Orders"], "size": 12402 },
+      { "relations": ["g#l_shipmode"], "size": 2 }
+    ]
+}

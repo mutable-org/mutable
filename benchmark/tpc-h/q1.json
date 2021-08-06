@@ -1,0 +1,6 @@
+{
+    "tpc_h": [
+      { "relations": ["Lineitem"], "size": 5916591 },
+      { "relations": ["g#l_returnflag#l_linestatus"], "size": 4 }
+    ]
+}

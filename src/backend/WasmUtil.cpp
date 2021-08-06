@@ -2368,9 +2368,30 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
                 auto [key_index, _] = build_schema[build_key_id];
 
                 /*----- Allocate hash table. -------------------------------------------------------------------------*/
-                uint32_t initial_capacity = 32;
-                if (auto scan = cast<ScanOperator>(op.child(0))) /// XXX: hack for pre-allocation
-                    initial_capacity = ceil_to_pow_2<decltype(initial_capacity)>(scan->store().num_rows() / .8);
+                bool knows_capacity = false;
+                std::size_t required_capacity = 0;
+
+                if (op.child(0)->has_info()) {
+                    required_capacity = op.child(0)->info().estimated_cardinality;
+                    knows_capacity = true;
+                }
+
+                if (not knows_capacity) {
+                    if (auto scan = cast<ScanOperator>(op.child(0))) { /// XXX: hack for pre-allocation
+                        required_capacity = scan->store().num_rows();
+                        knows_capacity = true;
+                    }
+                }
+
+                if (not knows_capacity) {
+                    required_capacity = 1024; // fallback
+                    knows_capacity = true;
+                }
+
+                insist(knows_capacity, "at this point we must have determined an initial capacity for the hash table");
+                std::size_t initial_capacity = ceil_to_pow_2<std::size_t>(required_capacity);
+                if (required_capacity >= initial_capacity * .7)
+                    initial_capacity *= 2;
 
                 data->HT = new WasmRefCountingHashTable(module(), module().main(), *data->struc,
                                                         { WasmStruct::index_type(key_index) });
@@ -2715,10 +2736,16 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
     }
 
     /*----- Allocate hash table. -------------------------------------------------------------------------------------*/
-    std::size_t initial_capacity = 0;
+    bool knows_capacity = false;
+    std::size_t required_capacity = 0;
 
-    /*--- XXX: Crude hack to do pre-allocation in benchmarks. --------------------------------------------------------*/
-    if (not op.group_by().empty()) {
+    if (op.has_info()) {
+        required_capacity = op.info().estimated_cardinality;
+        knows_capacity = true;
+    }
+
+    if (not knows_capacity) {
+        /*--- XXX: Crude hack to do pre-allocation in benchmarks. ----------------------------------------------------*/
         std::regex reg_is_distinct("n\\d+");
         std::size_t num_groups_est = 1;
         for (auto expr : op.group_by()) {
@@ -2735,22 +2762,20 @@ void WasmPipelineCG::operator()(const GroupingOperator &op)
             goto estimation_failed;
         }
 
-        if (num_groups_est > 1e9)
-            initial_capacity = 1e9 / .7;
-        else
-            initial_capacity = ceil_to_pow_2<decltype(initial_capacity)>(num_groups_est / .7);
+        required_capacity = num_groups_est;
+        knows_capacity = true;
 estimation_failed:;
     }
 
-    if (auto scan = cast<ScanOperator>(op.child(0))) { // XXX: hack for pre-allocation
-        if (initial_capacity == 0)
-            initial_capacity = ceil_to_pow_2<decltype(initial_capacity)>(scan->store().num_rows() / .8);
-        else
-            initial_capacity = std::min(initial_capacity, ceil_to_pow_2<decltype(initial_capacity)>(scan->store().num_rows() / .8));
+    if (not knows_capacity) {
+        required_capacity = 20; // fallback
+        knows_capacity = true;
     }
 
-    if (initial_capacity == 0)
-        initial_capacity = 32;
+    insist(knows_capacity, "at this point we must have determined an initial capacity for the hash table");
+    std::size_t initial_capacity = ceil_to_pow_2<std::size_t>(required_capacity);
+    if (required_capacity >= initial_capacity * .7)
+        initial_capacity *= 2;
 
     data->HT = new WasmRefCountingHashTable(module(), module().main(), *data->struc, std::move(key_indizes));
     auto HT = as<WasmRefCountingHashTable>(data->HT);

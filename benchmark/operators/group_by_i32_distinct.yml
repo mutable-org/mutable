@@ -5,8 +5,16 @@ name: distinct INT(4)
 readonly: yes
 pattern: '^Execute query:.*'
 configurations:
-    Interpreter: --backend Interpreter
-    "WebAssembly (ColumnStore)": --backend WasmV8 --store ColumnStore
+    Interpreter: >-
+      --backend Interpreter
+      --store ColumnStore
+      --cardinality-estimator InjectionCardinalityEstimator
+      --use-cardinality-file benchmark/operators/group_by_i32_distinct.json
+    'WebAssembly (ColumnStore)': >-
+      --backend WasmV8 --store ColumnStore
+      --store ColumnStore
+      --cardinality-estimator InjectionCardinalityEstimator
+      --use-cardinality-file benchmark/operators/group_by_i32_distinct.json
 tables:
     - name: 'Distinct_i32'
       header: 1

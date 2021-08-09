@@ -1,0 +1,5 @@
+{
+    "operators": [
+      { "relations": ["g#n100000"], "size": 100000 }
+    ]
+}

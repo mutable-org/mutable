@@ -104,14 +104,14 @@ TEST_CASE("Injection estimator estimates", "[core][catalog][cardinality]")
         CHECK(ICE.predict_cardinality(*limit_existing_entry_model_low) == 8);
         CHECK(ICE.predict_cardinality(*limit_non_existing_entry_model_low) == 8);
     }
-    SECTION("estimate_grouping") {
+    SECTION("estimate_grouping (empty)") {
         auto existing_entry_model = ICE.estimate_scan(*G, Subproblem(1UL));
         auto non_existing_entry_model = ICE.estimate_scan(*G, Subproblem(1UL << 1));
-        std::vector<const Expr *> group_by;
+        std::vector<const Expr*> group_by;
         auto grouping_existing_entry_model = ICE.estimate_grouping(*existing_entry_model, group_by);
         auto grouping_non_existing_entry_model = ICE.estimate_grouping(*non_existing_entry_model, group_by);
-        CHECK(ICE.predict_cardinality(*grouping_existing_entry_model) == 500);
-        CHECK(ICE.predict_cardinality(*grouping_non_existing_entry_model) == 10);
+        CHECK(ICE.predict_cardinality(*grouping_existing_entry_model) == 1);
+        CHECK(ICE.predict_cardinality(*grouping_non_existing_entry_model) == 1);
     }
     SECTION("estimate_join") {
         auto existing_entry_model_one = ICE.estimate_scan(*G, Subproblem(1UL));

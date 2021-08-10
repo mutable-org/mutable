@@ -1,0 +1,11 @@
+{
+    "tpc_h": [
+      { "relations": ["Customer"], "size": 30142 },
+      { "relations": ["Lineitem"], "size": 3241776 },
+      { "relations": ["Orders"], "size": 727305 },
+      { "relations": ["Customer", "Orders"], "size": 147126 },
+      { "relations": ["Orders", "Lineitem"], "size": 151331 },
+      { "relations": ["Customer", "Orders", "Lineitem"], "size": 30519 },
+      { "relations": ["g#l_orderkey#o_orderdate#o_shippriority"], "size": 11620 }
+    ]
+}

@@ -77,7 +77,8 @@ struct BaseTable : DataSource
 
     private:
     const Table &table_; ///< the table providing the tuples
-    std::vector<const Designator*> expansion_; ///< list of designators expanded from `GetPrimaryKey::compute()`
+    ///> list of designators expanded from `GetPrimaryKey::compute()` or `GetAttributes::compute()`
+    std::vector<const Designator*> expansion_;
 
     private:
     BaseTable(std::size_t id, const char *alias, const Table &table) : DataSource(id, alias), table_(table) { }
@@ -158,8 +159,6 @@ struct QueryGraph
     std::vector<projection_type> projections_; ///< the data to compute
     std::vector<order_type> order_by_; ///< the order
     struct { uint64_t limit = 0, offset = 0; } limit_; ///< limit: limit and offset
-    bool projection_is_anti_ = false;
-    std::vector<const Expr*> *expanded_projections_; ///< the data expanded from the initial `SELECT *`
 
     GetCorrelationInfo *info_; ///< the correlation information about all sources in this graph
 
@@ -201,12 +200,9 @@ struct QueryGraph
     const auto & joins() const { return joins_; }
     const auto & group_by() const { return group_by_; }
     const auto & aggregates() const { return aggregates_; }
-    const auto & projections() const { return projections_; }
+    const std::vector<projection_type> & projections() const { return projections_; }
     const auto & order_by() const { return order_by_; }
     auto limit() const { return limit_; }
-    bool projection_is_anti() const { return projection_is_anti_; }
-    /** Returns all data expanded from the initial `SELECT *` (computed by the `Sema`). */
-    auto expanded_projections() const { return expanded_projections_; }
 
     /** Returns a data souce given its id. */
     const DataSource * operator[](uint64_t id) const {

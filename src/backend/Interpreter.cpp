@@ -1014,22 +1014,10 @@ void Pipeline::operator()(const ProjectionOperator &op)
     pipeline.block_.mask(block_.mask());
 
 
-    if (op.is_anti()) {
-        const auto num_anti = op.child(0)->schema().num_entries();
-        const auto num_projections = op.projections().size();
-        for (auto it = block_.begin(); it != block_.end(); ++it) {
-            auto &out = pipeline.block_[it.index()];
-            Tuple *args[] = { &data->res, &*it };
-            data->projections(args);
-            out.insert(*it, 0, num_anti);
-            out.insert(data->res, num_anti, num_projections);
-        }
-    } else {
-        for (auto it = block_.begin(); it != block_.end(); ++it) {
-            auto &out = pipeline.block_[it.index()];
-            Tuple *args[] = { &out, &*it };
-            data->projections(args);
-        }
+    for (auto it = block_.begin(); it != block_.end(); ++it) {
+        auto &out = pipeline.block_[it.index()];
+        Tuple *args[] = { &out, &*it };
+        data->projections(args);
     }
 
     pipeline.push(*op.parent());

@@ -268,10 +268,9 @@ struct ProjectionOperator : Producer, Consumer
 
     private:
     std::vector<projection_type> projections_;
-    bool is_anti_ = false;
 
     public:
-    ProjectionOperator(std::vector<projection_type> projections, bool is_anti = false);
+    ProjectionOperator(std::vector<projection_type> projections);
 
     /*----- Override child setters to *NOT* modify the computed schema! ----------------------------------------------*/
     virtual void add_child(Producer *child) override {
@@ -279,25 +278,12 @@ struct ProjectionOperator : Producer, Consumer
             throw invalid_argument("no child given");
         children().push_back(child);
         child->parent(this);
-
-        if (is_anti()) {
-            /* Recompute schema. */
-            Schema S;
-            for (auto c : children())
-                S += c->schema();
-            for (auto idx = schema().num_entries() - projections_.size(); idx != schema().num_entries(); ++idx) {
-                auto &e = schema()[idx];
-                S.add(e.id, e.type);
-            }
-            schema() = S;
-        }
     }
     virtual Producer * set_child(Producer*, std::size_t) override {
         unreachable("not supported by ProjectionOperator");
     }
 
     const std::vector<projection_type> & projections() const { return projections_; }
-    bool is_anti() const { return is_anti_; }
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;

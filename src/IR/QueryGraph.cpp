@@ -37,7 +37,7 @@ bool equal(const Designator &one, const Designator &two) {
     return streq(to_string(one).c_str(), to_string(two).c_str());
 }
 
-/** Like `std::vector::emplace_back()` but adds only iff `pair` is not already contained in `proj`. */
+/** Like `std::vector::emplace_back()` but adds only iff `pair` is not already contained in `pairs`. */
 void emplace_back(std::vector<std::pair<const Expr*, const char*>> &pairs,
                   const std::pair<const Designator*, const char*> &pair) {
     for (auto p : pairs) {
@@ -47,7 +47,7 @@ void emplace_back(std::vector<std::pair<const Expr*, const char*>> &pairs,
     pairs.emplace_back(pair);
 }
 
-/** Like `std::vector::emplace_back()` but adds only iff `pair` is not already contained in `proj`. */
+/** Like `std::vector::emplace_back()` but adds only iff `pair` is not already contained in `pairs`. */
 void emplace_back(std::vector<std::pair<const Expr*, const char*>> &pairs,
                   const std::pair<const Expr*, const char*> &pair) {
     if (auto d = cast<const Designator>(pair.first))
@@ -267,10 +267,10 @@ auto get_queries(const cnf::Clause &clause)
 /** Helper structure to compute and provide primary keys. */
 struct m::GetPrimaryKey
 {
-private:
+    private:
     std::vector<const Expr*> primary_keys_; ///< a list of all primary keys
 
-public:
+    public:
     GetPrimaryKey() { }
 
     auto get() { return std::move(primary_keys_); }
@@ -309,10 +309,10 @@ public:
                     compute(ds);
             }
             /* Provide all newly inserted primary keys. */
-            if (not graph->projection_is_anti() and not graph->projections().empty()) {
+            if (not graph->projections().empty()) {
                 while (former_size != primary_keys_.size()) {
                     emplace_back(graph->projections_,
-                                 std::pair<const Expr*, const char*>(primary_keys_.at(former_size),nullptr));
+                                 std::pair<const Expr *, const char *>(primary_keys_.at(former_size), nullptr));
                     ++former_size;
                 }
             }
@@ -322,7 +322,7 @@ public:
     }
 };
 
-/** Given a list of `DataSource`s and a `Query`, compute and provide all primary keys of `source`. */
+/** Compute and provide all primary keys of `source`. */
 auto get_primary_key(DataSource *source) {
     GetPrimaryKey GPK;
     GPK.compute(source);
@@ -384,15 +384,13 @@ auto get_needed_attrs(const QueryGraph *graph, const Query &query)
                 GD(*p.expr());
         }
     }
-    if (not graph->group_by().empty() or not graph->aggregates().empty()) {
+    if (graph->grouping()) {
         for (auto &e : graph->group_by())
             GD(*e);
         GD.aggregates(false); // to search for needed attributes in the arguments of aggregates
         for (auto &e : graph->aggregates())
             GD(*e);
     } else {
-        for (auto &e : *graph->expanded_projections())
-            GD(*e);
         for (auto &e : graph->projections())
             GD(*e.first);
     }
@@ -939,7 +937,7 @@ struct m::Decorrelation
         insist(query->query_graph() == lower);
         insist(contains(upper->sources(), query));
 
-        auto projection = lower->projection_is_anti() or not lower->projections().empty();
+        auto projection = not lower->projections().empty();
         auto grouping = lower->grouping();
         auto equi = lower->info_->getEqui();
         auto non_equi = lower->info_->getNonEqui();
@@ -973,9 +971,8 @@ struct m::Decorrelation
                         e_new = d_new;
                     }
                 }
-                if (projection) {
-                    emplace_back(lower->projections_, std::pair<const Expr *, const char *>(e_new, nullptr));
-                }
+                if (projection)
+                   emplace_back(lower->projections_, std::pair<const Expr *, const char *>(e_new, nullptr));
             }
             /* Update `i->uncorrelated_expr` and `i->clause` by replacing the table name of all uncorrelated
              * designators by the alias of `query` (if given) because it will be pushed up and therefore the former
@@ -1037,11 +1034,8 @@ struct m::Decorrelation
             delete j;
         }
         auto grouping = lower->grouping();
-        /* Adapt projection of `lower`. */
-        if (lower->projection_is_anti() or not lower->projections().empty())
-            lower->projection_is_anti_ = true;
-        /* Move all sources except `query` from `upper` to `lower` and adapt grouping of `lower`. Change source id
-         * such that the id's of all sources of `lower` are sequential. */
+        /* Move all sources except `query` from `upper` to `lower` and adapt grouping of `lower`.
+         * Change source id such that the id's of all sources of `lower` are sequential. */
         size_t num_sources = lower->sources().size();
         for (auto it = upper->sources_.begin(); it != upper->sources_.end(); ++it) {
             if (*it == query) continue;
@@ -1058,9 +1052,13 @@ struct m::Decorrelation
         /* Move all joins of `upper` to `lower`. */
         lower->joins_.insert(lower->joins_.end(), upper->joins_.begin(), upper->joins_.end());
         upper->joins_.clear();
-        /* Add all later needed attributes (of `graph_`) to grouping of `lower`. */
+        /* Add all later needed attributes (of `graph_`) to grouping and projection of `lower`. */
         if (grouping)
             insert(lower->group_by_, needed_attrs_);
+        if (not lower->projections().empty()) {
+            for (auto attr : needed_attrs_)
+                emplace_back(lower->projections_, std::pair<const Expr*, const char*>(attr, nullptr));
+        }
         /* Add joins for correlated predicates iff possible. */
         auto equi = lower->info_->getEqui();
         auto non_equi = lower->info_->getNonEqui();
@@ -1146,7 +1144,6 @@ struct m::Decorrelation
         return nullptr;
     }
 
-
     /** Replaces all designators in `graph` by new ones pointing to the respective designator in `origin`. */
     void replace_designators(QueryGraph *graph, const std::vector<const Expr*> *origin) {
         insist(graph->sources().size() == 1);
@@ -1163,12 +1160,8 @@ struct m::Decorrelation
             graph->info_->expansion_.insert(graph->info_->expansion_.end(), expansions.begin(), expansions.end());
             expansions = RP.replace(graph->projections_, &graph->group_by());
             graph->info_->expansion_.insert(graph->info_->expansion_.end(), expansions.begin(), expansions.end());
-            expansions = RP.replace(*graph->expanded_projections_, &graph->group_by(), true);
-            graph->info_->expansion_.insert(graph->info_->expansion_.end(), expansions.begin(), expansions.end());
         } else {
             expansions = RP.replace(graph->projections_, origin);
-            graph->info_->expansion_.insert(graph->info_->expansion_.end(), expansions.begin(), expansions.end());
-            expansions = RP.replace(*graph->expanded_projections_, origin, true);
             graph->info_->expansion_.insert(graph->info_->expansion_.end(), expansions.begin(), expansions.end());
         }
     }
@@ -1211,7 +1204,6 @@ struct m::GraphBuilder : ConstASTStmtVisitor
 
     void operator()(Const<SelectStmt> &s) {
         Catalog &C = Catalog::Get();
-        bool has_nested_query = false;
 
         /* Create data sources. */
         if (s.from) {
@@ -1255,8 +1247,8 @@ struct m::GraphBuilder : ConstASTStmtVisitor
 
         /* Add projections. */
         auto S = as<SelectClause>(s.select);
-        graph_->projection_is_anti_ = S->select_all;
-        graph_->expanded_projections_ = &S->expansion;
+        for (auto e : S->expansion)
+            graph_->projections_.emplace_back(e, nullptr);
         std::vector<std::pair<const QueryExpr*, const char*>> nested_queries_select;
         for (auto s : S->select) {
             if (auto query = cast<const QueryExpr>(s.first)) {
@@ -1299,7 +1291,6 @@ struct m::GraphBuilder : ConstASTStmtVisitor
                         ds->add_join(J);
                 }
             } else {
-                has_nested_query = true;
                 insist(queries.size() == 1, "Multiple nested queries in one clause are not yet supported.");
                 auto query = as<const QueryExpr>(*queries.begin());
                 if (auto select = cast<SelectStmt>(query->query)) {
@@ -1347,9 +1338,6 @@ struct m::GraphBuilder : ConstASTStmtVisitor
             }
         }
 
-        if (s.group_by)
-            has_nested_query = false; // because additional attributes of nested queries are eliminated by the GROUP BY
-
         /* Implement HAVING as a regular selection filter on a sub query. */
         cnf::CNF cnf_having;
         if (s.having) {
@@ -1360,12 +1348,7 @@ struct m::GraphBuilder : ConstASTStmtVisitor
             auto &sub = graph_->add_source(nullptr, sub_graph);
             aliases_.emplace("HAVING", &sub);
             /* Reset former computation of projection and move it after the HAVING. */
-            graph_->projections_ = std::move(sub.query_graph()->projections_);
-            sub.query_graph()->projections_.clear();
-            graph_->projection_is_anti_ = sub.query_graph()->projection_is_anti_;
-            sub.query_graph()->projection_is_anti_ = false;
-            graph_->expanded_projections_ = sub.query_graph()->expanded_projections_;
-            sub.query_graph()->expanded_projections_ = nullptr;
+            std::swap(graph_->projections_, sub.query_graph()->projections_);
             /* Update `decorrelated_`-flag. */
             if (sub.is_correlated())
                 sub.decorrelated_ = false;
@@ -1378,7 +1361,6 @@ struct m::GraphBuilder : ConstASTStmtVisitor
             if (queries.empty()) {
                 aliases_.at("HAVING")->update_filter(graph_->info_->compute(cnf::CNF({clause})));
             } else {
-                has_nested_query = true;
                 insist(queries.size() == 1, "Multiple nested queries in one clause are not yet supported.");
                 auto query = as<const QueryExpr>(*queries.begin());
                 if (auto select = cast<SelectStmt>(query->query)) {
@@ -1418,16 +1400,12 @@ struct m::GraphBuilder : ConstASTStmtVisitor
             auto &sub = graph_->add_source(nullptr, sub_graph);
             aliases_.emplace("SELECT", &sub);
             /* Reset former computation of projection and move it after the SELECT. */
-            graph_->projections_ = std::move(sub.query_graph()->projections_);
-            sub.query_graph()->projections_.clear();
-            graph_->projection_is_anti_ = sub.query_graph()->projection_is_anti_;
-            sub.query_graph()->projection_is_anti_ = false;
-            graph_->expanded_projections_ = sub.query_graph()->expanded_projections_;
-            sub.query_graph()->expanded_projections_ = nullptr;
+            std::swap(graph_->projections_, sub.query_graph()->projections_);
             /* Update `decorrelated_`-flag. */
             if (sub.is_correlated())
                 sub.decorrelated_ = false;
         }
+
         /* Add nested queries in SELECT. */
         /* TODO iterate over expressions in the order nested queries (equi) < nested queries (non-equi) */
         for (auto &p : nested_queries_select) {
@@ -1450,10 +1428,10 @@ struct m::GraphBuilder : ConstASTStmtVisitor
                         DataSource *source;
                         try {
                             source = aliases_.at("SELECT");
-                        } catch (std::out_of_range) {
+                        } catch (std::out_of_range&) {
                             try {
                                 source = aliases_.at("HAVING");
-                            } catch (std::out_of_range) {
+                            } catch (std::out_of_range&) {
                                 source = aliases_.begin()->second;
                             }
                         }
@@ -1462,8 +1440,7 @@ struct m::GraphBuilder : ConstASTStmtVisitor
                         source->add_join(J);
                     }
                     aliases_.emplace(q_name, &q);
-                    if (not graph_->projection_is_anti_ or has_nested_query)
-                        graph_->projections_.emplace_back(query, p.second);
+                    graph_->projections_.emplace_back(query, p.second);
                     /* Decorrelate the nested query iff it is correlated. */
                     if (q.is_correlated())
                         decorrelate(q);
@@ -1473,13 +1450,6 @@ struct m::GraphBuilder : ConstASTStmtVisitor
             } else {
                 unreachable("invalid variant");
             }
-        }
-
-        if (has_nested_query and graph_->projection_is_anti_) {
-            /* Replace * by all attributes of original data sources. */
-            graph_->projection_is_anti_ = false;
-            for (auto e : S->expansion)
-                graph_->projections_.emplace_back(e, nullptr);
         }
 
         /* Add order by. */
@@ -1632,13 +1602,11 @@ void QueryGraph::dot_recursive(std::ostream &out) const
     }
 
     /* Projections */
-    if (projection_is_anti() or not projections_.empty()) {
+    if (not projections_.empty()) {
         out << "             <TR><TD ALIGN=\"LEFT\">\n"
             << "               <B>π</B><FONT POINT-SIZE=\"9\">";
-        if (projection_is_anti())
-            out << "*";
         for (auto it = projections_.begin(), end = projections_.end(); it != end; ++it) {
-            if (it != projections_.begin() or projection_is_anti())
+            if (it != projections_.begin())
                 out << ", ";
             out << html_escape(to_string(*it->first));
             if (it->second)

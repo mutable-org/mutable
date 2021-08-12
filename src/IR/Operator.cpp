@@ -123,7 +123,6 @@ void Operator::dot(std::ostream &out) const
         },
         [&out](const ProjectionOperator &op) {
             out << id(op) << " [label=<<B>π</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">";
-            if (op.is_anti()) out << '*';
             const auto &P = op.projections();
             for (auto it = P.begin(); it != P.end(); ++it) {
                 if (it != P.begin()) out << ", ";
@@ -197,9 +196,8 @@ void Operator::dot(std::ostream &out) const
 void Operator::dump(std::ostream &out) const { out << *this << std::endl; }
 void Operator::dump() const { dump(std::cerr); }
 
-ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections, bool is_anti)
+ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
     : projections_(projections)
-    , is_anti_(is_anti)
 {
     /* Compute the schema of the operator. */
     uint64_t const_counter = 0;
@@ -341,8 +339,6 @@ void SchemaMinimizer::operator()(Const<ProjectionOperator> &op)
 {
     // FIXME simply adding all projections is not correct for *nested* projection operators
     required = Schema();
-    if (op.is_anti())
-        required |= op.child(0)->schema();
     for (auto &p : op.projections())
         required |= p.first->get_required();
     if (not const_cast<const ProjectionOperator&>(op).children().empty())

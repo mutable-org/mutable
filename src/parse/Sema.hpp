@@ -23,17 +23,27 @@ struct Sema : ASTExprVisitor, ASTClauseVisitor, ASTStmtVisitor
             S_Select,
             S_OrderBy,
             S_Limit,
-        } stage = S_From;
+        } stage = S_From; ///< current stage
 
-        using named_expr_table = std::unordered_multimap<const char*, Expr*>;
+        ///> list of all computed expressions along with their order
+        using named_expr_table = std::unordered_multimap<const char*, std::pair<Expr*, unsigned>>;
         using source_type = std::variant<const Table*, named_expr_table>;
-        using source_table = std::unordered_map<const char*, source_type>;
-        source_table sources; ///> list of all sources
-        std::unordered_multimap<const char*, Expr*> results; ///> list of all results computed by this statement
+        using source_table = std::unordered_map<const char*, std::pair<source_type, unsigned>>;
+        source_table sources; ///< list of all sources along with their order
+        ///> list of all results computed by this statement along with their order
+        std::unordered_multimap<const char*, std::pair<Expr*, unsigned>> results;
 
-        std::vector<Expr*> group_keys; ///> list of group keys
+        std::vector<Expr*> group_keys; ///< list of group keys
 
         SemaContext(Stmt &stmt) : stmt(stmt) { }
+
+        /* Returns the `sources` in a sorted manner according to their order. */
+        std::vector<std::pair<const char*, source_type>> sorted_sources() const {
+            std::vector<std::pair<const char*, source_type>> res(sources.size());
+            for (auto &src : sources)
+                res[src.second.second] = std::make_pair(src.first, src.second.first);
+            return res;
+        }
     };
 
     private:

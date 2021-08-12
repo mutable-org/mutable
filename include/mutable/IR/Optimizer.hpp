@@ -27,7 +27,7 @@ struct Optimizer
     public:
     Optimizer(const PlanEnumerator &pe, const CostFunction &cf) : pe_(pe), cf_(cf) { }
 
-    auto & plan_enumerator() const { return pe_; };
+    auto & plan_enumerator() const { return pe_; }
     auto & cost_function() const { return cf_; }
 
     /** Apply this optimizer to the given query graph to compute an operator tree. */
@@ -43,9 +43,9 @@ struct Optimizer
     /** Constructs an operator tree given a solved plan table and the plans to compute the data sources of the query. */
     std::unique_ptr<Producer> construct_plan(const QueryGraph &G, PlanTable &plan_table, Producer **source_plans) const;
 
-    /** Returns all `projections` which are needed by `order_by`. */
-    std::vector<projection_type> compute_needed_projections(const std::vector<projection_type> &projections,
-                                                            const std::vector<order_type> &order_by) const;
+    /** Returns `true` iff there is an element in `projections` which is needed by `order_by`. */
+    bool projection_needed(const std::vector<projection_type> &projections,
+                           const std::vector<order_type> &order_by) const;
 };
 
 }

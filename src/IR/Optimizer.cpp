@@ -236,14 +236,15 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
         plan = agg;
     }
 
+    bool additional_projection = false; // indicate whether an additional projection must be performed before ordering
+
     /* Perform ordering. */
     if (not G.order_by().empty()) {
-        /* Perform additional projection to provide all attributes needed to perform grouping. */
-        if (auto needed_projections = compute_needed_projections(G.projections(), G.order_by());
-            not needed_projections.empty())
-        {
+        /* Perform additional projection to provide all attributes needed to perform ordering. */
+        if (projection_needed(G.projections(), G.order_by())) {
             // TODO estimate data model
-            auto projection = new ProjectionOperator(needed_projections, true);
+            additional_projection = true;
+            auto projection = new ProjectionOperator(G.projections()); // projection on all attributes
             projection->add_child(plan);
             plan = projection;
         }
@@ -254,9 +255,9 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
     }
 
     /* Perform projection. */
-    if (not G.projections().empty() or G.projection_is_anti()) {
+    if (not additional_projection and not G.projections().empty()) {
         // TODO estimate data model
-        auto projection = new ProjectionOperator(G.projections(), G.projection_is_anti());
+        auto projection = new ProjectionOperator(G.projections());
         projection->add_child(plan);
         plan = projection;
     }
@@ -344,9 +345,8 @@ Optimizer::construct_plan(const QueryGraph &G, PlanTable &plan_table, Producer *
     return std::unique_ptr<Producer>(construct_recursive(Subproblem((1UL << G.sources().size()) - 1)));
 }
 
-std::vector<Optimizer::projection_type>
-Optimizer::compute_needed_projections(const std::vector<projection_type> &projections,
-                                      const std::vector<order_type> &order_by) const
+bool Optimizer::projection_needed(const std::vector<projection_type> &projections,
+                                  const std::vector<order_type> &order_by) const
 {
     struct GetDesignatorTargets : ConstASTExprVisitor
     {
@@ -385,16 +385,15 @@ Optimizer::compute_needed_projections(const std::vector<projection_type> &projec
     GDT.compute(order_by);
     auto designator_targets = GDT.get();
 
-    /* Choose all `projections` which are needed by `order_by`, i.e. those which are target and create the needed
-     * attribute name by renaming. */
-    std::vector<projection_type> needed_projections;
+    /* Check if there is an element of `projections` which is needed by `order_by`, i.e. which is target and creates
+     * the needed attribute name by renaming. */
     for (auto &p : projections) {
         auto pred = [&p](const std::pair<const Designator*, const Expr*> &des_target) -> bool {
             return des_target.second == p.first and des_target.first->attr_name.text == p.second;
         };
         if (std::find_if(designator_targets.begin(), designator_targets.end(), pred) != designator_targets.end())
-            needed_projections.push_back(p);
+            return true;
     }
 
-    return needed_projections;
+    return false;
 }

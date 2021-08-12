@@ -10,8 +10,7 @@ void QueryGraph2SQL::translate(const QueryGraph *graph)
     graph_ = graph;
     after_grouping_ = true;
     out_ << "SELECT ";
-    bool anti = false;
-    if (graph_->projection_is_anti() or graph_->projections().empty()) {
+    if (graph_->projections().empty()) {
         if (graph_->grouping()) {
             /* Rename grouping keys and aggregates similar to mu*t*able, i.e. their textual representation is used as
              * new attribute name and no table name is specified. */
@@ -34,18 +33,15 @@ void QueryGraph2SQL::translate(const QueryGraph *graph)
                     first = false;
                 }
             }
-            anti = not first;
         } else {
             out_ << '*';
-            anti = true;
         }
-    }
-    if (anti and not graph_->projections().empty())
-        out_ << ", ";
-    for (auto it = graph_->projections().begin(); it != graph_->projections().end(); ++it) {
-        if (it != graph_->projections().begin())
-            out_ << ", ";
-        translate_projection(*it);
+    } else {
+        for (auto it = graph_->projections().begin(); it != graph_->projections().end(); ++it) {
+            if (it != graph_->projections().begin())
+                out_ << ", ";
+            translate_projection(*it);
+        }
     }
 
     after_grouping_ = false;

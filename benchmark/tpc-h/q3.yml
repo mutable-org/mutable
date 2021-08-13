@@ -47,3 +47,8 @@ cases:
             - name: Customer
               path: benchmark/tpc-h/data/customer.tbl
               delimiter: '|'
+compare_to:
+    'PostgreSQL':           'benchmark/tpc-h/q3_postgresql.sh'
+    'DuckDB':               'benchmark/tpc-h/q3_duckdb.sh'
+    'HyPer (single core)':  'taskset -c 0 benchmark/tpc-h/q3_hyper.py'
+    'HyPer (all cores)':    'benchmark/tpc-h/q3_hyper.py'

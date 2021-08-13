@@ -157,6 +157,22 @@ def benchmark_execution_times(connection :Connection, queries :list, tables :lis
     )
     return list(map(lambda m: m['v']['execution-time'] * 1000, matches))
 
+def benchmark_compilation_times(connection :Connection, queries :list, tables :list):
+    for q in queries:
+        benchmark_query(connection, q, tables)
+    res = extract_results()
+    matches = filter_results(
+        res,
+        { 'k': 'query-end'},
+        [ MATCH_SELECT ]
+    )
+
+    def compilation_time(m):
+        ct = m['v']['adaptive-compilation']
+        return (ct['cheap']['actual'] + ct['optimized']['actual']) * 1000
+
+    return list(map(compilation_time, matches))
+
 def median(seq :list):
     l = len(seq)
     if l == 0:

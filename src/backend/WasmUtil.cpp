@@ -2808,6 +2808,7 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
 void WasmPipelineCG::operator()(const ProjectionOperator &op)
 {
     WasmEnvironment new_context(module().main());
+    insist(op.projections().size() == op.schema().num_entries(), "projections must match the operator's schema");
     auto p = op.projections().begin();
     for (auto &e : op.schema()) {
         if (not new_context.has(e.id)) {

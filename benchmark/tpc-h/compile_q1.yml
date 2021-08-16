@@ -3,9 +3,9 @@ suite: TPC
 benchmark: TPC-H Compilation Times
 name: Q1
 readonly: yes
-pattern: '^Execute query:.*'
+pattern: '^Compile to WebAssembly:.*'
 configurations:
-    'WebAssembly': --backend WasmV8 --store ColumnStore --dryrun
+    'WebAssembly': --backend WasmV8 --store ColumnStore --dryrun --quiet
 tables: [ ]
 cases:
     1:

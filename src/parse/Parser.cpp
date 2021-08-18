@@ -567,16 +567,26 @@ Clause * Parser::parse_LimitClause()
     Token start = token();
     bool ok = true;
 
-    /* 'LIMIT' integer-constant */
+    /* 'LIMIT' integer constant */
     expect(TK_Limit);
     Token limit = token();
-    Token offset;
-    ok = ok and expect(TK_DEC_INT);
+    if (limit.type == TK_DEC_INT or streq(limit.text, "0")) {
+        consume();
+    } else {
+        diag.e(limit.pos) << "expected integer limit, got " << limit.text << '\n';
+        ok = false;
+    }
 
-    /* 'OFFSET' integer-constant */
+    /* 'OFFSET' integer constant */
+    Token offset;
     if (accept(TK_Offset)) {
         offset = token();
-        ok = ok and expect(TK_DEC_INT);
+        if (offset.type == TK_DEC_INT or streq(offset.text, "0")) {
+            consume();
+        } else {
+            diag.e(offset.pos) << "expected integer offset, got " << offset.text << '\n';
+            ok = false;
+        }
     }
 
     if (not ok)

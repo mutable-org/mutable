@@ -1,7 +1,7 @@
-description: SELECT with LIMIT and OFFSET
+description: SELECT with LIMIT and OFFSET of 0 (zero)
 db: empty
 query: |
-    SELECT * FROM tbl LIMIT 13 OFFSET 42;
+    SELECT * FROM tbl LIMIT 13 OFFSET 0;
 required: YES
 
 stages:
@@ -14,8 +14,8 @@ stages:
             -:1:19: LIMIT TK_Limit
             -:1:25: 13 TK_DEC_INT
             -:1:28: OFFSET TK_Offset
-            -:1:35: 42 TK_DEC_INT
-            -:1:37: ; TK_SEMICOL
+            -:1:35: 0 TK_OCT_INT
+            -:1:36: ; TK_SEMICOL
         err: NULL
         num_err: 0
         returncode: 0
@@ -24,7 +24,7 @@ stages:
         out: |
             SELECT *
             FROM tbl
-            LIMIT 13 OFFSET 42;
+            LIMIT 13 OFFSET 0;
         err: NULL
         num_err: 0
         returncode: 0

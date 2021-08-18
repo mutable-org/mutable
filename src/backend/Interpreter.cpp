@@ -733,8 +733,8 @@ struct AggregationData : OperatorData
             for (auto arg : fe->args) {
                 sm.emit(*arg, 1);
                 sm.emit_Cast(agg->type(), arg->type()); // cast argument type to aggregate type, e.g. f32 to f64 for SUM
-                sm.emit_St_Tup(0, arg_idx++, arg->type());
-                arg_types.push_back(arg->type());
+                sm.emit_St_Tup(0, arg_idx++, agg->type()); // store casted argument of aggregate type to tuple
+                arg_types.push_back(agg->type());
             }
             args.emplace_back(Tuple(arg_types));
             compute_aggregate_arguments.emplace_back(std::move(sm));
@@ -1183,6 +1183,7 @@ void Pipeline::operator()(const AggregationOperator &op)
     auto &nth_tuple = data->aggregates[op.schema().num_entries()].as_i();
 
     for (auto &tuple : block_) {
+        nth_tuple += 1UL;
         for (std::size_t i = 0, end = op.aggregates().size(); i != end; ++i) {
             auto &aggregate_arguments = data->args[i];
             Tuple *args[] = { &aggregate_arguments, &tuple };

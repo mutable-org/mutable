@@ -223,7 +223,7 @@ struct Tuple
     /** Sets all `Value`s of this `Tuple` to `NULL`. */
     void clear() { null_mask_ = SmallBitset(~0UL); }
 
-    /** Sets the `Value` at index `idx` to `NULL`. */
+    /** Sets the `Value` at index `idx` to not-`NULL`. */
     void not_null(std::size_t idx) {
         INBOUNDS(idx);
         null_mask_.set(idx, false);

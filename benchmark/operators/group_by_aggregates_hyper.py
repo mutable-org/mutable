@@ -27,11 +27,12 @@ if __name__ == '__main__':
                 ]
             )
 
+            AGG='MIN'
             queries = [
-                f'SELECT SUM(n100) FROM {table_def.table_name} GROUP BY n10',
-                f'SELECT SUM(n100), SUM(n1000) FROM {table_def.table_name} GROUP BY n10',
-                f'SELECT SUM(n100), SUM(n1000), SUM(n10000) FROM {table_def.table_name} GROUP BY n10',
-                f'SELECT SUM(n100), SUM(n1000), SUM(n10000), SUM(n100000) FROM {table_def.table_name} GROUP BY n10',
+                f'SELECT {AGG}(n100) FROM {table_def.table_name} GROUP BY n10',
+                f'SELECT {AGG}(n100), {AGG}(n1000) FROM {table_def.table_name} GROUP BY n10',
+                f'SELECT {AGG}(n100), {AGG}(n1000), {AGG}(n10000) FROM {table_def.table_name} GROUP BY n10',
+                f'SELECT {AGG}(n100), {AGG}(n1000), {AGG}(n10000), {AGG}(n100000) FROM {table_def.table_name} GROUP BY n10',
             ]
 
             times = hyperconf.benchmark_execution_times(connection, queries, [

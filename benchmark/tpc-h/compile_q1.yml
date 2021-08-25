@@ -36,5 +36,5 @@ cases:
               path: benchmark/tpc-h/data/lineitem.tbl
               delimiter: '|'
 compare_to:
-    'HyPer (single core)':  'taskset -c 0 benchmark/tpc-h/q1_hyper.py'
-    'HyPer (all cores)':    'benchmark/tpc-h/q1_hyper.py'
+    'HyPer (single core)':  'taskset -c 0 benchmark/tpc-h/compile_q1_hyper.py'
+    'HyPer (all cores)':    'benchmark/tpc-h/compile_q1_hyper.py'

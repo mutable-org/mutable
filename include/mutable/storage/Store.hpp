@@ -5,6 +5,7 @@
 #include <mutable/catalog/Type.hpp>
 #include <mutable/storage/Linearization.hpp>
 #include <mutable/util/macro.hpp>
+#include <mutable/util/memory.hpp>
 #include <mutable/util/Visitor.hpp>
 #include <string>
 #include <unordered_map>
@@ -71,6 +72,9 @@ struct Store
     void linearization(std::unique_ptr<Linearization> lin) { lin_ = std::move(lin); }
 
     public:
+    /** Returns the memory corresponding to the `idx`-th entry in the `Linearization`'s root node. */
+    virtual const memory::Memory & memory(std::size_t idx) const = 0;
+
     /** Return the number of rows in this store. */
     virtual std::size_t num_rows() const = 0;
 

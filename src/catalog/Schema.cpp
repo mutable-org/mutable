@@ -8,6 +8,7 @@
 #include "mutable/IR/PlanTable.hpp"
 #include "mutable/util/fn.hpp"
 #include "storage/ColumnStore.hpp"
+#include "storage/PaxStore.hpp"
 #include "storage/RowStore.hpp"
 #include <algorithm>
 #include <cmath>

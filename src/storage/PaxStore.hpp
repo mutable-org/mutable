@@ -54,6 +54,7 @@ struct PaxStore : Store
 
     /** Returns the memory of the store. */
     const memory::Memory & memory() const { return data_; }
+    const memory::Memory & memory(std::size_t idx) const override { insist(idx == 0); return data_; }
 
     void accept(StoreVisitor &v) override;
     void accept(ConstStoreVisitor &v) const override;

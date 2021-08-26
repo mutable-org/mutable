@@ -52,6 +52,7 @@ struct RowStore : Store
 
     /** Returns the memory of the store. */
     const memory::Memory & memory() const { return data_; }
+    const memory::Memory & memory(std::size_t idx) const override { insist(idx == 0); return data_; }
     /** Sets the memory of the store to `memory`. */
     void memory(memory::Memory memory) { data_ = std::move(memory); }
 

@@ -105,4 +105,4 @@ void PaxStore::dump(std::ostream &out) const
     out << ']' << std::endl;
 }
 
-// std::unique_ptr<Store> Store::CreatePaxStore(const Table &table) { return std::make_unique<PaxStore>(table); }
+std::unique_ptr<Store> Store::CreatePaxStore(const Table &table) { return std::make_unique<PaxStore>(table); }

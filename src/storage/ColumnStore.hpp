@@ -44,7 +44,7 @@ struct ColumnStore : Store
     }
 
     /** Returns the memory of the column assigned to the attribute with id `attr_id`. */
-    const memory::Memory & memory(std::size_t attr_id) const {
+    const memory::Memory & memory(std::size_t attr_id) const override {
         insist(attr_id < columns_.size());
         return columns_[attr_id]; // XXX What if attributes were erased and added again to a table?
     }

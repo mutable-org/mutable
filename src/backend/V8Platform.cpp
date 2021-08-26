@@ -135,7 +135,7 @@ void throw_invalid_escape_sequence(const v8::FunctionCallbackInfo<v8::Value>&)
 
 namespace {
 
-struct Store2Wasm : ConstStoreVisitor
+struct Store2Wasm
 {
     private:
     v8::Isolate *isolate_;
@@ -152,68 +152,42 @@ struct Store2Wasm : ConstStoreVisitor
 
     std::size_t get_next_page() const { return next_page_; }
 
-    using ConstStoreVisitor::operator();
-
-    void operator()(const ColumnStore &s) override {
+    void map(const Store &s) {
         std::ostringstream oss;
         auto Ctx = isolate_->GetCurrentContext();
         auto &table = s.table();
 
-        /* Add "table_name: num_rows" mapping to env. */
-        DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, table.name), v8::Int32::New(isolate_, table.store().num_rows()));
+        std::size_t idx = 0;
+        for (const auto &e : s.linearization()) {
+            std::size_t bytes;
+            if (e.is_null_bitmap() or e.is_attribute()) {
+                bytes = (s.num_rows() * e.stride + 7) / 8;
+            } else {
+                insist(e.is_linearization());
+                const auto e_rows = e.as_linearization().num_tuples();
+                bytes = (s.num_rows() + e_rows - 1) / e_rows * e.stride;
+            }
 
-        for (auto &attr : table) {
-            oss.str("");
-            oss << table.name << '.' << attr.name;
-            auto env_name = oss.str();
-
-            /* Map next column into WebAssembly linear memory. */
+            /* Map entry into WebAssembly linear memory. */
             const auto ptr = get_pagesize() * next_page_;
-            const auto bytes = s.num_rows() * attr.type->size() / 8;
             const auto aligned_bytes = Ceil_To_Next_Page(bytes);
             const auto num_pages = aligned_bytes / get_pagesize();
-            auto &mem = s.memory(attr.id);
+            const auto &mem = s.memory(idx);
             if (aligned_bytes) {
                 mem.map(aligned_bytes, 0, wasm_context_.vm, ptr);
                 next_page_ += num_pages + 1; // "install" a guard page after the mapping to fault on oob
             }
 
-            /* Add column address to env. */
-            DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, env_name), v8::Int32::New(isolate_, ptr));
+            /* Add entry address to env. */
+            oss.str("");
+            oss << table.name << "_mem_" << idx++;
+            DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, oss.str()), v8::Int32::New(isolate_, ptr));
         }
-
-        // TODO add null bitmap column
 
         /* Add table size (num_rows) to env. */
         oss.str("");
         oss << table.name << "_num_rows";
-        DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, oss.str()), v8::Int32::New(isolate_, table.store().num_rows()));
-    }
-
-    void operator()(const PaxStore&) override { unreachable("not supported"); }
-
-    void operator()(const RowStore &s) override {
-        auto Ctx = isolate_->GetCurrentContext();
-        auto &table = s.table();
-
-        /* Map entire row store to WebAssembly linear memory. */
-        const auto ptr = get_pagesize() * next_page_;
-        const auto bytes = s.num_rows() * s.row_size() / 8;
-        const auto aligned_bytes = Ceil_To_Next_Page(bytes);
-        const auto num_pages = aligned_bytes / get_pagesize();
-        auto &mem = s.memory();
-        if (aligned_bytes) {
-            mem.map(aligned_bytes, 0, wasm_context_.vm, ptr);
-            next_page_ += num_pages + 1; // "install" a guard page after the mapping to fault on oob
-        }
-
-        /* Add table address to env. */
-        DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, table.name), v8::Int32::New(isolate_, ptr));
-
-        /* Add table size (num_rows) to env. */
-        std::ostringstream oss;
-        oss << table.name << "_num_rows";
-        DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, oss.str()), v8::Int32::New(isolate_, table.store().num_rows()));
+        DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, oss.str()), v8::Int32::New(isolate_, s.num_rows()));
     }
 };
 
@@ -722,7 +696,7 @@ v8::Local<v8::Object> V8Platform::create_env(WasmContext &wasm_context, const Op
     auto env = v8::Object::New(isolate_);
     Store2Wasm S2W(isolate_, env, wasm_context);
     for (auto it = DB.begin_tables(); it != DB.end_tables(); ++it)
-        S2W(it->second->store());
+        S2W.map(it->second->store());
 
     /* Import next free page, usable for heap allcoations. */
     auto head_of_heap = S2W.get_next_page() * get_pagesize();

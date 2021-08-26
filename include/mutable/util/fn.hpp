@@ -75,6 +75,17 @@ struct StrEqualWithNull
     }
 };
 
+/** Computes the XOR-hash for a pair. */
+template<typename T1, typename T2, typename H1 = std::hash<T1>, typename H2 = std::hash<T2>>
+struct PairHash
+{
+    uint64_t operator()(const std::pair<T1, T2> &p) const {
+        H1 h1;
+        H2 h2;
+        return h1(p.first) ^ h2(p.second);
+    }
+};
+
 template<typename T>
 typename std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T>, bool>
 is_pow_2(T n)

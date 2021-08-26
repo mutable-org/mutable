@@ -2287,39 +2287,25 @@ void WasmPipelineCG::emit_write_results(const Schema &schema)
 void WasmPipelineCG::operator()(const ScanOperator &op)
 {
     std::ostringstream oss;
+    auto &table = op.store().table();
+    auto &lin = op.store().linearization();
 
     /*----- Get the number of rows in the scanned table. -------------------------------------------------------------*/
-    auto & table = op.store().table();
     oss << table.name << "_num_rows";
     module().import(oss.str(), BinaryenTypeInt32());
     WasmTemporary num_rows = module().get_imported(oss.str(), BinaryenTypeInt32());
 
-    WasmVariable induction(module().main(), BinaryenTypeInt32()); // initialized to 0
-
-    oss.str("");
-    oss << "scan_" << op.alias();
-    WasmWhile loop(module(), oss.str().c_str(), BinaryenBinary(
-        /* module= */ module(),
-        /* op=     */ BinaryenLtUInt32(),
-        /* left=   */ induction,
-        /* right=  */ num_rows
-    ));
+    /*----- Get the base addresses of the mapped memories. -----------------------------------------------------------*/
+    std::vector<WasmTemporary> base_addresses;
+    for (std::size_t idx = 0; idx < lin.num_sequences(); ++idx) {
+        oss.str("");
+        oss << table.name << "_mem_" << idx;
+        module().import(oss.str(), BinaryenTypeInt32());
+        base_addresses.push_back(module().get_imported(oss.str(), BinaryenTypeInt32()));
+    }
 
     /*----- Generate code to access attributes and emit code for the rest of the pipeline. ---------------------------*/
-    swap(block_, loop);
-    WasmStoreCG store(*this, op);
-    store(op.store());
-    swap(block_, loop);
-
-    /*----- Increment induction variable. ----------------------------------------------------------------------------*/
-    loop += induction.set(BinaryenBinary(
-        /* module= */ module(),
-        /* op=     */ BinaryenAddInt32(),
-        /* left=   */ induction,
-        /* right=  */ BinaryenConst(module(), BinaryenLiteralInt32(1))
-    ));
-
-    block_ += loop.finalize();
+    WasmStoreCG::compile_load(*this, op, lin, std::move(num_rows), base_addresses);
 }
 
 void WasmPipelineCG::operator()(const CallbackOperator &op)
@@ -3581,178 +3567,1029 @@ void WasmPipelineCG::operator()(const SortingOperator &op)
  * WasmStoreCG
  *====================================================================================================================*/
 
-void WasmStoreCG::operator()(const ColumnStore &store)
+void WasmStoreCG::compile_load(WasmPipelineCG &pipeline, const Producer &op, const Linearization &L,
+                               WasmTemporary num_rows, const std::vector<WasmTemporary> &root_offsets,
+                               std::size_t row_id)
 {
-    std::ostringstream oss;
-    auto &table = store.table();
+    compile_linearization<false>(pipeline, op, L, std::move(num_rows), root_offsets, row_id);
+}
 
-    /* Import null bitmap column address. */
-    // TODO
+void WasmStoreCG::compile_store(WasmPipelineCG &pipeline, const Producer &op, const Linearization &L,
+                                WasmTemporary num_rows, const std::vector<WasmTemporary> &root_offsets,
+                                std::size_t row_id)
+{
+    compile_linearization<true>(pipeline, op, L, std::move(num_rows), root_offsets, row_id);
+}
 
-    /*----- Generate code to access null bitmap and value of all required attributes. --------------------------------*/
-    std::vector<WasmVariable> col_addrs;
-    for (auto &e : op.schema()) {
-        auto &attr = table[e.id.name];
+template<bool IsStore>
+void WasmStoreCG::compile_linearization(WasmPipelineCG &pipeline, const Producer &op, const Linearization &L,
+                                        WasmTemporary num_rows, const std::vector<WasmTemporary> &root_offsets,
+                                        std::size_t row_id)
+{
+    struct {
+        WasmVariable *ptr = nullptr; ///< pointer to the null bitmap
+        ///> to keep track of current varying bit offset in case of a bit stride
+        std::optional<WasmVariable> varying_bit_offset;
+        uintptr_t bit_offset; ///< fixed offset, in bits
+        std::size_t bit_stride; ///< stride, in bits
+        const Linearization *lin; ///< `Linearization` in which the NULL bitmap is stored
 
-        oss.str("");
-        oss << table.name << '.' << attr.name;
-        auto name = oss.str();
+        operator bool() const { return ptr != nullptr; }
+        bool has_varying_offset() const { return *this and bit_stride != 0; }
+    } null_bitmap_info;
 
-        /*----- Import column address. -------------------------------------------------------------------------------*/
-        auto &col_addr = col_addrs.emplace_back(pipeline.module().main(), BinaryenTypeInt32());
-        pipeline.module().import(name, BinaryenTypeInt32());
-        pipeline.module().main().block() += col_addr.set(pipeline.module().get_imported(name, BinaryenTypeInt32()));
+    struct level_info_t
+    {
+        WasmVariable counter; ///< loop counter
+        WasmWhile loop; ///< loop
+        BlockBuilder block; ///< block containing code to emit at the end of loop's body
 
-        if (attr.type->size() < 8) {
-            unreachable("not implemented");
-        } else if (attr.type->is_character_sequence()) {
-            pipeline.context().add(e.id, col_addr);
-        } else {
-            WasmTemporary value = BinaryenLoad(
-                /* module=  */ pipeline.module(),
-                /* bytes=   */ attr.type->size() / 8,
-                /* signed=  */ true,
-                /* offset=  */ 0,
-                /* align=   */ 0,
-                /* type=    */ get_binaryen_type(attr.type),
-                /* ptr=     */ col_addr
+        level_info_t(WasmModuleCG &module, const char *name, WasmTemporary end)
+            : counter(module.main(), BinaryenTypeInt32())
+            , loop(module, name, BinaryenBinary(
+                /* module= */ module,
+                /* op=     */ BinaryenLtUInt32(),
+                /* left=   */ counter,
+                /* right=  */ end
+            ))
+            , block(module, name)
+        { }
+
+        level_info_t(level_info_t&&) = default;
+    };
+    std::vector<level_info_t> level_info_stack; // keep track of compiled code snippets per level
+
+    struct stride_info_t
+    {
+        std::size_t num_tuples; ///< number of tuples of the `Linearization`
+        std::size_t stride; ///< stride, in bytes
+    };
+    std::vector<stride_info_t> stride_info_stack; // keep track of all strides from root to leaf
+
+    /* Keep track of greatest common divisors of all lengths of all `Linearization`s per level. */
+    std::vector<std::size_t> gcd_stack;
+
+    /* Keep track of pointers per `Linearization`-stride combination.
+     * Since the root node's entries represent independent memory spaces and thus need individual pointers but may
+     * have the same stride, duplicates may occur and a `std::unordered_multimap` must be used. */
+    using hash = PairHash<const Linearization*, uint32_t>;
+    std::unordered_multimap<std::pair<const Linearization*, uint32_t>, WasmVariable, hash> lin_stride2ptr;
+
+    /* Keep track of masks per `Linearization`-bit_offset combination. */
+    std::unordered_map<std::pair<const Linearization*, uint32_t>, WasmVariable, hash> lin_offset2mask;
+
+    /*----- Compute location of NULL bitmap and initialize `gcd_stack`. ----------------------------------------------*/
+    auto initialize = [&](const Linearization &L, std::size_t row_id) -> void {
+        auto initialize_impl = [&](const Linearization &L, std::size_t level, WasmTemporary base, uintptr_t offset,
+                                   std::size_t row_id, auto &initialize_impl_ref) -> void
+        {
+            if (level < gcd_stack.size()) {
+                /* Update existing gcd level. */
+                gcd_stack[level] = std::gcd(gcd_stack[level], L.num_tuples());
+            } else {
+                /* Create new gcd level. The gcd must divide the parent gcd if one is specified. The first level is
+                 * initialized with gcd 0 to indicate an unspecified gcd. */
+                insist(level == gcd_stack.size());
+                gcd_stack.push_back(level == 0 ? 0UL : std::gcd(gcd_stack[level - 1], L.num_tuples()));
+            }
+
+            std::size_t idx = 0;
+            for (const auto &e : L) {
+                if (level == 0) {
+                    if (root_offsets.empty()) {
+                        /* Use offset provided in root node entry as base address. */
+                        base = BinaryenConst(
+                            /* module= */ pipeline.module(),
+                            /* value=  */ BinaryenLiteralInt32(e.offset)
+                        );
+                    } else {
+                        /* Use provided alternative offset as base address. */
+                        insist(root_offsets.size() == L.num_sequences());
+                        base = root_offsets[idx++].clone(pipeline.module());
+                    }
+                }
+
+                if (e.is_null_bitmap()) {
+                    insist(not null_bitmap_info, "there must be at most one null bitmap in the linearization");
+                    const std::size_t ptr_byte_offset = (row_id * e.stride) / 8;
+                    const std::size_t ptr_bit_offset = (row_id * e.stride) % 8;
+
+                    /* Add pointer for this `Linearization`-`e.stride` combination if none exists. */
+                    WasmVariable *ptr;
+                    if (auto it = lin_stride2ptr.find({&L, e.stride}); it != lin_stride2ptr.end()) {
+                        ptr = &it->second;
+                    } else {
+                        ptr = &lin_stride2ptr.emplace_hint(it, std::piecewise_construct,
+                                                           std::forward_as_tuple(&L, e.stride),
+                                                           std::forward_as_tuple(pipeline.module().main(), BinaryenTypeInt32())
+                        )->second;
+                        pipeline.block_ += ptr->set(BinaryenBinary(
+                            /* module= */ pipeline.module(),
+                            /* op=     */ BinaryenAddInt32(),
+                            /* left=   */ base.clone(pipeline.module()),
+                            /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(offset + ptr_byte_offset))
+                        ));
+                    }
+
+                    /* Initialize NULL bitmap info. */
+                    null_bitmap_info.ptr = ptr;
+                    null_bitmap_info.bit_offset = e.offset;
+                    null_bitmap_info.bit_stride = e.stride;
+                    null_bitmap_info.lin = &L;
+
+                    if (null_bitmap_info.has_varying_offset()) {
+                        /* Initialize varying NULL bitmap offset including pointer bit offset. */
+                        null_bitmap_info.varying_bit_offset.emplace(pipeline.module().main(), BinaryenTypeInt32());
+                        pipeline.block_ += null_bitmap_info.varying_bit_offset->set(BinaryenConst(
+                            /* module= */ pipeline.module(),
+                            /* value=  */ BinaryenLiteralInt32(null_bitmap_info.bit_offset + ptr_bit_offset)
+                        ));
+                    }
+                } else if (e.is_linearization()) {
+                    auto &lin = e.as_linearization();
+                    insist(lin.num_tuples() != 0);
+                    const std::size_t lin_id = row_id / lin.num_tuples();
+                    const std::size_t inner_row_id = row_id % lin.num_tuples();
+                    const auto additional_offset = level == 0 ? e.stride * lin_id : e.offset + e.stride * lin_id;
+                    initialize_impl_ref(lin, level + 1, base.clone(pipeline.module()), offset + additional_offset,
+                                        inner_row_id, initialize_impl_ref);
+                }
+            }
+        };
+        initialize_impl(L, 0, WasmTemporary(), 0, row_id, initialize_impl);
+    };
+    initialize(L, row_id);
+
+    /*----- Initialize `level_info_stack`. Initialize counters and increment them in each block. ---------------------*/
+    insist(not gcd_stack.empty());
+    level_info_stack.reserve(gcd_stack.size());
+
+    std::size_t inner_row_id = row_id;
+    for (std::size_t level = 0; level < gcd_stack.size(); ++level) {
+        const std::size_t current_gcd = gcd_stack[level];
+        const std::size_t inner_gcd = level + 1 < gcd_stack.size() ? gcd_stack[level + 1] : 1UL;
+
+        WasmTemporary end;
+        if (level == 0) {
+            /* Iterate in outermost loop until at least `num_rows` tuples are processed. The inner loop will process
+             * `inner_gcd` tuples. */
+            WasmTemporary num_rows_ceiled = BinaryenBinary(
+                /* module= */ pipeline.module(),
+                /* op=     */ BinaryenAddInt32(),
+                /* lhs=    */ num_rows.clone(pipeline.module()),
+                /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(inner_gcd - 1U))
             );
-            pipeline.context().add(e.id, std::move(value));
+            end = BinaryenBinary(
+                /* module= */ pipeline.module(),
+                /* op=     */ BinaryenDivUInt32(),
+                /* lhs=    */ num_rows_ceiled,
+                /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(inner_gcd))
+            );
+        } else {
+            /* Iterate in inner loops until exactly `current_gcd` tuples are processed. The inner loop will process
+             * `inner_gcd` tuples. */
+            end = BinaryenConst(pipeline.module(), BinaryenLiteralInt32(current_gcd / inner_gcd));
         }
-    }
+        std::ostringstream oss;
+        oss << "compile_linearization.level" << level;
+        auto &level_info = level_info_stack.emplace_back(pipeline.module(), oss.str().c_str(), std::move(end));
 
-    /*----- Generate code for rest of the pipeline. ------------------------------------------------------------------*/
-    pipeline(*op.parent());
+        /* Initialize counter. */
+        pipeline.block_ += level_info.counter.set(BinaryenConst(
+            /* module= */ pipeline.module(),
+            /* value=  */ BinaryenLiteralInt32(inner_row_id / inner_gcd)
+        ));
 
-    /*----- Emit code to advance each column address to next row. ----------------------------------------------------*/
-    auto col_addr_it = col_addrs.cbegin();
-    for (auto &e : op.schema()) {
-        auto &attr = table[e.id.name];
-        auto &col_addr = *col_addr_it++;
-        const auto attr_size = std::max<std::size_t>(1, attr.type->size() / 8);
-
-        pipeline.block_ += col_addr.set(BinaryenBinary(
+        /* Increment counter. */
+        level_info.block += level_info.counter.set(BinaryenBinary(
             /* module= */ pipeline.module(),
             /* op=     */ BinaryenAddInt32(),
-            /* left=   */ col_addr,
-            /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(attr_size))
+            /* left=   */ level_info.counter,
+            /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(1U))
         ));
+
+        /* Update inner row id for next iteration. */
+        inner_row_id = inner_row_id % inner_gcd;
     }
-}
+    insist(inner_row_id == 0);
 
-void WasmStoreCG::operator()(const PaxStore&)
-{
-    unreachable("not supported");
-}
+    /*----- Compile code for aborting iteration at the end of the data. ----------------------------------------------*/
+    auto &innermost = level_info_stack.back().block; // innermost block
 
-void WasmStoreCG::operator()(const RowStore &store)
-{
-    std::ostringstream oss;
-    auto &table = store.table();
+    /* Initialize current row id. */
+    WasmVariable current_row_id(pipeline.module().main(), BinaryenTypeInt32());
+    pipeline.block_ += current_row_id.set(BinaryenConst(
+        /* module= */ pipeline.module(),
+        /* value=  */ BinaryenLiteralInt32(row_id)
+    ));
 
-    /*----- Import table address. ------------------------------------------------------------------------------------*/
-    WasmVariable row_addr(pipeline.module().main(), BinaryenTypeInt32());
-    pipeline.module().import(table.name, BinaryenTypeInt32());
-    pipeline.module().main().block() += row_addr.set(pipeline.module().get_imported(table.name, BinaryenTypeInt32()));
+    /* Break to end of outermost loop if `current_row_id` >= `num_rows`. */
+    WasmTemporary cond = BinaryenBinary(
+        /* module= */ pipeline.module(),
+        /* op=     */ BinaryenGeUInt32(),
+        /* lhs=    */ current_row_id,
+        /* rhs=    */ num_rows
+    );
+    innermost += BinaryenBreak(
+        /* module=    */ pipeline.module(),
+        /* name=      */ level_info_stack.front().loop.body().name(), // body of outermost loop
+        /* condition= */ cond,
+        /* value=     */ nullptr
+    );
 
-    /*----- Generate code to access null bitmap and value of all required attributes. --------------------------------*/
-    const auto null_bitmap_offset = store.offset(table.size());
-    for (auto &e : op.schema()) {
-        auto &attr = table[e.id.name];
-
-        /*----- Generate code for null bit check. --------------------------------------------------------------------*/
-        {
-            const auto null_bit_offset = null_bitmap_offset + attr.id;
-            const auto qwords = null_bit_offset / 32;
-            const auto bits = null_bit_offset % 32;
-
-            WasmTemporary null_bitmap_addr = BinaryenBinary(
-                /* module= */ pipeline.module(),
-                /* op=     */ BinaryenAddInt32(),
-                /* left=   */ row_addr,
-                /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(qwords))
-            );
-            WasmTemporary qword = BinaryenLoad(
-                /* module= */ pipeline.module(),
-                /* bytes=  */ 4,
-                /* signed= */ false,
-                /* offset= */ 0,
-                /* align=  */ 0,
-                /* type=   */ BinaryenTypeInt32(),
-                /* ptr=    */ null_bitmap_addr
-            );
-            WasmTemporary shr = BinaryenBinary(
-                /* module= */ pipeline.module(),
-                /* op=     */ BinaryenShrUInt32(),
-                /* left=   */ qword,
-                /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(bits))
-            );
-            WasmTemporary is_null = BinaryenBinary(
-                /* module= */ pipeline.module(),
-                /* op=     */ BinaryenAndInt32(),
-                /* left=   */ shr,
-                /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(1))
-            );
-            // TODO add to context nulls
-            (void) is_null;
-        }
-
-        /*----- Generate code for value access. ----------------------------------------------------------------------*/
-        if (attr.type->size() < 8) {
-            WasmTemporary byte = BinaryenLoad(
-                /* module= */ pipeline.module(),
-                /* bytes=  */ 1,
-                /* signed= */ false,
-                /* offset= */ store.offset(attr.id) / 8,
-                /* align=  */ 0,
-                /* type=   */ BinaryenTypeInt32(),
-                /* ptr=    */ row_addr
-            );
-            WasmTemporary shifted = BinaryenBinary(
-                /* module= */ pipeline.module(),
-                /* op=     */ BinaryenShrUInt32(),
-                /* lhs=    */ byte,
-                /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(store.offset(attr.id) % 8))
-            );
-            WasmTemporary value = BinaryenBinary(
-                /* module= */ pipeline.module(),
-                /* op=     */ BinaryenAndInt32(),
-                /* lhs=    */ shifted,
-                /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32((1 << attr.type->size()) - 1))
-            );
-            pipeline.context().add(e.id, std::move(value));
-        } else if (attr.type->is_character_sequence()) {
-            WasmTemporary address = BinaryenBinary(
-                /* module= */ pipeline.module(),
-                /* op=     */ BinaryenAddInt32(),
-                /* left=   */ row_addr,
-                /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(store.offset(attr.id) / 8))
-            );
-            pipeline.context().add(e.id, std::move(address));
-        } else {
-            WasmTemporary value = BinaryenLoad(
-                /* module= */ pipeline.module(),
-                /* bytes=  */ attr.type->size() / 8,
-                /* signed= */ true,
-                /* offset= */ store.offset(attr.id) / 8,
-                /* align=  */ 0,
-                /* type=   */ get_binaryen_type(attr.type),
-                /* ptr=    */ row_addr
-            );
-            pipeline.context().add(e.id, std::move(value));
-        }
-    }
-
-    /*----- Generate code for rest of the pipeline. ------------------------------------------------------------------*/
-    pipeline(*op.parent());
-
-    /*----- Emit code to advance to next row. ------------------------------------------------------------------------*/
-    pipeline.block_ += row_addr.set(BinaryenBinary(
+    /* Increment current row id. */
+    innermost += current_row_id.set(BinaryenBinary(
         /* module= */ pipeline.module(),
         /* op=     */ BinaryenAddInt32(),
-        /* left=   */ row_addr,
-        /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(store.row_size() / 8))
+        /* lhs=    */ current_row_id,
+        /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(1U))
     ));
+
+    /*----- Compile entire pipeline for storing. ---------------------------------------------------------------------*/
+    if constexpr (IsStore) {
+        /* Compilation before attribute access to be able to store the computed results. */
+        swap(pipeline.block_, innermost);
+        pipeline(*op.parent());
+        swap(pipeline.block_, innermost);
+    }
+
+    /*----- Compile code for attribute access. -----------------------------------------------------------------------*/
+    auto compile_access = [&](const Linearization &L, std::size_t row_id) -> void {
+        auto compile_access_impl = [&](const Linearization &L, std::size_t level, WasmTemporary base, uintptr_t offset,
+                                       std::size_t row_id, auto compile_access_impl_ref) -> void
+        {
+            std::size_t idx = 0;
+            for (const auto &e : L) {
+                if (level == 0) {
+                    if (root_offsets.empty()) {
+                        /* Use offset provided in root node entry as base address. */
+                        base = BinaryenConst(
+                            /* module= */ pipeline.module(),
+                            /* value=  */ BinaryenLiteralInt32(e.offset)
+                        );
+                    } else {
+                        /* Use provided alternative offset as base address. */
+                        insist(root_offsets.size() == L.num_sequences());
+                        base = root_offsets[idx++].clone(pipeline.module());
+                    }
+                }
+
+                if (e.is_null_bitmap()) {
+                    /* nothing to be done */
+                } else if (e.is_attribute()) {
+                    auto &attr = e.as_attribute();
+
+                    /* Locate the attribute in the operator schema. */
+                    auto &S = op.schema();
+                    if (auto it = S.find({attr.table.name, attr.name}); it != S.end()) {
+                        const std::size_t ptr_byte_offset = (row_id * e.stride) / 8;
+                        const std::size_t ptr_bit_offset = (row_id * e.stride) % 8;
+                        const std::size_t attr_byte_offset = (e.offset + ptr_bit_offset) / 8;
+                        const std::size_t attr_bit_offset = (e.offset + ptr_bit_offset) % 8;
+                        insist(not (ptr_bit_offset or attr_bit_offset) or attr.type->is_boolean(),
+                               "only booleans may not be byte aligned");
+
+                        const std::size_t byte_stride = e.stride / 8;
+                        const std::size_t bit_stride  = e.stride % 8;
+                        insist(not bit_stride or attr.type->is_boolean(), "only booleans may not be byte aligned");
+                        insist(bit_stride == 0 or byte_stride == 0,
+                               "the stride must be a whole multiple of a byte or less than a byte");
+
+                        /* Access NULL bit. */
+                        if (null_bitmap_info) {
+                            if (null_bitmap_info.has_varying_offset()) {
+                                /* With bit stride. Use varying offset instead of fixed offset. */
+                                WasmTemporary null_offset = BinaryenBinary(
+                                    /* module= */ pipeline.module(),
+                                    /* op=     */ BinaryenAddInt32(),
+                                    /* lhs=    */ *null_bitmap_info.varying_bit_offset,
+                                    /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(attr.id))
+                                ); // in bits
+                                WasmTemporary null_byte_offset = BinaryenBinary(
+                                    /* module= */ pipeline.module(),
+                                    /* op=     */ BinaryenShrUInt32(),
+                                    /* lhs=    */ null_offset.clone(pipeline.module()),
+                                    /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(3U))
+                                ); // = null_offset / 8
+                                WasmTemporary ptr = BinaryenBinary(
+                                    /* module= */ pipeline.module(),
+                                    /* op=     */ BinaryenAddInt32(),
+                                    /* lhs=    */ *null_bitmap_info.ptr,
+                                    /* rhs=    */ null_byte_offset
+                                );
+                                WasmTemporary null_bit_offset = BinaryenBinary(
+                                    /* module= */ pipeline.module(),
+                                    /* op=     */ BinaryenAndInt32(),
+                                    /* lhs=    */ null_offset,
+                                    /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(0b111U))
+                                ); // = null_offset % 8
+                                WasmTemporary mask = BinaryenBinary(
+                                    /* module= */ pipeline.module(),
+                                    /* op=     */ BinaryenShlInt32(),
+                                    /* lhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(1U)),
+                                    /* rhs=    */ null_bit_offset
+                                );
+
+                                if constexpr (IsStore) {
+                                    /* Load NULL bit to store. */
+                                    WasmTemporary is_null = pipeline.context().get_null(it->id);
+
+                                    /* Store NULL bit. */
+                                    WasmTemporary byte = BinaryenLoad(
+                                        /* module= */ pipeline.module(),
+                                        /* bytes=  */ 1,
+                                        /* signed= */ false,
+                                        /* offset= */ 0,
+                                        /* align=  */ 0,
+                                        /* type=   */ BinaryenTypeInt32(),
+                                        /* ptr=    */ ptr.clone(pipeline.module())
+                                    );
+#if 0
+                                    WasmTemporary subed = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenSubInt32(),
+                                        /* lhs=    */ is_null,
+                                        /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(1U))
+                                    );
+                                    WasmTemporary xored = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenXorInt32(),
+                                        /* lhs=    */ subed,
+                                        /* rhs=    */ byte.clone(pipeline.module())
+                                    );
+                                    WasmTemporary anded = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenAndInt32(),
+                                        /* lhs=    */ xored,
+                                        /* rhs=    */ mask
+                                    );
+                                    WasmTemporary new_byte = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenXorInt32(),
+                                        /* lhs=    */ byte,
+                                        /* rhs=    */ anded
+                                    ); // = byte ^ (((is_null - 1) ^ byte) & mask) = byte ^ ((-(!is_null) ^ byte) & mask)
+#else
+                                    WasmTemporary set_bit = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenOrInt32(),
+                                        /* lhs=    */ byte.clone(pipeline.module()),
+                                        /* rhs=    */ mask.clone(pipeline.module())
+                                    );
+                                    WasmTemporary inverted_mask = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenXorInt32(),
+                                        /* lhs=    */ mask,
+                                        /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(0xFF))
+                                    );
+                                    WasmTemporary unset_bit = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenAndInt32(),
+                                        /* lhs=    */ byte,
+                                        /* rhs=    */ inverted_mask
+                                    );
+                                    WasmTemporary new_byte = BinaryenSelect(
+                                        /* module=    */ pipeline.module(),
+                                        /* condition= */ is_null,
+                                        /* ifTrue=    */ unset_bit,
+                                        /* ifFalse=   */ set_bit,
+                                        /* type=      */ BinaryenTypeInt32()
+                                    );
+#endif
+                                    innermost += BinaryenStore(
+                                        /* module= */ pipeline.module(),
+                                        /* bytes=  */ 1,
+                                        /* offset= */ 0,
+                                        /* align=  */ 0,
+                                        /* ptr=    */ ptr,
+                                        /* value=  */ new_byte,
+                                        /* type=   */ BinaryenTypeInt32()
+                                    );
+                                } else {
+                                    /* Load NULL bit. */
+                                    WasmTemporary byte = BinaryenLoad(
+                                        /* module= */ pipeline.module(),
+                                        /* bytes=  */ 1,
+                                        /* signed= */ false,
+                                        /* offset= */ 0,
+                                        /* align=  */ 0,
+                                        /* type=   */ BinaryenTypeInt32(),
+                                        /* ptr=    */ ptr
+                                    );
+                                    WasmTemporary isolated_null_bit = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenAndInt32(),
+                                        /* lhs=    */ byte,
+                                        /* rhs=    */ mask
+                                    );
+                                    WasmTemporary is_null = BinaryenUnary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenEqZInt32(),
+                                        /* value=  */ isolated_null_bit
+                                    );
+                                    // TODO add to context
+                                    (void) is_null;
+                                }
+                            } else {
+                                /* No bit stride means the NULL bitmap only advances with parent sequence. */
+                                const std::size_t null_offset = null_bitmap_info.bit_offset + attr.id; // in bits
+                                const std::size_t null_byte_offset = null_offset / 8;
+                                const std::size_t null_bit_offset = null_offset % 8;
+
+                                if constexpr (IsStore) {
+                                    /* Load NULL bit to store. */
+                                    WasmTemporary is_null = pipeline.context().get_null(it->id);
+
+                                    /* Store NULL bit. */
+                                    WasmTemporary byte = BinaryenLoad(
+                                        /* module= */ pipeline.module(),
+                                        /* bytes=  */ 1,
+                                        /* signed= */ false,
+                                        /* offset= */ null_byte_offset,
+                                        /* align=  */ 0,
+                                        /* type=   */ BinaryenTypeInt32(),
+                                        /* ptr=    */ *null_bitmap_info.ptr
+                                    );
+#if 0
+                                    const unsigned clear_bit = ~(1UL << null_bit_offset);
+                                    WasmTemporary anded = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenAndInt32(),
+                                        /* lhs=    */ byte,
+                                        /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(clear_bit))
+                                    );
+                                    WasmTemporary is_not_null = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenNeInt32(),
+                                        /* lhs=    */ is_null,
+                                        /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(1U))
+                                    );
+                                    WasmTemporary set_bit = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenShlInt32(),
+                                        /* lhs=    */ is_not_null,
+                                        /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(null_bit_offset))
+                                    );
+                                    WasmTemporary new_byte = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenOrInt32(),
+                                        /* lhs=    */ anded,
+                                        /* rhs=    */ set_bit
+                                    ); // = (byte & ~(1UL << null_bit_offset)) | (!is_null << null_bit_offset)
+#else
+                                    WasmTemporary set_bit = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenOrInt32(),
+                                        /* lhs=    */ byte.clone(pipeline.module()),
+                                        /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(1U << null_bit_offset))
+                                    );
+                                    WasmTemporary unset_bit = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenAndInt32(),
+                                        /* lhs=    */ byte,
+                                        /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(~(1U << null_bit_offset)))
+                                    );
+                                    WasmTemporary new_byte = BinaryenSelect(
+                                        /* module=    */ pipeline.module(),
+                                        /* condition= */ is_null,
+                                        /* ifTrue=    */ unset_bit,
+                                        /* ifFalse=   */ set_bit,
+                                        /* type=      */ BinaryenTypeInt32()
+                                    );
+#endif
+                                    innermost += BinaryenStore(
+                                        /* module= */ pipeline.module(),
+                                        /* bytes=  */ 1,
+                                        /* offset= */ null_byte_offset,
+                                        /* align=  */ 0,
+                                        /* ptr=    */ *null_bitmap_info.ptr,
+                                        /* value=  */ new_byte,
+                                        /* type=   */ BinaryenTypeInt32()
+                                    );
+                                } else {
+                                    /* Load NULL bit. */
+                                    WasmTemporary byte = BinaryenLoad(
+                                        /* module= */ pipeline.module(),
+                                        /* bytes=  */ 1,
+                                        /* signed= */ false,
+                                        /* offset= */ null_byte_offset,
+                                        /* align=  */ 0,
+                                        /* type=   */ BinaryenTypeInt32(),
+                                        /* ptr=    */ *null_bitmap_info.ptr
+                                    );
+                                    WasmTemporary isolated_null_bit = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenAndInt32(),
+                                        /* lhs=    */ byte,
+                                        /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(1U << null_bit_offset))
+                                    );
+                                    WasmTemporary is_null = BinaryenUnary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenEqZInt32(),
+                                        /* value=  */ isolated_null_bit
+                                    );
+                                    // TODO add to context
+                                    (void) is_null;
+                                }
+                            }
+                        }
+
+                        /* Add pointer for this `Linearization`-`e.stride` combination if none exists.
+                         * Note that individual pointers must be created for the first level since the root node's
+                         * entries represent independent memory spaces. */
+                        WasmVariable *ptr;
+                        if (auto it = lin_stride2ptr.find({&L, e.stride}); level != 0 and it != lin_stride2ptr.end()) {
+                            ptr = &it->second;
+                        } else {
+                            ptr = &lin_stride2ptr.emplace_hint(it, std::piecewise_construct,
+                                                               std::forward_as_tuple(&L, e.stride),
+                                                               std::forward_as_tuple(pipeline.module().main(), BinaryenTypeInt32())
+                            )->second;
+                            pipeline.block_ += ptr->set(BinaryenBinary(
+                                /* module= */ pipeline.module(),
+                                /* op=     */ BinaryenAddInt32(),
+                                /* left=   */ base.clone(pipeline.module()),
+                                /* right=  */ BinaryenConst(pipeline.module(),BinaryenLiteralInt32(offset + ptr_byte_offset))
+                            ));
+                        }
+
+                        /* Access attribute. */
+                        if (bit_stride) {
+                            insist(e.stride == 1, "only booleans may not be byte aligned with one bit stride");
+
+                            /* Add mask for this `Linearization`-`e.offset % 8` combination if none exists. */
+                            WasmVariable *mask;
+                            if (auto it = lin_offset2mask.find({&L, e.offset % 8}); it != lin_offset2mask.end()) {
+                                mask = &it->second;
+                            } else {
+                                mask = &lin_offset2mask.emplace_hint(it, std::piecewise_construct,
+                                                                     std::forward_as_tuple(&L, e.offset % 8),
+                                                                     std::forward_as_tuple(pipeline.module().main(), BinaryenTypeInt32())
+                                )->second;
+                                pipeline.block_ += mask->set(BinaryenConst(
+                                    /* module= */ pipeline.module(),
+                                    /* value=  */ BinaryenLiteralInt32(1U << attr_bit_offset)
+                                ));
+                            }
+
+                            if constexpr (IsStore) {
+                                /* Load value to store. */
+                                WasmTemporary value = pipeline.context().get_value(it->id);
+
+                                /* Store value. */
+                                WasmTemporary byte = BinaryenLoad(
+                                    /* module= */ pipeline.module(),
+                                    /* bytes=  */ 1,
+                                    /* signed= */ false,
+                                    /* offset= */ attr_byte_offset,
+                                    /* align=  */ 0,
+                                    /* type=   */ BinaryenTypeInt32(),
+                                    /* ptr=    */ *ptr
+                                );
+                                WasmTemporary negated = BinaryenBinary(
+                                    /* module= */ pipeline.module(),
+                                    /* op=     */ BinaryenSubInt32(),
+                                    /* lhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(0)),
+                                    /* rhs=    */ value
+                                );
+                                WasmTemporary xored = BinaryenBinary(
+                                    /* module= */ pipeline.module(),
+                                    /* op=     */ BinaryenXorInt32(),
+                                    /* lhs=    */ negated,
+                                    /* rhs=    */ byte.clone(pipeline.module())
+                                );
+                                WasmTemporary anded = BinaryenBinary(
+                                    /* module= */ pipeline.module(),
+                                    /* op=     */ BinaryenAndInt32(),
+                                    /* lhs=    */ xored,
+                                    /* rhs=    */ *mask
+                                );
+                                WasmTemporary new_byte = BinaryenBinary(
+                                    /* module= */ pipeline.module(),
+                                    /* op=     */ BinaryenXorInt32(),
+                                    /* lhs=    */ byte,
+                                    /* rhs=    */ anded
+                                ); // = (byte ^ ((-value ^ byte) & mask)
+                                innermost += BinaryenStore(
+                                    /* module= */ pipeline.module(),
+                                    /* bytes=  */ 1,
+                                    /* offset= */ attr_byte_offset,
+                                    /* align=  */ 0,
+                                    /* ptr=    */ *ptr,
+                                    /* value=  */ new_byte,
+                                    /* type=   */ BinaryenTypeInt32()
+                                );
+                            } else {
+                                /* Load value. */
+                                WasmTemporary byte = BinaryenLoad(
+                                    /* module= */ pipeline.module(),
+                                    /* bytes=  */ 1,
+                                    /* signed= */ false,
+                                    /* offset= */ attr_byte_offset,
+                                    /* align=  */ 0,
+                                    /* type=   */ BinaryenTypeInt32(),
+                                    /* ptr=    */ *ptr
+                                );
+                                WasmTemporary isolated_bit = BinaryenBinary(
+                                    /* module= */ pipeline.module(),
+                                    /* op=     */ BinaryenAndInt32(),
+                                    /* lhs=    */ byte,
+                                    /* rhs=    */ *mask
+                                );
+                                WasmTemporary value = BinaryenBinary(
+                                    /* module= */ pipeline.module(),
+                                    /* op=     */ BinaryenNeInt32(),
+                                    /* lhs=    */ isolated_bit,
+                                    /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(0))
+                                );
+                                pipeline.context().add(it->id, std::move(value));
+                            }
+                        } else {
+                            if constexpr (IsStore) {
+                                /* Load value to store. */
+                                WasmTemporary value = pipeline.context().get_value(it->id);
+
+                                /* Store value. */
+                                if (attr.type->size() < 8) {
+                                    insist(attr.type->size() <= 8 - attr_bit_offset,
+                                           "attribute with size less than one byte must be contained in a single byte");
+                                    WasmTemporary byte = BinaryenLoad(
+                                        /* module= */ pipeline.module(),
+                                        /* bytes=  */ 1,
+                                        /* signed= */ false,
+                                        /* offset= */ attr_byte_offset,
+                                        /* align=  */ 0,
+                                        /* type=   */ BinaryenTypeInt32(),
+                                        /* ptr=    */ *ptr
+                                    );
+                                    const unsigned clear_bits = ~(((1UL << attr.type->size()) - 1UL) << attr_bit_offset);
+                                    WasmTemporary anded = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenAndInt32(),
+                                        /* lhs=    */ byte,
+                                        /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(clear_bits))
+                                    );
+                                    WasmTemporary shifted = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenShlInt32(),
+                                        /* lhs=    */ value,
+                                        /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(attr.type->size()))
+                                    );
+                                    WasmTemporary extended_value = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenSubInt32(),
+                                        /* lhs=    */ shifted,
+                                        /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(1U))
+                                    );
+                                    WasmTemporary set_bits = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenShlInt32(),
+                                        /* lhs=    */ attr.type->is_boolean() ? value : extended_value,
+                                        /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(attr_bit_offset))
+                                    );
+                                    WasmTemporary ored = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenOrInt32(),
+                                        /* lhs=    */ anded,
+                                        /* rhs=    */ set_bits
+                                    ); // = (byte & ~(1UL << attr_bit_offset)) | (value << attr_bit_offset)
+                                    innermost += BinaryenStore(
+                                        /* module= */ pipeline.module(),
+                                        /* bytes=  */ 1,
+                                        /* offset= */ attr_byte_offset,
+                                        /* align=  */ 0,
+                                        /* ptr=    */ *ptr,
+                                        /* value=  */ ored,
+                                        /* type=   */ BinaryenTypeInt32()
+                                    );
+                                } else if (attr.type->is_character_sequence()) {
+                                    WasmTemporary address = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenAddInt32(),
+                                        /* left=   */ *ptr,
+                                        /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(attr_byte_offset))
+                                    );
+                                    WasmStrncpy strncpy(pipeline.module().main());
+                                    strncpy.emit(innermost, std::move(address), std::move(value),
+                                                 as<const CharacterSequence>(attr.type)->length);
+                                } else {
+                                    innermost += BinaryenStore(
+                                        /* module= */ pipeline.module(),
+                                        /* bytes=  */ attr.type->size() / 8,
+                                        /* offset= */ attr_byte_offset,
+                                        /* align=  */ 0,
+                                        /* ptr=    */ *ptr,
+                                        /* value=  */ value,
+                                        /* type=   */ get_binaryen_type(attr.type)
+                                    );
+                                }
+                            } else {
+                                /* Load value. */
+                                if (attr.type->size() < 8) {
+                                    insist(attr.type->size() <= 8 - attr_bit_offset,
+                                           "attribute with size less than one byte must be contained in a single byte");
+                                    WasmTemporary byte = BinaryenLoad(
+                                        /* module= */ pipeline.module(),
+                                        /* bytes=  */ 1,
+                                        /* signed= */ false,
+                                        /* offset= */ attr_byte_offset,
+                                        /* align=  */ 0,
+                                        /* type=   */ BinaryenTypeInt32(),
+                                        /* ptr=    */ *ptr
+                                    );
+                                    WasmTemporary shifted = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenShrUInt32(),
+                                        /* lhs=    */ byte,
+                                        /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(attr_bit_offset))
+                                    );
+                                    WasmTemporary value = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenAndInt32(),
+                                        /* lhs=    */ shifted,
+                                        /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32((1U << attr.type->size()) - 1U))
+                                    );
+                                    pipeline.context().add(it->id, std::move(value));
+                                } else if (attr.type->is_character_sequence()) {
+                                    WasmTemporary address = BinaryenBinary(
+                                        /* module= */ pipeline.module(),
+                                        /* op=     */ BinaryenAddInt32(),
+                                        /* left=   */ *ptr,
+                                        /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(attr_byte_offset))
+                                    );
+                                    pipeline.context().add(it->id, std::move(address));
+                                } else {
+                                    WasmTemporary value = BinaryenLoad(
+                                        /* module= */ pipeline.module(),
+                                        /* bytes=  */ attr.type->size() / 8,
+                                        /* signed= */ true,
+                                        /* offset= */ attr_byte_offset,
+                                        /* align=  */ 0,
+                                        /* type=   */ get_binaryen_type(attr.type),
+                                        /* ptr=    */ *ptr
+                                    );
+                                    pipeline.context().add(it->id, std::move(value));
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    insist(e.is_linearization());
+
+                    auto &lin = e.as_linearization();
+                    insist(lin.num_tuples() != 0);
+                    const std::size_t lin_id = row_id / lin.num_tuples();
+                    const std::size_t inner_row_id = row_id % lin.num_tuples();
+                    const auto additional_offset = level == 0 ? e.stride * lin_id : e.offset + e.stride * lin_id;
+                    compile_access_impl_ref(lin, level + 1, base.clone(pipeline.module()),
+                                            offset + additional_offset, inner_row_id, compile_access_impl_ref);
+                }
+            }
+        };
+        compile_access_impl(L, 0, WasmTemporary(), 0, row_id, compile_access_impl);
+    };
+    compile_access(L, row_id);
+
+    /*----- Compile entire pipeline for loading. ---------------------------------------------------------------------*/
+    if constexpr (not IsStore) {
+        /* Compilation after attribute access to be able to use the loaded values. */
+        swap(pipeline.block_, innermost);
+        pipeline(*op.parent());
+        swap(pipeline.block_, innermost);
+    }
+
+    /*----- Compile code to update the varying NULL bitmap offset. ------------------------------------------------*/
+    if (null_bitmap_info.has_varying_offset()) {
+        innermost += null_bitmap_info.varying_bit_offset->set(BinaryenBinary(
+            /* module= */ pipeline.module(),
+            /* op=     */ BinaryenAddInt32(),
+            /* left=   */ *null_bitmap_info.varying_bit_offset,
+            /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(null_bitmap_info.bit_stride))
+        ));
+    }
+
+    /*----- Compile code to update pointers and masks. ---------------------------------------------------------------*/
+    auto compile_update = [&](const Linearization &L) -> void {
+        auto compile_update_impl = [&](const Linearization &L, std::size_t level, auto &compile_update_impl_ref) -> void
+        {
+            /* Update pointers. */
+            for (const auto &p : lin_stride2ptr) {
+                if (p.first.first != &L)
+                    continue; // skip all pointers that do not belong to this node
+
+                const auto stride = p.first.second;
+                const auto &ptr = p.second;
+
+                /* Update pointer in innermost block if there is a stride of at least one byte. */
+                if (const std::size_t byte_stride = stride / 8) {
+                    innermost += ptr.set(BinaryenBinary(
+                        /* module= */ pipeline.module(),
+                        /* op=     */ BinaryenAddInt32(),
+                        /* left=   */ ptr,
+                        /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(byte_stride))
+                    ));
+                }
+
+                /* Compile code for stride jumps. */
+                std::size_t prev_num_tuples = 1;
+                std::size_t prev_stride = stride;
+                std::size_t current_level = level;
+                for (auto it = stride_info_stack.rbegin(), end = stride_info_stack.rend(); it != end; ++it) {
+                    const auto &info = *it;
+
+                    /* Compute the remaining stride in bits. */
+                    const std::size_t stride_remaining = info.stride * 8 - (info.num_tuples / prev_num_tuples) * prev_stride;
+
+                    /* Perform stride jump, if necessary. */
+                    if (stride_remaining) {
+                        std::size_t byte_stride = stride_remaining / 8;
+                        const std::size_t bit_stride = stride_remaining % 8;
+
+                        /* Find innermost level where to place the stride jump, i.e. where the gcd is greater than
+                         * `info.num_tuples`. */
+                        auto pred = [&info](const std::size_t &gcd) { return gcd > info.num_tuples; };
+                        const auto gcd_it = std::find_if(gcd_stack.rbegin(), std::prev(gcd_stack.rend()), pred);
+                        insist(gcd_stack.size() == 1 or gcd_it != gcd_stack.rbegin(),
+                               "innermost level has at most gcd equal to sequence length");
+                        insist(gcd_it != gcd_stack.rend(), "first level has unspecified (i.e. 0) gcd");
+                        const std::size_t level = gcd_stack.size() - std::distance(gcd_stack.rbegin(), gcd_it) - 1;
+                        auto &level_info = level_info_stack[level];
+
+                        BlockBuilder stride_jump(pipeline.module(), "compile_linearization.stride_jump");
+
+                        if (bit_stride) {
+                            if (stride == 1UL) {
+                                /* Masks may be introduced for this pointer. Reset them to their initial first bit. */
+                                for (auto &p : lin_offset2mask) {
+                                    if (p.first.first != &L)
+                                        continue; // skip all masks that do not belong to this node
+
+                                    stride_jump += p.second.set(BinaryenConst(
+                                        /* module= */ pipeline.module(),
+                                        /* value=  */ BinaryenLiteralInt32(1U << p.first.second)
+                                    ));
+                                }
+                            }
+
+                            if (null_bitmap_info.has_varying_offset() and null_bitmap_info.lin == &L) {
+                                /* NULL bitmap is present in this `Linearization`. Reset its varying offset. */
+                                stride_jump += null_bitmap_info.varying_bit_offset->set(BinaryenConst(
+                                    /* module= */ pipeline.module(),
+                                    /* value=  */ BinaryenLiteralInt32(null_bitmap_info.bit_offset)
+                                ));
+                            }
+
+                            /* Ceil to next byte. */
+                            ++byte_stride;
+                        }
+
+                        if (byte_stride) {
+                            /* Advance pointer by `byte_stride` bytes. */
+                            stride_jump += ptr.set(BinaryenBinary(
+                                /* module= */ pipeline.module(),
+                                /* op=     */ BinaryenAddInt32(),
+                                /* lhs=    */ ptr,
+                                /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(byte_stride))
+                            ));
+                        }
+
+                        if (gcd_it != gcd_stack.rbegin() and *std::prev(gcd_it) == info.num_tuples) {
+                            /* No condition required since inner block processes exactly `info.num_tuples` tuples. */
+                            level_info.block += stride_jump.finalize();
+                        } else {
+                            /* Check whether we are in an `info.num_tuples`-th iteration. If yes, perform stride jump. */
+                            WasmTemporary cond_mod = BinaryenBinary(
+                                /* module= */ pipeline.module(),
+                                /* op=     */ BinaryenRemUInt32(),
+                                /* lhs=    */ level_info.counter,
+                                /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(info.num_tuples))
+                            );
+                            WasmTemporary cond_and = BinaryenBinary(
+                                /* module= */ pipeline.module(),
+                                /* op=     */ BinaryenAndInt32(),
+                                /* lhs=    */ level_info.counter,
+                                /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(info.num_tuples - 1U))
+                            );
+                            insist(info.num_tuples != 0);
+                            const bool is_power_of_2 = (info.num_tuples bitand (info.num_tuples - 1)) == 0;
+                            level_info.block += BinaryenIf(
+                                /* module=    */ pipeline.module(),
+                                /* condition= */ is_power_of_2 ? cond_and : cond_mod,
+                                /* ifTrue=    */ stride_jump.finalize(),
+                                /* ifFalse=   */ nullptr
+                            );
+                        }
+                    }
+
+                    /* Update variables for next iteration. */
+                    prev_num_tuples = info.num_tuples;
+                    prev_stride = info.stride * 8;
+                    --current_level;
+                }
+            }
+
+            /* Update masks. */
+            bool has_masks = false;
+            for (const auto &p : lin_offset2mask) {
+                if (p.first.first != &L)
+                    continue; // skip all masks that do not belong to this node
+
+                const auto &mask = p.second;
+                has_masks = true;
+
+                /* Advance mask to the next bit in innermost block. */
+                innermost += mask.set(BinaryenBinary(
+                    /* module= */ pipeline.module(),
+                    /* op=     */ BinaryenShlInt32(),
+                    /* left=   */ mask,
+                    /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(1U))
+                ));
+            }
+
+            /* Check whether any mask exceeds a single byte. If yes, reset all masks to their initial first bit and
+             * advance the corresponding pointers to the next byte.
+             * Since all masks are advanced by one bit simultaneously, only the mask with the highest initial bit may
+             * exceed a single byte and has to be checked. */
+            if (has_masks) {
+                BlockBuilder reset_masks(pipeline.module(), "compile_linearization.reset_mask");
+
+                uint32_t highest_offset = 0;
+                for (const auto &p : lin_offset2mask) {
+                    if (p.first.first != &L)
+                        continue; // skip all masks that do not belong to this node
+
+                    reset_masks += p.second.set(BinaryenConst(
+                        /* module= */ pipeline.module(),
+                        /* value=  */ BinaryenLiteralInt32(1U << p.first.second)
+                    ));
+
+                    highest_offset = std::max(highest_offset, p.first.second);
+                }
+
+                const auto &range = lin_stride2ptr.equal_range({&L, 1U}); // masks are only introduced for one bit strides
+                insist(range.first != range.second);
+                for (auto it = range.first; it != range.second; ++it) {
+                    const auto &ptr = it->second;
+
+                    reset_masks += ptr.set(BinaryenBinary(
+                        /* module= */ pipeline.module(),
+                        /* op=     */ BinaryenAddInt32(),
+                        /* left=   */ ptr,
+                        /* right=  */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(1U))
+                    ));
+                }
+
+                WasmTemporary cond = BinaryenBinary(
+                    /* module= */ pipeline.module(),
+                    /* op=     */ BinaryenEqInt32(),
+                    /* lhs=    */ lin_offset2mask.at({&L, highest_offset}),
+                    /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(1U << 8))
+                );
+                innermost += BinaryenIf(
+                    /* module=    */ pipeline.module(),
+                    /* condition= */ cond,
+                    /* ifTrue=    */ reset_masks.finalize(),
+                    /* ifFalse=   */ nullptr
+                );
+            }
+
+            /* Perform recursive descent. */
+            for (const auto &e : L) {
+                if (e.is_linearization()) {
+                    auto &lin = e.as_linearization();
+
+                    /* Put context on stack. */
+                    stride_info_stack.push_back(stride_info_t{
+                        .num_tuples = lin.num_tuples(),
+                        .stride = e.stride
+                    });
+                    compile_update_impl_ref(lin, level + 1, compile_update_impl_ref);
+                    stride_info_stack.pop_back();
+                }
+            }
+        };
+        compile_update_impl(L, 0, compile_update_impl);
+    };
+    compile_update(L);
+
+    /*----- Compile loops. -------------------------------------------------------------------------------------------*/
+    for (auto level_it = level_info_stack.rbegin(); level_it != level_info_stack.rend(); ++level_it) {
+        if (level_it != level_info_stack.rbegin()) {
+            /* Add inner loop and reset its counter to 0. */
+            auto inner_level_it = std::prev(level_it);
+            level_it->loop += inner_level_it->loop.finalize();
+            level_it->loop += inner_level_it->counter.set(BinaryenConst(
+                /* module= */ pipeline.module(),
+                /* value=  */ BinaryenLiteralInt32(0)
+            ));
+        }
+
+        /* Add own block. */
+        level_it->loop += level_it->block.finalize();
+    }
+
+    /* Add outermost loop to pipeline block. */
+    pipeline.block_ += level_info_stack.front().loop.finalize();
 }
 
 

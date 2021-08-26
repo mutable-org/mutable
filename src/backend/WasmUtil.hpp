@@ -83,7 +83,6 @@ struct WasmTemporary
     WasmTemporary(BinaryenExpressionRef ref) : ref_(notnull(ref)) { }
     ~WasmTemporary() { /* nothing to be done */ }
 
-    WasmTemporary(const WasmTemporary&) = delete;
     WasmTemporary(WasmTemporary &&other) : WasmTemporary() { swap(*this, other); }
 
     WasmTemporary & operator=(WasmTemporary other) {
@@ -122,8 +121,9 @@ struct WasmVariable
         , var_idx_(idx)
     { }
 
-    WasmVariable(const WasmVariable&) = delete;
     WasmVariable(WasmVariable&&) = default;
+
+    WasmVariable & operator=(WasmVariable&&) = default;
 
     WasmTemporary set(WasmTemporary expr) const {
         return BinaryenLocalSet(
@@ -573,6 +573,8 @@ struct WasmLoop
         , body_(module, (std::string(name_) + ".body").c_str())
     { }
 
+    WasmLoop(WasmLoop&&) = default;
+
     virtual ~WasmLoop() { free((void*) name_); }
 
     BlockBuilder & body() { return body_; }
@@ -603,6 +605,8 @@ struct WasmDoWhile : WasmLoop
         , condition_(std::move(condition))
     { }
 
+    WasmDoWhile(WasmDoWhile&&) = default;
+
     WasmTemporary condition() const;
 
     virtual WasmTemporary finalize() override {
@@ -617,6 +621,8 @@ struct WasmWhile : WasmDoWhile
     WasmWhile(WasmModuleCG &module, const char *name, WasmTemporary condition)
         : WasmDoWhile(module, name, std::move(condition))
     { }
+
+    WasmWhile(WasmWhile&&) = default;
 
     WasmTemporary finalize() override;
 };
@@ -961,22 +967,48 @@ struct WasmPipelineCG : ConstOperatorVisitor
 #undef DECLARE
 };
 
-struct WasmStoreCG : ConstStoreVisitor
+struct WasmStoreCG
 {
-    WasmPipelineCG &pipeline;
-    const Producer &op;
+    /** Compiles the loading of a tuple of `Schema` `op.schema()` using a given `Linearization`.
+     *
+     * @param pipeline      the `WasmPipelineCG` for which the code is compiled
+     * @param op            the `Producer` which produces the tuple to load
+     * @param L             the `Linearization` of the `Store` we are loading from
+     * @param num_rows      the overall number of rows
+     * @param root_offsets  the alternative offsets used for the root node of `L`
+     * @param row_id        the ID of the *first* row to load from
+     */
+    static void compile_load(WasmPipelineCG &pipeline, const Producer &op, const Linearization &L,
+                             WasmTemporary num_rows, const std::vector<WasmTemporary> &root_offsets = std::vector<WasmTemporary>(),
+                             std::size_t row_id = 0);
 
-    WasmStoreCG(WasmPipelineCG &pipeline, const Producer &op)
-        : pipeline(pipeline)
-        , op(op)
-    { }
+    /** Compiles the storing of a tuple of `Schema` `op.schema()` using a given `Linearization`.
+     *
+     * @param pipeline      the `WasmPipelineCG` for which the code is compiled
+     * @param op            the `Producer` which produces the tuple to store
+     * @param L             the `Linearization` of the `Store` we are storing to
+     * @param num_rows      the overall number of rows
+     * @param root_offsets  the alternative offsets used for the root node of `L`
+     * @param row_id        the ID of the *first* row to store to
+     */
+    static void compile_store(WasmPipelineCG &pipeline, const Producer &op, const Linearization &L,
+                              WasmTemporary num_rows, const std::vector<WasmTemporary> &root_offsets = std::vector<WasmTemporary>(),
+                              std::size_t row_id = 0);
 
-    ~WasmStoreCG() { }
-
-    using ConstStoreVisitor::operator();
-    void operator()(const ColumnStore &store) override;
-    void operator()(const PaxStore &store) override;
-    void operator()(const RowStore &store) override;
+    private:
+    /** Compiles the loading or storing of a tuple of `Schema` `op.schema()` using a given `Linearization`.
+     *
+     * @param pipeline      the `WasmPipelineCG` for which the code is compiled
+     * @param op            the `Producer` which produces the tuple to load / store
+     * @param L             the `Linearization` of the `Store` we are loading from / storing to
+     * @param num_rows      the overall number of rows
+     * @param root_offsets  the alternative offsets used for the root node of `L`
+     * @param row_id        the ID of the *first* row to load / store
+     */
+    template<bool IsStore>
+    static void compile_linearization(WasmPipelineCG &pipeline, const Producer &op, const Linearization &L,
+                                      WasmTemporary num_rows, const std::vector<WasmTemporary> &root_offsets,
+                                      std::size_t row_id);
 };
 
 

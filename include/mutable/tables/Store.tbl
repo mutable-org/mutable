@@ -7,4 +7,4 @@
 /*        NAME            | Description */
 DB_STORE( RowStore,         "stores attributes in row-major order" )
 DB_STORE( ColumnStore,      "stores attributes in column-major order" )
-// DB_STORE( PaxStore,         "stores attributes using PAX layout" )
+DB_STORE( PaxStore,         "stores attributes using PAX layout" )

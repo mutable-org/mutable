@@ -33,6 +33,7 @@ endif()
 add_library(
     frontend
     globals.cpp
+    $<TARGET_OBJECTS:backend>
     $<TARGET_OBJECTS:IR>
     $<TARGET_OBJECTS:storage>
     $<TARGET_OBJECTS:parse>

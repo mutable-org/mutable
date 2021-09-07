@@ -65,8 +65,8 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
         PrintOperator print(std::cout);
         print.add_child(optree.release());
 
-        auto backend = Backend::Create("Interpreter");
-        TIME_EXPR(backend->execute(print), "Execute the query", C.timer());
+        auto &backend = C.backend();
+        TIME_EXPR(backend.execute(print), "Execute the query", C.timer());
     } else if (auto I = cast<const InsertStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
         auto &T = DB.get_table(I->table_name.text);
@@ -141,6 +141,7 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
 
 void m::execute_query(Diagnostic&, const SelectStmt &stmt, std::unique_ptr<Consumer> consumer)
 {
+    Catalog &C = Catalog::Get();
     auto query_graph = QueryGraph::Build(stmt);
 
     std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::CreateDPccp();
@@ -158,8 +159,8 @@ void m::execute_query(Diagnostic&, const SelectStmt &stmt, std::unique_ptr<Consu
 
     consumer->add_child(optree.release());
 
-    auto backend = Backend::Create("Interpreter");
-    backend->execute(*consumer);
+    auto &backend = C.backend();
+    TIME_EXPR(backend.execute(*consumer), "Execute the query", C.timer());
 }
 
 void m::load_from_CSV(Diagnostic &diag, Table &table, const std::filesystem::path &path, std::size_t num_rows,

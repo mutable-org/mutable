@@ -5,6 +5,7 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <mutable/backend/Backend.hpp>
 #include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/Type.hpp>
 #include <mutable/storage/Store.hpp>
@@ -461,6 +462,7 @@ struct Catalog
     Database *database_in_use_ = nullptr; ///< the currently used database
     std::unordered_map<const char*, Function*> standard_functions_; ///< functions defined by the SQL standard
     Timer timer_; ///< a global timer
+    std::unique_ptr<Backend> backend_; ///< the active backend
 
     /*----- Factories ------------------------------------------------------------------------------------------------*/
     std::unordered_map<const char*, std::unique_ptr<StoreFactory>> store_factories_; ///< store factories to create new stores
@@ -561,7 +563,24 @@ struct Catalog
     std::unique_ptr<Store> create_store(const char *name, const Table &tbl) const;
     std::unique_ptr<Store> create_store(const Table &tbl) const;
 
-    /*===== CardinalityEstimators ===================================================================================================*/
+    /*===== Backends =================================================================================================*/
+    /** Returns `true` iff a `Backend` is set. */
+    bool has_backend() const { return bool(backend_); }
+
+    /** Returns the active `Backend`. */
+    Backend & backend() const {
+        insist(has_backend(), "must have set a backend");
+        return *backend_;
+    }
+
+    /** Sets the new `Backend` and returns the old one. */
+    std::unique_ptr<Backend> backend(std::unique_ptr<Backend> new_backend) {
+        using std::swap;
+        swap(new_backend, backend_);
+        return new_backend;
+    }
+
+    /*===== CardinalityEstimators ====================================================================================*/
     /** Registers a new `CardinalityEstimator` with the given `name`. */
     template<typename T>
     void register_cardinality_estimator(const char *name) {

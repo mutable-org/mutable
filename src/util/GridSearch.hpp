@@ -1,10 +1,14 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <functional>
 #include <iostream>
 #include <stdexcept>
+#include <tuple>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 
@@ -95,6 +99,77 @@ struct LinearSpace : Space<T, LinearSpace>
     void dump(std::ostream &out) const { out << *this << std::endl; }
     void dump() const { dump(std::cerr); }
 };
+
+template<typename... Spaces>
+struct GridSearch
+{
+    using callback_type = std::function<void(typename Spaces::value_type...)>;
+    static constexpr std::size_t NUM_SPACES = sizeof...(Spaces);
+
+    private:
+    std::tuple<Spaces...> spaces_;
+
+    public:
+    GridSearch(Spaces... spaces) : spaces_(std::forward<Spaces>(spaces)...) { }
+
+    constexpr std::size_t num_spaces() const { return NUM_SPACES; }
+
+    std::size_t num_points() const {
+        return std::apply([](auto&... space) {
+            return ((space.num_steps() + 1) * ... );
+        }, spaces_);
+    }
+
+    void search(callback_type fn) const;
+    void operator()(callback_type fn) const { search(fn); }
+
+    friend std::ostream & operator<<(std::ostream &out, const GridSearch &GS) {
+        out << "grid search with";
+
+        std::apply([&out](auto&... space) {
+            ((out << "\n  " << space), ...); // use C++17 fold-expression
+        }, GS.spaces_);
+
+        return out;
+    }
+
+    void dump(std::ostream &out) const { out << *this << std::endl; }
+    void dump() const { dump(std::cerr); }
+
+    private:
+    template<std::size_t... I>
+    std::tuple<typename Spaces::value_type...>
+    make_args(std::array<unsigned, NUM_SPACES> &counters, std::index_sequence<I...>) const {
+        return std::apply([&counters](auto&... space) {
+            return std::make_tuple(space(counters[I])...);
+        }, spaces_);
+    }
+};
+
+template<typename... Spaces>
+void GridSearch<Spaces...>::search(callback_type fn) const
+{
+    std::array<unsigned, NUM_SPACES> counters;
+    std::fill(counters.begin(), counters.end(), 0U);
+    const std::array<unsigned, NUM_SPACES> num_steps = std::apply([](auto&... space) {
+        return std::array<unsigned, NUM_SPACES>{ space.num_steps()... };
+    }, spaces_);
+
+    for (;;) {
+        auto args = make_args(counters, std::index_sequence_for<Spaces...>{});
+        std::apply(fn, args);
+
+        std::size_t idx = NUM_SPACES - 1;
+
+        while (counters[idx] == num_steps[idx]) {
+            if (idx == 0) goto finished;
+            counters[idx] = 0;
+            --idx;
+        }
+        ++counters[idx];
+    }
+finished:;
+}
 
 }
 

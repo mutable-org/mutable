@@ -174,3 +174,19 @@ TEST_CASE("Space", "[core][util]")
     CHECK(S.num_steps() == 2);
     CHECK(S.step() == Approx(5));
 }
+
+TEST_CASE("GridSearch", "[core][util]")
+{
+    LinearSpace<int> A(0, 1, 1);
+    LinearSpace<int> B(-10, 10, 4);
+
+    GridSearch GS(A, B);
+    CHECK(GS.num_spaces() == 2);
+    CHECK(GS.num_points() == 10);
+    std::vector<std::pair<int, int>> points;
+    GS.search([&points](int a, int b) { points.emplace_back(a, b); });
+    CHECK(points == std::vector<std::pair<int, int>>{
+        {0, -10}, {0, -5}, {0, 0}, {0, 5}, {0, 10},
+        {1, -10}, {1, -5}, {1, 0}, {1, 5}, {1, 10},
+    });
+}

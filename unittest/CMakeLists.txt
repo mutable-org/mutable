@@ -19,6 +19,7 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
 
         # util/container
         util/container/RefCountingHashMapTest.cpp
+        util/GridSearchTest.cpp
 
         # lex
         lex/LexerTest.cpp

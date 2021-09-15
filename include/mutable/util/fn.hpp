@@ -590,3 +590,36 @@ inline uint32_t sequence_number(float x)
     }
     return u32 + 0x80000000U;
 }
+
+/** Checks whether the range `[a, b]` contains at least `n` distinct values. */
+template<typename T>
+constexpr bool is_range_wide_enough(T a, T b, std::size_t n)
+{
+    using std::swap;
+    if (a > b) swap(a, b);
+
+    if (n == 0) return true;
+
+    insist(a <= b);
+    insist(n > 0);
+    if constexpr (std::is_integral_v<T>) {
+        if constexpr (std::is_signed_v<T>) {
+            using U = std::make_unsigned_t<T>;
+
+            if ((a < 0) == (b < 0)) { // equal signs
+                return U(b - a) >= n;
+            } else { // different signs
+                insist(a < 0);
+                insist(b >= 0);
+                U a_abs = U(~a) + 1U; // compute absolute without overflow
+                return a_abs >= n or (U(b) >= n - a_abs);
+            }
+        } else { // unsigned
+            return (b - a) >= n;
+        }
+    } else if constexpr (std::is_floating_point_v<T>) {
+        return sequence_number(b) - sequence_number(a) >= n - 1;
+    } else {
+        static_assert(std::is_same_v<T, T>, "unsupported type");
+    }
+}

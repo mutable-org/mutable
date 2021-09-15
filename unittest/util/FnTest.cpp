@@ -2,9 +2,11 @@
 
 #include "mutable/util/fn.hpp"
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <limits>
 #include <sstream>
 #include <string>
 
@@ -482,4 +484,112 @@ TEST_CASE("TimePoint to human readable", "[core][util][fn]")
     std::ostringstream oss;
     oss << put_timepoint(tp);
     check_human_readable(oss.str());
+}
+
+TEST_CASE("sequence_number/double", "[core][util]")
+{
+    SECTION("negative infinity")
+    {
+        constexpr double N_INF = -std::numeric_limits<double>::infinity();
+        const double next = std::nextafter(N_INF, 0.);
+        CHECK(sequence_number(next) - sequence_number(N_INF) == 1);
+    }
+
+    SECTION("positive infinity")
+    {
+        constexpr double P_INF = std::numeric_limits<double>::infinity();
+        const double previous = std::nextafter(P_INF, 0.);
+        CHECK(sequence_number(P_INF) - sequence_number(previous) == 1);
+    }
+
+    SECTION("negative zero")
+    {
+        constexpr double N_ZERO = -0.;
+        const double next = std::nextafter(N_ZERO, +1.);
+        CHECK(sequence_number(next) - sequence_number(N_ZERO) == 1);
+    }
+
+    SECTION("positive zero")
+    {
+        constexpr double P_ZERO = +0.;
+        const double previous = std::nextafter(P_ZERO, -1.);
+        CHECK(sequence_number(P_ZERO) - sequence_number(previous) == 1);
+    }
+
+    SECTION("negative one")
+    {
+        constexpr double N_ONE = -1.;
+        const double next = std::nextafter(N_ONE, 0.);
+        CHECK(sequence_number(next) - sequence_number(N_ONE) == 1);
+    }
+
+    SECTION("positive one")
+    {
+        constexpr double P_ONE = +1.;
+        const double previous = std::nextafter(P_ONE, 0.);
+        CHECK(sequence_number(P_ONE) - sequence_number(previous) == 1);
+    }
+
+    SECTION("three steps from 42.0")
+    {
+        constexpr double VAL = 42.;
+        const double val_1 = std::nextafter(VAL, 100);
+        const double val_2 = std::nextafter(val_1, 100);
+        const double val_3 = std::nextafter(val_2, 100);
+        CHECK(sequence_number(val_3) - sequence_number(VAL) == 3);
+    }
+}
+
+TEST_CASE("sequence_number/float", "[core][util]")
+{
+    SECTION("negative infinity")
+    {
+        constexpr float N_INF = -std::numeric_limits<float>::infinity();
+        const float next = std::nextafter(N_INF, 0.f);
+        CHECK(sequence_number(next) - sequence_number(N_INF) == 1);
+    }
+
+    SECTION("positive infinity")
+    {
+        constexpr float P_INF = std::numeric_limits<float>::infinity();
+        const float previous = std::nextafter(P_INF, 0.f);
+        CHECK(sequence_number(P_INF) - sequence_number(previous) == 1);
+    }
+
+    SECTION("negative zero")
+    {
+        constexpr float N_ZERO = -0.f;
+        const float next = std::nextafter(N_ZERO, +1.f);
+        CHECK(sequence_number(next) - sequence_number(N_ZERO) == 1);
+    }
+
+    SECTION("positive zero")
+    {
+        constexpr float P_ZERO = +0.f;
+        const float previous = std::nextafter(P_ZERO, -1.f);
+        CHECK(sequence_number(P_ZERO) - sequence_number(previous) == 1);
+    }
+
+    SECTION("negative one")
+    {
+        constexpr float N_ONE = -1.f;
+        const float next = std::nextafter(N_ONE, 0.f);
+        CHECK(sequence_number(next) - sequence_number(N_ONE) == 1);
+    }
+
+    SECTION("positive one")
+    {
+        constexpr float P_ONE = +1.f;
+        const float previous = std::nextafter(P_ONE, 0.f);
+        CHECK(sequence_number(P_ONE) - sequence_number(previous) == 1);
+    }
+
+    SECTION("three steps from 42.0f")
+    {
+        constexpr float VAL = 42.f;
+        const float val_1 = std::nextafter(VAL, 100.f);
+        const float val_2 = std::nextafter(val_1, 100.f);
+        const float val_3 = std::nextafter(val_2, 100.f);
+        CHECK(sequence_number(val_3) - sequence_number(VAL) == 3);
+    }
 }

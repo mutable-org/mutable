@@ -12,11 +12,12 @@
 #include <initializer_list>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <regex>
 #include <sstream>
 #include <type_traits>
-#include <variant>
 #include <unistd.h>
+#include <variant>
 
 
 inline bool streq(const char *first, const char *second) { return 0 == strcmp(first, second); }
@@ -561,3 +562,31 @@ inline std::size_t Is_Page_Aligned(std::size_t n) { return (n & (get_pagesize() 
 
 /** Returns the smallest integral multiple of the page size (in bytes) greater than or equals to `n`. */
 inline std::size_t Ceil_To_Next_Page(std::size_t n) { return ((n - 1UL) | (get_pagesize() - 1UL)) + 1UL; }
+
+/** This function assigns an integral sequence number to each `double` that is not *NaN*, such that if
+ *  `y = std::nextafter(x, INF)` then `sequence_number(y)` = `sequence_number(x) + 1`.
+ *  Taken from https://stackoverflow.com/a/47184081/3029188 */
+inline uint64_t sequence_number(double x)
+{
+    uint64_t u64;
+    std::memcpy(&u64, &x, sizeof u64);
+    if (u64 & 0x8000000000000000UL) {
+        u64 ^= 0x8000000000000000UL;
+        return 0x8000000000000000UL - u64;
+    }
+    return u64 + 0x8000000000000000UL;
+}
+
+/** This function assigns an integral sequence number to each `float` that is not *NaN*, such that if
+ *  `y = std::nextafter(x, INF)` then `sequence_number(y)` = `sequence_number(x) + 1`.
+ *  Inspired by https://stackoverflow.com/a/47184081/3029188 and adapted to `float`. */
+inline uint32_t sequence_number(float x)
+{
+    uint32_t u32;
+    std::memcpy(&u32, &x, sizeof u32);
+    if (u32 & 0x80000000U) {
+        u32 ^= 0x80000000U;
+        return 0x80000000U - u32;
+    }
+    return u32 + 0x80000000U;
+}

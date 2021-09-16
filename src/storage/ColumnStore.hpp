@@ -17,10 +17,11 @@ struct ColumnStore : Store
 #endif
 
     private:
+    memory::LinearAllocator allocator_; ///< the memory allocator
+    std::vector<memory::Memory> columns_;
     std::size_t num_rows_ = 0;
     std::size_t capacity_;
     std::size_t row_size_ = 0;
-    std::vector<memory::Memory> columns_;
 
     public:
     ColumnStore(const Table &table);

@@ -18,10 +18,9 @@ RowStore::RowStore(const Table &table)
     : Store(table)
     , offsets_(new uint32_t[table.size() + 1]) // add one slot for the offset of the meta data
 {
-    auto &allocator = Catalog::Get().allocator();
     compute_offsets();
     capacity_ = ALLOCATION_SIZE / (row_size_ / 8);
-    data_ = allocator.allocate(ALLOCATION_SIZE);
+    data_ = allocator_.allocate(ALLOCATION_SIZE);
 
     /* Initialize linearization. */
     auto lin = std::make_unique<Linearization>(Linearization::CreateInfinite(1));

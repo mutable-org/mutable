@@ -13,19 +13,17 @@ ColumnStore::ColumnStore(const Table &table)
 {
     uint32_t max_attr_size = 0;
 
-    auto &allocator = Catalog::Get().allocator();
-
     /* Allocate columns for the attributes. */
     columns_.reserve(table.size() + 1);
     for (auto &attr : table) {
-        columns_.emplace_back(allocator.allocate(ALLOCATION_SIZE));
+        columns_.emplace_back(allocator_.allocate(ALLOCATION_SIZE));
         auto size = attr.type->size();
         row_size_ += size;
         max_attr_size = std::max(max_attr_size, size);
     }
 
     /* Allocate a column for the null bitmap. */
-    columns_.emplace_back(allocator.allocate(ALLOCATION_SIZE));
+    columns_.emplace_back(allocator_.allocate(ALLOCATION_SIZE));
     uint32_t size = table.size();
     row_size_ += size;
     max_attr_size = std::max(max_attr_size, size);

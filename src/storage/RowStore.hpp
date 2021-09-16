@@ -17,6 +17,7 @@ struct RowStore : Store
 #endif
 
     private:
+    memory::LinearAllocator allocator_; ///< the memory allocator
     memory::Memory data_; ///< the underlying memory containing the data
     std::size_t num_rows_ = 0; ///< the number of rows in use
     std::size_t capacity_; ///< the number of available rows

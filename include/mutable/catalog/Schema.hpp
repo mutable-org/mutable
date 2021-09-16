@@ -456,7 +456,7 @@ struct ConcreteCardinalityEstimatorFactory : CardinalityEstimatorFactory
 struct Catalog
 {
     private:
-    std::unique_ptr<rewire::Allocator> allocator_; ///< our custom allocator
+    std::unique_ptr<memory::Allocator> allocator_; ///< our custom allocator
     mutable StringPool pool_; ///< pool of strings
     std::unordered_map<const char*, Database*> databases_; ///< the databases
     Database *database_in_use_ = nullptr; ///< the currently used database
@@ -503,10 +503,10 @@ struct Catalog
     /** Returns the global `Timer` instance. */
     const Timer & timer() const { return timer_; }
 
-    /** Returns a reference to the `rewire::Allocator`. */
-    rewire::Allocator & allocator() { return *allocator_; }
-    /** Returns a reference to the `rewire::Allocator`. */
-    const rewire::Allocator & allocator() const { return *allocator_; }
+    /** Returns a reference to the `memory::Allocator`. */
+    memory::Allocator & allocator() { return *allocator_; }
+    /** Returns a reference to the `memory::Allocator`. */
+    const memory::Allocator & allocator() const { return *allocator_; }
 
     /** Creates an internalized copy of the string `str` by adding it to the internal `StringPool`. */
     const char * pool(const char *str) const { return pool_(str); }

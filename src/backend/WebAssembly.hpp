@@ -60,7 +60,7 @@ struct WasmPlatform
     struct WasmContext
     {
         uint32_t id; ///< a unique ID
-        rewire::AddressSpace vm; ///< the WebAssembly module instance's virtual address space aka.\ *linear memory*
+        memory::AddressSpace vm; ///< the WebAssembly module instance's virtual address space aka.\ *linear memory*
         uint32_t heap; ///< the beginning of the heap, encoded as offset from the beginning of the virtual address sapce
 
         WasmContext(uint32_t id, std::size_t size) : id(id), vm(size) { }

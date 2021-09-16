@@ -20,7 +20,7 @@ struct ColumnStore : Store
     std::size_t num_rows_ = 0;
     std::size_t capacity_;
     std::size_t row_size_ = 0;
-    std::vector<rewire::Memory> columns_;
+    std::vector<memory::Memory> columns_;
 
     public:
     ColumnStore(const Table &table);
@@ -43,7 +43,7 @@ struct ColumnStore : Store
     }
 
     /** Returns the memory of the column assigned to the attribute with id `attr_id`. */
-    const rewire::Memory & memory(std::size_t attr_id) const {
+    const memory::Memory & memory(std::size_t attr_id) const {
         insist(attr_id < columns_.size());
         return columns_[attr_id]; // XXX What if attributes were erased and added again to a table?
     }

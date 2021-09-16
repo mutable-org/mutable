@@ -6,7 +6,9 @@
 #include <memory>
 
 
-namespace rewire {
+namespace m {
+
+namespace memory {
 
 struct Memory;
 
@@ -30,14 +32,14 @@ struct Allocator
 
     protected:
     /** Deallocates a memory object. */
-    virtual void deallocate(Memory &mem) = 0;
+    virtual void deallocate(Memory &&mem) = 0;
 
     /** Helper method to inherit the friend ability to construct a `Memory` object. */
     Memory create_memory(void *addr, std::size_t size, std::size_t offset);
 };
 
 /** This class represents a reserved address space in virtual memory.  It can be used to map the contents of
- * `rewire::Memory` instances into one contiguous virtual address range. */
+ * `memory::Memory` instances into one contiguous virtual address range. */
 struct AddressSpace
 {
     friend void swap(AddressSpace &first, AddressSpace &second) {
@@ -68,7 +70,7 @@ struct AddressSpace
     T as() const { return reinterpret_cast<T>(addr()); }
 };
 
-/** Represents a mapping created by a `rewire::Allocator`.  THe class holds all information on the mapping, i.e. a
+/** Represents a mapping created by a `memory::Allocator`.  The class holds all information on the mapping, i.e. a
  * reference to the allocator that created the mapping, a pointer to the beginning of the virtual address range that was
  * mapped to, the offset within the allocator, and the size of the allocation.  */
 struct Memory
@@ -94,7 +96,7 @@ struct Memory
 
     Memory() { }
     Memory(void *addr, std::size_t size) : addr_(addr), size_(size) { }
-    ~Memory() { if (allocator_) allocator().deallocate(*this); }
+    ~Memory() { if (allocator_) allocator().deallocate(std::move(*this)); }
     Memory(const Memory&) = delete;
     Memory(Memory &&other) { swap(*this, other); }
 
@@ -128,13 +130,17 @@ struct Memory
 /** This is the simplest kind of allocator. The idea is to keep a pointer at the first memory address of your memory
  * chunk and move it every time an allocation is done. In this allocator, the internal fragmentation is kept to a
  * minimum because all elements are sequentially inserted and the only fragmentation between them is the alignment.
- * There is no overhead to allocation and existing allocations are never modified.  Deallocation does nothing and
- * reclaiming allocated memory is *not possible*.  */
+ * Note that allocations are always page aligned and whole multiples of an entire page.  There is no overhead to
+ * allocation and existing allocations are never modified.  Deallocation can only reclaim memory if all chronologically
+ * later allocations have been deallocated before.  If possible, deallocate memory in the inverse order of allocation.
+ */
 struct LinearAllocator : Allocator
 {
     private:
-    std::size_t capacity_ = 0; ///< the currently allocated capacity of the memory file
     std::size_t offset_ = 0; ///< the offset from the start of the memory file of the next allocation
+
+    ///> stack of allocations; allocations can be marked deallocated for later reclaiming
+    std::vector<std::size_t> allocations_;
 
     public:
     LinearAllocator() { }
@@ -142,9 +148,13 @@ struct LinearAllocator : Allocator
 
     Memory allocate(std::size_t size) override;
 
+    /** Returns the offset in the underlying memory file where the next allocation is placed. */
+    std::size_t offset() const { return offset_; }
+
     private:
-    void deallocate(Memory &mem) override;
+    void deallocate(Memory &&mem) override;
 };
 
+}
 
 }

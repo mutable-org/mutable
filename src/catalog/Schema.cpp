@@ -115,7 +115,7 @@ const Function * Database::get_function(const char *name) const
  *====================================================================================================================*/
 
 Catalog::Catalog()
-    : allocator_(new rewire::LinearAllocator())
+    : allocator_(new memory::LinearAllocator())
     , backend_(Backend::CreateInterpreter())
 {
     /* Initialize standard functions. */

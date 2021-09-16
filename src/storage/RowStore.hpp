@@ -17,7 +17,7 @@ struct RowStore : Store
 #endif
 
     private:
-    rewire::Memory data_; ///< the underlying memory containing the data
+    memory::Memory data_; ///< the underlying memory containing the data
     std::size_t num_rows_ = 0; ///< the number of rows in use
     std::size_t capacity_; ///< the number of available rows
     uint32_t *offsets_; ///< the offsets from the first column, in bits, of all columns
@@ -50,8 +50,9 @@ struct RowStore : Store
     }
 
     /** Returns the memory of the store. */
-    const rewire::Memory & memory() const { return data_; }
-    void memory(rewire::Memory memory) { data_ = std::move(memory); }
+    const memory::Memory & memory() const { return data_; }
+    /** Sets the memory of the store to `memory`. */
+    void memory(memory::Memory memory) { data_ = std::move(memory); }
 
     void accept(StoreVisitor &v) override;
     void accept(ConstStoreVisitor &v) const override;

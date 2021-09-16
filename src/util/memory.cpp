@@ -2,6 +2,7 @@
 
 #include "mutable/util/macro.hpp"
 #include <cerrno>
+#include <climits>
 #include <cstring>
 #include <exception>
 #include <stdexcept>
@@ -19,7 +20,8 @@
 #endif
 
 
-using namespace rewire;
+using namespace m;
+using namespace m::memory;
 
 
 /*======================================================================================================================
@@ -113,15 +115,14 @@ void Memory::dump() const { dump(std::cerr); }
 
 Memory LinearAllocator::allocate(std::size_t size)
 {
-    std::size_t aligned_size = Ceil_To_Next_Page(size);
+    if (size == 0) return Memory();
+
+    const std::size_t aligned_size = Ceil_To_Next_Page(size);
     insist(aligned_size >= size, "size must be ceiled");
     insist(Is_Page_Aligned(aligned_size), "not page aligned");
 #if __linux
-    std::size_t min_cap = offset_ + aligned_size;
-    if (min_cap > capacity_) {
-        if (ftruncate(fd(), min_cap))
-            throw std::runtime_error(strerror(errno));
-    }
+    if (ftruncate(fd(), offset_ + aligned_size))
+        throw std::runtime_error(strerror(errno));
 #elif __APPLE__
     /* Nothing to be done.
      * Memory has been preallocated because resizing with `ftruncate()` is not supported on macOS.  */
@@ -132,8 +133,64 @@ Memory LinearAllocator::allocate(std::size_t size)
         throw std::runtime_error(strerror(errno));
 
     auto mem = create_memory(addr, aligned_size, offset_);
+    allocations_.push_back(offset_);
     offset_ += aligned_size;
     return mem;
 }
 
-void LinearAllocator::deallocate(Memory &mem) { munmap(mem.addr(), mem.size()); }
+namespace {
+
+/** Set MSB of a std::size_t. */
+constexpr std::size_t MSB = std::size_t(1UL) << (sizeof(MSB) * CHAR_BIT - 1U);
+
+/** Mark offset for deallocation by setting MSB.  This is safe as offsets with set MSB would exceed maximum file
+ * size. */
+std::size_t mark_for_deallocation(std::size_t offset) { return offset | MSB; }
+
+/** Check whether MSB is set, i.e. offset marked for deallocation. */
+bool is_marked_for_deallocation(uintptr_t offset) { return offset & MSB; }
+
+/** Clear MSB. */
+std::size_t unmarked(std::size_t offset) { return offset & ~MSB; }
+
+}
+
+void LinearAllocator::deallocate(Memory &&mem)
+{
+    if (&mem.allocator() != this)
+        throw std::invalid_argument("memory has not been allocated by this allocator");
+
+    /* Find the allocation. */
+    auto it = std::find(allocations_.rbegin(), allocations_.rend(), mem.offset());
+    if (it == allocations_.rend())
+        throw std::invalid_argument("memory has not been allocated by this allocator or has already been deallocated");
+
+    /* Unmap the mapped memory. */
+    munmap(mem.addr(), mem.size());
+
+#if __linux
+    *it = mark_for_deallocation(mem.offset());
+
+    /* Reclaim memory if this is the last allocation. */
+    if (it == allocations_.rbegin()) {
+        /* This is the last allocation.  Check how much memory we can reclaim. */
+        std::size_t new_size_of_file;
+        do {
+            new_size_of_file = unmarked(*it);
+            ++it;
+        } while (it != allocations_.rend() and is_marked_for_deallocation(*it));
+        insist(it == allocations_.rend() or not is_marked_for_deallocation(*it));
+
+        /* Truncate file to reclaim memory. */
+        if (ftruncate(fd(), new_size_of_file))
+            throw std::runtime_error(strerror(errno));
+        offset_ = new_size_of_file;
+
+        /* Remove reclaimed allocations. */
+        allocations_.resize(std::distance(it, allocations_.rend()));
+    }
+#elif __APPLE__
+    /* Nothing to be done.
+     * Memory has been preallocated because resizing with `ftruncate()` is not supported on macOS.  */
+#endif
+}

@@ -556,7 +556,7 @@ void V8Platform::execute(const Operator &plan)
 
     /* Map the remaining address space to the output buffer. */
     const auto bytes_remaining = wasm_context.vm.size() - wasm_context.heap;
-    rewire::Memory mem = Catalog::Get().allocator().allocate(bytes_remaining);
+    memory::Memory mem = Catalog::Get().allocator().allocate(bytes_remaining);
     mem.map(bytes_remaining, 0, wasm_context.vm, wasm_context.heap);
 
     /* Create a WebAssembly instance object. */

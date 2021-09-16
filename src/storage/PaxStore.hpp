@@ -19,7 +19,7 @@ struct PaxStore : Store
     static constexpr uint32_t BLOCK_SIZE = 1UL << 12; ///< 4 KiB
 
     private:
-    rewire::Memory data_; ///< the underlying memory containing the data
+    memory::Memory data_; ///< the underlying memory containing the data
     std::size_t num_rows_ = 0; ///< the number of rows in use
     std::size_t capacity_; ///< the number of available rows
     uint32_t *offsets_; ///< the offsets of each column within a PAX block, in bits
@@ -52,7 +52,7 @@ struct PaxStore : Store
     }
 
     /** Returns the memory of the store. */
-    const rewire::Memory & memory() const { return data_; }
+    const memory::Memory & memory() const { return data_; }
 
     void accept(StoreVisitor &v) override;
     void accept(ConstStoreVisitor &v) const override;

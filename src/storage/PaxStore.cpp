@@ -16,10 +16,9 @@ PaxStore::PaxStore(const Table &table, uint32_t block_size_in_bytes)
         , block_size_(block_size_in_bytes)
         , offsets_(new uint32_t[table.size() + 1]) // add one slot for the offset of the meta data
 {
-    auto &allocator = Catalog::Get().allocator();
     compute_block_offsets();
 
-    data_ = allocator.allocate(ALLOCATION_SIZE);
+    data_ = allocator_.allocate(ALLOCATION_SIZE);
 
     /* Initialize linearization. */
     auto lin = std::make_unique<Linearization>(Linearization::CreateInfinite(1));

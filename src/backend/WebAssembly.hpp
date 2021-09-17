@@ -1,6 +1,7 @@
 #pragma once
 
 #include "catalog/Schema.hpp"
+#include <memory>
 #include <mutable/backend/Backend.hpp>
 #include <mutable/IR/Operator.hpp>
 #include <mutable/parse/AST.hpp>
@@ -68,15 +69,17 @@ struct WasmPlatform
 
     private:
     static uint32_t wasm_counter_; ///< a counter used to generate unique IDs
-    static std::unordered_map<uint32_t, WasmContext> contexts_; ///< maps unique IDs to `WasmContext` instances
+    ///> maps unique IDs to `WasmContext` instances
+    static std::unordered_map<uint32_t, std::unique_ptr<WasmContext>> contexts_;
 
     protected:
     /** Creates a new `WasmContext` with `size` bytes of virtual address space. */
     static WasmContext & Create_Wasm_Context(std::size_t size) {
-        auto res = contexts_.emplace(wasm_counter_, WasmContext(wasm_counter_, size));
+        auto wasm_context = std::make_unique<WasmContext>(wasm_counter_, size);
+        auto res = contexts_.emplace(wasm_counter_, std::move(wasm_context));
         insist(res.second, "WasmContext with that ID already exists");
         ++wasm_counter_;
-        return res.first->second;
+        return *res.first->second;
     }
 
     /** Disposes of the `WasmContext` with ID `id`. */
@@ -86,12 +89,14 @@ struct WasmPlatform
         insist(res == 1, "There is no context with the given ID to erase");
     }
 
+    static void Dispose_Wasm_Context(const WasmContext &ctx) { Dispose_Wasm_Context(ctx.id); }
+
     public:
     /** Returns a reference to the `WasmContext` with ID `id`. */
     static WasmContext & Get_Wasm_Context_By_ID(uint32_t id) {
         auto it = contexts_.find(id);
         insist(it != contexts_.end(), "There is no context with the given ID");
-        return it->second;
+        return *it->second;
     }
 
     WasmPlatform() = default;

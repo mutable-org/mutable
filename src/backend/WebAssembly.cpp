@@ -50,7 +50,7 @@ void WasmModule::dump() const { dump(std::cerr); }
  *====================================================================================================================*/
 
 uint32_t WasmPlatform::wasm_counter_ = 0;
-std::unordered_map<uint32_t, WasmPlatform::WasmContext> WasmPlatform::contexts_;
+std::unordered_map<uint32_t, std::unique_ptr<WasmPlatform::WasmContext>> WasmPlatform::contexts_;
 
 
 /*======================================================================================================================

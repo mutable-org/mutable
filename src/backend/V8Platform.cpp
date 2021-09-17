@@ -684,6 +684,8 @@ void V8Platform::execute(const Operator &plan)
         if (not Options::Get().quiet)
             noop_op->out << num_tuples << " rows\n";
     }
+
+    Dispose_Wasm_Context(wasm_context);
 }
 
 v8::Local<v8::WasmModuleObject> V8Platform::instantiate(const WasmModule &module, v8::Local<v8::Object> imports)

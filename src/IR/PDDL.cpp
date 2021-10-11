@@ -191,13 +191,12 @@ struct RecursiveFactsGenerator
         for (auto relation: relations) {
             auto base_table = cast<BaseTable>(relation);
             relation_names.emplace_back(base_table->table().name);
-            P.set(base_table->id(), true);
+            P(base_table->id()) = true;
         }
         std::sort(relation_names.begin(), relation_names.end());
         std::ostringstream oss;
-        for (auto &relation_name : relation_names) {
+        for (auto &relation_name : relation_names)
             oss << relation_name;
-        }
         auto model = make_model(G, P);
         oss << CE.predict_cardinality(*model);
         return oss.str();
@@ -213,8 +212,8 @@ struct RecursiveFactsGenerator
     std::unique_ptr<CardinalityEstimator::DataModel> make_model(const QueryGraph &G, Subproblem P) {
         std::vector<std::unique_ptr<CardinalityEstimator::DataModel>> data_models;
         for (auto P_it = P.begin(); P_it != P.end(); ++P_it) {
-            Subproblem P_single(0);
-            P_single.set(*P_it, true);
+            Subproblem P_single;
+            P_single(*P_it) = true;
             data_models.push_back(CE.estimate_scan(G, P_single));
         }
         int data_models_size = data_models.size();
@@ -261,18 +260,16 @@ struct RecursiveFactsGenerator
     void generate_sum_fact(const QueryGraph &G, std::vector<DataSource *> &left, std::vector<DataSource *> &right){
         std::string left_identifier = make_fact_name(G, left);
         std::string right_identifier = make_fact_name(G, right);
-        Subproblem P_left(0);
-        for (auto l:left) {
-            P_left.set(l->id(), true);
-        }
-        Subproblem P_right(0);
-        for (auto r:right) {
-            P_right.set(r->id(), true);
-        }
+        Subproblem P_left;
+        for (auto l : left)
+            P_left(l->id()) = true;
+        Subproblem P_right;
+        for (auto r : right)
+            P_right(r->id()) = true;
         std::ostringstream sum_fact;
 
 //        auto left_model = CE.estimate_scan(G, P_left);
-auto left_model = make_model(G, P_left);
+        auto left_model = make_model(G, P_left);
         std::size_t left_size = CE.predict_cardinality(*left_model);
 //        auto right_model = CE.estimate_scan(G, P_right);
         auto right_model = make_model(G, P_right);
@@ -851,8 +848,8 @@ void PDDLGenerator::generate_currentSize_facts(const QueryGraph &G)
 {
     for (auto source : G.sources()) {
         auto base_table = cast<BaseTable>(source);
-        Subproblem P(0);
-        P.set(source->id(), true);
+        Subproblem P;
+        P(source->id()) = true;
         auto model = cardinality_estimator_.estimate_scan(G, P);
         init_section_problem_file_ << "\t\t(currentSize v"
                                    << base_table->table().name

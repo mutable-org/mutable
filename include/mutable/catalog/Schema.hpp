@@ -286,7 +286,7 @@ struct Table
      * attribute with the given `name` exists. */
     void add_primary_key(const char *name) {
         auto &attr = at(name);
-        primary_key_.set(attr.id);
+        primary_key_(attr.id) = true;
     }
 
     /** Adds a new attribute with the given `name` and `type` to the table.  Throws `std::invalid_argument` if the

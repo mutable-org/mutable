@@ -211,13 +211,13 @@ struct Tuple
     /** Returns `true` iff the `Value` at index `idx` is `NULL`. */
     bool is_null(std::size_t idx) const {
         INBOUNDS(idx);
-        return null_mask_.contains(idx);
+        return null_mask_(idx);
     }
 
     /** Sets the `Value` at index `idx` to `NULL`. */
     void null(std::size_t idx) {
         INBOUNDS(idx);
-        null_mask_.set(idx);
+        null_mask_(idx) = true;
     }
 
     /** Sets all `Value`s of this `Tuple` to `NULL`. */
@@ -226,20 +226,20 @@ struct Tuple
     /** Sets the `Value` at index `idx` to not-`NULL`. */
     void not_null(std::size_t idx) {
         INBOUNDS(idx);
-        null_mask_.set(idx, false);
+        null_mask_(idx) = false;
     }
 
     /** Assigns the `Value` `val` to this `Tuple` at index `idx` and clears the respective `NULL` bit. */
     void set(std::size_t idx, Value val) {
         INBOUNDS(idx);
-        null_mask_.clear(idx);
+        null_mask_(idx) = false;
         values_[idx] = val;
     }
 
     /** Assigns the `Value` `val` to this `Tuple` at index `idx` and sets the respective `NULL` bit to `is_null`. */
     void set(std::size_t idx, Value val, bool is_null) {
         INBOUNDS(idx);
-        null_mask_.set(idx, is_null);
+        null_mask_(idx) = is_null;
         values_[idx] = val;
     }
 

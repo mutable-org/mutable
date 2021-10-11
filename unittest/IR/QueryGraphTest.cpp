@@ -153,35 +153,35 @@ TEST_CASE("AdjacencyMatrix/Standalone Matrix", "[core][IR][unit]")
      * 2 | 1 0 0 1
      * 3 | 1 1 1 0
      */
-    adj_mat.set(0, 2);
-    adj_mat.set(2, 0);
+    adj_mat(0, 2) = true;
+    adj_mat(2, 0) = true;
 
-    adj_mat.set(0, 3);
-    adj_mat.set(3, 0);
+    adj_mat(0, 3) = true;
+    adj_mat(3, 0) = true;
 
-    adj_mat.set_bidirectional(1, 3);
+    adj_mat(1, 3) = adj_mat(3, 1) = true;
 
-    adj_mat.set_bidirectional(2, 3);
+    adj_mat(2, 3) = adj_mat(3, 2) = true;
 
     SECTION("check edges")
     {
         /* Positive checks. */
-        REQUIRE(adj_mat.get(0, 2));
-        REQUIRE(adj_mat.get(2, 0));
+        REQUIRE(adj_mat(0, 2));
+        REQUIRE(adj_mat(2, 0));
 
-        REQUIRE(adj_mat.get(0, 3));
-        REQUIRE(adj_mat.get(3, 0));
+        REQUIRE(adj_mat(0, 3));
+        REQUIRE(adj_mat(3, 0));
 
-        REQUIRE(adj_mat.get(1, 3));
-        REQUIRE(adj_mat.get(3, 1));
+        REQUIRE(adj_mat(1, 3));
+        REQUIRE(adj_mat(3, 1));
 
-        REQUIRE(adj_mat.get(2, 3));
-        REQUIRE(adj_mat.get(3, 2));
+        REQUIRE(adj_mat(2, 3));
+        REQUIRE(adj_mat(3, 2));
 
         /* Negative checks. */
-        REQUIRE_FALSE(adj_mat.get(0, 1));
-        REQUIRE_THROWS_AS(adj_mat.get(13, 9), m::out_of_range);
-        REQUIRE_THROWS_AS(adj_mat.get(63, 2), m::out_of_range);
+        REQUIRE_FALSE(adj_mat(0, 1));
+        REQUIRE_THROWS_AS(adj_mat.at(13, 9), m::out_of_range);
+        REQUIRE_THROWS_AS(adj_mat.at(2, 63), m::out_of_range);
     }
 
     SECTION("check connectedness of nodes")
@@ -345,8 +345,8 @@ TEST_CASE("AdjacencyMatrix", "[core][IR][unit]")
      * 2 | 1 0 0 0
      * 3 | 1 0 0 0
      */
-    M.set_bidirectional(0, 2);
-    M.set_bidirectional(0, 3);
+    M(0, 2) = M(2, 0) = true;
+    M(0, 3) = M(3, 0) = true;
 
     SECTION("reachable from singleton")
     {
@@ -514,7 +514,7 @@ TEST_CASE("AdjacencyMatrix/QueryGraph Matrix Negative", "[core][IR][unit]")
 
         delete stmt;
 
-        REQUIRE_FALSE(adj_mat.get(0, 0));
+        REQUIRE_FALSE(adj_mat(0, 0));
     }
 }
 
@@ -536,8 +536,8 @@ TEST_CASE("AdjacencyMatrix/Matrix output", "[core][IR][unit]")
 
     SECTION("non-empty matrix output")
     {
-        adj_mat.set(0,1);
-        adj_mat.set_bidirectional(3,2);
+        adj_mat(0, 1) = true;
+        adj_mat(2, 3) = adj_mat(3, 2) = true;
         out << adj_mat;
 
         std::string out_str("Adjacency Matrix");

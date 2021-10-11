@@ -311,7 +311,7 @@ Optimizer::construct_plan(const QueryGraph &G, PlanTable &plan_table, Producer *
                     Subproblem join_sources;
                     /* Compute subproblem of sources to join. */
                     for (auto ds : (*it)->sources())
-                        join_sources.set(ds->id());
+                        join_sources(ds->id()) = true;
 
                     if (join_sources.is_subset(s)) { // possible join
                         join_condition = join_condition and (*it)->condition();

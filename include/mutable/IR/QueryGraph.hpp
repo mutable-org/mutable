@@ -242,6 +242,39 @@ struct QueryGraph
 /** An adjacency matrix for a given query graph. Represents the join graph. */
 struct AdjacencyMatrix
 {
+    /** A proxy to access single entries in the `AdjacencyMatrix`. */
+    template<bool C>
+    struct Proxy
+    {
+        friend struct AdjacencyMatrix;
+
+        static constexpr bool Is_Const = C;
+
+        private:
+        using reference_type = std::conditional_t<Is_Const, const AdjacencyMatrix&, AdjacencyMatrix&>;
+
+        reference_type M_;
+        std::size_t i_;
+        std::size_t j_;
+
+        Proxy(reference_type M, std::size_t i, std::size_t j) : M_(M) , i_(i), j_(j) {
+            insist(i < M_.num_vertices_);
+            insist(j < M_.num_vertices_);
+        }
+
+        public:
+        operator bool() const { return M_.m_[i_][j_]; }
+
+        template<bool C_ = Is_Const>
+        std::enable_if_t<not C_, Proxy&>
+        operator=(bool val) { M_.m_[i_][j_] = val; return *this; }
+
+        Proxy & operator=(const Proxy &other) {
+            static_assert(not Is_Const, "can only assign to proxy of non-const matrix");
+            return operator=(bool(other));
+        }
+    };
+
     private:
     SmallBitset m_[SmallBitset::CAPACITY]; ///< matrix entries
     std::size_t num_vertices_ = 0; ///< number of sources of the `QueryGraph` represented by this matrix
@@ -258,25 +291,27 @@ struct AdjacencyMatrix
             /* Take both join inputs and set the appropriate bit in the adjacency matrix. */
             auto i = join->sources()[0]->id(); // first join input
             auto j = join->sources()[1]->id(); // second join input
-            set_bidirectional(i, j); // symmetric matrix
+            (*this)(i, j) = (*this)(j, i) = true;
         }
 
     }
 
-    /** Set the bit in row `i` at offset `j` to one. */
-    void set(std::size_t i, std::size_t j) {
-        if (i >= num_vertices_ or j >= num_vertices_)
-            throw out_of_range("offset is out of bounds");
-        m_[i].set(j);
-    }
-    /** Set the bit in row `i` at offset `j` and the symmetric bit to one. */
-    void set_bidirectional(std::size_t i, std::size_t j) { set(i, j); set(j, i); }
+    /** Returns the bit at position `(i, j)`.  Both `i` and `j` must be in bounds. */
+    Proxy<true> operator()(std::size_t i, std::size_t j) const { return Proxy<true>(*this, i, j); }
 
-    /** Get the bit in row `i` at offset `j`. */
-    bool get(std::size_t i, std::size_t j) const {
+    /** Returns the bit at position `(i, j)`.  Both `i` and `j` must be in bounds. */
+    Proxy<false> operator()(std::size_t i, std::size_t j) { return Proxy<false>(*this, i, j); }
+
+    Proxy<true> at(std::size_t i, std::size_t j) const {
         if (i >= num_vertices_ or j >= num_vertices_)
-            throw out_of_range("offset is out of bounds");
-        return m_[i].contains(j);
+            throw out_of_range("index is out of bounds");
+        return operator()(i, j);
+    }
+
+    Proxy<false> at(std::size_t i, std::size_t j) {
+        if (i >= num_vertices_ or j >= num_vertices_)
+            throw out_of_range("index is out of bounds");
+        return operator()(i, j);
     }
 
     /** Computes the set of nodes reachable from `src`, i.e.\ the set of nodes reachable from any node in `src`. */

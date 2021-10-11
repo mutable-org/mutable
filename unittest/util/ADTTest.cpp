@@ -15,18 +15,18 @@ TEST_CASE("SmallBitset", "[unit]")
 
     SECTION("setting and checking bits")
     {
-        S.set(0);
+        S(0) = true;
         REQUIRE(S == SmallBitset(1UL));
         REQUIRE(S.size() == 1);
-        S.set(2);
+        S[2] = true;
         REQUIRE(S == SmallBitset(5UL));
-        S.set(2);
+        S[2] = true;
         REQUIRE(S == SmallBitset(5UL));
         REQUIRE(S.size() == 2);
         REQUIRE(not S.empty());
-        REQUIRE(S.contains(0));
+        REQUIRE(S(0));
         REQUIRE(S(2));
-        REQUIRE(not S.contains(1));
+        REQUIRE(not S(1));
     }
 
     SECTION("bitwise operations")
@@ -47,6 +47,12 @@ TEST_CASE("SmallBitset", "[unit]")
 
         REQUIRE(S2.is_subset(S1));
         REQUIRE(not S1.is_subset(S2));
+    }
+
+    SECTION("out of range")
+    {
+        SmallBitset S;
+        REQUIRE_THROWS_AS(S.at(64), m::out_of_range);
     }
 }
 

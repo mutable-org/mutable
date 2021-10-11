@@ -5,6 +5,7 @@
 #include "mutable/util/macro.hpp"
 #include <algorithm>
 #include <iostream>
+#include <type_traits>
 
 
 namespace m {
@@ -13,6 +14,28 @@ namespace m {
 struct SmallBitset
 {
     static constexpr std::size_t CAPACITY = 64; ///< the maximum capacity of a `SmallBitset`
+
+    /** A proxy to access single elements in `SmallBitset`. */
+    template<bool C>
+    struct Proxy
+    {
+        static constexpr bool Is_Const = C;
+
+        private:
+        using reference_type = std::conditional_t<Is_Const, const SmallBitset&, SmallBitset&>;
+
+        reference_type S_;
+        std::size_t offset_;
+
+        public:
+        Proxy(reference_type S, std::size_t offset) : S_(S), offset_(offset) { insist(offset_ < CAPACITY); }
+
+        operator bool() const { return (S_.bits_ >> offset_) & 0b1; }
+
+        template<bool C_ = Is_Const>
+        std::enable_if_t<not C_, Proxy&>
+        operator=(bool val) { setbit(&S_.bits_, val, offset_); return *this; }
+    };
 
     private:
     uint64_t bits_; ///< the bit vector representing the set
@@ -38,28 +61,33 @@ struct SmallBitset
     SmallBitset() : bits_(0) { };
     explicit SmallBitset(uint64_t bits) : bits_(bits) { };
 
-    /** Set the `offset`-th bit to `val`. */
-    void set(std::size_t offset, bool val) {
+    /** Returns the `offset`-th bit.  Requires that `offset` is in range `[0; CAPACITY)`. */
+    Proxy<true> operator()(std::size_t offset) const { return Proxy<true>(*this, offset); }
+
+    /** Returns the `offset`-th bit.  Requires that `offset` is in range `[0; CAPACITY)`. */
+    Proxy<false> operator()(std::size_t offset) { return Proxy<false>(*this, offset); }
+
+    /** Returns the `offset`-th bit.  Requires that `offset` is in range `[0; CAPACITY)`. */
+    Proxy<true> operator[](std::size_t offset) const { return operator()(offset); }
+
+    /** Returns the `offset`-th bit.  Requires that `offset` is in range `[0; CAPACITY)`. */
+    Proxy<false> operator[](std::size_t offset) { return operator()(offset); }
+
+    /** Returns a proxy to the bit at offset `offset`.  Throws `m::out_of_range` if `offset` is not in range
+     * `[0; CAPACITY)`. */
+    Proxy<true> at(std::size_t offset) const {
         if (offset >= CAPACITY)
             throw m::out_of_range("offset is out of bounds");
-        setbit(&bits_, val, offset);
+        return operator()(offset);
     }
 
-    /** Set the `offset`-th bit to `1`. */
-    void set(std::size_t offset) { set(offset, true); }
-
-    /** Set the `offset`-th bit to `0`. */
-    void clear(std::size_t offset) { set(offset, false); }
-
-    /** Returns `true` iff the `offset`-th bit is set to `1`. */
-    bool contains(std::size_t offset) const {
+    /** Returns a proxy to the bit at offset `offset`.  Throws `m::out_of_range` if `offset` is not in range
+     * `[0; CAPACITY)`. */
+    Proxy<false> at(std::size_t offset) {
         if (offset >= CAPACITY)
             throw m::out_of_range("offset is out of bounds");
-        return (bits_ >> offset) & 0b1;
+        return operator()(offset);
     }
-
-    /** Returns `true` iff the `offset`-th bit is set to `1`. */
-    bool operator()(std::size_t offset) const { return contains(offset); }
 
     /** Returns the maximum capacity. */
     constexpr std::size_t capacity() { return CAPACITY; }
@@ -105,14 +133,14 @@ struct SmallBitset
     /** Write a textual representation of `s` to `out`. */
     friend std::ostream & operator<<(std::ostream &out, SmallBitset s) {
         for (uint64_t i = CAPACITY; i --> 0;)
-            out << s.contains(i);
+            out << s(i);
         return out;
     }
 
     /** Print a textual representation of `this` with `size` bits to `out`. */
     void print_fixed_length(std::ostream &out, std::size_t size) const {
         for (uint64_t i = size; i --> 0;)
-            out << contains(i);
+            out << (*this)(i);
     }
 
     void dump(std::ostream &out) const;

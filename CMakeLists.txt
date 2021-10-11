@@ -68,7 +68,7 @@ set(CMAKE_COMPILE_FLAGS             "${CMAKE_COMPILE_FLAGS} -W -Wall -pedantic -
 set(CMAKE_C_FLAGS                   "${CMAKE_C_FLAGS} ${CMAKE_COMPILE_FLAGS}")
 set(CMAKE_CXX_FLAGS                 "-std=c++17 ${CMAKE_CXX_FLAGS} ${CMAKE_COMPILE_FLAGS}")
 set(CMAKE_CXX_FLAGS_DEBUG           "-ggdb3 -fno-omit-frame-pointer -fno-optimize-sibling-calls -fsanitize=address,undefined -fno-sanitize=vptr -fsanitize-address-use-after-scope")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "-ggdb3 -fno-omit-frame-pointer -fno-optimize-sibling-calls -O1")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "-DNDEBUG -ggdb3 -fno-omit-frame-pointer -fno-optimize-sibling-calls -O2")
 set(CMAKE_POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS})
 
 

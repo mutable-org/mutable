@@ -12,6 +12,7 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
         util/ADTTest.cpp
         util/AlgorithmsTest.cpp
         util/FnTest.cpp
+        util/LinearModelTest.cpp
         util/MemoryTest.cpp
         util/PoolTest.cpp
         util/PositionTest.cpp

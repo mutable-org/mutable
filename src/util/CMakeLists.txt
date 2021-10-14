@@ -5,6 +5,7 @@ add_library(
     ArgParser.cpp
     DotTool.cpp
     fn.cpp
+    LinearModel.cpp
     memory.cpp
     Position.cpp
     terminal.cpp

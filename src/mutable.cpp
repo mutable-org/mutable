@@ -50,16 +50,7 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
         auto query_graph = TIME_EXPR(QueryGraph::Build(stmt), "Construct the query graph", C.timer());
 
         std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::CreateDPccp();
-        CostFunction cf([](CostFunction::Subproblem left, CostFunction::Subproblem right, OperatorKind, const PlanTable &T) {
-            auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
-            return sum_wo_overflow(
-                T[left].cost,
-                T[right].cost,
-                CE.predict_cardinality(*T[left].model),
-                CE.predict_cardinality(*T[right].model)
-            );
-        });
-        Optimizer Opt(*pe, cf);
+        Optimizer Opt(*pe, C.cost_function());
         auto optree = TIME_EXPR(Opt(*query_graph), "Compute the query plan", C.timer());
 
         PrintOperator print(std::cout);
@@ -145,16 +136,7 @@ void m::execute_query(Diagnostic&, const SelectStmt &stmt, std::unique_ptr<Consu
     auto query_graph = QueryGraph::Build(stmt);
 
     std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::CreateDPccp();
-    CostFunction cf([](CostFunction::Subproblem left, CostFunction::Subproblem right, OperatorKind, const PlanTable &T) {
-        auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
-        return sum_wo_overflow(
-            T[left].cost,
-            T[right].cost,
-            CE.predict_cardinality(*T[left].model),
-            CE.predict_cardinality(*T[right].model)
-        );
-    });
-    Optimizer Opt(*pe, cf);
+    Optimizer Opt(*pe, C.cost_function());
     auto optree = Opt(*query_graph);
 
     consumer->add_child(optree.release());

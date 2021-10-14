@@ -1,14 +1,21 @@
 #include "catalog/Schema.hpp"
 
+#include <algorithm>
 #include "globals.hpp"
+#include "mutable/catalog/CardinalityEstimator.hpp"
+#include "mutable/catalog/CostFunction.hpp"
+#include "mutable/catalog/SimpleCostFunction.hpp"
+#include "mutable/IR/PlanTable.hpp"
 #include "mutable/util/fn.hpp"
 #include "storage/ColumnStore.hpp"
-#include "storage/PaxStore.hpp"
 #include "storage/RowStore.hpp"
 #include <algorithm>
 #include <cmath>
 #include <iterator>
 #include <mutable/catalog/CardinalityEstimator.hpp>
+#include <mutable/catalog/CostFunction.hpp>
+#include <mutable/IR/Operator.hpp>
+#include <mutable/IR/PlanTable.hpp>
 #include <stdexcept>
 
 
@@ -117,6 +124,8 @@ const Function * Database::get_function(const char *name) const
 Catalog::Catalog()
     : allocator_(new memory::LinearAllocator())
     , backend_(Backend::CreateInterpreter())
+    /* Initialize dummy cost function. */
+    , cost_function_(std::make_unique<SimpleCostFunction>())
 {
     /* Initialize standard functions. */
 #define DB_FUNCTION(NAME, KIND) { \
@@ -206,4 +215,13 @@ std::unique_ptr<CardinalityEstimator> Catalog::create_cardinality_estimator() co
 {
     insist(default_cardinality_estimator_, "there must always be a default cardinality estimator");
     return default_cardinality_estimator_->make();
+}
+
+const CostFunction & Catalog::cost_function() const {
+    return *cost_function_;
+}
+
+std::unique_ptr<CostFunction> Catalog::cost_function(std::unique_ptr<CostFunction> cost_function) {
+    cost_function_.swap(cost_function);
+    return cost_function;
 }

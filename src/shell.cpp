@@ -133,16 +133,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             }
 
             std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::Create(Options::Get().plan_enumerator);
-            CostFunction cf([](CostFunction::Subproblem left, CostFunction::Subproblem right, OperatorKind, const PlanTable &T) {
-                auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
-                return sum_wo_overflow(
-                    T[left].cost,
-                    T[right].cost,
-                    CE.predict_cardinality(*T[left].model),
-                    CE.predict_cardinality(*T[right].model)
-                );
-            });
-            Optimizer Opt(*pe.get(), cf);
+            Optimizer Opt(*pe.get(), C.cost_function());
             auto optree = TIME_EXPR(Opt(*query_graph.get()), "Compute the query plan", timer);
             if (Options::Get().plan) optree->dump(std::cout);
             if (Options::Get().plandot) {
@@ -245,7 +236,11 @@ next:
         delete stmt;
 
         if (Options::Get().times) {
-            std::cout << timer;
+            using namespace std::chrono;
+            for (const auto &M : timer) {
+                if (M.is_finished())
+                    std::cout << M.name << ": " << duration_cast<microseconds>(M.duration()).count() / 1e3 << '\n';
+            }
             std::cout.flush();
             timer.clear();
         }

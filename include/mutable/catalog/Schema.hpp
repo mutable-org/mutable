@@ -7,6 +7,7 @@
 #include <memory>
 #include <mutable/backend/Backend.hpp>
 #include <mutable/catalog/CardinalityEstimator.hpp>
+#include <mutable/catalog/CostFunction.hpp>
 #include <mutable/catalog/Type.hpp>
 #include <mutable/storage/Store.hpp>
 #include <mutable/util/ADT.hpp>
@@ -463,6 +464,7 @@ struct Catalog
     std::unordered_map<const char*, Function*> standard_functions_; ///< functions defined by the SQL standard
     Timer timer_; ///< a global timer
     std::unique_ptr<Backend> backend_; ///< the active backend
+    std::unique_ptr<CostFunction> cost_function_; ///< the default cost function
 
     /*----- Factories ------------------------------------------------------------------------------------------------*/
     std::unordered_map<const char*, std::unique_ptr<StoreFactory>> store_factories_; ///< store factories to create new stores
@@ -602,6 +604,13 @@ struct Catalog
 
     std::unique_ptr<CardinalityEstimator> create_cardinality_estimator(const char *name) const;
     std::unique_ptr<CardinalityEstimator> create_cardinality_estimator() const;
+
+    /*===== CostFunction =============================================================================================*/
+    /** Returns the active `CostFunction`. */
+    const CostFunction & cost_function() const;
+
+    /** Sets the new `CostFunction` and returns the old one. */
+    std::unique_ptr<CostFunction> cost_function(std::unique_ptr<CostFunction> cost_function);
 };
 
 }

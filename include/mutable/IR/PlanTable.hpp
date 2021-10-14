@@ -25,7 +25,7 @@ struct PlanTable {
         Subproblem left; ///< the left subproblem
         Subproblem right; ///< the right subproblem
         std::unique_ptr<CardinalityEstimator::DataModel> model; ///< the model this subplan's result
-        uint64_t cost = std::numeric_limits<uint64_t>::max(); ///< the cost of the subproblem
+        double cost = std::numeric_limits<double>::infinity(); ///< the cost of the subproblem
 
         /* Returns all subproblems. */
         std::vector<Subproblem> get_subproblems() const {
@@ -111,22 +111,22 @@ struct PlanTable {
     /** Returns true iff the `PlanTable` has a plan for the subproblem specified by `S`. */
     bool has_plan(Subproblem S) const {
         if (S.size() == 1) return true;
-        if (not at(S).left.empty()) {
-            insist(not at(S).right.empty());
-            return true;
-        }
-        return false;
+        insist(at(S).left.empty() == at(S).right.empty(), "either both sides are not set or both sides are set");
+        return not at(S).left.empty();
     }
 
-    void update(const CostFunction &cf, Subproblem left, Subproblem right, OperatorKind op) {
+    void update(const Subproblem left, const Subproblem right, const double cost) {
+        insist(not left.empty(), "left side must not be empty");
+        insist(not right.empty(), "right side must not be empty");
         auto &entry = at(left | right);
-        auto cost = cf(left, right, op, *this); // TODO: Provide actual operator
         if (not entry.model) {
             /* If we consider this subproblem for the first time, compute its `DataModel`.  If this subproblem describes
              * a nested query, the `DataModel` must have been set by the `Optimizer`.  */
             auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
             auto &entry_left = at(left);
             auto &entry_right = at(right);
+            insist(bool(entry_left.model), "must have a model for the left side");
+            insist(bool(entry_right.model), "must have a model for the right side");
             entry.model = CE.estimate_join(*entry_left.model, *entry_right.model, cnf::CNF{}); // TODO use join condition
         }
         if (not has_plan(left | right) or cost < entry.cost) {
@@ -138,13 +138,14 @@ struct PlanTable {
         }
     }
 
+    friend std::ostream & operator<<(std::ostream &out, const PlanTable &PT);
+
     friend std::string to_string(const PlanTable &PT) {
-        std::ostringstream os;
-        os << PT;
-        return os.str();
+        std::ostringstream oss;
+        oss << PT;
+        return oss.str();
     }
 
-    friend std::ostream &operator<<(std::ostream &out, const PlanTable &PT);
     void dump(std::ostream &out) const;
     void dump() const;
 };

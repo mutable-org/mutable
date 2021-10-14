@@ -1,6 +1,7 @@
 #include "catch.hpp"
 
 #include <mutable/catalog/CostFunction.hpp>
+#include <mutable/catalog/SimpleCostFunction.hpp>
 #include <catalog/Schema.hpp>
 #include <mutable/catalog/Type.hpp>
 #include <mutable/IR/PlanEnumerator.hpp>
@@ -118,15 +119,7 @@ TEST_CASE("PlanEnumerator", "[core][IR]")
     auto query_graph = QueryGraph::Build(*stmt);
     auto &G = *query_graph.get();
 
-    CostFunction CF([](CostFunction::Subproblem left, CostFunction::Subproblem right, OperatorKind, const PlanTable &T) {
-        auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
-        return sum_wo_overflow(
-                T[left].cost,
-                T[right].cost,
-                CE.predict_cardinality(*T[left].model),
-                CE.predict_cardinality(*T[right].model)
-        );
-    });
+    const CostFunction& CF = SimpleCostFunction();
 
     auto M = [](std::size_t size) {
         return std::make_unique<CartesianProductEstimator::CartesianProductDataModel>(size);

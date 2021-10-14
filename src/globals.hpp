@@ -44,6 +44,8 @@ struct Options
     const char *pddl;
     int pddl_actions;
 
+    bool train_cost_models;
+
 #if WITH_V8
     /* Specify the port for debugging via ChromeDevTools (CDT). */
     int16_t cdt_port = -1;

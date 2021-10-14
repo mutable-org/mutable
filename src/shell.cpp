@@ -5,6 +5,7 @@
 #include "globals.hpp"
 #include "io/Reader.hpp"
 #include "IR/PDDL.hpp"
+#include "mutable/catalog/CostModel.hpp"
 #include "mutable/mutable.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
@@ -582,6 +583,12 @@ int main(int argc, const char **argv)
         "specify the number of actions used for the PDDL files (2,3 or 4), 0 will create all 3 models",
         [&](int number) { Options::Get().pddl_actions = number; }           /* Callback         */
     );
+    /*------ Cost Model Generation -----------------------------------------------------------------------------------*/
+    ADD(bool, Options::Get().train_cost_models, false,                  /* Type, Var, Init  */
+        nullptr, "--train-cost-models",                                 /* Short, Long      */
+        "train cost models (may take a couple of minutes)",             /* Description      */
+        [&](bool) { Options::Get().train_cost_models = true; }          /* Callback         */
+    );
 #undef ADD
     AP.parse_args(argc, argv);
 
@@ -749,6 +756,12 @@ Example for injected cardinalities file:\n\
 
     /* Create the diagnostics object. */
     Diagnostic diag(Options::Get().has_color, std::cout, std::cerr);
+
+    /* ----- Cost model training -------------------------------------------------------------------------------------*/
+    if (Options::Get().train_cost_models) {
+        auto CF = CostModelFactory::get_cost_function();
+        Catalog::Get().cost_function(std::move(CF));
+    }
 
     /* ----- Replxx configuration ------------------------------------------------------------------------------------*/
     Replxx rx;

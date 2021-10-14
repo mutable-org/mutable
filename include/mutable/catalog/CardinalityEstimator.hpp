@@ -7,8 +7,7 @@
 #include <unordered_map>
 
 
-namespace m
-{
+namespace m {
 
 /* Forward declarations */
 struct QueryGraph;
@@ -32,6 +31,19 @@ struct CardinalityEstimator
     struct DataModel
     {
         virtual ~DataModel() = 0;
+    };
+
+
+    /** `data_model_exception` is thrown if a `DataModel` implementation does not contain the requested information. */
+    struct data_model_exception : m::exception
+    {
+        private:
+        const std::string message_;
+
+        public:
+        data_model_exception(const std::string &message) : message_(message) { }
+
+        const char* what() const noexcept override { return message_.c_str(); }
     };
 
     enum kind_t {
@@ -117,6 +129,7 @@ struct CardinalityEstimator
 
     virtual std::size_t predict_cardinality(const DataModel &data) const = 0;
 
+    virtual double predict_number_distinct_values(const DataModel &data) const;
 
     /*==================================================================================================================
      * other methods

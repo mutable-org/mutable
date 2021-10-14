@@ -21,6 +21,11 @@ CardinalityEstimator::DataModel::~DataModel() { }
 
 CardinalityEstimator::~CardinalityEstimator() { }
 
+double CardinalityEstimator::predict_number_distinct_values(const DataModel &data) const
+{
+    throw data_model_exception("predicting the number of distinct values is not supported by this data model.");
+};
+
 void CardinalityEstimator::dump(std::ostream &out) const
 {
     print(out);
@@ -393,7 +398,8 @@ void InjectionCardinalityEstimator::print(std::ostream &out) const
     }
 }
 
-std::unique_ptr<CardinalityEstimator> CardinalityEstimator::CreateInjectionCardinalityEstimator(const char *name_of_database)
+std::unique_ptr<CardinalityEstimator>
+        CardinalityEstimator::CreateInjectionCardinalityEstimator(const char *name_of_database)
 {
     return std::make_unique<InjectionCardinalityEstimator>(name_of_database);
 }

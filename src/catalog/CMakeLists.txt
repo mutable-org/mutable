@@ -5,5 +5,6 @@ add_library(
     CostModel.cpp
     Schema.cpp
     SimpleCostFunction.cpp
+    TrainedCostFunction.cpp
     Type.cpp
 )

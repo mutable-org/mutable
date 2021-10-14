@@ -57,3 +57,6 @@ set_target_properties(check-bin PROPERTIES OUTPUT_NAME check)
 add_executable(shell shell.cpp)
 add_dependencies(shell Replxx)
 target_link_libraries(shell replxx ${PROJECT_NAME} Threads::Threads)
+
+add_executable(train-operator-model train-operator-model.cpp)
+target_link_libraries(train-operator-model ${PROJECT_NAME} Threads::Threads)

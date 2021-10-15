@@ -59,11 +59,13 @@ Memory Allocator::create_memory(void *addr, std::size_t size, std::size_t offset
 
 AddressSpace::AddressSpace(std::size_t size)
 {
-    auto aligned_size = Ceil_To_Next_Page(size);
-    addr_ = mmap(nullptr, aligned_size, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, /* fd= */ -1, /* offset= */ 0);
-    if (addr_ == MAP_FAILED)
-        throw std::runtime_error(strerror(errno));
-    size_ = aligned_size;
+    if (size != 0) {
+        auto aligned_size = Ceil_To_Next_Page(size);
+        addr_ = mmap(nullptr, aligned_size, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, /* fd= */ -1, /* offset= */ 0);
+        if (addr_ == MAP_FAILED)
+            throw std::runtime_error(strerror(errno));
+        size_ = aligned_size;
+    }
 }
 
 AddressSpace::~AddressSpace() { if (addr_) munmap(addr_, size_); }

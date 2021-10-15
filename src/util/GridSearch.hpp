@@ -47,37 +47,59 @@ struct LinearSpace : Space<T, LinearSpace>
 {
     static_assert(std::is_arithmetic_v<T>, "type T must be an arithmetic type");
     using value_type = T;
+    using difference_type = typename std::conditional_t<std::is_integral_v<T>,
+                                                        std::make_signed<T>,
+                                                        std::common_type<T>>::type;
 
     private:
     value_type lo_;
     value_type hi_;
     double step_;
     unsigned num_steps_;
+    bool is_ascending_;
 
     public:
-    LinearSpace(value_type lowest, value_type highest, unsigned num_steps)
-        : lo_(lowest), hi_(highest), num_steps_(num_steps)
+    LinearSpace(value_type lowest, value_type highest, unsigned num_steps, bool is_ascending = true)
+        : lo_(lowest), hi_(highest), num_steps_(num_steps), is_ascending_(is_ascending)
     {
-        if (hi_ < lo_)
-            throw std::invalid_argument("lowest value must not be greater than highest value");
+        if (lo_ > hi_)
+            throw std::invalid_argument("invalid range");
         if (num_steps_ == 0)
             throw std::invalid_argument("number of steps must not be zero");
 
         step_ = (double(hi_) - double(lo_)) / num_steps_;
     }
 
+    static LinearSpace Ascending(value_type lowest, value_type highest, unsigned num_steps) {
+        return LinearSpace(lowest, highest, num_steps, true);
+    }
+
+    static LinearSpace Descending(value_type lowest, value_type highest, unsigned num_steps) {
+        return LinearSpace(lowest, highest, num_steps, false);
+    }
+
     value_type lo() const { return lo_; }
     value_type hi() const { return hi_; }
     double step() const { return step_; }
     unsigned num_steps() const { return num_steps_; }
+    difference_type delta() const { return hi_ - lo_; }
+    bool ascending() const { return is_ascending_; }
+    bool descending() const { return not is_ascending_; }
 
     value_type at(unsigned n) const {
         if (n > num_steps_)
             throw std::out_of_range("n must be between 0 and num_steps()");
-        if constexpr (std::is_integral_v<value_type>)
-            return std::clamp<value_type>(value_type(std::round(double(lo()) + n * step_)), lo_, hi_);
-        else
-            return std::clamp<value_type>(value_type(double(lo()) + n * step_), lo_, hi_);
+        if constexpr (std::is_integral_v<value_type>) {
+            if (ascending())
+                return std::clamp<value_type>(value_type(std::round(double(lo()) + n * step_)), lo_, hi_);
+            else
+                return std::clamp<value_type>(value_type(std::round(double(hi()) - n * step_)), lo_, hi_);
+        } else {
+            if (ascending())
+                return std::clamp<value_type>(value_type(double(lo()) + n * step_), lo_, hi_);
+            else
+                return std::clamp<value_type>(value_type(double(hi()) - n * step_), lo_, hi_);
+        }
     }
     value_type operator()(unsigned n) const { return at(n); }
 

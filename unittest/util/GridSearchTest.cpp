@@ -16,6 +16,8 @@ TEST_CASE("LinearSpace", "[core][util]")
         CHECK(S.hi() == 1);
         CHECK(S.num_steps() == 1);
         CHECK(S.step() == Approx(1));
+        CHECK(S.ascending());
+        CHECK_FALSE(S.descending());
 
         SECTION("at()/operator()")
         {
@@ -36,6 +38,34 @@ TEST_CASE("LinearSpace", "[core][util]")
         CHECK(S.hi() == 10);
         CHECK(S.num_steps() == 5);
         CHECK(S.step() == Approx(2));
+        CHECK(S.ascending());
+        CHECK_FALSE(S.descending());
+
+        SECTION("at()/operator()")
+        {
+            CHECK(S.at(0) == 0);
+            CHECK(S.at(1) == 2);
+            CHECK(S.at(2) == 4);
+            CHECK(S.at(3) == 6);
+            CHECK(S.at(4) == 8);
+            CHECK(S.at(5) == 10);
+        }
+
+        SECTION("sequence()")
+        {
+            CHECK(S.sequence() == std::vector<unsigned>{0, 2, 4, 6, 8, 10});
+        }
+    }
+
+    SECTION("unsigned, 0 to 10, 5 steps, ascending (factory method)")
+    {
+        auto S = LinearSpace<unsigned>::Ascending(0, 10, 5);
+        CHECK(S.lo() == 0);
+        CHECK(S.hi() == 10);
+        CHECK(S.num_steps() == 5);
+        CHECK(S.step() == Approx(2));
+        CHECK(S.ascending());
+        CHECK_FALSE(S.descending());
 
         SECTION("at()/operator()")
         {
@@ -60,6 +90,8 @@ TEST_CASE("LinearSpace", "[core][util]")
         CHECK(S.hi() == 10);
         CHECK(S.num_steps() == 4);
         CHECK(S.step() == Approx(5));
+        CHECK(S.ascending());
+        CHECK_FALSE(S.descending());
 
         SECTION("at()/operator()")
         {
@@ -83,6 +115,8 @@ TEST_CASE("LinearSpace", "[core][util]")
         CHECK(S.hi() == 5);
         CHECK(S.num_steps() == 3);
         CHECK(S.step() == Approx(10./3));
+        CHECK(S.ascending());
+        CHECK_FALSE(S.descending());
 
         SECTION("at()/operator()")
         {
@@ -105,6 +139,8 @@ TEST_CASE("LinearSpace", "[core][util]")
         CHECK(S.hi() == 1.f);
         CHECK(S.num_steps() == 10);
         CHECK(S.step() == Approx(.1f));
+        CHECK(S.ascending());
+        CHECK_FALSE(S.descending());
 
         SECTION("at()/operator()")
         {
@@ -126,6 +162,8 @@ TEST_CASE("LinearSpace", "[core][util]")
         CHECK(S.hi() == 1.);
         CHECK(S.num_steps() == 4);
         CHECK(S.step() == Approx(.5));
+        CHECK(S.ascending());
+        CHECK_FALSE(S.descending());
 
         SECTION("at()/operator()")
         {
@@ -141,11 +179,63 @@ TEST_CASE("LinearSpace", "[core][util]")
             CHECK(S.sequence() == std::vector<double>{-1., -.5, 0., .5, 1.});
         }
     }
+
+    SECTION("unsigned, 0 to 10, 5 steps, descending")
+    {
+        LinearSpace<unsigned> S(0, 10, 5, /* ascending= */ false);
+        CHECK(S.lo() == 0);
+        CHECK(S.hi() == 10);
+        CHECK(S.num_steps() == 5);
+        CHECK(S.step() == Approx(2));
+        CHECK(S.descending());
+        CHECK_FALSE(S.ascending());
+
+        SECTION("at()/operator()")
+        {
+            CHECK(S.at(0) == 10);
+            CHECK(S.at(1) == 8);
+            CHECK(S.at(2) == 6);
+            CHECK(S.at(3) == 4);
+            CHECK(S.at(4) == 2);
+            CHECK(S.at(5) == 0);
+        }
+
+        SECTION("sequence()")
+        {
+            CHECK(S.sequence() == std::vector<unsigned>{10, 8, 6, 4, 2, 0});
+        }
+    }
+
+    SECTION("unsigned, 0 to 10, 5 steps, descending (factory method)")
+    {
+        auto S = LinearSpace<unsigned>::Descending(0, 10, 5);
+        CHECK(S.lo() == 0);
+        CHECK(S.hi() == 10);
+        CHECK(S.num_steps() == 5);
+        CHECK(S.step() == Approx(2));
+        CHECK(S.descending());
+        CHECK_FALSE(S.ascending());
+
+        SECTION("at()/operator()")
+        {
+            CHECK(S.at(0) == 10);
+            CHECK(S.at(1) == 8);
+            CHECK(S.at(2) == 6);
+            CHECK(S.at(3) == 4);
+            CHECK(S.at(4) == 2);
+            CHECK(S.at(5) == 0);
+        }
+
+        SECTION("sequence()")
+        {
+            CHECK(S.sequence() == std::vector<unsigned>{10, 8, 6, 4, 2, 0});
+        }
+    }
 }
 
 TEST_CASE("LinearSpace sanity", "[core][util]")
 {
-    SECTION("int, 1 to 0, 1 step")
+    SECTION("int, 1 to 0, 1 steps")
     {
         REQUIRE_THROWS_AS(LinearSpace<int>(1, 0, 1), std::invalid_argument);
     }

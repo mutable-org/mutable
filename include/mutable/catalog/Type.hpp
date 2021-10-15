@@ -123,6 +123,9 @@ bool is_convertible(const Type *attr);
  * or `Numeric`. */
 bool is_comparable(const Type *first, const Type *second);
 
+template<typename T>
+const PrimitiveType * get_runtime_type();
+
 }
 
 namespace std {
@@ -501,4 +504,19 @@ inline bool m::is_comparable(const Type *first, const Type *second) {
     if (first->is_date_time() and second->is_date_time()) return true;
     if (first->is_numeric() and second->is_numeric()) return true;
     return false;
+}
+
+
+/** Returns the internal runtime `Type` of mu*t*able for the compile-time type `T`. */
+template<typename T>
+const m::PrimitiveType * m::get_runtime_type()
+{
+    if constexpr (std::is_integral_v<T>)
+        return Type::Get_Integer(Type::TY_Vector, sizeof(T));
+    else if constexpr (std::is_same_v<T, float>)
+        return Type::Get_Float(Type::TY_Vector);
+    else if constexpr (std::is_same_v<T, double>)
+        return Type::Get_Double(Type::TY_Vector);
+    else
+        static_assert(not std::is_same_v<T, T>, "unsupported compile-time type T");
 }

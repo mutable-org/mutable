@@ -34,12 +34,61 @@ struct Timer
     using duration = clock::duration;
     using time_point = clock::time_point;
 
-    private:
     struct Measurement
     {
         std::string name; ///< the name of this `Measurement`
         time_point begin, end; ///< the begin and end time points of this `Measurement`
+
+        explicit Measurement(std::string name) : name(std::move(name)) { }
+        Measurement(std::string name, time_point begin) : name(std::move(name)), begin(std::move(begin)) { }
+        Measurement(std::string name, time_point begin, time_point end)
+            : name(std::move(name))
+            , begin(std::move(begin))
+            , end(std::move(end))
+        { }
+
+        /** Clear this `Measurement`, rendering it unused. */
+        void clear() { begin = end = time_point(); }
+
+        /** Start this `Measurement` by setting the start time point to *NOW*. */
+        void start() {
+            insist(is_unused());
+            begin = clock::now();
+        }
+
+        /** Stop this `Measurement` by setting the end time point to *NOW*. */
+        void stop() {
+            insist(is_active());
+            end = clock::now();
+        }
+
+        /** Returns `true` iff the `Measurement` is unused, i.e. has not started (and hence also not finished). */
+        bool is_unused() const {
+            insist(begin != time_point() or end == time_point(),
+                   "if the measurement hasn't started it must not have ended");
+            return begin == time_point();
+        }
+        /** Returns `true` iff this `Measurement` has begun. */
+        bool has_started() const { return begin != time_point(); }
+        /** Returns `true` iff this `Measurement` has ended. */
+        bool has_ended() const { return end != time_point(); }
+        /** Returns `true` iff this `Measurement` is currently in process. */
+        bool is_active() const { return has_started() and not has_ended(); }
+        /** Returns `true` iff this `Measurement` has completed. */
+        bool is_finished() const { return has_started() and has_ended(); }
+
+        /** Returns the duration of a *finished* `Measurement`. */
+        duration duration() const {
+            insist(is_finished(), "can only compute duration of finished measurements");
+            return end - begin;
+        }
+
+        friend std::ostream & operator<<(std::ostream &out, const Measurement &M);
+        void dump(std::ostream &out) const;
+        void dump() const;
     };
+
+    private:
     std::vector<Measurement> measurements_;
 
     public:
@@ -48,13 +97,13 @@ struct Timer
     auto cbegin() const { return measurements_.cbegin(); }
     auto cend()   const { return measurements_.cend(); }
 
-    auto & measurements() const { return measurements_; }
-    auto & get(std::size_t i) const {
+    const std::vector<Measurement> & measurements() const { return measurements_; }
+    const Measurement & get(std::size_t i) const {
         if (i >= measurements_.size())
             throw m::out_of_range("index i out of bounds");
         return measurements_[i];
     }
-    auto & get(const std::string &name) const {
+    const Measurement & get(const std::string &name) const {
         auto it = std::find_if(measurements_.begin(), measurements_.end(),
                                [&](auto &elem) { return elem.name == name; });
         if (it == measurements_.end())
@@ -72,15 +121,16 @@ struct Timer
                                [&](auto &elem) { return elem.name == name; });
 
         if (it != measurements_.end()) { // overwrite existing, finished measurement
-            if (it->end == time_point())
+            if (it->is_active())
                 throw m::invalid_argument("a measurement with that name is already in progress");
-            it->begin = clock::now();
+            const auto idx = std::distance(measurements_.begin(), it);
             it->end = time_point();
-            return std::distance(measurements_.begin(), it);
+            it->begin = clock::now();
+            return idx;
         } else { // create new measurement
-            Measurement m{ name, clock::now(), time_point() };
             auto id = measurements_.size();
-            measurements_.emplace_back(std::move(m));
+            auto &M = measurements_.emplace_back(name);
+            M.start();
             return id;
         }
     }
@@ -89,18 +139,18 @@ struct Timer
     void stop(std::size_t id) {
         if (id >= measurements_.size())
             throw m::out_of_range("id out of bounds");
-        auto &ref = measurements_[id];
-        if (ref.end != time_point())
+        auto &M = measurements_[id];
+        if (M.has_ended())
             throw m::invalid_argument("cannot stop that measurement because it has already been stopped");
-        ref.end = clock::now();
+        M.stop();
     }
 
     /** Erase a `Measurement` from this `Timer`. */
     void erase(std::size_t id) {
         if (id >= measurements_.size())
             throw m::out_of_range("id out of bounds");
-        auto &ref = measurements_[id];
-        ref.begin = ref.end = time_point();
+        auto &M = measurements_[id];
+        M.clear(); // just clear it, don't remove it to avoid moving other measurements within the container
     }
 
     public:
@@ -109,18 +159,9 @@ struct Timer
 
     /** Print all finished and in-process timings of `timer` to `out`. */
     friend std::ostream & operator<<(std::ostream &out, const Timer &timer) {
-        using std::chrono::duration_cast;
-        using std::chrono::microseconds;
-
-        for (auto &m : timer) {
-            if (m.begin == time_point()) continue; // measurement has been removed
-            out << m.name << ": ";
-            if (m.end == time_point()) {
-                out << "started at " << put_timepoint(m.begin) << ", not finished\n";
-            } else {
-                out << duration_cast<microseconds>(m.end - m.begin).count() / 1e3 << " ms\n";
-            }
-        }
+        out << "Timer measurements:\n";
+        for (auto &M : timer)
+            out << "  " << M << '\n';
 
         return out;
     }

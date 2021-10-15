@@ -6,7 +6,9 @@
 
 namespace m {
 
-struct invalid_argument : std::exception
+struct exception : std::exception { };
+
+struct invalid_argument : exception
 {
     private:
     const std::string message_;
@@ -17,7 +19,7 @@ struct invalid_argument : std::exception
     const char *what() const noexcept override { return message_.c_str(); }
 };
 
-struct out_of_range : std::exception
+struct out_of_range : exception
 {
     private:
     const std::string message_;
@@ -28,7 +30,7 @@ struct out_of_range : std::exception
     const char *what() const noexcept override { return message_.c_str(); }
 };
 
-struct runtime_error : std::exception
+struct runtime_error : exception
 {
     private:
     const std::string message_;
@@ -39,7 +41,7 @@ struct runtime_error : std::exception
     const char *what() const noexcept override { return message_.c_str(); }
 };
 
-struct frontend_exception : std::exception
+struct frontend_exception : exception
 {
     private:
     const std::string message_;
@@ -50,7 +52,7 @@ struct frontend_exception : std::exception
     const char *what() const noexcept override { return message_.c_str(); }
 };
 
-struct backend_exception : std::exception
+struct backend_exception : exception
 {
     private:
     const std::string message_;

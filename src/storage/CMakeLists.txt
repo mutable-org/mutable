@@ -5,5 +5,6 @@ add_library(
     Linearization.cpp
     RowStore.cpp
     Store.cpp
+    store_manip.cpp
     PaxStore.cpp
 )

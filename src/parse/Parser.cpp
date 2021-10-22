@@ -800,7 +800,7 @@ const Type * Parser::parse_data_type()
                 ok = false;
             }
             errno = 0;
-            std::size_t s = strtoul(scale.text, nullptr, 10);
+            std::size_t s = scale.text ? strtoul(scale.text, nullptr, 10) : 0;
             if (errno) {
                 diag.e(scale.pos) << scale.text << " is not a valid scale for a DECIMAL\n";
                 ok = false;

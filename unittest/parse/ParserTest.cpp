@@ -463,6 +463,16 @@ TEST_CASE("Parser::parse_data_type()", "[core][parse][unit]")
         REQUIRE(err.str().empty());
         REQUIRE(type == Type::Get_Decimal(Type::TY_Scalar, 10, 2));
     }
+
+    SECTION("DECIMAL(p)")
+    {
+        LEXER("DECIMAL(10)");
+        Parser parser(lexer);
+        const Type *type = parser.parse_data_type();
+        REQUIRE(diag.num_errors() == 0);
+        REQUIRE(err.str().empty());
+        REQUIRE(type == Type::Get_Decimal(Type::TY_Scalar, 10, 0));
+    }
 }
 
 TEST_CASE("Parser::parse_data_type() sanity tests", "[core][parse][unit]")

@@ -586,7 +586,7 @@ Clause * Parser::parse_LimitClause()
     /* 'LIMIT' integer constant */
     expect(TK_Limit);
     Token limit = token();
-    if (limit.type == TK_DEC_INT or streq(limit.text, "0")) {
+    if (limit.type == TK_DEC_INT or limit.type == TK_OCT_INT or limit.type == TK_HEX_INT) {
         consume();
     } else {
         diag.e(limit.pos) << "expected integer limit, got " << limit.text << '\n';
@@ -597,7 +597,7 @@ Clause * Parser::parse_LimitClause()
     Token offset;
     if (accept(TK_Offset)) {
         offset = token();
-        if (offset.type == TK_DEC_INT or streq(offset.text, "0")) {
+        if (offset.type == TK_DEC_INT or offset.type == TK_OCT_INT or offset.type == TK_HEX_INT) {
             consume();
         } else {
             diag.e(offset.pos) << "expected integer offset, got " << offset.text << '\n';

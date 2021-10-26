@@ -865,6 +865,8 @@ TEST_CASE("Parser::parse_LimitClause()", "[core][parse][unit]")
 
         { "LIMIT 1", "LIMIT 1", TK_EOF },
         { "LIMIT 1 OFFSET 2", "LIMIT 1 OFFSET 2", TK_EOF },
+        { "LIMIT 01 OFFSET 0xA", "LIMIT 01 OFFSET 0xA", TK_EOF },
+        { "LIMIT 0xA OFFSET 01", "LIMIT 0xA OFFSET 01", TK_EOF },
         { "LIMIT 1 offset 2", "LIMIT 1", TK_IDENTIFIER },
         { "LIMIT 1 2", "LIMIT 1", TK_DEC_INT },
         { "LIMIT 1, OFFSET 2", "LIMIT 1", TK_COMMA }

@@ -1180,7 +1180,7 @@ void Sema::operator()(Const<LimitClause> &c)
     /* TODO limit only makes sense when SELECT is vectorial and not scalar */
 
     errno = 0;
-    strtoull(c.limit.text, nullptr, 10);
+    strtoull(c.limit.text, nullptr, 0);
     if (errno == EINVAL)
         diag.e(c.limit.pos) << "Invalid value for LIMIT.\n";
     else if (errno == ERANGE)
@@ -1190,7 +1190,7 @@ void Sema::operator()(Const<LimitClause> &c)
 
     if (c.offset) {
         errno = 0;
-        strtoull(c.offset.text, nullptr, 10);
+        strtoull(c.offset.text, nullptr, 0);
         if (errno == EINVAL)
             diag.e(c.offset.pos) << "Invalid value for OFFSET.\n";
         else if (errno == ERANGE)

@@ -1463,10 +1463,10 @@ struct m::GraphBuilder : ConstASTStmtVisitor
         if (s.limit) {
             auto L = as<LimitClause>(s.limit);
             errno = 0;
-            graph_->limit_.limit = strtoull(L->limit.text, nullptr, 10);
+            graph_->limit_.limit = strtoull(L->limit.text, nullptr, 0);
             insist(errno == 0);
             if (L->offset) {
-                graph_->limit_.offset = strtoull(L->offset.text, nullptr, 10);
+                graph_->limit_.offset = strtoull(L->offset.text, nullptr, 0);
                 insist(errno == 0);
             }
         }

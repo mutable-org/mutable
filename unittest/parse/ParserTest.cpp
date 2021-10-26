@@ -668,7 +668,8 @@ TEST_CASE("Parser::parse_FromClause() sanity tests", "[core][parse][unit]")
         const char * clauses[] = {
             "FROM A AS 42",
             "FROM A AS 42, B AS b",
-            "FROM 42"
+            "FROM 42",
+            "FROM (SELECT * FROM R)"
         };
 
         for (auto c : clauses) {
@@ -1235,7 +1236,8 @@ TEST_CASE("Parser::parse_InsertStmt() sanity tests", "[core][parse][unit]")
     SECTION("newly generated errors")
     {
         const char * statements[] = {
-            "INSERT INTO VALUES (NULL)"
+            "INSERT INTO VALUES (NULL)",
+            "INSERT INTO VALUES (42)"
         };
 
         for (auto s : statements) {
@@ -1294,6 +1296,28 @@ TEST_CASE("Parser::parse_UpdateStmt() sanity tests", "[core][parse][unit]")
             delete ast;
         }
     }
+
+    SECTION("newly generated errors")
+    {
+        const char * statements[] = {
+                "UPDATE SET fkey = 42",
+                "UPDATE R WHERE TRUE"
+        };
+
+        for (auto s : statements) {
+            LEXER(s);
+            Parser parser(lexer);
+            auto ast = parser.parse_UpdateStmt();
+            if (diag.num_errors() == 0)
+                std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
+            CHECK(diag.num_errors() > 0);
+            CHECK_FALSE(err.str().empty());
+            if (not is<ErrorStmt>(ast))
+                std::cerr << "Input \"" << s << "\" is not parsed as ErrorStmt" << std::endl;
+            CHECK(is<ErrorStmt>(ast));
+            delete ast;
+        }
+    }
 }
 
 TEST_CASE("Parser::parse_DeleteStmt()", "[core][parse][unit]")
@@ -1340,7 +1364,8 @@ TEST_CASE("Parser::parse_DeleteStmt() sanity tests", "[core][parse][unit]")
         const char * statements[] = {
             "",
             "DELETE FROM ",
-            "DELETE FROM 0"
+            "DELETE FROM 0",
+            "DELETE FROM WHERE TRUE"
         };
 
         for (auto s : statements) {

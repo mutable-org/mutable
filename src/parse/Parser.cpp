@@ -294,8 +294,13 @@ Stmt * Parser::parse_InsertStmt()
         tuples.emplace_back(tuple);
     } while (accept(TK_COMMA));
 
-    if (not ok)
+    if (not ok) {
+        for (InsertStmt::tuple_t &v : tuples) {
+            for (InsertStmt::element_type &e : v)
+                delete e.second;
+        }
         return new ErrorStmt(start);
+    }
 
     return new InsertStmt(table_name, tuples);
 }
@@ -324,8 +329,12 @@ Stmt * Parser::parse_UpdateStmt()
     if (token() == TK_Where)
         where = parse_WhereClause();
 
-    if (not ok)
+    if (not ok) {
+        for (auto &s : set)
+            delete s.second;
+        delete where;
         return new ErrorStmt(start);
+    }
 
     return new UpdateStmt(table_name, set, where);
 }
@@ -345,8 +354,10 @@ Stmt * Parser::parse_DeleteStmt()
     if (token() == TK_Where)
         where = parse_WhereClause();
 
-    if (not ok)
+    if (not ok) {
+        delete where;
         return new ErrorStmt(start);
+    }
 
     return new DeleteStmt(table_name, where);
 }
@@ -498,8 +509,13 @@ Clause * Parser::parse_FromClause()
         }
     } while (accept(TK_COMMA));
 
-    if (not ok)
+    if (not ok) {
+        for (auto &f : from) {
+            if (Stmt **stmt = std::get_if<Stmt*>(&f.source))
+                delete (*stmt);
+        }
         return new ErrorClause(start);
+    }
 
     return new FromClause(start, from);
 }

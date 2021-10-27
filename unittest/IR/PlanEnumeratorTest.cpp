@@ -1,14 +1,14 @@
 #include "catch.hpp"
 
+#include <catalog/Schema.hpp>
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/catalog/SimpleCostFunction.hpp>
-#include <catalog/Schema.hpp>
 #include <mutable/catalog/Type.hpp>
 #include <mutable/IR/PlanEnumerator.hpp>
 #include <mutable/IR/PlanTable.hpp>
+#include <mutable/storage/Store.hpp>
 #include <parse/Parser.hpp>
 #include <parse/Sema.hpp>
-#include <mutable/storage/Store.hpp>
 #include <testutil.hpp>
 #include <util/ADT.hpp>
 
@@ -119,7 +119,7 @@ TEST_CASE("PlanEnumerator", "[core][IR]")
     auto query_graph = QueryGraph::Build(*stmt);
     auto &G = *query_graph.get();
 
-    const CostFunction& CF = SimpleCostFunction();
+    SimpleCostFunction CF;
 
     auto M = [](std::size_t size) {
         return std::make_unique<CartesianProductEstimator::CartesianProductDataModel>(size);

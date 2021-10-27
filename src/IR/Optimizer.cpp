@@ -127,11 +127,6 @@ std::unique_ptr<FilterOperator> optimize_filter(std::unique_ptr<FilterOperator> 
  * Optimizer
  *====================================================================================================================*/
 
-std::unique_ptr<Producer> Optimizer::operator()(const QueryGraph &G) const
-{
-    return std::move(optimize(G).first);
-}
-
 std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryGraph &G) const
 {
     PlanTable plan_table(G);
@@ -280,11 +275,12 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
 
 void Optimizer::optimize_locally(const QueryGraph &G, PlanTable &plan_table) const
 {
-    plan_enumerator()(G, cost_function(), plan_table);
+    Catalog &C = Catalog::Get();
+    TIME_EXPR(plan_enumerator()(G, cost_function(), plan_table), "Plan enumeration", C.timer());
 }
 
 std::unique_ptr<Producer>
-Optimizer::construct_plan(const QueryGraph &G, PlanTable &plan_table, Producer **source_plans) const
+Optimizer::construct_plan(const QueryGraph &G, const PlanTable &plan_table, Producer * const *source_plans) const
 {
     auto &C = Catalog::Get();
     auto &DB = C.get_database_in_use();

@@ -24,7 +24,7 @@ struct CardinalityEstimator
     /** A `DataModel` describes a data set.
      *
      * A data set is usually the result of evaluating a subplan.  The `DataModel` describes this result.  The way how
-     * the data is descibed depends on the actual kind of model.  A very simplistic model may only descibe the upper
+     * the data is described depends on the actual kind of model.  A very simplistic model may only describe the upper
      * limit of the tuples in the data set.  More sophisticated models may express statistical information, such as
      * correlation of attributes and frequency of individual values.
      */
@@ -248,6 +248,7 @@ struct InjectionCardinalityEstimator : CardinalityEstimator
     std::size_t predict_cardinality(const DataModel &data) const override;
 
     private:
+    void read_json(Diagnostic &diag, std::istream &in);
     void print(std::ostream &out) const override;
 };
 

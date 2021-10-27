@@ -139,14 +139,12 @@ CardinalityEstimator::CreateCartesianProductEstimator(const char*)
 
 namespace {
 
-std::string make_identifier(std::vector<const char*> &relations)
+template<typename It>
+std::string make_identifier(const It begin, const It end)
 {
     std::ostringstream oss;
-    std::sort(relations.begin(), relations.end(), [](const char *a, const char *b) {
-        return std::strcmp(a, b) < 0;
-    });
-    for (auto it = relations.begin(); it != relations.end(); ++it) {
-        if (it != relations.begin()) oss << ',';
+    for (auto it = begin; it != end; ++it) {
+        if (it != begin) oss << '$';
         oss << *it;
     }
     return oss.str();
@@ -161,58 +159,20 @@ InjectionCardinalityEstimator::InjectionCardinalityEstimator() : InjectionCardin
 InjectionCardinalityEstimator::InjectionCardinalityEstimator(const char *name_of_database)
     : name_of_database_(name_of_database)
 {
-    using json = nlohmann::json;
     Catalog &C = Catalog::Get();
     Diagnostic diag(Options::Get().has_color, std::cout, std::cerr);
     Position pos("InjectionCardinalityEstimator");
+
     if (Options::Get().injected_cardinalities_file) {
         std::ifstream in(Options::Get().injected_cardinalities_file);
         if (in) {
-            json cardinalities;
-            try {
-                in >> cardinalities;
-            } catch (json::parse_error parse_error) {
-                diag.w(pos) << "The file " << Options::Get().injected_cardinalities_file
-                            << " could not be parsed as json. Parser error output:\n"
-                            << parse_error.what() << "\n"
-                            << "A dummy estimator will be used to do estimations\n";
-                return;
-            }
-            json database_entry;
-            try {
-                database_entry = cardinalities.at(
-                        name_of_database_); //throws json.exception.out_of_range if key does not exist
-            } catch (json::out_of_range &out_of_range) {
-                diag.w(pos) << "No entry for the db " << name_of_database_ << " in file "
-                            << Options::Get().injected_cardinalities_file << "\n"
-                            << "A dummy estimator will be used to do estimations\n";
-                return;
-            }
-            for (auto &subproblem_entry : database_entry) {
-                std::vector<const char*> relations;
-                json *relations_array;
-                json *size;
-                try {
-                    relations_array = &subproblem_entry.at("relations");
-                    size = &subproblem_entry.at("size");
-                } catch (json::exception &exception) {
-                    diag.w(pos) << "The entry " << subproblem_entry << " for the db \"" << name_of_database_ << "\""
-                                << " does not have the required form of {\"relations\": ..., \"size\": ... } "
-                                << "and will thus be ignored\n";
-                    continue;
-                }
-                for (auto &array_elem : *relations_array)
-                    relations.push_back(C.pool(array_elem.get<std::string>().c_str()));
-
-                std::string identifier = make_identifier(relations);
-                cardinality_table_.emplace(identifier, *size);
-            }
+            read_json(diag, in);
         } else {
-            diag.w(pos) << "Could not open file " << Options::Get().injected_cardinalities_file << "\n"
-                        << "A dummy estimator will be used to do estimations\n";
+            diag.w(pos) << "Could not open file " << Options::Get().injected_cardinalities_file << ".\n"
+                        << "A dummy estimator will be used to do estimations.\n";
         }
     } else {
-        std::cout << "No injection file was passed\n";
+        std::cout << "No injection file was passed.\n";
     }
 }
 
@@ -220,30 +180,36 @@ InjectionCardinalityEstimator::InjectionCardinalityEstimator(Diagnostic &diag, c
                                                              std::istream &in)
     : name_of_database_(name_of_database)
 {
-    Position pos("InjectionCardinalityEstimator");
-    using json = nlohmann::json;
-    auto &C = Catalog::Get();
+    read_json(diag, in);
+}
 
+void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in)
+{
+    Catalog &C = Catalog::Get();
+    Position pos("InjectionCardinalityEstimator");
+    std::ostringstream oss;
+    std::string prev_relation;
+
+    using json = nlohmann::json;
     json cardinalities;
     try {
         in >> cardinalities;
     } catch (json::parse_error parse_error) {
         diag.w(pos) << "The file could not be parsed as json. Parser error output:\n"
                     << parse_error.what() << "\n"
-                    << "A dummy estimator will be used to do estimations\n";
+                    << "A dummy estimator will be used to do estimations.\n";
         return;
     }
-    json database_entry;
+    json *database_entry;
     try {
-        database_entry = cardinalities.at(
-                name_of_database_); //throws json.exception.out_of_range if key does not exist
+        database_entry = &cardinalities.at(name_of_database_); //throws if key does not exist
     } catch (json::out_of_range &out_of_range) {
         diag.w(pos) << "No entry for the db " << name_of_database_ << " in the file.\n"
-                    << "A dummy estimator will be used to do estimations\n";
+                    << "A dummy estimator will be used to do estimations.\n";
         return;
     }
-    for (auto &subproblem_entry : database_entry) {
-        std::vector<const char*> relations;
+    cardinality_table_.reserve(database_entry->size());
+    for (auto &subproblem_entry : *database_entry) {
         json* relations_array;
         json* size;
         try {
@@ -252,14 +218,28 @@ InjectionCardinalityEstimator::InjectionCardinalityEstimator(Diagnostic &diag, c
         } catch (json::exception &exception) {
             diag.w(pos) << "The entry " << subproblem_entry << " for the db \"" << name_of_database_ << "\""
                         << " does not have the required form of {\"relations\": ..., \"size\": ... } "
-                        << "and will thus be ignored\n";
+                        << "and will thus be ignored.\n";
             continue;
         }
-        for (auto &array_elem : *relations_array)
-            relations.push_back(C.pool(array_elem.get<std::string>().c_str()));
 
-        std::string identifier = make_identifier(relations);
-        cardinality_table_.insert(std::make_pair(identifier, *size));
+        oss.str("");
+        prev_relation.clear();
+        try {
+            for (auto it = relations_array->begin(); it != relations_array->end(); ++it) {
+                if (it != relations_array->begin()) oss << '$';
+                std::string current(it->get<std::string>());
+                if (current <= prev_relation) [[unlikely]]
+                    throw std::invalid_argument("relations must be sorted lexicographically and must not contain duplicates");
+                oss << current;
+                prev_relation = std::move(current);
+            }
+        } catch (std::invalid_argument) {
+            diag.w(pos) << "Invalid identifier '" << oss.str()
+                        << "', must contain relations in lexicographical order and must not contain duplicates.\n";
+            continue;
+        }
+        auto res = cardinality_table_.emplace(oss.str(), *size);
+        insist(res.second, "insertion must not fail as we do not allow for duplicates in the input file");
     }
 }
 
@@ -286,12 +266,12 @@ std::unique_ptr<DataModel> InjectionCardinalityEstimator::estimate_scan(const Qu
         model->relations_.push_back(BT->table().name);
     }
 
-    auto it = cardinality_table_.find(model->relations_[0]);
-    if (it == cardinality_table_.end()) {
+    if (auto it = cardinality_table_.find(model->relations_[0]); it != cardinality_table_.end()) {
+        model->size_ = it->second;
+    } else {
+        /* no match, fall back */
         auto fallback_model = fallback_.estimate_scan(G, P);
         model->size_ = fallback_.predict_cardinality(*fallback_model);
-    } else {
-        model->size_ = it->second;
     }
 
     return model;
@@ -351,13 +331,19 @@ InjectionCardinalityEstimator::estimate_join(const DataModel &_left, const DataM
 {
     auto &left = as<const InjectionCardinalityDataModel>(_left);
     auto &right = as<const InjectionCardinalityDataModel>(_right);
-
     auto model = std::make_unique<InjectionCardinalityDataModel>();
+
+    /* Merge the relations of `left` and `right` -- both sorted lexicographically -- into `model` and maintain
+     * sortedness. */
+    model->relations_.reserve(left.relations_.size() + right.relations_.size());
     std::merge(left.relations_.begin(), left.relations_.end(),
                right.relations_.begin(), right.relations_.end(),
                std::back_inserter(model->relations_),
                [](const char *left, const char *right) { return strcmp(left, right) < 0; });
-    auto id = make_identifier(model->relations_);
+    insist(std::is_sorted(model->relations_.begin(), model->relations_.end(),
+                          [](const char *left, const char *right) { return strcmp(left, right) < 0; }),
+           "relations must be sorted lexicographically");
+    std::string id = make_identifier(model->relations_.begin(), model->relations_.end());
 
     if (auto it = cardinality_table_.find(id); it != cardinality_table_.end()) {
         /* Lookup cardinality in table. */

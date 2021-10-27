@@ -6,61 +6,40 @@
 
 namespace m {
 
-struct exception : std::exception { };
-
-struct invalid_argument : exception
+struct exception : std::exception
 {
     private:
     const std::string message_;
 
     public:
-    invalid_argument(const std::string &message) : message_(message) { }
+    explicit exception(std::string message) : message_(std::move(message)) { }
 
-    const char *what() const noexcept override { return message_.c_str(); }
+    const char * what() const noexcept override { return message_.c_str(); }
+};
+
+struct invalid_argument : exception
+{
+    explicit invalid_argument(std::string message) : exception(std::move(message)) { }
 };
 
 struct out_of_range : exception
 {
-    private:
-    const std::string message_;
-
-    public:
-    out_of_range(const std::string &message) : message_(message) { }
-
-    const char *what() const noexcept override { return message_.c_str(); }
+    explicit out_of_range(std::string message) : exception(std::move(message)) { }
 };
 
 struct runtime_error : exception
 {
-    private:
-    const std::string message_;
-
-    public:
-    runtime_error(const std::string &message) : message_(message) { }
-
-    const char *what() const noexcept override { return message_.c_str(); }
+    explicit runtime_error(std::string message) : exception(std::move(message)) { }
 };
 
 struct frontend_exception : exception
 {
-    private:
-    const std::string message_;
-
-    public:
-    frontend_exception(const std::string &message) : message_(message) { }
-
-    const char *what() const noexcept override { return message_.c_str(); }
+    explicit frontend_exception(std::string message) : exception(std::move(message)) { }
 };
 
 struct backend_exception : exception
 {
-    private:
-    const std::string message_;
-
-    public:
-    backend_exception(const std::string &message) : message_(message) { }
-
-    const char *what() const noexcept override { return message_.c_str(); }
+    explicit backend_exception(std::string message) : exception(std::move(message)) { }
 };
 
 }

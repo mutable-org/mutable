@@ -37,13 +37,7 @@ struct CardinalityEstimator
     /** `data_model_exception` is thrown if a `DataModel` implementation does not contain the requested information. */
     struct data_model_exception : m::exception
     {
-        private:
-        const std::string message_;
-
-        public:
-        data_model_exception(const std::string &message) : message_(message) { }
-
-        const char* what() const noexcept override { return message_.c_str(); }
+        explicit data_model_exception(std::string message) : m::exception(std::move(message)) { }
     };
 
     enum kind_t {

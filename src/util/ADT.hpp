@@ -6,18 +6,19 @@
 namespace m {
 
 /** A sorted list of elements.  Allows duplicates. */
-template<typename T>
-struct sorted_list
+template<typename T, typename Compare = std::less<T>>
+struct sorted_vector
 {
     using vector_type = std::vector<T>; ///< the type of the internal container of elements
     using value_type = T;
     using size_type = typename vector_type::size_type;
 
     private:
+    Compare comp_;
     vector_type v_; ///< the internal container of elements
 
     public:
-    sorted_list() { }
+    sorted_vector(Compare comp = Compare()) : comp_(comp) { }
 
     auto begin() { return v_.begin(); }
     auto end()   { return v_.end(); }
@@ -26,23 +27,23 @@ struct sorted_list
     auto cbegin() const { return v_.cbegin(); }
     auto cend()   const { return v_.cend(); }
 
-    /** Returns `true` iff the `sorted_list` has no elements. */
+    /** Returns `true` iff the `sorted_vector` has no elements. */
     auto empty() const { return v_.empty(); }
-    /** Returns the number of elements in this `sorted_list`. */
+    /** Returns the number of elements in this `sorted_vector`. */
     auto size() const { return v_.size(); }
-    /** Reserves space for `new_cap` elements in this `sorted_list`. */
+    /** Reserves space for `new_cap` elements in this `sorted_vector`. */
     auto reserve(size_type new_cap) { return v_.reserve(new_cap); }
 
-    /** Returns `true` iff this `sorted_list` contains an element that is equal to `value`. */
+    /** Returns `true` iff this `sorted_vector` contains an element that is equal to `value`. */
     bool contains(const T &value) const {
-        auto pos = std::lower_bound(begin(), end(), value);
+        auto pos = std::lower_bound(begin(), end(), value, comp_);
         return pos != end() and *pos == value;
     }
 
-    /** Inserts `value` into this `sorted_list`.  Returns an `iterator` pointing to the inserted element. */
-    auto insert(T value) { return v_.insert(std::lower_bound(begin(), end(), value), value); }
+    /** Inserts `value` into this `sorted_vector`.  Returns an `iterator` pointing to the inserted element. */
+    auto insert(T value) { return v_.insert(std::lower_bound(begin(), end(), value), value, comp_); }
 
-    /** Inserts elements in the range from `first` (including) to `last` (excluding) into this `sorted_list. */
+    /** Inserts elements in the range from `first` (including) to `last` (excluding) into this `sorted_vector. */
     template<typename InsertIt>
     void insert(InsertIt first, InsertIt last) {
         while (first != last)

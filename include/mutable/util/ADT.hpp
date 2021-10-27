@@ -108,10 +108,17 @@ struct SmallBitset
     bool operator==(SmallBitset other) const { return this->bits_ == other.bits_; }
     bool operator!=(SmallBitset other) const { return not operator==(other); }
 
+    /** Inverts all bits in the bitset. */
     SmallBitset operator~() const { return SmallBitset(~bits_); }
 
     /** Returns `true` if the set represented by `this` is a subset of `other`, i.e.\ `this` ⊆ `other`. */
     bool is_subset(SmallBitset other) const { return this->bits_ == (other.bits_ & this->bits_); }
+
+    /** Converts a singleton set to a mask for all bits lower than the single, set bit. */
+    SmallBitset singleton_to_lo_mask() const {
+        insist((bits_ & (bits_ - 1UL)) == 0UL, "not a singleton set");
+        return bits_ ? SmallBitset(bits_ - 1UL) : SmallBitset(0UL);
+    }
 
     /** Returns the union of `left` and `right`, i.e.\ `left` ∪ `right`. */
     friend SmallBitset unify(SmallBitset left, SmallBitset right) { return SmallBitset(left.bits_ | right.bits_); }
@@ -152,6 +159,9 @@ struct SmallBitset
 inline SmallBitset least_subset(SmallBitset S) { return SmallBitset(uint64_t(S) & -uint64_t(S)); }
 
 /** Returns the next subset of a given `subset` and `set. */
-inline SmallBitset next_subset(SmallBitset subset, SmallBitset set) { return SmallBitset(uint64_t(subset) - uint64_t(set)) & set; }
+inline SmallBitset next_subset(SmallBitset subset, SmallBitset set)
+{
+    return SmallBitset(uint64_t(subset) - uint64_t(set)) & set;
+}
 
 }

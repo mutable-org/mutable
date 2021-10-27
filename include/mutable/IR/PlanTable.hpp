@@ -138,6 +138,14 @@ struct PlanTable {
         }
     }
 
+    /** Resets the costs for all entries in the `PlanTable` to MAX_INT. */
+    void reset_costs() {
+        for (std::size_t i = 0; i < 1UL << num_sources(); ++i) {
+            Subproblem S(i);
+            at(S).cost = std::numeric_limits<decltype(entry_type::cost)>::infinity();
+        }
+    }
+
     friend std::ostream & operator<<(std::ostream &out, const PlanTable &PT);
 
     friend std::string to_string(const PlanTable &PT) {

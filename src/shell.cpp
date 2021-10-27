@@ -570,7 +570,7 @@ int main(int argc, const char **argv)
         "specify file with cardinalities to inject",                                /* Description      */
         [&](const char *str) { Options::Get().injected_cardinalities_file = str; }  /* Callback         */
     );
-    /*------ PDDL Generation -----------------------------------------------------------------------------------------*/
+    /*----- PDDL Generation ------------------------------------------------------------------------------------------*/
     ADD(const char *, Options::Get().pddl, nullptr,                     /* Type, Var, Init  */
         nullptr, "--pddl",                                              /* Short, Long      */
         /* Description      */
@@ -588,6 +588,22 @@ int main(int argc, const char **argv)
         nullptr, "--train-cost-models",                                 /* Short, Long      */
         "train cost models (may take a couple of minutes)",             /* Description      */
         [&](bool) { Options::Get().train_cost_models = true; }          /* Callback         */
+    );
+    /*----- AIPlanning Config ----------------------------------------------------------------------------------------*/
+    ADD(const char *, Options::Get().ai_state, "BottomUp",                              /* Type, Var, Init  */
+        nullptr, "--ai-state",                                                          /* Short, Long      */
+        "specify which state definition to use for plan enumeration via AIPlanning",    /* Description      */
+        [&](const char *str) { Options::Get().ai_state = str; }                         /* Callback         */
+    );
+    ADD(const char *, Options::Get().ai_heuristic, "hsum",                              /* Type, Var, Init  */
+        nullptr, "--ai-heuristic",                                                      /* Short, Long      */
+        "specify which heuristic to use for plan enumeration via AIPlanning",           /* Description      */
+        [&](const char *str) { Options::Get().ai_heuristic = str; }                     /* Callback         */
+    );
+    ADD(const char *, Options::Get().ai_search, "AStar",                                /* Type, Var, Init  */
+        nullptr, "--ai-search",                                                         /* Short, Long      */
+        "specify which search algorithm to use for plan enumeration via AIPlanning",    /* Description      */
+        [&](const char *str) { Options::Get().ai_search = str; }                        /* Callback         */
     );
 #undef ADD
     AP.parse_args(argc, argv);
@@ -619,31 +635,6 @@ Immanuel Haffner\
 , Felix Brinkmann\
 ";
         std::cout << std::endl;
-        std::exit(EXIT_SUCCESS);
-    }
-
-    //TODO put this in an extra method/all into one std::cout << ?
-    if (Options::Get().show_injected_cardinalities_example) {
-        std::cout << "Estimator-File-Format:\n";
-        std::cout << "The estimator file has to be a valid json file of the form:\n";
-        std::cout << "{\n\t<database1>: {\n";
-        std::cout << "\t\t <subproblem1>: <size>,\n";
-        std::cout << "\t\t <subproblem2>: <size>,\n";
-        std::cout << "\t\t\t :\n";
-        std::cout << "\t},\n";
-        std::cout << "\t<database2>: {\n";
-        std::cout << "\t\t <subproblem1>: <size>,\n";
-        std::cout << "\t\t <subproblem2>: <size>,\n";
-        std::cout << "\t\t\t :\n";
-        std::cout << "\t},\n";
-        std::cout << "\t    :\n";
-        std::cout << "},\n";
-        std::cout << "WHERE \n";
-        std::cout << "<database> = Name of the database \n";
-        //TODO enforce this in the input file or be able to create this format?
-        std::cout << "<subproblem> = String containing all the names of the contained relations, alphabetically sorted, "
-                     "comma-seperated, without whitespaces \n";
-        std::cout << "<size> = Size of the <subproblem>\n";
         std::exit(EXIT_SUCCESS);
     }
 

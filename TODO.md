@@ -84,6 +84,10 @@
 
 ### Query Planner
 
+* [x] AI Planning
+    * [x] beam search
+        * [x] track in `StateTracker` whether a state made it to the `beam_Q`.  if not, and it is part of a beam, add it
+          to the `beam_Q` no matter its cost
 
 
 ### Query Interpreter

@@ -53,6 +53,11 @@ struct Options
     bool wasm_adaptive = false;
 #endif
 
+    /* AI planning configuration */
+    const char *ai_state;
+    const char *ai_heuristic;
+    const char *ai_search;
+
     private:
     Options() = default;
 

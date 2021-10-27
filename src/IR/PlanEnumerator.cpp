@@ -1609,19 +1609,14 @@ struct checkpoints
             checkpoints.reserve(num_checkpoints + 1);
             /* The final *checkpoint* is the goal state. */
             checkpoints.emplace_back(Subproblem((1UL << G.sources().size()) - 1UL)); // goal state
-            /* Compute first *actual* checkpoint, that is reachible from `state`. */
+            /* Compute checkpoints on the path from `state` to goal. */
             for (std::size_t i = 0; i != num_checkpoints; ++i) {
                 Subproblem checkpoint = calculate_checkpoint(i, state, checkpoints.back());
 
-                /* If, at some point in the checkpoint chain, no valid next checkpoint can be found, return hsum.  This
-                 * can occur if all intermediate results are too large to form a potential checkpoint if combined. */
-                if (checkpoint.empty()) {
-                    const double h_sum = hsum<state_type>{PT, G, M, CF, CE}(state, PT, G, M, CF, CE);
-#ifndef NDEBUG
-                    std::cerr << " `  no checkpoints, h_sum = " << h_sum << '\n';
-#endif
-                    return std::min(h_sum, h_greedy_bushy);
-                }
+                /* If, at some point in the checkpoint chain, no valid next checkpoint can be found, skip this
+                 * checkpoint. */
+                if (checkpoint.empty())
+                    continue; // skip checkpoint of infeasible size
 
                 /* Add checkpoint. */
                 checkpoints.emplace_back(checkpoint);

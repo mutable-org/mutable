@@ -5,6 +5,7 @@
 #include "mutable/util/macro.hpp"
 #include <algorithm>
 #include <iostream>
+#include <memory>
 #include <type_traits>
 
 
@@ -163,5 +164,109 @@ inline SmallBitset next_subset(SmallBitset subset, SmallBitset set)
 {
     return SmallBitset(uint64_t(subset) - uint64_t(set)) & set;
 }
+
+/** Implements an array of dynamic but fixed size. */
+template<typename T>
+struct dyn_array
+{
+    using value_type = T;
+    using size_type = std::size_t;
+    using iterator = value_type*;
+    using const_iterator = const value_type*;
+
+    private:
+    std::unique_ptr<value_type[]> arr_;
+    std::size_t size_;
+
+    public:
+    /** Constructs an array of size 0. */
+    dyn_array() : size_(0) { }
+
+    /** Constructs an array of size `size`. */
+    explicit dyn_array(std::size_t size)
+        : arr_(std::make_unique<value_type[]>(size))
+        , size_(size)
+    { }
+
+    /** Constructs an array with the elements in range `[begin, end)`.  The size of the array will be
+     * `std::distance(begin, end)`.  */
+    template<typename It>
+    dyn_array(It begin, It end)
+        : dyn_array(std::distance(begin, end))
+    {
+        auto ptr = data();
+        for (auto it = begin; it != end; ++it)
+            new (ptr++) value_type(*it);
+    }
+
+    /** Copy-constructs an array. */
+    explicit dyn_array(const dyn_array &other)
+        : dyn_array(other.size())
+    {
+        for (std::size_t i = 0; i != other.size(); ++i)
+            new (&data()[i]) value_type(other[i]);
+    }
+
+    dyn_array(dyn_array&&) = default;
+    dyn_array & operator=(dyn_array&&) = default;
+
+    /** Returns the size of this array, i.e. the number of elements. */
+    size_type size() const { return size_; }
+
+    /** Returns a pointer to the beginning of the array. */
+    const value_type * data() const { return arr_.get(); }
+    /** Returns a pointer to the beginning of the array. */
+    value_type * data() { return arr_.get(); }
+
+    /** Returns a reference to the element at position `pos`.  Requires that `pos` is in bounds. */
+    const value_type & operator[](std::size_t pos) const {
+        insist(pos < size(), "index out of bounds");
+        return data()[pos];
+    }
+
+    /** Returns a reference to the element at position `pos`.  Requires that `pos` is in bounds. */
+    value_type & operator[](std::size_t pos) {
+        insist(pos < size(), "index out of bounds");
+        return data()[pos];
+    }
+
+    /** Returns a reference to the element at position `pos`.  Throws `m::out_of_range` if `pos` is out of bounds. */
+    const value_type & at(std::size_t pos) const {
+        if (pos >= size())
+            throw m::out_of_range("index out of bounds");
+        return (*this)[pos];
+    }
+
+    /** Returns a reference to the element at position `pos`.  Throws `m::out_of_range` if `pos` is out of bounds. */
+    value_type & at(std::size_t pos) {
+        if (pos >= size())
+            throw m::out_of_range("index out of bounds");
+        return (*this)[pos];
+    }
+
+    iterator begin() { return data(); }
+    iterator end() { return data() + size(); }
+    const_iterator begin() const { return data(); }
+    const_iterator end() const { return data() + size(); }
+    const_iterator cbegin() const { return begin(); }
+    const_iterator cend() const { return end(); }
+
+    /** Returns `true` iff the contents of `this` and `other` are equal, that is, they have the same number of elements
+     * and each element in `this` compares equal with the element in `other` at the same position. */
+    bool operator==(const dyn_array &other) const {
+        if (this->size() != other.size())
+            return false;
+
+        for (std::size_t i = 0; i != size(); ++i) {
+            if ((*this)[i] != other[i])
+                return false;
+        }
+
+        return true;
+    }
+    /** Returns `false` iff the contents of `this` and `other` are equal, that is, they have the same number of elements
+     * and each element in `this` compares equal with the element in `other` at the same position. */
+    bool operator!=(const dyn_array &other) const { return not operator==(other); }
+};
 
 }

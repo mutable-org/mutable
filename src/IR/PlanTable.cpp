@@ -21,7 +21,7 @@ std::ostream & m::operator<<(std::ostream &out, const PlanTable &PT)
 
     /* Compute max length of columns. */
     auto &entry = PT.get_final();
-    const uint64_t size_len = std::max<uint64_t>(std::ceil(std::log10(CE.predict_cardinality(*entry.model))), 4);
+    const uint64_t size_len = std::max<uint64_t>(entry.model ? std::ceil(std::log10(CE.predict_cardinality(*entry.model))) : 0, 4);
     const uint64_t cost_len = std::max<uint64_t>(std::ceil(std::log10(entry.cost)), 4);
     const uint64_t sub_len  = std::max<uint64_t>(PT.num_sources(), 5);
 
@@ -37,7 +37,11 @@ std::ostream & m::operator<<(std::ostream &out, const PlanTable &PT)
         sub.print_fixed_length(out, num_sources);
         out << "  ";;
         if (PT.has_plan(sub)) {
-            out << std::setw(size_len) << CE.predict_cardinality(*PT.at(sub).model) << "  "
+            if (PT.at(sub).model)
+                out << std::setw(size_len) << CE.predict_cardinality(*PT.at(sub).model);
+            else
+                out << std::setw(size_len) << '-';
+            out << "  "
                 << std::setw(cost_len) << PT.at(sub).cost << "  "
                 << std::setw(sub_len) << uint64_t(PT.at(sub).left) << "  "
                 << std::setw(sub_len) << uint64_t(PT.at(sub).right) << '\n';
@@ -51,5 +55,5 @@ std::ostream & m::operator<<(std::ostream &out, const PlanTable &PT)
     return out;
 }
 
-void PlanTable::dump(std::ostream &out) const { out << *this << std::endl; }
+void PlanTable::dump(std::ostream &out) const { out << *this; out.flush(); }
 void PlanTable::dump() const { dump(std::cerr); }

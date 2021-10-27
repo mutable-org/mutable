@@ -2,6 +2,7 @@
 
 #include "mutable/util/Diagnostic.hpp"
 #include <sstream>
+#include <utility>
 
 
 namespace m {
@@ -20,9 +21,11 @@ struct DotTool
     DotTool(m::Diagnostic &diag);
 
     template<typename T>
-    friend DotTool & operator<<(DotTool &dot, const T &t) { dot.stream_ << t; return dot; }
+    friend DotTool & operator<<(DotTool &dot, T &&t) { dot.stream_ << std::forward<T>(t); return dot; }
 
     std::ostream & stream() { return stream_; }
+
+    std::string str() const { return stream_.str(); }
 
     friend std::ostream & operator<<(std::ostream &out, const DotTool &dot) { return out << dot.stream_.rdbuf(); }
 

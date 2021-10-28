@@ -242,7 +242,7 @@ add_subdirectory(unittest)
 add_custom_target(
     check
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    DEPENDS shell unittest
+    DEPENDS lex-bin parse-bin check-bin shell unittest
     VERBATIM USES_TERMINAL
     COMMAND echo "##################"
     COMMAND echo "### Unit Tests ###"

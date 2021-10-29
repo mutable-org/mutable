@@ -317,7 +317,8 @@ V8Platform::V8Platform()
         flags << "--no-liftoff ";
     }
     if (Options::Get().cdt_port > 0) {
-        flags << "--log-all "
+        flags << "--log "
+              << "--log-all "
               << "--expose-wasm "
               << "--trace-wasm "
               << "--trace-wasm-instances "

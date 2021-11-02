@@ -1,12 +1,16 @@
 #pragma once
 
+#include "mutable/util/allocator.hpp"
 #include "mutable/util/exception.hpp"
 #include "mutable/util/fn.hpp"
 #include "mutable/util/macro.hpp"
 #include <algorithm>
+#include <cstdint>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <type_traits>
+#include <utility>
 
 
 namespace m {
@@ -190,8 +194,8 @@ struct dyn_array
 
     /** Constructs an array with the elements in range `[begin, end)`.  The size of the array will be
      * `std::distance(begin, end)`.  */
-    template<typename It>
-    dyn_array(It begin, It end)
+    template<typename InputIt>
+    dyn_array(InputIt begin, InputIt end)
         : dyn_array(std::distance(begin, end))
     {
         auto ptr = data();
@@ -267,6 +271,261 @@ struct dyn_array
     /** Returns `false` iff the contents of `this` and `other` are equal, that is, they have the same number of elements
      * and each element in `this` compares equal with the element in `other` at the same position. */
     bool operator!=(const dyn_array &other) const { return not operator==(other); }
+};
+
+/** Implements a doubly-linked list with an overhead of just a single pointer per element. */
+template<
+    typename T,
+    typename Allocator = malloc_allocator
+>
+struct doubly_linked_list
+{
+    using value_type = T;
+    using size_type = std::size_t;
+    using allocator_type = Allocator;
+
+    using reference_type = T&;
+    using const_reference_type = const T&;
+
+    private:
+    ///> the memory allocator
+    allocator_type &&allocator_;
+
+    struct elem_t
+    {
+        std::uintptr_t ptrxor_;
+        T value_;
+    };
+
+    ///> points to the first element
+    elem_t *head_ = nullptr;
+    ///> points to the last element
+    elem_t *tail_ = nullptr;
+    ///> the number of elements in the list
+    size_type size_ = 0;
+
+    template<bool C>
+    struct the_iterator
+    {
+        friend struct doubly_linked_list;
+
+        static constexpr bool Is_Const = C;
+
+        using iterator_category = std::bidirectional_iterator_tag;
+        using value_type = T;
+        using difference_type = std::size_t;
+        using pointer = std::conditional_t<Is_Const, const T*, T*>;
+        using reference = std::conditional_t<Is_Const, const T&, T&>;
+
+        private:
+        elem_t *elem_;
+        std::uintptr_t prev_;
+
+        public:
+        the_iterator(elem_t *elem, std::uintptr_t prev) : elem_(elem), prev_(prev) { }
+
+        the_iterator & operator++() {
+            insist(elem_, "cannot advance a past-the-end iterator");
+            elem_t *curr = elem_;
+            elem_ = reinterpret_cast<elem_t*>(prev_ ^ elem_->ptrxor_);
+            prev_ = reinterpret_cast<std::uintptr_t>(curr);
+            return *this;
+        }
+
+        the_iterator operator++(int) { the_iterator clone = *this; operator++(); return clone; }
+
+        the_iterator & operator--() {
+            elem_t *prev = reinterpret_cast<elem_t*>(prev_);
+            insist(prev, "cannot retreat past the beginning");
+            prev_ = prev->ptrxor_ ^ reinterpret_cast<std::uintptr_t>(elem_);
+            elem_ = prev;
+            return *this;
+        }
+
+        the_iterator operator--(int) { the_iterator clone = *this; operator--(); return clone; }
+
+        reference operator*() const { return elem_->value_; }
+        pointer operator->() const { return &elem_->value_; }
+
+        bool operator==(const the_iterator &other) const {
+            return this->elem_ == other.elem_ and this->prev_ == other.prev_;
+        }
+        bool operator!=(const the_iterator &other) const { return not operator==(other); }
+
+        operator the_iterator<true>() const { return the_iterator<true>(elem_, prev_); }
+    };
+
+    public:
+    using iterator = the_iterator<false>;
+    using const_iterator = the_iterator<true>;
+
+    friend void swap(doubly_linked_list &first, doubly_linked_list &second) {
+        using std::swap;
+        swap(first.head_, second.head_);
+        swap(first.tail_, second.tail_);
+        swap(first.size_, second.size_);
+    }
+
+    /*----- Constructors & Destructor --------------------------------------------------------------------------------*/
+    doubly_linked_list() : doubly_linked_list(allocator_type()) { }
+    explicit doubly_linked_list(allocator_type &&allocator)
+        : allocator_(std::forward<allocator_type>(allocator))
+    { }
+
+    template<typename InputIt>
+    doubly_linked_list(InputIt begin, InputIt end, allocator_type &&allocator = allocator_type())
+        : allocator_(std::forward<allocator_type>(allocator))
+    {
+        for (auto it = begin; it != end; ++it)
+            push_back(*it);
+    }
+
+    ~doubly_linked_list() { clear(); }
+
+    explicit doubly_linked_list(const doubly_linked_list &other) : doubly_linked_list() {
+        insert(begin(), other.cbegin(), other.cend());
+    }
+
+    doubly_linked_list(doubly_linked_list &&other) : doubly_linked_list() { swap(*this, other); }
+
+    doubly_linked_list & operator=(doubly_linked_list other) { swap(*this, other); return *this; }
+
+    /*----- Element access -------------------------------------------------------------------------------------------*/
+    reference_type front() { insist(head_); return head_->value_; }
+    const_reference_type front() const { insist(head_); return head_->value_; }
+    reference_type back() { insist(tail_); return tail_->value_; }
+    const_reference_type back() const { insist(tail_); return tail_->value_; }
+
+    /*----- Iterators ------------------------------------------------------------------------------------------------*/
+    iterator begin() { return iterator(head_, 0); }
+    iterator end() { return iterator(nullptr, reinterpret_cast<std::uintptr_t>(tail_)); }
+    const_iterator begin() const { return const_iterator(head_, 0); }
+    const_iterator end() const { return const_iterator(nullptr, reinterpret_cast<std::uintptr_t>(tail_)); }
+    const_iterator cbegin() const { return begin(); }
+    const_iterator cend() const { return end(); }
+
+    iterator rbegin() { return iterator(tail_, 0); }
+    iterator rend() { return iterator(nullptr, reinterpret_cast<std::uintptr_t>(head_)); }
+    const_iterator rbegin() const { return const_iterator(tail_, 0); }
+    const_iterator rend() const { return const_iterator(nullptr, reinterpret_cast<std::uintptr_t>(head_)); }
+    const_iterator crbegin() const { return rbegin(); }
+    const_iterator crend() const { return rend(); }
+
+    /*----- Capacity -------------------------------------------------------------------------------------------------*/
+    bool empty() const { return size_ == 0; }
+    size_type size() const { return size_; }
+    size_type max_size() const { return std::numeric_limits<size_type>::max(); }
+
+    /*----- Modifiers ------------------------------------------------------------------------------------------------*/
+    template<typename... Args>
+    iterator emplace(const_iterator pos, Args&&... args) {
+        elem_t *new_elem = allocate_elem();
+        new (&new_elem->value_) value_type(std::forward<Args>(args)...);
+        new_elem->ptrxor_ = pos.prev_ ^ reinterpret_cast<std::uintptr_t>(pos.elem_);
+
+        elem_t *prev = reinterpret_cast<elem_t*>(pos.prev_);
+        if (prev)
+            prev->ptrxor_ ^= reinterpret_cast<std::uintptr_t>(pos.elem_) ^ reinterpret_cast<std::uintptr_t>(new_elem);
+        else // insert at front
+            head_ = new_elem;
+        if (pos.elem_)
+            pos.elem_->ptrxor_ ^= pos.prev_ ^ reinterpret_cast<std::uintptr_t>(new_elem);
+        else // insert at end
+            tail_ = new_elem;
+
+        ++size_;
+        return iterator(new_elem, pos.prev_);
+    }
+
+    template<typename... Args>
+    reference_type emplace_back(Args&&... args) {
+        auto it = emplace(end(), std::forward<Args>(args)...);
+        return *it;
+    }
+
+    template<typename... Args>
+    reference_type emplace_front(Args&&... args) {
+        auto it = emplace(begin(), std::forward<Args>(args)...);
+        return *it;
+    }
+
+    void push_back(const value_type &value) { emplace_back(value); }
+    void push_back(value_type &&value) { emplace_back(std::move(value)); }
+    void push_front(const value_type &value) { emplace_front(value); }
+    void push_front(value_type &&value) { emplace_front(std::move(value)); }
+
+    iterator insert(const_iterator pos, const value_type &value) { return emplace(pos, value); }
+    iterator insert(const_iterator pos, value_type &&value) { return emplace(pos, std::move(value)); }
+    iterator insert(const_iterator pos, size_type count, const value_type &value) {
+        iterator it(pos.elem_, pos.prev_);
+        while (count--) it = insert(it, value);
+        return it;
+    }
+
+    template<typename InputIt,
+             typename = decltype(*std::declval<InputIt&>(), std::declval<InputIt&>()++, void())>
+    iterator insert(const_iterator pos, InputIt first, InputIt last) {
+        if (first == last) return iterator(pos.elem_, pos.prev_);
+
+        iterator begin = insert(pos, *first++);
+        insist(begin != end());
+        insist(begin.elem_);
+        iterator it = begin;
+        while (first != last) it = insert(++it, *first++);
+
+        return begin;
+    }
+
+    iterator insert(const_iterator pos, std::initializer_list<value_type> ilist) {
+        return insert(pos, ilist.begin(), ilist.end());
+    }
+
+    iterator erase(iterator pos) {
+        insist(pos.elem_);
+        insist(size_);
+        elem_t *prev = reinterpret_cast<elem_t*>(pos.prev_);
+        elem_t *next = reinterpret_cast<elem_t*>(pos.elem_->ptrxor_ ^ pos.prev_);
+        if (prev)
+            prev->ptrxor_ ^= reinterpret_cast<std::uintptr_t>(pos.elem_) ^ reinterpret_cast<std::uintptr_t>(next);
+        else // erased first element
+            head_ = next;
+        if (next)
+            next->ptrxor_ ^= reinterpret_cast<std::uintptr_t>(pos.elem_) ^ reinterpret_cast<std::uintptr_t>(prev);
+        else // erased last element
+            tail_ = prev;
+        deallocate_elem(pos.elem_);
+        --size_;
+        return iterator(next, pos.prev_);
+    }
+
+    iterator erase(const_iterator pos) { return erase(iterator(pos.elem_, pos.prev_)); }
+
+    value_type pop_back() {
+        reverse();
+        value_type value = pop_front();
+        reverse();
+        return value;
+    }
+
+    value_type pop_front() {
+        insist(head_);
+        insist(tail_);
+        insist(size_);
+        value_type value = std::move(head_->value_);
+        erase(begin());
+        return value;
+    }
+
+    void clear() { while (head_) pop_front(); insist(size_ == 0); }
+
+    void swap(doubly_linked_list &other) { swap(*this, other); }
+
+    /*----- Operations -----------------------------------------------------------------------------------------------*/
+    void reverse() { std::swap(head_, tail_); }
+
+    private:
+    elem_t * allocate_elem() { return allocator_.template allocate<elem_t>(); }
+    void deallocate_elem(elem_t *ptr) { allocator_.template deallocate<elem_t>(ptr); }
 };
 
 }

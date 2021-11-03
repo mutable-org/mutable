@@ -734,6 +734,7 @@ std::string V8Platform::create_js_debug_script(const WasmModule &module, v8::Loc
 
     std::string env_str = *v8::String::Utf8Value(isolate_, to_json(env));
     env_str.insert(env_str.length() - 1, ", \"print\": function (arg) { console.log(arg); }");
+    env_str.insert(env_str.length() - 1, ", \"throw_invalid_escape_sequence\": function () { console.log(\"invalid_escape_sequence\"); }");
 
     /* Construct import object. */
     oss << "\
@@ -746,7 +747,8 @@ const bytes = Uint8Array.from([";
     /* Emit code to instantiate module and invoke exported `run()` function. */
     oss << "]);\n\
 WebAssembly.compile(bytes).then(module => {\n\
-    const instance = new WebAssembly.Instance(module, importObject);\n\
+    return WebAssembly.instantiate(module, importObject);\n\
+}).then(instance => {\n\
     set_wasm_instance_raw_memory(instance, " << wasm_context.id << ");\n\
     const head_of_heap = instance.exports.run();\n\
     console.log('The head of heap is at byte offset %i.', head_of_heap);\n\

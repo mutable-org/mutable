@@ -28,7 +28,7 @@ struct ConstTypeVisitor;
 /** This class represents types in the SQL type system. */
 struct Type
 {
-#define category_t(X) X(TY_Scalar), X(TY_Vector)
+#define category_t(X) X(TY_Scalar) X(TY_Vector)
     DECLARE_ENUM(category_t); ///< a category for whether this type is *scalar* or *vectorial*
     protected:
     static constexpr const char *CATEGORY_TO_STR_[] = { ENUM_TO_STR(category_t) };
@@ -351,7 +351,7 @@ struct Numeric : PrimitiveType
     /** How many binary digits fit into a single decimal digit.  Used to compute precision. */
     static constexpr float DECIMAL_TO_BINARY_DIGITS = 3.32192f;
 
-#define kind_t(X) X(N_Int), X(N_Float), X(N_Decimal)
+#define kind_t(X) X(N_Int) X(N_Float) X(N_Decimal)
     DECLARE_ENUM(kind_t) kind; ///< the kind of numeric type
 private:
     static constexpr const char *KIND_TO_STR_[] = { ENUM_TO_STR(kind_t) };

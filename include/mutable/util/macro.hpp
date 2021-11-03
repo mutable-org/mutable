@@ -31,6 +31,7 @@ namespace {
 /*===== Stringify (useful when #X is too eager) ======================================================================*/
 #define STR_(X) #X
 #define STR(X) STR_(X)
+#define STRCOMMA(X) STR(X),
 
 #define PASTE_(X, Y) X ## Y
 #define PASTE(X, Y) PASTE_(X, Y)
@@ -42,9 +43,9 @@ namespace {
 /*===== Define enum ==================================================================================================*/
 #define DECLARE_ENUM(LIST) \
     enum LIST { \
-        LIST(ID) \
+        LIST(COMMA) \
     }
-#define ENUM_TO_STR(LIST) LIST(STR)
+#define ENUM_TO_STR(LIST) LIST(STRCOMMA)
 #define DECL(NAME, TYPE) TYPE NAME;
 
 /*===== Number of elements in an array ===============================================================================*/

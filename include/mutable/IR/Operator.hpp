@@ -237,9 +237,9 @@ struct FilterOperator : Producer, Consumer
 struct JoinOperator : Producer, Consumer
 {
 #define algorithm(X) \
-    X(J_Undefined), \
-    X(J_NestedLoops), \
-    X(J_SimpleHashJoin),
+    X(J_Undefined) \
+    X(J_NestedLoops) \
+    X(J_SimpleHashJoin)
 
     DECLARE_ENUM(algorithm);
 
@@ -314,9 +314,9 @@ struct LimitOperator : Producer, Consumer
 struct GroupingOperator : Producer, Consumer
 {
 #define algorithm(X) \
-    X(G_Undefined), \
-    X(G_Ordered), \
-    X(G_Hashing),
+    X(G_Undefined) \
+    X(G_Ordered) \
+    X(G_Hashing)
 
     DECLARE_ENUM(algorithm);
 

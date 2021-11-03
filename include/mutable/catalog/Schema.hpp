@@ -310,7 +310,7 @@ struct Table
 struct Function
 {
 #define kind_t(X) \
-    X(FN_Scalar), \
+    X(FN_Scalar) \
     X(FN_Aggregate)
 
     enum fnid_t {

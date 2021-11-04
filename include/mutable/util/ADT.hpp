@@ -287,21 +287,21 @@ struct doubly_linked_list
     using reference_type = T&;
     using const_reference_type = const T&;
 
-    private:
-    ///> the memory allocator
-    allocator_type &&allocator_;
-
-    struct elem_t
+    struct node_type
     {
         std::uintptr_t ptrxor_;
         T value_;
     };
 
-    ///> points to the first element
-    elem_t *head_ = nullptr;
-    ///> points to the last element
-    elem_t *tail_ = nullptr;
-    ///> the number of elements in the list
+    private:
+    ///> the memory allocator
+    mutable allocator_type allocator_;
+
+    ///> points to the first node
+    node_type *head_ = nullptr;
+    ///> points to the last node
+    node_type *tail_ = nullptr;
+    ///> the number of elements/nodes in the list
     size_type size_ = 0;
 
     template<bool C>
@@ -318,16 +318,16 @@ struct doubly_linked_list
         using reference = std::conditional_t<Is_Const, const T&, T&>;
 
         private:
-        elem_t *elem_;
+        node_type *node_;
         std::uintptr_t prev_;
 
         public:
-        the_iterator(elem_t *elem, std::uintptr_t prev) : elem_(elem), prev_(prev) { }
+        the_iterator(node_type *node, std::uintptr_t prev) : node_(node), prev_(prev) { }
 
         the_iterator & operator++() {
-            insist(elem_, "cannot advance a past-the-end iterator");
-            elem_t *curr = elem_;
-            elem_ = reinterpret_cast<elem_t*>(prev_ ^ elem_->ptrxor_);
+            insist(node_, "cannot advance a past-the-end iterator");
+            node_type *curr = node_;
+            node_ = reinterpret_cast<node_type*>(prev_ ^ node_->ptrxor_);
             prev_ = reinterpret_cast<std::uintptr_t>(curr);
             return *this;
         }
@@ -335,24 +335,24 @@ struct doubly_linked_list
         the_iterator operator++(int) { the_iterator clone = *this; operator++(); return clone; }
 
         the_iterator & operator--() {
-            elem_t *prev = reinterpret_cast<elem_t*>(prev_);
+            node_type *prev = reinterpret_cast<node_type*>(prev_);
             insist(prev, "cannot retreat past the beginning");
-            prev_ = prev->ptrxor_ ^ reinterpret_cast<std::uintptr_t>(elem_);
-            elem_ = prev;
+            prev_ = prev->ptrxor_ ^ reinterpret_cast<std::uintptr_t>(node_);
+            node_ = prev;
             return *this;
         }
 
         the_iterator operator--(int) { the_iterator clone = *this; operator--(); return clone; }
 
-        reference operator*() const { return elem_->value_; }
-        pointer operator->() const { return &elem_->value_; }
+        reference operator*() const { return node_->value_; }
+        pointer operator->() const { return &node_->value_; }
 
         bool operator==(const the_iterator &other) const {
-            return this->elem_ == other.elem_ and this->prev_ == other.prev_;
+            return this->node_ == other.node_ and this->prev_ == other.prev_;
         }
         bool operator!=(const the_iterator &other) const { return not operator==(other); }
 
-        operator the_iterator<true>() const { return the_iterator<true>(elem_, prev_); }
+        operator the_iterator<true>() const { return the_iterator<true>(node_, prev_); }
     };
 
     public:
@@ -368,8 +368,10 @@ struct doubly_linked_list
 
     /*----- Constructors & Destructor --------------------------------------------------------------------------------*/
     doubly_linked_list() : doubly_linked_list(allocator_type()) { }
-    explicit doubly_linked_list(allocator_type &&allocator)
-        : allocator_(std::forward<allocator_type>(allocator))
+
+    template<typename A = allocator_type>
+    explicit doubly_linked_list(A &&allocator)
+        : allocator_(std::forward<A>(allocator))
     { }
 
     template<typename InputIt>
@@ -389,6 +391,8 @@ struct doubly_linked_list
     doubly_linked_list(doubly_linked_list &&other) : doubly_linked_list() { swap(*this, other); }
 
     doubly_linked_list & operator=(doubly_linked_list other) { swap(*this, other); return *this; }
+
+    allocator_type & get_allocator() const noexcept { return allocator_; }
 
     /*----- Element access -------------------------------------------------------------------------------------------*/
     reference_type front() { insist(head_); return head_->value_; }
@@ -419,22 +423,22 @@ struct doubly_linked_list
     /*----- Modifiers ------------------------------------------------------------------------------------------------*/
     template<typename... Args>
     iterator emplace(const_iterator pos, Args&&... args) {
-        elem_t *new_elem = allocate_elem();
-        new (&new_elem->value_) value_type(std::forward<Args>(args)...);
-        new_elem->ptrxor_ = pos.prev_ ^ reinterpret_cast<std::uintptr_t>(pos.elem_);
+        node_type *node = allocate_node();
+        new (&node->value_) value_type(std::forward<Args>(args)...);
+        node->ptrxor_ = pos.prev_ ^ reinterpret_cast<std::uintptr_t>(pos.node_);
 
-        elem_t *prev = reinterpret_cast<elem_t*>(pos.prev_);
+        node_type *prev = reinterpret_cast<node_type*>(pos.prev_);
         if (prev)
-            prev->ptrxor_ ^= reinterpret_cast<std::uintptr_t>(pos.elem_) ^ reinterpret_cast<std::uintptr_t>(new_elem);
+            prev->ptrxor_ ^= reinterpret_cast<std::uintptr_t>(pos.node_) ^ reinterpret_cast<std::uintptr_t>(node);
         else // insert at front
-            head_ = new_elem;
-        if (pos.elem_)
-            pos.elem_->ptrxor_ ^= pos.prev_ ^ reinterpret_cast<std::uintptr_t>(new_elem);
+            head_ = node;
+        if (pos.node_)
+            pos.node_->ptrxor_ ^= pos.prev_ ^ reinterpret_cast<std::uintptr_t>(node);
         else // insert at end
-            tail_ = new_elem;
+            tail_ = node;
 
         ++size_;
-        return iterator(new_elem, pos.prev_);
+        return iterator(node, pos.prev_);
     }
 
     template<typename... Args>
@@ -457,7 +461,7 @@ struct doubly_linked_list
     iterator insert(const_iterator pos, const value_type &value) { return emplace(pos, value); }
     iterator insert(const_iterator pos, value_type &&value) { return emplace(pos, std::move(value)); }
     iterator insert(const_iterator pos, size_type count, const value_type &value) {
-        iterator it(pos.elem_, pos.prev_);
+        iterator it(pos.node_, pos.prev_);
         while (count--) it = insert(it, value);
         return it;
     }
@@ -465,11 +469,11 @@ struct doubly_linked_list
     template<typename InputIt,
              typename = decltype(*std::declval<InputIt&>(), std::declval<InputIt&>()++, void())>
     iterator insert(const_iterator pos, InputIt first, InputIt last) {
-        if (first == last) return iterator(pos.elem_, pos.prev_);
+        if (first == last) return iterator(pos.node_, pos.prev_);
 
         iterator begin = insert(pos, *first++);
         insist(begin != end());
-        insist(begin.elem_);
+        insist(begin.node_);
         iterator it = begin;
         while (first != last) it = insert(++it, *first++);
 
@@ -481,24 +485,24 @@ struct doubly_linked_list
     }
 
     iterator erase(iterator pos) {
-        insist(pos.elem_);
+        insist(pos.node_);
         insist(size_);
-        elem_t *prev = reinterpret_cast<elem_t*>(pos.prev_);
-        elem_t *next = reinterpret_cast<elem_t*>(pos.elem_->ptrxor_ ^ pos.prev_);
+        node_type *prev = reinterpret_cast<node_type*>(pos.prev_);
+        node_type *next = reinterpret_cast<node_type*>(pos.node_->ptrxor_ ^ pos.prev_);
         if (prev)
-            prev->ptrxor_ ^= reinterpret_cast<std::uintptr_t>(pos.elem_) ^ reinterpret_cast<std::uintptr_t>(next);
-        else // erased first element
+            prev->ptrxor_ ^= reinterpret_cast<std::uintptr_t>(pos.node_) ^ reinterpret_cast<std::uintptr_t>(next);
+        else // erased first node
             head_ = next;
         if (next)
-            next->ptrxor_ ^= reinterpret_cast<std::uintptr_t>(pos.elem_) ^ reinterpret_cast<std::uintptr_t>(prev);
-        else // erased last element
+            next->ptrxor_ ^= reinterpret_cast<std::uintptr_t>(pos.node_) ^ reinterpret_cast<std::uintptr_t>(prev);
+        else // erased last node
             tail_ = prev;
-        deallocate_elem(pos.elem_);
+        deallocate_node(pos.node_);
         --size_;
         return iterator(next, pos.prev_);
     }
 
-    iterator erase(const_iterator pos) { return erase(iterator(pos.elem_, pos.prev_)); }
+    iterator erase(const_iterator pos) { return erase(iterator(pos.node_, pos.prev_)); }
 
     value_type pop_back() {
         reverse();
@@ -524,8 +528,8 @@ struct doubly_linked_list
     void reverse() { std::swap(head_, tail_); }
 
     private:
-    elem_t * allocate_elem() { return allocator_.template allocate<elem_t>(); }
-    void deallocate_elem(elem_t *ptr) { allocator_.template deallocate<elem_t>(ptr); }
+    node_type * allocate_node() { return allocator_.template allocate<node_type>(); }
+    void deallocate_node(node_type *ptr) { allocator_.template deallocate<node_type>(ptr); }
 };
 
 }

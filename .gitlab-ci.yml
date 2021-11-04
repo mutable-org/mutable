@@ -33,11 +33,15 @@ build:debug:linux-amd64:
     script:
         - mkdir -p build/debug
         - cd build/debug
-        - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug ../..
+        - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DWITH_V8=1 ../..
         - ninja
     artifacts:
         paths:
-            - "build/debug/bin/"
+            - "build/debug/bin/lex"
+            - "build/debug/bin/parse"
+            - "build/debug/bin/check"
+            - "build/debug/bin/shell"
+            - "build/debug/bin/unittest"
         expire_in: 1 day
 
 build:debug:macos-amd64:
@@ -48,11 +52,15 @@ build:debug:macos-amd64:
     script:
         - mkdir -p build/debug
         - cd build/debug
-        - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug ../..
+        - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DWITH_V8=1 ../..
         - ninja
     artifacts:
         paths:
-            - "build/debug/bin/"
+            - "build/debug/bin/lex"
+            - "build/debug/bin/parse"
+            - "build/debug/bin/check"
+            - "build/debug/bin/shell"
+            - "build/debug/bin/unittest"
         expire_in: 1 day
 
 
@@ -117,7 +125,7 @@ build:release:linux-amd64:
     script:
         - mkdir -p build/release
         - cd build/release
-        - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ../..
+        - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DWITH_V8=1 ../..
         - ninja
         - cd ../..
         - mkdir mutable
@@ -144,7 +152,7 @@ build:release:macos-amd64:
     script:
         - mkdir -p build/release
         - cd build/release
-        - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ../..
+        - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DWITH_V8=1 ../..
         - ninja
         - cd ../..
         - mkdir mutable

@@ -16,6 +16,7 @@
 #include <regex>
 #include <sstream>
 #include <type_traits>
+#include <typeinfo>
 #include <unistd.h>
 #include <variant>
 
@@ -464,6 +465,13 @@ template <typename... Args0, typename... Args1>
 struct Concat<std::variant<Args0...>, Args1...> {
     using type = std::variant<Args0..., Args1...>;
 };
+
+
+/* Detect whether an instance of type `T` can be streamted to an instance of type `S`. */
+template<typename S, typename T, typename = void>
+struct is_streamable : std::false_type {};
+template<typename S, typename T>
+struct is_streamable<S, T, std::void_t<decltype( std::declval<S&>() << std::declval<T>() )>> : std::true_type {};
 
 inline bool is_oct  (int c) { return '0' <= c && c <= '7'; }
 inline bool is_dec  (int c) { return '0' <= c && c <= '9'; }

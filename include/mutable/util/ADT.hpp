@@ -9,6 +9,8 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <sstream>
+#include <string>
 #include <type_traits>
 #include <utility>
 
@@ -526,6 +528,31 @@ struct doubly_linked_list
 
     /*----- Operations -----------------------------------------------------------------------------------------------*/
     void reverse() { std::swap(head_, tail_); }
+
+    /*----- Text -----------------------------------------------------------------------------------------------------*/
+    friend std::ostream & operator<<(std::ostream &out, const doubly_linked_list &L) {
+        if (L.empty())
+            return out << "+-+";
+
+        out << "+-> ";
+        for (auto it = L.cbegin(); it != L.cend(); ++it) {
+            if (it != L.cbegin()) out << " <-> ";
+            if constexpr (is_streamable<std::ostream&, decltype(*it)>::value)
+                out << *it;
+            else
+                out << 'o';
+        }
+        return out << " <-+";
+    }
+
+    friend std::string to_string(const doubly_linked_list &L) {
+        std::ostringstream oss;
+        oss << L;
+        return oss.str();
+    }
+
+    void dump(std::ostream &out) const { out << *this << std::endl; }
+    void dump() const { dump(std::cerr); }
 
     private:
     node_type * allocate_node() { return allocator_.template allocate<node_type>(); }

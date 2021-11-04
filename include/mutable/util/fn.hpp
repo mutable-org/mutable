@@ -73,6 +73,13 @@ struct StrEqualWithNull
 };
 
 template<typename T>
+typename std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T>, bool>
+is_pow_2(T n)
+{
+    return n ? (n & (n - T(1))) == T(0) : false;
+}
+
+template<typename T>
 typename std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T> and sizeof(T) <= sizeof(unsigned long long), T>
 ceil_to_pow_2(T n)
 {
@@ -93,6 +100,7 @@ ceil_to_pow_2(T n)
     T ceiled = T(1) << (8 * sizeof(T) - lz);
     insist(n <= ceiled, "the ceiled value must be greater or equal to the original value");
     insist((n << 1) == 0 or ceiled < (n << 1), "the ceiled value must be smaller than twice the original value");
+    insist(is_pow_2(ceiled));
     return ceiled;
 }
 template<typename T>
@@ -100,6 +108,17 @@ typename std::enable_if<std::is_floating_point<T>::value, T>::type
 ceil_to_pow_2(T f)
 {
     return ceil_to_pow_2((unsigned long) std::ceil(f));
+}
+
+/** Ceils number `n` to the next whole multiple of `power_of_two`.  `power_of_two` must be a power of 2. */
+template<typename T>
+typename std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T>, T>
+ceil_to_multiple_of_pow_2(T n, T power_of_two)
+{
+    insist(is_pow_2(power_of_two));
+    T ceiled = (n + (power_of_two - T(1))) & ~(power_of_two - T(1));
+    insist(ceiled % power_of_two == T(0));
+    return ceiled;
 }
 
 template<typename T>

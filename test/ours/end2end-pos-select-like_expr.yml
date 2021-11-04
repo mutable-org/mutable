@@ -2,7 +2,7 @@ description: LIKE expression with a binary expression pattern.
 db: ours
 query: |
     SELECT rstring FROM R WHERE rstring LIKE "_a%" .. "t%";
-required: YES
+required: NO
 
 stages:
     lexer:

@@ -11,7 +11,7 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
         # util
         util/ADTTest.cpp
         util/AlgorithmsTest.cpp
-        util/allocatorTest.cpp
+        util/AllocatorTest.cpp
         util/FnTest.cpp
         util/LinearModelTest.cpp
         util/MemoryTest.cpp

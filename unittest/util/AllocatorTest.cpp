@@ -1,13 +1,13 @@
 #include "catch.hpp"
 
-#include "mutable/util/allocator.hpp"
+#include "mutable/util/malloc_allocator.hpp"
 #include <cstring>
 
 
 using namespace m;
 
 
-TEST_CASE("malloc_allocator", "[core][util]")
+TEST_CASE("malloc_allocator", "[core][util][allocator]")
 {
     malloc_allocator A;
 

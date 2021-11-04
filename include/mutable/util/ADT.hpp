@@ -1,9 +1,9 @@
 #pragma once
 
-#include "mutable/util/allocator.hpp"
 #include "mutable/util/exception.hpp"
 #include "mutable/util/fn.hpp"
 #include "mutable/util/macro.hpp"
+#include "mutable/util/malloc_allocator.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <iostream>

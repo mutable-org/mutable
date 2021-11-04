@@ -24,6 +24,9 @@ endif()
 set(Boost_USE_MULTITHREADED ON)
 find_package(Boost COMPONENTS system REQUIRED)
 
+# Git
+find_package(Git REQUIRED)
+
 # Build flags
 # cmake_policy(SET CMP0063 NEW)
 # set(CMAKE_CXX_VISIBILITY_PRESET hidden)

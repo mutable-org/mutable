@@ -1,4 +1,4 @@
-#include "catch.hpp"
+#include "catch2/catch.hpp"
 
 #include "storage/RowStore.hpp"
 #include "storage/ColumnStore.hpp"

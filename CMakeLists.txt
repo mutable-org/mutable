@@ -105,6 +105,14 @@ add_custom_target(gitversion DEPENDS ${GITREV_FILE})
 # Third-Party
 ########################################################################################################################
 
+# Catch2 - Unit testing
+FetchContent_Populate(
+    Catch2
+    URL "https://raw.githubusercontent.com/catchorg/Catch2/v2.13.7/single_include/catch2/catch.hpp"
+    SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/catch2/include/catch2"
+    DOWNLOAD_NO_EXTRACT TRUE
+)
+
 # Replxx - Interactive Command Line Tool with History and Completions
 ExternalProject_Add(
     Replxx

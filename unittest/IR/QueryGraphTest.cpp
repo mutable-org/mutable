@@ -1,4 +1,4 @@
-#include "catch.hpp"
+#include "catch2/catch.hpp"
 
 #include <mutable/IR/QueryGraph.hpp>
 #include <IR/QueryGraph.cpp>

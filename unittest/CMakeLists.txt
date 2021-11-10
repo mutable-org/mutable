@@ -1,5 +1,8 @@
 if (CMAKE_BUILD_TYPE MATCHES Debug)
-    include_directories(.)
+    include_directories(
+        ${PROJECT_SOURCE_DIR}/third-party/catch2/include
+        .
+    )
 
     add_executable(
         unittest

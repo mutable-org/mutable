@@ -1,4 +1,4 @@
-#include "catch.hpp"
+#include "catch2/catch.hpp"
 
 #include "storage/ColumnStore.hpp"
 #include "mutable/storage/Store.hpp"

@@ -187,7 +187,8 @@ if(${WITH_V8})
         SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8"
         DOWNLOAD_COMMAND fetch --force v8 || true
         COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/"
-        COMMAND git remote | grep '^mutable$' && git fetch mutable || git remote add -f mutable git@gitlab.cs.uni-saarland.de:bigdata/mutable/v8.git
+        COMMAND git remote | grep ^mutable$ || git remote add mutable git@gitlab.cs.uni-saarland.de:bigdata/mutable/v8.git
+        COMMAND git fetch mutable
         COMMAND git checkout 6654a50ba9706514c24471fb5163f8b9946e2166
         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/third_party/depot_tools/gclient sync
         UPDATE_COMMAND ""

@@ -192,15 +192,15 @@ if(${WITH_V8})
         COMMAND git checkout 6654a50ba9706514c24471fb5163f8b9946e2166
         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/third_party/depot_tools/gclient sync
         UPDATE_COMMAND ""
-        CONFIGURE_COMMAND gn gen . --root=${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8 --args=${V8_BUILD_ARGS}
-        BUILD_COMMAND ninja
-        BUILD_BYPRODUCTS "${PROJECT_BINARY_DIR}/third-party/src/V8-build/obj/libv8_monolith.a"
+        CONFIGURE_COMMAND gn gen out --root=${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8 --args=${V8_BUILD_ARGS}
+        BUILD_COMMAND ninja -C out
+        BUILD_BYPRODUCTS "${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/obj/libv8_monolith.a"
         INSTALL_COMMAND ""
     )
     add_definitions(-DWITH_V8)
     include_directories(SYSTEM third-party/v8/v8/include)
     add_library(v8 STATIC IMPORTED)
-    set_target_properties(v8 PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/third-party/src/V8-build/obj/libv8_monolith.a")
+    set_target_properties(v8 PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/obj/libv8_monolith.a")
     add_dependencies(v8 V8)
 endif()
 

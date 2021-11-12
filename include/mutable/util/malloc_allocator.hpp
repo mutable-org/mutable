@@ -44,10 +44,11 @@ struct malloc_allocator
     /** Allocate space for an array of `n` entities of type `T`.  The space is aligned according to `T`s alignment
      * requirement. */
     template<typename T>
-    T * allocate(size_type n) { return reinterpret_cast<T*>(allocate(n * sizeof(T), alignof(T))); }
+    std::enable_if_t<not std::is_void_v<T>, T*>
+    allocate(size_type n) { return reinterpret_cast<T*>(allocate(n * sizeof(T), alignof(T))); }
 
-    /** Deallocate the allocation at `ptr`. */
-    void deallocate(void *ptr, size_type) { free(ptr); }
+    /** Deallocate the allocation at `ptr` of size `size`. */
+    void deallocate(void *ptr, size_type size) { (void) size; free(ptr); }
 
     /** Deallocate the space for an entity of type `T` at `ptr`. */
     template<typename T>
@@ -56,7 +57,8 @@ struct malloc_allocator
 
     /** Deallocate the space for an array of `n` entities of type `T`. */
     template<typename T>
-    void deallocate(T *arr, size_type n) { deallocate(reinterpret_cast<void*>(arr), n * sizeof(T)); }
+    std::enable_if_t<not std::is_void_v<T>, void>
+    deallocate(T *arr, size_type n) { deallocate(reinterpret_cast<void*>(arr), n * sizeof(T)); }
 };
 
 }

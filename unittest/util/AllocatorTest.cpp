@@ -6,14 +6,50 @@
 
 using namespace m;
 
+namespace {
+
+struct S0 { int i; char c; };
+struct S1 { double d; int i; };
+struct alignas(8) S2 { char c; short s; };
+
+template<typename Allocator>
+void check_typed_allocation(Allocator &A)
+{
+#define CHECK_ALLOC(TYPE) { \
+    auto p = A.template allocate<TYPE>(); \
+    std::uintptr_t u = reinterpret_cast<std::uintptr_t>(p); \
+    CHECK(u % sizeof(TYPE) == 0); \
+    A.deallocate(p); \
+}
+    CHECK_ALLOC(int);
+    CHECK_ALLOC(S0);
+    CHECK_ALLOC(S1);
+    CHECK_ALLOC(S2);
+#undef CHECK_ALLOC
+}
+
+template<typename Allocator>
+void check_array_allocation(Allocator &A)
+{
+#define CHECK_ALLOC(TYPE, COUNT) { \
+    auto p = A.template allocate<TYPE>(COUNT); \
+    std::uintptr_t u = reinterpret_cast<std::uintptr_t>(p); \
+    CHECK(u % alignof(TYPE) == 0); \
+    A.deallocate(p, COUNT); \
+}
+    CHECK_ALLOC(int, 42);
+    CHECK_ALLOC(S0,  13);
+    CHECK_ALLOC(S1,  73);
+    CHECK_ALLOC(S2,   5);
+#undef CHECK_ALLOC
+}
+
+}
+
 
 TEST_CASE("malloc_allocator", "[core][util][allocator]")
 {
     malloc_allocator A;
-
-    struct S0 { int i; char c; };
-    struct S1 { double d; int i; };
-    struct alignas(8) S2 { char c; short s; };
 
     SECTION("unaligned bytes")
     {
@@ -54,33 +90,7 @@ TEST_CASE("malloc_allocator", "[core][util][allocator]")
         A.deallocate(p2, 2);
     }
 
-    SECTION("typed")
-    {
-#define CHECK_ALLOC(TYPE) { \
-        auto p = A.allocate<TYPE>(); \
-        std::uintptr_t u = reinterpret_cast<std::uintptr_t>(p); \
-        CHECK(u % sizeof(TYPE) == 0); \
-        A.deallocate(p); \
-    }
-        CHECK_ALLOC(int);
-        CHECK_ALLOC(S0);
-        CHECK_ALLOC(S1);
-        CHECK_ALLOC(S2);
-#undef CHECK_ALLOC
-    }
+    SECTION("typed") { check_typed_allocation(A); }
 
-    SECTION("array")
-    {
-#define CHECK_ALLOC(TYPE, COUNT) { \
-        auto p = A.allocate<TYPE>(COUNT); \
-        std::uintptr_t u = reinterpret_cast<std::uintptr_t>(p); \
-        CHECK(u % sizeof(TYPE) == 0); \
-        A.deallocate(p, COUNT); \
-    }
-        CHECK_ALLOC(int, 42);
-        CHECK_ALLOC(S0,  13);
-        CHECK_ALLOC(S1,  73);
-        CHECK_ALLOC(S2,   5);
-#undef CHECK_ALLOC
-    }
+    SECTION("array") { check_array_allocation(A); }
 }

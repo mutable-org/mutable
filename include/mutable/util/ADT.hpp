@@ -315,7 +315,7 @@ struct doubly_linked_list
 
         using iterator_category = std::bidirectional_iterator_tag;
         using value_type = T;
-        using difference_type = std::size_t;
+        using difference_type = std::ptrdiff_t;
         using pointer = std::conditional_t<Is_Const, const T*, T*>;
         using reference = std::conditional_t<Is_Const, const T&, T&>;
 

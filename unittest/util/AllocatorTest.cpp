@@ -169,6 +169,27 @@ TEST_CASE("list_allocator", "[core][util][allocator]")
 
     SECTION("array") { check_array_allocation(A); }
 
+    SECTION("swap")
+    {
+        list_allocator B;
+        CHECK(A.num_chunks_available() == 0);
+        CHECK(B.num_chunks_available() == 0);
+
+        void *p0 = A.allocate(8);
+        void *p1 = A.allocate(8);
+        A.deallocate(p1, 8);
+        CHECK(A.num_chunks_available() == 1);
+        CHECK(B.num_chunks_available() == 0);
+
+        swap(A, B);
+        CHECK(A.num_chunks_available() == 0);
+        CHECK(B.num_chunks_available() == 1);
+
+        B.deallocate(p0, 8); // coalesce
+        CHECK(A.num_chunks_available() == 0);
+        CHECK(B.num_chunks_available() == 1);
+    }
+
     SECTION("pre-allocation")
     {
         const std::size_t chunk_size = 1024;
@@ -282,5 +303,33 @@ TEST_CASE("list_allocator", "[core][util][allocator]")
             B.deallocate(p4, 6 * pagesize);
             CHECK(B.num_chunks_available() == 1);
         }
+    }
+
+    SECTION("coalescing three chunks")
+    {
+        CHECK(A.num_chunks_available() == 0); // remainder of page
+        void *p0 = A.allocate(8);
+        void *p1 = A.allocate(8);
+        void *p2 = A.allocate(8);
+        CHECK(A.num_chunks_available() == 1); // remainder of page
+
+        CHECK(p0 != p1);
+        CHECK(p1 != p2);
+        CHECK(p0 != p2);
+
+        A.deallocate(p0, 8); // no coalescing yet
+        CHECK(A.num_chunks_available() == 2);
+        A.deallocate(p2, 8); // coalesce with remainder of page
+        CHECK(A.num_chunks_available() == 2);
+
+        void *p3 = A.allocate(16);
+        CHECK(A.num_chunks_available() == 2); // p0 and remainder of page
+        CHECK(p3 != p0);
+        CHECK(p3 != p1);
+        A.deallocate(p3, 16); // coalesce with remainder of page
+        CHECK(A.num_chunks_available() == 2); // p0 and remainder of page
+
+        A.deallocate(p1, 8); // coalesce with p0 *and* remainder of page
+        CHECK(A.num_chunks_available() == 1); // p0 and remainder of page
     }
 }

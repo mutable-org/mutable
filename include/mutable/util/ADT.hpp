@@ -363,9 +363,10 @@ struct doubly_linked_list
 
     friend void swap(doubly_linked_list &first, doubly_linked_list &second) {
         using std::swap;
-        swap(first.head_, second.head_);
-        swap(first.tail_, second.tail_);
-        swap(first.size_, second.size_);
+        swap(first.head_,      second.head_);
+        swap(first.tail_,      second.tail_);
+        swap(first.size_,      second.size_);
+        swap(first.allocator_, second.allocator_);
     }
 
     /*----- Constructors & Destructor --------------------------------------------------------------------------------*/

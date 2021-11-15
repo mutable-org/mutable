@@ -24,8 +24,7 @@
 #endif
 
 
-#define OUT  if constexpr(false) std::cerr
-#define DUMP if constexpr(false) dump()
+#define OUT if constexpr(false) std::cerr
 
 namespace m {
 
@@ -50,10 +49,17 @@ struct list_allocator_proxy : allocator<list_allocator_proxy>
     using base_type::deallocate;
 
     private:
-    list_allocator &alloc_;
+    list_allocator *alloc_;
 
     public:
-    list_allocator_proxy(list_allocator &alloc) : alloc_(alloc) { }
+    list_allocator_proxy(list_allocator *alloc) : alloc_(notnull(alloc)) { }
+    ~list_allocator_proxy() { }
+    list_allocator_proxy(const list_allocator_proxy&) = delete;
+    list_allocator_proxy(list_allocator_proxy&&) = default;
+    list_allocator_proxy & operator=(list_allocator_proxy&&) = default;
+
+    list_allocator * get_allocator() const { return alloc_; }
+
     void * allocate(size_type size, size_type alignment = 0);
     void deallocate(void *ptr, size_type size);
 };
@@ -120,38 +126,57 @@ struct list_allocator : allocator<list_allocator>
     friend void swap(list_allocator &first, list_allocator &second) {
         insist(first .override_addr_ == nullptr);
         insist(second.override_addr_ == nullptr);
+        insist(first .chunks_.get_allocator().get_allocator() == &first);
+        insist(second.chunks_.get_allocator().get_allocator() == &second);
 
         using std::swap;
-        swap(first.min_allocation_size_,      second.min_allocation_size_);
-        swap(first.min_allocation_alignment_, second.min_allocation_alignment_);
-        swap(first.strategy_,                 second.strategy_);
-        swap(first.chunks_,                   second.chunks_);
+        swap(first.min_allocation_size_,                   second.min_allocation_size_);
+        swap(first.min_allocation_alignment_,              second.min_allocation_alignment_);
+        swap(first.strategy_,                              second.strategy_);
+        swap(first.chunks_,                                second.chunks_);
+
+        /* Update allocator proxies. */
+        first .chunks_.get_allocator() = list_allocator_proxy(&first);
+        second.chunks_.get_allocator() = list_allocator_proxy(&second);
+
+        insist(first .override_addr_ == nullptr);
+        insist(second.override_addr_ == nullptr);
     }
 
     list_allocator(size_type initial_size = 0, AllocationStrategy strategy = AllocationStrategy::Linear)
         : strategy_(strategy)
-        , chunks_(list_allocator_proxy(*this))
+        , chunks_(list_allocator_proxy(this))
     {
+        OUT << "list_allocator<" << ((void*) this) << ">::list_allocator("
+            << initial_size << ", "
+            << ( strategy == AllocationStrategy::Linear ? "Linear" : "Exponential" )
+            << ")\n";
+
         min_allocation_size_ = ceil_to_multiple_of_pow_2(
             initial_size ? initial_size : sizeof(header_type),
             get_pagesize()
         );
         min_allocation_alignment_ = std::max(alignof(header_type), get_pagesize());
 
-        if (initial_size)
-            add_fresh_chunk(min_allocation_size_, 0);
+        if (initial_size) {
+            add_fresh_chunk(1, 0);
+            insist(chunks_.size() == 1);
+        } else {
+            insist(chunks_.empty());
+        }
 
-        DUMP;
+        OUT << " ` after: " << *this << '\n' << '\n';
     }
 
     ~list_allocator() {
-        OUT << "list_allocator::~list_allocator()\n";
-        DUMP;
+        OUT << "list_allocator<" << ((void*) this) << ">::~list_allocator()\n"
+            << "|- before: " << *this << '\n';
+
         while (not chunks_.empty()) {
             auto it = chunks_.begin();
             header_type *header = header_of_unused_chunk(&*it);
 
-            OUT << "deallocate [";
+            OUT << "|- deallocate [";
             if (is_marked_for_deallocation(header)) OUT << '*';
             OUT << ((void*) header) << ", " << extract_size(header) << "B]\n";
 
@@ -160,10 +185,12 @@ struct list_allocator : allocator<list_allocator>
             chunks_.erase(it); // unlink node
             if (marked_for_deallocation) {
                 errno = 0;
-                OUT << "munmap(" << ((void*) header) << ", " << extract_size(header) << ")\n";
+                OUT << "|-  ` munmap(" << ((void*) header) << ", " << extract_size(header) << ")\n";
                 munmap(header, extract_size(header));
             }
         }
+
+        OUT << " ` after: " << *this << '\n' << '\n';
     }
 
     /** Copy c'tor.  Copies the current behavior (allocation size and strategy).  Does *not* copy the current
@@ -177,14 +204,15 @@ struct list_allocator : allocator<list_allocator>
     list_allocator & operator=(list_allocator other) { swap(*this, other); return *this; }
 
     void * allocate(const size_type size, const size_type alignment = 0) {
-        OUT << "list_allocator::allocate(" << size << ", " << alignment << ")\n";
-
         if (size == 0) return nullptr;
-        insist(alignment == 0 or (alignment & (alignment - 1)) == 0, "alignment must be 0 or a power of 2");
 
-        chunk_list_type::iterator it = chunks_.begin();
+        OUT << "list_allocator<" << ((void*) this) << ">::allocate(" << size << ", " << alignment << ")\n"
+            << "|- before: " << *this << '\n';
+
+        insist(alignment == 0 or is_pow_2(alignment), "alignment must be 0 or a power of 2");
 
         /* Search for a suitable chunk. */
+        chunk_list_type::iterator it = chunks_.begin();
         for (; it != chunks_.end(); ++it) {
             /* Get the size of the chunk. */
             insist(*it > sizeof(size_type), "allocation of invalid size (too small)");
@@ -196,10 +224,10 @@ struct list_allocator : allocator<list_allocator>
                 continue;
 
             /* Found chunk. */
-            OUT << " ` chunk " << ((void*) header) << " found\n";
+            OUT << "|- chunk " << ((void*) header) << " found\n";
             goto found_chunk;
         }
-        OUT << " ` no chunk found, add fresh chunk\n";
+        OUT << "|- no chunk found, add fresh chunk\n";
         /* No chunk found, so add a fresh chunk. */
         insist(it == chunks_.end());
         it = add_fresh_chunk(size, alignment);
@@ -223,16 +251,18 @@ found_chunk:
         unlink_chunk(it);
         size_of_used_chunk(header, size) = header->value_;
 
-        OUT << " ` allocation gets chunk " << ((void*) header) << " of effective size " << effective_size << '\n';
+        OUT << "|- allocation gets chunk " << ((void*) header) << " of effective size " << effective_size << '\n'
+            << " ` after: " << *this << '\n' << '\n';
         return header;
     }
 
     void deallocate(void *ptr, const size_type size) {
-        OUT << "list_allocator::deallocate(" << ((void*) ptr) << ", " << size << ")\n";
         if (ptr == nullptr) return;
+        OUT << "list_allocator<" << ((void*) this) << ">::deallocate(" << ((void*) ptr) << ", " << size << ")\n"
+            << "|- before: " << *this << '\n';
         const size_type masked_size = size_of_used_chunk(ptr, size);
         reclaim_chunk(ptr, masked_size);
-        DUMP;
+        OUT << " ` after: " << *this << '\n' << '\n';
     }
 
     size_type num_chunks_available() const { return chunks_.size(); }
@@ -320,34 +350,36 @@ found_chunk:
      * The list node is inserted at position `pos` within the linked list. */
     chunk_list_type::iterator link_chunk(chunk_list_type::iterator pos, void *chunk, size_type masked_size) {
         override_addr_ = chunk; // emplace in chunk
-        return chunks_.insert(pos, masked_size);
+        pos = chunks_.insert(pos, masked_size);
+        insist(pos != chunks_.end());
+        insist(*pos == masked_size);
+        return pos;
     }
 
     chunk_list_type::iterator insert_chunk_sorted(void *chunk, size_type masked_size) {
         auto it = chunks_.begin();
         for (; it != chunks_.end() and &*it < chunk; ++it);
-        auto pos = link_chunk(it, chunk, masked_size);
-        insist(pos != chunks_.end());
-        return pos;
+        return link_chunk(it, chunk, masked_size);
     }
 
 
     /* Reclaims a chunk by adding it to the list of unused chunks and attempting to coalesce it with its immediate
      * neighbors.  The chunk may have been used or be an entirely new allocation. */
-    chunk_list_type::iterator reclaim_chunk(void *chunk, size_type masked_size) {
+    void reclaim_chunk(void *chunk, size_type masked_size) {
         auto pos = insert_chunk_sorted(chunk, masked_size);
+        insist(pos != chunks_.end());
         insist(header_of_unused_chunk(&*pos)->value_ == masked_size);
         pos = coalesce(pos);
         insist(pos != chunks_.end());
         if (pos != chunks_.begin())
-            pos = coalesce(std::prev(pos));
-        return pos;
+            coalesce(std::prev(pos));
     }
 
     /** Allocates fresh memory that contains enough space to fit a chunk of size `size`, that is aligned according to
      * `alignment`, and that also fits a header.  The chunk is added to the list of chunks.
-     * @return an iterator the the chunk */
+     * @return an iterator to the chunk */
     chunk_list_type::iterator add_fresh_chunk(const size_type size, const size_type alignment) {
+        OUT << "|- list_allocator::add_fresh_chunk(" << size << ", " << alignment << ")\n";
         insist(alignment == 0 or is_pow_2(alignment), "alignment must be a power of 2");
 
         /* Ensure the alignment satisfies the requirements of `header_type`.  */
@@ -362,7 +394,7 @@ found_chunk:
 
         /* Allocate the chunk with space for the header. */
         insist(override_addr_ == nullptr);
-        OUT << "aligned_mmap(" << effective_size << ", " << effective_alignment << ")\n";
+        OUT << "|-  ` aligned_mmap(" << effective_size << ", " << effective_alignment << ")\n";
         void *chunk = aligned_mmap(effective_size, effective_alignment);
         insist(is_aligned(chunk, effective_alignment), "allocated a misaligned chunk");
         insist(is_aligned(chunk, alignment), "allocated a misaligned chunk");
@@ -390,6 +422,10 @@ found_chunk:
      */
     chunk_list_type::iterator split_unused_chunk(chunk_list_type::iterator it, size_type required_size) {
         header_type *header_first_chunk = header_of_unused_chunk(&*it);
+        OUT << "|- list_allocator::split_unused_chunk(";
+        if (is_marked_for_deallocation(header_first_chunk))
+            OUT << '*';
+        OUT << ((void*) header_first_chunk) << ", " << required_size << ")\n";
 
         const size_type effective_size_original_chunk = extract_size(header_first_chunk);
         insist(effective_size_original_chunk >= 2 * sizeof(header_type),
@@ -400,63 +436,85 @@ found_chunk:
             std::max(required_size + sizeof(size_type), sizeof(header_type)),
             alignof(header_type)
         );
-        OUT << " ` the first chunk will have effective size " << effective_size_first_chunk << '\n';
+        OUT << "|- |- the first chunk will have effective size " << effective_size_first_chunk << '\n';
 
         /* Update the effective size of the first chunk. */
+#ifndef NDEBUG
+        const bool was_marked_for_deallocation = is_marked_for_deallocation(header_first_chunk);
+#endif
         header_first_chunk->value_ = preserve_deallocation(effective_size_first_chunk, header_first_chunk);
+#ifndef NDEBUG
+        insist(was_marked_for_deallocation == is_marked_for_deallocation(header_first_chunk));
+#endif
 
         /* Add the second chunk to the list of unused chunks. */
         header_type *second_chunk = reinterpret_cast<header_type*>(
             reinterpret_cast<std::uintptr_t>(header_first_chunk) + effective_size_first_chunk
         );
         const size_type effective_size_second_chunk = effective_size_original_chunk - effective_size_first_chunk;
-        OUT << " ` the second chunk will have effective size " << effective_size_second_chunk << '\n';
+        OUT << "|-  ` the second chunk will have effective size " << effective_size_second_chunk << '\n';
         insist(effective_size_second_chunk % alignof(header_type) == 0, "effective size violates alignment");
         insist(effective_size_second_chunk >= sizeof(header_type), "effective size is too small");
         link_chunk(std::next(it), second_chunk, effective_size_second_chunk);
         insist(not is_marked_for_deallocation(second_chunk),
                "the second split chunk must never be marked for deallocation");
 
-        DUMP;
         return it;
     }
 
     /** Attempt to coalesce the chunk pointed to by `it` and its successor.
      * @return an iterator to the coalesced chunk, if coalescing succeeded, `it` otherwise */
     chunk_list_type::iterator coalesce(chunk_list_type::iterator it) {
-        OUT << "list_allocator::coalesce(";
         header_type *header_first_chunk = header_of_unused_chunk(&*it);
+        OUT << "|- list_allocator::coalesce(";
+        if (is_marked_for_deallocation(header_first_chunk))
+            OUT << '*';
         OUT << ((void*) header_first_chunk) << ")\n";
         auto successor_it = std::next(it);
 
         /* No next chunk to coalesce with. */
         if (successor_it == chunks_.end()) {
-            OUT << " ` no chunk to coalesce with\n";
+            OUT << "|-  ` no chunk to coalesce with\n";
             return it;
         }
+
+#ifndef NDEBUG
+        const bool is_first_chunk_marked_for_deallocation = is_marked_for_deallocation(header_first_chunk);
+#endif
 
         header_type *header_second_chunk = header_of_unused_chunk(&*successor_it);
 
         /* If the second chunk is marked for deallocation, it cannot be coalesced with. */
         if (is_marked_for_deallocation(header_second_chunk)) {
-            OUT << " ` second chunk marked for deallocation, coalescing not possible\n";
+            OUT << "|-  ` second chunk marked for deallocation, coalescing not possible\n";
             return it;
         }
 
-        void *addr_end_first_chunk = reinterpret_cast<uint8_t*>(header_first_chunk) + extract_size(header_first_chunk);
+        const size_type size_first_chunk = extract_size(header_first_chunk);
+        void * const addr_end_first_chunk = reinterpret_cast<uint8_t*>(header_first_chunk) + size_first_chunk;
 
         if (addr_end_first_chunk != header_second_chunk) {
-            OUT << " ` first and second chunk are not adjacent, coalescing not possible\n";
+            OUT << "|-  ` first and second chunk are not adjacent, coalescing not possible\n";
             return it;
         }
 
-        OUT << " ` coalescing chunks " << ((void*) header_first_chunk) << " and " << ((void*) header_second_chunk)
+        const size_type size_second_chunk = extract_size(header_second_chunk);
+        OUT << "|-  ` coalescing chunks ";
+        if (is_marked_for_deallocation(header_first_chunk))
+            OUT << '*';
+        OUT << ((void*) header_first_chunk) << " of size " << size_first_chunk
+            << " and " << ((void*) header_second_chunk) << " of size " << size_second_chunk
             << '\n';
 
         /* Coalesce the second chunk into the first chunk. */
-        auto next = unlink_chunk(successor_it);
         insist(not is_marked_for_deallocation(header_second_chunk));
-        header_first_chunk->value_ += header_second_chunk->value_;
+        auto next = unlink_chunk(successor_it);
+        header_first_chunk->value_ += size_second_chunk;
+
+#ifndef NDEBUG
+        insist(is_marked_for_deallocation(header_first_chunk) == is_first_chunk_marked_for_deallocation,
+               "coalescing must not alter the deallocation mark");
+#endif
 
         return std::prev(next);
     }
@@ -512,15 +570,14 @@ found_chunk:
 
 void * list_allocator_proxy::allocate(size_type size, size_type alignment)
 {
-    return alloc_.proxy_allocate(size, alignment);
+    return alloc_->proxy_allocate(size, alignment);
 }
 
 void list_allocator_proxy::deallocate(void *ptr, size_type size)
 {
-    return alloc_.proxy_deallocate(ptr, size);
+    return alloc_->proxy_deallocate(ptr, size);
 }
 
 }
 
-#undef DUMP
 #undef OUT

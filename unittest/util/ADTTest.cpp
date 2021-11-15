@@ -363,6 +363,8 @@ TEST_CASE("doubly_linked_list", "[core][util]")
             CHECK(L.size() == 2);
             REQUIRE(ref != L.end());
             CHECK(*ref == 13);
+            ++ref;
+            CHECK(*ref == 73);
             CHECK_LIST(L, { 13, 73 });
         }
 
@@ -374,6 +376,8 @@ TEST_CASE("doubly_linked_list", "[core][util]")
             CHECK(L.size() == 2);
             REQUIRE(ref != L.end());
             CHECK(*ref == 73);
+            ++ref;
+            CHECK(ref == L.end());
             CHECK_LIST(L, { 42, 73 });
         }
 
@@ -385,6 +389,8 @@ TEST_CASE("doubly_linked_list", "[core][util]")
             auto ref = L.erase(to_erase); // erase 73
             CHECK(L.size() == 2);
             REQUIRE(ref == L.end());
+            --ref;
+            CHECK(*ref == 13);
             CHECK_LIST(L, { 42, 13 });
         }
     }

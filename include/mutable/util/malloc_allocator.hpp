@@ -5,15 +5,18 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <mutable/util/allocator_base.hpp>
 #include <stdexcept>
 
 
 namespace m {
 
 /** This allocator serves allocations using malloc/free. */
-struct malloc_allocator
+struct malloc_allocator : allocator<malloc_allocator>
 {
-    using size_type = std::size_t;
+    using base_type = allocator<malloc_allocator>;
+    using base_type::allocate;
+    using base_type::deallocate;
 
     /** Allocate `size` bytes aligned to `alignment`.  If `alignment` is `0`, the usual alignment of `malloc` applies.
      * */
@@ -36,29 +39,8 @@ struct malloc_allocator
         }
     }
 
-    /** Allocate space for a single entity of type `T` that is aligned according to `T`s alignment requirement. */
-    template<typename T>
-    std::enable_if_t<not std::is_void_v<T>, T*>
-    allocate() { return reinterpret_cast<T*>(allocate(sizeof(T), alignof(T))); }
-
-    /** Allocate space for an array of `n` entities of type `T`.  The space is aligned according to `T`s alignment
-     * requirement. */
-    template<typename T>
-    std::enable_if_t<not std::is_void_v<T>, T*>
-    allocate(size_type n) { return reinterpret_cast<T*>(allocate(n * sizeof(T), alignof(T))); }
-
     /** Deallocate the allocation at `ptr` of size `size`. */
     void deallocate(void *ptr, size_type size) { (void) size; free(ptr); }
-
-    /** Deallocate the space for an entity of type `T` at `ptr`. */
-    template<typename T>
-    std::enable_if_t<not std::is_void_v<T>, void>
-    deallocate(T *ptr) { deallocate(reinterpret_cast<void*>(ptr), sizeof(T)); }
-
-    /** Deallocate the space for an array of `n` entities of type `T`. */
-    template<typename T>
-    std::enable_if_t<not std::is_void_v<T>, void>
-    deallocate(T *arr, size_type n) { deallocate(reinterpret_cast<void*>(arr), n * sizeof(T)); }
 };
 
 }

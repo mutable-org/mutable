@@ -41,36 +41,21 @@ struct list_allocator;
 namespace {
 
 /** This allocator serves as a proxy to redirect allocations and deallocations back to `list_allocator`. */
-struct list_allocator_proxy
+struct list_allocator_proxy : allocator<list_allocator_proxy>
 {
     friend struct ::m::list_allocator;
-    using size_type = std::size_t;
+
+    using base_type = allocator<list_allocator_proxy>;
+    using base_type::allocate;
+    using base_type::deallocate;
 
     private:
     list_allocator &alloc_;
 
     public:
     list_allocator_proxy(list_allocator &alloc) : alloc_(alloc) { }
-
     void * allocate(size_type size, size_type alignment = 0);
-
-    template<typename T>
-    std::enable_if_t<not std::is_void_v<T>, T*>
-    allocate() { return reinterpret_cast<T*>(allocate(sizeof(T), alignof(T))); }
-
-    template<typename T>
-    std::enable_if_t<not std::is_void_v<T>, T*>
-    allocate(size_type n) { return reinterpret_cast<T*>(allocate(n * sizeof(T), alignof(T))); }
-
     void deallocate(void *ptr, size_type size);
-
-    template<typename T>
-    std::enable_if_t<not std::is_void_v<T>, void>
-    deallocate(T *ptr) { deallocate(reinterpret_cast<void*>(ptr), sizeof(T)); }
-
-    template<typename T>
-    std::enable_if_t<not std::is_void_v<T>, void>
-    deallocate(T *arr, size_type n) { deallocate(reinterpret_cast<void*>(arr), n * sizeof(T)); }
 };
 
 }
@@ -101,11 +86,13 @@ struct list_allocator_proxy
  *  by specifying the size that was specified when the chunk was allocated.
  *
  * */
-struct list_allocator
+struct list_allocator : allocator<list_allocator>
 {
     friend struct list_allocator_proxy;
 
-    using size_type = std::size_t;
+    using base_type = allocator<list_allocator>;
+    using base_type::allocate;
+    using base_type::deallocate;
 
     private:
     ///> the factor by which a chunk must be larger than the requested allocation to be considered for splitting
@@ -189,7 +176,6 @@ struct list_allocator
 
     list_allocator & operator=(list_allocator other) { swap(*this, other); return *this; }
 
-    /** Allocate `size` bytes aligned to `alignment`.  The `alignment` is ceiled to be at least `alignof(size_type)`. */
     void * allocate(const size_type size, const size_type alignment = 0) {
         OUT << "list_allocator::allocate(" << size << ", " << alignment << ")\n";
 
@@ -241,18 +227,6 @@ found_chunk:
         return header;
     }
 
-    /** Allocate space for a single entity of type `T` that is aligned according to `T`s alignment requirement. */
-    template<typename T>
-    std::enable_if_t<not std::is_void_v<T>, T*>
-    allocate() { return reinterpret_cast<T*>(allocate(sizeof(T), alignof(T))); }
-
-    /** Allocate space for an array of `n` entities of type `T`.  The space is aligned according to `T`s alignment
-     * requirement. */
-    template<typename T>
-    std::enable_if_t<not std::is_void_v<T>, T*>
-    allocate(size_type n) { return reinterpret_cast<T*>(allocate(n * sizeof(T), alignof(T))); }
-
-    /** Deallocate the allocation at `ptr` of size `size` and alignment `alignment`. */
     void deallocate(void *ptr, const size_type size) {
         OUT << "list_allocator::deallocate(" << ((void*) ptr) << ", " << size << ")\n";
         if (ptr == nullptr) return;
@@ -260,16 +234,6 @@ found_chunk:
         reclaim_chunk(ptr, masked_size);
         DUMP;
     }
-
-    /** Deallocate the space for an entity of type `T` at `ptr`. */
-    template<typename T>
-    std::enable_if_t<not std::is_void_v<T>, void>
-    deallocate(T *ptr) { deallocate(reinterpret_cast<void*>(ptr), sizeof(T)); }
-
-    /** Deallocate the space for an array of `n` entities of type `T`. */
-    template<typename T>
-    std::enable_if_t<not std::is_void_v<T>, void>
-    deallocate(T *arr, size_type n) { deallocate(reinterpret_cast<void*>(arr), n * sizeof(T)); }
 
     size_type num_chunks_available() const { return chunks_.size(); }
 

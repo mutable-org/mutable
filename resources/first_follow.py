@@ -1,8 +1,13 @@
+#!env python3
+
 import os
 import subprocess
 import sys
 
 import requests
+
+LEX_BINARY = os.path.join(os.path.dirname(sys.argv[0]), '../build/debug/bin/lex')
+FOLLOW_SET_TABLE = os.path.join(os.path.dirname(sys.argv[0]), '../src/tables/FollowSet.tbl')
 
 
 def codeGenerator(file):
@@ -166,7 +171,7 @@ def firstSet(G: dict):
 def followSet(G: dict, Fi: dict):
     Fo = {}
     for nt in G.keys():
-        Fo[nt] = set()
+        Fo[nt] = {'EOF'}    # EOF can always follow
 
     def rule2(pred, succ):
         # handle predecessor
@@ -249,6 +254,7 @@ def followSet(G: dict, Fi: dict):
 def genTableFile(Fo: dict):
     tk_cache = dict()
     special_tokens = {
+        'EOF': {'TK_EOF'},
         'IDENTIFIER': {'TK_IDENTIFIER'},
         'STRING-LITERAL': {'TK_STRING_LITERAL'},
         'INTEGER-CONSTANT': {'TK_DEC_INT', 'TK_OCT_INT', 'TK_HEX_INT'},
@@ -259,39 +265,31 @@ def genTableFile(Fo: dict):
 
     def getTokenTypes(s: str):
         nonlocal special_tokens
-        if s in special_tokens:
+        try:
             return special_tokens[s]
+        except KeyError:
+            pass
         nonlocal tk_cache
         if s not in tk_cache:
-            p = subprocess.run([os.path.join(os.path.dirname(sys.argv[0]), '../build/debug/bin/lex'), '-'],
+            p = subprocess.run([LEX_BINARY, '-'],
                                input=s, text=True, capture_output=True, timeout=5, check=True)
             tk_cache[s] = p.stdout.split()[2]
         return {tk_cache[s]}
 
     # create FollowSet.tbl
-    with open(os.path.join(os.path.dirname(sys.argv[0]), '../src/tables/FollowSet.tbl'), 'wt') as f:
+    with open(FOLLOW_SET_TABLE, 'wt') as f:
         # write header
-        f.write('''/* vim: set filetype=cpp: */
-
-#ifndef M_FOLLOW
-#error "define M_FOLLOW(NonTerminal, TokenSet) before including this file"
-#endif
-
-/* NonTerminal | TokenSet */
-''')
+        f.write('/* vim: set filetype=cpp: */\n\n')
         # convert terminals into `TokenType`
         for key, val in Fo.items():
-            f.write(f'M_FOLLOW({key}, ' + '{')
+            f.write(f'M_FOLLOW( {key.upper().replace("-", "_")}, ({{ ')
+
             token_set = set()
             for e in val:
                 token_set = token_set.union(getTokenTypes(e))
-            i = 0
-            for e in token_set:
-                i += 1
-                f.write(e)
-                if i < len(token_set):
-                    f.write(', ')
-            f.write('})\n')
+            f.write(', '.join(token_set))
+
+            f.write(' }))\n')
 
 
 # check arguments for filename

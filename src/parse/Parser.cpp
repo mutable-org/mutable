@@ -3,6 +3,7 @@
 #include "catalog/Schema.hpp"
 #include <cerrno>
 #include <cstdlib>
+#include <initializer_list>
 #include <utility>
 
 
@@ -60,6 +61,24 @@ bool is_integer(TokenType tt)
     }
 }
 
+
+/*======================================================================================================================
+ * Follow sets
+ *====================================================================================================================*/
+
+constexpr Parser::follow_set_t make_follow_set(std::initializer_list<TokenType> tokens)
+{
+    Parser::follow_set_t F{{false}};
+    for (TokenType tk : tokens)
+        F[tk] = true;
+    return F;
+}
+
+#define M_FOLLOW(NAME, SET) \
+const Parser::follow_set_t follow_set_##NAME = make_follow_set SET ;
+#include "tables/FollowSet.tbl"
+#undef M_FOLLOW
+
 }
 
 Stmt * Parser::parse()
@@ -81,7 +100,7 @@ Stmt * Parser::parse()
                     stmt = new ErrorStmt(token());
                     diag.e(token().pos) << "expected a create database statement or a create table statement, got "
                                         << token().text << '\n';
-                    consume();
+                    recover(follow_set_CREATE_DATABASE_STATEMENT);
                     break;
 
                 case TK_Database: stmt = parse_CreateDatabaseStmt(); break;
@@ -97,7 +116,7 @@ Stmt * Parser::parse()
         case TK_Delete: stmt = parse_DeleteStmt(); break;
         case TK_Import: stmt = parse_ImportStmt(); break;
     }
-    expect(TK_SEMICOL);
+    if (not expect(TK_SEMICOL)) recover(follow_set_STATEMENT);
     return stmt;
 }
 
@@ -110,12 +129,15 @@ Stmt * Parser::parse_CreateDatabaseStmt()
     bool ok = true;
     Token start = token();
 
-    expect(TK_Database);
+    ok = ok and expect(TK_Database);
     Token database_name = token();
-    ok = ok and expect(TK_IDENTIFIER);
+    if (ok)
+        ok = expect(TK_IDENTIFIER);
 
-    if (not ok)
+    if (not ok) {
+        recover(follow_set_CREATE_DATABASE_STATEMENT);
         return new ErrorStmt(start);
+    }
 
     return new CreateDatabaseStmt(database_name);
 }
@@ -125,12 +147,15 @@ Stmt * Parser::parse_UseDatabaseStmt()
     bool ok = true;
     Token start = token();
 
-    expect(TK_Use);
+    ok = ok and expect(TK_Use);
     Token database_name = token();
-    ok = ok and expect(TK_IDENTIFIER);
+    if (ok)
+        ok = expect(TK_IDENTIFIER);
 
-    if (not ok)
+    if (not ok) {
+        recover(follow_set_USE_DATABASE_STATEMENT);
         return new ErrorStmt(start);
+    }
 
     return new UseDatabaseStmt(database_name);
 }
@@ -142,15 +167,16 @@ Stmt * Parser::parse_CreateTableStmt()
     std::vector<CreateTableStmt::attribute_definition*> attrs;
 
     /* 'TABLE' identifier '(' */
-    expect(TK_Table);
+    ok = ok and expect(TK_Table);
     Token table_name = token();
-    ok = ok and expect(TK_IDENTIFIER);
-    expect(TK_LPAR);
+    if (not ok) goto error_recovery;
+    if (not expect(TK_IDENTIFIER)) goto error_recovery;
+    if (not expect(TK_LPAR)) goto error_recovery;
 
     /* identifier data-type { constraint } [ ',' identifier data-type { constraint } ] */
     do {
         Token id = token();
-        ok = ok and expect(TK_IDENTIFIER);
+        if (not expect(TK_IDENTIFIER)) goto error_recovery;
         const Type *type = parse_data_type();
         insist(type, "Must never be NULL");
 
@@ -161,7 +187,7 @@ Stmt * Parser::parse_CreateTableStmt()
                 /* 'PRIMARY' 'KEY' */
                 case TK_Primary: {
                     Token tok = consume();
-                    expect(TK_Key);
+                    if (not expect(TK_Key)) goto constraint_error_recovery;
                     constraints.push_back(new PrimaryKeyConstraint(tok));
                     break;
                 }
@@ -169,7 +195,7 @@ Stmt * Parser::parse_CreateTableStmt()
                 /* 'NOT' 'NULL' */
                 case TK_Not: {
                     Token tok = consume();
-                    expect(TK_Null);
+                    if (not expect(TK_Null)) goto constraint_error_recovery;
                     constraints.push_back(new NotNullConstraint(tok));
                     break;
                 }
@@ -184,9 +210,9 @@ Stmt * Parser::parse_CreateTableStmt()
                 /* 'CHECK' '(' expression ')' */
                 case TK_Check: {
                     Token tok = consume();
-                    expect(TK_LPAR);
+                    if (not expect(TK_LPAR)) goto constraint_error_recovery;
                     Expr *cond = parse_Expr();
-                    expect(TK_RPAR);
+                    if (not expect(TK_RPAR)) goto constraint_error_recovery;
                     constraints.push_back(new CheckConditionConstraint(tok, cond));
                     break;
                 }
@@ -195,11 +221,11 @@ Stmt * Parser::parse_CreateTableStmt()
                 case TK_References: {
                     Token tok = consume();
                     Token table_name = token();
-                    expect(TK_IDENTIFIER);
-                    expect(TK_LPAR);
+                    if (not expect(TK_IDENTIFIER)) goto constraint_error_recovery;
+                    if (not expect(TK_LPAR)) goto constraint_error_recovery;
                     Token attr_name = token();
-                    expect(TK_IDENTIFIER);
-                    expect(TK_RPAR);
+                    if (not expect(TK_IDENTIFIER)) goto constraint_error_recovery;
+                    if (not expect(TK_RPAR)) goto constraint_error_recovery;
                     constraints.push_back(new ReferenceConstraint(tok,
                                                                   table_name,
                                                                   attr_name,
@@ -210,21 +236,24 @@ Stmt * Parser::parse_CreateTableStmt()
                 default:
                     goto exit_constraints;
             }
+
         }
+constraint_error_recovery:
+        recover(follow_set_CONSTRAINT);
 exit_constraints:
         attrs.push_back(new CreateTableStmt::attribute_definition(id, type, constraints));
     } while (accept(TK_COMMA));
 
     /* ')' */
-    expect(TK_RPAR);
-
-    if (not ok) {
-        for (auto attr : attrs)
-            delete attr;
-        return new ErrorStmt(start);
-    }
+    if (not expect(TK_RPAR)) goto error_recovery;
 
     return new CreateTableStmt(table_name, std::move(attrs));
+
+error_recovery:
+    recover(follow_set_CREATE_TABLE_STATEMENT);
+    for (auto attr : attrs)
+        delete attr;
+    return new ErrorStmt(start);
 }
 
 Stmt * Parser::parse_SelectStmt()
@@ -260,17 +289,19 @@ Stmt * Parser::parse_InsertStmt()
     std::vector<InsertStmt::tuple_t> tuples;
 
     /* 'INSERT' 'INTO' identifier 'VALUES' */
-    expect(TK_Insert);
-    expect(TK_Into);
+    ok = ok and expect(TK_Insert);
+    if (ok)
+        ok = expect(TK_Into);
     Token table_name = token();
-    ok = ok and expect(TK_IDENTIFIER);
-    expect(TK_Values);
+    if (not ok) goto error_recovery;
+    if (not expect(TK_IDENTIFIER)) goto error_recovery;
+    if (not expect(TK_Values)) goto error_recovery;
 
     /* tuple { ',' tuple } */
     do {
         /* '(' ( 'DEFAULT' | 'NULL' | expression ) { ',' ( 'DEFAULT' | 'NULL' | expression ) } ')' */
         InsertStmt::tuple_t tuple;
-        expect(TK_LPAR);
+        if (not expect(TK_LPAR)) goto tuple_error_recovery;
         do {
             switch (token().type) {
                 case TK_Default:
@@ -290,19 +321,24 @@ Stmt * Parser::parse_InsertStmt()
                 }
             }
         } while (accept(TK_COMMA));
-        expect(TK_RPAR);
+        if (not expect(TK_RPAR)) goto tuple_error_recovery;
         tuples.emplace_back(tuple);
+        continue;
+tuple_error_recovery:
+        for (InsertStmt::element_type &e : tuple)
+            delete e.second;
+        recover(follow_set_TUPLE);
     } while (accept(TK_COMMA));
 
-    if (not ok) {
-        for (InsertStmt::tuple_t &v : tuples) {
-            for (InsertStmt::element_type &e : v)
-                delete e.second;
-        }
-        return new ErrorStmt(start);
-    }
-
     return new InsertStmt(table_name, tuples);
+
+error_recovery:
+    recover(follow_set_INSERT_STATEMENT);
+    for (InsertStmt::tuple_t &v : tuples) {
+        for (InsertStmt::element_type &e : v)
+            delete e.second;
+    }
+    return new ErrorStmt(start);
 }
 
 Stmt * Parser::parse_UpdateStmt()
@@ -313,15 +349,16 @@ Stmt * Parser::parse_UpdateStmt()
     Clause *where = nullptr;
 
     /* update-clause ::= 'UPDATE' identifier 'SET' identifier '=' expression { ',' identifier '=' expression } ; */
-    expect(TK_Update);
+    ok = ok and expect(TK_Update);
     Token table_name = token();
-    ok = ok and expect(TK_IDENTIFIER);
-    expect(TK_Set);
+    if (not ok) goto error_recovery;
+    if (not expect(TK_IDENTIFIER)) goto error_recovery;
+    if (not expect(TK_Set)) goto error_recovery;
 
     do {
         auto id = token();
-        ok = ok and expect(TK_IDENTIFIER);
-        expect(TK_EQUAL);
+        if (not expect(TK_IDENTIFIER)) goto error_recovery;
+        if (not expect(TK_EQUAL)) goto error_recovery;
         auto e = parse_Expr();
         set.emplace_back(id, e);
     } while (accept(TK_COMMA));
@@ -329,14 +366,14 @@ Stmt * Parser::parse_UpdateStmt()
     if (token() == TK_Where)
         where = parse_WhereClause();
 
-    if (not ok) {
-        for (auto &s : set)
-            delete s.second;
-        delete where;
-        return new ErrorStmt(start);
-    }
-
     return new UpdateStmt(table_name, set, where);
+
+error_recovery:
+    recover(follow_set_UPDATE_STATEMENT);
+    for (auto &s : set)
+        delete s.second;
+    delete where;
+    return new ErrorStmt(start);
 }
 
 Stmt * Parser::parse_DeleteStmt()
@@ -346,30 +383,34 @@ Stmt * Parser::parse_DeleteStmt()
     Clause *where = nullptr;
 
     /* delete-statement ::= 'DELETE' 'FROM' identifier [ where-clause ] ; */
-    expect(TK_Delete);
-    expect(TK_From);
+    ok = ok and expect(TK_Delete);
+    if (ok)
+        ok = expect(TK_From);
     Token table_name = token();
-    ok = ok and expect(TK_IDENTIFIER);
+    if (not ok) goto error_recovery;
+    if (not expect(TK_IDENTIFIER)) goto error_recovery;
 
     if (token() == TK_Where)
         where = parse_WhereClause();
 
-    if (not ok) {
-        delete where;
-        return new ErrorStmt(start);
-    }
-
     return new DeleteStmt(table_name, where);
+
+error_recovery:
+    recover(follow_set_DELETE_STATEMENT);
+    delete where;
+    return new ErrorStmt(start);
 }
 
 Stmt * Parser::parse_ImportStmt()
 {
     bool ok = true;
     Token start = token();
-    expect(TK_Import);
-    expect(TK_Into);
+    ok = ok and expect(TK_Import);
+    if (ok)
+        ok = expect(TK_Into);
     Token table_name = token();
-    ok = ok and expect(TK_IDENTIFIER);
+    if (not ok) goto error_recovery;
+    if (not expect(TK_IDENTIFIER)) goto error_recovery;
 
     switch (token().type) {
         case TK_Dsv: {
@@ -379,7 +420,7 @@ Stmt * Parser::parse_ImportStmt()
 
             stmt.table_name = table_name;
             stmt.path = token();
-            ok = ok and expect(TK_STRING_LITERAL);
+            if (not expect(TK_STRING_LITERAL)) goto error_recovery;
 
             /* Read the number of rows to read. */
             if (accept(TK_Rows)) {
@@ -388,40 +429,44 @@ Stmt * Parser::parse_ImportStmt()
                     consume();
                 } else {
                     diag.e(token().pos) << "expected a decimal integer, got " << token().text << '\n';
-                    ok = false;
+                    goto error_recovery;
                 }
             }
 
             /* Read the delimiter, escape character, and quote character. */
             if (accept(TK_Delimiter)) {
                 stmt.delimiter = token();
-                ok = ok and expect(TK_STRING_LITERAL);
+                if (not expect(TK_STRING_LITERAL)) goto error_recovery;
             }
             if (accept(TK_Escape)) {
                 stmt.escape = token();
-                ok = ok and expect(TK_STRING_LITERAL);
+                if (not expect(TK_STRING_LITERAL)) goto error_recovery;
             }
             if (accept(TK_Quote)) {
                 stmt.quote = token();
-                ok = ok and expect(TK_STRING_LITERAL);
+                if (not expect(TK_STRING_LITERAL)) goto error_recovery;
             }
 
-            if (accept(TK_Has) and expect(TK_Header))
+            if (accept(TK_Has)) {
+                if (not expect(TK_Header)) goto error_recovery;
                 stmt.has_header = true;
-            if (accept(TK_Skip) and expect(TK_Header))
+            }
+            if (accept(TK_Skip)) {
+                if (not expect(TK_Header)) goto error_recovery;
                 stmt.skip_header = true;
-
-            if (not ok)
-                return new ErrorStmt(start);
+            }
 
             return new DSVImportStmt(stmt);
         }
 
         default:
             diag.e(token().pos) << "Unrecognized input format \"" << token().text << "\".\n";
-            consume();
-            return new ErrorStmt(start);
+            goto error_recovery;
     }
+
+error_recovery:
+    recover(follow_set_IMPORT_STATEMENT);
+    return new ErrorStmt(start);
 }
 
 /*======================================================================================================================
@@ -431,12 +476,11 @@ Stmt * Parser::parse_ImportStmt()
 Clause * Parser::parse_SelectClause()
 {
     Token start = token();
-    bool ok = true;
     Token select_all;
     std::vector<SelectClause::select_type> select;
 
     /* 'SELECT' */
-    expect(TK_Select);
+    if (not expect(TK_Select)) goto error_recovery;
 
     /* ( '*' | expression [ [ 'AS' ] identifier ] ) */
     if (token() == TK_ASTERISK) {
@@ -447,7 +491,10 @@ Clause * Parser::parse_SelectClause()
         Token tok;
         if (accept(TK_As)) {
             tok = token();
-            ok = ok and expect(TK_IDENTIFIER);
+            if (not expect(TK_IDENTIFIER)) {
+                delete e;
+                goto error_recovery;
+            }
         } else if (token().type == TK_IDENTIFIER) {
             tok = token();
             consume();
@@ -461,7 +508,10 @@ Clause * Parser::parse_SelectClause()
         Token tok;
         if (accept(TK_As)) {
             tok = token();
-            ok = ok and expect(TK_IDENTIFIER);
+            if (not expect(TK_IDENTIFIER)) {
+                delete e;
+                goto error_recovery;
+            }
         } else if (token().type == TK_IDENTIFIER) {
             tok = token();
             consume();
@@ -469,38 +519,43 @@ Clause * Parser::parse_SelectClause()
         select.push_back(std::make_pair(e, tok));
     }
 
-    if (not ok) {
-        for (auto s : select)
-            delete s.first;
-        return new ErrorClause(start);
-    }
-
     return new SelectClause(start, select, select_all);
+
+error_recovery:
+    recover(follow_set_SELECT_CLAUSE);
+    for (auto s : select)
+        delete s.first;
+    return new ErrorClause(start);
 }
 
 Clause * Parser::parse_FromClause()
 {
     Token start = token();
-    bool ok = true;
     std::vector<FromClause::from_type> from;
 
     /* 'FROM' table-or-select-statement { ',' table-or-select-statement } */
-    expect(TK_From);
+    if (not expect(TK_From)) goto error_recovery;
     do {
         Token alias;
         if (accept(TK_LPAR)) {
             Stmt *S = parse_SelectStmt();
-            expect(TK_RPAR);
+            if (not expect(TK_RPAR)) {
+                delete S;
+                goto error_recovery;
+            }
             accept(TK_As);
             alias = token();
-            ok = ok and expect(TK_IDENTIFIER);
+            if (not expect(TK_IDENTIFIER)) {
+                delete S;
+                goto error_recovery;
+            }
             from.emplace_back(S, alias);
         } else {
             Token table = token();
-            ok = ok and expect(TK_IDENTIFIER);
+            if (not expect(TK_IDENTIFIER)) goto error_recovery;
             if (accept(TK_As)) {
                 alias = token();
-                ok = ok and expect(TK_IDENTIFIER);
+                if (not expect(TK_IDENTIFIER)) goto error_recovery;
             } else if (token().type == TK_IDENTIFIER) {
                 alias = token();
                 consume();
@@ -509,15 +564,15 @@ Clause * Parser::parse_FromClause()
         }
     } while (accept(TK_COMMA));
 
-    if (not ok) {
-        for (auto &f : from) {
-            if (Stmt **stmt = std::get_if<Stmt*>(&f.source))
-                delete (*stmt);
-        }
-        return new ErrorClause(start);
-    }
-
     return new FromClause(start, from);
+
+error_recovery:
+    recover(follow_set_FROM_CLAUSE);
+    for (auto &f : from) {
+        if (Stmt **stmt = std::get_if<Stmt*>(&f.source))
+            delete (*stmt);
+    }
+    return new ErrorClause(start);
 }
 
 Clause * Parser::parse_WhereClause()
@@ -525,7 +580,10 @@ Clause * Parser::parse_WhereClause()
     Token start = token();
 
     /* 'WHERE' expression */
-    expect(TK_Where);
+    if (not expect(TK_Where)) {
+        recover(follow_set_WHERE_CLAUSE);
+        return new ErrorClause(start);
+    }
     Expr *where = parse_Expr();
 
     return new WhereClause(start, where);
@@ -537,12 +595,16 @@ Clause * Parser::parse_GroupByClause()
     std::vector<Expr*> group_by;
 
     /* 'GROUP' 'BY' designator { ',' designator } */
-    expect(TK_Group);
-    expect(TK_By);
+    if (not expect(TK_Group)) goto error_recovery;
+    if (not expect(TK_By)) goto error_recovery;
     do
         group_by.push_back(parse_Expr());
     while (accept(TK_COMMA));
     return new GroupByClause(start, group_by);
+
+error_recovery:
+    recover(follow_set_GROUP_BY_CLAUSE);
+    return new ErrorClause(start);
 }
 
 Clause * Parser::parse_HavingClause()
@@ -550,7 +612,10 @@ Clause * Parser::parse_HavingClause()
     Token start = token();
 
     /* 'HAVING' expression */
-    expect(TK_Having);
+    if (not expect(TK_Having)) {
+        recover(follow_set_HAVING_CLAUSE);
+        return new ErrorClause(start);
+    }
     Expr *having = parse_Expr();
 
     return new HavingClause(start, having);
@@ -562,8 +627,8 @@ Clause * Parser::parse_OrderByClause()
     std::vector<OrderByClause::order_type> order_by;
 
     /* 'ORDER' 'BY' expression [ 'ASC' | 'DESC' ] { ',' expression [ 'ASC' | 'DESC' ] } */
-    expect(TK_Order);
-    expect(TK_By);
+    if (not expect(TK_Order)) goto error_recovery;
+    if (not expect(TK_By)) goto error_recovery;
 
     do {
         auto e = parse_Expr();
@@ -576,6 +641,10 @@ Clause * Parser::parse_OrderByClause()
     } while (accept(TK_COMMA));
 
     return new OrderByClause(start, order_by);
+
+error_recovery:
+    recover(follow_set_ORDER_BY_CLAUSE);
+    return new ErrorClause(start);
 }
 
 Clause * Parser::parse_LimitClause()
@@ -584,31 +653,33 @@ Clause * Parser::parse_LimitClause()
     bool ok = true;
 
     /* 'LIMIT' integer constant */
-    expect(TK_Limit);
+    ok = ok and expect(TK_Limit);
     Token limit = token();
-    if (limit.type == TK_DEC_INT or limit.type == TK_OCT_INT or limit.type == TK_HEX_INT) {
+    if (ok and (limit.type == TK_DEC_INT or limit.type == TK_OCT_INT or limit.type == TK_HEX_INT)) {
         consume();
-    } else {
+    } else if (ok) {
         diag.e(limit.pos) << "expected integer limit, got " << limit.text << '\n';
         ok = false;
     }
 
     /* 'OFFSET' integer constant */
     Token offset;
+    if (not ok) goto error_recovery;
     if (accept(TK_Offset)) {
         offset = token();
         if (offset.type == TK_DEC_INT or offset.type == TK_OCT_INT or offset.type == TK_HEX_INT) {
             consume();
         } else {
             diag.e(offset.pos) << "expected integer offset, got " << offset.text << '\n';
-            ok = false;
+            goto error_recovery;
         }
     }
 
-    if (not ok)
-        return new ErrorClause(start);
-
     return new LimitClause(start, limit, offset);
+
+error_recovery:
+    recover(follow_set_LIMIT_CLAUSE);
+    return new ErrorClause(start);
 }
 
 /*======================================================================================================================
@@ -646,7 +717,9 @@ Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
                 lhs = new QueryExpr(token(), parse_SelectStmt());
             else
                 lhs = parse_Expr();
-            expect(TK_RPAR);
+            if (not expect(TK_RPAR)) {
+                recover(follow_set_PRIMARY_EXPRESSION);
+            }
             break;
 
         /* unary-expression */
@@ -669,7 +742,8 @@ Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
 
         default:
             diag.e(token().pos) << "expected expression, got " << token().text << '\n';
-            lhs = new ErrorExpr(token());
+            recover(follow_set_EXPRESSION);
+            return new ErrorExpr(token());
     }
 
     /* postfix-expression ::= postfix-expression '(' [ expression { ',' expression } ] ')' | primary-expression */
@@ -683,7 +757,14 @@ Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
                 args.push_back(parse_Expr());
             while (accept(TK_COMMA));
         }
-        expect(TK_RPAR);
+        if (not expect(TK_RPAR)) {
+            recover(follow_set_POSTFIX_EXPRESSION);
+            for (Expr* e : args)
+                delete e;
+            delete lhs;
+            lhs = new ErrorExpr(token());
+            continue;
+        }
         lhs = new FnApplicationExpr(lpar, lhs, args);
     }
 
@@ -701,13 +782,17 @@ Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
 Expr * Parser::parse_designator()
 {
     Token lhs = token();
-    if (not expect(TK_IDENTIFIER))
+    if (not expect(TK_IDENTIFIER)) {
+        recover(follow_set_DESIGNATOR);
         return new ErrorExpr(lhs);
+    }
     if (token() == TK_DOT) {
         Token dot = consume();
         Token rhs = token();
-        if (not expect(TK_IDENTIFIER))
+        if (not expect(TK_IDENTIFIER)) {
+            recover(follow_set_DESIGNATOR);
             return new ErrorExpr(rhs);
+        }
         return new Designator(dot, lhs, rhs); // tbl.attr
     }
     return new Designator(lhs); // attr
@@ -732,7 +817,7 @@ const Type * Parser::parse_data_type()
     switch (token().type) {
         default:
             diag.e(token().pos) << "expected data-type, got " << token().text << '\n';
-            return Type::Get_Error();
+            goto error_recovery;
 
         /* BOOL */
         case TK_Bool:
@@ -745,16 +830,15 @@ const Type * Parser::parse_data_type()
         case TK_Varchar: {
             bool is_varying = token().type == TK_Varchar;
             consume();
-            expect(TK_LPAR);
+            if (not expect(TK_LPAR)) goto error_recovery;
             Token tok = token();
-            bool ok = expect(TK_DEC_INT);
-            expect(TK_RPAR);
-            if (not ok) return Type::Get_Error();
+            if (not expect(TK_DEC_INT)) goto error_recovery;
+            if (not expect(TK_RPAR)) goto error_recovery;
             errno = 0;
             std::size_t length = strtoul(tok.text, nullptr, 10);
             if (errno) {
                 diag.e(tok.pos) << tok.text << " is not a valid length\n";
-                return Type::Get_Error();
+                goto error_recovery;
             }
             return is_varying ? Type::Get_Varchar(Type::TY_Scalar, length) : Type::Get_Char(Type::TY_Scalar, length);
         }
@@ -772,16 +856,15 @@ const Type * Parser::parse_data_type()
         /* 'INT' '(' decimal-constant ')' */
         case TK_Int: {
             consume();
-            expect(TK_LPAR);
+            if (not expect(TK_LPAR)) goto error_recovery;
             Token tok = token();
-            bool ok = expect(TK_DEC_INT);
-            expect(TK_RPAR);
-            if (not ok) return Type::Get_Error();
+            if (not expect(TK_DEC_INT)) goto error_recovery;
+            if (not expect(TK_RPAR)) goto error_recovery;
             errno = 0;
             std::size_t bytes = strtoul(tok.text, nullptr, 10);
             if (errno) {
                 diag.e(tok.pos) << tok.text << " is not a valid size for an INT\n";
-                return Type::Get_Error();
+                goto error_recovery;
             }
             return Type::Get_Integer(Type::TY_Scalar, bytes);
         }
@@ -799,30 +882,32 @@ const Type * Parser::parse_data_type()
         /* 'DECIMAL' '(' decimal-constant [ ',' decimal-constant ] ')' */
         case TK_Decimal: {
             consume();
-            expect(TK_LPAR);
+            if (not expect(TK_LPAR)) goto error_recovery;
             Token precision = token();
             Token scale;
-            bool ok = expect(TK_DEC_INT);
+            if (not expect(TK_DEC_INT)) goto error_recovery;
             if (accept(TK_COMMA)) {
                 scale = token();
-                ok = ok and expect(TK_DEC_INT);
+                if (not expect(TK_DEC_INT)) goto error_recovery;
             }
-            expect(TK_RPAR);
-            if (not ok) return Type::Get_Error();
+            if (not expect(TK_RPAR)) goto error_recovery;
             errno = 0;
             std::size_t p = strtoul(precision.text, nullptr, 10);
             if (errno) {
                 diag.e(precision.pos) << precision.text << " is not a valid precision for a DECIMAL\n";
-                ok = false;
+                goto error_recovery;
             }
             errno = 0;
             std::size_t s = scale.text ? strtoul(scale.text, nullptr, 10) : 0;
             if (errno) {
                 diag.e(scale.pos) << scale.text << " is not a valid scale for a DECIMAL\n";
-                ok = false;
+                goto error_recovery;
             }
-            if (not ok) return Type::Get_Error();
             return Type::Get_Decimal(Type::TY_Scalar, p, s);
         }
     }
+
+error_recovery:
+    recover(follow_set_DATA_TYPE);
+    return Type::Get_Error();
 }

@@ -2,21 +2,25 @@
 
 
 #include "lex/Lexer.hpp"
-#include "mutable/lex/Token.hpp"
-#include "mutable/lex/TokenType.hpp"
-#include "mutable/parse/AST.hpp"
-#include "mutable/util/Diagnostic.hpp"
+#include <array>
+#include <mutable/lex/Token.hpp>
+#include <mutable/lex/TokenType.hpp>
+#include <mutable/parse/AST.hpp>
+#include <mutable/util/Diagnostic.hpp>
 
 
 namespace m {
 
 struct Parser
 {
+    using follow_set_t = std::array<bool, unsigned(TokenType::TokenType_MAX) + 1U>;
+
     public:
     Lexer      &lexer;
     Diagnostic &diag;
 
     private:
+
     Token tok_;
 
     public:
@@ -60,6 +64,8 @@ struct Parser
         diag.e(token().pos) << "expected " << tt << ", got " << token().text << '\n';
         return false;
     }
+
+    void recover(const follow_set_t &FS) { while (not FS[token().type]) consume(); }
 
     Stmt * parse();
 

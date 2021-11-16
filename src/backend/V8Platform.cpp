@@ -365,7 +365,7 @@ WasmModule V8Platform::compile(const Operator &plan) const
     /*----- Add memory. ----------------------------------------------------------------------------------------------*/
     if (num_literals > 0) {
         /*----- Create data segments for literals. -------------------------------------------------------------------*/
-        int8_t *segments_passive = new int8_t[num_literals]();
+        bool *segments_passive = new bool[num_literals]();
         std::fill_n(segments_passive, num_literals, true);
 
         std::vector<BinaryenExpressionRef> segment_offsets;
@@ -392,7 +392,7 @@ WasmModule V8Platform::compile(const Operator &plan) const
             /* segmentOffsets= */ &segment_offsets[0],
             /* segmentSizes=   */ &segment_sizes[0],
             /* numSegments=    */ literals.size(),
-            /* shared=         */ 0
+            /* shared=         */ false
         );
 
         for (std::size_t i = 0; i != literals.size(); ++i) {
@@ -434,7 +434,7 @@ WasmModule V8Platform::compile(const Operator &plan) const
             /* segmentOffsets= */ nullptr,
             /* segmentSizes=   */ nullptr,
             /* numSegments=    */ 0,
-            /* shared=         */ 0
+            /* shared=         */ false
         );
     }
 

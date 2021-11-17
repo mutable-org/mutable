@@ -1649,7 +1649,7 @@ struct checkpoints
                     break;
                 }
 
-                /* Find the "best" successor or `runner` w.r.t. g+h where `h` is lookup_cheapest heuristic. */
+                /* Find the "best" successor or `runner` w.r.t. g+h where `h` is lookahead_cheapest heuristic. */
                 state_type best_successor;
                 double least_successor_cost = std::numeric_limits<decltype(least_successor_cost)>::infinity();
                 runner.for_each_successor([&](state_type successor) {

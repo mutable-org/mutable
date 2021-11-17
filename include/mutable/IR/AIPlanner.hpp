@@ -133,14 +133,27 @@ struct StateTracker
     }
 
     /** Add `state` with its current cost to the tracked states. */
-    void add(const state_type &state) {
-        auto res = seen_states_.emplace(state_type(state), state.g());
+    void add(state_type &&state) {
+        auto res = seen_states_.emplace(std::move(state), state.g());
         insist(res.second, "must not add a duplicate state");
     }
 
     /** Checks whether `state` `is_feasible()` and in case it is, adds/updates the tracked state.
      * @returns `is_feasible(state)`
      */
+    bool update(state_type &&state) {
+        auto it = seen_states_.find(state);
+        if (it == seen_states_.end()) { // entirely new state
+            seen_states_.emplace_hint(it, std::move(state), state.g());
+            return true;
+        }
+        if (state.g() < it->second) { // duplicate state, check whether it's cheaper than previous paths
+            it->second = state.g();
+            return true;
+        }
+        return false;
+    }
+
     bool update(const state_type &state) {
         auto it = seen_states_.find(state);
         if (it == seen_states_.end()) { // entirely new state
@@ -196,6 +209,8 @@ struct genericAStar
     static constexpr float BEAM_FACTOR = .2f;
 
     using callback_t = std::function<void(state_type, double)>;
+
+    static_assert(not is_acyclic or use_beam_search, "acyclic is only meaningful in combination with beam search");
 
     private:
     /** Attaches a weight to a state. */
@@ -325,21 +340,26 @@ struct genericAStar
             if (candidates.size() == beam_width)
                 std::make_heap(candidates.begin(), candidates.end());
         } else if (s >= top) {
-            /* The new state has higher g+h than the top of heap, so bypass the heap immediately. */
-            if constexpr (not is_acyclic)
+            /* The state has higher g+h than the top of the candidates heap, so bypass the candidates immediately. */
+            if constexpr (is_acyclic)
+                seen_states.update(std::move(s.state));
+            else
                 push(regular_queue, std::move(s));
         } else {
-            /* The new state has less g+h than the top of heap.  Pop the current top and insert the new state into the
-             * heap. */
+            /* The state has less g+h than the top of candidates heap.  Pop the current top and insert the state into
+             * the candidates heap. */
             insist(candidates.size() == beam_width);
             insist(std::is_heap(candidates.begin(), candidates.end()));
             candidates.emplace_back(std::move(s));
             std::pop_heap(candidates.begin(), candidates.end());
-            if constexpr (not is_acyclic)
-                push(regular_queue, std::move(candidates.back()));
+            weighted_state old_top = std::move(candidates.back());
             candidates.pop_back();
             insist(std::is_heap(candidates.begin(), candidates.end()));
             insist(candidates.size() == beam_width);
+            if constexpr (is_acyclic)
+                seen_states.update(std::move(old_top.state));
+            else
+                push(regular_queue, std::move(old_top));
         }
     };
 
@@ -349,7 +369,7 @@ struct genericAStar
         const std::size_t num_beamed = std::ceil(candidates.size() * BEAM_FACTOR);
         insist(not candidates.size() or num_beamed, "if the state has successors, at least one must be in the beam");
         auto it = candidates.begin();
-        for (auto end = std::next(it, num_beamed); it != end; ++it) {
+        for (auto end = it + num_beamed; it != end; ++it) {
             if constexpr (is_acyclic)
                 seen_states.update(it->state); // add generated state to seen states
             push(priority_queue, std::move(*it));
@@ -361,11 +381,13 @@ struct genericAStar
     };
 
     /** Expands the given `state` by *lazily* evaluating the heuristic function. */
-    void for_each_lazily(const state_type &state, heuristic_type &heuristic, callback_t callback, Context&... context) {
+    void for_each_lazily(const state_type &state, heuristic_type &heuristic, callback_t &&callback, Context&... context) {
         /* Evaluate heuristic lazily by using heurisitc value of current state. */
         const double h_current_state = double(Weight::num) * heuristic(state, context...) / Weight::den;
         state.for_each_successor([this, &callback, h_current_state](state_type successor) {
-            if constexpr (use_beam_search and is_acyclic) { // do not yet add generated states to seen states
+            if constexpr (use_beam_search and is_acyclic) {
+                /* We don't know yet, which states will be inside the beam.  We therefore must not add them to the seen
+                 * states, yet. */
                 if (seen_states.is_feasible(successor)) {
                     const double weight = successor.g() + h_current_state;
                     callback(std::move(successor), weight);
@@ -380,10 +402,12 @@ struct genericAStar
     };
 
     /** Expands the given `state` by *eagerly* evaluating the heuristic function. */
-    void for_each_eagerly(const state_type &state, heuristic_type &heuristic, callback_t callback, Context&... context) {
+    void for_each_eagerly(const state_type &state, heuristic_type &heuristic, callback_t &&callback, Context&... context) {
         /* Evaluate heuristic eagerly. */
-        state.for_each_successor([this, &callback, &heuristic, &context...](state_type successor) {
-            if constexpr (use_beam_search and is_acyclic) { // do not yet add generated states to seen states
+        state.for_each_successor([this, callback=std::move(callback), &heuristic, &context...](state_type successor) {
+            if constexpr (use_beam_search and is_acyclic) {
+                /* We don't know yet, which states will be inside the beam.  We therefore must not add them to the seen
+                 * states, yet. */
                 if (seen_states.is_feasible(successor)) {
                     const double h = double(Weight::num) * heuristic(successor, context...) / Weight::den;
                     const double weight = successor.g() + h;
@@ -400,11 +424,11 @@ struct genericAStar
     };
 
     /** Expands the given `state` according to `is_lazy`. */
-    void for_each(const state_type &state, heuristic_type &heuristic, callback_t callback, Context&... context) {
+    void for_each(const state_type &state, heuristic_type &heuristic, callback_t &&callback, Context&... context) {
         if constexpr (is_lazy)
-            for_each_lazily(state, heuristic, callback, context...);
+            for_each_lazily(state, heuristic, std::move(callback), context...);
         else
-            for_each_eagerly(state, heuristic, callback, context...);
+            for_each_eagerly(state, heuristic, std::move(callback), context...);
     };
 
     /** Explores the given `state`. */
@@ -421,8 +445,12 @@ struct genericAStar
                 beam(weighted_state(std::move(successor), weight));
             }, context...);
             for (auto &s : candidates) {
-                if constexpr (is_acyclic)
+                if constexpr (is_acyclic) {
+                    /* If the search space is acyclic and without dead ends, the states within the beam will lead to a
+                     * goal before the priority queue runs empty.  Hence, all states outside the beam will never be
+                     * expanded. */
                     seen_states.update(s.state); // add generated state to seen states
+                }
                 push(priority_queue, std::move(s));
             }
         } else {

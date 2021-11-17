@@ -448,23 +448,10 @@ double genericAStar<State, Heuristic, Weight, BeamWidth, Lazy, Acyclic, Context.
     Context&... context
 ) {
     /* Initialize queue with initial state. */
-    seen_states.add(initial_state);
-    // TODO we need not compute heuristic of initial state
-    if constexpr (use_beam_search and is_acyclic) {
-        if constexpr (is_lazy) {
-            push(priority_queue, weighted_state{std::move(initial_state), 0});
-        } else {
-            const double h_initial_state = double(Weight::num) / Weight::den * heuristic(initial_state, context...);
-            push(priority_queue, weighted_state{std::move(initial_state), h_initial_state});
-        }
-    } else {
-        if constexpr (is_lazy) {
-            push(regular_queue, weighted_state{std::move(initial_state), 0});
-        } else {
-            const double h_initial_state = double(Weight::num) / Weight::den * heuristic(initial_state, context...);
-            push(regular_queue, weighted_state{std::move(initial_state), h_initial_state});
-        }
-    }
+    if (use_beam_search and is_acyclic)
+        push(priority_queue, weighted_state(std::move(initial_state), 0));
+    else
+        push(regular_queue, weighted_state(std::move(initial_state), 0));
 
     /* Run work list algorithm. */
     while (have_state()) {
@@ -475,7 +462,7 @@ double genericAStar<State, Heuristic, Weight, BeamWidth, Lazy, Acyclic, Context.
         weighted_state top = pop();
 
         if (seen_states.get(top.state) < top.state.g())
-            continue; // we already know that we reached this state on a cheaper path, skip
+            continue; // we already reached this state on a cheaper path, skip
 
         if (top.state.is_goal())
             return top.state.g();

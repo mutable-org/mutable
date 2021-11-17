@@ -34,8 +34,6 @@ struct is_planner_state : std::conjunction<
     std::is_default_constructible<State>,
     std::is_move_constructible<State>,
     std::is_move_assignable<State>,
-    std::is_member_function_pointer<decltype(&State::expand)>,
-    std::is_invocable_r<std::vector<State>, decltype(&State::expand), const State&, Context...>,
     std::is_member_function_pointer<decltype(&State::is_goal)>,
     std::is_invocable_r<bool, decltype(&State::is_goal), const State&>,
     std::is_member_function_pointer<decltype(&State::g)>,
@@ -60,47 +58,42 @@ struct is_planner_search : std::conjunction<
     is_planner_state<typename Search::state_type, Context...>,
     is_planner_heuristic<typename Search::heuristic_type, Context...>,
     std::is_same<typename Search::state_type, typename Search::heuristic_type::state_type>,
-    std::is_member_function_pointer<decltype(&Search::operator())>,
-    std::is_invocable<decltype(&Search::operator()), Search&, typename Search::state_type, typename Search::heuristic_type&&, Context...>
+    std::is_member_function_pointer<decltype(&Search::search)>,
+    std::is_invocable<decltype(&Search::search), Search&, typename Search::state_type, typename Search::heuristic_type&, Context...>
 > { };
 template<typename Search, typename... Context>
 inline constexpr bool is_planner_search_v = is_planner_search<Search, Context...>::value;
 
 
 /*======================================================================================================================
- * AI Classes
+ * AI Planning
  *====================================================================================================================*/
 
-/** This class combines a state representation, a heuristic operating on these states, and a search algorithm operating
- * on these states and using the heuristic for guided search.  This class is merely a wrapper. */
+/** Find a path from an `initial_state` to a goal state and return its cost. */
 template<
     typename State,
     typename Heuristic,
     template<typename, typename, typename...> typename SearchAlgorithm,
     typename... Context
 >
-struct Planner
+double solve(State initial_state, Heuristic &heuristic, Context&&... context)
 {
     static_assert(is_planner_state_v<State, Context...>, "State is not a valid state for this Planner");
     static_assert(is_planner_heuristic_v<Heuristic, Context...> and std::is_same_v<State, typename Heuristic::state_type>,
                   "Heuristic is not a valid heuristic for this Planner");
     static_assert(is_planner_search_v<SearchAlgorithm<State, Heuristic, Context...>, Context...>,
                   "SearchAlgorithm is not a valid search algorithm for this Planner");
+    using search_algorithm = SearchAlgorithm<State, Heuristic, Context...>;
 
-    using state_type = State;
-    using heuristic_type = Heuristic;
-    using search_algorithm = SearchAlgorithm<state_type, heuristic_type, Context...>;
+    search_algorithm S;
+    double final_cost = S.search(std::move(initial_state), heuristic, std::forward<Context>(context)...);
+    return final_cost;
+}
 
-    public:
-    ///> Count maximum number of states simultaneously in the open list/fringe of the searchAlgorithm.
-    std::size_t max_size_openlist = 0;
 
-    double operator()(State initial_state, heuristic_type heuristic, Context&&... context) {
-        search_algorithm S;
-        double final_cost = S(std::move(initial_state), std::move(heuristic), std::forward<Context>(context)...);
-        return final_cost;
-    }
-};
+/*======================================================================================================================
+ * AI Planning Classes
+ *====================================================================================================================*/
 
 /** Tracks generated states to allow for duplicate elimination. */
 template<typename State, typename... Context>
@@ -117,6 +110,12 @@ struct StateTracker
     public:
     StateTracker() = default;
     StateTracker(std::size_t num_states_expected) : seen_states_(num_states_expected) { }
+    ~StateTracker() { }
+
+    StateTracker(const StateTracker&) = delete;
+    StateTracker(StateTracker&&) = default;
+
+    StateTracker & operator=(StateTracker&&) = default;
 
     double get(const state_type &state) const {
         auto it = seen_states_.find(state);
@@ -134,7 +133,10 @@ struct StateTracker
     }
 
     /** Add `state` with its current cost to the tracked states. */
-    void add(const state_type &state) { seen_states_.emplace(state_type(state), state.g()); }
+    void add(const state_type &state) {
+        auto res = seen_states_.emplace(state_type(state), state.g());
+        insist(res.second, "must not add a duplicate state");
+    }
 
     /** Checks whether `state` `is_feasible()` and in case it is, adds/updates the tracked state.
      * @returns `is_feasible(state)`
@@ -151,6 +153,8 @@ struct StateTracker
         }
         return false;
     }
+
+    void clear() { seen_states_.clear(); }
 };
 
 
@@ -191,7 +195,10 @@ struct genericAStar
     ///> The fraction of a state's successors to add to the beam (if performing beam search)
     static constexpr float BEAM_FACTOR = .2f;
 
+    using callback_t = std::function<void(state_type, double)>;
+
     private:
+    /** Attaches a weight to a state. */
     struct weighted_state
     {
         friend void swap(weighted_state &first, weighted_state &second) {
@@ -215,92 +222,97 @@ struct genericAStar
         bool operator>=(const weighted_state &other) const { return this->weight >= other.weight; }
     };
 
+    ///> tracks the states this search has seen already
+    StateTracker<State, Context...> seen_states;
+
+    ///> the priority queue of regular states
+    std::vector<weighted_state> regular_queue;
+
+    ///> the priority queue of prioritized states (states in the beam)
+    std::vector<weighted_state> priority_queue;
+
+    ///> candidates for the beam
+    std::vector<weighted_state> candidates;
+
     public:
+    explicit genericAStar() {
+        if constexpr (use_beam_search)
+            priority_queue.reserve(1024);
+        if constexpr (not (use_beam_search and is_acyclic))
+            regular_queue.reserve(1024);
+        if constexpr (use_beam_search and not use_dynamic_beam_sarch)
+            candidates.reserve(beam_width + 1);
+    }
+
+    genericAStar(const genericAStar&) = delete;
+    genericAStar(genericAStar&&) = default;
+
+    genericAStar & operator=(genericAStar&&) = default;
+
     /** Search for a path from the given `initial_state` to a goal state.  Uses the given heuristic to guide the search.
      *
      * @return the cost of the computed path from `initial_state` to a goal state
      */
-    double operator()(state_type initial_state, heuristic_type heuristic, Context&&... context);
-};
+    double search(state_type initial_state, heuristic_type &heuristic, Context&... context);
 
-template<
-    typename State,
-    typename Heuristic,
-    typename Weight,
-    unsigned BeamWidth,
-    bool Lazy,
-    bool Acyclic,
-    typename... Context
->
-double genericAStar<State, Heuristic, Weight, BeamWidth, Lazy, Acyclic, Context...>::operator()(
-    genericAStar::state_type initial_state,
-    genericAStar::heuristic_type heuristic,
-    Context&&... context
-) {
-    StateTracker<State, Context...> seen_states;
+    /** Resets the state of the search. */
+    void clear() {
+        seen_states.clear();
+        regular_queue.clear();
+        priority_queue.clear();
+        candidates.clear();
+    }
 
-    /* Define priority queue. */
-    std::vector<weighted_state> heap;
-    heap.reserve(64);
-    std::priority_queue<
-        weighted_state,
-        std::vector<weighted_state>,
-        std::greater<weighted_state>
-    > Q(std::greater<weighted_state>{}, std::move(heap));
+    private:
+    /*------------------------------------------------------------------------------------------------------------------
+     * Helper methods
+     *----------------------------------------------------------------------------------------------------------------*/
 
-    /* Define priority queue for states in the beam.  These are states with *higher* priority over the regular queue. */
-    std::vector<weighted_state> beam_heap;
-    if constexpr (use_beam_search) beam_heap.reserve(64);
-    std::priority_queue<
-        weighted_state,
-        std::vector<weighted_state>,
-        std::greater<weighted_state>
-    > beam_Q(std::greater<weighted_state>{}, std::move(beam_heap));
-
-    /* Define queue for beam candidates. */
-    std::vector<weighted_state> candidates;
-    if constexpr (use_beam_search and not use_dynamic_beam_sarch) candidates.reserve(beam_width + 1);
-
-    /* Check whether there is a state to explore. */
-    auto have_state = [&Q, &beam_Q]() -> bool {
+    /** Check whether there is a state to explore. */
+    bool have_state() {
         if constexpr (use_beam_search) {
-            if constexpr (is_acyclic) {
-                (void) Q;
-                return not beam_Q.empty();
-            } else {
-                return not (beam_Q.empty() and Q.empty());
-            }
+            if constexpr (is_acyclic)
+                return not priority_queue.empty();
+            else
+                return not (priority_queue.empty() and regular_queue.empty());
         } else {
-            (void) beam_Q;
-            return not Q.empty();
+            return not regular_queue.empty();
         }
-    };
+    }
 
-    auto pop = [](auto &queue) -> weighted_state {
-        insist(not queue.empty(), "cannot pop from empty queue");
-        weighted_state top = std::move(const_cast<weighted_state&>(queue.top()));
-        queue.pop();
-        return top;
-    };
+    /** Removes and returns the state at the head of the queue. */
+    weighted_state pop() {
+        auto pop_internal = [](std::vector<weighted_state> &Q) -> weighted_state {
+            insist(not Q.empty(), "cannot pop from empty queue");
+            insist(std::is_heap(Q.begin(), Q.end(), std::greater<weighted_state>{}));
+            std::pop_heap(Q.begin(), Q.end(), std::greater<weighted_state>{});
+            weighted_state top = std::move(Q.back());
+            Q.pop_back();
+            insist(std::is_heap(Q.begin(), Q.end(), std::greater<weighted_state>{}));
+            insist(Q.empty() or top <= Q.front(), "did not extract the state with least weight");
+            return top;
+        };
 
-    /* Extract and return the next state to explore. */
-    auto pop_state = [&pop, &Q, &beam_Q]() -> weighted_state {
         if constexpr (use_beam_search and is_acyclic) {
-            (void) Q;
-            return pop(beam_Q);
+            return pop_internal(priority_queue);
         }
         if constexpr (use_beam_search) {
-            if (not beam_Q.empty()) {
-                return pop(beam_Q);
-            }
+            if (not priority_queue.empty())
+                return pop_internal(priority_queue);
         }
-        (void) beam_Q;
-        return pop(Q);
+        return pop_internal(regular_queue);
     };
+
+    void push(std::vector<weighted_state> &Q, weighted_state state) {
+        insist(std::is_heap(Q.begin(), Q.end(), std::greater<weighted_state>{}));
+        Q.emplace_back(std::move(state));
+        std::push_heap(Q.begin(), Q.end(), std::greater<weighted_state>{});
+        insist(std::is_heap(Q.begin(), Q.end(), std::greater<weighted_state>{}));
+    }
 
     /* Try to add the successor state `s` to the beam.  If the weight of `s` is already higher than the highest weight
      * in the beam, immediately bypass the beam. */
-    auto beam = [&candidates, &Q](weighted_state s) -> void {
+    void beam(weighted_state s) {
         auto &top = candidates.front();
 #ifndef NDEBUG
         insist(std::is_heap(candidates.begin(), candidates.end()), "candidates must always be a max-heap");
@@ -314,7 +326,8 @@ double genericAStar<State, Heuristic, Weight, BeamWidth, Lazy, Acyclic, Context.
                 std::make_heap(candidates.begin(), candidates.end());
         } else if (s >= top) {
             /* The new state has higher g+h than the top of heap, so bypass the heap immediately. */
-            if constexpr (not is_acyclic) Q.emplace(std::move(s));
+            if constexpr (not is_acyclic)
+                push(regular_queue, std::move(s));
         } else {
             /* The new state has less g+h than the top of heap.  Pop the current top and insert the new state into the
              * heap. */
@@ -322,11 +335,8 @@ double genericAStar<State, Heuristic, Weight, BeamWidth, Lazy, Acyclic, Context.
             insist(std::is_heap(candidates.begin(), candidates.end()));
             candidates.emplace_back(std::move(s));
             std::pop_heap(candidates.begin(), candidates.end());
-            if constexpr (not is_acyclic) {
-                Q.emplace(std::move(candidates.back()));
-            } else {
-                (void) Q;
-            }
+            if constexpr (not is_acyclic)
+                push(regular_queue, std::move(candidates.back()));
             candidates.pop_back();
             insist(std::is_heap(candidates.begin(), candidates.end()));
             insist(candidates.size() == beam_width);
@@ -334,8 +344,7 @@ double genericAStar<State, Heuristic, Weight, BeamWidth, Lazy, Acyclic, Context.
     };
 
     /* Compute a beam of dynamic (relative) size from the set of successor states. */
-    auto beam_dynamic = [&seen_states, &candidates, &beam_Q, &Q]() -> void {
-        (void) seen_states;
+    void beam_dynamic() {
         std::sort(candidates.begin(), candidates.end());
         const std::size_t num_beamed = std::ceil(candidates.size() * BEAM_FACTOR);
         insist(not candidates.size() or num_beamed, "if the state has successors, at least one must be in the beam");
@@ -343,22 +352,19 @@ double genericAStar<State, Heuristic, Weight, BeamWidth, Lazy, Acyclic, Context.
         for (auto end = std::next(it, num_beamed); it != end; ++it) {
             if constexpr (is_acyclic)
                 seen_states.update(it->state); // add generated state to seen states
-            beam_Q.emplace(std::move(*it));
+            push(priority_queue, std::move(*it));
         }
         if constexpr (not is_acyclic) {
             for (auto end = candidates.end(); it != end; ++it)
-                Q.emplace(std::move(*it));
-        } else {
-            (void) Q;
+                push(regular_queue, std::move(*it));
         }
     };
 
-    using callback_t = std::function<void(state_type, double)>;
-
-    auto for_each_lazily = [&seen_states, &heuristic, &context...](const state_type &state, callback_t callback) {
+    /** Expands the given `state` by *lazily* evaluating the heuristic function. */
+    void for_each_lazily(const state_type &state, heuristic_type &heuristic, callback_t callback, Context&... context) {
         /* Evaluate heuristic lazily by using heurisitc value of current state. */
-        const double h_current_state = double(Weight::num) * heuristic(state, std::forward<Context>(context)...) / Weight::den;
-        state.for_each_successor([&seen_states, &callback, h_current_state](state_type successor) {
+        const double h_current_state = double(Weight::num) * heuristic(state, context...) / Weight::den;
+        state.for_each_successor([this, &callback, h_current_state](state_type successor) {
             if constexpr (use_beam_search and is_acyclic) { // do not yet add generated states to seen states
                 if (seen_states.is_feasible(successor)) {
                     const double weight = successor.g() + h_current_state;
@@ -370,86 +376,103 @@ double genericAStar<State, Heuristic, Weight, BeamWidth, Lazy, Acyclic, Context.
                     callback(std::move(successor), weight);
                 }
             }
-        }, std::forward<Context>(context)...);
+        }, context...);
     };
 
-    auto for_each_eagerly = [&seen_states, &heuristic, &context...](const state_type &state, callback_t callback) {
+    /** Expands the given `state` by *eagerly* evaluating the heuristic function. */
+    void for_each_eagerly(const state_type &state, heuristic_type &heuristic, callback_t callback, Context&... context) {
         /* Evaluate heuristic eagerly. */
-        state.for_each_successor([&seen_states, &callback, &heuristic, &context...](state_type successor) {
+        state.for_each_successor([this, &callback, &heuristic, &context...](state_type successor) {
             if constexpr (use_beam_search and is_acyclic) { // do not yet add generated states to seen states
                 if (seen_states.is_feasible(successor)) {
-                    const double h = double(Weight::num) * heuristic(successor, std::forward<Context>(context)...) / Weight::den;
+                    const double h = double(Weight::num) * heuristic(successor, context...) / Weight::den;
                     const double weight = successor.g() + h;
                     callback(std::move(successor), weight);
                 }
             } else {
                 if (seen_states.update(successor)) {
-                    const double h = double(Weight::num) * heuristic(successor, std::forward<Context>(context)...) / Weight::den;
+                    const double h = double(Weight::num) * heuristic(successor, context...) / Weight::den;
                     const double weight = successor.g() + h;
                     callback(std::move(successor), weight);
                 }
             }
-        }, std::forward<Context>(context)...);
+        }, context...);
     };
 
-    auto for_each = [&for_each_lazily, &for_each_eagerly](const state_type &state, callback_t callback) {
-        (void) for_each_lazily;
-        (void) for_each_eagerly;
+    /** Expands the given `state` according to `is_lazy`. */
+    void for_each(const state_type &state, heuristic_type &heuristic, callback_t callback, Context&... context) {
         if constexpr (is_lazy)
-            for_each_lazily(state, callback);
+            for_each_lazily(state, heuristic, callback, context...);
         else
-            for_each_eagerly(state, callback);
+            for_each_eagerly(state, heuristic, callback, context...);
     };
 
-    auto explore_state = [&](const state_type &state) {
+    /** Explores the given `state`. */
+    void explore_state(const state_type &state, heuristic_type &heuristic, Context&... context) {
         if constexpr (use_dynamic_beam_sarch) {
             candidates.clear();
-            for_each(state, [&candidates](state_type successor, double weight){
+            for_each(state, heuristic, [this](state_type successor, double weight) {
                 candidates.emplace_back(std::move(successor), weight);
-            });
+            }, context...);
             beam_dynamic();
         } else if constexpr (use_beam_search) {
             candidates.clear();
-            for_each(state, [&beam](state_type successor, double weight){
+            for_each(state, heuristic, [this](state_type successor, double weight) {
                 beam(weighted_state(std::move(successor), weight));
-            });
+            }, context...);
             for (auto &s : candidates) {
                 if constexpr (is_acyclic)
                     seen_states.update(s.state); // add generated state to seen states
-                beam_Q.emplace(std::move(s));
+                push(priority_queue, std::move(s));
             }
         } else {
-            for_each(state, [&Q](state_type successor, double weight){
-                Q.emplace(std::move(successor), weight);
-            });
+            for_each(state, heuristic, [this](state_type successor, double weight) {
+                push(regular_queue, weighted_state{std::move(successor), weight});
+            }, context...);
         }
     };
+};
 
+template<
+    typename State,
+    typename Heuristic,
+    typename Weight,
+    unsigned BeamWidth,
+    bool Lazy,
+    bool Acyclic,
+    typename... Context
+>
+double genericAStar<State, Heuristic, Weight, BeamWidth, Lazy, Acyclic, Context...>::search(
+    state_type initial_state,
+    heuristic_type &heuristic,
+    Context&... context
+) {
     /* Initialize queue with initial state. */
     seen_states.add(initial_state);
+    // TODO we need not compute heuristic of initial state
     if constexpr (use_beam_search and is_acyclic) {
         if constexpr (is_lazy) {
-            beam_Q.emplace(std::move(initial_state), 0);
+            push(priority_queue, weighted_state{std::move(initial_state), 0});
         } else {
-            const double h_initial_state = double(Weight::num) / Weight::den * heuristic(initial_state, std::forward<Context>(context)...);
-            beam_Q.emplace(std::move(initial_state), h_initial_state);
+            const double h_initial_state = double(Weight::num) / Weight::den * heuristic(initial_state, context...);
+            push(priority_queue, weighted_state{std::move(initial_state), h_initial_state});
         }
     } else {
         if constexpr (is_lazy) {
-            Q.emplace(std::move(initial_state), 0);
+            push(regular_queue, weighted_state{std::move(initial_state), 0});
         } else {
-            const double h_initial_state = double(Weight::num) / Weight::den * heuristic(initial_state, std::forward<Context>(context)...);
-            Q.emplace(std::move(initial_state), h_initial_state);
+            const double h_initial_state = double(Weight::num) / Weight::den * heuristic(initial_state, context...);
+            push(regular_queue, weighted_state{std::move(initial_state), h_initial_state});
         }
     }
 
     /* Run work list algorithm. */
     while (have_state()) {
         if constexpr (use_beam_search and is_acyclic) {
-            insist(Q.empty(), "regular queue must never be used");
-            insist(not beam_Q.empty(), "beam queue must never run empty");
+            insist(regular_queue.empty(), "regular queue must never be used");
+            insist(not priority_queue.empty(), "priority queue must never run empty");
         }
-        weighted_state top = pop_state();
+        weighted_state top = pop();
 
         if (seen_states.get(top.state) < top.state.g())
             continue; // we already know that we reached this state on a cheaper path, skip
@@ -457,7 +480,7 @@ double genericAStar<State, Heuristic, Weight, BeamWidth, Lazy, Acyclic, Context.
         if (top.state.is_goal())
             return top.state.g();
 
-        explore_state(top.state);
+        explore_state(top.state, heuristic, context...);
     }
 
     throw std::logic_error("goal state unreachable from provided initial state");

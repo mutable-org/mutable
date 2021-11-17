@@ -46,7 +46,7 @@ struct WeightFilterClauses : ConstASTExprVisitor
 
     private:
     using ConstASTExprVisitor::operator();
-    void operator()(const ErrorExpr &e) { unreachable("no errors at this stage"); }
+    void operator()(const ErrorExpr&) { unreachable("no errors at this stage"); }
 
     void operator()(const Designator &e) {
         if (auto cs = cast<const CharacterSequence>(e.type()))
@@ -72,7 +72,7 @@ struct WeightFilterClauses : ConstASTExprVisitor
 
     void operator()(const BinaryExpr &e) { weight_ += 1; (*this)(*e.lhs); (*this)(*e.rhs); }
 
-    void operator()(const QueryExpr &e) { weight_ += 1000; }
+    void operator()(const QueryExpr&) { weight_ += 1000; }
 };
 
 std::unique_ptr<FilterOperator> optimize_filter(std::unique_ptr<FilterOperator> filter)
@@ -273,10 +273,13 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
     return std::make_pair(std::unique_ptr<Producer>(plan), std::move(plan_table));
 }
 
-void Optimizer::optimize_locally(const QueryGraph &G, PlanTable &plan_table) const
+void Optimizer::optimize_locally(const QueryGraph &G, PlanTable &PT) const
 {
     Catalog &C = Catalog::Get();
-    TIME_EXPR(plan_enumerator()(G, cost_function(), plan_table), "Plan enumeration", C.timer());
+    TIME_EXPR(plan_enumerator()(G, cost_function(), PT), "Plan enumeration", C.timer());
+#ifdef NDEBUG
+    std::cout << "Calculated cost: " << PT.get_final().cost << '\n';
+#endif
 }
 
 std::unique_ptr<Producer>

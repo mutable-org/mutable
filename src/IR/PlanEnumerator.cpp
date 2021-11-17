@@ -11,6 +11,8 @@
 #include <mutable/IR/PlanTable.hpp>
 #include <mutable/IR/QueryGraph.hpp>
 #include <mutable/util/fn.hpp>
+#include <mutable/util/list_allocator.hpp>
+#include <mutable/util/malloc_allocator.hpp>
 #include <mutable/util/Timer.hpp>
 #include <queue>
 #include <set>
@@ -483,7 +485,10 @@ void compute_data_model_recursive(const Subproblem S, PlanTable &PT, const Query
  * States
  *--------------------------------------------------------------------------------------------------------------------*/
 
+// #define WITH_STATE_COUNTERS
+#if !defined(NDEBUG) && !defined(WITH_STATE_COUNTERS)
 #define WITH_STATE_COUNTERS
+#endif
 
 /** A state in the AI planning search space.
  *
@@ -491,22 +496,31 @@ void compute_data_model_recursive(const Subproblem S, PlanTable &PT, const Query
  * of the actual problem within the state.  The problem is described as the sorted list of `Subproblem`s yet to be
  * joined.
  */
-template<typename Actual>
+template<typename Actual, typename Allocator>
 struct AIPlanningStateBase
 {
     using actual_type = Actual;
+    using size_type = std::size_t;
     using Subproblem = PlanTable::Subproblem;
 
     using iterator = Subproblem*;
     using const_iterator = const Subproblem*;
+    using allocator_type = Allocator;
 
 #ifdef WITH_STATE_COUNTERS
     struct state_counters_t
     {
         unsigned num_states_generated;
         unsigned num_states_expanded;
+        unsigned num_states_constructed;
+        unsigned num_states_disposed;
 
-        state_counters_t() : num_states_generated(0), num_states_expanded(0) { }
+        state_counters_t()
+            : num_states_generated(0)
+            , num_states_expanded(0)
+            , num_states_constructed(0)
+            , num_states_disposed(0)
+        { }
     };
 
     private:
@@ -516,9 +530,13 @@ struct AIPlanningStateBase
     static void RESET_STATE_COUNTERS() { state_counters_ = state_counters_t(); }
     static unsigned NUM_STATES_GENERATED() { return state_counters_.num_states_generated; }
     static unsigned NUM_STATES_EXPANDED() { return state_counters_.num_states_expanded; }
+    static unsigned NUM_STATES_CONSTRUCTED() { return state_counters_.num_states_constructed; }
+    static unsigned NUM_STATES_DISPOSED() { return state_counters_.num_states_disposed; }
 
     static void INCREMENT_NUM_STATES_GENERATED() { state_counters_.num_states_generated += 1; }
     static void INCREMENT_NUM_STATES_EXPANDED() { state_counters_.num_states_expanded += 1; }
+    static void INCREMENT_NUM_STATES_CONSTRUCTED() { state_counters_.num_states_constructed += 1; }
+    static void INCREMENT_NUM_STATES_DISPOSED() { state_counters_.num_states_disposed += 1; }
 
     static state_counters_t STATE_COUNTERS() { return state_counters_; }
     static state_counters_t STATE_COUNTERS(state_counters_t new_counters) {
@@ -531,52 +549,90 @@ struct AIPlanningStateBase
     static void RESET_STATE_COUNTERS() { /* nothing to be done */ };
     static unsigned NUM_STATES_GENERATED() { return 0; }
     static unsigned NUM_STATES_EXPANDED() { return 0; }
+    static unsigned NUM_STATES_CONSTRUCTED() { return 0; }
+    static unsigned NUM_STATES_DISPOSED() { return 0; }
 
     static void INCREMENT_NUM_STATES_GENERATED() { /* nothing to be done */ }
     static void INCREMENT_NUM_STATES_EXPANDED() { /* nothing to be done */ }
+    static void INCREMENT_NUM_STATES_CONSTRUCTED() { /* nothing to be done */ }
+    static void INCREMENT_NUM_STATES_DISPOSED() { /* nothing to be done */ }
 #endif
+
+    private:
+    static allocator_type allocator_;
+
+    public:
+    static allocator_type & ALLOCATOR() { return allocator_; }
+    static allocator_type ALLOCATOR(allocator_type &&A) {
+        allocator_type tmp = std::move(allocator_);
+        allocator_ = std::move(A);
+        return tmp;
+    }
 
     private:
     ///> the cost to reach this state from the initial state
     double g_;
+    ///> number of subproblems in this state
+    size_type size_ = 0;
     ///> array of subproblems
-    dyn_array<Subproblem> subproblems_;
+    std::unique_ptr<Subproblem[]> subproblems_;
 
     public:
-    AIPlanningStateBase() = default;
+    friend void swap(AIPlanningStateBase &first, AIPlanningStateBase &second) {
+        using std::swap;
+        swap(first.g_,           second.g_);
+        swap(first.size_,        second.size_);
+        swap(first.subproblems_, second.subproblems_);
+    }
 
-    /** Creates a state with actual costs `g` and subproblems `begin` to `end`. */
+    AIPlanningStateBase() { insist(not subproblems_); }
+
+    /** Creates a state with actual costs `g` and given `subproblems`. */
+    AIPlanningStateBase(double g, size_type size, std::unique_ptr<Subproblem[]> subproblems)
+        : g_(g)
+        , size_(size)
+        , subproblems_(std::move(subproblems))
+    {
+        insist(bool(subproblems_));
+        insist(std::is_sorted(begin(), end(), subproblem_lt));
+        INCREMENT_NUM_STATES_CONSTRUCTED();
+    }
+
+    /** Creates an initial state with the given `subproblems`. */
+    AIPlanningStateBase(size_type size, std::unique_ptr<Subproblem[]> subproblems)
+        : AIPlanningStateBase(0, size, std::move(subproblems))
+    { }
+
+    /** Creates a state with actual costs `g` and subproblems in range `[begin; end)`. */
     template<typename It>
     AIPlanningStateBase(double g, It begin, It end)
         : g_(g)
-        , subproblems_(std::distance(begin, end))
+        , size_(std::distance(begin, end))
+        , subproblems_(ALLOCATOR().template make_unique<Subproblem[]>(size_))
     {
-        using it_traits = std::iterator_traits<It>;
-        static_assert(std::is_same_v<typename it_traits::value_type, Subproblem>,
-                      "must provide an iterator over subproblems");
-        for (auto ptr = subproblems_.data(); begin != end; ++begin, ++ptr)
-            new (ptr) Subproblem(*begin);
-        insist(std::is_sorted(cbegin(), cend(), subproblem_lt));
+        insist(begin != end);
+        std::copy(begin, end, this->begin());
+        insist(std::is_sorted(this->begin(), this->end(), subproblem_lt));
+        INCREMENT_NUM_STATES_CONSTRUCTED();
     }
 
-    /** Creates a state with actual costs `g` and given `subproblems`. */
-    AIPlanningStateBase(double g, dyn_array<Subproblem> subproblems)
-        : g_(g)
-        , subproblems_(std::move(subproblems))
-    {
-        insist(std::is_sorted(cbegin(), cend(), subproblem_lt));
+    ~AIPlanningStateBase() {
+        if (subproblems_) INCREMENT_NUM_STATES_DISPOSED();
+        ALLOCATOR().dispose(std::move(subproblems_), size_);
     }
 
-    /** Creates an initial state with subproblems `begin` to `end`. */
-    template<typename It>
-    AIPlanningStateBase(It begin, It end) : AIPlanningStateBase(0, begin, end) { }
+    explicit AIPlanningStateBase(const AIPlanningStateBase &other)
+        : g_(other.g_)
+        , size_(other.size_)
+        , subproblems_(ALLOCATOR().template make_unique<Subproblem[]>(size_))
+    {
+        INCREMENT_NUM_STATES_CONSTRUCTED();
+        insist(bool(subproblems_));
+        std::copy(other.begin(), other.end(), this->begin());
+    }
 
-    /** Creates an initial state with the given `subproblems`. */
-    AIPlanningStateBase(dyn_array<Subproblem> subproblems) : AIPlanningStateBase(0, std::move(subproblems)) { }
-
-    explicit AIPlanningStateBase(const AIPlanningStateBase&) = default;
-    AIPlanningStateBase(AIPlanningStateBase&&) = default;
-    AIPlanningStateBase & operator=(AIPlanningStateBase&&) = default;
+    AIPlanningStateBase(AIPlanningStateBase &&other) : AIPlanningStateBase() { swap(*this, other); }
+    AIPlanningStateBase & operator=(AIPlanningStateBase other) { swap(*this, other); return *this; }
 
     /** Compares two states lexicographically. */
     bool operator<(const AIPlanningStateBase &other) const {
@@ -584,12 +640,24 @@ struct AIPlanningStateBase
     }
 
     /** Returns `true` iff `this` and `other` have the exact same `Subproblem`s. */
-    bool operator==(const AIPlanningStateBase &other) const { return this->subproblems_ == other.subproblems_; }
+    bool operator==(const AIPlanningStateBase &other) const {
+        if (this->size() != other.size()) return false;
+        insist(this->size() == other.size());
+        auto this_it = this->cbegin();
+        auto other_it = other.cbegin();
+        for (; this_it != this->cend(); ++this_it, ++other_it) {
+            if (*this_it != *other_it)
+                return false;
+        }
+        return true;
+    }
+
+    bool operator!=(const AIPlanningStateBase &other) const { return not operator==(other); }
 
     /** Returns the number of `Subproblem`s in this state. */
-    std::size_t size() const { return subproblems_.size(); }
+    std::size_t size() const { return size_; }
 
-    Subproblem operator[](std::size_t idx) const { return subproblems_[idx]; }
+    Subproblem operator[](std::size_t idx) const { insist(idx < size_); return subproblems_[idx]; }
 
     /** Returns the cost to reach this state from the initial state. */
     double g() const { return g_; }
@@ -599,10 +667,10 @@ struct AIPlanningStateBase
 
     // const std::vector<Subproblem> & subproblems() const { return subproblems_; }
 
-    iterator begin() { return subproblems_.begin(); };
-    iterator end() { return subproblems_.end(); }
-    const_iterator begin() const { return subproblems_.begin(); };
-    const_iterator end() const { return subproblems_.end(); }
+    iterator begin() { return subproblems_.get(); };
+    iterator end() { return begin() + size(); }
+    const_iterator begin() const { return subproblems_.get(); };
+    const_iterator end() const { return begin() + size(); }
     const_iterator cbegin() const { return begin(); };
     const_iterator cend() const { return end(); }
 
@@ -611,14 +679,6 @@ struct AIPlanningStateBase
     void for_each_successor(Callback &&callback, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                             const CostFunction &CF, const CardinalityEstimator &CE) const {
         static_cast<const actual_type*>(this)->for_each_successor(std::forward<Callback>(callback), PT, G, M, CF, CE);
-    }
-
-    /** Returns a `std::vector` of all states that can be reached by a single action from this state. */
-    std::vector<actual_type> expand(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
-                                    const CostFunction &CF, const CardinalityEstimator &CE) const {
-        std::vector<actual_type> successors;
-        for_each_successor([&](actual_type state) { successors.emplace_back(std::move(state)); }, PT, G, M, CF, CE);
-        return successors;
     }
 
     /** Returns a unique identifier for this state. */
@@ -644,19 +704,34 @@ struct AIPlanningStateBase
 };
 
 #ifdef WITH_STATE_COUNTERS
-template<typename Actual>
-typename AIPlanningStateBase<Actual>::state_counters_t
-AIPlanningStateBase<Actual>::state_counters_;
+template<typename Actual, typename Allocator>
+typename AIPlanningStateBase<Actual, Allocator>::state_counters_t
+AIPlanningStateBase<Actual, Allocator>::state_counters_;
 #endif
+
+template<typename Actual, typename Allocator>
+typename AIPlanningStateBase<Actual, Allocator>::allocator_type
+AIPlanningStateBase<Actual, Allocator>::allocator_;
+
+#define IMPORT_BASE(CLASS) \
+    using base_type = AIPlanningStateBase<CLASS<Allocator>, Allocator>; \
+    using size_type = typename base_type::size_type; \
+    using \
+        base_type::ALLOCATOR, \
+        base_type::size, \
+        base_type::g, \
+        base_type::begin, base_type::end, \
+        base_type::cbegin, base_type::cend, \
+        base_type::dump
 
 }
 
 namespace std {
 
-template<typename Actual>
-struct hash<AIPlanningStateBase<Actual>>
+template<typename Actual, typename Allocator>
+struct hash<AIPlanningStateBase<Actual, Allocator>>
 {
-    uint64_t operator()(const AIPlanningStateBase<Actual> &state) const {
+    uint64_t operator()(const AIPlanningStateBase<Actual, Allocator> &state) const {
         /* Rolling hash with multiplier taken from [1] where the moduli is 2^64.
          * [1] http://www.ams.org/mcom/1999-68-225/S0025-5718-99-00996-5/S0025-5718-99-00996-5.pdf */
         uint64_t hash = 0;
@@ -672,44 +747,46 @@ struct hash<AIPlanningStateBase<Actual>>
 
 namespace {
 
-struct AIPlanningStateBottomUp : AIPlanningStateBase<AIPlanningStateBottomUp>
+template<typename Allocator>
+struct AIPlanningStateBottomUp : AIPlanningStateBase<AIPlanningStateBottomUp<Allocator>, Allocator>
 {
-    using base_type = AIPlanningStateBase<AIPlanningStateBottomUp>;
+    IMPORT_BASE(AIPlanningStateBottomUp);
 
     static AIPlanningStateBottomUp CreateInitial(const QueryGraph &G, const AdjacencyMatrix&) {
-        dyn_array<Subproblem> subproblems(G.sources().size());
+        const size_type size = G.sources().size();
+        auto subproblems = ALLOCATOR().template make_unique<Subproblem[]>(size);
         for (auto ds : G.sources())
             new (&subproblems[ds->id()]) Subproblem(1UL << ds->id());
-        insist(std::is_sorted(subproblems.begin(), subproblems.end(), subproblem_lt));
-        return AIPlanningStateBottomUp(std::move(subproblems));
+        insist(std::is_sorted(subproblems.get(), subproblems.get() + size, subproblem_lt));
+        return AIPlanningStateBottomUp(size, std::move(subproblems));
     }
 
     static AIPlanningStateBottomUp CreateGoal(double g) {
-        return AIPlanningStateBottomUp(g, dyn_array<Subproblem>());
+        return AIPlanningStateBottomUp(g, 0, nullptr);
+    }
+
+    template<typename It>
+    static AIPlanningStateBottomUp CreateFromSubproblems(const QueryGraph&, const AdjacencyMatrix&, double g,
+                                                         It begin, It end) {
+        return AIPlanningStateBottomUp(g, begin, end);
     }
 
     AIPlanningStateBottomUp() = default;
 
     /** Creates a state with actual costs `g` and given `subproblems`. */
-    AIPlanningStateBottomUp(double g, dyn_array<Subproblem> subproblems)
-        : AIPlanningStateBase(g, std::move(subproblems))
-    { }
-
-    /** Creates a state with actual costs `g` and subproblems `begin` to `end`. */
-    template<typename It>
-    AIPlanningStateBottomUp(double g, It begin, It end)
-        : AIPlanningStateBase(g, begin, end)
-    { }
-
-    /** Creates an initial state with subproblems `begin` to `end`. */
-    template<typename It>
-    AIPlanningStateBottomUp(It begin, It end)
-        : AIPlanningStateBottomUp(0, begin, end)
+    AIPlanningStateBottomUp(double g, size_type size, std::unique_ptr<Subproblem[]> subproblems)
+        : base_type(g, size, std::move(subproblems))
     { }
 
     /** Creates an initial state with the given `subproblems`. */
-    AIPlanningStateBottomUp(dyn_array<Subproblem> subproblems)
-        : AIPlanningStateBottomUp(0, std::move(subproblems))
+    AIPlanningStateBottomUp(size_type size, std::unique_ptr<Subproblem[]> subproblems)
+        : AIPlanningStateBottomUp(0, size, std::move(subproblems))
+    { }
+
+    /** Creates a state with actual costs `g` and subproblems in range `[begin; end)`. */
+    template<typename It>
+    AIPlanningStateBottomUp(double g, It begin, It end)
+        : base_type(g, begin, end)
     { }
 
     explicit AIPlanningStateBottomUp(const AIPlanningStateBottomUp&) = default;
@@ -723,12 +800,14 @@ struct AIPlanningStateBottomUp : AIPlanningStateBase<AIPlanningStateBottomUp>
                             const CostFunction &CF, const CardinalityEstimator &CE) const;
 };
 
+template<typename Allocator>
 template<typename Callback>
-void AIPlanningStateBottomUp::for_each_successor(Callback &&callback,
-                                                 PlanTable &PT, const QueryGraph&, const AdjacencyMatrix &M,
-                                                 const CostFunction &CF, const CardinalityEstimator&) const
+void AIPlanningStateBottomUp<Allocator>::for_each_successor(Callback &&callback,
+                                                            PlanTable &PT, const QueryGraph&, const AdjacencyMatrix &M,
+                                                            const CostFunction &CF, const CardinalityEstimator&) const
 {
-    INCREMENT_NUM_STATES_EXPANDED();
+    base_type::INCREMENT_NUM_STATES_EXPANDED();
+
     /* Enumerate all potential join pairs and check whether they are connected. */
     for (auto outer_it = cbegin(), outer_end = std::prev(cend()); outer_it != outer_end; ++outer_it)
     {
@@ -741,14 +820,14 @@ void AIPlanningStateBottomUp::for_each_successor(Callback &&callback,
                 const Subproblem joined = *outer_it | *inner_it;
 
                 /* Compute new subproblems after join */
-                dyn_array<Subproblem> subproblems(size() - 1);
-                Subproblem *ptr = subproblems.data();
+                auto subproblems = ALLOCATOR().template make_unique<Subproblem[]>(size() - 1);
+                Subproblem *ptr = subproblems.get();
                 for (auto it = cbegin(); it != cend(); ++it) {
                     if (it == outer_it) continue; // skip outer
-                    else if (it == inner_it) new(ptr++) Subproblem(joined); // replace inner
+                    else if (it == inner_it) new (ptr++) Subproblem(joined); // replace inner
                     else new (ptr++) Subproblem(*it);
                 }
-                insist(std::is_sorted(subproblems.begin(), subproblems.end(), subproblem_lt));
+                insist(std::is_sorted(subproblems.get(), subproblems.get() + size() - 1, subproblem_lt));
 
                 /* Compute total cost. */
                 const double total_cost = CF.calculate_join_cost(PT, *outer_it, *inner_it, cnf::CNF{});
@@ -758,8 +837,8 @@ void AIPlanningStateBottomUp::for_each_successor(Callback &&callback,
                 const double action_cost = total_cost - (PT[*outer_it].cost + PT[*inner_it].cost);
 
                 /* Create new AIPlanningState. */
-                AIPlanningStateBottomUp S(g() + action_cost, std::move(subproblems));
-                INCREMENT_NUM_STATES_GENERATED();
+                AIPlanningStateBottomUp S(g() + action_cost, size() - 1, std::move(subproblems));
+                base_type::INCREMENT_NUM_STATES_GENERATED();
                 callback(std::move(S));
             }
         }
@@ -770,11 +849,11 @@ void AIPlanningStateBottomUp::for_each_successor(Callback &&callback,
 
 namespace std {
 
-template<>
-struct hash<AIPlanningStateBottomUp>
+template<typename Allocator>
+struct hash<AIPlanningStateBottomUp<Allocator>>
 {
-    uint64_t operator()(const AIPlanningStateBottomUp &state) const {
-        return std::hash<AIPlanningStateBase<AIPlanningStateBottomUp>>{}(state);
+    uint64_t operator()(const AIPlanningStateBottomUp<Allocator> &state) const {
+        return std::hash<typename std::remove_reference_t<decltype(state)>::base_type>{}(state);
     }
 };
 
@@ -782,19 +861,25 @@ struct hash<AIPlanningStateBottomUp>
 
 namespace {
 
-struct AIPlanningStateBottomUpOpt : AIPlanningStateBase<AIPlanningStateBottomUpOpt>
+template<typename Allocator>
+struct AIPlanningStateBottomUpOpt : AIPlanningStateBase<AIPlanningStateBottomUpOpt<Allocator>, Allocator>
 {
-    using base_type = AIPlanningStateBase<AIPlanningStateBottomUpOpt>;
+    IMPORT_BASE(AIPlanningStateBottomUpOpt);
+
+    using join_iterator = SmallBitset*;
+    using const_join_iterator = const SmallBitset*;
 
     /** Remember for each subproblem in this state, with which other subproblems it can join.  Do this asymmetrically to
      * avoid repeating commutative joins twice.  A `SmallBitset` contains the *indices* of `Subproblems` to join with.
      * */
-    dyn_array<SmallBitset> joins;
+    private:
+    std::unique_ptr<SmallBitset[]> joins_;
 
+    public:
     static AIPlanningStateBottomUpOpt CreateInitial(const QueryGraph &G, const AdjacencyMatrix &M) {
         const std::size_t num_sources = G.sources().size();
-        dyn_array<Subproblem> subproblems(num_sources);
-        dyn_array<SmallBitset> joins(num_sources);
+        auto subproblems = ALLOCATOR().template make_unique<Subproblem[]>(num_sources);
+        auto joins = ALLOCATOR().template make_unique<SmallBitset[]>(num_sources);
 
         /* Initialize subproblems. */
         for (std::size_t idx = 0; idx != num_sources; ++idx) {
@@ -807,28 +892,54 @@ struct AIPlanningStateBottomUpOpt : AIPlanningStateBase<AIPlanningStateBottomUpO
             insist(forward_edges.empty() or *forward_edges.begin() > idx, "must not have backward edges");
             new (&joins[idx]) SmallBitset(forward_edges);
         }
-        insist(std::is_sorted(subproblems.begin(), subproblems.end(), subproblem_lt));
+        insist(std::is_sorted(subproblems.get(), subproblems.get() + num_sources, subproblem_lt));
         insist(joins[num_sources - 1].empty(), "last subproblem must not have forward edges");
 
-        return AIPlanningStateBottomUpOpt(std::move(subproblems), std::move(joins));
+        return AIPlanningStateBottomUpOpt(num_sources, std::move(subproblems), std::move(joins));
     }
 
     static AIPlanningStateBottomUpOpt CreateGoal(double g) {
-        return AIPlanningStateBottomUpOpt(g, dyn_array<Subproblem>(), dyn_array<SmallBitset>());
+        return AIPlanningStateBottomUpOpt(g, 0, nullptr, nullptr);
+    }
+
+    template<typename It>
+    static AIPlanningStateBottomUpOpt CreateFromSubproblems(const QueryGraph&, const AdjacencyMatrix &M, double g,
+                                                            It begin, It end)
+    {
+        const size_type size = std::distance(begin, end);
+        auto joins = ALLOCATOR().template make_unique<SmallBitset[]>(size);
+
+        auto outer_it = begin;
+        for (std::size_t outer_idx = 0; outer_idx != size; ++outer_idx, ++outer_it) {
+            SmallBitset &J = joins[outer_idx];
+            new (&J) SmallBitset();
+            const auto neighbors = M.neighbors(*outer_it);
+            auto inner_it = std::next(outer_it);
+            for (std::size_t inner_idx = outer_idx + 1; inner_idx < size; ++inner_idx, ++inner_it)
+                J[inner_idx] = not (neighbors & *inner_it).empty();
+        }
+
+        return AIPlanningStateBottomUpOpt(g, begin, end, std::move(joins));
+    }
+
+    friend void swap(AIPlanningStateBottomUpOpt &first, AIPlanningStateBottomUpOpt &second) {
+        using std::swap;
+        swap<base_type>(first, second);
+        swap(first.joins_, second.joins_);
     }
 
     AIPlanningStateBottomUpOpt() = default;
 
     /** Creates a state with actual costs `g` and given `subproblems`. */
-    AIPlanningStateBottomUpOpt(double g, dyn_array<Subproblem> subproblems, dyn_array<SmallBitset> joins)
-        : AIPlanningStateBase(g, std::move(subproblems))
-        , joins(std::move(joins))
+    AIPlanningStateBottomUpOpt(double g, size_type size, std::unique_ptr<Subproblem[]> subproblems,
+                               std::unique_ptr<SmallBitset[]> joins)
+        : base_type(g, size, std::move(subproblems))
+        , joins_(std::move(joins))
     {
 #ifndef NDEBUG
-        insist(size() == this->joins.size());
         insist(std::is_sorted(cbegin(), cend(), subproblem_lt));
-        for (std::size_t idx = 0; idx != this->joins.size(); ++idx) {
-            const SmallBitset joins_with = this->joins[idx];
+        for (std::size_t idx = 0; idx != size; ++idx) {
+            const SmallBitset joins_with = joins_[idx];
             insist(not joins_with(idx), "must not self-join");
             insist(joins_with.empty() or *joins_with.begin() > idx, "must not have backward edges");
         }
@@ -836,15 +947,45 @@ struct AIPlanningStateBottomUpOpt : AIPlanningStateBase<AIPlanningStateBottomUpO
     }
 
     /** Creates an initial state with the given `subproblems`. */
-    AIPlanningStateBottomUpOpt(dyn_array<Subproblem> subproblems, dyn_array<SmallBitset> joins)
-        : AIPlanningStateBottomUpOpt(0, std::move(subproblems), std::move(joins))
+    AIPlanningStateBottomUpOpt(size_type size, std::unique_ptr<Subproblem[]> subproblems,
+                               std::unique_ptr<SmallBitset[]> joins)
+        : AIPlanningStateBottomUpOpt(0, size, std::move(subproblems), std::move(joins))
     { }
 
-    explicit AIPlanningStateBottomUpOpt(const AIPlanningStateBottomUpOpt&) = default;
-    AIPlanningStateBottomUpOpt(AIPlanningStateBottomUpOpt&&) = default;
-    AIPlanningStateBottomUpOpt & operator=(AIPlanningStateBottomUpOpt&&) = default;
+    /** Creates a state with actual costs `g` and subproblems in range `[begin; end)`. */
+    template<typename It>
+    AIPlanningStateBottomUpOpt(double g, It begin, It end, std::unique_ptr<SmallBitset[]> joins)
+        : base_type(g, begin, end)
+        , joins_(std::move(joins))
+    { }
+
+    ~AIPlanningStateBottomUpOpt() {
+        ALLOCATOR().dispose(std::move(joins_), size());
+    }
+
+    explicit AIPlanningStateBottomUpOpt(const AIPlanningStateBottomUpOpt &other)
+        : base_type(static_cast<const base_type&>(other))
+    {
+        joins_ = ALLOCATOR().template make_unique<Subproblem[]>(size());
+        std::copy(other.joins_begin(), other.joins_end(), this->joins_begin());
+    }
+
+    AIPlanningStateBottomUpOpt(AIPlanningStateBottomUpOpt &&other)
+        : AIPlanningStateBottomUpOpt()
+    {
+        swap(*this, other);
+    }
+
+    AIPlanningStateBottomUpOpt & operator=(AIPlanningStateBottomUpOpt other) { swap(*this, other); return *this; }
 
     bool is_goal() const { return size() <= 1; }
+
+    join_iterator joins_begin() { return joins_.get(); }
+    join_iterator joins_end() { return joins_begin() + size(); }
+    const_join_iterator joins_begin() const { return joins_.get(); }
+    const_join_iterator joins_end() const { return joins_begin() + size(); }
+    const_join_iterator joins_cbegin() const { return joins_begin(); }
+    const_join_iterator joins_cend() const { return joins_end(); }
 
     template<typename Callback>
     void for_each_successor(Callback &&callback, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
@@ -857,9 +998,9 @@ struct AIPlanningStateBottomUpOpt : AIPlanningStateBase<AIPlanningStateBottomUpO
             it->print_fixed_length(out, 15);
         }
         out << "], joins [";
-        for (auto it = S.joins.cbegin(); it != S.joins.cend(); ++it) {
-            if (it != S.joins.cbegin()) out << ", ";
-            it->print_fixed_length(out, 15);
+        for (size_type idx = 0; idx != S.size(); ++idx) {
+            if (idx != 0) out << ", ";
+            S.joins_[idx].print_fixed_length(out, 15);
         }
         return out << ']';
     }
@@ -879,22 +1020,23 @@ SmallBitset update_join(const SmallBitset S, const uint64_t bit_mask, const unsi
     return SmallBitset(extracted_bits | replace_bit);
 }
 
+template<typename Allocator>
 template<typename Callback>
-void AIPlanningStateBottomUpOpt::for_each_successor(Callback &&callback,
-                                                    PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
-                                                    const CostFunction &CF, const CardinalityEstimator &CE) const
+void AIPlanningStateBottomUpOpt<Allocator>::for_each_successor(Callback &&callback,
+                                                               PlanTable &PT, const QueryGraph &G,
+                                                               const AdjacencyMatrix &M, const CostFunction &CF,
+                                                               const CardinalityEstimator &CE) const
 {
 #ifndef NDEBUG
     std::size_t num_states_generated = 0;
 #endif
-    insist(size() == joins.size());
 
-    INCREMENT_NUM_STATES_EXPANDED();
+    base_type::INCREMENT_NUM_STATES_EXPANDED();
 
     /* Enumerate all join pairs. */
     for (std::size_t left_idx = 0; left_idx < size() - 1; ++left_idx) {
         const Subproblem left = (*this)[left_idx];
-        const SmallBitset left_joins_with = joins[left_idx];
+        const SmallBitset left_joins_with = joins_[left_idx];
         insist(left_joins_with.empty() or *left_joins_with.begin() > left_idx, "must not have backward edges");
 
         /* Compute mask of the join bit corresponding to `left`.  Used later for updating joins. */
@@ -916,9 +1058,9 @@ void AIPlanningStateBottomUpOpt::for_each_successor(Callback &&callback,
             const unsigned delta_join_bits = new_joined_index - left_idx;
 
             /* Compute subproblems of successor. */
-            dyn_array<Subproblem> subproblems(size() - 1);
+            auto subproblems = ALLOCATOR().template make_unique<Subproblem[]>(size() - 1);
             {
-                auto ptr = subproblems.data();
+                auto ptr = subproblems.get();
                 for (auto s : *this) {
 #if 1
                     if (s == left) [[unlikely]]
@@ -932,16 +1074,16 @@ void AIPlanningStateBottomUpOpt::for_each_successor(Callback &&callback,
                     ptr += unsigned(s != left);
 #endif
                 }
-                insist(std::is_sorted(subproblems.begin(), subproblems.end(), subproblem_lt));
+                insist(std::is_sorted(subproblems.get(), subproblems.get() + size() - 1, subproblem_lt));
             }
 
             /* Compute join partners for each subproblem in the successor. */
-            dyn_array<SmallBitset> joins(size() - 1);
+            auto joins = ALLOCATOR().template make_unique<SmallBitset[]>(size() - 1);
             std::size_t idx = 0;
 
             /* Subproblems before `left`. */
             for (; idx < left_idx; ++idx) {
-                const SmallBitset j = this->joins[idx];
+                const SmallBitset j = this->joins_[idx];
                 insist(j.empty() or *j.begin() > idx,
                        "joins are directed and must always point towards the subproblem of higher index");
                 const bool joined_with_left = j(left_idx);
@@ -959,8 +1101,8 @@ void AIPlanningStateBottomUpOpt::for_each_successor(Callback &&callback,
             insist(idx == left_idx);
             /* Subproblems between `left` and `right`. */
             for (/* skip left */ ++idx; idx < right_idx; ++idx) {
-                const SmallBitset j = this->joins[idx];
-                const bool joined_with_left = this->joins[left_idx](idx);
+                const SmallBitset j = this->joins_[idx];
+                const bool joined_with_left = this->joins_[left_idx](idx);
                 const bool joined_with_right = j[right_idx];
                 insist(j.empty() or *j.begin() > idx,
                        "joins are directed and must always point towards the subproblem of higher index");
@@ -979,7 +1121,7 @@ void AIPlanningStateBottomUpOpt::for_each_successor(Callback &&callback,
             insist(idx == right_idx);
             /* Joined subproblems. */
             {
-                SmallBitset j = this->joins[left_idx] | this->joins[right_idx];
+                SmallBitset j = this->joins_[left_idx] | this->joins_[right_idx];
                 const SmallBitset mask_back_edges((1UL << (right_idx + 1U)) - 1UL);
                 j = j - mask_back_edges;
                 j = SmallBitset(uint64_t(j) >> 1U); // erase by right shift, all lower bits are 0
@@ -989,7 +1131,7 @@ void AIPlanningStateBottomUpOpt::for_each_successor(Callback &&callback,
             }
             /* Subproblems after `right`. */
             for (++idx; idx < size(); ++idx) {
-                const SmallBitset j = this->joins[idx];
+                const SmallBitset j = this->joins_[idx];
                 insist(j.empty() or *j.begin() > idx,
                        "joins are directed and must always point towards the subproblem of higher index");
                 const SmallBitset j_upd = SmallBitset(uint64_t(j) >> 1U); // erase by right shift, all lower bits are 0
@@ -1006,8 +1148,9 @@ void AIPlanningStateBottomUpOpt::for_each_successor(Callback &&callback,
             const double action_cost = total_cost - (PT[left].cost + PT[right].cost);
 
             /* Create new AIPlanningState. */
-            AIPlanningStateBottomUpOpt S(g() + action_cost, std::move(subproblems), std::move(joins));
-            INCREMENT_NUM_STATES_GENERATED();
+            AIPlanningStateBottomUpOpt S(g() + action_cost, size() - 1, std::move(subproblems),
+                                         std::move(joins));
+            base_type::INCREMENT_NUM_STATES_GENERATED();
 #ifndef NDEBUG
             ++num_states_generated;
 #endif
@@ -1016,25 +1159,34 @@ void AIPlanningStateBottomUpOpt::for_each_successor(Callback &&callback,
     }
 
 #ifndef NDEBUG
-    AIPlanningStateBottomUp clone(this->g(), begin(), end());
-    std::size_t num_states_generated_by_clone = 0;
-    clone.for_each_successor([&num_states_generated_by_clone](const AIPlanningStateBottomUp&) {
-        ++num_states_generated_by_clone;
-    }, PT, G, M, CF, CE);
-    if (num_states_generated != num_states_generated_by_clone) {
-        std::cerr << ">>> discrepancy detected (";
-        if (num_states_generated < num_states_generated_by_clone)
-            std::cerr << "LESS";
-        else
-            std::cerr << "MORE";
-        std::cerr << ")\n"
-                  << "  AIPlanningStateBottomUpOpt generated " << num_states_generated << " states,\n"
-                  << "  AIPlanningStateBottomUp    generated " << num_states_generated_by_clone << " states\n"
-                  << "  the state is:\n";
-        dump(std::cerr);
-        std::cerr << "  the cloned AIPlanningStateBottomUp is:\n";
-        clone.dump(std::cerr);
-        abort();
+    {
+#ifdef WITH_STATE_COUNTERS
+        auto counters = base_type::STATE_COUNTERS();
+#endif
+        AIPlanningStateBottomUp<Allocator> clone(g(), begin(), end());
+        std::size_t num_states_generated_by_clone = 0;
+        auto callback = [&num_states_generated_by_clone](const AIPlanningStateBottomUp<Allocator>&) {
+            ++num_states_generated_by_clone;
+        };
+        clone.for_each_successor(callback, PT, G, M, CF, CE);
+        if (num_states_generated != num_states_generated_by_clone) {
+            std::cerr << ">>> discrepancy detected (";
+            if (num_states_generated < num_states_generated_by_clone)
+                std::cerr << "LESS";
+            else
+                std::cerr << "MORE";
+            std::cerr << ")\n"
+                      << "  AIPlanningStateBottomUpOpt generated " << num_states_generated << " states,\n"
+                      << "  AIPlanningStateBottomUp    generated " << num_states_generated_by_clone << " states\n"
+                      << "  the state is:\n";
+            dump(std::cerr);
+            std::cerr << "  the cloned AIPlanningStateBottomUp is:\n";
+            clone.dump(std::cerr);
+            abort();
+        }
+#ifdef WITH_STATE_COUNTERS
+        base_type::STATE_COUNTERS(std::move(counters));
+#endif
     }
 #endif
 }
@@ -1043,11 +1195,11 @@ void AIPlanningStateBottomUpOpt::for_each_successor(Callback &&callback,
 
 namespace std {
 
-template<>
-struct hash<AIPlanningStateBottomUpOpt>
+template<typename Allocator>
+struct hash<AIPlanningStateBottomUpOpt<Allocator>>
 {
-    uint64_t operator()(const AIPlanningStateBottomUpOpt &state) const {
-        return std::hash<AIPlanningStateBase<AIPlanningStateBottomUpOpt>>{}(state);
+    uint64_t operator()(const AIPlanningStateBottomUpOpt<Allocator> &state) const {
+        return std::hash<typename std::remove_reference_t<decltype(state)>::base_type>{}(state);
     }
 };
 
@@ -1055,9 +1207,10 @@ struct hash<AIPlanningStateBottomUpOpt>
 
 namespace {
 
-struct AIPlanningStateTopDown : AIPlanningStateBase<AIPlanningStateTopDown>
+template<typename Allocator>
+struct AIPlanningStateTopDown : AIPlanningStateBase<AIPlanningStateTopDown<Allocator>, Allocator>
 {
-    using base_type = AIPlanningStateBase<AIPlanningStateTopDown>;
+    IMPORT_BASE(AIPlanningStateTopDown);
 
     private:
     std::size_t number_of_goal_relations_; ///< number of single relations in a state to be a goal state
@@ -1065,35 +1218,31 @@ struct AIPlanningStateTopDown : AIPlanningStateBase<AIPlanningStateTopDown>
     public:
     static AIPlanningStateTopDown CreateInitial(const QueryGraph &G, const AdjacencyMatrix&) {
         int num_sources = G.sources().size();
-        dyn_array<Subproblem> subproblems(1);
-        new (subproblems.data()) Subproblem((1UL << num_sources) - 1U);
-        return AIPlanningStateTopDown(num_sources, std::move(subproblems));
+        auto subproblems = ALLOCATOR().template make_unique<Subproblem[]>(1);
+        new (&subproblems[0]) Subproblem((1UL << num_sources) - 1U);
+        return AIPlanningStateTopDown(num_sources, 1, std::move(subproblems));
     }
 
     /** Creates a state with actual costs `g` and given `subproblems`. */
-    AIPlanningStateTopDown(double g, std::size_t number_of_goal_relations, dyn_array<Subproblem> subproblems)
-        : AIPlanningStateBase(g, std::move(subproblems))
+    AIPlanningStateTopDown(double g, std::size_t number_of_goal_relations, size_type size,
+                           std::unique_ptr<Subproblem[]> subproblems)
+        : base_type(g, size, std::move(subproblems))
         , number_of_goal_relations_(number_of_goal_relations)
     { }
 
     AIPlanningStateTopDown() = default;
 
-    /** Creates a state with actual costs `g` and subproblems `begin` to `end`. */
-    template<typename It>
-    AIPlanningStateTopDown(double g, std::size_t number_of_goal_relations, It begin, It end)
-        : AIPlanningStateBase(g, begin, end)
-        , number_of_goal_relations_(number_of_goal_relations)
-    { }
-
-    /** Creates an initial state with subproblems `begin` to `end`. */
-    template<typename It>
-    AIPlanningStateTopDown(std::size_t number_of_goal_relations, It begin, It end)
-        : AIPlanningStateTopDown(0, number_of_goal_relations, begin, end)
-    { }
-
     /** Creates an initial state with the given `subproblems`. */
-    AIPlanningStateTopDown(std::size_t number_of_goal_relations, dyn_array<Subproblem> subproblems)
-        : AIPlanningStateTopDown(0, number_of_goal_relations, std::move(subproblems))
+    AIPlanningStateTopDown(std::size_t number_of_goal_relations, size_type size,
+                           std::unique_ptr<Subproblem[]> subproblems)
+        : AIPlanningStateTopDown(0, number_of_goal_relations, size, std::move(subproblems))
+    { }
+
+    /** Creates a state with actual costs `g` and subproblems in range `[begin; end)`. */
+    template<typename It>
+    AIPlanningStateTopDown(double g, size_type number_of_goal_relations, It begin, It end)
+        : base_type(g, begin, end)
+        , number_of_goal_relations_(number_of_goal_relations)
     { }
 
     explicit AIPlanningStateTopDown(const AIPlanningStateTopDown&) = default;
@@ -1109,10 +1258,11 @@ struct AIPlanningStateTopDown : AIPlanningStateBase<AIPlanningStateTopDown>
                             const CostFunction &CF, const CardinalityEstimator&) const;
 };
 
+template<typename Allocator>
 template<typename Callback>
-void AIPlanningStateTopDown::for_each_successor(Callback &&callback,
-                                                PlanTable &PT, const QueryGraph&, const AdjacencyMatrix &M,
-                                                const CostFunction&, const CardinalityEstimator &CE) const
+void AIPlanningStateTopDown<Allocator>::for_each_successor(Callback &&callback,
+                                                           PlanTable &PT, const QueryGraph&, const AdjacencyMatrix &M,
+                                                           const CostFunction&, const CardinalityEstimator &CE) const
 {
     /* Enumerate all potential join pairs and check whether they are connected. */
     for (auto outer_it = cbegin(); outer_it != cend(); ++outer_it) {
@@ -1135,7 +1285,7 @@ void AIPlanningStateTopDown::for_each_successor(Callback &&callback,
                 auto right = CE.predict_cardinality(*PT.at(complement).model);
                 AIPlanningStateTopDown S(/* g=           */ g() + left + right,
                                          /* #relations = */ number_of_goal_relations_,
-                                         /* subproblems= */ dyn_array<Subproblem>(subproblems.begin(), subproblems.end()));
+                                         /* subproblems= */ subproblems.begin(), subproblems.end());
                 subproblems.clear();
                 callback(std::move(S));
             }
@@ -1147,135 +1297,11 @@ void AIPlanningStateTopDown::for_each_successor(Callback &&callback,
 
 namespace std {
 
-template<>
-struct hash<AIPlanningStateTopDown>
+template<typename Allocator>
+struct hash<AIPlanningStateTopDown<Allocator>>
 {
-    uint64_t operator()(const AIPlanningStateTopDown &state) const {
-        return std::hash<AIPlanningStateBase<AIPlanningStateTopDown>>{}(state);
-    }
-};
-
-}
-
-namespace {
-
-struct AIPlanningStateCheckpoints: AIPlanningStateBase<AIPlanningStateCheckpoints>
-{
-    using base_type = AIPlanningStateBase<AIPlanningStateCheckpoints>;
-
-    private:
-    /** the goal for this search, there can be other `Subproblem`s in the goal state as well, but this one needs to be
-     * there */
-    Subproblem goal_;
-
-    public:
-    AIPlanningStateCheckpoints() = default;
-
-    AIPlanningStateCheckpoints(double g, dyn_array<Subproblem> subproblems, Subproblem goal)
-        : AIPlanningStateBase(g, std::move(subproblems))
-        , goal_(goal)
-    { }
-
-    /** Creates a state with actual costs `g` and subproblems `begin` to `end`. */
-    template<typename It>
-    AIPlanningStateCheckpoints(double g, It begin, It end, Subproblem goal)
-        : AIPlanningStateBase(g, begin, end)
-        , goal_(goal)
-    { }
-
-    /** Creates an initial state with subproblems `begin` to `end`. */
-    template<typename It>
-    AIPlanningStateCheckpoints(It begin, It end, Subproblem goal)
-        : AIPlanningStateCheckpoints(0, begin, end, goal)
-    { }
-
-    /** Creates an initial state with the given `subproblems`. */
-    AIPlanningStateCheckpoints(dyn_array<Subproblem> subproblems, Subproblem goal)
-        : AIPlanningStateCheckpoints(0, std::move(subproblems), goal)
-    { }
-
-    explicit AIPlanningStateCheckpoints(const AIPlanningStateCheckpoints&) = default;
-    AIPlanningStateCheckpoints(AIPlanningStateCheckpoints&&) = default;
-    AIPlanningStateCheckpoints & operator=(AIPlanningStateCheckpoints&&) = default;
-
-    /** Returns `true` iff this is a goal state. */
-    bool is_goal() const {
-        // TODO Check why the solution with the goal_num_of_subproblems_ does not work yet, would probably be more efficient
-        return std::find(cbegin(), cend(), goal_) != cend();
-    }
-
-    Subproblem goal() const { return goal_; }
-
-    /** Calls `callback` on every state reachable from this state by a single actions. */
-    template<typename Callback>
-    void for_each_successor(Callback &&callback, PlanTable &PT, const QueryGraph&, const AdjacencyMatrix &M,
-                            const CostFunction &CF, const CardinalityEstimator&) const;
-
-    friend std::ostream & operator<<(std::ostream &out, const AIPlanningStateCheckpoints &S) {
-        out << "g = " << S.g() << ", Goal: " << S.goal_ << "\n[";
-        for (auto it = S.cbegin(); it != S.cend(); ++it) {
-            if (it != S.cbegin()) out << ", ";
-            it->print_fixed_length(out, 15);
-        }
-        return out << ']';
-    }
-
-    void dump(std::ostream &out) const { out << *this << std::endl; }
-    void dump() const { dump(std::cerr); }
-};
-
-template<typename Callback>
-void AIPlanningStateCheckpoints::for_each_successor(Callback &&callback,
-                                                    PlanTable &PT, const QueryGraph&, const AdjacencyMatrix &M,
-                                                    const CostFunction &CF, const CardinalityEstimator&) const
-{
-    /* Enumerate all potential join pairs and check whether they are connected. */
-    for (auto outer_it = cbegin(); outer_it != cend(); ++outer_it) {
-        const auto neighbors = M.neighbors(*outer_it);
-
-        for (auto inner_it = std::next(outer_it); inner_it != cend(); ++inner_it) {
-            insist(uint64_t(*inner_it) > uint64_t(*outer_it), "subproblems must be sorted");
-            insist((*outer_it & *inner_it).empty(), "subproblems must not overlap");
-            if (neighbors & *inner_it) { // inner and outer are joinable.
-                /* Compute joined subproblem. */
-                const Subproblem joined = *outer_it | *inner_it;
-
-                /* Compute new subproblems after join */
-                dyn_array<Subproblem> subproblems(size() - 1);
-                {
-                    auto ptr = subproblems.data();
-                    for (auto it = cbegin(); it != cend(); ++it) {
-                        if (it == outer_it) continue; // skip outer
-                        else if (it == inner_it) new (ptr++) Subproblem(joined); // replace inner
-                        else new (ptr++) Subproblem(*it);
-                    }
-                    insist(std::is_sorted(subproblems.begin(), subproblems.end(), subproblem_lt));
-                }
-
-                /* Compute total cost. */
-                const double total_cost = CF.calculate_join_cost(PT, *outer_it, *inner_it, cnf::CNF{});
-                PT.update(*outer_it, *inner_it, total_cost);
-
-                /* Compute action cost. */
-                const double action_cost = total_cost - (PT[*outer_it].cost + PT[*inner_it].cost);
-
-                /* Create new AIPlanningState. */
-                AIPlanningStateCheckpoints S(g() + action_cost, std::move(subproblems), goal_);
-                callback(std::move(S));
-            }
-        }
-    }
-}
-
-}
-
-namespace std {
-
-template<>
-struct hash<AIPlanningStateCheckpoints>
-{
-    uint64_t operator()(const AIPlanningStateCheckpoints &state) const {
-        return std::hash<AIPlanningStateBase<AIPlanningStateCheckpoints>>{}(state);
+    uint64_t operator()(const AIPlanningStateTopDown<Allocator> &state) const {
+        return std::hash<typename std::remove_reference_t<decltype(state)>::base_type>{}(state);
     }
 };
 
@@ -1286,6 +1312,28 @@ namespace heuristics {
 /*----------------------------------------------------------------------------------------------------------------------
  * Heuristics
  *--------------------------------------------------------------------------------------------------------------------*/
+
+/** This heuristic implements a perfect oracle, always returning the exact distance to the nearest goal state. */
+template<typename State>
+struct perfect_oracle
+{
+    using state_type = State;
+
+    perfect_oracle(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix&, const CostFunction &CF,
+                   const CardinalityEstimator&)
+    {
+        DPccp{}(G, CF, PT); // pre-compute costs
+    }
+
+    double operator()(const state_type &state, const PlanTable &PT, const QueryGraph&, const AdjacencyMatrix&,
+                      const CostFunction&, const CardinalityEstimator&) const
+    {
+        // TODO calculate distance based on pre-filled PlanTable
+        (void) state;
+        (void) PT;
+        return 0;
+    }
+};
 
 /** This heuristic estimates the distance from a state to the nearest goal state as the sum of the sizes of all
  * `Subproblem`s yet to be joined.
@@ -1339,7 +1387,7 @@ struct hprod
     }
 };
 
-template<typename State = AIPlanningStateBottomUp>
+template<typename State>
 struct bottomup_lookahead_cheapest
 {
     using state_type = State;
@@ -1409,6 +1457,8 @@ struct checkpoints
     using state_type = State;
 
     private:
+    using internal_state_type = AIPlanningStateBottomUp<typename State::allocator_type>;
+
     ///> the distance between two checkpoints, i.e. the difference in the number of relations contained in two
     ///> consecutive checkpoints
     static constexpr unsigned CHECKPOINT_DISTANCE = 3;
@@ -1416,20 +1466,32 @@ struct checkpoints
     /** This heuristic estimates the distance from a state to the nearest goal state as the sum of the sizes of all
      * `Subproblem`s yet to be joined.
      * This heuristic is admissible, yet dramatically underestimates the actual distance to a goal state.  */
-    using internal_hsum = hsum<AIPlanningStateCheckpoints>;
+    using internal_hsum = hsum<internal_state_type>;
 
     /** Represents one specific search done in the checkpoints heurisitc with its `initial_state` and `goal`.  Used to
      * determine which searches have already been conducted and thus need not be conducted again but can be loaded from
      * cache instead.  */
     struct SearchSection
     {
-        AIPlanningStateCheckpoints initial_state;
-        Subproblem goal;
+        private:
+        internal_state_type initial_state_;
+        Subproblem goal_;
+
+        public:
+        SearchSection(internal_state_type state, Subproblem goal)
+            : initial_state_(std::move(state))
+            , goal_(goal)
+        { }
+
+        const internal_state_type & initial_state() const { return initial_state_; }
+        Subproblem goal() const { return goal_; }
+
         bool operator==(const SearchSection &other) const {
-            return this->goal == other.goal and this->initial_state == other.initial_state;
+            return this->goal() == other.goal() and this->initial_state() == other.initial_state();
         }
         bool operator<(const SearchSection &other) const {
-            return this->goal < other.goal or (this->goal == other.goal and this->initial_state < other.initial_state);
+            return this->goal() <  other.goal() or
+                  (this->goal() == other.goal() and this->initial_state() < other.initial_state());
         }
     };
 
@@ -1437,7 +1499,7 @@ struct checkpoints
     {
         uint64_t operator()(const SearchSection &section) const {
             using std::hash;
-            return hash<AIPlanningStateCheckpoints>{}(section.initial_state) * 0x100000001b3UL ^ uint64_t(section.goal);
+            return hash<internal_state_type>{}(section.initial_state()) * 0x100000001b3UL ^ uint64_t(section.goal());
         }
     };
 
@@ -1463,6 +1525,17 @@ struct checkpoints
      * be in `checkpoint_connected_subproblems_[2]`.  */
     std::vector<std::vector<PotentialCheckpoint>> checkpoint_connected_subproblems_;
 
+    ai::AStar<
+        internal_state_type,
+        internal_hsum,
+        /*----- context ----- */
+        PlanTable&,
+        const QueryGraph&,
+        const AdjacencyMatrix&,
+        const CostFunction&,
+        const CardinalityEstimator&
+    > S_;
+
     public:
     checkpoints(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction&,
                 const CardinalityEstimator &CE)
@@ -1478,6 +1551,7 @@ struct checkpoints
 
         for (std::size_t i = 0; i != num_checkpoints; ++i) {
             std::vector<PotentialCheckpoint> &connected_subproblems = checkpoint_connected_subproblems_.emplace_back();
+            // TODO reserve size for connected_subproblems
             insist(i * CHECKPOINT_DISTANCE < num_sources);
             const std::size_t checkpoint_size = num_sources - (i + 1) * CHECKPOINT_DISTANCE;
             for (auto S = GospersHack::enumerate_all(checkpoint_size, num_sources); S; ++S) {
@@ -1497,6 +1571,11 @@ struct checkpoints
                       [](PotentialCheckpoint left, PotentialCheckpoint right) { return left.size < right.size; });
         }
     }
+
+    checkpoints(const checkpoints&) = delete;
+    checkpoints(checkpoints&&) = default;
+
+    checkpoints & operator=(checkpoints&&) = default;
 
     /** Returns `true` iff `to` is reachable from `from`.  */
     bool is_reachable(const Subproblem to, const state_type &from) const {
@@ -1551,7 +1630,7 @@ struct checkpoints
         double h_checkpoints = 0;
 
         /*----- Run greedy search with lookup_cheapest heuristic to estimate bushy plan cost. ------------------------*/
-        {
+        if constexpr (true) {
 #ifdef WITH_STATE_COUNTERS
             const auto old_counters = state_type::STATE_COUNTERS();
             state_type::RESET_STATE_COUNTERS();
@@ -1600,6 +1679,8 @@ struct checkpoints
 #ifdef WITH_STATE_COUNTERS
             state_type::STATE_COUNTERS(old_counters);
 #endif
+        } else {
+            h_greedy_bushy = std::numeric_limits<decltype(h_greedy_bushy)>::infinity();
         }
 
 
@@ -1675,35 +1756,20 @@ struct checkpoints
                                       subproblem_lt));
 
                 /* Construct initial state for local search to next checkpoint. */
-                AIPlanningStateCheckpoints initial_state(
-                    /* cost=        */ 0,
-                    /* subproblems= */ subproblems_current_checkpoint.begin(), subproblems_current_checkpoint.end(),
-                    /* goal=        */ checkpoint
+                internal_state_type initial_state = internal_state_type::CreateFromSubproblems(
+                    G, M, 0, subproblems_current_checkpoint.begin(), subproblems_current_checkpoint.end()
                 );
-                SearchSection cache_candidate{
-                    .initial_state = AIPlanningStateCheckpoints(initial_state), // copy
-                    .goal = checkpoint
-                };
+                SearchSection cache_candidate(std::move(initial_state), checkpoint);
 
                 if (auto it = cached_searches_.find(cache_candidate); it != cached_searches_.end()) {
                     h_checkpoints += it->second;
                 } else {
-                    ai::Planner<
-                            AIPlanningStateCheckpoints,
-                            internal_hsum,
-                            ai::AStar,
-                            /*----- context ----- */
-                            PlanTable&,
-                            const QueryGraph&,
-                            const AdjacencyMatrix&,
-                            const CostFunction&,
-                            const CardinalityEstimator&
-                    > internal_planner;
-
                     internal_hsum h(PT, G, M, CF, CE);
-                    const double cost = internal_planner(std::move(initial_state), h, PT, G, M, CF, CE);
+                    const double cost = S_.search(internal_state_type(cache_candidate.initial_state()), // clone
+                                                  h, PT, G, M, CF, CE);
+                    S_.clear();
                     h_checkpoints += cost;
-                    cached_searches_.emplace_hint(it, cache_candidate, cost);
+                    cached_searches_.emplace_hint(it, std::move(cache_candidate), cost);
                 }
 
                 if (h_checkpoints >= h_greedy_bushy) {
@@ -1902,36 +1968,36 @@ template<
 void run_planner_config(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
                         const CardinalityEstimator &CE)
 {
-    ai::Planner<
-        State,
-        Heuristic,
-        Search,
-        /*----- context -----*/
-        PlanTable&,
-        const QueryGraph&,
-        const AdjacencyMatrix&,
-        const CostFunction&,
-        const CardinalityEstimator&
-    > P;
-
-    decltype(P)::state_type::RESET_STATE_COUNTERS();
-    auto initial_state = decltype(P)::state_type::CreateInitial(G, M);
+    // State::ALLOCATOR(list_allocator(get_pagesize(), AllocationStrategy::Exponential));
+    State::ALLOCATOR(malloc_allocator{});
+    State::RESET_STATE_COUNTERS();
+    State initial_state = State::CreateInitial(G, M);
     try {
-        auto ptr = malloc(4096U * 1024 * 1024); // 4 GiB
-        free(ptr);
-        auto h = typename decltype(P)::heuristic_type(PT, G, M, CF, CE);
-        P(std::move(initial_state), h, PT, G, M, CF, CE);
+        Heuristic h = Heuristic(PT, G, M, CF, CE);
+        ai::solve<
+            State,
+            Heuristic,
+            Search,
+            /*----- context -----*/
+            PlanTable&,
+            const QueryGraph&,
+            const AdjacencyMatrix&,
+            const CostFunction&,
+            const CardinalityEstimator&
+        >(std::move(initial_state), h, PT, G, M, CF, CE);
     } catch (std::logic_error err) {
         std::cerr << "search did not reach a goal state, fall back to DPccp" << std::endl;
         DPccp dpccp;
         dpccp(G, CF, PT);
     }
-
 #ifdef WITH_STATE_COUNTERS
-    std::cerr <<   "States generated: " << decltype(P)::state_type::NUM_STATES_GENERATED()
-              << "\nStates expanded: " << decltype(P)::state_type::NUM_STATES_EXPANDED()
-              << "\nCalculated cost: " << PT.get_final().cost << std::endl;
+    std::cerr <<   "States generated: " << State::NUM_STATES_GENERATED()
+              << "\nStates expanded: " << State::NUM_STATES_EXPANDED()
+              << "\nStates constructed: " << State::NUM_STATES_CONSTRUCTED()
+              << "\nStates disposed: " << State::NUM_STATES_DISPOSED()
+              << std::endl;
 #endif
+    State::ALLOCATOR(malloc_allocator{}); // reset allocator
 }
 
 void AIPlanning::operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const
@@ -1947,8 +2013,8 @@ void AIPlanning::operator()(const QueryGraph &G, const CostFunction &CF, PlanTab
     if (IS_PLANNER_CONFIG(STATE, HEURISTIC, SEARCH)) \
     { \
         run_planner_config<\
-            AIPlanningState ## STATE,\
-            heuristics:: HEURISTIC <AIPlanningState ## STATE>,\
+            AIPlanningState ## STATE<malloc_allocator>,\
+            heuristics:: HEURISTIC <AIPlanningState ## STATE<malloc_allocator>>,\
             SEARCH>\
         (PT, G, M, CF, CE); \
     }
@@ -1969,6 +2035,8 @@ void AIPlanning::operator()(const QueryGraph &G, const CostFunction &CF, PlanTab
     else EMIT_PLANNER_CONFIG(BottomUpOpt,   checkpoints,                    AStar                           )
     else EMIT_PLANNER_CONFIG(BottomUpOpt,   checkpoints,                    beam_search                     )
     else EMIT_PLANNER_CONFIG(BottomUpOpt,   checkpoints,                    dynamic_beam_search             )
+    else EMIT_PLANNER_CONFIG(BottomUp,      perfect_oracle,                 AStar                           )
+    else EMIT_PLANNER_CONFIG(BottomUp,      perfect_oracle,                 beam_search                     )
     else EMIT_PLANNER_CONFIG(BottomUp,      path,                           AStar                           )
     else EMIT_PLANNER_CONFIG(BottomUp,      path,                           beam_search                     )
     else { throw std::invalid_argument("illegal planner configuration"); }

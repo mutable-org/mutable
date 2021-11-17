@@ -160,11 +160,26 @@ struct QueryGraph
     std::vector<order_type> order_by_; ///< the order
     struct { uint64_t limit = 0, offset = 0; } limit_; ///< limit: limit and offset
 
-    GetCorrelationInfo *info_; ///< the correlation information about all sources in this graph
+    GetCorrelationInfo *info_ = nullptr; ///< the correlation information about all sources in this graph
 
     public:
+    friend void swap(QueryGraph &first, QueryGraph &second) {
+        using std::swap;
+        swap(first.sources_,    second.sources_);
+        swap(first.joins_,      second.joins_);
+        swap(first.group_by_,   second.group_by_);
+        swap(first.projections_,   second.projections_);
+        swap(first.order_by_,   second.order_by_);
+        swap(first.limit_,   second.limit_);
+    }
+
     QueryGraph();
     ~QueryGraph();
+
+    QueryGraph(const QueryGraph&) = delete;
+    QueryGraph(QueryGraph &&other) : QueryGraph() { swap(*this, other); }
+
+    QueryGraph & operator=(QueryGraph &&other) { swap(*this, other); return *this; }
 
     static std::unique_ptr<QueryGraph> Build(const Stmt &stmt);
 
@@ -276,13 +291,15 @@ struct AdjacencyMatrix
     };
 
     private:
-    SmallBitset m_[SmallBitset::CAPACITY]; ///< matrix entries
+    std::array<SmallBitset, SmallBitset::CAPACITY> m_; ///< matrix entries
     std::size_t num_vertices_ = 0; ///< number of sources of the `QueryGraph` represented by this matrix
 
     public:
     AdjacencyMatrix() { }
     AdjacencyMatrix(std::size_t num_vertices) : num_vertices_(num_vertices) { }
-    AdjacencyMatrix(const QueryGraph &query_graph) : num_vertices_(query_graph.sources().size())
+
+    AdjacencyMatrix(const QueryGraph &query_graph)
+        : num_vertices_(query_graph.sources().size())
     {
         /* Iterate over all joins in the query graph. */
         for (auto join : query_graph.joins()) {
@@ -295,6 +312,11 @@ struct AdjacencyMatrix
         }
 
     }
+
+    AdjacencyMatrix(const AdjacencyMatrix&) = delete;
+    AdjacencyMatrix(AdjacencyMatrix&&) = default;
+
+    AdjacencyMatrix & operator=(AdjacencyMatrix&&) = default;
 
     /** Returns the bit at position `(i, j)`.  Both `i` and `j` must be in bounds. */
     Proxy<true> operator()(std::size_t i, std::size_t j) const { return Proxy<true>(*this, i, j); }

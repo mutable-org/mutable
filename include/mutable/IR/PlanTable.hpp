@@ -12,7 +12,8 @@ namespace m {
 
 /** This table represents all explored plans with their sub-plans, estimated size, cost, and further optional
  * properties. */
-struct PlanTable {
+struct PlanTable
+{
     using Subproblem = QueryGraph::Subproblem;
 
     friend void swap(PlanTable &first, PlanTable &second) {
@@ -65,7 +66,7 @@ struct PlanTable {
 
     ~PlanTable() { delete[] cost_table_; }
 
-    PlanTable &operator=(PlanTable &&other) {
+    PlanTable & operator=(PlanTable &&other) {
         swap(*this, other);
         return *this;
     }

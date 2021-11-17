@@ -2036,6 +2036,8 @@ void AIPlanning::operator()(const QueryGraph &G, const CostFunction &CF, PlanTab
     else EMIT_PLANNER_CONFIG(BottomUpOpt,   checkpoints,                    AStar                           )
     else EMIT_PLANNER_CONFIG(BottomUpOpt,   checkpoints,                    beam_search                     )
     else EMIT_PLANNER_CONFIG(BottomUpOpt,   checkpoints,                    dynamic_beam_search             )
+    else EMIT_PLANNER_CONFIG(BottomUpOpt,   checkpoints,                    acyclic_beam_search             )
+    else EMIT_PLANNER_CONFIG(BottomUpOpt,   checkpoints,                    acyclic_dynamic_beam_search     )
     else EMIT_PLANNER_CONFIG(BottomUp,      perfect_oracle,                 AStar                           )
     else EMIT_PLANNER_CONFIG(BottomUp,      perfect_oracle,                 beam_search                     )
     else EMIT_PLANNER_CONFIG(BottomUp,      path,                           AStar                           )

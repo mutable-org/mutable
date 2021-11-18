@@ -2,6 +2,7 @@
 
 #include "globals.hpp"
 #include <algorithm>
+#include <cstring>
 #include <mutable/IR/CNF.hpp>
 #include <mutable/IR/Operator.hpp>
 #include <mutable/IR/QueryGraph.hpp>
@@ -165,6 +166,12 @@ InjectionCardinalityEstimator::InjectionCardinalityEstimator(Diagnostic &diag, c
     read_json(diag, in);
 }
 
+InjectionCardinalityEstimator::~InjectionCardinalityEstimator()
+{
+    for (auto entry : cardinality_table_)
+        free((void*) entry.first);
+}
+
 void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in)
 {
     Position pos("InjectionCardinalityEstimator");
@@ -202,23 +209,26 @@ void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in
             continue;
         }
 
-        oss_.str("");
+        buf_.clear();
         prev_relation.clear();
         try {
             for (auto it = relations_array->begin(); it != relations_array->end(); ++it) {
                 std::string current(it->get<std::string>());
                 if (current <= prev_relation) [[unlikely]]
                     throw std::invalid_argument("relations must be sorted lexicographically and must not contain duplicates");
-                if (it != relations_array->begin()) oss_ << '$';
-                oss_ << current;
+                if (it != relations_array->begin())
+                    buf_.emplace_back('$');
+                buf_append(current);
                 prev_relation = std::move(current);
             }
         } catch (std::invalid_argument) {
-            diag.w(pos) << "Invalid identifier '" << oss_.str()
+            diag.w(pos) << "Invalid identifier '" << std::string(buf_.cbegin(), buf_.cend())
                         << "', must contain relations in lexicographical order and must not contain duplicates.\n";
             continue;
         }
-        auto res = cardinality_table_.emplace(oss_.str(), *size);
+        buf_.emplace_back(0);
+        auto str = strdup(buf_view());
+        auto res = cardinality_table_.emplace(str, *size);
         insist(res.second, "insertion must not fail as we do not allow for duplicates in the input file");
     }
 }
@@ -297,7 +307,7 @@ InjectionCardinalityEstimator::estimate_grouping(const DataModel &_data, const s
     for (auto e : exprs)
         oss_ << '#' << *e;
 
-    if (auto it = cardinality_table_.find(oss_.str()); it != cardinality_table_.end()) {
+    if (auto it = cardinality_table_.find(oss_.str().c_str()); it != cardinality_table_.end()) {
         model->size_ = it->second;
     } else {
         model->size_ = data.size_; // this model cannot estimate the effects of grouping
@@ -324,8 +334,8 @@ InjectionCardinalityEstimator::estimate_join(const DataModel &_left, const DataM
     insist(std::is_sorted(model->relations_.begin(), model->relations_.end(),
                           [](const char *left, const char *right) { return strcmp(left, right) < 0; }),
            "relations must be sorted lexicographically");
-    std::string id = make_identifier(*model);
 
+    const char *id = make_identifier(*model);
     if (auto it = cardinality_table_.find(id); it != cardinality_table_.end()) {
         /* Lookup cardinality in table. */
         model->size_ = it->second;
@@ -351,7 +361,7 @@ void InjectionCardinalityEstimator::print(std::ostream &out) const
     constexpr uint32_t max_rows_printed = 100;     /// Number of rows of the cardinality_table printed
     std::size_t sub_len = 13;                         /// Length of Subproblem column
     for (auto &entry : cardinality_table_)
-        sub_len = std::max(sub_len, entry.first.length());
+        sub_len = std::max(sub_len, strlen(entry.first));
 
     out << std::left << "InjectionCardinalityEstimator for the Database: " << name_of_database_ << "\n"
         << std::setw(sub_len) << "Subproblem" << "Size" << "\n" << std::right;
@@ -365,14 +375,16 @@ void InjectionCardinalityEstimator::print(std::ostream &out) const
     }
 }
 
-std::string InjectionCardinalityEstimator::make_identifier(const InjectionCardinalityDataModel &model) const
+const char * InjectionCardinalityEstimator::make_identifier(const InjectionCardinalityDataModel &model) const
 {
-    oss_.str("");
+    buf_.clear();
     for (auto it = model.relations_.begin(); it != model.relations_.end(); ++it) {
-        if (it != model.relations_.begin()) oss_ << '$';
-        oss_ << *it;
+        if (it != model.relations_.begin())
+            buf_.emplace_back('$');
+        buf_append(*it);
     }
-    return oss_.str();
+    buf_.emplace_back(0);
+    return buf_view();
 }
 
 std::unique_ptr<CardinalityEstimator>

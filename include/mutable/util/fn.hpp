@@ -57,6 +57,8 @@ struct StrHash
         }
         return hash;
     }
+
+    uint64_t operator()(const std::string &s) const { return operator()(s.c_str()); }
 };
 
 /** Compares two cstrings for equality. */

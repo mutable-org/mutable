@@ -4,7 +4,9 @@
 #include <iostream>
 #include <mutable/util/ADT.hpp>
 #include <nlohmann/json.hpp>
+#include <sstream>
 #include <unordered_map>
+#include <vector>
 
 
 namespace m {
@@ -201,10 +203,13 @@ struct InjectionCardinalityEstimator : CardinalityEstimator
     };
 
     private:
-    ///> used to construct identifiers
+    ///> buffer used to construct identifiers
+    mutable std::vector<char> buf_;
+    ///> buffer used to construct identifiers
     mutable std::ostringstream oss_;
+
     const char *name_of_database_;
-    std::unordered_map<std::string, std::size_t> cardinality_table_;
+    std::unordered_map<const char*, std::size_t, StrHash, StrEqual> cardinality_table_;
     CartesianProductEstimator fallback_;
 
     public:
@@ -224,6 +229,8 @@ struct InjectionCardinalityEstimator : CardinalityEstimator
      * @param in inputstream containing the injected cardinalities in JSON format
      */
     InjectionCardinalityEstimator(Diagnostic &diag, const char *name_of_database, std::istream &in);
+
+    ~InjectionCardinalityEstimator();
 
 
     /*==================================================================================================================
@@ -250,7 +257,13 @@ struct InjectionCardinalityEstimator : CardinalityEstimator
     private:
     void read_json(Diagnostic &diag, std::istream &in);
     void print(std::ostream &out) const override;
-    std::string make_identifier(const InjectionCardinalityDataModel &model) const;
+    void buf_append(const char *s) const { while (*s) buf_.emplace_back(*s++); }
+    void buf_append(const std::string &s) const {
+        buf_.reserve(buf_.size() + s.size());
+        buf_append(s.c_str());
+    }
+    const char * buf_view() const { return &buf_[0]; }
+    const char * make_identifier(const InjectionCardinalityDataModel &model) const;
 };
 
 }

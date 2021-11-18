@@ -20,7 +20,7 @@ double SimpleCostFunction::calculate_join_cost(const PlanTable &PT, const Cardin
 }
 
 double SimpleCostFunction::calculate_grouping_cost(const PlanTable &PT, const CardinalityEstimator &CE,
-                                                   const Subproblem &sub, std::vector<const Expr*> &group_by) const
+                                                   const Subproblem &sub, std::vector<const Expr*>&) const
 {
     return double(CE.predict_cardinality(*PT[sub].model)) + PT[sub].cost;
 }

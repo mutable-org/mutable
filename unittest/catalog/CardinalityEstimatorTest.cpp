@@ -82,13 +82,16 @@ TEST_CASE("Injection estimator estimates", "[core][catalog][cardinality]")
         auto non_existing_entry_model = ICE.estimate_scan(*G, Subproblem(1UL << 1));
         CHECK(ICE.predict_cardinality(*non_existing_entry_model) == 10);
     }
-    SECTION("estimate_filter") {
-        auto existing_entry_model = ICE.estimate_scan(*G, Subproblem(1UL));
-        auto non_existing_entry_model = ICE.estimate_scan(*G, Subproblem(1UL << 1));
+    SECTION("estimate_filter")
+    {
         cnf::CNF filter;
+
+        auto existing_entry_model = ICE.estimate_scan(*G, Subproblem(1UL));
         auto filter_existing_entry_model = ICE.estimate_filter(*existing_entry_model, filter);
-        auto filter_non_existing_entry_model = ICE.estimate_filter(*non_existing_entry_model, filter);
         CHECK(ICE.predict_cardinality(*filter_existing_entry_model) == 500);
+
+        auto non_existing_entry_model = ICE.estimate_scan(*G, Subproblem(1UL << 1));
+        auto filter_non_existing_entry_model = ICE.estimate_filter(*non_existing_entry_model, filter);
         CHECK(ICE.predict_cardinality(*filter_non_existing_entry_model) == 10);
     }
     SECTION("estimate_limit") {

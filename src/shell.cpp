@@ -144,11 +144,11 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             }
 
             std::unique_ptr<Consumer> plan;
-            auto print = [&](const Schema &S, const Tuple &t) { t.print(std::cout, S); std::cout << '\n'; };
             if (Options::Get().benchmark) {
                 plan = std::make_unique<NoOpOperator>(std::cout);
             } else {
 #if 0
+                auto print = [&](const Schema &S, const Tuple &t) { t.print(std::cout, S); std::cout << '\n'; };
                 plan = std::make_unique<CallbackOperator>(print);
 #else
                 plan = std::make_unique<PrintOperator>(std::cout);

@@ -21,7 +21,7 @@ CardinalityEstimator::DataModel::~DataModel() { }
 
 CardinalityEstimator::~CardinalityEstimator() { }
 
-double CardinalityEstimator::predict_number_distinct_values(const DataModel &data) const
+double CardinalityEstimator::predict_number_distinct_values(const DataModel&) const
 {
     throw data_model_exception("predicting the number of distinct values is not supported by this data model.");
 };
@@ -135,23 +135,6 @@ CardinalityEstimator::CreateCartesianProductEstimator(const char*)
  * InjectionCardinalityEstimator
  *====================================================================================================================*/
 
-/*----- Helper functions for InjectionCardinalityEstimator -----------------------------------------------------------*/
-
-namespace {
-
-template<typename It>
-std::string make_identifier(const It begin, const It end)
-{
-    std::ostringstream oss;
-    for (auto it = begin; it != end; ++it) {
-        if (it != begin) oss << '$';
-        oss << *it;
-    }
-    return oss.str();
-}
-
-}
-
 /*----- Constructors -------------------------------------------------------------------------------------------------*/
 
 InjectionCardinalityEstimator::InjectionCardinalityEstimator() : InjectionCardinalityEstimator("default") {}
@@ -159,7 +142,6 @@ InjectionCardinalityEstimator::InjectionCardinalityEstimator() : InjectionCardin
 InjectionCardinalityEstimator::InjectionCardinalityEstimator(const char *name_of_database)
     : name_of_database_(name_of_database)
 {
-    Catalog &C = Catalog::Get();
     Diagnostic diag(Options::Get().has_color, std::cout, std::cerr);
     Position pos("InjectionCardinalityEstimator");
 
@@ -185,9 +167,7 @@ InjectionCardinalityEstimator::InjectionCardinalityEstimator(Diagnostic &diag, c
 
 void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in)
 {
-    Catalog &C = Catalog::Get();
     Position pos("InjectionCardinalityEstimator");
-    std::ostringstream oss;
     std::string prev_relation;
 
     using json = nlohmann::json;
@@ -222,23 +202,23 @@ void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in
             continue;
         }
 
-        oss.str("");
+        oss_.str("");
         prev_relation.clear();
         try {
             for (auto it = relations_array->begin(); it != relations_array->end(); ++it) {
-                if (it != relations_array->begin()) oss << '$';
                 std::string current(it->get<std::string>());
                 if (current <= prev_relation) [[unlikely]]
                     throw std::invalid_argument("relations must be sorted lexicographically and must not contain duplicates");
-                oss << current;
+                if (it != relations_array->begin()) oss_ << '$';
+                oss_ << current;
                 prev_relation = std::move(current);
             }
         } catch (std::invalid_argument) {
-            diag.w(pos) << "Invalid identifier '" << oss.str()
+            diag.w(pos) << "Invalid identifier '" << oss_.str()
                         << "', must contain relations in lexicographical order and must not contain duplicates.\n";
             continue;
         }
-        auto res = cardinality_table_.emplace(oss.str(), *size);
+        auto res = cardinality_table_.emplace(oss_.str(), *size);
         insist(res.second, "insertion must not fail as we do not allow for duplicates in the input file");
     }
 }
@@ -266,6 +246,7 @@ std::unique_ptr<DataModel> InjectionCardinalityEstimator::estimate_scan(const Qu
         model->relations_.push_back(BT->table().name);
     }
 
+    // Note: we bypass `make_identifier()` as we know that the model consists of a single relation
     if (auto it = cardinality_table_.find(model->relations_[0]); it != cardinality_table_.end()) {
         model->size_ = it->second;
     } else {
@@ -311,12 +292,12 @@ InjectionCardinalityEstimator::estimate_grouping(const DataModel &_data, const s
     }
 
     /* Combine grouping keys into an identifier. */
-    std::ostringstream oss;
-    oss << "g";
+    oss_.str("");
+    oss_ << "g";
     for (auto e : exprs)
-        oss << '#' << *e;
+        oss_ << '#' << *e;
 
-    if (auto it = cardinality_table_.find(oss.str()); it != cardinality_table_.end()) {
+    if (auto it = cardinality_table_.find(oss_.str()); it != cardinality_table_.end()) {
         model->size_ = it->second;
     } else {
         model->size_ = data.size_; // this model cannot estimate the effects of grouping
@@ -343,7 +324,7 @@ InjectionCardinalityEstimator::estimate_join(const DataModel &_left, const DataM
     insist(std::is_sorted(model->relations_.begin(), model->relations_.end(),
                           [](const char *left, const char *right) { return strcmp(left, right) < 0; }),
            "relations must be sorted lexicographically");
-    std::string id = make_identifier(model->relations_.begin(), model->relations_.end());
+    std::string id = make_identifier(*model);
 
     if (auto it = cardinality_table_.find(id); it != cardinality_table_.end()) {
         /* Lookup cardinality in table. */
@@ -382,6 +363,16 @@ void InjectionCardinalityEstimator::print(std::ostream &out) const
         out << std::left << std::setw(sub_len) << entry.first << entry.second << "\n";
         counter++;
     }
+}
+
+std::string InjectionCardinalityEstimator::make_identifier(const InjectionCardinalityDataModel &model) const
+{
+    oss_.str("");
+    for (auto it = model.relations_.begin(); it != model.relations_.end(); ++it) {
+        if (it != model.relations_.begin()) oss_ << '$';
+        oss_ << *it;
+    }
+    return oss_.str();
 }
 
 std::unique_ptr<CardinalityEstimator>

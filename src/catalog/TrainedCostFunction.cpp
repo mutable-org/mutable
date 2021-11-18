@@ -35,6 +35,8 @@ double TrainedCostFunction::calculate_join_cost(const PlanTable &PT, const Cardi
     insist(cardinality_left > 0 and cardinality_right > 0);
     auto redundancy_left = cardinality_left / num_distinct_values_left;
     auto redundancy_right = cardinality_right / num_distinct_values_right;
+    // TODO before calculating the model for the join result, check whether we already have that model in the plan table
+    // to avoid recalculating it
     auto post_join = CE.estimate_join(*PT[left].model, *PT[right].model, condition);
     auto result_size = CE.predict_cardinality(*post_join);
 

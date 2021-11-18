@@ -3,24 +3,24 @@
 #include "mutable/IR/PlanTable.hpp"
 
 
-double m::SimpleCostFunction::calculate_filter_cost(const m::PlanTable &PT, const m::Subproblem &sub,
-                                                    const m::cnf::CNF&) const
+using namespace m;
+
+
+double SimpleCostFunction::calculate_filter_cost(const PlanTable &PT, const CardinalityEstimator &CE,
+                                                 const Subproblem &sub, const cnf::CNF&) const
 {
-    auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
-    return double(CE.predict_cardinality(*PT[sub].model)) + double(PT[sub].cost);
+    return double(CE.predict_cardinality(*PT[sub].model)) + PT[sub].cost;
 }
 
-double m::SimpleCostFunction::calculate_join_cost(const m::PlanTable &PT, const m::Subproblem &left,
-                                                  const m::Subproblem &right, const m::cnf::CNF&) const
+double SimpleCostFunction::calculate_join_cost(const PlanTable &PT, const CardinalityEstimator &CE,
+                                               const Subproblem &left, const Subproblem &right, const cnf::CNF&) const
 {
-    auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
-    return double(CE.predict_cardinality(*PT[left].model)) + double(CE.predict_cardinality(*PT[right].model))
-        + double(PT[left].cost) + double(PT[right].cost);
+    return double(CE.predict_cardinality(*PT[left].model)) + double(CE.predict_cardinality(*PT[right].model)) +
+           PT[left].cost + PT[right].cost;
 }
 
-double m::SimpleCostFunction::calculate_grouping_cost(const m::PlanTable &PT, const m::Subproblem &sub,
-                                                      std::vector<const Expr*> &group_by) const
+double SimpleCostFunction::calculate_grouping_cost(const PlanTable &PT, const CardinalityEstimator &CE,
+                                                   const Subproblem &sub, std::vector<const Expr*> &group_by) const
 {
-    auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
-    return double(CE.predict_cardinality(*PT[sub].model)) + double(PT[sub].cost);
+    return double(CE.predict_cardinality(*PT[sub].model)) + PT[sub].cost;
 }

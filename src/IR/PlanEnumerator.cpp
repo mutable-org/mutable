@@ -949,7 +949,7 @@ struct AIPlanningStateBottomUpOpt : AIPlanningStateBase<AIPlanningStateBottomUpO
         : base_type(g, size, std::move(subproblems))
         , joins_(std::move(joins))
     {
-        insist(size == 0 or bool(joins));
+        insist(size == 0 or bool(joins_));
 #ifndef NDEBUG
         insist(std::is_sorted(cbegin(), cend(), subproblem_lt));
         for (std::size_t idx = 0; idx != size; ++idx) {

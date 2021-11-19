@@ -232,6 +232,11 @@ struct InjectionCardinalityEstimator : CardinalityEstimator
 
     ~InjectionCardinalityEstimator();
 
+    InjectionCardinalityEstimator(const InjectionCardinalityEstimator&) = delete;
+    InjectionCardinalityEstimator(InjectionCardinalityEstimator&&) = default;
+
+    InjectionCardinalityEstimator & operator=(InjectionCardinalityEstimator&&) = default;
+
 
     /*==================================================================================================================
      * Model calculation

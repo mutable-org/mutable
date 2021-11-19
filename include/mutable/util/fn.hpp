@@ -652,3 +652,12 @@ constexpr bool is_range_wide_enough(T a, T b, std::size_t n)
         static_assert(std::is_same_v<T, T>, "unsupported type");
     }
 }
+
+/** Approximates n! using the gamma function.  See https://en.cppreference.com/w/cpp/numeric/math/lgamma and
+ * https://en.wikipedia.org/wiki/Binomial_coefficient#In_programming_languages */
+template<typename T>
+std::enable_if_t<std::is_integral_v<T>, unsigned long long>
+n_choose_k_approx(T n, T k)
+{
+    return std::exp(std::lgamma(n + T(1)) - std::lgamma(k + T(1)) - std::lgamma(n - k + T(1)));
+}

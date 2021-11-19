@@ -1565,14 +1565,18 @@ struct checkpoints
 
         for (std::size_t i = 0; i != num_checkpoints; ++i) {
             std::vector<PotentialCheckpoint> &connected_subproblems = checkpoint_connected_subproblems_.emplace_back();
-            // TODO reserve size for connected_subproblems
             insist(i * CHECKPOINT_DISTANCE < num_sources);
             const std::size_t checkpoint_size = num_sources - (i + 1) * CHECKPOINT_DISTANCE;
+
+            /* Reserve size for connected_subproblems. */
+            const auto est_num_checkpoints = n_choose_k_approx(num_sources, checkpoint_size);
+            connected_subproblems.reserve(est_num_checkpoints);
+
             for (auto S = GospersHack::enumerate_all(checkpoint_size, num_sources); S; ++S) {
                 if (M.is_connected(*S)) {
                     compute_data_model_recursive(*S, PT, G, M, CE);
                     std::size_t size = CE.predict_cardinality(*PT[*S].model);
-                    connected_subproblems.emplace_back(PotentialCheckpoint{.checkpoint = *S, .size = size});
+                    connected_subproblems.emplace_back(PotentialCheckpoint{*S, size});
                 }
             }
         }

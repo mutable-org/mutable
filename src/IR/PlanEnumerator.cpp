@@ -1573,7 +1573,7 @@ struct checkpoints
     /** Calculates the smallest (w.r.t. estimated cardinality) checkpoint for a given `iteration` for a given `state` on
      * the way to `goal`.  The `iteration` describes whether we look for the 1st, 2nd, etc. checkpoint, starting from
      * the goal of the whole search.  For example, with a query of 15 relations and a `CHECKPOINT_DISTANCE` of 5, the
-     * 1st checkpoint would contain 10 relations and the 2nd checkpoint would contain 5 relations.  A potential
+     * 1st checkpoint would contain 5 relations and the 2nd checkpoint would contain 10 relations.  A potential
      * checkpoint must be a subset of `superset`. */
     Subproblem calculate_checkpoint(std::size_t iteration, const state_type &state, const Subproblem superset) {
         insist(iteration < checkpoint_connected_subproblems_.size());

@@ -113,7 +113,7 @@ struct SubsetEnumerator
         : set_(set)
         , GH_(GospersHack::enumerate_all(size, set.size()))
     {
-        insist(set.size() >= size);
+        insist(size <= set.size());
     }
 
     SubsetEnumerator & operator++() { ++GH_; return *this; }

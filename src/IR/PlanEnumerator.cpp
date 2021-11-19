@@ -482,15 +482,12 @@ void compute_data_model_recursive(const Subproblem S, PlanTable &PT, const Query
     insist(M.is_connected(S), "S must be a connected subproblem");
 
     if (PT[S].model) return; // we already have a data model
+    insist(S.size() > 1, "data sources must have a model by construction of the plan table");
 
-    if (S.size() == 1) {
-        PT[S].model = CE.estimate_scan(G, S);
-    } else {
-        auto [left, right] = decompose(S, M);
-        compute_data_model_recursive(left,  PT, G, M, CE);
-        compute_data_model_recursive(right, PT, G, M, CE);
-        PT[S].model = CE.estimate_join(*PT[left].model, *PT[right].model, cnf::CNF());
-    }
+    auto [left, right] = decompose(S, M);
+    compute_data_model_recursive(left,  PT, G, M, CE);
+    compute_data_model_recursive(right, PT, G, M, CE);
+    PT[S].model = CE.estimate_join(*PT[left].model, *PT[right].model, cnf::CNF());
 }
 
 /*----------------------------------------------------------------------------------------------------------------------

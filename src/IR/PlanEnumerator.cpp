@@ -460,36 +460,6 @@ namespace {
 /** A "less than" comparator for `Subproblem`s. */
 bool subproblem_lt(Subproblem left, Subproblem right) { return uint64_t(left) < uint64_t(right); };
 
-/** Decomposes `Subproblem` `S` into two smaller, non-empty `Subproblem`s, that are connected w.r.t. `M`. */
-std::pair<Subproblem, Subproblem> decompose(const Subproblem S, const AdjacencyMatrix &M)
-{
-    insist(S.size() >= 2);
-    Subproblem left = least_subset(S);
-    Subproblem right = S - left;
-    while ((not M.is_connected(left)) || (not M.is_connected(right))) {
-        left = next_subset(left, S);
-        right = S - left;
-    }
-    insist((left | right) == S, "incorrect set decomposition");
-    return {left, right};
-}
-
-/** Computes the `DataModel` of `Subproblem` `S` by recursive decomposition.  Requires that `S` is *connected* in `G`.
- */
-void compute_data_model_recursive(const Subproblem S, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
-                                  const CardinalityEstimator &CE)
-{
-    insist(M.is_connected(S), "S must be a connected subproblem");
-
-    if (PT[S].model) return; // we already have a data model
-    insist(S.size() > 1, "data sources must have a model by construction of the plan table");
-
-    auto [left, right] = decompose(S, M);
-    compute_data_model_recursive(left,  PT, G, M, CE);
-    compute_data_model_recursive(right, PT, G, M, CE);
-    PT[S].model = CE.estimate_join(*PT[left].model, *PT[right].model, cnf::CNF());
-}
-
 /*----------------------------------------------------------------------------------------------------------------------
  * States
  *--------------------------------------------------------------------------------------------------------------------*/
@@ -1802,6 +1772,35 @@ struct checkpoints
         std::cerr << " `  h_checkpoints = " << h_checkpoints << '\n';
 #endif
         return h_checkpoints;
+    }
+
+    private:
+    /** Computes the `DataModel` of `Subproblem` `S` by recursive decomposition.  Requires that `S` is *connected* in `G`.
+     */
+    void compute_data_model_recursive(const Subproblem S, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                                      const CardinalityEstimator &CE) {
+        insist(M.is_connected(S), "S must be a connected subproblem");
+
+        if (PT[S].model) return; // we already have a data model
+        insist(S.size() > 1, "data sources must have a model by construction of the plan table");
+
+        auto [left, right] = decompose(S, M);
+        compute_data_model_recursive(left,  PT, G, M, CE);
+        compute_data_model_recursive(right, PT, G, M, CE);
+        PT[S].model = CE.estimate_join(*PT[left].model, *PT[right].model, cnf::CNF());
+    }
+
+    /** Decomposes `Subproblem` `S` into two smaller, non-empty `Subproblem`s, that are connected w.r.t. `M`. */
+    std::pair<Subproblem, Subproblem> decompose(const Subproblem S, const AdjacencyMatrix &M) {
+        insist(S.size() >= 2);
+        Subproblem left = least_subset(S); // TODO decompose a single relation, not a subset; only enumerate deep plans
+        Subproblem right = S - left;
+        while ((not M.is_connected(left)) || (not M.is_connected(right))) {
+            left = next_subset(left, S);
+            right = S - left;
+        }
+        insist((left | right) == S, "incorrect set decomposition");
+        return {left, right};
     }
 };
 

@@ -1576,13 +1576,11 @@ struct checkpoints
                     connected_subproblems.emplace_back(PotentialCheckpoint{*S, size});
                 }
             }
-        }
 
-        /* Sort the potential checkpoints by estimated subproblem size in ascending order to speed up search for best
-         * checkpoint.  This way, the first element in the list, that can be reached from a certain state, is the one
-         * with the smallest size and thus the checkpoint.  */
-        for (std::size_t i = 0; i < checkpoint_connected_subproblems_.size(); i++) {
-            std::sort(checkpoint_connected_subproblems_[i].begin(), checkpoint_connected_subproblems_[i].end(),
+            /* Sort the potential checkpoints by estimated subproblem size in ascending order to speed up search for
+             * best checkpoint.  This way, the first element in the list, that can be reached from a certain state, is
+             * the one with the smallest size and thus the checkpoint.  */
+            std::sort(connected_subproblems.begin(), connected_subproblems.end(),
                       [](PotentialCheckpoint left, PotentialCheckpoint right) { return left.size < right.size; });
         }
     }

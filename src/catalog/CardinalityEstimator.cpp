@@ -388,7 +388,7 @@ const char * InjectionCardinalityEstimator::make_identifier(const InjectionCardi
 }
 
 std::unique_ptr<CardinalityEstimator>
-        CardinalityEstimator::CreateInjectionCardinalityEstimator(const char *name_of_database)
+CardinalityEstimator::CreateInjectionCardinalityEstimator(const char *name_of_database)
 {
     return std::make_unique<InjectionCardinalityEstimator>(name_of_database);
 }

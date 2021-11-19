@@ -86,7 +86,6 @@ TEST_CASE("SmallBitset/least_subset", "[core][util][fn]")
     REQUIRE(least_subset(set) == SmallBitset(2UL));
 }
 
-
 TEST_CASE("SmallBitset/next_subset", "[core][util][fn]")
 {
     SmallBitset set(10UL); // 0b1010 <=> { 2, 8 }
@@ -95,6 +94,50 @@ TEST_CASE("SmallBitset/next_subset", "[core][util][fn]")
     REQUIRE(next_subset(SmallBitset(2UL), set) == SmallBitset(8UL));
     REQUIRE(next_subset(SmallBitset(8UL), set) == set);
     REQUIRE(next_subset(SmallBitset(10UL), set) == SmallBitset(0UL));
+}
+
+TEST_CASE("SubsetEnumerator", "[core][util]")
+{
+    SmallBitset S(0b1101UL);
+
+    SECTION("single")
+    {
+        SubsetEnumerator SE(S, 1);
+        CHECK(bool(SE));
+        CHECK(*SE == SmallBitset(0b0001UL));
+        ++SE;
+        CHECK(bool(SE));
+        CHECK(*SE == SmallBitset(0b0100UL));
+        ++SE;
+        CHECK(bool(SE));
+        CHECK(*SE == SmallBitset(0b1000UL));
+        ++SE;
+        CHECK_FALSE(bool(SE));
+    }
+
+    SECTION("two")
+    {
+        SubsetEnumerator SE(S, 2);
+        CHECK(bool(SE));
+        CHECK(*SE == SmallBitset(0b0101UL));
+        ++SE;
+        CHECK(bool(SE));
+        CHECK(*SE == SmallBitset(0b1001UL));
+        ++SE;
+        CHECK(bool(SE));
+        CHECK(*SE == SmallBitset(0b1100UL));
+        ++SE;
+        CHECK_FALSE(bool(SE));
+    }
+
+    SECTION("three")
+    {
+        SubsetEnumerator SE(S, 3);
+        CHECK(bool(SE));
+        CHECK(*SE == SmallBitset(0b1101UL));
+        ++SE;
+        CHECK_FALSE(bool(SE));
+    }
 }
 
 TEST_CASE("doubly_linked_list", "[core][util]")

@@ -1,6 +1,7 @@
 #pragma once
 
-#include "mutable/util/ADT.hpp"
+#include <mutable/util/ADT.hpp>
+#include <x86intrin.h>
 
 
 namespace m {
@@ -96,6 +97,31 @@ struct GospersHack
 
     /** Returns the current subset. */
     SmallBitset operator*() const { return SmallBitset(set_); }
+};
+
+/** This class efficiently enumerates all subsets of a given size. */
+struct SubsetEnumerator
+{
+    private:
+    ///> the set to compute the power set of
+    SmallBitset set_;
+    ///> used to enumerate the power set of numbers 0 to n-1
+    GospersHack GH_;
+
+    public:
+    SubsetEnumerator(SmallBitset set, uint64_t size)
+        : set_(set)
+        , GH_(GospersHack::enumerate_all(size, set.size()))
+    {
+        insist(set.size() >= size);
+    }
+
+    SubsetEnumerator & operator++() { ++GH_; return *this; }
+    operator bool() const { return bool(GH_); }
+    SmallBitset operator*() const {
+        auto gh_set = *GH_;
+        return SmallBitset(_pdep_u64(uint64_t(gh_set), uint64_t(set_)));
+    }
 };
 
 }

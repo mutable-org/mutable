@@ -35,11 +35,11 @@ struct PaxStore : Store
     std::size_t num_rows_per_block() const { return num_rows_per_block_; }
     uint32_t block_size() const { return block_size_; }
 
-    int offset(uint32_t idx) const {
+    uint32_t offset(uint32_t idx) const {
         insist(idx <= table().size(), "index out of range");
         return offsets_[idx];
     }
-    int offset(const Attribute &attr) const { return offset(attr.id); }
+    uint32_t offset(const Attribute &attr) const { return offset(attr.id); }
 
     void append() override {
         if (num_rows_ == capacity_)

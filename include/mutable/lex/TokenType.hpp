@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include <iostream>
 
 
@@ -11,6 +10,7 @@ enum TokenType
 #define DB_TOKENTYPE(tok) TK_##tok,
 #include "mutable/tables/TokenType.tbl"
 #undef DB_TOKENTYPE
+    TokenType_MAX = TK_EOF
 };
 
 inline char const * get_name(const TokenType tt)

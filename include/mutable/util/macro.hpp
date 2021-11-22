@@ -7,6 +7,7 @@
 #pragma once
 
 #include <cstdlib>
+#include <initializer_list>
 #include <iostream>
 
 namespace {
@@ -40,10 +41,13 @@ namespace {
 #define FIRST(X, ...) X
 #define TAIL(X, ...) __VA_ARGS__
 
+#define COUNT(LIST) (std::initializer_list<const char*>{ LIST(STRCOMMA) }.size())
+
 /*===== Define enum ==================================================================================================*/
 #define DECLARE_ENUM(LIST) \
     enum LIST { \
         LIST(COMMA) \
+        LIST##_MAX = COUNT(LIST) - 1U \
     }
 #define ENUM_TO_STR(LIST) LIST(STRCOMMA)
 #define DECL(NAME, TYPE) TYPE NAME;

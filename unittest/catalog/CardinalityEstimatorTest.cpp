@@ -76,12 +76,14 @@ TEST_CASE("Injection estimator estimates", "[core][catalog][cardinality]")
     //Always check if "A" == 500 because it is in the input_json
     //Always check if "B" == 10 because it is not in the input_json
 
-    SECTION("estimate_scan") {
+    SECTION("estimate_scan")
+    {
         auto existing_entry_model = ICE.estimate_scan(*G, Subproblem(1UL));
         CHECK(ICE.predict_cardinality(*existing_entry_model) == 500);
         auto non_existing_entry_model = ICE.estimate_scan(*G, Subproblem(1UL << 1));
         CHECK(ICE.predict_cardinality(*non_existing_entry_model) == 10);
     }
+
     SECTION("estimate_filter")
     {
         cnf::CNF filter;
@@ -94,7 +96,9 @@ TEST_CASE("Injection estimator estimates", "[core][catalog][cardinality]")
         auto filter_non_existing_entry_model = ICE.estimate_filter(*G, *non_existing_entry_model, filter);
         CHECK(ICE.predict_cardinality(*filter_non_existing_entry_model) == 10);
     }
-    SECTION("estimate_limit") {
+
+    SECTION("estimate_limit")
+    {
         auto existing_entry_model = ICE.estimate_scan(*G, Subproblem(1UL));
         auto non_existing_entry_model = ICE.estimate_scan(*G, Subproblem(1UL << 1));
         auto limit_existing_entry_model_high = ICE.estimate_limit(*G, *existing_entry_model, 5000, 0);
@@ -107,7 +111,9 @@ TEST_CASE("Injection estimator estimates", "[core][catalog][cardinality]")
         CHECK(ICE.predict_cardinality(*limit_existing_entry_model_low) == 8);
         CHECK(ICE.predict_cardinality(*limit_non_existing_entry_model_low) == 8);
     }
-    SECTION("estimate_grouping (empty)") {
+
+    SECTION("estimate_grouping (empty)")
+    {
         auto existing_entry_model = ICE.estimate_scan(*G, Subproblem(1UL));
         auto non_existing_entry_model = ICE.estimate_scan(*G, Subproblem(1UL << 1));
         std::vector<const Expr*> group_by;
@@ -116,7 +122,9 @@ TEST_CASE("Injection estimator estimates", "[core][catalog][cardinality]")
         CHECK(ICE.predict_cardinality(*grouping_existing_entry_model) == 1);
         CHECK(ICE.predict_cardinality(*grouping_non_existing_entry_model) == 1);
     }
-    SECTION("estimate_join") {
+
+    SECTION("estimate_join")
+    {
         auto existing_entry_model_one = ICE.estimate_scan(*G, Subproblem(1UL));
         auto non_existing_entry_model_two = ICE.estimate_scan(*G, Subproblem(1UL << 1));
         auto non_existing_entry_model_three = ICE.estimate_scan(*G, Subproblem(1UL << 2));
@@ -128,7 +136,9 @@ TEST_CASE("Injection estimator estimates", "[core][catalog][cardinality]")
         CHECK(ICE.predict_cardinality(*existing_entry_model_join) == 1000);
         CHECK(ICE.predict_cardinality(*non_existing_entry_model_join) == 4000);
     }
-    SECTION("wrong database, return cartesian") {
+
+    SECTION("wrong database, return cartesian")
+    {
         std::istringstream json_input_wrong_db;
         json_input_wrong_db.str("{ \"mine\": [{\"relations\": [\"A\", \"B\"], \"size\":1000}]}");
         InjectionCardinalityEstimator ice_wrong_db(diag, "yours", json_input_wrong_db);
@@ -142,6 +152,7 @@ TEST_CASE("Injection estimator estimates", "[core][catalog][cardinality]")
         CHECK(ice_wrong_db.predict_cardinality(*non_existing_entry_model_two) == 10);
         CHECK(ice_wrong_db.predict_cardinality(*non_existing_entry_model_join) == 50);
     }
+
 }
 
 TEST_CASE("Cartesian estimator estimates", "[core][catalog][cardinality]")
@@ -199,7 +210,8 @@ TEST_CASE("Cartesian estimator estimates", "[core][catalog][cardinality]")
     auto G = QueryGraph::Build(*S);
     CartesianProductEstimator CE;
 
-    SECTION("estimate_scan") {
+    SECTION("estimate_scan")
+    {
         auto scan_model_one = CE.estimate_scan(*G, Subproblem(1UL));
         auto scan_model_two = CE.estimate_scan(*G, Subproblem(1UL << 1));
         auto scan_model_three = CE.estimate_scan(*G, Subproblem(1UL << 2));
@@ -207,13 +219,17 @@ TEST_CASE("Cartesian estimator estimates", "[core][catalog][cardinality]")
         CHECK(CE.predict_cardinality(*scan_model_two) == 10);
         CHECK(CE.predict_cardinality(*scan_model_three) == 8);
     }
-    SECTION("estimate_filter") {
+
+    SECTION("estimate_filter")
+    {
         auto scan_model = CE.estimate_scan(*G, Subproblem(1UL));
         cnf::CNF filter;
         auto filter_model = CE.estimate_filter(*G, *scan_model, filter);
         CHECK(CE.predict_cardinality(*filter_model) == 5);
     }
-    SECTION("estimate_limit") {
+
+    SECTION("estimate_limit")
+    {
         auto scan_model_one = CE.estimate_scan(*G, Subproblem(1UL));
         auto scan_model_two = CE.estimate_scan(*G, Subproblem(1UL << 1));
         auto limit_model_one_high = CE.estimate_limit(*G, *scan_model_one, 5000, 0);
@@ -226,13 +242,17 @@ TEST_CASE("Cartesian estimator estimates", "[core][catalog][cardinality]")
         CHECK(CE.predict_cardinality(*limit_model_one_low) == 3);
         CHECK(CE.predict_cardinality(*limit_model_two_low) == 3);
     }
-    SECTION("estimate_grouping") {
+
+    SECTION("estimate_grouping")
+    {
         auto scan_model = CE.estimate_scan(*G, Subproblem(1UL));
         std::vector<const Expr *> group_by;
         auto grouping_model = CE.estimate_grouping(*G, *scan_model, group_by);
         CHECK(CE.predict_cardinality(*grouping_model) == 5);
     }
-    SECTION("estimate_join") {
+
+    SECTION("estimate_join")
+    {
         auto scan_model_one = CE.estimate_scan(*G, Subproblem(1UL));
         auto scan_model_two = CE.estimate_scan(*G, Subproblem(1UL << 1));
         cnf::CNF condition;

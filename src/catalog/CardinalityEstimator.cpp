@@ -5,6 +5,7 @@
 #include <cstring>
 #include <mutable/IR/CNF.hpp>
 #include <mutable/IR/Operator.hpp>
+#include <mutable/IR/PlanTable.hpp>
 #include <mutable/IR/QueryGraph.hpp>
 #include <mutable/util/Diagnostic.hpp>
 #include <nlohmann/json.hpp>
@@ -115,6 +116,19 @@ CartesianProductEstimator::estimate_join(const QueryGraph&, const DataModel &_le
     auto right = as<const CartesianProductDataModel>(_right);
     auto model = std::make_unique<CartesianProductDataModel>();
     model->size = left.size * right.size; // this model cannot estimate the effects of a join condition
+    return model;
+}
+
+std::unique_ptr<DataModel>
+CartesianProductEstimator::estimate_join_all(const QueryGraph&, const PlanTable &PT, const Subproblem to_join,
+                                             const cnf::CNF&) const
+{
+    insist(not to_join.empty());
+    auto model = std::make_unique<CartesianProductDataModel>();
+    auto it = to_join.begin();
+    model->size = as<const CartesianProductDataModel>(*PT[it.as_set()].model).size;
+    for (; it != to_join.end(); ++it)
+        model->size *= as<const CartesianProductDataModel>(*PT[it.as_set()].model).size;
     return model;
 }
 
@@ -320,6 +334,24 @@ InjectionCardinalityEstimator::estimate_join(const QueryGraph &G, const DataMode
         auto fallback_model = fallback_.estimate_join(G, *left_fallback, *right_fallback, condition);
         return std::make_unique<InjectionCardinalityDataModel>(subproblem,
                                                                fallback_.predict_cardinality(*fallback_model));
+    }
+}
+
+std::unique_ptr<DataModel>
+InjectionCardinalityEstimator::estimate_join_all(const QueryGraph &G, const PlanTable &PT, const Subproblem to_join,
+                                             const cnf::CNF&) const
+{
+    const char *id = make_identifier(G, to_join);
+    if (auto it = cardinality_table_.find(id); it != cardinality_table_.end()) {
+        return std::make_unique<InjectionCardinalityDataModel>(to_join, it->second);
+    } else {
+        /* Fallback to cartesian product. */
+        std::cerr << "warning: failed to estimate the join of all data sources in " << to_join << '\n';
+        auto ds_it = to_join.begin();
+        std::size_t size = as<const InjectionCardinalityDataModel>(*PT[ds_it.as_set()].model).size_;
+        for (; ds_it != to_join.end(); ++ds_it)
+            size *= as<const InjectionCardinalityDataModel>(*PT[ds_it.as_set()].model).size_;
+        return std::make_unique<InjectionCardinalityDataModel>(to_join, size);
     }
 }
 

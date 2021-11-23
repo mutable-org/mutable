@@ -12,12 +12,13 @@
 namespace m {
 
 /* Forward declarations */
-struct QueryGraph;
-struct Expr;
 struct Diagnostic;
-struct Operator;
-struct LimitOperator;
+struct Expr;
 struct GroupingOperator;
+struct LimitOperator;
+struct Operator;
+struct PlanTable;
+struct QueryGraph;
 namespace cnf { struct CNF; }
 using Subproblem = SmallBitset;
 
@@ -121,6 +122,11 @@ struct CardinalityEstimator
     estimate_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
                   const cnf::CNF &condition) const = 0;
 
+    /** Compute a `DataModel` for the result of joining *all* `DataSource`s in `to_join` by `condition`. */
+    virtual std::unique_ptr<DataModel>
+    estimate_join_all(const QueryGraph &G, const PlanTable &PT, const Subproblem to_join,
+                      const cnf::CNF &condition) const = 0;
+
 
     /*==================================================================================================================
      * Prediction via model use
@@ -179,6 +185,9 @@ struct CartesianProductEstimator : CardinalityEstimator
     std::unique_ptr<DataModel>
     estimate_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
                   const cnf::CNF &condition) const override;
+    std::unique_ptr<DataModel>
+    estimate_join_all(const QueryGraph &G, const PlanTable &PT, const Subproblem to_join,
+                      const cnf::CNF &condition) const override;
 
 
     /*==================================================================================================================
@@ -268,6 +277,9 @@ struct InjectionCardinalityEstimator : CardinalityEstimator
     std::unique_ptr<DataModel>
     estimate_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
                   const cnf::CNF &condition) const override;
+    std::unique_ptr<DataModel>
+    estimate_join_all(const QueryGraph &G, const PlanTable &PT, const Subproblem to_join,
+                      const cnf::CNF &condition) const override;
 
 
     /*==================================================================================================================

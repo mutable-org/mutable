@@ -85,10 +85,12 @@ struct GospersHack
 
     /** Advance to the next subset. */
     GospersHack & operator++() {
-        uint64_t s(set_);
-        uint64_t c = s & -s;
-        uint64_t r = s + c;
-        set_ = SmallBitset((((r ^ s) >> 2) / c) | r);
+        const uint64_t s(set_);
+        const uint64_t c = _blsi_u64(s); // BMI1: extract lowest set isolated bit -> c is a power of 2
+        const uint64_t r = s + c; // flip lowest block of 1-bits and following 0-bit
+        const uint64_t m = r ^ s; // mask flipped bits, i.e. lowest block of 1-bits and following 0-bit
+        const uint64_t l = _pext_u64(m, m); // BMI2: deposit all set bits in the low bits
+        set_ = SmallBitset((l >> 2U) | r); // instead of divide by c, rshift by log2(c)
         return *this;
     }
 

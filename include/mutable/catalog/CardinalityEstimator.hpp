@@ -110,7 +110,7 @@ struct CardinalityEstimator
     virtual std::unique_ptr<DataModel>
     estimate_grouping(const QueryGraph &G, const DataModel &data, const std::vector<const Expr*> &groups) const = 0;
 
-    /** From a new `DataModel` from joining two `DataModel`s.
+    /** Form a new `DataModel` by joining two `DataModel`s.
      *
      * @param left      the `DataModel` describing the data coming from the left input
      * @param right     the `DataModel` describing the data coming from the right input

@@ -21,7 +21,6 @@ add_library(
     $<TARGET_OBJECTS:catalog>
     $<TARGET_OBJECTS:util>
 )
-add_dependencies(${PROJECT_NAME} gitversion)
 target_link_libraries(${PROJECT_NAME} PRIVATE binaryen ${Boost_LIBRARIES} dl)
 if(${WITH_V8})
     target_link_libraries(${PROJECT_NAME} PRIVATE v8)

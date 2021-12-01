@@ -62,3 +62,6 @@ target_link_libraries(train-operator-model ${PROJECT_NAME} Threads::Threads)
 
 add_executable(allocator_benchmark allocator_benchmark.cpp $<TARGET_OBJECTS:util>)
 target_link_libraries(allocator_benchmark dl Threads::Threads)
+
+add_executable(cardinality_gen cardinality_gen.cpp $<TARGET_OBJECTS:io> version.cpp mutable.cpp)
+target_link_libraries(cardinality_gen frontend)

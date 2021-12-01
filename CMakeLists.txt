@@ -256,7 +256,7 @@ add_subdirectory(unittest)
 
 # Tests
 if(APPLE)
-    set(ENV env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0)
+    set(ENV env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0)
 else()
     set(ENV env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1)
 endif()

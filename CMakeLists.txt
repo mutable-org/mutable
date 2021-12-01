@@ -255,6 +255,11 @@ add_subdirectory(src)
 add_subdirectory(unittest)
 
 # Tests
+if(APPLE)
+    set(ENV env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0)
+else()
+    set(ENV env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1)
+endif()
 add_custom_target(
     check
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -263,9 +268,9 @@ add_custom_target(
     COMMAND echo "##################"
     COMMAND echo "### Unit Tests ###"
     COMMAND echo "##################"
-    COMMAND env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 ${EXECUTABLE_OUTPUT_PATH}/unittest "\[core\]"
+    COMMAND ${ENV} ${EXECUTABLE_OUTPUT_PATH}/unittest "\[core\]"
     COMMAND echo "#########################"
     COMMAND echo "### Integration Tests ###"
     COMMAND echo "#########################"
-    COMMAND env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 "${CMAKE_CURRENT_SOURCE_DIR}/test/IntegrationTest.py" -r "${PROJECT_BINARY_DIR}"
+    COMMAND ${ENV} "${CMAKE_CURRENT_SOURCE_DIR}/test/IntegrationTest.py" -r "${PROJECT_BINARY_DIR}"
 )

@@ -86,7 +86,7 @@ unittest:macos-amd64:
     needs:
         - job: "build:debug:macos-amd64"
           artifacts: true
-    script: env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 build/debug/bin/unittest \[core\]
+    script: env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 build/debug/bin/unittest \[core\]
 
 integrationtest:linux-amd64:
     stage: test
@@ -110,7 +110,7 @@ integrationtest:macos-amd64:
           artifacts: true
     script:
         - pip3 install --user --upgrade colorama pyyaml yamale tqdm
-        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 python3 test/IntegrationTest.py --verbose --required-only --debug build/debug
+        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 python3 test/IntegrationTest.py --verbose --required-only --debug build/debug
 
 
 #-----------------------------------------------------------------------------------------------------------------------

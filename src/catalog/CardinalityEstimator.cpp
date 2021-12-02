@@ -145,7 +145,6 @@ CardinalityEstimator::CreateCartesianProductEstimator(const char*)
 InjectionCardinalityEstimator::InjectionCardinalityEstimator() : InjectionCardinalityEstimator("default") {}
 
 InjectionCardinalityEstimator::InjectionCardinalityEstimator(const char *name_of_database)
-    : name_of_database_(name_of_database)
 {
     Diagnostic diag(Options::Get().has_color, std::cout, std::cerr);
     Position pos("InjectionCardinalityEstimator");
@@ -153,7 +152,7 @@ InjectionCardinalityEstimator::InjectionCardinalityEstimator(const char *name_of
     if (Options::Get().injected_cardinalities_file) {
         std::ifstream in(Options::Get().injected_cardinalities_file);
         if (in) {
-            read_json(diag, in);
+            read_json(diag, in, name_of_database);
         } else {
             diag.w(pos) << "Could not open file " << Options::Get().injected_cardinalities_file << ".\n"
                         << "A dummy estimator will be used to do estimations.\n";
@@ -165,9 +164,8 @@ InjectionCardinalityEstimator::InjectionCardinalityEstimator(const char *name_of
 
 InjectionCardinalityEstimator::InjectionCardinalityEstimator(Diagnostic &diag, const char *name_of_database,
                                                              std::istream &in)
-    : name_of_database_(name_of_database)
 {
-    read_json(diag, in);
+    read_json(diag, in, name_of_database);
 }
 
 InjectionCardinalityEstimator::~InjectionCardinalityEstimator()
@@ -176,7 +174,7 @@ InjectionCardinalityEstimator::~InjectionCardinalityEstimator()
         free((void*) entry.first);
 }
 
-void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in)
+void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in, const char *name_of_database)
 {
     Position pos("InjectionCardinalityEstimator");
     std::string prev_relation;
@@ -193,9 +191,9 @@ void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in
     }
     json *database_entry;
     try {
-        database_entry = &cardinalities.at(name_of_database_); //throws if key does not exist
+        database_entry = &cardinalities.at(name_of_database); //throws if key does not exist
     } catch (json::out_of_range &out_of_range) {
-        diag.w(pos) << "No entry for the db " << name_of_database_ << " in the file.\n"
+        diag.w(pos) << "No entry for the db " << name_of_database << " in the file.\n"
                     << "A dummy estimator will be used to do estimations.\n";
         return;
     }
@@ -207,7 +205,7 @@ void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in
             relations_array = &subproblem_entry.at("relations");
             size = &subproblem_entry.at("size");
         } catch (json::exception &exception) {
-            diag.w(pos) << "The entry " << subproblem_entry << " for the db \"" << name_of_database_ << "\""
+            diag.w(pos) << "The entry " << subproblem_entry << " for the db \"" << name_of_database << "\""
                         << " does not have the required form of {\"relations\": ..., \"size\": ... } "
                         << "and will thus be ignored.\n";
             continue;
@@ -369,7 +367,7 @@ void InjectionCardinalityEstimator::print(std::ostream &out) const
     for (auto &entry : cardinality_table_)
         sub_len = std::max(sub_len, strlen(entry.first));
 
-    out << std::left << "InjectionCardinalityEstimator for the Database: " << name_of_database_ << "\n"
+    out << std::left << "InjectionCardinalityEstimator\n"
         << std::setw(sub_len) << "Subproblem" << "Size" << "\n" << std::right;
 
     /* ------- Print maximum max_rows_printed rows of the cardinality_table_ */

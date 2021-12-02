@@ -214,7 +214,6 @@ struct InjectionCardinalityEstimator : CardinalityEstimator
     ///> buffer used to construct identifiers
     mutable std::ostringstream oss_;
 
-    const char *name_of_database_;
     std::unordered_map<const char*, std::size_t, StrHash, StrEqual> cardinality_table_;
     CartesianProductEstimator fallback_;
 
@@ -269,7 +268,7 @@ struct InjectionCardinalityEstimator : CardinalityEstimator
     std::size_t predict_cardinality(const DataModel &data) const override;
 
     private:
-    void read_json(Diagnostic &diag, std::istream &in);
+    void read_json(Diagnostic &diag, std::istream &in, const char *name_of_database);
     void print(std::ostream &out) const override;
     void buf_append(const char *s) const { while (*s) buf_.emplace_back(*s++); }
     void buf_append(const std::string &s) const {

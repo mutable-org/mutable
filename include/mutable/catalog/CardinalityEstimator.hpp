@@ -199,13 +199,22 @@ struct CartesianProductEstimator : CardinalityEstimator
  */
 struct InjectionCardinalityEstimator : CardinalityEstimator
 {
+    using Subproblem = SmallBitset;
+
     struct InjectionCardinalityDataModel : DataModel
     {
         friend struct InjectionCardinalityEstimator;
 
         private:
-        std::vector<const char*> relations_; // collection of relations, sorted by name
+        Subproblem subproblem_;
         std::size_t size_;
+
+        public:
+        InjectionCardinalityDataModel(Subproblem S, std::size_t size) : subproblem_(S), size_(size) { }
+        InjectionCardinalityDataModel(const InjectionCardinalityDataModel&) = default;
+        InjectionCardinalityDataModel(InjectionCardinalityDataModel&&) = default;
+        InjectionCardinalityDataModel & operator=(InjectionCardinalityDataModel &&other) = default;
+        InjectionCardinalityDataModel & operator=(const InjectionCardinalityDataModel &other) = default;
     };
 
     private:
@@ -276,7 +285,7 @@ struct InjectionCardinalityEstimator : CardinalityEstimator
         buf_append(s.c_str());
     }
     const char * buf_view() const { return &buf_[0]; }
-    const char * make_identifier(const InjectionCardinalityDataModel &model) const;
+    const char * make_identifier(const QueryGraph &G, const Subproblem S) const;
 };
 
 }

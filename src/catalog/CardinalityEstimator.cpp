@@ -79,16 +79,15 @@ std::unique_ptr<DataModel> CartesianProductEstimator::estimate_scan(const QueryG
 }
 
 std::unique_ptr<DataModel>
-CartesianProductEstimator::estimate_filter(const QueryGraph &G, const DataModel &_data, const cnf::CNF&) const
+CartesianProductEstimator::estimate_filter(const QueryGraph&, const DataModel &_data, const cnf::CNF&) const
 {
+    /* This model cannot estimate the effects of applying a filter. */
     auto &data = as<const CartesianProductDataModel>(_data);
-    auto model = std::make_unique<CartesianProductDataModel>();
-    model->size = data.size; // this model cannot estimate the effects of applying a filter
-    return model;
+    return std::make_unique<CartesianProductDataModel>(data); // copy
 }
 
 std::unique_ptr<DataModel>
-CartesianProductEstimator::estimate_limit(const QueryGraph &G, const DataModel &_data, std::size_t limit,
+CartesianProductEstimator::estimate_limit(const QueryGraph&, const DataModel &_data, std::size_t limit,
                                           std::size_t offset) const
 {
     auto data = as<const CartesianProductDataModel>(_data);
@@ -99,7 +98,7 @@ CartesianProductEstimator::estimate_limit(const QueryGraph &G, const DataModel &
 }
 
 std::unique_ptr<DataModel>
-CartesianProductEstimator::estimate_grouping(const QueryGraph &G, const DataModel &_data,
+CartesianProductEstimator::estimate_grouping(const QueryGraph&, const DataModel &_data,
                                              const std::vector<const Expr*>&) const
 {
     auto &data = as<const CartesianProductDataModel>(_data);
@@ -109,7 +108,7 @@ CartesianProductEstimator::estimate_grouping(const QueryGraph &G, const DataMode
 }
 
 std::unique_ptr<DataModel>
-CartesianProductEstimator::estimate_join(const QueryGraph &G, const DataModel &_left, const DataModel &_right,
+CartesianProductEstimator::estimate_join(const QueryGraph&, const DataModel &_left, const DataModel &_right,
                                          const cnf::CNF&) const
 {
     auto left = as<const CartesianProductDataModel>(_left);
@@ -239,71 +238,49 @@ void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in
 
 std::unique_ptr<DataModel> InjectionCardinalityEstimator::empty_model() const
 {
-    auto model = std::make_unique<InjectionCardinalityDataModel>();
-    model->size_ = 0;
-    return model;
+    return std::make_unique<InjectionCardinalityDataModel>(Subproblem(), 0);
 }
 
 std::unique_ptr<DataModel> InjectionCardinalityEstimator::estimate_scan(const QueryGraph &G, Subproblem P) const
 {
     insist(P.size() == 1);
-    auto model = std::make_unique<InjectionCardinalityDataModel>();
     const auto idx = *P.begin();
     auto DS = G.sources()[idx];
 
-    if (DS->alias()) {
-        model->relations_.push_back(DS->alias());
-    } else {
-        auto BT = as<const BaseTable>(DS);
-        model->relations_.push_back(BT->table().name);
-    }
-
-    // Note: we bypass `make_identifier()` as we know that the model consists of a single relation
-    if (auto it = cardinality_table_.find(model->relations_[0]); it != cardinality_table_.end()) {
-        model->size_ = it->second;
+    if (auto it = cardinality_table_.find(DS->name()); it != cardinality_table_.end()) {
+        return std::make_unique<InjectionCardinalityDataModel>(P, it->second);
     } else {
         /* no match, fall back */
         auto fallback_model = fallback_.estimate_scan(G, P);
-        model->size_ = fallback_.predict_cardinality(*fallback_model);
+        return std::make_unique<InjectionCardinalityDataModel>(P, fallback_.predict_cardinality(*fallback_model));
     }
-
-    return model;
 }
 
 std::unique_ptr<DataModel>
-InjectionCardinalityEstimator::estimate_filter(const QueryGraph &G, const DataModel &_data, const cnf::CNF&) const
+InjectionCardinalityEstimator::estimate_filter(const QueryGraph&, const DataModel &_data, const cnf::CNF&) const
 {
-    auto data = as<const InjectionCardinalityDataModel>(_data);
-    auto model = std::make_unique<InjectionCardinalityDataModel>();
-    model->relations_ = data.relations_;
-    model->size_ = data.size_; // this model cannot estimate the effects of applying a filter
-    return model;
+    /* This model cannot estimate the effects of applying a filter. */
+    auto &data = as<const InjectionCardinalityDataModel>(_data);
+    return std::make_unique<InjectionCardinalityDataModel>(data); // copy
 }
 
 std::unique_ptr<DataModel>
-InjectionCardinalityEstimator::estimate_limit(const QueryGraph &G, const DataModel &_data, std::size_t limit,
+InjectionCardinalityEstimator::estimate_limit(const QueryGraph&, const DataModel &_data, std::size_t limit,
                                               std::size_t offset) const
 {
-    auto data = as<const InjectionCardinalityDataModel>(_data);
+    auto &data = as<const InjectionCardinalityDataModel>(_data);
     const std::size_t remaining = offset > data.size_ ? 0UL : data.size_ - offset;
-    auto model = std::make_unique<InjectionCardinalityDataModel>();
-    model->size_ = std::min(remaining, limit);
-    return model;
+    return std::make_unique<InjectionCardinalityDataModel>(data.subproblem_, std::min(remaining, limit));
 }
 
 std::unique_ptr<DataModel>
-InjectionCardinalityEstimator::estimate_grouping(const QueryGraph &G, const DataModel &_data,
+InjectionCardinalityEstimator::estimate_grouping(const QueryGraph&, const DataModel &_data,
                                                  const std::vector<const Expr*> &exprs) const
 {
-    auto data = as<const InjectionCardinalityDataModel>(_data);
+    auto &data = as<const InjectionCardinalityDataModel>(_data);
 
-    auto model = std::make_unique<InjectionCardinalityDataModel>();
-    model->relations_ = data.relations_;
-
-    if (exprs.empty()) {
-        model->size_ = 1;
-        return model;
-    }
+    if (exprs.empty())
+        return std::make_unique<InjectionCardinalityDataModel>(data.subproblem_, 1); // single group
 
     /* Combine grouping keys into an identifier. */
     oss_.str("");
@@ -312,47 +289,38 @@ InjectionCardinalityEstimator::estimate_grouping(const QueryGraph &G, const Data
         oss_ << '#' << *e;
 
     if (auto it = cardinality_table_.find(oss_.str().c_str()); it != cardinality_table_.end()) {
-        model->size_ = it->second;
+        return std::make_unique<InjectionCardinalityDataModel>(data.subproblem_, it->second);
     } else {
-        model->size_ = data.size_; // this model cannot estimate the effects of grouping
+        /* This model cannot estimate the effects of grouping. */
+        return std::make_unique<InjectionCardinalityDataModel>(data); // copy
     }
-
-    return model;
 }
 
 std::unique_ptr<DataModel>
 InjectionCardinalityEstimator::estimate_join(const QueryGraph &G, const DataModel &_left, const DataModel &_right,
                                              const cnf::CNF &condition) const
 {
-    auto &left = as<const InjectionCardinalityDataModel>(_left);
+    auto &left  = as<const InjectionCardinalityDataModel>(_left);
     auto &right = as<const InjectionCardinalityDataModel>(_right);
-    auto model = std::make_unique<InjectionCardinalityDataModel>();
 
-    /* Merge the relations of `left` and `right` -- both sorted lexicographically -- into `model` and maintain
-     * sortedness. */
-    model->relations_.reserve(left.relations_.size() + right.relations_.size());
-    std::merge(left.relations_.begin(), left.relations_.end(),
-               right.relations_.begin(), right.relations_.end(),
-               std::back_inserter(model->relations_),
-               [](const char *left, const char *right) { return strcmp(left, right) < 0; });
-    insist(std::is_sorted(model->relations_.begin(), model->relations_.end(),
-                          [](const char *left, const char *right) { return strcmp(left, right) < 0; }),
-           "relations must be sorted lexicographically");
+    const Subproblem subproblem = left.subproblem_ | right.subproblem_;
+    const char *id = make_identifier(G, subproblem);
 
-    const char *id = make_identifier(*model);
+    /* Lookup cardinality in table. */
     if (auto it = cardinality_table_.find(id); it != cardinality_table_.end()) {
-        /* Lookup cardinality in table. */
-        model->size_ = it->second;
+        return std::make_unique<InjectionCardinalityDataModel>(subproblem, it->second);
     } else {
         /* Fallback to CartesianProductEstimator. */
+        std::cerr << "warning: failed to estimate the join of " << left.subproblem_ << " and " << right.subproblem_
+                  << '\n';
         auto left_fallback = std::make_unique<CartesianProductEstimator::CartesianProductDataModel>();
         left_fallback->size = left.size_;
         auto right_fallback = std::make_unique<CartesianProductEstimator::CartesianProductDataModel>();
         right_fallback->size = right.size_;
         auto fallback_model = fallback_.estimate_join(G, *left_fallback, *right_fallback, condition);
-        model->size_ = fallback_.predict_cardinality(*fallback_model);
+        return std::make_unique<InjectionCardinalityDataModel>(subproblem,
+                                                               fallback_.predict_cardinality(*fallback_model));
     }
-    return model;
 }
 
 std::size_t InjectionCardinalityEstimator::predict_cardinality(const DataModel &data) const
@@ -379,14 +347,15 @@ void InjectionCardinalityEstimator::print(std::ostream &out) const
     }
 }
 
-const char * InjectionCardinalityEstimator::make_identifier(const InjectionCardinalityDataModel &model) const
+const char * InjectionCardinalityEstimator::make_identifier(const QueryGraph &G, const Subproblem S) const
 {
     buf_.clear();
-    for (auto it = model.relations_.begin(); it != model.relations_.end(); ++it) {
-        if (it != model.relations_.begin())
+    for (auto it = S.begin(); it != S.end(); ++it) {
+        if (it != S.begin())
             buf_.emplace_back('$');
-        buf_append(*it);
+        buf_append(G.sources()[*it]->name());
     }
+
     buf_.emplace_back(0);
     return buf_view();
 }

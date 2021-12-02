@@ -50,7 +50,7 @@ double TrainedCostFunction::calculate_join_cost(const QueryGraph &G, const PlanT
     return join_model_->predict_target(feature_matrix);
 }
 
-double TrainedCostFunction::calculate_grouping_cost(const QueryGraph &G, const PlanTable &PT,
+double TrainedCostFunction::calculate_grouping_cost(const QueryGraph&, const PlanTable &PT,
                                                     const CardinalityEstimator &CE, const Subproblem &sub,
                                                     const std::vector<const Expr*>&) const
 {

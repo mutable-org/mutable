@@ -44,6 +44,9 @@ struct DataSource
     std::size_t id() const { return id_; }
     /** Returns the alias of this `DataSource`.  May be `nullptr`. */
     const char * alias() const { return alias_; }
+    /** Returns the name of this `DataSource`.  Either the same as `alias()`, if an alias is given, otherwise the name
+     * of the referenced `Table`. */
+    virtual const char * name() const = 0;
     /** Returns the filter of this `DataSource`.  May be empty. */
     cnf::CNF filter() const { return filter_; }
     /** Adds `filter` to the current filter of this `DataSource` by logical conjunction. */
@@ -88,6 +91,8 @@ struct BaseTable : DataSource
     /** Returns a reference to the `Table` providing the tuples. */
     const Table & table() const { return table_; }
 
+    const char * name() const override { return alias() ? alias() : table_.name; }
+
     bool is_correlated() const override { return false; };
 };
 
@@ -109,6 +114,8 @@ struct Query : DataSource
 
     /** Returns a reference to the internal `QueryGraph`. */
     QueryGraph * query_graph() const { return query_graph_; }
+
+    const char * name() const override { insist(alias()); return alias(); }
 
     bool is_correlated() const override;
 };

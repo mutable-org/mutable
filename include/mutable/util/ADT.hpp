@@ -13,6 +13,7 @@
 #include <string>
 #include <type_traits>
 #include <utility>
+#include <x86intrin.h>
 
 
 namespace m {
@@ -58,10 +59,11 @@ struct SmallBitset
         bool operator==(iterator other) const { return this->bits_ == other.bits_; }
         bool operator!=(iterator other) const { return not operator==(other); }
 
-        iterator & operator++() { bits_ = bits_ & (bits_ - 1); /* reset lowest set bit */ return *this; }
+        iterator & operator++() { bits_ = _blsr_u64(bits_); return *this; } // BMI1: reset lowest set bit
         iterator operator++(int) { auto clone = *this; ++clone; return clone; }
 
         std::size_t operator*() const { insist(bits_ != 0); return __builtin_ctzl(bits_); }
+        SmallBitset as_set() const { return SmallBitset(_blsi_u64(bits_)); } // BMI1: extract lowest set isolated bit
     };
 
     public:
@@ -101,7 +103,7 @@ struct SmallBitset
     /** Returns the number of elements in this `SmallBitset`. */
     std::size_t size() const { return __builtin_popcountl(bits_); }
     /** Returns `true` if there are no elements in this `SmallBitset`. */
-    bool empty() const { return size() == 0; }
+    bool empty() const { return bits_ == 0; }
 
     auto begin() const { return iterator(bits_); }
     auto cbegin() const { return begin(); }

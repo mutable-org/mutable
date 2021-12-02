@@ -404,6 +404,15 @@ exit:
         return out;
     }
 
+    void print_fixed_length(std::ostream &out, unsigned length) {
+        insist(length <= SmallBitset::CAPACITY);
+        out << "Adjacency Matrix";
+        for (unsigned i = 0; i != length; ++i) {
+            out << '\n';
+            m_[i].print_fixed_length(out, length);
+        }
+    }
+
     void dump(std::ostream &out) const;
     void dump() const;
 };

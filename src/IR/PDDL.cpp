@@ -218,7 +218,7 @@ struct RecursiveFactsGenerator
         }
         int data_models_size = data_models.size();
         for (int i = 0; i < data_models_size-1; i++) {
-            data_models.push_back(CE.estimate_join(*data_models[i], *data_models[data_models.size()-1], cnf::CNF()));
+            data_models.push_back(CE.estimate_join(G, *data_models[i], *data_models[data_models.size()-1], cnf::CNF()));
         }
         return std::move(data_models[data_models.size()-1]);
     }

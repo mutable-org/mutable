@@ -67,8 +67,8 @@ void DPsize::operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &
                     if (not PT.has_plan(*S2)) continue; // subproblem S2 not connected -> skip
                     if (*S1 & *S2) continue; // subproblems not disjoint -> skip
                     if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
-                    auto cost = CF.calculate_join_cost(PT, CE, *S1, *S2, cnf::CNF{}); // TODO use join condition
-                    PT.update(*S1, *S2, cost);
+                    auto cost = CF.calculate_join_cost(G, PT, CE, *S1, *S2, cnf::CNF{}); // TODO use join condition
+                    PT.update(G, CE, *S1, *S2, cost);
                 }
             }
         }
@@ -110,10 +110,10 @@ void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &CF, PlanTabl
                         if (*S1 & *S2) continue; // subproblems not disjoint -> skip
                         if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
                         /* Exploit commutativity of join. */
-                        auto cost = CF.calculate_join_cost(PT, CE, *S1, *S2, cnf::CNF{}); // TODO use join condition
-                        PT.update(*S1, *S2, cost);
-                        cost = CF.calculate_join_cost(PT, CE, *S2, *S1, cnf::CNF{}); // TODO use join condition
-                        PT.update(*S2, *S1, cost);
+                        auto cost = CF.calculate_join_cost(G, PT, CE, *S1, *S2, cnf::CNF{}); // TODO use join condition
+                        PT.update(G, CE, *S1, *S2, cost);
+                        cost = CF.calculate_join_cost(G, PT, CE, *S2, *S1, cnf::CNF{}); // TODO use join condition
+                        PT.update(G, CE, *S2, *S1, cost);
                     }
                 }
             } else {
@@ -124,10 +124,10 @@ void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &CF, PlanTabl
                         if (*S1 & *S2) continue; // subproblems not disjoint -> skip
                         if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
                         /* Exploit commutativity of join. */
-                        auto cost = CF.calculate_join_cost(PT, CE, *S1, *S2, cnf::CNF{}); // TODO use join condition
-                        PT.update(*S1, *S2, cost);
-                        cost = CF.calculate_join_cost(PT, CE, *S1, *S2, cnf::CNF{}); // TODO use join condition
-                        PT.update(*S2, *S1, cost);
+                        auto cost = CF.calculate_join_cost(G, PT, CE, *S1, *S2, cnf::CNF{}); // TODO use join condition
+                        PT.update(G, CE, *S1, *S2, cost);
+                        cost = CF.calculate_join_cost(G, PT, CE, *S1, *S2, cnf::CNF{}); // TODO use join condition
+                        PT.update(G, CE, *S2, *S1, cost);
                     }
                 }
             }
@@ -161,8 +161,8 @@ void DPsizeSub::operator()(const QueryGraph &G, const CostFunction &CF, PlanTabl
                 insist(M.is_connected(O, Comp), "implied by S inducing a connected subgraph");
                 if (not PT.has_plan(O)) continue; // not connected -> skip
                 if (not PT.has_plan(Comp)) continue; // not connected -> skip
-                auto cost = CF.calculate_join_cost(PT, CE, O, Comp, cnf::CNF{}); // TODO use join condition
-                PT.update(O, Comp, cost);
+                auto cost = CF.calculate_join_cost(G, PT, CE, O, Comp, cnf::CNF{}); // TODO use join condition
+                PT.update(G, CE, O, Comp, cost);
             }
         }
     }
@@ -194,8 +194,8 @@ void DPsub::operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &P
             insist(M.is_connected(S1, S2), "implied by S inducing a connected subgraph");
             if (not PT.has_plan(S1)) continue; // not connected -> skip
             if (not PT.has_plan(S2)) continue; // not connected -> skip
-            auto cost = CF.calculate_join_cost(PT, CE, S1, S2, cnf::CNF{}); // TODO use join condition
-            PT.update(S1, S2, cost);
+            auto cost = CF.calculate_join_cost(G, PT, CE, S1, S2, cnf::CNF{}); // TODO use join condition
+            PT.update(G, CE, S1, S2, cost);
         }
     }
 }
@@ -232,10 +232,10 @@ void DPsubOpt::operator()(const QueryGraph &G, const CostFunction &CF, PlanTable
             if (not PT.has_plan(S1)) continue; // not connected -> skip
             if (not PT.has_plan(S2)) continue; // not connected -> skip
             /* Exploit commutativity of join. */
-            auto cost = CF.calculate_join_cost(PT, CE, S1, S2, cnf::CNF{}); // TODO use join condition
-            PT.update(S1, S2, cost);
-            cost = CF.calculate_join_cost(PT, CE, S1, S2, cnf::CNF{}); // TODO use join condition
-            PT.update(S2, S1, cost);
+            auto cost = CF.calculate_join_cost(G, PT, CE, S1, S2, cnf::CNF{}); // TODO use join condition
+            PT.update(G, CE, S1, S2, cost);
+            cost = CF.calculate_join_cost(G, PT, CE, S1, S2, cnf::CNF{}); // TODO use join condition
+            PT.update(G, CE, S2, S1, cost);
         }
     }
 }
@@ -279,10 +279,10 @@ void DPccp::enumerate_cmp(const QueryGraph &G, const AdjacencyMatrix &M, const C
             auto [S, X] = Q.front();
             Q.pop();
             /* Update `PlanTable` with connected subgraph complement pair (S1, S). */
-            auto cost = CF.calculate_join_cost(PT, CE, S1, S, cnf::CNF{}); // TODO use join condition
-            PT.update(S1, S, cost);
-            cost = CF.calculate_join_cost(PT, CE, S, S1, cnf::CNF{}); // TODO use join condition
-            PT.update(S, S1, cost);
+            auto cost = CF.calculate_join_cost(G, PT, CE, S1, S, cnf::CNF{}); // TODO use join condition
+            PT.update(G, CE, S1, S, cost);
+            cost = CF.calculate_join_cost(G, PT, CE, S, S1, cnf::CNF{}); // TODO use join condition
+            PT.update(G, CE, S, S1, cost);
 
             Subproblem N = M.neighbors(S) - X;
             /* Iterate over all subsets `sub` in `N` */
@@ -355,10 +355,10 @@ void TDbasic::PlanGen(const QueryGraph &G, const AdjacencyMatrix &M, const CostF
                 PlanGen(G, M, CF, CE, PT, complement);
 
                 /* Update `PlanTable`. */
-                auto cost = CF.calculate_join_cost(PT, CE, sub, complement, cnf::CNF{}); // TODO use join condition
-                PT.update(sub, complement, cost);
-                cost = CF.calculate_join_cost(PT, CE, complement, sub, cnf::CNF{}); // TODO use join condition
-                PT.update(complement, sub, cost);
+                auto cost = CF.calculate_join_cost(G, PT, CE, sub, complement, cnf::CNF{}); // TODO use join condition
+                PT.update(G, CE, sub, complement, cost);
+                cost = CF.calculate_join_cost(G, PT, CE, complement, sub, cnf::CNF{}); // TODO use join condition
+                PT.update(G, CE, complement, sub, cost);
             }
         }
     }
@@ -419,10 +419,10 @@ void TDMinCutAGaT::MinCutAGaT(const QueryGraph &G, const AdjacencyMatrix &M, con
                        cmpl, Subproblem(least_subset(cmpl)), Subproblem(0), Subproblem(least_subset(cmpl)));
 
             /* Update `PlanTable`. */
-            auto cost = CF.calculate_join_cost(PT, CE, e.C, cmpl, cnf::CNF{}); // TODO use join condition
-            PT.update(e.C, cmpl, cost);
-            cost = CF.calculate_join_cost(PT, CE, cmpl, e.C, cnf::CNF{}); // TODO use join condition
-            PT.update(cmpl, e.C, cost);
+            auto cost = CF.calculate_join_cost(G, PT, CE, e.C, cmpl, cnf::CNF{}); // TODO use join condition
+            PT.update(G, CE, e.C, cmpl, cost);
+            cost = CF.calculate_join_cost(G, PT, CE, cmpl, e.C, cnf::CNF{}); // TODO use join condition
+            PT.update(G, CE, cmpl, e.C, cost);
 
             T_tmp = Subproblem(0);
         } else T_tmp = e.C;
@@ -782,7 +782,7 @@ struct AIPlanningStateBottomUp : AIPlanningStateBase<AIPlanningStateBottomUp<All
 template<typename Allocator>
 template<typename Callback>
 void AIPlanningStateBottomUp<Allocator>::for_each_successor(Callback &&callback,
-                                                            PlanTable &PT, const QueryGraph&, const AdjacencyMatrix &M,
+                                                            PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                                                             const CostFunction &CF,
                                                             const CardinalityEstimator &CE) const
 {
@@ -810,8 +810,8 @@ void AIPlanningStateBottomUp<Allocator>::for_each_successor(Callback &&callback,
                 insist(std::is_sorted(subproblems.get(), subproblems.get() + size() - 1, subproblem_lt));
 
                 /* Compute total cost. */
-                const double total_cost = CF.calculate_join_cost(PT, CE, *outer_it, *inner_it, cnf::CNF{});
-                PT.update(*outer_it, *inner_it, total_cost);
+                const double total_cost = CF.calculate_join_cost(G, PT, CE, *outer_it, *inner_it, cnf::CNF{});
+                PT.update(G, CE, *outer_it, *inner_it, total_cost);
 
                 /* Compute action cost. */
                 const double action_cost = total_cost - (PT[*outer_it].cost + PT[*inner_it].cost);
@@ -1122,8 +1122,8 @@ void AIPlanningStateBottomUpOpt<Allocator>::for_each_successor(Callback &&callba
             }
 
             /* Compute total cost. */
-            const double total_cost = CF.calculate_join_cost(PT, CE, left, right, cnf::CNF{});
-            PT.update(left, right, total_cost);
+            const double total_cost = CF.calculate_join_cost(G, PT, CE, left, right, cnf::CNF{});
+            PT.update(G, CE, left, right, total_cost);
 
             /* Compute action cost. */
             const double action_cost = total_cost - (PT[left].cost + PT[right].cost);
@@ -1377,7 +1377,7 @@ struct bottomup_lookahead_cheapest
                                 const CardinalityEstimator&)
     { }
 
-    double operator()(const state_type &state, PlanTable &PT, const QueryGraph&, const AdjacencyMatrix &M,
+    double operator()(const state_type &state, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                       const CostFunction &CF, const CardinalityEstimator &CE) const
     {
         if (state.is_goal()) return 0;
@@ -1402,10 +1402,10 @@ struct bottomup_lookahead_cheapest
                 if (neighbors & *inner_it) { // inner and outer are joinable.
                     const Subproblem joined = *outer_it | *inner_it;
                     if (not PT[joined].model) {
-                        PT[joined].model = CE.estimate_join(*PT[*outer_it].model, *PT[*inner_it].model,
+                        PT[joined].model = CE.estimate_join(G, *PT[*outer_it].model, *PT[*inner_it].model,
                                                             /* TODO */ cnf::CNF{});
                     }
-                    const double total_cost = CF.calculate_join_cost(PT, CE, *outer_it, *inner_it, cnf::CNF{});
+                    const double total_cost = CF.calculate_join_cost(G, PT, CE, *outer_it, *inner_it, cnf::CNF{});
                     const double action_cost = total_cost - (PT[*outer_it].cost + PT[*inner_it].cost);
                     ///> XXX: Sum of different units: cost and cardinality
                     const double additional_costs = action_cost + CE.predict_cardinality(*PT[joined].model);
@@ -1787,7 +1787,7 @@ struct checkpoints
         auto [left, right] = decompose(S, M);
         compute_data_model_recursive(left,  PT, G, M, CE);
         compute_data_model_recursive(right, PT, G, M, CE);
-        PT[S].model = CE.estimate_join(*PT[left].model, *PT[right].model, cnf::CNF());
+        PT[S].model = CE.estimate_join(G, *PT[left].model, *PT[right].model, cnf::CNF());
     }
 
     /** Decomposes `Subproblem` `S` into two smaller, non-empty `Subproblem`s, that are connected w.r.t. `M`. */

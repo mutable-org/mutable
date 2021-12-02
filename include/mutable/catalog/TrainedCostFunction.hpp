@@ -19,14 +19,15 @@ struct TrainedCostFunction : CostFunction
         : CostFunction(), filter_model_(std::move(filter_model)), join_model_(std::move(join_model))
         , grouping_model_(std::move(grouping_model)) {}
 
-    double calculate_filter_cost(const PlanTable &PT, const CardinalityEstimator &CE, const Subproblem &sub,
-                                 const cnf::CNF &condition) const override;
+    double calculate_filter_cost(const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
+                                 const Subproblem &sub, const cnf::CNF &condition) const override;
 
-    double calculate_join_cost(const PlanTable &PT, const CardinalityEstimator &CE, const Subproblem &left,
-                               const Subproblem &right, const cnf::CNF &condition) const override;
+    double calculate_join_cost(const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
+                               const Subproblem &left, const Subproblem &right,
+                               const cnf::CNF &condition) const override;
 
-    double calculate_grouping_cost(const PlanTable &PT, const CardinalityEstimator &CE, const Subproblem &sub,
-                                   std::vector<const Expr*> &group_by) const override;
+    double calculate_grouping_cost(const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
+                                   const Subproblem &sub, const std::vector<const Expr*> &group_by) const override;
 };
 
 }

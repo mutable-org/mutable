@@ -116,19 +116,20 @@ struct PlanTable
         return not at(S).left.empty();
     }
 
-    void update(const Subproblem left, const Subproblem right, const double cost) {
+    void update(const QueryGraph &G, const CardinalityEstimator &CE,
+                const Subproblem left, const Subproblem right, const double cost) {
         insist(not left.empty(), "left side must not be empty");
         insist(not right.empty(), "right side must not be empty");
         auto &entry = at(left | right);
         if (not entry.model) {
             /* If we consider this subproblem for the first time, compute its `DataModel`.  If this subproblem describes
              * a nested query, the `DataModel` must have been set by the `Optimizer`.  */
-            auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
             auto &entry_left = at(left);
             auto &entry_right = at(right);
             insist(bool(entry_left.model), "must have a model for the left side");
             insist(bool(entry_right.model), "must have a model for the right side");
-            entry.model = CE.estimate_join(*entry_left.model, *entry_right.model, cnf::CNF{}); // TODO use join condition
+            // TODO use join condition for cardinality estimation
+            entry.model = CE.estimate_join(G, *entry_left.model, *entry_right.model, cnf::CNF{});
         }
         if (not has_plan(left | right) or cost < entry.cost) {
             /* If there is no plan yet for this subproblem or the current plan is better than the best plan yet, update

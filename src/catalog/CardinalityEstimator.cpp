@@ -78,7 +78,8 @@ std::unique_ptr<DataModel> CartesianProductEstimator::estimate_scan(const QueryG
     }
 }
 
-std::unique_ptr<DataModel> CartesianProductEstimator::estimate_filter(const DataModel &_data, const cnf::CNF&) const
+std::unique_ptr<DataModel>
+CartesianProductEstimator::estimate_filter(const QueryGraph &G, const DataModel &_data, const cnf::CNF&) const
 {
     auto &data = as<const CartesianProductDataModel>(_data);
     auto model = std::make_unique<CartesianProductDataModel>();
@@ -87,7 +88,8 @@ std::unique_ptr<DataModel> CartesianProductEstimator::estimate_filter(const Data
 }
 
 std::unique_ptr<DataModel>
-CartesianProductEstimator::estimate_limit(const DataModel &_data, std::size_t limit, std::size_t offset) const
+CartesianProductEstimator::estimate_limit(const QueryGraph &G, const DataModel &_data, std::size_t limit,
+                                          std::size_t offset) const
 {
     auto data = as<const CartesianProductDataModel>(_data);
     const std::size_t remaining = offset > data.size ? 0UL : data.size - offset;
@@ -97,7 +99,8 @@ CartesianProductEstimator::estimate_limit(const DataModel &_data, std::size_t li
 }
 
 std::unique_ptr<DataModel>
-CartesianProductEstimator::estimate_grouping(const DataModel &_data, const std::vector<const Expr*>&) const
+CartesianProductEstimator::estimate_grouping(const QueryGraph &G, const DataModel &_data,
+                                             const std::vector<const Expr*>&) const
 {
     auto &data = as<const CartesianProductDataModel>(_data);
     auto model = std::make_unique<CartesianProductDataModel>();
@@ -106,7 +109,8 @@ CartesianProductEstimator::estimate_grouping(const DataModel &_data, const std::
 }
 
 std::unique_ptr<DataModel>
-CartesianProductEstimator::estimate_join(const DataModel &_left, const DataModel &_right, const cnf::CNF&) const
+CartesianProductEstimator::estimate_join(const QueryGraph &G, const DataModel &_left, const DataModel &_right,
+                                         const cnf::CNF&) const
 {
     auto left = as<const CartesianProductDataModel>(_left);
     auto right = as<const CartesianProductDataModel>(_right);
@@ -269,7 +273,7 @@ std::unique_ptr<DataModel> InjectionCardinalityEstimator::estimate_scan(const Qu
 }
 
 std::unique_ptr<DataModel>
-InjectionCardinalityEstimator::estimate_filter(const DataModel &_data, const cnf::CNF&) const
+InjectionCardinalityEstimator::estimate_filter(const QueryGraph &G, const DataModel &_data, const cnf::CNF&) const
 {
     auto data = as<const InjectionCardinalityDataModel>(_data);
     auto model = std::make_unique<InjectionCardinalityDataModel>();
@@ -279,7 +283,8 @@ InjectionCardinalityEstimator::estimate_filter(const DataModel &_data, const cnf
 }
 
 std::unique_ptr<DataModel>
-InjectionCardinalityEstimator::estimate_limit(const DataModel &_data, std::size_t limit, std::size_t offset) const
+InjectionCardinalityEstimator::estimate_limit(const QueryGraph &G, const DataModel &_data, std::size_t limit,
+                                              std::size_t offset) const
 {
     auto data = as<const InjectionCardinalityDataModel>(_data);
     const std::size_t remaining = offset > data.size_ ? 0UL : data.size_ - offset;
@@ -289,7 +294,8 @@ InjectionCardinalityEstimator::estimate_limit(const DataModel &_data, std::size_
 }
 
 std::unique_ptr<DataModel>
-InjectionCardinalityEstimator::estimate_grouping(const DataModel &_data, const std::vector<const Expr*> &exprs) const
+InjectionCardinalityEstimator::estimate_grouping(const QueryGraph &G, const DataModel &_data,
+                                                 const std::vector<const Expr*> &exprs) const
 {
     auto data = as<const InjectionCardinalityDataModel>(_data);
 
@@ -317,7 +323,7 @@ InjectionCardinalityEstimator::estimate_grouping(const DataModel &_data, const s
 }
 
 std::unique_ptr<DataModel>
-InjectionCardinalityEstimator::estimate_join(const DataModel &_left, const DataModel &_right,
+InjectionCardinalityEstimator::estimate_join(const QueryGraph &G, const DataModel &_left, const DataModel &_right,
                                              const cnf::CNF &condition) const
 {
     auto &left = as<const InjectionCardinalityDataModel>(_left);
@@ -345,7 +351,7 @@ InjectionCardinalityEstimator::estimate_join(const DataModel &_left, const DataM
         left_fallback->size = left.size_;
         auto right_fallback = std::make_unique<CartesianProductEstimator::CartesianProductDataModel>();
         right_fallback->size = right.size_;
-        auto fallback_model = fallback_.estimate_join(*left_fallback, *right_fallback, condition);
+        auto fallback_model = fallback_.estimate_join(G, *left_fallback, *right_fallback, condition);
         model->size_ = fallback_.predict_cardinality(*fallback_model);
     }
     return model;

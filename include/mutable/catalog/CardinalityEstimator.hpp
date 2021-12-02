@@ -87,7 +87,8 @@ struct CardinalityEstimator
      * @param filter    the condition of the filter as `cnf::CNF`
      * @return          the `DataModel` describing the outcoming, i.e. filtered, data
      */
-    virtual std::unique_ptr<DataModel> estimate_filter(const DataModel &data, const cnf::CNF &filter) const = 0;
+    virtual std::unique_ptr<DataModel> estimate_filter(const QueryGraph &G, const DataModel &data,
+                                                       const cnf::CNF &filter) const = 0;
 
     /** Extracts a subset from a `DataModel`.
      *
@@ -97,7 +98,8 @@ struct CardinalityEstimator
      * @return          the estimated size of the limit result when applying `op` on `P`
      */
     virtual std::unique_ptr<DataModel>
-    estimate_limit(const DataModel &data, const std::size_t limit, const std::size_t offset) const = 0;
+    estimate_limit(const QueryGraph &G, const DataModel &data, const std::size_t limit,
+                   const std::size_t offset) const = 0;
 
     /** Groups data in the `DataModel`.
      *
@@ -106,7 +108,7 @@ struct CardinalityEstimator
      * @return          the `DataModel` describing the grouped data
      */
     virtual std::unique_ptr<DataModel>
-    estimate_grouping(const DataModel &data, const std::vector<const Expr*> &groups) const = 0;
+    estimate_grouping(const QueryGraph &G, const DataModel &data, const std::vector<const Expr*> &groups) const = 0;
 
     /** From a new `DataModel` from joining two `DataModel`s.
      *
@@ -116,7 +118,8 @@ struct CardinalityEstimator
      * @return          the `DataModel` describing the join result
      */
     virtual std::unique_ptr<DataModel>
-    estimate_join(const DataModel &left, const DataModel &right, const cnf::CNF &condition) const = 0;
+    estimate_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
+                  const cnf::CNF &condition) const = 0;
 
 
     /*==================================================================================================================
@@ -166,13 +169,16 @@ struct CartesianProductEstimator : CardinalityEstimator
 
     std::unique_ptr<DataModel> empty_model() const override;
     std::unique_ptr<DataModel> estimate_scan(const QueryGraph &G, Subproblem P) const override;
-    std::unique_ptr<DataModel> estimate_filter(const DataModel &data, const cnf::CNF &filter) const override;
     std::unique_ptr<DataModel>
-    estimate_limit(const DataModel &data, std::size_t limit, std::size_t offset) const override;
+    estimate_filter(const QueryGraph &G, const DataModel &data, const cnf::CNF &filter) const override;
     std::unique_ptr<DataModel>
-    estimate_grouping(const DataModel &data, const std::vector<const Expr*> &groups) const override;
+    estimate_limit(const QueryGraph &G, const DataModel &data, std::size_t limit, std::size_t offset) const override;
     std::unique_ptr<DataModel>
-    estimate_join(const DataModel &left, const DataModel &right, const cnf::CNF &condition) const override;
+    estimate_grouping(const QueryGraph &G, const DataModel &data,
+                      const std::vector<const Expr*> &groups) const override;
+    std::unique_ptr<DataModel>
+    estimate_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
+                  const cnf::CNF &condition) const override;
 
 
     /*==================================================================================================================
@@ -244,13 +250,16 @@ struct InjectionCardinalityEstimator : CardinalityEstimator
 
     std::unique_ptr<DataModel> empty_model() const override;
     std::unique_ptr<DataModel> estimate_scan(const QueryGraph &G, Subproblem P) const override;
-    std::unique_ptr<DataModel> estimate_filter(const DataModel &data, const cnf::CNF &filter) const override;
     std::unique_ptr<DataModel>
-    estimate_limit(const DataModel &data, std::size_t limit, std::size_t offset) const override;
+    estimate_filter(const QueryGraph &G, const DataModel &data, const cnf::CNF &filter) const override;
     std::unique_ptr<DataModel>
-    estimate_grouping(const DataModel &data, const std::vector<const Expr*> &groups) const override;
+    estimate_limit(const QueryGraph &G, const DataModel &data, std::size_t limit, std::size_t offset) const override;
     std::unique_ptr<DataModel>
-    estimate_join(const DataModel &left, const DataModel &right, const cnf::CNF &condition) const override;
+    estimate_grouping(const QueryGraph &G, const DataModel &data,
+                      const std::vector<const Expr*> &groups) const override;
+    std::unique_ptr<DataModel>
+    estimate_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
+                  const cnf::CNF &condition) const override;
 
 
     /*==================================================================================================================

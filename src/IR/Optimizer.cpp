@@ -182,7 +182,7 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
             // auto filter = new FilterOperator(ds->filter());
             filter->add_child(source_plans[ds->id()]);
             filter = optimize_filter(std::move(filter));
-            auto new_model = CE.estimate_filter(*plan_table[s].model, filter->filter());
+            auto new_model = CE.estimate_filter(G, *plan_table[s].model, filter->filter());
             source_plans[ds->id()] = filter.release();
             plan_table[s].model = std::move(new_model);
         }
@@ -202,7 +202,7 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
     /* Perform grouping. */
     if (not G.group_by().empty()) {
         /* Compute `DataModel` after grouping. */
-        auto new_model = CE.estimate_grouping(*entry.model, G.group_by()); // TODO provide aggregates
+        auto new_model = CE.estimate_grouping(G, *entry.model, G.group_by()); // TODO provide aggregates
         entry.model = std::move(new_model);
         // TODO pick "best" algorithm
         auto group_by = new GroupingOperator(G.group_by(), G.aggregates(), GroupingOperator::G_Hashing);
@@ -217,7 +217,7 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
         plan = group_by;
     } else if (not G.aggregates().empty()) {
         /* Compute `DataModel` after grouping. */
-        auto new_model = CE.estimate_grouping(*entry.model, std::vector<const Expr*>());
+        auto new_model = CE.estimate_grouping(G, *entry.model, std::vector<const Expr*>());
         entry.model = std::move(new_model);
         auto agg = new AggregationOperator(G.aggregates());
         agg->add_child(plan);
@@ -260,7 +260,7 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
     /* Limit. */
     if (G.limit().limit or G.limit().offset) {
         /* Compute `DataModel` after limit. */
-        auto new_model = CE.estimate_limit(*entry.model, G.limit().limit, G.limit().offset);
+        auto new_model = CE.estimate_limit(G, *entry.model, G.limit().limit, G.limit().offset);
         entry.model = std::move(new_model);
         // TODO estimate data model
         auto limit = new LimitOperator(G.limit().limit, G.limit().offset);

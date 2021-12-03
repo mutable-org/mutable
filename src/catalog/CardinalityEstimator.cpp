@@ -225,21 +225,10 @@ void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in
         }
 
         buf_.clear();
-        prev_relation.clear();
-        try {
-            for (auto it = relations_array->begin(); it != relations_array->end(); ++it) {
-                std::string current(it->get<std::string>());
-                if (current <= prev_relation) [[unlikely]]
-                    throw std::invalid_argument("relations must be sorted lexicographically and must not contain duplicates");
-                if (it != relations_array->begin())
-                    buf_.emplace_back('$');
-                buf_append(current);
-                prev_relation = std::move(current);
-            }
-        } catch (std::invalid_argument) {
-            diag.w(pos) << "Invalid identifier '" << std::string(buf_.cbegin(), buf_.cend())
-                        << "', must contain relations in lexicographical order and must not contain duplicates.\n";
-            continue;
+        for (auto it = relations_array->begin(); it != relations_array->end(); ++it) {
+            if (it != relations_array->begin())
+                buf_.emplace_back('$');
+            buf_append(it->get<std::string>());
         }
         buf_.emplace_back(0);
         auto str = strdup(buf_view());

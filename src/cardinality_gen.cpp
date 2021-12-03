@@ -70,11 +70,11 @@ int main(int argc, const char **argv)
     /*----- Cardinalities --------------------------------------------------------------------------------------------*/
     ADD(std::size_t, args.min_cardinality, 1,                               /* Type, Var, Init  */
         nullptr, "--min",                                                   /* Short, Long      */
-        "the minimum cardinality of relations and intermediate results",    /* Description      */
+        "the minimum cardinality of base tables",                           /* Description      */
         [&](std::size_t card) { args.min_cardinality = card; });            /* Callback         */
     ADD(std::size_t, args.max_cardinality, 1e6,                             /* Type, Var, Init  */
         nullptr, "--max",                                                   /* Short, Long      */
-        "the maximum cardinality of relations and intermediate results",    /* Description      */
+        "the maximum cardinality of base tables",                           /* Description      */
         [&](std::size_t card) { args.max_cardinality = card; });            /* Callback         */
     /*----- Parse command line arguments. ----------------------------------------------------------------------------*/
     AP.parse_args(argc, argv);

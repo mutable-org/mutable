@@ -146,7 +146,7 @@ if __name__ == '__main__':
     query_filename  = f'{filename_base}.query.sql'
 
     print(f'Generating problem statement {filename_base}.{{schema,query}}.sql for {args.query_type} query of '
-           '{args.num_relations} relations.')
+          f'{args.num_relations} relations.')
 
     # Generate relation names
     relations = list(map(lambda n: f'T{n}', range(args.num_relations)))

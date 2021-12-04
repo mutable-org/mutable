@@ -1,9 +1,10 @@
 #pragma once
 
-#include <mutable/IR/CNF.hpp>
-#include <mutable/util/ADT.hpp>
+#include <cstdint>
 #include <cstring>
 #include <memory>
+#include <mutable/IR/CNF.hpp>
+#include <mutable/util/ADT.hpp>
 #include <vector>
 
 
@@ -189,6 +190,12 @@ struct QueryGraph
     QueryGraph & operator=(QueryGraph &&other) { swap(*this, other); return *this; }
 
     static std::unique_ptr<QueryGraph> Build(const Stmt &stmt);
+
+    /** Returns the number of `DataSource`s in this graph. */
+    std::size_t num_sources() const { return sources_.size(); }
+
+    /** Returns the number of `Join`s in this graph. */
+    std::size_t num_joins() const { return joins_.size(); }
 
     void add_source(std::unique_ptr<DataSource> source) {
         source->id_ = sources_.size();

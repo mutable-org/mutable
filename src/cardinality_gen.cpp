@@ -272,8 +272,7 @@ void emit_cardinalities(std::ostream &out, const m::QueryGraph &G, const entry_t
         for (auto it = S.begin(); it != S.end(); ++it) {
             if (it != S.begin()) out << ", ";
             auto DS = G.sources()[*it];
-            const char *relation_name = DS->alias() ? : as<m::BaseTable>(DS)->table().name;
-            out << '"' << relation_name << '"';
+            out << '"' << DS->name() << '"';
         }
         /*----- Emit size. -----*/
         out << "], \"size\": " << size << "}";

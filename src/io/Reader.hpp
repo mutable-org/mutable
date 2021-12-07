@@ -26,14 +26,13 @@ struct Reader
 /** A reader for delimiter separated value (DSV) files. */
 struct DSVReader : Reader, ConstTypeVisitor
 {
-    std::size_t num_rows;
-    char delimiter;
-    char escape;
-    char quote;
-    bool has_header;
-    bool skip_header;
-
     private:
+    std::size_t num_rows_;
+    char delimiter_;
+    char escape_;
+    char quote_;
+    bool has_header_;
+    bool skip_header_;
     Position pos;
     char c;
     std::istream *in = nullptr;
@@ -43,14 +42,21 @@ struct DSVReader : Reader, ConstTypeVisitor
 
     public:
     DSVReader(const Table &table, Diagnostic &diag,
-              std::size_t num_rows = std::numeric_limits<decltype(num_rows)>::max(),
               char delimiter = ',',
               char escape = '\\',
               char quote = '\"',
               bool has_header = false,
-              bool skip_header = false);
+              bool skip_header = false,
+              std::size_t num_rows = std::numeric_limits<decltype(num_rows)>::max());
 
     void operator()(std::istream &in, const char *name) override;
+
+    size_t num_rows() const { return num_rows_; }
+    size_t delimiter() const { return delimiter_; }
+    size_t escape() const { return escape_; }
+    size_t quote() const { return quote_; }
+    size_t has_header() const { return has_header_; }
+    size_t skip_header() const { return skip_header_; }
 
     private:
     using ConstTypeVisitor::operator();
@@ -82,12 +88,12 @@ struct DSVReader : Reader, ConstTypeVisitor
     bool accept(char chr) { if (c == chr) { step(); return true; } return false; }
 
     void discard_cell() {
-        if (c == quote) {
+        if (c == quote_) {
             step();
-            while (c != EOF and c != '\n' and c != quote) { step(); }
-            accept(quote);
+            while (c != EOF and c != '\n' and c != quote_) { step(); }
+            accept(quote_);
         } else
-            while (c != EOF and c != '\n' and c != delimiter) { step(); }
+            while (c != EOF and c != '\n' and c != delimiter_) { step(); }
     }
     void discard_row() { while (c != EOF and c != '\n') { step(); } }
 

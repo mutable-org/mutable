@@ -211,25 +211,40 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             auto &DB = C.get_database_in_use();
             auto &T = DB.get_table(S->table_name.text);
 
-            DSVReader R(T, diag);
-            if (S->rows) R.num_rows = strtol(S->rows.text, nullptr, 10);
-            if (S->delimiter) R.delimiter = unescape(S->delimiter.text)[1];
-            if (S->escape) R.escape = unescape(S->escape.text)[1];
-            if (S->quote) R.quote = unescape(S->quote.text)[1];
-            R.has_header = S->has_header;
-            R.skip_header = S->skip_header;
+            struct {
+                char delimiter = ',';
+                char escape = '\\';
+                char quote = '\"';
+                bool has_header = false;
+                bool skip_header = false;
+                std::size_t num_rows = std::numeric_limits<decltype(num_rows)>::max();
+            } reader_config;
+            if (S->rows) reader_config.num_rows = strtol(S->rows.text, nullptr, 10);
+            if (S->delimiter) reader_config.delimiter = unescape(S->delimiter.text)[1];
+            if (S->escape) reader_config.escape = unescape(S->escape.text)[1];
+            if (S->quote) reader_config.quote = unescape(S->quote.text)[1];
+            reader_config.has_header = S->has_header;
+            reader_config.skip_header = S->skip_header;
 
-            std::string filename(S->path.text, 1, strlen(S->path.text) - 2);
-            errno = 0;
-            std::ifstream file(filename);
-            if (not file) {
-                const auto errsv = errno;
-                diag.e(S->path.pos) << "Could not open file '" << S->path.text << '\'';
-                if (errsv)
-                    diag.err() << ": " << strerror(errsv);
-                diag.err() << std::endl;
-            } else {
-                M_TIME_EXPR(R(file, S->path.text), "Read DSV file", timer);
+            try {
+                DSVReader R(T, diag, reader_config.delimiter, reader_config.escape, reader_config.quote,
+                            reader_config.has_header, reader_config.skip_header, reader_config.num_rows);
+
+                std::string filename(S->path.text, 1, strlen(S->path.text) - 2);
+                errno = 0;
+                std::ifstream file(filename);
+                if (not file) {
+                    const auto errsv = errno;
+                    diag.e(S->path.pos) << "Could not open file '" << S->path.text << '\'';
+                    if (errsv)
+                        diag.err() << ": " << strerror(errsv);
+                    diag.err() << std::endl;
+                } else {
+                    M_TIME_EXPR(R(file, S->path.text), "Read DSV file", timer);
+                }
+            } catch (m::invalid_argument e) {
+                diag.e(Position("DSVReader")) << "Error reading DSV file.\n"
+                                              << e.what() << "\n";
             }
         }
 next:

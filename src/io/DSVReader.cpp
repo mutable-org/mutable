@@ -1,7 +1,7 @@
 #include "io/Reader.hpp"
 
-#include "mutable/storage/Store.hpp"
-#include "mutable/util/macro.hpp"
+#include <mutable/storage/Store.hpp>
+#include <mutable/util/macro.hpp>
 #include "backend/Interpreter.hpp"
 #include "backend/StackMachine.hpp"
 #include <cctype>

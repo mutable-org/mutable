@@ -1,9 +1,9 @@
-#include "mutable/IR/CNF.hpp"
+#include <mutable/IR/CNF.hpp>
 
-#include "mutable/parse/AST.hpp"
+#include <mutable/parse/AST.hpp>
 #include "parse/ASTPrinter.hpp"
-#include "mutable/util/fn.hpp"
-#include "mutable/util/macro.hpp"
+#include <mutable/util/fn.hpp>
+#include <mutable/util/macro.hpp>
 
 
 namespace m {

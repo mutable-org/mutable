@@ -8,7 +8,7 @@ namespace m {
 enum TokenType
 {
 #define M_TOKENTYPE(tok) TK_##tok,
-#include "mutable/tables/TokenType.tbl"
+#include <mutable/tables/TokenType.tbl>
 #undef M_TOKENTYPE
     TokenType_MAX = TK_EOF
 };
@@ -32,12 +32,12 @@ inline char const * get_name(const TokenType tt)
             return "constant";
 
 #define M_KEYWORD(tt, name) case TK_ ## tt:
-#include "mutable/tables/Keywords.tbl"
+#include <mutable/tables/Keywords.tbl>
 #undef M_KEYWORD
             return "keyword";
 
 #define M_OPERATOR(tt) case TK_ ## tt:
-#include "mutable/tables/Operators.tbl"
+#include <mutable/tables/Operators.tbl>
 #undef M_OPERATOR
             return "punctuator";
     }
@@ -47,7 +47,7 @@ inline std::ostream & operator<<(std::ostream &os, const TokenType tt)
 {
     switch (tt) {
 #define M_TOKENTYPE(tok) case TK_ ## tok: return os << "TK_"#tok;
-#include "mutable/tables/TokenType.tbl"
+#include <mutable/tables/TokenType.tbl>
 #undef M_TOKENTYPE
     }
 }
@@ -56,7 +56,7 @@ inline std::string to_string(const TokenType tt)
 {
     switch (tt) {
 #define M_TOKENTYPE(tok) case TK_ ## tok: return "TK_"#tok;
-#include "mutable/tables/TokenType.tbl"
+#include <mutable/tables/TokenType.tbl>
 #undef M_TOKENTYPE
     }
 }

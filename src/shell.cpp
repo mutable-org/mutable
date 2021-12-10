@@ -5,8 +5,8 @@
 #include "globals.hpp"
 #include "io/Reader.hpp"
 #include "IR/PDDL.hpp"
-#include "mutable/catalog/CostModel.hpp"
-#include "mutable/mutable.hpp"
+#include <mutable/catalog/CostModel.hpp>
+#include <mutable/mutable.hpp>
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "util/ArgParser.hpp"
@@ -286,7 +286,7 @@ Replxx::completions_t hook_completion(const std::string &prefix, int &context_le
 {
     static constexpr const char *KW[] = {
 #define M_KEYWORD(tt, name) #name,
-#include "mutable/tables/Keywords.tbl"
+#include <mutable/tables/Keywords.tbl>
 #undef M_KEYWORD
     };
 
@@ -308,7 +308,7 @@ void hook_highlighter(const std::string &context, Replxx::colors_t &colors)
         /* Keywords */
 #define M_KEYWORD(tt, name)\
         { #name, Replxx::Color::BROWN },
-#include "mutable/tables/Keywords.tbl"
+#include <mutable/tables/Keywords.tbl>
 #undef M_KEYWORD
         /* Operators */
         { "\\(",  Replxx::Color::NORMAL},
@@ -354,7 +354,7 @@ Replxx::hints_t hook_hint(const std::string &prefix, int &context_len, Replxx::C
 {
     static constexpr const char *KW[] = {
 #define M_KEYWORD(tt, name) #name,
-#include "mutable/tables/Keywords.tbl"
+#include <mutable/tables/Keywords.tbl>
 #undef M_KEYWORD
     };
 
@@ -642,7 +642,7 @@ Immanuel Haffner\
         std::cout << "List of available stores:";
         constexpr std::pair<const char*, const char*> stores[] = {
 #define M_STORE(NAME, DESCR) { #NAME, DESCR },
-#include "mutable/tables/Store.tbl"
+#include <mutable/tables/Store.tbl>
 #undef M_STORE
         };
         std::size_t max_len = 0;
@@ -657,7 +657,7 @@ Immanuel Haffner\
         std::cout << "List of available backends:";
         constexpr std::pair<const char*, const char*> backends[] = {
 #define M_BACKEND(NAME, DESCR) { #NAME, DESCR },
-#include "mutable/tables/Backend.tbl"
+#include <mutable/tables/Backend.tbl>
 #undef M_BACKEND
         };
         std::size_t max_len = 0;
@@ -672,7 +672,7 @@ Immanuel Haffner\
         std::cout << "List of available plan enumerators:";
         constexpr std::pair<const char*, const char*> PE[] = {
 #define M_PLAN_ENUMERATOR(NAME, DESCR) { #NAME, DESCR },
-#include "mutable/tables/PlanEnumerator.tbl"
+#include <mutable/tables/PlanEnumerator.tbl>
 #undef M_PLAN_ENUMERATOR
         };
         std::size_t max_len = 0;
@@ -687,7 +687,7 @@ Immanuel Haffner\
         std::cout << "List of available cardinality estimators:";
         constexpr std::pair<const char*, const char*> CE[] = {
 #define M_CARDINALITY_ESTIMATOR(NAME, DESCR) { #NAME, DESCR },
-#include "mutable/tables/CardinalityEstimator.tbl"
+#include <mutable/tables/CardinalityEstimator.tbl>
 #undef M_CARDINALITY_ESTIMATOR
         };
         std::size_t max_len = 0;

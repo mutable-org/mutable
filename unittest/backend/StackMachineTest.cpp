@@ -2,10 +2,10 @@
 
 #include "backend/Interpreter.hpp"
 #include "backend/StackMachine.hpp"
-#include "mutable/catalog/Type.hpp"
-#include "mutable/IR/CNF.hpp"
-#include "mutable/mutable.hpp"
-#include "mutable/util/Diagnostic.hpp"
+#include <mutable/catalog/Type.hpp>
+#include <mutable/IR/CNF.hpp>
+#include <mutable/mutable.hpp>
+#include <mutable/util/Diagnostic.hpp>
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "testutil.hpp"

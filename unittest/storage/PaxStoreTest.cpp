@@ -1,7 +1,7 @@
 #include "catch2/catch.hpp"
 
 #include "storage/PaxStore.hpp"
-#include "mutable/storage/Store.hpp"
+#include <mutable/storage/Store.hpp>
 
 
 using namespace m;

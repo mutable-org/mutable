@@ -1,7 +1,7 @@
-#include "mutable/catalog/CostModel.hpp"
+#include <mutable/catalog/CostModel.hpp>
 
-#include "mutable/catalog/TrainedCostFunction.hpp"
-#include "mutable/mutable.hpp"
+#include <mutable/catalog/TrainedCostFunction.hpp>
+#include <mutable/mutable.hpp>
 #include "storage/ColumnStore.hpp"
 #include "storage/store_manip.hpp"
 #include <type_traits>

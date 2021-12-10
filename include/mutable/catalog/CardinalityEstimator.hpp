@@ -45,7 +45,7 @@ struct CardinalityEstimator
 
     enum kind_t {
 #define M_CARDINALITY_ESTIMATOR(NAME, _) CE_ ## NAME,
-#include "mutable/tables/CardinalityEstimator.tbl"
+#include <mutable/tables/CardinalityEstimator.tbl>
 #undef M_CARDINALITY_ESTIMATOR
     };
 
@@ -61,7 +61,7 @@ struct CardinalityEstimator
 
 #define M_CARDINALITY_ESTIMATOR(NAME, _) \
     static std::unique_ptr<CardinalityEstimator> Create ## NAME(const char *name_of_database);
-#include "mutable/tables/CardinalityEstimator.tbl"
+#include <mutable/tables/CardinalityEstimator.tbl>
 #undef M_CARDINALITY_ESTIMATOR
 
     virtual ~CardinalityEstimator() = 0;

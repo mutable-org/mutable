@@ -3,8 +3,8 @@
 #include <fstream>
 #include <util/ArgParser.hpp>
 #include "globals.hpp"
-#include "mutable/catalog/CostModel.hpp"
-#include "mutable/IR/Operator.hpp"
+#include <mutable/catalog/CostModel.hpp>
+#include <mutable/IR/Operator.hpp>
 #include "storage/store_manip.hpp"
 #include "util/GridSearch.hpp"
 

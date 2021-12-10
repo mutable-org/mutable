@@ -1,4 +1,4 @@
-#include "mutable/IR/PlanEnumerator.hpp"
+#include <mutable/IR/PlanEnumerator.hpp>
 
 #include "util/ADT.hpp"
 #include <algorithm>
@@ -29,14 +29,14 @@ using namespace m;
 
 const std::unordered_map<std::string, PlanEnumerator::kind_t> PlanEnumerator::STR_TO_KIND = {
 #define M_PLAN_ENUMERATOR(NAME, _) { #NAME,  PlanEnumerator::PE_ ## NAME },
-#include "mutable/tables/PlanEnumerator.tbl"
+#include <mutable/tables/PlanEnumerator.tbl>
 #undef M_PLAN_ENUMERATOR
 };
 
 std::unique_ptr<PlanEnumerator> PlanEnumerator::Create(PlanEnumerator::kind_t kind) {
     switch(kind) {
 #define M_PLAN_ENUMERATOR(NAME, _) case PE_ ## NAME: return Create ## NAME();
-#include "mutable/tables/PlanEnumerator.tbl"
+#include <mutable/tables/PlanEnumerator.tbl>
 #undef M_PLAN_ENUMERATOR
     }
 }
@@ -1880,5 +1880,5 @@ void AIPlanning::operator()(const QueryGraph &G, const CostFunction &CF, PlanTab
     std::unique_ptr<PlanEnumerator> PlanEnumerator::Create ## NAME() { \
         return std::make_unique<NAME>(); \
     }
-#include "mutable/tables/PlanEnumerator.tbl"
+#include <mutable/tables/PlanEnumerator.tbl>
 #undef M_PLAN_ENUMERATOR

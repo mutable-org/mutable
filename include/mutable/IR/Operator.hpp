@@ -1,10 +1,10 @@
 #pragma once
 
-#include "mutable/catalog/Schema.hpp"
-#include "mutable/IR/CNF.hpp"
-#include "mutable/IR/QueryGraph.hpp"
-#include "mutable/storage/Store.hpp"
-#include "mutable/util/macro.hpp"
+#include <mutable/catalog/Schema.hpp>
+#include <mutable/IR/CNF.hpp>
+#include <mutable/IR/QueryGraph.hpp>
+#include <mutable/storage/Store.hpp>
+#include <mutable/util/macro.hpp>
 #include <functional>
 #include <iostream>
 #include <unordered_map>

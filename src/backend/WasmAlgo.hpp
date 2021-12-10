@@ -1,7 +1,7 @@
 #pragma once
 
 #include "backend/WasmUtil.hpp"
-#include "mutable/parse/AST.hpp"
+#include <mutable/parse/AST.hpp>
 #include <binaryen-c.h>
 #include <unordered_map>
 #include <vector>

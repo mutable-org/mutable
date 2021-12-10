@@ -1,7 +1,7 @@
 #include "storage/ColumnStore.hpp"
 
 #include "backend/StackMachine.hpp"
-#include "mutable/storage/Linearization.hpp"
+#include <mutable/storage/Linearization.hpp>
 #include <numeric>
 
 

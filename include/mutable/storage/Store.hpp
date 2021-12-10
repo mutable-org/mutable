@@ -27,7 +27,7 @@ struct Store
 {
     enum kind_t {
 #define M_STORE(NAME, _) S_ ## NAME,
-#include "mutable/tables/Store.tbl"
+#include <mutable/tables/Store.tbl>
 #undef M_STORE
     };
 
@@ -43,7 +43,7 @@ struct Store
 
 #define M_STORE(NAME, _) \
     static std::unique_ptr<Store> Create ## NAME(const Table &table);
-#include "mutable/tables/Store.tbl"
+#include <mutable/tables/Store.tbl>
 #undef M_STORE
 
     private:

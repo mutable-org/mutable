@@ -4,7 +4,7 @@
 #include "parse/ASTPrinter.hpp"
 #include "parse/Parser.hpp"
 #include "testutil.hpp"
-#include "mutable/util/fn.hpp"
+#include <mutable/util/fn.hpp>
 
 
 using namespace m;

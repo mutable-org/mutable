@@ -1,7 +1,7 @@
 #pragma once
 
-#include "mutable/IR/CNF.hpp"
-#include "mutable/util/ADT.hpp"
+#include <mutable/IR/CNF.hpp>
+#include <mutable/util/ADT.hpp>
 #include <cstring>
 #include <memory>
 #include <vector>

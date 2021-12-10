@@ -1,6 +1,6 @@
 #include "catch2/catch.hpp"
 
-#include "mutable/util/Position.hpp"
+#include <mutable/util/Position.hpp>
 #include <cstring>
 
 

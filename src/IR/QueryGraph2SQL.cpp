@@ -1,6 +1,6 @@
 #include "IR/QueryGraph2SQL.hpp"
 
-#include "mutable/IR/QueryGraph.hpp"
+#include <mutable/IR/QueryGraph.hpp>
 
 
 using namespace m;

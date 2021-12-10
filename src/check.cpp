@@ -1,7 +1,7 @@
 #include "globals.hpp"
 #include "lex/Lexer.hpp"
-#include "mutable/util/Diagnostic.hpp"
-#include "mutable/util/fn.hpp"
+#include <mutable/util/Diagnostic.hpp>
+#include <mutable/util/fn.hpp>
 #include "parse/ASTDumper.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"

@@ -1,10 +1,10 @@
 #include "catch2/catch.hpp"
 
-#include "mutable/IR/CNF.hpp"
+#include <mutable/IR/CNF.hpp>
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "testutil.hpp"
-#include "mutable/util/fn.hpp"
+#include <mutable/util/fn.hpp>
 #include <sstream>
 
 using namespace m;

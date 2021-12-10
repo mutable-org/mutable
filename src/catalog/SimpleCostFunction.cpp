@@ -1,6 +1,6 @@
-#include "mutable/catalog/SimpleCostFunction.hpp"
+#include <mutable/catalog/SimpleCostFunction.hpp>
 
-#include "mutable/IR/PlanTable.hpp"
+#include <mutable/IR/PlanTable.hpp>
 
 
 using namespace m;

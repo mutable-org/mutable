@@ -1,8 +1,8 @@
 #pragma once
 
-#include "mutable/catalog/CostFunction.hpp"
-#include "mutable/IR/QueryGraph.hpp"
-#include "mutable/util/macro.hpp"
+#include <mutable/catalog/CostFunction.hpp>
+#include <mutable/IR/QueryGraph.hpp>
+#include <mutable/util/macro.hpp>
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
@@ -20,7 +20,7 @@ struct PlanEnumerator
 
     enum kind_t {
 #define M_PLAN_ENUMERATOR(NAME, _) PE_ ## NAME,
-#include "mutable/tables/PlanEnumerator.tbl"
+#include <mutable/tables/PlanEnumerator.tbl>
 #undef M_PLAN_ENUMERATOR
     };
 
@@ -35,7 +35,7 @@ struct PlanEnumerator
 
 #define M_PLAN_ENUMERATOR(NAME, _) \
     static std::unique_ptr<PlanEnumerator> Create ## NAME();
-#include "mutable/tables/PlanEnumerator.tbl"
+#include <mutable/tables/PlanEnumerator.tbl>
 #undef M_PLAN_ENUMERATOR
 
     /** Enumerate subplans and fill plan table. */

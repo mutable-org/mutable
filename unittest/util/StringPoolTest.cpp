@@ -1,6 +1,6 @@
 #include "catch2/catch.hpp"
 
-#include "mutable/util/StringPool.hpp"
+#include <mutable/util/StringPool.hpp>
 
 
 using namespace m;

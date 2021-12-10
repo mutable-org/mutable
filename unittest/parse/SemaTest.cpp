@@ -1,8 +1,8 @@
 #include "catch2/catch.hpp"
 
 #include "catalog/Schema.hpp"
-#include "mutable/util/Diagnostic.hpp"
-#include "mutable/util/fn.hpp"
+#include <mutable/util/Diagnostic.hpp>
+#include <mutable/util/fn.hpp>
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "testutil.hpp"

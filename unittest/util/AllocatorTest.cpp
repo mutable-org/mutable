@@ -1,7 +1,7 @@
 #include "catch2/catch.hpp"
 
-#include "mutable/util/list_allocator.hpp"
-#include "mutable/util/malloc_allocator.hpp"
+#include <mutable/util/list_allocator.hpp>
+#include <mutable/util/malloc_allocator.hpp>
 #include <cstring>
 
 

@@ -2,11 +2,11 @@
 
 #include <algorithm>
 #include "globals.hpp"
-#include "mutable/catalog/CardinalityEstimator.hpp"
-#include "mutable/catalog/CostFunction.hpp"
-#include "mutable/catalog/SimpleCostFunction.hpp"
-#include "mutable/IR/PlanTable.hpp"
-#include "mutable/util/fn.hpp"
+#include <mutable/catalog/CardinalityEstimator.hpp>
+#include <mutable/catalog/CostFunction.hpp>
+#include <mutable/catalog/SimpleCostFunction.hpp>
+#include <mutable/IR/PlanTable.hpp>
+#include <mutable/util/fn.hpp>
 #include "storage/ColumnStore.hpp"
 #include "storage/PaxStore.hpp"
 #include "storage/RowStore.hpp"
@@ -134,7 +134,7 @@ Catalog::Catalog()
     auto res = standard_functions_.emplace(name, new Function(name, Function::FN_ ## NAME, Function::KIND)); \
     M_insist(res.second, "function already defined"); \
 }
-#include "mutable/tables/Functions.tbl"
+#include <mutable/tables/Functions.tbl>
 #undef M_FUNCTION
 
     /* Initialize stores. */
@@ -143,7 +143,7 @@ Catalog::Catalog()
     auto res = store_factories_.emplace(name, new ConcreteStoreFactory<NAME>()); \
     M_insist(res.second, "store already defined"); \
 }
-#include "mutable/tables/Store.tbl"
+#include <mutable/tables/Store.tbl>
 #undef M_STORE
     M_insist(store_factories_.size() != 0);
     default_store(store_factories_.begin()->first); // set default store
@@ -154,7 +154,7 @@ Catalog::Catalog()
     auto res = cardinality_estimator_factories_.emplace(name, new ConcreteCardinalityEstimatorFactory<NAME>()); \
     M_insist(res.second, "cardinality estimator already defined"); \
 }
-#include "mutable/tables/CardinalityEstimator.tbl"
+#include <mutable/tables/CardinalityEstimator.tbl>
 #undef M_CARDINALITY_ESTIMATOR
     M_insist(cardinality_estimator_factories_.size() != 0);
     default_cardinality_estimator(cardinality_estimator_factories_.begin()->first); // set default cardinality estimator

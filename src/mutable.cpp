@@ -1,4 +1,4 @@
-#include "mutable/mutable.hpp"
+#include <mutable/mutable.hpp>
 
 #include "backend/Interpreter.hpp"
 #include "backend/StackMachine.hpp"
@@ -6,8 +6,8 @@
 #include "globals.hpp"
 #include "io/Reader.hpp"
 #include "lex/Lexer.hpp"
-#include "mutable/IR/Tuple.hpp"
-#include "mutable/util/Diagnostic.hpp"
+#include <mutable/IR/Tuple.hpp>
+#include <mutable/util/Diagnostic.hpp>
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "parse/Sema.hpp"

@@ -1,6 +1,6 @@
 #include "storage/PaxStore.hpp"
 
-#include "mutable/storage/Linearization.hpp"
+#include <mutable/storage/Linearization.hpp>
 #include <algorithm>
 #include <exception>
 #include <fstream>

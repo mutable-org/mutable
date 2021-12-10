@@ -2,7 +2,7 @@
 
 #include "catalog/Schema.hpp"
 #include "globals.hpp"
-#include "mutable/util/fn.hpp"
+#include <mutable/util/fn.hpp>
 #include "storage/ColumnStore.hpp"
 #include "util/datagen.hpp"
 #include <algorithm>

@@ -12,7 +12,7 @@ using namespace m;
 void Lexer::initialize_keywords()
 {
 #define M_KEYWORD(tok, text) keywords_.emplace(pool(#text), TK_##tok);
-#include "mutable/tables/Keywords.tbl"
+#include <mutable/tables/Keywords.tbl>
 #undef M_KEYWORD
 }
 

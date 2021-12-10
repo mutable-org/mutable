@@ -1,7 +1,7 @@
 #include "catch2/catch.hpp"
 
 #include "catalog/Schema.hpp"
-#include "mutable/util/fn.hpp"
+#include <mutable/util/fn.hpp>
 #include <cmath>
 #include <cstring>
 #include <sstream>

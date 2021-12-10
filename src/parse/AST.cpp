@@ -1,4 +1,4 @@
-#include "mutable/parse/AST.hpp"
+#include <mutable/parse/AST.hpp>
 
 #include "catalog/Schema.hpp"
 #include "parse/ASTDot.hpp"

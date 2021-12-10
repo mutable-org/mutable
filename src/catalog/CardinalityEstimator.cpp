@@ -38,7 +38,7 @@ void CardinalityEstimator::dump() const { dump(std::cerr); }
 
 const std::unordered_map<std::string, CardinalityEstimator::kind_t> CardinalityEstimator::STR_TO_KIND = {
 #define M_CARDINALITY_ESTIMATOR(NAME, _) { #NAME,  CardinalityEstimator::CE_ ## NAME },
-#include "mutable/tables/CardinalityEstimator.tbl"
+#include <mutable/tables/CardinalityEstimator.tbl>
 #undef M_CARDINALITY_ESTIMATOR
 };
 
@@ -46,7 +46,7 @@ std::unique_ptr<CardinalityEstimator>
 CardinalityEstimator::Create(CardinalityEstimator::kind_t kind, const char *name_of_database) {
     switch(kind) {
 #define M_CARDINALITY_ESTIMATOR(NAME, _) case CE_ ## NAME: return Create ## NAME(name_of_database);
-#include "mutable/tables/CardinalityEstimator.tbl"
+#include <mutable/tables/CardinalityEstimator.tbl>
 #undef M_CARDINALITY_ESTIMATOR
     }
 }

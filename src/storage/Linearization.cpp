@@ -1,4 +1,4 @@
-#include "mutable/storage/Linearization.hpp"
+#include <mutable/storage/Linearization.hpp>
 
 #include "catalog/Schema.hpp"
 #include <cmath>

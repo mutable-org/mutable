@@ -2,8 +2,8 @@
 
 #include "catalog/Schema.hpp"
 #include "lex/Lexer.hpp"
-#include "mutable/util/Diagnostic.hpp"
-#include "mutable/util/StringPool.hpp"
+#include <mutable/util/Diagnostic.hpp>
+#include <mutable/util/StringPool.hpp>
 #include <sstream>
 #include <string>
 

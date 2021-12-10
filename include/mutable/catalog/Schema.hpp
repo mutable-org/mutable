@@ -315,7 +315,7 @@ struct Function
 
     enum fnid_t {
 #define M_FUNCTION(NAME, KIND) FN_ ## NAME,
-#include "mutable/tables/Functions.tbl"
+#include <mutable/tables/Functions.tbl>
 #undef M_FUNCTION
         FN_UDF, // for all user-defined functions
     };
@@ -340,7 +340,7 @@ struct Function
     private:
     static constexpr const char *FNID_TO_STR_[] = {
 #define M_FUNCTION(NAME, KIND) "FN_" #NAME,
-#include "mutable/tables/Functions.tbl"
+#include <mutable/tables/Functions.tbl>
 #undef M_FUNCTION
             "FN_UDF",
     };

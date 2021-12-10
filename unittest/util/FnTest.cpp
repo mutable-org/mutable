@@ -1,6 +1,6 @@
 #include "catch2/catch.hpp"
 
-#include "mutable/util/fn.hpp"
+#include <mutable/util/fn.hpp>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>

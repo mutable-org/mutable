@@ -15,7 +15,7 @@ struct Backend
 {
     enum kind_t {
 #define M_BACKEND(NAME, _) B_ ## NAME,
-#include "mutable/tables/Backend.tbl"
+#include <mutable/tables/Backend.tbl>
 #undef M_BACKEND
     };
 
@@ -28,7 +28,7 @@ struct Backend
 
 #define M_BACKEND(NAME, _) \
     static std::unique_ptr<Backend> Create ## NAME();
-#include "mutable/tables/Backend.tbl"
+#include <mutable/tables/Backend.tbl>
 #undef M_BACKEND
 
     virtual ~Backend() { }

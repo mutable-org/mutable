@@ -1,6 +1,6 @@
 #include "util/terminal.hpp"
 
-#include "mutable/util/fn.hpp"
+#include <mutable/util/fn.hpp>
 #include <cstdlib>
 
 

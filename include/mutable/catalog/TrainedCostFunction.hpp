@@ -1,7 +1,7 @@
 #pragma once
 
-#include "mutable/catalog/CostFunction.hpp"
-#include "mutable/catalog/CostModel.hpp"
+#include <mutable/catalog/CostFunction.hpp>
+#include <mutable/catalog/CostModel.hpp>
 
 
 namespace m {

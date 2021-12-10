@@ -1,6 +1,6 @@
 #pragma once
 
-#include "mutable/catalog/Schema.hpp"
+#include <mutable/catalog/Schema.hpp>
 
 
 namespace std {

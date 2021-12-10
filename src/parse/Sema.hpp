@@ -57,7 +57,7 @@ struct Sema : ASTExprVisitor, ASTClauseVisitor, ASTStmtVisitor
 
         public:
         RequireContext(Sema *sema, Stmt &stmt)
-            : sema_(*notnull(sema))
+            : sema_(*M_notnull(sema))
             , needs_context_(sema_.contexts_.empty())
         {
             if (needs_context_)
@@ -100,11 +100,11 @@ struct Sema : ASTExprVisitor, ASTClauseVisitor, ASTStmtVisitor
         return ctx;
     }
     SemaContext & get_context() {
-        insist(not contexts_.empty());
+        M_insist(not contexts_.empty());
         return *contexts_.back();
     }
     const SemaContext & get_context() const {
-        insist(not contexts_.empty());
+        M_insist(not contexts_.empty());
         return *contexts_.back();
     }
 

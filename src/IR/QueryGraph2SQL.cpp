@@ -55,7 +55,7 @@ void QueryGraph2SQL::translate(const QueryGraph *graph)
                 auto name = base->table().name;
                 out_ << name;
                 if (name != ds->alias()) {
-                    insist(ds->alias());
+                    M_insist(ds->alias());
                     out_ << " AS " << ds->alias();
                 }
             } else if (auto query = cast<Query>(ds)) {
@@ -68,7 +68,7 @@ void QueryGraph2SQL::translate(const QueryGraph *graph)
                 else
                     out_ << make_unique_alias(); // query is anonymous -> alias is never used but required by SQL syntax
             } else {
-                unreachable("invalid variant");
+                M_unreachable("invalid variant");
             }
         }
     }
@@ -160,13 +160,13 @@ bool QueryGraph2SQL::references_group_by(Designator::target_type t)
 
 void QueryGraph2SQL::operator()(Const<ErrorExpr>&)
 {
-    unreachable("graph must not contain errors");
+    M_unreachable("graph must not contain errors");
 }
 
 void QueryGraph2SQL::operator()(Const<Designator> &e)
 {
     if (after_grouping_ and references_group_by(e.target())) {
-        insist(not e.has_table_name());
+        M_insist(not e.has_table_name());
         std::ostringstream expr;
         QueryGraph2SQL expr_trans(expr, graph_, false);
         expr_trans(*std::get<const Expr*>(e.target()));

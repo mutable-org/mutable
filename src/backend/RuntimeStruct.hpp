@@ -59,13 +59,13 @@ struct RuntimeStruct
 
     /** Returns the `Type` of the field at index `idx`. */
     const Type & type(index_type idx) const {
-        insist(idx < num_entries());
+        M_insist(idx < num_entries());
         return *types_[idx];
     }
 
     /** Returns the offset (in bits) of the field at index `idx`. */
     offset_type offset(index_type idx) const {
-        insist(idx < num_entries());
+        M_insist(idx < num_entries());
         return offsets_[idx];
     }
     /** Returns the `Type` and offset (in bits) of the field at index `idx`. */

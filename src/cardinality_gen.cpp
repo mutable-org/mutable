@@ -215,10 +215,10 @@ generate_cardinalities_for_query(const m::QueryGraph &G, const m::AdjacencyMatri
                 auto [S2, X2] = cmp_Q.front();
                 cmp_Q.pop_front();
 
-                insist((S1 & S2).empty());
-                insist(M.is_connected(S1, S2));
+                M_insist((S1 & S2).empty());
+                M_insist(M.is_connected(S1, S2));
 #ifndef NDEBUG
-                insist(duplicate_check.emplace(S1, S2).second, "duplicate");
+                M_insist(duplicate_check.emplace(S1, S2).second, "duplicate");
 #endif
 
                 update(S1, S2);

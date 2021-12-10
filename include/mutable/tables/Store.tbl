@@ -1,10 +1,10 @@
 /* vim: set filetype=cpp: */
 
-#ifndef DB_STORE
-#error "define DB_STORE(NAME, DESCR) before including this file"
+#ifndef M_STORE
+#error "define M_STORE(NAME, DESCR) before including this file"
 #endif
 
-/*        NAME            | Description */
-DB_STORE( RowStore,         "stores attributes in row-major order" )
-DB_STORE( ColumnStore,      "stores attributes in column-major order" )
-DB_STORE( PaxStore,         "stores attributes using PAX layout" )
+/*       NAME             | Description */
+M_STORE( RowStore,          "stores attributes in row-major order" )
+M_STORE( ColumnStore,       "stores attributes in column-major order" )
+M_STORE( PaxStore,          "stores attributes using PAX layout" )

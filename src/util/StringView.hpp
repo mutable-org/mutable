@@ -21,11 +21,11 @@ struct StringView
         : left_(reinterpret_cast<uintptr_t>(start))
         , right_((length << 1UL) | 0x1UL)
     {
-        insist(is_flat());
+        M_insist(is_flat());
         std::cerr << "Created SV \"" << *this << "\".\n";
     }
 
-    StringView(const char *start, const char *end) : StringView(start, end - start) { insist(end >= start); }
+    StringView(const char *start, const char *end) : StringView(start, end - start) { M_insist(end >= start); }
     StringView(const char *start) : StringView(start, strlen(start)) { }
     StringView(const std::string &str) : StringView(str.c_str(), str.length()) { }
 
@@ -34,18 +34,18 @@ struct StringView
         : left_(reinterpret_cast<uintptr_t>(left))
         , right_(reinterpret_cast<uintptr_t>(right))
     {
-        insist(is_composed());
+        M_insist(is_composed());
         std::cerr << "Composed SV \"" << *this << "\" of \"" << *left << "\" .. \"" << *right << "\".\n";
     }
 
     bool is_flat() const { return right_ & 0x1; }
     bool is_composed() const { return not is_flat(); }
 
-    const char * data() const { insist(is_flat()); return reinterpret_cast<char*>(left_); }
-    std::size_t length() const { insist(is_flat()); return right_ >> 1UL; }
+    const char * data() const { M_insist(is_flat()); return reinterpret_cast<char*>(left_); }
+    std::size_t length() const { M_insist(is_flat()); return right_ >> 1UL; }
 
-    const StringView & left() const { insist(is_composed()); return *reinterpret_cast<const StringView*>(left_); }
-    const StringView & right() const { insist(is_composed()); return *reinterpret_cast<const StringView*>(right_); }
+    const StringView & left() const { M_insist(is_composed()); return *reinterpret_cast<const StringView*>(left_); }
+    const StringView & right() const { M_insist(is_composed()); return *reinterpret_cast<const StringView*>(right_); }
 
     int compare(StringView other) const { return str().compare(other.str()); }
 

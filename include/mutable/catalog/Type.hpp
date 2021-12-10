@@ -29,9 +29,9 @@ struct ConstTypeVisitor;
 struct Type
 {
 #define category_t(X) X(TY_Scalar) X(TY_Vector)
-    DECLARE_ENUM(category_t); ///< a category for whether this type is *scalar* or *vectorial*
+    M_DECLARE_ENUM(category_t); ///< a category for whether this type is *scalar* or *vectorial*
     protected:
-    static constexpr const char *CATEGORY_TO_STR_[] = { ENUM_TO_STR(category_t) };
+    static constexpr const char *CATEGORY_TO_STR_[] = { M_ENUM_TO_STR(category_t) };
 #undef category_t
 
     protected:
@@ -352,9 +352,9 @@ struct Numeric : PrimitiveType
     static constexpr float DECIMAL_TO_BINARY_DIGITS = 3.32192f;
 
 #define kind_t(X) X(N_Int) X(N_Float) X(N_Decimal)
-    DECLARE_ENUM(kind_t) kind; ///< the kind of numeric type
+    M_DECLARE_ENUM(kind_t) kind; ///< the kind of numeric type
 private:
-    static constexpr const char *KIND_TO_STR_[] = { ENUM_TO_STR(kind_t) };
+    static constexpr const char *KIND_TO_STR_[] = { M_ENUM_TO_STR(kind_t) };
 #undef kind_t
     public:
     /** The precision gives the maximum number of digits that can be represented by that type.  Its interpretation
@@ -388,7 +388,7 @@ private:
             case N_Float: return precision;
             case N_Decimal: return ceil_to_pow_2(uint32_t(std::ceil(DECIMAL_TO_BINARY_DIGITS * precision)));
         }
-        unreachable("illegal kind");
+        M_unreachable("illegal kind");
     }
 
     uint32_t alignment() const override { return size(); }
@@ -413,7 +413,7 @@ struct FnType : Type
 
     private:
     FnType(const Type *return_type, std::vector<const Type*> parameter_types)
-            : return_type(notnull(return_type))
+            : return_type(M_notnull(return_type))
             , parameter_types(parameter_types)
     { }
 

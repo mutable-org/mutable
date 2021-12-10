@@ -64,7 +64,7 @@ TEST_CASE("Injection estimator estimates", "[core][catalog][cardinality]")
                          FROM A, B, C \
                          WHERE A.id = C.aid AND A.id = B.aid;";
     auto S = m::statement_from_string(diag, query);
-    insist(diag.num_errors() == 0);
+    M_insist(diag.num_errors() == 0);
     auto G = QueryGraph::Build(*S);
     std::istringstream json_input;
     json_input.str("{ \"mine\": [ \
@@ -206,7 +206,7 @@ TEST_CASE("Cartesian estimator estimates", "[core][catalog][cardinality]")
                          FROM A, B, C \
                          WHERE A.id = C.aid AND A.id = B.aid;";
     auto S = m::statement_from_string(diag, query);
-    insist(diag.num_errors() == 0);
+    M_insist(diag.num_errors() == 0);
     auto G = QueryGraph::Build(*S);
     CartesianProductEstimator CE;
 

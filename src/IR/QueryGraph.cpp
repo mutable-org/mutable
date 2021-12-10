@@ -112,7 +112,7 @@ struct GetTables : ConstASTExprVisitor
     std::set<const char*> get() { return std::move(tables_); }
 
     using ConstASTExprVisitor::operator();
-    void operator()(Const<ErrorExpr>&) override { unreachable("graph must not contain errors"); }
+    void operator()(Const<ErrorExpr>&) override { M_unreachable("graph must not contain errors"); }
 
     void operator()(Const<Designator> &e) override {
         /* check whether this designator refers to an attribute of a table of this query */
@@ -160,7 +160,7 @@ struct GetAggregates : ConstASTExprVisitor, ConstASTClauseVisitor, ConstASTStmtV
 
     /*----- Expressions ----------------------------------------------------------------------------------------------*/
     using ConstASTExprVisitor::operator();
-    void operator()(Const<ErrorExpr>&) override { unreachable("graph must not contain errors"); }
+    void operator()(Const<ErrorExpr>&) override { M_unreachable("graph must not contain errors"); }
 
     void operator()(Const<Designator>&) override { /* nothing to be done */ }
     void operator()(Const<Constant>&) override { /* nothing to be done */ }
@@ -169,7 +169,7 @@ struct GetAggregates : ConstASTExprVisitor, ConstASTClauseVisitor, ConstASTStmtV
     void operator()(Const<QueryExpr>&) override { /* nothing to be done */ }
 
     void operator()(Const<FnApplicationExpr> &e) override {
-        insist(e.has_function());
+        M_insist(e.has_function());
         if (e.get_function().is_aggregate()) { // test that this is an aggregation
             using std::find_if, std::to_string;
             std::string str = to_string(e);
@@ -181,11 +181,11 @@ struct GetAggregates : ConstASTExprVisitor, ConstASTClauseVisitor, ConstASTStmtV
 
     /*----- Clauses --------------------------------------------------------------------------------------------------*/
     using ConstASTClauseVisitor::operator();
-    void operator()(Const<ErrorClause>&) override { unreachable("not implemented"); }
-    void operator()(Const<FromClause>&) override { unreachable("not implemented"); }
-    void operator()(Const<WhereClause>&) override { unreachable("not implemented"); }
-    void operator()(Const<GroupByClause>&) override { unreachable("not implemented"); }
-    void operator()(Const<LimitClause>&) override { unreachable("not implemented"); }
+    void operator()(Const<ErrorClause>&) override { M_unreachable("not implemented"); }
+    void operator()(Const<FromClause>&) override { M_unreachable("not implemented"); }
+    void operator()(Const<WhereClause>&) override { M_unreachable("not implemented"); }
+    void operator()(Const<GroupByClause>&) override { M_unreachable("not implemented"); }
+    void operator()(Const<LimitClause>&) override { M_unreachable("not implemented"); }
 
 
     void operator()(Const<SelectClause> &c) override {
@@ -202,14 +202,14 @@ struct GetAggregates : ConstASTExprVisitor, ConstASTClauseVisitor, ConstASTStmtV
 
     /*----- Statements -----------------------------------------------------------------------------------------------*/
     using ConstASTStmtVisitor::operator();
-    void operator()(Const<ErrorStmt>&) override { unreachable("not implemented"); }
-    void operator()(Const<EmptyStmt>&) override { unreachable("not implemented"); }
-    void operator()(Const<CreateDatabaseStmt>&) override { unreachable("not implemented"); }
-    void operator()(Const<UseDatabaseStmt>&) override { unreachable("not implemented"); }
-    void operator()(Const<CreateTableStmt>&) override { unreachable("not implemented"); }
-    void operator()(Const<InsertStmt>&) override { unreachable("not implemented"); }
-    void operator()(Const<UpdateStmt>&) override { unreachable("not implemented"); }
-    void operator()(Const<DeleteStmt>&) override { unreachable("not implemented"); }
+    void operator()(Const<ErrorStmt>&) override { M_unreachable("not implemented"); }
+    void operator()(Const<EmptyStmt>&) override { M_unreachable("not implemented"); }
+    void operator()(Const<CreateDatabaseStmt>&) override { M_unreachable("not implemented"); }
+    void operator()(Const<UseDatabaseStmt>&) override { M_unreachable("not implemented"); }
+    void operator()(Const<CreateTableStmt>&) override { M_unreachable("not implemented"); }
+    void operator()(Const<InsertStmt>&) override { M_unreachable("not implemented"); }
+    void operator()(Const<UpdateStmt>&) override { M_unreachable("not implemented"); }
+    void operator()(Const<DeleteStmt>&) override { M_unreachable("not implemented"); }
     void operator()(Const<DSVImportStmt>&) override { }
 
     void operator()(Const<SelectStmt> &s) override {
@@ -239,7 +239,7 @@ struct GetQueries : ConstASTExprVisitor
     std::vector<const QueryExpr*> get() { return std::move(queries_); }
 
     using ConstASTExprVisitor::operator();
-    void operator()(Const<ErrorExpr>&) override { unreachable("graph must not contain errors"); }
+    void operator()(Const<ErrorExpr>&) override { M_unreachable("graph must not contain errors"); }
 
     void operator()(Const<Designator>&) override { /* nothing to be done */ }
 
@@ -317,7 +317,7 @@ struct m::GetPrimaryKey
                 }
             }
         } else {
-            unreachable("invalid variant");
+            M_unreachable("invalid variant");
         }
     }
 };
@@ -344,7 +344,7 @@ struct GetDesignators : ConstASTExprVisitor
     void aggregates(bool aggregates) { aggregates_ = aggregates; }
 
     using ConstASTExprVisitor::operator();
-    void operator()(Const<ErrorExpr>&) override { unreachable("graph must not contain errors"); }
+    void operator()(Const<ErrorExpr>&) override { M_unreachable("graph must not contain errors"); }
 
     void operator()(Const<Designator> &e) override { designators_.push_back(&e); }
 
@@ -370,7 +370,7 @@ struct GetDesignators : ConstASTExprVisitor
  * in the filter and joins of `query` plus those in the grouping (or the projection if no grouping exists). */
 auto get_needed_attrs(const QueryGraph *graph, const Query &query)
 {
-    insist(contains(graph->sources(), &query));
+    M_insist(contains(graph->sources(), &query));
 
     GetDesignators GD;
     auto it = std::find(graph->sources().begin(), graph->sources().end(), &query);
@@ -504,7 +504,7 @@ struct ReplaceDesignators : ConstASTExprVisitor
 
     private:
     using ConstASTExprVisitor::operator();
-    void operator()(Const<ErrorExpr>&) override { unreachable("graph must not contain errors"); }
+    void operator()(Const<ErrorExpr>&) override { M_unreachable("graph must not contain errors"); }
 
     void operator()(Const<Designator> &e) override {
         if (auto d = findDesignator(e))
@@ -628,7 +628,7 @@ struct m::GetCorrelationInfo : ConstASTExprVisitor
                     } catch (std::out_of_range&) {
                         /* `d_new` was not found in `old_to_new_inner` since no table name was specified and no new
                          * designator was created by this function. Add `d_new` as new uncorrelated expression. */
-                        insist(not table_name_);
+                        M_insist(not table_name_);
                         uncorrelated_exprs_new.emplace(d_new);
                     }
                 } else {
@@ -652,7 +652,7 @@ struct m::GetCorrelationInfo : ConstASTExprVisitor
 
         private:
         using ASTExprVisitor::operator();
-        void operator()(Const<ErrorExpr>&) override { unreachable("graph must not contain errors"); }
+        void operator()(Const<ErrorExpr>&) override { M_unreachable("graph must not contain errors"); }
 
         void operator()(Const<Designator> &d) override { if (finishDecorrelation_) d.decorrelate(); }
 
@@ -776,7 +776,7 @@ struct m::GetCorrelationInfo : ConstASTExprVisitor
 
     private:
     using ConstASTExprVisitor::operator();
-    void operator()(Const<ErrorExpr>&) override { unreachable("graph must not contain errors"); }
+    void operator()(Const<ErrorExpr>&) override { M_unreachable("graph must not contain errors"); }
 
     void operator()(Const<Designator> &e) override {
         if (e.is_correlated()) {
@@ -828,7 +828,7 @@ struct m::GetCorrelationInfo : ConstASTExprVisitor
             }
             return res;
         } else {
-            unreachable("target can not be `std::monostate`");
+            M_unreachable("target can not be `std::monostate`");
         }
     }
 };
@@ -863,7 +863,7 @@ struct m::Decorrelation
             pushPredicates(last.first, graphs_.back().first, last.second);
         }
 
-        insist(not graphs_.empty());
+        M_insist(not graphs_.empty());
 
         if (graphs_.size() > 1) {
             /* Initialize `needed_attrs_` for operator push-up. */
@@ -885,10 +885,10 @@ struct m::Decorrelation
 
             /* Adapt all designators above the innermost non-equi-predicate. */
             auto *origin = &graphs_.back().first->group_by_;
-            insist(not origin->empty());
+            M_insist(not origin->empty());
             for (auto i = graphs_.size() - 1; i != 0; --i) {
                 auto &upper = graphs_[i - 1];
-                insist(not origin->empty());
+                M_insist(not origin->empty());
                 replace_designators(upper.first, origin);
                 if (upper.first->grouping())
                     origin = &upper.first->group_by_;
@@ -922,7 +922,7 @@ struct m::Decorrelation
         bool found = false;
         for (auto ds : graph->sources()) {
             if (ds->decorrelated_) continue;
-            insist(not found, "Multiple not yet decorrelated nested queries in one graph should not be possible.");
+            M_insist(not found, "Multiple not yet decorrelated nested queries in one graph should not be possible.");
             found = true;
             auto q = as<Query>(ds);
             searchGraphs(q->query_graph(), q);
@@ -934,8 +934,8 @@ struct m::Decorrelation
      *  iff all sources are reachable.
      *  Otherwise, the correlated predicate has to be pushed further up and, therefore, is added to `upper.info_`. */
     void pushPredicates(QueryGraph *lower, QueryGraph *upper, Query *query) {
-        insist(query->query_graph() == lower);
-        insist(contains(upper->sources(), query));
+        M_insist(query->query_graph() == lower);
+        M_insist(contains(upper->sources(), query));
 
         auto projection = not lower->projections().empty();
         auto grouping = lower->grouping();
@@ -944,7 +944,7 @@ struct m::Decorrelation
         lower->info_->equi_.clear();
         lower->info_->non_equi_.clear();
         bool is_equi = true;
-        insist(non_equi.empty() or not grouping);
+        M_insist(non_equi.empty() or not grouping);
         for (auto it = equi.begin(); it != non_equi.end(); ++it) {
             if (it == equi.end()) {
                 it = non_equi.begin(); // to iterate over equi and non_equi
@@ -1021,8 +1021,8 @@ struct m::Decorrelation
      *  Otherwise, the operators of the graph below has to be pushed further up and, therefore, the correlated
      *  predicate is still contained in `lower.info_`. */
     void pushOperators(QueryGraph *lower, QueryGraph *upper, Query *query) {
-        insist(query->query_graph() == lower);
-        insist(contains(upper->sources(), query));
+        M_insist(query->query_graph() == lower);
+        M_insist(contains(upper->sources(), query));
         auto lower_sources = lower->sources();
 
         /* Remove joins of `query` and add conditions as filter. */
@@ -1043,7 +1043,7 @@ struct m::Decorrelation
             lower->sources_.emplace_back(*it);
             if (grouping) {
                 auto primary_key = get_primary_key(*it);
-                insist(not primary_key.empty(), "can not push-up grouping above source without primary key");
+                M_insist(not primary_key.empty(), "can not push-up grouping above source without primary key");
                 insert(lower->group_by_, primary_key);
             }
         }
@@ -1146,7 +1146,7 @@ struct m::Decorrelation
 
     /** Replaces all designators in `graph` by new ones pointing to the respective designator in `origin`. */
     void replace_designators(QueryGraph *graph, const std::vector<const Expr*> *origin) {
-        insist(graph->sources().size() == 1);
+        M_insist(graph->sources().size() == 1);
         ReplaceDesignators RP;
         auto ds = *graph->sources().begin();
         auto filter_new = ds->filter();
@@ -1186,7 +1186,7 @@ struct m::GraphBuilder : ConstASTStmtVisitor
 
     using ConstASTStmtVisitor::operator();
     void operator()(Const<Stmt> &s) { s.accept(*this); }
-    void operator()(Const<ErrorStmt>&) { unreachable("graph must not contain errors"); }
+    void operator()(Const<ErrorStmt>&) { M_unreachable("graph must not contain errors"); }
 
     void operator()(Const<EmptyStmt>&) { /* nothing to be done */ }
 
@@ -1211,24 +1211,24 @@ struct m::GraphBuilder : ConstASTStmtVisitor
             for (auto &tbl : F->from) {
                 if (auto tok = std::get_if<Token>(&tbl.source)) {
                     /* Create a new base table. */
-                    insist(tbl.has_table());
+                    M_insist(tbl.has_table());
                     Token alias = tbl.alias ? tbl.alias : *tok;
                     auto &base = graph_->add_source(alias.text, tbl.table());
                     aliases_.emplace(alias.text, &base);
                 } else if (auto stmt = std::get_if<Stmt*>(&tbl.source)) {
-                    insist(tbl.alias.text, "every nested statement requires an alias");
+                    M_insist(tbl.alias.text, "every nested statement requires an alias");
                     if (auto select = cast<SelectStmt>(*stmt)) {
                         /* Create a graph for the sub query. */
                         GraphBuilder builder;
                         builder(*select);
                         auto graph = builder.get();
                         auto &q = graph_->add_source(tbl.alias.text, graph.release());
-                        insist(tbl.alias);
+                        M_insist(tbl.alias);
                         aliases_.emplace(tbl.alias.text, &q);
                     } else
-                        unreachable("invalid variant");
+                        M_unreachable("invalid variant");
                 } else {
-                    unreachable("invalid variant");
+                    M_unreachable("invalid variant");
                 }
             }
         }
@@ -1291,11 +1291,11 @@ struct m::GraphBuilder : ConstASTStmtVisitor
                         ds->add_join(J);
                 }
             } else {
-                insist(queries.size() == 1, "Multiple nested queries in one clause are not yet supported.");
+                M_insist(queries.size() == 1, "Multiple nested queries in one clause are not yet supported.");
                 auto query = as<const QueryExpr>(*queries.begin());
                 if (auto select = cast<SelectStmt>(query->query)) {
                     auto selectClause = as<SelectClause>(select->select);
-                    insist(not selectClause->select_all, "* can not yet be used in nested queries.");
+                    M_insist(not selectClause->select_all, "* can not yet be used in nested queries.");
                     if (selectClause->select.size() == 1) {
                         /* Replace the alias of the expression by `$res`. */
                         selectClause->select.begin()->second.text = C.pool("$res");
@@ -1310,7 +1310,7 @@ struct m::GraphBuilder : ConstASTStmtVisitor
                         if (tables.empty()) {
                             /* This clause is a filter to all data sources. Since it contains the nested query we
                              * have to use a join to an arbitrary source. */
-                            insist(not aliases_.empty(), "can not join nested query to any source");
+                            M_insist(not aliases_.empty(), "can not join nested query to any source");
                             /* TODO if q is correlated use the referenced table */
                             auto &p = *aliases_.begin();
                             auto J = graph_->joins_.emplace_back(new Join(cnf::CNF({clause}),{&q, p.second}));
@@ -1330,10 +1330,10 @@ struct m::GraphBuilder : ConstASTStmtVisitor
                         if (q.is_correlated())
                             decorrelate(q);
                     } else {
-                        unreachable("invalid variant");
+                        M_unreachable("invalid variant");
                     }
                 } else {
-                    unreachable("invalid variant");
+                    M_unreachable("invalid variant");
                 }
             }
         }
@@ -1361,11 +1361,11 @@ struct m::GraphBuilder : ConstASTStmtVisitor
             if (queries.empty()) {
                 aliases_.at("HAVING")->update_filter(graph_->info_->compute(cnf::CNF({clause})));
             } else {
-                insist(queries.size() == 1, "Multiple nested queries in one clause are not yet supported.");
+                M_insist(queries.size() == 1, "Multiple nested queries in one clause are not yet supported.");
                 auto query = as<const QueryExpr>(*queries.begin());
                 if (auto select = cast<SelectStmt>(query->query)) {
                     auto selectClause = as<SelectClause>(select->select);
-                    insist(not selectClause->select_all, "* can not yet be used in nested queries.");
+                    M_insist(not selectClause->select_all, "* can not yet be used in nested queries.");
                     if (selectClause->select.size() == 1) {
                         /* Replace the alias of the expression by `$res`. */
                         selectClause->select.begin()->second.text = C.pool("$res");
@@ -1384,10 +1384,10 @@ struct m::GraphBuilder : ConstASTStmtVisitor
                         if (q.is_correlated())
                             decorrelate(q);
                     } else {
-                        unreachable("invalid variant");
+                        M_unreachable("invalid variant");
                     }
                 } else {
-                    unreachable("invalid variant");
+                    M_unreachable("invalid variant");
                 }
             }
         }
@@ -1412,7 +1412,7 @@ struct m::GraphBuilder : ConstASTStmtVisitor
             auto query = p.first;
             if (auto select = cast<SelectStmt>(query->query)) {
                 auto selectClause = as<SelectClause>(select->select);
-                insist(not selectClause->select_all, "* can not yet be used in nested queries.");
+                M_insist(not selectClause->select_all, "* can not yet be used in nested queries.");
                 if (selectClause->select.size() == 1) {
                     /* Replace the alias of the expression by `$res`. */
                     selectClause->select.begin()->second.text = C.pool("$res");
@@ -1445,10 +1445,10 @@ struct m::GraphBuilder : ConstASTStmtVisitor
                     if (q.is_correlated())
                         decorrelate(q);
                 } else {
-                    unreachable("invalid variant");
+                    M_unreachable("invalid variant");
                 }
             } else {
-                unreachable("invalid variant");
+                M_unreachable("invalid variant");
             }
         }
 
@@ -1464,10 +1464,10 @@ struct m::GraphBuilder : ConstASTStmtVisitor
             auto L = as<LimitClause>(s.limit);
             errno = 0;
             graph_->limit_.limit = strtoull(L->limit.text, nullptr, 0);
-            insist(errno == 0);
+            M_insist(errno == 0);
             if (L->offset) {
                 graph_->limit_.offset = strtoull(L->offset.text, nullptr, 0);
-                insist(errno == 0);
+                M_insist(errno == 0);
             }
         }
     }

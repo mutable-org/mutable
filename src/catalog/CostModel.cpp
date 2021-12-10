@@ -125,7 +125,7 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_filter()
         }
     }();
     const std::vector<T> values = value_space.sequence();
-    insist(values.size() == NUM_DISTINCT_VALUES_IN_FILTER_EXPERIMENT);
+    M_insist(values.size() == NUM_DISTINCT_VALUES_IN_FILTER_EXPERIMENT);
 
     /*----- Perform grid search. -------------------------------------------------------------------------------------*/
     std::size_t row_index = 0;
@@ -138,11 +138,11 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_filter()
 
             /* Fill store with new data. */
             for (unsigned i = 0; i != delta_cardinality; ++i) store.append(); // allocate fresh rows in store
-            insist(store.num_rows() == cardinality);
+            M_insist(store.num_rows() == cardinality);
             set_all_not_null(store, old_cardinality, cardinality);
             generate_primary_keys(store, table[0UL], old_cardinality, cardinality);
             fill_uniform<T>(store, table[1], values, old_cardinality, cardinality);
-            insist(store.num_rows() == cardinality);
+            M_insist(store.num_rows() == cardinality);
             old_cardinality = cardinality;
 
             /* Measure time to scan table. */
@@ -208,7 +208,7 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_group_by()
     unsigned old_num_distinct_values = 0;
     auto scan_time = time_select_query_execution(DB, "SELECT val FROM group_by;");
     GS([&](unsigned num_distinct_values, unsigned cardinality) {
-        insist(store.num_rows() == old_cardinality);
+        M_insist(store.num_rows() == old_cardinality);
 
         if (old_num_distinct_values != num_distinct_values) {
             if (old_cardinality > cardinality) {
@@ -217,11 +217,11 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_group_by()
             } else if (old_cardinality < cardinality) {
                 /* Grow store. */
                 for (unsigned i = old_cardinality; i != cardinality; ++i) store.append();
-                insist(store.num_rows() == cardinality);
+                M_insist(store.num_rows() == cardinality);
                 set_all_not_null(store, cardinality, old_cardinality);
                 generate_primary_keys(store, table[0UL], old_cardinality, cardinality);
             }
-            insist(store.num_rows() == cardinality);
+            M_insist(store.num_rows() == cardinality);
 
             /*----- Generate distinct values. ------------------------------------------------------------------------*/
             if (num_distinct_values == 1) {
@@ -244,7 +244,7 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_group_by()
                 }();
                 distinct_values = value_space.sequence();
             }
-            insist(distinct_values.size() == num_distinct_values);
+            M_insist(distinct_values.size() == num_distinct_values);
 
             /* Completely fill the entire column with the new distinct values. */
             fill_uniform<T>(store, table[1], distinct_values, 0, cardinality);
@@ -257,7 +257,7 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_group_by()
         } else if (old_cardinality < cardinality) {
             /* Grow store. */
             for (unsigned i = old_cardinality; i != cardinality; ++i) store.append();
-            insist(store.num_rows() == cardinality);
+            M_insist(store.num_rows() == cardinality);
             set_all_not_null(store, old_cardinality, cardinality);
             generate_primary_keys(store, table[0UL], old_cardinality, cardinality);
             fill_uniform<T>(store, table[1], distinct_values, old_cardinality, cardinality);
@@ -269,7 +269,7 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_group_by()
         } else if (old_cardinality > cardinality) {
             /* Shrink store. */
             for (unsigned i = old_cardinality; i != cardinality; --i) store.drop();
-            insist(store.num_rows() == cardinality);
+            M_insist(store.num_rows() == cardinality);
 
             /* Measure time to scan table. */
             scan_time = time_select_query_execution(DB, "SELECT val FROM group_by;");
@@ -343,7 +343,7 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_join()
     unsigned old_cardinality_right = store_right.num_rows();
     GS([&](unsigned result_size, unsigned redundancy_left, unsigned redundancy_right,
             unsigned cardinality_left, unsigned cardinality_right) {
-        insist(store_left.num_rows() == old_cardinality_left and store_right.num_rows() == old_cardinality_right);
+        M_insist(store_left.num_rows() == old_cardinality_left and store_right.num_rows() == old_cardinality_right);
 
         /* Check if current feature state is valid. */
         const unsigned num_distinct_values_left = cardinality_left / redundancy_left;
@@ -356,18 +356,18 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_join()
         if (old_cardinality_left < cardinality_left) {
             /* Grow store. */
             for (unsigned i = old_cardinality_left; i != cardinality_left; ++i) store_left.append();
-            insist(store_left.num_rows() == cardinality_left);
+            M_insist(store_left.num_rows() == cardinality_left);
             set_all_not_null(store_left, old_cardinality_left, cardinality_left);
             generate_primary_keys(store_left, table_left[0UL], old_cardinality_left, cardinality_left);
         } else if (old_cardinality_left > cardinality_left) {
             /* Shrink store. */
             for (unsigned i = old_cardinality_left; i != cardinality_left; --i) store_left.drop();
         }
-        insist(store_left.num_rows() == cardinality_left);
+        M_insist(store_left.num_rows() == cardinality_left);
         if (old_cardinality_right < cardinality_right) {
             /* Grow store. */
             for (unsigned i = old_cardinality_right; i != cardinality_right; ++i) store_right.append();
-            insist(store_right.num_rows() == cardinality_right);
+            M_insist(store_right.num_rows() == cardinality_right);
             set_all_not_null(store_right, old_cardinality_right, cardinality_right);
             generate_primary_keys(store_right, table_right[0UL], old_cardinality_right, cardinality_right);
         } else if (old_cardinality_right > cardinality_right) {
@@ -403,14 +403,14 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_join()
             }();
             distinct_values = value_space.sequence();
         }
-        insist(distinct_values.size() == num_values);
+        M_insist(distinct_values.size() == num_values);
         /* Split distinct_values between left store and right store. */
         std::vector<T> distinct_values_left(distinct_values.begin(),
                                             distinct_values.begin() + num_distinct_values_left);
         std::vector<T> distinct_values_right(distinct_values.rbegin(),
                                              distinct_values.rbegin() + num_distinct_values_right);
-        insist(distinct_values_left.size() == num_distinct_values_left);
-        insist(distinct_values_right.size() == num_distinct_values_right);
+        M_insist(distinct_values_left.size() == num_distinct_values_left);
+        M_insist(distinct_values_right.size() == num_distinct_values_right);
 
 
         /* Completely fill the entire column with the new distinct values. */
@@ -464,7 +464,7 @@ CostModel CostModelFactory::generate_filter_cost_model(unsigned degree, const ch
          * feature_matrix[0] := y-intercept (values in this column are always 1)
          * feature_matrix[1] := number of input table rows to be filtered
          * feature_matrix[2] := selectivity of the filter operation */
-        insist(feature_matrix.cols() == 3);
+        M_insist(feature_matrix.cols() == 3);
         feature_matrix.conservativeResize(feature_matrix.rows(), 2 * degree + 1);
         for (unsigned row = 0; row < feature_matrix.rows(); ++row) {
             /* degree := maximum polynomial degree used to generate polynomial features for selectivity */

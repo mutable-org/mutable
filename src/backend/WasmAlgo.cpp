@@ -112,7 +112,7 @@ WasmTemporary WasmPartitionBranching::emit(FunctionBuilder &fn, BlockBuilder &bl
  (get_local $1)
 )
      */
-    unreachable("not implemented");
+    M_unreachable("not implemented");
 }
 
 
@@ -485,7 +485,7 @@ WasmTemporary WasmBitMixMurmur3::emit(WasmModuleCG &module, FunctionBuilder &fn,
     /* Taken from https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp by Austin Appleby.  We use the
      * optimized constants found by David Stafford, in particular the values for `Mix01`, as reported at
      * http://zimbry.blogspot.com/2011/09/better-bit-mixing-improving-on.html. */
-    insist(the_bits.type() == BinaryenTypeInt64(), "WasmBitMix expects a 64-bit integer");
+    M_insist(the_bits.type() == BinaryenTypeInt64(), "WasmBitMix expects a 64-bit integer");
 
     WasmVariable v(fn, BinaryenTypeInt64());
     WasmVariable bits(fn, BinaryenTypeInt64());
@@ -568,7 +568,7 @@ WasmTemporary WasmHashMumur3_64A::emit(WasmModuleCG &module, FunctionBuilder &fn
 {
     /* Inspired by https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp by Austin Appleby.  We use
      * constants from MurmurHash2_64 as reported on https://sites.google.com/site/murmurhash/. */
-    insist(values.size() != 0, "cannot compute the hash of an empty sequence of values");
+    M_insist(values.size() != 0, "cannot compute the hash of an empty sequence of values");
 
     std::size_t total_size_in_bits = 0;
     for (auto &v : values)
@@ -734,7 +734,7 @@ WasmTemporary WasmRefCountingHashTable::create_table(BlockBuilder &block, WasmTe
                                                      std::size_t num_buckets) const
 {
     num_buckets = ceil_to_pow_2(num_buckets);
-    insist(num_buckets <= 1UL << 31, "initial capacity exceeds uint32 type");
+    M_insist(num_buckets <= 1UL << 31, "initial capacity exceeds uint32 type");
     block += addr_.set(std::move(addr));
     block += mask_.set(BinaryenConst(module, BinaryenLiteralInt32(num_buckets - 1)));
 
@@ -808,7 +808,7 @@ std::pair<WasmTemporary, WasmTemporary>
 WasmRefCountingHashTable::find_in_bucket(BlockBuilder &block, WasmTemporary bucket_addr,
                                          const std::vector<WasmTemporary> &key) const
 {
-    insist(key.size() <= struc.schema.num_entries(), "incorrect number of key values");
+    M_insist(key.size() <= struc.schema.num_entries(), "incorrect number of key values");
     WasmLoop loop(module, "find_in_bucket.loop");
 
     /*----- Create local runner . ------------------------------------------------------------------------------------*/
@@ -934,7 +934,7 @@ WasmTemporary WasmRefCountingHashTable::is_slot_empty(WasmTemporary slot_addr) c
 WasmTemporary WasmRefCountingHashTable::compare_key(BlockBuilder &block, WasmTemporary slot_addr,
                                                     const std::vector<WasmTemporary> &key) const
 {
-    insist(key.size() == this->key().size());
+    M_insist(key.size() == this->key().size());
 
     WasmTemporary keys_equal;
     {
@@ -968,7 +968,7 @@ WasmTemporary WasmRefCountingHashTable::compare_key(BlockBuilder &block, WasmTem
 void WasmRefCountingHashTable::emplace(BlockBuilder &block, WasmTemporary bucket_addr, WasmTemporary steps,
                                        WasmTemporary slot_addr, const std::vector<WasmTemporary> &key) const
 {
-    insist(key.size() <= this->key().size(), "incorrect number of key values");
+    M_insist(key.size() <= this->key().size(), "incorrect number of key values");
 
     /*----- Update bucket probe length. ------------------------------------------------------------------------------*/
     block += BinaryenStore(

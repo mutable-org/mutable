@@ -28,7 +28,7 @@ ColumnStore::ColumnStore(const Table &table)
     row_size_ += size;
     max_attr_size = std::max(max_attr_size, size);
 
-    insist(columns_.size() == table.size() + 1);
+    M_insist(columns_.size() == table.size() + 1);
     capacity_ = (ALLOCATION_SIZE * 8) / max_attr_size;
 
     /* Initialize linearization. */

@@ -78,7 +78,7 @@ struct PlanTable
     std::size_t num_sources() const { return graph().sources().size(); }
 
     /** Returns the entry for a given subproblem.  (`s` may be empty.) */
-    entry_type & at(Subproblem s) { insist(uint64_t(s) < (1UL << num_sources())); return cost_table_[uint64_t(s)]; }
+    entry_type & at(Subproblem s) { M_insist(uint64_t(s) < (1UL << num_sources())); return cost_table_[uint64_t(s)]; }
 
     /** Returns the entry for a given subproblem. */
     const entry_type & at(Subproblem s) const { return const_cast<PlanTable*>(this)->at(s); }
@@ -112,22 +112,22 @@ struct PlanTable
     /** Returns true iff the `PlanTable` has a plan for the subproblem specified by `S`. */
     bool has_plan(Subproblem S) const {
         if (S.size() == 1) return true;
-        insist(at(S).left.empty() == at(S).right.empty(), "either both sides are not set or both sides are set");
+        M_insist(at(S).left.empty() == at(S).right.empty(), "either both sides are not set or both sides are set");
         return not at(S).left.empty();
     }
 
     void update(const QueryGraph &G, const CardinalityEstimator &CE,
                 const Subproblem left, const Subproblem right, const double cost) {
-        insist(not left.empty(), "left side must not be empty");
-        insist(not right.empty(), "right side must not be empty");
+        M_insist(not left.empty(), "left side must not be empty");
+        M_insist(not right.empty(), "right side must not be empty");
         auto &entry = at(left | right);
         if (not entry.model) {
             /* If we consider this subproblem for the first time, compute its `DataModel`.  If this subproblem describes
              * a nested query, the `DataModel` must have been set by the `Optimizer`.  */
             auto &entry_left = at(left);
             auto &entry_right = at(right);
-            insist(bool(entry_left.model), "must have a model for the left side");
-            insist(bool(entry_right.model), "must have a model for the right side");
+            M_insist(bool(entry_left.model), "must have a model for the left side");
+            M_insist(bool(entry_right.model), "must have a model for the right side");
             // TODO use join condition for cardinality estimation
             entry.model = CE.estimate_join(G, *entry_left.model, *entry_right.model, cnf::CNF{});
         }

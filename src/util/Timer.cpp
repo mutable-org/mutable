@@ -12,7 +12,7 @@ std::ostream & m::operator<<(std::ostream &out, const Timer::Measurement &M)
     } else if (M.is_active()) {
         out << " started at " << put_timepoint(M.begin) << ", not finished";
     } else {
-        insist(M.is_finished());
+        M_insist(M.is_finished());
         using namespace std::chrono;
         out << " took " << duration_cast<microseconds>(M.duration()).count() / 1e3 << " ms";
     }

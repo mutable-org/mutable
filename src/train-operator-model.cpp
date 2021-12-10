@@ -85,11 +85,11 @@ CostModel load_filter_cost_model(const char *csv_path, unsigned degree = 9)
         coefficients.push_back(std::stod(line));
         ++rows;
     }
-    insist(std::floor(rows / 2) == degree);
+    M_insist(std::floor(rows / 2) == degree);
     Map<VectorXd> coefficients_vector(coefficients.data(),rows, 1);
 
     return CostModel(coefficients_vector, 3, [degree](Eigen::MatrixXd featureMatrix) {
-        insist(featureMatrix.cols() == 3);
+        M_insist(featureMatrix.cols() == 3);
         featureMatrix.conservativeResize(featureMatrix.rows(), 2 * degree + 1);
         for (unsigned row = 0; row < featureMatrix.rows(); ++row) {
             for (unsigned i = 2; i <= degree; ++i) {
@@ -275,7 +275,7 @@ int main(int argc, const char **argv)
     );
 
 
-#if WITH_V8
+#if M_WITH_V8
     ADD(int, Options::Get().wasm_optimization_level, 0,                             /* Type, Var, Init  */
         "-O", "--wasm-opt",                                                         /* Short, Long      */
         "set the optimization level for Wasm modules (0, 1, or 2)",                 /* Description      */
@@ -303,7 +303,7 @@ int main(int argc, const char **argv)
 
     Catalog::Get().backend(Backend::Create(args.backend));
 
-#if WITH_V8
+#if M_WITH_V8
     if (not (Options::Get().wasm_optimization_level >= 0 and Options::Get().wasm_optimization_level <= 2)) {
         std::cerr << "level " << Options::Get().wasm_optimization_level << " is not a valid Wasm optimization level"
                   << std::endl;

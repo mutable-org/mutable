@@ -73,7 +73,7 @@ struct Value
     template<typename T>
     std::conditional_t<std::is_pointer_v<T>, T, T&> as() {
 #ifndef NDEBUG
-#define VALIDATE_TYPE(TY) insist(this->type == V##TY)
+#define VALIDATE_TYPE(TY) M_insist(this->type == V##TY)
 #else
 #define VALIDATE_TYPE(TY)
 #endif
@@ -152,7 +152,7 @@ struct Value
      * type. */
     bool operator==(Value other) const {
 #ifndef NDEBUG
-        insist(this->type == other.type, "comparing values of different type");
+        M_insist(this->type == other.type, "comparing values of different type");
 #endif
         return memcmp(&this->val_, &other.val_, sizeof(this->val_)) == 0;
     }
@@ -188,7 +188,7 @@ struct Tuple
     SmallBitset null_mask_ = SmallBitset(-1UL); ///< a bit mask for the `NULL` values; `1` represents `NULL`
 #ifndef NDEBUG
     std::size_t num_values_ = 0; ///< the number of `Value`s in this `Tuple`
-#define INBOUNDS(VAR) insist((VAR) < num_values_, "index out of bounds")
+#define INBOUNDS(VAR) M_insist((VAR) < num_values_, "index out of bounds")
 #else
 #define INBOUNDS(VAR)
 #endif
@@ -255,7 +255,7 @@ struct Tuple
     /** Returns a reference to the `Value` at index `idx`.  Must not be `NULL`. */
     Value & get(std::size_t idx) {
         INBOUNDS(idx);
-        insist(not null_mask_(idx), "Value must not be NULL");
+        M_insist(not null_mask_(idx), "Value must not be NULL");
         return values_[idx];
     }
 #undef INBOUNDS

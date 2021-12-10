@@ -129,34 +129,34 @@ Catalog::Catalog()
     , cost_function_(std::make_unique<SimpleCostFunction>())
 {
     /* Initialize standard functions. */
-#define DB_FUNCTION(NAME, KIND) { \
+#define M_FUNCTION(NAME, KIND) { \
     auto name = pool(#NAME); \
     auto res = standard_functions_.emplace(name, new Function(name, Function::FN_ ## NAME, Function::KIND)); \
-    insist(res.second, "function already defined"); \
+    M_insist(res.second, "function already defined"); \
 }
 #include "mutable/tables/Functions.tbl"
-#undef DB_FUNCTION
+#undef M_FUNCTION
 
     /* Initialize stores. */
-#define DB_STORE(NAME, _) { \
+#define M_STORE(NAME, _) { \
     auto name = pool(#NAME); \
     auto res = store_factories_.emplace(name, new ConcreteStoreFactory<NAME>()); \
-    insist(res.second, "store already defined"); \
+    M_insist(res.second, "store already defined"); \
 }
 #include "mutable/tables/Store.tbl"
-#undef DB_STORE
-    insist(store_factories_.size() != 0);
+#undef M_STORE
+    M_insist(store_factories_.size() != 0);
     default_store(store_factories_.begin()->first); // set default store
 
     /* Initialize cardinality estimators. */
-#define DB_CARDINALITY_ESTIMATOR(NAME, _) { \
+#define M_CARDINALITY_ESTIMATOR(NAME, _) { \
     auto name = pool(#NAME); \
     auto res = cardinality_estimator_factories_.emplace(name, new ConcreteCardinalityEstimatorFactory<NAME>()); \
-    insist(res.second, "cardinality estimator already defined"); \
+    M_insist(res.second, "cardinality estimator already defined"); \
 }
 #include "mutable/tables/CardinalityEstimator.tbl"
-#undef DB_CARDINALITY_ESTIMATOR
-    insist(cardinality_estimator_factories_.size() != 0);
+#undef M_CARDINALITY_ESTIMATOR
+    M_insist(cardinality_estimator_factories_.size() != 0);
     default_cardinality_estimator(cardinality_estimator_factories_.begin()->first); // set default cardinality estimator
 }
 
@@ -200,7 +200,7 @@ std::unique_ptr<Store> Catalog::create_store(const char *name, const Table &tbl)
 
 std::unique_ptr<Store> Catalog::create_store(const Table &tbl) const
 {
-    insist(default_store_, "there must always be a default store");
+    M_insist(default_store_, "there must always be a default store");
     return default_store_->make(tbl);
 }
 
@@ -214,7 +214,7 @@ std::unique_ptr<CardinalityEstimator> Catalog::create_cardinality_estimator(cons
 
 std::unique_ptr<CardinalityEstimator> Catalog::create_cardinality_estimator() const
 {
-    insist(default_cardinality_estimator_, "there must always be a default cardinality estimator");
+    M_insist(default_cardinality_estimator_, "there must always be a default cardinality estimator");
     return default_cardinality_estimator_->make();
 }
 

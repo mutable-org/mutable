@@ -112,9 +112,9 @@ ceil_to_pow_2(T n)
     }
 
     T ceiled = T(1) << (8 * sizeof(T) - lz);
-    insist(n <= ceiled, "the ceiled value must be greater or equal to the original value");
-    insist((n << 1) == 0 or ceiled < (n << 1), "the ceiled value must be smaller than twice the original value");
-    insist(is_pow_2(ceiled));
+    M_insist(n <= ceiled, "the ceiled value must be greater or equal to the original value");
+    M_insist((n << 1) == 0 or ceiled < (n << 1), "the ceiled value must be smaller than twice the original value");
+    M_insist(is_pow_2(ceiled));
     return ceiled;
 }
 template<typename T>
@@ -129,9 +129,9 @@ template<typename T>
 typename std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T>, T>
 ceil_to_multiple_of_pow_2(T n, T power_of_two)
 {
-    insist(is_pow_2(power_of_two));
+    M_insist(is_pow_2(power_of_two));
     T ceiled = (n + (power_of_two - T(1))) & ~(power_of_two - T(1));
-    insist(ceiled % power_of_two == T(0));
+    M_insist(ceiled % power_of_two == T(0));
     return ceiled;
 }
 
@@ -176,7 +176,7 @@ T * cast(U *u) { return dynamic_cast<T*>(u); }
 /** Short version of static_cast that works for pointers and references.  In debug build, check that the cast is legit.
  */
 template<typename T, typename U>
-T * as(U *u) { insist(cast<T>(u)); return static_cast<T*>(u); }
+T * as(U *u) { M_insist(cast<T>(u)); return static_cast<T*>(u); }
 template<typename T, typename U>
 T & as(U &u) { return *as<T>(&u); }
 
@@ -462,7 +462,7 @@ struct put_timepoint
             chk = gmtime_r(&time, &tm); // convert the given `time_t` to UTC `std::tm`
         else
             chk = localtime_r(&time, &tm); // convert the given `time_t` to local `std::tm`
-        insist(chk == &tm);
+        M_insist(chk == &tm);
 
         /* Print `std::tm`. */
         return out << put_tm(tm);
@@ -640,8 +640,8 @@ constexpr bool is_range_wide_enough(T a, T b, std::size_t n)
 
     if (n == 0) return true;
 
-    insist(a <= b);
-    insist(n > 0);
+    M_insist(a <= b);
+    M_insist(n > 0);
     if constexpr (std::is_integral_v<T>) {
         if constexpr (std::is_signed_v<T>) {
             using U = std::make_unsigned_t<T>;
@@ -649,8 +649,8 @@ constexpr bool is_range_wide_enough(T a, T b, std::size_t n)
             if ((a < 0) == (b < 0)) { // equal signs
                 return U(b - a) >= n;
             } else { // different signs
-                insist(a < 0);
-                insist(b >= 0);
+                M_insist(a < 0);
+                M_insist(b >= 0);
                 U a_abs = U(~a) + 1U; // compute absolute without overflow
                 return a_abs >= n or (U(b) >= n - a_abs);
             }

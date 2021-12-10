@@ -55,7 +55,7 @@ struct Operator
     const Schema & schema() const { return schema_; }
 
     bool has_info() const { return bool(info_); }
-    const OperatorInformation & info() const { insist(bool(info_)); return *info_; }
+    const OperatorInformation & info() const { M_insist(bool(info_)); return *info_; }
     std::unique_ptr<OperatorInformation> info(std::unique_ptr<OperatorInformation> new_info) {
         using std::swap;
         swap(new_info, info_);
@@ -201,7 +201,7 @@ struct ScanOperator : Producer
     public:
     ScanOperator(const Store &store, const char *alias)
         : store_(store)
-        , alias_(notnull(alias))
+        , alias_(M_notnull(alias))
     {
         auto &S = schema();
         for (auto &attr : store.table())
@@ -241,7 +241,7 @@ struct JoinOperator : Producer, Consumer
     X(J_NestedLoops) \
     X(J_SimpleHashJoin)
 
-    DECLARE_ENUM(algorithm);
+    M_DECLARE_ENUM(algorithm);
 
     private:
     cnf::CNF predicate_;
@@ -253,7 +253,7 @@ struct JoinOperator : Producer, Consumer
     const cnf::CNF & predicate() const { return predicate_; }
     algorithm algo() const { return algo_; }
     const char * algo_str() const {
-        static const char *ALGO_TO_STR[] = { ENUM_TO_STR(algorithm) };
+        static const char *ALGO_TO_STR[] = { M_ENUM_TO_STR(algorithm) };
         return ALGO_TO_STR[algo_];
     }
 
@@ -280,7 +280,7 @@ struct ProjectionOperator : Producer, Consumer
         child->parent(this);
     }
     virtual Producer * set_child(Producer*, std::size_t) override {
-        unreachable("not supported by ProjectionOperator");
+        M_unreachable("not supported by ProjectionOperator");
     }
 
     const std::vector<projection_type> & projections() const { return projections_; }
@@ -318,7 +318,7 @@ struct GroupingOperator : Producer, Consumer
     X(G_Ordered) \
     X(G_Hashing)
 
-    DECLARE_ENUM(algorithm);
+    M_DECLARE_ENUM(algorithm);
 
     private:
     std::vector<const Expr*> group_by_; ///< the compound grouping key
@@ -348,7 +348,7 @@ struct GroupingOperator : Producer, Consumer
 
     algorithm algo() const { return algo_; }
     const char * algo_str() const {
-        static const char *ALGO_TO_STR[] = { ENUM_TO_STR(algorithm) };
+        static const char *ALGO_TO_STR[] = { M_ENUM_TO_STR(algorithm) };
         return ALGO_TO_STR[algo_];
     }
     const auto & group_by() const { return group_by_; }

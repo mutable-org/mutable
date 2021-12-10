@@ -14,7 +14,7 @@ std::ostream & m::operator<<(std::ostream &out, const Operator &op) {
         std::vector<unsigned> &depth;
 
         indent(std::ostream &out, const Operator &op, std::vector<unsigned> &depth) : out(out), op(op), depth(depth) {
-            insist(not depth.empty());
+            M_insist(not depth.empty());
             const unsigned n = depth.back();
             depth.pop_back();
             if (auto c = cast<const Consumer>(&op))

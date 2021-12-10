@@ -55,8 +55,8 @@ std::enable_if_t<std::is_arithmetic_v<T>, void>
 m::fill_uniform(ColumnStore &store, const Attribute &attr, std::vector<T> values,
         const std::size_t begin, const std::size_t end, Generator &&g)
 {
-    insist(end <= store.num_rows(), "end out of bounds");
-    insist(begin <= end, "begin out of bounds");
+    M_insist(end <= store.num_rows(), "end out of bounds");
+    M_insist(begin <= end, "begin out of bounds");
 
     const std::size_t count = end - begin;
 
@@ -75,5 +75,5 @@ m::fill_uniform(ColumnStore &store, const Attribute &attr, std::vector<T> values
         }
     }
 exit:
-    insist(ptr - mem.as<T*>() == (long long)(end), "incorrect number of elements written");
+    M_insist(ptr - mem.as<T*>() == (long long)(end), "incorrect number of elements written");
 }

@@ -11,9 +11,9 @@ using namespace m;
 
 void Lexer::initialize_keywords()
 {
-#define DB_KEYWORD(tok, text) keywords_.emplace(pool(#text), TK_##tok);
+#define M_KEYWORD(tok, text) keywords_.emplace(pool(#text), TK_##tok);
 #include "mutable/tables/Keywords.tbl"
-#undef DB_KEYWORD
+#undef M_KEYWORD
 }
 
 Token Lexer::next()
@@ -152,7 +152,7 @@ Token Lexer::read_number()
 
         /*-- sequence after dot ------*/
         if      (is == Dec) { if (is_dec(c_)) empty = false; while (is_dec(c_)) push(); }
-        else { insist(is == Hex); if (is_hex(c_)) empty = false; while (is_hex(c_)) push(); }
+        else { M_insist(is == Hex); if (is_hex(c_)) empty = false; while (is_hex(c_)) push(); }
     }
 
     /*-- exponent part ---------------*/

@@ -26,7 +26,7 @@ ASTDot::ASTDot(std::ostream &out, int i)
 ASTDot::~ASTDot()
 {
     --indent_;
-    insist(indent_ == 0);
+    M_insist(indent_ == 0);
     out << "\n}" << std::endl;
 }
 
@@ -208,15 +208,15 @@ void ASTDot::operator()(Const<FromClause> &c)
                 indent() << id(c) << EDGE << id(*name) << ';';
             }
         } else if (auto stmt = std::get_if<Stmt*>(&t.source)) {
-            insist(t.alias, "nested statements must have an alias");
+            M_insist(t.alias, "nested statements must have an alias");
             indent() << id(t.alias) << " [label=\"AS " << t.alias.text << "\"];";
             (*this)(**stmt);
             indent() << id(c) << EDGE << id(t.alias) << EDGE << id(**stmt) << ';';
         } else {
-            unreachable("invalid variant");
+            M_unreachable("invalid variant");
         }
         if (t.has_table()) {
-            insist(std::holds_alternative<Token>(t.source));
+            M_insist(std::holds_alternative<Token>(t.source));
             auto &name = std::get<Token>(t.source);
             auto &R = t.table();
             indent() << id(name) << EDGE << R.name << ":n [dir=\"forward\",color=\"#404040\"];";

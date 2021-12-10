@@ -218,7 +218,7 @@ struct RefCountingHashMap
         const size_type index = masked(hash);
         entry_type * const bucket = table_ + index;
 
-        if (likely(bucket->probe_length == 0)) { // bucket is free
+        if (bucket->probe_length == 0) [[likely]] { // bucket is free
             ++bucket->probe_length;
             new (&bucket->value) value_type(std::move(key), std::move(value));
             ++size_;
@@ -227,11 +227,11 @@ struct RefCountingHashMap
 
         /* Compute distance to end of probe sequence. */
         size_type distance = (bucket->probe_length * bucket->probe_length + bucket->probe_length) >> 1;
-        insist(distance > 0, "the distance must not be 0, otherwise we would have run into the likely case above");
+        M_insist(distance > 0, "the distance must not be 0, otherwise we would have run into the likely case above");
 
         /* Search next free slot in bucket's probe sequence. */
         entry_type *probe = table_ + masked(index + distance);
-        insist(probe != bucket, "the probed slot must not be the original bucket as the distance is not 0 and always "
+        M_insist(probe != bucket, "the probed slot must not be the original bucket as the distance is not 0 and always "
                                  "less than capacity");
         while (probe->probe_length != 0) {
             ++bucket->probe_length;
@@ -339,8 +339,8 @@ struct RefCountingHashMap
     /** Rehash all elements. */
     private:
     void rehash(std::size_t new_capacity) {
-        insist((new_capacity & (new_capacity - 1)) == 0, "not a power of 2");
-        insist(size_ <= watermark_high_, "there are more elements to rehash than the high watermark allows");
+        M_insist((new_capacity & (new_capacity - 1)) == 0, "not a power of 2");
+        M_insist(size_ <= watermark_high_, "there are more elements to rehash than the high watermark allows");
 
         auto old_table = table_;
         table_ = allocate(new_capacity);
@@ -368,7 +368,7 @@ struct RefCountingHashMap
 
         if (new_capacity != capacity_) {
             watermark_high_ = new_capacity * max_load_factor();
-            insist(watermark_high() >= size());
+            M_insist(watermark_high() >= size());
             rehash(new_capacity);
         }
     }

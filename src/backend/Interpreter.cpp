@@ -59,7 +59,7 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
         auto find_null_bitmap_impl = [&](const Linearization &L, uintptr_t offset, std::size_t row_id, auto &find_null_bitmap_ref) -> void {
             for (auto e : L) {
                 if (e.is_null_bitmap()) {
-                    insist(not null_bitmap_info, "there must be at most one null bitmap in the linearization");
+                    M_insist(not null_bitmap_info, "there must be at most one null bitmap in the linearization");
                     null_bitmap_info.id = SM.add(reinterpret_cast<void*>(offset + (e.offset + row_id * e.stride) / 8)); // add NULL bitmap address to context
                     null_bitmap_info.bit_offset = (e.offset + row_id * e.stride) % 8;
                     null_bitmap_info.bit_stride = e.stride;
@@ -67,7 +67,7 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                     null_bitmap_info.row_id = row_id;
                 } else if (e.is_linearization()) {
                     auto &lin = e.as_linearization();
-                    insist(lin.num_tuples() != 0);
+                    M_insist(lin.num_tuples() != 0);
                     const std::size_t lin_id = row_id / lin.num_tuples();
                     const std::size_t inner_row_id = row_id % lin.num_tuples();
                     find_null_bitmap_ref(e.as_linearization(), offset + e.offset + e.stride * lin_id, inner_row_id, find_null_bitmap_ref);
@@ -95,12 +95,12 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                         uint64_t idx = std::distance(S.begin(), it); // get attribute index in schema
                         const std::size_t byte_offset = (e.offset + row_id * e.stride) / 8;
                         const std::size_t bit_offset = (e.offset + row_id * e.stride) % 8;
-                        insist(not bit_offset or attr.type->is_boolean(), "only booleans may not be byte aligned");
+                        M_insist(not bit_offset or attr.type->is_boolean(), "only booleans may not be byte aligned");
 
                         const std::size_t byte_stride = e.stride / 8;
                         const std::size_t bit_stride  = e.stride % 8;
-                        insist(not bit_stride or attr.type->is_boolean(), "only booleans may not be byte aligned");
-                        insist(bit_stride == 0 or byte_stride == 0, "the stride must be a whole multiple of a byte or "
+                        M_insist(not bit_stride or attr.type->is_boolean(), "only booleans may not be byte aligned");
+                        M_insist(bit_stride == 0 or byte_stride == 0, "the stride must be a whole multiple of a byte or "
                                                                     "less than a byte");
 
                         /* Access NULL bit. */
@@ -134,7 +134,7 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                                 }
                             } else {
                                 /* With bit stride. Use adjustable offset instead of fixed offset. */
-                                insist(null_bitmap_info.adjustable_offset());
+                                M_insist(null_bitmap_info.adjustable_offset());
 
                                 /* Create variables for address and mask in context. Only used for storing.*/
                                 std::size_t address_id, mask_id;
@@ -204,7 +204,7 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                         attr2id[attr.id] = offset_id;
 
                         if (bit_stride) {
-                            insist(attr.type->is_boolean(), "only booleans may not be byte aligned");
+                            M_insist(attr.type->is_boolean(), "only booleans may not be byte aligned");
 
                             if constexpr (IsStore) {
                                 /* Load value to stack. */
@@ -301,7 +301,7 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                             }
 
                             /* If the attribute has a stride, advance the pointer accordingly. */
-                            insist(not bit_stride);
+                            M_insist(not bit_stride);
                             if (byte_stride) {
                                 /* Advance the attribute pointer by the attribute's stride. */
                                 SM.add_and_emit_load(int64_t(byte_stride));
@@ -314,10 +314,10 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
 
                     }
                 } else {
-                    insist(e.is_linearization());
+                    M_insist(e.is_linearization());
 
                     auto &lin = e.as_linearization();
-                    insist(lin.num_tuples() != 0);
+                    M_insist(lin.num_tuples() != 0);
                     const std::size_t lin_id = row_id / lin.num_tuples();
                     const std::size_t inner_row_id = row_id % lin.num_tuples();
                     compile_rec_ref(e.as_linearization(), offset + e.offset + e.stride * lin_id, inner_row_id, compile_rec_ref);
@@ -330,8 +330,8 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
 
     /* If the NULL bitmap has a stride, advance the adjustable offset accordingly. */
     if (null_bitmap_info and null_bitmap_info.bit_stride) {
-        insist(null_bitmap_info.adjustable_offset());
-        insist(null_bitmap_info.num_tuples > 1);
+        M_insist(null_bitmap_info.adjustable_offset());
+        M_insist(null_bitmap_info.num_tuples > 1);
 
         /* Update adjustable offset. */
         SM.emit_Ld_Ctx(null_bitmap_info.offset_id);
@@ -405,11 +405,11 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                             const std::size_t bit_stride = stride_remaining % 8;
 
                             if (bit_stride) {
-                                insist(e.is_null_bitmap() or e.as_attribute().type->is_boolean(),
+                                M_insist(e.is_null_bitmap() or e.as_attribute().type->is_boolean(),
                                        "only the null bitmap or booleans may cause not byte aligned stride jumps");
-                                insist(not e.is_null_bitmap() or null_bitmap_info.adjustable_offset(),
+                                M_insist(not e.is_null_bitmap() or null_bitmap_info.adjustable_offset(),
                                        "only null bitmaps with adjustable offset may cause not byte aligned stride jumps");
-                                insist(mask_id != -1UL);
+                                M_insist(mask_id != -1UL);
 
                                 /* Reset mask. */
                                 if (e.is_null_bitmap()) {
@@ -472,7 +472,7 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                         prev_stride = info.stride * 8;
                     }
                 } else {
-                    insist(e.is_linearization());
+                    M_insist(e.is_linearization());
 
                     /* Initialize counter and emit increment. */
                     const std::size_t inner_row_id = row_id % e.as_linearization().num_tuples();
@@ -491,7 +491,7 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                     stride_info_stack.pop_back();
 
                     /* Reset counter if iteration is whole multiple of num_tuples. */
-                    insist(e.as_linearization().num_tuples() != 0, "must not be an infinite sequence");
+                    M_insist(e.as_linearization().num_tuples() != 0, "must not be an infinite sequence");
                     if (e.as_linearization().num_tuples() != 1) {
                         SM.emit_Ld_Ctx(counter_id); // XXX: not needed if recursion cleans up stack properly
                         SM.add_and_emit_load(e.as_linearization().num_tuples());
@@ -619,17 +619,17 @@ struct SimpleHashJoinData : JoinData
     {
         /* Decompose the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. */
         auto &pred = op.predicate();
-        insist(pred.size() == 1, "invalid predicate for simple hash join");
+        M_insist(pred.size() == 1, "invalid predicate for simple hash join");
         auto &clause = pred[0];
-        insist(clause.size() == 1, "invalid predicate for simple hash join");
+        M_insist(clause.size() == 1, "invalid predicate for simple hash join");
         auto &literal = clause[0];
-        insist(not literal.negative(), "invalid predicate for simple hash join");
+        M_insist(not literal.negative(), "invalid predicate for simple hash join");
         auto expr = literal.expr();
         auto binary = as<const BinaryExpr>(expr);
-        insist(binary->tok == TK_EQUAL);
+        M_insist(binary->tok == TK_EQUAL);
         auto first = binary->lhs;
         auto second = binary->rhs;
-        insist(is_comparable(first->type(), second->type()), "the two sides of a comparison should be comparable");
+        M_insist(is_comparable(first->type(), second->type()), "the two sides of a comparison should be comparable");
 
         key_schema.add("key", first->type());
         key = Tuple(key_schema);
@@ -644,9 +644,9 @@ struct SimpleHashJoinData : JoinData
 
         if ((required_first & schema_lhs).num_entries() != 0) { // build on first, probe second
 #ifndef NDEBUG
-            insist((required_first & schema_rhs).num_entries() == 0,
+            M_insist((required_first & schema_rhs).num_entries() == 0,
                    "first expression requires definitions from both sides");
-            insist((required_second & schema_lhs).num_entries() == 0,
+            M_insist((required_second & schema_lhs).num_entries() == 0,
                    "second expression requires definition from left-hand side");
 #endif
             build_key.emit(*first, 1);
@@ -843,7 +843,7 @@ void Pipeline::operator()(const ScanOperator &op)
         block_.clear();
         block_.mask((1UL << remainder) - 1);
         for (std::size_t j = 0; i != op.store().num_rows(); ++i, ++j) {
-            insist(j < block_.capacity());
+            M_insist(j < block_.capacity());
             Tuple *args[] = { &block_[j] };
             loader(args);
             // std::cerr << "next tuple is " << block_[j] << std::endl;
@@ -890,7 +890,7 @@ void Pipeline::operator()(const JoinOperator &op)
 {
     switch (op.algo()) {
         default:
-            unreachable("Illegal join algorithm.");
+            M_unreachable("Illegal join algorithm.");
 
         case JoinOperator::J_Undefined:
             /* fall through */
@@ -949,7 +949,7 @@ void Pipeline::operator()(const JoinOperator &op)
                             positions[child_id] = std::size_t(-1L);
                             --child_id;
                         } else {
-                            insist(positions[child_id] < buffer.size(), "position out of bounds");
+                            M_insist(positions[child_id] < buffer.size(), "position out of bounds");
                             ++child_id;
                         }
                     }
@@ -989,7 +989,7 @@ void Pipeline::operator()(const JoinOperator &op)
                 }
 
                 if (i != 0) {
-                    insist(i <= pipeline.block_.capacity());
+                    M_insist(i <= pipeline.block_.capacity());
                     pipeline.block_.mask(i == pipeline.block_.capacity() ? -1UL : (1UL << i) - 1);
                     pipeline.push(*op.parent());
                 }
@@ -1065,10 +1065,10 @@ void Pipeline::operator()(const GroupingOperator &op)
 
             switch (fn.fnid) {
                 default:
-                    unreachable("function kind not implemented");
+                    M_unreachable("function kind not implemented");
 
                 case Function::FN_UDF:
-                    unreachable("UDFs not yet supported");
+                    M_unreachable("UDFs not yet supported");
 
                 case Function::FN_COUNT:
                     if (is_null)
@@ -1153,7 +1153,7 @@ void Pipeline::operator()(const GroupingOperator &op)
     switch (op.algo()) {
         case GroupingOperator::G_Undefined:
         case GroupingOperator::G_Ordered:
-            unreachable("not implemented");
+            M_unreachable("not implemented");
 
         case GroupingOperator::G_Hashing: {
             auto data = as<HashBasedGroupingData>(op.data());
@@ -1198,10 +1198,10 @@ void Pipeline::operator()(const AggregationOperator &op)
 
             switch (fn.fnid) {
                 default:
-                    unreachable("function kind not implemented");
+                    M_unreachable("function kind not implemented");
 
                 case Function::FN_UDF:
-                    unreachable("UDFs not yet supported");
+                    M_unreachable("UDFs not yet supported");
 
                 case Function::FN_COUNT:
                     if (fe->args.size() == 0) { // COUNT(*)
@@ -1319,7 +1319,7 @@ void Interpreter::operator()(const JoinOperator &op)
 {
     switch (op.algo()) {
         default:
-            unreachable("Undefined join algorithm.");
+            M_unreachable("Undefined join algorithm.");
 
         case JoinOperator::J_Undefined:
         case JoinOperator::J_NestedLoops: {
@@ -1378,7 +1378,7 @@ void Interpreter::operator()(const GroupingOperator &op)
     switch (op.algo()) {
         case GroupingOperator::G_Undefined:
         case GroupingOperator::G_Ordered:
-            unreachable("not implemented");
+            M_unreachable("not implemented");
 
         case GroupingOperator::G_Hashing: {
             auto data = new HashBasedGroupingData(op);
@@ -1424,10 +1424,10 @@ void Interpreter::operator()(const AggregationOperator &op)
 
         switch (fn.fnid) {
             default:
-                unreachable("function kind not implemented");
+                M_unreachable("function kind not implemented");
 
             case Function::FN_UDF:
-                unreachable("UDFs not yet supported");
+                M_unreachable("UDFs not yet supported");
 
             case Function::FN_COUNT:
                 data->aggregates.set(i, 0); // initialize
@@ -1502,7 +1502,7 @@ void Interpreter::operator()(const SortingOperator &op)
             },
             [&comparator](const Date&) { comparator.emit_Cmp_i(); },
             [&comparator](const DateTime&) { comparator.emit_Cmp_i(); },
-            [](auto&&) { insist("invalid type"); }
+            [](auto&&) { M_insist("invalid type"); }
         }, *ty);
 
         if (not o.second)
@@ -1515,7 +1515,7 @@ void Interpreter::operator()(const SortingOperator &op)
     std::sort(data->buffer.begin(), data->buffer.end(), [&](Tuple &first, Tuple &second) {
         Tuple *args[] = { &res, &first, &second };
         comparator(args);
-        insist(not res.is_null(0));
+        M_insist(not res.is_null(0));
         return res[0].as_i() < 0;
     });
 

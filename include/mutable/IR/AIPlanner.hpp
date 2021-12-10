@@ -135,7 +135,7 @@ struct StateTracker
     /** Add `state` with its current cost to the tracked states. */
     void add(state_type &&state) {
         auto res = seen_states_.emplace(std::move(state), state.g());
-        insist(res.second, "must not add a duplicate state");
+        M_insist(res.second, "must not add a duplicate state");
     }
 
     /** Checks whether `state` `is_feasible()` and in case it is, adds/updates the tracked state.
@@ -298,13 +298,13 @@ struct genericAStar
     /** Removes and returns the state at the head of the queue. */
     weighted_state pop() {
         auto pop_internal = [](std::vector<weighted_state> &Q) -> weighted_state {
-            insist(not Q.empty(), "cannot pop from empty queue");
-            insist(std::is_heap(Q.begin(), Q.end(), std::greater<weighted_state>{}));
+            M_insist(not Q.empty(), "cannot pop from empty queue");
+            M_insist(std::is_heap(Q.begin(), Q.end(), std::greater<weighted_state>{}));
             std::pop_heap(Q.begin(), Q.end(), std::greater<weighted_state>{});
             weighted_state top = std::move(Q.back());
             Q.pop_back();
-            insist(std::is_heap(Q.begin(), Q.end(), std::greater<weighted_state>{}));
-            insist(Q.empty() or top <= Q.front(), "did not extract the state with least weight");
+            M_insist(std::is_heap(Q.begin(), Q.end(), std::greater<weighted_state>{}));
+            M_insist(Q.empty() or top <= Q.front(), "did not extract the state with least weight");
             return top;
         };
 
@@ -319,10 +319,10 @@ struct genericAStar
     };
 
     void push(std::vector<weighted_state> &Q, weighted_state state) {
-        insist(std::is_heap(Q.begin(), Q.end(), std::greater<weighted_state>{}));
+        M_insist(std::is_heap(Q.begin(), Q.end(), std::greater<weighted_state>{}));
         Q.emplace_back(std::move(state));
         std::push_heap(Q.begin(), Q.end(), std::greater<weighted_state>{});
-        insist(std::is_heap(Q.begin(), Q.end(), std::greater<weighted_state>{}));
+        M_insist(std::is_heap(Q.begin(), Q.end(), std::greater<weighted_state>{}));
     }
 
     /* Try to add the successor state `s` to the beam.  If the weight of `s` is already higher than the highest weight
@@ -330,9 +330,9 @@ struct genericAStar
     void beam(weighted_state s) {
         auto &top = candidates.front();
 #ifndef NDEBUG
-        insist(std::is_heap(candidates.begin(), candidates.end()), "candidates must always be a max-heap");
+        M_insist(std::is_heap(candidates.begin(), candidates.end()), "candidates must always be a max-heap");
         for (auto &elem : candidates)
-            insist(top >= elem, "the top element at the front must be no less than any other element");
+            M_insist(top >= elem, "the top element at the front must be no less than any other element");
 #endif
         if (candidates.size() < beam_width) {
             /* There is still space in the candidates, so simply add the state to the heap. */
@@ -348,14 +348,14 @@ struct genericAStar
         } else {
             /* The state has less g+h than the top of candidates heap.  Pop the current top and insert the state into
              * the candidates heap. */
-            insist(candidates.size() == beam_width);
-            insist(std::is_heap(candidates.begin(), candidates.end()));
+            M_insist(candidates.size() == beam_width);
+            M_insist(std::is_heap(candidates.begin(), candidates.end()));
             candidates.emplace_back(std::move(s));
             std::pop_heap(candidates.begin(), candidates.end());
             weighted_state old_top = std::move(candidates.back());
             candidates.pop_back();
-            insist(std::is_heap(candidates.begin(), candidates.end()));
-            insist(candidates.size() == beam_width);
+            M_insist(std::is_heap(candidates.begin(), candidates.end()));
+            M_insist(candidates.size() == beam_width);
             if constexpr (is_acyclic)
                 seen_states.update(std::move(old_top.state));
             else
@@ -367,7 +367,7 @@ struct genericAStar
     void beam_dynamic() {
         std::sort(candidates.begin(), candidates.end());
         const std::size_t num_beamed = std::ceil(candidates.size() * BEAM_FACTOR);
-        insist(not candidates.size() or num_beamed, "if the state has successors, at least one must be in the beam");
+        M_insist(not candidates.size() or num_beamed, "if the state has successors, at least one must be in the beam");
         auto it = candidates.begin();
         for (auto end = it + num_beamed; it != end; ++it) {
             if constexpr (is_acyclic)
@@ -484,8 +484,8 @@ double genericAStar<State, Heuristic, Weight, BeamWidth, Lazy, Acyclic, Context.
     /* Run work list algorithm. */
     while (have_state()) {
         if constexpr (use_beam_search and is_acyclic) {
-            insist(regular_queue.empty(), "regular queue must never be used");
-            insist(not priority_queue.empty(), "priority queue must never run empty");
+            M_insist(regular_queue.empty(), "regular queue must never be used");
+            M_insist(not priority_queue.empty(), "priority queue must never run empty");
         }
         weighted_state top = pop();
 

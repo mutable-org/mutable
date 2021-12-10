@@ -52,19 +52,19 @@ struct Timer
 
         /** Start this `Measurement` by setting the start time point to *NOW*. */
         void start() {
-            insist(is_unused());
+            M_insist(is_unused());
             begin = clock::now();
         }
 
         /** Stop this `Measurement` by setting the end time point to *NOW*. */
         void stop() {
-            insist(is_active());
+            M_insist(is_active());
             end = clock::now();
         }
 
         /** Returns `true` iff the `Measurement` is unused, i.e. has not started (and hence also not finished). */
         bool is_unused() const {
-            insist(begin != time_point() or end == time_point(),
+            M_insist(begin != time_point() or end == time_point(),
                    "if the measurement hasn't started it must not have ended");
             return begin == time_point();
         }
@@ -79,7 +79,7 @@ struct Timer
 
         /** Returns the duration of a *finished* `Measurement`. */
         duration duration() const {
-            insist(is_finished(), "can only compute duration of finished measurements");
+            M_insist(is_finished(), "can only compute duration of finished measurements");
             return end - begin;
         }
 
@@ -178,13 +178,13 @@ struct Timer
     }
 };
 
-#define TIME_EXPR(EXPR, DESCR, TIMER) \
+#define M_TIME_EXPR(EXPR, DESCR, TIMER) \
     [&]() { auto TP = (TIMER).create_timing((DESCR)); return (EXPR); }();
-#define TIME_BLOCK(DESCR, TIMER, BLOCK) {\
+#define M_TIME_BLOCK(DESCR, TIMER, BLOCK) {\
     auto TP = (TIMER).create_timing((DESCR)); \
     BLOCK \
 }
-#define TIME_THIS(DESCR, TIMER) \
-    auto PASTE(__timer_, __COUNTER__) = (TIMER).create_timing((DESCR));
+#define M_TIME_THIS(DESCR, TIMER) \
+    auto M_PASTE(__timer_, __COUNTER__) = (TIMER).create_timing((DESCR));
 
 }

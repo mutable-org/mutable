@@ -64,7 +64,7 @@ int DotTool::render_to_pdf(const char *path_to_pdf, const char *algo)
 {
     /*----- Render the dot graph with graphviz. ----------------------------------------------------------------------*/
     auto dotstr = stream_.str();
-    Agraph_t *G = notnull(sym_agmemread(dotstr.c_str()));
+    Agraph_t *G = M_notnull(sym_agmemread(dotstr.c_str()));
     sym_gvLayout(gvc, G, algo);
     auto ret = sym_gvRenderFilename(gvc, G, "pdf", path_to_pdf);
     sym_gvFreeLayout(gvc, G);

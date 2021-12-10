@@ -23,7 +23,7 @@ struct ASTDumper : ConstASTVisitor
     private:
     /** Start a new line with proper indentation. */
     std::ostream & indent() const {
-        insist(indent_ >= 0, "Indent must not be negative!  Missing increment or superfluous decrement?");
+        M_insist(indent_ >= 0, "Indent must not be negative!  Missing increment or superfluous decrement?");
         if (indent_)
             out << '\n' << std::string(2 * indent_ - 2, ' ') << "` ";
         return out;

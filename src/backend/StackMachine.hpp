@@ -1,8 +1,8 @@
 #pragma once
 
 #include "catalog/Schema.hpp"
-#include "mutable/IR/Tuple.hpp"
 #include <cstdint>
+#include <mutable/IR/Tuple.hpp>
 
 
 namespace m {
@@ -23,9 +23,9 @@ struct StackMachine
 
     enum class Opcode : uint8_t
     {
-#define DB_OPCODE(CODE, ...) CODE,
+#define M_OPCODE(CODE, ...) CODE,
 #include "tables/Opcodes.tbl"
-#undef DB_OPCODE
+#undef M_OPCODE
         Last
     };
     static_assert(uint64_t(Opcode::Last) < (1UL << (sizeof(Opcode) * 8)), "too many opcodes");
@@ -34,9 +34,9 @@ struct StackMachine
 
     private:
     static constexpr const char *OPCODE_TO_STR[] = {
-#define DB_OPCODE(CODE, ...) #CODE,
+#define M_OPCODE(CODE, ...) #CODE,
 #include "tables/Opcodes.tbl"
-#undef DB_OPCODE
+#undef M_OPCODE
     };
     static const std::unordered_map<std::string, Opcode> STR_TO_OPCODE;
 
@@ -129,18 +129,18 @@ struct StackMachine
     ops.push_back(static_cast<Opcode>((ARG2)));
 #define PUSH(...) SELECT(__VA_ARGS__, PUSH_3, PUSH_2, PUSH_1, PUSH_0, __VA_ARGS__)
 
-#define DB_OPCODE(CODE, DELTA, ...) \
+#define M_OPCODE(CODE, DELTA, ...) \
     void emit_ ## CODE ( ARGS(XXX, ##__VA_ARGS__) ) { \
         ops.push_back(StackMachine::Opcode:: CODE ); \
         current_stack_size_ += DELTA; \
-        insist(current_stack_size_ >= 0); \
+        M_insist(current_stack_size_ >= 0); \
         required_stack_size_ = std::max(required_stack_size_, current_stack_size_); \
         PUSH(XXX, ##__VA_ARGS__) \
     }
 
 #include "tables/Opcodes.tbl"
 
-#undef DB_OPCODE
+#undef M_OPCODE
 #undef SELECT
 #undef ARGS_0
 #undef ARGS_1
@@ -178,7 +178,7 @@ struct StackMachine
 
     /** Sets the `Value` in the context at index `idx` to `val`. */
     void set(std::size_t idx, Value val) {
-        insist(idx < context_.size(), "index out of bounds");
+        M_insist(idx < context_.size(), "index out of bounds");
         context_[idx] = val;
     }
 

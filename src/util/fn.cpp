@@ -64,7 +64,7 @@ std::string html_escape(std::string str)
 
 bool like(const std::string &str, const std::string &pattern, const char escape_char)
 {
-    insist('_' != escape_char and '%' != escape_char, "illegal escape character");
+    M_insist('_' != escape_char and '%' != escape_char, "illegal escape character");
 
     bool dp[pattern.length() + 1][str.length() + 1]; // dp[i][j] == true iff pattern[:i] contains str[:j]
 

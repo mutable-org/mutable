@@ -46,7 +46,7 @@ const Numeric * m::arithmetic_join(const Numeric *lhs, const Numeric *rhs)
         case Numeric::N_Int: return Type::Get_Integer(category, precision / 8);
         case Numeric::N_Float: {
             if (precision == 32) return Type::Get_Float(category);
-            insist(precision == 64, "Illegal floating-point precision");
+            M_insist(precision == 64, "Illegal floating-point precision");
             return Type::Get_Double(category);
         }
 

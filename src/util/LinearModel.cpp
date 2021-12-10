@@ -27,12 +27,12 @@ LinearModel::LinearModel(const Eigen::MatrixXd &X, const Eigen::VectorXd &y,
 
 double LinearModel::predict_target(const Eigen::RowVectorXd& feature_vector) const
 {
-    insist(feature_vector.rows() == 1 and num_features_ - 1 == feature_vector.cols());
+    M_insist(feature_vector.rows() == 1 and num_features_ - 1 == feature_vector.cols());
     /* The linear regression algorithm requires a column of only ones to properly
      * train the y-intercept of the model. This column is added here. */
     Eigen::RowVectorXd concat_vector(1, feature_vector.cols() + 1);
     concat_vector << 1, feature_vector;
-    insist(num_features_ == concat_vector.cols());
+    M_insist(num_features_ == concat_vector.cols());
 
     if (bool(transformation_)) {
         /* apply transformations */

@@ -1,7 +1,7 @@
 /* vim: set filetype=cpp: */
 
-#ifndef DB_OPCODE
-#error "define DB_OPCODE(Opcode, Delta, __VA_ARGS__) before including this file"
+#ifndef M_OPCODE
+#error "define M_OPCODE(Opcode, Delta, __VA_ARGS__) before including this file"
 #endif
 
 
@@ -10,13 +10,13 @@
  *====================================================================================================================*/
 
 /** Stop the machine. */
-DB_OPCODE(Stop, 0)
+M_OPCODE(Stop, 0)
 
 /* Stop on condition. */
-DB_OPCODE(Stop_Z, 0)
-DB_OPCODE(Stop_NZ, 0)
-DB_OPCODE(Stop_False, 0)
-DB_OPCODE(Stop_True, 0)
+M_OPCODE(Stop_Z, 0)
+M_OPCODE(Stop_NZ, 0)
+M_OPCODE(Stop_False, 0)
+M_OPCODE(Stop_True, 0)
 
 
 /*======================================================================================================================
@@ -24,13 +24,13 @@ DB_OPCODE(Stop_True, 0)
  *====================================================================================================================*/
 
 /** Remove the top entry from the stack. */
-DB_OPCODE(Pop, -1)
+M_OPCODE(Pop, -1)
 
 /** Push NULL to top of the stack. */
-DB_OPCODE(Push_Null, +1)
+M_OPCODE(Push_Null, +1)
 
 /** Duplicate the top entry of the stack. */
-DB_OPCODE(Dup, +1)
+M_OPCODE(Dup, +1)
 
 
 /*======================================================================================================================
@@ -38,10 +38,10 @@ DB_OPCODE(Dup, +1)
  *====================================================================================================================*/
 
 /** Load a value from the context to the top of the stack. */
-DB_OPCODE(Ld_Ctx, +1, index)
+M_OPCODE(Ld_Ctx, +1, index)
 
 /** Update a value in the context with the value on top of the stack. */
-DB_OPCODE(Upd_Ctx, 0, index)
+M_OPCODE(Upd_Ctx, 0, index)
 
 
 /*======================================================================================================================
@@ -49,20 +49,20 @@ DB_OPCODE(Upd_Ctx, 0, index)
  *====================================================================================================================*/
 
 /** Load a value from a tuple to the top of the stack. */
-DB_OPCODE(Ld_Tup, +1, tuple_id, index)
+M_OPCODE(Ld_Tup, +1, tuple_id, index)
 
 /** Store NULL into a tuple. */
-DB_OPCODE(St_Tup_Null, 0, tuple_id, index)
+M_OPCODE(St_Tup_Null, 0, tuple_id, index)
 /** Store the current top-of-stack into a tuple. */
-DB_OPCODE(St_Tup_i, 0, tuple_id, index)
+M_OPCODE(St_Tup_i, 0, tuple_id, index)
 /** Store the current top-of-stack into a tuple. */
-DB_OPCODE(St_Tup_f, 0, tuple_id, index)
+M_OPCODE(St_Tup_f, 0, tuple_id, index)
 /** Store the current top-of-stack into a tuple. */
-DB_OPCODE(St_Tup_d, 0, tuple_id, index)
+M_OPCODE(St_Tup_d, 0, tuple_id, index)
 /** Store the current top-of-stack into a tuple. */
-DB_OPCODE(St_Tup_s, 0, tuple_id, index, length)
+M_OPCODE(St_Tup_s, 0, tuple_id, index, length)
 /** Store the current top-of-stack into a tuple. */
-DB_OPCODE(St_Tup_b, 0, tuple_id, index)
+M_OPCODE(St_Tup_b, 0, tuple_id, index)
 
 
 /*======================================================================================================================
@@ -70,16 +70,16 @@ DB_OPCODE(St_Tup_b, 0, tuple_id, index)
  *====================================================================================================================*/
 
 /* Writes the character `chr` to the `std::ostream` instance referenced by the `index`-th slot in the context. */
-DB_OPCODE(Putc, 0, index, chr)
+M_OPCODE(Putc, 0, index, chr)
 
 /* Print a value to the `std::ostream` instance referenced by the `index`-th slot in the context. */
-DB_OPCODE(Print_i, 0, index)
-DB_OPCODE(Print_f, 0, index)
-DB_OPCODE(Print_d, 0, index)
-DB_OPCODE(Print_s, 0, index)
-DB_OPCODE(Print_b, 0, index)
-DB_OPCODE(Print_date, 0, index)
-DB_OPCODE(Print_datetime, 0, index)
+M_OPCODE(Print_i, 0, index)
+M_OPCODE(Print_f, 0, index)
+M_OPCODE(Print_d, 0, index)
+M_OPCODE(Print_s, 0, index)
+M_OPCODE(Print_b, 0, index)
+M_OPCODE(Print_date, 0, index)
+M_OPCODE(Print_datetime, 0, index)
 
 
 /*======================================================================================================================
@@ -88,25 +88,25 @@ DB_OPCODE(Print_datetime, 0, index)
 
 /*----- Load from memory ---------------------------------------------------------------------------------------------*/
 
-DB_OPCODE(Ld_i8,  0)
-DB_OPCODE(Ld_i16, 0)
-DB_OPCODE(Ld_i32, 0)
-DB_OPCODE(Ld_i64, 0)
-DB_OPCODE(Ld_f,   0)
-DB_OPCODE(Ld_d,   0)
-DB_OPCODE(Ld_s,   0, length)
-DB_OPCODE(Ld_b,   0, mask)
+M_OPCODE(Ld_i8,  0)
+M_OPCODE(Ld_i16, 0)
+M_OPCODE(Ld_i32, 0)
+M_OPCODE(Ld_i64, 0)
+M_OPCODE(Ld_f,   0)
+M_OPCODE(Ld_d,   0)
+M_OPCODE(Ld_s,   0, length)
+M_OPCODE(Ld_b,   0, mask)
 
 /*----- Store to memory ----------------------------------------------------------------------------------------------*/
 
-DB_OPCODE(St_i8,  -2)
-DB_OPCODE(St_i16, -2)
-DB_OPCODE(St_i32, -2)
-DB_OPCODE(St_i64, -2)
-DB_OPCODE(St_f,   -2)
-DB_OPCODE(St_d,   -2)
-DB_OPCODE(St_s,   -2, length)
-DB_OPCODE(St_b,   -2, bit_offset)
+M_OPCODE(St_i8,  -2)
+M_OPCODE(St_i16, -2)
+M_OPCODE(St_i32, -2)
+M_OPCODE(St_i64, -2)
+M_OPCODE(St_f,   -2)
+M_OPCODE(St_d,   -2)
+M_OPCODE(St_s,   -2, length)
+M_OPCODE(St_b,   -2, bit_offset)
 
 
 /*======================================================================================================================
@@ -114,38 +114,38 @@ DB_OPCODE(St_b,   -2, bit_offset)
  *====================================================================================================================*/
 
 /* Integral increment. */
-DB_OPCODE(Inc, 0)
+M_OPCODE(Inc, 0)
 /* Integral decrement. */
-DB_OPCODE(Dec, 0)
+M_OPCODE(Dec, 0)
 
 /* Arithmetic negation */
-DB_OPCODE(Minus_i, 0)
-DB_OPCODE(Minus_f, 0)
-DB_OPCODE(Minus_d, 0)
+M_OPCODE(Minus_i, 0)
+M_OPCODE(Minus_f, 0)
+M_OPCODE(Minus_d, 0)
 
 /* Add two values. */
-DB_OPCODE(Add_i, -1)
-DB_OPCODE(Add_f, -1)
-DB_OPCODE(Add_d, -1)
-DB_OPCODE(Add_p, -1)
+M_OPCODE(Add_i, -1)
+M_OPCODE(Add_f, -1)
+M_OPCODE(Add_d, -1)
+M_OPCODE(Add_p, -1)
 
 /* Subtract two values. */
-DB_OPCODE(Sub_i, -1)
-DB_OPCODE(Sub_f, -1)
-DB_OPCODE(Sub_d, -1)
+M_OPCODE(Sub_i, -1)
+M_OPCODE(Sub_f, -1)
+M_OPCODE(Sub_d, -1)
 
 /* Multiply two values. */
-DB_OPCODE(Mul_i, -1)
-DB_OPCODE(Mul_f, -1)
-DB_OPCODE(Mul_d, -1)
+M_OPCODE(Mul_i, -1)
+M_OPCODE(Mul_f, -1)
+M_OPCODE(Mul_d, -1)
 
 /* Divide two values. */
-DB_OPCODE(Div_i, -1)
-DB_OPCODE(Div_f, -1)
-DB_OPCODE(Div_d, -1)
+M_OPCODE(Div_i, -1)
+M_OPCODE(Div_f, -1)
+M_OPCODE(Div_d, -1)
 
 /* Modulo divide two values. */
-DB_OPCODE(Mod_i, -1)
+M_OPCODE(Mod_i, -1)
 
 
 /*======================================================================================================================
@@ -153,25 +153,25 @@ DB_OPCODE(Mod_i, -1)
  *====================================================================================================================*/
 
 /* Bitwise negation */
-DB_OPCODE(Neg_i, 0)
+M_OPCODE(Neg_i, 0)
 
 /* Bitwise And */
-DB_OPCODE(And_i, -1)
+M_OPCODE(And_i, -1)
 
 /* Bitwise Or */
-DB_OPCODE(Or_i, -1)
+M_OPCODE(Or_i, -1)
 
 /* Bitwise Xor */
-DB_OPCODE(Xor_i, -1)
+M_OPCODE(Xor_i, -1)
 
 /* Shift left - with operand on stack. */
-DB_OPCODE(ShL_i, -1)
+M_OPCODE(ShL_i, -1)
 
 /* Shift left immediate - with operand as argument. */
-DB_OPCODE(ShLi_i, 0, count)
+M_OPCODE(ShLi_i, 0, count)
 
 /* Shift arithmetical right - with operand as argument. */
-DB_OPCODE(SARi_i, 0, count)
+M_OPCODE(SARi_i, 0, count)
 
 
 /*======================================================================================================================
@@ -179,13 +179,13 @@ DB_OPCODE(SARi_i, 0, count)
  *====================================================================================================================*/
 
 /* Logical not */
-DB_OPCODE(Not_b, 0)
+M_OPCODE(Not_b, 0)
 
 /* Logical and. */
-DB_OPCODE(And_b, -1)
+M_OPCODE(And_b, -1)
 
 /* Logical or. */
-DB_OPCODE(Or_b, -1)
+M_OPCODE(Or_b, -1)
 
 
 /*======================================================================================================================
@@ -193,7 +193,7 @@ DB_OPCODE(Or_b, -1)
  *====================================================================================================================*/
 
 /* Concatenate two strings. */
-DB_OPCODE(Cat_s, -1)
+M_OPCODE(Cat_s, -1)
 
 
 /*======================================================================================================================
@@ -201,53 +201,53 @@ DB_OPCODE(Cat_s, -1)
  *====================================================================================================================*/
 
 /* Test for NULL. */
-DB_OPCODE(Is_Null, 0)
+M_OPCODE(Is_Null, 0)
 /* Test equal to zero. */
-DB_OPCODE(EqZ_i, 0)
+M_OPCODE(EqZ_i, 0)
 /* Test not equal to zero. */
-DB_OPCODE(NEZ_i, 0)
+M_OPCODE(NEZ_i, 0)
 
-DB_OPCODE(Eq_i, -1)
-DB_OPCODE(Eq_f, -1)
-DB_OPCODE(Eq_d, -1)
-DB_OPCODE(Eq_b, -1)
-DB_OPCODE(Eq_s, -1)
+M_OPCODE(Eq_i, -1)
+M_OPCODE(Eq_f, -1)
+M_OPCODE(Eq_d, -1)
+M_OPCODE(Eq_b, -1)
+M_OPCODE(Eq_s, -1)
 
-DB_OPCODE(NE_i, -1)
-DB_OPCODE(NE_f, -1)
-DB_OPCODE(NE_d, -1)
-DB_OPCODE(NE_b, -1)
-DB_OPCODE(NE_s, -1)
+M_OPCODE(NE_i, -1)
+M_OPCODE(NE_f, -1)
+M_OPCODE(NE_d, -1)
+M_OPCODE(NE_b, -1)
+M_OPCODE(NE_s, -1)
 
-DB_OPCODE(LT_i, -1)
-DB_OPCODE(LT_f, -1)
-DB_OPCODE(LT_d, -1)
-DB_OPCODE(LT_s, -1)
+M_OPCODE(LT_i, -1)
+M_OPCODE(LT_f, -1)
+M_OPCODE(LT_d, -1)
+M_OPCODE(LT_s, -1)
 
-DB_OPCODE(GT_i, -1)
-DB_OPCODE(GT_f, -1)
-DB_OPCODE(GT_d, -1)
-DB_OPCODE(GT_s, -1)
+M_OPCODE(GT_i, -1)
+M_OPCODE(GT_f, -1)
+M_OPCODE(GT_d, -1)
+M_OPCODE(GT_s, -1)
 
-DB_OPCODE(LE_i, -1)
-DB_OPCODE(LE_f, -1)
-DB_OPCODE(LE_d, -1)
-DB_OPCODE(LE_s, -1)
+M_OPCODE(LE_i, -1)
+M_OPCODE(LE_f, -1)
+M_OPCODE(LE_d, -1)
+M_OPCODE(LE_s, -1)
 
-DB_OPCODE(GE_i, -1)
-DB_OPCODE(GE_f, -1)
-DB_OPCODE(GE_d, -1)
-DB_OPCODE(GE_s, -1)
+M_OPCODE(GE_i, -1)
+M_OPCODE(GE_f, -1)
+M_OPCODE(GE_d, -1)
+M_OPCODE(GE_s, -1)
 
-DB_OPCODE(Cmp_i, -1)
-DB_OPCODE(Cmp_f, -1)
-DB_OPCODE(Cmp_d, -1)
-DB_OPCODE(Cmp_b, -1)
-DB_OPCODE(Cmp_s, -1)
+M_OPCODE(Cmp_i, -1)
+M_OPCODE(Cmp_f, -1)
+M_OPCODE(Cmp_d, -1)
+M_OPCODE(Cmp_b, -1)
+M_OPCODE(Cmp_s, -1)
 
 /* `LIKE` operator. */
-DB_OPCODE(Like_const, -1)
-DB_OPCODE(Like_expr, -1)
+M_OPCODE(Like_const, -1)
+M_OPCODE(Like_expr, -1)
 
 
 /*======================================================================================================================
@@ -255,7 +255,7 @@ DB_OPCODE(Like_expr, -1)
  *====================================================================================================================*/
 
 /* Select one of two values based on a boolean. */
-DB_OPCODE(Sel, -2)
+M_OPCODE(Sel, -2)
 
 
 /*======================================================================================================================
@@ -263,14 +263,14 @@ DB_OPCODE(Sel, -2)
  *====================================================================================================================*/
 
 /* Cast to int. */
-DB_OPCODE(Cast_i_f, 0)
-DB_OPCODE(Cast_i_d, 0)
-DB_OPCODE(Cast_i_b, 0)
+M_OPCODE(Cast_i_f, 0)
+M_OPCODE(Cast_i_d, 0)
+M_OPCODE(Cast_i_b, 0)
 
 /* Cast to float. */
-DB_OPCODE(Cast_f_i, 0)
-DB_OPCODE(Cast_f_d, 0)
+M_OPCODE(Cast_f_i, 0)
+M_OPCODE(Cast_f_d, 0)
 
 /* Cast to double. */
-DB_OPCODE(Cast_d_i, 0)
-DB_OPCODE(Cast_d_f, 0)
+M_OPCODE(Cast_d_i, 0)
+M_OPCODE(Cast_d_f, 0)

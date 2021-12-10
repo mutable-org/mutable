@@ -18,7 +18,7 @@ namespace m {
 namespace v8_helper {
 
     inline v8::Local<v8::String> to_v8_string(v8::Isolate *isolate, std::string_view sv) {
-        insist(isolate);
+        M_insist(isolate);
         return v8::String::NewFromUtf8(isolate, sv.data(), v8::NewStringType::kNormal, sv.length()).ToLocalChecked();
     }
 
@@ -28,13 +28,13 @@ namespace v8_helper {
     }
 
     inline v8::Local<v8::String> to_json(v8::Isolate *isolate, v8::Local<v8::Value> val) {
-        insist(isolate);
+        M_insist(isolate);
         auto Ctx = isolate->GetCurrentContext();
         return v8::JSON::Stringify(Ctx, val).ToLocalChecked();
     }
 
     inline v8::Local<v8::Object> parse_json(v8::Isolate *isolate, std::string_view json) {
-        insist(isolate);
+        M_insist(isolate);
         auto Ctx = isolate->GetCurrentContext();
         auto value = v8::JSON::Parse(Ctx, to_v8_string(isolate, json)).ToLocalChecked();
         if (value.IsEmpty())
@@ -103,7 +103,7 @@ namespace v8_helper {
 
         public:
         V8InspectorClientImpl(int16_t port, v8::Isolate *isolate)
-            : isolate_(notnull(isolate))
+            : isolate_(M_notnull(isolate))
             , server_(port, std::bind(&V8InspectorClientImpl::on_message, this, std::placeholders::_1))
         {
             std::cout << "Initiating the V8 inspector server.  To attach to the inspector, open Chrome/Chromium and "
@@ -180,7 +180,7 @@ struct V8Platform : WasmPlatform
     V8Platform(V8Platform&&) = default;
     ~V8Platform();
 
-    static v8::Platform * platform() { insist(bool(PLATFORM_)); return PLATFORM_.get(); }
+    static v8::Platform * platform() { M_insist(bool(PLATFORM_)); return PLATFORM_.get(); }
 
     WasmModule compile(const Operator &plan) const override;
     void execute(const Operator &plan) override;

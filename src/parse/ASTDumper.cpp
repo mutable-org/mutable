@@ -122,11 +122,11 @@ void ASTDumper::operator()(Const<FromClause> &c)
             } else if (auto stmt = std::get_if<Stmt*>(&f.source)) {
                 (*this)(**stmt);
             } else {
-                unreachable("illegal variant");
+                M_unreachable("illegal variant");
             }
             --indent_;
         } else {
-            insist(std::holds_alternative<Token>(f.source), "nested statements require an alias");
+            M_insist(std::holds_alternative<Token>(f.source), "nested statements require an alias");
             Token &tok = std::get<Token>(f.source);
             indent() << tok.text << " (" << tok.pos << ')';
         }
@@ -268,7 +268,7 @@ void ASTDumper::operator()(Const<CreateTableStmt> &s)
                 indent() << "REFERENCES " << ref->table_name.text << '(' << ref->attr_name.text << ") (" << c->tok.pos
                          << ')';
             } else {
-                unreachable("invalid constraint");
+                M_unreachable("invalid constraint");
             }
         }
         --indent_;

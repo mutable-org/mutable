@@ -44,9 +44,9 @@ struct CardinalityEstimator
     };
 
     enum kind_t {
-#define DB_CARDINALITY_ESTIMATOR(NAME, _) CE_ ## NAME,
+#define M_CARDINALITY_ESTIMATOR(NAME, _) CE_ ## NAME,
 #include "mutable/tables/CardinalityEstimator.tbl"
-#undef DB_CARDINALITY_ESTIMATOR
+#undef M_CARDINALITY_ESTIMATOR
     };
 
     static const std::unordered_map<std::string, kind_t> STR_TO_KIND;
@@ -59,10 +59,10 @@ struct CardinalityEstimator
         return Create(STR_TO_KIND.at(kind), name_of_database);
     }
 
-#define DB_CARDINALITY_ESTIMATOR(NAME, _) \
+#define M_CARDINALITY_ESTIMATOR(NAME, _) \
     static std::unique_ptr<CardinalityEstimator> Create ## NAME(const char *name_of_database);
 #include "mutable/tables/CardinalityEstimator.tbl"
-#undef DB_CARDINALITY_ESTIMATOR
+#undef M_CARDINALITY_ESTIMATOR
 
     virtual ~CardinalityEstimator() = 0;
 

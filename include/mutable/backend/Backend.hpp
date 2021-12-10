@@ -14,9 +14,9 @@ struct Operator;
 struct Backend
 {
     enum kind_t {
-#define DB_BACKEND(NAME, _) B_ ## NAME,
+#define M_BACKEND(NAME, _) B_ ## NAME,
 #include "mutable/tables/Backend.tbl"
-#undef DB_BACKEND
+#undef M_BACKEND
     };
 
     static const std::unordered_map<std::string, kind_t> STR_TO_KIND;
@@ -26,10 +26,10 @@ struct Backend
     /** Create a `Backend` instance given the name of a backend. */
     static std::unique_ptr<Backend> Create(const char *kind) { return Create(STR_TO_KIND.at(kind)); }
 
-#define DB_BACKEND(NAME, _) \
+#define M_BACKEND(NAME, _) \
     static std::unique_ptr<Backend> Create ## NAME();
 #include "mutable/tables/Backend.tbl"
-#undef DB_BACKEND
+#undef M_BACKEND
 
     virtual ~Backend() { }
 

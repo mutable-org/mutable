@@ -42,7 +42,7 @@ struct Visitor
     template<typename Vis> \
     auto visit(Vis &&vis, BASE_CLASS &obj, m::tag<VISITOR>&& = m::tag<VISITOR>()) { \
         struct V : VISITOR { \
-            using result_type = std::common_type_t< CLASS_LIST(M_GET_INVOKE_RESULT) std::invoke_result_t<Vis, Const<EVAL(DEFER1(FIRST)(CLASS_LIST(COMMA)))>&> >; \
+            using result_type = std::common_type_t< CLASS_LIST(M_GET_INVOKE_RESULT) std::invoke_result_t<Vis, Const<M_EVAL(M_DEFER1(M_HEAD)(CLASS_LIST(M_COMMA)))>&> >; \
             Vis &&vis; \
             std::optional<m::some<result_type>> result; \
             V(Vis &&vis) : vis(std::forward<Vis>(vis)), result(std::nullopt) { } \

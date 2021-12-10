@@ -37,17 +37,17 @@ void CardinalityEstimator::dump(std::ostream &out) const
 void CardinalityEstimator::dump() const { dump(std::cerr); }
 
 const std::unordered_map<std::string, CardinalityEstimator::kind_t> CardinalityEstimator::STR_TO_KIND = {
-#define DB_CARDINALITY_ESTIMATOR(NAME, _) { #NAME,  CardinalityEstimator::CE_ ## NAME },
+#define M_CARDINALITY_ESTIMATOR(NAME, _) { #NAME,  CardinalityEstimator::CE_ ## NAME },
 #include "mutable/tables/CardinalityEstimator.tbl"
-#undef DB_CARDINALITY_ESTIMATOR
+#undef M_CARDINALITY_ESTIMATOR
 };
 
 std::unique_ptr<CardinalityEstimator>
 CardinalityEstimator::Create(CardinalityEstimator::kind_t kind, const char *name_of_database) {
     switch(kind) {
-#define DB_CARDINALITY_ESTIMATOR(NAME, _) case CE_ ## NAME: return Create ## NAME(name_of_database);
+#define M_CARDINALITY_ESTIMATOR(NAME, _) case CE_ ## NAME: return Create ## NAME(name_of_database);
 #include "mutable/tables/CardinalityEstimator.tbl"
-#undef DB_CARDINALITY_ESTIMATOR
+#undef M_CARDINALITY_ESTIMATOR
     }
 }
 
@@ -65,7 +65,7 @@ std::unique_ptr<DataModel> CartesianProductEstimator::empty_model() const
 
 std::unique_ptr<DataModel> CartesianProductEstimator::estimate_scan(const QueryGraph &G, Subproblem P) const
 {
-    insist(P.size() == 1, "Subproblem must identify exactly one DataSource");
+    M_insist(P.size() == 1, "Subproblem must identify exactly one DataSource");
     auto idx = *P.begin();
     auto DS = G.sources()[idx];
 
@@ -74,7 +74,7 @@ std::unique_ptr<DataModel> CartesianProductEstimator::estimate_scan(const QueryG
         model->size = BT->table().store().num_rows();
         return model;
     } else {
-        unreachable("nested queries should be estimated when they are planned and their model must be passed to the "
+        M_unreachable("nested queries should be estimated when they are planned and their model must be passed to the "
                     "planning process of the outer query");
     }
 }
@@ -123,7 +123,7 @@ std::unique_ptr<DataModel>
 CartesianProductEstimator::estimate_join_all(const QueryGraph&, const PlanTable &PT, const Subproblem to_join,
                                              const cnf::CNF&) const
 {
-    insist(not to_join.empty());
+    M_insist(not to_join.empty());
     auto model = std::make_unique<CartesianProductDataModel>();
     auto it = to_join.begin();
     model->size = as<const CartesianProductDataModel>(*PT[it.as_set()].model).size;
@@ -233,7 +233,7 @@ void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in
         buf_.emplace_back(0);
         auto str = strdup(buf_view());
         auto res = cardinality_table_.emplace(str, *size);
-        insist(res.second, "insertion must not fail as we do not allow for duplicates in the input file");
+        M_insist(res.second, "insertion must not fail as we do not allow for duplicates in the input file");
     }
 }
 
@@ -246,7 +246,7 @@ std::unique_ptr<DataModel> InjectionCardinalityEstimator::empty_model() const
 
 std::unique_ptr<DataModel> InjectionCardinalityEstimator::estimate_scan(const QueryGraph &G, Subproblem P) const
 {
-    insist(P.size() == 1);
+    M_insist(P.size() == 1);
     const auto idx = *P.begin();
     auto DS = G.sources()[idx];
 

@@ -48,7 +48,7 @@ public:
             case OperatorKind::JoinOperator:
                 return generate_join_cost_model<T>(csv_folder_path);
             default:
-                unreachable("operator not supported.");
+                M_unreachable("operator not supported.");
         }
     }
 

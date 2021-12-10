@@ -81,7 +81,7 @@ void Sema::operator()(Const<Designator> &e)
                 target = begin->second.first;
             }
         } else {
-            unreachable("invalid variant");
+            M_unreachable("invalid variant");
         }
         e.target_ = target;
         e.is_correlated_ = is_correlated;
@@ -97,7 +97,7 @@ void Sema::operator()(Const<Designator> &e)
                 e.type_ = Type::Get_Error();
                 return;
             } else {
-                insist(std::distance(begin, end) == 1);
+                M_insist(std::distance(begin, end) == 1);
                 e.target_ = begin->second.first;
                 if (auto d = cast<Designator>(begin->second.first); d and d->attr_name.text == e.attr_name.text)
                     e.table_name.text = d->table_name.text;
@@ -144,7 +144,7 @@ void Sema::operator()(Const<Designator> &e)
                             e.type_ = Type::Get_Error();
                             return;
                         } else {
-                            insist(std::distance(begin, end) == 1);
+                            M_insist(std::distance(begin, end) == 1);
                             if (not std::holds_alternative<std::monostate>(target)) {
                                 /* ambiguous attribute name */
                                 diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text
@@ -160,7 +160,7 @@ void Sema::operator()(Const<Designator> &e)
                             }
                         }
                     } else {
-                        unreachable("invalid variant");
+                        M_unreachable("invalid variant");
                     }
                 }
                 /* If we found target of the designator, abort searching contexts further outside. */
@@ -182,9 +182,9 @@ void Sema::operator()(Const<Designator> &e)
     }
 
     /* Compute the type of this designator based on the referenced source. */
-    insist(e.target_.index() != 0);
+    M_insist(e.target_.index() != 0);
     struct get_type {
-        const Type * operator()(std::monostate&) const { unreachable("target not set"); }
+        const Type * operator()(std::monostate&) const { M_unreachable("target not set"); }
         const Type * operator()(const Attribute *attr) const { return attr->type; }
         const Type * operator()(const Expr *expr) const { return expr->type_; }
     };
@@ -206,7 +206,7 @@ void Sema::operator()(Const<Designator> &e)
 
     switch ((*found_ctx)->stage) {
         default:
-            unreachable("designator not allowed in this stage");
+            M_unreachable("designator not allowed in this stage");
 
         case SemaContext::S_From:
             /* The designator is correlated and occurs in a nested query in the FROM. Emit an error. */
@@ -247,7 +247,7 @@ void Sema::operator()(Const<Constant> &e)
     int base = 8; // for integers
     switch (e.tok.type) {
         default:
-            unreachable("a constant must be one of the types below");
+            M_unreachable("a constant must be one of the types below");
 
         case TK_Null:
             e.type_ = Type::Get_None();
@@ -303,19 +303,19 @@ void Sema::operator()(Const<Constant> &e)
                 e.type_ = Type::Get_Error();
                 return;
             }
-            insist(hour >= 0);
+            M_insist(hour >= 0);
             if (hour > 23) {
                 diag.e(e.tok.pos) << e << " has invalid hour.\n";
                 e.type_ = Type::Get_Error();
                 return;
             }
-            insist(minute >= 0);
+            M_insist(minute >= 0);
             if (minute > 59) {
                 diag.e(e.tok.pos) << e << " has invalid minute.\n";
                 e.type_ = Type::Get_Error();
                 return;
             }
-            insist(second >= 0);
+            M_insist(second >= 0);
             if (second > 59) {
                 diag.e(e.tok.pos) << e << " has invalid second.\n";
                 e.type_ = Type::Get_Error();
@@ -363,8 +363,8 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
         d->type_ = e.type_ = Type::Get_Error();
         return;
     }
-    insist(d);
-    insist(not d->type_, "This identifier has already been analyzed.");
+    M_insist(d);
+    M_insist(not d->type_, "This identifier has already been analyzed.");
 
     /* Analyze arguments. */
     for (auto arg : e.args) {
@@ -385,13 +385,13 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
         e.type_ = Type::Get_Error();
         return;
     }
-    insist(e.func_);
+    M_insist(e.func_);
 
     /* Infer the type of the function.  Functions are defined in an abstract way, where the type of the parameters is
      * not specified.  We must infer the parameter types and the return type of the function. */
     switch (e.func_->fnid) {
         default:
-            unreachable("Function not implemented");
+            M_unreachable("Function not implemented");
 
         case Function::FN_UDF:
             diag.e(d->attr_name.pos) << "User-defined functions are not yet supported.\n";
@@ -412,7 +412,7 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
                 d->type_ = e.type_ = Type::Get_Error();
                 return;
             }
-            insist(e.args.size() == 1);
+            M_insist(e.args.size() == 1);
             const Expr *arg = e.args[0];
             if (arg->type()->is_error()) {
                 /* skip argument of error type */
@@ -425,7 +425,7 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
                 d->type_ = e.type_ = Type::Get_Error();
                 return;
             }
-            insist(arg->type()->is_numeric());
+            M_insist(arg->type()->is_numeric());
             const Numeric *arg_type = cast<const Numeric>(arg->type());
             if (not arg_type->is_vectorial()) {
                 diag.w(d->attr_name.pos) << "Argument of aggregate is not of vectorial type.  "
@@ -434,7 +434,7 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
 
             switch (e.func_->fnid) {
                 default:
-                    unreachable("Invalid function");
+                    M_unreachable("Invalid function");
 
                 case Function::FN_MIN:
                 case Function::FN_MAX: {
@@ -499,7 +499,7 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
                 e.type_ = Type::Get_Error();
                 return;
             }
-            insist(e.args.size() == 1);
+            M_insist(e.args.size() == 1);
             const Expr *arg = e.args[0];
 
             if (arg->type()->is_error()) {
@@ -519,15 +519,15 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
         }
     }
 
-    insist(d->type_);
-    insist(d->type()->is_error() or cast<const FnType>(d->type()));
-    insist(e.type_);
-    insist(not e.type()->is_error());
-    insist(e.type()->is_primitive());
+    M_insist(d->type_);
+    M_insist(d->type()->is_error() or cast<const FnType>(d->type()));
+    M_insist(e.type_);
+    M_insist(not e.type()->is_error());
+    M_insist(e.type()->is_primitive());
 
     switch (Ctx.stage) {
         case SemaContext::S_From:
-            unreachable("Function application in FROM clause is impossible");
+            M_unreachable("Function application in FROM clause is impossible");
 
         case SemaContext::S_Where:
             if (e.func_->is_aggregate()) {
@@ -574,7 +574,7 @@ void Sema::operator()(Const<UnaryExpr> &e)
 
     switch (e.op().type) {
         default:
-            unreachable("invalid unary expression");
+            M_unreachable("invalid unary expression");
 
         case TK_Not:
             if (not e.expr->type()->is_boolean()) {
@@ -613,7 +613,7 @@ void Sema::operator()(Const<BinaryExpr> &e)
     /* Validate that lhs and rhs are compatible with binary operator. */
     switch (e.op().type) {
         default:
-            unreachable("Invalid binary operator.");
+            M_unreachable("Invalid binary operator.");
 
         /* Arithmetic operations are only valid for numeric types.  Compute the type of the binary expression that is
          * precise enough.  */
@@ -630,8 +630,8 @@ void Sema::operator()(Const<BinaryExpr> &e)
                 e.type_ = Type::Get_Error();
                 return;
             }
-            insist(ty_lhs);
-            insist(ty_rhs);
+            M_insist(ty_lhs);
+            M_insist(ty_rhs);
 
             /* Compute type of the binary expression. */
             e.type_ = arithmetic_join(ty_lhs, ty_rhs);
@@ -647,8 +647,8 @@ void Sema::operator()(Const<BinaryExpr> &e)
                 e.type_ = Type::Get_Error();
                 return;
             }
-            insist(ty_lhs);
-            insist(ty_rhs);
+            M_insist(ty_lhs);
+            M_insist(ty_rhs);
 
             /* Scalar and scalar yield a scalar.  Otherwise, expression yields a vectorial. */
             Type::category_t c = std::max(ty_lhs->category, ty_rhs->category);
@@ -669,8 +669,8 @@ void Sema::operator()(Const<BinaryExpr> &e)
                     e.type_ = Type::Get_Error();
                     return;
                 }
-                insist(ty_lhs);
-                insist(ty_rhs);
+                M_insist(ty_lhs);
+                M_insist(ty_rhs);
 
                 /* Scalar and scalar yield a scalar.  Otherwise, expression yields a vectorial. */
                 Type::category_t c = std::max(ty_lhs->category, ty_rhs->category);
@@ -685,8 +685,8 @@ void Sema::operator()(Const<BinaryExpr> &e)
                     e.type_ = Type::Get_Error();
                     return;
                 }
-                insist(ty_lhs);
-                insist(ty_rhs);
+                M_insist(ty_lhs);
+                M_insist(ty_rhs);
 
                 /* Scalar and scalar yield a scalar.  Otherwise, expression yields a vectorial. */
                 Type::category_t c = std::max(ty_lhs->category, ty_rhs->category);
@@ -701,8 +701,8 @@ void Sema::operator()(Const<BinaryExpr> &e)
                     e.type_ = Type::Get_Error();
                     return;
                 }
-                insist(ty_lhs);
-                insist(ty_rhs);
+                M_insist(ty_lhs);
+                M_insist(ty_rhs);
 
                 /* Scalar and scalar yield a scalar.  Otherwise, expression yields a vectorial. */
                 Type::category_t c = std::max(ty_lhs->category, ty_rhs->category);
@@ -717,8 +717,8 @@ void Sema::operator()(Const<BinaryExpr> &e)
                     e.type_ = Type::Get_Error();
                     return;
                 }
-                insist(ty_lhs);
-                insist(ty_rhs);
+                M_insist(ty_lhs);
+                M_insist(ty_rhs);
 
                 /* Scalar and scalar yield a scalar.  Otherwise, expression yields a vectorial. */
                 Type::category_t c = std::max(ty_lhs->category, ty_rhs->category);
@@ -759,8 +759,8 @@ void Sema::operator()(Const<BinaryExpr> &e)
                 e.type_ = Type::Get_Error();
                 return;
             }
-            insist(ty_lhs);
-            insist(ty_rhs);
+            M_insist(ty_lhs);
+            M_insist(ty_rhs);
 
             /* Scalar and scalar yield a scalar.  Otherwise, expression yields a vectorial. */
             Type::category_t c = std::max(ty_lhs->category, ty_rhs->category);
@@ -794,14 +794,14 @@ void Sema::operator()(Const<BinaryExpr> &e)
 
 void Sema::operator()(Const<QueryExpr> &e)
 {
-    insist(is<SelectStmt>(*e.query), "nested statements are always select statements");
+    M_insist(is<SelectStmt>(*e.query), "nested statements are always select statements");
 
     SemaContext &Ctx = get_context();
 
     /* Evaluate the nested statement in a fresh sema context. */
     push_context(*e.query);
     (*this)(*e.query);
-    insist(not contexts_.empty());
+    M_insist(not contexts_.empty());
     SemaContext inner_ctx = pop_context();
 
     /* TODO an EXISTS operator allows multiple results */
@@ -810,7 +810,7 @@ void Sema::operator()(Const<QueryExpr> &e)
         e.type_ = Type::Get_Error();
         return;
     }
-    insist(1 == inner_ctx.results.size());
+    M_insist(1 == inner_ctx.results.size());
     auto res = inner_ctx.results.begin()->second.first;
 
     if (not res->type()->is_primitive()) {
@@ -873,7 +873,7 @@ void Sema::operator()(Const<SelectClause> &c)
     bool has_vector = false;
     bool has_scalar = false;
     uint64_t const_counter = 0;
-    insist(Ctx.results.empty());
+    M_insist(Ctx.results.empty());
     unsigned result_counter = 0;
 
     if (c.select_all) {
@@ -884,7 +884,7 @@ void Sema::operator()(Const<SelectClause> &c)
             auto group_by = as<const GroupByClause>(stmt.group_by);
             for (auto expr : group_by->group_by) {
                 auto d = make_designator(expr, expr);
-                insist(d->type()->is_error() or d->type()->is_primitive());
+                M_insist(d->type()->is_error() or d->type()->is_primitive());
                 if (auto ty = cast<const PrimitiveType>(d->type()))
                     d->type_ = ty->as_scalar();
                 c.expansion.push_back(d);
@@ -960,7 +960,7 @@ void Sema::operator()(Const<SelectClause> &c)
             /* Expression is a designator.  Simply reuse the name without table prefix. */
             Ctx.results.emplace(d->attr_name.text, std::make_pair(s.first, result_counter++));
         } else {
-            insist(not is<const Designator>(s.first));
+            M_insist(not is<const Designator>(s.first));
             /* Expression without alias.  Print expression as string to get a name.  Use '$const' as prefix for
              * constants. */
             std::ostringstream oss;
@@ -984,7 +984,7 @@ void Sema::operator()(Const<FromClause> &c)
     Catalog &C = Catalog::Get();
     const auto &DB = C.get_database_in_use();
 
-    insist(Ctx.sources.empty());
+    M_insist(Ctx.sources.empty());
     unsigned source_counter = 0;
 
     /* Check whether the source tables in the FROM clause exist in the database.  Add the source tables to the current
@@ -1012,12 +1012,12 @@ void Sema::operator()(Const<FromClause> &c)
                 return;
             }
         } else if (auto stmt = std::get_if<Stmt*>(&table.source)) {
-            insist(is<SelectStmt>(*stmt), "nested statements are always select statements");
+            M_insist(is<SelectStmt>(*stmt), "nested statements are always select statements");
 
             /* Evaluate the nested statement in a fresh sema context. */
             push_context(**stmt);
             (*this)(**stmt);
-            insist(not contexts_.empty());
+            M_insist(not contexts_.empty());
             SemaContext inner_ctx = pop_context();
 
             /* Add the results of the nested statement to the list of sources. */
@@ -1041,7 +1041,7 @@ void Sema::operator()(Const<FromClause> &c)
                 return;
             }
         } else {
-            unreachable("invalid variant");
+            M_unreachable("invalid variant");
         }
     }
 }
@@ -1455,7 +1455,7 @@ void Sema::operator()(Const<UpdateStmt> &s)
     RequireContext RCtx(this, s);
     /* TODO */
     (void) s;
-    unreachable("Not implemented.");
+    M_unreachable("Not implemented.");
 }
 
 void Sema::operator()(Const<DeleteStmt> &s)
@@ -1463,7 +1463,7 @@ void Sema::operator()(Const<DeleteStmt> &s)
     RequireContext RCtx(this, s);
     /* TODO */
     (void) s;
-    unreachable("Not implemented.");
+    M_unreachable("Not implemented.");
 }
 
 void Sema::operator()(Const<DSVImportStmt> &s)

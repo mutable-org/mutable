@@ -84,15 +84,15 @@ Memory::Memory(Allocator &allocator, void *addr, std::size_t size, std::size_t o
 
 void Memory::map(std::size_t size, std::size_t offset_src, const AddressSpace &vm, std::size_t offset_dst) const
 {
-    insist(size <= this->size(), "size exceeds memory size");
-    insist(offset_src < this->size(), "source offset out of bounds");
-    insist(Is_Page_Aligned(offset_src), "source offset is not page aligned");
-    insist(offset_src + size <= this->size(), "source range out of bounds");
+    M_insist(size <= this->size(), "size exceeds memory size");
+    M_insist(offset_src < this->size(), "source offset out of bounds");
+    M_insist(Is_Page_Aligned(offset_src), "source offset is not page aligned");
+    M_insist(offset_src + size <= this->size(), "source range out of bounds");
 
-    insist(size <= vm.size(), "size exceeds address space");
-    insist(offset_dst < vm.size(), "destination offset out of bounds");
-    insist(Is_Page_Aligned(offset_dst), "destination offset is not page aligned");
-    insist(offset_dst + size <= vm.size(), "destination range out of bounds");
+    M_insist(size <= vm.size(), "size exceeds address space");
+    M_insist(offset_dst < vm.size(), "destination offset out of bounds");
+    M_insist(Is_Page_Aligned(offset_dst), "destination offset is not page aligned");
+    M_insist(offset_dst + size <= vm.size(), "destination range out of bounds");
 
     void *dst_addr = vm.as<uint8_t*>() + offset_dst;
     void *addr = mmap(dst_addr, size, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_FIXED, allocator().fd(),
@@ -120,8 +120,8 @@ Memory LinearAllocator::allocate(std::size_t size)
     if (size == 0) return Memory();
 
     const std::size_t aligned_size = Ceil_To_Next_Page(size);
-    insist(aligned_size >= size, "size must be ceiled");
-    insist(Is_Page_Aligned(aligned_size), "not page aligned");
+    M_insist(aligned_size >= size, "size must be ceiled");
+    M_insist(Is_Page_Aligned(aligned_size), "not page aligned");
 #if __linux
     if (ftruncate(fd(), offset_ + aligned_size))
         throw std::runtime_error(strerror(errno));
@@ -181,7 +181,7 @@ void LinearAllocator::deallocate(Memory &&mem)
             new_size_of_file = unmarked(*it);
             ++it;
         } while (it != allocations_.rend() and is_marked_for_deallocation(*it));
-        insist(it == allocations_.rend() or not is_marked_for_deallocation(*it));
+        M_insist(it == allocations_.rend() or not is_marked_for_deallocation(*it));
 
         /* Truncate file to reclaim memory. */
         if (ftruncate(fd(), new_size_of_file))

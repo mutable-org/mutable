@@ -37,7 +37,7 @@ struct Block
         the_iterator(block_t &vec, uint64_t mask) : block_(vec), mask_(mask) { }
 
         bool operator==(the_iterator other) {
-            insist(&this->block_ == &other.block_);
+            M_insist(&this->block_ == &other.block_);
             return this->mask_ == other.mask_;
         }
         bool operator!=(the_iterator other) { return not operator==(other); }
@@ -90,7 +90,7 @@ struct Block
 
     /** Returns an iterator to the tuple at index `index`. */
     iterator at(std::size_t index) {
-        insist(index < capacity());
+        M_insist(index < capacity());
         return iterator(*this, mask_ & (-1UL << index));
     }
     /** Returns an iterator to the tuple at index `index`. */
@@ -98,7 +98,7 @@ struct Block
 
     /** Check whether the tuple at the given `index` is alive. */
     bool alive(std::size_t index) const {
-        insist(index < capacity());
+        M_insist(index < capacity());
         return mask_ & (1UL << index);
     }
 
@@ -117,19 +117,19 @@ struct Block
     public:
     /** Returns the tuple at index `index`.  The tuple must be *alive*!  */
     Tuple & operator[](std::size_t index) {
-        insist(index < capacity(), "index out of bounds");
-        insist(alive(index), "cannot access a dead tuple directly");
+        M_insist(index < capacity(), "index out of bounds");
+        M_insist(alive(index), "cannot access a dead tuple directly");
         return data_[index];
     }
     /** Returns the tuple at index `index`.  The tuple must be *alive*!  */
     const Tuple & operator[](std::size_t index) const { return const_cast<Block*>(this)->operator[](index); }
 
     /** Make all tuples in this `Block` *alive*. */
-    void fill() { mask_ = AllOnes(); insist(size() == capacity()); }
+    void fill() { mask_ = AllOnes(); M_insist(size() == capacity()); }
 
     /** Erase the tuple at the given `index` from this `Block`. */
     void erase(std::size_t index) {
-        insist(index < capacity(), "index out of bounds");
+        M_insist(index < capacity(), "index out of bounds");
         setbit(&mask_, false, index);
     }
     /** Erase the tuple identified by `it` from this `Block`. */
@@ -218,11 +218,11 @@ struct Interpreter : Backend, ConstOperatorVisitor
     {
         errno = 0;
         switch (c.tok.type) {
-            default: unreachable("illegal token");
+            default: M_unreachable("illegal token");
 
             /* Null */
             case TK_Null:
-                unreachable("NULL cannot be evaluated to a Value");
+                M_unreachable("NULL cannot be evaluated to a Value");
 
             /* Integer */
             case TK_OCT_INT:
@@ -239,7 +239,7 @@ struct Interpreter : Backend, ConstOperatorVisitor
                 return strtod(c.tok.text, nullptr);
 
             case TK_HEX_FLOAT:
-                unreachable("not implemented");
+                M_unreachable("not implemented");
 
             /* String */
             case TK_STRING_LITERAL: {
@@ -252,7 +252,7 @@ struct Interpreter : Backend, ConstOperatorVisitor
             case TK_DATE: {
                 int year, month, day;
                 if (3 != sscanf(c.tok.text, "d'%d-%d-%d'", &year, &month, &day))
-                    unreachable("invalid date");
+                    M_unreachable("invalid date");
                 return int32_t(unsigned(year) << 9 | month << 5 | day);
             }
 
@@ -265,19 +265,19 @@ struct Interpreter : Backend, ConstOperatorVisitor
                 /* Parse date time. */
                 std::tm tm;
                 ss >> get_tm(tm);
-                insist(not ss.fail(), "failed to parse date time");
+                M_insist(not ss.fail(), "failed to parse date time");
 
 #if defined(__APPLE__)
                 /* Adapt tm_year such that it is non-negative (i.e. >= 1900) since timegm() cannot handle these cases. */
                 constexpr long SECONDS_PER_400_YEAR_CYCLE = 12622780800L;
                 int cycles = tm.tm_year < 0 ? -tm.tm_year / 400 + 1 : 0;
                 tm.tm_year += cycles * 400;
-                insist(tm.tm_year >= 0);
+                M_insist(tm.tm_year >= 0);
 #endif
 
                 /* Convert date time from std::tm to time_t (seconds since epoch). */
                 const time_t time = timegm(&tm);
-                insist(time != -1, "datetime out of bounds");
+                M_insist(time != -1, "datetime out of bounds");
 
 #if defined(__APPLE__)
                 return int64_t(time - cycles * SECONDS_PER_400_YEAR_CYCLE);
@@ -293,7 +293,7 @@ struct Interpreter : Backend, ConstOperatorVisitor
             case TK_False:
                 return false;
         }
-        insist(errno == 0, "constant could not be parsed");
+        M_insist(errno == 0, "constant could not be parsed");
     }
 
     /** Compile a `StackMachine` to load a tuple of `Schema` `S` using a given `Linearization`.

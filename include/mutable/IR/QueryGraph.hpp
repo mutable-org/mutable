@@ -115,7 +115,7 @@ struct Query : DataSource
     /** Returns a reference to the internal `QueryGraph`. */
     QueryGraph * query_graph() const { return query_graph_; }
 
-    const char * name() const override { insist(alias()); return alias(); }
+    const char * name() const override { M_insist(alias()); return alias(); }
 
     bool is_correlated() const override;
 };
@@ -208,7 +208,7 @@ struct QueryGraph
     std::unique_ptr<DataSource> remove_source(std::size_t id) {
         auto it = std::next(sources_.begin(), id);
         auto ds = std::unique_ptr<DataSource>(*it);
-        insist(ds->id() == id, "IDs of sources must be sequential");
+        M_insist(ds->id() == id, "IDs of sources must be sequential");
         sources_.erase(it);
         /* Increment IDs of all sources after the deleted one to provide sequential IDs. */
         while (it != sources_.end()) {
@@ -229,7 +229,7 @@ struct QueryGraph
     /** Returns a data souce given its id. */
     const DataSource * operator[](uint64_t id) const {
         auto ds = sources_[id];
-        insist(ds->id() == id, "given id and data source id must match");
+        M_insist(ds->id() == id, "given id and data source id must match");
         return ds;
     }
 
@@ -280,8 +280,8 @@ struct AdjacencyMatrix
         std::size_t j_;
 
         Proxy(reference_type M, std::size_t i, std::size_t j) : M_(M) , i_(i), j_(j) {
-            insist(i < M_.num_vertices_);
-            insist(j < M_.num_vertices_);
+            M_insist(i < M_.num_vertices_);
+            M_insist(j < M_.num_vertices_);
         }
 
         public:
@@ -405,7 +405,7 @@ exit:
     }
 
     void print_fixed_length(std::ostream &out, unsigned length) {
-        insist(length <= SmallBitset::CAPACITY);
+        M_insist(length <= SmallBitset::CAPACITY);
         out << "Adjacency Matrix";
         for (unsigned i = 0; i != length; ++i) {
             out << '\n';

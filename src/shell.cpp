@@ -101,7 +101,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
         if (Options::Get().echo)
             std::cout << *stmt << std::endl;
         if (diag.num_errors() != num_errors) goto next;
-        TIME_EXPR(sema(*stmt), "Semantic Analysis", timer);
+        M_TIME_EXPR(sema(*stmt), "Semantic Analysis", timer);
         if (Options::Get().ast) stmt->dump(std::cout);
         if (Options::Get().astdot) {
             DotTool dot(diag);
@@ -111,7 +111,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
         if (diag.num_errors() != num_errors) goto next;
 
         if (is<SelectStmt>(stmt)) {
-            auto query_graph = TIME_EXPR(QueryGraph::Build(*stmt), "Construct the query graph", timer);
+            auto query_graph = M_TIME_EXPR(QueryGraph::Build(*stmt), "Construct the query graph", timer);
             if (Options::Get().graph) query_graph->dump(std::cout);
             if (Options::Get().graphdot) {
                 DotTool dot(diag);
@@ -135,7 +135,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
 
             std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::Create(Options::Get().plan_enumerator);
             Optimizer Opt(*pe.get(), C.cost_function());
-            auto optree = TIME_EXPR(Opt(*query_graph.get()), "Compute the query plan", timer);
+            auto optree = M_TIME_EXPR(Opt(*query_graph.get()), "Compute the query plan", timer);
             if (Options::Get().plan) optree->dump(std::cout);
             if (Options::Get().plandot) {
                 DotTool dot(diag);
@@ -156,18 +156,18 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             }
             plan->add_child(optree.release());
 
-#if WITH_V8
+#if M_WITH_V8
             if (Options::Get().dryrun and streq("WasmV8", Options::Get().backend)) {
                 auto backend = Backend::Create(Options::Get().backend);
                 auto &platform = as<WasmBackend>(*backend).platform();
-                WasmModule wasm = TIME_EXPR(platform.compile(*plan), "Compile to WebAssembly", timer);
+                WasmModule wasm = M_TIME_EXPR(platform.compile(*plan), "Compile to WebAssembly", timer);
                 wasm.dump(std::cout);
             }
 #endif
 
             if (not Options::Get().dryrun) {
                 auto backend = Backend::Create(Options::Get().backend);
-                TIME_THIS("Execute query", timer);
+                M_TIME_THIS("Execute query", timer);
                 backend->execute(*plan);
             }
         } else if (auto I = cast<InsertStmt>(stmt)) {
@@ -229,7 +229,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
                     diag.err() << ": " << strerror(errsv);
                 diag.err() << std::endl;
             } else {
-                TIME_EXPR(R(file, S->path.text), "Read DSV file", timer);
+                M_TIME_EXPR(R(file, S->path.text), "Read DSV file", timer);
             }
         }
 next:
@@ -285,9 +285,9 @@ int context_len(const std::string &prefix)
 Replxx::completions_t hook_completion(const std::string &prefix, int &context_len)
 {
     static constexpr const char *KW[] = {
-#define DB_KEYWORD(tt, name) #name,
+#define M_KEYWORD(tt, name) #name,
 #include "mutable/tables/Keywords.tbl"
-#undef DB_KEYWORD
+#undef M_KEYWORD
     };
 
     Replxx::completions_t completions;
@@ -306,10 +306,10 @@ void hook_highlighter(const std::string &context, Replxx::colors_t &colors)
 {
     std::vector<std::pair<std::string, Replxx::Color>> regex_color = {
         /* Keywords */
-#define DB_KEYWORD(tt, name)\
+#define M_KEYWORD(tt, name)\
         { #name, Replxx::Color::BROWN },
 #include "mutable/tables/Keywords.tbl"
-#undef DB_KEYWORD
+#undef M_KEYWORD
         /* Operators */
         { "\\(",  Replxx::Color::NORMAL},
         { "\\)",  Replxx::Color::NORMAL},
@@ -353,9 +353,9 @@ void hook_highlighter(const std::string &context, Replxx::colors_t &colors)
 Replxx::hints_t hook_hint(const std::string &prefix, int &context_len, Replxx::Color &color)
 {
     static constexpr const char *KW[] = {
-#define DB_KEYWORD(tt, name) #name,
+#define M_KEYWORD(tt, name) #name,
 #include "mutable/tables/Keywords.tbl"
-#undef DB_KEYWORD
+#undef M_KEYWORD
     };
 
     Replxx::hints_t hints;
@@ -455,7 +455,7 @@ int main(int argc, const char **argv)
         nullptr, "--benchmark",                             /* Short, Long      */
         "run queries in benchmark mode",                    /* Description      */
         [&](bool) { Options::Get().benchmark = true; });    /* Callback         */
-#if WITH_V8
+#if M_WITH_V8
     /*----- Enable Chrome DevTools debugging via web socket ----------------------------------------------------------*/
     ADD(int, Options::Get().cdt_port, 0,                  /* Type, Var, Init  */
         nullptr, "--CDT",                                   /* Short, Long      */
@@ -641,9 +641,9 @@ Immanuel Haffner\
     if (Options::Get().list_stores) {
         std::cout << "List of available stores:";
         constexpr std::pair<const char*, const char*> stores[] = {
-#define DB_STORE(NAME, DESCR) { #NAME, DESCR },
+#define M_STORE(NAME, DESCR) { #NAME, DESCR },
 #include "mutable/tables/Store.tbl"
-#undef DB_STORE
+#undef M_STORE
         };
         std::size_t max_len = 0;
         for (auto store : stores) max_len = std::max(max_len, strlen(store.first));
@@ -656,9 +656,9 @@ Immanuel Haffner\
     if (Options::Get().list_backends) {
         std::cout << "List of available backends:";
         constexpr std::pair<const char*, const char*> backends[] = {
-#define DB_BACKEND(NAME, DESCR) { #NAME, DESCR },
+#define M_BACKEND(NAME, DESCR) { #NAME, DESCR },
 #include "mutable/tables/Backend.tbl"
-#undef DB_BACKEND
+#undef M_BACKEND
         };
         std::size_t max_len = 0;
         for (auto backend : backends) max_len = std::max(max_len, strlen(backend.first));
@@ -671,9 +671,9 @@ Immanuel Haffner\
     if (Options::Get().list_plan_enumerators) {
         std::cout << "List of available plan enumerators:";
         constexpr std::pair<const char*, const char*> PE[] = {
-#define DB_PLAN_ENUMERATOR(NAME, DESCR) { #NAME, DESCR },
+#define M_PLAN_ENUMERATOR(NAME, DESCR) { #NAME, DESCR },
 #include "mutable/tables/PlanEnumerator.tbl"
-#undef DB_PLAN_ENUMERATOR
+#undef M_PLAN_ENUMERATOR
         };
         std::size_t max_len = 0;
         for (auto pe : PE) max_len = std::max(max_len, strlen(pe.first));
@@ -686,9 +686,9 @@ Immanuel Haffner\
     if (Options::Get().list_cardinality_estimators) {
         std::cout << "List of available cardinality estimators:";
         constexpr std::pair<const char*, const char*> CE[] = {
-#define DB_CARDINALITY_ESTIMATOR(NAME, DESCR) { #NAME, DESCR },
+#define M_CARDINALITY_ESTIMATOR(NAME, DESCR) { #NAME, DESCR },
 #include "mutable/tables/CardinalityEstimator.tbl"
-#undef DB_CARDINALITY_ESTIMATOR
+#undef M_CARDINALITY_ESTIMATOR
         };
         std::size_t max_len = 0;
         for (auto ce : CE) max_len = std::max(max_len, strlen(ce.first));
@@ -734,7 +734,7 @@ Example for injected cardinalities file:\n\
         std::cout << std::endl;
     }
 
-#if WITH_V8
+#if M_WITH_V8
     if (not (Options::Get().wasm_optimization_level >= 0 and Options::Get().wasm_optimization_level <= 2)) {
         std::cerr << "level " << Options::Get().wasm_optimization_level << " is not a valid Wasm optimization level"
                   << std::endl;
@@ -830,7 +830,7 @@ Example for injected cardinalities file:\n\
                 do
                     cinput = rx.input(Options::Get().show_prompt ? prompt(ss.str().size() != 0) : ""); // Read one line of input
                 while ((cinput == nullptr) and (errno == EAGAIN));
-                insist(errno != EAGAIN);
+                M_insist(errno != EAGAIN);
 
                 /* User sent EOF */
                 if (cinput == nullptr) {
@@ -838,7 +838,7 @@ Example for injected cardinalities file:\n\
                         std::cout << std::endl;
                     break;
                 }
-                insist(cinput);
+                M_insist(cinput);
 
                 /* User sent input */
                 auto len = strlen(cinput);

@@ -13,7 +13,7 @@ double TrainedCostFunction::calculate_filter_cost(const QueryGraph &G, const Pla
     auto cardinality = CE.predict_cardinality(*PT[sub].model);
     auto post_filter = CE.estimate_filter(G, *PT[sub].model, condition);
     auto result_size = CE.predict_cardinality(*post_filter);
-    insist(cardinality > 0);
+    M_insist(cardinality > 0);
     auto selectivity = double(result_size) / double(cardinality);
 
     Eigen::RowVectorXd feature_matrix(3);
@@ -32,7 +32,7 @@ double TrainedCostFunction::calculate_join_cost(const QueryGraph &G, const PlanT
     auto cardinality_right = CE.predict_cardinality(*PT[right].model);
     auto num_distinct_values_left = CE.predict_number_distinct_values(*PT[left].model);
     auto num_distinct_values_right = CE.predict_number_distinct_values(*PT[right].model);
-    insist(cardinality_left > 0 and cardinality_right > 0);
+    M_insist(cardinality_left > 0 and cardinality_right > 0);
     auto redundancy_left = cardinality_left / num_distinct_values_left;
     auto redundancy_right = cardinality_right / num_distinct_values_right;
     // TODO before calculating the model for the join result, check whether we already have that model in the plan table

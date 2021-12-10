@@ -28,16 +28,16 @@ using namespace m;
 
 
 const std::unordered_map<std::string, PlanEnumerator::kind_t> PlanEnumerator::STR_TO_KIND = {
-#define DB_PLAN_ENUMERATOR(NAME, _) { #NAME,  PlanEnumerator::PE_ ## NAME },
+#define M_PLAN_ENUMERATOR(NAME, _) { #NAME,  PlanEnumerator::PE_ ## NAME },
 #include "mutable/tables/PlanEnumerator.tbl"
-#undef DB_PLAN_ENUMERATOR
+#undef M_PLAN_ENUMERATOR
 };
 
 std::unique_ptr<PlanEnumerator> PlanEnumerator::Create(PlanEnumerator::kind_t kind) {
     switch(kind) {
-#define DB_PLAN_ENUMERATOR(NAME, _) case PE_ ## NAME: return Create ## NAME();
+#define M_PLAN_ENUMERATOR(NAME, _) case PE_ ## NAME: return Create ## NAME();
 #include "mutable/tables/PlanEnumerator.tbl"
-#undef DB_PLAN_ENUMERATOR
+#undef M_PLAN_ENUMERATOR
     }
 }
 
@@ -161,7 +161,7 @@ void DPsizeSub::operator()(const QueryGraph &G, const CostFunction &CF, PlanTabl
             if (not M.is_connected(*S)) continue; // not connected -> skip
             for (Subproblem O(least_subset(*S)); O != *S; O = Subproblem(next_subset(O, *S))) {
                 Subproblem Comp = *S - O;
-                insist(M.is_connected(O, Comp), "implied by S inducing a connected subgraph");
+                M_insist(M.is_connected(O, Comp), "implied by S inducing a connected subgraph");
                 if (not PT.has_plan(O)) continue; // not connected -> skip
                 if (not PT.has_plan(Comp)) continue; // not connected -> skip
                 auto cost = CF.calculate_join_cost(G, PT, CE, O, Comp, cnf::CNF{}); // TODO use join condition
@@ -194,7 +194,7 @@ void DPsub::operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &P
         if (not M.is_connected(S)) continue; // not connected -> skip
         for (Subproblem S1(least_subset(S)); S1 != S; S1 = Subproblem(next_subset(S1, S))) {
             Subproblem S2 = S - S1;
-            insist(M.is_connected(S1, S2), "implied by S inducing a connected subgraph");
+            M_insist(M.is_connected(S1, S2), "implied by S inducing a connected subgraph");
             if (not PT.has_plan(S1)) continue; // not connected -> skip
             if (not PT.has_plan(S2)) continue; // not connected -> skip
             auto cost = CF.calculate_join_cost(G, PT, CE, S1, S2, cnf::CNF{}); // TODO use join condition
@@ -227,11 +227,11 @@ void DPsubOpt::operator()(const QueryGraph &G, const CostFunction &CF, PlanTable
         if (not M.is_connected(S)) continue;
         /* Compute break condition to avoid enumerating symmetric subproblems. */
         uint64_t offset = S.capacity() - __builtin_clzl(uint64_t(S));
-        insist(offset != 0, "invalid subproblem offset");
+        M_insist(offset != 0, "invalid subproblem offset");
         Subproblem limit(1UL << (offset - 1));
         for (Subproblem S1(least_subset(S)); S1 != limit; S1 = Subproblem(next_subset(S1, S))) {
             Subproblem S2 = S - S1; // = S \ S1;
-            insist(M.is_connected(S1, S2), "implied by S inducing a connected subgraph");
+            M_insist(M.is_connected(S1, S2), "implied by S inducing a connected subgraph");
             if (not PT.has_plan(S1)) continue; // not connected -> skip
             if (not PT.has_plan(S2)) continue; // not connected -> skip
             /* Exploit commutativity of join. */
@@ -567,7 +567,7 @@ struct AIPlanningStateBase
         swap(first.subproblems_, second.subproblems_);
     }
 
-    AIPlanningStateBase() { insist(not subproblems_); }
+    AIPlanningStateBase() { M_insist(not subproblems_); }
 
     /** Creates a state with actual costs `g` and given `subproblems`. */
     AIPlanningStateBase(double g, size_type size, std::unique_ptr<Subproblem[]> subproblems)
@@ -575,8 +575,8 @@ struct AIPlanningStateBase
         , size_(size)
         , subproblems_(std::move(subproblems))
     {
-        insist(size == 0 or bool(subproblems_));
-        insist(std::is_sorted(begin(), end(), subproblem_lt));
+        M_insist(size == 0 or bool(subproblems_));
+        M_insist(std::is_sorted(begin(), end(), subproblem_lt));
         INCREMENT_NUM_STATES_CONSTRUCTED();
     }
 
@@ -592,9 +592,9 @@ struct AIPlanningStateBase
         , size_(std::distance(begin, end))
         , subproblems_(ALLOCATOR().template make_unique<Subproblem[]>(size_))
     {
-        insist(begin != end);
+        M_insist(begin != end);
         std::copy(begin, end, this->begin());
-        insist(std::is_sorted(this->begin(), this->end(), subproblem_lt));
+        M_insist(std::is_sorted(this->begin(), this->end(), subproblem_lt));
         INCREMENT_NUM_STATES_CONSTRUCTED();
     }
 
@@ -609,7 +609,7 @@ struct AIPlanningStateBase
         , subproblems_(ALLOCATOR().template make_unique<Subproblem[]>(size_))
     {
         INCREMENT_NUM_STATES_CONSTRUCTED();
-        insist(bool(subproblems_));
+        M_insist(bool(subproblems_));
         std::copy(other.begin(), other.end(), this->begin());
     }
 
@@ -624,7 +624,7 @@ struct AIPlanningStateBase
     /** Returns `true` iff `this` and `other` have the exact same `Subproblem`s. */
     bool operator==(const AIPlanningStateBase &other) const {
         if (this->size() != other.size()) return false;
-        insist(this->size() == other.size());
+        M_insist(this->size() == other.size());
         auto this_it = this->cbegin();
         auto other_it = other.cbegin();
         for (; this_it != this->cend(); ++this_it, ++other_it) {
@@ -639,7 +639,7 @@ struct AIPlanningStateBase
     /** Returns the number of `Subproblem`s in this state. */
     std::size_t size() const { return size_; }
 
-    Subproblem operator[](std::size_t idx) const { insist(idx < size_); return subproblems_[idx]; }
+    Subproblem operator[](std::size_t idx) const { M_insist(idx < size_); return subproblems_[idx]; }
 
     /** Returns the cost to reach this state from the initial state. */
     double g() const { return g_; }
@@ -739,7 +739,7 @@ struct AIPlanningStateBottomUp : AIPlanningStateBase<AIPlanningStateBottomUp<All
         auto subproblems = ALLOCATOR().template make_unique<Subproblem[]>(size);
         for (auto ds : G.sources())
             new (&subproblems[ds->id()]) Subproblem(1UL << ds->id());
-        insist(std::is_sorted(subproblems.get(), subproblems.get() + size, subproblem_lt));
+        M_insist(std::is_sorted(subproblems.get(), subproblems.get() + size, subproblem_lt));
         return AIPlanningStateBottomUp(size, std::move(subproblems));
     }
 
@@ -796,8 +796,8 @@ void AIPlanningStateBottomUp<Allocator>::for_each_successor(Callback &&callback,
     {
         const auto neighbors = M.neighbors(*outer_it);
         for (auto inner_it = std::next(outer_it); inner_it != cend(); ++inner_it) {
-            insist(uint64_t(*inner_it) > uint64_t(*outer_it), "subproblems must be sorted");
-            insist((*outer_it & *inner_it).empty(), "subproblems must not overlap");
+            M_insist(uint64_t(*inner_it) > uint64_t(*outer_it), "subproblems must be sorted");
+            M_insist((*outer_it & *inner_it).empty(), "subproblems must not overlap");
             if (neighbors & *inner_it) { // inner and outer are joinable.
                 /* Compute joined subproblem. */
                 const Subproblem joined = *outer_it | *inner_it;
@@ -810,7 +810,7 @@ void AIPlanningStateBottomUp<Allocator>::for_each_successor(Callback &&callback,
                     else if (it == inner_it) new (ptr++) Subproblem(joined); // replace inner
                     else new (ptr++) Subproblem(*it);
                 }
-                insist(std::is_sorted(subproblems.get(), subproblems.get() + size() - 1, subproblem_lt));
+                M_insist(std::is_sorted(subproblems.get(), subproblems.get() + size() - 1, subproblem_lt));
 
                 /* Compute total cost. */
                 const double total_cost = CF.calculate_join_cost(G, PT, CE, *outer_it, *inner_it, cnf::CNF{});
@@ -871,12 +871,12 @@ struct AIPlanningStateBottomUpOpt : AIPlanningStateBase<AIPlanningStateBottomUpO
             const SmallBitset mask_back_edges = S.singleton_to_lo_mask();
             const Subproblem neighbors = M.neighbors(S);
             const SmallBitset forward_edges = neighbors - mask_back_edges;
-            insist((forward_edges & mask_back_edges).empty(), "only forward edges");
-            insist(forward_edges.empty() or *forward_edges.begin() > idx, "must not have backward edges");
+            M_insist((forward_edges & mask_back_edges).empty(), "only forward edges");
+            M_insist(forward_edges.empty() or *forward_edges.begin() > idx, "must not have backward edges");
             new (&joins[idx]) SmallBitset(forward_edges);
         }
-        insist(std::is_sorted(subproblems.get(), subproblems.get() + num_sources, subproblem_lt));
-        insist(joins[num_sources - 1].empty(), "last subproblem must not have forward edges");
+        M_insist(std::is_sorted(subproblems.get(), subproblems.get() + num_sources, subproblem_lt));
+        M_insist(joins[num_sources - 1].empty(), "last subproblem must not have forward edges");
 
         return AIPlanningStateBottomUpOpt(num_sources, std::move(subproblems), std::move(joins));
     }
@@ -919,13 +919,13 @@ struct AIPlanningStateBottomUpOpt : AIPlanningStateBase<AIPlanningStateBottomUpO
         : base_type(g, size, std::move(subproblems))
         , joins_(std::move(joins))
     {
-        insist(size == 0 or bool(joins_));
+        M_insist(size == 0 or bool(joins_));
 #ifndef NDEBUG
-        insist(std::is_sorted(cbegin(), cend(), subproblem_lt));
+        M_insist(std::is_sorted(cbegin(), cend(), subproblem_lt));
         for (std::size_t idx = 0; idx != size; ++idx) {
             const SmallBitset joins_with = joins_[idx];
-            insist(not joins_with(idx), "must not self-join");
-            insist(joins_with.empty() or *joins_with.begin() > idx, "must not have backward edges");
+            M_insist(not joins_with(idx), "must not self-join");
+            M_insist(joins_with.empty() or *joins_with.begin() > idx, "must not have backward edges");
         }
 #endif
     }
@@ -994,12 +994,12 @@ struct AIPlanningStateBottomUpOpt : AIPlanningStateBase<AIPlanningStateBottomUpO
  * position.  If the masked bit was set in the original `S`, set the bit that is `delta` positions higher. */
 SmallBitset update_join(const SmallBitset S, const uint64_t bit_mask, const unsigned delta)
 {
-    insist(delta < 64);
+    M_insist(delta < 64);
 
     const uint64_t erased_bit = uint64_t(S) & bit_mask;
     const uint64_t extracted_bits = _pext_u64(uint64_t(S), ~bit_mask); // erase masked bit by parallel bit extract
     const uint64_t replace_bit = erased_bit << delta;
-    insist(bool(replace_bit) == bool(erased_bit), "the replace bit is only set if the erased bit was set");
+    M_insist(bool(replace_bit) == bool(erased_bit), "the replace bit is only set if the erased bit was set");
 
     return SmallBitset(extracted_bits | replace_bit);
 }
@@ -1021,18 +1021,18 @@ void AIPlanningStateBottomUpOpt<Allocator>::for_each_successor(Callback &&callba
     for (std::size_t left_idx = 0; left_idx < size() - 1; ++left_idx) {
         const Subproblem left = (*this)[left_idx];
         const SmallBitset left_joins_with = joins_[left_idx];
-        insist(left_joins_with.empty() or *left_joins_with.begin() > left_idx, "must not have backward edges");
+        M_insist(left_joins_with.empty() or *left_joins_with.begin() > left_idx, "must not have backward edges");
 
         /* Compute mask of the join bit corresponding to `left`.  Used later for updating joins. */
         const uint64_t mask_join_with_left = 1UL << left_idx;
 
         for (auto right_idx : left_joins_with) {
-            insist(left_idx < right_idx,
+            M_insist(left_idx < right_idx,
                    "joins are directed and must always point towards the subproblem of higher index");
             const Subproblem right = (*this)[right_idx];
-            insist((left & right).empty(), "subproblems must be disjoint");
-            insist(M.is_connected(left, right), "subproblems must be joinable");
-            insist(uint64_t(left) < uint64_t(right), "subproblems must be ordered");
+            M_insist((left & right).empty(), "subproblems must be disjoint");
+            M_insist(M.is_connected(left, right), "subproblems must be joinable");
+            M_insist(uint64_t(left) < uint64_t(right), "subproblems must be ordered");
 
             /* Compute joined subproblem. */
             const Subproblem joined = left | right;
@@ -1058,7 +1058,7 @@ void AIPlanningStateBottomUpOpt<Allocator>::for_each_successor(Callback &&callba
                     ptr += unsigned(s != left);
 #endif
                 }
-                insist(std::is_sorted(subproblems.get(), subproblems.get() + size() - 1, subproblem_lt));
+                M_insist(std::is_sorted(subproblems.get(), subproblems.get() + size() - 1, subproblem_lt));
             }
 
             /* Compute join partners for each subproblem in the successor. */
@@ -1068,59 +1068,59 @@ void AIPlanningStateBottomUpOpt<Allocator>::for_each_successor(Callback &&callba
             /* Subproblems before `left`. */
             for (; idx < left_idx; ++idx) {
                 const SmallBitset j = this->joins_[idx];
-                insist(j.empty() or *j.begin() > idx,
+                M_insist(j.empty() or *j.begin() > idx,
                        "joins are directed and must always point towards the subproblem of higher index");
                 const bool joined_with_left = j(left_idx);
                 const bool joined_with_right = j(right_idx);
                 const SmallBitset j_upd = update_join(j, mask_join_with_left, delta_join_bits); // TODO precompute PEXT mask
 
-                insist(j_upd.size() + (joined_with_left and joined_with_right) == j.size(),
+                M_insist(j_upd.size() + (joined_with_left and joined_with_right) == j.size(),
                        "looses exactly one join if it joined with both left and right");
-                insist(not j_upd.empty() or j.size() <= 1,
+                M_insist(not j_upd.empty() or j.size() <= 1,
                        "updated joins can only be empty if there was at most one join before");
-                insist(j_upd.empty() or *j_upd.begin() > idx,
+                M_insist(j_upd.empty() or *j_upd.begin() > idx,
                        "joins are directed and must always point towards the subproblem of higher index");
                 new (&joins[idx]) SmallBitset(j_upd);
             }
-            insist(idx == left_idx);
+            M_insist(idx == left_idx);
             /* Subproblems between `left` and `right`. */
             for (/* skip left */ ++idx; idx < right_idx; ++idx) {
                 const SmallBitset j = this->joins_[idx];
                 const bool joined_with_left = this->joins_[left_idx](idx);
                 const bool joined_with_right = j[right_idx];
-                insist(j.empty() or *j.begin() > idx,
+                M_insist(j.empty() or *j.begin() > idx,
                        "joins are directed and must always point towards the subproblem of higher index");
                 SmallBitset j_upd = SmallBitset(uint64_t(j) >> 1U); // erase by right shift, all lower bits are 0
-                insist(j_upd.size() == j.size(), "must not loose a join");
+                M_insist(j_upd.size() == j.size(), "must not loose a join");
                 /* If `left` joined with the current subproblem, this subproblem will have a new edge to `joined`.  */
-                insist(j_upd[new_joined_index] == joined_with_right);
+                M_insist(j_upd[new_joined_index] == joined_with_right);
                 j_upd[new_joined_index] = joined_with_right or joined_with_left; // there was an edge from `left` to this subproblem
-                insist(j_upd[new_joined_index] == joined_with_left or joined_with_right);
-                // insist(joined_with_right or j_upd.size() == j.size() + joined_with_left, "must not loose a join");
-                // insist(not joined_with_right or j_upd.size() == j.size(), "must not loose a join");
-                insist(j_upd.empty() or *j_upd.begin() > idx - 1,
+                M_insist(j_upd[new_joined_index] == joined_with_left or joined_with_right);
+                // M_insist(joined_with_right or j_upd.size() == j.size() + joined_with_left, "must not loose a join");
+                // M_insist(not joined_with_right or j_upd.size() == j.size(), "must not loose a join");
+                M_insist(j_upd.empty() or *j_upd.begin() > idx - 1,
                        "joins are directed and must always point towards the subproblem of higher index");
                 new (&joins[idx - 1]) SmallBitset(j_upd);
             }
-            insist(idx == right_idx);
+            M_insist(idx == right_idx);
             /* Joined subproblems. */
             {
                 SmallBitset j = this->joins_[left_idx] | this->joins_[right_idx];
                 const SmallBitset mask_back_edges((1UL << (right_idx + 1U)) - 1UL);
                 j = j - mask_back_edges;
                 j = SmallBitset(uint64_t(j) >> 1U); // erase by right shift, all lower bits are 0
-                insist(j.empty() or *j.begin() > idx - 1,
+                M_insist(j.empty() or *j.begin() > idx - 1,
                        "joins are directed and must always point towards the subproblem of higher index");
                 new (&joins[idx - 1]) SmallBitset(j);
             }
             /* Subproblems after `right`. */
             for (++idx; idx < size(); ++idx) {
                 const SmallBitset j = this->joins_[idx];
-                insist(j.empty() or *j.begin() > idx,
+                M_insist(j.empty() or *j.begin() > idx,
                        "joins are directed and must always point towards the subproblem of higher index");
                 const SmallBitset j_upd = SmallBitset(uint64_t(j) >> 1U); // erase by right shift, all lower bits are 0
-                insist(j_upd.size() == j.size(), "must not loose a join");
-                insist(j_upd.empty() or *j_upd.begin() > idx - 1);
+                M_insist(j_upd.size() == j.size(), "must not loose a join");
+                M_insist(j_upd.empty() or *j_upd.begin() > idx - 1);
                 new (&joins[idx - 1]) SmallBitset(j_upd);
             }
 
@@ -1400,8 +1400,8 @@ struct bottomup_lookahead_cheapest
         for (auto outer_it = state.cbegin(); outer_it != state.cend(); ++outer_it) {
             const auto neighbors = M.neighbors(*outer_it);
             for (auto inner_it = std::next(outer_it); inner_it != state.cend(); ++inner_it) {
-                insist(uint64_t(*inner_it) > uint64_t(*outer_it), "subproblems must be sorted");
-                insist((*outer_it & *inner_it).empty(), "subproblems must not overlap");
+                M_insist(uint64_t(*inner_it) > uint64_t(*outer_it), "subproblems must be sorted");
+                M_insist((*outer_it & *inner_it).empty(), "subproblems must not overlap");
                 if (neighbors & *inner_it) { // inner and outer are joinable.
                     const Subproblem joined = *outer_it | *inner_it;
                     if (not PT[joined].model) {
@@ -1549,7 +1549,7 @@ struct checkpoints
 
                 worklist_.clear();
                 for (std::size_t i = 0; i != subproblems.size(); ++i) {
-                    insist(worklist_.empty());
+                    M_insist(worklist_.empty());
                     const SmallBitset I(1UL << i);
                     worklist_.emplace_back(I, I.singleton_to_lo_mask());
 
@@ -1560,7 +1560,7 @@ struct checkpoints
                         auto add_to_worklist = [&, this](const SmallBitset S, const SmallBitset X) {
                             worklist_.emplace_back(S, X);
 #ifndef NDEBUG
-                            insist(duplicate_check.insert(uint64_t(S)).second, "must not generate duplicates");
+                            M_insist(duplicate_check.insert(uint64_t(S)).second, "must not generate duplicates");
 #endif
                         };
 
@@ -1569,7 +1569,7 @@ struct checkpoints
                             Subproblem checkpoint;
                             for (auto idx : S)
                                 checkpoint |= subproblems[idx];
-                            insist(M.is_connected(checkpoint));
+                            M_insist(M.is_connected(checkpoint));
 
                             /* Calculate model, if necessary. */
                             if (not PT[checkpoint].model) [[unlikely]]
@@ -1580,8 +1580,8 @@ struct checkpoints
                                 next_checkpoint = checkpoint;
                             }
                         } else { // needs further subproblems
-                            insist(S.size() >= 1U);
-                            insist(S.size() < CHECKPOINT_DISTANCE);
+                            M_insist(S.size() >= 1U);
+                            M_insist(S.size() < CHECKPOINT_DISTANCE);
                             const SmallBitset N = Msub.neighbors(S) - X;
                             const SmallBitset Xn = X | N;
                             const unsigned K = std::min<unsigned>(CHECKPOINT_DISTANCE - S.size(), N.size());
@@ -1589,16 +1589,16 @@ struct checkpoints
                             /*----- Handle singleton subsets. -----*/
                             for (auto it = N.begin(); it != N.end(); ++it) {
                                 const SmallBitset sub = it.as_set();
-                                insist((S & sub).empty());
-                                insist(sub.is_subset(N));
+                                M_insist((S & sub).empty());
+                                M_insist(sub.is_subset(N));
                                 add_to_worklist(S | sub, Xn);
                             }
 
                             /*----- Handle remaining subsets. -----*/
                             for (unsigned k = 2; k <= K; ++k) {
                                 for (auto sub = SubsetEnumerator(N, k); sub; ++sub) {
-                                    insist((S & *sub).empty());
-                                    insist((*sub).is_subset(N));
+                                    M_insist((S & *sub).empty());
+                                    M_insist((*sub).is_subset(N));
                                     add_to_worklist(S | *sub, Xn);
                                 }
                             }
@@ -1606,7 +1606,7 @@ struct checkpoints
                     }
                 }
 
-                insist(not next_checkpoint.empty(), "if there are more subproblems than CHECKPOINT_DISTANCE, "
+                M_insist(not next_checkpoint.empty(), "if there are more subproblems than CHECKPOINT_DISTANCE, "
                                                     "we *must* find at least one checkpoint");
 
                 checkpoints.emplace_back(next_checkpoint);
@@ -1654,9 +1654,9 @@ struct checkpoints
                     else
                         subproblems_later_checkpoints.emplace_back(S);
                 }
-                insist(std::is_sorted(subproblems_current_checkpoint.begin(), subproblems_current_checkpoint.end(),
+                M_insist(std::is_sorted(subproblems_current_checkpoint.begin(), subproblems_current_checkpoint.end(),
                                       subproblem_lt));
-                insist(std::is_sorted(subproblems_later_checkpoints.begin(), subproblems_later_checkpoints.end(),
+                M_insist(std::is_sorted(subproblems_later_checkpoints.begin(), subproblems_later_checkpoints.end(),
                                       subproblem_lt));
 
                 /* The current checkpoints becomes a subproblem for reaching later checkpoints. */
@@ -1666,9 +1666,9 @@ struct checkpoints
                                                   subproblem_lt);
                 subproblems_later_checkpoints.insert(pos, checkpoint);
 
-                insist(std::is_sorted(subproblems_current_checkpoint.begin(), subproblems_current_checkpoint.end(),
+                M_insist(std::is_sorted(subproblems_current_checkpoint.begin(), subproblems_current_checkpoint.end(),
                                       subproblem_lt));
-                insist(std::is_sorted(subproblems_later_checkpoints.begin(), subproblems_later_checkpoints.end(),
+                M_insist(std::is_sorted(subproblems_later_checkpoints.begin(), subproblems_later_checkpoints.end(),
                                       subproblem_lt));
 
                 /* Construct initial state for local search to next checkpoint. */
@@ -1699,7 +1699,7 @@ struct checkpoints
         }
 
 #ifdef WITH_GREEDY_BUSHY
-        insist(h_checkpoints < h_greedy_bushy);
+        M_insist(h_checkpoints < h_greedy_bushy);
 #endif
         return h_checkpoints;
     }
@@ -1709,9 +1709,9 @@ struct checkpoints
      */
     void compute_data_model_recursive(const Subproblem S, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                                       const CardinalityEstimator &CE) {
-        insist(not PT[S].model, "we already have a data model for this subproblem");
+        M_insist(not PT[S].model, "we already have a data model for this subproblem");
         // num_calls_compute_data_model_recursive_ += 1;
-        insist(M.is_connected(S), "S must be a connected subproblem");
+        M_insist(M.is_connected(S), "S must be a connected subproblem");
 
         auto [left, right] = decompose(S, PT, M);
         if (not PT[left].model)
@@ -1724,18 +1724,18 @@ struct checkpoints
     /** Decomposes `Subproblem` `S` into two smaller, non-empty `Subproblem`s, that are connected w.r.t. `M`.
      * Try to be clever and search for a decomposition where both sides already have a data model. */
     std::pair<Subproblem, Subproblem> decompose(const Subproblem S, const PlanTable&, const AdjacencyMatrix &M) {
-        insist(S.size() >= 2);
-        insist(M.is_connected(S));
+        M_insist(S.size() >= 2);
+        M_insist(M.is_connected(S));
 
         auto it = S.begin();
         std::pair<Subproblem, Subproblem> decomposition;
         for (; it != S.end(); ++it) {
             const Subproblem left = it.as_set();
-            insist(left.size() == 1);
+            M_insist(left.size() == 1);
             const Subproblem right = S - left;
 #if 0
             if (PT[right].model) { // we already have a data model for right (and left), so return immediately
-                insist(M.is_connected(right));
+                M_insist(M.is_connected(right));
                 return {left, right};
             }
             if (not M.is_connected(right)) continue;
@@ -1745,11 +1745,11 @@ struct checkpoints
                 return {left, right};
 #endif
         }
-        unreachable("must have found a valid decomposition");
-        insist(decomposition.first.size() == 1);
-        insist(M.is_connected(decomposition.second));
-        insist(M.is_connected(decomposition.first, decomposition.second));
-        insist((decomposition.first & decomposition.second).empty());
+        M_unreachable("must have found a valid decomposition");
+        M_insist(decomposition.first.size() == 1);
+        M_insist(M.is_connected(decomposition.second));
+        M_insist(M.is_connected(decomposition.first, decomposition.second));
+        M_insist((decomposition.first & decomposition.second).empty());
         return decomposition;
     }
 };
@@ -1876,9 +1876,9 @@ void AIPlanning::operator()(const QueryGraph &G, const CostFunction &CF, PlanTab
 #endif
 }
 
-#define DB_PLAN_ENUMERATOR(NAME, _) \
+#define M_PLAN_ENUMERATOR(NAME, _) \
     std::unique_ptr<PlanEnumerator> PlanEnumerator::Create ## NAME() { \
         return std::make_unique<NAME>(); \
     }
 #include "mutable/tables/PlanEnumerator.tbl"
-#undef DB_PLAN_ENUMERATOR
+#undef M_PLAN_ENUMERATOR

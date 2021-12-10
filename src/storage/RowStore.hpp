@@ -31,7 +31,7 @@ struct RowStore : Store
     virtual std::size_t num_rows() const override { return num_rows_; }
 
     int offset(uint32_t idx) const {
-        insist(idx <= table().size(), "index out of range");
+        M_insist(idx <= table().size(), "index out of range");
         return offsets_[idx];
     }
     int offset(const Attribute &attr) const { return offset(attr.id); }
@@ -46,13 +46,13 @@ struct RowStore : Store
     }
 
     void drop() override {
-        insist(num_rows_);
+        M_insist(num_rows_);
         --num_rows_;
     }
 
     /** Returns the memory of the store. */
     const memory::Memory & memory() const { return data_; }
-    const memory::Memory & memory(std::size_t idx) const override { insist(idx == 0); return data_; }
+    const memory::Memory & memory(std::size_t idx) const override { M_insist(idx == 0); return data_; }
     /** Sets the memory of the store to `memory`. */
     void memory(memory::Memory memory) { data_ = std::move(memory); }
 

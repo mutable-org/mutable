@@ -27,16 +27,16 @@ std::unique_ptr<Stmt> m::statement_from_string(Diagnostic &diag, const std::stri
     std::istringstream in(str);
     Lexer lexer(diag, C.get_pool(), "-", in);
     Parser parser(lexer);
-    auto stmt = TIME_EXPR(std::unique_ptr<Stmt>(parser.parse()), "Parse the statement", C.timer());
+    auto stmt = M_TIME_EXPR(std::unique_ptr<Stmt>(parser.parse()), "Parse the statement", C.timer());
     if (diag.num_errors() != 0)
         throw frontend_exception("syntactic error in statement");
-    insist(diag.num_errors() == 0);
+    M_insist(diag.num_errors() == 0);
 
     Sema sema(diag);
-    TIME_EXPR(sema(*stmt), "Semantic analysis", C.timer());
+    M_TIME_EXPR(sema(*stmt), "Semantic analysis", C.timer());
     if (diag.num_errors() != 0)
         throw frontend_exception("semantic error in statement");
-    insist(diag.num_errors() == 0);
+    M_insist(diag.num_errors() == 0);
 
     return stmt;
 }
@@ -47,17 +47,17 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
     Catalog &C = Catalog::Get();
 
     if (is<const SelectStmt>(stmt)) {
-        auto query_graph = TIME_EXPR(QueryGraph::Build(stmt), "Construct the query graph", C.timer());
+        auto query_graph = M_TIME_EXPR(QueryGraph::Build(stmt), "Construct the query graph", C.timer());
 
         std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::CreateDPccp();
         Optimizer Opt(*pe, C.cost_function());
-        auto optree = TIME_EXPR(Opt(*query_graph), "Compute the query plan", C.timer());
+        auto optree = M_TIME_EXPR(Opt(*query_graph), "Compute the query plan", C.timer());
 
         PrintOperator print(std::cout);
         print.add_child(optree.release());
 
         auto &backend = C.backend();
-        TIME_EXPR(backend.execute(print), "Execute the query", C.timer());
+        M_TIME_EXPR(backend.execute(print), "Execute the query", C.timer());
     } else if (auto I = cast<const InsertStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
         auto &T = DB.get_table(I->table_name.text);
@@ -67,7 +67,7 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
         Tuple tup(S);
 
         /* Write all tuples to the store. */
-        TIME_THIS("Execute the query", C.timer());
+        M_TIME_THIS("Execute the query", C.timer());
         for (auto &t : I->tuples) {
             StackMachine get_tuple(Schema{});
             for (std::size_t i = 0; i != t.size(); ++i) {
@@ -118,7 +118,7 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
                 diag.err() << ": " << strerror(errsv);
             diag.err() << std::endl;
         } else {
-            TIME_THIS("Read DSV file", C.timer());
+            M_TIME_THIS("Read DSV file", C.timer());
             R(file, filename.c_str());
         }
 
@@ -142,7 +142,7 @@ void m::execute_query(Diagnostic&, const SelectStmt &stmt, std::unique_ptr<Consu
     consumer->add_child(optree.release());
 
     auto &backend = C.backend();
-    TIME_EXPR(backend.execute(*consumer), "Execute the query", C.timer());
+    M_TIME_EXPR(backend.execute(*consumer), "Execute the query", C.timer());
 }
 
 void m::load_from_CSV(Diagnostic &diag, Table &table, const std::filesystem::path &path, std::size_t num_rows,

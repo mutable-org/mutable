@@ -18,8 +18,8 @@ std::vector<T> generate_uniform_distinct_numbers(const T min, const T max, const
                                                  Generator &&g = Generator())
 {
     static_assert(std::is_arithmetic_v<T>, "T must be an arithmetic type");
-    insist(min <= max);
-    insist(is_range_wide_enough<T>(min, max, count), "range [min, max] does not have count distinct values");
+    M_insist(min <= max);
+    M_insist(is_range_wide_enough<T>(min, max, count), "range [min, max] does not have count distinct values");
 
     if (count == 1) return std::vector<T>(1, min);
     std::vector<T> values = gs::LinearSpace<T>(min, max, count-1).sequence();

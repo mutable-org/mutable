@@ -20,7 +20,7 @@ namespace {
 /** Create a unique name from `name` by appending a unique identifier.  If `name` is `nullptr`, use `fallback` instead.
  */
 inline const char * mkname(const char *name, const char *fallback) {
-    insist(fallback, "fallback name must not be nullptr");
+    M_insist(fallback, "fallback name must not be nullptr");
     static uint32_t id = 0;
     std::ostringstream oss;
     if (name) oss << name;
@@ -63,7 +63,7 @@ inline BinaryenType get_binaryen_type(const Type *ty)
         [](const CharacterSequence&) { return BinaryenTypeInt32(); },
         [](const Date&) { return BinaryenTypeInt32(); },
         [](const DateTime&) { return BinaryenTypeInt64(); },
-        [](auto&&) -> BinaryenType { unreachable("unsupported type"); }
+        [](auto&&) -> BinaryenType { M_unreachable("unsupported type"); }
     }, *ty);
 }
 
@@ -80,24 +80,24 @@ struct WasmTemporary
 
     public:
     WasmTemporary() { }
-    WasmTemporary(BinaryenExpressionRef ref) : ref_(notnull(ref)) { }
+    WasmTemporary(BinaryenExpressionRef ref) : ref_(M_notnull(ref)) { }
     ~WasmTemporary() { /* nothing to be done */ }
 
     WasmTemporary(WasmTemporary &&other) : WasmTemporary() { swap(*this, other); }
 
     WasmTemporary & operator=(WasmTemporary other) {
-        insist(other.ref_, "cannot assign nullptr");
+        M_insist(other.ref_, "cannot assign nullptr");
         swap(*this, other);
         return *this;
     }
 
-    operator BinaryenExpressionRef() { insist(ref_); auto tmp = ref_; ref_ = nullptr; return tmp; }
+    operator BinaryenExpressionRef() { M_insist(ref_); auto tmp = ref_; ref_ = nullptr; return tmp; }
 
     /** Returns true iff there is a `BinaryenExpressionRef` attached to `this`. */
     bool is() const { return ref_ != nullptr; }
 
     /** Returns the type of the attached `BinaryenExpressionRef`. */
-    BinaryenType type() const { insist(ref_); return BinaryenExpressionGetType(ref_); }
+    BinaryenType type() const { M_insist(ref_); return BinaryenExpressionGetType(ref_); }
 
     /** Returns a fresh `WasmTemporary` with a *deep copy* of the attached `BinaryenExpressionRef`. */
     WasmTemporary clone(WasmModuleCG &module) const;
@@ -175,7 +175,7 @@ inline WasmTemporary convert(BinaryenModuleRef module, WasmTemporary expr, const
                 return CONVERT(ConvertSInt32ToFloat32); // i32 to f32
         }
         if (O->is_decimal()) {
-            unreachable("not implemented");
+            M_unreachable("not implemented");
         }
     }
 
@@ -224,7 +224,7 @@ inline WasmTemporary convert(BinaryenModuleRef module, WasmTemporary expr, const
                 );
             }
 
-            insist(T->scale == O->scale);
+            M_insist(T->scale == O->scale);
             return expr;
         }
 
@@ -265,7 +265,7 @@ inline WasmTemporary convert(BinaryenModuleRef module, WasmTemporary expr, const
         }
     }
 
-    unreachable("unsupported conversion");
+    M_unreachable("unsupported conversion");
 #undef CONVERT
 };
 
@@ -284,7 +284,7 @@ inline WasmTemporary reinterpret(BinaryenModuleRef module, WasmTemporary expr, c
             return CONVERT(ReinterpretFloat64, expr); // f64 to i64
     }
 
-    unreachable("unsupported reinterpretation");
+    M_unreachable("unsupported reinterpretation");
 #undef CONVERT
 }
 
@@ -350,7 +350,7 @@ struct FunctionBuilder
     FunctionBuilder(WasmModuleCG &module, const char *name,
                     BinaryenType result_type, std::vector<BinaryenType> parameter_types)
         : module_(&module)
-        , name_(strdup(notnull(name)))
+        , name_(strdup(M_notnull(name)))
         , result_type_(result_type)
         , parameter_type_(BinaryenTypeCreate(&parameter_types[0], parameter_types.size()))
         , block_(module, (std::string(name) + ".body").c_str())
@@ -399,19 +399,19 @@ struct WasmExprCompiler : ConstASTExprVisitor
     /** Sets the current `FunctionBuilder`. */
     void fn(FunctionBuilder &fn) const { fn_ = &fn; }
     /** Returns the current `FunctionBuilder`. */
-    FunctionBuilder & fn() const { return *notnull(fn_); }
+    FunctionBuilder & fn() const { return *M_notnull(fn_); }
     /** Sets the current `BlockBuilder`. */
     void block(BlockBuilder &block) const { block_ = &block; }
     /** Retunrs the target `BlockBuilder` for auxiliary code. */
-    BlockBuilder & block() const { return *notnull(block_); }
+    BlockBuilder & block() const { return *M_notnull(block_); }
     /** Returns the current `WasmModuleCG`. */
     WasmModuleCG & module() const { return fn().module(); }
 
-    WasmTemporary get() const { insist(value_.is()); return std::move(value_); }
+    WasmTemporary get() const { M_insist(value_.is()); return std::move(value_); }
     void set(WasmTemporary value) { value_ = std::move(value); }
 
     using ConstASTExprVisitor::operator();
-    void operator()(const ErrorExpr&) override { unreachable("no errors at this stage"); }
+    void operator()(const ErrorExpr&) override { M_unreachable("no errors at this stage"); }
     void operator()(const Constant &op) override;
     void operator()(const UnaryExpr &op) override;
     void operator()(const BinaryExpr &op) override;
@@ -451,7 +451,7 @@ struct WasmEnvironment : WasmExprCompiler
     /** Adds a mapping from `id` to `val` to this `WasmEnvironment`. */
     void add(Schema::Identifier id, WasmTemporary val) {
         auto res = values_.emplace(id, std::move(val));
-        insist(res.second, "duplicate ID");
+        M_insist(res.second, "duplicate ID");
     }
 
     /** Returns a `WasmTemporary` that evaluates to `true` iff the value of `id` is `NULL`. */
@@ -537,7 +537,7 @@ struct WasmStructCGContext : WasmExprCompiler
     /** Adds an entry for field `id` at `index` of the `WasmStruct` `struc`. */
     void add(Schema::Identifier id, WasmStruct::index_type index) {
         auto res = indices_.emplace(id, index);
-        insist(res.second, "duplicate ID");
+        M_insist(res.second, "duplicate ID");
     }
 
     WasmStruct::index_type index(Schema::Identifier id) const { return indices_.at(id); }
@@ -781,7 +781,7 @@ BinaryenLiteral wasm_constant(const T &val, const Type &ty)
                     break;
 
                 case Numeric::N_Decimal:
-                    unreachable("not supported");
+                    M_unreachable("not supported");
 
                 case Numeric::N_Float:
                     if (n.size() == 32)
@@ -791,7 +791,7 @@ BinaryenLiteral wasm_constant(const T &val, const Type &ty)
                     break;
             }
         },
-        [](auto&) { unreachable("unsupported type"); }
+        [](auto&) { M_unreachable("unsupported type"); }
     }, ty);
     return literal;
 }
@@ -840,7 +840,7 @@ struct WasmModuleCG
 
     BinaryenIndex get_literal_offset(const char *literal) {
         auto it = literal_offsets_.find(literal);
-        insist(it != literal_offsets_.end(), "unknown literal");
+        M_insist(it != literal_offsets_.end(), "unknown literal");
         return it->second;
     }
 
@@ -1019,7 +1019,7 @@ struct WasmStoreCG
 /*----- WasmTemporary ------------------------------------------------------------------------------------------------*/
 inline WasmTemporary WasmTemporary::clone(WasmModuleCG &module) const
 {
-    insist(ref_);
+    M_insist(ref_);
     return BinaryenExpressionCopy(ref_, module);
 }
 

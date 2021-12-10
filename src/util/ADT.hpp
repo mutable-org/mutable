@@ -65,8 +65,8 @@ struct GospersHack
     public:
     /** Create an instance of `GospersHack` that enumerates all subsets of size `k` of a set of `n` elements. */
     static GospersHack enumerate_all(uint64_t k, uint64_t n) {
-        insist(k <= n, "invalid enumeration");
-        insist(n < 64, "n exceeds range");
+        M_insist(k <= n, "invalid enumeration");
+        M_insist(n < 64, "n exceeds range");
         GospersHack GH;
         GH.set_ = SmallBitset((1UL << k) - 1);
         GH.limit_ = 1UL << n;
@@ -75,11 +75,11 @@ struct GospersHack
     /** Create an instance of `GospersHack` that enumerates all remaining subsets of a set of `n` elements, starting at
      * subset `set`. */
     static GospersHack enumerate_from(SmallBitset set, uint64_t n) {
-        insist(n < 64, "n exceeds range");
+        M_insist(n < 64, "n exceeds range");
         GospersHack GH;
         GH.set_ = set;
         GH.limit_ = 1UL << n;
-        insist(uint64_t(set) <= GH.limit_, "set exceeds the limit");
+        M_insist(uint64_t(set) <= GH.limit_, "set exceeds the limit");
         return GH;
     }
 
@@ -115,7 +115,7 @@ struct SubsetEnumerator
         : set_(set)
         , GH_(GospersHack::enumerate_all(size, set.size()))
     {
-        insist(size <= set.size());
+        M_insist(size <= set.size());
     }
 
     SubsetEnumerator & operator++() { ++GH_; return *this; }

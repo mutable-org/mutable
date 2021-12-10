@@ -94,7 +94,7 @@ void ASTPrinter::operator()(Const<FromClause> &c)
             (*this)(**stmt);
             out << ')';
         } else {
-            unreachable("illegal variant");
+            M_unreachable("illegal variant");
         }
         if (it->alias) out << " AS " << it->alias.text;
     }

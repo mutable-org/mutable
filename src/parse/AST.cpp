@@ -153,7 +153,7 @@ bool BinaryExpr::operator==(const Expr &o) const
     return false;
 }
 
-bool QueryExpr::operator==(const Expr&) const { unreachable("not implemented"); }
+bool QueryExpr::operator==(const Expr&) const { M_unreachable("not implemented"); }
 
 
 /*======================================================================================================================
@@ -172,7 +172,7 @@ struct GetRequired : ConstASTExprVisitor
 
     /* Expr */
     void operator()(Const<Expr> &e) { e.accept(*this); }
-    void operator()(Const<ErrorExpr>&) { unreachable("graph must not contain errors"); }
+    void operator()(Const<ErrorExpr>&) { M_unreachable("graph must not contain errors"); }
 
     void operator()(Const<Designator> &e) {
         Schema::Identifier id(e.table_name.text, e.attr_name.text);

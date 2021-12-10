@@ -50,7 +50,7 @@ struct Expr
     virtual ~Expr() { }
 
     /** Returns the `Type` of this `Expr`.  Assumes that the `Expr` has been assigned a `Type` by the `Sema`. */
-    virtual const Type * type() const { return notnull(type_); }
+    virtual const Type * type() const { return M_notnull(type_); }
     /** Returns true iff this `Expr` has been assigned a `Type`, most likely by `Sema`. */
     bool has_type() const { return type_ != nullptr; }
 
@@ -146,7 +146,7 @@ struct Designator : Expr
 
     bool has_table_name() const { return table_name.text != nullptr; }
     const char *get_table_name() const {
-        insist(table_name.text != nullptr,
+        M_insist(table_name.text != nullptr,
                "if the table name was not explicitly provided, semantic analysis must deduce it first");
         return table_name.text;
     }
@@ -227,7 +227,7 @@ struct UnaryExpr : Expr
 {
     Expr *expr;
 
-    UnaryExpr(Token op, Expr *expr) : Expr(op), expr(notnull(expr)) {}
+    UnaryExpr(Token op, Expr *expr) : Expr(op), expr(M_notnull(expr)) {}
     ~UnaryExpr() { delete expr; }
 
     bool is_constant() const override { return expr->is_constant(); }
@@ -246,7 +246,7 @@ struct BinaryExpr : Expr
     Expr *lhs;
     Expr *rhs;
 
-    BinaryExpr(Token op, Expr *lhs, Expr *rhs) : Expr(op), lhs(notnull(lhs)), rhs(notnull(rhs)) {}
+    BinaryExpr(Token op, Expr *lhs, Expr *rhs) : Expr(op), lhs(M_notnull(lhs)), rhs(M_notnull(rhs)) {}
     ~BinaryExpr() {
         delete lhs;
         delete rhs;
@@ -271,7 +271,7 @@ struct QueryExpr : Expr
     const char *alias_; ///> the alias that is used for this query expression
 
     public:
-    QueryExpr(Token op, Stmt *query) : Expr(op), query(notnull(query)), alias_(make_unique_alias()) { }
+    QueryExpr(Token op, Stmt *query) : Expr(op), query(M_notnull(query)), alias_(make_unique_alias()) { }
     ~QueryExpr();
 
     bool is_constant() const override;
@@ -373,7 +373,7 @@ struct FromClause : Clause
         from_type(Token name, Token alias) : source(name), alias(alias) { }
         from_type(Stmt *S, Token alias) : source(S), alias(alias) { }
 
-        const Table & table() const { return *notnull(table_); }
+        const Table & table() const { return *M_notnull(table_); }
         bool has_table() const { return table_ != nullptr; }
     };
 
@@ -390,7 +390,7 @@ struct WhereClause : Clause
 {
     Expr *where;
 
-    WhereClause(Token tok, Expr *where) : Clause(tok), where(notnull(where)) { }
+    WhereClause(Token tok, Expr *where) : Clause(tok), where(M_notnull(where)) { }
     ~WhereClause();
 
     void accept(ASTClauseVisitor &v) override;
@@ -502,7 +502,7 @@ struct CheckConditionConstraint : Constraint
 {
     Expr *cond;
 
-    CheckConditionConstraint(Token tok, Expr *cond) : Constraint(tok), cond(notnull(cond)) { }
+    CheckConditionConstraint(Token tok, Expr *cond) : Constraint(tok), cond(M_notnull(cond)) { }
 
     ~CheckConditionConstraint() { delete cond; }
 
@@ -660,7 +660,7 @@ struct SelectStmt : Stmt
                Clause *having,
                Clause *order_by,
                Clause *limit)
-            : select(notnull(select))
+            : select(M_notnull(select))
             , from(from)
             , where(where)
             , group_by(group_by)

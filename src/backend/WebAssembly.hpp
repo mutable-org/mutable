@@ -77,7 +77,7 @@ struct WasmPlatform
     static WasmContext & Create_Wasm_Context(std::size_t size) {
         auto wasm_context = std::make_unique<WasmContext>(wasm_counter_, size);
         auto res = contexts_.emplace(wasm_counter_, std::move(wasm_context));
-        insist(res.second, "WasmContext with that ID already exists");
+        M_insist(res.second, "WasmContext with that ID already exists");
         ++wasm_counter_;
         return *res.first->second;
     }
@@ -86,7 +86,7 @@ struct WasmPlatform
     static void Dispose_Wasm_Context(uint32_t id) {
         auto res = contexts_.erase(id);
         (void) res;
-        insist(res == 1, "There is no context with the given ID to erase");
+        M_insist(res == 1, "There is no context with the given ID to erase");
     }
 
     static void Dispose_Wasm_Context(const WasmContext &ctx) { Dispose_Wasm_Context(ctx.id); }
@@ -95,7 +95,7 @@ struct WasmPlatform
     /** Returns a reference to the `WasmContext` with ID `id`. */
     static WasmContext & Get_Wasm_Context_By_ID(uint32_t id) {
         auto it = contexts_.find(id);
-        insist(it != contexts_.end(), "There is no context with the given ID");
+        M_insist(it != contexts_.end(), "There is no context with the given ID");
         return *it->second;
     }
 

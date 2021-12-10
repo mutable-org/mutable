@@ -75,7 +75,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
             if (c == delimiter)
                 step(); // discard delimiter
         }
-        insist(c == EOF or c == '\n');
+        M_insist(c == EOF or c == '\n');
         step();
     } else {
         for (auto &attr : table)
@@ -126,7 +126,7 @@ end_of_row:
             Tuple *args[] = { &tup };
             (*W)(args); // write tuple to store
         }
-        insist(c == EOF or c == '\n');
+        M_insist(c == EOF or c == '\n');
         step();
     }
 
@@ -312,9 +312,9 @@ void DSVReader::operator()(Const<Numeric> &ty)
     }
 }
 
-void DSVReader::operator()(Const<ErrorType>&) { unreachable("invalid type"); }
-void DSVReader::operator()(Const<NoneType>&) { unreachable("invalid type"); }
-void DSVReader::operator()(Const<FnType>&) { unreachable("invalid type"); }
+void DSVReader::operator()(Const<ErrorType>&) { M_unreachable("invalid type"); }
+void DSVReader::operator()(Const<NoneType>&) { M_unreachable("invalid type"); }
+void DSVReader::operator()(Const<FnType>&) { M_unreachable("invalid type"); }
 
 int64_t DSVReader::read_int()
 {

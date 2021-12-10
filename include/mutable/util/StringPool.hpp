@@ -25,7 +25,7 @@ struct StringPool
             if (not copy)
                 throw runtime_error("strdup(str) failed and returned NULL");
             it = table_.emplace_hint(it, copy);
-            insist(streq(*it, str), "the pooled string differs from the original");
+            M_insist(streq(*it, str), "the pooled string differs from the original");
         }
         return *it;
     }

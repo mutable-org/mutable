@@ -46,7 +46,7 @@ struct Options
 
     bool train_cost_models;
 
-#if WITH_V8
+#if M_WITH_V8
     /* Specify the port for debugging via ChromeDevTools (CDT). */
     int16_t cdt_port = -1;
     int wasm_optimization_level = 2;

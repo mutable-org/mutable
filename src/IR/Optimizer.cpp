@@ -42,11 +42,11 @@ struct WeightFilterClauses : ConstASTExprVisitor
             clause_costs_.push_back(weight_);
         }
     }
-    unsigned operator[](std::size_t idx) const { insist(idx < clause_costs_.size()); return clause_costs_[idx]; }
+    unsigned operator[](std::size_t idx) const { M_insist(idx < clause_costs_.size()); return clause_costs_[idx]; }
 
     private:
     using ConstASTExprVisitor::operator();
-    void operator()(const ErrorExpr&) { unreachable("no errors at this stage"); }
+    void operator()(const ErrorExpr&) { M_unreachable("no errors at this stage"); }
 
     void operator()(const Designator &e) {
         if (auto cs = cast<const CharacterSequence>(e.type()))
@@ -116,7 +116,7 @@ std::unique_ptr<FilterOperator> optimize_filter(std::unique_ptr<FilterOperator> 
             w = wc.second;
         }
     }
-    insist(not cnf.empty());
+    M_insist(not cnf.empty());
     filter->filter(std::move(cnf));
 
     return filter;
@@ -276,7 +276,7 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
 void Optimizer::optimize_locally(const QueryGraph &G, PlanTable &PT) const
 {
     Catalog &C = Catalog::Get();
-    TIME_EXPR(plan_enumerator()(G, cost_function(), PT), "Plan enumeration", C.timer());
+    M_TIME_EXPR(plan_enumerator()(G, cost_function(), PT), "Plan enumeration", C.timer());
 #ifdef NDEBUG
     std::cout << "Calculated cost: " << PT.get_final().cost << '\n';
 #endif
@@ -296,7 +296,7 @@ Optimizer::construct_plan(const QueryGraph &G, const PlanTable &plan_table, Prod
         auto construct_plan_impl = [&](Subproblem s, auto &construct_plan_rec) -> Producer* {
             auto subproblems = plan_table[s].get_subproblems();
             if (subproblems.empty()) {
-                insist(s.size() == 1);
+                M_insist(s.size() == 1);
                 return source_plans[*s.begin()];
             } else {
                 /* Compute plan for each sub problem.  Must happen *before* calculating the join predicate. */
@@ -364,7 +364,7 @@ bool Optimizer::projection_needed(const std::vector<projection_type> &projection
 
         private:
         using ConstASTExprVisitor::operator();
-        void operator()(Const<ErrorExpr>&) override { unreachable("order by must not contain errors"); }
+        void operator()(Const<ErrorExpr>&) override { M_unreachable("order by must not contain errors"); }
         void operator()(Const<Designator> &e) override {
             if (not e.table_name.text) {
                 auto target = e.target();
@@ -373,10 +373,10 @@ bool Optimizer::projection_needed(const std::vector<projection_type> &projection
             }
         }
         void operator()(Const<Constant>&) override { /* nothing to be done */ }
-        void operator()(Const<FnApplicationExpr>&) override { unreachable("unexpected FnApplicationExpr"); }
+        void operator()(Const<FnApplicationExpr>&) override { M_unreachable("unexpected FnApplicationExpr"); }
         void operator()(Const<UnaryExpr> &e) override { (*this)(*e.expr); }
         void operator()(Const<BinaryExpr> &e) override { (*this)(*e.lhs); (*this)(*e.rhs); }
-        void operator()(Const<QueryExpr>&) override { unreachable("unexpected QueryExpr"); }
+        void operator()(Const<QueryExpr>&) override { M_unreachable("unexpected QueryExpr"); }
     };
 
     /* Compute all expression targets of designators without table name in `order_by`. */

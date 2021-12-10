@@ -26,9 +26,9 @@ struct ConstStoreVisitor;
 struct Store
 {
     enum kind_t {
-#define DB_STORE(NAME, _) S_ ## NAME,
+#define M_STORE(NAME, _) S_ ## NAME,
 #include "mutable/tables/Store.tbl"
-#undef DB_STORE
+#undef M_STORE
     };
 
     static const std::unordered_map<std::string, kind_t> STR_TO_KIND;
@@ -41,10 +41,10 @@ struct Store
         return Create(STR_TO_KIND.at(kind), table);
     }
 
-#define DB_STORE(NAME, _) \
+#define M_STORE(NAME, _) \
     static std::unique_ptr<Store> Create ## NAME(const Table &table);
 #include "mutable/tables/Store.tbl"
-#undef DB_STORE
+#undef M_STORE
 
     private:
     const Table &table_; ///< the table defining this store's schema

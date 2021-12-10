@@ -75,13 +75,13 @@ class ArgParser
 
         if (shortName) {
             auto it = key_map.emplace(shortName, opt);
-            insist(it.second, "name already in list");
+            M_insist(it.second, "name already in list");
             short_len_ = std::max(short_len_, std::string(shortName).length());
         }
 
         if (longName) {
             auto it = key_map.emplace(longName, opt);
-            insist(it.second, "name already in list");
+            M_insist(it.second, "name already in list");
             long_len_ = std::max(long_len_, std::string(longName).length());
         }
     }

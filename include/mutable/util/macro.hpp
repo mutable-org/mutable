@@ -10,62 +10,62 @@
 #include <initializer_list>
 #include <iostream>
 
-namespace {
+namespace m {
 
 /*===== Macro utilities ==============================================================================================*/
-#define ID(X) X
-#define CAT(X, Y) _CAT(X, Y)
-#define _CAT(X, Y) X ## Y
-#define EMPTY()
-#define DEFER1(X) X EMPTY()
-#define COMMA(X) X,
-#define UNPACK(...) __VA_ARGS__
+#define M_ID(X) X
+#define M_CAT(X, Y) M_CAT_(X, Y)
+#define M_CAT_(X, Y) X ## Y
+#define M_EMPTY()
+#define M_DEFER1(X) X M_EMPTY()
+#define M_COMMA(X) X,
+#define M_UNPACK(...) __VA_ARGS__
 
-#define EVAL(...)  EVAL1(EVAL1(EVAL1(__VA_ARGS__)))
-#define EVAL1(...) EVAL2(EVAL2(EVAL2(__VA_ARGS__)))
-#define EVAL2(...) EVAL3(EVAL3(EVAL3(__VA_ARGS__)))
-#define EVAL3(...) EVAL4(EVAL4(EVAL4(__VA_ARGS__)))
-#define EVAL4(...) EVAL5(EVAL5(EVAL5(__VA_ARGS__)))
-#define EVAL5(...) __VA_ARGS__
-
+#define M_EVAL(...)  M_EVAL1(M_EVAL1(M_EVAL1(__VA_ARGS__)))
+#define M_EVAL1(...) M_EVAL2(M_EVAL2(M_EVAL2(__VA_ARGS__)))
+#define M_EVAL2(...) M_EVAL3(M_EVAL3(M_EVAL3(__VA_ARGS__)))
+#define M_EVAL3(...) M_EVAL4(M_EVAL4(M_EVAL4(__VA_ARGS__)))
+#define M_EVAL4(...) M_EVAL5(M_EVAL5(M_EVAL5(__VA_ARGS__)))
+#define M_EVAL5(...) __VA_ARGS__
 
 /*===== Stringify (useful when #X is too eager) ======================================================================*/
-#define STR_(X) #X
-#define STR(X) STR_(X)
-#define STRCOMMA(X) STR(X),
+#define M_STR_(X) #X
+#define M_STR(X) M_STR_(X)
+#define M_STRCOMMA(X) M_STR(X),
 
-#define PASTE_(X, Y) X ## Y
-#define PASTE(X, Y) PASTE_(X, Y)
+#define M_PASTE_(X, Y) X ## Y
+#define M_PASTE(X, Y) M_PASTE_(X, Y)
 
-/*===== First element of list. =======================================================================================*/
-#define FIRST(X, ...) X
-#define TAIL(X, ...) __VA_ARGS__
+/*===== Head and tail of list ========================================================================================*/
+#define M_HEAD(X, ...) X
+#define M_TAIL(X, ...) __VA_ARGS__
 
-#define COUNT(LIST) (std::initializer_list<const char*>{ LIST(STRCOMMA) }.size())
+/*===== Count elements in a list macro ===============================================================================*/
+#define M_COUNT(LIST) (std::initializer_list<const char*>{ LIST(M_STRCOMMA) }.size())
 
 /*===== Define enum ==================================================================================================*/
-#define DECLARE_ENUM(LIST) \
+#define M_DECLARE_ENUM(LIST) \
     enum LIST { \
-        LIST(COMMA) \
-        LIST##_MAX = COUNT(LIST) - 1U \
+        LIST(M_COMMA) \
+        LIST##_MAX = M_COUNT(LIST) - 1U /* MAX takes the same value as the last *real* enum value */ \
     }
-#define ENUM_TO_STR(LIST) LIST(STRCOMMA)
-#define DECL(NAME, TYPE) TYPE NAME;
+#define M_ENUM_TO_STR(LIST) LIST(M_STRCOMMA)
+#define M_DECL(NAME, TYPE) TYPE NAME;
 
 /*===== Number of elements in an array ===============================================================================*/
-#define ARR_SIZE(ARR) (sizeof(ARR) / sizeof(*(ARR)))
+#define M_ARR_SIZE(ARR) (sizeof(ARR) / sizeof(*(ARR)))
 
 /*===== DEBUG(MSG): Print a message in debug build with location information. ========================================*/
 #ifndef NDEBUG
-#define DEBUG(MSG) \
+#define M_DEBUG(MSG) \
     std::cout.flush(); \
     std::cerr << __FILE__ << ':' << __LINE__ << ": " << __FUNCTION__ << ' ' << MSG << std::endl
 #else
-#define DEBUG
+#define M_DEBUG
 #endif
 
 /*======================================================================================================================
- * insist(COND [, MSG])
+ * M_insist(COND [, MSG])
  *
  * Similarly to `assert()`, checks a condition in debug build and aborts if it evaluates to `false`.  Prints location
  * information.  Optionally, a message can be provided to describe the condition.
@@ -85,20 +85,20 @@ inline void _insist(const bool cond, const char *filename, const unsigned line, 
     abort();
     __builtin_unreachable();
 }
-#define _INSIST2(COND, MSG) _insist((COND), __FILE__, __LINE__, #COND, MSG)
-#define _INSIST1(COND) _INSIST2(COND, nullptr)
+#define M_INSIST2_(COND, MSG) ::m::_insist((COND), __FILE__, __LINE__, #COND, MSG)
+#define M_INSIST1_(COND) M_INSIST2_(COND, nullptr)
 
 #else
-#define _INSIST2(COND, MSG) while (0) { ((void) (COND), (void) (MSG)); }
-#define _INSIST1(COND) while (0) { ((void) (COND)); }
+#define M_INSIST2_(COND, MSG) while (0) { ((void) (COND), (void) (MSG)); }
+#define M_INSIST1_(COND) while (0) { ((void) (COND)); }
 
 #endif
 
-#define _GET_INSIST(_1, _2, NAME, ...) NAME
-#define insist(...) _GET_INSIST(__VA_ARGS__, _INSIST2, _INSIST1, XXX)(__VA_ARGS__)
+#define M_GET_INSIST_(_1, _2, NAME, ...) NAME
+#define M_insist(...) M_GET_INSIST_(__VA_ARGS__, M_INSIST2_, M_INSIST1_, XXX)(__VA_ARGS__)
 
 /*======================================================================================================================
- * unreachable(MSG)
+ * M_unreachable(MSG)
  *
  * Identifies unreachable code.  When executed in debug build, prints a error message and aborts execution.  In release
  * build, hints to the compiler that this code is unreachable.
@@ -112,15 +112,15 @@ inline void _insist(const bool cond, const char *filename, const unsigned line, 
     abort();
     __builtin_unreachable();
 }
-#define unreachable(MSG) _abort(__FILE__, __LINE__, (MSG))
+#define M_unreachable(MSG) m::_abort(__FILE__, __LINE__, (MSG))
 
 #else
-#define unreachable(MSG) __builtin_unreachable()
+#define M_unreachable(MSG) __builtin_unreachable()
 
 #endif
 
 /*======================================================================================================================
- * notnull(ARG)
+ * M_notnull(ARG)
  *
  * In debug build, checks whether ARG is NULL.  If this is the case, prints an error message and aborts execution.
  * Otherwise, the original value of ARG is returned.  In release build, evaluates to ARG.
@@ -137,19 +137,13 @@ T * _notnull(T *arg, const char *filename, const unsigned line, const char *args
     }
     return arg;
 }
-#define notnull(ARG) _notnull((ARG), __FILE__, __LINE__, #ARG)
+#define M_notnull(ARG) m::_notnull((ARG), __FILE__, __LINE__, #ARG)
 
 #else
-#define notnull(ARG) (ARG)
+#define M_notnull(ARG) (ARG)
 
 #endif
 
-#define DISCARD (void)
-
-/*======================================================================================================================
- * Set branch likeliness
- *====================================================================================================================*/
-#define likely(x)   __builtin_expect((x),1)
-#define unlikely(x) __builtin_expect((x),0)
+#define M_DISCARD (void)
 
 }

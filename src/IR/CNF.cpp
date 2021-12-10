@@ -231,7 +231,7 @@ void CNFGenerator::operator()(Const<BinaryExpr> &e)
             else
                 result_ = equiv;
         } else {
-            unreachable("unsupported boolean expression");
+            M_unreachable("unsupported boolean expression");
         }
     } else {
         /* This expression is a literal. */

@@ -19,9 +19,9 @@ struct PlanEnumerator
     using Subproblem = QueryGraph::Subproblem;
 
     enum kind_t {
-#define DB_PLAN_ENUMERATOR(NAME, _) PE_ ## NAME,
+#define M_PLAN_ENUMERATOR(NAME, _) PE_ ## NAME,
 #include "mutable/tables/PlanEnumerator.tbl"
-#undef DB_PLAN_ENUMERATOR
+#undef M_PLAN_ENUMERATOR
     };
 
     static const std::unordered_map<std::string, kind_t> STR_TO_KIND;
@@ -33,10 +33,10 @@ struct PlanEnumerator
     /** Create a `PlanEnumerator` instance given the name of a plan enumerator. */
     static std::unique_ptr<PlanEnumerator> Create(const char *kind) { return Create(STR_TO_KIND.at(kind)); }
 
-#define DB_PLAN_ENUMERATOR(NAME, _) \
+#define M_PLAN_ENUMERATOR(NAME, _) \
     static std::unique_ptr<PlanEnumerator> Create ## NAME();
 #include "mutable/tables/PlanEnumerator.tbl"
-#undef DB_PLAN_ENUMERATOR
+#undef M_PLAN_ENUMERATOR
 
     /** Enumerate subplans and fill plan table. */
     virtual void operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const = 0;

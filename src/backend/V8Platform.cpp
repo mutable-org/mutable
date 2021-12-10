@@ -163,7 +163,7 @@ struct Store2Wasm
             if (e.is_null_bitmap() or e.is_attribute()) {
                 bytes = (s.num_rows() * e.stride + 7) / 8;
             } else {
-                insist(e.is_linearization());
+                M_insist(e.is_linearization());
                 const auto e_rows = e.as_linearization().num_tuples();
                 bytes = (s.num_rows() + e_rows - 1) / e_rows * e.stride;
             }
@@ -181,13 +181,13 @@ struct Store2Wasm
             /* Add entry address to env. */
             oss.str("");
             oss << table.name << "_mem_" << idx++;
-            DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, oss.str()), v8::Int32::New(isolate_, ptr));
+            M_DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, oss.str()), v8::Int32::New(isolate_, ptr));
         }
 
         /* Add table size (num_rows) to env. */
         oss.str("");
         oss << table.name << "_num_rows";
-        DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, oss.str()), v8::Int32::New(isolate_, s.num_rows()));
+        M_DISCARD env_->Set(Ctx, v8_helper::to_v8_string(isolate_, oss.str()), v8::Int32::New(isolate_, s.num_rows()));
     }
 };
 
@@ -247,7 +247,7 @@ struct CollectStringLiterals : ConstOperatorVisitor, ConstASTExprVisitor
     void operator()(const SortingOperator &op) override { recurse(op); }
 
     /*----- Expr -----------------------------------------------------------------------------------------------------*/
-    void operator()(const ErrorExpr&) override { unreachable("no errors at this stage"); }
+    void operator()(const ErrorExpr&) override { M_unreachable("no errors at this stage"); }
     void operator()(const Designator&) override { /* nothing to be done */ }
     void operator()(const Constant &e) override {
         if (e.is_string()) {
@@ -510,7 +510,7 @@ WasmModule V8Platform::compile(const Operator &plan) const
 void V8Platform::execute(const Operator &plan)
 {
     Catalog &C = Catalog::Get();
-    auto module = TIME_EXPR(compile(plan), "Compile to WebAssembly", C.timer());
+    auto module = M_TIME_EXPR(compile(plan), "Compile to WebAssembly", C.timer());
 
     /* Create required V8 scopes. */
     v8::Isolate::Scope isolate_scope(isolate_);
@@ -527,7 +527,7 @@ void V8Platform::execute(const Operator &plan)
     /* Create the import object for instantiating the WebAssembly module. */
     auto imports = v8::Object::New(isolate_);
     auto env = create_env(wasm_context, plan);
-    DISCARD imports->Set(context, mkstr("env"), env);
+    M_DISCARD imports->Set(context, mkstr("env"), env);
 
     /* Map the remaining address space to the output buffer. */
     const auto bytes_remaining = wasm_context.vm.size() - wasm_context.heap;
@@ -535,7 +535,7 @@ void V8Platform::execute(const Operator &plan)
     mem.map(bytes_remaining, 0, wasm_context.vm, wasm_context.heap);
 
     /* Create a WebAssembly instance object. */
-    auto instance = TIME_EXPR(instantiate(module, imports), "Compile Wasm to machine code", C.timer());
+    auto instance = M_TIME_EXPR(instantiate(module, imports), "Compile Wasm to machine code", C.timer());
 
     /* Set the underlying memory for the instance. */
     v8::SetWasmInstanceRawMemory(instance, wasm_context.vm.as<uint8_t*>(), wasm_context.vm.size());
@@ -619,7 +619,7 @@ void V8Platform::execute(const Operator &plan)
                 for (std::size_t j = 0; j != schema.num_entries(); ++j) {
                     auto &e = schema[j];
                     if (e.id == entry.id) {
-                        insist(e.type == entry.type);
+                        M_insist(e.type == entry.type);
                         loader.emit_St_Tup(1, j, e.type);
                     }
                 }
@@ -700,13 +700,13 @@ v8::Local<v8::Object> V8Platform::create_env(WasmContext &wasm_context, const Op
 
     /* Import next free page, usable for heap allcoations. */
     auto head_of_heap = S2W.get_next_page() * get_pagesize();
-    DISCARD env->Set(Ctx, mkstr("head_of_heap"), v8::Int32::New(isolate_, head_of_heap));
+    M_DISCARD env->Set(Ctx, mkstr("head_of_heap"), v8::Int32::New(isolate_, head_of_heap));
     wasm_context.heap = head_of_heap;
 
     /* Add functions to environment. */
 #define ADD_FUNC(FUNC) { \
     auto func = v8::Function::New(Ctx, (FUNC)).ToLocalChecked(); \
-    DISCARD env->Set(Ctx, mkstr(#FUNC), func); \
+    M_DISCARD env->Set(Ctx, mkstr(#FUNC), func); \
 }
     ADD_FUNC(print);
     ADD_FUNC(throw_invalid_escape_sequence);

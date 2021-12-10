@@ -202,7 +202,7 @@ if(${WITH_V8})
         BUILD_BYPRODUCTS "${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/obj/libv8_monolith.a"
         INSTALL_COMMAND ""
     )
-    add_definitions(-DWITH_V8)
+    add_definitions(-DM_WITH_V8)
     include_directories(SYSTEM third-party/v8/v8/include)
     add_library(v8 STATIC IMPORTED)
     set_target_properties(v8 PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/obj/libv8_monolith.a")
@@ -243,7 +243,7 @@ if(${WITH_SPIDERMONKEY})
         BUILD_BYPRODUCTS "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/target/debug/build/mozjs_sys-976838596e5f086e/out/dist/bin/libmozjs-72.${SHARED_LIB_SUFFIX}"
         INSTALL_COMMAND ""
     )
-    add_definitions(-DWITH_SPIDERMONKEY)
+    add_definitions(-DM_WITH_SPIDERMONKEY)
     include_directories(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/target/debug/build/mozjs_sys-976838596e5f086e/out/dist/include/")
     add_library(spidermonkey SHARED IMPORTED)
     set_target_properties(spidermonkey PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/target/debug/build/mozjs_sys-976838596e5f086e/out/dist/bin/libmozjs-72.${SHARED_LIB_SUFFIX}")

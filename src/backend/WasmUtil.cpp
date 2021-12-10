@@ -43,7 +43,7 @@ void WasmExprCompiler::operator()(const Constant &e)
     if (ty->is_boolean()) {
         literal = BinaryenLiteralInt32(value.as_b());
     } else if (ty->is_character_sequence()) {
-        unreachable("this is a string and should've been handled earlier");
+        M_unreachable("this is a string and should've been handled earlier");
     } else if (ty->is_date()) {
         literal = BinaryenLiteralInt32(value.as_i());
     } else if (ty->is_date_time()) {
@@ -68,7 +68,7 @@ void WasmExprCompiler::operator()(const Constant &e)
             }
         }
     } else
-        unreachable("invalid type");
+        M_unreachable("invalid type");
 
     set(BinaryenConst(module(), literal));
 }
@@ -79,7 +79,7 @@ void WasmExprCompiler::operator()(const UnaryExpr &e)
 
     switch (e.op().type) {
         default:
-            unreachable("illegal token type");
+            M_unreachable("illegal token type");
 
         case TK_PLUS:
             /* nothing to be done */
@@ -140,7 +140,7 @@ void WasmExprCompiler::operator()(const UnaryExpr &e)
                 }
 
                 case Numeric::N_Float:
-                    unreachable("bitwise not is not supported for floating-point types");
+                    M_unreachable("bitwise not is not supported for floating-point types");
             }
             break;
         }
@@ -148,7 +148,7 @@ void WasmExprCompiler::operator()(const UnaryExpr &e)
         case TK_Not: {
             /* In WebAssembly, booleans are represented as 32 bit integers.  Hence, logical not is achieved by computing
              * 1 - value. */
-            insist(e.type()->is_boolean());
+            M_insist(e.type()->is_boolean());
             auto One = BinaryenConst(module(), BinaryenLiteralInt32(1));
             set(BinaryenBinary(/* module= */ module(),
                                /* op=     */ BinaryenSubInt32(),
@@ -163,10 +163,10 @@ void WasmExprCompiler::operator()(const BinaryExpr &e)
 {
     (*this)(*e.lhs);
     WasmTemporary lhs = get();
-    insist(lhs.is());
+    M_insist(lhs.is());
     (*this)(*e.rhs);
     WasmTemporary rhs = get();
-    insist(rhs.is());
+    M_insist(rhs.is());
 
     const PrimitiveType *ty_lhs = as<const PrimitiveType>(e.lhs->type());
     const PrimitiveType *ty_rhs = as<const PrimitiveType>(e.rhs->type());
@@ -204,13 +204,13 @@ void WasmExprCompiler::operator()(const BinaryExpr &e)
 #define CMP(OP) \
 { \
     if (ty_lhs->is_character_sequence()) { \
-        insist(ty_rhs->is_character_sequence()); \
+        M_insist(ty_rhs->is_character_sequence()); \
         auto cs_lhs = as<const CharacterSequence>(ty_lhs); \
         auto cs_rhs = as<const CharacterSequence>(ty_rhs); \
         set(WasmStrcmp::OP(fn(), *block_, *cs_lhs, *cs_rhs, std::move(lhs), std::move(rhs))); \
     } else if (ty_lhs->is_numeric()) { \
         /* Convert numeric operands, if necessary. */ \
-        insist(ty_rhs->is_numeric()); \
+        M_insist(ty_rhs->is_numeric()); \
         auto n_lhs = as<const Numeric>(ty_lhs); \
         auto n_rhs = as<const Numeric>(ty_rhs); \
         auto n = arithmetic_join(n_lhs, n_rhs); \
@@ -218,14 +218,14 @@ void WasmExprCompiler::operator()(const BinaryExpr &e)
         rhs = convert(module(), std::move(rhs), n_rhs, n); \
         set(WasmCompare::OP(fn(), *n, std::move(lhs), std::move(rhs))); \
     } else { \
-        insist(ty_lhs->as_vectorial() == ty_rhs->as_vectorial()); \
+        M_insist(ty_lhs->as_vectorial() == ty_rhs->as_vectorial()); \
         set(WasmCompare::OP(fn(), *ty_lhs, std::move(lhs), std::move(rhs))); \
     } \
 }
 
     switch (e.op().type) {
         default:
-            unreachable("illegal token type");
+            M_unreachable("illegal token type");
 
         case TK_PLUS:       BINARY(Add); break;
         case TK_MINUS:      BINARY(Sub); break;
@@ -256,7 +256,7 @@ void WasmExprCompiler::operator()(const BinaryExpr &e)
             auto n = as<const Numeric>(e.type());
             switch (n->kind) {
                 case Numeric::N_Float:
-                    unreachable("module with float not defined");
+                    M_unreachable("module with float not defined");
 
                 case Numeric::N_Int:
                 case Numeric::N_Decimal: {
@@ -279,7 +279,7 @@ void WasmExprCompiler::operator()(const BinaryExpr &e)
         }
 
         case TK_DOTDOT:
-            unreachable("not yet supported");
+            M_unreachable("not yet supported");
 
         case TK_LESS:           CMP(Lt); break;
         case TK_GREATER:        CMP(Gt); break;
@@ -289,12 +289,12 @@ void WasmExprCompiler::operator()(const BinaryExpr &e)
         case TK_BANG_EQUAL:     CMP(Ne); break;
 
         case TK_And:
-            insist(e.type()->is_boolean());
+            M_insist(e.type()->is_boolean());
             BINARY_OP(And, Int32); // booleans are represented as 32 bit integers
             break;
 
         case TK_Or:
-            insist(e.type()->is_boolean());
+            M_insist(e.type()->is_boolean());
             BINARY_OP(Or, Int32); // booleans are represented as 32 bit integers
             break;
     }
@@ -350,7 +350,7 @@ WasmTemporary WasmEnvironment::compile(BlockBuilder &block, const cnf::CNF &cnf)
             wasm_cnf = std::move(wasm_clause);
         }
     }
-    insist(wasm_cnf.is(), "empty CNF?");
+    M_insist(wasm_cnf.is(), "empty CNF?");
 
     return wasm_cnf;
 }
@@ -372,7 +372,7 @@ void WasmEnvironment::operator()(const Designator &e)
         /* Search with fully qualified name. */
         set(get_value({e.table_name.text, e.attr_name.text}));
     } catch (std::out_of_range) {
-        unreachable("Designator could not be resolved");
+        M_unreachable("Designator could not be resolved");
     }
 }
 
@@ -384,13 +384,13 @@ void WasmEnvironment::operator()(const FnApplicationExpr &e)
     /* Load the arguments for the function call. */
     switch (fn.fnid) {
         default:
-            unreachable("function kind not implemented");
+            M_unreachable("function kind not implemented");
 
         case Function::FN_UDF:
-            unreachable("UDFs not yet supported");
+            M_unreachable("UDFs not yet supported");
 
         case Function::FN_ISNULL:
-            unreachable("not yet supported");
+            M_unreachable("not yet supported");
 
         /*----- Type casts -------------------------------------------------------------------------------------------*/
         case Function::FN_INT: {
@@ -434,7 +434,7 @@ void WasmStructCGContext::operator()(const Designator &e)
         auto idx = index({e.table_name.text, e.attr_name.text});
         set(struc.load(fn(), base_ptr_.clone(module()), idx, struc_offset_));
     } catch (std::out_of_range) {
-        unreachable("Designator could not be resolved");
+        M_unreachable("Designator could not be resolved");
     }
 }
 
@@ -446,13 +446,13 @@ void WasmStructCGContext::operator()(const FnApplicationExpr &e)
     /* Load the arguments for the function call. */
     switch (fn.fnid) {
         default:
-            unreachable("function kind not implemented");
+            M_unreachable("function kind not implemented");
 
         case Function::FN_UDF:
-            unreachable("UDFs not yet supported");
+            M_unreachable("UDFs not yet supported");
 
         case Function::FN_ISNULL:
-            unreachable("not yet supported");
+            M_unreachable("not yet supported");
 
         /*----- Type casts -------------------------------------------------------------------------------------------*/
         case Function::FN_INT: {
@@ -516,7 +516,7 @@ WasmTemporary WasmStruct::load(FunctionBuilder &fn, WasmTemporary ptr, std::size
             /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(1U))
         );
     } else if (type(idx).is_character_sequence()) {
-        insist(offset(idx) % 8 == 0, "type must be byte-aligned");
+        M_insist(offset(idx) % 8 == 0, "type must be byte-aligned");
         return BinaryenBinary(
             /* module= */ fn.module(),
             /* op=     */ BinaryenAddInt32(),
@@ -524,7 +524,7 @@ WasmTemporary WasmStruct::load(FunctionBuilder &fn, WasmTemporary ptr, std::size
             /* right=  */ BinaryenConst(fn.module(), BinaryenLiteralInt32(offset(idx) / 8 + struc_offset))
         );
     } else {
-        insist(offset(idx) % 8 == 0, "type must be byte-aligned");
+        M_insist(offset(idx) % 8 == 0, "type must be byte-aligned");
         const std::size_t size_in_bytes = type(idx).size() / 8;
         return BinaryenLoad(
             /* module= */ fn.module(),
@@ -586,7 +586,7 @@ void WasmStruct::store(FunctionBuilder &fn, BlockBuilder &block, WasmTemporary p
             /* type=   */ BinaryenTypeInt32()
         );
     } else if (type(idx).is_character_sequence()) {
-        insist(offset(idx) % 8 == 0, "type must be byte-aligned");
+        M_insist(offset(idx) % 8 == 0, "type must be byte-aligned");
         /* Compute destination address. */
         WasmTemporary dest = BinaryenBinary(
             /* module= */ fn.module(),
@@ -598,7 +598,7 @@ void WasmStruct::store(FunctionBuilder &fn, BlockBuilder &block, WasmTemporary p
         WasmStrncpy wasm_strncpy(fn);
         wasm_strncpy.emit(block, std::move(dest), std::move(val), as<const CharacterSequence>(type(idx)).length);
     } else {
-        insist(offset(idx) % 8 == 0, "type must be byte-aligned");
+        M_insist(offset(idx) % 8 == 0, "type must be byte-aligned");
         const std::size_t size_in_bytes = type(idx).size() / 8;
         block += BinaryenStore(
             /* module= */ fn.module(),
@@ -738,7 +738,7 @@ WasmTemporary WasmCompare::Cmp(FunctionBuilder &fn, const Type &ty, WasmTemporar
         case LE: BINARY_OP(Le ## SIGN, TYPE ## SIZE); break; \
         case GT: BINARY_OP(Gt ## SIGN, TYPE ## SIZE); break; \
         case GE: BINARY_OP(Ge ## SIGN, TYPE ## SIZE); break; \
-        default: unreachable("unknown comparison operator"); \
+        default: M_unreachable("unknown comparison operator"); \
     }
 
 #define CMP_SINT(SIZE)  CMP(Int,  S, SIZE)
@@ -767,7 +767,7 @@ WasmTemporary WasmCompare::Cmp(FunctionBuilder &fn, const Type &ty, WasmTemporar
                     break;
             }
         },
-        [](auto&) { unreachable("unsupported type"); }
+        [](auto&) { M_unreachable("unsupported type"); }
     }, ty);
 
 #undef CMP_FLOAT
@@ -1081,7 +1081,7 @@ WasmTemporary WasmLike::Like(FunctionBuilder &fn, BlockBuilder &block,
                              const CharacterSequence &ty_str, const CharacterSequence &ty_pattern,
                              WasmTemporary _str, WasmTemporary _pattern, const char escape_char)
 {
-    insist('_' != escape_char and '%' != escape_char, "illegal escape character");
+    M_insist('_' != escape_char and '%' != escape_char, "illegal escape character");
 
     if (ty_str.length == 0 and ty_pattern.length == 0)
         return BinaryenConst(fn.module(), BinaryenLiteralInt32(1));
@@ -1634,7 +1634,7 @@ WasmTemporary WasmLike::Like(FunctionBuilder &fn, BlockBuilder &block,
 
 WasmTemporary WasmLike::create_table(FunctionBuilder &fn, BlockBuilder &block, WasmTemporary addr, std::size_t num_entries)
 {
-    insist(num_entries <= 1UL << 31, "table size exceed uint32 type");
+    M_insist(num_entries <= 1UL << 31, "table size exceed uint32 type");
     return BinaryenBinary(
         /* module= */ fn.module(),
         /* op=     */ BinaryenAddInt32(),
@@ -1823,7 +1823,7 @@ BinaryenLiteral __limit(Visitor &&vis, const Type &ty)
                 case Numeric::N_Int:
                     switch (n.size()) {
                         default:
-                            unreachable("invalid integer type");
+                            M_unreachable("invalid integer type");
                         case 8:
                             LIMIT(Int32, int8_t);
                             break;
@@ -1840,7 +1840,7 @@ BinaryenLiteral __limit(Visitor &&vis, const Type &ty)
                     break;
 
                 case Numeric::N_Decimal:
-                    unreachable("not supported");
+                    M_unreachable("not supported");
 
                 case Numeric::N_Float:
                     if (n.size() <= 32)
@@ -1850,7 +1850,7 @@ BinaryenLiteral __limit(Visitor &&vis, const Type &ty)
                     break;
             }
         },
-        [](auto&) { unreachable("invalid type"); },
+        [](auto&) { M_unreachable("invalid type"); },
     }, ty);
     return literal;
 #undef LIMIT
@@ -1896,7 +1896,7 @@ struct AggregationData : OperatorData
         aggregates.reserve(op.schema().num_entries() + 1);
         for (std::size_t i = 0; i != op.schema().num_entries(); ++i) {
             auto &e = op.schema()[i];
-            insist(not e.type->is_character_sequence());
+            M_insist(not e.type->is_character_sequence());
             aggregates.emplace_back(fn, get_binaryen_type(e.type));
         }
         aggregates.emplace_back(fn, BinaryenTypeInt32()); // running count
@@ -1976,7 +1976,7 @@ void WasmPlanCG::operator()(const JoinOperator &op)
 {
     switch (op.algo()) {
         default:
-            unreachable("Undefined join algorithm.");
+            M_unreachable("Undefined join algorithm.");
 
         case JoinOperator::J_Undefined:
         case JoinOperator::J_NestedLoops: {
@@ -2010,7 +2010,7 @@ void WasmPlanCG::operator()(const JoinOperator &op)
         }
 
         case JoinOperator::J_SimpleHashJoin: {
-            insist(op.children().size() == 2, "SimpleHashJoin is a binary operation and expects exactly two children");
+            M_insist(op.children().size() == 2, "SimpleHashJoin is a binary operation and expects exactly two children");
             auto &build = *op.child(0);
             auto &probe = *op.child(1);
 
@@ -2320,7 +2320,7 @@ void WasmPipelineCG::operator()(const PrintOperator &op)
     std::vector<BinaryenExpressionRef> args;
     for (auto &e : op.schema()) {
         auto it = intermediates_.find(e.id);
-        insist(it != intermediates_.end(), "unknown identifier");
+        M_insist(it != intermediates_.end(), "unknown identifier");
         args.push_back(it->second);
     }
     block_ += BinaryenCall(
@@ -2358,7 +2358,7 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
 {
     switch (op.algo()) {
         default:
-            unreachable("Undefined join algorithm.");
+            M_unreachable("Undefined join algorithm.");
 
         case JoinOperator::J_Undefined:
         case JoinOperator::J_NestedLoops: {
@@ -2380,7 +2380,7 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
 
                 /*----- Create innermost loop. -----------------------------------------------------------------------*/
                 std::size_t current_child = 0;
-                insist(current_child < active_child);
+                M_insist(current_child < active_child);
                 WasmWhile innermost(module(), "join.loop.child0", BinaryenBinary(
                     /* module= */ module(),
                     /* op=     */ BinaryenLtUInt32(),
@@ -2485,13 +2485,13 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
 
             /*----- Decompose the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----------------*/
             auto &pred = op.predicate();
-            insist(pred.size() == 1, "invalid predicate for simple hash join");
+            M_insist(pred.size() == 1, "invalid predicate for simple hash join");
             auto &clause = pred[0];
-            insist(clause.size() == 1, "invalid predicate for simple hash join");
+            M_insist(clause.size() == 1, "invalid predicate for simple hash join");
             auto &literal = clause[0];
-            insist(not literal.negative(), "invalid predicate for simple hash join");
+            M_insist(not literal.negative(), "invalid predicate for simple hash join");
             auto binary = as<const BinaryExpr>(literal.expr());
-            insist(binary->tok == TK_EQUAL, "invalid predicate for simple hash join");
+            M_insist(binary->tok == TK_EQUAL, "invalid predicate for simple hash join");
             auto first = as<const Designator>(binary->lhs);
             auto second = as<const Designator>(binary->rhs);
             auto [build, probe] = build_schema.has({first->get_table_name(), first->attr_name.text}) ?
@@ -2536,7 +2536,7 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
                     knows_capacity = true;
                 }
 
-                insist(knows_capacity, "at this point we must have determined an initial capacity for the hash table");
+                M_insist(knows_capacity, "at this point we must have determined an initial capacity for the hash table");
                 std::size_t initial_capacity = ceil_to_pow_2<std::size_t>(required_capacity);
                 if (required_capacity >= initial_capacity * .7)
                     initial_capacity *= 2;
@@ -2616,7 +2616,7 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
                     /* module=      */ module(),
                     /* target=      */ BinaryenFunctionGetName(b_fn_rehash),
                     /* operands=    */ rehash_args,
-                    /* numOperands= */ ARR_SIZE(rehash_args),
+                    /* numOperands= */ M_ARR_SIZE(rehash_args),
                     /* returnType=  */ BinaryenTypeNone()
                 );
 
@@ -2794,21 +2794,21 @@ void WasmPipelineCG::operator()(const JoinOperator &op)
 void WasmPipelineCG::operator()(const ProjectionOperator &op)
 {
     WasmEnvironment new_context(module().main());
-    insist(op.projections().size() == op.schema().num_entries(), "projections must match the operator's schema");
+    M_insist(op.projections().size() == op.schema().num_entries(), "projections must match the operator's schema");
     auto p = op.projections().begin();
     for (auto &e : op.schema()) {
         if (not new_context.has(e.id)) {
             if (context().has(e.id)) { // migrate compiled expression to new context
                 new_context.add(e.id, context().get_value(e.id));
             } else {
-                insist(p != op.projections().end());
+                M_insist(p != op.projections().end());
                 if (auto d = cast<const Designator>(p->first)) {
                     auto t = d->target(); // consider target of renamed identifier
                     if (auto expr = std::get_if<const Expr *>(&t)) {
                         new_context.add(e.id, context().compile(block_, **expr));
                     } else { // access renamed attribute
                         auto attr = std::get_if<const Attribute *>(&t);
-                        insist(attr, "Target must be an expression or an attribute");
+                        M_insist(attr, "Target must be an expression or an attribute");
                         new_context.add(e.id, context().get_value({(*attr)->table.name, (*attr)->name}));
                     }
                 } else { // compile entire expression
@@ -2921,7 +2921,7 @@ estimation_failed:;
         knows_capacity = true;
     }
 
-    insist(knows_capacity, "at this point we must have determined an initial capacity for the hash table");
+    M_insist(knows_capacity, "at this point we must have determined an initial capacity for the hash table");
     std::size_t initial_capacity = ceil_to_pow_2<std::size_t>(required_capacity);
     if (required_capacity >= initial_capacity * .7)
         initial_capacity *= 2;
@@ -3001,7 +3001,7 @@ estimation_failed:;
             /* module=      */ module(),
             /* target=      */ BinaryenFunctionGetName(b_fn_rehash),
             /* operands=    */ rehash_args,
-            /* numOperands= */ ARR_SIZE(rehash_args),
+            /* numOperands= */ M_ARR_SIZE(rehash_args),
             /* returnType=  */ BinaryenTypeNone()
         );
 
@@ -3116,20 +3116,20 @@ estimation_failed:;
 
         auto fn_expr = as<const FnApplicationExpr>(agg);
         auto &fn = fn_expr->get_function();
-        insist(fn.kind == Function::FN_Aggregate, "not an aggregation function");
+        M_insist(fn.kind == Function::FN_Aggregate, "not an aggregation function");
 
         /*----- Emit code to evaluate arguments. ---------------------------------------------------------------------*/
-        insist(fn_expr->args.size() <= 1, "unsupported aggregate with more than one argument");
+        M_insist(fn_expr->args.size() <= 1, "unsupported aggregate with more than one argument");
         std::vector<WasmTemporary> args;
         for (auto arg : fn_expr->args)
             args.emplace_back(context().compile(block_, *arg));
 
         switch (fn.fnid) {
             default:
-                unreachable("unsupported aggregate function");
+                M_unreachable("unsupported aggregate function");
 
             case Function::FN_MIN: {
-                insist(args.size() == 1, "aggregate function expects exactly one argument");
+                M_insist(args.size() == 1, "aggregate function expects exactly one argument");
                 data->HT->store_value_to_slot(create_group, slot_addr, idx, args[0].clone(module()));
                 WasmVariable val(module().main(), get_binaryen_type(e.type));
                 update_group += val.set(args[0].clone(module()));
@@ -3168,7 +3168,7 @@ estimation_failed:;
                     }
 
                     case Numeric::N_Decimal:
-                        unreachable("not implemented");
+                        M_unreachable("not implemented");
 
                     case Numeric::N_Float: {
                         WasmTemporary new_val = BinaryenBinary(
@@ -3185,7 +3185,7 @@ estimation_failed:;
             }
 
             case Function::FN_MAX: {
-                insist(args.size() == 1, "aggregate function expects exactly one argument");
+                M_insist(args.size() == 1, "aggregate function expects exactly one argument");
                 data->HT->store_value_to_slot(create_group, slot_addr, idx, args[0].clone(module()));
                 WasmVariable val(module().main(), get_binaryen_type(e.type));
                 update_group += val.set(args[0].clone(module()));
@@ -3224,7 +3224,7 @@ estimation_failed:;
                     }
 
                     case Numeric::N_Decimal:
-                        unreachable("not implemented");
+                        M_unreachable("not implemented");
 
                     case Numeric::N_Float: {
                         WasmTemporary new_val = BinaryenBinary(
@@ -3241,7 +3241,7 @@ estimation_failed:;
             }
 
             case Function::FN_SUM: {
-                insist(args.size() == 1, "aggregate function expects exactly one argument");
+                M_insist(args.size() == 1, "aggregate function expects exactly one argument");
                 auto old_val = ld_slot.get_value(e.id);
                 auto n = as<const Numeric>(fn_expr->args[0]->type());
                 switch (n->kind) {
@@ -3290,7 +3290,7 @@ estimation_failed:;
             }
 
             case Function::FN_AVG: {
-                insist(args.size() == 1, "aggregate function expects exactly one argument");
+                M_insist(args.size() == 1, "aggregate function expects exactly one argument");
                 /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming Vol 2, section
                  * 4.2.2. */
                 WasmTemporary argument = convert(module(), std::move(args[0]), fn_expr->args[0]->type(), Type::Get_Double(Type::TY_Scalar));
@@ -3338,7 +3338,7 @@ estimation_failed:;
                     data->HT->store_value_to_slot(update_group, slot_addr, idx, std::move(new_val));
                 } else {
                     // TODO verify if NULL
-                    unreachable("not yet supported");
+                    M_unreachable("not yet supported");
                 }
                 break;
             }
@@ -3370,14 +3370,14 @@ void WasmPipelineCG::operator()(const AggregationOperator &op)
     for (std::size_t i = 0; i != op.schema().num_entries(); ++i) {
         auto fn_expr = as<const FnApplicationExpr>(op.aggregates()[i]);
         auto &fn = fn_expr->get_function();
-        insist(fn.kind == Function::FN_Aggregate, "not an aggregation function");
+        M_insist(fn.kind == Function::FN_Aggregate, "not an aggregation function");
 
         auto &agg_ty = *fn_expr->type();
         auto &agg_val = data->aggregates[i];
 
         switch (fn.fnid) {
             default:
-                unreachable("unsupported aggregate function");
+                M_unreachable("unsupported aggregate function");
 
             case Function::FN_MIN: {
                 auto &n = as<const Numeric>(agg_ty);
@@ -3409,7 +3409,7 @@ void WasmPipelineCG::operator()(const AggregationOperator &op)
                     }
 
                     case Numeric::N_Decimal:
-                        unreachable("not implemented");
+                        M_unreachable("not implemented");
 
                     case Numeric::N_Float:
                         block_ += agg_val.set(BinaryenBinary(
@@ -3453,7 +3453,7 @@ void WasmPipelineCG::operator()(const AggregationOperator &op)
                     }
 
                     case Numeric::N_Decimal:
-                        unreachable("not implemented");
+                        M_unreachable("not implemented");
 
                     case Numeric::N_Float:
                         block_ += agg_val.set(BinaryenBinary(
@@ -3649,7 +3649,7 @@ void WasmStoreCG::compile_linearization(WasmPipelineCG &pipeline, const Producer
             } else {
                 /* Create new gcd level. The gcd must divide the parent gcd if one is specified. The first level is
                  * initialized with gcd 0 to indicate an unspecified gcd. */
-                insist(level == gcd_stack.size());
+                M_insist(level == gcd_stack.size());
                 gcd_stack.push_back(level == 0 ? 0UL : std::gcd(gcd_stack[level - 1], L.num_tuples()));
             }
 
@@ -3664,13 +3664,13 @@ void WasmStoreCG::compile_linearization(WasmPipelineCG &pipeline, const Producer
                         );
                     } else {
                         /* Use provided alternative offset as base address. */
-                        insist(root_offsets.size() == L.num_sequences());
+                        M_insist(root_offsets.size() == L.num_sequences());
                         base = root_offsets[idx++].clone(pipeline.module());
                     }
                 }
 
                 if (e.is_null_bitmap()) {
-                    insist(not null_bitmap_info, "there must be at most one null bitmap in the linearization");
+                    M_insist(not null_bitmap_info, "there must be at most one null bitmap in the linearization");
                     const std::size_t ptr_byte_offset = (row_id * e.stride) / 8;
                     const std::size_t ptr_bit_offset = (row_id * e.stride) % 8;
 
@@ -3707,7 +3707,7 @@ void WasmStoreCG::compile_linearization(WasmPipelineCG &pipeline, const Producer
                     }
                 } else if (e.is_linearization()) {
                     auto &lin = e.as_linearization();
-                    insist(lin.num_tuples() != 0);
+                    M_insist(lin.num_tuples() != 0);
                     const std::size_t lin_id = row_id / lin.num_tuples();
                     const std::size_t inner_row_id = row_id % lin.num_tuples();
                     const auto additional_offset = level == 0 ? e.stride * lin_id : e.offset + e.stride * lin_id;
@@ -3721,7 +3721,7 @@ void WasmStoreCG::compile_linearization(WasmPipelineCG &pipeline, const Producer
     initialize(L, row_id);
 
     /*----- Initialize `level_info_stack`. Initialize counters and increment them in each block. ---------------------*/
-    insist(not gcd_stack.empty());
+    M_insist(not gcd_stack.empty());
     level_info_stack.reserve(gcd_stack.size());
 
     std::size_t inner_row_id = row_id;
@@ -3771,7 +3771,7 @@ void WasmStoreCG::compile_linearization(WasmPipelineCG &pipeline, const Producer
         /* Update inner row id for next iteration. */
         inner_row_id = inner_row_id % inner_gcd;
     }
-    insist(inner_row_id == 0);
+    M_insist(inner_row_id == 0);
 
     /*----- Compile code for aborting iteration at the end of the data. ----------------------------------------------*/
     auto &innermost = level_info_stack.back().block; // innermost block
@@ -3829,7 +3829,7 @@ void WasmStoreCG::compile_linearization(WasmPipelineCG &pipeline, const Producer
                         );
                     } else {
                         /* Use provided alternative offset as base address. */
-                        insist(root_offsets.size() == L.num_sequences());
+                        M_insist(root_offsets.size() == L.num_sequences());
                         base = root_offsets[idx++].clone(pipeline.module());
                     }
                 }
@@ -3846,13 +3846,13 @@ void WasmStoreCG::compile_linearization(WasmPipelineCG &pipeline, const Producer
                         const std::size_t ptr_bit_offset = (row_id * e.stride) % 8;
                         const std::size_t attr_byte_offset = (e.offset + ptr_bit_offset) / 8;
                         const std::size_t attr_bit_offset = (e.offset + ptr_bit_offset) % 8;
-                        insist(not (ptr_bit_offset or attr_bit_offset) or attr.type->is_boolean(),
+                        M_insist(not (ptr_bit_offset or attr_bit_offset) or attr.type->is_boolean(),
                                "only booleans may not be byte aligned");
 
                         const std::size_t byte_stride = e.stride / 8;
                         const std::size_t bit_stride  = e.stride % 8;
-                        insist(not bit_stride or attr.type->is_boolean(), "only booleans may not be byte aligned");
-                        insist(bit_stride == 0 or byte_stride == 0,
+                        M_insist(not bit_stride or attr.type->is_boolean(), "only booleans may not be byte aligned");
+                        M_insist(bit_stride == 0 or byte_stride == 0,
                                "the stride must be a whole multiple of a byte or less than a byte");
 
                         /* Access NULL bit. */
@@ -4115,7 +4115,7 @@ void WasmStoreCG::compile_linearization(WasmPipelineCG &pipeline, const Producer
 
                         /* Access attribute. */
                         if (bit_stride) {
-                            insist(e.stride == 1, "only booleans may not be byte aligned with one bit stride");
+                            M_insist(e.stride == 1, "only booleans may not be byte aligned with one bit stride");
 
                             /* Add mask for this `Linearization`-`e.offset % 8` combination if none exists. */
                             WasmVariable *mask;
@@ -4211,7 +4211,7 @@ void WasmStoreCG::compile_linearization(WasmPipelineCG &pipeline, const Producer
 
                                 /* Store value. */
                                 if (attr.type->size() < 8) {
-                                    insist(attr.type->size() <= 8 - attr_bit_offset,
+                                    M_insist(attr.type->size() <= 8 - attr_bit_offset,
                                            "attribute with size less than one byte must be contained in a single byte");
                                     WasmTemporary byte = BinaryenLoad(
                                         /* module= */ pipeline.module(),
@@ -4286,7 +4286,7 @@ void WasmStoreCG::compile_linearization(WasmPipelineCG &pipeline, const Producer
                             } else {
                                 /* Load value. */
                                 if (attr.type->size() < 8) {
-                                    insist(attr.type->size() <= 8 - attr_bit_offset,
+                                    M_insist(attr.type->size() <= 8 - attr_bit_offset,
                                            "attribute with size less than one byte must be contained in a single byte");
                                     WasmTemporary byte = BinaryenLoad(
                                         /* module= */ pipeline.module(),
@@ -4334,10 +4334,10 @@ void WasmStoreCG::compile_linearization(WasmPipelineCG &pipeline, const Producer
                         }
                     }
                 } else {
-                    insist(e.is_linearization());
+                    M_insist(e.is_linearization());
 
                     auto &lin = e.as_linearization();
-                    insist(lin.num_tuples() != 0);
+                    M_insist(lin.num_tuples() != 0);
                     const std::size_t lin_id = row_id / lin.num_tuples();
                     const std::size_t inner_row_id = row_id % lin.num_tuples();
                     const auto additional_offset = level == 0 ? e.stride * lin_id : e.offset + e.stride * lin_id;
@@ -4409,9 +4409,9 @@ void WasmStoreCG::compile_linearization(WasmPipelineCG &pipeline, const Producer
                          * `info.num_tuples`. */
                         auto pred = [&info](const std::size_t &gcd) { return gcd > info.num_tuples; };
                         const auto gcd_it = std::find_if(gcd_stack.rbegin(), std::prev(gcd_stack.rend()), pred);
-                        insist(gcd_stack.size() == 1 or gcd_it != gcd_stack.rbegin(),
+                        M_insist(gcd_stack.size() == 1 or gcd_it != gcd_stack.rbegin(),
                                "innermost level has at most gcd equal to sequence length");
-                        insist(gcd_it != gcd_stack.rend(), "first level has unspecified (i.e. 0) gcd");
+                        M_insist(gcd_it != gcd_stack.rend(), "first level has unspecified (i.e. 0) gcd");
                         const std::size_t level = gcd_stack.size() - std::distance(gcd_stack.rbegin(), gcd_it) - 1;
                         auto &level_info = level_info_stack[level];
 
@@ -4470,7 +4470,7 @@ void WasmStoreCG::compile_linearization(WasmPipelineCG &pipeline, const Producer
                                 /* lhs=    */ level_info.counter,
                                 /* rhs=    */ BinaryenConst(pipeline.module(), BinaryenLiteralInt32(info.num_tuples - 1U))
                             );
-                            insist(info.num_tuples != 0);
+                            M_insist(info.num_tuples != 0);
                             const bool is_power_of_2 = (info.num_tuples bitand (info.num_tuples - 1)) == 0;
                             level_info.block += BinaryenIf(
                                 /* module=    */ pipeline.module(),
@@ -4527,7 +4527,7 @@ void WasmStoreCG::compile_linearization(WasmPipelineCG &pipeline, const Producer
                 }
 
                 const auto &range = lin_stride2ptr.equal_range({&L, 1U}); // masks are only introduced for one bit strides
-                insist(range.first != range.second);
+                M_insist(range.first != range.second);
                 for (auto it = range.first; it != range.second; ++it) {
                     const auto &ptr = it->second;
 
@@ -4655,7 +4655,7 @@ WasmTemporary m::wasm_emit_strhash(FunctionBuilder &fn, BlockBuilder &block,
 #if 0
     if (ty.length <= 8) {
         /* Unroll FNV-1a loop to compute hash. */
-        insist(ty.length >= 1);
+        M_insist(ty.length >= 1);
         block += hash.set(BinaryenConst(fn.module(), BinaryenLiteralInt64(0xcbf29ce484222325UL)));
         for (std::size_t i = 0; i != ty.length; ++i) {
             WasmTemporary next_byte = BinaryenLoad(

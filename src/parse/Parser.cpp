@@ -178,7 +178,7 @@ Stmt * Parser::parse_CreateTableStmt()
         Token id = token();
         if (not expect(TK_IDENTIFIER)) goto error_recovery;
         const Type *type = parse_data_type();
-        insist(type, "Must never be NULL");
+        M_insist(type, "Must never be NULL");
 
         /* Parse the list of constraints. */
         std::vector<Constraint*> constraints;

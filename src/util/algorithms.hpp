@@ -18,7 +18,7 @@ bool verify_partition(It begin, It mid, It end)
     using T = std::remove_reference_t<decltype(*begin)>;
     T max_lo{std::numeric_limits<T>::lowest()};
     T min_hi{std::numeric_limits<T>::max()};
-    insist(max_lo < min_hi);
+    M_insist(max_lo < min_hi);
     for (It p = begin; p != mid; ++p)
         max_lo = std::max(max_lo, *p);
     for (It p = mid; p != end; ++p)
@@ -50,7 +50,7 @@ struct partition_predicated_naive
             end   -= adv_hi;
         }
 #ifndef NDEBUG
-        insist(begin == the_end or *begin >= pivot);
+        M_insist(begin == the_end or *begin >= pivot);
 #endif
         return begin;
     }
@@ -63,7 +63,7 @@ void qsort(It begin, It end, Partitioning p)
     using std::min, std::max;
     using std::distance;
     using std::prev, std::next;
-    insist(begin <= end);
+    M_insist(begin <= end);
 
     while (distance(begin, end) > 2) {
         /* Compute median of three. */
@@ -93,13 +93,13 @@ void qsort(It begin, It end, Partitioning p)
         }
 
         It mid = p(*begin, next(begin), end);
-        insist(mid <= end);
-        insist(mid >= next(begin));
-        insist(verify_partition(next(begin), mid, end));
+        M_insist(mid <= end);
+        M_insist(mid >= next(begin));
+        M_insist(verify_partition(next(begin), mid, end));
         swap(*begin, *prev(mid));
 
         if (distance(mid, end) >= 2) qsort(mid, end, p); // recurse to the right
-        insist(std::is_sorted(mid, end));
+        M_insist(std::is_sorted(mid, end));
         end = prev(mid);
     }
 

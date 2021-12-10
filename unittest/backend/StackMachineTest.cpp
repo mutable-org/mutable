@@ -86,7 +86,7 @@ TEST_CASE("StackMachine/Expressions", "[core][backend]")
 
             Diagnostic diag(true, std::cout, std::cerr);
             auto stmt = statement_from_string(diag, oss.str());
-            insist(diag.num_errors() == 0);
+            M_insist(diag.num_errors() == 0);
             auto select = as<SelectStmt>(*stmt).select;
             auto expr = as<SelectClause>(select)->select[0].first;
             StackMachine eval(schema);
@@ -314,7 +314,7 @@ TEST_CASE("StackMachine/emit/CNF", "[core][backend]")
 
             Diagnostic diag(true, std::cout, std::cerr);
             auto stmt = statement_from_string(diag, oss.str());
-            insist(diag.num_errors() == 0);
+            M_insist(diag.num_errors() == 0);
             auto select = as<SelectStmt>(*stmt).select;
             auto expr = as<SelectClause>(select)->select[0].first;
             auto cnf = cnf::to_CNF(*expr);

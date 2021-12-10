@@ -58,7 +58,7 @@ void Linearization::print(std::ostream &out, unsigned indentation) const {
             out << " and byte stride " << seq.stride;
             lin.print(out, indentation + 1);
         } else {
-            insist(seq.is_null_bitmap());
+            M_insist(seq.is_null_bitmap());
             out << "Null bitmap with bit offset " << seq.offset << " and bit stride " << seq.stride;
         }
     }

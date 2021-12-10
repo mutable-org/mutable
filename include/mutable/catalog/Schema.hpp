@@ -60,7 +60,7 @@ struct Schema
         Identifier id;
         const Type *type;
 
-        entry_type(Identifier id, const Type *type) : id(id), type(notnull(type)) { }
+        entry_type(Identifier id, const Type *type) : id(id), type(M_notnull(type)) { }
     };
 
     private:
@@ -204,8 +204,8 @@ struct Attribute
     explicit Attribute(std::size_t id, const Table &table, const PrimitiveType *type, const char *name)
             : id(id)
             , table(table)
-            , type(notnull(type))
-            , name(notnull(name))
+            , type(M_notnull(type))
+            , name(M_notnull(name))
     {
         if (not type->is_vectorial())
             throw invalid_argument("attributes must be of vectorial type");
@@ -258,7 +258,7 @@ struct Table
         if (id >= attrs_.size())
             throw out_of_range("id out of bounds");
         auto &attr = attrs_[id];
-        insist(attr.id == id, "attribute ID mismatch");
+        M_insist(attr.id == id, "attribute ID mismatch");
         return attr;
     }
     /** Returns the attribute with the given `id`. */
@@ -314,15 +314,15 @@ struct Function
     X(FN_Aggregate)
 
     enum fnid_t {
-#define DB_FUNCTION(NAME, KIND) FN_ ## NAME,
+#define M_FUNCTION(NAME, KIND) FN_ ## NAME,
 #include "mutable/tables/Functions.tbl"
-#undef DB_FUNCTION
+#undef M_FUNCTION
         FN_UDF, // for all user-defined functions
     };
 
     const char *name; ///< the name of the function
     fnid_t fnid; ///< the function id
-    DECLARE_ENUM(kind_t) kind; ///< the function kind: Scalar, Aggregate, etc.
+    M_DECLARE_ENUM(kind_t) kind; ///< the function kind: Scalar, Aggregate, etc.
 
     Function(const char *name, fnid_t fnid, kind_t kind) : name(name), fnid(fnid), kind(kind) { }
 
@@ -339,12 +339,12 @@ struct Function
 
     private:
     static constexpr const char *FNID_TO_STR_[] = {
-#define DB_FUNCTION(NAME, KIND) "FN_" #NAME,
+#define M_FUNCTION(NAME, KIND) "FN_" #NAME,
 #include "mutable/tables/Functions.tbl"
-#undef DB_FUNCTION
+#undef M_FUNCTION
             "FN_UDF",
     };
-    static constexpr const char *KIND_TO_STR_[] = { ENUM_TO_STR(kind_t) };
+    static constexpr const char *KIND_TO_STR_[] = { M_ENUM_TO_STR(kind_t) };
 #undef kind_t
 };
 
@@ -571,7 +571,7 @@ struct Catalog
 
     /** Returns the active `Backend`. */
     Backend & backend() const {
-        insist(has_backend(), "must have set a backend");
+        M_insist(has_backend(), "must have set a backend");
         return *backend_;
     }
 

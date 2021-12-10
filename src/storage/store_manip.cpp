@@ -34,7 +34,7 @@ std::vector<T> generate_distinct_numbers(const T min, const T max, const std::si
             std::uniform_real_distribution<T>>;
     static_assert(std::is_arithmetic_v<T>, "T must be an arithmetic type");
     if (std::is_integral_v<T>)
-        insist(T(max - count) < min, "range is too small to provide enough distinct values");
+        M_insist(T(max - count) < min, "range is too small to provide enough distinct values");
 
     std::vector<T> values;
     values.reserve(count);
@@ -68,9 +68,9 @@ void generate_numeric_column(ColumnStore &store, const Attribute &attr, const st
                              const std::size_t begin, const std::size_t end)
 {
     static_assert(std::is_arithmetic_v<T>, "T must be an arithmetic type");
-    insist(begin < store.num_rows(), "begin out of bounds");
-    insist(end <= store.num_rows(), "end out of bounds");
-    insist(begin <= end);
+    M_insist(begin < store.num_rows(), "begin out of bounds");
+    M_insist(end <= store.num_rows(), "end out of bounds");
+    M_insist(begin <= end);
 
     const std::size_t count = end - begin;
 
@@ -82,7 +82,7 @@ void generate_numeric_column(ColumnStore &store, const Attribute &attr, const st
                                                                num_distinct_values);
     else
         values = datagen::generate_uniform_distinct_numbers<T>(T(0), T(1), num_distinct_values);
-    insist(values.size() == num_distinct_values);
+    M_insist(values.size() == num_distinct_values);
 
     /* Write distinct values repeatedly in arbitrary order to column. */
     auto &mem = store.memory(attr.id);
@@ -100,7 +100,7 @@ void generate_numeric_column(ColumnStore &store, const Attribute &attr, const st
         }
     }
 exit:
-    insist(ptr - mem.as<T*>() == long(end), "incorrect number of elements written");
+    M_insist(ptr - mem.as<T*>() == long(end), "incorrect number of elements written");
 }
 
 template<typename T>
@@ -114,9 +114,9 @@ void generate_correlated_numeric_columns(ColumnStore &store_left,
                                          const std::size_t num_distinct_values_matching)
 {
     static_assert(std::is_arithmetic_v<T>, "T must be an arithmetic type");
-    insist(num_distinct_values_left >= num_distinct_values_matching,
+    M_insist(num_distinct_values_left >= num_distinct_values_matching,
            "num_distinct_values_left must be larger than num_distinct_values_matching");
-    insist(num_distinct_values_right >= num_distinct_values_matching,
+    M_insist(num_distinct_values_right >= num_distinct_values_matching,
            "num_distinct_values_right must be larger than num_distinct_values_matching");
 
     /* Generate a single set of distinct values to draw from to fill left and right side, with an overlap of exactly
@@ -149,7 +149,7 @@ void generate_correlated_numeric_columns(ColumnStore &store_left,
             }
         }
         exit_left:
-        insist(left - mem_left.as<T *>() == long(count_left), "incorrect number of elements written to left store");
+        M_insist(left - mem_left.as<T *>() == long(count_left), "incorrect number of elements written to left store");
     }
 
     /* Fill `store_right`. */
@@ -171,7 +171,7 @@ void generate_correlated_numeric_columns(ColumnStore &store_left,
             }
         }
         exit_right:
-        insist(right - mem_right.as<T *>() ==
+        M_insist(right - mem_right.as<T *>() ==
                long(count_right), "incorrect number of elements written to right store");
     }
 }
@@ -181,14 +181,14 @@ void generate_correlated_numeric_columns(ColumnStore &store_left,
 void m::set_null_bitmap(ColumnStore &store, const std::vector<uint8_t> &bytes,
                         const std::size_t begin, const std::size_t end)
 {
-    insist(end <= store.num_rows(), "end out of bounds");
-    insist(begin <= end, "begin out of bounds");
+    M_insist(end <= store.num_rows(), "end out of bounds");
+    M_insist(begin <= end, "begin out of bounds");
 
     const std::size_t num_attrs = store.table().size();
     uint8_t *null_bitmap_col = store.memory(num_attrs).as<uint8_t*>();
 
     const std::size_t null_bitmap_size_in_bytes = (num_attrs + 7) / 8;
-    insist(bytes.size() == null_bitmap_size_in_bytes, "invalid number of bytes to set");
+    M_insist(bytes.size() == null_bitmap_size_in_bytes, "invalid number of bytes to set");
 
     const std::size_t num_rows_to_set = end - begin;
     const std::size_t first_byte_to_set = null_bitmap_size_in_bytes * begin;
@@ -222,7 +222,7 @@ void m::set_all_not_null(ColumnStore &store, const std::size_t begin, const std:
     for (i = num_attrs; i >= 8; i -= 8)
         bytes.emplace_back(uint8_t(~0U));
     if (i) {
-        insist(i < 8);
+        M_insist(i < 8);
         bytes.emplace_back(uint8_t((1U << i) - 1));
     }
 
@@ -232,15 +232,15 @@ void m::set_all_not_null(ColumnStore &store, const std::size_t begin, const std:
 
 void m::generate_primary_keys(ColumnStore &store, const Attribute &attr, const std::size_t begin, const std::size_t end)
 {
-    insist(begin < store.num_rows(), "begin out of bounds");
-    insist(end <= store.num_rows(), "end out of bounds");
-    insist(begin <= end);
-    insist(attr.type->is_integral(), "primary key columns must be of integral type");
+    M_insist(begin < store.num_rows(), "begin out of bounds");
+    M_insist(end <= store.num_rows(), "end out of bounds");
+    M_insist(begin <= end);
+    M_insist(attr.type->is_integral(), "primary key columns must be of integral type");
 
     auto n = as<const Numeric>(attr.type);
     switch (n->size()) {
         default:
-            unreachable("unsupported size of primary key");
+            M_unreachable("unsupported size of primary key");
 
         case 32: {
             auto &mem = store.memory(attr.id);
@@ -266,7 +266,7 @@ void m::generate_primary_keys(ColumnStore &store, const Attribute &attr, const s
 void m::generate_column_data(m::ColumnStore &store, const m::Attribute &attr, const std::size_t num_distinct_values,
                              const std::size_t begin, const std::size_t end)
 {
-    insist(end >= begin);
+    M_insist(end >= begin);
     if (streq(attr.name, "id")) { // Generate primary key.
         generate_primary_keys(store, attr, begin, end);
     } else if (auto n = cast<const Numeric>(attr.type)) {
@@ -294,11 +294,11 @@ void m::generate_column_data(m::ColumnStore &store, const m::Attribute &attr, co
                 }
                 break;
             case m::Numeric::N_Decimal:
-                unreachable("unsupported type");
+                M_unreachable("unsupported type");
         }
 
     } else {
-        unreachable("unsupported type");
+        M_unreachable("unsupported type");
     }
 }
 
@@ -315,7 +315,7 @@ void m::generate_correlated_column_data(ColumnStore &store_left,
                                         const std::size_t num_distinct_values_matching)
 {
     if (streq(attr.name, "id")) { // primary keys cannot be correlated.
-        unreachable("primary keys unsupported");
+        M_unreachable("primary keys unsupported");
     } else if (auto n = cast<const Numeric>(attr.type)) {
         switch (n->size()) {
 #define CASE(N) case N: \
@@ -331,6 +331,6 @@ void m::generate_correlated_column_data(ColumnStore &store_left,
 #undef CASE
         }
     } else {
-        unreachable("unsupported type");
+        M_unreachable("unsupported type");
     }
 }

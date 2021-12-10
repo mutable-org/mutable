@@ -59,7 +59,7 @@ struct m::StackMachineBuilder : ConstASTExprVisitor
     static std::unordered_map<std::string, std::regex> regexes_; ///< regexes built from patterns in LIKE expressions
 
     using ConstASTExprVisitor::operator();
-    void operator()(Const<ErrorExpr>&) override { unreachable("invalid expression"); }
+    void operator()(Const<ErrorExpr>&) override { M_unreachable("invalid expression"); }
     void operator()(Const<Designator> &e) override;
     void operator()(Const<Constant> &e) override;
     void operator()(Const<FnApplicationExpr> &e) override;
@@ -74,7 +74,7 @@ void StackMachineBuilder::operator()(Const<Designator> &e)
 {
     /* Given the designator, identify the position of its value in the tuple.  */
     auto idx = schema_[{e.table_name.text, e.attr_name.text}].first;
-    insist(idx < schema_.num_entries(), "index out of bounds");
+    M_insist(idx < schema_.num_entries(), "index out of bounds");
     stack_machine_.emit_Ld_Tup(tuple_id, idx);
 }
 
@@ -93,20 +93,20 @@ void StackMachineBuilder::operator()(Const<FnApplicationExpr> &e)
     /* Load the arguments for the function call. */
     switch (fn.fnid) {
         default:
-            unreachable("function kind not implemented");
+            M_unreachable("function kind not implemented");
 
         case Function::FN_UDF:
-            unreachable("UDFs not yet supported");
+            M_unreachable("UDFs not yet supported");
 
         case Function::FN_ISNULL:
-            insist(e.args.size() == 1);
+            M_insist(e.args.size() == 1);
             (*this)(*e.args[0]);
             stack_machine_.emit_Is_Null();
             break;
 
         /*----- Type casts -------------------------------------------------------------------------------------------*/
         case Function::FN_INT: {
-            insist(e.args.size() == 1);
+            M_insist(e.args.size() == 1);
             (*this)(*e.args[0]);
             auto ty = e.args[0]->type();
             if (ty->is_float())
@@ -114,7 +114,7 @@ void StackMachineBuilder::operator()(Const<FnApplicationExpr> &e)
             else if (ty->is_double())
                 stack_machine_.emit_Cast_i_d();
             else if (ty->is_decimal()) {
-                unreachable("not implemented");
+                M_unreachable("not implemented");
             } else if (ty->is_boolean()) {
                 stack_machine_.emit_Cast_i_b();
             } else {
@@ -133,7 +133,7 @@ void StackMachineBuilder::operator()(Const<FnApplicationExpr> &e)
             oss << e;
             auto name = C.pool(oss.str().c_str());
             auto idx = schema_[{name}].first;
-            insist(idx < schema_.num_entries(), "index out of bounds");
+            M_insist(idx < schema_.num_entries(), "index out of bounds");
             stack_machine_.emit_Ld_Tup(tuple_id, idx);
             return;
         }
@@ -147,7 +147,7 @@ void StackMachineBuilder::operator()(Const<UnaryExpr> &e)
 
     switch (e.op().type) {
         default:
-            unreachable("illegal token type");
+            M_unreachable("illegal token type");
 
         case TK_PLUS:
             /* nothing to be done */
@@ -176,11 +176,11 @@ void StackMachineBuilder::operator()(Const<UnaryExpr> &e)
             else if (ty->is_boolean())
                 stack_machine_.emit_Not_b(); // negation of bool is always logical
             else
-                unreachable("illegal type");
+                M_unreachable("illegal type");
             break;
 
         case TK_Not:
-            insist(ty->is_boolean(), "illegal type");
+            M_insist(ty->is_boolean(), "illegal type");
             stack_machine_.emit_Not_b();
             break;
     }
@@ -210,7 +210,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
         auto n_from = as<const Numeric>(from_ty);
         auto n_to = as<const Numeric>(to_ty);
         if (n_from->scale < n_to->scale) {
-            insist(n_to->is_decimal(), "only decimals have a scale");
+            M_insist(n_to->is_decimal(), "only decimals have a scale");
             /* Scale up. */
             auto delta = n_to->scale - n_from->scale;
             const int64_t factor = powi<int64_t>(10, delta);
@@ -232,7 +232,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
                     break;
             }
         } else if (n_from->scale > n_to->scale) {
-            insist(n_from->is_decimal(), "only decimals have a scale");
+            M_insist(n_from->is_decimal(), "only decimals have a scale");
             /* Scale down. */
             auto delta = n_from->scale - n_to->scale;
             const int64_t factor = powi<int64_t>(10, delta);
@@ -253,7 +253,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
                     break;
 
                 case Numeric::N_Int:
-                    unreachable("int cannot be scaled down");
+                    M_unreachable("int cannot be scaled down");
             }
         }
     };
@@ -275,7 +275,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
 
     std::string opname;
     switch (e.op().type) {
-        default: unreachable("illegal operator");
+        default: M_unreachable("illegal operator");
 
         /*----- Arithmetic operators ---------------------------------------------------------------------------------*/
         case TK_PLUS:           opname = "Add"; break;
@@ -302,7 +302,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
     }
 
     switch (e.op().type) {
-        default: unreachable("illegal operator");
+        default: M_unreachable("illegal operator");
 
         /*----- Arithmetic operators ---------------------------------------------------------------------------------*/
         case TK_PLUS:
@@ -353,9 +353,9 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
 
             /* Scale down again, if necessary. */
             the_scale -= n_res->scale;
-            insist(the_scale >= 0);
+            M_insist(the_scale >= 0);
             if (the_scale != 0) {
-                insist(n_res->is_decimal());
+                M_insist(n_res->is_decimal());
                 const int64_t factor = powi<int64_t>(10, the_scale);
                 load_numeric(factor, n_res);
                 stack_machine_.emit_Div_i();
@@ -444,7 +444,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
         case TK_EQUAL:
         case TK_BANG_EQUAL:
             if (ty_lhs->is_numeric()) {
-                insist(ty_rhs->is_numeric());
+                M_insist(ty_rhs->is_numeric());
                 auto n_lhs = as<const Numeric>(ty_lhs);
                 auto n_rhs = as<const Numeric>(ty_rhs);
                 auto n_res = arithmetic_join(n_lhs, n_rhs);
@@ -505,7 +505,7 @@ void StackMachineBuilder::operator()(Const<QueryExpr> &e) {
     /* Given the query expression, identify the position of its value in the tuple.  */
     Catalog &C = Catalog::Get();
     std::size_t idx(schema_[{e.alias(), C.pool("$res")}].first);
-    insist(idx < schema_.num_entries(), "index out of bounds");
+    M_insist(idx < schema_.num_entries(), "index out of bounds");
     stack_machine_.emit_Ld_Tup(tuple_id, idx);
 }
 
@@ -515,9 +515,9 @@ void StackMachineBuilder::operator()(Const<QueryExpr> &e) {
  *====================================================================================================================*/
 
 const std::unordered_map<std::string, StackMachine::Opcode> StackMachine::STR_TO_OPCODE = {
-#define DB_OPCODE(CODE, ...) { #CODE, StackMachine::Opcode:: CODE },
+#define M_OPCODE(CODE, ...) { #CODE, StackMachine::Opcode:: CODE },
 #include "tables/Opcodes.tbl"
-#undef DB_OPCODE
+#undef M_OPCODE
 };
 
 StackMachine::StackMachine(Schema in_schema, const Expr &expr)
@@ -559,14 +559,14 @@ void StackMachine::emit(const cnf::CNF &cnf, std::size_t tuple_id)
 
 void StackMachine::emit_Ld(const Type *ty)
 {
-    insist(not ty->is_boolean(), "to access a boolean use `emit_Ld_b(offset)`");
+    M_insist(not ty->is_boolean(), "to access a boolean use `emit_Ld_b(offset)`");
 
     if (auto n = cast<const Numeric>(ty)) {
         switch (n->kind) {
             case Numeric::N_Int:
             case Numeric::N_Decimal: {
                 switch (n->size()) {
-                    default: unreachable("illegal type");
+                    default: M_unreachable("illegal type");
                     case  8: emit_Ld_i8();  break;
                     case 16: emit_Ld_i16(); break;
                     case 32: emit_Ld_i32(); break;
@@ -590,20 +590,20 @@ void StackMachine::emit_Ld(const Type *ty)
     } else if (auto dt = cast<const DateTime>(ty)) {
         emit_Ld_i64();
     } else {
-        unreachable("illegal type");
+        M_unreachable("illegal type");
     }
 }
 
 void StackMachine::emit_St(const Type *ty)
 {
-    insist(not ty->is_boolean(), "to access a boolean use `emit_St_b(offset)`");
+    M_insist(not ty->is_boolean(), "to access a boolean use `emit_St_b(offset)`");
 
     if (auto n = cast<const Numeric>(ty)) {
         switch (n->kind) {
             case Numeric::N_Int:
             case Numeric::N_Decimal: {
                 switch (n->size()) {
-                    default: unreachable("illegal type");
+                    default: M_unreachable("illegal type");
                     case  8: emit_St_i8();  break;
                     case 16: emit_St_i16(); break;
                     case 32: emit_St_i32(); break;
@@ -627,7 +627,7 @@ void StackMachine::emit_St(const Type *ty)
     } else if (auto dt = cast<const DateTime>(ty)) {
         emit_St_i64();
     } else {
-        unreachable("illegal type");
+        M_unreachable("illegal type");
     }
 }
 
@@ -711,7 +711,7 @@ void StackMachine::emit_Cast(const Type *to_ty, const Type *from_ty)
                             return;
 
                         case Numeric::N_Float: /* float -> double */
-                            insist(n_to->size() == 64, "float to float");
+                            M_insist(n_to->size() == 64, "float to float");
                             emit_Cast_d_f();
                             return;
                     }
@@ -728,7 +728,7 @@ void StackMachine::emit_Cast(const Type *to_ty, const Type *from_ty)
                             return;
 
                         case Numeric::N_Float:
-                            insist(n_to->size() == 32, "double to double");
+                            M_insist(n_to->size() == 32, "double to double");
                             emit_Cast_f_d(); /* double -> float */
                             return;
                     }
@@ -769,12 +769,12 @@ void StackMachine::emit_Cast(const Type *to_ty, const Type *from_ty)
                 break;
         }
     } else if (auto cs_from = cast<const CharacterSequence>(from_ty)) {
-        insist(to_ty->is_character_sequence()); // XXX any checks necessary?
+        M_insist(to_ty->is_character_sequence()); // XXX any checks necessary?
         return; // nothing to be done
     } else if (auto b_from = cast<const Boolean>(from_ty)) {
         auto n_to = as<const Numeric>(to);
 
-        insist(to_ty->is_numeric());
+        M_insist(to_ty->is_numeric());
         switch (n_to->kind) {
             case Numeric::N_Int: /* bool -> int */
                 emit_Cast_i_b();
@@ -782,19 +782,19 @@ void StackMachine::emit_Cast(const Type *to_ty, const Type *from_ty)
 
             case Numeric::N_Float:
             case Numeric::N_Decimal:
-                unreachable("unsupported conversion");
+                M_unreachable("unsupported conversion");
         }
     }
 
-    unreachable("unsupported conversion");
+    M_unreachable("unsupported conversion");
 }
 
 void StackMachine::operator()(Tuple **tuples) const
 {
     static const void *labels[] = {
-#define DB_OPCODE(CODE, ...) && CODE,
+#define M_OPCODE(CODE, ...) && CODE,
 #include "tables/Opcodes.tbl"
-#undef DB_OPCODE
+#undef M_OPCODE
     };
 
     const_cast<StackMachine*>(this)->emit_Stop();
@@ -809,7 +809,7 @@ void StackMachine::operator()(Tuple **tuples) const
 #define NEXT goto *labels[std::size_t(*op_++)]
 
 #define PUSH(VAL, NUL) { \
-    insist(top_ < required_stack_size(), "index out of bounds"); \
+    M_insist(top_ < required_stack_size(), "index out of bounds"); \
     values_[top_] = (VAL); \
     null_bits_[top_] = (NUL); \
     ++top_; \
@@ -826,25 +826,25 @@ void StackMachine::operator()(Tuple **tuples) const
  *====================================================================================================================*/
 
 Stop_Z: {
-    insist(top_ >= 1);
+    M_insist(top_ >= 1);
     if (TOP.as_i() == 0) goto Stop; // stop evaluation on ZERO
 }
 NEXT;
 
 Stop_NZ: {
-    insist(top_ >= 1);
+    M_insist(top_ >= 1);
     if (TOP.as_i() != 0) goto Stop; // stop evaluation on NOT ZERO
 }
 NEXT;
 
 Stop_False: {
-    insist(top_ >= 1);
+    M_insist(top_ >= 1);
     if (not TOP.as_b()) goto Stop; // stop evaluation on FALSE
 }
 NEXT;
 
 Stop_True: {
-    insist(top_ >= 1);
+    M_insist(top_ >= 1);
     if (TOP.as_b()) goto Stop; // stop evaluation on TRUE
 }
 NEXT;
@@ -874,17 +874,17 @@ Dup:
 /* Load a value from the context to the top of the value_stack_. */
 Ld_Ctx: {
     std::size_t idx = std::size_t(*op_++);
-    insist(idx < context_.size(), "index out of bounds");
+    M_insist(idx < context_.size(), "index out of bounds");
     PUSH(context_[idx], false);
 }
 NEXT;
 
 Upd_Ctx: {
-    insist(top_ >= 1);
+    M_insist(top_ >= 1);
     std::size_t idx = static_cast<std::size_t>(*op_++);
-    insist(idx < context_.size(), "index out of bounds");
+    M_insist(idx < context_.size(), "index out of bounds");
 #ifndef NDEBUG
-    insist(context_[idx].type == TOP.type, "update must not change the type of a context entry");
+    M_insist(context_[idx].type == TOP.type, "update must not change the type of a context entry");
 #endif
     const_cast<StackMachine*>(this)->context_[idx] = TOP;
 }
@@ -953,7 +953,7 @@ Putc: {
 NEXT;
 
 Print_i: {
-    insist(top_ >= 1);
+    M_insist(top_ >= 1);
     std::size_t index = std::size_t(*op_++);
     std::ostream &out = *reinterpret_cast<std::ostream*>(context_[index].as_p());
     if (TOP_IS_NULL)
@@ -964,7 +964,7 @@ Print_i: {
 NEXT;
 
 Print_f: {
-    insist(top_ >= 1);
+    M_insist(top_ >= 1);
     std::size_t index = std::size_t(*op_++);
     std::ostream &out = *reinterpret_cast<std::ostream*>(context_[index].as_p());
     if (TOP_IS_NULL) {
@@ -978,7 +978,7 @@ Print_f: {
 NEXT;
 
 Print_d: {
-    insist(top_ >= 1);
+    M_insist(top_ >= 1);
     std::size_t index = std::size_t(*op_++);
     std::ostream &out = *reinterpret_cast<std::ostream*>(context_[index].as_p());
     if (TOP_IS_NULL) {
@@ -992,7 +992,7 @@ Print_d: {
 NEXT;
 
 Print_s: {
-    insist(top_ >= 1);
+    M_insist(top_ >= 1);
     std::size_t index = std::size_t(*op_++);
     std::ostream &out = *reinterpret_cast<std::ostream*>(context_[index].as_p());
     if (TOP_IS_NULL) {
@@ -1005,7 +1005,7 @@ Print_s: {
 NEXT;
 
 Print_b: {
-    insist(top_ >= 1);
+    M_insist(top_ >= 1);
     std::size_t index = std::size_t(*op_++);
     std::ostream &out = *reinterpret_cast<std::ostream*>(context_[index].as_p());
     if (TOP_IS_NULL)
@@ -1056,7 +1056,7 @@ NEXT;
 /*----- Load from memory ---------------------------------------------------------------------------------------------*/
 
 #define LOAD(TO_TYPE, FROM_TYPE) { \
-    insist(top_ >= 1); \
+    M_insist(top_ >= 1); \
     const void *ptr = TOP.as_p(); \
     TOP = (TO_TYPE)(*reinterpret_cast<const FROM_TYPE*>(ptr)); \
 } \
@@ -1070,7 +1070,7 @@ Ld_f:   LOAD(float,   float);
 Ld_d:   LOAD(double,  double);
 
 Ld_s: {
-    insist(top_ >= 1);
+    M_insist(top_ >= 1);
     uint64_t length = uint64_t(*op_++);
     void *ptr = TOP.as_p();
     strncpy(reinterpret_cast<char*>(p_mem), reinterpret_cast<char*>(ptr), length);
@@ -1081,7 +1081,7 @@ Ld_s: {
 NEXT;
 
 Ld_b: {
-    insist(top_ >= 1);
+    M_insist(top_ >= 1);
     uint64_t mask = uint64_t(*op_++);
     void *ptr = TOP.as_p();
     TOP = bool(*reinterpret_cast<uint8_t*>(ptr) & mask);
@@ -1093,7 +1093,7 @@ NEXT;
 /*----- Store to memory ----------------------------------------------------------------------------------------------*/
 
 #define STORE(TO_TYPE, FROM_TYPE) { \
-    insist(top_ >= 2); \
+    M_insist(top_ >= 2); \
     if (TOP_IS_NULL) { POP(); POP(); NEXT; } \
     TO_TYPE val = TOP.as<FROM_TYPE>(); \
     POP(); \
@@ -1111,7 +1111,7 @@ St_f:   STORE(float,   float);
 St_d:   STORE(double,  double);
 
 St_s: {
-    insist(top_ >= 2);
+    M_insist(top_ >= 2);
     uint64_t length = uint64_t(*op_++);
     if (TOP_IS_NULL) { POP(); POP(); NEXT; }
 
@@ -1124,7 +1124,7 @@ St_s: {
 NEXT;
 
 St_b: {
-    insist(top_ >= 2);
+    M_insist(top_ >= 2);
     uint64_t bit_offset = uint64_t(*op_++);
     if (TOP_IS_NULL) { POP(); POP(); NEXT; }
 
@@ -1144,14 +1144,14 @@ NEXT;
  *====================================================================================================================*/
 
 #define UNARY(OP, TYPE) { \
-    insist(top_ >= 1); \
+    M_insist(top_ >= 1); \
     TYPE val = TOP.as<TYPE>(); \
     TOP = OP(val); \
 } \
 NEXT;
 
 #define BINARY(OP, TYPE) { \
-    insist(top_ >= 2); \
+    M_insist(top_ >= 2); \
     TYPE rhs = TOP.as<TYPE>(); \
     bool is_rhs_null = TOP_IS_NULL; \
     POP(); \
@@ -1177,7 +1177,7 @@ Add_i: BINARY(std::plus{}, int64_t);
 Add_f: BINARY(std::plus{}, float);
 Add_d: BINARY(std::plus{}, double);
 Add_p: {
-    insist(top_ >= 2);
+    M_insist(top_ >= 2);
     void *rhs = TOP.as_p();
     POP();
     const uint64_t lhs = TOP.as<int64_t>();
@@ -1207,7 +1207,7 @@ Mod_i: BINARY(std::modulus{}, int64_t);
 
 /* Concatenate two strings. */
 Cat_s: {
-    insist(top_ >= 2);
+    M_insist(top_ >= 2);
 
     bool rhs_is_null = TOP_IS_NULL;
     Value rhs = TOP;
@@ -1223,7 +1223,7 @@ Cat_s: {
         NEXT;
     }
 
-    insist(not rhs_is_null and not lhs_is_null);
+    M_insist(not rhs_is_null and not lhs_is_null);
     char *dest = reinterpret_cast<char*>(p_mem);
     TOP = dest;
     /* Append LHS. */
@@ -1256,7 +1256,7 @@ Xor_i: BINARY(std::bit_xor{}, int64_t);
 
 /* Shift left - with operand on stack. */
 ShL_i: {
-    insist(top_ >= 2);
+    M_insist(top_ >= 2);
     uint64_t count = TOP.as<int64_t>();
     POP();
     uint64_t val = TOP.as<int64_t>();
@@ -1266,7 +1266,7 @@ NEXT;
 
 /* Shift left immediate - with operand as argument. */
 ShLi_i: {
-    insist(top_ >= 1);
+    M_insist(top_ >= 1);
     std::size_t count = std::size_t(*op_++);
     uint64_t val = TOP.as<int64_t>();
     TOP = uint64_t(val << count);
@@ -1275,7 +1275,7 @@ NEXT;
 
 /* Shift arithmetical right - with operand as argument. */
 SARi_i: {
-    insist(top_ >= 1);
+    M_insist(top_ >= 1);
     std::size_t count = std::size_t(*op_++);
     int64_t val = TOP.as<int64_t>(); // signed integer for arithmetical shift
     TOP = int64_t(val >> count);
@@ -1292,7 +1292,7 @@ Not_b: UNARY(not, bool);
 
 /* Logical and with three-valued logic (https://en.wikipedia.org/wiki/Three-valued_logic#Kleene_and_Priest_logics). */
 And_b: {
-    insist(top_ >= 2);
+    M_insist(top_ >= 2);
     bool rhs = TOP.as<bool>();
     bool is_rhs_null = TOP_IS_NULL;
     POP();
@@ -1305,7 +1305,7 @@ NEXT;
 
 /* Logical or with three-valued logic (https://en.wikipedia.org/wiki/Three-valued_logic#Kleene_and_Priest_logics). */
 Or_b: {
-    insist(top_ >= 2);
+    M_insist(top_ >= 2);
     bool rhs = TOP.as<bool>();
     bool is_rhs_null = TOP_IS_NULL;
     POP();
@@ -1322,14 +1322,14 @@ NEXT;
  *====================================================================================================================*/
 
 EqZ_i: {
-    insist(top_ >= 1);
+    M_insist(top_ >= 1);
     uint64_t val = TOP.as<int64_t>();
     TOP = val == 0;
 }
 NEXT;
 
 NEZ_i: {
-    insist(top_ >= 1);
+    M_insist(top_ >= 1);
     uint64_t val = TOP.as<int64_t>();
     TOP = val != 0;
 }
@@ -1368,7 +1368,7 @@ GE_d: BINARY(std::greater_equal{}, double);
 GE_s: BINARY(0 <= strcmp, char*);
 
 #define CMP(TYPE) { \
-    insist(top_ >= 2); \
+    M_insist(top_ >= 2); \
     TYPE rhs = TOP.as<TYPE>(); \
     bool is_rhs_null = TOP_IS_NULL; \
     POP(); \
@@ -1388,7 +1388,7 @@ Cmp_s: BINARY(strcmp, char*);
 #undef CMP
 
 Like_const: {
-    insist(top_ >= 2);
+    M_insist(top_ >= 2);
     std::regex *re = TOP.as<std::regex*>();
     POP();
     if (not TOP_IS_NULL) {
@@ -1399,7 +1399,7 @@ Like_const: {
 NEXT;
 
 Like_expr: {
-    insist(top_ >= 2);
+    M_insist(top_ >= 2);
     if (TOP_IS_NULL) {
         POP();
         TOP_IS_NULL = true;
@@ -1420,7 +1420,7 @@ NEXT;
  *====================================================================================================================*/
 
 Sel: {
-    insist(top_ >= 3);
+    M_insist(top_ >= 3);
     bool cond_is_null = null_bits_[top_ - 3UL];
 
     if (cond_is_null) {

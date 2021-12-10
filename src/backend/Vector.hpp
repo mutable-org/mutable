@@ -44,7 +44,7 @@ struct Vector
         the_iterator & operator++() { mask_ = mask_ & (mask_ - 1); /* reset lowest set bit */ return *this; }
         the_iterator operator++(int) { auto clone = *this; ++clone; return clone; }
 
-        std::size_t index() const { insist(mask_ != 0); return __builtin_ctzl(mask_); }
+        std::size_t index() const { M_insist(mask_ != 0); return __builtin_ctzl(mask_); }
 
         /** Returns true iff the attribute with id `attr_id` is NULL. */
         bool is_null(std::size_t attr_id) const;
@@ -78,9 +78,9 @@ struct Vector
 
         template<>
         bool get<bool>(std::size_t attr_id) const {
-            insist(vec_->alive(index()));
-            insist(attr_id < vec_->schema.size(), "invalid attribute id");
-            insist(not is_null(attr_id), "value is NULL");
+            M_insist(vec_->alive(index()));
+            M_insist(attr_id < vec_->schema.size(), "invalid attribute id");
+            M_insist(not is_null(attr_id), "value is NULL");
             auto val_col = vec_->columns_[attr_id];
             const auto idx = index();
             const std::size_t bytes = idx / 8;
@@ -90,9 +90,9 @@ struct Vector
 
         template<>
         std::string get<std::string>(std::size_t attr_id) const {
-            insist(vec_->alive(index()));
-            insist(attr_id < vec_->schema.size(), "invalid attribute id");
-            insist(not is_null(attr_id), "value is NULL");
+            M_insist(vec_->alive(index()));
+            M_insist(attr_id < vec_->schema.size(), "invalid attribute id");
+            M_insist(not is_null(attr_id), "value is NULL");
             auto val_col = vec_->columns_[attr_id];
             auto ty = vec_->schema[attr_id].type;
             auto len = as<const CharacterSequence>(ty)->length;
@@ -103,7 +103,7 @@ struct Vector
 
         template<>
         void set<bool>(std::size_t attr_id, bool value) {
-            insist(attr_id < vec_->schema.size(), "invalid attribute id");
+            M_insist(attr_id < vec_->schema.size(), "invalid attribute id");
             set_null(attr_id, false);
             auto val_col = vec_->columns_[attr_id];
             const auto idx = index();
@@ -113,7 +113,7 @@ struct Vector
         }
 
         void set(std::size_t attr_id, const std::string &str) {
-            insist(attr_id < vec_->schema.size(), "invalid attribute id");
+            M_insist(attr_id < vec_->schema.size(), "invalid attribute id");
             set_null(attr_id, false);
             auto val_col = vec_->columns_[attr_id];
             auto ty = vec_->schema[attr_id].type;
@@ -149,7 +149,7 @@ struct Vector
     /** Returns an iterator, starting at the given `index`.  The iterator starts *exactly* at `index`, no matter whether
      * the value is alive or dead. */
     iterator at(std::size_t index) {
-        insist(index < capacity());
+        M_insist(index < capacity());
         const uint64_t index_bit = 1UL << index;
         return iterator(this, (mask_ & ~(index_bit - 1UL)) | index_bit);
     }
@@ -161,7 +161,7 @@ struct Vector
 
     /** Check whether the tuple at the given `index` is alive. */
     bool alive(std::size_t index) const {
-        insist(index < capacity());
+        M_insist(index < capacity());
         return mask_ & (1UL << index);
     }
 
@@ -178,11 +178,11 @@ struct Vector
 
     public:
     /** Make all tuples in the vector alive. */
-    void fill() { mask_ = AllOnes(); insist(size() == capacity()); }
+    void fill() { mask_ = AllOnes(); M_insist(size() == capacity()); }
 
     /** Erase a tuple at the given `index` from the vector. */
     void erase(std::size_t index) {
-        insist(index < capacity(), "index out of bounds");
+        M_insist(index < capacity(), "index out of bounds");
         setbit(&mask_, false, index);
     }
 
@@ -238,7 +238,7 @@ template<std::size_t N>
 template<bool C>
 bool Vector<N>::the_iterator<C>::is_null(std::size_t attr_id) const
 {
-    insist(attr_id < vec_->schema.size(), "invalid attribute id");
+    M_insist(attr_id < vec_->schema.size(), "invalid attribute id");
     auto bitmap_col = vec_->null_bitmap();
     const std::size_t bits_per_tuple = vec_->schema.size(); // one bit per attribute
     const std::size_t bit_offset = bits_per_tuple * index() + attr_id;
@@ -251,7 +251,7 @@ template<std::size_t N>
 template<bool C>
 void Vector<N>::the_iterator<C>::set_null(std::size_t attr_id, bool isnull)
 {
-    insist(attr_id < vec_->schema.size(), "invalid attribute id");
+    M_insist(attr_id < vec_->schema.size(), "invalid attribute id");
     auto bitmap_col = vec_->null_bitmap();
     const std::size_t bits_per_tuple = vec_->schema.size(); // one bit per attribute
     const std::size_t bit_offset = bits_per_tuple * index() + attr_id;
@@ -265,9 +265,9 @@ template<bool C>
 template<typename T>
 T Vector<N>::the_iterator<C>::get(std::size_t attr_id) const
 {
-    insist(vec_->alive(index()));
-    insist(attr_id < vec_->schema.size(), "invalid attribute id");
-    insist(not is_null(attr_id), "value is NULL");
+    M_insist(vec_->alive(index()));
+    M_insist(attr_id < vec_->schema.size(), "invalid attribute id");
+    M_insist(not is_null(attr_id), "value is NULL");
     auto val_col = vec_->columns_[attr_id];
     return reinterpret_cast<T*>(val_col)[index()];
 }
@@ -276,7 +276,7 @@ template<std::size_t N>
 template<bool C>
 template<typename T>
 void Vector<N>::the_iterator<C>::set(std::size_t attr_id, T value) {
-    insist(attr_id < vec_->schema.size(), "invalid attribute id");
+    M_insist(attr_id < vec_->schema.size(), "invalid attribute id");
     set_null(attr_id, false);
     auto val_col = vec_->columns_[attr_id];
     reinterpret_cast<T*>(val_col)[index()] = value;

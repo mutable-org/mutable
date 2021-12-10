@@ -36,7 +36,7 @@ struct SmallBitset
         std::size_t offset_;
 
         public:
-        Proxy(reference_type S, std::size_t offset) : S_(S), offset_(offset) { insist(offset_ < CAPACITY); }
+        Proxy(reference_type S, std::size_t offset) : S_(S), offset_(offset) { M_insist(offset_ < CAPACITY); }
 
         operator bool() const { return (S_.bits_ >> offset_) & 0b1; }
 
@@ -62,7 +62,7 @@ struct SmallBitset
         iterator & operator++() { bits_ = _blsr_u64(bits_); return *this; } // BMI1: reset lowest set bit
         iterator operator++(int) { auto clone = *this; ++clone; return clone; }
 
-        std::size_t operator*() const { insist(bits_ != 0); return __builtin_ctzl(bits_); }
+        std::size_t operator*() const { M_insist(bits_ != 0); return __builtin_ctzl(bits_); }
         SmallBitset as_set() const { return SmallBitset(_blsi_u64(bits_)); } // BMI1: extract lowest set isolated bit
     };
 
@@ -125,7 +125,7 @@ struct SmallBitset
 
     /** Converts a singleton set to a mask for all bits lower than the single, set bit. */
     SmallBitset singleton_to_lo_mask() const {
-        insist((bits_ & (bits_ - 1UL)) == 0UL, "not a singleton set");
+        M_insist((bits_ & (bits_ - 1UL)) == 0UL, "not a singleton set");
         return bits_ ? SmallBitset(bits_ - 1UL) : SmallBitset(0UL);
     }
 
@@ -228,13 +228,13 @@ struct dyn_array
 
     /** Returns a reference to the element at position `pos`.  Requires that `pos` is in bounds. */
     const value_type & operator[](std::size_t pos) const {
-        insist(pos < size(), "index out of bounds");
+        M_insist(pos < size(), "index out of bounds");
         return data()[pos];
     }
 
     /** Returns a reference to the element at position `pos`.  Requires that `pos` is in bounds. */
     value_type & operator[](std::size_t pos) {
-        insist(pos < size(), "index out of bounds");
+        M_insist(pos < size(), "index out of bounds");
         return data()[pos];
     }
 
@@ -329,7 +329,7 @@ struct doubly_linked_list
         the_iterator(node_type *node, std::uintptr_t prev) : node_(node), prev_(prev) { }
 
         the_iterator & operator++() {
-            insist(node_, "cannot advance a past-the-end iterator");
+            M_insist(node_, "cannot advance a past-the-end iterator");
             node_type *curr = node_;
             node_ = reinterpret_cast<node_type*>(prev_ ^ node_->ptrxor_);
             prev_ = reinterpret_cast<std::uintptr_t>(curr);
@@ -340,7 +340,7 @@ struct doubly_linked_list
 
         the_iterator & operator--() {
             node_type *prev = reinterpret_cast<node_type*>(prev_);
-            insist(prev, "cannot retreat past the beginning");
+            M_insist(prev, "cannot retreat past the beginning");
             prev_ = prev->ptrxor_ ^ reinterpret_cast<std::uintptr_t>(node_);
             node_ = prev;
             return *this;
@@ -400,10 +400,10 @@ struct doubly_linked_list
     allocator_type & get_allocator() const noexcept { return allocator_; }
 
     /*----- Element access -------------------------------------------------------------------------------------------*/
-    reference_type front() { insist(head_); return head_->value_; }
-    const_reference_type front() const { insist(head_); return head_->value_; }
-    reference_type back() { insist(tail_); return tail_->value_; }
-    const_reference_type back() const { insist(tail_); return tail_->value_; }
+    reference_type front() { M_insist(head_); return head_->value_; }
+    const_reference_type front() const { M_insist(head_); return head_->value_; }
+    reference_type back() { M_insist(tail_); return tail_->value_; }
+    const_reference_type back() const { M_insist(tail_); return tail_->value_; }
 
     /*----- Iterators ------------------------------------------------------------------------------------------------*/
     iterator begin() { return iterator(head_, 0); }
@@ -477,8 +477,8 @@ struct doubly_linked_list
         if (first == last) return iterator(pos.node_, pos.prev_);
 
         iterator begin = insert(pos, *first++);
-        insist(begin != end());
-        insist(begin.node_);
+        M_insist(begin != end());
+        M_insist(begin.node_);
         iterator it = begin;
         while (first != last) it = insert(++it, *first++);
 
@@ -490,8 +490,8 @@ struct doubly_linked_list
     }
 
     iterator erase(iterator pos) {
-        insist(pos.node_);
-        insist(size_);
+        M_insist(pos.node_);
+        M_insist(size_);
         node_type *prev = reinterpret_cast<node_type*>(pos.prev_);
         node_type *next = reinterpret_cast<node_type*>(pos.node_->ptrxor_ ^ pos.prev_);
         if (prev)
@@ -517,15 +517,15 @@ struct doubly_linked_list
     }
 
     value_type pop_front() {
-        insist(head_);
-        insist(tail_);
-        insist(size_);
+        M_insist(head_);
+        M_insist(tail_);
+        M_insist(size_);
         value_type value = std::move(head_->value_);
         erase(begin());
         return value;
     }
 
-    void clear() { while (head_) pop_front(); insist(size_ == 0); }
+    void clear() { while (head_) pop_front(); M_insist(size_ == 0); }
 
     void swap(doubly_linked_list &other) { swap(*this, other); }
 

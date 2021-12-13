@@ -1,6 +1,6 @@
 #include "catch2/catch.hpp"
 
-#include "util/LinearModel.hpp"
+#include <mutable/util/LinearModel.hpp>
 
 
 using namespace m;

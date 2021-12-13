@@ -1,7 +1,8 @@
-#include "util/LinearModel.hpp"
+#include <mutable/util/LinearModel.hpp>
 
-#include <mutable/util/Diagnostic.hpp>
 #include "util/eigen_meta.hpp"
+#include <mutable/util/Diagnostic.hpp>
+#include <mutable/util/Diagnostic.hpp>
 
 
 using namespace m;

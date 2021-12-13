@@ -3,10 +3,10 @@
 #include <Eigen/Core>
 #include <Eigen/LU>
 #include <mutable/catalog/CostFunction.hpp>
-#include <mutable/IR/PlanTable.hpp>
 #include <mutable/IR/Operator.hpp>
+#include <mutable/IR/PlanTable.hpp>
+#include <mutable/util/LinearModel.hpp>
 #include <utility>
-#include "util/LinearModel.hpp"
 
 
 namespace m {

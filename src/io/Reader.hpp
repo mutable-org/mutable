@@ -97,7 +97,7 @@ struct DSVReader : Reader, ConstTypeVisitor
     }
     void discard_row() { while (c != EOF and c != '\n') { step(); } }
 
-    int64_t read_int();
+    int64_t read_unsigned_int();
 };
 
 }

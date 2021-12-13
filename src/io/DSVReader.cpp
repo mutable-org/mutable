@@ -273,13 +273,19 @@ void DSVReader::operator()(Const<Numeric> &ty)
 {
     switch (ty.kind) {
         case Numeric::N_Int: {
-            int64_t i = read_int();
+            bool is_neg = false;
+            if (accept('-'))
+                is_neg = true;
+            else
+                accept('+');
+            int64_t i = read_unsigned_int();
             if (c != EOF and c != '\n' and c != delimiter_) {
                 diag.e(pos) << "WARNING: Unexpected characters encountered in an integer.\n";
                 tup.null(col_idx);
                 while (c != EOF and c != '\n' and c != delimiter_) step();
                 return;
             }
+            if (is_neg) i = -i;
             tup.set(col_idx, i);
             break;
         }
@@ -287,7 +293,12 @@ void DSVReader::operator()(Const<Numeric> &ty)
         case Numeric::N_Decimal: {
             auto scale = ty.scale;
             /* Read pre dot digits. */
-            int64_t d = read_int();
+            bool is_neg = false;
+            if (accept('-'))
+                is_neg = true;
+            else
+                accept('+');
+            int64_t d = read_unsigned_int();
             // std::cerr << "Read: " << d;
             d = d * powi(10, scale);
             if (accept('.')) {
@@ -310,6 +321,7 @@ void DSVReader::operator()(Const<Numeric> &ty)
                 while (c != EOF and c != '\n' and c != delimiter_) step();
                 return;
             }
+            if (is_neg) d = -d;
             tup.set(col_idx, d);
             break;
         }
@@ -348,18 +360,12 @@ void DSVReader::operator()(Const<ErrorType>&) { M_unreachable("invalid type"); }
 void DSVReader::operator()(Const<NoneType>&) { M_unreachable("invalid type"); }
 void DSVReader::operator()(Const<FnType>&) { M_unreachable("invalid type"); }
 
-int64_t DSVReader::read_int()
+int64_t DSVReader::read_unsigned_int()
 {
     int64_t i = 0;
-    bool is_neg = false;
-    if (accept('-'))
-        is_neg = true;
-    else
-        accept('+');
     while (is_dec(c)) {
         i = 10 * i + c - '0';
         step();
     }
-    if (is_neg) i = -i;
     return i;
 }

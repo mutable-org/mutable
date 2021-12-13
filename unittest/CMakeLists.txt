@@ -53,6 +53,9 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
         # backend
         backend/InterpreterTest.cpp
         backend/StackMachineTest.cpp
+
+        # io
+        io/DSVReaderTest.cpp
     )
     target_link_libraries(unittest ${PROJECT_NAME} Threads::Threads)
 endif()

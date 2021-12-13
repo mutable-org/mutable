@@ -146,6 +146,24 @@ struct SmallBitset
     SmallBitset & operator&=(SmallBitset other) { return *this = *this & other; }
     SmallBitset & operator-=(SmallBitset other) { return *this = *this - other; }
 
+    /** Treat this `SmallBitset` as an element of the power set of *2^n* bits, where *n* is the number of bits that fit
+     * into `SmallBitset`.  Then this method advances to the next set in the power set.  The behavior is undefined if
+     * all bits are already set. */
+    SmallBitset & operator++() { M_insist(~bits_ != 0UL, "must not have all bits set"); bits_ += 1UL; return *this; }
+    /** Treat this `SmallBitset` as an element of the power set of *2^n* bits, where *n* is the number of bits that fit
+     * into `SmallBitset`.  Then this method advances to the next set in the power set.  The behavior is undefined if
+     * all bits are already set. */
+    SmallBitset operator++(int) { SmallBitset clone(*this); operator++(); return clone; }
+
+    /** Treat this `SmallBitset` as an element of the power set of *2^n* bits, where *n* is the number of bits that fit
+     * into `SmallBitset`.  Then this method advances to the previous set in the power set.  The behavior is undefined
+     * if no bits are set. */
+    SmallBitset & operator--() { M_insist(bits_, "at least one bit must be set"); bits_ -= 1UL; return *this; }
+    /** Treat this `SmallBitset` as an element of the power set of *2^n* bits, where *n* is the number of bits that fit
+     * into `SmallBitset`.  Then this method advances to the previous set in the power set.  The behavior is undefined
+     * if no bits are set. */
+    SmallBitset operator--(int) { SmallBitset clone(*this); operator--(); return clone; }
+
     /** Write a textual representation of `s` to `out`. */
     friend std::ostream & operator<<(std::ostream &out, SmallBitset s) {
         for (uint64_t i = CAPACITY; i --> 0;)

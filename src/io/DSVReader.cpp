@@ -116,7 +116,6 @@ void DSVReader::operator()(std::istream &in, const char *name)
                 discard_cell();
             }
         }
-end_of_row:
         if (c != EOF and c != '\n') {
             diag.e(pos) << "Expected end of row.\n";
             discard_row();
@@ -129,6 +128,7 @@ end_of_row:
             Tuple *args[] = { &tup };
             (*W)(args); // write tuple to store
         }
+end_of_row:
         M_insist(c == EOF or c == '\n');
         step();
     }

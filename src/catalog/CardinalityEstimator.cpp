@@ -12,14 +12,13 @@
 
 
 using namespace m;
-using DataModel = CardinalityEstimator::DataModel;
 
 
 /*======================================================================================================================
  * CardinalityEstimator
  *====================================================================================================================*/
 
-CardinalityEstimator::DataModel::~DataModel() { }
+DataModel::~DataModel() { }
 
 CardinalityEstimator::~CardinalityEstimator() { }
 

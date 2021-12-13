@@ -22,21 +22,22 @@ struct QueryGraph;
 namespace cnf { struct CNF; }
 using Subproblem = SmallBitset;
 
+
+/** A `DataModel` describes a data set.
+ *
+ * A data set is usually the result of evaluating a subplan.  The `DataModel` describes this result.  The way how
+ * the data is described depends on the actual kind of model.  A very simplistic model may only describe the upper
+ * limit of the tuples in the data set.  More sophisticated models may express statistical information, such as
+ * correlation of attributes and frequency of individual values.
+ */
+struct DataModel
+{
+    virtual ~DataModel() = 0;
+};
+
+
 struct CardinalityEstimator
 {
-    /** A `DataModel` describes a data set.
-     *
-     * A data set is usually the result of evaluating a subplan.  The `DataModel` describes this result.  The way how
-     * the data is described depends on the actual kind of model.  A very simplistic model may only describe the upper
-     * limit of the tuples in the data set.  More sophisticated models may express statistical information, such as
-     * correlation of attributes and frequency of individual values.
-     */
-    struct DataModel
-    {
-        virtual ~DataModel() = 0;
-    };
-
-
     /** `data_model_exception` is thrown if a `DataModel` implementation does not contain the requested information. */
     struct data_model_exception : m::exception
     {

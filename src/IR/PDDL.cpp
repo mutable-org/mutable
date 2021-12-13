@@ -209,8 +209,8 @@ struct RecursiveFactsGenerator
      * @param P the `Subproblem` to compute the `DataModel` for
      * @return the computed `DataModel`
      */
-    std::unique_ptr<CardinalityEstimator::DataModel> make_model(const QueryGraph &G, Subproblem P) {
-        std::vector<std::unique_ptr<CardinalityEstimator::DataModel>> data_models;
+    std::unique_ptr<DataModel> make_model(const QueryGraph &G, Subproblem P) {
+        std::vector<std::unique_ptr<DataModel>> data_models;
         for (auto P_it = P.begin(); P_it != P.end(); ++P_it) {
             Subproblem P_single;
             P_single(*P_it) = true;

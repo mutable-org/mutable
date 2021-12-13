@@ -1,131 +1,119 @@
 #pragma once
 
 #include <cmath>
+#include <cstdint>
 #include <iomanip>
+#include <iostream>
+#include <memory>
 #include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/IR/Operator.hpp>
 #include <mutable/IR/QueryGraph.hpp>
+#include <mutable/util/ADT.hpp>
+#include <mutable/util/crtp.hpp>
+#include <mutable/util/fn.hpp>
+#include <mutable/util/list_allocator.hpp>
+#include <mutable/util/malloc_allocator.hpp>
+#include <sstream>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 
 namespace m {
 
-/** This table represents all explored plans with their sub-plans, estimated size, cost, and further optional
- * properties. */
-struct PlanTable
-{
-    using Subproblem = QueryGraph::Subproblem;
+using Subproblem = SmallBitset;
 
-    friend void swap(PlanTable &first, PlanTable &second) {
-        using std::swap;
-        swap(first.graph_,       second.graph_);
-        swap(first.cost_table_,  second.cost_table_);
+struct PlanTableEntry
+{
+    Subproblem left; ///< the left subproblem
+    Subproblem right; ///< the right subproblem
+    std::unique_ptr<DataModel> model; ///< the model this subplan's result
+    double cost = std::numeric_limits<double>::infinity(); ///< the cost of the subproblem
+
+    /* Returns all subproblems. */
+    std::vector<Subproblem> get_subproblems() const {
+        std::vector<Subproblem> s;
+        if (left) s.push_back(left);
+        if (right) s.push_back(right);
+        return s;
     }
 
-    struct entry_type {
-        Subproblem left; ///< the left subproblem
-        Subproblem right; ///< the right subproblem
-        std::unique_ptr<CardinalityEstimator::DataModel> model; ///< the model this subplan's result
-        double cost = std::numeric_limits<double>::infinity(); ///< the cost of the subproblem
+    /** Returns true iff two entries are equal. */
+    bool operator==(const PlanTableEntry &other) const {
+        return (cost == other.cost) and (left == other.left) and (right == other.right);
+    }
 
-        /* Returns all subproblems. */
-        std::vector<Subproblem> get_subproblems() const {
-            std::vector<Subproblem> s;
-            if (left) s.push_back(left);
-            if (right) s.push_back(right);
-            return s;
-        }
+    /** Returns true iff two entries are not equal. */
+    bool operator!=(const PlanTableEntry &other) const { return not(*this == other); }
+};
 
-        /** Returns true iff two entries are equal. */
-        bool operator==(const entry_type &other) const {
-            return (cost == other.cost) and (left == other.left) and (right == other.right);
-        }
+struct SubproblemHash
+{
+    std::size_t operator()(Subproblem S) const { return murmur3_64(uint64_t(S)); }
+};
 
-        /** Returns true iff two entries are not equal. */
-        bool operator!=(const entry_type &other) const { return not(*this == other); }
+template<typename Actual>
+struct PlanTableBase : crtp<Actual, PlanTableBase>
+{
+    using crtp<Actual, PlanTableBase>::actual;
+    using size_type = std::size_t;
+    using Subproblem = QueryGraph::Subproblem;
+    using cost_type = decltype(PlanTableEntry::cost);
 
-    };
+    friend void swap(PlanTableBase &first, PlanTableBase &second);
 
-    private:
-    const QueryGraph *graph_ = nullptr; ///< the `QueryGraph` of the planned query
-    entry_type *cost_table_ = nullptr; ///< the table of problem plans, sizes, and costs
+    protected:
+    PlanTableBase() = default;
 
     public:
-    PlanTable() = default;
-    explicit PlanTable(const QueryGraph &G)
-        : graph_(&G)
-        , cost_table_(new entry_type[1UL << num_sources()]())
-    {
-        auto &C = Catalog::Get();
-        auto &CE = C.get_database_in_use().cardinality_estimator();
-        cost_table_[0] = {Subproblem(0), Subproblem(0), CE.empty_model(), 0}; // default entry
-    }
+    PlanTableBase(const PlanTableBase&) = delete;
+    PlanTableBase(PlanTableBase &&other) : PlanTableBase() { swap(*this, other); }
 
-    PlanTable(const PlanTable &) = delete;
-    PlanTable(PlanTable &&other) : PlanTable() { swap(*this, other); }
+    PlanTableBase & operator=(PlanTableBase other) { swap(*this, other); return *this; }
 
-    ~PlanTable() { delete[] cost_table_; }
-
-    PlanTable & operator=(PlanTable &&other) {
-        swap(*this, other);
-        return *this;
-    }
-
-    /** Returns the `QueryGraph` of the planned query. */
-    const QueryGraph & graph() const { return *graph_; }
+    /** Returns true if two tables contain the exact same entries. */
+    bool operator==(const PlanTableBase &other) const { return this->actual() == other.actual(); }
+    /** Returns true if two tables differ in at least one entry. */
+    bool operator!=(const PlanTableBase &other) const { return not operator==(other); }
 
     /** Returns the number of data sources. */
-    std::size_t num_sources() const { return graph().sources().size(); }
+    size_type num_sources() const { return actual().num_sources(); }
 
-    /** Returns the entry for a given subproblem.  (`s` may be empty.) */
-    entry_type & at(Subproblem s) { M_insist(uint64_t(s) < (1UL << num_sources())); return cost_table_[uint64_t(s)]; }
+    /** Returns a reference to the entry of `s`. */
+    PlanTableEntry & at(Subproblem s) { return actual().at(s); }
+    /** Returns a reference to the entry of `s`. */
+    const PlanTableEntry & at(Subproblem s) const { return actual().at(s); }
 
-    /** Returns the entry for a given subproblem. */
-    const entry_type & at(Subproblem s) const { return const_cast<PlanTable*>(this)->at(s); }
+    /** Returns a reference to the entry of `s`. */
+    PlanTableEntry & operator[](Subproblem s) { return actual().operator[](s); }
+    /** Returns a reference to the entry of `s`. */
+    const PlanTableEntry & operator[](Subproblem s) const { return actual().operator[](s); }
 
-    /** Returns the entry for a given subproblem. */
-    entry_type & operator[](Subproblem s) { return at(s); }
+    /** Returns the entry for the final plan, i.e. the plan that joins all relations. */
+    PlanTableEntry & get_final() { return operator[](Subproblem((1UL << num_sources()) - 1UL)); }
+    /** Returns the entry for the final plan, i.e. the plan that joins all relations. */
+    const PlanTableEntry & get_final() const { return operator[](Subproblem((1UL << num_sources()) - 1UL)); }
 
-    /** Returns the entry for a given subproblem. */
-    const entry_type & operator[](Subproblem s) const { return at(s); }
+    /** Returns the cost of the best plan to compute `s`. */
+    cost_type c(Subproblem s) const { return operator[](s).cost; }
 
-    /** Returns true iff all entries of both plan tables are equal. */
-    bool operator==(const PlanTable &other) const {
-        if (num_sources() != other.num_sources()) return false;
-        for (std::size_t i = 0; i < 1UL << num_sources(); ++i) {
-            Subproblem S(i);
-            if (at(S) != other.at(S)) return false;
-        }
-        return true;
-    }
+    /** Returns true iff the plan table has a plan for `s`. */
+    bool has_plan(Subproblem s) const { return actual().has_plan(s); }
 
-    /** Returns true iff at least one entry in both plan tables is not equal. */
-    bool operator!=(const PlanTable &other) const { return not(*this == other); }
-
-    /** Returns the entry for the final plan. */
-    entry_type & get_final() { return at(Subproblem((1UL << num_sources()) - 1)); }
-    const entry_type & get_final() const { return at(Subproblem((1UL << num_sources()) - 1)); }
-
-    /** Get the already computed cost of a subproblem. */
-    auto c(Subproblem s) const { return at(s).cost; }
-
-    /** Returns true iff the `PlanTable` has a plan for the subproblem specified by `S`. */
-    bool has_plan(Subproblem S) const {
-        if (S.size() == 1) return true;
-        M_insist(at(S).left.empty() == at(S).right.empty(), "either both sides are not set or both sides are set");
-        return not at(S).left.empty();
-    }
-
+    /** Update the entry for `left` joined with `right` (`left|right`) by considering plan `left` join `right` of cost
+     * `c`.  The entry's plan and cost is changed *only* if `c` is less than the cost of the currently best plan. */
     void update(const QueryGraph &G, const CardinalityEstimator &CE,
-                const Subproblem left, const Subproblem right, const double cost) {
+                const Subproblem left, const Subproblem right, const double cost)
+    {
         M_insist(not left.empty(), "left side must not be empty");
         M_insist(not right.empty(), "right side must not be empty");
-        auto &entry = at(left | right);
+        auto &entry = operator[](left | right);
         if (not entry.model) {
             /* If we consider this subproblem for the first time, compute its `DataModel`.  If this subproblem describes
              * a nested query, the `DataModel` must have been set by the `Optimizer`.  */
-            auto &entry_left = at(left);
-            auto &entry_right = at(right);
+            auto &entry_left = operator[](left);
+            auto &entry_right = operator[](right);
             M_insist(bool(entry_left.model), "must have a model for the left side");
             M_insist(bool(entry_right.model), "must have a model for the right side");
             // TODO use join condition for cardinality estimation
@@ -140,24 +128,217 @@ struct PlanTable
         }
     }
 
-    /** Resets the costs for all entries in the `PlanTable` to MAX_INT. */
-    void reset_costs() {
-        for (std::size_t i = 0; i < 1UL << num_sources(); ++i) {
-            Subproblem S(i);
-            at(S).cost = std::numeric_limits<decltype(entry_type::cost)>::infinity();
-        }
-    }
+    /** Resets the costs for all entries in the table. */
+    void reset_costs() { actual().reset_costs(); }
 
-    friend std::ostream & operator<<(std::ostream &out, const PlanTable &PT);
+    friend std::ostream & operator<<(std::ostream &out, const PlanTableBase &PT);
 
-    friend std::string to_string(const PlanTable &PT) {
+    friend std::string to_string(const PlanTableBase &PT) {
         std::ostringstream oss;
         oss << PT;
         return oss.str();
     }
 
+    void dump(std::ostream &out) const { actual().dump(out); }
+    void dump() const { actual().dump(); }
+};
+
+/** This table represents all explored plans with their sub-plans, estimated size, cost, and further optional
+ * properties.  The `PlanTableSmallOrDense` is optimized for "small" queries, i.e. queries of few relations and/or a
+ * dense query graph. */
+struct PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
+{
+    using allocator_type = malloc_allocator;
+
+    private:
+    ///> the allocator
+    allocator_type allocator_;
+    ///> the number of `DataSource`s in the query
+    size_type num_sources_;
+    ///> the table of problem plans, sizes, and costs
+    std::unique_ptr<PlanTableEntry[]> table_;
+
+    public:
+    friend void swap(PlanTableSmallOrDense &first, PlanTableSmallOrDense &second) {
+        using std::swap;
+        swap(first.allocator_,   second.allocator_);
+        swap(first.num_sources_, second.num_sources_);
+        swap(first.table_,       second.table_);
+    }
+
+    PlanTableSmallOrDense() = default;
+    explicit PlanTableSmallOrDense(const QueryGraph &G, allocator_type allocator = allocator_type())
+        : allocator_(std::move(allocator))
+        , num_sources_(G.num_sources())
+        , table_(allocator_.template make_unique<PlanTableEntry[]>(1UL << num_sources()))
+    {
+        /*----- Initialize table. ------------------------------------------------------------------------------------*/
+        for (auto ptr = &table_[0], end = &table_[1UL << num_sources()]; ptr != end; ++ptr)
+            new (ptr) PlanTableEntry();
+    }
+
+    PlanTableSmallOrDense(const PlanTableSmallOrDense&) = delete;
+    PlanTableSmallOrDense(PlanTableSmallOrDense &&other) : PlanTableSmallOrDense() { swap(*this, other); }
+
+    ~PlanTableSmallOrDense() {
+        if (bool(table_)) {
+            for (auto ptr = &table_[0], end = &table_[1UL << num_sources()]; ptr != end; ++ptr)
+                ptr->~PlanTableEntry();
+        }
+        allocator_.dispose(std::move(table_), 1UL << num_sources());
+    }
+
+    PlanTableSmallOrDense & operator=(PlanTableSmallOrDense &&other) { swap(*this, other); return *this; }
+
+    bool operator==(const PlanTableSmallOrDense &other) const {
+        if (num_sources() != other.num_sources()) return false;
+        for (size_type i = 0; i < 1UL << num_sources(); ++i) {
+            Subproblem S(i);
+            if ((*this)[S] != other[S]) return false;
+        }
+        return true;
+    }
+    bool operator!=(const PlanTableSmallOrDense &other) const { return not operator==(other); }
+
+    size_type num_sources() const { return num_sources_; }
+
+    PlanTableEntry & at(Subproblem s) { M_insist(uint64_t(s) < (1UL << num_sources())); return table_[uint64_t(s)]; }
+    const PlanTableEntry & at(Subproblem s) const { return const_cast<PlanTableSmallOrDense*>(this)->at(s); }
+
+    PlanTableEntry & operator[](Subproblem s) { return at(s); }
+    const PlanTableEntry & operator[](Subproblem s) const { return at(s); }
+
+    bool has_plan(Subproblem s) const {
+        if (s.size() == 1) return true;
+        auto &e = operator[](s);
+        M_insist(e.left.empty() == e.right.empty(), "either both sides are not set or both sides are set");
+        return not e.left.empty();
+    }
+
+    void reset_costs() {
+        for (size_type i = 0; i < 1UL << num_sources(); ++i) {
+            Subproblem S(i);
+            operator[](S).cost = std::numeric_limits<decltype(PlanTableEntry::cost)>::infinity();
+        }
+    }
+
+    friend std::ostream & operator<<(std::ostream &out, const PlanTableSmallOrDense &PT);
+
     void dump(std::ostream &out) const;
     void dump() const;
 };
+
+/** This table represents all explored plans with their sub-plans, estimated size, cost, and further optional
+ * properties.  The `PlanTableLargeAndSparse` is optimized for "large" queries, i.e. queries of many relations or with a
+ * sparse query graph. */
+struct PlanTableLargeAndSparse : PlanTableBase<PlanTableLargeAndSparse>
+{
+    private:
+    ///> the number of `DataSource`s in the query
+    size_type num_sources_;
+    ///> the `PlanTableEntry`s
+    std::unordered_map<Subproblem, PlanTableEntry, SubproblemHash> table_;
+
+    public:
+    friend void swap(PlanTableLargeAndSparse &first, PlanTableLargeAndSparse &second) {
+        using std::swap;
+        swap(first.num_sources_, second.num_sources_);
+        swap(first.table_,       second.table_);
+    }
+
+    PlanTableLargeAndSparse() = default;
+    explicit PlanTableLargeAndSparse(const QueryGraph &G)
+        : num_sources_(G.num_sources())
+        , table_(OnoLohmannCycle(num_sources_))
+    { }
+
+    PlanTableLargeAndSparse(const PlanTableLargeAndSparse&) = delete;
+    PlanTableLargeAndSparse(PlanTableLargeAndSparse &&other) : PlanTableLargeAndSparse() { swap(*this, other); }
+
+    PlanTableLargeAndSparse & operator=(PlanTableLargeAndSparse &&other) { swap(*this, other); return *this; }
+
+    bool operator==(const PlanTableLargeAndSparse &other) const {
+        if (num_sources() != other.num_sources()) return false;
+        if (this->table_.size() != other.table_.size()) return false;
+        for (auto &this_e : this->table_) {
+            auto other_it = other.table_.find(this_e.first);
+            if (other_it == other.table_.end())
+                return false;
+            if (this_e.second != other_it->second)
+                return false;
+        }
+        return true;
+    }
+    bool operator!=(const PlanTableLargeAndSparse &other) const { return not operator==(other); }
+
+    size_type num_sources() const { return num_sources_; }
+
+    PlanTableEntry & at(Subproblem s) { return table_.at(s); }
+    const PlanTableEntry & at(Subproblem s) const { return const_cast<PlanTableLargeAndSparse*>(this)->at(s); }
+
+    PlanTableEntry & operator[](Subproblem s) { return table_[s]; }
+    const PlanTableEntry & operator[](Subproblem s) const {
+        return const_cast<PlanTableLargeAndSparse*>(this)->operator[](s);
+    }
+
+    bool has_plan(Subproblem s) const {
+        if (s.size() == 1) return true;
+        if (auto it = table_.find(s); it != table_.end()) {
+            auto &e = it->second;
+            M_insist(e.left.empty() == e.right.empty(), "either both sides are not set or both sides are set");
+            return not e.left.empty();
+        } else {
+            return false;
+        }
+    }
+
+    void reset_costs() { table_.clear(); }
+
+    friend std::ostream & operator<<(std::ostream &out, const PlanTableLargeAndSparse &PT);
+
+    void dump(std::ostream &out) const;
+    void dump() const;
+
+    private:
+    /** Computes the number of connected subgraphs (CSGs) of a query graph with `N` relations and *cycle* topology. */
+    static size_type OnoLohmannCycle(size_type N) { return N*N - N + 1; }
+};
+
+/** This table represents all explored plans with their sub-plans, estimated size, cost, and further optional
+ * properties. */
+#if 1
+struct PlanTable : PlanTableSmallOrDense
+{
+    PlanTable() = default;
+    explicit PlanTable(const QueryGraph &G)
+        : PlanTableSmallOrDense(G)
+    { }
+};
+#elif 0
+struct PlanTable : PlanTableLargeAndSparse
+{
+    PlanTable() = default;
+    explicit PlanTable(const QueryGraph &G)
+        : PlanTableLargeAndSparse(G)
+    { }
+};
+#endif
+
+
+/*----------------------------------------------------------------------------------------------------------------------
+ * PlanTableBase friends
+ *--------------------------------------------------------------------------------------------------------------------*/
+
+template<typename Actual>
+void swap(PlanTableBase<Actual> &first, PlanTableBase<Actual> &second)
+{
+    swap(static_cast<Actual&>(first), static_cast<Actual&>(second));
+}
+
+template<typename Actual>
+std::ostream & operator<<(std::ostream &out, const PlanTableBase<Actual> &PT)
+{
+    return out << static_cast<const Actual&>(PT);
+}
 
 }

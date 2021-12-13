@@ -274,6 +274,12 @@ void DSVReader::operator()(Const<Numeric> &ty)
     switch (ty.kind) {
         case Numeric::N_Int: {
             int64_t i = read_int();
+            if (c != EOF and c != '\n' and c != delimiter_) {
+                diag.e(pos) << "WARNING: Unexpected characters encountered in an integer.\n";
+                tup.null(col_idx);
+                while (c != EOF and c != '\n' and c != delimiter_) step();
+                return;
+            }
             tup.set(col_idx, i);
             break;
         }
@@ -298,18 +304,37 @@ void DSVReader::operator()(Const<Numeric> &ty)
                 while (is_dec(c)) { step(); }
                 d += d >= 0 ? post_dot : -post_dot;
             }
+            if (c != EOF and c != '\n' and c != delimiter_) {
+                diag.e(pos) << "WARNING: Unexpected characters encountered in a decimal.\n";
+                tup.null(col_idx);
+                while (c != EOF and c != '\n' and c != delimiter_) step();
+                return;
+            }
             tup.set(col_idx, d);
             break;
         }
 
         case Numeric::N_Float: {
-            double d;
-            in->unget();
-            auto before = in->tellg();
-            *in >> d;
-            auto after = in->tellg();
-            pos.column += after - before - 1;
-            step(); // get the next character (hopefully delimiter)
+            std::string float_str;
+            while(c != EOF and c != '\n' and c != delimiter_) {
+                float_str += c;
+                step();
+            }
+            char* end;
+            errno = 0;
+            double d = std::strtod(float_str.c_str(), &end);
+            if (*end != '\0') {
+                diag.e(pos) << "WARNING: Unexpected characters encountered in a floating-point number.\n";
+                tup.null(col_idx);
+                return;
+            }
+            if ( errno == ERANGE and ( d == HUGE_VAL or d == HUGE_VALF or d == HUGE_VALL ) ) {
+                diag.w(pos) << "WARNING: A floating-point number is larger than the maximum value.\n";
+                d = std::numeric_limits<double>::max();
+            } else if ( errno == ERANGE and (d == -HUGE_VAL or d == -HUGE_VALF or d == -HUGE_VALL ) ) {
+                diag.w(pos) << "WARNING: A floating-point number is smaller than the minimum value.\n";
+                d = std::numeric_limits<double>::min();
+            }
             if (ty.is_float())
                 tup.set(col_idx, float(d));
             else

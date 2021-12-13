@@ -1,8 +1,11 @@
 #include <mutable/IR/Optimizer.hpp>
 
+#include "globals.hpp"
+#include <algorithm>
+#include <mutable/IR/Operator.hpp>
 #include <mutable/IR/Operator.hpp>
 #include <mutable/storage/Store.hpp>
-#include <algorithm>
+#include <mutable/storage/Store.hpp>
 #include <vector>
 
 
@@ -127,7 +130,43 @@ std::unique_ptr<FilterOperator> optimize_filter(std::unique_ptr<FilterOperator> 
  * Optimizer
  *====================================================================================================================*/
 
-std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryGraph &G) const
+std::pair<std::unique_ptr<Producer>, PlanTableEntry>
+Optimizer::optimize(const QueryGraph &G) const
+{
+    switch (Options::Get().plan_table_type)
+    {
+        case Options::PT_auto: {
+            /* Select most suitable type of plan table depending on the query graph structure.
+             * Currently a simple heuristic based on the number of data sources.
+             * TODO: Consider join edges too.  Eventually consider #CSGs. */
+            if (G.num_sources() <= 15) {
+                // if (not Options::Get().quiet)
+                    // std::cout << "selecting plan table for small or dense query graphs\n";
+                return optimize_with_plantable<PlanTableSmallOrDense>(G);
+            } else {
+                // if (not Options::Get().quiet)
+                //     std::cout << "selecting plan table for large and sparse query graphs\n";
+                return optimize_with_plantable<PlanTableLargeAndSparse>(G);
+            }
+        }
+
+        case Options::PT_SmallOrDense: {
+            // if (not Options::Get().quiet)
+            //     std::cout << "forcing plan table for small or dense query graphs\n";
+            return optimize_with_plantable<PlanTableSmallOrDense>(G);
+        }
+
+        case Options::PT_LargeAndSparse: {
+            // if (not Options::Get().quiet)
+            //     std::cout << "forcing plan table for large and sparse query graphs\n";
+            return optimize_with_plantable<PlanTableLargeAndSparse>(G);
+        }
+    }
+}
+
+template<typename PlanTable>
+std::pair<std::unique_ptr<Producer>, PlanTableEntry>
+Optimizer::optimize_with_plantable(const QueryGraph &G) const
 {
     PlanTable plan_table(G);
     const auto num_sources = G.sources().size();
@@ -136,7 +175,7 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
     auto &CE = DB.cardinality_estimator();
 
     if (num_sources == 0)
-        return { std::make_unique<ProjectionOperator>(G.projections()), std::move(plan_table) };
+        return { std::make_unique<ProjectionOperator>(G.projections()), PlanTableEntry{} };
 
     /*----- Initialize plan table and compute plans for data sources. ------------------------------------------------*/
     Producer **source_plans = new Producer*[num_sources];
@@ -158,8 +197,7 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
         } else {
             /* Recursively solve nested queries. */
             auto Q = as<const Query>(ds);
-            auto [sub_plan, sub_table] = optimize(*Q->query_graph());
-            auto &sub = sub_table.get_final();
+            auto [sub_plan, sub] = optimize(*Q->query_graph());
 
             /* If an alias for the nested query is given, prefix every attribute with the alias. */
             if (Q->alias()) {
@@ -196,7 +234,7 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
     }
 
     optimize_locally(G, plan_table);
-    auto plan = construct_plan(G, plan_table, source_plans).release();
+    std::unique_ptr<Producer> plan = construct_plan(G, plan_table, source_plans);
     auto &entry = plan_table.get_final();
 
     /* Perform grouping. */
@@ -205,8 +243,8 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
         auto new_model = CE.estimate_grouping(G, *entry.model, G.group_by()); // TODO provide aggregates
         entry.model = std::move(new_model);
         // TODO pick "best" algorithm
-        auto group_by = new GroupingOperator(G.group_by(), G.aggregates(), GroupingOperator::G_Hashing);
-        group_by->add_child(plan);
+        auto group_by = std::make_unique<GroupingOperator>(G.group_by(), G.aggregates(), GroupingOperator::G_Hashing);
+        group_by->add_child(plan.release());
 
         /* Set operator information. */
         auto info = std::make_unique<OperatorInformation>();
@@ -214,13 +252,13 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
         info->estimated_cardinality = CE.predict_cardinality(*entry.model);
 
         group_by->info(std::move(info));
-        plan = group_by;
+        plan = std::move(group_by);
     } else if (not G.aggregates().empty()) {
         /* Compute `DataModel` after grouping. */
         auto new_model = CE.estimate_grouping(G, *entry.model, std::vector<const Expr*>());
         entry.model = std::move(new_model);
-        auto agg = new AggregationOperator(G.aggregates());
-        agg->add_child(plan);
+        auto agg = std::make_unique<AggregationOperator>(G.aggregates());
+        agg->add_child(plan.release());
 
         /* Set operator information. */
         auto info = std::make_unique<OperatorInformation>();
@@ -228,7 +266,7 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
         info->estimated_cardinality = CE.predict_cardinality(*entry.model);
 
         agg->info(std::move(info));
-        plan = agg;
+        plan = std::move(agg);
     }
 
     bool additional_projection = false; // indicate whether an additional projection must be performed before ordering
@@ -239,22 +277,22 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
         if (projection_needed(G.projections(), G.order_by())) {
             // TODO estimate data model
             additional_projection = true;
-            auto projection = new ProjectionOperator(G.projections()); // projection on all attributes
-            projection->add_child(plan);
-            plan = projection;
+            auto projection = std::make_unique<ProjectionOperator>(G.projections()); // projection on all attributes
+            projection->add_child(plan.release());
+            plan = std::move(projection);
         }
         // TODO estimate data model
-        auto order_by = new SortingOperator(G.order_by());
-        order_by->add_child(plan);
-        plan = order_by;
+        auto order_by = std::make_unique<SortingOperator>(G.order_by());
+        order_by->add_child(plan.release());
+        plan = std::move(order_by);
     }
 
     /* Perform projection. */
     if (not additional_projection and not G.projections().empty()) {
         // TODO estimate data model
-        auto projection = new ProjectionOperator(G.projections());
-        projection->add_child(plan);
-        plan = projection;
+        auto projection = std::make_unique<ProjectionOperator>(G.projections());
+        projection->add_child(plan.release());
+        plan = std::move(projection);
     }
 
     /* Limit. */
@@ -263,16 +301,17 @@ std::pair<std::unique_ptr<Producer>, PlanTable> Optimizer::optimize(const QueryG
         auto new_model = CE.estimate_limit(G, *entry.model, G.limit().limit, G.limit().offset);
         entry.model = std::move(new_model);
         // TODO estimate data model
-        auto limit = new LimitOperator(G.limit().limit, G.limit().offset);
-        limit->add_child(plan);
-        plan = limit;
+        auto limit = std::make_unique<LimitOperator>(G.limit().limit, G.limit().offset);
+        limit->add_child(plan.release());
+        plan = std::move(limit);
     }
 
     plan->minimize_schema();
     delete[] source_plans;
-    return std::make_pair(std::unique_ptr<Producer>(plan), std::move(plan_table));
+    return { std::move(plan), std::move(plan_table.get_final()) };
 }
 
+template<typename PlanTable>
 void Optimizer::optimize_locally(const QueryGraph &G, PlanTable &PT) const
 {
     Catalog &C = Catalog::Get();
@@ -282,6 +321,7 @@ void Optimizer::optimize_locally(const QueryGraph &G, PlanTable &PT) const
 #endif
 }
 
+template<typename PlanTable>
 std::unique_ptr<Producer>
 Optimizer::construct_plan(const QueryGraph &G, const PlanTable &plan_table, Producer * const *source_plans) const
 {

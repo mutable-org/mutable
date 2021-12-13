@@ -455,9 +455,18 @@ int main(int argc, const char **argv)
         nullptr, "--benchmark",                             /* Short, Long      */
         "run queries in benchmark mode",                    /* Description      */
         [&](bool) { Options::Get().benchmark = true; });    /* Callback         */
+    /*----- Select type of plan table to use -------------------------------------------------------------------------*/
+    ADD(bool, Options::Get().plan_table_type, Options::PT_auto,                         /* Type, Var, Init  */
+        nullptr, "--plan-table-sod",                                                    /* Short, Long      */
+        "use the plan table optimized for small or dense query graphs",                 /* Description      */
+        [&](bool) { Options::Get().plan_table_type = Options::PT_SmallOrDense; });      /* Callback         */
+    ADD(bool, Options::Get().plan_table_type, Options::PT_auto,                         /* Type, Var, Init  */
+        nullptr, "--plan-table-las",                                                    /* Short, Long      */
+        "use the plan table optimized for large and sparse query graphs",               /* Description      */
+        [&](bool) { Options::Get().plan_table_type = Options::PT_LargeAndSparse; });    /* Callback         */
 #if M_WITH_V8
     /*----- Enable Chrome DevTools debugging via web socket ----------------------------------------------------------*/
-    ADD(int, Options::Get().cdt_port, 0,                  /* Type, Var, Init  */
+    ADD(int, Options::Get().cdt_port, 0,                    /* Type, Var, Init  */
         nullptr, "--CDT",                                   /* Short, Long      */
         "specify the port for debugging via ChomeDevTools", /* Description      */
         [&](int port) { Options::Get().cdt_port = port; }); /* Callback         */

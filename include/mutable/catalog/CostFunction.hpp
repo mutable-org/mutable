@@ -1,6 +1,7 @@
 #pragma once
 
 #include <mutable/util/ADT.hpp>
+#include <mutable/util/crtp.hpp>
 
 
 namespace m {
@@ -11,50 +12,68 @@ struct Expr;
 struct FilterOperator;
 struct GroupingOperator;
 struct JoinOperator;
-struct PlanTable;
+struct PlanTableLargeAndSparse;
+struct PlanTableSmallOrDense;
 struct QueryGraph;
 
-struct CostFunction
+struct calculate_filter_cost_tag : const_virtual_crtp_helper<calculate_filter_cost_tag>::
+    returns<double>::
+    crtp_args<const PlanTableSmallOrDense&, const PlanTableLargeAndSparse&>::
+    args<const QueryGraph&, const CardinalityEstimator&, SmallBitset, const cnf::CNF&> { };
+struct calculate_join_cost_tag : const_virtual_crtp_helper<calculate_join_cost_tag>::
+    returns<double>::
+    crtp_args<const PlanTableSmallOrDense&, const PlanTableLargeAndSparse&>::
+    args<const QueryGraph&, const CardinalityEstimator&, SmallBitset, SmallBitset, const cnf::CNF&> { };
+struct calculate_grouping_cost_tag : const_virtual_crtp_helper<calculate_grouping_cost_tag>::
+    returns<double>::
+    crtp_args<const PlanTableSmallOrDense&, const PlanTableLargeAndSparse&>::
+    args<const QueryGraph&, const CardinalityEstimator&, SmallBitset, const std::vector<const Expr*>&> { };
+
+struct CostFunction : calculate_filter_cost_tag::base_type
+                    , calculate_join_cost_tag::base_type
+                    , calculate_grouping_cost_tag::base_type
 {
     using Subproblem = SmallBitset;
 
     public:
     CostFunction() { }
-
     virtual ~CostFunction() = default;
 
+    using calculate_filter_cost_tag::base_type::operator();
+    using calculate_join_cost_tag::base_type::operator();
+    using calculate_grouping_cost_tag::base_type::operator();
+
     /** Returns the total cost of performing a Filter operation. */
-    virtual double calculate_filter_cost(const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
-                                         const Subproblem &sub, const cnf::CNF &condition) const = 0;
+    template<typename PlanTable>
+    double calculate_filter_cost(const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
+                                 Subproblem sub, const cnf::CNF &condition) const
+    {
+        return operator()(calculate_filter_cost_tag{}, PT, G, CE, sub, condition);
+    }
 
     /** Returns the total cost of performing a Join operation. */
-    virtual double calculate_join_cost(const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
-                                       const Subproblem &left, const Subproblem &right, const cnf::CNF &condition) const = 0;
+    template<typename PlanTable>
+    double calculate_join_cost(const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
+                               Subproblem left, Subproblem right, cnf::CNF &condition) const
+    {
+        return operator()(calculate_join_cost_tag{}, PT, G, CE, left, right, condition);
+    }
+
 
     /** Returns the total cost of performing a Grouping operation. */
-    virtual double calculate_grouping_cost(const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
-                                           const Subproblem &sub, const std::vector<const Expr*> &group_by) const = 0;
-
-    /** Uses tag dispatch overload to the `calculate_filter_cost` method. */
-    double operator()(FilterOperator*, const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
-                      const Subproblem &sub, const cnf::CNF &condition) const
+    template<typename PlanTable>
+    double calculate_grouping_cost(const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
+                                   Subproblem sub, const std::vector<const Expr*> &group_by) const
     {
-        return calculate_filter_cost(G, PT, CE, sub, condition);
-    }
-
-    /** Uses tag dispatch overload to the `calculate_join_cost` method. */
-    double operator()(JoinOperator*, const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
-                      const Subproblem &left, const Subproblem &right, const cnf::CNF &condition) const
-    {
-        return calculate_join_cost(G, PT, CE, left, right, condition);
-    }
-
-    /** Uses tag dispatch overload to the `calculate_grouping_cost` method. */
-    double operator()(GroupingOperator*, const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
-                      const Subproblem &sub, const std::vector<const Expr*> &group_by) const
-    {
-        return calculate_grouping_cost(G, PT, CE, sub, group_by);
+        return operator()(calculate_grouping_cost_tag{}, PT, G, CE, sub, group_by);
     }
 };
+
+template<typename Actual>
+struct CostFunctionCRTP : CostFunction
+                        , calculate_filter_cost_tag::derived_type<Actual>
+                        , calculate_join_cost_tag::derived_type<Actual>
+                        , calculate_grouping_cost_tag::derived_type<Actual>
+{ };
 
 }

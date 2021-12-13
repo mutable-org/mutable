@@ -118,18 +118,27 @@ CartesianProductEstimator::estimate_join(const QueryGraph&, const DataModel &_le
     return model;
 }
 
+template<typename PlanTable>
 std::unique_ptr<DataModel>
-CartesianProductEstimator::estimate_join_all(const QueryGraph&, const PlanTable &PT, const Subproblem to_join,
-                                             const cnf::CNF&) const
+CartesianProductEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph&, Subproblem to_join,
+                                      const cnf::CNF&) const
 {
     M_insist(not to_join.empty());
     auto model = std::make_unique<CartesianProductDataModel>();
-    auto it = to_join.begin();
-    model->size = as<const CartesianProductDataModel>(*PT[it.as_set()].model).size;
-    for (; it != to_join.end(); ++it)
+    model->size = 1UL;
+    for (auto it = to_join.begin(); it != to_join.end(); ++it)
         model->size *= as<const CartesianProductDataModel>(*PT[it.as_set()].model).size;
     return model;
 }
+
+template
+std::unique_ptr<DataModel>
+CartesianProductEstimator::operator()(estimate_join_all_tag, const PlanTableSmallOrDense&, const QueryGraph&,
+                                      Subproblem, const cnf::CNF&) const;
+template
+std::unique_ptr<DataModel>
+CartesianProductEstimator::operator()(estimate_join_all_tag, const PlanTableLargeAndSparse&, const QueryGraph&,
+                                      Subproblem, const cnf::CNF&) const;
 
 std::size_t CartesianProductEstimator::predict_cardinality(const DataModel &data) const
 {
@@ -325,9 +334,10 @@ InjectionCardinalityEstimator::estimate_join(const QueryGraph &G, const DataMode
     }
 }
 
+template<typename PlanTable>
 std::unique_ptr<DataModel>
-InjectionCardinalityEstimator::estimate_join_all(const QueryGraph &G, const PlanTable &PT, const Subproblem to_join,
-                                             const cnf::CNF&) const
+InjectionCardinalityEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph &G,
+                                          Subproblem to_join, const cnf::CNF&) const
 {
     const char *id = make_identifier(G, to_join);
     if (auto it = cardinality_table_.find(id); it != cardinality_table_.end()) {
@@ -342,6 +352,16 @@ InjectionCardinalityEstimator::estimate_join_all(const QueryGraph &G, const Plan
         return std::make_unique<InjectionCardinalityDataModel>(to_join, size);
     }
 }
+
+template
+std::unique_ptr<DataModel>
+InjectionCardinalityEstimator::operator()(estimate_join_all_tag, const PlanTableSmallOrDense&, const QueryGraph&,
+                                          Subproblem, const cnf::CNF&) const;
+
+template
+std::unique_ptr<DataModel>
+InjectionCardinalityEstimator::operator()(estimate_join_all_tag, const PlanTableLargeAndSparse&, const QueryGraph&,
+                                          Subproblem, const cnf::CNF&) const;
 
 std::size_t InjectionCardinalityEstimator::predict_cardinality(const DataModel &data) const
 {

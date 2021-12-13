@@ -2,10 +2,18 @@
 
 #include <cstdint>
 
+namespace m {
 
 /** Singleton class representing options provided as command line argument to the binaries. */
 struct Options
 {
+    enum PlanTableType
+    {
+        PT_auto,
+        PT_SmallOrDense,
+        PT_LargeAndSparse,
+    };
+
     /* Help */
     bool show_help;
     bool show_version;
@@ -32,8 +40,12 @@ struct Options
     bool plandot;
     bool dryrun;
     bool wasm;
+
     /** If `true`, the results of queries are dropped and not passed back to the user. */
     bool benchmark;
+
+    /* What plan table type to use. */
+    PlanTableType plan_table_type;
 
     /* Keyword arguments. */
     const char *store;
@@ -65,3 +77,5 @@ struct Options
     /** Return a reference to the single `Options` instance. */
     static Options & Get();
 };
+
+}

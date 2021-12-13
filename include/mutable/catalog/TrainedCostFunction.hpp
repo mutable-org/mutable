@@ -6,7 +6,7 @@
 
 namespace m {
 
-struct TrainedCostFunction : CostFunction
+struct TrainedCostFunction : CostFunctionCRTP<TrainedCostFunction>
 {
     private:
     std::unique_ptr<CostModel> filter_model_;
@@ -16,18 +16,22 @@ struct TrainedCostFunction : CostFunction
     public:
     TrainedCostFunction(std::unique_ptr<CostModel> filter_model, std::unique_ptr<CostModel> join_model,
                         std::unique_ptr<CostModel> grouping_model)
-        : CostFunction(), filter_model_(std::move(filter_model)), join_model_(std::move(join_model))
+        : filter_model_(std::move(filter_model))
+        , join_model_(std::move(join_model))
         , grouping_model_(std::move(grouping_model)) {}
 
-    double calculate_filter_cost(const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
-                                 const Subproblem &sub, const cnf::CNF &condition) const override;
+    template<typename PlanTable>
+    double operator()(calculate_filter_cost_tag, PlanTable &&PT, const QueryGraph &G,
+                      const CardinalityEstimator &CE, Subproblem sub, const cnf::CNF &condition) const;
 
-    double calculate_join_cost(const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
-                               const Subproblem &left, const Subproblem &right,
-                               const cnf::CNF &condition) const override;
+    template<typename PlanTable>
+    double operator()(calculate_join_cost_tag, PlanTable &&PT, const QueryGraph &G, const CardinalityEstimator &CE,
+                      Subproblem left, Subproblem right, const cnf::CNF &condition) const;
 
-    double calculate_grouping_cost(const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
-                                   const Subproblem &sub, const std::vector<const Expr*> &group_by) const override;
+    template<typename PlanTable>
+    double operator()(calculate_grouping_cost_tag, PlanTable &&PT, const QueryGraph &G,
+                      const CardinalityEstimator &CE, Subproblem sub,
+                      const std::vector<const Expr*> &group_by) const;
 };
 
 }

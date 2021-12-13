@@ -30,16 +30,27 @@ struct Optimizer
     auto & plan_enumerator() const { return pe_; }
     auto & cost_function() const { return cf_; }
 
-    /** Recursively computes and constructs an optimial plan for the given query graph.  */
-    std::pair<std::unique_ptr<Producer>, PlanTable> optimize(const QueryGraph &G) const;
-
     /** Apply this optimizer to the given query graph to compute an operator tree. */
-    std::unique_ptr<Producer> operator()(const QueryGraph &G) const { return std::move(optimize(G).first); }
+    std::unique_ptr<Producer> operator()(const QueryGraph &G) const { return optimize(G).first; }
+
+    private:
+    /** Recursively computes and constructs an optimial plan for the given query graph.  Selects a `PlanTable*` type to
+     * represent the internal state of planning progress, then delegates to `optimize_with_plantable<>()`.  */
+    std::pair<std::unique_ptr<Producer>, PlanTableEntry>
+    optimize(const QueryGraph &G) const;
+
+    /** Recursively computes and constructs an optimial plan for the given query graph, using the given `PlanTable` type
+     * to represent the state of planning progress.  */
+    template<typename PlanTable>
+    std::pair<std::unique_ptr<Producer>, PlanTableEntry>
+    optimize_with_plantable(const QueryGraph &G) const;
 
     /** Optimizes a plan table after initialization of the data source entries. */
+    template<typename PlanTable>
     void optimize_locally(const QueryGraph &G, PlanTable &plan_table) const;
 
     /** Constructs an operator tree given a solved plan table and the plans to compute the data sources of the query. */
+    template<typename PlanTable>
     std::unique_ptr<Producer> construct_plan(const QueryGraph &G, const PlanTable &plan_table,
                                              Producer * const *source_plans) const;
 

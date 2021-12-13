@@ -94,7 +94,7 @@ int main(int argc, const char **argv)
     }
 
     /*----- Configure mutable. ---------------------------------------------------------------------------------------*/
-    Options::Get().quiet = true;
+    m::Options::Get().quiet = true;
 
     /*----- Load schema. ---------------------------------------------------------------------------------------------*/
     m::Diagnostic diag(false, std::cout, std::cerr);

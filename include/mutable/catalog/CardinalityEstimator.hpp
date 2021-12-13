@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <mutable/util/ADT.hpp>
+#include <mutable/util/crtp.hpp>
 #include <nlohmann/json.hpp>
 #include <sstream>
 #include <unordered_map>
@@ -12,14 +13,16 @@
 namespace m {
 
 /* Forward declarations */
+namespace cnf { struct CNF; }
 struct Diagnostic;
 struct Expr;
 struct GroupingOperator;
 struct LimitOperator;
 struct Operator;
-struct PlanTable;
+struct PlanTableLargeAndSparse;
+struct PlanTableSmallOrDense;
 struct QueryGraph;
-namespace cnf { struct CNF; }
+
 using Subproblem = SmallBitset;
 
 
@@ -36,8 +39,15 @@ struct DataModel
 };
 
 
-struct CardinalityEstimator
+struct estimate_join_all_tag : const_virtual_crtp_helper<estimate_join_all_tag>::
+    returns<std::unique_ptr<DataModel>>::
+    crtp_args<const PlanTableSmallOrDense&, const PlanTableLargeAndSparse&>::
+    args<const QueryGraph&, Subproblem, const cnf::CNF&> { };
+
+struct CardinalityEstimator : estimate_join_all_tag::base_type
 {
+    using estimate_join_all_tag::base_type::operator();
+
     /** `data_model_exception` is thrown if a `DataModel` implementation does not contain the requested information. */
     struct data_model_exception : m::exception
     {
@@ -124,9 +134,12 @@ struct CardinalityEstimator
                   const cnf::CNF &condition) const = 0;
 
     /** Compute a `DataModel` for the result of joining *all* `DataSource`s in `to_join` by `condition`. */
-    virtual std::unique_ptr<DataModel>
-    estimate_join_all(const QueryGraph &G, const PlanTable &PT, const Subproblem to_join,
-                      const cnf::CNF &condition) const = 0;
+    template<typename PlanTable>
+    std::unique_ptr<DataModel>
+    estimate_join_all(const QueryGraph &G, const PlanTable &PT, Subproblem to_join, const cnf::CNF &condition) const
+    {
+        return operator()(estimate_join_all_tag{}, PT, G, to_join, condition);
+    }
 
 
     /*==================================================================================================================
@@ -154,10 +167,19 @@ struct CardinalityEstimator
     virtual void print(std::ostream &out) const = 0;
 };
 
+namespace {
+
+template<typename Actual>
+struct CardinalityEstimatorCRTP : CardinalityEstimator
+                                , estimate_join_all_tag::derived_type<Actual>
+{ };
+
+}
+
 /**
  * DummyEstimator that always returns the size of the cartesian product of the given subproblems
  */
-struct CartesianProductEstimator : CardinalityEstimator
+struct CartesianProductEstimator : CardinalityEstimatorCRTP<CartesianProductEstimator>
 {
     struct CartesianProductDataModel : DataModel
     {
@@ -186,9 +208,11 @@ struct CartesianProductEstimator : CardinalityEstimator
     std::unique_ptr<DataModel>
     estimate_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
                   const cnf::CNF &condition) const override;
+
+    template<typename PlanTable>
     std::unique_ptr<DataModel>
-    estimate_join_all(const QueryGraph &G, const PlanTable &PT, const Subproblem to_join,
-                      const cnf::CNF &condition) const override;
+    operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph &G, Subproblem to_join,
+               const cnf::CNF &condition) const;
 
 
     /*==================================================================================================================
@@ -207,7 +231,7 @@ struct CartesianProductEstimator : CardinalityEstimator
  * Table is initialized in the constructor by using an external json-file
  * If no entry is found, uses the DummyEstimator to return an estimate
  */
-struct InjectionCardinalityEstimator : CardinalityEstimator
+struct InjectionCardinalityEstimator : CardinalityEstimatorCRTP<InjectionCardinalityEstimator>
 {
     using Subproblem = SmallBitset;
 
@@ -278,10 +302,11 @@ struct InjectionCardinalityEstimator : CardinalityEstimator
     std::unique_ptr<DataModel>
     estimate_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
                   const cnf::CNF &condition) const override;
-    std::unique_ptr<DataModel>
-    estimate_join_all(const QueryGraph &G, const PlanTable &PT, const Subproblem to_join,
-                      const cnf::CNF &condition) const override;
 
+    template<typename PlanTable>
+    std::unique_ptr<DataModel>
+    operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph &G, Subproblem to_join,
+               const cnf::CNF &condition) const;
 
     /*==================================================================================================================
      * Prediction via model use

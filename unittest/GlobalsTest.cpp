@@ -2,6 +2,10 @@
 
 #include "globals.hpp"
 
+
+using namespace m;
+
+
 TEST_CASE("Options", "[core][globals]")
 {
     Options options = Options::Get();

@@ -1,12 +1,12 @@
 #include <mutable/catalog/CostModel.hpp>
 
-#include <mutable/catalog/TrainedCostFunction.hpp>
-#include <mutable/mutable.hpp>
 #include "storage/ColumnStore.hpp"
 #include "storage/store_manip.hpp"
-#include <type_traits>
 #include "util/GridSearch.hpp"
 #include "util/stream.hpp"
+#include <mutable/catalog/TrainedCostFunction.hpp>
+#include <mutable/mutable.hpp>
+#include <type_traits>
 
 
 using namespace m;

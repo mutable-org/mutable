@@ -1,22 +1,26 @@
 #pragma once
 
+#include <cstdint>
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/IR/QueryGraph.hpp>
+#include <mutable/util/crtp.hpp>
 #include <mutable/util/macro.hpp>
-#include <cstdint>
 #include <unordered_map>
 #include <vector>
 
 
 namespace m {
 
-/* forward declarations */
-struct PlanTable;
+struct enumerate_tag : const_virtual_crtp_helper<enumerate_tag>::
+    returns<void>::
+    crtp_args<PlanTableSmallOrDense&, PlanTableLargeAndSparse&>::
+    args<const QueryGraph&, const CostFunction&> { };
 
 /** An interface for all plan enumerators. */
-struct PlanEnumerator
+struct PlanEnumerator : enumerate_tag::base_type
 {
     using Subproblem = QueryGraph::Subproblem;
+    using enumerate_tag::base_type::operator();
 
     enum kind_t {
 #define M_PLAN_ENUMERATOR(NAME, _) PE_ ## NAME,
@@ -39,7 +43,17 @@ struct PlanEnumerator
 #undef M_PLAN_ENUMERATOR
 
     /** Enumerate subplans and fill plan table. */
-    virtual void operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const = 0;
+    template<typename PlanTable>
+    void operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const {
+        operator()(enumerate_tag{}, PT, G, CF);
+    }
+};
+
+template<typename Actual>
+struct PlanEnumeratorCRTP : PlanEnumerator
+                          , enumerate_tag::derived_type<Actual>
+{
+    using PlanEnumerator::operator();
 };
 
 }

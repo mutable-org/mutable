@@ -1,14 +1,15 @@
 #include <mutable/catalog/TrainedCostFunction.hpp>
 
 #include <mutable/catalog/CardinalityEstimator.hpp>
+#include <mutable/IR/PlanTable.hpp>
 
 
 using namespace m;
 
 
-double TrainedCostFunction::calculate_filter_cost(const QueryGraph &G, const PlanTable &PT,
-                                                  const CardinalityEstimator &CE, const Subproblem &sub,
-                                                  const cnf::CNF &condition) const
+template<typename PlanTable>
+double TrainedCostFunction::operator()(calculate_filter_cost_tag, PlanTable &&PT, const QueryGraph &G,
+                                       const CardinalityEstimator &CE, Subproblem sub, const cnf::CNF &condition) const
 {
     auto cardinality = CE.predict_cardinality(*PT[sub].model);
     auto post_filter = CE.estimate_filter(G, *PT[sub].model, condition);
@@ -24,9 +25,10 @@ double TrainedCostFunction::calculate_filter_cost(const QueryGraph &G, const Pla
     return filter_model_->predict_target(feature_matrix);
 }
 
-double TrainedCostFunction::calculate_join_cost(const QueryGraph &G, const PlanTable &PT,
-                                                const CardinalityEstimator &CE, const CostFunction::Subproblem &left,
-                                                const CostFunction::Subproblem &right, const cnf::CNF &condition) const
+template<typename PlanTable>
+double TrainedCostFunction::operator()(calculate_join_cost_tag, PlanTable &&PT, const QueryGraph &G,
+                                       const CardinalityEstimator &CE, Subproblem left, Subproblem right,
+                                       const cnf::CNF &condition) const
 {
     auto cardinality_left = CE.predict_cardinality(*PT[left].model);
     auto cardinality_right = CE.predict_cardinality(*PT[right].model);
@@ -50,9 +52,10 @@ double TrainedCostFunction::calculate_join_cost(const QueryGraph &G, const PlanT
     return join_model_->predict_target(feature_matrix);
 }
 
-double TrainedCostFunction::calculate_grouping_cost(const QueryGraph&, const PlanTable &PT,
-                                                    const CardinalityEstimator &CE, const Subproblem &sub,
-                                                    const std::vector<const Expr*>&) const
+template<typename PlanTable>
+double TrainedCostFunction::operator()(calculate_grouping_cost_tag, PlanTable &&PT, const QueryGraph&,
+                                       const CardinalityEstimator &CE, Subproblem sub,
+                                       const std::vector<const Expr*>&) const
 {
     Eigen::RowVectorXd feature_matrix(3);
     feature_matrix << 1, // add 1 for y-intercept coefficient
@@ -60,3 +63,29 @@ double TrainedCostFunction::calculate_grouping_cost(const QueryGraph&, const Pla
             CE.predict_number_distinct_values(*PT[sub].model);
     return grouping_model_->predict_target(feature_matrix);
 }
+
+template
+double TrainedCostFunction::operator()<const PlanTableSmallOrDense&>(calculate_filter_cost_tag, const PlanTableSmallOrDense &PT, const QueryGraph &G,
+                                       const CardinalityEstimator &CE, Subproblem sub, const cnf::CNF &condition) const;
+template
+double TrainedCostFunction::operator()<const PlanTableLargeAndSparse&>(calculate_filter_cost_tag, const PlanTableLargeAndSparse &PT, const QueryGraph &G,
+                                       const CardinalityEstimator &CE, Subproblem sub, const cnf::CNF &condition) const;
+
+
+template
+double TrainedCostFunction::operator()<const PlanTableSmallOrDense&>(calculate_join_cost_tag, const PlanTableSmallOrDense &PT, const QueryGraph &G,
+                                       const CardinalityEstimator &CE, Subproblem left, Subproblem right,
+                                       const cnf::CNF &condition) const;
+template
+double TrainedCostFunction::operator()<const PlanTableLargeAndSparse&>(calculate_join_cost_tag, const PlanTableLargeAndSparse &PT, const QueryGraph &G,
+                                       const CardinalityEstimator &CE, Subproblem left, Subproblem right,
+                                       const cnf::CNF &condition) const;
+
+template
+double TrainedCostFunction::operator()<const PlanTableSmallOrDense&>(calculate_grouping_cost_tag, const PlanTableSmallOrDense &PT, const QueryGraph&,
+                                       const CardinalityEstimator &CE, Subproblem sub,
+                                       const std::vector<const Expr*>&) const;
+template
+double TrainedCostFunction::operator()<const PlanTableLargeAndSparse&>(calculate_grouping_cost_tag, const PlanTableLargeAndSparse &PT, const QueryGraph&,
+                                       const CardinalityEstimator &CE, Subproblem sub,
+                                       const std::vector<const Expr*>&) const;

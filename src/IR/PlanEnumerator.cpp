@@ -46,37 +46,40 @@ std::unique_ptr<PlanEnumerator> PlanEnumerator::Create(PlanEnumerator::kind_t ki
  *====================================================================================================================*/
 
 /** Computes the join order using size-based dynamic programming. */
-struct DPsize final : PlanEnumerator
+struct DPsize final : PlanEnumeratorCRTP<DPsize>
 {
-    void operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const override;
-};
+    using base_type = PlanEnumeratorCRTP<DPsize>;
+    using base_type::operator();
 
-void DPsize::operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const
-{
-    auto &sources = G.sources();
-    std::size_t n = sources.size();
-    AdjacencyMatrix M(G);
-    auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
+    template<typename PlanTable>
+    void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
+        auto &sources = G.sources();
+        std::size_t n = sources.size();
+        AdjacencyMatrix M(G);
+        auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
-    /* Process all subplans of size greater than one. */
-    for (std::size_t s = 2; s <= n; ++s) {
-        for (std::size_t s1 = 1; s1 < s; ++s1) {
-            std::size_t s2 = s - s1;
-            /* Check for all combinations of subsets if they are valid joins and if so, forward the combination to the
-             * plan table. */
-            for (auto S1 = GospersHack::enumerate_all(s1, n); S1; ++S1) { // enumerate all subsets of size `s1`
-                if (not PT.has_plan(*S1)) continue; // subproblem S1 not connected -> skip
-                for (auto S2 = GospersHack::enumerate_all(s2, n); S2; ++S2) { // enumerate all subsets of size `s - s1`
-                    if (not PT.has_plan(*S2)) continue; // subproblem S2 not connected -> skip
-                    if (*S1 & *S2) continue; // subproblems not disjoint -> skip
-                    if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
-                    auto cost = CF.calculate_join_cost(G, PT, CE, *S1, *S2, cnf::CNF{}); // TODO use join condition
-                    PT.update(G, CE, *S1, *S2, cost);
+        /* Process all subplans of size greater than one. */
+        for (std::size_t s = 2; s <= n; ++s) {
+            for (std::size_t s1 = 1; s1 < s; ++s1) {
+                std::size_t s2 = s - s1;
+                /* Check for all combinations of subsets if they are valid joins and if so, forward the combination to the
+                 * plan table. */
+                for (auto S1 = GospersHack::enumerate_all(s1, n); S1; ++S1) { // enumerate all subsets of size `s1`
+                    if (not PT.has_plan(*S1)) continue; // subproblem S1 not connected -> skip
+                    for (auto S2 = GospersHack::enumerate_all(s2, n); S2; ++S2) { // enumerate all subsets of size `s - s1`
+                        if (not PT.has_plan(*S2)) continue; // subproblem S2 not connected -> skip
+                        if (*S1 & *S2) continue; // subproblems not disjoint -> skip
+                        if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
+                        cnf::CNF condition; // TODO use join condition
+                        auto cost = CF.calculate_join_cost(G, PT, CE, *S1, *S2, condition);
+                        PT.update(G, CE, *S1, *S2, cost);
+                    }
                 }
             }
         }
     }
-}
+};
+
 
 /*======================================================================================================================
  * DPsizeOpt
@@ -85,123 +88,130 @@ void DPsize::operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &
 /** Computes the join order using size-based dynamic programming.  In addition to `DPsize`, applies the following
  * optimizations.  First, do not enumerate symmetric subproblems.  Second, in case both subproblems are of equal size,
  * consider only subproblems succeeding the first subproblem. */
-struct DPsizeOpt final : PlanEnumerator
+struct DPsizeOpt final : PlanEnumeratorCRTP<DPsizeOpt>
 {
-    void operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const override;
-};
+    using base_type = PlanEnumeratorCRTP<DPsizeOpt>;
+    using base_type::operator();
 
-void DPsizeOpt::operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const
-{
-    auto &sources = G.sources();
-    std::size_t n = sources.size();
-    AdjacencyMatrix M(G);
-    auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
+    template<typename PlanTable>
+    void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
+        auto &sources = G.sources();
+        std::size_t n = sources.size();
+        AdjacencyMatrix M(G);
+        auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
-    /* Process all subplans of size greater than one. */
-    for (std::size_t s = 2; s <= n; ++s) {
-        std::size_t m = s / 2; // division with rounding down
-        for (std::size_t s1 = 1; s1 <= m; ++s1) {
-            std::size_t s2 = s - s1;
-            /* Check for all combinations of subsets if they are valid joins and if so, forward the combination to the
-             * plan table. */
-            if (s1 == s2) { // exploit commutativity of join: if A⋈ B is possible, so is B⋈ A
-                for (auto S1 = GospersHack::enumerate_all(s1, n); S1; ++S1) { // enumerate all subsets of size `s1`
-                    if (not PT.has_plan(*S1)) continue; // subproblem not connected -> skip
-                    GospersHack S2 = GospersHack::enumerate_from(*S1, n);
-                    for (++S2; S2; ++S2) { // enumerate only the subsets following S1
-                        if (not PT.has_plan(*S2)) continue; // subproblem not connected -> skip
-                        if (*S1 & *S2) continue; // subproblems not disjoint -> skip
-                        if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
-                        /* Exploit commutativity of join. */
-                        auto cost = CF.calculate_join_cost(G, PT, CE, *S1, *S2, cnf::CNF{}); // TODO use join condition
-                        PT.update(G, CE, *S1, *S2, cost);
-                        cost = CF.calculate_join_cost(G, PT, CE, *S2, *S1, cnf::CNF{}); // TODO use join condition
-                        PT.update(G, CE, *S2, *S1, cost);
+        /* Process all subplans of size greater than one. */
+        for (std::size_t s = 2; s <= n; ++s) {
+            std::size_t m = s / 2; // division with rounding down
+            for (std::size_t s1 = 1; s1 <= m; ++s1) {
+                std::size_t s2 = s - s1;
+                /* Check for all combinations of subsets if they are valid joins and if so, forward the combination to the
+                 * plan table. */
+                if (s1 == s2) { // exploit commutativity of join: if A⋈ B is possible, so is B⋈ A
+                    for (auto S1 = GospersHack::enumerate_all(s1, n); S1; ++S1) { // enumerate all subsets of size `s1`
+                        if (not PT.has_plan(*S1)) continue; // subproblem not connected -> skip
+                        GospersHack S2 = GospersHack::enumerate_from(*S1, n);
+                        for (++S2; S2; ++S2) { // enumerate only the subsets following S1
+                            if (not PT.has_plan(*S2)) continue; // subproblem not connected -> skip
+                            if (*S1 & *S2) continue; // subproblems not disjoint -> skip
+                            if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
+                            /* Exploit commutativity of join. */
+                            cnf::CNF condition; // TODO use join condition
+                            auto cost = CF.calculate_join_cost(G, PT, CE, *S1, *S2, condition);
+                            PT.update(G, CE, *S1, *S2, cost);
+                            cost = CF.calculate_join_cost(G, PT, CE, *S2, *S1, condition);
+                            PT.update(G, CE, *S2, *S1, cost);
+                        }
                     }
-                }
-            } else {
-                for (auto S1 = GospersHack::enumerate_all(s1, n); S1; ++S1) { // enumerate all subsets of size `s1`
-                    if (not PT.has_plan(*S1)) continue; // subproblem not connected -> skip
-                    for (auto S2 = GospersHack::enumerate_all(s2, n); S2; ++S2) { // enumerate all subsets of size `s2`
-                        if (not PT.has_plan(*S2)) continue; // subproblem not connected -> skip
-                        if (*S1 & *S2) continue; // subproblems not disjoint -> skip
-                        if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
-                        /* Exploit commutativity of join. */
-                        auto cost = CF.calculate_join_cost(G, PT, CE, *S1, *S2, cnf::CNF{}); // TODO use join condition
-                        PT.update(G, CE, *S1, *S2, cost);
-                        cost = CF.calculate_join_cost(G, PT, CE, *S1, *S2, cnf::CNF{}); // TODO use join condition
-                        PT.update(G, CE, *S2, *S1, cost);
+                } else {
+                    for (auto S1 = GospersHack::enumerate_all(s1, n); S1; ++S1) { // enumerate all subsets of size `s1`
+                        if (not PT.has_plan(*S1)) continue; // subproblem not connected -> skip
+                        for (auto S2 = GospersHack::enumerate_all(s2, n); S2; ++S2) { // enumerate all subsets of size `s2`
+                            if (not PT.has_plan(*S2)) continue; // subproblem not connected -> skip
+                            if (*S1 & *S2) continue; // subproblems not disjoint -> skip
+                            if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
+                            /* Exploit commutativity of join. */
+                            cnf::CNF condition; // TODO use join condition
+                            auto cost = CF.calculate_join_cost(G, PT, CE, *S1, *S2, condition);
+                            PT.update(G, CE, *S1, *S2, cost);
+                            cost = CF.calculate_join_cost(G, PT, CE, *S1, *S2, condition);
+                            PT.update(G, CE, *S2, *S1, cost);
+                        }
                     }
                 }
             }
         }
     }
-}
+};
 
 /*======================================================================================================================
  * DPsizeSub
  *====================================================================================================================*/
 
 /** Computes the join order using size-based dynamic programming. */
-struct DPsizeSub final : PlanEnumerator
+struct DPsizeSub final : PlanEnumeratorCRTP<DPsizeSub>
 {
-    void operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const override;
-};
+    using base_type = PlanEnumeratorCRTP<DPsizeSub>;
+    using base_type::operator();
 
-void DPsizeSub::operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const
-{
-    auto &sources = G.sources();
-    std::size_t n = sources.size();
-    AdjacencyMatrix M(G);
-    auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
+    template<typename PlanTable>
+    void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
+        auto &sources = G.sources();
+        std::size_t n = sources.size();
+        AdjacencyMatrix M(G);
+        auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
-    /* Process all subplans of size greater than one. */
-    for (std::size_t s = 2; s <= n; ++s) {
-        for (auto S = GospersHack::enumerate_all(s, n); S; ++S) { // enumerate all subsets of size `s`
-            if (not M.is_connected(*S)) continue; // not connected -> skip
-            for (Subproblem O(least_subset(*S)); O != *S; O = Subproblem(next_subset(O, *S))) {
-                Subproblem Comp = *S - O;
-                M_insist(M.is_connected(O, Comp), "implied by S inducing a connected subgraph");
-                if (not PT.has_plan(O)) continue; // not connected -> skip
-                if (not PT.has_plan(Comp)) continue; // not connected -> skip
-                auto cost = CF.calculate_join_cost(G, PT, CE, O, Comp, cnf::CNF{}); // TODO use join condition
-                PT.update(G, CE, O, Comp, cost);
+        /* Process all subplans of size greater than one. */
+        for (std::size_t s = 2; s <= n; ++s) {
+            for (auto S = GospersHack::enumerate_all(s, n); S; ++S) { // enumerate all subsets of size `s`
+                if (not M.is_connected(*S)) continue; // not connected -> skip
+                for (Subproblem O(least_subset(*S)); O != *S; O = Subproblem(next_subset(O, *S))) {
+                    Subproblem Comp = *S - O;
+                    M_insist(M.is_connected(O, Comp), "implied by S inducing a connected subgraph");
+                    if (not PT.has_plan(O)) continue; // not connected -> skip
+                    if (not PT.has_plan(Comp)) continue; // not connected -> skip
+                    cnf::CNF condition; // TODO use join condition
+                    auto cost = CF.calculate_join_cost(G, PT, CE, O, Comp, condition);
+                    PT.update(G, CE, O, Comp, cost);
+                }
             }
         }
     }
-}
+};
 
 /*======================================================================================================================
  * DPsub
  *====================================================================================================================*/
 
 /** Computes the join order using subset-based dynamic programming. */
-struct DPsub final : PlanEnumerator
+struct DPsub final : PlanEnumeratorCRTP<DPsub>
 {
-    void operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const override;
-};
+    using base_type = PlanEnumeratorCRTP<DPsub>;
+    using base_type::operator();
 
-void DPsub::operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const
-{
-    auto &sources = G.sources();
-    const std::size_t n = sources.size();
-    const AdjacencyMatrix M(G);
-    auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
+    template<typename PlanTable>
+    void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
+        auto &sources = G.sources();
+        const std::size_t n = sources.size();
+        const AdjacencyMatrix M(G);
+        auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
-    for (std::size_t i = 1, end = 1UL << n; i < end; ++i) {
-        Subproblem S(i);
-        if (S.size() == 1) continue; // no non-empty and strict subset of S -> skip
-        if (not M.is_connected(S)) continue; // not connected -> skip
-        for (Subproblem S1(least_subset(S)); S1 != S; S1 = Subproblem(next_subset(S1, S))) {
-            Subproblem S2 = S - S1;
-            M_insist(M.is_connected(S1, S2), "implied by S inducing a connected subgraph");
-            if (not PT.has_plan(S1)) continue; // not connected -> skip
-            if (not PT.has_plan(S2)) continue; // not connected -> skip
-            auto cost = CF.calculate_join_cost(G, PT, CE, S1, S2, cnf::CNF{}); // TODO use join condition
-            PT.update(G, CE, S1, S2, cost);
+        for (std::size_t i = 1, end = 1UL << n; i < end; ++i) {
+            Subproblem S(i);
+            if (S.size() == 1) continue; // no non-empty and strict subset of S -> skip
+            if (not M.is_connected(S)) continue; // not connected -> skip
+            for (Subproblem S1(least_subset(S)); S1 != S; S1 = Subproblem(next_subset(S1, S))) {
+                Subproblem S2 = S - S1;
+                M_insist(M.is_connected(S1, S2), "implied by S inducing a connected subgraph");
+                if (not PT.has_plan(S1)) continue; // not connected -> skip
+                if (not PT.has_plan(S2)) continue; // not connected -> skip
+                cnf::CNF condition; // TODO use join condition
+                auto cost = CF.calculate_join_cost(G, PT, CE, S1, S2, condition);
+                PT.update(G, CE, S1, S2, cost);
+            }
         }
     }
-}
+};
 
 /*======================================================================================================================
  * DPsubOpt
@@ -209,180 +219,186 @@ void DPsub::operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &P
 
 /** Computes the join order using subset-based dynamic programming.  In comparison to `DPsub`, do not enumerate
  * symmetric subproblems. */
-struct DPsubOpt final : PlanEnumerator
+struct DPsubOpt final : PlanEnumeratorCRTP<DPsubOpt>
 {
-    void operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const override;
-};
+    using base_type = PlanEnumeratorCRTP<DPsubOpt>;
+    using base_type::operator();
 
-void DPsubOpt::operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const
-{
-    auto &sources = G.sources();
-    const std::size_t n = sources.size();
-    const AdjacencyMatrix M(G);
-    auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
+    template<typename PlanTable>
+    void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
+        auto &sources = G.sources();
+        const std::size_t n = sources.size();
+        const AdjacencyMatrix M(G);
+        auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
-    for (std::size_t i = 1, end = 1UL << n; i < end; ++i) {
-        Subproblem S(i);
-        if (S.size() == 1) continue; // no non-empty and strict subset of S -> skip
-        if (not M.is_connected(S)) continue;
-        /* Compute break condition to avoid enumerating symmetric subproblems. */
-        uint64_t offset = S.capacity() - __builtin_clzl(uint64_t(S));
-        M_insist(offset != 0, "invalid subproblem offset");
-        Subproblem limit(1UL << (offset - 1));
-        for (Subproblem S1(least_subset(S)); S1 != limit; S1 = Subproblem(next_subset(S1, S))) {
-            Subproblem S2 = S - S1; // = S \ S1;
-            M_insist(M.is_connected(S1, S2), "implied by S inducing a connected subgraph");
-            if (not PT.has_plan(S1)) continue; // not connected -> skip
-            if (not PT.has_plan(S2)) continue; // not connected -> skip
-            /* Exploit commutativity of join. */
-            auto cost = CF.calculate_join_cost(G, PT, CE, S1, S2, cnf::CNF{}); // TODO use join condition
-            PT.update(G, CE, S1, S2, cost);
-            cost = CF.calculate_join_cost(G, PT, CE, S1, S2, cnf::CNF{}); // TODO use join condition
-            PT.update(G, CE, S2, S1, cost);
+        for (std::size_t i = 1, end = 1UL << n; i < end; ++i) {
+            Subproblem S(i);
+            if (S.size() == 1) continue; // no non-empty and strict subset of S -> skip
+            if (not M.is_connected(S)) continue;
+            /* Compute break condition to avoid enumerating symmetric subproblems. */
+            uint64_t offset = S.capacity() - __builtin_clzl(uint64_t(S));
+            M_insist(offset != 0, "invalid subproblem offset");
+            Subproblem limit(1UL << (offset - 1));
+            for (Subproblem S1(least_subset(S)); S1 != limit; S1 = Subproblem(next_subset(S1, S))) {
+                Subproblem S2 = S - S1; // = S \ S1;
+                M_insist(M.is_connected(S1, S2), "implied by S inducing a connected subgraph");
+                if (not PT.has_plan(S1)) continue; // not connected -> skip
+                if (not PT.has_plan(S2)) continue; // not connected -> skip
+                /* Exploit commutativity of join. */
+                cnf::CNF condition; // TODO use join condition
+                auto cost = CF.calculate_join_cost(G, PT, CE, S1, S2, condition);
+                PT.update(G, CE, S1, S2, cost);
+                cost = CF.calculate_join_cost(G, PT, CE, S1, S2, condition);
+                PT.update(G, CE, S2, S1, cost);
+            }
         }
     }
-}
+};
 
 /*======================================================================================================================
  * DPccp
  *====================================================================================================================*/
 
 /** Computes the join order using connected subgraph complement pairs (CCP). */
-struct DPccp final : PlanEnumerator
+struct DPccp final : PlanEnumeratorCRTP<DPccp>
 {
+    using base_type = PlanEnumeratorCRTP<DPccp>;
+    using base_type::operator();
+
     /** For each connected subgraph (csg) `S1` of `G`, enumerate all complement connected subgraphs,
      * i.e.\ all csgs of `G - S1` that are connected to `S1`. */
+    template<typename PlanTable>
     void enumerate_cmp(const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF, PlanTable &PT,
-                       const CardinalityEstimator &CE, Subproblem S1) const;
-    void operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const override;
-};
+                       const CardinalityEstimator &CE, Subproblem S1) const
+    {
+        SmallBitset min = least_subset(S1); // node in `S1` with the lowest ID
+        Subproblem Bmin((uint64_t(min) << 1UL) - 1UL); // all nodes 'smaller' than `min`
+        Subproblem X(Bmin | S1); // exclude `S1` and all nodes with a lower ID than the smallest node in `S1`
 
-void DPccp::enumerate_cmp(const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF, PlanTable &PT,
-                          const CardinalityEstimator &CE, Subproblem S1) const
-{
-    SmallBitset min = least_subset(S1); // node in `S1` with the lowest ID
-    Subproblem Bmin((uint64_t(min) << 1UL) - 1UL); // all nodes 'smaller' than `min`
-    Subproblem X(Bmin | S1); // exclude `S1` and all nodes with a lower ID than the smallest node in `S1`
+        Subproblem N = M.neighbors(S1) - X;
+        if (not N) return; // empty neighborhood
 
-    Subproblem N = M.neighbors(S1) - X;
-    if (not N) return; // empty neighborhood
+        /* Process subgraphs in breadth-first order.  The queue contains pairs of connected subgraphs and the corresponding
+         * set of nodes to exclude. */
+        std::queue<std::pair<Subproblem, Subproblem>> Q;
 
-    /* Process subgraphs in breadth-first order.  The queue contains pairs of connected subgraphs and the corresponding
-     * set of nodes to exclude. */
-    std::queue<std::pair<Subproblem, Subproblem>> Q;
+        for (std::size_t i = G.sources().size(); i != 0; --i) {
+            Subproblem vi(1UL << (i - 1));
+            if (not (vi & N)) continue; // `vi` is in neighborhood of `S1`
+            /* Compute exclude set. */
+            Subproblem excluded((1UL << i) - 1); // all nodes 'smaller' than the current node `vi`
+            Subproblem excluded_N = excluded & N; // only exclude nodes in the neighborhood of `S1`
+            Q.emplace(std::make_pair(vi, X | excluded_N));
+            while (not Q.empty()) {
+                auto [S, X] = Q.front();
+                Q.pop();
+                /* Update `PlanTable` with connected subgraph complement pair (S1, S). */
+                cnf::CNF condition; // TODO use join condition
+                auto cost = CF.calculate_join_cost(G, PT, CE, S1, S, condition);
+                PT.update(G, CE, S1, S, cost);
+                cost = CF.calculate_join_cost(G, PT, CE, S, S1, condition);
+                PT.update(G, CE, S, S1, cost);
 
-    for (std::size_t i = G.sources().size(); i != 0; --i) {
-        Subproblem vi(1UL << (i - 1));
-        if (not (vi & N)) continue; // `vi` is in neighborhood of `S1`
-        /* Compute exclude set. */
-        Subproblem excluded((1UL << i) - 1); // all nodes 'smaller' than the current node `vi`
-        Subproblem excluded_N = excluded & N; // only exclude nodes in the neighborhood of `S1`
-        Q.emplace(std::make_pair(vi, X | excluded_N));
-        while (not Q.empty()) {
-            auto [S, X] = Q.front();
-            Q.pop();
-            /* Update `PlanTable` with connected subgraph complement pair (S1, S). */
-            auto cost = CF.calculate_join_cost(G, PT, CE, S1, S, cnf::CNF{}); // TODO use join condition
-            PT.update(G, CE, S1, S, cost);
-            cost = CF.calculate_join_cost(G, PT, CE, S, S1, cnf::CNF{}); // TODO use join condition
-            PT.update(G, CE, S, S1, cost);
-
-            Subproblem N = M.neighbors(S) - X;
-            /* Iterate over all subsets `sub` in `N` */
-            for (Subproblem sub(least_subset(N)); bool(sub); sub = Subproblem(next_subset(sub, N))) {
-                /* Connected subgraph `S` expanded by `sub` constitutes a new connected subgraph.  For each of those
-                 * connected subgraphs, do not consider the neighborhood `N` in addition to the existing set of excluded
-                 * nodes. */
-                Q.emplace(std::make_pair(S | sub, X | N));
+                Subproblem N = M.neighbors(S) - X;
+                /* Iterate over all subsets `sub` in `N` */
+                for (Subproblem sub(least_subset(N)); bool(sub); sub = Subproblem(next_subset(sub, N))) {
+                    /* Connected subgraph `S` expanded by `sub` constitutes a new connected subgraph.  For each of those
+                     * connected subgraphs, do not consider the neighborhood `N` in addition to the existing set of excluded
+                     * nodes. */
+                    Q.emplace(std::make_pair(S | sub, X | N));
+                }
             }
         }
     }
-}
 
-void DPccp::operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const
-{
-    auto &sources = G.sources();
-    const std::size_t n = sources.size();
-    const AdjacencyMatrix M(G);
-    auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
+    template<typename PlanTable>
+    void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
+        auto &sources = G.sources();
+        const std::size_t n = sources.size();
+        const AdjacencyMatrix M(G);
+        auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
-    /* Process subgraphs in breadth-first order.  The queue contains pairs of connected subgraphs and the corresponding
-     * set of nodes to exclude. */
-    std::queue<std::pair<Subproblem, Subproblem>> Q;
+        /* Process subgraphs in breadth-first order.  The queue contains pairs of connected subgraphs and the corresponding
+         * set of nodes to exclude. */
+        std::queue<std::pair<Subproblem, Subproblem>> Q;
 
-    for (std::size_t i = n; i != 0; --i) {
-        /* For a given single node subgraph, the node itself and all nodes with a lower ID are excluded. */
-        Q.emplace(std::make_pair(Subproblem(1UL << (i - 1)), Subproblem ((1UL << i) - 1)));
-        while (not Q.empty()) {
-            auto [S, X] = Q.front();
-            Q.pop();
-            enumerate_cmp(G, M, CF, PT, CE, S);
+        for (std::size_t i = n; i != 0; --i) {
+            /* For a given single node subgraph, the node itself and all nodes with a lower ID are excluded. */
+            Q.emplace(std::make_pair(Subproblem(1UL << (i - 1)), Subproblem ((1UL << i) - 1)));
+            while (not Q.empty()) {
+                auto [S, X] = Q.front();
+                Q.pop();
+                enumerate_cmp(G, M, CF, PT, CE, S);
 
-            Subproblem N = M.neighbors(S) - X;
-            /* Iterate over all subsets `sub` in `N` */
-            for (Subproblem sub(least_subset(N)); bool(sub); sub = Subproblem(next_subset(sub, N)))
-                /* Connected subgraph `S` expanded by `sub` constitutes a new connected subgraph.  For each of those
-                 * connected subgraphs, do not consider the neighborhood `N` in addition to the existing set of excluded
-                 * nodes. */
-                Q.emplace(std::make_pair(S | sub, X | N));
+                Subproblem N = M.neighbors(S) - X;
+                /* Iterate over all subsets `sub` in `N` */
+                for (Subproblem sub(least_subset(N)); bool(sub); sub = Subproblem(next_subset(sub, N)))
+                    /* Connected subgraph `S` expanded by `sub` constitutes a new connected subgraph.  For each of those
+                     * connected subgraphs, do not consider the neighborhood `N` in addition to the existing set of excluded
+                     * nodes. */
+                    Q.emplace(std::make_pair(S | sub, X | N));
+            }
         }
     }
-}
+};
 
 /*======================================================================================================================
  * TDbasic
  *====================================================================================================================*/
 
-struct TDbasic final : PlanEnumerator
+struct TDbasic final : PlanEnumeratorCRTP<TDbasic>
 {
+    using base_type = PlanEnumeratorCRTP<TDbasic>;
+    using base_type::operator();
+
+    template<typename PlanTable>
     void PlanGen(const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF, const CardinalityEstimator &CE,
-                 PlanTable &PT, Subproblem S)
-        const;
-    void operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &Pt) const override;
-};
+                 PlanTable &PT, Subproblem S) const
+    {
+        if (not PT.has_plan(S)) {
+            /* Naive Partitioning */
+            /* Iterate over all non-empty and strict subsets in `S`. */
+            for (Subproblem sub(least_subset(S)); sub != S; sub = Subproblem(next_subset(sub, S))) {
+                Subproblem complement = S - sub;
+                /* Check for valid connected subgraph complement pair. */
+                if (uint64_t(least_subset(sub)) < uint64_t(least_subset(complement)) and
+                    M.is_connected(sub) and M.is_connected(complement))
+                {
+                    /* Process `sub` and `complement` recursively. */
+                    PlanGen(G, M, CF, CE, PT, sub);
+                    PlanGen(G, M, CF, CE, PT, complement);
 
-void TDbasic::PlanGen(const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
-                      const CardinalityEstimator &CE, PlanTable &PT, Subproblem S) const
-{
-    if (not PT.has_plan(S)) {
-        /* Naive Partitioning */
-        /* Iterate over all non-empty and strict subsets in `S`. */
-        for (Subproblem sub(least_subset(S)); sub != S; sub = Subproblem(next_subset(sub, S))) {
-            Subproblem complement = S - sub;
-            /* Check for valid connected subgraph complement pair. */
-            if (uint64_t(least_subset(sub)) < uint64_t(least_subset(complement)) and
-                M.is_connected(sub) and M.is_connected(complement))
-            {
-                /* Process `sub` and `complement` recursively. */
-                PlanGen(G, M, CF, CE, PT, sub);
-                PlanGen(G, M, CF, CE, PT, complement);
-
-                /* Update `PlanTable`. */
-                auto cost = CF.calculate_join_cost(G, PT, CE, sub, complement, cnf::CNF{}); // TODO use join condition
-                PT.update(G, CE, sub, complement, cost);
-                cost = CF.calculate_join_cost(G, PT, CE, complement, sub, cnf::CNF{}); // TODO use join condition
-                PT.update(G, CE, complement, sub, cost);
+                    /* Update `PlanTable`. */
+                    cnf::CNF condition; // TODO use join condition
+                    auto cost = CF.calculate_join_cost(G, PT, CE, sub, complement, condition);
+                    PT.update(G, CE, sub, complement, cost);
+                    cost = CF.calculate_join_cost(G, PT, CE, complement, sub, condition);
+                    PT.update(G, CE, complement, sub, cost);
+                }
             }
         }
     }
-}
 
-void TDbasic::operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const
-{
-    auto &sources = G.sources();
-    std::size_t n = sources.size();
-    AdjacencyMatrix M(G);
-    auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
+    template<typename PlanTable>
+    void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
+        auto &sources = G.sources();
+        std::size_t n = sources.size();
+        AdjacencyMatrix M(G);
+        auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
-    PlanGen(G, M, CF, CE, PT, Subproblem((1UL << n) - 1));
-}
+        PlanGen(G, M, CF, CE, PT, Subproblem((1UL << n) - 1));
+    }
+};
 
 /*======================================================================================================================
  * TDMinCutAGaT
  *====================================================================================================================*/
 
-struct TDMinCutAGaT final : PlanEnumerator
+struct TDMinCutAGaT final : PlanEnumeratorCRTP<TDMinCutAGaT>
 {
+    using base_type = PlanEnumeratorCRTP<TDMinCutAGaT>;
+    using base_type::operator();
+
     struct queue_entry
     {
         Subproblem C;
@@ -391,67 +407,65 @@ struct TDMinCutAGaT final : PlanEnumerator
 
         queue_entry(Subproblem C, Subproblem X, Subproblem T) : C(C), X(X), T(T) { }
     };
+
+    template<typename PlanTable>
     void MinCutAGaT(const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
                     const CardinalityEstimator &CE, PlanTable &PT,
-                    Subproblem S, Subproblem C, Subproblem X, Subproblem T) const;
-    void operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const override;
-};
+                    Subproblem S, Subproblem C, Subproblem X, Subproblem T) const
+    {
+        if (PT.has_plan(S)) return;
 
-void TDMinCutAGaT::MinCutAGaT(const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
-                              const CardinalityEstimator &CE, PlanTable &PT,
-                              Subproblem S, Subproblem C, Subproblem X, Subproblem T) const
-{
-    if (PT.has_plan(S)) return;
+        std::queue<queue_entry> queue;
+        queue.push(queue_entry(C, X, T));
 
-    std::queue<queue_entry> queue;
-    queue.push(queue_entry(C, X, T));
+        while (not queue.empty()) {
+            auto e = queue.front();
+            queue.pop();
 
-    while (not queue.empty()) {
-        auto e = queue.front();
-        queue.pop();
+            Subproblem T_tmp;
+            Subproblem X_tmp;
+            Subproblem N_T = (M.neighbors(e.T) & S) - e.C; // sufficient to check if neighbors of T are connected
+            if (M.is_connected(N_T)) {
+                /* ccp (C, S - C) found, process `C` and `S - C` recursively. */
+                Subproblem cmpl = S - e.C;
+                MinCutAGaT(G, M, CF, CE, PT,
+                           e.C, Subproblem(least_subset(e.C)), Subproblem(0), Subproblem(least_subset(e.C)));
+                MinCutAGaT(G, M, CF, CE, PT,
+                           cmpl, Subproblem(least_subset(cmpl)), Subproblem(0), Subproblem(least_subset(cmpl)));
 
-        Subproblem T_tmp;
-        Subproblem X_tmp;
-        Subproblem N_T = (M.neighbors(e.T) & S) - e.C; // sufficient to check if neighbors of T are connected
-        if (M.is_connected(N_T)) {
-            /* ccp (C, S - C) found, process `C` and `S - C` recursively. */
-            Subproblem cmpl = S - e.C;
-            MinCutAGaT(G, M, CF, CE, PT,
-                       e.C, Subproblem(least_subset(e.C)), Subproblem(0), Subproblem(least_subset(e.C)));
-            MinCutAGaT(G, M, CF, CE, PT,
-                       cmpl, Subproblem(least_subset(cmpl)), Subproblem(0), Subproblem(least_subset(cmpl)));
+                /* Update `PlanTable`. */
+                cnf::CNF condition; // TODO use join condition
+                auto cost = CF.calculate_join_cost(G, PT, CE, e.C, cmpl, condition);
+                PT.update(G, CE, e.C, cmpl, cost);
+                cost = CF.calculate_join_cost(G, PT, CE, cmpl, e.C, condition);
+                PT.update(G, CE, cmpl, e.C, cost);
 
-            /* Update `PlanTable`. */
-            auto cost = CF.calculate_join_cost(G, PT, CE, e.C, cmpl, cnf::CNF{}); // TODO use join condition
-            PT.update(G, CE, e.C, cmpl, cost);
-            cost = CF.calculate_join_cost(G, PT, CE, cmpl, e.C, cnf::CNF{}); // TODO use join condition
-            PT.update(G, CE, cmpl, e.C, cost);
+                T_tmp = Subproblem(0);
+            } else T_tmp = e.C;
 
-            T_tmp = Subproblem(0);
-        } else T_tmp = e.C;
+            if (e.C.size() + 1 >= S.size()) continue;
 
-        if (e.C.size() + 1 >= S.size()) continue;
+            X_tmp = e.X;
+            Subproblem N_C = M.neighbors(e.C);
 
-        X_tmp = e.X;
-        Subproblem N_C = M.neighbors(e.C);
-
-        for (auto i : (N_C - e.X)) {
-            Subproblem v(1UL << i);
-            queue.push(queue_entry(e.C | v, X_tmp, T_tmp | v));
-            X_tmp = X_tmp | v;
+            for (auto i : (N_C - e.X)) {
+                Subproblem v(1UL << i);
+                queue.push(queue_entry(e.C | v, X_tmp, T_tmp | v));
+                X_tmp = X_tmp | v;
+            }
         }
     }
-}
 
-void TDMinCutAGaT::operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const
-{
-    auto &sources = G.sources();
-    std::size_t n = sources.size();
-    AdjacencyMatrix M(G);
-    auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
+    template<typename PlanTable>
+    void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
+        auto &sources = G.sources();
+        std::size_t n = sources.size();
+        AdjacencyMatrix M(G);
+        auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
-    MinCutAGaT(G, M, CF, CE, PT, Subproblem((1UL << n) - 1), Subproblem(1), Subproblem(0), Subproblem(1));
-}
+        MinCutAGaT(G, M, CF, CE, PT, Subproblem((1UL << n) - 1), Subproblem(1), Subproblem(0), Subproblem(1));
+    }
+};
 
 
 /*======================================================================================================================
@@ -483,7 +497,6 @@ struct AIPlanningStateBase
 {
     using actual_type = Actual;
     using size_type = std::size_t;
-    using Subproblem = PlanTable::Subproblem;
 
     using iterator = Subproblem*;
     using const_iterator = const Subproblem*;
@@ -657,7 +670,7 @@ struct AIPlanningStateBase
     const_iterator cend() const { return end(); }
 
     /** Calls `callback` on every state reachable from this state by a single actions. */
-    template<typename Callback>
+    template<typename Callback, typename PlanTable>
     void for_each_successor(Callback &&callback, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                             const CostFunction &CF, const CardinalityEstimator &CE) const {
         static_cast<const actual_type*>(this)->for_each_successor(std::forward<Callback>(callback), PT, G, M, CF, CE);
@@ -777,13 +790,13 @@ struct AIPlanningStateBottomUp : AIPlanningStateBase<AIPlanningStateBottomUp<All
 
     bool is_goal() const { return size() <= 1; }
 
-    template<typename Callback>
+    template<typename Callback, typename PlanTable>
     void for_each_successor(Callback &&callback, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                             const CostFunction &CF, const CardinalityEstimator &CE) const;
 };
 
 template<typename Allocator>
-template<typename Callback>
+template<typename Callback, typename PlanTable>
 void AIPlanningStateBottomUp<Allocator>::for_each_successor(Callback &&callback,
                                                             PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                                                             const CostFunction &CF,
@@ -813,7 +826,8 @@ void AIPlanningStateBottomUp<Allocator>::for_each_successor(Callback &&callback,
                 M_insist(std::is_sorted(subproblems.get(), subproblems.get() + size() - 1, subproblem_lt));
 
                 /* Compute total cost. */
-                const double total_cost = CF.calculate_join_cost(G, PT, CE, *outer_it, *inner_it, cnf::CNF{});
+                cnf::CNF condition; // TODO use join condition
+                const double total_cost = CF.calculate_join_cost(G, PT, CE, *outer_it, *inner_it, condition);
                 PT.update(G, CE, *outer_it, *inner_it, total_cost);
 
                 /* Compute action cost. */
@@ -971,7 +985,7 @@ struct AIPlanningStateBottomUpOpt : AIPlanningStateBase<AIPlanningStateBottomUpO
     const_join_iterator joins_cbegin() const { return joins_begin(); }
     const_join_iterator joins_cend() const { return joins_end(); }
 
-    template<typename Callback>
+    template<typename Callback, typename PlanTable>
     void for_each_successor(Callback &&callback, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                             const CostFunction &CF, const CardinalityEstimator &CE) const;
 
@@ -1005,7 +1019,7 @@ SmallBitset update_join(const SmallBitset S, const uint64_t bit_mask, const unsi
 }
 
 template<typename Allocator>
-template<typename Callback>
+template<typename Callback, typename PlanTable>
 void AIPlanningStateBottomUpOpt<Allocator>::for_each_successor(Callback &&callback,
                                                                PlanTable &PT, const QueryGraph &G,
                                                                const AdjacencyMatrix &M, const CostFunction &CF,
@@ -1125,7 +1139,8 @@ void AIPlanningStateBottomUpOpt<Allocator>::for_each_successor(Callback &&callba
             }
 
             /* Compute total cost. */
-            const double total_cost = CF.calculate_join_cost(G, PT, CE, left, right, cnf::CNF{});
+            cnf::CNF condition; // TODO use join condition
+            const double total_cost = CF.calculate_join_cost(G, PT, CE, left, right, condition);
             PT.update(G, CE, left, right, total_cost);
 
             /* Compute action cost. */
@@ -1237,13 +1252,13 @@ struct AIPlanningStateTopDown : AIPlanningStateBase<AIPlanningStateTopDown<Alloc
     bool is_goal() const { return size() == number_of_goal_relations_; }
 
     /** Calls `callback` on every state reachable from this state by a single actions. */
-    template<typename Callback>
+    template<typename Callback, typename PlanTable>
     void for_each_successor(Callback &&callback, PlanTable &PT, const QueryGraph&, const AdjacencyMatrix &M,
                             const CostFunction &CF, const CardinalityEstimator&) const;
 };
 
 template<typename Allocator>
-template<typename Callback>
+template<typename Callback, typename PlanTable>
 void AIPlanningStateTopDown<Allocator>::for_each_successor(Callback &&callback,
                                                            PlanTable &PT, const QueryGraph&, const AdjacencyMatrix &M,
                                                            const CostFunction&, const CardinalityEstimator &CE) const
@@ -1265,8 +1280,8 @@ void AIPlanningStateTopDown<Allocator>::for_each_successor(Callback &&callback,
                 subproblems.emplace_back(complement);
                 //TODO Find a smarter and more efficient way to order
                 std::sort(subproblems.begin(), subproblems.end(), subproblem_lt);
-                auto left = CE.predict_cardinality(*PT.at(sub).model);
-                auto right = CE.predict_cardinality(*PT.at(complement).model);
+                auto left = CE.predict_cardinality(*PT[sub].model);
+                auto right = CE.predict_cardinality(*PT[complement].model);
                 AIPlanningStateTopDown S(/* g=           */ g() + left + right,
                                          /* #relations = */ number_of_goal_relations_,
                                          /* subproblems= */ subproblems.begin(), subproblems.end());
@@ -1298,7 +1313,7 @@ namespace heuristics {
  *--------------------------------------------------------------------------------------------------------------------*/
 
 /** This heuristic implements a perfect oracle, always returning the exact distance to the nearest goal state. */
-template<typename State>
+template<typename PlanTable, typename State>
 struct perfect_oracle
 {
     using state_type = State;
@@ -1323,7 +1338,7 @@ struct perfect_oracle
  * `Subproblem`s yet to be joined.
  * This heuristic is admissible, yet dramatically underestimates the actual distance to a goal state.
  */
-template<typename State>
+template<typename PlanTable, typename State>
 struct hsum
 {
     using state_type = State;
@@ -1350,7 +1365,7 @@ struct hsum
  * starting point for development of other heuristics that try to estimate the cost by making the margin of error for
  * the overestimation smaller.
  */
-template<typename State>
+template<typename PlanTable, typename State>
 struct hprod
 {
     using state_type = State;
@@ -1371,7 +1386,7 @@ struct hprod
     }
 };
 
-template<typename State>
+template<typename PlanTable, typename State>
 struct bottomup_lookahead_cheapest
 {
     using state_type = State;
@@ -1408,7 +1423,8 @@ struct bottomup_lookahead_cheapest
                         PT[joined].model = CE.estimate_join(G, *PT[*outer_it].model, *PT[*inner_it].model,
                                                             /* TODO */ cnf::CNF{});
                     }
-                    const double total_cost = CF.calculate_join_cost(G, PT, CE, *outer_it, *inner_it, cnf::CNF{});
+                    cnf::CNF condition; // TODO use join condition
+                    const double total_cost = CF.calculate_join_cost(G, PT, CE, *outer_it, *inner_it, condition);
                     const double action_cost = total_cost - (PT[*outer_it].cost + PT[*inner_it].cost);
                     ///> XXX: Sum of different units: cost and cardinality
                     const double additional_costs = action_cost + CE.predict_cardinality(*PT[joined].model);
@@ -1435,7 +1451,7 @@ struct bottomup_lookahead_cheapest
  * The heuristic value then is the sum of the results of the executed searches.
  * This heuristic is not admissible and depends highly on the strategy for chosing checkpoints.
  */
-template<typename State>
+template<typename PlanTable, typename State>
 struct checkpoints
 {
     using state_type = State;
@@ -1450,7 +1466,7 @@ struct checkpoints
     /** This heuristic estimates the distance from a state to the nearest goal state as the sum of the sizes of all
      * `Subproblem`s yet to be joined.
      * This heuristic is admissible, yet dramatically underestimates the actual distance to a goal state.  */
-    using internal_hsum = hsum<internal_state_type>;
+    using internal_hsum = hsum<PlanTable, internal_state_type>;
 
     /** Represents one specific search done in the checkpoints heurisitc with its `initial_state` and `goal`.  Used to
      * determine which searches have already been conducted and thus need not be conducted again but can be loaded from
@@ -1756,12 +1772,6 @@ struct checkpoints
 
 }
 
-/** Computes the join order using an AI Planning approach */
-struct AIPlanning final : PlanEnumerator
-{
-    void operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const override;
-};
-
 template<typename State, typename Heuristic, typename... Context>
 using AStar = ai::AStar<State, Heuristic, Context...>;
 template<typename State, typename Heuristic, typename... Context>
@@ -1782,6 +1792,7 @@ template<typename State, typename Heuristic, typename... Context>
 using acyclic_dynamic_beam_search = ai::acyclic_beam_search<-1U>::type<State, Heuristic, Context...>;
 
 template<
+    typename PlanTable,
     typename State,
     typename Heuristic,
     template<typename, typename, typename...> typename Search
@@ -1821,60 +1832,68 @@ void run_planner_config(PlanTable &PT, const QueryGraph &G, const AdjacencyMatri
     State::ALLOCATOR(malloc_allocator{}); // reset allocator
 }
 
-void AIPlanning::operator()(const QueryGraph &G, const CostFunction &CF, PlanTable &PT) const
+/** Computes the join order using an AI Planning approach */
+struct AIPlanning final : PlanEnumeratorCRTP<AIPlanning>
 {
-    Catalog &C = Catalog::Get();
-    auto &CE = C.get_database_in_use().cardinality_estimator();
-    AdjacencyMatrix M(G);
+    using base_type = PlanEnumeratorCRTP<AIPlanning>;
+    using base_type::operator();
+
+    template<typename PlanTable>
+    void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
+        Catalog &C = Catalog::Get();
+        auto &CE = C.get_database_in_use().cardinality_estimator();
+        AdjacencyMatrix M(G);
 
 #define IS_PLANNER_CONFIG(STATE, HEURISTIC, SEARCH) \
-    (streq(Options::Get().ai_state, #STATE) and streq(Options::Get().ai_heuristic, #HEURISTIC) and \
-     streq(Options::Get().ai_search, #SEARCH))
+        (streq(Options::Get().ai_state, #STATE) and streq(Options::Get().ai_heuristic, #HEURISTIC) and \
+         streq(Options::Get().ai_search, #SEARCH))
 #define EMIT_PLANNER_CONFIG(STATE, HEURISTIC, SEARCH) \
-    if (IS_PLANNER_CONFIG(STATE, HEURISTIC, SEARCH)) \
-    { \
-        run_planner_config<\
-            AIPlanningState ## STATE<malloc_allocator>,\
-            heuristics:: HEURISTIC <AIPlanningState ## STATE<malloc_allocator>>,\
-            SEARCH>\
-        (PT, G, M, CF, CE); \
-    }
+        if (IS_PLANNER_CONFIG(STATE, HEURISTIC, SEARCH)) \
+        { \
+            run_planner_config<\
+                PlanTable, \
+                AIPlanningState ## STATE<malloc_allocator>,\
+                heuristics:: HEURISTIC <PlanTable, AIPlanningState ## STATE<malloc_allocator>>,\
+                SEARCH>\
+            (PT, G, M, CF, CE); \
+        }
 
-         EMIT_PLANNER_CONFIG(BottomUp,      hsum,                           AStar                           )
-    else EMIT_PLANNER_CONFIG(BottomUpOpt,   hsum,                           AStar                           )
-    else EMIT_PLANNER_CONFIG(BottomUp,      hprod,                          AStar                           )
-    else EMIT_PLANNER_CONFIG(BottomUpOpt,   hprod,                          AStar                           )
-    else EMIT_PLANNER_CONFIG(BottomUp,      bottomup_lookahead_cheapest,    AStar                           )
-    else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    AStar                           )
-    else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    lazyAStar                       )
-    else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    beam_search                     )
-    else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    dynamic_beam_search             )
-    else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    lazy_beam_search                )
-    else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    lazy_dynamic_beam_search        )
-    else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    acyclic_beam_search             )
-    else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    acyclic_dynamic_beam_search     )
-    else EMIT_PLANNER_CONFIG(BottomUpOpt,   checkpoints,                    AStar                           )
-    else EMIT_PLANNER_CONFIG(BottomUpOpt,   checkpoints,                    beam_search                     )
-    else EMIT_PLANNER_CONFIG(BottomUpOpt,   checkpoints,                    dynamic_beam_search             )
-    else EMIT_PLANNER_CONFIG(BottomUpOpt,   checkpoints,                    acyclic_beam_search             )
-    else EMIT_PLANNER_CONFIG(BottomUpOpt,   checkpoints,                    acyclic_dynamic_beam_search     )
-    else EMIT_PLANNER_CONFIG(BottomUp,      perfect_oracle,                 AStar                           )
-    else EMIT_PLANNER_CONFIG(BottomUp,      perfect_oracle,                 beam_search                     )
-    else { throw std::invalid_argument("illegal planner configuration"); }
+             EMIT_PLANNER_CONFIG(BottomUp,      hsum,                           AStar                           )
+        else EMIT_PLANNER_CONFIG(BottomUpOpt,   hsum,                           AStar                           )
+        else EMIT_PLANNER_CONFIG(BottomUp,      hprod,                          AStar                           )
+        else EMIT_PLANNER_CONFIG(BottomUpOpt,   hprod,                          AStar                           )
+        else EMIT_PLANNER_CONFIG(BottomUp,      bottomup_lookahead_cheapest,    AStar                           )
+        else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    AStar                           )
+        else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    lazyAStar                       )
+        else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    beam_search                     )
+        else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    dynamic_beam_search             )
+        else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    lazy_beam_search                )
+        else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    lazy_dynamic_beam_search        )
+        else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    acyclic_beam_search             )
+        else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    acyclic_dynamic_beam_search     )
+        else EMIT_PLANNER_CONFIG(BottomUpOpt,   checkpoints,                    AStar                           )
+        else EMIT_PLANNER_CONFIG(BottomUpOpt,   checkpoints,                    beam_search                     )
+        else EMIT_PLANNER_CONFIG(BottomUpOpt,   checkpoints,                    dynamic_beam_search             )
+        else EMIT_PLANNER_CONFIG(BottomUpOpt,   checkpoints,                    acyclic_beam_search             )
+        else EMIT_PLANNER_CONFIG(BottomUpOpt,   checkpoints,                    acyclic_dynamic_beam_search     )
+        else EMIT_PLANNER_CONFIG(BottomUp,      perfect_oracle,                 AStar                           )
+        else EMIT_PLANNER_CONFIG(BottomUp,      perfect_oracle,                 beam_search                     )
+        else { throw std::invalid_argument("illegal planner configuration"); }
 #undef EMIT_PLANNER_CONFIG
 
 #if 0
-    {
-        const auto ai_cost = PT.get_final().cost;
-        DPccp dpccp;
-        dpccp(G, CF, PT);
-        const auto dp_cost = PT.get_final().cost;
+        {
+            const auto ai_cost = PT.get_final().cost;
+            DPccp dpccp;
+            dpccp(G, CF, PT);
+            const auto dp_cost = PT.get_final().cost;
 
-        std::cerr << "AI: " << ai_cost << ", DP: " << dp_cost << ", Δ " << double(ai_cost) / dp_cost << 'x'
-                  << std::endl;
-    }
+            std::cerr << "AI: " << ai_cost << ", DP: " << dp_cost << ", Δ " << double(ai_cost) / dp_cost << 'x'
+                      << std::endl;
+        }
 #endif
-}
+    }
+};
 
 #define M_PLAN_ENUMERATOR(NAME, _) \
     std::unique_ptr<PlanEnumerator> PlanEnumerator::Create ## NAME() { \

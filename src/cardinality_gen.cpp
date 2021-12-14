@@ -177,11 +177,18 @@ table_type generate_cardinalities_for_query(const m::QueryGraph &G, const m::Adj
 
         /*----- Compute selectivity ranges. -----*/
         constexpr double MAX_SELECTIVITY = .8;
-        constexpr std::size_t MAX_GROWTH_FACTOR = 100;
-        const double max_selectivity = std::min<double>(
-            MAX_SELECTIVITY,
+        constexpr std::size_t MAX_GROWTH_FACTOR = 10;
+        double max_selectivity = MAX_SELECTIVITY;
+        /* Selectivity must not exceed max growth factor. */
+        max_selectivity = std::min<double>(
+            max_selectivity,
             MAX_GROWTH_FACTOR * double(std::max(left.max_cardinality, right.max_cardinality)) /
                 (left.max_cardinality * right.max_cardinality)
+        );
+        /* Selectivity must not exceed maximum representable integer value. */
+        max_selectivity = std::min<double>(
+            max_selectivity,
+            double(std::numeric_limits<std::size_t>::max()) / left.max_cardinality / right.max_cardinality
         );
         const double selectivity_factor = 1. - 1. / (1. + selectivity_dist(g));
         const double selectivity = max_selectivity * selectivity_factor;

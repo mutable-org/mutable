@@ -8,8 +8,10 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <mutable/IR/PlanTable.hpp>
 #include <mutable/mutable.hpp>
 #include <random>
+#include <unordered_map>
 #include <unordered_set>
 #include <x86intrin.h>
 
@@ -34,10 +36,11 @@ struct entry_t
     entry_t() { }
 };
 
-std::unique_ptr<entry_t[]>
-generate_cardinalities_for_query(const m::QueryGraph &G, const m::AdjacencyMatrix &M, const args_t &args);
+using table_type = std::unordered_map<Subproblem, entry_t, m::SubproblemHash>;
 
-void emit_cardinalities(std::ostream &out, const m::QueryGraph &G, const entry_t *table);
+table_type generate_cardinalities_for_query(const m::QueryGraph &G, const m::AdjacencyMatrix &M, const args_t &args);
+
+void emit_cardinalities(std::ostream &out, const m::QueryGraph &G, const table_type &table);
 
 void usage(std::ostream &out, const char *name)
 {
@@ -140,26 +143,25 @@ int main(int argc, const char **argv)
     m::AdjacencyMatrix M(*G);
 
     /*----- Generate cardinalities. ----------------------------------------------------------------------------------*/
-    std::unique_ptr<entry_t[]> table = generate_cardinalities_for_query(*G, M, args);
+    table_type table = generate_cardinalities_for_query(*G, M, args);
 
     /*----- Emit the table. ------------------------------------------------------------------------------------------*/
-    emit_cardinalities(std::cout, *G, table.get());
+    emit_cardinalities(std::cout, *G, table);
 }
 
-std::unique_ptr<entry_t[]>
-generate_cardinalities_for_query(const m::QueryGraph &G, const m::AdjacencyMatrix &M, const args_t &args)
+table_type generate_cardinalities_for_query(const m::QueryGraph &G, const m::AdjacencyMatrix &M, const args_t &args)
 {
     const std::size_t num_relations = G.sources().size();
 
     std::mt19937_64 g(args.seed);
     std::gamma_distribution<double> cardinality_dist(.5, 1.);
 
-    auto table = std::make_unique<entry_t[]>(1UL << num_relations);
+    table_type table(G.num_sources() * G.num_sources());
 
     /*----- Fill table with cardinalities for base relations. --------------------------------------------------------*/
     {
         for (unsigned i = 0; i != num_relations; ++i) {
-            auto &e = table[1UL << i];
+            auto &e = table[Subproblem(1UL << i)];
 
             e.max_cardinality =
                 args.max_cardinality - (args.max_cardinality - args.min_cardinality) / (1. + cardinality_dist(g));
@@ -167,9 +169,9 @@ generate_cardinalities_for_query(const m::QueryGraph &G, const m::AdjacencyMatri
     }
 
     auto update = [&table, &g](const Subproblem S1, const Subproblem S2) -> void {
-        auto &left   = table[uint64_t(S1)];
-        auto &right  = table[uint64_t(S2)];
-        auto &joined = table[uint64_t(S1 | S2)];
+        auto &left   = table[S1];
+        auto &right  = table[S2];
+        auto &joined = table[S1 | S2];
 
         std::gamma_distribution<double> selectivity_dist(.15, 1.);
 
@@ -250,20 +252,16 @@ generate_cardinalities_for_query(const m::QueryGraph &G, const m::AdjacencyMatri
     return table;
 }
 
-void emit_cardinalities(std::ostream &out, const m::QueryGraph &G, const entry_t *table)
+void emit_cardinalities(std::ostream &out, const m::QueryGraph &G, const table_type &table)
 {
     m::Catalog &C = m::Catalog::Get();
     m::Database &DB = C.get_database_in_use();
-    const std::size_t num_relations = G.sources().size();
-    const Subproblem All((1UL << num_relations) - 1UL);
 
     out << "{\n    \"" << DB.name << "\": [\n";
     bool first = true;
-    for (auto I = m::least_subset(All), S = I; bool(S); S = m::next_subset(S, All)) {
-        /*----- Get the size and check whether subproblem is feasible. -----*/
-        const std::size_t size = table[uint64_t(S)].max_cardinality;
-        if (size == -1UL)
-            continue; // not a feasible subproblem
+    for (auto entry : table) {
+        const Subproblem S = entry.first;
+        const std::size_t size = entry.second.max_cardinality;
 
         /*----- Emit relations. -----*/
         if (first) first = false;

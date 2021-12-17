@@ -65,3 +65,6 @@ target_link_libraries(allocator_benchmark dl Threads::Threads)
 
 add_executable(cardinality_gen cardinality_gen.cpp $<TARGET_OBJECTS:io> version.cpp mutable.cpp)
 target_link_libraries(cardinality_gen frontend)
+
+add_executable(query_slicer query_slicer.cpp $<TARGET_OBJECTS:io> version.cpp mutable.cpp)
+target_link_libraries(query_slicer frontend)

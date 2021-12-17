@@ -76,7 +76,7 @@ void emplace_back(std::vector<const Expr*> &exprs, const Expr *expr) {
 /** Like `std::vector::emplace_back()` but adds only iff `src` is not already contained in `sources`. */
 void emplace_back(std::vector<DataSource*> &sources, DataSource *src) {
     for (auto s : sources) {
-        if (s->alias() == src->alias())
+        if (s->name() == src->name())
             return;
     }
     sources.emplace_back(src);
@@ -280,7 +280,7 @@ struct m::GetPrimaryKey
             Catalog &C = Catalog::Get();
             Position pos(C.pool("Decorrelation"));
             Token dot(pos, C.pool("."), TK_DOT);
-            Token tbl(pos, base->alias(), TK_IDENTIFIER);
+            Token tbl(pos, base->name(), TK_IDENTIFIER);
             for (auto pkey : base->table().primary_key()) {
                 Token attr(pos, pkey->name, TK_IDENTIFIER);
                 auto D = new Designator(dot, tbl, attr, pkey->type, pkey);
@@ -296,7 +296,7 @@ struct m::GetPrimaryKey
                     Catalog &C = Catalog::Get();
                     Position pos(C.pool("Decorrelation"));
                     Token dot(pos, C.pool("."), TK_DOT);
-                    Token tbl(pos, query->alias(), TK_IDENTIFIER);
+                    Token tbl(pos, query->name(), TK_IDENTIFIER);
                     std::ostringstream oss;
                     oss << *e;
                     Token attr(pos, C.pool(oss.str().c_str()), TK_IDENTIFIER);
@@ -1127,7 +1127,7 @@ struct m::Decorrelation
      *  and `nullptr` otherwise. */
     DataSource * findSource(const std::vector<DataSource*> &sources, const char *name) {
         for (auto s : sources) {
-            if (auto q = cast<Query>(s); name == s->alias() or (q and findSource(q->query_graph()->sources(), name)))
+            if (auto q = cast<Query>(s); name == s->name() or (q and findSource(q->query_graph()->sources(), name)))
                 return s;
         }
         return nullptr;
@@ -1212,9 +1212,8 @@ struct m::GraphBuilder : ConstASTStmtVisitor
                 if (auto tok = std::get_if<Token>(&tbl.source)) {
                     /* Create a new base table. */
                     M_insist(tbl.has_table());
-                    Token alias = tbl.alias ? tbl.alias : *tok;
-                    auto &base = graph_->add_source(alias.text, tbl.table());
-                    aliases_.emplace(alias.text, &base);
+                    auto &base = graph_->add_source(tbl.alias ? tbl.alias.text : nullptr, tbl.table());
+                    aliases_.emplace(base.name(), &base);
                 } else if (auto stmt = std::get_if<Stmt*>(&tbl.source)) {
                     M_insist(tbl.alias.text, "every nested statement requires an alias");
                     if (auto select = cast<SelectStmt>(*stmt)) {
@@ -1559,8 +1558,7 @@ void QueryGraph::dot_recursive(std::ostream &out) const
 
     for (auto ds : sources_) {
         out << "    " << id(*ds) << " [label=<";
-        if (ds->alias())
-            out << "<B>" << ds->alias() << "</B>";
+        out << "<B>" << ds->name() << "</B>";
         if (ds->filter().size())
             out << "<BR/><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">"
                 << html_escape(to_string(ds->filter()))

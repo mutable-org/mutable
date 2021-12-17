@@ -46,7 +46,7 @@ struct DataSource
     /** Returns the alias of this `DataSource`.  May be `nullptr`. */
     const char * alias() const { return alias_; }
     /** Returns the name of this `DataSource`.  Either the same as `alias()`, if an alias is given, otherwise the name
-     * of the referenced `Table`. */
+     * of the referenced `Table`.  May return `nullptr` for anonymous nested queries (e.g. in a WHERE clause).  */
     virtual const char * name() const = 0;
     /** Returns the filter of this `DataSource`.  May be empty. */
     cnf::CNF filter() const { return filter_; }
@@ -116,7 +116,7 @@ struct Query : DataSource
     /** Returns a reference to the internal `QueryGraph`. */
     QueryGraph * query_graph() const { return query_graph_; }
 
-    const char * name() const override { M_insist(alias()); return alias(); }
+    const char * name() const override { return alias(); }
 
     bool is_correlated() const override;
 };

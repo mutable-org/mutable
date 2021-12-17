@@ -17,7 +17,7 @@ using namespace m;
 
 namespace {
 
-    Stmt *get_Stmt(const char *sql) {
+    Stmt * get_Stmt(const char *sql) {
         LEXER(sql);
         Parser parser(lexer);
         Sema sema(diag);
@@ -52,17 +52,17 @@ namespace {
         return false;
     }
 
-    DataSource *find_Source(const std::vector<DataSource *> &vec, const char * alias) {
+    DataSource * find_Source(const std::vector<DataSource *> &vec, const char * alias) {
         auto end = vec.end();
         for (auto begin = vec.begin(); begin != end; ++begin) {
             auto source = *begin;
-            if (source->alias() == alias)
+            if (source->name() == alias)
                 return source;
         }
         return nullptr;
     }
 
-    Join *find_Join(const std::vector<Join *> &vec, const char * alias1, const char * alias2) {
+    Join * find_Join(const std::vector<Join *> &vec, const char * alias1, const char * alias2) {
         auto end = vec.end();
         for (auto begin = vec.begin(); begin != end; ++begin) {
             auto join = *begin;
@@ -1143,7 +1143,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->limit().limit == 0);
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
 
@@ -1170,7 +1171,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->limit().limit == 0);
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
 
@@ -1197,7 +1199,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->limit().limit == 0);
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
 
@@ -1225,7 +1228,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->limit().limit == 0);
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
 
@@ -1253,7 +1257,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->limit().limit == 0);
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
 
@@ -1302,7 +1307,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.size());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
 
@@ -1327,6 +1333,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
 
             REQUIRE(sources.size() == 1);
             REQUIRE(sources[0]->alias() == c_tbl);
+            REQUIRE(sources[0]->name() == c_tbl);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
 
@@ -1351,7 +1358,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.size());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter() == cnf_A_val_eq_const0);
 
@@ -1377,6 +1385,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
 
             REQUIRE(sources.size() == 1);
             REQUIRE(sources[0]->alias() == c_tbl);
+            REQUIRE(sources[0]->name() == c_tbl);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter() == cnf_tbl_val_eq_const1);
 
@@ -1401,7 +1410,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.size());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter() == cnf::operator&&(cnf_A_val_eq_const0, cnf_not_A_bool));
 
@@ -1513,7 +1523,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.size());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter() == cnf_constTrue);
 
@@ -1606,7 +1617,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == 1);
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
 
@@ -1636,7 +1648,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == 1);
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
 
@@ -1666,7 +1679,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == 1);
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
 
@@ -1777,7 +1791,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.size());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
 
@@ -1803,7 +1818,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.size());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
 
@@ -1830,7 +1846,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.size());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
 
@@ -1857,7 +1874,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.size());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
 
@@ -1884,7 +1902,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.size());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
 
@@ -1914,7 +1933,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.size());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
 
@@ -1941,7 +1961,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == tableA.size());
 
             REQUIRE(sources.size() == 1);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
 
@@ -2000,6 +2021,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
 
             REQUIRE(sources.size() == 1);
             REQUIRE(sources[0]->alias() == c_tbl);
+            REQUIRE(sources[0]->name() == c_tbl);
             REQUIRE(sources[0]->joins().empty());
             REQUIRE(sources[0]->filter().empty());
 
@@ -2046,7 +2068,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(graph->projections().size() == 1);
 
             REQUIRE(sources.size() == 2);
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->joins().size() == 1);
             REQUIRE(sources[0]->filter().empty());
             REQUIRE(is<const BaseTable>(sources[0]));
@@ -2085,7 +2108,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
 
             REQUIRE(sources.size() == 2);
             REQUIRE(is<const BaseTable>(sources[0]));
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->filter().empty());
             REQUIRE(sources[0]->joins().size() == 1);
             auto q = cast<const Query>(sources[1]);
@@ -2200,6 +2224,7 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             auto Q = cast<const Query>(q_graph->sources()[1]);
             REQUIRE(Q);
             REQUIRE(streq(Q->alias(), "Q"));
+            REQUIRE(streq(Q->name(), "Q"));
             auto Q_graph = Q->query_graph();
             REQUIRE(Q_graph->projections().size() == 3);
             REQUIRE(*Q_graph->projections()[2].first == A_id);
@@ -2229,7 +2254,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
 
             REQUIRE(sources.size() == 2);
             REQUIRE(is<const BaseTable>(sources[0]));
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->filter().empty());
             REQUIRE(sources[0]->joins().size() == 1);
             auto q = cast<const Query>(sources[1]);
@@ -2340,7 +2366,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
 
             REQUIRE(sources.size() == 2);
             REQUIRE(is<const BaseTable>(sources[0]));
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->filter().empty());
             REQUIRE(sources[0]->joins().size() == 1);
             auto q = cast<const Query>(sources[1]);
@@ -2388,7 +2415,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
 
             REQUIRE(sources.size() == 2);
             REQUIRE(is<const BaseTable>(sources[0]));
-            REQUIRE(sources[0]->alias() == c_A);
+            REQUIRE(sources[0]->alias() == nullptr);
+            REQUIRE(sources[0]->name() == c_A);
             REQUIRE(sources[0]->filter().empty());
             REQUIRE(sources[0]->joins().size() == 1);
             auto q1 = cast<const Query>(sources[1]);
@@ -2396,7 +2424,8 @@ TEST_CASE("GraphBuilder/SelectStmt", "[core][IR][unit]")
             REQUIRE(q1->joins().size() == 1);
             REQUIRE(q1->query_graph()->sources().size() == 2);
             REQUIRE(is<const BaseTable>(q1->query_graph()->sources()[0]));
-            REQUIRE(q1->query_graph()->sources()[0]->alias() == c_C);
+            REQUIRE(q1->query_graph()->sources()[0]->alias() == nullptr);
+            REQUIRE(q1->query_graph()->sources()[0]->name() == c_C);
             REQUIRE(q1->query_graph()->sources()[0]->filter().empty());
             REQUIRE(q1->query_graph()->sources()[0]->joins().size() == 1);
             REQUIRE(q1->query_graph()->group_by().size() == 1);

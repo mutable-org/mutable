@@ -186,7 +186,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
             plan_table[s].cost = 0;
             plan_table[s].model = CE.estimate_scan(G, s);
             auto &store = bt->table().store();
-            auto source = new ScanOperator(store, bt->alias());
+            auto source = new ScanOperator(store, bt->name());
             source_plans[ds->id()] = source;
 
             /* Set operator information. */

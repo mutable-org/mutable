@@ -57,6 +57,9 @@ struct Predicate
      * `Predicate`s are larger than positive `Predicate`s of the same expression. */
     bool operator<(Predicate other) const { return this->literal_ < other.literal_; }
 
+    /** Print as SQL expression. */
+    void to_sql(std::ostream &out) const;
+
     /** Print a textual representation of `pred` to `out`. */
     friend std::ostream & operator<<(std::ostream &out, const Predicate &pred);
 
@@ -82,6 +85,9 @@ struct Clause : public std::vector<Predicate>
         return required;
     }
 
+    /** Print as SQL expression. */
+    void to_sql(std::ostream &out) const;
+
     /** Print a textual representation of `clause` to `out`. */
     friend std::ostream & operator<<(std::ostream &out, const Clause &clause);
 
@@ -106,6 +112,9 @@ struct CNF : public std::vector<Clause>
     bool operator>=(const CNF &other) const { return other <= *this; }
     bool operator==(const CNF &other) const { return *this >= other and *this <= other; }
     bool operator!=(const CNF &other) const { return not operator==(other); }
+
+    /** Print as SQL expression. */
+    void to_sql(std::ostream &out) const;
 
     /** Print a textual representation of `cnf` to `out`. */
     friend std::ostream & operator<<(std::ostream &out, const CNF &cnf);

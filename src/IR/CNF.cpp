@@ -95,6 +95,54 @@ CNF operator!(const CNF &cnf)
  * Print/Dump
  *====================================================================================================================*/
 
+void Predicate::to_sql(std::ostream &out) const
+{
+    if (negative())
+        out << "NOT (" << *expr() << ')';
+    else
+        out << *expr();
+}
+
+void Clause::to_sql(std::ostream &out) const
+{
+    switch (size()) {
+        case 0:
+            out << "TRUE";
+            return;
+
+        case 1:
+            out << *begin();
+            return;
+
+        default:
+            for (auto it = begin(); it != end(); ++it) {
+                if (it != begin()) out << " OR ";
+                out << '(' << *it << ')';
+            }
+            return;
+    }
+}
+
+void CNF::to_sql(std::ostream &out) const
+{
+    switch (size()) {
+        case 0:
+            out << "TRUE";
+            return;
+
+        case 1:
+            out << *begin();
+            return;
+
+        default:
+            for (auto it = begin(); it != end(); ++it) {
+                if (it != begin()) out << " AND ";
+                out << *it;
+            }
+            return;
+    }
+}
+
 std::ostream & operator<<(std::ostream &out, const Predicate &pred)
 {
     if (pred.negative())

@@ -1739,6 +1739,34 @@ void QueryGraph::dump() const { dump(std::cerr); }
  * AdjacencyMatrix
  *====================================================================================================================*/
 
+AdjacencyMatrix AdjacencyMatrix::transitive_closure_directed() const
+{
+    AdjacencyMatrix closure(*this); // copy
+
+    bool changed;
+    do {
+        changed = false;
+        for (std::size_t i = 0; i != num_vertices_; ++i) {
+            for (std::size_t j = 0; j != num_vertices_; ++j) {
+                if (not closure(i, j)) {
+                    const SmallBitset row = closure.m_[i];
+                    const SmallBitset col_mask(1UL << j);
+                    for (std::size_t k : row) {
+                        M_insist(row[k]);
+                        if (closure.m_[k] & col_mask) {
+                            closure(i, j) = true;
+                            changed = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    } while (changed);
+
+    return closure;
+}
+
 AdjacencyMatrix AdjacencyMatrix::transitive_closure_undirected() const
 {
     AdjacencyMatrix closure(*this); // copy

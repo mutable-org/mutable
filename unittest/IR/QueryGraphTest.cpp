@@ -518,6 +518,47 @@ TEST_CASE("AdjacencyMatrix/QueryGraph Matrix Negative", "[core][IR][unit]")
     }
 }
 
+TEST_CASE("AdjacencyMatrix/transitive_closure_directed", "[core][IR][unit]")
+{
+    SECTION("empty")
+    {
+        AdjacencyMatrix M(5);
+        AdjacencyMatrix closure = M.transitive_closure_directed();
+        CHECK(closure == M);
+    }
+
+    SECTION("self-connected nodes")
+    {
+        AdjacencyMatrix M(3);
+        M(0, 0) = M(1, 1) = M(2, 2) = true;
+        AdjacencyMatrix closure = M.transitive_closure_directed();
+        CHECK(closure == M);
+    }
+
+    SECTION("transitive edge")
+    {
+        /*  A →  B ↔  C ←  D →  E */
+        const unsigned A = 0;
+        const unsigned B = 1;
+        const unsigned C = 2;
+        const unsigned D = 3;
+        const unsigned E = 4;
+        AdjacencyMatrix M(5);
+        M(A, B) = true;
+        M(B, C) = true;
+        M(C, B) = true;
+        M(D, C) = M(D, E) = true;
+        AdjacencyMatrix closure = M.transitive_closure_directed();
+
+        AdjacencyMatrix expected(5);
+        expected(A, B) = expected(A, C) = true;
+        expected(B, B) = expected(B, C) = true;
+        expected(C, B) = expected(C, C) = true;
+        expected(D, B) = expected(D, C) = expected(D, E) = true;
+        CHECK(expected == closure);
+    }
+}
+
 TEST_CASE("AdjacencyMatrix/transitive_closure_undirected", "[core][IR][unit]")
 {
     SECTION("empty")

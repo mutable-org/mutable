@@ -409,6 +409,11 @@ exit:
     }
 
     /** Computes the *transitive closure* of this adjacency matrix.  That is, compute for each pair of vertices *(i, j)*
+     * whether *j* can be reached from *i* by any finite path.  Treats edges as directed and hence does not exploit
+     * symmetry.  */
+    AdjacencyMatrix transitive_closure_directed() const;
+
+    /** Computes the *transitive closure* of this adjacency matrix.  That is, compute for each pair of vertices *(i, j)*
      * whether *j* can be reached from *i* by any finite path.  Expects that this `AdjacencyMatrix` is symmetric, i.e.
      * that the original graph is undirected.  */
     AdjacencyMatrix transitive_closure_undirected() const;

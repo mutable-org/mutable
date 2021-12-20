@@ -521,17 +521,19 @@ TEST_CASE("AdjacencyMatrix/QueryGraph Matrix Negative", "[core][IR][unit]")
 TEST_CASE("AdjacencyMatrix/Matrix output", "[core][IR][unit]")
 {
     AdjacencyMatrix adj_mat(4);
-    std::stringstream out;
+    std::ostringstream out;
 
     SECTION("empty matrix output")
     {
         out << adj_mat;
-
-        std::string out_str("Adjacency Matrix");
-        for (size_t i = 0; i < SmallBitset::CAPACITY; ++i)
-            out_str += '\n' + std::string(SmallBitset::CAPACITY, '0');
-
-        REQUIRE(out.str() == out_str);
+        const std::string expected = "\
+Adjacency Matrix\n\
+0000\n\
+0000\n\
+0000\n\
+0000\
+";
+        REQUIRE(out.str() == expected);
     }
 
     SECTION("non-empty matrix output")
@@ -540,15 +542,15 @@ TEST_CASE("AdjacencyMatrix/Matrix output", "[core][IR][unit]")
         adj_mat(2, 3) = adj_mat(3, 2) = true;
         out << adj_mat;
 
-        std::string out_str("Adjacency Matrix");
-        out_str += '\n' + std::string(SmallBitset::CAPACITY - 4, '0') + "0010";
-        out_str += '\n' + std::string(SmallBitset::CAPACITY - 4, '0') + "0000";
-        out_str += '\n' + std::string(SmallBitset::CAPACITY - 4, '0') + "1000";
-        out_str += '\n' + std::string(SmallBitset::CAPACITY - 4, '0') + "0100";
-        for (size_t i = 4; i < SmallBitset::CAPACITY; ++i)
-            out_str += '\n' + std::string(SmallBitset::CAPACITY, '0');
-
-        REQUIRE(out.str() == out_str);
+        std::ostringstream expected;
+        expected << "\
+Adjacency Matrix\n\
+0010\n\
+0000\n\
+1000\n\
+0100\
+";
+        REQUIRE(out.str() == expected.str());
     }
 }
 

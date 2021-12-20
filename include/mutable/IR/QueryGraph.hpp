@@ -5,6 +5,8 @@
 #include <memory>
 #include <mutable/IR/CNF.hpp>
 #include <mutable/util/ADT.hpp>
+#include <sstream>
+#include <string>
 #include <vector>
 
 
@@ -404,14 +406,18 @@ exit:
         return not (left & neighbors).empty();
     }
 
-    friend std::ostream & operator<<(std::ostream &out, const AdjacencyMatrix &m) {
-        out << "Adjacency Matrix";
-        for (auto s : m.m_)
-            out << '\n' << s;
+    friend std::ostream & operator<<(std::ostream &out, const AdjacencyMatrix &M) {
+        M.print_fixed_length(out, M.num_vertices_);
         return out;
     }
 
-    void print_fixed_length(std::ostream &out, unsigned length) {
+    friend std::string to_string(const AdjacencyMatrix &M) {
+        std::ostringstream oss;
+        oss << M;
+        return oss.str();
+    }
+
+    void print_fixed_length(std::ostream &out, unsigned length) const {
         M_insist(length <= SmallBitset::CAPACITY);
         out << "Adjacency Matrix";
         for (unsigned i = 0; i != length; ++i) {

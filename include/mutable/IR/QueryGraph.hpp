@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <cstring>
+#include <deque>
+#include <functional>
 #include <memory>
 #include <mutable/IR/CNF.hpp>
 #include <mutable/util/ADT.hpp>
@@ -410,6 +412,28 @@ exit:
      * whether *j* can be reached from *i* by any finite path.  Expects that this `AdjacencyMatrix` is symmetric, i.e.
      * that the original graph is undirected.  */
     AdjacencyMatrix transitive_closure_undirected() const;
+
+    /** Enumerate all *connected subgraphs* (CSGs) of the graph induced by vertex super set `super`.  Requires that this
+     * matrix is symmetric. */
+    void for_each_CSG_undirected(SmallBitset super, std::function<void(SmallBitset)> callback) {
+        const SmallBitset X_super = SmallBitset((1UL << num_vertices_) - 1U) - super; // inverse of `super`
+        std::deque<std::pair<SmallBitset, SmallBitset>> Q;
+        for (auto super_it = super.begin(); super_it != super.end(); ++super_it) {
+            SmallBitset I = super_it.as_set();
+            Q.emplace_back(I, X_super | ~I.singleton_to_lo_mask()); // vertex i and excluding all "lower" vertices
+
+            while (not Q.empty()) {
+                auto [S, X] = Q.front();
+                Q.pop_front();
+
+                callback(S);
+
+                const SmallBitset N = neighbors(S) - X;
+                for (SmallBitset n = least_subset(N); bool(n); n = next_subset(n, N)) // enumerate 2^{neighbors of S}
+                    Q.emplace_back(S | n, X | N);
+            }
+        }
+    }
 
     /** Compares two `AdjacencyMatrix`s element-wise. */
     bool operator==(const AdjacencyMatrix &other) const {

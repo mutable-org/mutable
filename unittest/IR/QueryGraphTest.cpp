@@ -587,6 +587,123 @@ TEST_CASE("AdjacencyMatrix/transitive_closure_undirected", "[core][IR][unit]")
     }
 }
 
+TEST_CASE("AdjacencyMatrix/for_each_CSG_undirected", "[core][IR][unit]")
+{
+    /*  A ↔  B
+     *  ↕
+     *  C ↔  D
+     *
+     *
+     *  0 1 1 0
+     *  1 0 0 0
+     *  1 0 0 1
+     *  0 0 1 0
+     */
+    const SmallBitset A(1UL << 0);
+    const SmallBitset B(1UL << 1);
+    const SmallBitset C(1UL << 2);
+    const SmallBitset D(1UL << 3);
+    AdjacencyMatrix M(4);
+    M(0, 1) = M(1, 0) = true;
+    M(0, 2) = M(2, 0) = true;
+    M(2, 3) = M(3, 2) = true;
+
+    /* The enumerated CSGs. */
+    std::vector<SmallBitset> CSGs;
+    auto back_inserter = [&CSGs](SmallBitset S) { CSGs.emplace_back(S); };
+
+    SECTION("empty set")
+    {
+        const SmallBitset super;
+        M.for_each_CSG_undirected(super, back_inserter);
+        CHECK(CSGs.empty());
+    }
+
+    SECTION("singleton {A}")
+    {
+        SmallBitset super;
+        super[0] = true; // A
+        M.for_each_CSG_undirected(super, back_inserter);
+        REQUIRE(CSGs.size() == 1);
+        CHECK(CSGs[0] == A);
+    }
+
+    SECTION("{A, B}")
+    {
+        const SmallBitset super(A|B);
+        M.for_each_CSG_undirected(super, back_inserter);
+        REQUIRE(CSGs.size() == 3);
+        CHECK(CSGs[0] == A);
+        CHECK(CSGs[1] == B);
+        CHECK(CSGs[2] == (A|B));
+    }
+
+    SECTION("{A, B, C}")
+    {
+        const SmallBitset super(A|B|C);
+        M.for_each_CSG_undirected(super, back_inserter);
+        REQUIRE(CSGs.size() == 6);
+        CHECK(CSGs[0] == A);
+        CHECK(CSGs[1] == B);
+        CHECK(CSGs[2] == (A|B));
+        CHECK(CSGs[3] == C);
+        CHECK(CSGs[4] == (C|A));
+        CHECK(CSGs[5] == (C|A|B));
+    }
+
+    SECTION("{A, B, D}")
+    {
+        const SmallBitset super(A|B|D);
+        M.for_each_CSG_undirected(super, back_inserter);
+        REQUIRE(CSGs.size() == 4);
+        CHECK(CSGs[0] == A);
+        CHECK(CSGs[1] == B);
+        CHECK(CSGs[2] == (A|B));
+        CHECK(CSGs[3] == D);
+    }
+
+    SECTION("{A, C, D}")
+    {
+        const SmallBitset super(A|C|D);
+        M.for_each_CSG_undirected(super, back_inserter);
+        REQUIRE(CSGs.size() == 6);
+        CHECK(CSGs[0] == A);
+        CHECK(CSGs[1] == C);
+        CHECK(CSGs[2] == (C|A));
+        CHECK(CSGs[3] == D);
+        CHECK(CSGs[4] == (D|C));
+        CHECK(CSGs[5] == (D|C|A));
+    }
+
+    SECTION("{B, C, D}")
+    {
+        const SmallBitset super(B|C|D);
+        M.for_each_CSG_undirected(super, back_inserter);
+        REQUIRE(CSGs.size() == 4);
+        CHECK(CSGs[0] == B);
+        CHECK(CSGs[1] == C);
+        CHECK(CSGs[2] == D);
+        CHECK(CSGs[3] == (C|D));
+    }
+
+    SECTION("{A, B, C, D}")
+    {
+        const SmallBitset super(A|B|C|D);
+        M.for_each_CSG_undirected(super, back_inserter);
+        REQUIRE(CSGs.size() == 10);
+        CHECK(CSGs[0] == A);
+        CHECK(CSGs[1] == B);
+        CHECK(CSGs[2] == (A|B));
+        CHECK(CSGs[3] == C);
+        CHECK(CSGs[4] == (C|A));
+        CHECK(CSGs[5] == (C|A|B));
+        CHECK(CSGs[6] == D);
+        CHECK(CSGs[7] == (D|C));
+        CHECK(CSGs[8] == (D|C|A));
+        CHECK(CSGs[9] == (D|C|A|B));
+    }
+}
+
 TEST_CASE("AdjacencyMatrix/Matrix output", "[core][IR][unit]")
 {
     AdjacencyMatrix adj_mat(4);

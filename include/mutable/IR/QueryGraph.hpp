@@ -406,6 +406,17 @@ exit:
         return not (left & neighbors).empty();
     }
 
+    /** Compares two `AdjacencyMatrix`s element-wise. */
+    bool operator==(const AdjacencyMatrix &other) const {
+        if (this->num_vertices_ != other.num_vertices_) return false;
+        for (std::size_t i = 0; i != num_vertices_; ++i) {
+            if (this->m_[i] != other.m_[i])
+                return false;
+        }
+        return true;
+    }
+    bool operator!=(const AdjacencyMatrix &other) const { return not operator==(other); }
+
     friend std::ostream & operator<<(std::ostream &out, const AdjacencyMatrix &M) {
         M.print_fixed_length(out, M.num_vertices_);
         return out;

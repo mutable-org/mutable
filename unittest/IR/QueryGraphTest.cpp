@@ -518,6 +518,75 @@ TEST_CASE("AdjacencyMatrix/QueryGraph Matrix Negative", "[core][IR][unit]")
     }
 }
 
+TEST_CASE("AdjacencyMatrix/transitive_closure_undirected", "[core][IR][unit]")
+{
+    SECTION("empty")
+    {
+        AdjacencyMatrix M(5);
+        AdjacencyMatrix closure = M.transitive_closure_undirected();
+        CHECK(closure == M);
+    }
+
+    SECTION("self-connected nodes")
+    {
+        AdjacencyMatrix M(3);
+        M(0, 0) = M(1, 1) = M(2, 2) = true;
+
+        AdjacencyMatrix closure = M.transitive_closure_undirected();
+        CHECK(closure == M);
+    }
+
+    SECTION("transitive edge")
+    {
+        /*  0 1 0
+         *  1 0 1
+         *  0 1 0 */
+        AdjacencyMatrix M(3);
+        M(0, 1) = M(1, 0) = true;
+        M(1, 2) = M(2, 1) = true;
+
+        /*  1 1 1
+         *  1 1 1
+         *  1 1 1 */
+        AdjacencyMatrix closure = M.transitive_closure_undirected();
+        for (std::size_t i = 0; i != 3; ++i)
+            for (std::size_t j = 0; j != 3; ++j)
+                CHECK(closure(i, j));
+    }
+
+    SECTION("disconnected subgraphs")
+    {
+        /* 0 1 0 0 0
+         * 1 0 1 0 0
+         * 0 1 0 0 0
+         * 0 0 0 0 1
+         * 0 0 0 1 0 */
+        AdjacencyMatrix M(5);
+        M(0, 1) = M(1, 0) = true;
+        M(1, 2) = M(2, 1) = true;
+        M(3, 4) = M(4, 3) = true;
+
+        /* 1 1 1 0 0
+         * 1 1 1 0 0
+         * 1 1 1 0 0
+         * 0 0 0 1 1
+         * 0 0 0 1 1 */
+        AdjacencyMatrix closure = M.transitive_closure_undirected();
+        for (std::size_t i = 0; i != 3; ++i)
+            for (std::size_t j = 0; j != 3; ++j)
+                CHECK(closure(i, j));
+        for (std::size_t i = 3; i != 5; ++i) {
+            for (std::size_t j = 0; j != 3; ++j) {
+                CHECK_FALSE(closure(i, j));
+                CHECK_FALSE(closure(j, i));
+            }
+        }
+        for (std::size_t i = 3; i != 5; ++i)
+            for (std::size_t j = 3; j != 5; ++j)
+                CHECK(closure(i, j));
+    }
+}
+
 TEST_CASE("AdjacencyMatrix/Matrix output", "[core][IR][unit]")
 {
     AdjacencyMatrix adj_mat(4);

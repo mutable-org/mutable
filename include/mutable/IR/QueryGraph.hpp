@@ -329,7 +329,7 @@ struct AdjacencyMatrix
 
     }
 
-    AdjacencyMatrix(const AdjacencyMatrix&) = delete;
+    explicit AdjacencyMatrix(const AdjacencyMatrix&) = default;
     AdjacencyMatrix(AdjacencyMatrix&&) = default;
 
     AdjacencyMatrix & operator=(AdjacencyMatrix&&) = default;
@@ -405,6 +405,11 @@ exit:
          * immediately connected by a join. */
         return not (left & neighbors).empty();
     }
+
+    /** Computes the *transitive closure* of this adjacency matrix.  That is, compute for each pair of vertices *(i, j)*
+     * whether *j* can be reached from *i* by any finite path.  Expects that this `AdjacencyMatrix` is symmetric, i.e.
+     * that the original graph is undirected.  */
+    AdjacencyMatrix transitive_closure_undirected() const;
 
     /** Compares two `AdjacencyMatrix`s element-wise. */
     bool operator==(const AdjacencyMatrix &other) const {

@@ -1734,5 +1734,33 @@ void QueryGraph::dump(std::ostream &out) const
 }
 void QueryGraph::dump() const { dump(std::cerr); }
 
+
+/*======================================================================================================================
+ * AdjacencyMatrix
+ *====================================================================================================================*/
+
+AdjacencyMatrix AdjacencyMatrix::transitive_closure_undirected() const
+{
+    AdjacencyMatrix closure(*this); // copy
+
+    bool changed;
+    do {
+        changed = false;
+        for (std::size_t i = 0; i != num_vertices_; ++i) {
+            for (std::size_t j = i; j != num_vertices_; ++j) { // exploit symmetry
+                M_insist(closure(i, j) == closure(j, i), "not symmetric");
+                const bool before = closure(i, j);
+                const SmallBitset row = closure.m_[i];
+                const SmallBitset col = closure.m_[j]; // exploit symmetry
+                const bool dot = not (row & col).empty(); // compute connected-ness as "dot product"
+                closure(i, j) = closure(j, i) = dot;
+                changed = changed or before != dot;
+            }
+        }
+    } while (changed);
+
+    return closure;
+}
+
 void AdjacencyMatrix::dump(std::ostream &out) const { out << *this << std::endl; }
 void AdjacencyMatrix::dump() const { dump(std::cerr); }

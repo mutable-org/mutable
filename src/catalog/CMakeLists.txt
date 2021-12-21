@@ -4,7 +4,6 @@ add_library(
     CardinalityEstimator.cpp
     CostModel.cpp
     Schema.cpp
-    SimpleCostFunction.cpp
     TrainedCostFunction.cpp
     Type.cpp
 )

@@ -343,6 +343,170 @@ struct DPccp final : PlanEnumeratorCRTP<DPccp>
 };
 
 /*======================================================================================================================
+ * IK/KBZ
+ *====================================================================================================================*/
+
+/** Implements join ordering using the IK/KBZ algorithm.
+ *
+ * See Toshihide (I)baraki and Tiko (K)ameda. "On the optimal nesting order for computing n-relational joins." and Ravi
+ * (K)rishnamurthy, Haran (B)oral, and Carlo (Z)aniolo. "Optimization of Nonrecursive Queries." */
+struct IKKBZ final : PlanEnumeratorCRTP<IKKBZ>
+{
+    using base_type = PlanEnumeratorCRTP<IKKBZ>;
+    using base_type::operator();
+
+    template<typename PlanTable>
+    std::vector<std::size_t>
+    linearize(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
+              const CardinalityEstimator &CE) const
+    {
+        /* Computes the selectivity between two relations, identified by indices `u` and `v`, respectively. */
+        auto selectivity = [&](std::size_t u, std::size_t v) {
+            const SmallBitset U(1UL << u);
+            const SmallBitset V(1UL << v);
+            auto &model_u = *PT[U].model;
+            auto &model_v = *PT[V].model;
+            auto &joined = PT[U|V];
+            if (not joined.model) {
+                cnf::CNF condition; // TODO use join condition
+                joined.model = CE.estimate_join(G, model_u, model_v, condition);
+            }
+            const double cardinality_joined = double(CE.predict_cardinality(*joined.model));
+            return cardinality_joined / double(CE.predict_cardinality(model_u)) / double(CE.predict_cardinality(model_v));
+        };
+
+        /* Compute MST w.r.t. selectivity of join edges.  See Ravi Krishnamurthy, Haran Boral, and Carlo Zaniolo.
+         * "Optimization of Nonrecursive Queries." */
+        const AdjacencyMatrix MST = M.minimum_spanning_forest(selectivity);
+
+        std::vector<std::size_t> linearization;
+        linearization.reserve(G.num_sources());
+        std::vector<std::size_t> best_linearization;
+        best_linearization.reserve(G.num_sources());
+        double least_cost = std::numeric_limits<decltype(least_cost)>::infinity();
+
+        /* The *rank* of a relation is defined as the factor by which the result set grows when joining with this
+         * relation.  The rank is defined for a *child* relation and its *parent* relation w.r.t. the MST.
+         * "Intuitively, the rank measures the increase in the intermediate result per unit differential cost of doing
+         * the join." */
+        auto rank = [&](std::size_t parent_id, std::size_t child_id) -> double {
+            const SmallBitset parent(1UL << parent_id);
+            const SmallBitset child(1UL << child_id);
+            M_insist(MST.is_connected(parent, child), "relations must be joinable");
+            M_insist(MST.neighbors(parent)[child_id]);
+
+            const auto &model_parent = *PT[parent].model;
+            const auto &model_child = *PT[child].model;
+            if (not PT[parent|child].model) {
+                cnf::CNF condition; // TODO use join condition
+                PT[parent|child].model = CE.estimate_join(G, model_parent, model_child, condition);
+            }
+            const double cardinality_joined = CE.predict_cardinality(*PT[parent|child].model);
+            const double cardinality_parent  = CE.predict_cardinality(model_parent);
+            const double cardinality_child  = CE.predict_cardinality(model_child);
+            auto g = [](double cardinality) -> double { return 1 * cardinality; }; // TODO adapt to cost function
+            return (cardinality_joined - cardinality_parent) / g(cardinality_child);
+        };
+
+        struct ranked_relation
+        {
+            private:
+            std::size_t id_;
+            double rank_;
+
+            public:
+            ranked_relation(std::size_t id, double rank) : id_(id), rank_(rank) { }
+
+            std::size_t id() const { return id_; }
+            double rank() const { return rank_; }
+
+            bool operator<(const ranked_relation &other) const { return this->rank() < other.rank(); }
+            bool operator>(const ranked_relation &other) const { return this->rank() > other.rank(); }
+        };
+
+        /*---- Consider each relation as root and linearize the query tree. -----*/
+        for (std::size_t root_id = 0; root_id != G.num_sources(); ++root_id) {
+            Subproblem root(1UL << root_id);
+
+            linearization.clear();
+            linearization.emplace_back(root_id);
+
+            /* Initialize MIN heap with successors of root of query tree. */
+            std::priority_queue<ranked_relation, std::vector<ranked_relation>, std::greater<ranked_relation>> Q;
+            for (std::size_t n : MST.neighbors(root))
+                Q.emplace(n, rank(root_id, n));
+
+            Subproblem joined = root;
+            while (not Q.empty()) {
+                ranked_relation ranked_relation = Q.top();
+                Q.pop();
+
+                const Subproblem R(1UL << ranked_relation.id());
+                M_insist((joined & R).empty());
+                M_insist(MST.is_connected(joined, R));
+                linearization.emplace_back(ranked_relation.id());
+
+                /*----- Join next relation with already joined relations. -----*/
+                cnf::CNF condition; // TODO use join condition
+                const double join_cost = CF.calculate_join_cost(G, PT, CE, R, joined, condition);
+                PT.update(G, CE, joined, R, join_cost);
+                joined |= R; // add R to the joined relations
+
+                /*----- Add all children of `R` to the priority queue. -----*/
+                const Subproblem N = MST.neighbors(R) - joined;
+                for (std::size_t n : N)
+                    Q.emplace(n, rank(ranked_relation.id(), n));
+            }
+
+            /* Get the cost of the final plan. */
+            const double cost = PT[joined].cost;
+
+            /*----- Clear plan table. -----*/
+            Subproblem runner = root;
+            M_insist(linearization[0] == root_id);
+            for (std::size_t i = 1; i != linearization.size(); ++i) {
+                const std::size_t R = linearization[i];
+                M_insist(not runner[R]);
+                runner[R] = true;
+                M_insist(not runner.singleton());
+                M_insist(bool(PT[runner].model), "must have computed a model during linearization");
+                M_insist(bool(PT[runner].left), "must have a left subplan");
+                M_insist(bool(PT[runner].right), "must have a right subplan");
+                PT[runner] = PlanTableEntry();
+            }
+
+            if (cost < least_cost) {
+                using std::swap;
+                swap(best_linearization, linearization);
+                least_cost = cost;
+            }
+        }
+
+        return best_linearization;
+    }
+
+    template<typename PlanTable>
+    void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
+        AdjacencyMatrix M(G);
+        auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
+
+        /* Linearize the vertices. */
+        const std::vector<std::size_t> linearization = linearize(PT, G, M, CF, CE);
+        M_insist(linearization.size() == G.num_sources());
+
+        /*----- Reconstruct the right-deep plan from the linearization. -----*/
+        Subproblem right(1UL << linearization[0]);
+        for (std::size_t i = 1; i < G.num_sources(); ++i) {
+            const Subproblem left(1UL << linearization[i]);
+            cnf::CNF condition; // TODO use join condition
+            const double cost = CF.calculate_join_cost(G, PT, CE, left, right, condition);
+            PT.update(G, CE, left, right, cost);
+            right = left | right;
+        }
+    }
+};
+
+/*======================================================================================================================
  * TDbasic
  *====================================================================================================================*/
 

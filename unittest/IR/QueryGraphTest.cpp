@@ -745,6 +745,108 @@ TEST_CASE("AdjacencyMatrix/for_each_CSG_undirected", "[core][IR][unit]")
     }
 }
 
+TEST_CASE("AdjacencyMatrix/minimum_spanning_forest", "[core][IR][unit]")
+{
+    auto weight = [](std::size_t u, std::size_t v) -> double { return u + v; };
+
+    SECTION("no edges")
+    {
+        AdjacencyMatrix M(5);
+        const AdjacencyMatrix MSF = M.minimum_spanning_forest(weight);
+        CHECK(MSF == M);
+    }
+
+    SECTION("self-connected")
+    {
+        AdjacencyMatrix M(3);
+        M(0, 0) = M(1, 1) = M(2, 2) = true;
+        const AdjacencyMatrix MSF = M.minimum_spanning_forest(weight);
+        for (std::size_t i = 0; i != 3; ++i)
+            for (std::size_t j = 0; j != 3; ++j)
+                CHECK_FALSE(MSF(i, j));
+    }
+
+    SECTION("triangle")
+    {
+        AdjacencyMatrix M(3);
+        M(0, 1) = M(1, 0) = true;
+        M(0, 2) = M(2, 0) = true;
+        M(1, 2) = M(2, 1) = true;
+
+        const AdjacencyMatrix MSF = M.minimum_spanning_forest(weight);
+
+        AdjacencyMatrix expected(3);
+        expected(0, 1) = expected(1, 0) = true;
+        expected(0, 2) = expected(2, 0) = true;
+        CHECK(expected == MSF);
+    }
+
+    SECTION("rectangle")
+    {
+        AdjacencyMatrix M(4);
+        M(0, 1) = M(1, 0) = true;
+        M(1, 2) = M(2, 1) = true;
+        M(2, 3) = M(3, 2) = true;
+        M(3, 0) = M(0, 3) = true;
+
+        const AdjacencyMatrix MSF = M.minimum_spanning_forest(weight);
+
+        AdjacencyMatrix expected(4);
+        expected(0, 1) = expected(1, 0) = true;
+        expected(1, 2) = expected(2, 1) = true;
+        expected(3, 0) = expected(0, 3) = true;
+        CHECK(expected == MSF);
+    }
+
+    SECTION("star4")
+    {
+        AdjacencyMatrix M(4);
+        M(0, 1) = M(1, 0) = true;
+        M(0, 2) = M(2, 0) = true;
+        M(0, 3) = M(3, 0) = true;
+
+        const AdjacencyMatrix MSF = M.minimum_spanning_forest(weight);
+        CHECK(M == MSF);
+    }
+
+    SECTION("clique4")
+    {
+        AdjacencyMatrix M(4);
+        M(0, 1) = M(1, 0) = true;
+        M(0, 2) = M(2, 0) = true;
+        M(0, 3) = M(3, 0) = true;
+        M(1, 2) = M(2, 1) = true;
+        M(1, 3) = M(3, 1) = true;
+        M(2, 3) = M(3, 2) = true;
+
+        const AdjacencyMatrix MSF = M.minimum_spanning_forest(weight);
+        AdjacencyMatrix expected(4);
+        expected(0, 1) = expected(1, 0) = true;
+        expected(0, 2) = expected(2, 0) = true;
+        expected(0, 3) = expected(3, 0) = true;
+        CHECK(expected == MSF);
+    }
+
+    SECTION("two disconnected triangles")
+    {
+        AdjacencyMatrix M(6);
+        M(0, 1) = M(1, 0) = true;
+        M(0, 2) = M(2, 0) = true;
+        M(1, 2) = M(2, 1) = true;
+        M(3, 4) = M(4, 3) = true;
+        M(3, 5) = M(5, 3) = true;
+        M(4, 5) = M(5, 4) = true;
+
+        const AdjacencyMatrix MSF = M.minimum_spanning_forest(weight);
+        AdjacencyMatrix expected(6);
+        expected(0, 1) = expected(1, 0) = true;
+        expected(0, 2) = expected(2, 0) = true;
+        expected(3, 4) = expected(4, 3) = true;
+        expected(3, 5) = expected(5, 3) = true;
+        CHECK(expected == MSF);
+    }
+}
+
 TEST_CASE("AdjacencyMatrix/Matrix output", "[core][IR][unit]")
 {
     AdjacencyMatrix adj_mat(4);

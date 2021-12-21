@@ -5,6 +5,7 @@
 #include "parse/ASTDumper.hpp"
 #include <mutable/parse/AST.hpp>
 #include <mutable/util/macro.hpp>
+#include <queue>
 #include <set>
 #include <unordered_map>
 #include <utility>
@@ -1788,6 +1789,66 @@ AdjacencyMatrix AdjacencyMatrix::transitive_closure_undirected() const
     } while (changed);
 
     return closure;
+}
+
+AdjacencyMatrix AdjacencyMatrix::minimum_spanning_forest(std::function<double(std::size_t, std::size_t)> weight) const
+{
+    AdjacencyMatrix MSF(num_vertices_);
+
+    if (num_vertices_ == 0)
+        return MSF;
+
+    struct weighted_edge
+    {
+        std::size_t source, sink;
+        double weight;
+
+        weighted_edge() = default;
+        weighted_edge(std::size_t source, std::size_t sink, double weight)
+            : source(source), sink(sink), weight(weight)
+        { }
+
+        bool operator<(const weighted_edge &other) const { return this->weight < other.weight; }
+        bool operator>(const weighted_edge &other) const { return this->weight > other.weight; }
+    };
+    std::priority_queue<weighted_edge, std::vector<weighted_edge>, std::greater<weighted_edge>> Q;
+
+    /* Run Prim's algorithm for each remaining vertex to compute a MSF. */
+    SmallBitset vertices_remaining((1UL << num_vertices_) - 1UL);
+
+    while (vertices_remaining) {
+        SmallBitset next_vertex = vertices_remaining.begin().as_set();
+        vertices_remaining = vertices_remaining - next_vertex;
+
+        /* Prim's algorithm for finding a MST. */
+        while (next_vertex) {
+            /* Explore edges of `next_vertex`. */
+            M_insist(next_vertex.size() == 1);
+            const SmallBitset N = neighbors(next_vertex) & vertices_remaining;
+            const std::size_t u = *next_vertex.begin();
+            for (std::size_t v : N) {
+                double w = weight(u, v);
+                Q.emplace(u, v, w);
+            }
+
+            /* Search for the cheapest edge not within the MSF. */
+            weighted_edge E;
+            do {
+                if (Q.empty())
+                    goto MST_done;
+                E = Q.top();
+                Q.pop();
+            } while (not vertices_remaining[E.sink]);
+
+            /* Add edge to MSF. */
+            M_insist(vertices_remaining[E.sink], "sink must not yet be in the MSF");
+            vertices_remaining[E.sink] = false;
+            MSF(E.source, E.sink) = MSF(E.sink, E.source) = true; // add undirected edge to MSF
+            next_vertex = SmallBitset(1UL << E.sink);
+        }
+MST_done: /* MST is complete */;
+    }
+    return MSF;
 }
 
 void AdjacencyMatrix::dump(std::ostream &out) const { out << *this << std::endl; }

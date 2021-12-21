@@ -440,6 +440,10 @@ exit:
         }
     }
 
+    /** Computes the minimum spanning forest for this graph.  Expects the graph to be undirected, meaning that the
+     * `AdjacencyMatrix` must be symmetric. */
+    AdjacencyMatrix minimum_spanning_forest(std::function<double(std::size_t, std::size_t)> weight) const;
+
     /** Compares two `AdjacencyMatrix`s element-wise. */
     bool operator==(const AdjacencyMatrix &other) const {
         if (this->num_vertices_ != other.num_vertices_) return false;

@@ -8,6 +8,9 @@
 #include <utility>
 
 
+namespace m {
+
+
 /** Verifies that `mid` splits the range `begin` to `end` (exclusive) into two partitions.
  *
  * @return  `true` iff `mid` splits the range `begin` to `end` (exclusive) into two partitions.
@@ -108,3 +111,5 @@ void qsort(It begin, It end, Partitioning p)
             swap(*begin, *prev(end));
     }
 };
+
+}

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "util/macro.hpp"
+#include <mutable/util/macro.hpp>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
@@ -8,6 +8,9 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+
+
+namespace m {
 
 
 struct StringView
@@ -75,4 +78,6 @@ struct StringView
 inline StringView operator+(const StringView &left, const StringView &right) {
     std::cerr << "Concatenate \"" << left << "\" .. \"" << right << "\".\n";
     return StringView(&left, &right);
+}
+
 }

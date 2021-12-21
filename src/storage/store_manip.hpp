@@ -29,31 +29,7 @@ void generate_primary_keys(ColumnStore &store, const Attribute &attr, const std:
 template<typename T, typename Generator = std::mt19937_64>
 std::enable_if_t<std::is_arithmetic_v<T>, void>
 fill_uniform(ColumnStore &store, const Attribute &attr, std::vector<T> values,
-     const std::size_t begin, const std::size_t end, Generator &&g = Generator());
-
-void generate_column_data(ColumnStore &store, const Attribute &attr, const std::size_t num_distinct_values,
-                          const std::size_t begin, std::size_t end);
-
-void generate_correlated_column_data(ColumnStore &store_left,
-                                     ColumnStore &store_right,
-                                     const Attribute &attr,
-                                     const std::size_t num_distinct_values_left,
-                                     const std::size_t num_distinct_values_right,
-                                     const std::size_t count_left,
-                                     const std::size_t count_right,
-                                     const std::size_t num_distinct_values_matching);
-
-}
-
-
-/*======================================================================================================================
- * Template implementations
- *====================================================================================================================*/
-
-template<typename T, typename Generator>
-std::enable_if_t<std::is_arithmetic_v<T>, void>
-m::fill_uniform(ColumnStore &store, const Attribute &attr, std::vector<T> values,
-        const std::size_t begin, const std::size_t end, Generator &&g)
+             const std::size_t begin, const std::size_t end, Generator &&g = Generator())
 {
     M_insist(end <= store.num_rows(), "end out of bounds");
     M_insist(begin <= end, "begin out of bounds");
@@ -76,4 +52,18 @@ m::fill_uniform(ColumnStore &store, const Attribute &attr, std::vector<T> values
     }
 exit:
     M_insist(ptr - mem.as<T*>() == (long long)(end), "incorrect number of elements written");
+}
+
+void generate_column_data(ColumnStore &store, const Attribute &attr, const std::size_t num_distinct_values,
+                          const std::size_t begin, std::size_t end);
+
+void generate_correlated_column_data(ColumnStore &store_left,
+                                     ColumnStore &store_right,
+                                     const Attribute &attr,
+                                     const std::size_t num_distinct_values_left,
+                                     const std::size_t num_distinct_values_right,
+                                     const std::size_t count_left,
+                                     const std::size_t count_right,
+                                     const std::size_t num_distinct_values_matching);
+
 }

@@ -9,7 +9,7 @@ template<>
 struct hash<m::Schema::Identifier>
 {
     uint64_t operator()(m::Schema::Identifier id) const {
-        StrHash h;
+        m::StrHash h;
         uint64_t hash = h(id.name);
         if (id.prefix)
             hash *= h(id.prefix);
@@ -19,8 +19,11 @@ struct hash<m::Schema::Identifier>
 
 }
 
+namespace m {
+
 template<typename T>
-bool m::type_check(const Attribute &attr) {
+bool type_check(const Attribute &attr)
+{
     auto ty = attr.type;
 
     /* Boolean */
@@ -68,6 +71,8 @@ bool m::type_check(const Attribute &attr) {
     return false;
 }
 
+}
+
 namespace std {
 
 /** Specializes `std::hash<T>` for `Attribute`. */
@@ -75,7 +80,7 @@ template<>
 struct hash<m::Attribute>
 {
     uint64_t operator()(const m::Attribute &attr) const {
-        StrHash h;
+        m::StrHash h;
         return h(attr.table.name) * (attr.id + 1);
     }
 };

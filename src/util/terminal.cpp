@@ -19,7 +19,7 @@ bool term::has_color()
     };
     if (auto term = std::getenv("TERM")) {
         for (auto supported : SUPPORTED_TERMS) {
-            if (streq(term, supported))
+            if (m::streq(term, supported))
                 return true;
         }
     }

@@ -9,6 +9,9 @@
 #include <thread>
 
 
+namespace m {
+
+
 struct WebSocketServer
 {
     using on_message_t = std::function<void(std::string)>;
@@ -48,3 +51,5 @@ struct WebSocketServer
 
     Connection await();
 };
+
+}

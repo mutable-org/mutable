@@ -13,30 +13,30 @@ TEST_CASE("verify_partition", "[core][util][algorithms]")
     SECTION("empty")
     {
         std::array<int, 0> data;
-        REQUIRE(verify_partition(data.begin(), data.begin(), data.end()));
+        REQUIRE(m::verify_partition(data.begin(), data.begin(), data.end()));
     }
 
     SECTION("single element")
     {
         std::array<int, 1> data = { {42} };
-        REQUIRE(verify_partition(data.begin(), data.begin(), data.end()));
-        REQUIRE(verify_partition(data.begin(), next(data.begin()), data.end()));
+        REQUIRE(m::verify_partition(data.begin(), data.begin(), data.end()));
+        REQUIRE(m::verify_partition(data.begin(), next(data.begin()), data.end()));
     }
 
     SECTION("sorted")
     {
         std::array<int, 2> data = { {13, 42} };
-        REQUIRE(verify_partition(data.begin(), data.begin(), data.end()));
-        REQUIRE(verify_partition(data.begin(), next(data.begin()), data.end()));
-        REQUIRE(verify_partition(data.begin(), next(data.begin(), 2), data.end()));
+        REQUIRE(m::verify_partition(data.begin(), data.begin(), data.end()));
+        REQUIRE(m::verify_partition(data.begin(), next(data.begin()), data.end()));
+        REQUIRE(m::verify_partition(data.begin(), next(data.begin(), 2), data.end()));
     }
 
     SECTION("unsorted")
     {
         std::array<int, 2> data = { {42, 13} };
-        REQUIRE(verify_partition(data.begin(), data.begin(), data.end()));
-        REQUIRE_FALSE(verify_partition(data.begin(), next(data.begin()), data.end()));
-        REQUIRE(verify_partition(data.begin(), next(data.begin(), 2), data.end()));
+        REQUIRE(m::verify_partition(data.begin(), data.begin(), data.end()));
+        REQUIRE_FALSE(m::verify_partition(data.begin(), next(data.begin()), data.end()));
+        REQUIRE(m::verify_partition(data.begin(), next(data.begin(), 2), data.end()));
     }
 }
 
@@ -44,7 +44,7 @@ TEST_CASE("partition_predicated_naive", "[core][util][algorithms]")
 {
     using std::distance;
 
-    partition_predicated_naive p;
+    m::partition_predicated_naive p;
 
     SECTION("empty")
     {
@@ -61,20 +61,20 @@ TEST_CASE("partition_predicated_naive", "[core][util][algorithms]")
         {
             auto part = p(43, data.begin(), data.end());
             REQUIRE(distance(part, data.end()) == 0);
-            REQUIRE(verify_partition(data.begin(), part, data.end()));
+            REQUIRE(m::verify_partition(data.begin(), part, data.end()));
         }
 
         SECTION("equals to pivot")
         {
             auto part = p(42, data.begin(), data.end());
-            REQUIRE(verify_partition(data.begin(), part, data.end()));
+            REQUIRE(m::verify_partition(data.begin(), part, data.end()));
         }
 
         SECTION("greater than pivot")
         {
             auto part = p(41, data.begin(), data.end());
             REQUIRE(distance(data.begin(), part) == 0);
-            REQUIRE(verify_partition(data.begin(), part, data.end()));
+            REQUIRE(m::verify_partition(data.begin(), part, data.end()));
         }
     }
 
@@ -86,14 +86,14 @@ TEST_CASE("partition_predicated_naive", "[core][util][algorithms]")
         {
             auto part = p(43, data.begin(), data.end());
             REQUIRE(distance(data.begin(), part) == 2);
-            REQUIRE(verify_partition(data.begin(), part, data.end()));
+            REQUIRE(m::verify_partition(data.begin(), part, data.end()));
         }
 
         SECTION("one less than pivot")
         {
             auto part = p(41, data.begin(), data.end());
             REQUIRE(distance(data.begin(), part) == 1);
-            REQUIRE(verify_partition(data.begin(), part, data.end()));
+            REQUIRE(m::verify_partition(data.begin(), part, data.end()));
             REQUIRE(data[0] == 13);
             REQUIRE(data[1] == 42);
         }
@@ -102,7 +102,7 @@ TEST_CASE("partition_predicated_naive", "[core][util][algorithms]")
         {
             auto part = p(12, data.begin(), data.end());
             REQUIRE(distance(data.begin(), part) == 0);
-            REQUIRE(verify_partition(data.begin(), part, data.end()));
+            REQUIRE(m::verify_partition(data.begin(), part, data.end()));
         }
     }
 
@@ -114,14 +114,14 @@ TEST_CASE("partition_predicated_naive", "[core][util][algorithms]")
         {
             auto part = p(43, data.begin(), data.end());
             REQUIRE(distance(data.begin(), part) == 2);
-            REQUIRE(verify_partition(data.begin(), part, data.end()));
+            REQUIRE(m::verify_partition(data.begin(), part, data.end()));
         }
 
         SECTION("one less than pivot")
         {
             auto part = p(41, data.begin(), data.end());
             REQUIRE(distance(data.begin(), part) == 1);
-            REQUIRE(verify_partition(data.begin(), part, data.end()));
+            REQUIRE(m::verify_partition(data.begin(), part, data.end()));
             REQUIRE(data[0] == 13);
             REQUIRE(data[1] == 42);
         }
@@ -130,7 +130,7 @@ TEST_CASE("partition_predicated_naive", "[core][util][algorithms]")
         {
             auto part = p(12, data.begin(), data.end());
             REQUIRE(distance(data.begin(), part) == 0);
-            REQUIRE(verify_partition(data.begin(), part, data.end()));
+            REQUIRE(m::verify_partition(data.begin(), part, data.end()));
         }
     }
 
@@ -142,14 +142,14 @@ TEST_CASE("partition_predicated_naive", "[core][util][algorithms]")
         {
             auto part = p(74, data.begin(), data.end());
             REQUIRE(distance(data.begin(), part) == 3);
-            REQUIRE(verify_partition(data.begin(), part, data.end()));
+            REQUIRE(m::verify_partition(data.begin(), part, data.end()));
         }
 
         SECTION("two less than pivot")
         {
             auto part = p(72, data.begin(), data.end());
             REQUIRE(distance(data.begin(), part) == 2);
-            REQUIRE(verify_partition(data.begin(), part, data.end()));
+            REQUIRE(m::verify_partition(data.begin(), part, data.end()));
             REQUIRE(data[2] == 73);
         }
 
@@ -157,7 +157,7 @@ TEST_CASE("partition_predicated_naive", "[core][util][algorithms]")
         {
             auto part = p(41, data.begin(), data.end());
             REQUIRE(distance(data.begin(), part) == 1);
-            REQUIRE(verify_partition(data.begin(), part, data.end()));
+            REQUIRE(m::verify_partition(data.begin(), part, data.end()));
             REQUIRE(data[0] == 13);
         }
 
@@ -165,7 +165,7 @@ TEST_CASE("partition_predicated_naive", "[core][util][algorithms]")
         {
             auto part = p(12, data.begin(), data.end());
             REQUIRE(distance(data.begin(), part) == 0);
-            REQUIRE(verify_partition(data.begin(), part, data.end()));
+            REQUIRE(m::verify_partition(data.begin(), part, data.end()));
         }
     }
 
@@ -177,14 +177,14 @@ TEST_CASE("partition_predicated_naive", "[core][util][algorithms]")
         {
             auto part = p(74, data.begin(), data.end());
             REQUIRE(distance(data.begin(), part) == 3);
-            REQUIRE(verify_partition(data.begin(), part, data.end()));
+            REQUIRE(m::verify_partition(data.begin(), part, data.end()));
         }
 
         SECTION("two less than pivot")
         {
             auto part = p(72, data.begin(), data.end());
             REQUIRE(distance(data.begin(), part) == 2);
-            REQUIRE(verify_partition(data.begin(), part, data.end()));
+            REQUIRE(m::verify_partition(data.begin(), part, data.end()));
             REQUIRE(data[2] == 73);
         }
 
@@ -192,7 +192,7 @@ TEST_CASE("partition_predicated_naive", "[core][util][algorithms]")
         {
             auto part = p(41, data.begin(), data.end());
             REQUIRE(distance(data.begin(), part) == 1);
-            REQUIRE(verify_partition(data.begin(), part, data.end()));
+            REQUIRE(m::verify_partition(data.begin(), part, data.end()));
             REQUIRE(data[0] == 13);
         }
 
@@ -200,14 +200,14 @@ TEST_CASE("partition_predicated_naive", "[core][util][algorithms]")
         {
             auto part = p(12, data.begin(), data.end());
             REQUIRE(distance(data.begin(), part) == 0);
-            REQUIRE(verify_partition(data.begin(), part, data.end()));
+            REQUIRE(m::verify_partition(data.begin(), part, data.end()));
         }
     }
 }
 
 TEST_CASE("qsort/partition_predicated_naive", "[core][util][algorithms]")
 {
-    partition_predicated_naive p;
+    m::partition_predicated_naive p;
 
     SECTION("empty")
     {

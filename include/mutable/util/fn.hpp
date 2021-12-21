@@ -21,6 +21,8 @@
 #include <variant>
 
 
+namespace m {
+
 inline bool streq(const char *first, const char *second) { return 0 == strcmp(first, second); }
 inline bool strneq(const char *first, const char *second, std::size_t n) { return 0 == strncmp(first, second, n); }
 
@@ -370,8 +372,6 @@ inline uint64_t murmur3_64(uint64_t v)
     return v;
 }
 
-namespace m {
-
 struct put_tm
 {
     private:
@@ -468,8 +468,6 @@ struct put_timepoint
         return out << put_tm(tm);
     }
 };
-
-}
 
 /* Template class definition to concatenate more types to std::variant. */
 template <typename T, typename... Args> struct Concat;
@@ -671,4 +669,6 @@ std::enable_if_t<std::is_integral_v<T>, unsigned long long>
 n_choose_k_approx(T n, T k)
 {
     return std::exp(std::lgamma(n + T(1)) - std::lgamma(k + T(1)) - std::lgamma(n - k + T(1)));
+}
+
 }

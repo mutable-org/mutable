@@ -9,7 +9,10 @@
 #endif
 
 
-std::string escape(const std::string &str, char esc, char quote)
+using namespace m;
+
+
+std::string m::escape(const std::string &str, char esc, char quote)
 {
     std::string res;
     res.reserve(str.length());
@@ -29,7 +32,7 @@ std::string escape(const std::string &str, char esc, char quote)
     return res;
 }
 
-std::string unescape(const std::string &str, char esc, char quote)
+std::string m::unescape(const std::string &str, char esc, char quote)
 {
     std::string res;
     res.reserve(str.length());
@@ -54,7 +57,7 @@ std::string unescape(const std::string &str, char esc, char quote)
     return res;
 }
 
-std::string html_escape(std::string str)
+std::string m::html_escape(std::string str)
 {
     str = replace_all(str, "&", "&amp;");
     str = replace_all(str, "<", "&lt;");
@@ -62,7 +65,7 @@ std::string html_escape(std::string str)
     return str;
 }
 
-bool like(const std::string &str, const std::string &pattern, const char escape_char)
+bool m::like(const std::string &str, const std::string &pattern, const char escape_char)
 {
     M_insist('_' != escape_char and '%' != escape_char, "illegal escape character");
 
@@ -117,7 +120,7 @@ bool like(const std::string &str, const std::string &pattern, const char escape_
     return dp[pattern.length()][str.length()];
 }
 
-void exec(const char *executable, std::initializer_list<const char*> args)
+void m::exec(const char *executable, std::initializer_list<const char*> args)
 {
 #if __linux || __APPLE__
     if (fork()) {
@@ -135,7 +138,7 @@ void exec(const char *executable, std::initializer_list<const char*> args)
 #endif
 }
 
-std::size_t get_pagesize()
+std::size_t m::get_pagesize()
 {
     static std::size_t pagesize(0);
     if (0 == pagesize)

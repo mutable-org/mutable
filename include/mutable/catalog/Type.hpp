@@ -448,40 +448,38 @@ const Numeric * arithmetic_join(const Numeric *lhs, const Numeric *rhs);
 M_DECLARE_VISITOR(TypeVisitor, Type, M_TYPE_LIST)
 M_DECLARE_VISITOR(ConstTypeVisitor, const Type, M_TYPE_LIST)
 
-}
-
-inline bool m::Type::is_integral() const {
+inline bool Type::is_integral() const {
     if (auto n = cast<const Numeric>(this))
         return n->kind == Numeric::N_Int;
     return false;
 }
 
-inline bool m::Type::is_decimal() const {
+inline bool Type::is_decimal() const {
     if (auto n = cast<const Numeric>(this))
         return n->kind == Numeric::N_Decimal;
     return false;
 }
 
-inline bool m::Type::is_floating_point() const {
+inline bool Type::is_floating_point() const {
     if (auto n = cast<const Numeric>(this))
         return n->kind == Numeric::N_Float;
     return false;
 }
 
-inline bool m::Type::is_float() const {
+inline bool Type::is_float() const {
     if (auto n = cast<const Numeric>(this))
         return n->kind == Numeric::N_Float and n->precision == 32;
     return false;
 }
 
-inline bool m::Type::is_double() const {
+inline bool Type::is_double() const {
     if (auto n = cast<const Numeric>(this))
         return n->kind == Numeric::N_Float and n->precision == 64;
     return false;
 }
 
 template<typename T>
-bool m::is_convertible(const Type *ty) {
+bool is_convertible(const Type *ty) {
     /* Boolean */
     if constexpr (std::is_same_v<T, bool>)
         return is<const Boolean>(ty);
@@ -497,7 +495,7 @@ bool m::is_convertible(const Type *ty) {
     return false;
 }
 
-inline bool m::is_comparable(const Type *first, const Type *second) {
+inline bool is_comparable(const Type *first, const Type *second) {
     if (first->is_boolean() and second->is_boolean()) return true;
     if (first->is_character_sequence() and second->is_character_sequence()) return true;
     if (first->is_date() and second->is_date()) return true;
@@ -509,7 +507,7 @@ inline bool m::is_comparable(const Type *first, const Type *second) {
 
 /** Returns the internal runtime `Type` of mu*t*able for the compile-time type `T`. */
 template<typename T>
-const m::PrimitiveType * m::get_runtime_type()
+const PrimitiveType * get_runtime_type()
 {
     if constexpr (std::is_integral_v<T>)
         return Type::Get_Integer(Type::TY_Vector, sizeof(T));
@@ -519,4 +517,6 @@ const m::PrimitiveType * m::get_runtime_type()
         return Type::Get_Double(Type::TY_Vector);
     else
         static_assert(not std::is_same_v<T, T>, "unsupported compile-time type T");
+}
+
 }

@@ -151,21 +151,17 @@ int main(int argc, const char **argv)
 
 table_type generate_cardinalities_for_query(const m::QueryGraph &G, const m::AdjacencyMatrix &M, const args_t &args)
 {
-    const std::size_t num_relations = G.sources().size();
-
     std::mt19937_64 g(args.seed);
     std::gamma_distribution<double> cardinality_dist(.5, 1.);
 
     table_type table(G.num_sources() * G.num_sources());
+    const Subproblem All((1UL << G.num_sources()) - 1UL);
 
     /*----- Fill table with cardinalities for base relations. --------------------------------------------------------*/
-    {
-        for (unsigned i = 0; i != num_relations; ++i) {
-            auto &e = table[Subproblem(1UL << i)];
-
-            e.max_cardinality =
-                args.max_cardinality - (args.max_cardinality - args.min_cardinality) / (1. + cardinality_dist(g));
-        }
+    for (unsigned i = 0; i != G.num_sources(); ++i) {
+        auto &e = table[Subproblem(1UL << i)];
+        e.max_cardinality =
+            args.max_cardinality - (args.max_cardinality - args.min_cardinality) / (1. + cardinality_dist(g));
     }
 
     auto update = [&table, &g](const Subproblem S1, const Subproblem S2) -> void {
@@ -197,64 +193,8 @@ table_type generate_cardinalities_for_query(const m::QueryGraph &G, const m::Adj
         joined.max_cardinality = std::max<std::size_t>(1UL, selectivity * left.max_cardinality * right.max_cardinality);
     };
 
-    /*----- Run DPccp algorithm to enumerate all connected complement pairs in ascending order. ----------------------*/
-#ifndef NDEBUG
-    using duplicate_t = std::pair<uint64_t, uint64_t>;
-    struct duplicate_hash
-    {
-        uint64_t operator()(const duplicate_t &d) const {
-            return std::hash<uint64_t>{}(d.first) ^ std::hash<uint64_t>{}(d.second);
-        }
-    };
-    std::unordered_set<duplicate_t, duplicate_hash> duplicate_check;
-#endif
-
-    std::deque<std::pair<Subproblem, Subproblem>> cmp_Q;
-    auto enumerate_complements = [&](const Subproblem S1) -> void {
-        const Subproblem X = S1 | Subproblem(uint64_t(S1) - 1UL); // mask all nodes in S1 and smaller than its smallest
-        const Subproblem N = M.neighbors(S1) - X;
-        if (N.empty()) return;
-
-        cmp_Q.clear();
-        for (auto it = N.begin(); it != N.end(); ++it) {
-            const Subproblem vi = it.as_set();
-            cmp_Q.emplace_back(vi, X | (vi.singleton_to_lo_mask() & N));
-
-            while (not cmp_Q.empty()) {
-                auto [S2, X2] = cmp_Q.front();
-                cmp_Q.pop_front();
-
-                M_insist((S1 & S2).empty());
-                M_insist(M.is_connected(S1, S2));
-#ifndef NDEBUG
-                M_insist(duplicate_check.emplace(S1, S2).second, "duplicate");
-#endif
-
-                update(S1, S2);
-
-                const Subproblem N2 = M.neighbors(S2) - X2;
-                for (Subproblem n = m::least_subset(N2); bool(n); n = m::next_subset(n, N2))
-                    cmp_Q.emplace_back(S2 | n, X2 | N);
-            }
-        }
-    };
-
-    std::deque<std::pair<Subproblem, Subproblem>> Q;
-    for (unsigned i = num_relations; i --> 0;) {
-        Subproblem I(1UL << i);
-        Q.emplace_back(I, I.singleton_to_lo_mask());
-
-        while (not Q.empty()) {
-            auto [S, X] = Q.front();
-            Q.pop_front();
-
-            enumerate_complements(S);
-
-            const Subproblem N = M.neighbors(S) - X;
-            for (Subproblem n = m::least_subset(N); bool(n); n = m::next_subset(n, N))
-                Q.emplace_back(S | n, X | N);
-        }
-    }
+    /*----- Enumerate all connected complement pairs in ascending order. ---------------------------------------------*/
+    M.for_each_CSG_pair_undirected(All, update);
 
     return table;
 }

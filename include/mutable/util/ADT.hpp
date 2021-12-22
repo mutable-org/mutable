@@ -43,6 +43,11 @@ struct SmallBitset
         template<bool C_ = Is_Const>
         std::enable_if_t<not C_, Proxy&>
         operator=(bool val) { setbit(&S_.bits_, val, offset_); return *this; }
+
+        Proxy & operator=(const Proxy &other) {
+            static_assert(not Is_Const, "can only assign to proxy of non-const SmallBitset");
+            return operator=(bool(other));
+        }
     };
 
     private:

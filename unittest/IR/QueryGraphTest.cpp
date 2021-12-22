@@ -1,15 +1,24 @@
 #include "catch2/catch.hpp"
 
-#include <mutable/IR/QueryGraph.hpp>
-#include <IR/QueryGraph.cpp>
-#include <catalog/Schema.hpp>
+#include "catalog/Schema.hpp"
+#include "parse/Parser.hpp"
+#include "parse/Sema.hpp"
+#include "testutil.hpp"
+#include "util/ADT.hpp"
 #include <mutable/catalog/Type.hpp>
-#include <parse/Parser.hpp>
-#include <parse/Sema.hpp>
-#include <testutil.hpp>
-#include <util/ADT.hpp>
+#include <mutable/IR/QueryGraph.hpp>
+#include <mutable/util/fn.hpp>
+#include <set>
+#include <unordered_set>
+#include <vector>
+
 
 using namespace m;
+
+
+// forward declarations
+std::set<const char*> get_tables(const cnf::Clause &clause);
+std::vector<const Expr*> get_aggregates(const Stmt &stmt);
 
 /*======================================================================================================================
  * Helper funtctions for test setup.
@@ -17,70 +26,70 @@ using namespace m;
 
 namespace {
 
-    Stmt * get_Stmt(const char *sql) {
-        LEXER(sql);
-        Parser parser(lexer);
-        Sema sema(diag);
-        auto stmt = parser.parse();
-        sema(*stmt);
-        if (diag.num_errors() != 0) {
-            std::cout << out.str() << std::endl;
-            std::cerr << err.str() << std::endl;
-            delete stmt;
-            REQUIRE(false); // abort test
-        }
-        return stmt;
+Stmt * get_Stmt(const char *sql) {
+    LEXER(sql);
+    Parser parser(lexer);
+    Sema sema(diag);
+    auto stmt = parser.parse();
+    sema(*stmt);
+    if (diag.num_errors() != 0) {
+        std::cout << out.str() << std::endl;
+        std::cerr << err.str() << std::endl;
+        delete stmt;
+        REQUIRE(false); // abort test
     }
+    return stmt;
+}
 
-    bool find_Expr(const std::vector<const Expr *> &vec, const Expr &expr) {
-        auto end = vec.end();
-        for (auto begin = vec.begin(); begin != end; ++begin) {
-            if (expr.operator==(**begin))
-                return true;
-        }
-        return false;
+bool find_Expr(const std::vector<const Expr *> &vec, const Expr &expr) {
+    auto end = vec.end();
+    for (auto begin = vec.begin(); begin != end; ++begin) {
+        if (expr.operator==(**begin))
+            return true;
     }
+    return false;
+}
 
-    bool find_Proj(const std::vector<std::pair<const Expr *, const char *>> &vec,
-                   const std::pair<const Expr *, const char*> &p) {
-        auto end = vec.end();
-        for (auto begin = vec.begin(); begin != end; ++begin) {
-            auto pair = *begin;
-            if (p.first->operator==(*(pair.first)) and p.second == pair.second)
-                return true;
-        }
-        return false;
+bool find_Proj(const std::vector<std::pair<const Expr *, const char *>> &vec,
+               const std::pair<const Expr *, const char*> &p) {
+    auto end = vec.end();
+    for (auto begin = vec.begin(); begin != end; ++begin) {
+        auto pair = *begin;
+        if (p.first->operator==(*(pair.first)) and p.second == pair.second)
+            return true;
     }
+    return false;
+}
 
-    DataSource * find_Source(const std::vector<DataSource *> &vec, const char * alias) {
-        auto end = vec.end();
-        for (auto begin = vec.begin(); begin != end; ++begin) {
-            auto source = *begin;
-            if (source->name() == alias)
-                return source;
-        }
-        return nullptr;
+DataSource * find_Source(const std::vector<DataSource *> &vec, const char * alias) {
+    auto end = vec.end();
+    for (auto begin = vec.begin(); begin != end; ++begin) {
+        auto source = *begin;
+        if (source->name() == alias)
+            return source;
     }
+    return nullptr;
+}
 
-    Join * find_Join(const std::vector<Join *> &vec, const char * alias1, const char * alias2) {
-        auto end = vec.end();
-        for (auto begin = vec.begin(); begin != end; ++begin) {
-            auto join = *begin;
-            if (find_Source(join->sources(), alias1) and find_Source(join->sources(), alias2))
-                return join;
-        }
-        return nullptr;
+Join * find_Join(const std::vector<Join *> &vec, const char * alias1, const char * alias2) {
+    auto end = vec.end();
+    for (auto begin = vec.begin(); begin != end; ++begin) {
+        auto join = *begin;
+        if (find_Source(join->sources(), alias1) and find_Source(join->sources(), alias2))
+            return join;
     }
+    return nullptr;
+}
 
-    bool find_OrderBy(const std::vector<std::pair<const Expr *, bool>> &vec, std::pair<const Expr *, bool> &p) {
-        auto end = vec.end();
-        for (auto begin = vec.begin(); begin != end; ++begin) {
-            auto pair = *begin;
-            if (p.first->operator==(*(pair.first)) and p.second == pair.second)
-                return true;
-        }
-        return false;
+bool find_OrderBy(const std::vector<std::pair<const Expr *, bool>> &vec, std::pair<const Expr *, bool> &p) {
+    auto end = vec.end();
+    for (auto begin = vec.begin(); begin != end; ++begin) {
+        auto pair = *begin;
+        if (p.first->operator==(*(pair.first)) and p.second == pair.second)
+            return true;
     }
+    return false;
+}
 
 }
 

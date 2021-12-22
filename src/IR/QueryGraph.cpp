@@ -137,7 +137,7 @@ struct GetTables : ConstASTExprVisitor
 };
 
 /** Given a clause of a CNF formula, compute the tables that are required by this clause. */
-auto get_tables(const cnf::Clause &clause)
+std::set<const char*> get_tables(const cnf::Clause &clause)
 {
     using std::begin, std::end;
     GetTables GT;
@@ -155,7 +155,7 @@ struct GetAggregates : ConstASTExprVisitor, ConstASTClauseVisitor, ConstASTStmtV
     public:
     GetAggregates() { }
 
-    auto get() { return std::move(aggregates_); }
+    std::vector<const Expr*> get() { return std::move(aggregates_); }
 
     using ConstASTExprVisitor::Const;
 
@@ -221,7 +221,7 @@ struct GetAggregates : ConstASTExprVisitor, ConstASTClauseVisitor, ConstASTStmtV
 };
 
 /** Given a select statement, extract the aggregates to compute while grouping. */
-auto get_aggregates(const Stmt &stmt)
+std::vector<const Expr*> get_aggregates(const Stmt &stmt)
 {
     GetAggregates GA;
     GA(stmt);

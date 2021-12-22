@@ -25,7 +25,7 @@ struct args_t
 };
 
 void emit_CSG_queries(std::ostream &out, const m::QueryGraph &G, const m::AdjacencyMatrix &M);
-void emit_query_slice(std::ostream &out, const m::QueryGraph &G, const m::AdjacencyMatrix &M, m::Subproblem slice);
+void emit_query_slice(std::ostream &out, const m::QueryGraph &G, m::Subproblem slice);
 
 void usage(std::ostream &out, const char *name)
 {
@@ -114,33 +114,12 @@ int main(int argc, const char **argv)
     m::AdjacencyMatrix M(*G);
 
     /*----- Emit the queries. ----------------------------------------------------------------------------------------*/
-    emit_CSG_queries(std::cout, *G, M);
+    const Subproblem All((1UL << G->num_sources()) - 1UL);
+    auto emit = [&G](Subproblem S) { emit_query_slice(std::cout, *G, S); };
+    M.for_each_CSG_undirected(All, emit);
 }
 
-void emit_CSG_queries(std::ostream &out, const m::QueryGraph &G, const m::AdjacencyMatrix &M)
-{
-    const std::size_t num_relations = G.sources().size();
-
-    /*----- Enumerate all connected subgraphs of the query graph. ----------------------------------------------------*/
-    std::deque<std::pair<Subproblem, Subproblem>> Q;
-    for (unsigned i = num_relations; i --> 0;) {
-        Subproblem I(1UL << i);
-        Q.emplace_back(I, I.singleton_to_lo_mask());
-
-        while (not Q.empty()) {
-            auto [S, X] = Q.front();
-            Q.pop_front();
-
-            emit_query_slice(out, G, M, S);
-
-            const Subproblem N = M.neighbors(S) - X;
-            for (Subproblem n = m::least_subset(N); bool(n); n = m::next_subset(n, N))
-                Q.emplace_back(S | n, X | N);
-        }
-    }
-}
-
-void emit_query_slice(std::ostream &out, const m::QueryGraph &G, const m::AdjacencyMatrix &M, m::Subproblem slice)
+void emit_query_slice(std::ostream &out, const m::QueryGraph &G, m::Subproblem slice)
 {
     /*----- SELECT clause -----*/
     out << "SELECT COUNT(*)\n";

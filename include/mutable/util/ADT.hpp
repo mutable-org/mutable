@@ -104,6 +104,8 @@ struct SmallBitset
     std::size_t size() const { return __builtin_popcountl(bits_); }
     /** Returns `true` if there are no elements in this `SmallBitset`. */
     bool empty() const { return bits_ == 0; }
+    /* Returns `true` if this set is a singleton set, i.e. the set contains exactly one element. */
+    bool singleton() const { return size() == 1; }
 
     auto begin() const { return iterator(bits_); }
     auto cbegin() const { return begin(); }
@@ -123,17 +125,20 @@ struct SmallBitset
     /** Returns `true` if the set represented by `this` is a subset of `other`, i.e.\ `this` ⊆ `other`. */
     bool is_subset(SmallBitset other) const { return this->bits_ == (other.bits_ & this->bits_); }
 
-    /** Converts a singleton set to a mask for all bits lower than the single, set bit. */
+    /** Returns a mask up to and including the lowest set bit. */
+    SmallBitset mask_to_lo() const { M_insist(not empty()); return SmallBitset(_blsmsk_u64(bits_)); }
+
+    /** Converts a singleton set to a mask up to -- but not including -- the single, set bit. */
     SmallBitset singleton_to_lo_mask() const {
-        M_insist((bits_ & (bits_ - 1UL)) == 0UL, "not a singleton set");
-        return bits_ ? SmallBitset(bits_ - 1UL) : SmallBitset(0UL);
+        M_insist(singleton(), "not a singleton set");
+        return SmallBitset(bits_ - 1UL);
     }
 
     /** Returns the union of `left` and `right`, i.e.\ `left` ∪ `right`. */
     friend SmallBitset unify(SmallBitset left, SmallBitset right) { return SmallBitset(left.bits_ | right.bits_); }
     /** Returns the intersection of `left` and `right`, i.e.\ `left` ∩ `right`. */
     friend SmallBitset intersect(SmallBitset left, SmallBitset right) { return SmallBitset(left.bits_ & right.bits_); }
-    /** Returns the set where the elements of `left` have been subtracted from `right`, i.e.\ `left` - `right`. */
+    /** Returns the set where the elements of `right` have been subtracted from `left`, i.e.\ `left` - `right`. */
     friend SmallBitset subtract(SmallBitset left, SmallBitset right) { return SmallBitset(left.bits_ & ~right.bits_); }
     /** Returns the union of `left` and `right`, i.e.\ `left` ∪ `right`. */
     friend SmallBitset operator|(SmallBitset left, SmallBitset right) { return unify(left, right); }

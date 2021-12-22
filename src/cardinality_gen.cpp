@@ -10,7 +10,10 @@
 #include <memory>
 #include <mutable/IR/PlanTable.hpp>
 #include <mutable/mutable.hpp>
+#include <mutable/util/fn.hpp>
 #include <random>
+#include <stdexcept>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <x86intrin.h>
@@ -18,27 +21,61 @@
 
 using Subproblem = m::SmallBitset;
 
-struct args_t
+///> the highest allowed selectivity of a join
+constexpr double MAX_SELECTIVITY = .8;
+///> the maximum factor by which a join result can be larger than the largest input to the join
+constexpr std::size_t MAX_GROWTH_FACTOR = 10;
+
+/** A distribution of values in range *[0; 1]* that are skewed towards 0.  The `alpha` parameter affects the factor of
+ * skewed-ness, with `alpha` = 1 causing a uniform distribution, `alpha` < 1 causing a skew towards 1, and `alpha` > 1
+ * causing a skew towards 0. */
+template<typename RealType>
+struct skewed_distribution
+{
+    using real_type = RealType;
+    static_assert(std::is_floating_point_v<real_type>, "RealType must be a floating-point type");
+
+    private:
+    real_type alpha_;
+    std::uniform_real_distribution<real_type> d_;
+
+    public:
+    skewed_distribution(real_type alpha)
+        : alpha_(alpha), d_(0, 1)
+    {
+        if (alpha_ <= 0)
+            throw std::invalid_argument("alpha must be positive");
+    }
+
+    real_type alpha() const { return alpha_; }
+
+    template<typename Generator>
+    real_type operator()(Generator &&g) { return std::pow(d_(std::forward<Generator>(g)), alpha_); }
+};
+
+struct
 {
     ///> whether to show a help message
     bool show_help;
     ///> the seed for the PRNG
     unsigned seed;
+    ///> whether selectivities are correlated
+    bool correlated_selectivities;
     ///> minimum cardinality of relations and intermediate results
     std::size_t min_cardinality;
     ///> maximum cardinality of relations and intermediate results
     std::size_t max_cardinality;
-};
+    ///> alpha for skewed distribution
+    double alpha;
+} args;
 
-struct entry_t
-{
-    std::size_t max_cardinality = -1UL;
-    entry_t() { }
-};
+using table_type = std::unordered_map<Subproblem, std::size_t, m::SubproblemHash>;
 
-using table_type = std::unordered_map<Subproblem, entry_t, m::SubproblemHash>;
+template<typename Generator>
+void generate_correlated_cardinalities(table_type &table, const m::QueryGraph &G, Generator &&g);
 
-table_type generate_cardinalities_for_query(const m::QueryGraph &G, const m::AdjacencyMatrix &M, const args_t &args);
+template<typename Generator>
+void generate_uncorrelated_cardinalities(table_type &table, const m::QueryGraph &G, Generator &&g);
 
 void emit_cardinalities(std::ostream &out, const m::QueryGraph &G, const table_type &table);
 
@@ -53,7 +90,6 @@ int main(int argc, const char **argv)
 {
     /*----- Parse command line arguments. ----------------------------------------------------------------------------*/
     m::ArgParser AP;
-    args_t args;
 #define ADD(TYPE, VAR, INIT, SHORT, LONG, DESCR, CALLBACK)\
     VAR = INIT;\
     {\
@@ -70,15 +106,31 @@ int main(int argc, const char **argv)
         nullptr, "--seed",                                                  /* Short, Long      */
         "the seed for the PRNG",                                            /* Description      */
         [&](unsigned s) { args.seed = s; });                                /* Callback         */
+    /*----- Correlated selectivity -----------------------------------------------------------------------------------*/
+    ADD(bool, args.correlated_selectivities, true,                          /* Type, Var, Init  */
+        nullptr, "--uncorrelated",                                          /* Short, Long      */
+        "make join selectivities uncorrelated",                             /* Description      */
+        [&](bool) { args.correlated_selectivities = false; });              /* Callback         */
     /*----- Cardinalities --------------------------------------------------------------------------------------------*/
-    ADD(std::size_t, args.min_cardinality, 1,                               /* Type, Var, Init  */
+    ADD(std::size_t, args.min_cardinality, 10,                              /* Type, Var, Init  */
         nullptr, "--min",                                                   /* Short, Long      */
         "the minimum cardinality of base tables",                           /* Description      */
         [&](std::size_t card) { args.min_cardinality = card; });            /* Callback         */
-    ADD(std::size_t, args.max_cardinality, 1e6,                             /* Type, Var, Init  */
+    ADD(std::size_t, args.max_cardinality, 1e4,                             /* Type, Var, Init  */
         nullptr, "--max",                                                   /* Short, Long      */
         "the maximum cardinality of base tables",                           /* Description      */
         [&](std::size_t card) { args.max_cardinality = card; });            /* Callback         */
+    ADD(int, args.alpha, 3,                                                 /* Type, Var, Init  */
+        nullptr, "--alpha",                                                 /* Short, Long      */
+        "skewedness of cardinalities and selectivities, from ℤ",            /* Description      */
+        [&](int alpha) {                                                    /* Callback         */
+            if (alpha == 0)
+                args.alpha = 1;
+            else if (alpha > 0)
+                args.alpha = alpha;
+            else
+                args.alpha = 1./-alpha;
+        });
     /*----- Parse command line arguments. ----------------------------------------------------------------------------*/
     AP.parse_args(argc, argv);
 
@@ -139,64 +191,155 @@ int main(int argc, const char **argv)
         return std::unique_ptr<m::SelectStmt>(as<m::SelectStmt>(stmt.release()));
     }();
 
+    /*----- Prepare graph, table, and generator. ---------------------------------------------------------------------*/
     auto G = m::QueryGraph::Build(*select);
-    m::AdjacencyMatrix M(*G);
+    table_type table(G->num_sources() * G->num_sources());
+    std::mt19937_64 g(args.seed ^ 0x1d9a07cfbc6e4464UL);
+
+    /*----- Fill table with cardinalities for base relations. --------------------------------------------------------*/
+    const double delta = args.max_cardinality - args.min_cardinality;
+    skewed_distribution<double> dist(args.alpha);
+    for (unsigned i = 0; i != G->num_sources(); ++i) {
+        const std::size_t cardinality = args.min_cardinality + delta * dist(g);
+        M_insist(args.min_cardinality <= cardinality);
+        M_insist(cardinality <= args.max_cardinality);
+        table[Subproblem(1UL << i)] = cardinality;
+    }
 
     /*----- Generate cardinalities. ----------------------------------------------------------------------------------*/
-    table_type table = generate_cardinalities_for_query(*G, M, args);
+    if (args.correlated_selectivities)
+        generate_correlated_cardinalities(table, *G, g);
+    else
+        generate_uncorrelated_cardinalities(table, *G, g);
 
     /*----- Emit the table. ------------------------------------------------------------------------------------------*/
     emit_cardinalities(std::cout, *G, table);
 }
 
-table_type generate_cardinalities_for_query(const m::QueryGraph &G, const m::AdjacencyMatrix &M, const args_t &args)
+template<typename Generator>
+void generate_correlated_cardinalities(table_type &table, const m::QueryGraph &G, Generator &&g)
 {
-    std::mt19937_64 g(args.seed);
-    std::gamma_distribution<double> cardinality_dist(.5, 1.);
-
-    table_type table(G.num_sources() * G.num_sources());
     const Subproblem All((1UL << G.num_sources()) - 1UL);
-
-    /*----- Fill table with cardinalities for base relations. --------------------------------------------------------*/
-    for (unsigned i = 0; i != G.num_sources(); ++i) {
-        auto &e = table[Subproblem(1UL << i)];
-        e.max_cardinality =
-            args.max_cardinality - (args.max_cardinality - args.min_cardinality) / (1. + cardinality_dist(g));
-    }
+    const m::AdjacencyMatrix M(G);
 
     auto update = [&table, &g](const Subproblem S1, const Subproblem S2) -> void {
-        auto &left   = table[S1];
-        auto &right  = table[S2];
-        auto &joined = table[S1 | S2];
+        std::size_t left  = table[S1];
+        std::size_t right = table[S2];
 
         std::gamma_distribution<double> selectivity_dist(.15, 1.);
 
         /*----- Compute selectivity ranges. -----*/
-        constexpr double MAX_SELECTIVITY = .8;
-        constexpr std::size_t MAX_GROWTH_FACTOR = 10;
         double max_selectivity = MAX_SELECTIVITY;
         /* Selectivity must not exceed max growth factor. */
         max_selectivity = std::min<double>(
             max_selectivity,
-            MAX_GROWTH_FACTOR * double(std::max(left.max_cardinality, right.max_cardinality)) /
-                (left.max_cardinality * right.max_cardinality)
+            MAX_GROWTH_FACTOR * double(std::max(left, right)) / (left * right)
         );
         /* Selectivity must not exceed maximum representable integer value. */
         max_selectivity = std::min<double>(
             max_selectivity,
-            double(std::numeric_limits<std::size_t>::max()) / left.max_cardinality / right.max_cardinality
+            double(std::numeric_limits<std::size_t>::max()) / left / right
         );
         const double selectivity_factor = 1. - 1. / (1. + selectivity_dist(g));
         const double selectivity = max_selectivity * selectivity_factor;
 
         /* Make sure relations are never empty. */
-        joined.max_cardinality = std::max<std::size_t>(1UL, selectivity * left.max_cardinality * right.max_cardinality);
+        table[S1 | S2] = std::max<std::size_t>(1UL, selectivity * left * right);
     };
 
-    /*----- Enumerate all connected complement pairs in ascending order. ---------------------------------------------*/
     M.for_each_CSG_pair_undirected(All, update);
+}
 
-    return table;
+template<typename Generator>
+void generate_uncorrelated_cardinalities(table_type &table, const m::QueryGraph &G, Generator &&g)
+{
+    const Subproblem All((1UL << G.num_sources()) - 1UL);
+    const m::AdjacencyMatrix M(G);
+    skewed_distribution<double> selectivity_dist(args.alpha);
+    // std::uniform_real_distribution<double> selectivity_dist(0, 1);
+    const std::size_t delta = args.max_cardinality - args.min_cardinality;
+
+    /* Roll result cardinality. */
+    const std::size_t cardinality_of_result = args.min_cardinality + delta * selectivity_dist(g);
+    std::cerr << "expected result cardinality is " << cardinality_of_result << '\n';
+
+    /*----- Compute combined selectivity. -----*/
+    const double combined_selectivity = [&]() -> double {
+        double cardinality_of_Cartesian_product = 1;
+        for (auto it = All.begin(); it != All.end(); ++it)
+            cardinality_of_Cartesian_product *= table[it.as_set()];
+        std::cerr << "Cartesian product is " << cardinality_of_Cartesian_product << '\n';
+        const double x = cardinality_of_result / cardinality_of_Cartesian_product;
+        std::cerr << "combined selectivity has to be " << x << '\n';
+        return x;
+    }();
+
+    const double avg_selectivity = std::pow(combined_selectivity, 1. / G.num_joins());
+    std::cerr << "expected average selectivity " << avg_selectivity << '\n';
+
+    /*----- Generate selectivities for joins. -----*/
+    std::vector<double> selectivities(G.num_joins());
+    double remaining_selectivity = combined_selectivity;
+    for (std::size_t j = 1; j != G.num_joins(); ++j) {
+        auto &J = G.joins()[j]->sources();
+
+        /*----- Create a fresh PRNG from the sources that are being joined. -----*/
+        std::size_t seed = 0;
+        for (auto s : J)
+            seed = (seed * 526122883134911UL) ^ m::StrHash{}(s->name());
+        std::mt19937_64 local_g(seed);
+
+        /*----- Compute the selectivity of this join. -----*/
+        double cartesian = 1;
+        for (auto s : J)
+            cartesian *= table[Subproblem(1UL << s->id())];
+        const double min_selectivity = std::max(args.min_cardinality / cartesian, remaining_selectivity);
+        if (min_selectivity < avg_selectivity) {
+            /*----- Draw selectivity between min and average. -----*/
+            M_insist(min_selectivity <= avg_selectivity);
+            selectivities[j] = avg_selectivity - (avg_selectivity - min_selectivity) * selectivity_dist(local_g);
+        } else {
+            /*----- Draw selectivity between average and 1. -----*/
+            selectivities[j] = avg_selectivity + (1. - avg_selectivity) * selectivity_dist(local_g);
+        }
+        std::cerr << "> remaining " << remaining_selectivity << '\n'
+                  << "  minimum   " << min_selectivity << '\n'
+                  << "  taken     " << selectivities[j] << '\n';
+        remaining_selectivity /= selectivities[j];
+    }
+    std::cerr << "remaining selectivity " << remaining_selectivity << '\n';
+    selectivities[0] = remaining_selectivity;
+
+
+    auto update = [&G, &M, &selectivities, &table](const Subproblem left, const Subproblem right) {
+        M_insist(M.is_connected(left, right));
+
+        /* Compute total selectivity as product of selectivities of all edges between `left` and `right`. */
+        double total_selectivity = 1.;
+        for (std::size_t j = 0; j != G.num_joins(); ++j) {
+            auto &sources = G.joins()[j]->sources();
+            if (sources.size() != 2)
+                throw std::invalid_argument("unsupported join");
+            /* Check whether this join connects `left` and `right`. */
+            if ((left[sources[0]->id()] and right[sources[1]->id()]) or
+                (left[sources[1]->id()] and right[sources[0]->id()]))
+            {
+                /* This join connects `left` and `right`. */
+                total_selectivity *= selectivities[j];
+            }
+        }
+
+        /* Compute cardinality of CSG. */
+        const double real_cardinality = table[left] * table[right] * total_selectivity;
+        std::size_t clamped_cardinality;
+        if (real_cardinality > double(std::numeric_limits<std::size_t>::max()))
+            clamped_cardinality = std::numeric_limits<std::size_t>::max();
+        else
+            clamped_cardinality = real_cardinality;
+        table[left | right] = std::max<std::size_t>(1UL, clamped_cardinality);
+    };
+
+    M.for_each_CSG_pair_undirected(All, update);
 }
 
 void emit_cardinalities(std::ostream &out, const m::QueryGraph &G, const table_type &table)
@@ -206,9 +349,21 @@ void emit_cardinalities(std::ostream &out, const m::QueryGraph &G, const table_t
 
     out << "{\n    \"" << DB.name << "\": [\n";
     bool first = true;
+    const Subproblem All((1UL << G.num_sources()) - 1UL);
+
+    /*----- Print singletons aka base relations. -----*/
+    for (auto it = All.begin(); it != All.end(); ++it) {
+        if (first) first = false;
+        else       out << ",\n";
+        out << "        { \"relations\": [\"" << G.sources()[*it]->name() << "\"], "
+            << "\"size\": " << table.at(it.as_set()) << "}";
+    }
+
+    /*----- Print non-singletons. -----*/
     for (auto entry : table) {
         const Subproblem S = entry.first;
-        const std::size_t size = entry.second.max_cardinality;
+        if (S.singleton()) continue; // skip singleton
+        const std::size_t size = entry.second;
 
         /*----- Emit relations. -----*/
         if (first) first = false;

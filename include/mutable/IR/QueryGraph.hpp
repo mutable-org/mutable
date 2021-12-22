@@ -418,14 +418,18 @@ exit:
      * that the original graph is undirected.  */
     AdjacencyMatrix transitive_closure_undirected() const;
 
-    /** Enumerate all *connected subgraphs* (CSGs) of the graph induced by vertex super set `super`.  Requires that this
-     * matrix is symmetric. */
-    void for_each_CSG_undirected(SmallBitset super, std::function<void(SmallBitset)> callback) {
+    /** Enumerate all *connected subgraphs* (CSGs) of the graph induced by vertex super set `super`, starting only from
+     * nodes in `source`. */
+    void for_each_CSG_undirected(SmallBitset super, SmallBitset source, std::function<void(SmallBitset)> callback) const
+    {
         const SmallBitset X_super = SmallBitset((1UL << num_vertices_) - 1U) - super; // inverse of `super`
+        source = source & super; // restrict sources to vertices in `super`
+
         std::deque<std::pair<SmallBitset, SmallBitset>> Q;
-        for (auto super_it = super.begin(); super_it != super.end(); ++super_it) {
-            SmallBitset I = super_it.as_set();
-            Q.emplace_back(I, X_super | ~I.singleton_to_lo_mask()); // vertex i and excluding all "lower" vertices
+        for (auto it = source.rbegin(); it != source.rend(); ++it) {
+            SmallBitset I = it.as_set();
+            M_insist(I.singleton());
+            Q.emplace_back(I, X_super | I.singleton_to_lo_mask()); // vertex i and excluding all "lower" vertices
 
             while (not Q.empty()) {
                 auto [S, X] = Q.front();
@@ -438,6 +442,27 @@ exit:
                     Q.emplace_back(S | n, X | N);
             }
         }
+    }
+
+    /** Enumerate all *connected subgraphs* (CSGs) of the graph induced by vertex super set `super`.  Requires that this
+     * matrix is symmetric. */
+    void for_each_CSG_undirected(SmallBitset super, std::function<void(SmallBitset)> callback) const {
+        for_each_CSG_undirected(super, super, std::move(callback));
+    }
+
+    /** Enumerate all pairs of *connected subgraphs* (CSGs) that are connected by at least one edge.  Requires that this
+     * matrix is symmetric. */
+    void for_each_CSG_pair_undirected(SmallBitset super, std::function<void(SmallBitset, SmallBitset)> callback) const {
+        auto callback_CSG = [this, super, &callback](SmallBitset first) {
+            auto callback_partial = [&callback, first](SmallBitset second) { callback(first, second); };
+            const SmallBitset X_first = first | first.mask_to_lo();
+            const SmallBitset N_first = neighbors(first) - X_first;
+            for (auto it = N_first.begin(); it != N_first.end(); ++it) {
+                const SmallBitset n = it.as_set();
+                for_each_CSG_undirected(super - X_first - (N_first & n.singleton_to_lo_mask()), n, callback_partial);
+            }
+        };
+        for_each_CSG_undirected(super, callback_CSG);
     }
 
     /** Computes the minimum spanning forest for this graph.  Expects the graph to be undirected, meaning that the

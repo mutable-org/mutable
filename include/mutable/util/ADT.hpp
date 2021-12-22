@@ -5,6 +5,7 @@
 #include <mutable/util/macro.hpp>
 #include <mutable/util/malloc_allocator.hpp>
 #include <algorithm>
+#include <climits>
 #include <cstdint>
 #include <iostream>
 #include <limits>
@@ -71,6 +72,28 @@ struct SmallBitset
         SmallBitset as_set() const { return SmallBitset(_blsi_u64(bits_)); } // BMI1: extract lowest set isolated bit
     };
 
+    struct reverse_iterator
+    {
+        private:
+        uint64_t bits_;
+
+        public:
+        reverse_iterator(uint64_t bits) : bits_(bits) { }
+
+        bool operator==(reverse_iterator other) const { return this->bits_ == other.bits_; }
+        bool operator!=(reverse_iterator other) const { return not operator==(other); }
+
+        reverse_iterator & operator++();
+        reverse_iterator operator++(int) { auto clone = *this; ++clone; return clone; }
+
+        std::size_t operator*() const {
+            M_insist(bits_ != 0);
+            const unsigned lz = __builtin_clzl(bits_);
+            return CHAR_BIT * sizeof(bits_) - 1UL - lz;
+        }
+        SmallBitset as_set() const;
+    };
+
     public:
     SmallBitset() : bits_(0) { };
     explicit SmallBitset(uint64_t bits) : bits_(bits) { };
@@ -112,10 +135,21 @@ struct SmallBitset
     /* Returns `true` if this set is a singleton set, i.e. the set contains exactly one element. */
     bool singleton() const { return size() == 1; }
 
+    /** Returns the highest set bit as a `SmallBitset`. */
+    SmallBitset hi() const {
+        unsigned lz = __builtin_clzl(bits_);
+        return SmallBitset(1UL << (CHAR_BIT * sizeof(bits_) - lz - 1U));
+    }
+
     auto begin() const { return iterator(bits_); }
     auto cbegin() const { return begin(); }
     auto end() const { return iterator(0); }
     auto cend() const { return end(); }
+
+    auto rbegin() const { return reverse_iterator(bits_); }
+    auto crbegin() const { return rbegin(); }
+    auto rend() const { return reverse_iterator(0); }
+    auto crend() const { return rend(); }
 
     /** Convert the `SmallBitset` type to `uint64_t`. */
     explicit operator uint64_t() const { return bits_; }
@@ -190,6 +224,17 @@ struct SmallBitset
     void dump(std::ostream &out) const;
     void dump() const;
 };
+
+inline SmallBitset SmallBitset::reverse_iterator::as_set() const
+{
+    return SmallBitset(1UL << operator*());
+}
+
+inline SmallBitset::reverse_iterator & SmallBitset::reverse_iterator::operator++()
+{
+    bits_ = bits_ & ~(1UL << operator*());
+    return *this;
+}
 
 
 /** Returns the least subset of a given `set`, i.e.\ the set represented by the lowest 1 bit. */

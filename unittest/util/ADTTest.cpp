@@ -54,6 +54,20 @@ TEST_CASE("SmallBitset", "[core][util]")
         SmallBitset S;
         REQUIRE_THROWS_AS(S.at(64), m::out_of_range);
     }
+
+    SECTION("reverse_iterator")
+    {
+        SmallBitset S;
+        S[0] = S[4] = S[63] = true;
+        auto it = S.rbegin();
+        CHECK(*it == 63);
+        ++it;
+        CHECK(*it == 4);
+        ++it;
+        CHECK(*it == 0);
+        ++it;
+        CHECK(it == S.rend());
+    }
 }
 
 TEST_CASE("GospersHack", "[core][util]")

@@ -175,7 +175,7 @@ include_directories(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/third-party/eigen")
 
 # V8 - Google's JavaScript and WebAssembly Engine (used in Chrome, Node.js)
 if(${WITH_V8})
-    set(V8_VERSION "9.4.147")
+    set(V8_VERSION "9.8.178")
     set(V8_BUILD_ARGS "is_clang=true is_component_build=false v8_monolithic=true v8_enable_pointer_compression=true treat_warnings_as_errors=false v8_use_external_startup_data=false use_sysroot=false use_custom_libcxx=false clang_use_chrome_plugins=false target_cpu=\"x64\"")
     add_definitions("-DV8_COMPRESS_POINTERS")
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -194,7 +194,7 @@ if(${WITH_V8})
         COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/"
         COMMAND git remote | grep ^mutable$ || git remote add mutable git@gitlab.cs.uni-saarland.de:bigdata/mutable/v8.git
         COMMAND git fetch mutable
-        COMMAND git checkout 6654a50ba9706514c24471fb5163f8b9946e2166
+        COMMAND git checkout 704e04a600319161da3368b20013dd4054c0d9db
         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/third_party/depot_tools/gclient sync
         UPDATE_COMMAND ""
         CONFIGURE_COMMAND gn gen out --root=${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8 --args=${V8_BUILD_ARGS}

@@ -10,6 +10,13 @@ stages:
     - build:release
     - report
 
+# Define global cache
+cache:
+  paths:
+    - "build/debug/bin"
+    - "build/debug/lib"
+    - "build/debug/third-party/src/*-build"
+    - "third-party"
 
 #-----------------------------------------------------------------------------------------------------------------------
 # CHECK

@@ -1,3 +1,4 @@
+# vim: set expandtab tabstop=4 shiftwidth=4:
 #-----------------------------------------------------------------------------------------------------------------------
 # GENERAL
 #-----------------------------------------------------------------------------------------------------------------------
@@ -10,13 +11,29 @@ stages:
     - build:release
     - report
 
-# Define global cache
-cache:
-  paths:
-    - "build/debug/bin"
-    - "build/debug/lib"
-    - "build/debug/third-party/src/*-build"
-    - "third-party"
+.build_cache:
+    cache:
+        - key: third-party
+          paths:
+              - "third-party"
+        - key: "build:${BUILD_TYPE}"
+          paths:
+              - "build/${BUILD_TYPE}/bin"
+              - "build/${BUILD_TYPE}/lib"
+              - "build/${BUILD_TYPE}/third-party/src/*-build"
+
+.debug:
+    variables:
+        BUILD_TYPE: debug
+
+.release:
+    variables:
+        BUILD_TYPE: release
+
+.coverage:
+    variables:
+        BUILD_TYPE: coverage
+
 
 #-----------------------------------------------------------------------------------------------------------------------
 # CHECK
@@ -42,7 +59,10 @@ build:debug:linux-amd64:
         - cd build/debug
         - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DWITH_V8=1 ../..
         - ninja gitversion
-        - ninja
+        - ninja all unittest
+    extends:
+        - .debug
+        - .build_cache
     artifacts:
         paths:
             - "build/debug/bin/lex"
@@ -62,7 +82,10 @@ build:debug:macos-amd64:
         - cd build/debug
         - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DWITH_V8=1 ../..
         - ninja gitversion
-        - ninja
+        - ninja all unittest
+    extends:
+        - .debug
+        - .build_cache
     artifacts:
         paths:
             - "build/debug/bin/lex"
@@ -135,6 +158,7 @@ build:release:linux-amd64:
         - mkdir -p build/release
         - cd build/release
         - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DWITH_V8=1 ../..
+        - ninja gitversion
         - ninja
         - cd ../..
         - mkdir mutable
@@ -142,6 +166,9 @@ build:release:linux-amd64:
         - find mutable/include -type f -iname '*.hpp' | xargs perl -i -pe 'BEGIN{undef $/;} s/^\#ifndef NDEBUG.*?(\#else(.*?))?\#endif/$2/smg'
         - mkdir mutable/lib
         - cp build/release/lib/libmutable.a mutable/lib
+    extends:
+        - .release
+        - .build_cache
     needs:
         - job: "unittest:linux-amd64"
         - job: "integrationtest:linux-amd64"
@@ -162,6 +189,7 @@ build:release:macos-amd64:
         - mkdir -p build/release
         - cd build/release
         - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DWITH_V8=1 ../..
+        - ninja gitversion
         - ninja
         - cd ../..
         - mkdir mutable
@@ -169,6 +197,9 @@ build:release:macos-amd64:
         - find mutable/include -type f -iname '*.hpp' | xargs perl -i -pe 'BEGIN{undef $/;} s/^\#ifndef NDEBUG.*?(\#else(.*?))?\#endif/$2/smg'
         - mkdir mutable/lib
         - cp build/release/lib/libmutable.a mutable/lib
+    extends:
+        - .release
+        - .build_cache
     needs:
         - job: "unittest:macos-amd64"
         - job: "integrationtest:macos-amd64"
@@ -219,6 +250,9 @@ report:coverage:
         - rm -rf /srv/http/mutable/coverage
         - mv build/coverage/html /srv/http/mutable/coverage
     coverage: '/branches\.\.\.: \d+\.\d+/'
+    extends:
+        - .coverage
+        - .build_cache
     artifacts:
         paths:
             - "build/coverage/catch.xml"

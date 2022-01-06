@@ -16,6 +16,8 @@ stages:
         - key: third-party
           paths:
               - "third-party"
+              - "build/${BUILD_TYPE}/third-party/src/*-stamp/*-download"
+              - "build/${BUILD_TYPE}/*-subbuild/*-populate-prefix/src/*-populate-stamp/*-populate-download"
         - key: "build:${BUILD_TYPE}"
           paths:
               - "build/${BUILD_TYPE}/bin"

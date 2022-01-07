@@ -114,6 +114,7 @@ set_source_files_properties(
 FetchContent_Populate(
     Catch2
     URL "https://raw.githubusercontent.com/catchorg/Catch2/v2.13.7/single_include/catch2/catch.hpp"
+    URL_HASH MD5=afc1a3a08d753ec1bef9a449ff418e07
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/catch2/include/catch2"
     DOWNLOAD_NO_EXTRACT TRUE
 )

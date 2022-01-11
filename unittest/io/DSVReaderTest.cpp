@@ -17,6 +17,10 @@ typedef std::vector< std::tuple<int16_t, int32_t, float, const char*> > tuple_li
  * Helper function.
  *====================================================================================================================*/
 
+
+namespace {
+
+
 Table & create_table()
 {
     Catalog::Clear();
@@ -29,7 +33,7 @@ Table & create_table()
     table.push_back(C.pool("i2"),      Type::Get_Integer(Type::TY_Vector, 2));
     table.push_back(C.pool("i4"),      Type::Get_Integer(Type::TY_Vector, 4));
     table.push_back(C.pool("f"),       Type::Get_Float(Type::TY_Vector));
-    table.push_back(C.pool("char15"),   Type::Get_Char(Type::TY_Vector, 15));
+    table.push_back(C.pool("char15"),  Type::Get_Char(Type::TY_Vector, 15));
 
     table.store(std::make_unique<RowStore>(table));
     return table;
@@ -73,6 +77,8 @@ std::string format_string(const char *str, const char delimiter = ',', const cha
     }
 
     return char15;
+}
+
 }
 
 /*======================================================================================================================

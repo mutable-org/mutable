@@ -34,7 +34,7 @@ std::vector<T> generate_distinct_numbers(const T min, const T max, const std::si
             std::uniform_real_distribution<T>>;
     static_assert(std::is_arithmetic_v<T>, "T must be an arithmetic type");
     if (std::is_integral_v<T>)
-        M_insist(T(max - count) < min, "range is too small to provide enough distinct values");
+        M_insist(T(max - count) > min, "range is too small to provide enough distinct values");
 
     std::vector<T> values;
     values.reserve(count);

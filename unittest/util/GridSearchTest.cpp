@@ -231,6 +231,134 @@ TEST_CASE("LinearSpace", "[core][util]")
             CHECK(S.sequence() == std::vector<unsigned>{10, 8, 6, 4, 2, 0});
         }
     }
+
+    SECTION("int32_t, -2^31 to 2^31 - 1, 4 steps")
+    {
+        LinearSpace<int32_t> S(std::numeric_limits<int32_t>::lowest(), std::numeric_limits<int32_t>::max(), 4);
+        CHECK(S.lo() == std::numeric_limits<int32_t>::lowest());
+        CHECK(S.hi() == std::numeric_limits<int32_t>::max());
+        CHECK(S.num_steps() == 4);
+        CHECK(S.step() == Approx(std::numeric_limits<uint32_t>::max()/4));
+        CHECK(S.ascending());
+        CHECK_FALSE(S.descending());
+
+        SECTION("at()/operator()")
+        {
+            CHECK(S.at(0) == std::numeric_limits<int32_t>::lowest());
+            CHECK(S.at(1) == -1073741824);
+            CHECK(S.at(2) == 0);
+            CHECK(S.at(3) == 1073741823);
+            CHECK(S.at(4) == std::numeric_limits<int32_t>::max());
+        }
+
+        SECTION("sequence()")
+        {
+            CHECK(S.sequence() == std::vector<int32_t>{
+                std::numeric_limits<int32_t>::lowest(),
+                -1073741824,
+                0,
+                1073741823,
+                std::numeric_limits<int32_t>::max()
+            });
+        }
+    }
+
+    SECTION("int64_t, -2^63 to 2^63 - 1, 4 steps")
+    {
+        LinearSpace<int64_t> S(std::numeric_limits<int64_t>::lowest(), std::numeric_limits<int64_t>::max(), 4);
+        CHECK(S.lo() == std::numeric_limits<int64_t>::lowest());
+        CHECK(S.hi() == std::numeric_limits<int64_t>::max());
+        CHECK(S.num_steps() == 4);
+        CHECK(S.step() == Approx(std::numeric_limits<uint64_t>::max()/4));
+        CHECK(S.ascending());
+        CHECK_FALSE(S.descending());
+
+        /* an overflow was caused when casting double(2^64) to uint64_t because of a rounding issue with double.
+         * To prevent this and allow for a close to accurate result LinearSpace rounds down the step distance,
+         * causing inaccuracies when dealing with a large range of type int64_t. */
+        SECTION("at()/operator()")
+        {
+            CHECK(S.at(0) == std::numeric_limits<int64_t>::lowest());
+            CHECK(S.at(1) == -4611686018427388416);
+            CHECK(S.at(2) == -1024);
+            CHECK(S.at(3) == 4611686018427385856);
+            CHECK(S.at(4) == 9223372036854773760);
+        }
+
+        SECTION("sequence()")
+        {
+            CHECK(S.sequence() == std::vector<int64_t>{
+                std::numeric_limits<int64_t>::lowest(),
+                -4611686018427388416,
+                -1024,
+                4611686018427385856,
+                9223372036854773760});
+        }
+    }
+
+    SECTION("int32_t, -2^31 to 2^31 - 1, 4 steps, descending")
+    {
+        LinearSpace<int32_t> S(std::numeric_limits<int32_t>::lowest(), std::numeric_limits<int32_t>::max(), 4, false);
+        CHECK(S.lo() == std::numeric_limits<int32_t>::lowest());
+        CHECK(S.hi() == std::numeric_limits<int32_t>::max());
+        CHECK(S.num_steps() == 4);
+        CHECK(S.step() == Approx(std::numeric_limits<uint32_t>::max()/4));
+        CHECK_FALSE(S.ascending());
+        CHECK(S.descending());
+
+        SECTION("at()/operator()")
+        {
+            CHECK(S.at(0) == std::numeric_limits<int32_t>::max());
+            CHECK(S.at(1) == 1073741823);
+            CHECK(S.at(2) == -1);
+            CHECK(S.at(3) == -1073741824);
+            CHECK(S.at(4) == std::numeric_limits<int32_t>::lowest());
+        }
+
+        SECTION("sequence()")
+        {
+            CHECK(S.sequence() == std::vector<int32_t>{
+                std::numeric_limits<int32_t>::max(),
+                1073741823,
+                -1,
+                -1073741824,
+                std::numeric_limits<int32_t>::lowest()
+            });
+        }
+    }
+
+    SECTION("int64_t, -2^63 to 2^63 - 1, 4 steps, descending")
+    {
+        LinearSpace<int64_t> S(std::numeric_limits<int64_t>::lowest(), std::numeric_limits<int64_t>::max(), 4, false);
+        CHECK(S.lo() == std::numeric_limits<int64_t>::lowest());
+        CHECK(S.hi() == std::numeric_limits<int64_t>::max());
+        CHECK(S.num_steps() == 4);
+        CHECK(S.step() == Approx(std::numeric_limits<uint64_t>::max()/4));
+        CHECK_FALSE(S.ascending());
+        CHECK(S.descending());
+
+        /* an overflow was caused when casting double(2^64) to uint64_t because of a rounding issue with double.
+         * To prevent this and allow for a close to accurate result LinearSpace rounds down the step distance,
+         * causing inaccuracies when dealing with a large range of type int64_t. */
+        SECTION("at()/operator()")
+        {
+            CHECK(S.at(0) == std::numeric_limits<int64_t>::max());
+            CHECK(S.at(1) == 4611686018427388415);
+            CHECK(S.at(2) == 1023);
+            CHECK(S.at(3) == -4611686018427385857);
+            CHECK(S.at(4) == -9223372036854773761);
+        }
+
+        SECTION("sequence()")
+        {
+            CHECK(S.sequence() == std::vector<int64_t>{
+                std::numeric_limits<int64_t>::max(),
+                4611686018427388415,
+                1023,
+                -4611686018427385857,
+                -9223372036854773761});
+        }
+    }
 }
 
 TEST_CASE("LinearSpace sanity", "[core][util]")

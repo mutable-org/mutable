@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cfenv>
 #include <cmath>
 #include <functional>
 #include <iostream>
@@ -67,7 +68,10 @@ struct LinearSpace : Space<T, LinearSpace>
         if (num_steps_ == 0)
             throw std::invalid_argument("number of steps must not be zero");
 
+        const int save_round = std::fegetround();
+        std::fesetround(FE_TOWARDZERO);
         step_ = (double(hi_) - double(lo_)) / num_steps_;
+        std::fesetround(save_round);
     }
 
     static LinearSpace Ascending(value_type lowest, value_type highest, unsigned num_steps) {
@@ -90,10 +94,11 @@ struct LinearSpace : Space<T, LinearSpace>
         if (n > num_steps_)
             throw std::out_of_range("n must be between 0 and num_steps()");
         if constexpr (std::is_integral_v<value_type>) {
+            const typename std::make_unsigned_t<value_type> delta = std::round(n * step());
             if (ascending())
-                return std::clamp<value_type>(value_type(std::round(double(lo()) + n * step_)), lo_, hi_);
+                return lo() + delta;
             else
-                return std::clamp<value_type>(value_type(std::round(double(hi()) - n * step_)), lo_, hi_);
+                return hi() - delta;
         } else {
             if (ascending())
                 return std::clamp<value_type>(value_type(double(lo()) + n * step_), lo_, hi_);

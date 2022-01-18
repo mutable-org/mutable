@@ -2,6 +2,9 @@
 
 trap "exit" INT
 
+# Ignore List: Remove data for files that should be ignored in the final coverage report
+IGNORE_LIST=('*QueryGraph2SQL.*' '*PDDL.*' '*TrainedCostFunction.*' '*CostModel.*')
+
 # Make coverage build
 mkdir -p build/coverage
 cd build/coverage
@@ -47,6 +50,10 @@ lcov --quiet --gcov-tool "${GCOV}" --directory src --rc lcov_branch_coverage=1 \
 # Filter collected data to final coverage report
 lcov --quiet --gcov-tool "${GCOV}" --directory src --rc lcov_branch_coverage=1 \
      --remove cov.total '*unittest*' '/usr/include/*' '*third-party/*' \
+     --output-file cov.info
+# Apply Ignore List: Remove data for files that should be ignored in the final coverage report
+lcov --quiet --gcov-tool "${GCOV}" --directory src --rc lcov_branch_coverage=1 \
+     --remove cov.info "${IGNORE_LIST[@]}" \
      --output-file cov.info
 
 # Generate HTML output

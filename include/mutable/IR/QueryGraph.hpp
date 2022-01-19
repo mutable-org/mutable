@@ -469,6 +469,10 @@ exit:
      * `AdjacencyMatrix` must be symmetric. */
     AdjacencyMatrix minimum_spanning_forest(std::function<double(std::size_t, std::size_t)> weight) const;
 
+    /** Computes an `AdjacencyMatrix` with all edges directed away from `root`.  Requires that the graph is a tree,
+     * i.e.\ connected and acyclic. */
+    AdjacencyMatrix tree_directed_away_from(SmallBitset root);
+
     /** Compares two `AdjacencyMatrix`s element-wise. */
     bool operator==(const AdjacencyMatrix &other) const {
         if (this->num_vertices_ != other.num_vertices_) return false;

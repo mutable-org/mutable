@@ -1851,5 +1851,21 @@ MST_done: /* MST is complete */;
     return MSF;
 }
 
+AdjacencyMatrix AdjacencyMatrix::tree_directed_away_from(SmallBitset root)
+{
+    M_insist(root.singleton());
+    AdjacencyMatrix directed_tree(num_vertices_);
+    SmallBitset V = root;
+    SmallBitset X;
+    while (not V.empty()) {
+        X |= V;
+        for (auto v : V)
+            directed_tree.m_[v] = this->m_[v] - X;
+        V = directed_tree.neighbors(V);
+    }
+
+    return directed_tree;
+}
+
 void AdjacencyMatrix::dump(std::ostream &out) const { out << *this << std::endl; }
 void AdjacencyMatrix::dump() const { dump(std::cerr); }

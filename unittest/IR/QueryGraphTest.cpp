@@ -991,6 +991,138 @@ TEST_CASE("AdjacencyMatrix/minimum_spanning_forest", "[core][IR][unit]")
     }
 }
 
+TEST_CASE("AdjacencyMatrix/tree_directed_away_from", "[core][IR][unit]")
+{
+    SECTION("no edges")
+    {
+        AdjacencyMatrix tree(1);
+        AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset(1UL));
+        CHECK(tree == directed_tree);
+    }
+
+    SECTION("single edge")
+    {
+        AdjacencyMatrix tree(2);
+        tree(0, 1) = tree(1, 0) = true;
+        SECTION("root 0")
+        {
+            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset(1UL));
+            AdjacencyMatrix expected(2);
+            expected(0, 1) = true;
+            CHECK(expected == directed_tree);
+        }
+        SECTION("root 1")
+        {
+            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset(2UL));
+            AdjacencyMatrix expected(2);
+            expected(1, 0) = true;
+            CHECK(expected == directed_tree);
+        }
+    }
+
+    SECTION("multiple edges, one level")
+    {
+        /*    1
+         *   /
+         *  0-2
+         *   \
+         *    3
+         */
+        AdjacencyMatrix tree(4);
+        tree(0, 1) = tree(1, 0) = true;
+        tree(0, 2) = tree(2, 0) = true;
+        tree(0, 3) = tree(3, 0) = true;
+
+        SECTION("root 0")
+        {
+            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset(1UL));
+            AdjacencyMatrix expected(4);
+            expected(0, 1) = true;
+            expected(0, 2) = true;
+            expected(0, 3) = true;
+            CHECK(expected == directed_tree);
+        }
+
+        SECTION("root 1")
+        {
+            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset(2UL));
+            AdjacencyMatrix expected(4);
+            expected(1, 0) = true;
+            expected(0, 2) = true;
+            expected(0, 3) = true;
+            CHECK(expected == directed_tree);
+        }
+
+        SECTION("root 2")
+        {
+            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset(1UL << 2));
+            AdjacencyMatrix expected(4);
+            expected(2, 0) = true;
+            expected(0, 1) = true;
+            expected(0, 3) = true;
+            CHECK(expected == directed_tree);
+        }
+
+        SECTION("root 3")
+        {
+            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset(1UL << 3));
+            AdjacencyMatrix expected(4);
+            expected(3, 0) = true;
+            expected(0, 1) = true;
+            expected(0, 2) = true;
+            CHECK(expected == directed_tree);
+        }
+    }
+
+    SECTION("simple chain")
+    {
+        AdjacencyMatrix tree(4);
+        tree(0, 1) = tree(1, 0) = true;
+        tree(1, 2) = tree(2, 1) = true;
+        tree(2, 3) = tree(3, 2) = true;
+
+        SECTION("root 0")
+        {
+            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset(1UL));
+            AdjacencyMatrix expected(4);
+            expected(0, 1) = true;
+            expected(1, 2) = true;
+            expected(2, 3) = true;
+            CHECK(expected == directed_tree);
+        }
+
+        SECTION("root 1")
+        {
+            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset(2UL));
+            AdjacencyMatrix expected(4);
+            expected(1, 0) = true;
+            expected(1, 2) = true;
+            expected(2, 3) = true;
+            CHECK(expected == directed_tree);
+        }
+
+        SECTION("root 2")
+        {
+            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset(1UL << 2));
+            AdjacencyMatrix expected(4);
+            expected(1, 0) = true;
+            expected(2, 1) = true;
+            expected(2, 3) = true;
+            CHECK(expected == directed_tree);
+        }
+
+        SECTION("root 3")
+        {
+            const AdjacencyMatrix directed_tree = tree.tree_directed_away_from(SmallBitset(1UL << 3));
+            AdjacencyMatrix expected(4);
+            expected(1, 0) = true;
+            expected(2, 1) = true;
+            expected(3, 2) = true;
+            CHECK(expected == directed_tree);
+        }
+    }
+}
+
 TEST_CASE("AdjacencyMatrix/Matrix output", "[core][IR][unit]")
 {
     AdjacencyMatrix adj_mat(4);

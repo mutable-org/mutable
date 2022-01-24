@@ -130,7 +130,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
                 problem_path.append("problem/");
 
                 PDDLGenerator PDDL(Catalog::Get().get_database_in_use().cardinality_estimator(), diag);
-                PDDL.generate_files(*query_graph.get(), Options::Get().pddl_actions, domain_path, problem_path);
+                PDDL.generate_files(*query_graph, Options::Get().pddl_actions, domain_path, problem_path);
             }
 
             std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::Create(Options::Get().plan_enumerator);

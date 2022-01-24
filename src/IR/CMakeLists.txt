@@ -4,6 +4,7 @@ add_library(
     CNF.cpp
     Operator.cpp
     Optimizer.cpp
+    PartialPlanGenerator.cpp
     PDDL.cpp
     PlanEnumerator.cpp
     PlanTable.cpp

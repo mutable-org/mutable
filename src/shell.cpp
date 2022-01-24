@@ -4,6 +4,7 @@
 #include "catalog/Schema.hpp"
 #include "globals.hpp"
 #include "io/Reader.hpp"
+#include "IR/PartialPlanGenerator.hpp"
 #include "IR/PDDL.hpp"
 #include <mutable/catalog/CostModel.hpp>
 #include <mutable/mutable.hpp>
@@ -135,7 +136,36 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
 
             std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::Create(Options::Get().plan_enumerator);
             Optimizer Opt(*pe.get(), C.cost_function());
-            auto optree = M_TIME_EXPR(Opt(*query_graph.get()), "Compute the query plan", timer);
+            std::unique_ptr<Producer> optree;
+            if (Options::Get().output_partial_plans_file) {
+                auto res = M_TIME_EXPR(
+                    Opt.optimize_with_plantable<PlanTableLargeAndSparse>(*query_graph),
+                    "Compute the query plan",
+                    timer
+                );
+                optree = std::move(res.first);
+
+                std::filesystem::path JSON_path(Options::Get().output_partial_plans_file);
+                errno = 0;
+                std::ofstream JSON_file(JSON_path);
+                if (not JSON_file or errno) {
+                    const auto errsv = errno;
+                    if (errsv) {
+                        diag.err() << "Failed to open output file for partial plans " << JSON_path << ": "
+                                   << strerror(errsv) << std::endl;
+                    } else {
+                        diag.err() << "Failed to open output file for partial plans " << JSON_path << std::endl;
+                    }
+                } else {
+                    auto for_each = [&res](PartialPlanGenerator::callback_type callback) {
+                        PartialPlanGenerator{}.for_each_complete_partial_plan(res.second, callback);
+                    };
+                    PartialPlanGenerator{}.write_partial_plans_JSON(JSON_file, *query_graph, res.second, for_each);
+                }
+            } else {
+                optree = M_TIME_EXPR(Opt(*query_graph), "Compute the query plan", timer);
+            }
+            M_insist(bool(optree), "optree must have been computed");
             if (Options::Get().plan) optree->dump(std::cout);
             if (Options::Get().plandot) {
                 DotTool dot(diag);
@@ -470,6 +500,10 @@ int main(int argc, const char **argv)
         nullptr, "--benchmark",                             /* Short, Long      */
         "run queries in benchmark mode",                    /* Description      */
         [&](bool) { Options::Get().benchmark = true; });    /* Callback         */
+    ADD(const char*, Options::Get().output_partial_plans_file, nullptr,             /* Type, Var, Init  */
+        nullptr, "--output-partial-plans-file",                                     /* Short, Long      */
+        "specify file to output all partial plans of the final plan",               /* Description      */
+        [&](const char *str) { Options::Get().output_partial_plans_file = str; });  /* Callback         */
     /*----- Select type of plan table to use -------------------------------------------------------------------------*/
     ADD(bool, Options::Get().plan_table_type, Options::PT_auto,                         /* Type, Var, Init  */
         nullptr, "--plan-table-sod",                                                    /* Short, Long      */

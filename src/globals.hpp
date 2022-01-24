@@ -53,6 +53,7 @@ struct Options
     const char *backend;
     const char *cardinality_estimator;
     const char *injected_cardinalities_file;
+    const char *output_partial_plans_file;
     const char *pddl;
     int pddl_actions;
 

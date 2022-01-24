@@ -308,26 +308,6 @@ struct PlanTableLargeAndSparse : PlanTableBase<PlanTableLargeAndSparse>
     static size_type OnoLohmannCycle(size_type N) { return N*N - N + 1; }
 };
 
-/** This table represents all explored plans with their sub-plans, estimated size, cost, and further optional
- * properties. */
-#if 1
-struct PlanTable : PlanTableSmallOrDense
-{
-    PlanTable() = default;
-    explicit PlanTable(const QueryGraph &G)
-        : PlanTableSmallOrDense(G)
-    { }
-};
-#elif 0
-struct PlanTable : PlanTableLargeAndSparse
-{
-    PlanTable() = default;
-    explicit PlanTable(const QueryGraph &G)
-        : PlanTableLargeAndSparse(G)
-    { }
-};
-#endif
-
 
 /*----------------------------------------------------------------------------------------------------------------------
  * PlanTableBase friends

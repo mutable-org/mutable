@@ -63,10 +63,12 @@ ColumnStore::ColumnStore(const Table &table)
 
 ColumnStore::~ColumnStore() { }
 
+M_LCOV_EXCL_START
 void ColumnStore::dump(std::ostream &out) const
 {
     out << "ColumnStore for table \"" << table().name << "\": " << num_rows_ << '/' << capacity_
         << " rows, " << row_size_ << " bits per row" << std::endl;
 }
+M_LCOV_EXCL_STOP
 
 std::unique_ptr<Store> Store::CreateColumnStore(const Table &table) { return std::make_unique<ColumnStore>(table); }

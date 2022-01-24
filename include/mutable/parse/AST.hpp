@@ -76,11 +76,13 @@ struct Expr
 
     friend std::ostream & operator<<(std::ostream &out, const Expr &e);
 
+M_LCOV_EXCL_START
     friend std::string to_string(const Expr &e) {
         std::ostringstream oss;
         oss << e;
         return oss.str();
     }
+M_LCOV_EXCL_STOP
 
     void dump(std::ostream &out) const;
     void dump() const;

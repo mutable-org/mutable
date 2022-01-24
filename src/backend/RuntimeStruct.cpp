@@ -51,6 +51,7 @@ RuntimeStruct::~RuntimeStruct()
     delete[] offsets_;
 }
 
+M_LCOV_EXCL_START
 std::ostream & m::operator<<(std::ostream &out, const RuntimeStruct &PS) {
     out << "RuntimeStruct [";
     for (RuntimeStruct::index_type i = 0; i != PS.num_fields_; ++i) {
@@ -62,3 +63,4 @@ std::ostream & m::operator<<(std::ostream &out, const RuntimeStruct &PS) {
 
 void RuntimeStruct::dump(std::ostream &out) const { out << *this << std::endl; }
 void RuntimeStruct::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP

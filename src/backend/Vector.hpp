@@ -189,6 +189,7 @@ struct Vector
     /** Clears the vector, i.e. makes all tuples dead. */
     void clear() { mask_ = 0; }
 
+M_EXCLUDE_FROM_COVERAGE_BEGIN
     friend std::ostream & operator<<(std::ostream &out, const Vector &vec) {
         out << "Vector<" << N << "> with " << vec.size() << " rows:\n";
         for (std::size_t i = 0; i != vec.capacity(); ++i) {
@@ -204,6 +205,7 @@ struct Vector
 
     void dump(std::ostream &out) const { out << *this; out.flush(); }
     void dump() const { dump(std::cerr); }
+M_EXCLUDE_FROM_COVERAGE_END
 };
 
 template<std::size_t N>

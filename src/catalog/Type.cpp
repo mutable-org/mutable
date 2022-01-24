@@ -15,7 +15,9 @@ constexpr const char *Type::CATEGORY_TO_STR_[];
 
 Pool<Type> Type::types_;
 
+M_LCOV_EXCL_START
 void Type::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 const Numeric * m::arithmetic_join(const Numeric *lhs, const Numeric *rhs)
 {
@@ -255,6 +257,7 @@ const PrimitiveType * Numeric::as_vectorial() const
 
 /*===== Pretty Printing ==============================================================================================*/
 
+M_LCOV_EXCL_START
 void ErrorType::print(std::ostream &out) const { out << "[ErrorType]"; }
 
 void NoneType::print(std::ostream &out) const { out << "[none]"; }
@@ -299,9 +302,11 @@ void FnType::print(std::ostream &out) const
     }
     out << ") -> " << *return_type;
 }
+M_LCOV_EXCL_STOP
 
 /*===== Dump =========================================================================================================*/
 
+M_LCOV_EXCL_START
 void ErrorType::dump(std::ostream &out) const { out << "[ErrorType]" << std::endl; }
 
 void NoneType::dump(std::ostream &out) const { out << "[NoneType]" << std::endl; }
@@ -344,3 +349,4 @@ void FnType::dump(std::ostream &out) const
     }
     out << '}' << std::endl;
 }
+M_LCOV_EXCL_STOP

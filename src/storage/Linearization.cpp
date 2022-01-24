@@ -10,6 +10,7 @@ using namespace m;
 
 namespace {
 
+M_LCOV_EXCL_START
 /** Start a new line with proper indentation. */
 std::ostream & indent(std::ostream &out, unsigned indentation) {
     out << '\n' << std::string(4 * indentation - 4, ' ');
@@ -64,3 +65,4 @@ void Linearization::print(std::ostream &out, unsigned indentation) const {
     }
     --indentation;
 }
+M_LCOV_EXCL_STOP

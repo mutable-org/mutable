@@ -84,10 +84,12 @@ struct Type
     void dump() const;
 
     /** Print a textual representation of `Type` `t` to `out`. */
+M_LCOV_EXCL_START
     friend std::ostream & operator<<(std::ostream &out, const Type &t) {
         t.print(out);
         return out;
     }
+M_LCOV_EXCL_STOP
 
     /*----- Type factory methods -------------------------------------------------------------------------------------*/
     /** Returns a `ErrorType`. */

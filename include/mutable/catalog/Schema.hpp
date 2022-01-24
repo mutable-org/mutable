@@ -48,11 +48,13 @@ struct Schema
         }
         bool operator!=(Identifier other) const { return not operator==(other); }
 
+M_LCOV_EXCL_START
         friend std::ostream & operator<<(std::ostream &out, Identifier id) {
             if (id.prefix)
                 out << id.prefix << '.';
             return out << id.name;
         }
+M_LCOV_EXCL_STOP
     };
 
     struct entry_type
@@ -141,6 +143,7 @@ struct Schema
         return *this;
     }
 
+M_LCOV_EXCL_START
     friend std::ostream & operator<<(std::ostream &out, const Schema &schema) {
         out << "{[";
         for (auto it = schema.begin(), end = schema.end(); it != end; ++it) {
@@ -149,6 +152,7 @@ struct Schema
         }
         return out << " ]}";
     }
+M_LCOV_EXCL_STOP
 
     void dump(std::ostream &out) const;
     void dump() const;
@@ -219,9 +223,11 @@ struct Attribute
     bool operator==(const Attribute &other) const { return &this->table == &other.table and this->id == other.id; }
     bool operator!=(const Attribute &other) const { return not operator==(other); }
 
+M_LCOV_EXCL_START
     friend std::ostream & operator<<(std::ostream &out, const Attribute &attr) {
         return out << '`' << attr.name << "` " << *attr.type;
     }
+M_LCOV_EXCL_STOP
 
     void dump(std::ostream &out) const;
     void dump() const;

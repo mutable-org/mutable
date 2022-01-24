@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <mutable/util/macro.hpp>
 
 
 namespace m {
@@ -43,6 +44,7 @@ inline char const * get_name(const TokenType tt)
     }
 }
 
+M_LCOV_EXCL_START
 inline std::ostream & operator<<(std::ostream &os, const TokenType tt)
 {
     switch (tt) {
@@ -60,5 +62,6 @@ inline std::string to_string(const TokenType tt)
 #undef M_TOKENTYPE
     }
 }
+M_LCOV_EXCL_STOP
 
 }

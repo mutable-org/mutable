@@ -27,6 +27,7 @@ double CardinalityEstimator::predict_number_distinct_values(const DataModel&) co
     throw data_model_exception("predicting the number of distinct values is not supported by this data model.");
 };
 
+M_LCOV_EXCL_START
 void CardinalityEstimator::dump(std::ostream &out) const
 {
     print(out);
@@ -34,6 +35,7 @@ void CardinalityEstimator::dump(std::ostream &out) const
 }
 
 void CardinalityEstimator::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 const std::unordered_map<std::string, CardinalityEstimator::kind_t> CardinalityEstimator::STR_TO_KIND = {
 #define M_CARDINALITY_ESTIMATOR(NAME, _) { #NAME,  CardinalityEstimator::CE_ ## NAME },
@@ -145,10 +147,12 @@ std::size_t CartesianProductEstimator::predict_cardinality(const DataModel &data
     return as<const CartesianProductDataModel>(data).size;
 }
 
+M_LCOV_EXCL_START
 void CartesianProductEstimator::print(std::ostream &out) const
 {
     out << "CartesianProductEstimator - returns size of the Cartesian product of the given subproblems";
 }
+M_LCOV_EXCL_STOP
 
 std::unique_ptr<CardinalityEstimator>
 CardinalityEstimator::CreateCartesianProductEstimator(const char*)
@@ -368,6 +372,7 @@ std::size_t InjectionCardinalityEstimator::predict_cardinality(const DataModel &
     return as<const InjectionCardinalityDataModel>(data).size_;
 }
 
+M_LCOV_EXCL_START
 void InjectionCardinalityEstimator::print(std::ostream &out) const
 {
     constexpr uint32_t max_rows_printed = 100;     /// Number of rows of the cardinality_table printed
@@ -386,6 +391,7 @@ void InjectionCardinalityEstimator::print(std::ostream &out) const
         counter++;
     }
 }
+M_LCOV_EXCL_STOP
 
 const char * InjectionCardinalityEstimator::make_identifier(const QueryGraph &G, const Subproblem S) const
 {

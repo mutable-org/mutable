@@ -103,12 +103,14 @@ void Memory::map(std::size_t size, std::size_t offset_src, const AddressSpace &v
         throw std::runtime_error("MAP_FIXED failed");
 }
 
+M_LCOV_EXCL_START
 void Memory::dump(std::ostream &out) const
 {
     out << "Memory at virtual address " << addr() << " of size " << size() << " bytes mapped to offset " << offset()
         << " of file descriptor " << allocator().fd() << std::endl;
 }
 void Memory::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 
 /*======================================================================================================================

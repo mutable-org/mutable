@@ -6,6 +6,7 @@
 #include <cmath>
 #include <functional>
 #include <iostream>
+#include <mutable/util/macro.hpp>
 #include <stdexcept>
 #include <tuple>
 #include <type_traits>
@@ -35,12 +36,14 @@ struct Space
     std::vector<value_type> sequence() const { return CDERIVED.sequence(); }
 #undef CDERIVED
 
+M_LCOV_EXCL_START
     friend std::ostream & operator<<(std::ostream &out, const Space &S) {
         return out << static_cast<const derived_type&>(S);
     }
 
     void dump(std::ostream &out) const { out << *this << std::endl; }
     void dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 };
 
 template<typename T>
@@ -118,6 +121,7 @@ struct LinearSpace : Space<T, LinearSpace>
         return vec;
     }
 
+M_LCOV_EXCL_START
     friend std::ostream & operator<<(std::ostream &out, const LinearSpace &S) {
         return out << "linear space from " << S.lo() << " to " << S.hi() << " with " << S.num_steps() << " steps of "
                    << S.step();
@@ -125,6 +129,7 @@ struct LinearSpace : Space<T, LinearSpace>
 
     void dump(std::ostream &out) const { out << *this << std::endl; }
     void dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 };
 
 template<typename... Spaces>
@@ -150,6 +155,7 @@ struct GridSearch
     void search(callback_type fn) const;
     void operator()(callback_type fn) const { search(fn); }
 
+M_LCOV_EXCL_START
     friend std::ostream & operator<<(std::ostream &out, const GridSearch &GS) {
         out << "grid search with";
 
@@ -162,6 +168,7 @@ struct GridSearch
 
     void dump(std::ostream &out) const { out << *this << std::endl; }
     void dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
     private:
     template<std::size_t... I>

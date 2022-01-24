@@ -14,7 +14,9 @@ using namespace m;
  * WasmTemporary
  *====================================================================================================================*/
 
+M_LCOV_EXCL_START
 void WasmTemporary::dump() const { if (ref_) BinaryenExpressionPrint(ref_); }
+M_LCOV_EXCL_STOP
 
 
 /*======================================================================================================================
@@ -355,6 +357,7 @@ WasmTemporary WasmEnvironment::compile(BlockBuilder &block, const cnf::CNF &cnf)
     return wasm_cnf;
 }
 
+M_LCOV_EXCL_START
 void WasmEnvironment::dump(std::ostream &out) const
 {
     out << "WasmEnvironment in function " << fn().name() << "\n` entries: { ";
@@ -365,6 +368,7 @@ void WasmEnvironment::dump(std::ostream &out) const
     out << " }" << std::endl;
 }
 void WasmEnvironment::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 void WasmEnvironment::operator()(const Designator &e)
 {
@@ -612,6 +616,7 @@ void WasmStruct::store(FunctionBuilder &fn, BlockBuilder &block, WasmTemporary p
     }
 }
 
+M_LCOV_EXCL_START
 void WasmStruct::dump(std::ostream &out) const
 {
     out << "WasmStruct of schema " << schema << " and size " << size_in_bits() << " bits";
@@ -630,12 +635,14 @@ void WasmStruct::dump(std::ostream &out) const
     out << std::endl;
 }
 void WasmStruct::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 
 /*======================================================================================================================
  * BlockBuilder
  *====================================================================================================================*/
 
+M_LCOV_EXCL_START
 void BlockBuilder::dump(std::ostream &out) const
 {
     out << "block \"" << name() << "\"";
@@ -646,18 +653,21 @@ void BlockBuilder::dump(std::ostream &out) const
     out << std::endl;
 }
 void BlockBuilder::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 
 /*======================================================================================================================
  * FunctionBuilder
  *====================================================================================================================*/
 
+M_LCOV_EXCL_START
 void FunctionBuilder::dump(std::ostream &out) const
 {
     out << "function \"" << name() << "\"";
     block().dump(out);
 }
 void FunctionBuilder::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 
 /*======================================================================================================================

@@ -72,6 +72,7 @@ void RowStore::compute_offsets()
     delete[] attrs;
 }
 
+M_LCOV_EXCL_START
 void RowStore::dump(std::ostream &out) const
 {
     out << "RowStore at " << data_.addr() << " for table \"" << table().name << "\": " << num_rows_ << '/' << capacity_
@@ -82,5 +83,6 @@ void RowStore::dump(std::ostream &out) const
     }
     out << ']' << std::endl;
 }
+M_LCOV_EXCL_STOP
 
 std::unique_ptr<Store> Store::CreateRowStore(const Table &table) { return std::make_unique<RowStore>(table); }

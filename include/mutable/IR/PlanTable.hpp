@@ -131,6 +131,7 @@ struct PlanTableBase : crtp<Actual, PlanTableBase>
     /** Resets the costs for all entries in the table. */
     void reset_costs() { actual().reset_costs(); }
 
+M_LCOV_EXCL_START
     friend std::ostream & operator<<(std::ostream &out, const PlanTableBase &PT);
 
     friend std::string to_string(const PlanTableBase &PT) {
@@ -141,6 +142,7 @@ struct PlanTableBase : crtp<Actual, PlanTableBase>
 
     void dump(std::ostream &out) const { actual().dump(out); }
     void dump() const { actual().dump(); }
+M_LCOV_EXCL_STOP
 };
 
 /** This table represents all explored plans with their sub-plans, estimated size, cost, and further optional
@@ -322,10 +324,12 @@ void swap(PlanTableBase<Actual> &first, PlanTableBase<Actual> &second)
     swap(static_cast<Actual&>(first), static_cast<Actual&>(second));
 }
 
+M_LCOV_EXCL_START
 template<typename Actual>
 std::ostream & operator<<(std::ostream &out, const PlanTableBase<Actual> &PT)
 {
     return out << static_cast<const Actual&>(PT);
 }
+M_LCOV_EXCL_STOP
 
 }

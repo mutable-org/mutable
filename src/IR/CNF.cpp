@@ -143,6 +143,7 @@ void CNF::to_sql(std::ostream &out) const
     }
 }
 
+M_LCOV_EXCL_START
 std::ostream & operator<<(std::ostream &out, const Predicate &pred)
 {
     if (pred.negative())
@@ -194,6 +195,7 @@ void CNF::dump(std::ostream &out) const
     out << *this << std::endl;
 }
 void CNF::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 
 /*======================================================================================================================

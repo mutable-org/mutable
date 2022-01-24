@@ -4,6 +4,7 @@
 using namespace m;
 
 
+M_LCOV_EXCL_START
 std::ostream & m::operator<<(std::ostream &out, const Timer::Measurement &M)
 {
     out << M.name;
@@ -24,3 +25,4 @@ void Timer::Measurement::dump() const { dump(std::cerr); }
 
 void Timer::dump(std::ostream &out) const { out << *this; out.flush(); }
 void Timer::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP

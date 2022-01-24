@@ -192,10 +192,12 @@ struct Linearization
         sequences_[idx] = reinterpret_cast<uintptr_t>(nullptr);
     }
 
+M_LCOV_EXCL_START
     friend std::ostream & operator<<(std::ostream &out, const Linearization &lin) {
         lin.print(out);
         return out;
     };
+M_LCOV_EXCL_STOP
 
     void dump() const;
     void dump(std::ostream &out) const;

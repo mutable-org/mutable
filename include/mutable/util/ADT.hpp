@@ -606,6 +606,7 @@ struct doubly_linked_list
     void reverse() { std::swap(head_, tail_); }
 
     /*----- Text -----------------------------------------------------------------------------------------------------*/
+M_LCOV_EXCL_START
     friend std::ostream & operator<<(std::ostream &out, const doubly_linked_list &L) {
         if (L.empty())
             return out << "+-+";
@@ -629,6 +630,7 @@ struct doubly_linked_list
 
     void dump(std::ostream &out) const { out << *this << std::endl; }
     void dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
     private:
     node_type * allocate_node() { return allocator_.template allocate<node_type>(); }

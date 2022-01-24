@@ -998,6 +998,7 @@ struct AIPlanningStateBase
         return oss.str();
     }
 
+M_LCOV_EXCL_START
     friend std::ostream & operator<<(std::ostream &out, const AIPlanningStateBase &S) {
         out << "g = " << S.g() << ", [";
         for (auto it = S.cbegin(); it != S.cend(); ++it) {
@@ -1009,6 +1010,7 @@ struct AIPlanningStateBase
 
     void dump(std::ostream &out) const { out << (Actual&)(*this) << std::endl; }
     void dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 };
 
 #ifdef WITH_STATE_COUNTERS
@@ -1302,6 +1304,7 @@ struct AIPlanningStateBottomUpOpt : AIPlanningStateBase<AIPlanningStateBottomUpO
     void for_each_successor(Callback &&callback, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                             const CostFunction &CF, const CardinalityEstimator &CE) const;
 
+M_LCOV_EXCL_START
     friend std::ostream & operator<<(std::ostream &out, const AIPlanningStateBottomUpOpt &S) {
         out << "g = " << S.g() << ", [";
         for (auto it = S.cbegin(); it != S.cend(); ++it) {
@@ -1315,6 +1318,7 @@ struct AIPlanningStateBottomUpOpt : AIPlanningStateBase<AIPlanningStateBottomUpO
         }
         return out << ']';
     }
+M_LCOV_EXCL_STOP
 };
 
 /** Erase the bit masked by `bit_mask` from `S` by moving all bits at positions higher than the masked bit down by one

@@ -43,6 +43,7 @@ double LinearModel::predict_target(const Eigen::RowVectorXd& feature_vector) con
     return concat_vector * coefficients_;
 }
 
+M_LCOV_EXCL_START
 std::ostream & m::operator<<(std::ostream &out, const LinearModel &linear_model)
 {
     out << "LinearModel ";
@@ -60,3 +61,4 @@ void LinearModel::dump(std::ostream &out) const
 }
 
 void LinearModel::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP

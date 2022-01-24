@@ -27,14 +27,17 @@ using namespace m;
  * Schema
  *====================================================================================================================*/
 
+M_LCOV_EXCL_START
 void Schema::dump(std::ostream &out) const { out << *this << std::endl; }
 void Schema::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 
 /*======================================================================================================================
  * Attribute
  *====================================================================================================================*/
 
+M_LCOV_EXCL_START
 void Attribute::dump(std::ostream &out) const
 {
     out << "Attribute `" << table.name << "`.`" << name << "`, "
@@ -44,6 +47,7 @@ void Attribute::dump(std::ostream &out) const
 }
 
 void Attribute::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 
 /*======================================================================================================================
@@ -58,6 +62,7 @@ Schema Table::schema() const
     return S;
 }
 
+M_LCOV_EXCL_START
 void Table::dump(std::ostream &out) const
 {
     out << "Table `" << name << '`';
@@ -67,6 +72,7 @@ void Table::dump(std::ostream &out) const
 }
 
 void Table::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 
 /*======================================================================================================================
@@ -76,11 +82,13 @@ void Table::dump() const { dump(std::cerr); }
 constexpr const char * Function::FNID_TO_STR_[];
 constexpr const char * Function::KIND_TO_STR_[];
 
+M_LCOV_EXCL_START
 void Function::dump(std::ostream &out) const
 {
     out << "Function{ name = \"" << name << "\", fnid = " << FNID_TO_STR_[fnid] << ", kind = " << KIND_TO_STR_[kind]
         << "}" << std::endl;
 }
+M_LCOV_EXCL_STOP
 
 
 /*======================================================================================================================

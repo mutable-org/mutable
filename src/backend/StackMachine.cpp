@@ -1477,6 +1477,7 @@ Stop:
     top_ = 0;
 }
 
+M_LCOV_EXCL_START
 void StackMachine::dump(std::ostream &out) const
 {
     out << "StackMachine\n    Context: [";
@@ -1552,3 +1553,4 @@ void StackMachine::dump(std::ostream &out) const
 }
 
 void StackMachine::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP

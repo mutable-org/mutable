@@ -375,6 +375,7 @@ struct RefCountingHashMap
 
     void shrink_to_fit() { resize(size()); }
 
+M_LCOV_EXCL_START
     friend std::ostream & operator<<(std::ostream &out, const RefCountingHashMap &map) {
         size_type log2 = log2_ceil(map.capacity());
         size_type log10 = size_type(std::ceil(double(log2) / 3.322));
@@ -391,6 +392,7 @@ struct RefCountingHashMap
 
     void dump(std::ostream &out) const { out << *this; out.flush(); }
     void dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
     private:
     static entry_type * allocate(size_type n, entry_type *hint = nullptr) {

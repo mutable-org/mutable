@@ -154,10 +154,12 @@ struct CardinalityEstimator : estimate_join_all_tag::base_type
      * other methods
      *================================================================================================================*/
 
+M_LCOV_EXCL_START
     friend std::ostream & operator<<(std::ostream &out, const CardinalityEstimator &CE) {
         CE.print(out);
         return out;
     }
+M_LCOV_EXCL_STOP
 
     void dump(std::ostream &out) const;
 

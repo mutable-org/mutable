@@ -484,6 +484,7 @@ exit:
     }
     bool operator!=(const AdjacencyMatrix &other) const { return not operator==(other); }
 
+M_LCOV_EXCL_START
     friend std::ostream & operator<<(std::ostream &out, const AdjacencyMatrix &M) {
         M.print_fixed_length(out, M.num_vertices_);
         return out;
@@ -506,6 +507,7 @@ exit:
 
     void dump(std::ostream &out) const;
     void dump() const;
+M_LCOV_EXCL_STOP
 };
 
 }

@@ -31,6 +31,7 @@ struct Position
     }
     bool operator!=(Position other) const { return not operator==(other); }
 
+M_LCOV_EXCL_START
     friend std::string to_string(const Position &pos) {
         std::ostringstream os;
         os << pos;
@@ -43,6 +44,7 @@ struct Position
 
     void dump(std::ostream &out) const { out << *this << std::endl; }
     void dump() const;
+M_LCOV_EXCL_STOP
 };
 
 }

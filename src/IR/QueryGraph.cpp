@@ -1647,6 +1647,7 @@ void QueryGraph::sql(std::ostream &out) const
     out << ';' << std::endl;
 }
 
+M_LCOV_EXCL_START
 void QueryGraph::dump(std::ostream &out) const
 {
     out << "QueryGraph {\n  sources:";
@@ -1734,6 +1735,7 @@ void QueryGraph::dump(std::ostream &out) const
     out << "\n}" << std::endl;
 }
 void QueryGraph::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 
 /*======================================================================================================================
@@ -1867,5 +1869,7 @@ AdjacencyMatrix AdjacencyMatrix::tree_directed_away_from(SmallBitset root)
     return directed_tree;
 }
 
+M_LCOV_EXCL_START
 void AdjacencyMatrix::dump(std::ostream &out) const { out << *this << std::endl; }
 void AdjacencyMatrix::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP

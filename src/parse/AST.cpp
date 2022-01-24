@@ -258,6 +258,7 @@ void Stmt::dot(std::ostream &out) const
  * dump()
  *====================================================================================================================*/
 
+M_LCOV_EXCL_START
 void Expr::dump(std::ostream &out) const
 {
     ASTDumper dumper(out);
@@ -281,6 +282,7 @@ void Stmt::dump(std::ostream &out) const
     out << std::endl;
 }
 void Stmt::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 
 /*======================================================================================================================

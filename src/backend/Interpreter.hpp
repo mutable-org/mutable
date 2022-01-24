@@ -144,6 +144,7 @@ struct Block
             t.clear();
     }
 
+M_LCOV_EXCL_START
     /** Print a textual representation of this `Block` to `out`. */
     friend std::ostream & operator<<(std::ostream &out, const Block<N> &block) {
         out << "Block<" << block.capacity() << "> with " << block.size() << " elements:\n";
@@ -164,6 +165,7 @@ struct Block
         out.flush();
     }
     void dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 };
 
 struct Interpreter;

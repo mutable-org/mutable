@@ -6,6 +6,7 @@ using namespace m;
 
 OperatorData::~OperatorData() { }
 
+M_LCOV_EXCL_START
 std::ostream & m::operator<<(std::ostream &out, const Operator &op) {
     std::vector<unsigned> depth({0}); // stack of indentation depths
     struct indent {
@@ -87,6 +88,7 @@ std::ostream & m::operator<<(std::ostream &out, const Operator &op) {
 
     return out;
 }
+M_LCOV_EXCL_STOP
 
 void Operator::dot(std::ostream &out) const
 {
@@ -193,8 +195,10 @@ void Operator::dot(std::ostream &out) const
     out << "}\n";
 }
 
+M_LCOV_EXCL_START
 void Operator::dump(std::ostream &out) const { out << *this << std::endl; }
 void Operator::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
     : projections_(projections)

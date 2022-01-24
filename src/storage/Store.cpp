@@ -24,7 +24,9 @@ std::unique_ptr<Store> Store::Create(Store::kind_t kind, const Table &table) {
     }
 }
 
+M_LCOV_EXCL_START
 void Store::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 
 /*======================================================================================================================

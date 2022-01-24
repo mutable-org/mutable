@@ -13,6 +13,7 @@ using namespace m;
   Value
  *====================================================================================================================*/
 
+M_LCOV_EXCL_START
 void Value::print(std::ostream &out, const Type &ty) const
 {
     visit(overloaded {
@@ -66,6 +67,7 @@ void Value::print(std::ostream &out, const Type &ty) const
 
 void Value::dump(std::ostream &out) const { out << *this << std::endl; }
 void Value::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 
 /*======================================================================================================================
@@ -133,6 +135,7 @@ Tuple Tuple::clone(const Schema &S) const
     return cpy;
 }
 
+M_LCOV_EXCL_START
 void Tuple::print(std::ostream &out, const Schema &schema) const
 {
     for (std::size_t i = 0; i != schema.num_entries(); ++i) {
@@ -146,3 +149,4 @@ void Tuple::print(std::ostream &out, const Schema &schema) const
 
 void Tuple::dump(std::ostream &out) const { out << *this << std::endl; }
 void Tuple::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP

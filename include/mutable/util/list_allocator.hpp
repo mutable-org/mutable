@@ -235,6 +235,7 @@ found_chunk:
 
     size_type num_chunks_available() const { return chunks_.size(); }
 
+M_LCOV_EXCL_START
     friend std::ostream & operator<<(std::ostream &out, const list_allocator &A) {
         out << "allocation size = " << A.min_allocation_size_
             << ", alignment = " << A.min_allocation_alignment_
@@ -253,6 +254,7 @@ found_chunk:
 
     void dump(std::ostream &out) const { out << *this << std::endl; }
     void dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
     private:
     /*==================================================================================================================

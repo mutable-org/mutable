@@ -950,5 +950,6 @@ std::vector<std::string> PDDLGenerator::generate_views(std::vector<std::string> 
 
 
 
-
+M_LCOV_EXCL_START
 void PDDLGenerator::dump() const { std::cout << "This is a PDDLGenerator"; }
+M_LCOV_EXCL_STOP

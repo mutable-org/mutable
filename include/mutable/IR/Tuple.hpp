@@ -124,6 +124,7 @@ struct Value
     explicit operator T*() const { return reinterpret_cast<T*>(as_p()); }
 
     /*----- Print ----------------------------------------------------------------------------------------------------*/
+M_LCOV_EXCL_START
     /** Print a hexdump of `val` to `out`. */
     friend std::ostream & operator<<(std::ostream &out, Value val) {
 #ifndef NDEBUG
@@ -144,6 +145,7 @@ struct Value
 #endif
         return out << std::dec;
     }
+M_LCOV_EXCL_STOP
 
     /** Interpret this `Value` as of `Type` `ty` and print a human-readable representation to `out`. */
     void print(std::ostream &out, const Type &ty) const;
@@ -272,6 +274,7 @@ struct Tuple
     /** Create a clone of this `Tuple` interpreted using the `Schema` `S`. */
     Tuple clone(const Schema &S) const;
 
+M_LCOV_EXCL_START
     friend std::ostream & operator<<(std::ostream &out, const Tuple &tup) {
 #ifndef NDEBUG
         out << "(";
@@ -289,6 +292,7 @@ struct Tuple
         return out;
 #endif
     }
+M_LCOV_EXCL_STOP
 
     bool operator==(const Tuple &other) const {
         if (this->null_mask_ != other.null_mask_) return false;

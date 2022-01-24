@@ -94,6 +94,7 @@ void PaxStore::compute_block_offsets()
     delete[] attrs;
 }
 
+M_LCOV_EXCL_START
 void PaxStore::dump(std::ostream &out) const
 {
     out << "PaxStore at " << data_.addr() << " for table \"" << table().name << "\": " << num_rows_ << '/' << capacity_
@@ -104,5 +105,6 @@ void PaxStore::dump(std::ostream &out) const
     }
     out << ']' << std::endl;
 }
+M_LCOV_EXCL_STOP
 
 std::unique_ptr<Store> Store::CreatePaxStore(const Table &table) { return std::make_unique<PaxStore>(table); }

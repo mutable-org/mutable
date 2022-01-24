@@ -22,6 +22,7 @@ std::pair<uint8_t*, std::size_t> WasmModule::binary() const
     return std::make_pair(reinterpret_cast<uint8_t*>(result.binary), result.binaryBytes);
 }
 
+M_LCOV_EXCL_START
 std::ostream & m::operator<<(std::ostream &out, const WasmModule &module)
 {
     auto result = BinaryenModuleAllocateAndWriteText(module.ref_);
@@ -43,6 +44,7 @@ void WasmModule::dump(std::ostream &out) const {
     free(buffer);
 }
 void WasmModule::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 
 /*======================================================================================================================

@@ -14,6 +14,7 @@ using namespace m;
  * PlanTableSmallOrDense
  *--------------------------------------------------------------------------------------------------------------------*/
 
+M_LCOV_EXCL_START
 std::ostream & m::operator<<(std::ostream &out, const PlanTableSmallOrDense &PT)
 {
     using std::setw;
@@ -66,12 +67,14 @@ std::ostream & m::operator<<(std::ostream &out, const PlanTableSmallOrDense &PT)
 
 void PlanTableSmallOrDense::dump(std::ostream &out) const { out << *this; out.flush(); }
 void PlanTableSmallOrDense::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 
 /*----------------------------------------------------------------------------------------------------------------------
  * PlanTableLargeAndSparse
  *--------------------------------------------------------------------------------------------------------------------*/
 
+M_LCOV_EXCL_START
 std::ostream & m::operator<<(std::ostream &out, const PlanTableLargeAndSparse &PT)
 {
     using std::setw;
@@ -134,3 +137,4 @@ std::ostream & m::operator<<(std::ostream &out, const PlanTableLargeAndSparse &P
 
 void PlanTableLargeAndSparse::dump(std::ostream &out) const { out << *this; out.flush(); }
 void PlanTableLargeAndSparse::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP

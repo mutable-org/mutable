@@ -167,15 +167,19 @@ struct PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
     }
 
     PlanTableSmallOrDense() = default;
-    explicit PlanTableSmallOrDense(const QueryGraph &G, allocator_type allocator = allocator_type())
+    explicit PlanTableSmallOrDense(std::size_t num_sources, allocator_type allocator = allocator_type())
         : allocator_(std::move(allocator))
-        , num_sources_(G.num_sources())
-        , table_(allocator_.template make_unique<PlanTableEntry[]>(1UL << num_sources()))
+        , num_sources_(num_sources)
+        , table_(allocator_.template make_unique<PlanTableEntry[]>(1UL << num_sources))
     {
         /*----- Initialize table. ------------------------------------------------------------------------------------*/
-        for (auto ptr = &table_[0], end = &table_[1UL << num_sources()]; ptr != end; ++ptr)
+        for (auto ptr = &table_[0], end = &table_[1UL << num_sources]; ptr != end; ++ptr)
             new (ptr) PlanTableEntry();
     }
+
+    explicit PlanTableSmallOrDense(const QueryGraph &G, allocator_type allocator = allocator_type())
+        : PlanTableSmallOrDense(G.num_sources(), std::move(allocator))
+    { }
 
     PlanTableSmallOrDense(const PlanTableSmallOrDense&) = delete;
     PlanTableSmallOrDense(PlanTableSmallOrDense &&other) : PlanTableSmallOrDense() { swap(*this, other); }

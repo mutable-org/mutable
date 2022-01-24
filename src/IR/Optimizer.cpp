@@ -140,32 +140,28 @@ Optimizer::optimize(const QueryGraph &G) const
              * Currently a simple heuristic based on the number of data sources.
              * TODO: Consider join edges too.  Eventually consider #CSGs. */
             if (G.num_sources() <= 15) {
-                // if (not Options::Get().quiet)
-                    // std::cout << "selecting plan table for small or dense query graphs\n";
-                return optimize_with_plantable<PlanTableSmallOrDense>(G);
+                auto res = optimize_with_plantable<PlanTableSmallOrDense>(G);
+                return { std::move(res.first), std::move(res.second.get_final()) };
             } else {
-                // if (not Options::Get().quiet)
-                //     std::cout << "selecting plan table for large and sparse query graphs\n";
-                return optimize_with_plantable<PlanTableLargeAndSparse>(G);
+                auto res = optimize_with_plantable<PlanTableLargeAndSparse>(G);
+                return { std::move(res.first), std::move(res.second.get_final()) };
             }
         }
 
         case Options::PT_SmallOrDense: {
-            // if (not Options::Get().quiet)
-            //     std::cout << "forcing plan table for small or dense query graphs\n";
-            return optimize_with_plantable<PlanTableSmallOrDense>(G);
+            auto res = optimize_with_plantable<PlanTableSmallOrDense>(G);
+            return { std::move(res.first), std::move(res.second.get_final()) };
         }
 
         case Options::PT_LargeAndSparse: {
-            // if (not Options::Get().quiet)
-            //     std::cout << "forcing plan table for large and sparse query graphs\n";
-            return optimize_with_plantable<PlanTableLargeAndSparse>(G);
+            auto res = optimize_with_plantable<PlanTableLargeAndSparse>(G);
+            return { std::move(res.first), std::move(res.second.get_final()) };
         }
     }
 }
 
 template<typename PlanTable>
-std::pair<std::unique_ptr<Producer>, PlanTableEntry>
+std::pair<std::unique_ptr<Producer>, PlanTable>
 Optimizer::optimize_with_plantable(const QueryGraph &G) const
 {
     PlanTable plan_table(G);
@@ -175,7 +171,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
     auto &CE = DB.cardinality_estimator();
 
     if (num_sources == 0)
-        return { std::make_unique<ProjectionOperator>(G.projections()), PlanTableEntry{} };
+        return { std::make_unique<ProjectionOperator>(G.projections()), std::move(plan_table) };
 
     /*----- Initialize plan table and compute plans for data sources. ------------------------------------------------*/
     Producer **source_plans = new Producer*[num_sources];
@@ -308,7 +304,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
 
     plan->minimize_schema();
     delete[] source_plans;
-    return { std::move(plan), std::move(plan_table.get_final()) };
+    return { std::move(plan), std::move(plan_table) };
 }
 
 template<typename PlanTable>

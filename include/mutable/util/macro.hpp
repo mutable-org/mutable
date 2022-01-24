@@ -64,6 +64,10 @@ namespace m {
 #define M_DEBUG
 #endif
 
+/*===== Define Coverage Exclusion Block ==============================================================================*/
+#define M_LCOV_EXCL_START /* M_LCOV_EXCL_START */
+#define M_LCOV_EXCL_STOP  /* M_LCOV_EXCL_STOP */
+
 /*======================================================================================================================
  * M_insist(COND [, MSG])
  *

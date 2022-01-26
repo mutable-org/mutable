@@ -9,6 +9,9 @@ SECONDS=0
 # Initialize Bash's PRNG engine
 RANDOM=42
 
+# timeout for single invocations
+TIMEOUT=15s
+
 BIN=build/release/bin/shell
 CSV=planner-benchmark.csv
 MIN_RELATIONS=10
@@ -107,7 +110,7 @@ do
                 unset COST
                 unset TIME
                 set +m;
-                timeout --signal=KILL 30s taskset -c 2 ${BIN} \
+                timeout --signal=KILL ${TIMEOUT} taskset -c 2 ${BIN} \
                     --quiet --dryrun --times \
                     ${PLANNER_CONFIG} \
                     --cardinality-estimator InjectionCardinalityEstimator \

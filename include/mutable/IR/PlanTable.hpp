@@ -251,9 +251,12 @@ struct PlanTableLargeAndSparse : PlanTableBase<PlanTableLargeAndSparse>
     }
 
     PlanTableLargeAndSparse() = default;
-    explicit PlanTableLargeAndSparse(const QueryGraph &G)
-        : num_sources_(G.num_sources())
+    explicit PlanTableLargeAndSparse(std::size_t num_sources)
+        : num_sources_(num_sources)
         , table_(OnoLohmannCycle(num_sources_))
+    { }
+    explicit PlanTableLargeAndSparse(const QueryGraph &G)
+        : PlanTableLargeAndSparse(G.num_sources())
     { }
 
     PlanTableLargeAndSparse(const PlanTableLargeAndSparse&) = delete;

@@ -261,21 +261,17 @@ void generate_uncorrelated_cardinalities(table_type &table, const m::QueryGraph 
 
     /* Roll result cardinality. */
     const std::size_t cardinality_of_result = args.min_cardinality + delta * selectivity_dist(g);
-    std::cerr << "expected result cardinality is " << cardinality_of_result << '\n';
 
     /*----- Compute combined selectivity. -----*/
     const double combined_selectivity = [&]() -> double {
         double cardinality_of_Cartesian_product = 1;
         for (auto it = All.begin(); it != All.end(); ++it)
             cardinality_of_Cartesian_product *= table[it.as_set()];
-        std::cerr << "Cartesian product is " << cardinality_of_Cartesian_product << '\n';
         const double x = cardinality_of_result / cardinality_of_Cartesian_product;
-        std::cerr << "combined selectivity has to be " << x << '\n';
         return x;
     }();
 
     const double avg_selectivity = std::pow(combined_selectivity, 1. / G.num_joins());
-    std::cerr << "expected average selectivity " << avg_selectivity << '\n';
 
     /*----- Generate selectivities for joins. -----*/
     std::vector<double> selectivities(G.num_joins());
@@ -302,12 +298,8 @@ void generate_uncorrelated_cardinalities(table_type &table, const m::QueryGraph 
             /*----- Draw selectivity between average and 1. -----*/
             selectivities[j] = avg_selectivity + (1. - avg_selectivity) * selectivity_dist(local_g);
         }
-        std::cerr << "> remaining " << remaining_selectivity << '\n'
-                  << "  minimum   " << min_selectivity << '\n'
-                  << "  taken     " << selectivities[j] << '\n';
         remaining_selectivity /= selectivities[j];
     }
-    std::cerr << "remaining selectivity " << remaining_selectivity << '\n';
     selectivities[0] = remaining_selectivity;
 
 

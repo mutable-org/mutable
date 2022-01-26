@@ -18,7 +18,7 @@ MIN_RELATIONS=10
 STEP_RELATIONS=1
 REPETITIONS_PER_NUM_RELATIONS=10
 
-MIN_CARDINALITY=100
+MIN_CARDINALITY=10
 MAX_CARDINALITY=10000
 
 # Associative array mapping topologies to their max. number of relations tested
@@ -32,6 +32,7 @@ declare -A TOPOLOGIES=(
 declare -A PLANNER_CONFIGS=(
     [DPccp]="--plan-enumerator DPccp"
     [DPsub]="--plan-enumerator DPsubOpt"
+    [IKKBZ]="--plan-enumerator IKKBZ"
     [A*-checkpoints]="--plan-enumerator AIPlanning --ai-state BottomUp --ai-heuristic checkpoints --ai-search AStar"
     [A*-checkpoints-opt]="--plan-enumerator AIPlanning --ai-state BottomUpOpt --ai-heuristic checkpoints --ai-search AStar"
     [beam-checkpoints]="--plan-enumerator AIPlanning --ai-state BottomUp --ai-heuristic checkpoints --ai-search beam_search"
@@ -84,6 +85,7 @@ do
             python3 querygen.py -t "${TOPOLOGY}" -n ${N}
             build/release/bin/cardinality_gen \
                 --seed "${SEED}" \
+                --uncorrelated \
                 --min "${MIN_CARDINALITY}" \
                 --max "${MAX_CARDINALITY}" \
                 "${NAME}.schema.sql" \
@@ -112,6 +114,7 @@ do
                 set +m;
                 timeout --signal=KILL ${TIMEOUT} taskset -c 2 ${BIN} \
                     --quiet --dryrun --times \
+                    --plan-table-las \
                     ${PLANNER_CONFIG} \
                     --cardinality-estimator InjectionCardinalityEstimator \
                     --use-cardinality-file "${NAME}.cardinalities.json" \

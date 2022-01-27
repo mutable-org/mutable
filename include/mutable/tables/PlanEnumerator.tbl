@@ -12,6 +12,7 @@ M_PLAN_ENUMERATOR( DPsub,                   "subset-based subproblem enumeration
 M_PLAN_ENUMERATOR( DPsubOpt,                "optimized DPsub: does not enumerate symmetric subproblems" )
 M_PLAN_ENUMERATOR( DPccp,                   "enumerates connected subgraph complement pairs" )
 M_PLAN_ENUMERATOR( IKKBZ,                   "greedy algorithm by IK/KBZ, ordering joins by rank" )
+M_PLAN_ENUMERATOR( LinearizedDP,            "DP with search space linearization based on IK/KBZ" )
 M_PLAN_ENUMERATOR( TDbasic,                 "basic top-down join enumeration using generate-and-test partitioning" )
 M_PLAN_ENUMERATOR( TDMinCutAGaT,            "top-down join enumeration using minimal graph cuts and advanced generate-and-test partitioning" )
 M_PLAN_ENUMERATOR( AIPlanning,              "using AI Planning for efficient search space pruning and plan enumeration" )

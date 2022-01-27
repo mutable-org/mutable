@@ -41,6 +41,7 @@ std::unique_ptr<PlanEnumerator> PlanEnumerator::Create(PlanEnumerator::kind_t ki
     }
 }
 
+
 /*======================================================================================================================
  * DPsize
  *====================================================================================================================*/
@@ -144,6 +145,7 @@ struct DPsizeOpt final : PlanEnumeratorCRTP<DPsizeOpt>
     }
 };
 
+
 /*======================================================================================================================
  * DPsizeSub
  *====================================================================================================================*/
@@ -179,6 +181,7 @@ struct DPsizeSub final : PlanEnumeratorCRTP<DPsizeSub>
     }
 };
 
+
 /*======================================================================================================================
  * DPsub
  *====================================================================================================================*/
@@ -212,6 +215,7 @@ struct DPsub final : PlanEnumeratorCRTP<DPsub>
         }
     }
 };
+
 
 /*======================================================================================================================
  * DPsubOpt
@@ -254,6 +258,7 @@ struct DPsubOpt final : PlanEnumeratorCRTP<DPsubOpt>
         }
     }
 };
+
 
 /*======================================================================================================================
  * DPccp
@@ -341,6 +346,7 @@ struct DPccp final : PlanEnumeratorCRTP<DPccp>
         }
     }
 };
+
 
 /*======================================================================================================================
  * IK/KBZ
@@ -506,6 +512,148 @@ struct IKKBZ final : PlanEnumeratorCRTP<IKKBZ>
     }
 };
 
+
+/*======================================================================================================================
+ * LinearizedDP
+ *====================================================================================================================*/
+
+struct LinearizedDP final : PlanEnumeratorCRTP<LinearizedDP>
+{
+    using base_type = PlanEnumeratorCRTP<LinearizedDP>;
+    using base_type::operator();
+
+    struct Sequence
+    {
+        private:
+        const std::vector<std::size_t> &linearization_;
+        ///> the index in the linearization of the first element of this sequence
+        std::size_t begin_;
+        ///> the index in the linearization one past the last element of this sequence
+        std::size_t end_;
+        ///> the subproblem formed by this sequence
+        Subproblem S_;
+
+        public:
+        Sequence(const std::vector<std::size_t> &linearization, std::size_t begin, std::size_t end)
+            : linearization_(linearization), begin_(begin), end_(end)
+        {
+            S_ = compute_subproblem_from_sequence(begin_, end_);
+        }
+
+        std::size_t length() const { return end_ - begin_; }
+        Subproblem subproblem() const { return S_; }
+        /** Returns the index in linearization of the first element of this sequence. */
+        std::size_t first_index() const { return begin_; }
+        /** Returns the index in linearization of the last element of this sequence. */
+        std::size_t last_index() const { return end_ - 1; }
+        std::size_t end() const { return end_; }
+
+        std::size_t first() const { return linearization_[first_index()]; }
+        std::size_t last() const { return linearization_[last_index()]; }
+
+        bool is_at_front() const { return begin_ == 0; }
+        bool is_at_back() const { return end_ == linearization_.size(); }
+
+        Subproblem compute_subproblem_from_sequence(std::size_t begin, std::size_t end) {
+            M_insist(begin < end);
+            M_insist(end <= linearization_.size());
+            Subproblem S;
+            while (begin != end)
+                S[linearization_[begin++]] = true;
+            return S;
+        }
+
+        void extend_at_front() {
+            M_insist(begin_ > 0);
+            --begin_;
+            S_[first()] = true;
+        }
+
+        void extend_at_back() {
+            M_insist(end_ < linearization_.size());
+            ++end_;
+            S_[last()] = true;
+        }
+
+        void shrink_at_front() {
+            M_insist(begin_ < end_);
+            S_[first()] = false;
+            ++begin_;
+        }
+
+        void shrink_at_back() {
+            M_insist(begin_ < end_);
+            S_[last()] = false;
+            --end_;
+        }
+
+        friend std::ostream & operator<<(std::ostream &out, const Sequence &seq) {
+            out << seq.first_index() << '-' << seq.last_index() << ": [";
+            for (std::size_t i = seq.first_index(); i <= seq.last_index(); ++i) {
+                if (i != seq.first_index()) out << ", ";
+                out << seq.linearization_[i];
+            }
+            return out << ']';
+        }
+
+        void dump(std::ostream &out) const { out << *this << std::endl; }
+        void dump() const { dump(std::cerr); }
+    };
+
+    template<typename PlanTable>
+    void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
+        if (G.num_sources() <= 1) return;
+
+        auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
+        const AdjacencyMatrix M(G);
+        const std::vector<std::size_t> linearization = IKKBZ{}.linearize(PT, G, M, CF, CE);
+        const std::size_t num_relations = G.num_sources();
+
+        Sequence seq(linearization, 0, 2);
+        bool moves_right = true;
+        for (;;) {
+            if (M.is_connected(seq.subproblem())){
+                /*----- Consider all dissections of `seq` into two sequences. -----*/
+                for (std::size_t mid = seq.first_index() + 1; mid <= seq.last_index(); ++mid) {
+                    const Subproblem left = seq.compute_subproblem_from_sequence(seq.first_index(), mid);
+                    const Subproblem right = seq.subproblem() - left;
+
+                    const bool is_left_connected = PT.has_plan(left);
+                    const bool is_right_connected = PT.has_plan(right);
+                    if (is_left_connected and is_right_connected) {
+                        cnf::CNF condition; // TODO use join condition
+                        const double cost = CF.calculate_join_cost(G, PT, CE, left, right, condition);
+                        PT.update(G, CE, left, right, cost);
+                    }
+                }
+            }
+
+            if (seq.length() == num_relations)
+                break;
+
+            /*----- Move and grow the sequence. -----*/
+            if (moves_right) {
+                if (seq.is_at_back()) [[unlikely]] {
+                    moves_right = false;
+                    seq.extend_at_front();
+                } else {
+                    seq.extend_at_back();
+                    seq.shrink_at_front();
+                }
+            } else {
+                if (seq.is_at_front()) [[unlikely]] {
+                    moves_right = true;
+                    seq.extend_at_back();
+                } else {
+                    seq.extend_at_front();
+                    seq.shrink_at_back();
+                }
+            }
+        }
+    }
+};
+
+
 /*======================================================================================================================
  * TDbasic
  *====================================================================================================================*/
@@ -553,6 +701,7 @@ struct TDbasic final : PlanEnumeratorCRTP<TDbasic>
         PlanGen(G, M, CF, CE, PT, Subproblem((1UL << n) - 1));
     }
 };
+
 
 /*======================================================================================================================
  * TDMinCutAGaT

@@ -21,10 +21,6 @@
 
 using Subproblem = m::SmallBitset;
 
-///> the highest allowed selectivity of a join
-constexpr double MAX_SELECTIVITY = .8;
-///> the maximum factor by which a join result can be larger than the largest input to the join
-constexpr std::size_t MAX_GROWTH_FACTOR = 10;
 
 /** A distribution of values in range *[0; 1]* that are skewed towards 0.  The `alpha` parameter affects the factor of
  * skewed-ness, with `alpha` = 1 causing a uniform distribution, `alpha` < 1 causing a skew towards 1, and `alpha` > 1
@@ -221,33 +217,41 @@ void generate_correlated_cardinalities(table_type &table, const m::QueryGraph &G
 {
     const Subproblem All((1UL << G.num_sources()) - 1UL);
     const m::AdjacencyMatrix M(G);
+    std::unordered_map<Subproblem, std::size_t, m::SubproblemHash> max_cardinalities;
 
-    auto update = [&table, &g](const Subproblem S1, const Subproblem S2) -> void {
-        std::size_t left  = table[S1];
-        std::size_t right = table[S2];
+    auto cardinality = [&](const Subproblem S) -> std::size_t {
+        auto table_it = table.find(S);
+        if (table_it != table.end()) [[likely]] {
+            return table_it->second;
+        } else {
+            auto it = max_cardinalities.find(S);
+            M_insist(it != max_cardinalities.end());
+            M_insist(it->second > args.min_cardinality);
+            skewed_distribution<double> selectivity_dist(args.alpha);
+            const std::size_t max_cardinality = std::min(it->second, args.max_cardinality * args.max_cardinality);
+            const std::size_t c = args.min_cardinality + (max_cardinality - args.min_cardinality) * selectivity_dist(g);
+            max_cardinalities.erase(it);
+            table.emplace_hint(table_it, S, c);
+            return c;
+        }
+    };
 
-        std::gamma_distribution<double> selectivity_dist(.15, 1.);
+    auto update = [&](const Subproblem S1, const Subproblem S2) -> void {
+        const std::size_t cardinality_S1 = cardinality(S1);
+        const std::size_t cardinality_S2 = cardinality(S2);
 
-        /*----- Compute selectivity ranges. -----*/
-        double max_selectivity = MAX_SELECTIVITY;
-        /* Selectivity must not exceed max growth factor. */
-        max_selectivity = std::min<double>(
-            max_selectivity,
-            MAX_GROWTH_FACTOR * double(std::max(left, right)) / (left * right)
-        );
-        /* Selectivity must not exceed maximum representable integer value. */
-        max_selectivity = std::min<double>(
-            max_selectivity,
-            double(std::numeric_limits<std::size_t>::max()) / left / right
-        );
-        const double selectivity_factor = 1. - 1. / (1. + selectivity_dist(g));
-        const double selectivity = max_selectivity * selectivity_factor;
+        auto [it, _] = max_cardinalities.try_emplace(S1|S2, std::numeric_limits<std::size_t>::max());
 
-        /* Make sure relations are never empty. */
-        table[S1 | S2] = std::max<std::size_t>(1UL, selectivity * left * right);
+        std::size_t res;
+        const bool overflowed = __builtin_umull_overflow(cardinality_S1, cardinality_S2, &res);
+        if (overflowed)
+            res = std::numeric_limits<std::size_t>::max();
+        it->second = res;
     };
 
     M.for_each_CSG_pair_undirected(All, update);
+    M_insist(max_cardinalities.size() == 1);
+    table[All] = max_cardinalities.at(All);
 }
 
 template<typename Generator>

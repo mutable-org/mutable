@@ -65,8 +65,9 @@ namespace m {
 #endif
 
 /*===== Define Coverage Exclusion Block ==============================================================================*/
-#define M_LCOV_EXCL_START /* M_LCOV_EXCL_START */
-#define M_LCOV_EXCL_STOP  /* M_LCOV_EXCL_STOP */
+#define M_LCOV_EXCL_START /* Start exclusion block */
+#define M_LCOV_EXCL_STOP  /* Stop exclusion block */
+#define M_LCOV_EXCL_LINE  /* Exclude line */
 
 /*======================================================================================================================
  * M_insist(COND [, MSG])

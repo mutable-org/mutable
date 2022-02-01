@@ -75,4 +75,40 @@ TEST_CASE("PaxStore", "[core][storage][paxstore]")
         store.append();
         REQUIRE(store.num_rows() == 2);
     }
+
+    SECTION("drop")
+    {
+        store.append();
+        store.append();
+        store.drop();
+        REQUIRE(store.num_rows() == 1);
+        store.drop();
+        REQUIRE(store.num_rows() == 0);
+    }
+}
+
+TEST_CASE("PaxStore sanity checks", "[core][storage][columnstore]")
+{
+    /* Construct a table definition. */
+    Table table("mytable");
+    table.push_back("char2048", Type::Get_Char(Type::TY_Vector, 2048)); // 2048 byte
+
+    constexpr uint32_t BLOCK_SIZE = 1UL << 13; // 8 KiB
+    PaxStore store(table, BLOCK_SIZE);
+    size_t num_not_byte_aligned = 0;
+    size_t row_size = 0;
+    for (auto &attr : table) {
+        row_size += attr.type->size();
+        if (attr.type->size() % 8) ++num_not_byte_aligned;
+    }
+    row_size += table.size(); // add size of NULL bitmap
+    std::size_t num_rows_per_block = (BLOCK_SIZE * 8 - num_not_byte_aligned * 7) / row_size;
+    std::size_t capacity = (PaxStore::ALLOCATION_SIZE / BLOCK_SIZE) * num_rows_per_block // entire blocks
+            + ((PaxStore::ALLOCATION_SIZE % BLOCK_SIZE) * 8) / row_size;  // last partial filled block
+
+    SECTION("append")
+    {
+        while (store.num_rows() < capacity) store.append();
+        REQUIRE_THROWS_AS(store.append(), std::logic_error);
+    }
 }

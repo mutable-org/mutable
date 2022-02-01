@@ -59,4 +59,30 @@ TEST_CASE("ColumnStore", "[core][storage][columnstore]")
         store.append();
         REQUIRE(store.num_rows() == 2);
     }
+
+    SECTION("drop")
+    {
+        store.append();
+        store.append();
+        store.drop();
+        REQUIRE(store.num_rows() == 1);
+        store.drop();
+        REQUIRE(store.num_rows() == 0);
+    }
+}
+
+TEST_CASE("ColumnStore sanity checks", "[core][storage][columnstore]")
+{
+    /* Construct a table definition. */
+    Table table("mytable");
+    table.push_back("char2048", Type::Get_Char(Type::TY_Vector, 2048)); // 2048 byte
+
+    ColumnStore store(table);
+
+    SECTION("append")
+    {
+        std::size_t capacity = ColumnStore::ALLOCATION_SIZE / 2048;
+        while (store.num_rows() < capacity) store.append();
+        REQUIRE_THROWS_AS(store.append(), std::logic_error);
+    }
 }

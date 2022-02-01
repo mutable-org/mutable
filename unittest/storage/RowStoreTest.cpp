@@ -70,4 +70,40 @@ TEST_CASE("RowStore", "[core][storage][rowstore]")
         store.append();
         REQUIRE(store.num_rows() == 2);
     }
+
+    SECTION("drop")
+    {
+        store.append();
+        store.append();
+        store.drop();
+        REQUIRE(store.num_rows() == 1);
+        store.drop();
+        REQUIRE(store.num_rows() == 0);
+    }
+}
+
+TEST_CASE("RowStore sanity checks", "[core][storage][columnstore]")
+{
+    /* Construct a table definition. */
+    Table table("mytable");
+    table.push_back("char2048", Type::Get_Char(Type::TY_Vector, 2048)); // 2048 byte
+
+    RowStore store(table);
+
+    std::size_t row_size = 0;
+    uint32_t alignment = 8;
+    for (auto &attr : table) {
+        row_size += attr.type->size();
+        alignment = std::max(alignment, attr.type->alignment());
+    }
+    row_size += table.size(); // reserve space for the NULL bitmap
+    if (row_size % alignment)
+        row_size += (alignment - row_size % alignment); // the offset is padded to fulfill the alignment requirements
+    std::size_t capacity = RowStore::ALLOCATION_SIZE / (row_size / 8);
+
+    SECTION("append")
+    {
+        while (store.num_rows() < capacity) store.append();
+        REQUIRE_THROWS_AS(store.append(), std::logic_error);
+    }
 }

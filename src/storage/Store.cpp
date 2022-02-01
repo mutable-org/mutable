@@ -21,7 +21,7 @@ std::unique_ptr<Store> Store::Create(Store::kind_t kind, const Table &table) {
 #define M_STORE(NAME, _) case S_ ## NAME: return Create ## NAME(table);
 #include <mutable/tables/Store.tbl>
 #undef M_STORE
-    }
+    } M_LCOV_EXCL_LINE /* exclude default case from coverage. */
 }
 
 M_LCOV_EXCL_START

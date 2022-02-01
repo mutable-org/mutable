@@ -3,7 +3,7 @@
 trap "exit" INT
 
 # Ignore List: Remove data for files that should be ignored in the final coverage report
-IGNORE_LIST=('*QueryGraph2SQL.*' '*PDDL.*' '*TrainedCostFunction.*' '*CostModel.*')
+IGNORE_LIST=('*QueryGraph2SQL.*' '*PDDL.*' '*TrainedCostFunction.*' '*CostModel.*' '*src/storage/Linearization.cpp')
 
 # Make coverage build
 mkdir -p build/coverage

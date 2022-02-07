@@ -1050,10 +1050,6 @@ struct AIPlanningStateBottomUp : AIPlanningStateBase<AIPlanningStateBottomUp<All
         return std::lexicographical_compare(cbegin(), cend(), other.cbegin(), other.cend(), subproblem_lt);
     }
 
-    template<typename Callback, typename PlanTable>
-    void for_each_successor(Callback &&callback, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
-                            const CostFunction &CF, const CardinalityEstimator &CE) const;
-
 M_LCOV_EXCL_START
     friend std::ostream & operator<<(std::ostream &out, const AIPlanningStateBottomUp &S) {
         out << "g = " << S.g() << ", [";
@@ -1072,53 +1068,6 @@ M_LCOV_EXCL_STOP
 template<typename Allocator>
 typename AIPlanningStateBottomUp<Allocator>::allocator_type
 AIPlanningStateBottomUp<Allocator>::allocator_;
-
-template<typename Allocator>
-template<typename Callback, typename PlanTable>
-void AIPlanningStateBottomUp<Allocator>::for_each_successor(Callback &&callback,
-                                                            PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
-                                                            const CostFunction &CF,
-                                                            const CardinalityEstimator &CE) const
-{
-    base_type::INCREMENT_NUM_STATES_EXPANDED();
-
-    /* Enumerate all potential join pairs and check whether they are connected. */
-    for (auto outer_it = cbegin(), outer_end = std::prev(cend()); outer_it != outer_end; ++outer_it)
-    {
-        const auto neighbors = M.neighbors(*outer_it);
-        for (auto inner_it = std::next(outer_it); inner_it != cend(); ++inner_it) {
-            M_insist(uint64_t(*inner_it) > uint64_t(*outer_it), "subproblems must be sorted");
-            M_insist((*outer_it & *inner_it).empty(), "subproblems must not overlap");
-            if (neighbors & *inner_it) { // inner and outer are joinable.
-                /* Compute joined subproblem. */
-                const Subproblem joined = *outer_it | *inner_it;
-
-                /* Compute new subproblems after join */
-                auto subproblems = ALLOCATOR().template make_unique<Subproblem[]>(size() - 1);
-                Subproblem *ptr = subproblems.get();
-                for (auto it = cbegin(); it != cend(); ++it) {
-                    if (it == outer_it) continue; // skip outer
-                    else if (it == inner_it) new (ptr++) Subproblem(joined); // replace inner
-                    else new (ptr++) Subproblem(*it);
-                }
-                M_insist(std::is_sorted(subproblems.get(), subproblems.get() + size() - 1, subproblem_lt));
-
-                /* Compute total cost. */
-                cnf::CNF condition; // TODO use join condition
-                const double total_cost = CF.calculate_join_cost(G, PT, CE, *outer_it, *inner_it, condition);
-                PT.update(G, CE, *outer_it, *inner_it, total_cost);
-
-                /* Compute action cost. */
-                const double action_cost = total_cost - (PT[*outer_it].cost + PT[*inner_it].cost);
-
-                /* Create new AIPlanningState. */
-                AIPlanningStateBottomUp S(g() + action_cost, size() - 1, std::move(subproblems));
-                base_type::INCREMENT_NUM_STATES_GENERATED();
-                callback(std::move(S));
-            }
-        }
-    }
-}
 
 }
 
@@ -1141,9 +1090,59 @@ struct hash<AIPlanningStateBottomUp<Allocator>>
 
 }
 
+
 /*----------------------------------------------------------------------------------------------------------------------
  * Expansions
  *--------------------------------------------------------------------------------------------------------------------*/
+
+struct ExpandBottomUpComplete
+{
+    template<typename Allocator, typename Callback, typename PlanTable>
+    void operator()(const AIPlanningStateBottomUp<Allocator> &state, Callback &&callback, PlanTable &PT,
+                    const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
+                    const CardinalityEstimator &CE) const
+    {
+        state.INCREMENT_NUM_STATES_EXPANDED();
+
+        /* Enumerate all potential join pairs and check whether they are connected. */
+        for (auto outer_it = state.cbegin(), outer_end = std::prev(state.cend()); outer_it != outer_end; ++outer_it)
+        {
+            const auto neighbors = M.neighbors(*outer_it);
+            for (auto inner_it = std::next(outer_it); inner_it != state.cend(); ++inner_it) {
+                M_insist(uint64_t(*inner_it) > uint64_t(*outer_it), "subproblems must be sorted");
+                M_insist((*outer_it & *inner_it).empty(), "subproblems must not overlap");
+                if (neighbors & *inner_it) { // inner and outer are joinable.
+                    /* Compute joined subproblem. */
+                    const Subproblem joined = *outer_it | *inner_it;
+
+                    /* Compute new subproblems after join */
+                    auto subproblems = state.ALLOCATOR().template make_unique<Subproblem[]>(state.size() - 1);
+                    Subproblem *ptr = subproblems.get();
+                    for (auto it = state.cbegin(); it != state.cend(); ++it) {
+                        if (it == outer_it) continue; // skip outer
+                        else if (it == inner_it) new (ptr++) Subproblem(joined); // replace inner
+                        else new (ptr++) Subproblem(*it);
+                    }
+                    M_insist(std::is_sorted(subproblems.get(), subproblems.get() + state.size() - 1, subproblem_lt));
+
+                    /* Compute total cost. */
+                    cnf::CNF condition; // TODO use join condition
+                    const double total_cost = CF.calculate_join_cost(G, PT, CE, *outer_it, *inner_it, condition);
+                    PT.update(G, CE, *outer_it, *inner_it, total_cost);
+
+                    /* Compute action cost. */
+                    const double action_cost = total_cost - (PT[*outer_it].cost + PT[*inner_it].cost);
+
+                    /* Create new AIPlanningState. */
+                    AIPlanningStateBottomUp<Allocator> S(state.g() + action_cost, state.size() - 1,
+                                                         std::move(subproblems));
+                    state.INCREMENT_NUM_STATES_GENERATED();
+                    callback(std::move(S));
+                }
+            }
+        }
+    }
+};
 
 
 /*----------------------------------------------------------------------------------------------------------------------
@@ -1347,11 +1346,10 @@ struct checkpoints
     /** This map caches the estimated costs for searches already performed. */
     std::unordered_map<SearchSection, double, SearchSectionHash> cached_searches_;
 
-    struct Expand { };
     ai::AStar<
         internal_state_type,
         internal_hsum,
-        Expand,
+        ExpandBottomUpComplete,
         /*----- context ----- */
         PlanTable&,
         const QueryGraph&,
@@ -1540,7 +1538,7 @@ struct checkpoints
                 } else {
                     internal_hsum h(PT, G, M, CF, CE);
                     const double cost = S_.search(internal_state_type(cache_candidate.initial_state()), // clone
-                                                  h, Expand{}, PT, G, M, CF, CE);
+                                                  h, ExpandBottomUpComplete{}, PT, G, M, CF, CE);
                     S_.clear();
                     h_checkpoints += cost;
                     cached_searches_.emplace_hint(it, std::move(cache_candidate), cost);
@@ -1646,13 +1644,12 @@ void run_planner_config(PlanTable &PT, const QueryGraph &G, const AdjacencyMatri
     State::ALLOCATOR(malloc_allocator{});
     State::RESET_STATE_COUNTERS();
     State initial_state = State::CreateInitial(G, M);
-    struct Expand { };
     try {
         Heuristic h = Heuristic(PT, G, M, CF, CE);
         ai::solve<
             State,
             Heuristic,
-            Expand,
+            ExpandBottomUpComplete,
             Search,
             /*----- context -----*/
             PlanTable&,
@@ -1660,7 +1657,7 @@ void run_planner_config(PlanTable &PT, const QueryGraph &G, const AdjacencyMatri
             const AdjacencyMatrix&,
             const CostFunction&,
             const CardinalityEstimator&
-        >(std::move(initial_state), h, Expand{}, PT, G, M, CF, CE);
+        >(std::move(initial_state), h, ExpandBottomUpComplete{}, PT, G, M, CF, CE);
     } catch (std::logic_error err) {
         std::cerr << "search did not reach a goal state, fall back to DPccp" << std::endl;
         DPccp dpccp;

@@ -420,10 +420,12 @@ struct genericAStar
     };
 
     /** Expands the given `state` by *lazily* evaluating the heuristic function. */
-    void for_each_lazily(const state_type &state, heuristic_type &heuristic, callback_t &&callback, Context&... context) {
+    void for_each_lazily(const state_type &state, heuristic_type &heuristic, expand_type &expand, callback_t &&callback,
+                         Context&... context)
+    {
         /* Evaluate heuristic lazily by using heurisitc value of current state. */
         const double h_current_state = double(Weight::num) * heuristic(state, context...) / Weight::den;
-        state.for_each_successor([this, &callback, h_current_state](state_type successor) {
+        expand(state, [this, &callback, h_current_state](state_type successor) {
             if constexpr (use_beam_search and is_acyclic) {
                 /* We don't know yet, which states will be inside the beam.  We therefore must not add them to the seen
                  * states, yet. */
@@ -441,9 +443,11 @@ struct genericAStar
     };
 
     /** Expands the given `state` by *eagerly* evaluating the heuristic function. */
-    void for_each_eagerly(const state_type &state, heuristic_type &heuristic, callback_t &&callback, Context&... context) {
+    void for_each_eagerly(const state_type &state, heuristic_type &heuristic, expand_type &expand,
+                          callback_t &&callback, Context&... context)
+    {
         /* Evaluate heuristic eagerly. */
-        state.for_each_successor([this, callback=std::move(callback), &heuristic, &context...](state_type successor) {
+        expand(state, [this, callback=std::move(callback), &heuristic, &context...](state_type successor) {
             if constexpr (use_beam_search and is_acyclic) {
                 /* We don't know yet, which states will be inside the beam.  We therefore must not add them to the seen
                  * states, yet. */
@@ -463,24 +467,26 @@ struct genericAStar
     };
 
     /** Expands the given `state` according to `is_lazy`. */
-    void for_each(const state_type &state, heuristic_type &heuristic, callback_t &&callback, Context&... context) {
+    void for_each(const state_type &state, heuristic_type &heuristic, expand_type &expand, callback_t &&callback,
+                  Context&... context)
+    {
         if constexpr (is_lazy)
-            for_each_lazily(state, heuristic, std::move(callback), context...);
+            for_each_lazily(state, heuristic, expand, std::move(callback), context...);
         else
-            for_each_eagerly(state, heuristic, std::move(callback), context...);
+            for_each_eagerly(state, heuristic, expand, std::move(callback), context...);
     };
 
     /** Explores the given `state`. */
-    void explore_state(const state_type &state, heuristic_type &heuristic, Context&... context) {
+    void explore_state(const state_type &state, heuristic_type &heuristic, expand_type &expand, Context&... context) {
         if constexpr (use_dynamic_beam_sarch) {
             candidates.clear();
-            for_each(state, heuristic, [this](state_type successor, double weight) {
+            for_each(state, heuristic, expand, [this](state_type successor, double weight) {
                 candidates.emplace_back(std::move(successor), weight);
             }, context...);
             beam_dynamic();
         } else if constexpr (use_beam_search) {
             candidates.clear();
-            for_each(state, heuristic, [this](state_type successor, double weight) {
+            for_each(state, heuristic, expand, [this](state_type successor, double weight) {
                 beam(weighted_state(std::move(successor), weight));
             }, context...);
             for (auto &s : candidates) {
@@ -493,7 +499,7 @@ struct genericAStar
                 push(priority_queue, std::move(s));
             }
         } else {
-            for_each(state, heuristic, [this](state_type successor, double weight) {
+            for_each(state, heuristic, expand, [this](state_type successor, double weight) {
                 push(regular_queue, weighted_state{std::move(successor), weight});
             }, context...);
         }
@@ -536,7 +542,7 @@ double genericAStar<State, Heuristic, Expand, Weight, BeamWidth, Lazy, Acyclic, 
         if (top.state.is_goal())
             return top.state.g();
 
-        explore_state(top.state, heuristic, context...);
+        explore_state(top.state, heuristic, expand, context...);
     }
 
     throw std::logic_error("goal state unreachable from provided initial state");

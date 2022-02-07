@@ -22,44 +22,77 @@ namespace ai {
 static bool is_first_search = true;
 #endif
 
+
 /*======================================================================================================================
  * AI Type Traits
  *====================================================================================================================*/
 
+/*===== State ========================================================================================================*/
+
+/*----- double State::g() const --------------------------------------------------------------------------------------*/
+template<typename State>
+struct has_method_g : std::conjunction<
+    std::is_member_function_pointer<decltype(&State::g)>,
+    std::is_invocable_r<double, decltype(&State::g), const State&>
+> { };
+
+/*----- bool State::is_goal() const ----------------------------------------------------------------------------------*/
+template<typename State>
+struct has_method_is_goal : std::conjunction<
+    std::is_member_function_pointer<decltype(&State::is_goal)>,
+    std::is_invocable_r<bool, decltype(&State::is_goal), const State&>
+> { };
+
 /*----- State --------------------------------------------------------------------------------------------------------*/
-template<typename State, typename... Context>
+template<typename State>
 struct is_planner_state : std::conjunction<
     std::is_class<State>,
     std::is_class<typename State::base_type>,
     std::is_default_constructible<State>,
     std::is_move_constructible<State>,
     std::is_move_assignable<State>,
-    std::is_member_function_pointer<decltype(&State::is_goal)>,
-    std::is_invocable_r<bool, decltype(&State::is_goal), const State&>,
-    std::is_member_function_pointer<decltype(&State::g)>,
-    std::is_invocable_r<double, decltype(&State::g), const State&>
+    has_method_g<State>,
+    has_method_is_goal<State>
 > { };
-template<typename State, typename... Context>
-inline constexpr bool is_planner_state_v = is_planner_state<State, Context...>::value;
+template<typename State>
+inline constexpr bool is_planner_state_v = is_planner_state<State>::value;
+
+
+/*===== Heuristic ====================================================================================================*/
+
+/*----- double Heuristic::operator(const State&, Context...) const ---------------------------------------------------*/
+template<typename Heuristic, typename... Context>
+struct is_callable : std::conjunction<
+    std::is_member_function_pointer<decltype(&Heuristic::operator())>,
+    std::is_invocable_r<double, decltype(&Heuristic::operator()), Heuristic&, const typename Heuristic::state_type&, Context...>
+> { };
 
 /*----- Heuristic ----------------------------------------------------------------------------------------------------*/
 template<typename Heuristic, typename... Context>
 struct is_planner_heuristic : std::conjunction<
-    is_planner_state<typename Heuristic::state_type, Context...>,
-    std::is_member_function_pointer<decltype(&Heuristic::operator())>,
-    std::is_invocable_r<double, decltype(&Heuristic::operator()), Heuristic&, const typename Heuristic::state_type&, Context...>
+    is_planner_state<typename Heuristic::state_type>,
+    is_callable<Heuristic, Context...>
 > { };
 template<typename Heuristic, typename... Context>
 inline constexpr bool is_planner_heuristic_v = is_planner_heuristic<Heuristic, Context...>::value;
 
+
+/*===== Search Algorithm =============================================================================================*/
+
+/*----- void Search::search(State, Heuristic&, Context...) -----------------------------------------------------------*/
+template<typename Search, typename... Context>
+struct has_method_search : std::conjunction<
+    std::is_member_function_pointer<decltype(&Search::search)>,
+    std::is_invocable<decltype(&Search::search), Search&, typename Search::state_type, typename Search::heuristic_type&, Context...>
+> { };
+
 /*----- Search Algorithm ---------------------------------------------------------------------------------------------*/
 template<typename Search, typename... Context>
 struct is_planner_search : std::conjunction<
-    is_planner_state<typename Search::state_type, Context...>,
+    is_planner_state<typename Search::state_type>,
     is_planner_heuristic<typename Search::heuristic_type, Context...>,
     std::is_same<typename Search::state_type, typename Search::heuristic_type::state_type>,
-    std::is_member_function_pointer<decltype(&Search::search)>,
-    std::is_invocable<decltype(&Search::search), Search&, typename Search::state_type, typename Search::heuristic_type&, Context...>
+    has_method_search<Search, Context...>
 > { };
 template<typename Search, typename... Context>
 inline constexpr bool is_planner_search_v = is_planner_search<Search, Context...>::value;
@@ -78,7 +111,7 @@ template<
 >
 double solve(State initial_state, Heuristic &heuristic, Context&&... context)
 {
-    static_assert(is_planner_state_v<State, Context...>, "State is not a valid state for this Planner");
+    static_assert(is_planner_state_v<State>, "State is not a valid state for this Planner");
     static_assert(is_planner_heuristic_v<Heuristic, Context...> and std::is_same_v<State, typename Heuristic::state_type>,
                   "Heuristic is not a valid heuristic for this Planner");
     static_assert(is_planner_search_v<SearchAlgorithm<State, Heuristic, Context...>, Context...>,
@@ -102,7 +135,7 @@ struct StateTracker
     ///> use only the base type; we only need hashing and comparison
     using state_type = typename State::base_type;
 
-    static_assert(is_planner_state_v<State, Context...>, "State is not a valid planner state");
+    static_assert(is_planner_state_v<State>, "State is not a valid planner state");
 
     private:
     std::unordered_map<state_type, double> seen_states_;
@@ -184,7 +217,7 @@ template<
 >
 struct genericAStar
 {
-    static_assert(is_planner_state_v<State, Context...>, "State is not a valid state for this Planner");
+    static_assert(is_planner_state_v<State>, "State is not a valid state for this Planner");
     static_assert(is_planner_heuristic_v<Heuristic, Context...> and
                   std::is_same_v<State, typename Heuristic::state_type>,
                   "Heuristic is not a valid heuristic for this Planner");

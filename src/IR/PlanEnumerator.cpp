@@ -10,6 +10,7 @@
 #include <mutable/IR/AIPlanner.hpp>
 #include <mutable/IR/PlanTable.hpp>
 #include <mutable/IR/QueryGraph.hpp>
+#include <mutable/util/crtp.hpp>
 #include <mutable/util/fn.hpp>
 #include <mutable/util/list_allocator.hpp>
 #include <mutable/util/malloc_allocator.hpp>
@@ -785,14 +786,15 @@ struct TDMinCutAGaT final : PlanEnumeratorCRTP<TDMinCutAGaT>
  * AI Planning
  *====================================================================================================================*/
 
-namespace {
-
 /** A "less than" comparator for `Subproblem`s. */
-bool subproblem_lt(Subproblem left, Subproblem right) { return uint64_t(left) < uint64_t(right); };
+inline bool subproblem_lt(Subproblem left, Subproblem right) { return uint64_t(left) < uint64_t(right); };
+
 
 /*----------------------------------------------------------------------------------------------------------------------
  * States
  *--------------------------------------------------------------------------------------------------------------------*/
+
+namespace {
 
 // #define WITH_STATE_COUNTERS
 #if !defined(NDEBUG) && !defined(WITH_STATE_COUNTERS)
@@ -805,16 +807,13 @@ bool subproblem_lt(Subproblem left, Subproblem right) { return uint64_t(left) < 
  * of the actual problem within the state.  The problem is described as the sorted list of `Subproblem`s yet to be
  * joined.
  */
-template<typename Actual, typename Allocator>
-struct AIPlanningStateBase
+template<typename Actual>
+struct AIPlanningStateBase : crtp<Actual, AIPlanningStateBase>
 {
-    using actual_type = Actual;
+    using crtp<Actual, AIPlanningStateBase>::actual;
     using size_type = std::size_t;
 
-    using iterator = Subproblem*;
-    using const_iterator = const Subproblem*;
-    using allocator_type = Allocator;
-
+    /*----- State counters -------------------------------------------------------------------------------------------*/
 #ifdef WITH_STATE_COUNTERS
     struct state_counters_t
     {
@@ -853,7 +852,6 @@ struct AIPlanningStateBase
         return old_counters;
     }
 #else
-    public:
     static void RESET_STATE_COUNTERS() { /* nothing to be done */ };
     static unsigned NUM_STATES_GENERATED() { return 0; }
     static unsigned NUM_STATES_EXPANDED() { return 0; }
@@ -866,7 +864,55 @@ struct AIPlanningStateBase
     static void INCREMENT_NUM_STATES_DISPOSED() { /* nothing to be done */ }
 #endif
 
+    /*----- Getters --------------------------------------------------------------------------------------------------*/
+
+    /** Returns the number of `Subproblem`s in this state. */
+    std::size_t size() const { return actual().size(); }
+
+    /** Returns `true` iff this is a goal state. */
+    bool is_goal() const { return actual().is_goal(); }
+
+    /** Returns the cost to reach this state from the initial state. */
+    double g() const { return actual().g(); }
+
+    /*----- Comparison -----------------------------------------------------------------------------------------------*/
+
+    bool operator==(const AIPlanningStateBase &other) const { return actual().operator==(other.actual()); }
+    bool operator!=(const AIPlanningStateBase &other) const { return actual().operator!=(other.actual()); }
+    bool operator<(const AIPlanningStateBase &other) const { return actual().operator<(other.actual()); }
+
+    /** Returns `true` iff `this` and `other` have the exact same `Subproblem`s. */
+    /** Calls `callback` on every state reachable from this state by a single actions. */
+    template<typename Callback, typename PlanTable>
+    void for_each_successor(Callback &&callback, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                            const CostFunction &CF, const CardinalityEstimator &CE) const {
+        actual().for_each_successor(std::forward<Callback>(callback), PT, G, M, CF, CE);
+    }
+
+    /*----- Debugging ------------------------------------------------------------------------------------------------*/
+M_LCOV_EXCL_START
+    void dump(std::ostream &out) const { out << actual() << std::endl; }
+    void dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
+};
+
+#ifdef WITH_STATE_COUNTERS
+template<typename Actual>
+typename AIPlanningStateBase<Actual>::state_counters_t
+AIPlanningStateBase<Actual>::state_counters_;
+#endif
+
+template<typename Allocator>
+struct AIPlanningStateBottomUp : AIPlanningStateBase<AIPlanningStateBottomUp<Allocator>>
+{
+    using base_type = AIPlanningStateBase<AIPlanningStateBottomUp<Allocator>>;
+    using size_type = typename base_type::size_type;
+    using allocator_type = Allocator;
+    using iterator = Subproblem*;
+    using const_iterator = const Subproblem*;
+
     private:
+    ///> class-wide allocator, used by all instances
     static allocator_type allocator_;
 
     public:
@@ -885,35 +931,36 @@ struct AIPlanningStateBase
     ///> array of subproblems
     std::unique_ptr<Subproblem[]> subproblems_;
 
+    /*----- The Big Four and a Half, copy & swap idiom ---------------------------------------------------------------*/
     public:
-    friend void swap(AIPlanningStateBase &first, AIPlanningStateBase &second) {
+    friend void swap(AIPlanningStateBottomUp &first, AIPlanningStateBottomUp &second) {
         using std::swap;
         swap(first.g_,           second.g_);
         swap(first.size_,        second.size_);
         swap(first.subproblems_, second.subproblems_);
     }
 
-    AIPlanningStateBase() { M_insist(not subproblems_); }
+    AIPlanningStateBottomUp() = default;
 
     /** Creates a state with actual costs `g` and given `subproblems`. */
-    AIPlanningStateBase(double g, size_type size, std::unique_ptr<Subproblem[]> subproblems)
+    AIPlanningStateBottomUp(double g, size_type size, std::unique_ptr<Subproblem[]> subproblems)
         : g_(g)
         , size_(size)
         , subproblems_(std::move(subproblems))
     {
         M_insist(size == 0 or bool(subproblems_));
         M_insist(std::is_sorted(begin(), end(), subproblem_lt));
-        INCREMENT_NUM_STATES_CONSTRUCTED();
+        base_type::INCREMENT_NUM_STATES_CONSTRUCTED();
     }
 
     /** Creates an initial state with the given `subproblems`. */
-    AIPlanningStateBase(size_type size, std::unique_ptr<Subproblem[]> subproblems)
-        : AIPlanningStateBase(0, size, std::move(subproblems))
+    AIPlanningStateBottomUp(size_type size, std::unique_ptr<Subproblem[]> subproblems)
+        : AIPlanningStateBottomUp(0, size, std::move(subproblems))
     { }
 
     /** Creates a state with actual costs `g` and subproblems in range `[begin; end)`. */
     template<typename It>
-    AIPlanningStateBase(double g, It begin, It end)
+    AIPlanningStateBottomUp(double g, It begin, It end)
         : g_(g)
         , size_(std::distance(begin, end))
         , subproblems_(ALLOCATOR().template make_unique<Subproblem[]>(size_))
@@ -921,34 +968,71 @@ struct AIPlanningStateBase
         M_insist(begin != end);
         std::copy(begin, end, this->begin());
         M_insist(std::is_sorted(this->begin(), this->end(), subproblem_lt));
-        INCREMENT_NUM_STATES_CONSTRUCTED();
+        base_type::INCREMENT_NUM_STATES_CONSTRUCTED();
     }
 
-    ~AIPlanningStateBase() {
-        if (subproblems_) INCREMENT_NUM_STATES_DISPOSED();
-        ALLOCATOR().dispose(std::move(subproblems_), size_);
-    }
-
-    explicit AIPlanningStateBase(const AIPlanningStateBase &other)
+    /** Copy c'tor. */
+    explicit AIPlanningStateBottomUp(const AIPlanningStateBottomUp &other)
         : g_(other.g_)
         , size_(other.size_)
         , subproblems_(ALLOCATOR().template make_unique<Subproblem[]>(size_))
     {
-        INCREMENT_NUM_STATES_CONSTRUCTED();
+        base_type::INCREMENT_NUM_STATES_CONSTRUCTED();
         M_insist(bool(subproblems_));
         std::copy(other.begin(), other.end(), this->begin());
     }
 
-    AIPlanningStateBase(AIPlanningStateBase &&other) : AIPlanningStateBase() { swap(*this, other); }
-    AIPlanningStateBase & operator=(AIPlanningStateBase other) { swap(*this, other); return *this; }
+    /** Move c'tor. */
+    AIPlanningStateBottomUp(AIPlanningStateBottomUp &&other) : AIPlanningStateBottomUp() { swap(*this, other); }
+    /** Assignment. */
+    AIPlanningStateBottomUp & operator=(AIPlanningStateBottomUp other) { swap(*this, other); return *this; }
 
-    /** Compares two states lexicographically. */
-    bool operator<(const AIPlanningStateBase &other) const {
-        return std::lexicographical_compare(cbegin(), cend(), other.cbegin(), other.cend(), subproblem_lt);
+    /** D'tor. */
+    ~AIPlanningStateBottomUp() {
+        if (subproblems_) base_type::INCREMENT_NUM_STATES_DISPOSED();
+        ALLOCATOR().dispose(std::move(subproblems_), size_);
     }
 
+    /*----- Factory methods. -----------------------------------------------------------------------------------------*/
+
+    static AIPlanningStateBottomUp CreateInitial(const QueryGraph &G, const AdjacencyMatrix&) {
+        const size_type size = G.sources().size();
+        auto subproblems = ALLOCATOR().template make_unique<Subproblem[]>(size);
+        for (auto ds : G.sources())
+            new (&subproblems[ds->id()]) Subproblem(1UL << ds->id());
+        M_insist(std::is_sorted(subproblems.get(), subproblems.get() + size, subproblem_lt));
+        return AIPlanningStateBottomUp(size, std::move(subproblems));
+    }
+
+    static AIPlanningStateBottomUp CreateGoal(double g) { return AIPlanningStateBottomUp(g, 0, nullptr); }
+
+    template<typename It>
+    static AIPlanningStateBottomUp CreateFromSubproblems(const QueryGraph&, const AdjacencyMatrix&, double g,
+                                                         It begin, It end)
+    {
+        return AIPlanningStateBottomUp(g, begin, end);
+    }
+
+    /*----- Getters --------------------------------------------------------------------------------------------------*/
+
+    size_type size() const { return size_; }
+    bool is_goal() const { return size() <= 1; }
+    double g() const { return g_; }
+    Subproblem operator[](std::size_t idx) const { M_insist(idx < size_); return subproblems_[idx]; }
+
+    /*----- Iteration ------------------------------------------------------------------------------------------------*/
+
+    iterator begin() { return subproblems_.get(); };
+    iterator end() { return begin() + size(); }
+    const_iterator begin() const { return subproblems_.get(); };
+    const_iterator end() const { return begin() + size(); }
+    const_iterator cbegin() const { return begin(); };
+    const_iterator cend() const { return end(); }
+
+    /*----- Comparison -----------------------------------------------------------------------------------------------*/
+
     /** Returns `true` iff `this` and `other` have the exact same `Subproblem`s. */
-    bool operator==(const AIPlanningStateBase &other) const {
+    bool operator==(const AIPlanningStateBottomUp &other) const {
         if (this->size() != other.size()) return false;
         M_insist(this->size() == other.size());
         auto this_it = this->cbegin();
@@ -960,46 +1044,18 @@ struct AIPlanningStateBase
         return true;
     }
 
-    bool operator!=(const AIPlanningStateBase &other) const { return not operator==(other); }
+    bool operator!=(const AIPlanningStateBottomUp &other) const { return not operator==(other); }
 
-    /** Returns the number of `Subproblem`s in this state. */
-    std::size_t size() const { return size_; }
+    bool operator<(const AIPlanningStateBottomUp &other) const {
+        return std::lexicographical_compare(cbegin(), cend(), other.cbegin(), other.cend(), subproblem_lt);
+    }
 
-    Subproblem operator[](std::size_t idx) const { M_insist(idx < size_); return subproblems_[idx]; }
-
-    /** Returns the cost to reach this state from the initial state. */
-    double g() const { return g_; }
-
-    /** Returns `true` iff this is a goal state. */
-    bool is_goal() const { return static_cast<const actual_type*>(this)->is_goal(); }
-
-    // const std::vector<Subproblem> & subproblems() const { return subproblems_; }
-
-    iterator begin() { return subproblems_.get(); };
-    iterator end() { return begin() + size(); }
-    const_iterator begin() const { return subproblems_.get(); };
-    const_iterator end() const { return begin() + size(); }
-    const_iterator cbegin() const { return begin(); };
-    const_iterator cend() const { return end(); }
-
-    /** Calls `callback` on every state reachable from this state by a single actions. */
     template<typename Callback, typename PlanTable>
     void for_each_successor(Callback &&callback, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
-                            const CostFunction &CF, const CardinalityEstimator &CE) const {
-        static_cast<const actual_type*>(this)->for_each_successor(std::forward<Callback>(callback), PT, G, M, CF, CE);
-    }
-
-    /** Returns a unique identifier for this state. */
-    std::string id() const {
-        std::ostringstream oss;
-        oss << "state";
-        for (auto s : *this)
-            oss << '_' << s;
-        return oss.str();
-    }
+                            const CostFunction &CF, const CardinalityEstimator &CE) const;
 
 M_LCOV_EXCL_START
-    friend std::ostream & operator<<(std::ostream &out, const AIPlanningStateBase &S) {
+    friend std::ostream & operator<<(std::ostream &out, const AIPlanningStateBottomUp &S) {
         out << "g = " << S.g() << ", [";
         for (auto it = S.cbegin(); it != S.cend(); ++it) {
             if (it != S.cbegin()) out << ", ";
@@ -1008,107 +1064,14 @@ M_LCOV_EXCL_START
         return out << ']';
     }
 
-    void dump(std::ostream &out) const { out << (Actual&)(*this) << std::endl; }
+    void dump(std::ostream &out) const { out << *this << std::endl; }
     void dump() const { dump(std::cerr); }
 M_LCOV_EXCL_STOP
 };
 
-#ifdef WITH_STATE_COUNTERS
-template<typename Actual, typename Allocator>
-typename AIPlanningStateBase<Actual, Allocator>::state_counters_t
-AIPlanningStateBase<Actual, Allocator>::state_counters_;
-#endif
-
-template<typename Actual, typename Allocator>
-typename AIPlanningStateBase<Actual, Allocator>::allocator_type
-AIPlanningStateBase<Actual, Allocator>::allocator_;
-
-#define IMPORT_BASE(CLASS) \
-    using base_type = AIPlanningStateBase<CLASS<Allocator>, Allocator>; \
-    using size_type = typename base_type::size_type; \
-    using \
-        base_type::ALLOCATOR, \
-        base_type::size, \
-        base_type::g, \
-        base_type::begin, base_type::end, \
-        base_type::cbegin, base_type::cend, \
-        base_type::dump
-
-}
-
-namespace std {
-
-template<typename Actual, typename Allocator>
-struct hash<AIPlanningStateBase<Actual, Allocator>>
-{
-    uint64_t operator()(const AIPlanningStateBase<Actual, Allocator> &state) const {
-        /* Rolling hash with multiplier taken from [1] where the moduli is 2^64.
-         * [1] http://www.ams.org/mcom/1999-68-225/S0025-5718-99-00996-5/S0025-5718-99-00996-5.pdf */
-        uint64_t hash = 0;
-        for (Subproblem s : state) {
-            hash = hash ^ uint64_t(s);
-            hash = hash * 3935559000370003845UL + 0xcbf29ce484222325UL;
-        }
-        return hash;
-    }
-};
-
-}
-
-namespace {
-
 template<typename Allocator>
-struct AIPlanningStateBottomUp : AIPlanningStateBase<AIPlanningStateBottomUp<Allocator>, Allocator>
-{
-    IMPORT_BASE(AIPlanningStateBottomUp);
-
-    static AIPlanningStateBottomUp CreateInitial(const QueryGraph &G, const AdjacencyMatrix&) {
-        const size_type size = G.sources().size();
-        auto subproblems = ALLOCATOR().template make_unique<Subproblem[]>(size);
-        for (auto ds : G.sources())
-            new (&subproblems[ds->id()]) Subproblem(1UL << ds->id());
-        M_insist(std::is_sorted(subproblems.get(), subproblems.get() + size, subproblem_lt));
-        return AIPlanningStateBottomUp(size, std::move(subproblems));
-    }
-
-    static AIPlanningStateBottomUp CreateGoal(double g) {
-        return AIPlanningStateBottomUp(g, 0, nullptr);
-    }
-
-    template<typename It>
-    static AIPlanningStateBottomUp CreateFromSubproblems(const QueryGraph&, const AdjacencyMatrix&, double g,
-                                                         It begin, It end) {
-        return AIPlanningStateBottomUp(g, begin, end);
-    }
-
-    AIPlanningStateBottomUp() = default;
-
-    /** Creates a state with actual costs `g` and given `subproblems`. */
-    AIPlanningStateBottomUp(double g, size_type size, std::unique_ptr<Subproblem[]> subproblems)
-        : base_type(g, size, std::move(subproblems))
-    { }
-
-    /** Creates an initial state with the given `subproblems`. */
-    AIPlanningStateBottomUp(size_type size, std::unique_ptr<Subproblem[]> subproblems)
-        : AIPlanningStateBottomUp(0, size, std::move(subproblems))
-    { }
-
-    /** Creates a state with actual costs `g` and subproblems in range `[begin; end)`. */
-    template<typename It>
-    AIPlanningStateBottomUp(double g, It begin, It end)
-        : base_type(g, begin, end)
-    { }
-
-    explicit AIPlanningStateBottomUp(const AIPlanningStateBottomUp&) = default;
-    AIPlanningStateBottomUp(AIPlanningStateBottomUp&&) = default;
-    AIPlanningStateBottomUp & operator=(AIPlanningStateBottomUp&&) = default;
-
-    bool is_goal() const { return size() <= 1; }
-
-    template<typename Callback, typename PlanTable>
-    void for_each_successor(Callback &&callback, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
-                            const CostFunction &CF, const CardinalityEstimator &CE) const;
-};
+typename AIPlanningStateBottomUp<Allocator>::allocator_type
+AIPlanningStateBottomUp<Allocator>::allocator_;
 
 template<typename Allocator>
 template<typename Callback, typename PlanTable>
@@ -1165,17 +1128,29 @@ template<typename Allocator>
 struct hash<AIPlanningStateBottomUp<Allocator>>
 {
     uint64_t operator()(const AIPlanningStateBottomUp<Allocator> &state) const {
-        return std::hash<typename std::remove_reference_t<decltype(state)>::base_type>{}(state);
+        /* Rolling hash with multiplier taken from [1] where the moduli is 2^64.
+         * [1] http://www.ams.org/mcom/1999-68-225/S0025-5718-99-00996-5/S0025-5718-99-00996-5.pdf */
+        uint64_t hash = 0;
+        for (Subproblem s : state) {
+            hash = hash ^ uint64_t(s);
+            hash = hash * 3935559000370003845UL + 0xcbf29ce484222325UL;
+        }
+        return hash;
     }
 };
 
 }
 
-namespace heuristics {
+/*----------------------------------------------------------------------------------------------------------------------
+ * Expansions
+ *--------------------------------------------------------------------------------------------------------------------*/
+
 
 /*----------------------------------------------------------------------------------------------------------------------
  * Heuristics
  *--------------------------------------------------------------------------------------------------------------------*/
+
+namespace heuristics {
 
 /** This heuristic implements a perfect oracle, always returning the exact distance to the nearest goal state. */
 template<typename PlanTable, typename State>

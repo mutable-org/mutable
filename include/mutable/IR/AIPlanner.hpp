@@ -132,8 +132,8 @@ double solve(State initial_state, Heuristic &heuristic, Context&&... context)
 template<typename State, typename... Context>
 struct StateTracker
 {
-    ///> use only the base type; we only need hashing and comparison
-    using state_type = typename State::base_type;
+    ///> the type of a state in the search space
+    using state_type = State;
 
     static_assert(is_planner_state_v<State>, "State is not a valid planner state");
 

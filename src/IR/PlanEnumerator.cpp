@@ -1347,9 +1347,11 @@ struct checkpoints
     /** This map caches the estimated costs for searches already performed. */
     std::unordered_map<SearchSection, double, SearchSectionHash> cached_searches_;
 
+    struct Expand { };
     ai::AStar<
         internal_state_type,
         internal_hsum,
+        Expand,
         /*----- context ----- */
         PlanTable&,
         const QueryGraph&,
@@ -1538,7 +1540,7 @@ struct checkpoints
                 } else {
                     internal_hsum h(PT, G, M, CF, CE);
                     const double cost = S_.search(internal_state_type(cache_candidate.initial_state()), // clone
-                                                  h, PT, G, M, CF, CE);
+                                                  h, Expand{}, PT, G, M, CF, CE);
                     S_.clear();
                     h_checkpoints += cost;
                     cached_searches_.emplace_hint(it, std::move(cache_candidate), cost);
@@ -1612,30 +1614,30 @@ struct checkpoints
 
 }
 
-template<typename State, typename Heuristic, typename... Context>
-using AStar = ai::AStar<State, Heuristic, Context...>;
-template<typename State, typename Heuristic, typename... Context>
-using wAStar = ai::wAStar<std::ratio<2, 1>>::type<State, Heuristic, Context...>;
-template<typename State, typename Heuristic, typename... Context>
-using lazyAStar = ai::lazy_AStar<State, Heuristic, Context...>;
-template<typename State, typename Heuristic, typename... Context>
-using beam_search = ai::beam_search<2>::type<State, Heuristic, Context...>;
-template<typename State, typename Heuristic, typename... Context>
-using dynamic_beam_search = ai::beam_search<-1U>::type<State, Heuristic, Context...>;
-template<typename State, typename Heuristic, typename... Context>
-using lazy_beam_search = ai::lazy_beam_search<2>::type<State, Heuristic, Context...>;
-template<typename State, typename Heuristic, typename... Context>
-using lazy_dynamic_beam_search = ai::lazy_beam_search<-1U>::type<State, Heuristic, Context...>;
-template<typename State, typename Heuristic, typename... Context>
-using acyclic_beam_search = ai::acyclic_beam_search<2>::type<State, Heuristic, Context...>;
-template<typename State, typename Heuristic, typename... Context>
-using acyclic_dynamic_beam_search = ai::acyclic_beam_search<-1U>::type<State, Heuristic, Context...>;
+template<typename State, typename Heuristic, typename Expand, typename... Context>
+using AStar = ai::AStar<State, Heuristic, Expand, Context...>;
+template<typename State, typename Heuristic, typename Expand, typename... Context>
+using wAStar = ai::wAStar<std::ratio<2, 1>>::type<State, Heuristic, Expand, Context...>;
+template<typename State, typename Heuristic, typename Expand, typename... Context>
+using lazyAStar = ai::lazy_AStar<State, Heuristic, Expand, Context...>;
+template<typename State, typename Heuristic, typename Expand, typename... Context>
+using beam_search = ai::beam_search<2>::type<State, Heuristic, Expand, Context...>;
+template<typename State, typename Heuristic, typename Expand, typename... Context>
+using dynamic_beam_search = ai::beam_search<-1U>::type<State, Heuristic, Expand, Context...>;
+template<typename State, typename Heuristic, typename Expand, typename... Context>
+using lazy_beam_search = ai::lazy_beam_search<2>::type<State, Heuristic, Expand, Context...>;
+template<typename State, typename Heuristic, typename Expand, typename... Context>
+using lazy_dynamic_beam_search = ai::lazy_beam_search<-1U>::type<State, Heuristic, Expand, Context...>;
+template<typename State, typename Heuristic, typename Expand, typename... Context>
+using acyclic_beam_search = ai::acyclic_beam_search<2>::type<State, Heuristic, Expand, Context...>;
+template<typename State, typename Heuristic, typename Expand, typename... Context>
+using acyclic_dynamic_beam_search = ai::acyclic_beam_search<-1U>::type<State, Heuristic, Expand, Context...>;
 
 template<
     typename PlanTable,
     typename State,
     typename Heuristic,
-    template<typename, typename, typename...> typename Search
+    template<typename, typename, typename, typename...> typename Search
 >
 void run_planner_config(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
                         const CardinalityEstimator &CE)
@@ -1644,11 +1646,13 @@ void run_planner_config(PlanTable &PT, const QueryGraph &G, const AdjacencyMatri
     State::ALLOCATOR(malloc_allocator{});
     State::RESET_STATE_COUNTERS();
     State initial_state = State::CreateInitial(G, M);
+    struct Expand { };
     try {
         Heuristic h = Heuristic(PT, G, M, CF, CE);
         ai::solve<
             State,
             Heuristic,
+            Expand,
             Search,
             /*----- context -----*/
             PlanTable&,
@@ -1656,7 +1660,7 @@ void run_planner_config(PlanTable &PT, const QueryGraph &G, const AdjacencyMatri
             const AdjacencyMatrix&,
             const CostFunction&,
             const CardinalityEstimator&
-        >(std::move(initial_state), h, PT, G, M, CF, CE);
+        >(std::move(initial_state), h, Expand{}, PT, G, M, CF, CE);
     } catch (std::logic_error err) {
         std::cerr << "search did not reach a goal state, fall back to DPccp" << std::endl;
         DPccp dpccp;

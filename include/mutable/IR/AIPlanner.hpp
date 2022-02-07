@@ -45,7 +45,7 @@ struct has_method_is_goal : std::conjunction<
 
 /*----- State --------------------------------------------------------------------------------------------------------*/
 template<typename State>
-struct is_planner_state : std::conjunction<
+struct is_ai_state : std::conjunction<
     std::is_class<State>,
     std::is_class<typename State::base_type>,
     std::is_default_constructible<State>,
@@ -55,7 +55,7 @@ struct is_planner_state : std::conjunction<
     has_method_is_goal<State>
 > { };
 template<typename State>
-inline constexpr bool is_planner_state_v = is_planner_state<State>::value;
+inline constexpr bool is_ai_state_v = is_ai_state<State>::value;
 
 
 /*===== Heuristic ====================================================================================================*/
@@ -69,12 +69,12 @@ struct is_callable : std::conjunction<
 
 /*----- Heuristic ----------------------------------------------------------------------------------------------------*/
 template<typename Heuristic, typename... Context>
-struct is_planner_heuristic : std::conjunction<
-    is_planner_state<typename Heuristic::state_type>,
+struct is_ai_heuristic : std::conjunction<
+    is_ai_state<typename Heuristic::state_type>,
     is_callable<Heuristic, Context...>
 > { };
 template<typename Heuristic, typename... Context>
-inline constexpr bool is_planner_heuristic_v = is_planner_heuristic<Heuristic, Context...>::value;
+inline constexpr bool is_ai_heuristic_v = is_ai_heuristic<Heuristic, Context...>::value;
 
 
 /*===== Search Algorithm =============================================================================================*/
@@ -83,19 +83,20 @@ inline constexpr bool is_planner_heuristic_v = is_planner_heuristic<Heuristic, C
 template<typename Search, typename... Context>
 struct has_method_search : std::conjunction<
     std::is_member_function_pointer<decltype(&Search::search)>,
-    std::is_invocable<decltype(&Search::search), Search&, typename Search::state_type, typename Search::heuristic_type&, Context...>
+    std::is_invocable<decltype(&Search::search), Search&, typename Search::state_type, typename Search::heuristic_type&,
+                      typename Search::expand_type, Context...>
 > { };
 
 /*----- Search Algorithm ---------------------------------------------------------------------------------------------*/
 template<typename Search, typename... Context>
-struct is_planner_search : std::conjunction<
-    is_planner_state<typename Search::state_type>,
-    is_planner_heuristic<typename Search::heuristic_type, Context...>,
+struct is_ai_search : std::conjunction<
+    is_ai_state<typename Search::state_type>,
+    is_ai_heuristic<typename Search::heuristic_type, Context...>,
     std::is_same<typename Search::state_type, typename Search::heuristic_type::state_type>,
     has_method_search<Search, Context...>
 > { };
 template<typename Search, typename... Context>
-inline constexpr bool is_planner_search_v = is_planner_search<Search, Context...>::value;
+inline constexpr bool is_ai_search_v = is_ai_search<Search, Context...>::value;
 
 
 /*======================================================================================================================
@@ -106,20 +107,24 @@ inline constexpr bool is_planner_search_v = is_planner_search<Search, Context...
 template<
     typename State,
     typename Heuristic,
-    template<typename, typename, typename...> typename SearchAlgorithm,
+    typename Expand,
+    template</* State */ typename, /*Heuristic */ typename, /* Expand */ typename, /*Context */ typename...>
+        typename SearchAlgorithm,
     typename... Context
 >
-double solve(State initial_state, Heuristic &heuristic, Context&&... context)
+double solve(State initial_state, Heuristic &heuristic, Expand expand, Context&&... context)
 {
-    static_assert(is_planner_state_v<State>, "State is not a valid state for this Planner");
-    static_assert(is_planner_heuristic_v<Heuristic, Context...> and std::is_same_v<State, typename Heuristic::state_type>,
-                  "Heuristic is not a valid heuristic for this Planner");
-    static_assert(is_planner_search_v<SearchAlgorithm<State, Heuristic, Context...>, Context...>,
+    static_assert(is_ai_state_v<State>, "State is not a valid state for this Planner");
+    static_assert(is_ai_heuristic_v<Heuristic, Context...>, "Heuristic is not a valid heuristic");
+    static_assert(std::is_same_v<State, typename Heuristic::state_type>, "Heuristic is not applicable to State");
+
+    using search_algorithm = SearchAlgorithm<State, Heuristic, Expand, Context...>;
+    static_assert(is_ai_search_v<search_algorithm, Context...>,
                   "SearchAlgorithm is not a valid search algorithm for this Planner");
-    using search_algorithm = SearchAlgorithm<State, Heuristic, Context...>;
 
     search_algorithm S;
-    double final_cost = S.search(std::move(initial_state), heuristic, std::forward<Context>(context)...);
+    double final_cost = S.search(std::move(initial_state), heuristic, std::move(expand),
+                                 std::forward<Context>(context)...);
     return final_cost;
 }
 
@@ -135,7 +140,7 @@ struct StateTracker
     ///> the type of a state in the search space
     using state_type = State;
 
-    static_assert(is_planner_state_v<State>, "State is not a valid planner state");
+    static_assert(is_ai_state_v<State>, "State is not a valid planner state");
 
     private:
     std::unordered_map<state_type, double> seen_states_;
@@ -209,6 +214,7 @@ struct StateTracker
 template<
     typename State,
     typename Heuristic,
+    typename Expand,
     typename Weight,
     unsigned BeamWidth,
     bool Lazy,
@@ -217,15 +223,15 @@ template<
 >
 struct genericAStar
 {
-    static_assert(is_planner_state_v<State>, "State is not a valid state for this Planner");
-    static_assert(is_planner_heuristic_v<Heuristic, Context...> and
-                  std::is_same_v<State, typename Heuristic::state_type>,
-                  "Heuristic is not a valid heuristic for this Planner");
+    static_assert(is_ai_state_v<State>, "State is not a valid state for this Planner");
+    static_assert(is_ai_heuristic_v<Heuristic, Context...>, "Heuristic is not a valid heuristic");
+    static_assert(std::is_same_v<State, typename Heuristic::state_type>, "Heuristic is not applicable to State");
     static_assert(std::is_arithmetic_v<decltype(Weight::num)> and std::is_arithmetic_v<decltype(Weight::den)>,
                   "Weight must be specified as std::ratio<Num, Denom>");
 
     using state_type = State;
     using heuristic_type = Heuristic;
+    using expand_type = Expand;
     using weight = Weight;
 
     ///> The width of a beam used for *beam search*.  Set to 0 to disable beam search.
@@ -301,7 +307,7 @@ struct genericAStar
      *
      * @return the cost of the computed path from `initial_state` to a goal state
      */
-    double search(state_type initial_state, heuristic_type &heuristic, Context&... context);
+    double search(state_type initial_state, heuristic_type &heuristic, expand_type expand, Context&... context);
 
     /** Resets the state of the search. */
     void clear() {
@@ -497,15 +503,17 @@ struct genericAStar
 template<
     typename State,
     typename Heuristic,
+    typename Expand,
     typename Weight,
     unsigned BeamWidth,
     bool Lazy,
     bool Acyclic,
     typename... Context
 >
-double genericAStar<State, Heuristic, Weight, BeamWidth, Lazy, Acyclic, Context...>::search(
+double genericAStar<State, Heuristic, Expand, Weight, BeamWidth, Lazy, Acyclic, Context...>::search(
     state_type initial_state,
     heuristic_type &heuristic,
+    expand_type expand,
     Context&... context
 ) {
     /* Initialize queue with initial state. */
@@ -537,16 +545,18 @@ double genericAStar<State, Heuristic, Weight, BeamWidth, Lazy, Acyclic, Context.
 template<
     typename State,
     typename Heuristic,
+    typename Expand,
     typename... Context
 >
-using AStar = genericAStar<State, Heuristic, std::ratio<1, 1>, 0, false, false, Context...>;
+using AStar = genericAStar<State, Heuristic, Expand, std::ratio<1, 1>, 0, false, false, Context...>;
 
 template<
     typename State,
     typename Heuristic,
+    typename Expand,
     typename... Context
 >
-using lazy_AStar = genericAStar<State, Heuristic, std::ratio<1, 1>, 0, true, false, Context...>;
+using lazy_AStar = genericAStar<State, Heuristic, Expand, std::ratio<1, 1>, 0, true, false, Context...>;
 
 template<typename Weight>
 struct wAStar
@@ -554,9 +564,10 @@ struct wAStar
     template<
         typename State,
         typename Heuristic,
+        typename Expand,
         typename... Context
     >
-    using type = genericAStar<State, Heuristic, Weight, 0, false, false, Context...>;
+    using type = genericAStar<State, Heuristic, Expand, Weight, 0, false, false, Context...>;
 };
 
 template<typename Weight>
@@ -565,9 +576,10 @@ struct lazy_wAStar
     template<
         typename State,
         typename Heuristic,
+        typename Expand,
         typename... Context
     >
-    using type = genericAStar<State, Heuristic, Weight, 0, true, false, Context...>;
+    using type = genericAStar<State, Heuristic, Expand, Weight, 0, true, false, Context...>;
 };
 
 template<unsigned BeamWidth>
@@ -576,9 +588,10 @@ struct beam_search
     template<
         typename State,
         typename Heuristic,
+        typename Expand,
         typename... Context
     >
-    using type = genericAStar<State, Heuristic, std::ratio<1, 1>, BeamWidth, false, false, Context...>;
+    using type = genericAStar<State, Heuristic, Expand, std::ratio<1, 1>, BeamWidth, false, false, Context...>;
 };
 
 template<unsigned BeamWidth>
@@ -587,9 +600,10 @@ struct lazy_beam_search
     template<
         typename State,
         typename Heuristic,
+        typename Expand,
         typename... Context
     >
-    using type = genericAStar<State, Heuristic, std::ratio<1, 1>, BeamWidth, true, false, Context...>;
+    using type = genericAStar<State, Heuristic, Expand, std::ratio<1, 1>, BeamWidth, true, false, Context...>;
 };
 
 template<unsigned BeamWidth>
@@ -598,9 +612,10 @@ struct acyclic_beam_search
     template<
         typename State,
         typename Heuristic,
+        typename Expand,
         typename... Context
     >
-    using type = genericAStar<State, Heuristic, std::ratio<1, 1>, BeamWidth, false, true, Context...>;
+    using type = genericAStar<State, Heuristic, Expand, std::ratio<1, 1>, BeamWidth, false, true, Context...>;
 };
 
 }

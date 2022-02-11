@@ -24,7 +24,7 @@ static bool is_first_search = true;
 
 
 /*======================================================================================================================
- * AI Type Traits
+ * Type Traits for Heuristic Search
  *====================================================================================================================*/
 
 /*===== State ========================================================================================================*/
@@ -45,7 +45,7 @@ struct has_method_is_goal : std::conjunction<
 
 /*----- State --------------------------------------------------------------------------------------------------------*/
 template<typename State>
-struct is_ai_state : std::conjunction<
+struct is_search_state : std::conjunction<
     std::is_class<State>,
     std::is_class<typename State::base_type>,
     std::is_default_constructible<State>,
@@ -55,7 +55,7 @@ struct is_ai_state : std::conjunction<
     has_method_is_goal<State>
 > { };
 template<typename State>
-inline constexpr bool is_ai_state_v = is_ai_state<State>::value;
+inline constexpr bool is_search_state_v = is_search_state<State>::value;
 
 
 /*===== Heuristic ====================================================================================================*/
@@ -69,12 +69,12 @@ struct is_callable : std::conjunction<
 
 /*----- Heuristic ----------------------------------------------------------------------------------------------------*/
 template<typename Heuristic, typename... Context>
-struct is_ai_heuristic : std::conjunction<
-    is_ai_state<typename Heuristic::state_type>,
+struct is_search_heuristic : std::conjunction<
+    is_search_state<typename Heuristic::state_type>,
     is_callable<Heuristic, Context...>
 > { };
 template<typename Heuristic, typename... Context>
-inline constexpr bool is_ai_heuristic_v = is_ai_heuristic<Heuristic, Context...>::value;
+inline constexpr bool is_search_heuristic_v = is_search_heuristic<Heuristic, Context...>::value;
 
 
 /*===== Search Algorithm =============================================================================================*/
@@ -89,18 +89,18 @@ struct has_method_search : std::conjunction<
 
 /*----- Search Algorithm ---------------------------------------------------------------------------------------------*/
 template<typename Search, typename... Context>
-struct is_ai_search : std::conjunction<
-    is_ai_state<typename Search::state_type>,
-    is_ai_heuristic<typename Search::heuristic_type, Context...>,
+struct is_search_search : std::conjunction<
+    is_search_state<typename Search::state_type>,
+    is_search_heuristic<typename Search::heuristic_type, Context...>,
     std::is_same<typename Search::state_type, typename Search::heuristic_type::state_type>,
     has_method_search<Search, Context...>
 > { };
 template<typename Search, typename... Context>
-inline constexpr bool is_ai_search_v = is_ai_search<Search, Context...>::value;
+inline constexpr bool is_search_search_v = is_search_search<Search, Context...>::value;
 
 
 /*======================================================================================================================
- * AI Planning
+ * Heuristic Search
  *====================================================================================================================*/
 
 /** Find a path from an `initial_state` to a goal state and return its cost. */
@@ -112,15 +112,15 @@ template<
         typename SearchAlgorithm,
     typename... Context
 >
-double solve(State initial_state, Heuristic &heuristic, Expand expand, Context&&... context)
+double search(State initial_state, Heuristic &heuristic, Expand expand, Context&&... context)
 {
-    static_assert(is_ai_state_v<State>, "State is not a valid state for this Planner");
-    static_assert(is_ai_heuristic_v<Heuristic, Context...>, "Heuristic is not a valid heuristic");
+    static_assert(is_search_state_v<State>, "State is not a valid state for this search");
+    static_assert(is_search_heuristic_v<Heuristic, Context...>, "Heuristic is not a valid heuristic");
     static_assert(std::is_same_v<State, typename Heuristic::state_type>, "Heuristic is not applicable to State");
 
     using search_algorithm = SearchAlgorithm<State, Heuristic, Expand, Context...>;
-    static_assert(is_ai_search_v<search_algorithm, Context...>,
-                  "SearchAlgorithm is not a valid search algorithm for this Planner");
+    static_assert(is_search_search_v<search_algorithm, Context...>,
+                  "SearchAlgorithm is not a valid search algorithm for this search");
 
     search_algorithm S;
     double final_cost = S.search(std::move(initial_state), heuristic, std::move(expand),
@@ -130,7 +130,7 @@ double solve(State initial_state, Heuristic &heuristic, Expand expand, Context&&
 
 
 /*======================================================================================================================
- * AI Planning Classes
+ * Heuristic Search Classes
  *====================================================================================================================*/
 
 /** Tracks generated states to allow for duplicate elimination. */
@@ -140,7 +140,7 @@ struct StateTracker
     ///> the type of a state in the search space
     using state_type = State;
 
-    static_assert(is_ai_state_v<State>, "State is not a valid planner state");
+    static_assert(is_search_state_v<State>, "State is not a valid search state");
 
     private:
     std::unordered_map<state_type, double> seen_states_;
@@ -223,8 +223,8 @@ template<
 >
 struct genericAStar
 {
-    static_assert(is_ai_state_v<State>, "State is not a valid state for this Planner");
-    static_assert(is_ai_heuristic_v<Heuristic, Context...>, "Heuristic is not a valid heuristic");
+    static_assert(is_search_state_v<State>, "State is not a valid state for this search");
+    static_assert(is_search_heuristic_v<Heuristic, Context...>, "Heuristic is not a valid heuristic");
     static_assert(std::is_same_v<State, typename Heuristic::state_type>, "Heuristic is not applicable to State");
     static_assert(std::is_arithmetic_v<decltype(Weight::num)> and std::is_arithmetic_v<decltype(Weight::den)>,
                   "Weight must be specified as std::ratio<Num, Denom>");

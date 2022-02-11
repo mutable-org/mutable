@@ -648,7 +648,7 @@ int main(int argc, const char **argv)
         [&](bool) { Options::Get().train_cost_models = true; }          /* Callback         */
     );
     /*----- AIPlanning Config ----------------------------------------------------------------------------------------*/
-    ADD(const char *, Options::Get().ai_state, "BottomUp",                              /* Type, Var, Init  */
+    ADD(const char *, Options::Get().ai_state, "SubproblemsBottomUp",                   /* Type, Var, Init  */
         nullptr, "--ai-state",                                                          /* Short, Long      */
         "specify which state definition to use for plan enumeration via AIPlanning",    /* Description      */
         [&](const char *str) { Options::Get().ai_state = str; }                         /* Callback         */

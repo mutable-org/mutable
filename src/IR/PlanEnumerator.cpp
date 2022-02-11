@@ -7,11 +7,11 @@
 #include <iterator>
 #include <memory>
 #include <mutable/catalog/CostFunction.hpp>
-#include <mutable/IR/AIPlanner.hpp>
 #include <mutable/IR/PlanTable.hpp>
 #include <mutable/IR/QueryGraph.hpp>
 #include <mutable/util/crtp.hpp>
 #include <mutable/util/fn.hpp>
+#include <mutable/util/HeuristicSearch.hpp>
 #include <mutable/util/list_allocator.hpp>
 #include <mutable/util/malloc_allocator.hpp>
 #include <mutable/util/Timer.hpp>
@@ -783,7 +783,7 @@ struct TDMinCutAGaT final : PlanEnumeratorCRTP<TDMinCutAGaT>
 
 
 /*======================================================================================================================
- * AI Planning
+ * Heuristic Search
  *====================================================================================================================*/
 
 /** A "less than" comparator for `Subproblem`s. */
@@ -801,16 +801,16 @@ namespace {
 #define WITH_STATE_COUNTERS
 #endif
 
-/** A state in the AI planning search space.
+/** A state in the search space.
  *
  * A state consists of the accumulated costs of actions to reach this state from the from initial state and a desciption
  * of the actual problem within the state.  The problem is described as the sorted list of `Subproblem`s yet to be
  * joined.
  */
 template<typename Actual>
-struct AIPlanningStateBase : crtp<Actual, AIPlanningStateBase>
+struct SearchStateBase : crtp<Actual, SearchStateBase>
 {
-    using crtp<Actual, AIPlanningStateBase>::actual;
+    using crtp<Actual, SearchStateBase>::actual;
     using size_type = std::size_t;
 
     /*----- State counters -------------------------------------------------------------------------------------------*/
@@ -877,9 +877,9 @@ struct AIPlanningStateBase : crtp<Actual, AIPlanningStateBase>
 
     /*----- Comparison -----------------------------------------------------------------------------------------------*/
 
-    bool operator==(const AIPlanningStateBase &other) const { return actual().operator==(other.actual()); }
-    bool operator!=(const AIPlanningStateBase &other) const { return actual().operator!=(other.actual()); }
-    bool operator<(const AIPlanningStateBase &other) const { return actual().operator<(other.actual()); }
+    bool operator==(const SearchStateBase &other) const { return actual().operator==(other.actual()); }
+    bool operator!=(const SearchStateBase &other) const { return actual().operator!=(other.actual()); }
+    bool operator<(const SearchStateBase &other) const { return actual().operator<(other.actual()); }
 
     /** Returns `true` iff `this` and `other` have the exact same `Subproblem`s. */
     /** Calls `callback` on every state reachable from this state by a single actions. */
@@ -898,14 +898,14 @@ M_LCOV_EXCL_STOP
 
 #ifdef WITH_STATE_COUNTERS
 template<typename Actual>
-typename AIPlanningStateBase<Actual>::state_counters_t
-AIPlanningStateBase<Actual>::state_counters_;
+typename SearchStateBase<Actual>::state_counters_t
+SearchStateBase<Actual>::state_counters_;
 #endif
 
 template<typename Allocator>
-struct AIPlanningStateBottomUp : AIPlanningStateBase<AIPlanningStateBottomUp<Allocator>>
+struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBottomUp<Allocator>>
 {
-    using base_type = AIPlanningStateBase<AIPlanningStateBottomUp<Allocator>>;
+    using base_type = SearchStateBase<SearchStateSubproblemsBottomUp<Allocator>>;
     using size_type = typename base_type::size_type;
     using allocator_type = Allocator;
     using iterator = Subproblem*;
@@ -933,17 +933,17 @@ struct AIPlanningStateBottomUp : AIPlanningStateBase<AIPlanningStateBottomUp<All
 
     /*----- The Big Four and a Half, copy & swap idiom ---------------------------------------------------------------*/
     public:
-    friend void swap(AIPlanningStateBottomUp &first, AIPlanningStateBottomUp &second) {
+    friend void swap(SearchStateSubproblemsBottomUp &first, SearchStateSubproblemsBottomUp &second) {
         using std::swap;
         swap(first.g_,           second.g_);
         swap(first.size_,        second.size_);
         swap(first.subproblems_, second.subproblems_);
     }
 
-    AIPlanningStateBottomUp() = default;
+    SearchStateSubproblemsBottomUp() = default;
 
     /** Creates a state with actual costs `g` and given `subproblems`. */
-    AIPlanningStateBottomUp(double g, size_type size, std::unique_ptr<Subproblem[]> subproblems)
+    SearchStateSubproblemsBottomUp(double g, size_type size, std::unique_ptr<Subproblem[]> subproblems)
         : g_(g)
         , size_(size)
         , subproblems_(std::move(subproblems))
@@ -954,13 +954,13 @@ struct AIPlanningStateBottomUp : AIPlanningStateBase<AIPlanningStateBottomUp<All
     }
 
     /** Creates an initial state with the given `subproblems`. */
-    AIPlanningStateBottomUp(size_type size, std::unique_ptr<Subproblem[]> subproblems)
-        : AIPlanningStateBottomUp(0, size, std::move(subproblems))
+    SearchStateSubproblemsBottomUp(size_type size, std::unique_ptr<Subproblem[]> subproblems)
+        : SearchStateSubproblemsBottomUp(0, size, std::move(subproblems))
     { }
 
     /** Creates a state with actual costs `g` and subproblems in range `[begin; end)`. */
     template<typename It>
-    AIPlanningStateBottomUp(double g, It begin, It end)
+    SearchStateSubproblemsBottomUp(double g, It begin, It end)
         : g_(g)
         , size_(std::distance(begin, end))
         , subproblems_(ALLOCATOR().template make_unique<Subproblem[]>(size_))
@@ -972,7 +972,7 @@ struct AIPlanningStateBottomUp : AIPlanningStateBase<AIPlanningStateBottomUp<All
     }
 
     /** Copy c'tor. */
-    explicit AIPlanningStateBottomUp(const AIPlanningStateBottomUp &other)
+    explicit SearchStateSubproblemsBottomUp(const SearchStateSubproblemsBottomUp &other)
         : g_(other.g_)
         , size_(other.size_)
         , subproblems_(ALLOCATOR().template make_unique<Subproblem[]>(size_))
@@ -983,34 +983,34 @@ struct AIPlanningStateBottomUp : AIPlanningStateBase<AIPlanningStateBottomUp<All
     }
 
     /** Move c'tor. */
-    AIPlanningStateBottomUp(AIPlanningStateBottomUp &&other) : AIPlanningStateBottomUp() { swap(*this, other); }
+    SearchStateSubproblemsBottomUp(SearchStateSubproblemsBottomUp &&other) : SearchStateSubproblemsBottomUp() { swap(*this, other); }
     /** Assignment. */
-    AIPlanningStateBottomUp & operator=(AIPlanningStateBottomUp other) { swap(*this, other); return *this; }
+    SearchStateSubproblemsBottomUp & operator=(SearchStateSubproblemsBottomUp other) { swap(*this, other); return *this; }
 
     /** D'tor. */
-    ~AIPlanningStateBottomUp() {
+    ~SearchStateSubproblemsBottomUp() {
         if (subproblems_) base_type::INCREMENT_NUM_STATES_DISPOSED();
         ALLOCATOR().dispose(std::move(subproblems_), size_);
     }
 
     /*----- Factory methods. -----------------------------------------------------------------------------------------*/
 
-    static AIPlanningStateBottomUp CreateInitial(const QueryGraph &G, const AdjacencyMatrix&) {
+    static SearchStateSubproblemsBottomUp CreateInitial(const QueryGraph &G, const AdjacencyMatrix&) {
         const size_type size = G.sources().size();
         auto subproblems = ALLOCATOR().template make_unique<Subproblem[]>(size);
         for (auto ds : G.sources())
             new (&subproblems[ds->id()]) Subproblem(1UL << ds->id());
         M_insist(std::is_sorted(subproblems.get(), subproblems.get() + size, subproblem_lt));
-        return AIPlanningStateBottomUp(size, std::move(subproblems));
+        return SearchStateSubproblemsBottomUp(size, std::move(subproblems));
     }
 
-    static AIPlanningStateBottomUp CreateGoal(double g) { return AIPlanningStateBottomUp(g, 0, nullptr); }
+    static SearchStateSubproblemsBottomUp CreateGoal(double g) { return SearchStateSubproblemsBottomUp(g, 0, nullptr); }
 
     template<typename It>
-    static AIPlanningStateBottomUp CreateFromSubproblems(const QueryGraph&, const AdjacencyMatrix&, double g,
+    static SearchStateSubproblemsBottomUp CreateFromSubproblems(const QueryGraph&, const AdjacencyMatrix&, double g,
                                                          It begin, It end)
     {
-        return AIPlanningStateBottomUp(g, begin, end);
+        return SearchStateSubproblemsBottomUp(g, begin, end);
     }
 
     /*----- Getters --------------------------------------------------------------------------------------------------*/
@@ -1032,7 +1032,7 @@ struct AIPlanningStateBottomUp : AIPlanningStateBase<AIPlanningStateBottomUp<All
     /*----- Comparison -----------------------------------------------------------------------------------------------*/
 
     /** Returns `true` iff `this` and `other` have the exact same `Subproblem`s. */
-    bool operator==(const AIPlanningStateBottomUp &other) const {
+    bool operator==(const SearchStateSubproblemsBottomUp &other) const {
         if (this->size() != other.size()) return false;
         M_insist(this->size() == other.size());
         auto this_it = this->cbegin();
@@ -1044,14 +1044,14 @@ struct AIPlanningStateBottomUp : AIPlanningStateBase<AIPlanningStateBottomUp<All
         return true;
     }
 
-    bool operator!=(const AIPlanningStateBottomUp &other) const { return not operator==(other); }
+    bool operator!=(const SearchStateSubproblemsBottomUp &other) const { return not operator==(other); }
 
-    bool operator<(const AIPlanningStateBottomUp &other) const {
+    bool operator<(const SearchStateSubproblemsBottomUp &other) const {
         return std::lexicographical_compare(cbegin(), cend(), other.cbegin(), other.cend(), subproblem_lt);
     }
 
 M_LCOV_EXCL_START
-    friend std::ostream & operator<<(std::ostream &out, const AIPlanningStateBottomUp &S) {
+    friend std::ostream & operator<<(std::ostream &out, const SearchStateSubproblemsBottomUp &S) {
         out << "g = " << S.g() << ", [";
         for (auto it = S.cbegin(); it != S.cend(); ++it) {
             if (it != S.cbegin()) out << ", ";
@@ -1066,17 +1066,17 @@ M_LCOV_EXCL_STOP
 };
 
 template<typename Allocator>
-typename AIPlanningStateBottomUp<Allocator>::allocator_type
-AIPlanningStateBottomUp<Allocator>::allocator_;
+typename SearchStateSubproblemsBottomUp<Allocator>::allocator_type
+SearchStateSubproblemsBottomUp<Allocator>::allocator_;
 
 }
 
 namespace std {
 
 template<typename Allocator>
-struct hash<AIPlanningStateBottomUp<Allocator>>
+struct hash<SearchStateSubproblemsBottomUp<Allocator>>
 {
-    uint64_t operator()(const AIPlanningStateBottomUp<Allocator> &state) const {
+    uint64_t operator()(const SearchStateSubproblemsBottomUp<Allocator> &state) const {
         /* Rolling hash with multiplier taken from [1] where the moduli is 2^64.
          * [1] http://www.ams.org/mcom/1999-68-225/S0025-5718-99-00996-5/S0025-5718-99-00996-5.pdf */
         uint64_t hash = 0;
@@ -1098,7 +1098,7 @@ struct hash<AIPlanningStateBottomUp<Allocator>>
 struct ExpandBottomUpComplete
 {
     template<typename Allocator, typename Callback, typename PlanTable>
-    void operator()(const AIPlanningStateBottomUp<Allocator> &state, Callback &&callback, PlanTable &PT,
+    void operator()(const SearchStateSubproblemsBottomUp<Allocator> &state, Callback &&callback, PlanTable &PT,
                     const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
                     const CardinalityEstimator &CE) const
     {
@@ -1133,8 +1133,8 @@ struct ExpandBottomUpComplete
                     /* Compute action cost. */
                     const double action_cost = total_cost - (PT[*outer_it].cost + PT[*inner_it].cost);
 
-                    /* Create new AIPlanningState. */
-                    AIPlanningStateBottomUp<Allocator> S(state.g() + action_cost, state.size() - 1,
+                    /* Create new SearchState. */
+                    SearchStateSubproblemsBottomUp<Allocator> S(state.g() + action_cost, state.size() - 1,
                                                          std::move(subproblems));
                     state.INCREMENT_NUM_STATES_GENERATED();
                     callback(std::move(S));
@@ -1296,7 +1296,7 @@ struct checkpoints
     using state_type = State;
 
     private:
-    using internal_state_type = AIPlanningStateBottomUp<typename State::allocator_type>;
+    using internal_state_type = SearchStateSubproblemsBottomUp<typename State::allocator_type>;
 
     ///> the distance between two checkpoints, i.e. the difference in the number of relations contained in two
     ///> consecutive checkpoints
@@ -1637,8 +1637,8 @@ template<
     typename Heuristic,
     template<typename, typename, typename, typename...> typename Search
 >
-void run_planner_config(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
-                        const CardinalityEstimator &CE)
+void run_heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
+                          const CardinalityEstimator &CE)
 {
     // State::ALLOCATOR(list_allocator(get_pagesize(), AllocationStrategy::Exponential));
     State::ALLOCATOR(malloc_allocator{});
@@ -1646,7 +1646,7 @@ void run_planner_config(PlanTable &PT, const QueryGraph &G, const AdjacencyMatri
     State initial_state = State::CreateInitial(G, M);
     try {
         Heuristic h = Heuristic(PT, G, M, CF, CE);
-        ai::solve<
+        ai::search<
             State,
             Heuristic,
             ExpandBottomUpComplete,
@@ -1673,10 +1673,10 @@ void run_planner_config(PlanTable &PT, const QueryGraph &G, const AdjacencyMatri
     State::ALLOCATOR(malloc_allocator{}); // reset allocator
 }
 
-/** Computes the join order using an AI Planning approach */
-struct AIPlanning final : PlanEnumeratorCRTP<AIPlanning>
+/** Computes the join order using heuristic search */
+struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
 {
-    using base_type = PlanEnumeratorCRTP<AIPlanning>;
+    using base_type = PlanEnumeratorCRTP<HeuristicSearch>;
     using base_type::operator();
 
     template<typename PlanTable>
@@ -1685,35 +1685,35 @@ struct AIPlanning final : PlanEnumeratorCRTP<AIPlanning>
         auto &CE = C.get_database_in_use().cardinality_estimator();
         AdjacencyMatrix M(G);
 
-#define IS_PLANNER_CONFIG(STATE, HEURISTIC, SEARCH) \
+#define IS_HEURISTIC_SEARCH_CONFIG(STATE, HEURISTIC, SEARCH) \
         (streq(Options::Get().ai_state, #STATE) and streq(Options::Get().ai_heuristic, #HEURISTIC) and \
          streq(Options::Get().ai_search, #SEARCH))
-#define EMIT_PLANNER_CONFIG(STATE, HEURISTIC, SEARCH) \
-        if (IS_PLANNER_CONFIG(STATE, HEURISTIC, SEARCH)) \
+#define EMIT_HEURISTIC_SEARCH_CONFIG(STATE, HEURISTIC, SEARCH) \
+        if (IS_HEURISTIC_SEARCH_CONFIG(STATE, HEURISTIC, SEARCH)) \
         { \
-            run_planner_config<\
+            run_heuristic_search<\
                 PlanTable, \
-                AIPlanningState ## STATE<malloc_allocator>,\
-                heuristics:: HEURISTIC <PlanTable, AIPlanningState ## STATE<malloc_allocator>>,\
+                SearchState ## STATE<malloc_allocator>,\
+                heuristics:: HEURISTIC <PlanTable, SearchState ## STATE<malloc_allocator>>,\
                 SEARCH>\
             (PT, G, M, CF, CE); \
         }
 
-             EMIT_PLANNER_CONFIG(BottomUp,      hsum,                           AStar                           )
-        else EMIT_PLANNER_CONFIG(BottomUp,      hprod,                          AStar                           )
-        else EMIT_PLANNER_CONFIG(BottomUp,      bottomup_lookahead_cheapest,    AStar                           )
-        else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    AStar                           )
-        else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    lazyAStar                       )
-        else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    beam_search                     )
-        else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    dynamic_beam_search             )
-        else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    lazy_beam_search                )
-        else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    lazy_dynamic_beam_search        )
-        else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    acyclic_beam_search             )
-        else EMIT_PLANNER_CONFIG(BottomUp,      checkpoints,                    acyclic_dynamic_beam_search     )
-        else EMIT_PLANNER_CONFIG(BottomUp,      perfect_oracle,                 AStar                           )
-        else EMIT_PLANNER_CONFIG(BottomUp,      perfect_oracle,                 beam_search                     )
+             EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  hsum,                           AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  hprod,                          AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  bottomup_lookahead_cheapest,    AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    lazyAStar                       )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    beam_search                     )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    dynamic_beam_search             )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    lazy_beam_search                )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    lazy_dynamic_beam_search        )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    acyclic_beam_search             )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    acyclic_dynamic_beam_search     )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  perfect_oracle,                 AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  perfect_oracle,                 beam_search                     )
         else { throw std::invalid_argument("illegal planner configuration"); }
-#undef EMIT_PLANNER_CONFIG
+#undef EMIT_HEURISTIC_SEARCH_CONFIG
 
 #if 0
         {

@@ -866,9 +866,6 @@ struct SearchStateBase : crtp<Actual, SearchStateBase>
 
     /*----- Getters --------------------------------------------------------------------------------------------------*/
 
-    /** Returns the number of `Subproblem`s in this state. */
-    std::size_t size() const { return actual().size(); }
-
     /** Returns `true` iff this is a goal state. */
     bool is_goal() const { return actual().is_goal(); }
 
@@ -1015,9 +1012,9 @@ struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBo
 
     /*----- Getters --------------------------------------------------------------------------------------------------*/
 
-    size_type size() const { return size_; }
     bool is_goal() const { return size() <= 1; }
     double g() const { return g_; }
+    size_type size() const { return size_; }
     Subproblem operator[](std::size_t idx) const { M_insist(idx < size_); return subproblems_[idx]; }
 
     /*----- Iteration ------------------------------------------------------------------------------------------------*/

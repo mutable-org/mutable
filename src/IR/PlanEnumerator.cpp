@@ -886,6 +886,13 @@ struct SearchStateBase : crtp<Actual, SearchStateBase>
         actual().for_each_successor(std::forward<Callback>(callback), PT, G, M, CF, CE);
     }
 
+    /*----- Iteration ------------------------------------------------------------------------------------------------*/
+
+    template<typename Callback>
+    void for_each_subproblem(Callback &&callback, const QueryGraph &G) const {
+        actual().template for_each_subproblem<Callback>(std::forward<Callback>(callback), G);
+    }
+
     /*----- Debugging ------------------------------------------------------------------------------------------------*/
 M_LCOV_EXCL_START
     void dump(std::ostream &out) const { out << actual() << std::endl; }
@@ -1025,6 +1032,12 @@ struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBo
     const_iterator end() const { return begin() + size(); }
     const_iterator cbegin() const { return begin(); };
     const_iterator cend() const { return end(); }
+
+    template<typename Callback>
+    void for_each_subproblem(Callback &&callback, const QueryGraph&) const {
+        for (Subproblem S : *this)
+            callback(S);
+    }
 
     /*----- Comparison -----------------------------------------------------------------------------------------------*/
 
@@ -1183,13 +1196,14 @@ struct hsum
          const CardinalityEstimator&)
     { }
 
-    double operator()(const state_type &state, const PlanTable &PT, const QueryGraph&, const AdjacencyMatrix&,
+    double operator()(const state_type &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix&,
                       const CostFunction&, const CardinalityEstimator &CE) const
     {
         double distance = 0;
-        if (state.size() > 1) {
-            for (auto s : state)
-                distance += CE.predict_cardinality(*PT[s].model);
+        if (not state.is_goal()) {
+            state.for_each_subproblem([&](Subproblem S) {
+                distance += CE.predict_cardinality(*PT[S].model);
+            }, G);
         }
         return distance;
     }

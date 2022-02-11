@@ -2,6 +2,7 @@
 
 #include "util/ADT.hpp"
 #include <algorithm>
+#include <cstring>
 #include <globals.hpp>
 #include <iostream>
 #include <iterator>
@@ -1100,6 +1101,275 @@ struct hash<SearchStateSubproblemsBottomUp<Allocator>>
 
 }
 
+namespace {
+
+template<typename Allocator>
+struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp<Allocator>>
+{
+    using base_type = SearchStateBase<SearchStateEdgesBottomUp<Allocator>>;
+    using size_type = typename base_type::size_type;
+    using allocator_type = Allocator;
+    using iterator = unsigned*;
+    using const_iterator = const unsigned*;
+
+    private:
+    ///> class-wide allocator, used by all instances
+    static allocator_type allocator_;
+
+    public:
+    static allocator_type & ALLOCATOR() { return allocator_; }
+    static allocator_type ALLOCATOR(allocator_type &&A) {
+        allocator_type tmp = std::move(allocator_);
+        allocator_ = std::move(A);
+        return tmp;
+    }
+
+    private:
+    ///> number of joins necessary to reach goal
+    size_type num_joins_to_goal_ = 0;
+    ///> the cost to reach this state from the initial state
+    double g_;
+    ///> number of joins performed to reach this state
+    size_type num_joins_ = 0;
+    ///> array of IDs of joins performed
+    std::unique_ptr<unsigned[]> joins_;
+
+    /*----- The Big Four and a Half, copy & swap idiom ---------------------------------------------------------------*/
+    public:
+    friend void swap(SearchStateEdgesBottomUp &first, SearchStateEdgesBottomUp &second) {
+        using std::swap;
+        swap(first.g_,                 second.g_);
+        swap(first.num_joins_,         second.num_joins_);
+        swap(first.num_joins_to_goal_, second.num_joins_to_goal_);
+        swap(first.joins_,             second.joins_);
+    }
+
+    SearchStateEdgesBottomUp() = default;
+
+    /** Creates a state with actual costs `g` and given `subproblems`. */
+    SearchStateEdgesBottomUp(size_type num_joins_to_goal, double g, size_type num_joins,
+                             std::unique_ptr<unsigned[]> joins)
+        : num_joins_to_goal_(num_joins_to_goal)
+        , g_(g)
+        , num_joins_(num_joins)
+        , joins_(std::move(joins))
+    {
+        M_insist(num_joins_ == 0 or bool(joins_));
+        M_insist(std::is_sorted(cbegin(), cend()), "joins must be sorted by index");
+#ifdef WITH_STATE_COUNTERS
+        if (num_joins_)
+            base_type::INCREMENT_NUM_STATES_CONSTRUCTED();
+#endif
+    }
+
+    /** Creates an initial state with the given `subproblems`. */
+    SearchStateEdgesBottomUp(size_type num_joins_to_goal, size_type num_joins, std::unique_ptr<unsigned[]> joins)
+        : SearchStateEdgesBottomUp(num_joins_to_goal, 0, num_joins, std::move(joins))
+    { }
+
+    /** Creates a state with actual costs `g` and subproblems in range `[begin; end)`. */
+    template<typename It>
+    SearchStateEdgesBottomUp(size_type num_joins_to_goal, double g, It begin, It end)
+        : num_joins_to_goal_(num_joins_to_goal)
+        , g_(g)
+        , num_joins_(std::distance(begin, end))
+        , joins_(ALLOCATOR().template make_unique<unsigned[]>(num_joins_))
+    {
+        M_insist(begin != end);
+        std::copy(begin, end, this->begin());
+        M_insist(std::is_sorted(cbegin(), cend()), "joins must be sorted by index");
+#ifdef WITH_STATE_COUNTERS
+        if (num_joins_)
+            base_type::INCREMENT_NUM_STATES_CONSTRUCTED();
+#endif
+    }
+
+    /** Copy c'tor. */
+    explicit SearchStateEdgesBottomUp(const SearchStateEdgesBottomUp &other)
+        : num_joins_to_goal_(other.num_joins_to_goal_)
+        , g_(other.g_)
+        , num_joins_(other.num_joins_)
+        , joins_(ALLOCATOR().template make_unique<unsigned[]>(num_joins_))
+    {
+        M_insist(bool(joins_));
+        M_insist(std::is_sorted(cbegin(), cend()), "joins must be sorted by index");
+        std::copy(other.begin(), other.end(), this->begin());
+#ifdef WITH_STATE_COUNTERS
+        if (num_joins_)
+            base_type::INCREMENT_NUM_STATES_CONSTRUCTED();
+#endif
+    }
+
+    /** Move c'tor. */
+    SearchStateEdgesBottomUp(SearchStateEdgesBottomUp &&other) : SearchStateEdgesBottomUp()
+    { swap(*this, other); }
+    /** Assignment. */
+    SearchStateEdgesBottomUp & operator=(SearchStateEdgesBottomUp other) { swap(*this, other); return *this; }
+
+    /** D'tor. */
+    ~SearchStateEdgesBottomUp() {
+#ifdef WITH_STATE_COUNTERS
+        if (num_joins_) {
+            M_insist(bool(joins_));
+            base_type::INCREMENT_NUM_STATES_DISPOSED();
+        }
+#endif
+        ALLOCATOR().dispose(std::move(joins_), num_joins_);
+    }
+
+    /*----- Factory methods. -----------------------------------------------------------------------------------------*/
+
+    static SearchStateEdgesBottomUp CreateInitial(const QueryGraph &G, const AdjacencyMatrix&) {
+        return SearchStateEdgesBottomUp(G.num_sources() - 1, 0, nullptr);
+    }
+
+    static SearchStateEdgesBottomUp CreateGoal(const QueryGraph &G, const AdjacencyMatrix&, double g) {
+        return SearchStateEdgesBottomUp(G.num_sources() - 1, g, 0, nullptr);
+    }
+
+    template<typename It>
+    static SearchStateEdgesBottomUp CreateFromSubproblems(const QueryGraph &G, const AdjacencyMatrix&, double g,
+                                                              It begin, It end)
+    {
+        return SearchStateEdgesBottomUp(G.num_sources() - 1, g, begin, end);
+    }
+
+    /*----- Getters --------------------------------------------------------------------------------------------------*/
+
+    bool is_goal() const { return num_joins() == num_joins_to_goal_; }
+    double g() const { return g_; }
+    size_type num_joins() const { return num_joins_; }
+    size_type num_subproblems(const QueryGraph &G) const {
+        M_insist(num_joins() < G.num_sources());
+        return G.num_sources() - num_joins();
+    }
+    size_type num_joins_to_goal() const { return num_joins_to_goal_; }
+    unsigned operator[](std::size_t idx) const { M_insist(idx < num_joins()); return joins_[idx]; }
+
+    /*----- Iteration ------------------------------------------------------------------------------------------------*/
+
+    iterator begin() { return joins_.get(); };
+    iterator end() { return begin() + num_joins(); }
+    const_iterator begin() const { return joins_.get(); };
+    const_iterator end() const { return begin() + num_joins(); }
+    const_iterator cbegin() const { return begin(); };
+    const_iterator cend() const { return end(); }
+
+    template<typename Callback>
+    void for_each_subproblem(Callback &&callback, const QueryGraph &G) const {
+        Subproblem subproblems[G.num_sources()];
+        uint8_t datasource_to_subproblem[G.num_sources()];
+        compute_datasource_to_subproblem_index(G, subproblems, datasource_to_subproblem);
+
+        for (Subproblem *it = subproblems, *end = subproblems + G.num_sources(); it != end; ++it) {
+            if (not it->empty())
+                callback(*it);
+        }
+    }
+
+    /*----- Comparison -----------------------------------------------------------------------------------------------*/
+
+    /** Returns `true` iff `this` and `other` have the exact same joins. */
+    bool operator==(const SearchStateEdgesBottomUp &other) const {
+        if (this->num_joins() != other.num_joins()) return false;
+        M_insist(this->num_joins() == other.num_joins());
+        auto this_it = this->cbegin();
+        auto other_it = other.cbegin();
+        for (; this_it != this->cend(); ++this_it, ++other_it) {
+            if (*this_it != *other_it)
+                return false;
+        }
+        return true;
+    }
+
+    bool operator!=(const SearchStateEdgesBottomUp &other) const { return not operator==(other); }
+
+    /*----- Edge calculations ----------------------------------------------------------------------------------------*/
+
+    /** Computes the `Subproblem`s produced by the `Join`s of this state in `subproblems`.  Simultaniously, buils a
+     * reverse index that maps from `DataSource` ID to `Subproblem` in `datasource_to_subproblem`.  */
+    void compute_datasource_to_subproblem_index(const QueryGraph &G, Subproblem *subproblems,
+                                                uint8_t *datasource_to_subproblem) const
+    {
+        /*----- Initialize datasource_to_subproblem reverse index. -----*/
+        for (std::size_t idx = 0; idx != G.num_sources(); ++idx) {
+            new (&datasource_to_subproblem[idx]) int8_t(idx);
+            new (&subproblems[idx]) Subproblem(1UL << idx);
+        }
+
+        /*----- Update index with joins performed so far. -----*/
+        for (unsigned join_idx : *this) {
+            const Join *join = G.joins()[join_idx];
+            const auto &sources = join->sources();
+            const unsigned left_idx  = datasource_to_subproblem[sources[0]->id()];
+            const unsigned right_idx = datasource_to_subproblem[sources[1]->id()];
+            subproblems[left_idx] |= subproblems[right_idx];
+            subproblems[right_idx] = Subproblem();
+            datasource_to_subproblem[sources[1]->id()] = left_idx;
+        }
+
+#ifndef NDEBUG
+        for (std::size_t idx = 0; idx != G.num_sources(); ++idx) {
+            Subproblem S = subproblems[datasource_to_subproblem[idx]];
+            M_insist(not S.empty(), "reverse index must never point to an empty subproblem");
+        }
+        Subproblem All((1UL << G.num_sources()) - 1UL);
+        Subproblem combined;
+        unsigned num_subproblems_nonempty = 0;
+        for (std::size_t idx = 0; idx != G.num_sources(); ++idx) {
+            Subproblem S = subproblems[idx];
+            if (S.empty()) continue;
+            ++num_subproblems_nonempty;
+            M_insist((S & combined).empty(), "current subproblem must be disjoint from all others");
+            combined |= S;
+        }
+        M_insist(num_subproblems(G) == num_subproblems_nonempty);
+        M_insist(All == combined, "must not loose a relation");
+#endif
+    }
+
+
+    /*----- Debugging ------------------------------------------------------------------------------------------------*/
+M_LCOV_EXCL_START
+    friend std::ostream & operator<<(std::ostream &out, const SearchStateEdgesBottomUp &S) {
+        out << "g = " << S.g() << ", [";
+        for (auto it = S.cbegin(); it != S.cend(); ++it) {
+            if (it != S.cbegin()) out << ", ";
+            out << *it;
+        }
+        return out << ']';
+    }
+
+    void dump(std::ostream &out) const { out << *this << std::endl; }
+    void dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
+};
+
+template<typename Allocator>
+typename SearchStateEdgesBottomUp<Allocator>::allocator_type
+SearchStateEdgesBottomUp<Allocator>::allocator_;
+
+}
+
+namespace std {
+
+template<typename Allocator>
+struct hash<SearchStateEdgesBottomUp<Allocator>>
+{
+    uint64_t operator()(const SearchStateEdgesBottomUp<Allocator> &state) const {
+        /* Rolling hash with multiplier taken from [1] where the moduli is 2^64.
+         * [1] http://www.ams.org/mcom/1999-68-225/S0025-5718-99-00996-5/S0025-5718-99-00996-5.pdf */
+        uint64_t hash = 0;
+        for (unsigned join_idx : state) {
+            hash = hash ^ join_idx;
+            hash = hash * 3935559000370003845UL + 0xcbf29ce484222325UL;
+        }
+        return hash;
+    }
+};
+
+}
+
 
 /*----------------------------------------------------------------------------------------------------------------------
  * Expansions
@@ -1151,6 +1421,100 @@ struct ExpandBottomUpComplete
                 }
             }
         }
+    }
+
+    template<typename Allocator, typename Callback, typename PlanTable>
+    void operator()(const SearchStateEdgesBottomUp<Allocator> &state, Callback &&callback, PlanTable &PT,
+                    const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
+                    const CardinalityEstimator &CE) const
+    {
+        state.INCREMENT_NUM_STATES_EXPANDED();
+        M_insist(std::is_sorted(state.cbegin(), state.cend()), "joins must be sorted by index");
+
+        /*----- Compute datasource to subproblem reverse index. -----*/
+        Subproblem subproblems[G.num_sources()];
+        uint8_t datasource_to_subproblem[G.num_sources()];
+        state.compute_datasource_to_subproblem_index(G, subproblems, datasource_to_subproblem);
+
+        /*----- Initialize join matrix. -----*/
+        const unsigned size_of_join_matrix = G.num_sources() * (G.num_sources() - 1) / 2;
+        ///> stores for each combination of subproblems whether they were joint yet
+        bool join_matrix[size_of_join_matrix];
+        std::fill_n(join_matrix, size_of_join_matrix, false);
+
+        auto joined = [&G, size_of_join_matrix](bool *matrix, unsigned row, unsigned col) -> bool& {
+            const unsigned x = std::min(row, col);
+            const unsigned y = std::max(row, col);
+            M_insist(y < G.num_sources());
+            M_insist(x < y);
+            M_insist(y * (y - 1) / 2 + x < size_of_join_matrix);
+            return matrix[ y * (y - 1) / 2 + x ];
+        };
+
+        /*----- Enumerate all joins that can still be performed. -----*/
+        unsigned *joins = static_cast<unsigned*>(alloca(sizeof(unsigned[state.num_joins() + 1])));
+        std::copy(state.cbegin(), state.cend(), joins + 1);
+        std::size_t j = 0;
+        joins[j] = 0;
+        M_insist(std::is_sorted(joins, joins + state.num_joins() + 1));
+
+        /*---- Find the first gap in the joins. -----*/
+        while (j < state.num_joins() and joins[j] == joins[j+1]) {
+            ++j;
+            ++joins[j];
+        }
+        M_insist(j == state.num_joins() or joins[j] < joins[j+1]);
+        M_insist(std::is_sorted(joins, joins + state.num_joins() + 1));
+
+        for (;;) {
+            M_insist(j <= state.num_joins(), "j out of bounds");
+            M_insist(j == state.num_joins() or joins[j] < joins[j+1], "invalid position of j");
+
+            const Join *join = G.joins()[joins[j]];
+            const auto &sources = join->sources();
+
+            /*----- Check whether the join is subsumed by joins in `state`. -----*/
+            const unsigned left  = datasource_to_subproblem[sources[0]->id()];
+            const unsigned right = datasource_to_subproblem[sources[1]->id()];
+            if (left == right) // the data sources joined already belong to the same subproblem
+                goto next;
+
+            /*----- Check whether the join is subsumed by a previously considered join. -----*/
+            if (bool &was_joined_before = joined(join_matrix, left, right); was_joined_before)
+                goto next;
+            else
+                was_joined_before = true; // this will be joined now
+
+            /*----- This is a feasible join.  Compute the successor state. -----*/
+            {
+                M_insist(std::is_sorted(joins, joins + state.num_joins() + 1));
+                M_insist(not subproblems[left].empty());
+                M_insist(not subproblems[right].empty());
+
+                /*----- Compute total cost. -----*/
+                cnf::CNF condition; // TODO use join condition
+                const double total_cost = CF.calculate_join_cost(G, PT, CE, subproblems[left], subproblems[right], condition);
+                PT.update(G, CE, subproblems[left], subproblems[right], total_cost);
+
+                /* Compute action cost. */
+                const double action_cost = total_cost - (PT[subproblems[left]].cost + PT[subproblems[right]].cost);
+
+                SearchStateEdgesBottomUp<Allocator> S(state.num_joins_to_goal(), state.g() + action_cost,
+                                                      joins, joins + state.num_joins() + 1);
+                state.INCREMENT_NUM_STATES_GENERATED();
+                callback(std::move(S));
+            }
+
+next:
+            /*----- Advance to next join. -----*/
+            ++joins[j];
+            while (j < state.num_joins() and joins[j] == joins[j+1]) {
+                ++j;
+                ++joins[j];
+            }
+            if (joins[j] == G.num_joins())
+                break;
+        };
     }
 };
 
@@ -1711,6 +2075,7 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         }
 
              EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  hsum,                           AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        hsum,                           AStar                           )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  hprod,                          AStar                           )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  bottomup_lookahead_cheapest,    AStar                           )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    AStar                           )

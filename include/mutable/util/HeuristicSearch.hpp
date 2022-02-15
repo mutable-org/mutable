@@ -217,7 +217,7 @@ template<
     typename Weight,
     unsigned BeamWidth,
     bool Lazy,
-    bool Acyclic,
+    bool IsMonotone,
     typename... Context
 >
 struct genericAStar
@@ -241,14 +241,12 @@ struct genericAStar
     static constexpr bool use_dynamic_beam_sarch = beam_width == decltype(beam_width)(-1);
     ///> Whether to evaluate the heuristic lazily
     static constexpr bool is_lazy = Lazy;
-    ///> Whether the state space is acyclic (useful in combination with beam search)
-    static constexpr bool is_acyclic = Acyclic;
+    ///> Whether the state space is acyclic and without dead ends (useful in combination with beam search)
+    static constexpr bool is_monotone = IsMonotone;
     ///> The fraction of a state's successors to add to the beam (if performing beam search)
     static constexpr float BEAM_FACTOR = .2f;
 
     using callback_t = std::function<void(state_type, double)>;
-
-    static_assert(not is_acyclic or use_beam_search, "acyclic is only meaningful in combination with beam search");
 
     private:
     /** Attaches a weight to a state. */
@@ -291,7 +289,7 @@ struct genericAStar
     explicit genericAStar() {
         if constexpr (use_beam_search)
             priority_queue.reserve(1024);
-        if constexpr (not (use_beam_search and is_acyclic))
+        if constexpr (not (use_beam_search and is_monotone))
             regular_queue.reserve(1024);
         if constexpr (use_beam_search and not use_dynamic_beam_sarch)
             candidates.reserve(beam_width + 1);
@@ -324,7 +322,7 @@ struct genericAStar
     /** Check whether there is a state to explore. */
     bool have_state() {
         if constexpr (use_beam_search) {
-            if constexpr (is_acyclic)
+            if constexpr (is_monotone)
                 return not priority_queue.empty();
             else
                 return not (priority_queue.empty() and regular_queue.empty());
@@ -346,7 +344,7 @@ struct genericAStar
             return top;
         };
 
-        if constexpr (use_beam_search and is_acyclic) {
+        if constexpr (use_beam_search and is_monotone) {
             return pop_internal(priority_queue);
         }
         if constexpr (use_beam_search) {
@@ -379,7 +377,7 @@ struct genericAStar
                 std::make_heap(candidates.begin(), candidates.end());
         } else if (s >= top) {
             /* The state has higher g+h than the top of the candidates heap, so bypass the candidates immediately. */
-            if constexpr (is_acyclic)
+            if constexpr (is_monotone)
                 seen_states.update(std::move(s.state));
             else
                 push(regular_queue, std::move(s));
@@ -394,7 +392,7 @@ struct genericAStar
             candidates.pop_back();
             M_insist(std::is_heap(candidates.begin(), candidates.end()));
             M_insist(candidates.size() == beam_width);
-            if constexpr (is_acyclic)
+            if constexpr (is_monotone)
                 seen_states.update(std::move(old_top.state));
             else
                 push(regular_queue, std::move(old_top));
@@ -408,11 +406,11 @@ struct genericAStar
         M_insist(not candidates.size() or num_beamed, "if the state has successors, at least one must be in the beam");
         auto it = candidates.begin();
         for (auto end = it + num_beamed; it != end; ++it) {
-            if constexpr (is_acyclic)
+            if constexpr (is_monotone)
                 seen_states.update(it->state); // add generated state to seen states
             push(priority_queue, std::move(*it));
         }
-        if constexpr (not is_acyclic) {
+        if constexpr (not is_monotone) {
             for (auto end = candidates.end(); it != end; ++it)
                 push(regular_queue, std::move(*it));
         }
@@ -425,7 +423,7 @@ struct genericAStar
         /* Evaluate heuristic lazily by using heurisitc value of current state. */
         const double h_current_state = double(Weight::num) * heuristic(state, context...) / Weight::den;
         expand(state, [this, &callback, h_current_state](state_type successor) {
-            if constexpr (use_beam_search and is_acyclic) {
+            if constexpr (use_beam_search and is_monotone) {
                 /* We don't know yet, which states will be inside the beam.  We therefore must not add them to the seen
                  * states, yet. */
                 if (seen_states.is_feasible(successor)) {
@@ -447,7 +445,7 @@ struct genericAStar
     {
         /* Evaluate heuristic eagerly. */
         expand(state, [this, callback=std::move(callback), &heuristic, &context...](state_type successor) {
-            if constexpr (use_beam_search and is_acyclic) {
+            if constexpr (use_beam_search and is_monotone) {
                 /* We don't know yet, which states will be inside the beam.  We therefore must not add them to the seen
                  * states, yet. */
                 if (seen_states.is_feasible(successor)) {
@@ -489,7 +487,7 @@ struct genericAStar
                 beam(weighted_state(std::move(successor), weight));
             }, context...);
             for (auto &s : candidates) {
-                if constexpr (is_acyclic) {
+                if constexpr (is_monotone) {
                     /* If the search space is acyclic and without dead ends, the states within the beam will lead to a
                      * goal before the priority queue runs empty.  Hence, all states outside the beam will never be
                      * expanded. */
@@ -512,24 +510,24 @@ template<
     typename Weight,
     unsigned BeamWidth,
     bool Lazy,
-    bool Acyclic,
+    bool IsMonotone,
     typename... Context
 >
-double genericAStar<State, Heuristic, Expand, Weight, BeamWidth, Lazy, Acyclic, Context...>::search(
+double genericAStar<State, Heuristic, Expand, Weight, BeamWidth, Lazy, IsMonotone, Context...>::search(
     state_type initial_state,
     heuristic_type &heuristic,
     expand_type expand,
     Context&... context
 ) {
     /* Initialize queue with initial state. */
-    if (use_beam_search and is_acyclic)
+    if (use_beam_search and is_monotone)
         push(priority_queue, weighted_state(std::move(initial_state), 0));
     else
         push(regular_queue, weighted_state(std::move(initial_state), 0));
 
     /* Run work list algorithm. */
     while (have_state()) {
-        if constexpr (use_beam_search and is_acyclic) {
+        if constexpr (use_beam_search and is_monotone) {
             M_insist(regular_queue.empty(), "regular queue must never be used");
             M_insist(not priority_queue.empty(), "priority queue must never run empty");
         }
@@ -612,7 +610,7 @@ struct lazy_beam_search
 };
 
 template<unsigned BeamWidth>
-struct acyclic_beam_search
+struct monotone_beam_search
 {
     template<
         typename State,

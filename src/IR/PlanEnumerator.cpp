@@ -2024,9 +2024,9 @@ using lazy_beam_search = ai::lazy_beam_search<2>::type<State, Heuristic, Expand,
 template<typename State, typename Heuristic, typename Expand, typename... Context>
 using lazy_dynamic_beam_search = ai::lazy_beam_search<-1U>::type<State, Heuristic, Expand, Context...>;
 template<typename State, typename Heuristic, typename Expand, typename... Context>
-using acyclic_beam_search = ai::acyclic_beam_search<2>::type<State, Heuristic, Expand, Context...>;
+using monotone_beam_search = ai::monotone_beam_search<2>::type<State, Heuristic, Expand, Context...>;
 template<typename State, typename Heuristic, typename Expand, typename... Context>
-using acyclic_dynamic_beam_search = ai::acyclic_beam_search<-1U>::type<State, Heuristic, Expand, Context...>;
+using monotone_dynamic_beam_search = ai::monotone_beam_search<-1U>::type<State, Heuristic, Expand, Context...>;
 
 template<
     typename PlanTable,
@@ -2106,8 +2106,8 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    dynamic_beam_search             )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    lazy_beam_search                )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    lazy_dynamic_beam_search        )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    acyclic_beam_search             )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    acyclic_dynamic_beam_search     )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    monotone_beam_search            )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    monotone_dynamic_beam_search    )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  perfect_oracle,                 AStar                           )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  perfect_oracle,                 beam_search                     )
         else { throw std::invalid_argument("illegal search configuration"); }

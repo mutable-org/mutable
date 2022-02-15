@@ -29,29 +29,32 @@ namespace ai {
 template<typename State>
 struct has_method_g : std::conjunction<
     std::is_member_function_pointer<decltype(&State::g)>,
-    std::is_invocable_r<double, decltype(&State::g), const State&>
+    std::is_invocable_r<double, decltype(&State::g), const State&>,
+    std::is_member_function_pointer<decltype(&State::decrease_g)>,
+    std::is_invocable_r<void, decltype(&State::decrease_g), State&, double>
 > { };
 
 /*----- bool State::is_goal() const ----------------------------------------------------------------------------------*/
-template<typename State>
-struct has_method_is_goal : std::conjunction<
-    std::is_member_function_pointer<decltype(&State::is_goal)>,
-    std::is_invocable_r<bool, decltype(&State::is_goal), const State&>
-> { };
+template<typename State, typename... Context>
+struct provides_is_goal
+{
+    template<typename = void> struct helper : std::false_type { };
+    template<> struct helper<bool> : std::true_type { };
+    static constexpr bool value = helper<decltype(std::declval<const State>().is_goal(std::declval<Context>()...))>::value;
+};
 
 /*----- State --------------------------------------------------------------------------------------------------------*/
-template<typename State>
+template<typename State, typename... Context>
 struct is_search_state : std::conjunction<
     std::is_class<State>,
     std::is_class<typename State::base_type>,
-    std::is_default_constructible<State>,
     std::is_move_constructible<State>,
     std::is_move_assignable<State>,
     has_method_g<State>,
-    has_method_is_goal<State>
+    provides_is_goal<State, Context...>
 > { };
-template<typename State>
-inline constexpr bool is_search_state_v = is_search_state<State>::value;
+template<typename State, typename... Context>
+inline constexpr bool is_search_state_v = is_search_state<State, Context...>::value;
 
 
 /*===== Heuristic ====================================================================================================*/
@@ -66,7 +69,7 @@ struct is_callable : std::conjunction<
 /*----- Heuristic ----------------------------------------------------------------------------------------------------*/
 template<typename Heuristic, typename... Context>
 struct is_search_heuristic : std::conjunction<
-    is_search_state<typename Heuristic::state_type>,
+    is_search_state<typename Heuristic::state_type, Context...>,
     is_callable<Heuristic, Context...>
 > { };
 template<typename Heuristic, typename... Context>
@@ -86,7 +89,7 @@ struct has_method_search : std::conjunction<
 /*----- Search Algorithm ---------------------------------------------------------------------------------------------*/
 template<typename Search, typename... Context>
 struct is_search_search : std::conjunction<
-    is_search_state<typename Search::state_type>,
+    is_search_state<typename Search::state_type, Context...>,
     is_search_heuristic<typename Search::heuristic_type, Context...>,
     std::is_same<typename Search::state_type, typename Search::heuristic_type::state_type>,
     has_method_search<Search, Context...>
@@ -110,7 +113,7 @@ template<
 >
 double search(State initial_state, Heuristic &heuristic, Expand expand, Context&&... context)
 {
-    static_assert(is_search_state_v<State>, "State is not a valid state for this search");
+    static_assert(is_search_state_v<State, Context...>, "State is not a valid state for this search");
     static_assert(is_search_heuristic_v<Heuristic, Context...>, "Heuristic is not a valid heuristic");
     static_assert(std::is_same_v<State, typename Heuristic::state_type>, "Heuristic is not applicable to State");
 
@@ -136,7 +139,7 @@ struct StateTracker
     ///> the type of a state in the search space
     using state_type = State;
 
-    static_assert(is_search_state_v<State>, "State is not a valid search state");
+    static_assert(is_search_state_v<State, Context...>, "State is not a valid search state");
 
     private:
     std::unordered_map<state_type, double> seen_states_;
@@ -219,7 +222,7 @@ template<
 >
 struct genericAStar
 {
-    static_assert(is_search_state_v<State>, "State is not a valid state for this search");
+    static_assert(is_search_state_v<State, Context...>, "State is not a valid state for this search");
     static_assert(is_search_heuristic_v<Heuristic, Context...>, "Heuristic is not a valid heuristic");
     static_assert(std::is_same_v<State, typename Heuristic::state_type>, "Heuristic is not applicable to State");
     static_assert(std::is_arithmetic_v<decltype(Weight::num)> and std::is_arithmetic_v<decltype(Weight::den)>,
@@ -535,7 +538,7 @@ double genericAStar<State, Heuristic, Expand, Weight, BeamWidth, Lazy, Acyclic, 
         if (seen_states.get(top.state) < top.state.g())
             continue; // we already reached this state on a cheaper path, skip
 
-        if (top.state.is_goal())
+        if (top.state.is_goal(context...))
             return top.state.g();
 
         explore_state(top.state, heuristic, expand, context...);

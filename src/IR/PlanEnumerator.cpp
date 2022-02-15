@@ -868,10 +868,20 @@ struct SearchStateBase : crtp<Actual, SearchStateBase>
     /*----- Getters --------------------------------------------------------------------------------------------------*/
 
     /** Returns `true` iff this is a goal state. */
-    bool is_goal() const { return actual().is_goal(); }
+    template<typename PlanTable>
+    bool is_goal(const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
+                 const CardinalityEstimator &CE) const
+    {
+        return actual().is_goal(PT, G, M, CF, CE);
+    }
 
     /** Returns the cost to reach this state from the initial state. */
     double g() const { return actual().g(); }
+
+    /*----- Setters --------------------------------------------------------------------------------------------------*/
+
+    /** Reduces the *g* value of the state. */
+    double decrease_g(double new_g) const { return actual().decrease_g(new_g); }
 
     /*----- Comparison -----------------------------------------------------------------------------------------------*/
 
@@ -930,7 +940,7 @@ struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBo
 
     private:
     ///> the cost to reach this state from the initial state
-    double g_;
+    mutable double g_;
     ///> number of subproblems in this state
     size_type size_ = 0;
     ///> array of subproblems
@@ -1020,8 +1030,14 @@ struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBo
 
     /*----- Getters --------------------------------------------------------------------------------------------------*/
 
-    bool is_goal() const { return size() <= 1; }
+    template<typename PlanTable>
+    bool is_goal(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&,
+                 const CardinalityEstimator&) const
+    {
+        return size() <= 1;
+    }
     double g() const { return g_; }
+    void decrease_g(double new_g) const { M_insist(new_g <= g_); g_ = new_g; }
     size_type size() const { return size_; }
     Subproblem operator[](std::size_t idx) const { M_insist(idx < size_); return subproblems_[idx]; }
 
@@ -1128,7 +1144,7 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp<Alloc
     ///> number of joins necessary to reach goal
     size_type num_joins_to_goal_ = 0;
     ///> the cost to reach this state from the initial state
-    double g_;
+    mutable double g_;
     ///> number of joins performed to reach this state
     size_type num_joins_ = 0;
     ///> array of IDs of joins performed
@@ -1236,8 +1252,14 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp<Alloc
 
     /*----- Getters --------------------------------------------------------------------------------------------------*/
 
-    bool is_goal() const { return num_joins() == num_joins_to_goal_; }
+    template<typename PlanTable>
+    bool is_goal(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&,
+                 const CardinalityEstimator&) const
+    {
+        return num_joins() == num_joins_to_goal_;
+    }
     double g() const { return g_; }
+    void decrease_g(double new_g) const { M_insist(new_g <= g_); g_ = new_g; }
     size_type num_joins() const { return num_joins_; }
     size_type num_subproblems(const QueryGraph &G) const {
         M_insist(num_joins() < G.num_sources());
@@ -1560,11 +1582,11 @@ struct hsum
          const CardinalityEstimator&)
     { }
 
-    double operator()(const state_type &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix&,
-                      const CostFunction&, const CardinalityEstimator &CE) const
+    double operator()(const state_type &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                      const CostFunction &CF, const CardinalityEstimator &CE) const
     {
         double distance = 0;
-        if (not state.is_goal()) {
+        if (not state.is_goal(PT, G, M, CF, CE)) {
             state.for_each_subproblem([&](Subproblem S) {
                 distance += CE.predict_cardinality(*PT[S].model);
             }, G);
@@ -1612,7 +1634,7 @@ struct bottomup_lookahead_cheapest
     double operator()(const state_type &state, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                       const CostFunction &CF, const CardinalityEstimator &CE) const
     {
-        if (state.is_goal()) return 0;
+        if (state.is_goal(PT, G, M, CF, CE)) return 0;
 
         double distance = 0;
         for (auto s : state)
@@ -1752,7 +1774,7 @@ struct checkpoints
     double operator()(const state_type &state, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                       const CostFunction &CF, const CardinalityEstimator &CE)
     {
-        if (state.is_goal()) return 0;
+        if (state.is_goal(PT, G, M, CF, CE)) return 0;
 
         /*----- Compute checkpoints for this `state`. ----------------------------------------------------------------*/
         std::vector<Subproblem> checkpoints;

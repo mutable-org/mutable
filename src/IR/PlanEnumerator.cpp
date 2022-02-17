@@ -1019,15 +1019,6 @@ struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBo
         return SearchStateSubproblemsBottomUp(size, std::move(subproblems));
     }
 
-    static SearchStateSubproblemsBottomUp CreateGoal(double g) { return SearchStateSubproblemsBottomUp(g, 0, nullptr); }
-
-    template<typename It>
-    static SearchStateSubproblemsBottomUp CreateFromSubproblems(const QueryGraph&, const AdjacencyMatrix&, double g,
-                                                         It begin, It end)
-    {
-        return SearchStateSubproblemsBottomUp(g, begin, end);
-    }
-
     /*----- Getters --------------------------------------------------------------------------------------------------*/
 
     template<typename PlanTable>
@@ -1237,17 +1228,6 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp<Alloc
 
     static SearchStateEdgesBottomUp CreateInitial(const QueryGraph &G, const AdjacencyMatrix&) {
         return SearchStateEdgesBottomUp(G.num_sources() - 1, 0, nullptr);
-    }
-
-    static SearchStateEdgesBottomUp CreateGoal(const QueryGraph &G, const AdjacencyMatrix&, double g) {
-        return SearchStateEdgesBottomUp(G.num_sources() - 1, g, 0, nullptr);
-    }
-
-    template<typename It>
-    static SearchStateEdgesBottomUp CreateFromSubproblems(const QueryGraph &G, const AdjacencyMatrix&, double g,
-                                                              It begin, It end)
-    {
-        return SearchStateEdgesBottomUp(G.num_sources() - 1, g, begin, end);
     }
 
     /*----- Getters --------------------------------------------------------------------------------------------------*/
@@ -1690,11 +1670,13 @@ struct bottomup_lookahead_cheapest
  */
 template<typename PlanTable, typename State>
 struct checkpoints
-{
-    using state_type = State;
+{ };
 
-    private:
-    using internal_state_type = SearchStateSubproblemsBottomUp<typename State::allocator_type>;
+/*----- Specialization for SearchStateSubproblemsBottomUp ------------------------------------------------------------*/
+template<typename PlanTable, typename Allocator>
+struct checkpoints<PlanTable, SearchStateSubproblemsBottomUp<Allocator>>
+{
+    using state_type = SearchStateSubproblemsBottomUp<Allocator>;
 
     ///> the distance between two checkpoints, i.e. the difference in the number of relations contained in two
     ///> consecutive checkpoints
@@ -1703,7 +1685,7 @@ struct checkpoints
     /** This heuristic estimates the distance from a state to the nearest goal state as the sum of the sizes of all
      * `Subproblem`s yet to be joined.
      * This heuristic is admissible, yet dramatically underestimates the actual distance to a goal state.  */
-    using internal_hsum = hsum<PlanTable, internal_state_type>;
+    using internal_hsum = hsum<PlanTable, state_type>;
 
     /** Represents one specific search done in the checkpoints heurisitc with its `initial_state` and `goal`.  Used to
      * determine which searches have already been conducted and thus need not be conducted again but can be loaded from
@@ -1711,16 +1693,16 @@ struct checkpoints
     struct SearchSection
     {
         private:
-        internal_state_type initial_state_;
+        state_type initial_state_;
         Subproblem goal_;
 
         public:
-        SearchSection(internal_state_type state, Subproblem goal)
+        SearchSection(state_type state, Subproblem goal)
             : initial_state_(std::move(state))
             , goal_(goal)
         { }
 
-        const internal_state_type & initial_state() const { return initial_state_; }
+        const state_type & initial_state() const { return initial_state_; }
         Subproblem goal() const { return goal_; }
 
         bool operator==(const SearchSection &other) const {
@@ -1736,7 +1718,7 @@ struct checkpoints
     {
         uint64_t operator()(const SearchSection &section) const {
             using std::hash;
-            return hash<internal_state_type>{}(section.initial_state()) * 0x100000001b3UL ^ uint64_t(section.goal());
+            return hash<state_type>{}(section.initial_state()) * 0x100000001b3UL ^ uint64_t(section.goal());
         }
     };
 
@@ -1745,7 +1727,7 @@ struct checkpoints
     std::unordered_map<SearchSection, double, SearchSectionHash> cached_searches_;
 
     ai::AStar<
-        internal_state_type,
+        state_type,
         internal_hsum,
         ExpandBottomUpComplete,
         /*----- context ----- */
@@ -1759,8 +1741,8 @@ struct checkpoints
     std::vector<std::pair<SmallBitset, SmallBitset>> worklist_;
 
     public:
-    checkpoints(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction&,
-                const CardinalityEstimator &CE)
+    checkpoints(PlanTable&, const QueryGraph &G, const AdjacencyMatrix&, const CostFunction&,
+                const CardinalityEstimator&)
     {
         worklist_.reserve(G.sources().size());
     }
@@ -1861,7 +1843,7 @@ struct checkpoints
                 }
 
                 M_insist(not next_checkpoint.empty(), "if there are more subproblems than CHECKPOINT_DISTANCE, "
-                                                    "we *must* find at least one checkpoint");
+                                                      "we *must* find at least one checkpoint");
 
                 checkpoints.emplace_back(next_checkpoint);
                 auto it = subproblems.begin();
@@ -1926,16 +1908,15 @@ struct checkpoints
                                       subproblem_lt));
 
                 /* Construct initial state for local search to next checkpoint. */
-                internal_state_type initial_state = internal_state_type::CreateFromSubproblems(
-                    G, M, 0, subproblems_current_checkpoint.begin(), subproblems_current_checkpoint.end()
-                );
+                state_type initial_state(0, subproblems_current_checkpoint.begin(),
+                                            subproblems_current_checkpoint.end());
                 SearchSection cache_candidate(std::move(initial_state), checkpoint);
 
                 if (auto it = cached_searches_.find(cache_candidate); it != cached_searches_.end()) {
                     h_checkpoints += it->second;
                 } else {
                     internal_hsum h(PT, G, M, CF, CE);
-                    const double cost = S_.search(internal_state_type(cache_candidate.initial_state()), // clone
+                    const double cost = S_.search(state_type(cache_candidate.initial_state()), // clone
                                                   h, ExpandBottomUpComplete{}, PT, G, M, CF, CE);
                     S_.clear();
                     h_checkpoints += cost;

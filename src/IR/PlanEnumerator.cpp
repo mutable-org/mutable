@@ -1326,8 +1326,9 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp<Alloc
             const unsigned left_idx  = datasource_to_subproblem[sources[0]->id()];
             const unsigned right_idx = datasource_to_subproblem[sources[1]->id()];
             subproblems[left_idx] |= subproblems[right_idx];
+            for (auto id : subproblems[right_idx])
+                datasource_to_subproblem[id] = left_idx;
             subproblems[right_idx] = Subproblem();
-            datasource_to_subproblem[sources[1]->id()] = left_idx;
         }
 
 #ifndef NDEBUG

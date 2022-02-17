@@ -18,10 +18,6 @@ struct AdjacencyMatrix;
 
 namespace ai {
 
-#ifndef NDEBUG
-static bool is_first_search = true;
-#endif
-
 
 /*======================================================================================================================
  * Type Traits for Heuristic Search

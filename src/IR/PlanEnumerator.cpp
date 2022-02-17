@@ -1957,55 +1957,6 @@ struct checkpoints
 #endif
         return h_checkpoints;
     }
-
-    private:
-    /** Computes the `DataModel` of `Subproblem` `S` by recursive decomposition.  Requires that `S` is *connected* in `G`.
-     */
-    void compute_data_model_recursive(const Subproblem S, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
-                                      const CardinalityEstimator &CE) {
-        M_insist(not PT[S].model, "we already have a data model for this subproblem");
-        // num_calls_compute_data_model_recursive_ += 1;
-        M_insist(M.is_connected(S), "S must be a connected subproblem");
-
-        auto [left, right] = decompose(S, PT, M);
-        if (not PT[left].model)
-            compute_data_model_recursive(left,  PT, G, M, CE);
-        if (not PT[right].model)
-            compute_data_model_recursive(right, PT, G, M, CE);
-        PT[S].model = CE.estimate_join(G, *PT[left].model, *PT[right].model, cnf::CNF());
-    }
-
-    /** Decomposes `Subproblem` `S` into two smaller, non-empty `Subproblem`s, that are connected w.r.t. `M`.
-     * Try to be clever and search for a decomposition where both sides already have a data model. */
-    std::pair<Subproblem, Subproblem> decompose(const Subproblem S, const PlanTable&, const AdjacencyMatrix &M) {
-        M_insist(S.size() >= 2);
-        M_insist(M.is_connected(S));
-
-        auto it = S.begin();
-        std::pair<Subproblem, Subproblem> decomposition;
-        for (; it != S.end(); ++it) {
-            const Subproblem left = it.as_set();
-            M_insist(left.size() == 1);
-            const Subproblem right = S - left;
-#if 0
-            if (PT[right].model) { // we already have a data model for right (and left), so return immediately
-                M_insist(M.is_connected(right));
-                return {left, right};
-            }
-            if (not M.is_connected(right)) continue;
-            decomposition = {left, right};
-#else
-            if (M.is_connected(right))
-                return {left, right};
-#endif
-        }
-        M_unreachable("must have found a valid decomposition");
-        M_insist(decomposition.first.size() == 1);
-        M_insist(M.is_connected(decomposition.second));
-        M_insist(M.is_connected(decomposition.first, decomposition.second));
-        M_insist((decomposition.first & decomposition.second).empty());
-        return decomposition;
-    }
 };
 
 }

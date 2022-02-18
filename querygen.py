@@ -154,4 +154,5 @@ if __name__ == '__main__':
     with open(schema_filename, 'w') as F:
         write_schema(F, relations)
     with open(query_filename, 'w') as F:
-        write_query(F, relations)
+        for _ in range(args.count):
+            write_query(F, relations)

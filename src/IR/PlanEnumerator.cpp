@@ -2030,6 +2030,10 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    monotone_dynamic_beam_search    )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  perfect_oracle,                 AStar                           )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  perfect_oracle,                 beam_search                     )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        hsum,                           AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        hsum,                           beam_search                     )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        hsum,                           monotone_beam_search            )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        hsum,                           monotone_dynamic_beam_search    )
         else { throw std::invalid_argument("illegal search configuration"); }
 #undef EMIT_HEURISTIC_SEARCH_CONFIG
 

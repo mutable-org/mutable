@@ -2,6 +2,8 @@
 
 #include "util/ADT.hpp"
 #include <algorithm>
+#include <boost/container/allocator.hpp>
+#include <boost/container/node_allocator.hpp>
 #include <cstring>
 #include <globals.hpp>
 #include <iostream>
@@ -917,12 +919,11 @@ typename SearchStateBase<Actual>::state_counters_t
 SearchStateBase<Actual>::state_counters_;
 #endif
 
-template<typename Allocator>
-struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBottomUp<Allocator>>
+struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBottomUp>
 {
-    using base_type = SearchStateBase<SearchStateSubproblemsBottomUp<Allocator>>;
+    using base_type = SearchStateBase<SearchStateSubproblemsBottomUp>;
+    using allocator_type = boost::container::node_allocator<Subproblem>;
     using size_type = typename base_type::size_type;
-    using allocator_type = Allocator;
     using iterator = Subproblem*;
     using const_iterator = const Subproblem*;
 
@@ -931,20 +932,15 @@ struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBo
     static allocator_type allocator_;
 
     public:
-    static allocator_type & ALLOCATOR() { return allocator_; }
-    static allocator_type ALLOCATOR(allocator_type &&A) {
-        allocator_type tmp = std::move(allocator_);
-        allocator_ = std::move(A);
-        return tmp;
-    }
+    ///> returns a reference to the class-wide allocator
+    static allocator_type & get_allocator() { return allocator_; }
 
-    private:
     ///> the cost to reach this state from the initial state
     mutable double g_;
     ///> number of subproblems in this state
     size_type size_ = 0;
     ///> array of subproblems
-    std::unique_ptr<Subproblem[]> subproblems_;
+    Subproblem *subproblems_ = nullptr;
 
     /*----- The Big Four and a Half, copy & swap idiom ---------------------------------------------------------------*/
     public:
@@ -958,19 +954,19 @@ struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBo
     SearchStateSubproblemsBottomUp() = default;
 
     /** Creates a state with actual costs `g` and given `subproblems`. */
-    SearchStateSubproblemsBottomUp(double g, size_type size, std::unique_ptr<Subproblem[]> subproblems)
+    SearchStateSubproblemsBottomUp(double g, size_type size, Subproblem *subproblems)
         : g_(g)
         , size_(size)
-        , subproblems_(std::move(subproblems))
+        , subproblems_(subproblems)
     {
-        M_insist(size == 0 or bool(subproblems_));
+        M_insist(size == 0 or subproblems_);
         M_insist(std::is_sorted(begin(), end(), subproblem_lt));
         base_type::INCREMENT_NUM_STATES_CONSTRUCTED();
     }
 
     /** Creates an initial state with the given `subproblems`. */
-    SearchStateSubproblemsBottomUp(size_type size, std::unique_ptr<Subproblem[]> subproblems)
-        : SearchStateSubproblemsBottomUp(0, size, std::move(subproblems))
+    SearchStateSubproblemsBottomUp(size_type size, Subproblem *subproblems)
+        : SearchStateSubproblemsBottomUp(0, size, subproblems)
     { }
 
     /** Creates a state with actual costs `g` and subproblems in range `[begin; end)`. */
@@ -978,7 +974,7 @@ struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBo
     SearchStateSubproblemsBottomUp(double g, It begin, It end)
         : g_(g)
         , size_(std::distance(begin, end))
-        , subproblems_(ALLOCATOR().template make_unique<Subproblem[]>(size_))
+        , subproblems_(allocator_.allocate(size_))
     {
         M_insist(begin != end);
         std::copy(begin, end, this->begin());
@@ -990,10 +986,10 @@ struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBo
     explicit SearchStateSubproblemsBottomUp(const SearchStateSubproblemsBottomUp &other)
         : g_(other.g_)
         , size_(other.size_)
-        , subproblems_(ALLOCATOR().template make_unique<Subproblem[]>(size_))
+        , subproblems_(allocator_.allocate(size_))
     {
         base_type::INCREMENT_NUM_STATES_CONSTRUCTED();
-        M_insist(bool(subproblems_));
+        M_insist(subproblems_);
         std::copy(other.begin(), other.end(), this->begin());
     }
 
@@ -1005,18 +1001,18 @@ struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBo
     /** D'tor. */
     ~SearchStateSubproblemsBottomUp() {
         if (subproblems_) base_type::INCREMENT_NUM_STATES_DISPOSED();
-        ALLOCATOR().dispose(std::move(subproblems_), size_);
+        allocator_.deallocate(subproblems_, size_);
     }
 
     /*----- Factory methods. -----------------------------------------------------------------------------------------*/
 
     static SearchStateSubproblemsBottomUp CreateInitial(const QueryGraph &G, const AdjacencyMatrix&) {
         const size_type size = G.sources().size();
-        auto subproblems = ALLOCATOR().template make_unique<Subproblem[]>(size);
+        auto subproblems = allocator_.allocate(size);
         for (auto ds : G.sources())
             new (&subproblems[ds->id()]) Subproblem(1UL << ds->id());
-        M_insist(std::is_sorted(subproblems.get(), subproblems.get() + size, subproblem_lt));
-        return SearchStateSubproblemsBottomUp(size, std::move(subproblems));
+        M_insist(std::is_sorted(subproblems, subproblems + size, subproblem_lt));
+        return SearchStateSubproblemsBottomUp(size, subproblems);
     }
 
     /*----- Getters --------------------------------------------------------------------------------------------------*/
@@ -1034,9 +1030,9 @@ struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBo
 
     /*----- Iteration ------------------------------------------------------------------------------------------------*/
 
-    iterator begin() { return subproblems_.get(); };
+    iterator begin() { return subproblems_; };
     iterator end() { return begin() + size(); }
-    const_iterator begin() const { return subproblems_.get(); };
+    const_iterator begin() const { return subproblems_; };
     const_iterator end() const { return begin() + size(); }
     const_iterator cbegin() const { return begin(); };
     const_iterator cend() const { return end(); }
@@ -1083,18 +1079,16 @@ M_LCOV_EXCL_START
 M_LCOV_EXCL_STOP
 };
 
-template<typename Allocator>
-typename SearchStateSubproblemsBottomUp<Allocator>::allocator_type
-SearchStateSubproblemsBottomUp<Allocator>::allocator_;
+SearchStateSubproblemsBottomUp::allocator_type SearchStateSubproblemsBottomUp::allocator_;
 
 }
 
 namespace std {
 
-template<typename Allocator>
-struct hash<SearchStateSubproblemsBottomUp<Allocator>>
+template<>
+struct hash<SearchStateSubproblemsBottomUp>
 {
-    uint64_t operator()(const SearchStateSubproblemsBottomUp<Allocator> &state) const {
+    uint64_t operator()(const SearchStateSubproblemsBottomUp &state) const {
         /* Rolling hash with multiplier taken from [1] where the moduli is 2^64.
          * [1] http://www.ams.org/mcom/1999-68-225/S0025-5718-99-00996-5/S0025-5718-99-00996-5.pdf */
         uint64_t hash = 0;
@@ -1110,12 +1104,11 @@ struct hash<SearchStateSubproblemsBottomUp<Allocator>>
 
 namespace {
 
-template<typename Allocator>
-struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp<Allocator>>
+struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp>
 {
-    using base_type = SearchStateBase<SearchStateEdgesBottomUp<Allocator>>;
+    using base_type = SearchStateBase<SearchStateEdgesBottomUp>;
+    using allocator_type = boost::container::node_allocator<unsigned>;
     using size_type = typename base_type::size_type;
-    using allocator_type = Allocator;
     using iterator = unsigned*;
     using const_iterator = const unsigned*;
 
@@ -1124,12 +1117,8 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp<Alloc
     static allocator_type allocator_;
 
     public:
-    static allocator_type & ALLOCATOR() { return allocator_; }
-    static allocator_type ALLOCATOR(allocator_type &&A) {
-        allocator_type tmp = std::move(allocator_);
-        allocator_ = std::move(A);
-        return tmp;
-    }
+    ///> returns a reference to the class-wide allocator
+    static allocator_type & get_allocator() { return allocator_; }
 
     private:
     ///> number of joins necessary to reach goal
@@ -1139,7 +1128,7 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp<Alloc
     ///> number of joins performed to reach this state
     size_type num_joins_ = 0;
     ///> array of IDs of joins performed
-    std::unique_ptr<unsigned[]> joins_;
+    unsigned *joins_ = nullptr;
 
     /*----- The Big Four and a Half, copy & swap idiom ---------------------------------------------------------------*/
     public:
@@ -1155,11 +1144,11 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp<Alloc
 
     /** Creates a state with actual costs `g` and given `subproblems`. */
     SearchStateEdgesBottomUp(size_type num_joins_to_goal, double g, size_type num_joins,
-                             std::unique_ptr<unsigned[]> joins)
+                             unsigned *joins)
         : num_joins_to_goal_(num_joins_to_goal)
         , g_(g)
         , num_joins_(num_joins)
-        , joins_(std::move(joins))
+        , joins_(joins)
     {
         M_insist(num_joins_ == 0 or bool(joins_));
         M_insist(std::is_sorted(cbegin(), cend()), "joins must be sorted by index");
@@ -1170,8 +1159,8 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp<Alloc
     }
 
     /** Creates an initial state with the given `subproblems`. */
-    SearchStateEdgesBottomUp(size_type num_joins_to_goal, size_type num_joins, std::unique_ptr<unsigned[]> joins)
-        : SearchStateEdgesBottomUp(num_joins_to_goal, 0, num_joins, std::move(joins))
+    SearchStateEdgesBottomUp(size_type num_joins_to_goal, size_type num_joins, unsigned *joins)
+        : SearchStateEdgesBottomUp(num_joins_to_goal, 0, num_joins, joins)
     { }
 
     /** Creates a state with actual costs `g` and subproblems in range `[begin; end)`. */
@@ -1180,7 +1169,7 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp<Alloc
         : num_joins_to_goal_(num_joins_to_goal)
         , g_(g)
         , num_joins_(std::distance(begin, end))
-        , joins_(ALLOCATOR().template make_unique<unsigned[]>(num_joins_))
+        , joins_(allocator_.allocate(num_joins_))
     {
         M_insist(begin != end);
         std::copy(begin, end, this->begin());
@@ -1196,7 +1185,7 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp<Alloc
         : num_joins_to_goal_(other.num_joins_to_goal_)
         , g_(other.g_)
         , num_joins_(other.num_joins_)
-        , joins_(ALLOCATOR().template make_unique<unsigned[]>(num_joins_))
+        , joins_(allocator_.allocate(num_joins_))
     {
         M_insist(bool(joins_));
         M_insist(std::is_sorted(cbegin(), cend()), "joins must be sorted by index");
@@ -1221,7 +1210,7 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp<Alloc
             base_type::INCREMENT_NUM_STATES_DISPOSED();
         }
 #endif
-        ALLOCATOR().dispose(std::move(joins_), num_joins_);
+        allocator_.deallocate(joins_, num_joins_);
     }
 
     /*----- Factory methods. -----------------------------------------------------------------------------------------*/
@@ -1250,9 +1239,9 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp<Alloc
 
     /*----- Iteration ------------------------------------------------------------------------------------------------*/
 
-    iterator begin() { return joins_.get(); };
+    iterator begin() { return joins_; };
     iterator end() { return begin() + num_joins(); }
-    const_iterator begin() const { return joins_.get(); };
+    const_iterator begin() const { return joins_; };
     const_iterator end() const { return begin() + num_joins(); }
     const_iterator cbegin() const { return begin(); };
     const_iterator cend() const { return end(); }
@@ -1348,18 +1337,16 @@ M_LCOV_EXCL_START
 M_LCOV_EXCL_STOP
 };
 
-template<typename Allocator>
-typename SearchStateEdgesBottomUp<Allocator>::allocator_type
-SearchStateEdgesBottomUp<Allocator>::allocator_;
+SearchStateEdgesBottomUp::allocator_type SearchStateEdgesBottomUp::allocator_;
 
 }
 
 namespace std {
 
-template<typename Allocator>
-struct hash<SearchStateEdgesBottomUp<Allocator>>
+template<>
+struct hash<SearchStateEdgesBottomUp>
 {
-    uint64_t operator()(const SearchStateEdgesBottomUp<Allocator> &state) const {
+    uint64_t operator()(const SearchStateEdgesBottomUp &state) const {
         /* Rolling hash with multiplier taken from [1] where the moduli is 2^64.
          * [1] http://www.ams.org/mcom/1999-68-225/S0025-5718-99-00996-5/S0025-5718-99-00996-5.pdf */
         uint64_t hash = 0;
@@ -1380,8 +1367,8 @@ struct hash<SearchStateEdgesBottomUp<Allocator>>
 
 struct ExpandBottomUpComplete
 {
-    template<typename Allocator, typename Callback, typename PlanTable>
-    void operator()(const SearchStateSubproblemsBottomUp<Allocator> &state, Callback &&callback, PlanTable &PT,
+    template<typename Callback, typename PlanTable>
+    void operator()(const SearchStateSubproblemsBottomUp &state, Callback &&callback, PlanTable &PT,
                     const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
                     const CardinalityEstimator &CE) const
     {
@@ -1399,14 +1386,14 @@ struct ExpandBottomUpComplete
                     const Subproblem joined = *outer_it | *inner_it;
 
                     /* Compute new subproblems after join */
-                    auto subproblems = state.ALLOCATOR().template make_unique<Subproblem[]>(state.size() - 1);
-                    Subproblem *ptr = subproblems.get();
+                    auto subproblems = state.get_allocator().allocate(state.size() - 1);
+                    Subproblem *ptr = subproblems;
                     for (auto it = state.cbegin(); it != state.cend(); ++it) {
                         if (it == outer_it) continue; // skip outer
                         else if (it == inner_it) new (ptr++) Subproblem(joined); // replace inner
                         else new (ptr++) Subproblem(*it);
                     }
-                    M_insist(std::is_sorted(subproblems.get(), subproblems.get() + state.size() - 1, subproblem_lt));
+                    M_insist(std::is_sorted(subproblems, subproblems + state.size() - 1, subproblem_lt));
 
                     /* Compute total cost. */
                     cnf::CNF condition; // TODO use join condition
@@ -1417,8 +1404,7 @@ struct ExpandBottomUpComplete
                     const double action_cost = total_cost - (PT[*outer_it].cost + PT[*inner_it].cost);
 
                     /* Create new SearchState. */
-                    SearchStateSubproblemsBottomUp<Allocator> S(state.g() + action_cost, state.size() - 1,
-                                                         std::move(subproblems));
+                    SearchStateSubproblemsBottomUp S(state.g() + action_cost, state.size() - 1, std::move(subproblems));
                     state.INCREMENT_NUM_STATES_GENERATED();
                     callback(std::move(S));
                 }
@@ -1426,8 +1412,8 @@ struct ExpandBottomUpComplete
         }
     }
 
-    template<typename Allocator, typename Callback, typename PlanTable>
-    void operator()(const SearchStateEdgesBottomUp<Allocator> &state, Callback &&callback, PlanTable &PT,
+    template<typename Callback, typename PlanTable>
+    void operator()(const SearchStateEdgesBottomUp &state, Callback &&callback, PlanTable &PT,
                     const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
                     const CardinalityEstimator &CE) const
     {
@@ -1502,8 +1488,8 @@ struct ExpandBottomUpComplete
                 /* Compute action cost. */
                 const double action_cost = total_cost - (PT[subproblems[left]].cost + PT[subproblems[right]].cost);
 
-                SearchStateEdgesBottomUp<Allocator> S(state.num_joins_to_goal(), state.g() + action_cost,
-                                                      joins, joins + state.num_joins() + 1);
+                SearchStateEdgesBottomUp S(state.num_joins_to_goal(), state.g() + action_cost, joins,
+                                           joins + state.num_joins() + 1);
                 state.INCREMENT_NUM_STATES_GENERATED();
                 callback(std::move(S));
             }
@@ -1673,10 +1659,10 @@ struct checkpoints
 { };
 
 /*----- Specialization for SearchStateSubproblemsBottomUp ------------------------------------------------------------*/
-template<typename PlanTable, typename Allocator>
-struct checkpoints<PlanTable, SearchStateSubproblemsBottomUp<Allocator>>
+template<typename PlanTable>
+struct checkpoints<PlanTable, SearchStateSubproblemsBottomUp>
 {
-    using state_type = SearchStateSubproblemsBottomUp<Allocator>;
+    using state_type = SearchStateSubproblemsBottomUp;
 
     ///> the distance between two checkpoints, i.e. the difference in the number of relations contained in two
     ///> consecutive checkpoints
@@ -1970,8 +1956,6 @@ template<
 void run_heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
                           const CardinalityEstimator &CE)
 {
-    // State::ALLOCATOR(list_allocator(get_pagesize(), AllocationStrategy::Exponential));
-    State::ALLOCATOR(malloc_allocator{});
     State::RESET_STATE_COUNTERS();
     State initial_state = State::CreateInitial(G, M);
     try {
@@ -2000,7 +1984,6 @@ void run_heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMat
               << "\nStates disposed: " << State::NUM_STATES_DISPOSED()
               << std::endl;
 #endif
-    State::ALLOCATOR(malloc_allocator{}); // reset allocator
 }
 
 /** Computes the join order using heuristic search */
@@ -2023,14 +2006,18 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         { \
             run_heuristic_search<\
                 PlanTable, \
-                SearchState ## STATE<malloc_allocator>,\
-                heuristics:: HEURISTIC <PlanTable, SearchState ## STATE<malloc_allocator>>,\
+                SearchState ## STATE,\
+                heuristics:: HEURISTIC <PlanTable, SearchState ## STATE>,\
                 SEARCH>\
             (PT, G, M, CF, CE); \
         }
 
              EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  hsum,                           AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        hsum,                           AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  hsum,                           lazyAStar                       )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  hsum,                           beam_search                     )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  hsum,                           dynamic_beam_search             )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  hsum,                           monotone_beam_search            )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  hsum,                           monotone_dynamic_beam_search    )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  hprod,                          AStar                           )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  bottomup_lookahead_cheapest,    AStar                           )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    AStar                           )

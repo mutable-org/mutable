@@ -22,7 +22,7 @@ else()
     set(Boost_USE_STATIC_LIBS ON)
 endif()
 set(Boost_USE_MULTITHREADED ON)
-find_package(Boost COMPONENTS system REQUIRED)
+find_package(Boost REQUIRED COMPONENTS system container)
 
 # Git
 find_package(Git REQUIRED)

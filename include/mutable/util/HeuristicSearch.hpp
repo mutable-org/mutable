@@ -1,6 +1,8 @@
 #pragma once
 
 #include <algorithm>
+#include <boost/container/allocator.hpp>
+#include <boost/container/node_allocator.hpp>
 #include <boost/heap/binomial_heap.hpp>
 #include <exception>
 #include <map>
@@ -191,7 +193,14 @@ struct StateManager
         StateInfo & operator=(StateInfo&&) = default;
     };
 
-    using map_type = std::unordered_map<state_type, StateInfo>;
+    using map_value_type = std::pair<const state_type, StateInfo>;
+    using map_type = std::unordered_map<
+        /* Key=       */ state_type,
+        /* Mapped=    */ StateInfo,
+        /* Hash=      */ std::hash<state_type>,
+        /* KeyEqual=  */ std::equal_to<state_type>,
+        /* Allocator= */ boost::container::node_allocator<map_value_type>
+    >;
     ///> map of all states ever explored, mapping state to its info
     map_type states_;
 

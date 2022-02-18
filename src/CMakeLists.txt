@@ -40,6 +40,7 @@ add_library(
     $<TARGET_OBJECTS:catalog>
     $<TARGET_OBJECTS:util>
 )
+target_link_libraries(frontend ${Boost_LIBRARIES})
 
 add_executable(lex-bin lex.cpp)
 target_link_libraries(lex-bin frontend)

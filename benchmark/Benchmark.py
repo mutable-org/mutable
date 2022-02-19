@@ -3,6 +3,7 @@
 from colorama import Fore, Back, Style
 from git import Repo
 from pandas.api.types import is_numeric_dtype
+from sqlobject.converters import sqlrepr
 from tqdm import tqdm
 import argparse
 import datetime
@@ -11,7 +12,6 @@ import itertools
 import json
 import math
 import numpy
-import MySQLdb
 import os
 import pandas
 import re
@@ -273,9 +273,9 @@ def perform_experiment(experiment_name, yml, path_to_file):
 # Generate a .pgsql file to load the results into the database
 #=======================================================================================================================
 
-def escape(input_str):
-    escaped = MySQLdb.escape_string(str(input_str))
-    return escaped.decode('utf-8')
+# Converts an inpit string to a string in a SQL statement.  Performs quoting and escaping.
+def dbstr(input_str):
+    return sqlrepr(input_str, 'postgres')
 
 def generate_pgsql(commit, results):
     _, nodename, *_ = os.uname()
@@ -349,11 +349,11 @@ DECLARE
     chartconfig_id integer;
 BEGIN
     -- Get timestamp
-    PERFORM insert_timestamp('{escape(commit)}', '{escape(now)}', '{escape(nodename)}');
+    PERFORM insert_timestamp({dbstr(commit.hexsha)}, {dbstr(now)}, {dbstr(nodename)});
     SELECT id FROM "Timestamps"
-    WHERE commit='{escape(commit)}'
-      AND timestamp='{escape(now)}'
-      AND host='{escape(nodename)}'
+    WHERE commit={dbstr(commit.hexsha)}
+      AND timestamp={dbstr(now)}
+      AND host={dbstr(nodename)}
     INTO timestamp_id;
 ''')
 
@@ -361,19 +361,19 @@ BEGIN
             # Insert Suite
             output_sql_file.write(f'''
     -- Get suite
-    PERFORM insert_suite('{escape(suite)}');
+    PERFORM insert_suite({dbstr(suite)});
     SELECT id FROM "Suites"
-    WHERE name='{escape(suite)}'
+    WHERE name={dbstr(suite)}
     INTO suite_id;
 ''')
 
             for benchmark, experiments in benchmarks.items():
                 output_sql_file.write(f'''
     -- Get benchmark
-    PERFORM insert_benchmark(suite_id, '{escape(benchmark)}');
+    PERFORM insert_benchmark(suite_id, {dbstr(benchmark)});
     SELECT id FROM "Benchmarks"
     WHERE suite=suite_id
-      AND name='{escape(benchmark)}'
+      AND name={dbstr(benchmark)}
     INTO benchmark_id;
 ''')
 
@@ -385,7 +385,7 @@ BEGIN
                         chart = yml['chart']
                         for dimension, dimension_config in chart.items():
                             for attr, val in dimension_config.items():
-                                chart_config[f'{attr}_{dimension}'] = "'{0}'".format(escape(val))
+                                chart_config[f'{attr}_{dimension}'] = dbstr(val)
 
                     chart_scale_x = chart_config.get('scale_x', "'linear'")
                     chart_scale_y = chart_config.get('scale_y', "'linear'")
@@ -414,11 +414,11 @@ BEGIN
 
                     output_sql_file.write(f'''
     -- Get experiment
-    PERFORM insert_experiment(benchmark_id, suite_id, '{escape(experiment)}', {version}, '{escape(description)}', {read_only}, chartconfig_id);
+    PERFORM insert_experiment(benchmark_id, suite_id, {dbstr(experiment)}, {version}, {dbstr(description)}, {read_only}, chartconfig_id);
     SELECT id FROM "Experiments"
     WHERE benchmark=benchmark_id
       AND suite=suite_id
-      AND name='{escape(experiment)}'
+      AND name={dbstr(experiment)}
       AND version={version}
     INTO experiment_id;
 ''')
@@ -433,14 +433,14 @@ BEGIN
                             parameters.append(' '.join(config_params))
                         output_sql_file.write(f'''
     -- Get config
-    PERFORM insert_configuration('{escape(config)}', '{escape(" ".join(parameters))}');
+    PERFORM insert_configuration({dbstr(config)}, {dbstr(" ".join(parameters))});
     SELECT id FROM "Configurations"
-    WHERE name='{escape(config)}'
-      AND parameters='{escape(" ".join(parameters))}'
+    WHERE name={dbstr(config)}
+      AND parameters={dbstr(" ".join(parameters))}
     INTO configuration_id;
 
     -- Write measurements
-    --  timestamp:  ('{commit}', '{now}', '{nodename}')
+    --  timestamp:  ('{commit.hexsha}', '{now}', '{nodename}')
     --  suite:      '{suite}'
     --  benchmark:  '{benchmark}'
     --  experiment: '{experiment}'

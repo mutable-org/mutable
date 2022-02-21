@@ -1357,6 +1357,304 @@ struct hash<search_states::EdgesBottomUp>
 
 }
 
+namespace search_states {
+
+struct EdgePtrBottomUp : Base<EdgePtrBottomUp>
+{
+    using base_type = Base<EdgePtrBottomUp>;
+    using size_type = typename base_type::size_type;
+
+    private:
+    template<bool IsConst>
+    struct the_iterator
+    {
+        static constexpr bool is_const = IsConst;
+
+        using pointer_type = std::conditional_t<is_const, const EdgePtrBottomUp*, EdgePtrBottomUp*>;
+        using reference_type = std::conditional_t<is_const, const EdgePtrBottomUp&, EdgePtrBottomUp&>;
+
+        private:
+        pointer_type state_ = nullptr;
+
+        public:
+        the_iterator() = default;
+        the_iterator(pointer_type state) : state_(state) { }
+
+        bool operator==(the_iterator other) const { return this->state_ == other.state_; }
+        bool operator!=(the_iterator other) const { return not operator==(other); }
+
+        the_iterator & operator++() {
+            M_notnull(state_);
+            state_ = state_->parent();
+            return *this;
+        }
+
+        the_iterator operator++(int) {
+            the_iterator clone(this->state_);
+            operator++();
+            return clone;
+        }
+
+        pointer_type operator->() const { return M_notnull(state_); }
+        reference_type operator*() const { return *M_notnull(state_); }
+    };
+    public:
+    using iterator = the_iterator<false>;
+    using const_iterator = the_iterator<true>;
+
+    private:
+    /*----- Scratchpad -----*/
+    struct Scratchpad
+    {
+        friend void swap(Scratchpad &first, Scratchpad &second) {
+            using std::swap;
+            swap(first.owner,                    second.owner);
+            swap(first.subproblems,              second.subproblems);
+            swap(first.datasource_to_subproblem, second.datasource_to_subproblem);
+        }
+
+        const EdgePtrBottomUp *owner = nullptr;
+        Subproblem *subproblems = nullptr;
+        uint8_t *datasource_to_subproblem = nullptr;
+
+        Scratchpad() = default;
+        Scratchpad(const QueryGraph &G)
+            : subproblems(new Subproblem[G.num_sources()])
+            , datasource_to_subproblem(new uint8_t[G.num_sources()])
+         { }
+
+        Scratchpad(const Scratchpad&) = delete;
+        Scratchpad(Scratchpad &&other) : Scratchpad() { swap(*this, other); }
+
+        ~Scratchpad() {
+            delete[] subproblems;
+            delete[] datasource_to_subproblem;
+            owner = nullptr;
+            subproblems = nullptr;
+            datasource_to_subproblem = nullptr;
+        }
+
+        Scratchpad & operator=(Scratchpad other) { swap(*this, other); return *this; }
+
+        bool is_allocated() const { return subproblems != nullptr; }
+        bool owned_by(const EdgePtrBottomUp *state) const { return owner == state; }
+
+        void make_owner(const EdgePtrBottomUp *state, const QueryGraph &G) {
+            M_insist(is_allocated());
+            if (owned_by(state)) return; // nothing to be done
+            owner = state;
+            state->compute_datasource_to_subproblem_index(G, subproblems, datasource_to_subproblem);
+        }
+    };
+    static Scratchpad scratchpad_;
+
+    private:
+    mutable double g_;
+    const EdgePtrBottomUp *parent_ = nullptr;
+    unsigned join_id_;
+    unsigned num_joins_;
+
+    /*----- The Big Four and a Half, copy & swap idiom ---------------------------------------------------------------*/
+    public:
+    friend void swap(EdgePtrBottomUp &first, EdgePtrBottomUp &second) {
+        using std::swap;
+        swap(first.g_,         second.g_);
+        swap(first.parent_,    second.parent_);
+        swap(first.join_id_,   second.join_id_);
+        swap(first.num_joins_, second.num_joins_);
+    }
+
+    /** Creates an initial state. */
+    EdgePtrBottomUp(const QueryGraph &G)
+        : g_(0)
+        , num_joins_(0)
+    {
+        INCREMENT_NUM_STATES_CONSTRUCTED();
+    }
+
+    /** Creates a state with actual costs `g` and given `subproblems`. */
+    EdgePtrBottomUp(const EdgePtrBottomUp *parent, unsigned num_joins, double g, unsigned join_id)
+        : g_(g)
+        , parent_(parent)
+        , join_id_(join_id)
+        , num_joins_(num_joins)
+    {
+        INCREMENT_NUM_STATES_CONSTRUCTED();
+    }
+
+    ~EdgePtrBottomUp() {
+        if (parent_)
+            INCREMENT_NUM_STATES_DISPOSED();
+    }
+
+    /** Copy c'tor. */
+    EdgePtrBottomUp(const EdgePtrBottomUp&) = delete;
+    /** Move c'tor. */
+    EdgePtrBottomUp(EdgePtrBottomUp &&other) { swap(*this, other); }
+    /** Assignment. */
+    EdgePtrBottomUp & operator=(EdgePtrBottomUp other) { swap(*this, other); return *this; }
+
+    /*----- Factory methods. -----------------------------------------------------------------------------------------*/
+
+    static EdgePtrBottomUp CreateInitial(const QueryGraph &G, const AdjacencyMatrix&) {
+        if (not scratchpad_.is_allocated())
+            scratchpad_ = Scratchpad(G);
+        return EdgePtrBottomUp(G);
+    }
+
+    /*----- Getters --------------------------------------------------------------------------------------------------*/
+
+    template<typename PlanTable>
+    bool is_goal(const PlanTable&, const QueryGraph &G, const AdjacencyMatrix&, const CostFunction&,
+                 const CardinalityEstimator&) const
+    {
+        return num_joins() == G.num_sources() - 1;
+    }
+
+    double g() const { return g_; }
+    void decrease_g(double new_g) const { M_insist(new_g <= g_); g_ = new_g; }
+    const EdgePtrBottomUp * parent() const { return parent_; }
+    unsigned join_id() const { M_notnull(parent_); return join_id_; }
+    unsigned num_joins() const { return num_joins_; }
+    unsigned num_joins_remaining(const QueryGraph &G) const { return G.num_sources() - 1 - num_joins(); }
+
+    /*----- Iteration ------------------------------------------------------------------------------------------------*/
+
+    iterator begin() { return iterator(this); }
+    iterator end()   { return iterator(); }
+    const_iterator begin() const { return const_iterator(this); }
+    const_iterator end()   const { return const_iterator(); }
+    const_iterator cbegin() const { return begin(); }
+    const_iterator cend()   const { return end(); }
+
+    template<typename Callback>
+    void for_each_subproblem(Callback &&callback, const QueryGraph &G) const {
+        Subproblem subproblems[G.num_sources()];
+        uint8_t datasource_to_subproblem[G.num_sources()];
+        compute_datasource_to_subproblem_index(G, subproblems, datasource_to_subproblem);
+
+        for (Subproblem *it = subproblems, *end = subproblems + G.num_sources(); it != end; ++it) {
+            if (not it->empty())
+                callback(*it);
+        }
+    }
+
+    /*----- Comparison -----------------------------------------------------------------------------------------------*/
+
+    /** Returns `true` iff `this` and `other` have the exact same joins. */
+    bool operator==(const EdgePtrBottomUp &other) const {
+        if (this->num_joins() != other.num_joins())
+            return false;
+
+        /*----- Collect all joins of `this`. -----*/
+        unsigned this_joins[num_joins()];
+        auto ptr = this_joins;
+        for (auto it = this->cbegin(); it->parent(); ++it, ++ptr)
+            *ptr = it->join_id();
+
+        /*----- Compare with joins of `other`. -----*/
+        const auto end = this_joins + num_joins();
+        for (auto it = other.cbegin(); it->parent(); ++it) {
+            auto pos = std::find(this_joins, end, it->join_id());
+            if (pos == end)
+                return false;
+        }
+        return true;
+    }
+
+    bool operator!=(const EdgePtrBottomUp &other) const { return not operator==(other); }
+
+    /*----- Edge calculations ----------------------------------------------------------------------------------------*/
+
+    /** Computes the `Subproblem`s produced by the `Join`s of this state in `subproblems`.  Simultaniously, buils a
+     * reverse index that maps from `DataSource` ID to `Subproblem` in `datasource_to_subproblem`.  */
+    void compute_datasource_to_subproblem_index(const QueryGraph &G, Subproblem *subproblems,
+                                                uint8_t *datasource_to_subproblem) const
+    {
+        /*----- Initialize datasource_to_subproblem reverse index. -----*/
+        for (std::size_t idx = 0; idx != G.num_sources(); ++idx) {
+            new (&datasource_to_subproblem[idx]) int8_t(idx);
+            new (&subproblems[idx]) Subproblem(1UL << idx);
+        }
+
+        /*----- Update index with joins performed so far. -----*/
+        const EdgePtrBottomUp *runner = this;
+        while (runner->parent()) {
+            const Join *join = G.joins()[runner->join_id()];
+            const auto &sources = join->sources();
+            const unsigned left_idx  = datasource_to_subproblem[sources[0]->id()];
+            const unsigned right_idx = datasource_to_subproblem[sources[1]->id()];
+            subproblems[left_idx] |= subproblems[right_idx];
+            for (auto id : subproblems[right_idx])
+                datasource_to_subproblem[id] = left_idx;
+            subproblems[right_idx] = Subproblem();
+            runner = runner->parent();
+        }
+
+#ifndef NDEBUG
+        for (std::size_t idx = 0; idx != G.num_sources(); ++idx) {
+            Subproblem S = subproblems[datasource_to_subproblem[idx]];
+            M_insist(not S.empty(), "reverse index must never point to an empty subproblem");
+        }
+        Subproblem All((1UL << G.num_sources()) - 1UL);
+        Subproblem combined;
+        for (std::size_t idx = 0; idx != G.num_sources(); ++idx) {
+            Subproblem S = subproblems[idx];
+            if (S.empty()) continue;
+            M_insist((S & combined).empty(), "current subproblem must be disjoint from all others");
+            combined |= S;
+        }
+        M_insist(All == combined, "must not loose a relation");
+#endif
+    }
+
+
+    /*----- Debugging ------------------------------------------------------------------------------------------------*/
+M_LCOV_EXCL_START
+    friend std::ostream & operator<<(std::ostream &out, const EdgePtrBottomUp &S) {
+        out << "g = " << S.g() << ", [";
+        for (auto it = S.cbegin(); it->parent(); ++it) {
+            if (it != S.cbegin()) out << ", ";
+            out << it->join_id();
+        }
+        return out << ']';
+    }
+
+    void dump(std::ostream &out) const { out << *this << std::endl; }
+    void dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
+};
+
+EdgePtrBottomUp::Scratchpad EdgePtrBottomUp::scratchpad_;
+
+}
+
+namespace std {
+
+template<>
+struct hash<search_states::EdgePtrBottomUp>
+{
+    uint64_t operator()(const search_states::EdgePtrBottomUp &state) const {
+        /*----- Collect all joins in sorted order. -----*/
+        unsigned joins[state.num_joins()];
+        unsigned *ptr = joins;
+        for (auto it = state.cbegin(); it->parent(); ++it, ++ptr)
+            *ptr = it->join_id();
+        std::sort(joins, joins + state.num_joins());
+
+        /* Rolling hash with multiplier taken from [1] where the moduli is 2^64.
+         * [1] http://www.ams.org/mcom/1999-68-225/S0025-5718-99-00996-5/S0025-5718-99-00996-5.pdf */
+        uint64_t hash = 0;
+        for (auto it = joins; it != joins + state.num_joins(); ++it) {
+            hash = hash ^ *it;
+            hash = hash * 1181783497276652981UL + 4292484099903637661UL;
+        }
+        return hash;
+    }
+};
+
+}
+
 
 /*----------------------------------------------------------------------------------------------------------------------
  * Expansions
@@ -1503,6 +1801,86 @@ next:
             if (joins[j] == G.num_joins())
                 break;
         };
+    }
+
+    template<typename Callback, typename PlanTable>
+    void operator()(const EdgePtrBottomUp &state, Callback &&callback, PlanTable &PT,
+                    const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
+                    const CardinalityEstimator &CE) const
+    {
+        state.INCREMENT_NUM_STATES_EXPANDED();
+
+        /*----- Compute datasource to subproblem reverse index. -----*/
+        Subproblem subproblems[G.num_sources()];
+        uint8_t datasource_to_subproblem[G.num_sources()];
+        state.compute_datasource_to_subproblem_index(G, subproblems, datasource_to_subproblem);
+
+        /*----- Initialize join matrix. -----*/
+        const unsigned size_of_join_matrix = G.num_sources() * (G.num_sources() - 1) / 2;
+        ///> stores for each combination of subproblems whether they were joint yet
+        bool join_matrix[size_of_join_matrix];
+        std::fill_n(join_matrix, size_of_join_matrix, false);
+        auto joined = [&G, size_of_join_matrix](bool *matrix, unsigned row, unsigned col) -> bool& {
+            const unsigned x = std::min(row, col);
+            const unsigned y = std::max(row, col);
+            M_insist(y < G.num_sources());
+            M_insist(x < y);
+            M_insist(y * (y - 1) / 2 + x < size_of_join_matrix);
+            return matrix[ y * (y - 1) / 2 + x ];
+        };
+
+        /*----- Collect all joins of `state`. -----*/
+        unsigned joins_taken[state.num_joins()];
+        {
+            unsigned *ptr = joins_taken;
+            for (auto it = state.cbegin(); it->parent(); ++it, ++ptr)
+                *ptr = it->join_id();
+            std::sort(joins_taken, joins_taken + state.num_joins());
+        }
+
+        /*----- Enumerate all joins that can still be performed. -----*/
+        unsigned *sweepline = joins_taken;
+        for (std::size_t j = 0; j != G.num_joins(); ++j) {
+            if (sweepline != joins_taken + state.num_joins() and j == *sweepline) {
+                /*----- Join already present. -----*/
+                ++sweepline;
+                continue;
+            }
+
+            const Join *join = G.joins()[j];
+            const auto &sources = join->sources();
+
+            /*----- Check whether the join is subsumed by joins in `state`. -----*/
+            const unsigned left  = datasource_to_subproblem[sources[0]->id()];
+            const unsigned right = datasource_to_subproblem[sources[1]->id()];
+            if (left == right) continue; // the data sources joined already belong to the same subproblem
+
+            /*----- Check whether the join is subsumed by a previously considered join. -----*/
+            if (bool &was_joined_before = joined(join_matrix, left, right); was_joined_before)
+                continue;
+            else
+                was_joined_before = true; // this will be joined now
+
+            /*----- This is a feasible join.  Compute the successor state. -----*/
+            M_insist(not subproblems[left].empty());
+            M_insist(not subproblems[right].empty());
+            M_insist(M.is_connected(subproblems[left], subproblems[right]));
+
+            /*----- Compute total cost. -----*/
+            cnf::CNF condition; // TODO use join condition
+            const double total_cost = CF.calculate_join_cost(G, PT, CE, subproblems[left], subproblems[right], condition);
+            PT.update(G, CE, subproblems[left], subproblems[right], total_cost);
+
+            /* Compute action cost. */
+            const double action_cost = total_cost - (PT[subproblems[left]].cost + PT[subproblems[right]].cost);
+
+            EdgePtrBottomUp S(/* parent=    */ &state,
+                              /* num_joins= */ state.num_joins() + 1,
+                              /* g=         */ state.g() + action_cost,
+                              /* join_id=   */ j);
+            state.INCREMENT_NUM_STATES_GENERATED();
+            callback(std::move(S));
+        }
     }
 };
 

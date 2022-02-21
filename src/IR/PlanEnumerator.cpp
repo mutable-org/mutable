@@ -1554,8 +1554,7 @@ struct sum
 {
     using state_type = State;
 
-    sum(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&,
-         const CardinalityEstimator&)
+    sum(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&, const CardinalityEstimator&)
     { }
 
     double operator()(const state_type &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
@@ -1567,6 +1566,40 @@ struct sum
                 distance += CE.predict_cardinality(*PT[S].model);
             }, G);
         }
+        return distance;
+    }
+};
+
+template<typename PlanTable, typename State>
+struct scaled_sum;
+
+
+template<typename PlanTable>
+struct scaled_sum<PlanTable, SubproblemsBottomUp>
+{
+    using state_type = SubproblemsBottomUp;
+
+    scaled_sum(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&,
+               const CardinalityEstimator&)
+    { }
+
+    double operator()(const state_type &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                      const CostFunction &CF, const CardinalityEstimator &CE) const
+    {
+        double distance = 0;
+        double cardinalities[G.num_sources()];
+        std::size_t num_sources = 0;
+
+        if (not state.is_goal(PT, G, M, CF, CE)) {
+            state.for_each_subproblem([&](Subproblem S) {
+                cardinalities[num_sources++] = CE.predict_cardinality(*PT[S].model);
+            }, G);
+            std::sort(cardinalities, cardinalities + num_sources, std::greater<double>());
+            for (std::size_t i = 0; i != num_sources - 1; ++i)
+                distance += (i+1) * cardinalities[i];
+            distance += (num_sources-1) * cardinalities[num_sources - 1];
+        }
+
         return distance;
     }
 };
@@ -2027,6 +2060,9 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            dynamic_beam_search             )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            monotone_beam_search            )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            monotone_dynamic_beam_search    )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  scaled_sum,                     AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  scaled_sum,                     monotone_beam_search            )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  scaled_sum,                     monotone_dynamic_beam_search    )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  product,                        AStar                           )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  bottomup_lookahead_cheapest,    AStar                           )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    AStar                           )

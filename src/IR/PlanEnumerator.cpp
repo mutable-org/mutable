@@ -1094,7 +1094,7 @@ struct hash<search_states::SubproblemsBottomUp>
         uint64_t hash = 0;
         for (Subproblem s : state) {
             hash = hash ^ uint64_t(s);
-            hash = hash * 3935559000370003845UL + 0xcbf29ce484222325UL;
+            hash = hash * 1181783497276652981UL + 4292484099903637661UL;
         }
         return hash;
     }
@@ -1352,7 +1352,7 @@ struct hash<search_states::EdgesBottomUp>
         uint64_t hash = 0;
         for (unsigned join_idx : state) {
             hash = hash ^ join_idx;
-            hash = hash * 3935559000370003845UL + 0xcbf29ce484222325UL;
+            hash = hash * 1181783497276652981UL + 4292484099903637661UL;
         }
         return hash;
     }

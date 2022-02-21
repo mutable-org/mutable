@@ -28,9 +28,6 @@
 using namespace m;
 
 
-#define OUT std::cerr
-
-
 const std::unordered_map<std::string, PlanEnumerator::kind_t> PlanEnumerator::STR_TO_KIND = {
 #define M_PLAN_ENUMERATOR(NAME, _) { #NAME,  PlanEnumerator::PE_ ## NAME },
 #include <mutable/tables/PlanEnumerator.tbl>
@@ -1434,7 +1431,6 @@ struct ExpandBottomUpComplete
         ///> stores for each combination of subproblems whether they were joint yet
         bool join_matrix[size_of_join_matrix];
         std::fill_n(join_matrix, size_of_join_matrix, false);
-
         auto joined = [&G, size_of_join_matrix](bool *matrix, unsigned row, unsigned col) -> bool& {
             const unsigned x = std::min(row, col);
             const unsigned y = std::max(row, col);
@@ -1469,8 +1465,7 @@ struct ExpandBottomUpComplete
             /*----- Check whether the join is subsumed by joins in `state`. -----*/
             const unsigned left  = datasource_to_subproblem[sources[0]->id()];
             const unsigned right = datasource_to_subproblem[sources[1]->id()];
-            if (left == right) // the data sources joined already belong to the same subproblem
-                goto next;
+            if (left == right) goto next; // the data sources joined already belong to the same subproblem
 
             /*----- Check whether the join is subsumed by a previously considered join. -----*/
             if (bool &was_joined_before = joined(join_matrix, left, right); was_joined_before)
@@ -1571,13 +1566,9 @@ struct sum
 };
 
 template<typename PlanTable, typename State>
-struct scaled_sum;
-
-
-template<typename PlanTable>
-struct scaled_sum<PlanTable, SubproblemsBottomUp>
+struct scaled_sum
 {
-    using state_type = SubproblemsBottomUp;
+    using state_type = State;
 
     scaled_sum(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&,
                const CardinalityEstimator&)
@@ -2079,6 +2070,9 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            beam_search                     )
         else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            monotone_beam_search            )
         else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            monotone_dynamic_beam_search    )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        scaled_sum,                     AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        scaled_sum,                     monotone_beam_search            )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        scaled_sum,                     monotone_dynamic_beam_search    )
         else { throw std::invalid_argument("illegal search configuration"); }
 #undef EMIT_HEURISTIC_SEARCH_CONFIG
 

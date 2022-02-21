@@ -797,7 +797,7 @@ inline bool subproblem_lt(Subproblem left, Subproblem right) { return uint64_t(l
  * States
  *--------------------------------------------------------------------------------------------------------------------*/
 
-namespace {
+namespace search_states {
 
 // #define WITH_STATE_COUNTERS
 #if !defined(NDEBUG) && !defined(WITH_STATE_COUNTERS)
@@ -811,9 +811,9 @@ namespace {
  * joined.
  */
 template<typename Actual>
-struct SearchStateBase : crtp<Actual, SearchStateBase>
+struct Base : crtp<Actual, Base>
 {
-    using crtp<Actual, SearchStateBase>::actual;
+    using crtp<Actual, Base>::actual;
     using size_type = std::size_t;
 
     /*----- State counters -------------------------------------------------------------------------------------------*/
@@ -887,9 +887,9 @@ struct SearchStateBase : crtp<Actual, SearchStateBase>
 
     /*----- Comparison -----------------------------------------------------------------------------------------------*/
 
-    bool operator==(const SearchStateBase &other) const { return actual().operator==(other.actual()); }
-    bool operator!=(const SearchStateBase &other) const { return actual().operator!=(other.actual()); }
-    bool operator<(const SearchStateBase &other) const { return actual().operator<(other.actual()); }
+    bool operator==(const Base &other) const { return actual().operator==(other.actual()); }
+    bool operator!=(const Base &other) const { return actual().operator!=(other.actual()); }
+    bool operator<(const Base &other) const { return actual().operator<(other.actual()); }
 
     /** Returns `true` iff `this` and `other` have the exact same `Subproblem`s. */
     /** Calls `callback` on every state reachable from this state by a single actions. */
@@ -915,13 +915,13 @@ M_LCOV_EXCL_STOP
 
 #ifdef WITH_STATE_COUNTERS
 template<typename Actual>
-typename SearchStateBase<Actual>::state_counters_t
-SearchStateBase<Actual>::state_counters_;
+typename Base<Actual>::state_counters_t
+Base<Actual>::state_counters_;
 #endif
 
-struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBottomUp>
+struct SubproblemsBottomUp : Base<SubproblemsBottomUp>
 {
-    using base_type = SearchStateBase<SearchStateSubproblemsBottomUp>;
+    using base_type = Base<SubproblemsBottomUp>;
     using allocator_type = boost::container::node_allocator<Subproblem>;
     using size_type = typename base_type::size_type;
     using iterator = Subproblem*;
@@ -944,17 +944,17 @@ struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBo
 
     /*----- The Big Four and a Half, copy & swap idiom ---------------------------------------------------------------*/
     public:
-    friend void swap(SearchStateSubproblemsBottomUp &first, SearchStateSubproblemsBottomUp &second) {
+    friend void swap(SubproblemsBottomUp &first, SubproblemsBottomUp &second) {
         using std::swap;
         swap(first.g_,           second.g_);
         swap(first.size_,        second.size_);
         swap(first.subproblems_, second.subproblems_);
     }
 
-    SearchStateSubproblemsBottomUp() = default;
+    SubproblemsBottomUp() = default;
 
     /** Creates a state with actual costs `g` and given `subproblems`. */
-    SearchStateSubproblemsBottomUp(double g, size_type size, Subproblem *subproblems)
+    SubproblemsBottomUp(double g, size_type size, Subproblem *subproblems)
         : g_(g)
         , size_(size)
         , subproblems_(subproblems)
@@ -965,13 +965,13 @@ struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBo
     }
 
     /** Creates an initial state with the given `subproblems`. */
-    SearchStateSubproblemsBottomUp(size_type size, Subproblem *subproblems)
-        : SearchStateSubproblemsBottomUp(0, size, subproblems)
+    SubproblemsBottomUp(size_type size, Subproblem *subproblems)
+        : SubproblemsBottomUp(0, size, subproblems)
     { }
 
     /** Creates a state with actual costs `g` and subproblems in range `[begin; end)`. */
     template<typename It>
-    SearchStateSubproblemsBottomUp(double g, It begin, It end)
+    SubproblemsBottomUp(double g, It begin, It end)
         : g_(g)
         , size_(std::distance(begin, end))
         , subproblems_(allocator_.allocate(size_))
@@ -983,7 +983,7 @@ struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBo
     }
 
     /** Copy c'tor. */
-    explicit SearchStateSubproblemsBottomUp(const SearchStateSubproblemsBottomUp &other)
+    explicit SubproblemsBottomUp(const SubproblemsBottomUp &other)
         : g_(other.g_)
         , size_(other.size_)
         , subproblems_(allocator_.allocate(size_))
@@ -994,25 +994,25 @@ struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBo
     }
 
     /** Move c'tor. */
-    SearchStateSubproblemsBottomUp(SearchStateSubproblemsBottomUp &&other) : SearchStateSubproblemsBottomUp() { swap(*this, other); }
+    SubproblemsBottomUp(SubproblemsBottomUp &&other) : SubproblemsBottomUp() { swap(*this, other); }
     /** Assignment. */
-    SearchStateSubproblemsBottomUp & operator=(SearchStateSubproblemsBottomUp other) { swap(*this, other); return *this; }
+    SubproblemsBottomUp & operator=(SubproblemsBottomUp other) { swap(*this, other); return *this; }
 
     /** D'tor. */
-    ~SearchStateSubproblemsBottomUp() {
+    ~SubproblemsBottomUp() {
         if (subproblems_) base_type::INCREMENT_NUM_STATES_DISPOSED();
         allocator_.deallocate(subproblems_, size_);
     }
 
     /*----- Factory methods. -----------------------------------------------------------------------------------------*/
 
-    static SearchStateSubproblemsBottomUp CreateInitial(const QueryGraph &G, const AdjacencyMatrix&) {
+    static SubproblemsBottomUp CreateInitial(const QueryGraph &G, const AdjacencyMatrix&) {
         const size_type size = G.sources().size();
         auto subproblems = allocator_.allocate(size);
         for (auto ds : G.sources())
             new (&subproblems[ds->id()]) Subproblem(1UL << ds->id());
         M_insist(std::is_sorted(subproblems, subproblems + size, subproblem_lt));
-        return SearchStateSubproblemsBottomUp(size, subproblems);
+        return SubproblemsBottomUp(size, subproblems);
     }
 
     /*----- Getters --------------------------------------------------------------------------------------------------*/
@@ -1046,7 +1046,7 @@ struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBo
     /*----- Comparison -----------------------------------------------------------------------------------------------*/
 
     /** Returns `true` iff `this` and `other` have the exact same `Subproblem`s. */
-    bool operator==(const SearchStateSubproblemsBottomUp &other) const {
+    bool operator==(const SubproblemsBottomUp &other) const {
         if (this->size() != other.size()) return false;
         M_insist(this->size() == other.size());
         auto this_it = this->cbegin();
@@ -1058,14 +1058,14 @@ struct SearchStateSubproblemsBottomUp : SearchStateBase<SearchStateSubproblemsBo
         return true;
     }
 
-    bool operator!=(const SearchStateSubproblemsBottomUp &other) const { return not operator==(other); }
+    bool operator!=(const SubproblemsBottomUp &other) const { return not operator==(other); }
 
-    bool operator<(const SearchStateSubproblemsBottomUp &other) const {
+    bool operator<(const SubproblemsBottomUp &other) const {
         return std::lexicographical_compare(cbegin(), cend(), other.cbegin(), other.cend(), subproblem_lt);
     }
 
 M_LCOV_EXCL_START
-    friend std::ostream & operator<<(std::ostream &out, const SearchStateSubproblemsBottomUp &S) {
+    friend std::ostream & operator<<(std::ostream &out, const SubproblemsBottomUp &S) {
         out << "g = " << S.g() << ", [";
         for (auto it = S.cbegin(); it != S.cend(); ++it) {
             if (it != S.cbegin()) out << ", ";
@@ -1079,16 +1079,16 @@ M_LCOV_EXCL_START
 M_LCOV_EXCL_STOP
 };
 
-SearchStateSubproblemsBottomUp::allocator_type SearchStateSubproblemsBottomUp::allocator_;
+SubproblemsBottomUp::allocator_type SubproblemsBottomUp::allocator_;
 
 }
 
 namespace std {
 
 template<>
-struct hash<SearchStateSubproblemsBottomUp>
+struct hash<search_states::SubproblemsBottomUp>
 {
-    uint64_t operator()(const SearchStateSubproblemsBottomUp &state) const {
+    uint64_t operator()(const search_states::SubproblemsBottomUp &state) const {
         /* Rolling hash with multiplier taken from [1] where the moduli is 2^64.
          * [1] http://www.ams.org/mcom/1999-68-225/S0025-5718-99-00996-5/S0025-5718-99-00996-5.pdf */
         uint64_t hash = 0;
@@ -1102,11 +1102,11 @@ struct hash<SearchStateSubproblemsBottomUp>
 
 }
 
-namespace {
+namespace search_states {
 
-struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp>
+struct EdgesBottomUp : Base<EdgesBottomUp>
 {
-    using base_type = SearchStateBase<SearchStateEdgesBottomUp>;
+    using base_type = Base<EdgesBottomUp>;
     using allocator_type = boost::container::node_allocator<unsigned>;
     using size_type = typename base_type::size_type;
     using iterator = unsigned*;
@@ -1132,7 +1132,7 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp>
 
     /*----- The Big Four and a Half, copy & swap idiom ---------------------------------------------------------------*/
     public:
-    friend void swap(SearchStateEdgesBottomUp &first, SearchStateEdgesBottomUp &second) {
+    friend void swap(EdgesBottomUp &first, EdgesBottomUp &second) {
         using std::swap;
         swap(first.g_,                 second.g_);
         swap(first.num_joins_,         second.num_joins_);
@@ -1140,10 +1140,10 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp>
         swap(first.joins_,             second.joins_);
     }
 
-    SearchStateEdgesBottomUp() = default;
+    EdgesBottomUp() = default;
 
     /** Creates a state with actual costs `g` and given `subproblems`. */
-    SearchStateEdgesBottomUp(size_type num_joins_to_goal, double g, size_type num_joins,
+    EdgesBottomUp(size_type num_joins_to_goal, double g, size_type num_joins,
                              unsigned *joins)
         : num_joins_to_goal_(num_joins_to_goal)
         , g_(g)
@@ -1159,13 +1159,13 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp>
     }
 
     /** Creates an initial state with the given `subproblems`. */
-    SearchStateEdgesBottomUp(size_type num_joins_to_goal, size_type num_joins, unsigned *joins)
-        : SearchStateEdgesBottomUp(num_joins_to_goal, 0, num_joins, joins)
+    EdgesBottomUp(size_type num_joins_to_goal, size_type num_joins, unsigned *joins)
+        : EdgesBottomUp(num_joins_to_goal, 0, num_joins, joins)
     { }
 
     /** Creates a state with actual costs `g` and subproblems in range `[begin; end)`. */
     template<typename It>
-    SearchStateEdgesBottomUp(size_type num_joins_to_goal, double g, It begin, It end)
+    EdgesBottomUp(size_type num_joins_to_goal, double g, It begin, It end)
         : num_joins_to_goal_(num_joins_to_goal)
         , g_(g)
         , num_joins_(std::distance(begin, end))
@@ -1181,7 +1181,7 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp>
     }
 
     /** Copy c'tor. */
-    explicit SearchStateEdgesBottomUp(const SearchStateEdgesBottomUp &other)
+    explicit EdgesBottomUp(const EdgesBottomUp &other)
         : num_joins_to_goal_(other.num_joins_to_goal_)
         , g_(other.g_)
         , num_joins_(other.num_joins_)
@@ -1197,13 +1197,13 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp>
     }
 
     /** Move c'tor. */
-    SearchStateEdgesBottomUp(SearchStateEdgesBottomUp &&other) : SearchStateEdgesBottomUp()
+    EdgesBottomUp(EdgesBottomUp &&other) : EdgesBottomUp()
     { swap(*this, other); }
     /** Assignment. */
-    SearchStateEdgesBottomUp & operator=(SearchStateEdgesBottomUp other) { swap(*this, other); return *this; }
+    EdgesBottomUp & operator=(EdgesBottomUp other) { swap(*this, other); return *this; }
 
     /** D'tor. */
-    ~SearchStateEdgesBottomUp() {
+    ~EdgesBottomUp() {
 #ifdef WITH_STATE_COUNTERS
         if (num_joins_) {
             M_insist(bool(joins_));
@@ -1215,8 +1215,8 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp>
 
     /*----- Factory methods. -----------------------------------------------------------------------------------------*/
 
-    static SearchStateEdgesBottomUp CreateInitial(const QueryGraph &G, const AdjacencyMatrix&) {
-        return SearchStateEdgesBottomUp(G.num_sources() - 1, 0, nullptr);
+    static EdgesBottomUp CreateInitial(const QueryGraph &G, const AdjacencyMatrix&) {
+        return EdgesBottomUp(G.num_sources() - 1, 0, nullptr);
     }
 
     /*----- Getters --------------------------------------------------------------------------------------------------*/
@@ -1261,7 +1261,7 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp>
     /*----- Comparison -----------------------------------------------------------------------------------------------*/
 
     /** Returns `true` iff `this` and `other` have the exact same joins. */
-    bool operator==(const SearchStateEdgesBottomUp &other) const {
+    bool operator==(const EdgesBottomUp &other) const {
         if (this->num_joins() != other.num_joins()) return false;
         M_insist(this->num_joins() == other.num_joins());
         auto this_it = this->cbegin();
@@ -1273,7 +1273,7 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp>
         return true;
     }
 
-    bool operator!=(const SearchStateEdgesBottomUp &other) const { return not operator==(other); }
+    bool operator!=(const EdgesBottomUp &other) const { return not operator==(other); }
 
     /*----- Edge calculations ----------------------------------------------------------------------------------------*/
 
@@ -1323,7 +1323,7 @@ struct SearchStateEdgesBottomUp : SearchStateBase<SearchStateEdgesBottomUp>
 
     /*----- Debugging ------------------------------------------------------------------------------------------------*/
 M_LCOV_EXCL_START
-    friend std::ostream & operator<<(std::ostream &out, const SearchStateEdgesBottomUp &S) {
+    friend std::ostream & operator<<(std::ostream &out, const EdgesBottomUp &S) {
         out << "g = " << S.g() << ", [";
         for (auto it = S.cbegin(); it != S.cend(); ++it) {
             if (it != S.cbegin()) out << ", ";
@@ -1337,16 +1337,16 @@ M_LCOV_EXCL_START
 M_LCOV_EXCL_STOP
 };
 
-SearchStateEdgesBottomUp::allocator_type SearchStateEdgesBottomUp::allocator_;
+EdgesBottomUp::allocator_type EdgesBottomUp::allocator_;
 
 }
 
 namespace std {
 
 template<>
-struct hash<SearchStateEdgesBottomUp>
+struct hash<search_states::EdgesBottomUp>
 {
-    uint64_t operator()(const SearchStateEdgesBottomUp &state) const {
+    uint64_t operator()(const search_states::EdgesBottomUp &state) const {
         /* Rolling hash with multiplier taken from [1] where the moduli is 2^64.
          * [1] http://www.ams.org/mcom/1999-68-225/S0025-5718-99-00996-5/S0025-5718-99-00996-5.pdf */
         uint64_t hash = 0;
@@ -1365,10 +1365,14 @@ struct hash<SearchStateEdgesBottomUp>
  * Expansions
  *--------------------------------------------------------------------------------------------------------------------*/
 
+namespace expansions {
+
+using namespace search_states;
+
 struct ExpandBottomUpComplete
 {
     template<typename Callback, typename PlanTable>
-    void operator()(const SearchStateSubproblemsBottomUp &state, Callback &&callback, PlanTable &PT,
+    void operator()(const SubproblemsBottomUp &state, Callback &&callback, PlanTable &PT,
                     const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
                     const CardinalityEstimator &CE) const
     {
@@ -1403,8 +1407,8 @@ struct ExpandBottomUpComplete
                     /* Compute action cost. */
                     const double action_cost = total_cost - (PT[*outer_it].cost + PT[*inner_it].cost);
 
-                    /* Create new SearchState. */
-                    SearchStateSubproblemsBottomUp S(state.g() + action_cost, state.size() - 1, std::move(subproblems));
+                    /* Create new search state. */
+                    SubproblemsBottomUp S(state.g() + action_cost, state.size() - 1, std::move(subproblems));
                     state.INCREMENT_NUM_STATES_GENERATED();
                     callback(std::move(S));
                 }
@@ -1413,7 +1417,7 @@ struct ExpandBottomUpComplete
     }
 
     template<typename Callback, typename PlanTable>
-    void operator()(const SearchStateEdgesBottomUp &state, Callback &&callback, PlanTable &PT,
+    void operator()(const EdgesBottomUp &state, Callback &&callback, PlanTable &PT,
                     const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
                     const CardinalityEstimator &CE) const
     {
@@ -1488,7 +1492,7 @@ struct ExpandBottomUpComplete
                 /* Compute action cost. */
                 const double action_cost = total_cost - (PT[subproblems[left]].cost + PT[subproblems[right]].cost);
 
-                SearchStateEdgesBottomUp S(state.num_joins_to_goal(), state.g() + action_cost, joins,
+                EdgesBottomUp S(state.num_joins_to_goal(), state.g() + action_cost, joins,
                                            joins + state.num_joins() + 1);
                 state.INCREMENT_NUM_STATES_GENERATED();
                 callback(std::move(S));
@@ -1507,12 +1511,17 @@ next:
     }
 };
 
+}
+
 
 /*----------------------------------------------------------------------------------------------------------------------
  * Heuristics
  *--------------------------------------------------------------------------------------------------------------------*/
 
 namespace heuristics {
+
+using namespace search_states;
+using namespace expansions;
 
 /** This heuristic implements a perfect oracle, always returning the exact distance to the nearest goal state. */
 template<typename PlanTable, typename State>
@@ -1541,11 +1550,11 @@ struct perfect_oracle
  * This heuristic is admissible, yet dramatically underestimates the actual distance to a goal state.
  */
 template<typename PlanTable, typename State>
-struct hsum
+struct sum
 {
     using state_type = State;
 
-    hsum(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&,
+    sum(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&,
          const CardinalityEstimator&)
     { }
 
@@ -1569,11 +1578,11 @@ struct hsum
  * the overestimation smaller.
  */
 template<typename PlanTable, typename State>
-struct hprod
+struct product
 {
     using state_type = State;
 
-    hprod(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&, const CardinalityEstimator&)
+    product(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&, const CardinalityEstimator&)
     { }
 
     double operator()(const state_type &state, const PlanTable &PT, const QueryGraph&, const AdjacencyMatrix&,
@@ -1658,11 +1667,11 @@ template<typename PlanTable, typename State>
 struct checkpoints
 { };
 
-/*----- Specialization for SearchStateSubproblemsBottomUp ------------------------------------------------------------*/
+/*----- Specialization for SubproblemsBottomUp ------------------------------------------------------------*/
 template<typename PlanTable>
-struct checkpoints<PlanTable, SearchStateSubproblemsBottomUp>
+struct checkpoints<PlanTable, SubproblemsBottomUp>
 {
-    using state_type = SearchStateSubproblemsBottomUp;
+    using state_type = SubproblemsBottomUp;
 
     ///> the distance between two checkpoints, i.e. the difference in the number of relations contained in two
     ///> consecutive checkpoints
@@ -1671,7 +1680,7 @@ struct checkpoints<PlanTable, SearchStateSubproblemsBottomUp>
     /** This heuristic estimates the distance from a state to the nearest goal state as the sum of the sizes of all
      * `Subproblem`s yet to be joined.
      * This heuristic is admissible, yet dramatically underestimates the actual distance to a goal state.  */
-    using internal_hsum = hsum<PlanTable, state_type>;
+    using internal_hsum = sum<PlanTable, state_type>;
 
     /** Represents one specific search done in the checkpoints heurisitc with its `initial_state` and `goal`.  Used to
      * determine which searches have already been conducted and thus need not be conducted again but can be loaded from
@@ -1963,7 +1972,7 @@ void run_heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMat
         ai::search<
             State,
             Heuristic,
-            ExpandBottomUpComplete,
+            expansions::ExpandBottomUpComplete,
             Search,
             /*----- context -----*/
             PlanTable&,
@@ -1971,7 +1980,7 @@ void run_heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMat
             const AdjacencyMatrix&,
             const CostFunction&,
             const CardinalityEstimator&
-        >(std::move(initial_state), h, ExpandBottomUpComplete{}, PT, G, M, CF, CE);
+        >(std::move(initial_state), h, expansions::ExpandBottomUpComplete{}, PT, G, M, CF, CE);
     } catch (std::logic_error err) {
         std::cerr << "search did not reach a goal state, fall back to DPccp" << std::endl;
         DPccp dpccp;
@@ -2006,19 +2015,19 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         { \
             run_heuristic_search<\
                 PlanTable, \
-                SearchState ## STATE,\
-                heuristics:: HEURISTIC <PlanTable, SearchState ## STATE>,\
+                search_states:: STATE,\
+                heuristics:: HEURISTIC <PlanTable, search_states:: STATE>,\
                 SEARCH>\
             (PT, G, M, CF, CE); \
         }
 
-             EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  hsum,                           AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  hsum,                           lazyAStar                       )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  hsum,                           beam_search                     )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  hsum,                           dynamic_beam_search             )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  hsum,                           monotone_beam_search            )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  hsum,                           monotone_dynamic_beam_search    )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  hprod,                          AStar                           )
+             EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            lazyAStar                       )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            beam_search                     )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            dynamic_beam_search             )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            monotone_beam_search            )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            monotone_dynamic_beam_search    )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  product,                        AStar                           )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  bottomup_lookahead_cheapest,    AStar                           )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    AStar                           )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    lazyAStar                       )
@@ -2030,10 +2039,10 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    monotone_dynamic_beam_search    )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  perfect_oracle,                 AStar                           )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  perfect_oracle,                 beam_search                     )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        hsum,                           AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        hsum,                           beam_search                     )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        hsum,                           monotone_beam_search            )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        hsum,                           monotone_dynamic_beam_search    )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            beam_search                     )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            monotone_beam_search            )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            monotone_dynamic_beam_search    )
         else { throw std::invalid_argument("illegal search configuration"); }
 #undef EMIT_HEURISTIC_SEARCH_CONFIG
 

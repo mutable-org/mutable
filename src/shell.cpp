@@ -653,7 +653,7 @@ int main(int argc, const char **argv)
         "specify which state definition to use for plan enumeration via AIPlanning",    /* Description      */
         [&](const char *str) { Options::Get().ai_state = str; }                         /* Callback         */
     );
-    ADD(const char *, Options::Get().ai_heuristic, "hsum",                              /* Type, Var, Init  */
+    ADD(const char *, Options::Get().ai_heuristic, "sum",                               /* Type, Var, Init  */
         nullptr, "--ai-heuristic",                                                      /* Short, Long      */
         "specify which heuristic to use for plan enumeration via AIPlanning",           /* Description      */
         [&](const char *str) { Options::Get().ai_heuristic = str; }                     /* Callback         */

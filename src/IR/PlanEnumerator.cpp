@@ -1997,6 +1997,21 @@ namespace heuristics {
 using namespace search_states;
 using namespace expansions;
 
+template<typename PlanTable, typename State>
+struct zero
+{
+    using state_type = State;
+
+    zero(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&, const CardinalityEstimator&)
+    { }
+
+    double operator()(const state_type&, const PlanTable&, const QueryGraph&, const AdjacencyMatrix&,
+                      const CostFunction&, const CardinalityEstimator&) const
+    {
+        return 0;
+    }
+};
+
 /** This heuristic implements a perfect oracle, always returning the exact distance to the nearest goal state. */
 template<typename PlanTable, typename State>
 struct perfect_oracle
@@ -2524,7 +2539,11 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
             (PT, G, M, CF, CE); \
         }
 
-             EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            AStar                           )
+             EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  zero,                           AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  zero,                           beam_search                     )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  zero,                           monotone_beam_search            )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  zero,                           monotone_dynamic_beam_search    )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            AStar                           )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            lazyAStar                       )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            beam_search                     )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            dynamic_beam_search             )

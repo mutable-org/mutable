@@ -15,4 +15,5 @@ M_PLAN_ENUMERATOR( IKKBZ,                   "greedy algorithm by IK/KBZ, orderin
 M_PLAN_ENUMERATOR( LinearizedDP,            "DP with search space linearization based on IK/KBZ" )
 M_PLAN_ENUMERATOR( TDbasic,                 "basic top-down join enumeration using generate-and-test partitioning" )
 M_PLAN_ENUMERATOR( TDMinCutAGaT,            "top-down join enumeration using minimal graph cuts and advanced generate-and-test partitioning" )
+M_PLAN_ENUMERATOR( GOO,                     "Greedy Operator Ordering" )
 M_PLAN_ENUMERATOR( HeuristicSearch,         "using AI Planning for efficient search space pruning and plan enumeration" )

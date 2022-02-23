@@ -781,6 +781,107 @@ struct TDMinCutAGaT final : PlanEnumeratorCRTP<TDMinCutAGaT>
     }
 };
 
+/*======================================================================================================================
+ * GOO
+ *====================================================================================================================*/
+
+struct GOO : PlanEnumeratorCRTP<GOO>
+{
+    using base_type = PlanEnumeratorCRTP<GOO>;
+    using base_type::operator();
+
+    struct node
+    {
+        Subproblem subproblem;
+        Subproblem neighbors;
+
+        node() = default;
+        node(Subproblem subproblem, Subproblem neighbors)
+            : subproblem(subproblem), neighbors(neighbors)
+        { }
+
+        /** Checks whether two nodes can be merged. */
+        bool can_merge_with(const node &other) const {
+            M_insist(bool(this->subproblem & other.neighbors) == bool(other.subproblem & this->neighbors));
+            return bool(this->subproblem & other.neighbors);
+        }
+
+        /** Merge two nodes. */
+        node merge(const node &other) const {
+            M_insist(can_merge_with(other));
+            const Subproblem S = this->subproblem | other.subproblem;
+            return node(S, (this->neighbors | other.neighbors) - S);
+        }
+
+        /** Merges `this` and `other`. */
+        node operator+(const node &other) const { return merge(other); }
+        /** Merges `other` *into* `this` node. */
+        node & operator+=(const node &other) { *this = *this + other; return *this; }
+
+        /** Checks whether `this` node node can be merged with `other`. */
+        bool operator&(const node &other) const { return can_merge_with(other); }
+    };
+
+    template<typename Callback, typename PlanTable>
+    void for_each_join(Callback &&callback, PlanTable &PT, const QueryGraph &G, const CostFunction &CF,
+                       const CardinalityEstimator &CE, node *begin, node *end) const
+    {
+        cnf::CNF condition; // TODO use join condition
+        while (begin + 1 != end) {
+            using std::swap;
+
+            /*----- Find two most promising subproblems to join. -----*/
+            node *left = nullptr, *right = nullptr;
+            double least_cardinality = std::numeric_limits<double>::infinity();
+            for (node *outer = begin; outer != end; ++outer) {
+                for (node *inner = std::next(outer); inner != end; ++inner) {
+                    if (*outer & *inner) { // can be merged
+                        const Subproblem joined = outer->subproblem | inner->subproblem;
+                        if (not PT[joined].model) {
+                            const double join_cost = CF.calculate_join_cost(G, PT, CE, outer->subproblem,
+                                                                            inner->subproblem, condition);
+                            PT.update(G, CE, outer->subproblem, inner->subproblem, join_cost);
+                        }
+                        const double C_joined = CE.predict_cardinality(*PT[joined].model);
+                        if (C_joined < least_cardinality) {
+                            least_cardinality = C_joined;
+                            left = outer;
+                            right = inner;
+                        }
+                    }
+                }
+            }
+
+            /*----- Issue callback. -----*/
+            callback(left->subproblem, right->subproblem);
+
+            /*----- Join the two most promising subproblems found. -----*/
+            M_notnull(left);
+            M_notnull(right);
+            M_insist(left < right);
+            *left += *right; // merge `right` into `left`
+            swap(*right, *--end); // erase old `right`
+        }
+    }
+
+    template<typename PlanTable>
+    void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
+        const AdjacencyMatrix M(G);
+        auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
+
+        /*----- Initialize subproblems and their neighbors. -----*/
+        node nodes[G.num_sources()];
+        for (std::size_t i = 0; i != G.num_sources(); ++i) {
+            Subproblem S(1UL << i);
+            Subproblem N = M.neighbors(S);
+            nodes[i] = node(S, N);
+        }
+
+        /*----- Greedyly enumerate joins, thereby computing a plan. -----*/
+        for_each_join([](Subproblem, Subproblem){}, PT, G, CF, CE, nodes, nodes + G.num_sources());
+    }
+};
+
 
 /*======================================================================================================================
  * Heuristic Search

@@ -2212,8 +2212,7 @@ struct GOO
  * This heuristic is not admissible and depends highly on the strategy for chosing checkpoints.
  */
 template<typename PlanTable, typename State>
-struct checkpoints
-{ };
+struct checkpoints;
 
 /*----- Specialization for SubproblemsBottomUp ------------------------------------------------------------*/
 template<typename PlanTable>

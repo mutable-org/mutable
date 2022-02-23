@@ -2173,6 +2173,36 @@ struct bottomup_lookahead_cheapest
     }
 };
 
+/** Inspired by GOO: Greedy Operator Ordering.  https://link.springer.com/chapter/10.1007/BFb0054528 */
+template<typename PlanTable, typename State>
+struct GOO
+{
+    using state_type = State;
+
+    GOO(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&, const CardinalityEstimator&)
+    { }
+
+    double operator()(const state_type &state, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                      const CostFunction &CF, const CardinalityEstimator &CE) const
+    {
+        /*----- Initialize nodes. -----*/
+        ::GOO::node nodes[G.num_sources()];
+        std::size_t num_nodes = 0;
+        state.for_each_subproblem([&](Subproblem S) {
+            nodes[num_nodes++] = ::GOO::node(S, M.neighbors(S));
+        }, G);
+
+        /*----- Greedily enumerate all joins. -----*/
+        double cost = 0;
+        ::GOO{}.for_each_join([&](Subproblem left, Subproblem right) {
+            static cnf::CNF condition; // TODO use join condition
+            cost += CF.calculate_join_cost(G, PT, CE, left, right, condition);
+        }, PT, G, CF, CE, nodes, nodes + num_nodes);
+
+        return cost;
+    }
+};
+
 /** This heuristic estimates the distance to the goal by calculating certain checkpoints on the path from the goal state
  * to the current state and searching for plans between those checkpoints.
  * Each checkpoint is a `Subproblem` containing a certain number of relations that has the minimal size for that number
@@ -2553,6 +2583,9 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  scaled_sum,                     monotone_beam_search            )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  scaled_sum,                     monotone_dynamic_beam_search    )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  product,                        AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  GOO,                            AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  GOO,                            monotone_beam_search            )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  GOO,                            monotone_dynamic_beam_search    )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  bottomup_lookahead_cheapest,    AStar                           )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    AStar                           )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    lazyAStar                       )

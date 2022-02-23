@@ -1887,7 +1887,7 @@ struct ExpandBottomUpComplete
                 const double action_cost = total_cost - (PT[subproblems[left]].cost + PT[subproblems[right]].cost);
 
                 EdgesBottomUp S(state.num_joins_to_goal(), state.g() + action_cost, joins,
-                                           joins + state.num_joins() + 1);
+                                joins + state.num_joins() + 1);
                 state.INCREMENT_NUM_STATES_GENERATED();
                 callback(std::move(S));
             }

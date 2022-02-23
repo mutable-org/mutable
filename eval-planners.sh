@@ -19,6 +19,9 @@ RANDOM=42
 # timeout for single invocations
 TIMEOUT=15s
 
+# number of repetitions per query
+QUERY_REPEAT_COUNT=3
+
 BIN=build/release/bin/shell
 CSV=planner-benchmark.csv
 CORRELATED=1
@@ -37,25 +40,34 @@ declare -A TOPOLOGIES=(
 )
 
 declare -A PLANNER_CONFIGS=(
+    ###### Traditional Planners #####
     [DPccp]="--plan-enumerator DPccp"
     [DPsub]="--plan-enumerator DPsubOpt"
     [IKKBZ]="--plan-enumerator IKKBZ"
     [linDP]="--plan-enumerator LinearizedDP"
-    # [A*-checkpoints]="--plan-enumerator AIPlanning --ai-state BottomUp --ai-heuristic checkpoints --ai-search AStar"
-    [A*-checkpoints-opt]="--plan-enumerator AIPlanning --ai-state BottomUpOpt --ai-heuristic checkpoints --ai-search AStar"
-    # [beam-checkpoints]="--plan-enumerator AIPlanning --ai-state BottomUp --ai-heuristic checkpoints --ai-search beam_search"
-    # [beam-checkpoints-opt]="--plan-enumerator AIPlanning --ai-state BottomUpOpt --ai-heuristic checkpoints --ai-search beam_search"
-    # [beam_acyclic-checkpoints]="--plan-enumerator AIPlanning --ai-state BottomUp --ai-heuristic checkpoints --ai-search acyclic_beam_search"
-    [beam_acyclic-checkpoints-opt]="--plan-enumerator AIPlanning --ai-state BottomUpOpt --ai-heuristic checkpoints --ai-search acyclic_beam_search"
+    [GOO]="--plan-enumerator GOO"
+    ##### Heuristic Search #####
+    [A*-zero]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic zero --ai-search AStar"
+    [beam-zero]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic zero --ai-search monotone_beam_search"
+    [dynamic_beam-zero]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic zero --ai-search monotone_dynamic_beam_search"
+    [A*-checkpoints]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic checkpoints --ai-search AStar"
+    [beam-checkpoints]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic checkpoints --ai-search monotone_beam_search"
+    [beam-scaled_sum]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic scaled_sum --ai-search monotone_beam_search"
+    [dynamic_beam-scaled_sum]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic scaled_sum --ai-search monotone_dynamic_beam_search"
+    [A*-GOO]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic GOO --ai-search AStar"
+    [beam-GOO]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic GOO --ai-search monotone_beam_search"
+    [dynamic_beam-GOO]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic GOO --ai-search monotone_dynamic_beam_search"
 )
 
 declare -A SKIP_CONFIGS=(
-    [cycle-DPsub]=25
     [chain-DPsub]=27
-    [clique-DPsub]=17
-    [clique-DPccp]=17
+    [cycle-DPsub]=25
+    [clique-DPsub]=16
+    [clique-DPccp]=16
     [star-DPsub]=18
     [star-DPccp]=22
+    [star-linDP]=24
+    [star-dynamic_beam-scaled_sum]=24
 )
 
 declare -A TOPOLOGY_STEPS=(
@@ -153,7 +165,7 @@ main() {
                 # Generate problem
                 SEED=${RANDOM}
                 echo -n '` '
-                python3 querygen.py -t "${TOPOLOGY}" -n ${N}
+                python3 querygen.py -t "${TOPOLOGY}" -n ${N} --count=${QUERY_REPEAT_COUNT}
                 build/release/bin/cardinality_gen \
                     ${FLAGS} \
                     --seed "${SEED}" \
@@ -171,7 +183,7 @@ main() {
                     then
                         # entry found, check whether to skip
                         M=${SKIP_CONFIGS[${TOPOLOGY}-${PLANNER}]}
-                        if [ ${N} -gt ${M} ];
+                        if [ ${N} -ge ${M} ];
                         then
                             continue # skip this planner
                         fi
@@ -195,6 +207,8 @@ main() {
                         | cut --delimiter=':' --fields=2 \
                         | paste -sd ' \n' \
                         | while read -r COST TIME; do echo "${TOPOLOGY},${N},${PLANNER},${COST},${TIME},${SEED}" >> "${CSV}"; done
+                    ERR=$?
+                    if [ $ERR -ne 0 ]; then >&2 echo ${PLANNER_CONFIG}; fi
 
                     # set +x;
                 done

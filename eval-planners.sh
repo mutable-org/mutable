@@ -16,10 +16,13 @@ SECONDS=0
 # Initialize Bash's PRNG engine
 RANDOM=42
 
-# timeout for single invocations
+# Timeout for single invocations
 TIMEOUT=15s
 
-# number of repetitions per query
+# Maximum number of timeouts allowed per planner configuration.  If this value is reached, the configuration is skipped.
+MAX_TIMEOUTS_PER_CONFIG=1
+
+# Number of repetitions per query
 QUERY_REPEAT_COUNT=3
 
 BIN=build/release/bin/shell
@@ -41,8 +44,8 @@ declare -A TOPOLOGIES=(
 
 declare -A PLANNER_CONFIGS=(
     ###### Traditional Planners #####
-    [DPccp]="--plan-enumerator DPccp"
     [DPsub]="--plan-enumerator DPsubOpt"
+    [DPccp]="--plan-enumerator DPccp"
     [IKKBZ]="--plan-enumerator IKKBZ"
     [linDP]="--plan-enumerator LinearizedDP"
     [GOO]="--plan-enumerator GOO"
@@ -59,17 +62,6 @@ declare -A PLANNER_CONFIGS=(
     [dynamic_beam-GOO]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic GOO --ai-search monotone_dynamic_beam_search"
 )
 
-declare -A SKIP_CONFIGS=(
-    [chain-DPsub]=27
-    [cycle-DPsub]=25
-    [clique-DPsub]=16
-    [clique-DPccp]=16
-    [star-DPsub]=18
-    [star-DPccp]=22
-    [star-linDP]=24
-    [star-dynamic_beam-scaled_sum]=24
-)
-
 declare -A TOPOLOGY_STEPS=(
     [chain]=3
     [cycle]=3
@@ -82,7 +74,8 @@ declare -A TOPOLOGY_STEPS=(
 # Helper functions
 ########################################################################################################################
 
-trim() {
+function trim()
+{
     local var="$*"
     # remove leading whitespace characters
     var="${var#"${var%%[![:space:]]*}"}"
@@ -90,6 +83,20 @@ trim() {
     var="${var%"${var##*[![:space:]]}"}"
     printf '%s' "$var"
 }
+
+function has_planners_to_run()
+{
+    for COUNT in "${PLANNER_TIME_OUTS[@]}";
+    do
+        if [ ${COUNT} -lt ${MAX_TIMEOUTS_PER_CONFIG} ];
+        then
+            return 0 # SUCCESS: found planner to run
+        fi
+    done
+    return 1 # FAILURE: no planners to run
+}
+
+
 
 
 ########################################################################################################################
@@ -155,6 +162,14 @@ main() {
     do
         MAX_RELATIONS=${TOPOLOGIES[$TOPOLOGY]}
         STEP=${TOPOLOGY_STEPS[$TOPOLOGY]}
+
+        # Initialize timeout counters
+        declare -A PLANNER_TIME_OUTS
+        for PLANNER in "${!PLANNER_CONFIGS[@]}";
+        do
+            PLANNER_TIME_OUTS[${PLANNER}]=0
+        done
+
         for ((N=${MIN_RELATIONS}; N <= ${MAX_RELATIONS}; N = N + ${STEP}));
         do
             NAME="${TOPOLOGY}-${N}"
@@ -162,31 +177,33 @@ main() {
 
             for ((R=0; R < ${REPETITIONS_PER_NUM_RELATIONS}; ++R));
             do
+                if ! has_planners_to_run;
+                then
+                    >&2 echo '` No more planners to run.  Skipping rest of topology.'
+                    break 2;
+                fi
+
                 # Generate problem
                 SEED=${RANDOM}
                 echo -n '` '
-                python3 querygen.py -t "${TOPOLOGY}" -n ${N} --count=${QUERY_REPEAT_COUNT}
-                build/release/bin/cardinality_gen \
+                python3 querygen.py -t "${TOPOLOGY}" -n ${N} --count=${QUERY_REPEAT_COUNT} | tr -d '\n'
+                (time build/release/bin/cardinality_gen \
                     ${FLAGS} \
                     --seed "${SEED}" \
                     --min "${MIN_CARDINALITY}" \
                     --max "${MAX_CARDINALITY}" \
                     "${NAME}.schema.sql" \
-                    "${NAME}.query.sql" \
-                    > "${NAME}.cardinalities.json"
+                    "${NAME}.query.sql") \
+                    3>&1 1>"${NAME}.cardinalities.json" 2>&3 3>&- | ack real | cut -d$'\t' -f 2 | (read -r TIME; echo " (${TIME})";)
 
                 # Evaluate problem with each planner
                 echo '` Running planner'
                 for PLANNER in "${!PLANNER_CONFIGS[@]}";
                 do
-                    if [ ${SKIP_CONFIGS[${TOPOLOGY}-${PLANNER}]+_} ];
+                    if [ ${PLANNER_TIME_OUTS[${PLANNER}]} -ge ${MAX_TIMEOUTS_PER_CONFIG} ];
                     then
-                        # entry found, check whether to skip
-                        M=${SKIP_CONFIGS[${TOPOLOGY}-${PLANNER}]}
-                        if [ ${N} -ge ${M} ];
-                        then
-                            continue # skip this planner
-                        fi
+                        >&2 echo "  \` Skipping configuration '${PLANNER}' because of too many timeouts."
+                        continue
                     fi
 
                     # set -x;
@@ -194,8 +211,9 @@ main() {
 
                     unset COST
                     unset TIME
-                    set +m;
-                    timeout --signal=KILL ${TIMEOUT} taskset -c 2 ${BIN} \
+                    set +m
+                    # The following command needs pipefail
+                    timeout --signal=TERM --kill-after=3s ${TIMEOUT} taskset -c 2 ${BIN} \
                         --quiet --dryrun --times \
                         --plan-table-las \
                         ${PLANNER_CONFIG} \
@@ -207,17 +225,46 @@ main() {
                         | cut --delimiter=':' --fields=2 \
                         | paste -sd ' \n' \
                         | while read -r COST TIME; do echo "${TOPOLOGY},${N},${PLANNER},${COST},${TIME},${SEED}" >> "${CSV}"; done
-                    ERR=$?
-                    if [ $ERR -ne 0 ]; then >&2 echo ${PLANNER_CONFIG}; fi
+                    # Save and aggregate PIPESTATUS
+                    SAVED_PIPESTATUS=("${PIPESTATUS[@]}")
+                    TIMEOUT_RET=${SAVED_PIPESTATUS[0]}
+                    ERR=0
+                    for RET in "${SAVED_PIPESTATUS[@]}";
+                    do
+                        if [ ${RET} -ne 0 ];
+                        then
+                            ERR=${RET}
+                            break
+                        fi
+                    done
+
+                    if [ ${TIMEOUT_RET} -eq 124 ] || [ ${TIMEOUT_RET} -eq 137 ]; # timed out
+                    then
+                        >&2 echo "  \` Configuration '${PLANNER}' timed out."
+                        ((PLANNER_TIME_OUTS[${PLANNER}]++)) # increment number of timeouts
+                    elif [ ${ERR} -ne 0 ];
+                    then
+                        >&2 echo "  \` Unexpected termination: ERR=${ERR}, PIPESTATUS=(${SAVED_PIPESTATUS[@]}), configuration '${PLANNER}':"
+                        >&2 cat << EOF
+    timeout --signal=TERM --kill-after=3s ${TIMEOUT} taskset -c 2 ${BIN} \
+--quiet --dryrun --times \
+--plan-table-las \
+${PLANNER_CONFIG} \
+--cardinality-estimator InjectionCardinalityEstimator \
+--use-cardinality-file "${NAME}.cardinalities.json" \
+"${NAME}.schema.sql" \
+"${NAME}.query.sql"
+EOF
+                    fi
 
                     # set +x;
                 done
             done
 
             echo '` Cleanup files.'
-            rm "${NAME}.schema.sql"
-            rm "${NAME}.query.sql"
-            rm "${NAME}.cardinalities.json"
+            rm -f "${NAME}.schema.sql"
+            rm -f "${NAME}.query.sql"
+            rm -f "${NAME}.cardinalities.json"
         done
     done
 

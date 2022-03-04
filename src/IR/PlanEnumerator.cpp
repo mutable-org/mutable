@@ -1126,6 +1126,21 @@ struct SubproblemsBottomUp : Base<SubproblemsBottomUp>
     size_type size() const { return size_; }
     Subproblem operator[](std::size_t idx) const { M_insist(idx < size_); return subproblems_[idx]; }
 
+    template<typename PlanTable>
+    static unsigned num_partitions(const PlanTable&, const QueryGraph &G, const AdjacencyMatrix&, const CostFunction&,
+                                   const CardinalityEstimator&)
+    {
+        return G.num_sources();
+    }
+
+    template<typename PlanTable>
+    unsigned partition_id(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&,
+                          const CardinalityEstimator&) const
+    {
+        M_insist(size() > 0);
+        return size() - 1;
+    }
+
     /*----- Iteration ------------------------------------------------------------------------------------------------*/
 
     iterator begin() { return subproblems_; };
@@ -2283,8 +2298,9 @@ struct checkpoints<PlanTable, SubproblemsBottomUp>
     std::vector<std::pair<SmallBitset, SmallBitset>> worklist_;
 
     public:
-    checkpoints(PlanTable&, const QueryGraph &G, const AdjacencyMatrix&, const CostFunction&,
-                const CardinalityEstimator&)
+    checkpoints(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
+                const CardinalityEstimator &CE)
+        : S_(PT, G, M, CF, CE)
     {
         worklist_.reserve(G.sources().size());
     }

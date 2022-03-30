@@ -305,6 +305,7 @@ struct StateManager
         auto &Q = ToBeamQueue ? beam_queue_ : regular_queue_;
         auto &P = partition(state, context...);
 
+#if 1
         if (auto it = P.find(state); it == P.end()) [[likely]] {
             /*----- Entirely new state, never seen before. -----*/
             it = P.emplace_hint(it, std::move(state), StateInfo(h, &Q));
@@ -348,9 +349,22 @@ struct StateManager
                 }
             }
         }
+#else
+        const auto new_g = state.g();
+        auto [it, res] = P.try_emplace(std::move(state), StateInfo(h, &Q));
+        Q.push(&*it);
+        if (res) {
+            inc_new();
+        } else {
+            inc_duplicates();
+            if (new_g < it->first.g())
+                inc_cheaper();
+        }
+#endif
     }
 
     void push_regular_queue(state_type state, double h, Context&... context) {
+#if 1
         if constexpr (HasRegularQueue) {
             push<false>(std::move(state), h, context...);
         } else {
@@ -378,6 +392,9 @@ struct StateManager
                 }
             }
         }
+#else
+        push<not HasRegularQueue>(std::move(state), h, context...);
+#endif
     }
 
     void push_beam_queue(state_type state, double h, Context&... context) {
@@ -559,6 +576,10 @@ struct genericAStar
             if constexpr (not use_dynamic_beam_sarch)
                 candidates.reserve(beam_width + 1);
         }
+    }
+
+    ~genericAStar() {
+        dump();
     }
 
     genericAStar(const genericAStar&) = delete;

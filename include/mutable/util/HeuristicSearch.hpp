@@ -4,6 +4,8 @@
 #include <boost/container/allocator.hpp>
 #include <boost/container/node_allocator.hpp>
 #include <boost/heap/binomial_heap.hpp>
+// #include <boost/heap/fibonacci_heap.hpp>
+// #include <boost/heap/pairing_heap.hpp>
 #include <exception>
 #include <map>
 #include <queue>
@@ -170,6 +172,8 @@ struct StateManager
     struct comparator { bool operator()(pointer_type p_left, pointer_type p_right) const; };
     ///> the type of heap to implement the priority queues
     using heap_type = boost::heap::binomial_heap<pointer_type, boost::heap::compare<comparator>>;
+    // using heap_type = boost::heap::fibonacci_heap<pointer_type, boost::heap::compare<comparator>>;
+    // using heap_type = boost::heap::pairing_heap<pointer_type, boost::heap::compare<comparator>>;
 
     /*----- Counters -------------------------------------------------------------------------------------------------*/
 #if 1

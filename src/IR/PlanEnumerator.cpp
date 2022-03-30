@@ -1033,10 +1033,13 @@ struct SubproblemsBottomUp : Base<SubproblemsBottomUp>
     ///> returns a reference to the class-wide allocator
     static allocator_type & get_allocator() { return allocator_; }
 
+    private:
     ///> the cost to reach this state from the initial state
     mutable double g_;
     ///> number of subproblems in this state
     size_type size_ = 0;
+    ///> marked last formed subproblem
+    size_type mark_ = 0;
     ///> array of subproblems
     Subproblem *subproblems_ = nullptr;
 
@@ -1046,25 +1049,28 @@ struct SubproblemsBottomUp : Base<SubproblemsBottomUp>
         using std::swap;
         swap(first.g_,           second.g_);
         swap(first.size_,        second.size_);
+        swap(first.mark_,        second.mark_);
         swap(first.subproblems_, second.subproblems_);
     }
 
     SubproblemsBottomUp() = default;
 
     /** Creates a state with actual costs `g` and given `subproblems`. */
-    SubproblemsBottomUp(double g, size_type size, Subproblem *subproblems)
+    SubproblemsBottomUp(double g, size_type size, size_type mark, Subproblem *subproblems)
         : g_(g)
         , size_(size)
+        , mark_(mark)
         , subproblems_(subproblems)
     {
         M_insist(size == 0 or subproblems_);
+        M_insist(mark < size, "mark out of bounds");
         M_insist(std::is_sorted(begin(), end(), subproblem_lt));
         base_type::INCREMENT_NUM_STATES_CONSTRUCTED();
     }
 
     /** Creates an initial state with the given `subproblems`. */
     SubproblemsBottomUp(size_type size, Subproblem *subproblems)
-        : SubproblemsBottomUp(0, size, subproblems)
+        : SubproblemsBottomUp(0, size, 0, subproblems)
     { }
 
     /** Creates a state with actual costs `g` and subproblems in range `[begin; end)`. */
@@ -1072,6 +1078,7 @@ struct SubproblemsBottomUp : Base<SubproblemsBottomUp>
     SubproblemsBottomUp(double g, It begin, It end)
         : g_(g)
         , size_(std::distance(begin, end))
+        , mark_(0)
         , subproblems_(allocator_.allocate(size_))
     {
         M_insist(begin != end);
@@ -1084,6 +1091,7 @@ struct SubproblemsBottomUp : Base<SubproblemsBottomUp>
     explicit SubproblemsBottomUp(const SubproblemsBottomUp &other)
         : g_(other.g_)
         , size_(other.size_)
+        , mark_(other.mark_)
         , subproblems_(allocator_.allocate(size_))
     {
         base_type::INCREMENT_NUM_STATES_CONSTRUCTED();
@@ -1122,6 +1130,7 @@ struct SubproblemsBottomUp : Base<SubproblemsBottomUp>
         return size() <= 1;
     }
     double g() const { return g_; }
+    size_type mark() const { return mark_; }
     void decrease_g(double new_g) const { M_insist(new_g <= g_); g_ = new_g; }
     size_type size() const { return size_; }
     Subproblem operator[](std::size_t idx) const { M_insist(idx < size_); return subproblems_[idx]; }
@@ -1789,6 +1798,8 @@ struct ExpandBottomUpComplete
     {
         state.INCREMENT_NUM_STATES_EXPANDED();
 
+        const auto marker = std::next(state.cbegin(), state.mark());
+
         /* Enumerate all potential join pairs and check whether they are connected. */
         for (auto outer_it = state.cbegin(), outer_end = std::prev(state.cend()); outer_it != outer_end; ++outer_it)
         {
@@ -1796,6 +1807,10 @@ struct ExpandBottomUpComplete
             for (auto inner_it = std::next(outer_it); inner_it != state.cend(); ++inner_it) {
                 M_insist(uint64_t(*inner_it) > uint64_t(*outer_it), "subproblems must be sorted");
                 M_insist((*outer_it & *inner_it).empty(), "subproblems must not overlap");
+
+                if (inner_it < marker) // implies outer_it < marker
+                    continue; // prune symmetrical paths
+
                 if (neighbors & *inner_it) { // inner and outer are joinable.
                     /* Compute joined subproblem. */
                     const Subproblem joined = *outer_it | *inner_it;
@@ -1819,7 +1834,12 @@ struct ExpandBottomUpComplete
                     const double action_cost = total_cost - (PT[*outer_it].cost + PT[*inner_it].cost);
 
                     /* Create new search state. */
-                    SubproblemsBottomUp S(state.g() + action_cost, state.size() - 1, std::move(subproblems));
+                    SubproblemsBottomUp S(
+                        /* g=           */ state.g() + action_cost,
+                        /* size=        */ state.size() - 1,
+                        /* mark=        */ std::distance(state.cbegin(), inner_it) - 1,
+                        /* subproblems= */ std::move(subproblems)
+                    );
                     state.INCREMENT_NUM_STATES_GENERATED();
                     callback(std::move(S));
                 }

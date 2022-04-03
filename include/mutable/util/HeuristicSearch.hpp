@@ -232,19 +232,17 @@ struct StateManager
     {
         std::vector<map_type> partitions_;
 
-        Partitions(Context&... context)
-            : partitions_(state_type::num_partitions(context...))
-        {
-            std::cerr << "initialize with " << partitions_.size() << " partitions\n";
-        }
+        Partitions(Context&... context) : partitions_(state_type::num_partitions(context...)) { }
         Partitions(const Partitions&) = delete;
         Partitions(Partitions&&) = default;
 
         ~Partitions() {
+#ifndef NDEBUG
             std::cerr << partitions_.size() << " partitions:";
             for (auto &P : partitions_)
                 std::cerr << "\n  " << P.size();
             std::cerr << std::endl;
+#endif
         }
 
         map_type & operator()(const state_type &state, Context&... context) {

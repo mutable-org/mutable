@@ -38,8 +38,8 @@ MAX_CARDINALITY=10000
 declare -A TOPOLOGIES=(
     [chain]=63
     [cycle]=63
-    [clique]=19
     [star]=28
+    [clique]=19
 )
 
 declare -A PLANNER_CONFIGS=(
@@ -51,22 +51,23 @@ declare -A PLANNER_CONFIGS=(
     [GOO]="--plan-enumerator GOO"
     ##### Heuristic Search #####
     [A*-zero]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic zero --ai-search AStar"
-    [beam-zero]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic zero --ai-search monotone_beam_search"
-    [dynamic_beam-zero]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic zero --ai-search monotone_dynamic_beam_search"
-    [A*-checkpoints]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic checkpoints --ai-search AStar"
-    [beam-checkpoints]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic checkpoints --ai-search monotone_beam_search"
+    # [beam-zero]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic zero --ai-search monotone_beam_search"
+    # [dynamic_beam-zero]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic zero --ai-search monotone_dynamic_beam_search"
+    [A*-sum]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic sum --ai-search AStar"
     [beam-scaled_sum]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic scaled_sum --ai-search monotone_beam_search"
     [dynamic_beam-scaled_sum]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic scaled_sum --ai-search monotone_dynamic_beam_search"
+    [A*-checkpoints]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic checkpoints --ai-search AStar"
+    [beam-checkpoints]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic checkpoints --ai-search monotone_beam_search"
     [A*-GOO]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic GOO --ai-search AStar"
     [beam-GOO]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic GOO --ai-search monotone_beam_search"
-    [dynamic_beam-GOO]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic GOO --ai-search monotone_dynamic_beam_search"
+    # [dynamic_beam-GOO]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic GOO --ai-search monotone_dynamic_beam_search"
 )
 
 declare -A TOPOLOGY_STEPS=(
     [chain]=3
     [cycle]=3
-    [clique]=1
     [star]=2
+    [clique]=1
 )
 
 

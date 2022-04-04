@@ -1038,7 +1038,7 @@ struct SubproblemsBottomUp : Base<SubproblemsBottomUp>
     mutable double g_;
     ///> number of subproblems in this state
     size_type size_ = 0;
-    ///> marked last formed subproblem
+    ///> marks last formed subproblem
     size_type mark_ = 0;
     ///> array of subproblems
     Subproblem *subproblems_ = nullptr;
@@ -1055,8 +1055,10 @@ struct SubproblemsBottomUp : Base<SubproblemsBottomUp>
 
     SubproblemsBottomUp() = default;
 
-    /** Creates a state with actual costs `g` and given `subproblems`. */
-    SubproblemsBottomUp(double g, size_type size, size_type mark, Subproblem *subproblems)
+    /** Creates a state with cost `g` and given `subproblems`. */
+    template<typename PlanTable>
+    SubproblemsBottomUp(const PlanTable&, const QueryGraph &G, const AdjacencyMatrix&, const CostFunction&,
+                        const CardinalityEstimator&, double g, size_type size, size_type mark, Subproblem *subproblems)
         : g_(g)
         , size_(size)
         , mark_(mark)
@@ -1064,22 +1066,27 @@ struct SubproblemsBottomUp : Base<SubproblemsBottomUp>
     {
         M_insist(size == 0 or subproblems_);
         M_insist(mark < size, "mark out of bounds");
+        M_insist(size <= G.num_sources());
         M_insist(std::is_sorted(begin(), end(), subproblem_lt));
         base_type::INCREMENT_NUM_STATES_CONSTRUCTED();
     }
 
-    /** Creates an initial state with the given `subproblems`. */
-    SubproblemsBottomUp(size_type size, Subproblem *subproblems)
-        : SubproblemsBottomUp(0, size, 0, subproblems)
-    { }
+    /** Creates an initial state. */
+    template<typename PlanTable>
+    SubproblemsBottomUp(const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
+                        const CardinalityEstimator &CE)
+        : SubproblemsBottomUp(PT, G, M, CF, CE, 0., G.num_sources(), 0, allocator_.allocate(G.num_sources()))
+    {
+        for (uint64_t i = 0; i != G.num_sources(); ++i)
+            subproblems_[i] = Subproblem(1UL << i);
+    }
 
-    /** Creates a state with actual costs `g` and subproblems in range `[begin; end)`. */
-    template<typename It>
-    SubproblemsBottomUp(double g, It begin, It end)
-        : g_(g)
-        , size_(std::distance(begin, end))
-        , mark_(0)
-        , subproblems_(allocator_.allocate(size_))
+    /** Creates a state with cost `g` and subproblems in range `[begin; end)`. */
+    template<typename PlanTable, typename It>
+    SubproblemsBottomUp(const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
+                        const CardinalityEstimator &CE, double g, It begin, It end)
+        : SubproblemsBottomUp(PT, G, M, CF, CE, g, std::distance(begin, end), 0,
+                              allocator_.allocate(std::distance(begin, end)))
     {
         M_insist(begin != end);
         std::copy(begin, end, this->begin());
@@ -1108,17 +1115,6 @@ struct SubproblemsBottomUp : Base<SubproblemsBottomUp>
     ~SubproblemsBottomUp() {
         if (subproblems_) base_type::INCREMENT_NUM_STATES_DISPOSED();
         allocator_.deallocate(subproblems_, size_);
-    }
-
-    /*----- Factory methods. -----------------------------------------------------------------------------------------*/
-
-    static SubproblemsBottomUp CreateInitial(const QueryGraph &G, const AdjacencyMatrix&) {
-        const size_type size = G.sources().size();
-        auto subproblems = allocator_.allocate(size);
-        for (auto ds : G.sources())
-            new (&subproblems[ds->id()]) Subproblem(1UL << ds->id());
-        M_insist(std::is_sorted(subproblems, subproblems + size, subproblem_lt));
-        return SubproblemsBottomUp(size, subproblems);
     }
 
     /*----- Getters --------------------------------------------------------------------------------------------------*/
@@ -1835,9 +1831,11 @@ struct ExpandBottomUpComplete
 
                     /* Create new search state. */
                     SubproblemsBottomUp S(
+                        /* Context=     */ PT, G, M, CF, CE,
                         /* g=           */ state.g() + action_cost,
                         /* size=        */ state.size() - 1,
                         /* mark=        */ std::distance(state.cbegin(), inner_it) - 1,
+                        ///* mark=        */ 0,
                         /* subproblems= */ std::move(subproblems)
                     );
                     state.INCREMENT_NUM_STATES_GENERATED();
@@ -2486,8 +2484,10 @@ struct checkpoints<PlanTable, SubproblemsBottomUp>
                                       subproblem_lt));
 
                 /* Construct initial state for local search to next checkpoint. */
-                state_type initial_state(0, subproblems_current_checkpoint.begin(),
-                                            subproblems_current_checkpoint.end());
+                state_type initial_state(/* Context= */ PT, G, M, CF, CE,
+                                         /* g=       */ 0,
+                                         /* begin=   */ subproblems_current_checkpoint.begin(),
+                                         /* end=     */ subproblems_current_checkpoint.end());
                 SearchSection cache_candidate(std::move(initial_state), checkpoint);
 
                 if (auto it = cached_searches_.find(cache_candidate); it != cached_searches_.end()) {
@@ -2549,7 +2549,7 @@ void run_heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMat
                           const CardinalityEstimator &CE)
 {
     State::RESET_STATE_COUNTERS();
-    State initial_state = State::CreateInitial(G, M);
+    State initial_state(PT, G, M, CF, CE);
     try {
         Heuristic h = Heuristic(PT, G, M, CF, CE);
         ai::search<
@@ -2630,12 +2630,12 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    monotone_beam_search            )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    monotone_dynamic_beam_search    )
         else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  perfect_oracle,                 AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            monotone_beam_search            )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            monotone_dynamic_beam_search    )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        scaled_sum,                     AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        scaled_sum,                     monotone_beam_search            )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        scaled_sum,                     monotone_dynamic_beam_search    )
+        // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            AStar                           )
+        // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            monotone_beam_search            )
+        // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            monotone_dynamic_beam_search    )
+        // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        scaled_sum,                     AStar                           )
+        // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        scaled_sum,                     monotone_beam_search            )
+        // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        scaled_sum,                     monotone_dynamic_beam_search    )
         else { throw std::invalid_argument("illegal search configuration"); }
 #undef EMIT_HEURISTIC_SEARCH_CONFIG
 
@@ -2646,8 +2646,10 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
             dpccp(G, CF, PT);
             const auto dp_cost = PT.get_final().cost;
 
-            std::cerr << "AI: " << ai_cost << ", DP: " << dp_cost << ", Δ " << double(ai_cost) / dp_cost << 'x'
-                      << std::endl;
+            if (ai_cost > dp_cost)
+                throw std::runtime_error("suboptimal solution");
+            // std::cerr << "AI: " << ai_cost << ", DP: " << dp_cost << ", Δ " << double(ai_cost) / dp_cost << 'x'
+            //           << std::endl;
         }
 #endif
     }

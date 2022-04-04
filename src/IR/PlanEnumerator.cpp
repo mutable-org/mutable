@@ -2082,6 +2082,7 @@ struct ExpandBottomUpComplete
     {
         state.INCREMENT_NUM_STATES_EXPANDED();
 
+#if 0
         const auto marker = std::next(state.cbegin(), state.mark());
 
         /* Enumerate all potential join pairs and check whether they are connected. */
@@ -2131,6 +2132,83 @@ struct ExpandBottomUpComplete
                 }
             }
         }
+
+#else
+
+        const Subproblem mark = state[state.mark()];
+
+        /*----- Build relation reverse index. -----*/
+        Subproblem RI[G.num_sources()];
+        for (std::size_t i = 0; i != G.num_sources(); ++i)
+            RI[i] = Subproblem();
+        for (const Subproblem S : state) {
+            for (unsigned idx : S)
+                RI[idx] = S;
+        }
+
+        /*----- Enumerate all left sides. -----*/
+        Subproblem X;
+        for (const Subproblem L : state) {
+            Subproblem N = M.neighbors(L) - X;
+            /*----- Enumerate all right sides of left side. -----*/
+            while (not N.empty()) {
+                auto it = N.begin();
+                const Subproblem R = RI[*it];
+                N -= it.as_set();
+
+#ifndef NDEBUG
+                std::cerr << "(";
+                L.print_fixed_length(std::cerr, G.num_sources());
+                std::cerr << ", ";
+                R.print_fixed_length(std::cerr, G.num_sources());
+                std::cerr << ")\n";
+#endif
+
+                M_insist(uint64_t(L) < uint64_t(R));
+                M_insist(M.is_connected(L, R));
+                M_insist((L & R).empty());
+
+                if (uint64_t(L|R) < uint64_t(mark)) continue; // prune symmetrical paths
+
+                /* Compute joined subproblem. */
+                const Subproblem joined = L|R;
+
+                /* Compute new subproblems after join */
+                auto subproblems = state.get_allocator().allocate(state.size() - 1);
+                Subproblem *ptr = subproblems;
+                SubproblemsBottomUp::size_type new_mark;
+                for (auto it = state.cbegin(); it != state.cend(); ++it) {
+                    if (*it == L) continue; // skip left
+                    else if (*it == R) {
+                        new_mark = std::distance(state.cbegin(), it) - 1;
+                        new (ptr++) Subproblem(joined); // replace right
+                    }
+                    else new (ptr++) Subproblem(*it);
+                }
+                M_insist(std::is_sorted(subproblems, subproblems + state.size() - 1, subproblem_lt));
+
+                /* Compute total cost. */
+                cnf::CNF condition; // TODO use join condition
+                const double total_cost = CF.calculate_join_cost(G, PT, CE, L, R, condition);
+                PT.update(G, CE, L, R, total_cost);
+
+                /* Compute action cost. */
+                const double action_cost = total_cost - (PT[L].cost + PT[R].cost);
+
+                /* Create new search state. */
+                SubproblemsBottomUp S(
+                    /* g=           */ state.g() + action_cost,
+                    /* size=        */ state.size() - 1,
+                    /* mark=        */ new_mark,
+                    /* subproblems= */ std::move(subproblems)
+                );
+                state.INCREMENT_NUM_STATES_GENERATED();
+                callback(std::move(S));
+            }
+            X |= L;
+        }
+
+#endif
     }
 
     template<typename Callback, typename PlanTable>
@@ -2370,6 +2448,53 @@ next:
             callback(std::move(S));
         }
     }
+};
+
+struct ExpandTopDownComplete
+{
+    template<typename Callback, typename PlanTable>
+    void operator()(const SubproblemsBottomUp &state, Callback &&callback, PlanTable &PT,
+                    const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
+                    const CardinalityEstimator &CE) const
+    {
+        TDMinCutAGaT TD;
+        auto enumerate_ccp = [&](Subproblem S1, Subproblem S2) {
+            using std::swap;
+            if (uint64_t(S1) > uint64_t(S2)) swap(S1, S2);
+            M_insist(uint64_t(S1) <= uint64_t(S2));
+
+            Subproblem partitions[2] = { S1, S2 };
+
+            auto subproblems = state.get_allocator().allocate(state.size() + 1);
+            std::merge(partitions, partitions + 2,
+                       state.cbegin(), state.cend(),
+                       subproblems);
+            M_insist(std::is_sorted(subproblems, subproblems + state.size() + 1, subproblem_lt));
+
+            /* Compute total cost. */
+            cnf::CNF condition; // TODO use join condition
+            const double total_cost = CF.calculate_join_cost(G, PT, CE, S1, S2, condition);
+            PT.update(G, CE, S1, S2, total_cost);
+
+            /* Compute action cost. */
+            const double action_cost = total_cost - (PT[S1].cost + PT[S2].cost);
+
+            /* Create new search state. */
+            SubproblemsBottomUp S(
+                /* Context=     */ PT, G, M, CF, CE,
+                /* g=           */ state.g() + action_cost,
+                /* size=        */ state.size() - 1,
+                /* mark=        */ 0,
+                /* subproblems= */ std::move(subproblems)
+            );
+            state.INCREMENT_NUM_STATES_GENERATED();
+            callback(std::move(S));
+        };
+
+        for (const Subproblem S : state)
+            TD.partition(M, enumerate_ccp, S);
+    }
+
 };
 
 }
@@ -2995,7 +3120,7 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         else { throw std::invalid_argument("illegal search configuration"); }
 #undef EMIT_HEURISTIC_SEARCH_CONFIG
 
-#if 0
+#if 1
         {
             const auto ai_cost = PT.get_final().cost;
             DPccp dpccp;

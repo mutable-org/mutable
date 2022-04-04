@@ -1095,7 +1095,11 @@ struct SubproblemsBottomUp : Base<SubproblemsBottomUp>
     }
 
     /** Copy c'tor. */
-    explicit SubproblemsBottomUp(const SubproblemsBottomUp &other)
+    SubproblemsBottomUp(const SubproblemsBottomUp&) = delete;
+
+    template<typename PlanTable>
+    SubproblemsBottomUp(const SubproblemsBottomUp &other, const PlanTable&, const QueryGraph&, const AdjacencyMatrix&,
+                        const CostFunction&, const CardinalityEstimator&)
         : g_(other.g_)
         , size_(other.size_)
         , mark_(other.mark_)
@@ -1207,6 +1211,253 @@ template<>
 struct hash<search_states::SubproblemsBottomUp>
 {
     uint64_t operator()(const search_states::SubproblemsBottomUp &state) const {
+        /* Rolling hash with multiplier taken from [1] where the moduli is 2^64.
+         * [1] http://www.ams.org/mcom/1999-68-225/S0025-5718-99-00996-5/S0025-5718-99-00996-5.pdf */
+        uint64_t hash = 0;
+        for (Subproblem s : state) {
+            hash = hash ^ uint64_t(s);
+            hash = hash * 1181783497276652981UL + 4292484099903637661UL;
+        }
+        return hash;
+    }
+};
+
+}
+
+namespace search_states {
+
+struct SubproblemTableBottomUp : Base<SubproblemTableBottomUp>
+{
+    using base_type = Base<SubproblemTableBottomUp>;
+    using allocator_type = boost::container::node_allocator<Subproblem>;
+    using size_type = typename base_type::size_type;
+
+    private:
+    ///> class-wide allocator, used by all instances
+    static allocator_type allocator_;
+
+    public:
+    ///> returns a reference to the class-wide allocator
+    static allocator_type & get_allocator() { return allocator_; }
+
+    private:
+    ///> the cost to reach this state from the initial state
+    mutable double g_;
+    ///> number of subproblems in this state
+    size_type size_ = 0;
+    ///> the last formed subproblem
+    Subproblem marker_;
+    ///> array of subproblems
+    Subproblem *table_ = nullptr;
+
+    template<bool IsConst>
+    struct the_iterator
+    {
+        static constexpr bool is_const = IsConst;
+
+        using reference = std::conditional_t<is_const, const Subproblem&, Subproblem&>;
+        using pointer = std::conditional_t<is_const, const Subproblem*, Subproblem*>;
+
+        private:
+        Subproblem *table_;
+        Subproblem X_;
+        size_type size_;
+        size_type idx_;
+        size_type unique_;
+
+        public:
+        the_iterator(Subproblem *table, size_type size, size_type idx, size_type unique)
+            : table_(table) , size_(size) , idx_(idx), unique_(unique)
+        { }
+
+        the_iterator & operator++() {
+            M_insist(unique_ < size_, "out of bounds");
+            ++unique_; // count unique subproblems
+            X_ |= table_[idx_++]; // remember unique subproblem
+            if (unique_ < size_) // not at end
+                while (table_[idx_].is_subset(X_)) ++idx_; // find next unique subproblem
+            return *this;
+        }
+
+        bool operator==(the_iterator other) const {
+            return this->table_ == other.table_ and this->unique_ == other.unique_;
+        }
+
+        bool operator!=(the_iterator other) const { return not operator==(other); }
+
+        the_iterator operator++(int) { the_iterator clone = *this; operator++(); return clone; }
+
+        reference operator*() const { return table_[idx_]; }
+        pointer operator->() const { return &operator*(); }
+    };
+    public:
+    using iterator = the_iterator<false>;
+    using const_iterator = the_iterator<true>;
+
+
+    /*----- The Big Four and a Half, copy & swap idiom ---------------------------------------------------------------*/
+    public:
+    friend void swap(SubproblemTableBottomUp &first, SubproblemTableBottomUp &second) {
+        using std::swap;
+        swap(first.g_,      second.g_);
+        swap(first.size_,   second.size_);
+        swap(first.marker_, second.marker_);
+        swap(first.table_,  second.table_);
+    }
+
+    SubproblemTableBottomUp() = default;
+
+    /** Creates a state with cost `g` and given `table`. */
+    template<typename PlanTable>
+    SubproblemTableBottomUp(const PlanTable&, const QueryGraph &G, const AdjacencyMatrix&, const CostFunction&,
+                        const CardinalityEstimator&, double g, size_type size, Subproblem marker, Subproblem *table)
+        : g_(g)
+        , size_(size)
+        , marker_(marker)
+        , table_(table)
+    {
+        M_insist(size == 0 or table);
+        M_insist(size <= G.num_sources());
+        base_type::INCREMENT_NUM_STATES_CONSTRUCTED();
+    }
+
+    /** Creates an initial state. */
+    template<typename PlanTable>
+    SubproblemTableBottomUp(const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
+                        const CardinalityEstimator &CE)
+        : SubproblemTableBottomUp(PT, G, M, CF, CE, 0., G.num_sources(), Subproblem(), allocator_.allocate(G.num_sources()))
+    {
+        for (uint64_t i = 0; i != G.num_sources(); ++i)
+            table_[i] = Subproblem(1UL << i);
+    }
+
+    /** Copy c'tor. */
+    SubproblemTableBottomUp(const SubproblemTableBottomUp&) = delete;
+
+    template<typename PlanTable>
+    SubproblemTableBottomUp(const SubproblemTableBottomUp &other, const PlanTable&, const QueryGraph &G,
+                            const AdjacencyMatrix&, const CostFunction&, const CardinalityEstimator&)
+        : g_(other.g_)
+        , size_(other.size_)
+        , marker_(other.marker_)
+        , table_(allocator_.allocate(size_))
+    {
+        base_type::INCREMENT_NUM_STATES_CONSTRUCTED();
+        M_insist(table_);
+        std::copy_n(other.table_, G.num_sources(), this->table_);
+    }
+
+    /** Move c'tor. */
+    SubproblemTableBottomUp(SubproblemTableBottomUp &&other) : SubproblemTableBottomUp() { swap(*this, other); }
+    /** Assignment. */
+    SubproblemTableBottomUp & operator=(SubproblemTableBottomUp other) { swap(*this, other); return *this; }
+
+    /** D'tor. */
+    ~SubproblemTableBottomUp() {
+        if (table_) base_type::INCREMENT_NUM_STATES_DISPOSED();
+        allocator_.deallocate(table_, size_);
+    }
+
+    /*----- Getters --------------------------------------------------------------------------------------------------*/
+
+    template<typename PlanTable>
+    bool is_goal(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&,
+                 const CardinalityEstimator&) const
+    {
+        return size() <= 1;
+    }
+    double g() const { return g_; }
+    Subproblem marker() const { return marker_; }
+    void decrease_g(double new_g) const { M_insist(new_g <= g_); g_ = new_g; }
+    size_type size() const { return size_; }
+    Subproblem & operator[](std::size_t idx) { M_insist(idx < size_); return table_[idx]; }
+    const Subproblem & operator[](std::size_t idx) const { return table_[idx]; }
+
+    template<typename PlanTable>
+    static unsigned num_partitions(const PlanTable&, const QueryGraph &G, const AdjacencyMatrix&, const CostFunction&,
+                                   const CardinalityEstimator&)
+    {
+        return G.num_sources();
+    }
+
+    template<typename PlanTable>
+    unsigned partition_id(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&,
+                          const CardinalityEstimator&) const
+    {
+        M_insist(size() > 0);
+        return size() - 1;
+    }
+
+    template<typename Callback>
+    void for_each_subproblem(Callback &&callback, const QueryGraph &G) const {
+        for (Subproblem S : *this)
+            callback(S);
+    }
+
+    /*----- Iteration ------------------------------------------------------------------------------------------------*/
+
+    iterator begin() { return iterator(table_, size_, 0, 0); }
+    iterator end() { return iterator(table_, size_, 0, size_); }
+    const_iterator begin() const { return const_iterator(table_, size_, 0, 0); }
+    const_iterator end() const { return const_iterator(table_, size_, 0, size_); }
+    const_iterator cbegin() const { return begin(); }
+    const_iterator cend() const { return end(); }
+
+    /*----- Comparison -----------------------------------------------------------------------------------------------*/
+
+    /** Returns `true` iff `this` and `other` have the exact same `Subproblem`s. */
+    bool operator==(const SubproblemTableBottomUp &other) const {
+        if (this->size() != other.size()) return false;
+        M_insist(this->size() == other.size());
+
+        Subproblem X;
+        std::size_t i = 0, j = 0;
+        while (i != size()) {
+            Subproblem T = this->table_[j];
+            if (T.is_subset(X)) { // subproblem already seen
+                ++j;
+                continue;
+            }
+            /* New unique subproblem, compare. */
+            Subproblem O = this->table_[j];
+            if (T != O) return false;
+            ++i; // count unique subproblems
+            X |= T; // remember unique subproblem
+        }
+        return true;
+    }
+
+    bool operator!=(const SubproblemTableBottomUp &other) const { return not operator==(other); }
+
+    bool operator<(const SubproblemTableBottomUp &other) const {
+        M_unreachable("not implemented");
+    }
+
+M_LCOV_EXCL_START
+    friend std::ostream & operator<<(std::ostream &out, const SubproblemTableBottomUp &S) {
+        out << "g = " << S.g() << ", [";
+        for (auto it = S.cbegin(); it != S.cend(); ++it) {
+            if (it != S.cbegin()) out << ", ";
+            it->print_fixed_length(out, 15);
+        }
+        return out << ']';
+    }
+
+    void dump(std::ostream &out) const { out << *this << std::endl; }
+    void dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
+};
+
+SubproblemTableBottomUp::allocator_type SubproblemTableBottomUp::allocator_;
+
+}
+
+namespace std {
+
+template<>
+struct hash<search_states::SubproblemTableBottomUp>
+{
+    uint64_t operator()(const search_states::SubproblemTableBottomUp &state) const {
         /* Rolling hash with multiplier taken from [1] where the moduli is 2^64.
          * [1] http://www.ams.org/mcom/1999-68-225/S0025-5718-99-00996-5/S0025-5718-99-00996-5.pdf */
         uint64_t hash = 0;
@@ -1841,6 +2092,72 @@ struct ExpandBottomUpComplete
                     state.INCREMENT_NUM_STATES_GENERATED();
                     callback(std::move(S));
                 }
+            }
+        }
+    }
+
+    template<typename Callback, typename PlanTable>
+    void operator()(const SubproblemTableBottomUp &state, Callback &&callback, PlanTable &PT,
+                    const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
+                    const CardinalityEstimator &CE) const
+    {
+        state.INCREMENT_NUM_STATES_EXPANDED();
+
+        /*----- Enumerate all left sides. -----*/
+        const Subproblem All((1UL << G.num_sources()) - 1UL);
+        Subproblem X;
+        std::size_t i = 0;
+        while (X != All) {
+            const Subproblem L = state[i++];
+            if (L.is_subset(X)) continue;
+            X |= L; // remember left side
+
+            Subproblem N = M.neighbors(L) - X;
+            /*----- Enumerate all right sides of left side. -----*/
+            while (not N.empty()) {
+                auto it = N.begin();
+                const Subproblem R = state[*it];
+                N -= R;
+
+                // M_insist(uint64_t(L) < uint64_t(R));
+                M_insist(M.is_connected(L, R));
+                M_insist((L & R).empty());
+
+                /* Compute joined subproblem. */
+                const Subproblem joined = L|R;
+
+                if (uint64_t(joined) < uint64_t(state.marker())) continue; // prune symmetrical paths
+
+                /* Compute new subproblem table after join. */
+                auto table = state.get_allocator().allocate(G.num_sources());
+
+#if 1
+                for (std::size_t j = 0; j != G.num_sources(); ++j)
+                    table[j] = joined[j] ? joined : state[j];
+#else
+                std::copy_n(&state[0], G.num_sources(), table);
+                for (std::size_t i : joined)
+                    table[i] = joined;
+#endif
+
+                /* Compute total cost. */
+                cnf::CNF condition; // TODO use join condition
+                const double total_cost = CF.calculate_join_cost(G, PT, CE, L, R, condition);
+                PT.update(G, CE, L, R, total_cost);
+
+                /* Compute action cost. */
+                const double action_cost = total_cost - (PT[L].cost + PT[R].cost);
+
+                /* Create new search state. */
+                SubproblemTableBottomUp S(
+                    /* Context= */ PT, G, M, CF, CE,
+                    /* g=       */ state.g() + action_cost,
+                    /* size=    */ state.size() - 1,
+                    /* mark=    */ joined,
+                    /* table_   */ table
+                );
+                state.INCREMENT_NUM_STATES_GENERATED();
+                callback(std::move(S));
             }
         }
     }
@@ -2488,14 +2805,15 @@ struct checkpoints<PlanTable, SubproblemsBottomUp>
                                          /* g=       */ 0,
                                          /* begin=   */ subproblems_current_checkpoint.begin(),
                                          /* end=     */ subproblems_current_checkpoint.end());
+                state_type initial_state_copy = state_type(initial_state, PT, G, M, CF, CE);
                 SearchSection cache_candidate(std::move(initial_state), checkpoint);
 
                 if (auto it = cached_searches_.find(cache_candidate); it != cached_searches_.end()) {
                     h_checkpoints += it->second;
                 } else {
                     internal_hsum h(PT, G, M, CF, CE);
-                    const double cost = S_.search(state_type(cache_candidate.initial_state()), // clone
-                                                  h, ExpandBottomUpComplete{}, PT, G, M, CF, CE);
+                    const double cost = S_.search(std::move(initial_state_copy), h, ExpandBottomUpComplete{},
+                                                  /* Context= */ PT, G, M, CF, CE);
                     S_.clear();
                     h_checkpoints += cost;
                     cached_searches_.emplace_hint(it, std::move(cache_candidate), cost);
@@ -2604,32 +2922,33 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
             (PT, G, M, CF, CE); \
         }
 
-             EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  zero,                           AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  zero,                           beam_search                     )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  zero,                           monotone_beam_search            )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  zero,                           monotone_dynamic_beam_search    )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            lazyAStar                       )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            beam_search                     )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            dynamic_beam_search             )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            monotone_beam_search            )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  sum,                            monotone_dynamic_beam_search    )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  scaled_sum,                     AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  scaled_sum,                     monotone_beam_search            )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  scaled_sum,                     monotone_dynamic_beam_search    )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  product,                        AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  GOO,                            AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  GOO,                            monotone_beam_search            )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  GOO,                            monotone_dynamic_beam_search    )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  bottomup_lookahead_cheapest,    AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    lazyAStar                       )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    dynamic_beam_search             )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    lazy_beam_search                )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    lazy_dynamic_beam_search        )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    monotone_beam_search            )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  checkpoints,                    monotone_dynamic_beam_search    )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,  perfect_oracle,                 AStar                           )
+             EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      zero,                           AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      zero,                           beam_search                     )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      zero,                           monotone_beam_search            )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      zero,                           monotone_dynamic_beam_search    )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      sum,                            AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      sum,                            lazyAStar                       )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      sum,                            beam_search                     )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      sum,                            dynamic_beam_search             )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      sum,                            monotone_beam_search            )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      sum,                            monotone_dynamic_beam_search    )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      scaled_sum,                     AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      scaled_sum,                     monotone_beam_search            )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      scaled_sum,                     monotone_dynamic_beam_search    )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      product,                        AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      GOO,                            AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      GOO,                            monotone_beam_search            )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      GOO,                            monotone_dynamic_beam_search    )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      bottomup_lookahead_cheapest,    AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      checkpoints,                    AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      checkpoints,                    lazyAStar                       )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      checkpoints,                    dynamic_beam_search             )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      checkpoints,                    lazy_beam_search                )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      checkpoints,                    lazy_dynamic_beam_search        )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      checkpoints,                    monotone_beam_search            )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      checkpoints,                    monotone_dynamic_beam_search    )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsBottomUp,      perfect_oracle,                 AStar                           )
+        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemTableBottomUp,  sum,                            AStar                           )
         // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            AStar                           )
         // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            monotone_beam_search            )
         // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            monotone_dynamic_beam_search    )

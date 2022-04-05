@@ -1095,7 +1095,7 @@ struct SubproblemsArray : Base<SubproblemsArray>
     /** Creates a state with cost `g` and given `subproblems`. */
     template<typename PlanTable>
     SubproblemsArray(const PlanTable&, const QueryGraph &G, const AdjacencyMatrix&, const CostFunction&,
-                        const CardinalityEstimator&, double g, size_type size, size_type mark, Subproblem *subproblems)
+                     const CardinalityEstimator&, double g, size_type size, size_type mark, Subproblem *subproblems)
         : g_(g)
         , size_(size)
         , mark_(mark)
@@ -1108,15 +1108,17 @@ struct SubproblemsArray : Base<SubproblemsArray>
         base_type::INCREMENT_NUM_STATES_CONSTRUCTED();
     }
 
+#if 1
     /** Creates an initial state. */
     template<typename PlanTable>
     SubproblemsArray(const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
-                        const CardinalityEstimator &CE)
+                     const CardinalityEstimator &CE)
         : SubproblemsArray(PT, G, M, CF, CE, 0., G.num_sources(), 0, allocator_.allocate(G.num_sources()))
     {
         for (uint64_t i = 0; i != G.num_sources(); ++i)
             subproblems_[i] = Subproblem(1UL << i);
     }
+#endif
 
     /** Creates a state with cost `g` and subproblems in range `[begin; end)`. */
     template<typename PlanTable, typename It>
@@ -3023,40 +3025,50 @@ using monotone_dynamic_beam_search = ai::monotone_beam_search<-1U>::type<State, 
 template<
     typename PlanTable,
     typename State,
-    typename Heuristic,
+    typename Expand,
+    template<typename, typename> typename Heuristic,
     template<typename, typename, typename, typename...> typename Search
 >
-void run_heuristic_search(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
-                          const CardinalityEstimator &CE)
+bool heuristic_search_helper(const char *state_str, const char *expand_str, const char *heuristic_str,
+                             const char *search_str, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                             const CostFunction &CF, const CardinalityEstimator &CE)
 {
-    State::RESET_STATE_COUNTERS();
-    State initial_state(PT, G, M, CF, CE);
-    try {
-        Heuristic h = Heuristic(PT, G, M, CF, CE);
-        ai::search<
-            State,
-            Heuristic,
-            expansions::ExpandBottomUpComplete,
-            Search,
-            /*----- context -----*/
-            PlanTable&,
-            const QueryGraph&,
-            const AdjacencyMatrix&,
-            const CostFunction&,
-            const CardinalityEstimator&
-        >(std::move(initial_state), h, expansions::ExpandBottomUpComplete{}, PT, G, M, CF, CE);
-    } catch (std::logic_error err) {
-        std::cerr << "search did not reach a goal state, fall back to DPccp" << std::endl;
-        DPccp dpccp;
-        dpccp(G, CF, PT);
-    }
+    if (streq(Options::Get().ai_state,     state_str    ) and
+        streq(Options::Get().ai_expand,    expand_str   ) and
+        streq(Options::Get().ai_heuristic, heuristic_str) and
+        streq(Options::Get().ai_search,    search_str   ))
+    {
+        State::RESET_STATE_COUNTERS();
+        State initial_state(PT, G, M, CF, CE);
+        try {
+            Heuristic<PlanTable, State> h(PT, G, M, CF, CE);
+            ai::search<
+                State,
+                Heuristic<PlanTable, State>,
+                Expand,
+                Search,
+                /*----- context -----*/
+                PlanTable&,
+                const QueryGraph&,
+                const AdjacencyMatrix&,
+                const CostFunction&,
+                const CardinalityEstimator&
+            >(std::move(initial_state), h, expansions::ExpandBottomUpComplete{}, PT, G, M, CF, CE);
+        } catch (std::logic_error err) {
+            std::cerr << "search did not reach a goal state, fall back to DPccp" << std::endl;
+            DPccp dpccp;
+            dpccp(G, CF, PT);
+        }
 #ifdef WITH_STATE_COUNTERS
-    std::cerr <<   "States generated: " << State::NUM_STATES_GENERATED()
-              << "\nStates expanded: " << State::NUM_STATES_EXPANDED()
-              << "\nStates constructed: " << State::NUM_STATES_CONSTRUCTED()
-              << "\nStates disposed: " << State::NUM_STATES_DISPOSED()
-              << std::endl;
+        std::cerr <<   "States generated: " << State::NUM_STATES_GENERATED()
+                  << "\nStates expanded: " << State::NUM_STATES_EXPANDED()
+                  << "\nStates constructed: " << State::NUM_STATES_CONSTRUCTED()
+                  << "\nStates disposed: " << State::NUM_STATES_DISPOSED()
+                  << std::endl;
 #endif
+        return true;
+    }
+    return false;
 }
 
 /** Computes the join order using heuristic search */
@@ -3071,56 +3083,55 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         auto &CE = C.get_database_in_use().cardinality_estimator();
         AdjacencyMatrix M(G);
 
-#define IS_HEURISTIC_SEARCH_CONFIG(STATE, HEURISTIC, SEARCH) \
-        (streq(Options::Get().ai_state, #STATE) and streq(Options::Get().ai_heuristic, #HEURISTIC) and \
-         streq(Options::Get().ai_search, #SEARCH))
-#define EMIT_HEURISTIC_SEARCH_CONFIG(STATE, HEURISTIC, SEARCH) \
-        if (IS_HEURISTIC_SEARCH_CONFIG(STATE, HEURISTIC, SEARCH)) \
+#define HEURISTIC_SEARCH(STATE, EXPAND, HEURISTIC, SEARCH) \
+        if (heuristic_search_helper<PlanTable, \
+                                    search_states::STATE, \
+                                    expansions::EXPAND, \
+                                    heuristics::HEURISTIC, \
+                                    SEARCH>(#STATE, #EXPAND, #HEURISTIC, #SEARCH, PT, G, M, CF, CE)) \
         { \
-            run_heuristic_search<\
-                PlanTable, \
-                search_states:: STATE,\
-                heuristics:: HEURISTIC <PlanTable, search_states:: STATE>,\
-                SEARCH>\
-            (PT, G, M, CF, CE); \
+            goto matched_heuristic_search; \
         }
 
-             EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      zero,                           AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      zero,                           beam_search                     )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      zero,                           monotone_beam_search            )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      zero,                           monotone_dynamic_beam_search    )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      sum,                            AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      sum,                            lazyAStar                       )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      sum,                            beam_search                     )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      sum,                            dynamic_beam_search             )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      sum,                            monotone_beam_search            )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      sum,                            monotone_dynamic_beam_search    )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      scaled_sum,                     AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      scaled_sum,                     monotone_beam_search            )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      scaled_sum,                     monotone_dynamic_beam_search    )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      product,                        AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      GOO,                            AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      GOO,                            monotone_beam_search            )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      GOO,                            monotone_dynamic_beam_search    )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      bottomup_lookahead_cheapest,    AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      checkpoints,                    AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      checkpoints,                    lazyAStar                       )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      checkpoints,                    dynamic_beam_search             )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      checkpoints,                    lazy_beam_search                )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      checkpoints,                    lazy_dynamic_beam_search        )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      checkpoints,                    monotone_beam_search            )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      checkpoints,                    monotone_dynamic_beam_search    )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemsArray,      perfect_oracle,                 AStar                           )
-        else EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemTableBottomUp,  sum,                            AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     zero,                           AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     zero,                           beam_search                     )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     zero,                           monotone_beam_search            )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     zero,                           monotone_dynamic_beam_search    )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     sum,                            AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     sum,                            lazyAStar                       )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     sum,                            beam_search                     )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     sum,                            dynamic_beam_search             )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     sum,                            monotone_beam_search            )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     sum,                            monotone_dynamic_beam_search    )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     scaled_sum,                     AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     scaled_sum,                     monotone_beam_search            )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     scaled_sum,                     monotone_dynamic_beam_search    )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     product,                        AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     GOO,                            AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     GOO,                            monotone_beam_search            )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     GOO,                            monotone_dynamic_beam_search    )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     bottomup_lookahead_cheapest,    AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     checkpoints,                    AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     checkpoints,                    lazyAStar                       )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     checkpoints,                    dynamic_beam_search             )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     checkpoints,                    lazy_beam_search                )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     checkpoints,                    lazy_dynamic_beam_search        )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     checkpoints,                    monotone_beam_search            )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     checkpoints,                    monotone_dynamic_beam_search    )
+        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     perfect_oracle,                 AStar                           )
+
+        // EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemTableBottomUp,  sum,                            AStar                           )
         // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            AStar                           )
         // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            monotone_beam_search            )
         // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            monotone_dynamic_beam_search    )
         // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        scaled_sum,                     AStar                           )
         // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        scaled_sum,                     monotone_beam_search            )
         // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        scaled_sum,                     monotone_dynamic_beam_search    )
-        else { throw std::invalid_argument("illegal search configuration"); }
-#undef EMIT_HEURISTIC_SEARCH_CONFIG
 
+        throw std::invalid_argument("illegal search configuration");
+#undef HEURISTIC_SEARCH
+
+matched_heuristic_search:;
 #if 1
         {
             const auto ai_cost = PT.get_final().cost;

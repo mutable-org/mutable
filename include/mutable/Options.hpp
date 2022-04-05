@@ -72,6 +72,7 @@ struct Options
 
     /* AI planning configuration */
     const char *ai_state;
+    const char *ai_expand;
     const char *ai_heuristic;
     const char *ai_search;
 

@@ -632,19 +632,24 @@ int main(int argc, const char **argv)
         [&](bool) { Options::Get().train_cost_models = true; }          /* Callback         */
     );
     /*----- AIPlanning Config ----------------------------------------------------------------------------------------*/
-    ADD(const char *, Options::Get().ai_state, "SubproblemsBottomUp",                   /* Type, Var, Init  */
+    ADD(const char*, Options::Get().ai_state, "SubproblemsArray",                       /* Type, Var, Init  */
         nullptr, "--ai-state",                                                          /* Short, Long      */
-        "specify which state definition to use for plan enumeration via AIPlanning",    /* Description      */
+        "specify which state definition to use for heuristic search",                   /* Description      */
         [&](const char *str) { Options::Get().ai_state = str; }                         /* Callback         */
     );
-    ADD(const char *, Options::Get().ai_heuristic, "sum",                               /* Type, Var, Init  */
+    ADD(const char*, Options::Get().ai_expand, "ExpandBottomUpComplete",                /* Type, Var, Init  */
+        nullptr, "--ai-expand",                                                         /* Short, Long      */
+        "specify how the search expands vertices",                                      /* Description      */
+        [&](const char *str) { Options::Get().ai_expand = str; }                        /* Callback         */
+    );
+    ADD(const char*, Options::Get().ai_heuristic, "sum",                                /* Type, Var, Init  */
         nullptr, "--ai-heuristic",                                                      /* Short, Long      */
-        "specify which heuristic to use for plan enumeration via AIPlanning",           /* Description      */
+        "specify which heuristic to use for heuristic search",                          /* Description      */
         [&](const char *str) { Options::Get().ai_heuristic = str; }                     /* Callback         */
     );
-    ADD(const char *, Options::Get().ai_search, "AStar",                                /* Type, Var, Init  */
+    ADD(const char*, Options::Get().ai_search, "AStar",                                 /* Type, Var, Init  */
         nullptr, "--ai-search",                                                         /* Short, Long      */
-        "specify which search algorithm to use for plan enumeration via AIPlanning",    /* Description      */
+        "specify which search algorithm to use for heuristic search",                   /* Description      */
         [&](const char *str) { Options::Get().ai_search = str; }                        /* Callback         */
     );
 #undef ADD

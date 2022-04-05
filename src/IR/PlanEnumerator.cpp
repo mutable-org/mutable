@@ -713,71 +713,108 @@ struct TDMinCutAGaT final : PlanEnumeratorCRTP<TDMinCutAGaT>
     using base_type = PlanEnumeratorCRTP<TDMinCutAGaT>;
     using base_type::operator();
 
-    struct queue_entry
+    template<typename Callback>
+    void MinCutAGaT(const AdjacencyMatrix &M, Callback &&callback, const Subproblem S,
+                    const Subproblem C, const Subproblem X, const Subproblem T) const
     {
-        Subproblem C;
-        Subproblem X;
-        Subproblem T;
+        M_insist(not S.empty());
+        M_insist(not S.singleton());
+        M_insist(M.is_connected(S));
+        M_insist(T.is_subset(C));
+        M_insist(C.is_subset(S));
+        M_insist((C & X).empty());
 
-        queue_entry(Subproblem C, Subproblem X, Subproblem T) : C(C), X(X), T(T) { }
-    };
+        using queue_entry = std::tuple<Subproblem, Subproblem, Subproblem>;
+        std::vector<queue_entry> worklist;
+        worklist.emplace_back(C, X, T);
 
-    template<typename PlanTable>
-    void MinCutAGaT(const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
-                    const CardinalityEstimator &CE, PlanTable &PT,
-                    Subproblem S, Subproblem C, Subproblem X, Subproblem T) const
-    {
-        if (PT.has_plan(S)) return;
+        while (not worklist.empty()) {
+            auto [C, X, T] = worklist.back();
+            worklist.pop_back();
 
-        std::queue<queue_entry> queue;
-        queue.push(queue_entry(C, X, T));
+            M_insist(C.is_subset(S));
+            M_insist(M.is_connected(C));
+            M_insist(T.is_subset(C));
 
-        while (not queue.empty()) {
-            auto e = queue.front();
-            queue.pop();
+            /*----- IsConnectedImp() check. -----*/
+            const Subproblem N_T = (M.neighbors(T) & S) - C; // sufficient to check if neighbors of T are connected
+            bool is_connected;
+            if (N_T.size() <= 1) {
+                is_connected = true; // trivial
+            } else {
+                const Subproblem n = N_T.begin().as_set(); // single, random vertex from the neighborhood of T
+                const Subproblem reachable = M.reachable(n, S - C); // compute vertices reachable from n in S - C
+                is_connected = N_T.is_subset(reachable); // if reachable vertices contain N_T, then S - C is connected
+            }
 
             Subproblem T_tmp;
-            Subproblem X_tmp;
-            Subproblem N_T = (M.neighbors(e.T) & S) - e.C; // sufficient to check if neighbors of T are connected
-            if (M.is_connected(N_T)) {
-                /* ccp (C, S - C) found, process `C` and `S - C` recursively. */
-                Subproblem cmpl = S - e.C;
-                MinCutAGaT(G, M, CF, CE, PT,
-                           e.C, Subproblem(least_subset(e.C)), Subproblem(0), Subproblem(least_subset(e.C)));
-                MinCutAGaT(G, M, CF, CE, PT,
-                           cmpl, Subproblem(least_subset(cmpl)), Subproblem(0), Subproblem(least_subset(cmpl)));
+            if (is_connected) { // found ccp (C, S\C)
+                M_insist(M.is_connected(S - C));
+                M_insist(M.is_connected(C, S - C));
+                callback(C, S - C);
+            } else {
+                M_insist(not M.is_connected(S - C) or not M.is_connected(C, S - C));
+                T_tmp = C;
+            }
 
-                /* Update `PlanTable`. */
-                cnf::CNF condition; // TODO use join condition
-                auto cost = CF.calculate_join_cost(G, PT, CE, e.C, cmpl, condition);
-                PT.update(G, CE, e.C, cmpl, cost);
-                cost = CF.calculate_join_cost(G, PT, CE, cmpl, e.C, condition);
-                PT.update(G, CE, cmpl, e.C, cost);
+            if (C.size() + 1 >= S.size()) continue;
 
-                T_tmp = Subproblem(0);
-            } else T_tmp = e.C;
-
-            if (e.C.size() + 1 >= S.size()) continue;
-
-            X_tmp = e.X;
-            Subproblem N_C = M.neighbors(e.C);
-
-            for (auto i : (N_C - e.X)) {
-                Subproblem v(1UL << i);
-                queue.push(queue_entry(e.C | v, X_tmp, T_tmp | v));
+            Subproblem X_tmp = X;
+            const Subproblem N_C = (M.neighbors(C) & S) - X;
+            for (auto it = N_C.begin(); it != N_C.end(); ++it) {
+                const Subproblem v = it.as_set();
+                worklist.emplace_back(C | v, X_tmp, T_tmp | v);
                 X_tmp = X_tmp | v;
             }
         }
     }
 
+    template<typename Callback>
+    void partition(const AdjacencyMatrix &M, Callback &&callback, const Subproblem S) const {
+        M_insist(not S.empty());
+        M_insist(not S.singleton());
+        const Subproblem C = S.begin().as_set();
+        M_insist(not C.empty());
+        MinCutAGaT(
+            /* Matrix=   */ M,
+            /* Callback= */ std::forward<Callback>(callback),
+            /* S=        */ S,
+            /* C=        */ C,
+            /* X=        */ Subproblem(),
+            /* T=        */ C
+        );
+    }
+
     template<typename PlanTable>
     void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
-        auto &sources = G.sources();
-        std::size_t n = sources.size();
-        AdjacencyMatrix M(G);
+        const AdjacencyMatrix M(G);
         auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
-        MinCutAGaT(G, M, CF, CE, PT, Subproblem((1UL << n) - 1), Subproblem(1), Subproblem(0), Subproblem(1));
+        auto handle_ccp = [&](const Subproblem first, const Subproblem second) -> void {
+            auto recurse = [&](const Subproblem first, const Subproblem second, auto recurse) -> void {
+                auto handle_ccp = std::bind(recurse, std::placeholders::_1, std::placeholders::_2, recurse);
+                /*----- Solve recursively. -----*/
+                if (not PT.has_plan(first))
+                    partition(M, handle_ccp, first);
+                M_insist(PT.has_plan(first));
+                if (not PT.has_plan(second))
+                    partition(M, handle_ccp, second);
+                M_insist(PT.has_plan(second));
+
+                /*----- Update `PlanTable`. -----*/
+                cnf::CNF condition; // TODO use join condition
+                auto cost = CF.calculate_join_cost(G, PT, CE, first, second, condition);
+                PT.update(G, CE, first, second, cost);
+                cost = CF.calculate_join_cost(G, PT, CE, second, first, condition);
+                PT.update(G, CE, second, first, cost);
+            };
+            recurse(first, second, recurse);
+        };
+
+        if (G.num_sources() > 1) {
+            const Subproblem All((1UL << G.num_sources()) - 1UL);
+            partition(M, handle_ccp, All);
+        }
     }
 };
 

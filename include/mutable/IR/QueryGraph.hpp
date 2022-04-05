@@ -396,7 +396,7 @@ exit:
 
     /** Returns `true` iff the subproblem `S` is connected.  `S` is connected iff any node in `S` can reach all other
      * nodes of `S` using only nodes in `S`.  */
-    bool is_connected(SmallBitset S) const { return reachable(SmallBitset(1UL << *S.begin()), S) == S; }
+    bool is_connected(SmallBitset S) const { return reachable(S.begin().as_set(), S) == S; }
 
     /** Returns `true` iff there is at least one edge (join) between `left` and `right`. */
     bool is_connected(SmallBitset left, SmallBitset right) const {

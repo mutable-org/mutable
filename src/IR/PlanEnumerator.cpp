@@ -1004,12 +1004,20 @@ struct Base : crtp<Actual, Base>
 
     /*----- Getters --------------------------------------------------------------------------------------------------*/
 
-    /** Returns `true` iff this is a goal state. */
+    const Actual * parent() const { return actual().parent(); }
+
     template<typename PlanTable>
-    bool is_goal(const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
-                 const CardinalityEstimator &CE) const
+    bool is_bottom(const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
+                   const CardinalityEstimator &CE) const
     {
-        return actual().is_goal(PT, G, M, CF, CE);
+        return actual().is_bottom(PT, G, M, CF, CE);
+    }
+
+    template<typename PlanTable>
+    bool is_top(const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
+                const CardinalityEstimator &CE) const
+    {
+        return actual().is_top(PT, G, M, CF, CE);
     }
 
     /** Returns the cost to reach this state from the initial state. */
@@ -1018,7 +1026,7 @@ struct Base : crtp<Actual, Base>
     /*----- Setters --------------------------------------------------------------------------------------------------*/
 
     /** Reduces the *g* value of the state. */
-    double decrease_g(double new_g) const { return actual().decrease_g(new_g); }
+    double decrease_g(const Actual *new_parent, double new_g) const { return actual().decrease_g(new_parent, new_g); }
 
     /*----- Comparison -----------------------------------------------------------------------------------------------*/
 
@@ -1071,6 +1079,7 @@ struct SubproblemsArray : Base<SubproblemsArray>
     static allocator_type & get_allocator() { return allocator_; }
 
     private:
+    mutable const SubproblemsArray *parent_ = nullptr;
     ///> the cost to reach this state from the initial state
     mutable double g_;
     ///> number of subproblems in this state
@@ -1084,6 +1093,7 @@ struct SubproblemsArray : Base<SubproblemsArray>
     public:
     friend void swap(SubproblemsArray &first, SubproblemsArray &second) {
         using std::swap;
+        swap(first.parent_,      second.parent_);
         swap(first.g_,           second.g_);
         swap(first.size_,        second.size_);
         swap(first.mark_,        second.mark_);
@@ -1095,12 +1105,15 @@ struct SubproblemsArray : Base<SubproblemsArray>
     /** Creates a state with cost `g` and given `subproblems`. */
     template<typename PlanTable>
     SubproblemsArray(const PlanTable&, const QueryGraph &G, const AdjacencyMatrix&, const CostFunction&,
-                     const CardinalityEstimator&, double g, size_type size, size_type mark, Subproblem *subproblems)
-        : g_(g)
+                     const CardinalityEstimator&, const SubproblemsArray *parent, double g, size_type size,
+                     size_type mark, Subproblem *subproblems)
+        : parent_(parent)
+        , g_(g)
         , size_(size)
         , mark_(mark)
         , subproblems_(subproblems)
     {
+        M_insist(parent_ == nullptr or parent_->g() <= this->g(), "cannot have less cost than parent");
         M_insist(size == 0 or subproblems_);
         M_insist(mark < size, "mark out of bounds");
         M_insist(size <= G.num_sources());
@@ -1108,37 +1121,27 @@ struct SubproblemsArray : Base<SubproblemsArray>
         base_type::INCREMENT_NUM_STATES_CONSTRUCTED();
     }
 
-#if 1
-    /** Creates an initial state. */
-    template<typename PlanTable>
-    SubproblemsArray(const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
-                     const CardinalityEstimator &CE)
-        : SubproblemsArray(PT, G, M, CF, CE, 0., G.num_sources(), 0, allocator_.allocate(G.num_sources()))
-    {
-        for (uint64_t i = 0; i != G.num_sources(); ++i)
-            subproblems_[i] = Subproblem(1UL << i);
-    }
-#endif
-
+#if 0
     /** Creates a state with cost `g` and subproblems in range `[begin; end)`. */
     template<typename PlanTable, typename It>
     SubproblemsArray(const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
-                        const CardinalityEstimator &CE, double g, It begin, It end)
+                     const CardinalityEstimator &CE, double g, It begin, It end)
         : SubproblemsArray(PT, G, M, CF, CE, g, std::distance(begin, end), 0,
-                              allocator_.allocate(std::distance(begin, end)))
+                           allocator_.allocate(std::distance(begin, end)))
     {
         M_insist(begin != end);
         std::copy(begin, end, this->begin());
         M_insist(std::is_sorted(this->begin(), this->end(), subproblem_lt));
         base_type::INCREMENT_NUM_STATES_CONSTRUCTED();
     }
+#endif
 
     /** Copy c'tor. */
     SubproblemsArray(const SubproblemsArray&) = delete;
 
     template<typename PlanTable>
     SubproblemsArray(const SubproblemsArray &other, const PlanTable&, const QueryGraph&, const AdjacencyMatrix&,
-                        const CostFunction&, const CardinalityEstimator&)
+                     const CostFunction&, const CardinalityEstimator&)
         : g_(other.g_)
         , size_(other.size_)
         , mark_(other.mark_)
@@ -1160,17 +1163,70 @@ struct SubproblemsArray : Base<SubproblemsArray>
         allocator_.deallocate(subproblems_, size_);
     }
 
-    /*----- Getters --------------------------------------------------------------------------------------------------*/
+
+    /*----- Factory methods ------------------------------------------------------------------------------------------*/
 
     template<typename PlanTable>
-    bool is_goal(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&,
-                 const CardinalityEstimator&) const
+    static SubproblemsArray Bottom(const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                                   const CostFunction &CF, const CardinalityEstimator &CE)
+    {
+        SubproblemsArray S(
+            /* Context=     */ PT, G, M, CF, CE,
+            /* parent=      */ nullptr,
+            /* cost=        */ 0.,
+            /* size=        */ G.num_sources(),
+            /* mark=        */ 0,
+            /* subproblems= */ allocator_.allocate(G.num_sources())
+        );
+        for (uint64_t i = 0; i != G.num_sources(); ++i)
+            S.subproblems_[i] = Subproblem(1UL << i);
+        return S;
+    }
+
+    template<typename PlanTable>
+    static SubproblemsArray Top(const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                                const CostFunction &CF, const CardinalityEstimator &CE)
+    {
+        SubproblemsArray S(
+            /* Context=     */ PT, G, M, CF, CE,
+            /* parent=      */ nullptr,
+            /* cost=        */ 0.,
+            /* size=        */ 1,
+            /* mark=        */ 0,
+            /* subproblems= */ allocator_.allocate(1)
+        );
+        const Subproblem All((1UL << G.num_sources()) - 1UL);
+        S.subproblems_[0] = All;
+        return S;
+    }
+
+    /*----- Getters --------------------------------------------------------------------------------------------------*/
+
+    const SubproblemsArray * parent() const { return parent_; }
+
+    template<typename PlanTable>
+    bool is_bottom(const PlanTable&, const QueryGraph &G, const AdjacencyMatrix&, const CostFunction&,
+                const CardinalityEstimator&) const
+    {
+        return size() == G.num_sources();
+    }
+
+    template<typename PlanTable>
+    bool is_top(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&,
+                const CardinalityEstimator&) const
     {
         return size() <= 1;
     }
+
     double g() const { return g_; }
     size_type mark() const { return mark_; }
-    void decrease_g(double new_g) const { M_insist(new_g <= g_); g_ = new_g; }
+    void decrease_g(const SubproblemsArray *new_parent, double new_g) const {
+        M_insist(new_parent != this);
+        M_insist(new_parent->g() <= new_g);
+        M_insist(new_g <= this->g());
+        parent_ = new_parent;
+        g_ = new_g;
+    }
     size_type size() const { return size_; }
     Subproblem operator[](std::size_t idx) const { M_insist(idx < size_); return subproblems_[idx]; }
 
@@ -2075,7 +2131,26 @@ namespace expansions {
 
 using namespace search_states;
 
-struct ExpandBottomUpComplete
+
+/*----- BottomUp -----------------------------------------------------------------------------------------------------*/
+
+struct BottomUp
+{
+    template<typename State, typename PlanTable>
+    static State Start(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
+                       const CardinalityEstimator &CE) {
+        return State::Bottom(PT, G, M, CF, CE);
+    }
+
+    template<typename State, typename PlanTable>
+    bool is_goal(const State &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                 const CostFunction &CF, const CardinalityEstimator &CE) const
+    {
+        return state.is_top(PT, G, M, CF, CE);
+    }
+};
+
+struct BottomUpComplete : BottomUp
 {
     template<typename Callback, typename PlanTable>
     void operator()(const SubproblemsArray &state, Callback &&callback, PlanTable &PT,
@@ -2084,7 +2159,6 @@ struct ExpandBottomUpComplete
     {
         state.INCREMENT_NUM_STATES_EXPANDED();
 
-#if 0
         const auto marker = std::next(state.cbegin(), state.mark());
 
         /* Enumerate all potential join pairs and check whether they are connected. */
@@ -2114,15 +2188,18 @@ struct ExpandBottomUpComplete
 
                     /* Compute total cost. */
                     cnf::CNF condition; // TODO use join condition
-                    const double total_cost = CF.calculate_join_cost(G, PT, CE, *outer_it, *inner_it, condition);
-                    PT.update(G, CE, *outer_it, *inner_it, total_cost);
-
-                    /* Compute action cost. */
-                    const double action_cost = total_cost - (PT[*outer_it].cost + PT[*inner_it].cost);
+                    const double action_cost = CF.calculate_join_cost(G, PT, CE, *outer_it, *inner_it, condition);
+                    if (not PT[joined].model) {
+                        auto &model_left  = *PT[*outer_it].model;
+                        auto &model_right = *PT[*inner_it].model;
+                        PT[joined].model = CE.estimate_join(G, model_left, model_right, condition);
+                        PT[joined].cost = 0;
+                    }
 
                     /* Create new search state. */
                     SubproblemsArray S(
                         /* Context=     */ PT, G, M, CF, CE,
+                        /* parent=      */ &state,
                         /* g=           */ state.g() + action_cost,
                         /* size=        */ state.size() - 1,
                         /* mark=        */ std::distance(state.cbegin(), inner_it) - 1,
@@ -2134,84 +2211,6 @@ struct ExpandBottomUpComplete
                 }
             }
         }
-
-#else
-
-        const Subproblem mark = state[state.mark()];
-
-        /*----- Build relation reverse index. -----*/
-        Subproblem RI[G.num_sources()];
-        for (std::size_t i = 0; i != G.num_sources(); ++i)
-            RI[i] = Subproblem();
-        for (const Subproblem S : state) {
-            for (unsigned idx : S)
-                RI[idx] = S;
-        }
-
-        /*----- Enumerate all left sides. -----*/
-        Subproblem X;
-        for (const Subproblem L : state) {
-            Subproblem N = M.neighbors(L) - X;
-            /*----- Enumerate all right sides of left side. -----*/
-            while (not N.empty()) {
-                auto it = N.begin();
-                const Subproblem R = RI[*it];
-                N -= it.as_set();
-
-#ifndef NDEBUG
-                std::cerr << "(";
-                L.print_fixed_length(std::cerr, G.num_sources());
-                std::cerr << ", ";
-                R.print_fixed_length(std::cerr, G.num_sources());
-                std::cerr << ")\n";
-#endif
-
-                M_insist(uint64_t(L) < uint64_t(R));
-                M_insist(M.is_connected(L, R));
-                M_insist((L & R).empty());
-
-                if (uint64_t(L|R) < uint64_t(mark)) continue; // prune symmetrical paths
-
-                /* Compute joined subproblem. */
-                const Subproblem joined = L|R;
-
-                /* Compute new subproblems after join */
-                auto subproblems = state.get_allocator().allocate(state.size() - 1);
-                Subproblem *ptr = subproblems;
-                SubproblemsArray::size_type new_mark;
-                for (auto it = state.cbegin(); it != state.cend(); ++it) {
-                    if (*it == L) continue; // skip left
-                    else if (*it == R) {
-                        new_mark = std::distance(state.cbegin(), it) - 1;
-                        new (ptr++) Subproblem(joined); // replace right
-                    }
-                    else new (ptr++) Subproblem(*it);
-                }
-                M_insist(std::is_sorted(subproblems, subproblems + state.size() - 1, subproblem_lt));
-
-                /* Compute total cost. */
-                cnf::CNF condition; // TODO use join condition
-                const double total_cost = CF.calculate_join_cost(G, PT, CE, L, R, condition);
-                PT.update(G, CE, L, R, total_cost);
-
-                /* Compute action cost. */
-                const double action_cost = total_cost - (PT[L].cost + PT[R].cost);
-
-                /* Create new search state. */
-                SubproblemsArray S(
-                    /* Context=     */ PT, G, M, CF, CE,
-                    /* g=           */ state.g() + action_cost,
-                    /* size=        */ state.size() - 1,
-                    /* mark=        */ new_mark,
-                    /* subproblems= */ std::move(subproblems)
-                );
-                state.INCREMENT_NUM_STATES_GENERATED();
-                callback(std::move(S));
-            }
-            X |= L;
-        }
-
-#endif
     }
 
     template<typename Callback, typename PlanTable>
@@ -2453,40 +2452,94 @@ next:
     }
 };
 
-struct ExpandTopDownComplete
+
+/*----- TopDown ------------------------------------------------------------------------------------------------------*/
+
+struct TopDown
+{
+    template<typename State, typename PlanTable>
+    static State Start(PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
+                       const CardinalityEstimator &CE) {
+        return State::Top(PT, G, M, CF, CE);
+    }
+
+    template<typename State, typename PlanTable>
+    bool is_goal(const State &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                 const CostFunction &CF, const CardinalityEstimator &CE) const
+    {
+        return state.is_bottom(PT, G, M, CF, CE);
+    }
+};
+
+struct TopDownComplete : TopDown
 {
     template<typename Callback, typename PlanTable>
     void operator()(const SubproblemsArray &state, Callback &&callback, PlanTable &PT,
                     const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
                     const CardinalityEstimator &CE) const
     {
+#ifndef NDEBUG
+        std::cerr << "\nexpand " << state << '\n';
+#endif
         TDMinCutAGaT TD;
         auto enumerate_ccp = [&](Subproblem S1, Subproblem S2) {
             using std::swap;
             if (uint64_t(S1) > uint64_t(S2)) swap(S1, S2);
             M_insist(uint64_t(S1) <= uint64_t(S2));
 
-            Subproblem partitions[2] = { S1, S2 };
+#ifndef NDEBUG
+            std::cerr << "    ccp ";
+            S1.print_fixed_length(std::cerr, G.num_sources());
+            std::cerr << " ⋈  ";
+            S2.print_fixed_length(std::cerr, G.num_sources());
+            std::cerr << '\n';
+#endif
 
+            /*----- Merge subproblems of state, excluding S1|S2, and partitions S1 and S2. -----*/
             auto subproblems = state.get_allocator().allocate(state.size() + 1);
-            std::merge(partitions, partitions + 2,
-                       state.cbegin(), state.cend(),
-                       subproblems);
+            {
+                Subproblem partitions[2] = { S1, S2 };
+                auto left_it = state.cbegin(), left_end = state.cend();
+                auto right_it = partitions, right_end = partitions + 2;
+                auto out = subproblems;
+                for (;;) {
+                    M_insist(out <= subproblems + state.size() + 1, "out of bounds");
+                    M_insist(left_it <= left_end, "out of bounds");
+                    M_insist(right_it <= right_end, "out of bounds");
+                    if (left_it == left_end) {
+                        if (right_it == right_end) break;
+                        *out++ = *right_it++;
+                    } else if (*left_it == (S1|S2)) [[unlikely]] {
+                        ++left_it; // skip partitioned subproblem S1|S2
+                    } else if (right_it == right_end) {
+                        *out++ = *left_it++;
+                    } else if (subproblem_lt(*left_it, *right_it)) {
+                        *out++ = *left_it++;
+                    } else {
+                        *out++ = *right_it++;
+                    }
+                }
+                M_insist(out == subproblems + state.size() + 1);
+            }
             M_insist(std::is_sorted(subproblems, subproblems + state.size() + 1, subproblem_lt));
 
-            /* Compute total cost. */
             cnf::CNF condition; // TODO use join condition
-            const double total_cost = CF.calculate_join_cost(G, PT, CE, S1, S2, condition);
-            PT.update(G, CE, S1, S2, total_cost);
-
-            /* Compute action cost. */
-            const double action_cost = total_cost - (PT[S1].cost + PT[S2].cost);
+            if (not PT[S1].model) {
+                PT[S1].cost = 0;
+                PT[S1].model = CE.estimate_join_all(G, PT, S1, condition);
+            }
+            if (not PT[S2].model) {
+                PT[S2].cost = 0;
+                PT[S2].model = CE.estimate_join_all(G, PT, S2, condition);
+            }
+            const double action_cost = CF.calculate_join_cost(G, PT, CE, S1, S2, condition);
 
             /* Create new search state. */
             SubproblemsArray S(
                 /* Context=     */ PT, G, M, CF, CE,
-                /* g=           */ state.g() + action_cost,
-                /* size=        */ state.size() - 1,
+                /* parent=      */ &state,
+                /* g=           */ state.g() + action_cost, // TODO new cost
+                /* size=        */ state.size() + 1,
                 /* mark=        */ 0,
                 /* subproblems= */ std::move(subproblems)
             );
@@ -2494,8 +2547,16 @@ struct ExpandTopDownComplete
             callback(std::move(S));
         };
 
-        for (const Subproblem S : state)
-            TD.partition(M, enumerate_ccp, S);
+        for (const Subproblem S : state) {
+            if (not S.singleton()) {
+#ifndef NDEBUG
+                std::cerr << "  partition ";
+                S.print_fixed_length(std::cerr, G.num_sources());
+                std::cerr << '\n';
+#endif
+                TD.partition(M, enumerate_ccp, S);
+            }
+        }
     }
 
 };
@@ -2565,9 +2626,30 @@ struct sum
                       const CostFunction &CF, const CardinalityEstimator &CE) const
     {
         double distance = 0;
-        if (not state.is_goal(PT, G, M, CF, CE)) {
+        if (not state.is_top(PT, G, M, CF, CE)) {
             state.for_each_subproblem([&](Subproblem S) {
                 distance += CE.predict_cardinality(*PT[S].model);
+            }, G);
+        }
+        return distance;
+    }
+};
+
+template<typename PlanTable, typename State>
+struct sqrt_sum
+{
+    using state_type = State;
+
+    sqrt_sum(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&, const CardinalityEstimator&)
+    { }
+
+    double operator()(const state_type &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                      const CostFunction &CF, const CardinalityEstimator &CE) const
+    {
+        double distance = 0;
+        if (not state.is_bottom(PT, G, M, CF, CE)) {
+            state.for_each_subproblem([&](Subproblem S) {
+                distance += 2 * std::sqrt(CE.predict_cardinality(*PT[S].model));
             }, G);
         }
         return distance;
@@ -2590,7 +2672,7 @@ struct scaled_sum
         double cardinalities[G.num_sources()];
         std::size_t num_sources = 0;
 
-        if (not state.is_goal(PT, G, M, CF, CE)) {
+        if (not state.is_top(PT, G, M, CF, CE)) {
             state.for_each_subproblem([&](Subproblem S) {
                 cardinalities[num_sources++] = CE.predict_cardinality(*PT[S].model);
             }, G);
@@ -2643,7 +2725,7 @@ struct bottomup_lookahead_cheapest
     double operator()(const state_type &state, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                       const CostFunction &CF, const CardinalityEstimator &CE) const
     {
-        if (state.is_goal(PT, G, M, CF, CE)) return 0;
+        if (state.is_top(PT, G, M, CF, CE)) return 0;
 
         double distance = 0;
         for (auto s : state)
@@ -2718,6 +2800,7 @@ struct GOO
     }
 };
 
+#if 0
 /** This heuristic estimates the distance to the goal by calculating certain checkpoints on the path from the goal state
  * to the current state and searching for plans between those checkpoints.
  * Each checkpoint is a `Subproblem` containing a certain number of relations that has the minimal size for that number
@@ -2786,7 +2869,7 @@ struct checkpoints<PlanTable, SubproblemsArray>
     ai::AStar<
         state_type,
         internal_hsum,
-        ExpandBottomUpComplete,
+        BottomUpComplete,
         /*----- context ----- */
         PlanTable&,
         const QueryGraph&,
@@ -2977,7 +3060,7 @@ struct checkpoints<PlanTable, SubproblemsArray>
                     h_checkpoints += it->second;
                 } else {
                     internal_hsum h(PT, G, M, CF, CE);
-                    const double cost = S_.search(std::move(initial_state_copy), h, ExpandBottomUpComplete{},
+                    const double cost = S_.search(std::move(initial_state_copy), h, BottomUpComplete{},
                                                   /* Context= */ PT, G, M, CF, CE);
                     S_.clear();
                     h_checkpoints += cost;
@@ -3000,27 +3083,28 @@ struct checkpoints<PlanTable, SubproblemsArray>
         return h_checkpoints;
     }
 };
+#endif
 
 }
 
-template<typename State, typename Heuristic, typename Expand, typename... Context>
-using AStar = ai::AStar<State, Heuristic, Expand, Context...>;
-template<typename State, typename Heuristic, typename Expand, typename... Context>
-using wAStar = ai::wAStar<std::ratio<2, 1>>::type<State, Heuristic, Expand, Context...>;
-template<typename State, typename Heuristic, typename Expand, typename... Context>
-using lazyAStar = ai::lazy_AStar<State, Heuristic, Expand, Context...>;
-template<typename State, typename Heuristic, typename Expand, typename... Context>
-using beam_search = ai::beam_search<2>::type<State, Heuristic, Expand, Context...>;
-template<typename State, typename Heuristic, typename Expand, typename... Context>
-using dynamic_beam_search = ai::beam_search<-1U>::type<State, Heuristic, Expand, Context...>;
-template<typename State, typename Heuristic, typename Expand, typename... Context>
-using lazy_beam_search = ai::lazy_beam_search<2>::type<State, Heuristic, Expand, Context...>;
-template<typename State, typename Heuristic, typename Expand, typename... Context>
-using lazy_dynamic_beam_search = ai::lazy_beam_search<-1U>::type<State, Heuristic, Expand, Context...>;
-template<typename State, typename Heuristic, typename Expand, typename... Context>
-using monotone_beam_search = ai::monotone_beam_search<2>::type<State, Heuristic, Expand, Context...>;
-template<typename State, typename Heuristic, typename Expand, typename... Context>
-using monotone_dynamic_beam_search = ai::monotone_beam_search<-1U>::type<State, Heuristic, Expand, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename... Context>
+using AStar = ai::AStar<State, Expand, Heuristic, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename... Context>
+using wAStar = ai::wAStar<std::ratio<2, 1>>::type<State, Expand, Heuristic, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename... Context>
+using lazyAStar = ai::lazy_AStar<State, Expand, Heuristic, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename... Context>
+using beam_search = ai::beam_search<2>::type<State, Expand, Heuristic, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename... Context>
+using dynamic_beam_search = ai::beam_search<-1U>::type<State, Expand, Heuristic, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename... Context>
+using lazy_beam_search = ai::lazy_beam_search<2>::type<State, Expand, Heuristic, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename... Context>
+using lazy_dynamic_beam_search = ai::lazy_beam_search<-1U>::type<State, Expand, Heuristic, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename... Context>
+using monotone_beam_search = ai::monotone_beam_search<2>::type<State, Expand, Heuristic, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename... Context>
+using monotone_dynamic_beam_search = ai::monotone_beam_search<-1U>::type<State, Expand, Heuristic, Context...>;
 
 template<
     typename PlanTable,
@@ -3033,27 +3117,107 @@ bool heuristic_search_helper(const char *state_str, const char *expand_str, cons
                              const char *search_str, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                              const CostFunction &CF, const CardinalityEstimator &CE)
 {
-    if (streq(Options::Get().ai_state,     state_str    ) and
-        streq(Options::Get().ai_expand,    expand_str   ) and
-        streq(Options::Get().ai_heuristic, heuristic_str) and
-        streq(Options::Get().ai_search,    search_str   ))
+    if (streq(Options::Get().hs_state,     state_str    ) and
+        streq(Options::Get().hs_expand,    expand_str   ) and
+        streq(Options::Get().hs_heuristic, heuristic_str) and
+        streq(Options::Get().hs_search,    search_str   ))
     {
         State::RESET_STATE_COUNTERS();
-        State initial_state(PT, G, M, CF, CE);
+        State initial_state = Expand::template Start<State>(PT, G, M, CF, CE);
         try {
             Heuristic<PlanTable, State> h(PT, G, M, CF, CE);
-            ai::search<
-                State,
-                Heuristic<PlanTable, State>,
-                Expand,
-                Search,
+            using search_algorithm = Search<
+                State, Heuristic<PlanTable, State>, Expand,
                 /*----- context -----*/
                 PlanTable&,
                 const QueryGraph&,
                 const AdjacencyMatrix&,
                 const CostFunction&,
                 const CardinalityEstimator&
-            >(std::move(initial_state), h, expansions::ExpandBottomUpComplete{}, PT, G, M, CF, CE);
+            >;
+            search_algorithm S(PT, G, M, CF, CE);
+            const State &goal = S.search(std::move(initial_state), h, Expand{}, PT, G, M, CF, CE);
+
+            /*----- Reconstruct the plan from the found path to goal. -----*/
+            if constexpr (std::is_base_of_v<expansions::TopDown, Expand>) {
+                const State *current = &goal;
+                cnf::CNF condition; // TODO use join condition
+
+                while (current->parent()) {
+                    const State *parent = current->parent();
+
+                    Subproblem delta[2];
+                    {
+                        M_insist(parent->size() + 1 == current->size());
+                        auto current_it = current->cbegin();
+                        auto parent_it = parent->cbegin();
+                        auto out_it = delta;
+
+                        while (out_it != delta + 2) {
+                            M_insist(current_it != current->cend());
+                            M_insist(parent_it <= parent->cend());
+                            if (parent_it == parent->cend()) {
+                                *out_it++ = *current_it++;
+                            } else if (*parent_it == *current_it) {
+                                ++parent_it;
+                                ++current_it;
+                            } else {
+                                *out_it++ = *current_it++;
+                            }
+                        }
+                    }
+                    const Subproblem left  = delta[0];
+                    const Subproblem right = delta[1];
+
+                    /*----- Update plan table. -----*/
+                    const double cost = CF.calculate_join_cost(G, PT, CE, left, right, condition);
+                    PT.update(G, CE, left, right, cost);
+
+                    current = parent;
+                }
+            } else {
+                static_assert(std::is_base_of_v<expansions::BottomUp, Expand>, "unexpected expansion");
+
+                cnf::CNF condition; // TODO use join condition
+                auto fill_DP_table = [&](const State *current, auto recurse) -> void {
+                    const State *parent = current->parent();
+                    if (not parent) return;
+                    recurse(parent, recurse);
+
+                    /*----- Find joined subproblems. -----*/
+                    Subproblem delta[2];
+                    {
+                        M_insist(parent->size() == current->size() + 1);
+                        auto current_it = current->cbegin();
+                        auto parent_it = parent->cbegin();
+                        auto out_it = delta;
+
+                        while (out_it != delta + 2) {
+                            M_insist(parent_it != parent->cend());
+                            M_insist(current_it <= current->cend());
+                            if (current_it == current->cend()) {
+                                *out_it++ = *parent_it++;
+                            } else if (*parent_it == *current_it) {
+                                ++parent_it;
+                                ++current_it;
+                            } else {
+                                *out_it++ = *parent_it++;
+                            }
+                        }
+                    }
+                    const Subproblem left  = delta[0];
+                    const Subproblem right = delta[1];
+
+                    /*----- Update plan table. -----*/
+                    const double cost = CF.calculate_join_cost(G, PT, CE, left, right, condition);
+                    PT.update(G, CE, left, right, cost);
+                };
+                fill_DP_table(&goal, fill_DP_table);
+            }
+
+#ifndef NDEBUG
+            // PT.dump();
+#endif
         } catch (std::logic_error err) {
             std::cerr << "search did not reach a goal state, fall back to DPccp" << std::endl;
             DPccp dpccp;
@@ -3093,32 +3257,28 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
             goto matched_heuristic_search; \
         }
 
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     zero,                           AStar                           )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     zero,                           beam_search                     )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     zero,                           monotone_beam_search            )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     zero,                           monotone_dynamic_beam_search    )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     sum,                            AStar                           )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     sum,                            lazyAStar                       )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     sum,                            beam_search                     )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     sum,                            dynamic_beam_search             )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     sum,                            monotone_beam_search            )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     sum,                            monotone_dynamic_beam_search    )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     scaled_sum,                     AStar                           )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     scaled_sum,                     monotone_beam_search            )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     scaled_sum,                     monotone_dynamic_beam_search    )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     product,                        AStar                           )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     GOO,                            AStar                           )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     GOO,                            monotone_beam_search            )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     GOO,                            monotone_dynamic_beam_search    )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     bottomup_lookahead_cheapest,    AStar                           )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     checkpoints,                    AStar                           )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     checkpoints,                    lazyAStar                       )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     checkpoints,                    dynamic_beam_search             )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     checkpoints,                    lazy_beam_search                )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     checkpoints,                    lazy_dynamic_beam_search        )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     checkpoints,                    monotone_beam_search            )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     checkpoints,                    monotone_dynamic_beam_search    )
-        HEURISTIC_SEARCH(   SubproblemsArray,   ExpandBottomUpComplete,     perfect_oracle,                 AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,                           AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,                           beam_search                     )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,                           monotone_beam_search            )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,                           monotone_dynamic_beam_search    )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,                            AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,                            lazyAStar                       )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,                            beam_search                     )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,                            dynamic_beam_search             )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,                            monotone_beam_search            )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,                            monotone_dynamic_beam_search    )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   scaled_sum,                     AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   scaled_sum,                     monotone_beam_search            )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   scaled_sum,                     monotone_dynamic_beam_search    )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   product,                        AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,                            AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,                            monotone_beam_search            )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,                            monotone_dynamic_beam_search    )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   bottomup_lookahead_cheapest,    AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   perfect_oracle,                 AStar                           )
+
+        HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,                           AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sqrt_sum,                       AStar                           )
 
         // EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemTableBottomUp,  sum,                            AStar                           )
         // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            AStar                           )
@@ -3127,6 +3287,13 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        scaled_sum,                     AStar                           )
         // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        scaled_sum,                     monotone_beam_search            )
         // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        scaled_sum,                     monotone_dynamic_beam_search    )
+        // HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   checkpoints,                    AStar                           )
+        // HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   checkpoints,                    lazyAStar                       )
+        // HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   checkpoints,                    dynamic_beam_search             )
+        // HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   checkpoints,                    lazy_beam_search                )
+        // HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   checkpoints,                    lazy_dynamic_beam_search        )
+        // HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   checkpoints,                    monotone_beam_search            )
+        // HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   checkpoints,                    monotone_dynamic_beam_search    )
 
         throw std::invalid_argument("illegal search configuration");
 #undef HEURISTIC_SEARCH
@@ -3134,15 +3301,15 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
 matched_heuristic_search:;
 #if 1
         {
-            const auto ai_cost = PT.get_final().cost;
+            const auto hs_cost = PT.get_final().cost;
             DPccp dpccp;
             dpccp(G, CF, PT);
             const auto dp_cost = PT.get_final().cost;
 
-            if (ai_cost > dp_cost)
+            std::cerr << "AI: " << hs_cost << ", DP: " << dp_cost << ", Δ " << double(hs_cost) / dp_cost << 'x'
+                      << std::endl;
+            if (hs_cost > dp_cost)
                 throw std::runtime_error("suboptimal solution");
-            // std::cerr << "AI: " << ai_cost << ", DP: " << dp_cost << ", Δ " << double(ai_cost) / dp_cost << 'x'
-            //           << std::endl;
         }
 #endif
     }

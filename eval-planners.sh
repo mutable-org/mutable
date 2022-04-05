@@ -50,17 +50,17 @@ declare -A PLANNER_CONFIGS=(
     [linDP]="--plan-enumerator LinearizedDP"
     [GOO]="--plan-enumerator GOO"
     ##### Heuristic Search #####
-    [A*-zero]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic zero --ai-search AStar"
-    # [beam-zero]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic zero --ai-search monotone_beam_search"
-    # [dynamic_beam-zero]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic zero --ai-search monotone_dynamic_beam_search"
-    [A*-sum]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic sum --ai-search AStar"
-    [beam-scaled_sum]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic scaled_sum --ai-search monotone_beam_search"
-    [dynamic_beam-scaled_sum]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic scaled_sum --ai-search monotone_dynamic_beam_search"
-    [A*-checkpoints]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic checkpoints --ai-search AStar"
-    [beam-checkpoints]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic checkpoints --ai-search monotone_beam_search"
-    [A*-GOO]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic GOO --ai-search AStar"
-    [beam-GOO]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic GOO --ai-search monotone_beam_search"
-    # [dynamic_beam-GOO]="--plan-enumerator HeuristicSearch --ai-state SubproblemsBottomUp --ai-heuristic GOO --ai-search monotone_dynamic_beam_search"
+    [A*-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsBottomUp --hs-heuristic zero --hs-search AStar"
+    # [beam-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsBottomUp --hs-heuristic zero --hs-search monotone_beam_search"
+    # [dynamic_beam-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsBottomUp --hs-heuristic zero --hs-search monotone_dynamic_beam_search"
+    [A*-sum]="--plan-enumerator HeuristicSearch --hs-state SubproblemsBottomUp --hs-heuristic sum --hs-search AStar"
+    [beam-scaled_sum]="--plan-enumerator HeuristicSearch --hs-state SubproblemsBottomUp --hs-heuristic scaled_sum --hs-search monotone_beam_search"
+    [dynamic_beam-scaled_sum]="--plan-enumerator HeuristicSearch --hs-state SubproblemsBottomUp --hs-heuristic scaled_sum --hs-search monotone_dynamic_beam_search"
+    [A*-checkpoints]="--plan-enumerator HeuristicSearch --hs-state SubproblemsBottomUp --hs-heuristic checkpoints --hs-search AStar"
+    [beam-checkpoints]="--plan-enumerator HeuristicSearch --hs-state SubproblemsBottomUp --hs-heuristic checkpoints --hs-search monotone_beam_search"
+    [A*-GOO]="--plan-enumerator HeuristicSearch --hs-state SubproblemsBottomUp --hs-heuristic GOO --hs-search AStar"
+    [beam-GOO]="--plan-enumerator HeuristicSearch --hs-state SubproblemsBottomUp --hs-heuristic GOO --hs-search monotone_beam_search"
+    # [dynamic_beam-GOO]="--plan-enumerator HeuristicSearch --hs-state SubproblemsBottomUp --hs-heuristic GOO --hs-search monotone_dynamic_beam_search"
 )
 
 declare -A TOPOLOGY_STEPS=(

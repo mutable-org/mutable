@@ -70,11 +70,11 @@ struct Options
     int wasm_optimization_level = 2;
     bool wasm_adaptive = false;
 
-    /* AI planning configuration */
-    const char *ai_state;
-    const char *ai_expand;
-    const char *ai_heuristic;
-    const char *ai_search;
+    /* Heuristic search configuration */
+    const char *hs_state;
+    const char *hs_expand;
+    const char *hs_heuristic;
+    const char *hs_search;
 
     private:
     Options() = default;

@@ -36,17 +36,8 @@ struct has_method_g : std::conjunction<
     std::is_member_function_pointer<decltype(&State::g)>,
     std::is_invocable_r<double, decltype(&State::g), const State&>,
     std::is_member_function_pointer<decltype(&State::decrease_g)>,
-    std::is_invocable_r<void, decltype(&State::decrease_g), State&, double>
+    std::is_invocable_r<void, decltype(&State::decrease_g), State&, const State*, double>
 > { };
-
-/*----- bool State::is_goal() const ----------------------------------------------------------------------------------*/
-template<typename State, typename... Context>
-struct provides_is_goal
-{
-    template<typename = void> struct helper : std::false_type { };
-    template<> struct helper<bool> : std::true_type { };
-    static constexpr bool value = helper<decltype(std::declval<const State>().is_goal(std::declval<Context>()...))>::value;
-};
 
 /*----- partitioning -------------------------------------------------------------------------------------------------*/
 template<typename State, typename... Context>
@@ -72,8 +63,7 @@ struct is_search_state : std::conjunction<
     std::is_class<typename State::base_type>,
     std::is_move_constructible<State>,
     std::is_move_assignable<State>,
-    has_method_g<State>,
-    provides_is_goal<State, Context...>
+    has_method_g<State>
 > { };
 template<typename State, typename... Context>
 inline constexpr bool is_search_state_v = is_search_state<State, Context...>::value;
@@ -124,6 +114,7 @@ inline constexpr bool is_search_search_v = is_search_search<Search, Context...>:
  * Heuristic Search
  *====================================================================================================================*/
 
+#if 0
 /** Find a path from an `initial_state` to a goal state and return its cost. */
 template<
     typename State,
@@ -133,7 +124,7 @@ template<
         typename SearchAlgorithm,
     typename... Context
 >
-double search(State initial_state, Heuristic &heuristic, Expand expand, Context&... context)
+const State & search(State initial_state, Heuristic &heuristic, Expand expand, Context&... context)
 {
     static_assert(is_search_state_v<State, Context...>, "State is not a valid state for this search");
     static_assert(is_search_heuristic_v<Heuristic, Context...>, "Heuristic is not a valid heuristic");
@@ -144,10 +135,9 @@ double search(State initial_state, Heuristic &heuristic, Expand expand, Context&
                   "SearchAlgorithm is not a valid search algorithm for this search");
 
     search_algorithm S(context...);
-    double final_cost = S.search(std::move(initial_state), heuristic, std::move(expand),
-                                 std::forward<Context>(context)...);
-    return final_cost;
+    return S.search(std::move(initial_state), heuristic, std::move(expand), std::forward<Context>(context)...);
 }
+#endif
 
 
 /*======================================================================================================================
@@ -323,7 +313,8 @@ struct StateManager
                 /*----- The state is in the regular queue and needs to be moved to the beam queue. -----*/
                 if constexpr (HasRegularQueue)
                     it->second.queue->erase(it->second.handle); // erase from regular queue
-                it->first.decrease_g(std::min(state.g(), it->first.g())); // update *g* value
+                if (state.g() < it->first.g())
+                    it->first.decrease_g(state.parent(), state.g()); // update *g* value
                 it->second.handle = beam_queue_.push(&*it); // add to beam queue and update handle
                 it->second.queue = &beam_queue_; // update queue
                 if constexpr (HasRegularQueue)
@@ -338,7 +329,7 @@ struct StateManager
                 /*----- The state was reached on a cheaper path.  We must reconsider the state. -----*/
                 M_insist(state.g() < it->first.g(), "the state was reached on a cheaper path");
                 inc_cheaper();
-                it->first.decrease_g(state.g()); // decrease value of *g*
+                it->first.decrease_g(state.parent(), state.g()); // decrease value of *g*
                 if (it->second.queue == nullptr) {
                     /*----- The state is currently not present in a queue. -----*/
                     it->second.handle = Q.push(&*it); // add to dedicated queue and update handle
@@ -384,7 +375,7 @@ struct StateManager
                 inc_duplicates();
                 if (state.g() < it->first.g()) {
                     inc_cheaper();
-                    it->first.decrease_g(state.g());
+                    it->first.decrease_g(state.parent(), state.g());
                     if (it->second.queue == &beam_queue_) { // if state is currently in a queue
                         it->second.queue->increase(it->second.handle); // *increase* because max-heap
                         inc_decrease_key();
@@ -488,8 +479,8 @@ operator()(StateManager::pointer_type p_left, StateManager::pointer_type p_right
  * for lazy evaluation of the heuristic. */
 template<
     typename State,
-    typename Heuristic,
     typename Expand,
+    typename Heuristic,
     typename Weight,
     unsigned BeamWidth,
     bool Lazy,
@@ -593,7 +584,7 @@ struct genericAStar
      *
      * @return the cost of the computed path from `initial_state` to a goal state
      */
-    double search(state_type initial_state, heuristic_type &heuristic, expand_type expand, Context&... context);
+    const State & search(state_type initial_state, heuristic_type &heuristic, expand_type expand, Context&... context);
 
     /** Resets the state of the search. */
     void clear() {
@@ -737,15 +728,15 @@ struct genericAStar
 
 template<
     typename State,
-    typename Heuristic,
     typename Expand,
+    typename Heuristic,
     typename Weight,
     unsigned BeamWidth,
     bool Lazy,
     bool IsMonotone,
     typename... Context
 >
-double genericAStar<State, Heuristic, Expand, Weight, BeamWidth, Lazy, IsMonotone, Context...>::search(
+const State & genericAStar<State, Expand, Heuristic, Weight, BeamWidth, Lazy, IsMonotone, Context...>::search(
     state_type initial_state,
     heuristic_type &heuristic,
     expand_type expand,
@@ -760,8 +751,8 @@ double genericAStar<State, Heuristic, Expand, Weight, BeamWidth, Lazy, IsMonoton
         const state_type &state = top.first;
         const double h = top.second;
 
-        if (state.is_goal(context...))
-            return state.g();
+        if (expand.is_goal(state, context...))
+            return state;
 
         explore_state(state, heuristic, expand, context...);
 
@@ -779,7 +770,7 @@ template<
     typename Expand,
     typename... Context
 >
-using AStar = genericAStar<State, Heuristic, Expand, std::ratio<1, 1>, 0, false, false, Context...>;
+using AStar = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, 0, false, false, Context...>;
 
 template<
     typename State,
@@ -787,7 +778,7 @@ template<
     typename Expand,
     typename... Context
 >
-using lazy_AStar = genericAStar<State, Heuristic, Expand, std::ratio<1, 1>, 0, true, false, Context...>;
+using lazy_AStar = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, 0, true, false, Context...>;
 
 template<typename Weight>
 struct wAStar
@@ -798,7 +789,7 @@ struct wAStar
         typename Expand,
         typename... Context
     >
-    using type = genericAStar<State, Heuristic, Expand, Weight, 0, false, false, Context...>;
+    using type = genericAStar<State, Expand, Heuristic, Weight, 0, false, false, Context...>;
 };
 
 template<typename Weight>
@@ -810,7 +801,7 @@ struct lazy_wAStar
         typename Expand,
         typename... Context
     >
-    using type = genericAStar<State, Heuristic, Expand, Weight, 0, true, false, Context...>;
+    using type = genericAStar<State, Expand, Heuristic, Weight, 0, true, false, Context...>;
 };
 
 template<unsigned BeamWidth>
@@ -822,7 +813,7 @@ struct beam_search
         typename Expand,
         typename... Context
     >
-    using type = genericAStar<State, Heuristic, Expand, std::ratio<1, 1>, BeamWidth, false, false, Context...>;
+    using type = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, BeamWidth, false, false, Context...>;
 };
 
 template<unsigned BeamWidth>
@@ -834,7 +825,7 @@ struct lazy_beam_search
         typename Expand,
         typename... Context
     >
-    using type = genericAStar<State, Heuristic, Expand, std::ratio<1, 1>, BeamWidth, true, false, Context...>;
+    using type = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, BeamWidth, true, false, Context...>;
 };
 
 template<unsigned BeamWidth>
@@ -846,7 +837,7 @@ struct monotone_beam_search
         typename Expand,
         typename... Context
     >
-    using type = genericAStar<State, Heuristic, Expand, std::ratio<1, 1>, BeamWidth, false, true, Context...>;
+    using type = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, BeamWidth, false, true, Context...>;
 };
 
 }

@@ -572,7 +572,9 @@ struct genericAStar
     }
 
     ~genericAStar() {
+#ifndef NDEBUG
         dump();
+#endif
     }
 
     genericAStar(const genericAStar&) = delete;
@@ -747,6 +749,8 @@ const State & genericAStar<State, Expand, Heuristic, Weight, BeamWidth, Lazy, Is
 
     /* Run work list algorithm. */
     while (not state_manager_.queues_empty()) {
+        M_insist(not (is_monotone and use_beam_search) or not state_manager_.is_beam_queue_empty(),
+                 "the beam queue must not run empty with beam search on a monotone search space");
         auto top = state_manager_.pop();
         const state_type &state = top.first;
         const double h = top.second;
@@ -755,10 +759,6 @@ const State & genericAStar<State, Expand, Heuristic, Weight, BeamWidth, Lazy, Is
             return state;
 
         explore_state(state, heuristic, expand, context...);
-
-        M_insist(not (is_monotone and use_beam_search) or not state_manager_.is_beam_queue_empty(),
-                 "the beam queue must not run empty with beam search on a monotone search space");
-        M_insist(not state_manager_.queues_empty(), "queue must never run empty before finding a solution");
     }
 
     throw std::logic_error("goal state unreachable from provided initial state");

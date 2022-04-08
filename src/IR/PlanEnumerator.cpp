@@ -2159,7 +2159,7 @@ struct BottomUpComplete : BottomUp
     {
         state.INCREMENT_NUM_STATES_EXPANDED();
 
-        const auto marker = std::next(state.cbegin(), state.mark());
+        const Subproblem *marked = std::next(state.cbegin(), state.mark());
 
         /* Enumerate all potential join pairs and check whether they are connected. */
         for (auto outer_it = state.cbegin(), outer_end = std::prev(state.cend()); outer_it != outer_end; ++outer_it)
@@ -2169,7 +2169,7 @@ struct BottomUpComplete : BottomUp
                 M_insist(uint64_t(*inner_it) > uint64_t(*outer_it), "subproblems must be sorted");
                 M_insist((*outer_it & *inner_it).empty(), "subproblems must not overlap");
 
-                if (inner_it < marker) // implies outer_it < marker
+                if (inner_it < marked) // implies outer_it < marked
                     continue; // prune symmetrical paths
 
                 if (neighbors & *inner_it) { // inner and outer are joinable.
@@ -2243,7 +2243,7 @@ struct BottomUpComplete : BottomUp
                 /* Compute joined subproblem. */
                 const Subproblem joined = L|R;
 
-                if (uint64_t(joined) < uint64_t(state.marker())) continue; // prune symmetrical paths
+                if (subproblem_lt(joined, state.marker())) continue; // prune symmetrical paths
 
                 /* Compute new subproblem table after join. */
                 auto table = state.get_allocator().allocate(G.num_sources());
@@ -2478,16 +2478,28 @@ struct TopDownComplete : TopDown
                     const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
                     const CardinalityEstimator &CE) const
     {
-#ifndef NDEBUG
+#if 0
         std::cerr << "\nexpand " << state << '\n';
 #endif
+
+        const Subproblem marker = *std::next(state.cbegin(), state.mark());
+
+#if 0
+        std::cerr << "  marker is ";
+        marker.print_fixed_length(std::cerr, G.num_sources());
+        std::cerr << '\n';
+#endif
+
         TDMinCutAGaT TD;
         auto enumerate_ccp = [&](Subproblem S1, Subproblem S2) {
             using std::swap;
-            if (uint64_t(S1) > uint64_t(S2)) swap(S1, S2);
-            M_insist(uint64_t(S1) <= uint64_t(S2));
 
-#ifndef NDEBUG
+            // if (subproblem_lt(S1|S2, marker)) return; // skip redundant path
+
+            if (subproblem_lt(S2, S1)) swap(S1, S2);
+            M_insist(subproblem_lt(S1, S2));
+
+#if 0
             std::cerr << "    ccp ";
             S1.print_fixed_length(std::cerr, G.num_sources());
             std::cerr << " ⋈  ";
@@ -2496,7 +2508,8 @@ struct TopDownComplete : TopDown
 #endif
 
             /*----- Merge subproblems of state, excluding S1|S2, and partitions S1 and S2. -----*/
-            auto subproblems = state.get_allocator().allocate(state.size() + 1);
+            const Subproblem *marked;// = nullptr;
+            Subproblem *subproblems = state.get_allocator().allocate(state.size() + 1);
             {
                 Subproblem partitions[2] = { S1, S2 };
                 auto left_it = state.cbegin(), left_end = state.cend();
@@ -2508,6 +2521,8 @@ struct TopDownComplete : TopDown
                     M_insist(right_it <= right_end, "out of bounds");
                     if (left_it == left_end) {
                         if (right_it == right_end) break;
+                        // marked = marked ? marked : out; // remember position of S1
+                        marked = out; // remember position of S2
                         *out++ = *right_it++;
                     } else if (*left_it == (S1|S2)) [[unlikely]] {
                         ++left_it; // skip partitioned subproblem S1|S2
@@ -2516,12 +2531,20 @@ struct TopDownComplete : TopDown
                     } else if (subproblem_lt(*left_it, *right_it)) {
                         *out++ = *left_it++;
                     } else {
+                        // marked = marked ? marked : out; // remember position of S1
+                        marked = out; // remember position of S2
                         *out++ = *right_it++;
                     }
                 }
                 M_insist(out == subproblems + state.size() + 1);
             }
             M_insist(std::is_sorted(subproblems, subproblems + state.size() + 1, subproblem_lt));
+            // M_insist(marked >= subproblems);
+            // M_insist(marked < subproblems + state.size());
+            // M_insist(*marked == S1);
+            M_insist(marked > subproblems);
+            M_insist(marked <= subproblems + state.size());
+            M_insist(*marked == S2);
 
             cnf::CNF condition; // TODO use join condition
             if (not PT[S1].model) {
@@ -2540,22 +2563,23 @@ struct TopDownComplete : TopDown
                 /* parent=      */ &state,
                 /* g=           */ state.g() + action_cost, // TODO new cost
                 /* size=        */ state.size() + 1,
-                /* mark=        */ 0,
-                /* subproblems= */ std::move(subproblems)
+                /* mark=        */ marked - subproblems,
+                /* subproblems= */ subproblems
             );
             state.INCREMENT_NUM_STATES_GENERATED();
             callback(std::move(S));
         };
 
         for (const Subproblem S : state) {
-            if (not S.singleton()) {
-#ifndef NDEBUG
-                std::cerr << "  partition ";
-                S.print_fixed_length(std::cerr, G.num_sources());
-                std::cerr << '\n';
+            if (S.singleton()) continue; // cannot be further partitioned
+            if (subproblem_lt(marker, S)) continue; // marker < S →  redundant path
+
+#if 0
+            std::cerr << "  partition ";
+            S.print_fixed_length(std::cerr, G.num_sources());
+            std::cerr << '\n';
 #endif
-                TD.partition(M, enumerate_ccp, S);
-            }
+            TD.partition(M, enumerate_ccp, S);
         }
     }
 
@@ -3279,6 +3303,8 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
 
         HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,                           AStar                           )
         HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sqrt_sum,                       AStar                           )
+        HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,                           monotone_beam_search            )
+        HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,                           monotone_dynamic_beam_search    )
 
         // EMIT_HEURISTIC_SEARCH_CONFIG(SubproblemTableBottomUp,  sum,                            AStar                           )
         // else EMIT_HEURISTIC_SEARCH_CONFIG(EdgesBottomUp,        sum,                            AStar                           )
@@ -3299,7 +3325,7 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
 #undef HEURISTIC_SEARCH
 
 matched_heuristic_search:;
-#if 1
+#ifndef NDEBUG
         {
             const auto hs_cost = PT.get_final().cost;
             DPccp dpccp;

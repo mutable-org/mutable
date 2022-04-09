@@ -593,3 +593,32 @@ TEST_CASE("sequence_number/float", "[core][util]")
         CHECK(sequence_number(val_3) - sequence_number(VAL) == 3);
     }
 }
+
+TEST_CASE("fast_sqrt", "[core][util]")
+{
+    SECTION("float")
+    {
+        CHECK(fast_sqrtf(0)    == Approx(0).epsilon(.01));
+        CHECK(fast_sqrtf(1)    == Approx(1).epsilon(.01));
+        CHECK(fast_sqrtf(2)    == Approx(1.414).epsilon(.01));
+        CHECK(fast_sqrtf(3)    == Approx(1.732).epsilon(.01));
+        CHECK(fast_sqrtf(4)    == Approx(2).epsilon(.01));
+        CHECK(fast_sqrtf(5)    == Approx(2.236).epsilon(.01));
+        CHECK(fast_sqrtf(10)   == Approx(3.162).epsilon(.01));
+        CHECK(fast_sqrtf(100)  == Approx(10).epsilon(.01));
+        CHECK(fast_sqrtf(1000) == Approx(31.62).epsilon(.01));
+    }
+
+    SECTION("double")
+    {
+        CHECK(fast_sqrtd(0)    == Approx(0).epsilon(.01));
+        CHECK(fast_sqrtd(1)    == Approx(1).epsilon(.01));
+        CHECK(fast_sqrtd(2)    == Approx(1.414).epsilon(.01));
+        CHECK(fast_sqrtd(3)    == Approx(1.732).epsilon(.01));
+        CHECK(fast_sqrtd(4)    == Approx(2).epsilon(.01));
+        CHECK(fast_sqrtd(5)    == Approx(2.236).epsilon(.01));
+        CHECK(fast_sqrtd(10)   == Approx(3.162).epsilon(.01));
+        CHECK(fast_sqrtd(100)  == Approx(10).epsilon(.01));
+        CHECK(fast_sqrtd(1000) == Approx(31.62).epsilon(.01));
+    }
+}

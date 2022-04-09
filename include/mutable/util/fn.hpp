@@ -680,4 +680,35 @@ n_choose_k_approx(T n, T k)
     return std::exp(std::lgamma(n + T(1)) - std::lgamma(k + T(1)) - std::lgamma(n - k + T(1)));
 }
 
+/** Fast reciprocal square root, that became famous in Quake 3. */
+inline float fast_reciprocal_sqrtf(const float n)
+{
+    const int32_t i = 0x5F375A86 - (*reinterpret_cast<const int32_t*>(&n) >> 1);
+    const float f = *reinterpret_cast<const float*>(&i);
+    return (int32_t(3) - n * f * f) * f * 0.5f;
+}
+inline float fast_reciprocal_sqrt(const float n) { return fast_reciprocal_sqrtf(n); }
+
+/** Fast reciprocal square root, that became famous in Quake 3.  The magic number is for doubles is from
+ * https://cs.uwaterloo.ca/~m32rober/rsqrt.pdf */
+inline double fast_reciprocal_sqrtd(const double n)
+{
+    const int64_t l = 0x5fe6eb50c7b537a9 - (*reinterpret_cast<const int64_t*>(&n) >> 1);
+    const double d = *reinterpret_cast<const double*>(&l);
+    return (int64_t(3) - n * d * d) * d * 0.5f;
+}
+inline double fast_reciprocal_sqrt(const double n) { return fast_reciprocal_sqrtd(n); }
+
+inline float fast_sqrtf(float n)
+{
+    return n * fast_reciprocal_sqrtf(n); // n * 1/sqrt(n) = sqrt(n)^2 / sqrt(n) = sqrt(n)
+}
+inline float fast_sqrt(float n) { return fast_sqrtf(n); }
+
+inline double fast_sqrtd(double n)
+{
+    return n * fast_reciprocal_sqrtd(n); // n * 1/sqrt(n) = sqrt(n)^2 / sqrt(n) = sqrt(n)
+}
+inline double fast_sqrt(double n) { return fast_sqrtd(n); }
+
 }

@@ -866,8 +866,8 @@ struct GOO : PlanEnumeratorCRTP<GOO>
             callback(left->subproblem, right->subproblem);
 
             /*----- Join the two most promising subproblems found. -----*/
-            M_notnull(left);
-            M_notnull(right);
+            M_insist(left);
+            M_insist(right);
             M_insist(left < right);
             *left += *right; // merge `right` into `left`
             swap(*right, *--end); // erase old `right`
@@ -2168,8 +2168,11 @@ struct BottomUpComplete : BottomUp
                         PT[joined].model = CE.estimate_join(G, model_left, model_right, condition);
                         PT[joined].cost = 0;
                     }
-                    const double action_cost = CE.predict_cardinality(*PT[*outer_it].model) +
-                                               CE.predict_cardinality(*PT[*inner_it].model);
+                    double action_cost = 0;
+                    if (not outer_it->singleton())
+                        action_cost += CE.predict_cardinality(*PT[*outer_it].model);
+                    if (not inner_it->singleton())
+                        action_cost += CE.predict_cardinality(*PT[*inner_it].model);
 
                     /* Create new search state. */
                     SubproblemsArray S(
@@ -2530,7 +2533,11 @@ struct TopDownComplete : TopDown
                 PT[S2].cost = 0;
                 PT[S2].model = CE.estimate_join_all(G, PT, S2, condition);
             }
-            const double action_cost = CE.predict_cardinality(*PT[S1].model) + CE.predict_cardinality(*PT[S2].model);
+            double action_cost = 0;
+            if (not S1.singleton())
+                action_cost += CE.predict_cardinality(*PT[S1].model);
+            if (not S2.singleton())
+                action_cost += CE.predict_cardinality(*PT[S2].model);
 
             /* Create new search state. */
             SubproblemsArray S(
@@ -2626,8 +2633,9 @@ struct sum
     {
         double distance = 0;
         if (not state.is_top(PT, G, M, CF, CE)) {
-            state.for_each_subproblem([&](Subproblem S) {
-                distance += CE.predict_cardinality(*PT[S].model);
+            state.for_each_subproblem([&](const Subproblem S) {
+                if (not S.singleton()) // skip base relations
+                    distance += CE.predict_cardinality(*PT[S].model);
             }, G);
         }
         return distance;
@@ -2647,8 +2655,9 @@ struct sqrt_sum
     {
         double distance = 0;
         if (not state.is_bottom(PT, G, M, CF, CE)) {
-            state.for_each_subproblem([&](Subproblem S) {
-                distance += 2 * std::sqrt(CE.predict_cardinality(*PT[S].model));
+            state.for_each_subproblem([&](const Subproblem S) {
+                if (not S.singleton()) // skip base relations
+                    distance += 2 * std::sqrt(CE.predict_cardinality(*PT[S].model));
             }, G);
         }
         return distance;

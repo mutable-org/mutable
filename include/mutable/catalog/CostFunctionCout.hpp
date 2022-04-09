@@ -6,7 +6,11 @@
 
 namespace m {
 
-struct SimpleCostFunction : CostFunctionCRTP<SimpleCostFunction>
+/** Implements the cassical, widely used cost function *C_out* from Cluet, Sophie, and Guido Moerkotte. "On the
+ * complexity of generating optimal left-deep processing trees with cross products." 1995.
+ * *C_out* provides the *adjacent sequence interchange* (ASI) property.
+ */
+struct CostFunctionCout : CostFunctionCRTP<CostFunctionCout>
 {
     template<typename PlanTable>
     double operator()(calculate_filter_cost_tag, const PlanTable &PT, const QueryGraph &G,
@@ -19,9 +23,9 @@ struct SimpleCostFunction : CostFunctionCRTP<SimpleCostFunction>
     double operator()(calculate_join_cost_tag, const PlanTable &PT, const QueryGraph &G, const CardinalityEstimator &CE,
                       Subproblem left, Subproblem right, const cnf::CNF &condition) const
     {
-        return double(CE.predict_cardinality(*PT[left].model)) +
-               double(CE.predict_cardinality(*PT[right].model)) +
-               PT[left].cost + PT[right].cost;
+        return /* |T| =        */ double(CE.predict_cardinality(*PT[left|right].model)) +
+               /* C_out(T_1) = */ PT[left].cost +
+               /* C_out(T_2) = */ PT[right].cost;
     }
 
     template<typename PlanTable>

@@ -5,16 +5,12 @@
 #include "storage/PaxStore.hpp"
 #include "storage/RowStore.hpp"
 #include <algorithm>
-#include <algorithm>
 #include <cmath>
 #include <iterator>
 #include <mutable/catalog/CardinalityEstimator.hpp>
-#include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/CostFunction.hpp>
-#include <mutable/catalog/CostFunction.hpp>
-#include <mutable/catalog/SimpleCostFunction.hpp>
+#include <mutable/catalog/CostFunctionCout.hpp>
 #include <mutable/IR/Operator.hpp>
-#include <mutable/IR/PlanTable.hpp>
 #include <mutable/IR/PlanTable.hpp>
 #include <mutable/Options.hpp>
 #include <mutable/util/fn.hpp>
@@ -136,7 +132,7 @@ Catalog * Catalog::the_catalog_(nullptr);
 Catalog::Catalog()
     : allocator_(new memory::LinearAllocator())
     /* Initialize dummy cost function. */
-    , cost_function_(std::make_unique<SimpleCostFunction>())
+    , cost_function_(std::make_unique<CostFunctionCout>())
     , default_backend_(backends_.end())
 {
     /*----- Initialize standard functions. ---------------------------------------------------------------------------*/

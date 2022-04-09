@@ -2,10 +2,11 @@
 
 #include <catalog/Schema.hpp>
 #include <mutable/catalog/CostFunction.hpp>
-#include <mutable/catalog/SimpleCostFunction.hpp>
+#include <mutable/catalog/CostFunctionCout.hpp>
 #include <mutable/catalog/Type.hpp>
 #include <mutable/IR/PlanEnumerator.hpp>
 #include <mutable/IR/PlanTable.hpp>
+#include <mutable/mutable.hpp>
 #include <mutable/storage/Store.hpp>
 #include <parse/Parser.hpp>
 #include <parse/Sema.hpp>
@@ -22,22 +23,6 @@ using namespace m;
 
 namespace pe_test {
 
-Stmt * get_Stmt(const char *sql)
-{
-    LEXER(sql);
-    Parser parser(lexer);
-    Sema sema(diag);
-    auto stmt = parser.parse();
-    sema(*stmt);
-    if (diag.num_errors() != 0) {
-        std::cout << out.str() << std::endl;
-        std::cerr << err.str() << std::endl;
-        delete stmt;
-        REQUIRE(false); // abort test
-    }
-    return stmt;
-}
-
 template<typename PlanTable>
 void init_PT_base_case(const QueryGraph &G, PlanTable &PT)
 {
@@ -46,7 +31,6 @@ void init_PT_base_case(const QueryGraph &G, PlanTable &PT)
     for (auto ds : G.sources()) {
         Subproblem s(1UL << ds->id());
         auto bt = cast<const BaseTable>(ds);
-        auto &store = bt->table().store();
         PT[s].cost = 0;
         PT[s].model = CE.estimate_scan(G, s);
     }
@@ -115,225 +99,165 @@ TEST_CASE("PlanEnumerator", "[core][IR]")
      *   / \
      *  A---D---B
      */
-    const char *query = "SELECT * \
-                         FROM A, B, C, D \
-                         WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
-    auto stmt = as<const SelectStmt>(pe_test::get_Stmt(query));
+    const std::string query = "\
+SELECT * \
+FROM A, B, C, D \
+WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
+
+    Diagnostic diag(false, std::cout, std::cerr);
+    auto stmt = m::statement_from_string(diag, query);
+    REQUIRE(not diag.num_errors());
     auto query_graph = QueryGraph::Build(*stmt);
     auto &G = *query_graph.get();
 
-    SimpleCostFunction CF;
+    const Subproblem A(1);
+    const Subproblem B(2);
+    const Subproblem C(4);
+    const Subproblem D(8);
+    CostFunctionCout C_out;
+    CartesianProductEstimator CE;
 
-    auto M = [](std::size_t size) {
-        return std::make_unique<CartesianProductEstimator::CartesianProductDataModel>(size);
+    /* Initialize `PlanTable` for base case. */
+    PlanTable plan_table(G);
+    pe_test::init_PT_base_case(G, plan_table);
+
+    PlanTable expected(G);
+    pe_test::init_PT_base_case(G, expected);
+
+    auto make_entry = [&](const Subproblem left, const Subproblem right) {
+        cnf::CNF condition;
+        auto &entry = expected[left|right];
+        entry.left = left;
+        entry.right = right;
+        entry.model = CE.estimate_join(G, *expected[left].model, *expected[right].model, condition);
+        entry.cost = C_out.calculate_join_cost(G, expected, CE, left, right, condition);
     };
 
     SECTION("DPsize")
     {
-        /* Initialize `PlanTable` for `DPsize`. */
-        PlanTable expected_plan_table(G);
-        expected_plan_table[Subproblem(1)]  = { Subproblem(0), Subproblem(0),     M(5),   0 }; // A
-        expected_plan_table[Subproblem(2)]  = { Subproblem(0), Subproblem(0),    M(10),   0 }; // B
-        expected_plan_table[Subproblem(4)]  = { Subproblem(0), Subproblem(0),     M(8),   0 }; // C
-        expected_plan_table[Subproblem(5)]  = { Subproblem(1), Subproblem(4),    M(40),  13 }; // A ⋈  C
-        expected_plan_table[Subproblem(8)]  = { Subproblem(0), Subproblem(0),    M(12),   0 }; // D
-        expected_plan_table[Subproblem(9)]  = { Subproblem(1), Subproblem(8),    M(60),  17 }; // A ⋈  D
-        expected_plan_table[Subproblem(10)] = { Subproblem(2), Subproblem(8),   M(120),  22 }; // B ⋈  D
-        expected_plan_table[Subproblem(11)] = { Subproblem(2), Subproblem(9),   M(600),  87 };
-        expected_plan_table[Subproblem(12)] = { Subproblem(4), Subproblem(8),    M(96),  20 };
-        expected_plan_table[Subproblem(13)] = { Subproblem(8), Subproblem(5),   M(480),  65 };
-        expected_plan_table[Subproblem(14)] = { Subproblem(2), Subproblem(12),  M(960), 126 };
-        expected_plan_table[Subproblem(15)] = { Subproblem(5), Subproblem(10), M(4800), 195 };
+        make_entry(A, C);
+        make_entry(A, D);
+        make_entry(B, D);
+        make_entry(B, A|D);
+        make_entry(C, D);
+        make_entry(D, A|C);
+        make_entry(B, C|D);
+        make_entry(A|C, B|D);
 
         auto dp_size = PlanEnumerator::CreateDPsize();
-        PlanTable plan_table(G);
-        /* Initialize `PlanTable` for base case. */
-        pe_test::init_PT_base_case(G, plan_table);
-
-        (*dp_size)(G, CF, plan_table);
-        REQUIRE(expected_plan_table == plan_table);
+        (*dp_size)(G, C_out, plan_table);
+        REQUIRE(expected == plan_table);
     }
 
     SECTION("DPsizeOpt")
     {
-        /* Initialize `PlanTable` for `DPsize`. */
-        PlanTable expected_plan_table(G);
-        expected_plan_table[Subproblem(1)]  = { Subproblem(0), Subproblem(0),     M(5),   0 };
-        expected_plan_table[Subproblem(2)]  = { Subproblem(0), Subproblem(0),    M(10),   0 };
-        expected_plan_table[Subproblem(4)]  = { Subproblem(0), Subproblem(0),     M(8),   0 };
-        expected_plan_table[Subproblem(5)]  = { Subproblem(1), Subproblem(4),    M(40),  13 };
-        expected_plan_table[Subproblem(8)]  = { Subproblem(0), Subproblem(0),    M(12),   0 };
-        expected_plan_table[Subproblem(9)]  = { Subproblem(1), Subproblem(8),    M(60),  17 };
-        expected_plan_table[Subproblem(10)] = { Subproblem(2), Subproblem(8),   M(120),  22 };
-        expected_plan_table[Subproblem(11)] = { Subproblem(2), Subproblem(9),   M(600),  87 };
-        expected_plan_table[Subproblem(12)] = { Subproblem(4), Subproblem(8),    M(96),  20 };
-        expected_plan_table[Subproblem(13)] = { Subproblem(8), Subproblem(5),   M(480),  65 };
-        expected_plan_table[Subproblem(14)] = { Subproblem(2), Subproblem(12),  M(960), 126 };
-        expected_plan_table[Subproblem(15)] = { Subproblem(5), Subproblem(10), M(4800), 195 };
+        make_entry(A, C);
+        make_entry(A, D);
+        make_entry(B, D);
+        make_entry(B, A|D);
+        make_entry(C, D);
+        make_entry(D, A|C);
+        make_entry(B, C|D);
+        make_entry(A|C, B|D);
 
         auto dp_size_opt = PlanEnumerator::CreateDPsizeOpt();
-        PlanTable plan_table(G);
-        /* Initialize `PlanTable` for base case. */
-        pe_test::init_PT_base_case(G, plan_table);
-
-        (*dp_size_opt)(G, CF, plan_table);
-        REQUIRE(expected_plan_table == plan_table);
+        (*dp_size_opt)(G, C_out, plan_table);
+        REQUIRE(expected == plan_table);
     }
 
     SECTION("DPsizeSub")
     {
-        /* Initialize `PlanTable` for `DPsizeSub`. */
-        PlanTable expected_plan_table(G);
-        expected_plan_table[Subproblem(1)]  = { Subproblem(0), Subproblem(0),     M(5),   0 };
-        expected_plan_table[Subproblem(2)]  = { Subproblem(0), Subproblem(0),    M(10),   0 };
-        expected_plan_table[Subproblem(4)]  = { Subproblem(0), Subproblem(0),     M(8),   0 };
-        expected_plan_table[Subproblem(5)]  = { Subproblem(1), Subproblem(4),    M(40),  13 };
-        expected_plan_table[Subproblem(8)]  = { Subproblem(0), Subproblem(0),    M(12),   0 };
-        expected_plan_table[Subproblem(9)]  = { Subproblem(1), Subproblem(8),    M(60),  17 };
-        expected_plan_table[Subproblem(10)] = { Subproblem(2), Subproblem(8),   M(120),  22 };
-        expected_plan_table[Subproblem(11)] = { Subproblem(2), Subproblem(9),   M(600),  87 };
-        expected_plan_table[Subproblem(12)] = { Subproblem(4), Subproblem(8),    M(96),  20 };
-        expected_plan_table[Subproblem(13)] = { Subproblem(5), Subproblem(8),   M(480),  65 };
-        expected_plan_table[Subproblem(14)] = { Subproblem(2), Subproblem(12),  M(960), 126 };
-        expected_plan_table[Subproblem(15)] = { Subproblem(5), Subproblem(10), M(4800), 195 };
+        make_entry(A, C);
+        make_entry(A, D);
+        make_entry(B, D);
+        make_entry(B, A|D);
+        make_entry(C, D);
+        make_entry(A|C, D);
+        make_entry(B, C|D);
+        make_entry(A|C, B|D);
 
         auto dp_size_sub = PlanEnumerator::CreateDPsizeSub();
-        PlanTable plan_table(G);
-        /* Initialize `PlanTable` for base case. */
-        pe_test::init_PT_base_case(G, plan_table);
-
-        (*dp_size_sub)(G, CF, plan_table);
-        REQUIRE(expected_plan_table == plan_table);
+        (*dp_size_sub)(G, C_out, plan_table);
+        REQUIRE(expected == plan_table);
     }
 
     SECTION("DPsub")
     {
-        /* Initialize `PlanTable` for `DPsub`. */
-        PlanTable expected_plan_table(G);
-        expected_plan_table[Subproblem(1)]  = { Subproblem(0), Subproblem(0),     M(5),   0 };
-        expected_plan_table[Subproblem(2)]  = { Subproblem(0), Subproblem(0),    M(10),   0 };
-        expected_plan_table[Subproblem(4)]  = { Subproblem(0), Subproblem(0),     M(8),   0 };
-        expected_plan_table[Subproblem(5)]  = { Subproblem(1), Subproblem(4),    M(40),  13 };
-        expected_plan_table[Subproblem(8)]  = { Subproblem(0), Subproblem(0),    M(12),   0 };
-        expected_plan_table[Subproblem(9)]  = { Subproblem(1), Subproblem(8),    M(60),  17 };
-        expected_plan_table[Subproblem(10)] = { Subproblem(2), Subproblem(8),   M(120),  22 };
-        expected_plan_table[Subproblem(11)] = { Subproblem(2), Subproblem(9),   M(600),  87 };
-        expected_plan_table[Subproblem(12)] = { Subproblem(4), Subproblem(8),    M(96),  20 };
-        expected_plan_table[Subproblem(13)] = { Subproblem(5), Subproblem(8),   M(480),  65 };
-        expected_plan_table[Subproblem(14)] = { Subproblem(2), Subproblem(12),  M(960), 126 };
-        expected_plan_table[Subproblem(15)] = { Subproblem(5), Subproblem(10), M(4800), 195 };
+        make_entry(A, C);
+        make_entry(A, D);
+        make_entry(B, D);
+        make_entry(B, A|D);
+        make_entry(C, D);
+        make_entry(A|C, D);
+        make_entry(B, C|D);
+        make_entry(A|C, B|D);
 
         auto dp_sub = PlanEnumerator::CreateDPsub();
-        PlanTable plan_table(G);
-        /* Initialize `PlanTable` for base case. */
-        pe_test::init_PT_base_case(G, plan_table);
-
-        (*dp_sub)(G, CF, plan_table);
-        REQUIRE(expected_plan_table == plan_table);
+        (*dp_sub)(G, C_out, plan_table);
+        REQUIRE(expected == plan_table);
     }
 
     SECTION("DPsubOpt")
     {
-        /* Initialize `PlanTable` for `DPsub`. */
-        PlanTable expected_plan_table(G);
-        expected_plan_table[Subproblem(1)]  = { Subproblem(0), Subproblem(0),     M(5),   0 };
-        expected_plan_table[Subproblem(2)]  = { Subproblem(0), Subproblem(0),    M(10),   0 };
-        expected_plan_table[Subproblem(4)]  = { Subproblem(0), Subproblem(0),     M(8),   0 };
-        expected_plan_table[Subproblem(5)]  = { Subproblem(1), Subproblem(4),    M(40),  13 };
-        expected_plan_table[Subproblem(8)]  = { Subproblem(0), Subproblem(0),    M(12),   0 };
-        expected_plan_table[Subproblem(9)]  = { Subproblem(1), Subproblem(8),    M(60),  17 };
-        expected_plan_table[Subproblem(10)] = { Subproblem(2), Subproblem(8),   M(120),  22 };
-        expected_plan_table[Subproblem(11)] = { Subproblem(2), Subproblem(9),   M(600),  87 };
-        expected_plan_table[Subproblem(12)] = { Subproblem(4), Subproblem(8),    M(96),  20 };
-        expected_plan_table[Subproblem(13)] = { Subproblem(5), Subproblem(8),   M(480),  65 };
-        expected_plan_table[Subproblem(14)] = { Subproblem(2), Subproblem(12),  M(960), 126 };
-        expected_plan_table[Subproblem(15)] = { Subproblem(5), Subproblem(10), M(4800), 195 };
+        make_entry(A, C);
+        make_entry(A, D);
+        make_entry(B, D);
+        make_entry(B, A|D);
+        make_entry(C, D);
+        make_entry(A|C, D);
+        make_entry(B, C|D);
+        make_entry(A|C, B|D);
 
         auto dp_sub_opt = PlanEnumerator::CreateDPsubOpt();
-        PlanTable plan_table(G);
-        /* Initialize `PlanTable` for base case. */
-        pe_test::init_PT_base_case(G, plan_table);
-
-        (*dp_sub_opt)(G, CF, plan_table);
-        REQUIRE(expected_plan_table == plan_table);
+        (*dp_sub_opt)(G, C_out, plan_table);
+        REQUIRE(expected == plan_table);
     }
 
     SECTION("DPccp")
     {
-        /* Initialize `PlanTable` for `DPccp`. */
-        PlanTable expected_plan_table(G);
-        expected_plan_table[Subproblem(1)]  = { Subproblem(0), Subproblem(0),     M(5),   0 };
-        expected_plan_table[Subproblem(2)]  = { Subproblem(0), Subproblem(0),    M(10),   0 };
-        expected_plan_table[Subproblem(4)]  = { Subproblem(0), Subproblem(0),     M(8),   0 };
-        expected_plan_table[Subproblem(5)]  = { Subproblem(1), Subproblem(4),    M(40),  13 };
-        expected_plan_table[Subproblem(8)]  = { Subproblem(0), Subproblem(0),    M(12),   0 };
-        expected_plan_table[Subproblem(9)]  = { Subproblem(1), Subproblem(8),    M(60),  17 };
-        expected_plan_table[Subproblem(10)] = { Subproblem(2), Subproblem(8),   M(120),  22 };
-        expected_plan_table[Subproblem(11)] = { Subproblem(9), Subproblem(2),   M(600),  87 };
-        expected_plan_table[Subproblem(12)] = { Subproblem(4), Subproblem(8),    M(96),  20 };
-        expected_plan_table[Subproblem(13)] = { Subproblem(5), Subproblem(8),   M(480),  65 };
-        expected_plan_table[Subproblem(14)] = { Subproblem(2), Subproblem(12),  M(960), 126 };
-        expected_plan_table[Subproblem(15)] = { Subproblem(5), Subproblem(10), M(4800), 195 };
+        make_entry(A, C);
+        make_entry(A, D);
+        make_entry(B, D);
+        make_entry(A|D, B);
+        make_entry(C, D);
+        make_entry(A|C, D);
+        make_entry(B, C|D);
+        make_entry(A|C, B|D);
 
         auto dp_ccp = PlanEnumerator::CreateDPccp();
-        PlanTable plan_table(G);
-        /* Initialize `PlanTable` for base case. */
-        pe_test::init_PT_base_case(G, plan_table);
-
-        (*dp_ccp)(G, CF, plan_table);
-        REQUIRE(expected_plan_table == plan_table);
+        (*dp_ccp)(G, C_out, plan_table);
+        REQUIRE(expected == plan_table);
     }
 
     SECTION("TDbasic")
     {
-        /* Initialize `PlanTable` for `TDbasic`. */
-        PlanTable expected_plan_table(G);
-        expected_plan_table[Subproblem(1)]  = { Subproblem(0), Subproblem(0),     M(5),   0 };
-        expected_plan_table[Subproblem(2)]  = { Subproblem(0), Subproblem(0),    M(10),   0 };
-        expected_plan_table[Subproblem(4)]  = { Subproblem(0), Subproblem(0),     M(8),   0 };
-        expected_plan_table[Subproblem(5)]  = { Subproblem(1), Subproblem(4),    M(40),  13 };
-        expected_plan_table[Subproblem(8)]  = { Subproblem(0), Subproblem(0),    M(12),   0 };
-        expected_plan_table[Subproblem(9)]  = { Subproblem(1), Subproblem(8),    M(60),  17 };
-        expected_plan_table[Subproblem(10)] = { Subproblem(2), Subproblem(8),   M(120),  22 };
-        expected_plan_table[Subproblem(11)] = { Subproblem(9), Subproblem(2),   M(600),  87 };
-        expected_plan_table[Subproblem(12)] = { Subproblem(4), Subproblem(8),    M(96),  20 };
-        expected_plan_table[Subproblem(13)] = { Subproblem(5), Subproblem(8),   M(480),  65 };
-        expected_plan_table[Subproblem(14)] = { Subproblem(2), Subproblem(12),  M(960), 126 };
-        expected_plan_table[Subproblem(15)] = { Subproblem(5), Subproblem(10), M(4800), 195 };
+        make_entry(A, C);
+        make_entry(A, D);
+        make_entry(B, D);
+        make_entry(A|D, B);
+        make_entry(C, D);
+        make_entry(A|C, D);
+        make_entry(B, C|D);
+        make_entry(A|C, B|D);
 
         auto td_basic = PlanEnumerator::CreateTDbasic();
-        PlanTable plan_table(G);
-        /* Initialize `PlanTable` for base case. */
-        pe_test::init_PT_base_case(G, plan_table);
-
-        (*td_basic)(G, CF, plan_table);
-        REQUIRE(expected_plan_table == plan_table);
+        (*td_basic)(G, C_out, plan_table);
+        REQUIRE(expected == plan_table);
     }
 
     SECTION("TDMinCutAGaT")
     {
-        /* Initialize `PlanTable` for `TDMinCutAGaT`. */
-        PlanTable expected_plan_table(G);
-        expected_plan_table[Subproblem(1)]  = { Subproblem(0), Subproblem(0),     M(5),   0 };
-        expected_plan_table[Subproblem(2)]  = { Subproblem(0), Subproblem(0),    M(10),   0 };
-        expected_plan_table[Subproblem(4)]  = { Subproblem(0), Subproblem(0),     M(8),   0 };
-        expected_plan_table[Subproblem(5)]  = { Subproblem(1), Subproblem(4),    M(40),  13 };
-        expected_plan_table[Subproblem(8)]  = { Subproblem(0), Subproblem(0),    M(12),   0 };
-        expected_plan_table[Subproblem(9)]  = { Subproblem(1), Subproblem(8),    M(60),  17 };
-        expected_plan_table[Subproblem(10)] = { Subproblem(2), Subproblem(8),   M(120),  22 };
-        expected_plan_table[Subproblem(11)] = { Subproblem(9), Subproblem(2),   M(600),  87 };
-        expected_plan_table[Subproblem(12)] = { Subproblem(4), Subproblem(8),    M(96),  20 };
-        expected_plan_table[Subproblem(13)] = { Subproblem(5), Subproblem(8),   M(480),  65 };
-        expected_plan_table[Subproblem(14)] = { Subproblem(2), Subproblem(12),  M(960), 126 };
-        expected_plan_table[Subproblem(15)] = { Subproblem(5), Subproblem(10), M(4800), 195 };
+        make_entry(A, C);
+        make_entry(A, D);
+        make_entry(B, D);
+        make_entry(A|D, B);
+        make_entry(C, D);
+        make_entry(A|C, D);
+        make_entry(B, C|D);
+        make_entry(A|C, B|D);
 
         auto td_mincut_agat = PlanEnumerator::CreateTDMinCutAGaT();
-        PlanTable plan_table(G);
-        /* Initialize `PlanTable` for base case. */
-        pe_test::init_PT_base_case(G, plan_table);
-
-        (*td_mincut_agat)(G, CF, plan_table);
-        REQUIRE(expected_plan_table == plan_table);
+        (*td_mincut_agat)(G, C_out, plan_table);
+        REQUIRE(expected == plan_table);
     }
-    delete stmt;
 }

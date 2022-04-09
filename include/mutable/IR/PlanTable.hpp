@@ -104,12 +104,15 @@ struct M_EXPORT PlanTableBase : crtp<Actual, PlanTableBase>
 
     /** Update the entry for `left` joined with `right` (`left|right`) by considering plan `left` join `right` of cost
      * `c`.  The entry's plan and cost is changed *only* if `c` is less than the cost of the currently best plan. */
-    void update(const QueryGraph &G, const CardinalityEstimator &CE,
-                const Subproblem left, const Subproblem right, const double cost)
+    void update(const QueryGraph &G, const CardinalityEstimator &CE, const CostFunction &CF,
+                Subproblem left, Subproblem right, const cnf::CNF &condition)
     {
+        using std::swap;
         M_insist(not left.empty(), "left side must not be empty");
         M_insist(not right.empty(), "right side must not be empty");
         auto &entry = operator[](left | right);
+
+        /*----- Compute data model of join result. -------------------------------------------------------------------*/
         if (not entry.model) {
             /* If we consider this subproblem for the first time, compute its `DataModel`.  If this subproblem describes
              * a nested query, the `DataModel` must have been set by the `Optimizer`.  */
@@ -118,8 +121,19 @@ struct M_EXPORT PlanTableBase : crtp<Actual, PlanTableBase>
             M_insist(bool(entry_left.model), "must have a model for the left side");
             M_insist(bool(entry_right.model), "must have a model for the right side");
             // TODO use join condition for cardinality estimation
-            entry.model = CE.estimate_join(G, *entry_left.model, *entry_right.model, cnf::CNF{});
+            entry.model = CE.estimate_join(G, *entry_left.model, *entry_right.model, condition);
         }
+
+        /*----- Calculate join cost. ---------------------------------------------------------------------------------*/
+        double cost = CF.calculate_join_cost(G, actual(), CE, left, right, condition);
+        // TODO only if cost model is not commutative
+        double rl_cost = CF.calculate_join_cost(G, actual(), CE, right, left, condition);
+        if (rl_cost < cost) {
+            swap(cost, rl_cost);
+            swap(left, right);
+        }
+
+        /*----- Update plan table entry. -----------------------------------------------------------------------------*/
         if (not has_plan(left | right) or cost < entry.cost) {
             /* If there is no plan yet for this subproblem or the current plan is better than the best plan yet, update
              * the plan and costs for this subproblem. */

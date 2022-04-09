@@ -73,8 +73,7 @@ struct DPsize final : PlanEnumeratorCRTP<DPsize>
                         if (*S1 & *S2) continue; // subproblems not disjoint -> skip
                         if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
                         cnf::CNF condition; // TODO use join condition
-                        auto cost = CF.calculate_join_cost(G, PT, CE, *S1, *S2, condition);
-                        PT.update(G, CE, *S1, *S2, cost);
+                        PT.update(G, CE, CF, *S1, *S2, condition);
                     }
                 }
             }
@@ -119,10 +118,7 @@ struct DPsizeOpt final : PlanEnumeratorCRTP<DPsizeOpt>
                             if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
                             /* Exploit commutativity of join. */
                             cnf::CNF condition; // TODO use join condition
-                            auto cost = CF.calculate_join_cost(G, PT, CE, *S1, *S2, condition);
-                            PT.update(G, CE, *S1, *S2, cost);
-                            cost = CF.calculate_join_cost(G, PT, CE, *S2, *S1, condition);
-                            PT.update(G, CE, *S2, *S1, cost);
+                            PT.update(G, CE, CF, *S1, *S2, condition);
                         }
                     }
                 } else {
@@ -134,10 +130,7 @@ struct DPsizeOpt final : PlanEnumeratorCRTP<DPsizeOpt>
                             if (not M.is_connected(*S1, *S2)) continue; // subproblems not connected -> skip
                             /* Exploit commutativity of join. */
                             cnf::CNF condition; // TODO use join condition
-                            auto cost = CF.calculate_join_cost(G, PT, CE, *S1, *S2, condition);
-                            PT.update(G, CE, *S1, *S2, cost);
-                            cost = CF.calculate_join_cost(G, PT, CE, *S1, *S2, condition);
-                            PT.update(G, CE, *S2, *S1, cost);
+                            PT.update(G, CE, CF, *S1, *S2, condition);
                         }
                     }
                 }
@@ -174,8 +167,7 @@ struct DPsizeSub final : PlanEnumeratorCRTP<DPsizeSub>
                     if (not PT.has_plan(O)) continue; // not connected -> skip
                     if (not PT.has_plan(Comp)) continue; // not connected -> skip
                     cnf::CNF condition; // TODO use join condition
-                    auto cost = CF.calculate_join_cost(G, PT, CE, O, Comp, condition);
-                    PT.update(G, CE, O, Comp, cost);
+                    PT.update(G, CE, CF, O, Comp, condition);
                 }
             }
         }
@@ -210,8 +202,7 @@ struct DPsub final : PlanEnumeratorCRTP<DPsub>
                 if (not PT.has_plan(S1)) continue; // not connected -> skip
                 if (not PT.has_plan(S2)) continue; // not connected -> skip
                 cnf::CNF condition; // TODO use join condition
-                auto cost = CF.calculate_join_cost(G, PT, CE, S1, S2, condition);
-                PT.update(G, CE, S1, S2, cost);
+                PT.update(G, CE, CF, S1, S2, condition);
             }
         }
     }
@@ -251,10 +242,7 @@ struct DPsubOpt final : PlanEnumeratorCRTP<DPsubOpt>
                 if (not PT.has_plan(S2)) continue; // not connected -> skip
                 /* Exploit commutativity of join. */
                 cnf::CNF condition; // TODO use join condition
-                auto cost = CF.calculate_join_cost(G, PT, CE, S1, S2, condition);
-                PT.update(G, CE, S1, S2, cost);
-                cost = CF.calculate_join_cost(G, PT, CE, S1, S2, condition);
-                PT.update(G, CE, S2, S1, cost);
+                PT.update(G, CE, CF, S1, S2, condition);
             }
         }
     }
@@ -300,10 +288,7 @@ struct DPccp final : PlanEnumeratorCRTP<DPccp>
                 Q.pop();
                 /* Update `PlanTable` with connected subgraph complement pair (S1, S). */
                 cnf::CNF condition; // TODO use join condition
-                auto cost = CF.calculate_join_cost(G, PT, CE, S1, S, condition);
-                PT.update(G, CE, S1, S, cost);
-                cost = CF.calculate_join_cost(G, PT, CE, S, S1, condition);
-                PT.update(G, CE, S, S1, cost);
+                PT.update(G, CE, CF, S1, S, condition);
 
                 Subproblem N = M.neighbors(S) - X;
                 /* Iterate over all subsets `sub` in `N` */
@@ -455,8 +440,7 @@ struct IKKBZ final : PlanEnumeratorCRTP<IKKBZ>
 
                 /*----- Join next relation with already joined relations. -----*/
                 cnf::CNF condition; // TODO use join condition
-                const double join_cost = CF.calculate_join_cost(G, PT, CE, R, joined, condition);
-                PT.update(G, CE, joined, R, join_cost);
+                PT.update(G, CE, CF, joined, R, condition);
                 joined |= R; // add R to the joined relations
 
                 /*----- Add all children of `R` to the priority queue. -----*/
@@ -506,8 +490,7 @@ struct IKKBZ final : PlanEnumeratorCRTP<IKKBZ>
         for (std::size_t i = 1; i < G.num_sources(); ++i) {
             const Subproblem left(1UL << linearization[i]);
             cnf::CNF condition; // TODO use join condition
-            const double cost = CF.calculate_join_cost(G, PT, CE, left, right, condition);
-            PT.update(G, CE, left, right, cost);
+            PT.update(G, CE, CF, left, right, condition);
             right = left | right;
         }
     }
@@ -623,8 +606,7 @@ struct LinearizedDP final : PlanEnumeratorCRTP<LinearizedDP>
                     const bool is_right_connected = PT.has_plan(right);
                     if (is_left_connected and is_right_connected) {
                         cnf::CNF condition; // TODO use join condition
-                        const double cost = CF.calculate_join_cost(G, PT, CE, left, right, condition);
-                        PT.update(G, CE, left, right, cost);
+                        PT.update(G, CE, CF, left, right, condition);
                     }
                 }
             }
@@ -683,10 +665,7 @@ struct TDbasic final : PlanEnumeratorCRTP<TDbasic>
 
                     /* Update `PlanTable`. */
                     cnf::CNF condition; // TODO use join condition
-                    auto cost = CF.calculate_join_cost(G, PT, CE, sub, complement, condition);
-                    PT.update(G, CE, sub, complement, cost);
-                    cost = CF.calculate_join_cost(G, PT, CE, complement, sub, condition);
-                    PT.update(G, CE, complement, sub, cost);
+                    PT.update(G, CE, CF, sub, complement, condition);
                 }
             }
         }
@@ -803,10 +782,7 @@ struct TDMinCutAGaT final : PlanEnumeratorCRTP<TDMinCutAGaT>
 
                 /*----- Update `PlanTable`. -----*/
                 cnf::CNF condition; // TODO use join condition
-                auto cost = CF.calculate_join_cost(G, PT, CE, first, second, condition);
-                PT.update(G, CE, first, second, cost);
-                cost = CF.calculate_join_cost(G, PT, CE, second, first, condition);
-                PT.update(G, CE, second, first, cost);
+                PT.update(G, CE, CF, first, second, condition);
             };
             recurse(first, second, recurse);
         };
@@ -874,11 +850,8 @@ struct GOO : PlanEnumeratorCRTP<GOO>
                 for (node *inner = std::next(outer); inner != end; ++inner) {
                     if (*outer & *inner) { // can be merged
                         const Subproblem joined = outer->subproblem | inner->subproblem;
-                        if (not PT[joined].model) {
-                            const double join_cost = CF.calculate_join_cost(G, PT, CE, outer->subproblem,
-                                                                            inner->subproblem, condition);
-                            PT.update(G, CE, outer->subproblem, inner->subproblem, join_cost);
-                        }
+                        if (not PT[joined].model)
+                            PT.update(G, CE, CF, outer->subproblem, inner->subproblem, condition);
                         const double C_joined = CE.predict_cardinality(*PT[joined].model);
                         if (C_joined < least_cardinality) {
                             least_cardinality = C_joined;
@@ -2160,6 +2133,7 @@ struct BottomUpComplete : BottomUp
         state.INCREMENT_NUM_STATES_EXPANDED();
 
         const Subproblem *marked = std::next(state.cbegin(), state.mark());
+        const Subproblem All((1UL << G.num_sources()) - 1UL);
 
         /* Enumerate all potential join pairs and check whether they are connected. */
         for (auto outer_it = state.cbegin(), outer_end = std::prev(state.cend()); outer_it != outer_end; ++outer_it)
@@ -2188,13 +2162,14 @@ struct BottomUpComplete : BottomUp
 
                     /* Compute total cost. */
                     cnf::CNF condition; // TODO use join condition
-                    const double action_cost = CF.calculate_join_cost(G, PT, CE, *outer_it, *inner_it, condition);
                     if (not PT[joined].model) {
                         auto &model_left  = *PT[*outer_it].model;
                         auto &model_right = *PT[*inner_it].model;
                         PT[joined].model = CE.estimate_join(G, model_left, model_right, condition);
                         PT[joined].cost = 0;
                     }
+                    const double action_cost = CE.predict_cardinality(*PT[*outer_it].model) +
+                                               CE.predict_cardinality(*PT[*inner_it].model);
 
                     /* Create new search state. */
                     SubproblemsArray S(
@@ -2259,10 +2234,10 @@ struct BottomUpComplete : BottomUp
 
                 /* Compute total cost. */
                 cnf::CNF condition; // TODO use join condition
-                const double total_cost = CF.calculate_join_cost(G, PT, CE, L, R, condition);
-                PT.update(G, CE, L, R, total_cost);
+                PT.update(G, CE, CF, L, R, condition);
 
                 /* Compute action cost. */
+                const double total_cost = CF.calculate_join_cost(G, PT, CE, L, R, condition);
                 const double action_cost = total_cost - (PT[L].cost + PT[R].cost);
 
                 /* Create new search state. */
@@ -2347,10 +2322,10 @@ struct BottomUpComplete : BottomUp
 
                 /*----- Compute total cost. -----*/
                 cnf::CNF condition; // TODO use join condition
-                const double total_cost = CF.calculate_join_cost(G, PT, CE, subproblems[left], subproblems[right], condition);
-                PT.update(G, CE, subproblems[left], subproblems[right], total_cost);
+                PT.update(G, CE, CF, subproblems[left], subproblems[right], condition);
 
                 /* Compute action cost. */
+                const double total_cost = CF.calculate_join_cost(G, PT, CE, subproblems[left], subproblems[right], condition);
                 const double action_cost = total_cost - (PT[subproblems[left]].cost + PT[subproblems[right]].cost);
 
                 EdgesBottomUp S(state.num_joins_to_goal(), state.g() + action_cost, joins,
@@ -2436,10 +2411,10 @@ next:
 
             /*----- Compute total cost. -----*/
             cnf::CNF condition; // TODO use join condition
-            const double total_cost = CF.calculate_join_cost(G, PT, CE, subproblems[left], subproblems[right], condition);
-            PT.update(G, CE, subproblems[left], subproblems[right], total_cost);
+            PT.update(G, CE, CF, subproblems[left], subproblems[right], condition);
 
             /* Compute action cost. */
+            const double total_cost = CF.calculate_join_cost(G, PT, CE, subproblems[left], subproblems[right], condition);
             const double action_cost = total_cost - (PT[subproblems[left]].cost + PT[subproblems[right]].cost);
 
             EdgePtrBottomUp S(/* parent=    */ &state,
@@ -2555,13 +2530,13 @@ struct TopDownComplete : TopDown
                 PT[S2].cost = 0;
                 PT[S2].model = CE.estimate_join_all(G, PT, S2, condition);
             }
-            const double action_cost = CF.calculate_join_cost(G, PT, CE, S1, S2, condition);
+            const double action_cost = CE.predict_cardinality(*PT[S1].model) + CE.predict_cardinality(*PT[S2].model);
 
             /* Create new search state. */
             SubproblemsArray S(
                 /* Context=     */ PT, G, M, CF, CE,
                 /* parent=      */ &state,
-                /* g=           */ state.g() + action_cost, // TODO new cost
+                /* g=           */ state.g() + action_cost,
                 /* size=        */ state.size() + 1,
                 /* mark=        */ marked - subproblems,
                 /* subproblems= */ subproblems
@@ -3194,8 +3169,7 @@ bool heuristic_search_helper(const char *state_str, const char *expand_str, cons
                     const Subproblem right = delta[1];
 
                     /*----- Update plan table. -----*/
-                    const double cost = CF.calculate_join_cost(G, PT, CE, left, right, condition);
-                    PT.update(G, CE, left, right, cost);
+                    PT.update(G, CE, CF, left, right, condition);
 
                     current = parent;
                 }
@@ -3233,8 +3207,7 @@ bool heuristic_search_helper(const char *state_str, const char *expand_str, cons
                     const Subproblem right = delta[1];
 
                     /*----- Update plan table. -----*/
-                    const double cost = CF.calculate_join_cost(G, PT, CE, left, right, condition);
-                    PT.update(G, CE, left, right, cost);
+                    PT.update(G, CE, CF, left, right, condition);
                 };
                 fill_DP_table(&goal, fill_DP_table);
             }
@@ -3335,7 +3308,7 @@ matched_heuristic_search:;
             std::cerr << "AI: " << hs_cost << ", DP: " << dp_cost << ", Δ " << double(hs_cost) / dp_cost << 'x'
                       << std::endl;
             if (hs_cost > dp_cost)
-                throw std::runtime_error("suboptimal solution");
+                std::cerr << "WARNING: Suboptimal solution!" << std::endl;
         }
 #endif
     }

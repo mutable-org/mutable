@@ -2169,10 +2169,15 @@ struct BottomUpComplete : BottomUp
                         PT[joined].cost = 0;
                     }
                     double action_cost = 0;
+#if 0
                     if (not outer_it->singleton())
                         action_cost += CE.predict_cardinality(*PT[*outer_it].model);
                     if (not inner_it->singleton())
                         action_cost += CE.predict_cardinality(*PT[*inner_it].model);
+#else
+                    if (joined != All)
+                        action_cost = CE.predict_cardinality(*PT[joined].model);
+#endif
 
                     /* Create new search state. */
                     SubproblemsArray S(
@@ -2790,6 +2795,8 @@ struct GOO
     double operator()(const state_type &state, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                       const CostFunction &CF, const CardinalityEstimator &CE) const
     {
+        using std::swap;
+
         /*----- Initialize nodes. -----*/
         ::GOO::node nodes[G.num_sources()];
         std::size_t num_nodes = 0;
@@ -2798,13 +2805,95 @@ struct GOO
         }, G);
 
         /*----- Greedily enumerate all joins. -----*/
+        const Subproblem All((1UL << G.num_sources()) - 1UL);
         double cost = 0;
         ::GOO{}.for_each_join([&](Subproblem left, Subproblem right) {
             static cnf::CNF condition; // TODO use join condition
-            cost += CF.calculate_join_cost(G, PT, CE, left, right, condition);
+            if (All != (left|right)) {
+                double old_cost_left = 0, old_cost_right = 0;
+                swap(PT[left].cost, old_cost_left);
+                swap(PT[right].cost, old_cost_right);
+                cost += CF.calculate_join_cost(G, PT, CE, left, right, condition);
+                swap(PT[left].cost, old_cost_left);
+                swap(PT[right].cost, old_cost_right);
+            }
         }, PT, G, CF, CE, nodes, nodes + num_nodes);
 
         return cost;
+    }
+};
+
+template<typename PlanTable, typename State>
+struct avg_sel
+{
+    using state_type = State;
+
+    avg_sel(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&, const CardinalityEstimator&)
+    { }
+
+    double operator()(const state_type &state, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                      const CostFunction &CF, const CardinalityEstimator &CE) const
+    {
+        using std::swap;
+        if (state.is_top(PT, G, M, CF, CE)) return 0;
+
+        double cardinalities[state.size()];
+        double *end;
+        {
+            double *ptr = cardinalities;
+            for (const Subproblem S : state)
+                *ptr++ = CE.predict_cardinality(*PT[S].model);
+            end = ptr;
+            std::sort(cardinalities, end); // sort cardinalities in ascending order
+#if 0
+            std::cerr << "subproblems [";
+            for (auto it = cardinalities; it != end; ++it) {
+                if (it != cardinalities) std::cerr << ", ";
+                std::cerr << *it;
+            }
+            std::cerr << "]\n";
+#endif
+        }
+
+        const Subproblem All((1UL << G.num_sources()) - 1UL);
+        if (not PT[All].model) {
+            static cnf::CNF condition;
+            PT[All].model = CE.estimate_join_all(G, PT, All, condition);
+        }
+
+        double Cprod = 1;
+        for (auto ptr = cardinalities; ptr != end; ++ptr)
+            Cprod *= *ptr;
+        const double sel_remaining = CE.predict_cardinality(*PT[All].model) / Cprod;
+        // std::cerr << "sel_rem = " << sel_remaining << '\n';
+        M_insist(sel_remaining <= 1.1);
+
+        const std::size_t num_joins_remaining = state.size() - 1;
+
+        const double avg_sel = std::pow(sel_remaining, 1. / num_joins_remaining);
+        // std::cerr << "avg sel = " << avg_sel << '\n';
+
+        /*----- Keep joining the two smallest subproblems and accumulate the cost. -----*/
+        double accumulated_cost = 0;
+        for (auto ptr = cardinalities; ptr < end - 1; ++ptr) {
+            const double card = ptr[0] * ptr[1] * avg_sel;
+            // std::cerr << "  two smallest join to " << card << '\n';
+            accumulated_cost += card;
+            *++ptr = card;
+            // std::cerr << "  new accu is " << accumulated_cost << '\n';
+            for (auto runner = ptr; runner != end - 1 and runner[0] > runner[1]; ++runner)
+                swap(runner[0], runner[1]);
+#if 0
+            std::cerr << "  new subproblems [";
+            for (auto it = ptr; it != end; ++it) {
+                if (it != ptr) std::cerr << ", ";
+                std::cerr << *it;
+            }
+            std::cerr << "]\n";
+#endif
+        }
+
+        return accumulated_cost;
     }
 };
 
@@ -3276,6 +3365,7 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   scaled_sum,                     AStar                           )
         HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   scaled_sum,                     monotone_beam_search            )
         HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   scaled_sum,                     monotone_dynamic_beam_search    )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   avg_sel,                        AStar                           )
         HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   product,                        AStar                           )
         HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,                            AStar                           )
         HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,                            monotone_beam_search            )

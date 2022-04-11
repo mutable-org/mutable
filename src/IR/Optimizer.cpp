@@ -311,9 +311,14 @@ template<typename PlanTable>
 void Optimizer::optimize_locally(const QueryGraph &G, PlanTable &PT) const
 {
     Catalog &C = Catalog::Get();
+    auto &DB = C.get_database_in_use();
+    auto &CE = DB.cardinality_estimator();
     M_TIME_EXPR(plan_enumerator()(G, cost_function(), PT), "Plan enumeration", C.timer());
 #ifdef NDEBUG
-    std::cout << "Calculated cost: " << PT.get_final().cost << '\n';
+    std::cout << "Est. total cost: " << PT.get_final().cost
+              << "\nEst. result set size: " << CE.predict_cardinality(*PT.get_final().model)
+              << "\nPlan cost: " << PT[PT.get_final().left].cost + PT[PT.get_final().right].cost
+              << std::endl;
 #endif
 }
 

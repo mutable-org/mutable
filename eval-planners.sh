@@ -41,20 +41,20 @@ declare -A TOPOLOGIES=(
     # [cycle]=63
     # [star]=28
     # [clique]=19
-    [chain]=23
-    [cycle]=23
-    [star]=20
-    [clique]=15
+    [chain]=26
+    [cycle]=26
+    [star]=19
+    [clique]=11
 )
 
 declare -A PLANNER_CONFIGS=(
     ###### Traditional Planners #####
-    [DPsub]="--plan-enumerator DPsubOpt"
+    # [DPsub]="--plan-enumerator DPsubOpt"
     [DPccp]="--plan-enumerator DPccp"
-    [TDMinCutAGaT]="--plan-enumerator TDMinCutAGaT"
-    [IKKBZ]="--plan-enumerator IKKBZ"
-    [linDP]="--plan-enumerator LinearizedDP"
-    [GOO]="--plan-enumerator GOO"
+    # [TDMinCutAGaT]="--plan-enumerator TDMinCutAGaT"
+    # [IKKBZ]="--plan-enumerator IKKBZ"
+    # [linDP]="--plan-enumerator LinearizedDP"
+    # [GOO]="--plan-enumerator GOO"
     ##### Heuristic Search #####
     [BU-A*-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search AStar"
     # [BU-A*-sum]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic sum --hs-search AStar"
@@ -64,7 +64,7 @@ declare -A PLANNER_CONFIGS=(
     # [BU-relative_beam-scaled_sum]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic scaled_sum --hs-search monotone_dynamic_beam_search"
     # [BU-A*-checkpoints]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic checkpoints --hs-search AStar"
     # [BU-beam-checkpoints]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic checkpoints --hs-search monotone_beam_search"
-    [BU-A*-GOO]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic GOO --hs-search AStar"
+    # [BU-A*-GOO]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic GOO --hs-search AStar"
     # [BU-beam-GOO]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic GOO --hs-search monotone_beam_search"
     [TD-A*-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic zero --hs-search AStar"
     # [TD-beam-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic zero --hs-search monotone_beam_search"
@@ -231,7 +231,7 @@ main() {
                         --use-cardinality-file "${NAME}.cardinalities.json" \
                         "${NAME}.schema.sql" \
                         "${NAME}.query.sql" \
-                        | grep -e 'Plan enumeration:' -e 'Calculated cost:' \
+                        | grep -e 'Plan enumeration:' -e 'Plan cost:' \
                         | cut --delimiter=':' --fields=2 \
                         | paste -sd ' \n' \
                         | while read -r COST TIME; do echo "${TOPOLOGY},${N},${PLANNER},${COST},${TIME},${SEED}" >> "${CSV}"; done

@@ -41,10 +41,10 @@ declare -A TOPOLOGIES=(
     # [cycle]=63
     # [star]=28
     # [clique]=19
-    [chain]=26
-    [cycle]=26
-    [star]=19
-    [clique]=11
+    [chain]=31
+    [cycle]=31
+    [star]=22
+    [clique]=14
 )
 
 declare -A PLANNER_CONFIGS=(
@@ -53,23 +53,31 @@ declare -A PLANNER_CONFIGS=(
     [DPccp]="--plan-enumerator DPccp"
     # [TDMinCutAGaT]="--plan-enumerator TDMinCutAGaT"
     # [IKKBZ]="--plan-enumerator IKKBZ"
-    # [linDP]="--plan-enumerator LinearizedDP"
-    # [GOO]="--plan-enumerator GOO"
+    [linDP]="--plan-enumerator LinearizedDP"
+    [GOO]="--plan-enumerator GOO"
     ##### Heuristic Search #####
+    # BottomUp
+    ## A*
     [BU-A*-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search AStar"
-    # [BU-A*-sum]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic sum --hs-search AStar"
     [BU-A*-avg_sel]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic avg_sel --hs-search AStar"
-    # [BU-A*-scaled_sum]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic scaled_sum --hs-search AStar"
-    # [BU-beam-scaled_sum]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic scaled_sum --hs-search monotone_beam_search"
-    # [BU-relative_beam-scaled_sum]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic scaled_sum --hs-search monotone_dynamic_beam_search"
-    # [BU-A*-checkpoints]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic checkpoints --hs-search AStar"
-    # [BU-beam-checkpoints]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic checkpoints --hs-search monotone_beam_search"
-    # [BU-A*-GOO]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic GOO --hs-search AStar"
-    # [BU-beam-GOO]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic GOO --hs-search monotone_beam_search"
+    [BU-A*-GOO]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic GOO --hs-search AStar"
+    ## beam
+    [BU-beam-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search monotone_beam_search"
+    [BU-beam-avg_sel]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic avg_sel --hs-search monotone_beam_search"
+    [BU-beam-GOO]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic GOO --hs-search monotone_beam_search"
+    ## relative beam
+    [BU-rel_beam-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search monotone_dynamic_beam_search"
+    # TopDown
+    ## A*
     [TD-A*-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic zero --hs-search AStar"
-    # [TD-beam-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic zero --hs-search monotone_beam_search"
-    # [TD-relative_beam-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic zero --hs-search monotone_dynamic_beam_search"
-    [TD-A*-sqrt_sum]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic sqrt_sum --hs-search AStar"
+    [TD-A*-sum]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic sum --hs-search AStar"
+    [TD-A*-GOO]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic GOO --hs-search AStar"
+    ## beam
+    [TD-beam-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic zero --hs-search monotone_beam_search"
+    [TD-beam-sum]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic sum --hs-search monotone_beam_search"
+    [TD-beam-GOO]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic GOO --hs-search monotone_beam_search"
+    ## relative beam
+    [TD-rel_beam-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic zero --hs-search monotone_dynamic_beam_search"
 )
 
 declare -A TOPOLOGY_STEPS=(

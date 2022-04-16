@@ -7,6 +7,7 @@
 // #include <boost/heap/fibonacci_heap.hpp>
 // #include <boost/heap/pairing_heap.hpp>
 #include <exception>
+#include <experimental/type_traits> // std::is_detected
 #include <map>
 #include <queue>
 #include <ratio>
@@ -599,6 +600,9 @@ struct genericAStar
      * Helper methods
      *----------------------------------------------------------------------------------------------------------------*/
 
+    template<typename T>
+    using has_mark = decltype(std::declval<T>().mark(Subproblem()));
+
     /* Try to add the successor state `s` to the beam.  If the weight of `s` is already higher than the highest weight
      * in the beam, immediately bypass the beam. */
     void beam(state_type state, double h, Context&... context) {
@@ -636,14 +640,17 @@ struct genericAStar
     };
 
     /* Compute a beam of dynamic (relative) size from the set of successor states. */
-    void beam_dynamic(Context&... context) {
+    void beam_dynamic(expand_type &expand, Context&... context) {
         std::sort(candidates.begin(), candidates.end());
         const std::size_t num_beamed = std::ceil(candidates.size() * BEAM_FACTOR);
         M_insist(not candidates.size() or num_beamed, "if the state has successors, at least one must be in the beam");
         auto it = candidates.begin();
         /*----- Add states in the beam to the beam queue. -----*/
-        for (auto end = it + num_beamed; it != end; ++it)
+        for (auto end = it + num_beamed; it != end; ++it) {
+            if constexpr (std::experimental::is_detected_v<has_mark, state_type>)
+                expand.reset_marked(it->state, context...);
             state_manager_.push_beam_queue(std::move(it->state), it->h, context...);
+        }
         /*----- Add remaining states to the regular queue. -----*/
         for (auto end = candidates.end(); it != end; ++it)
             state_manager_.push_regular_queue(std::move(it->state), it->h, context...);
@@ -700,7 +707,7 @@ struct genericAStar
             for_each_successor([this](state_type successor, double h) {
                 candidates.emplace_back(std::move(successor), h);
             }, state, heuristic, expand, context...);
-            beam_dynamic(context...); // order by g+h and partition into beam and regular states
+            beam_dynamic(expand, context...); // order by g+h and partition into beam and regular states
         } else if constexpr (use_beam_search) {
             /*----- Keep only `beam_width` best successors in `candidates`, rest is added to regular queue. ----*/
             candidates.clear();
@@ -708,8 +715,11 @@ struct genericAStar
                 beam(std::move(successor), h, context...); // try to add to candidates
             }, state, heuristic, expand, context...);
             /*----- The states remaining in `candidates` are within the beam. -----*/
-            for (auto &s : candidates)
+            for (auto &s : candidates) {
+                if constexpr (std::experimental::is_detected_v<has_mark, state_type>)
+                    expand.reset_marked(s.state, context...);
                 state_manager_.push_beam_queue(std::move(s.state), s.h, context...);
+            }
         } else {
             /*----- Have only regular queue. -----*/
             for_each_successor([this, &context...](state_type successor, double h) {

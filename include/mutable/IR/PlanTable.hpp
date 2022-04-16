@@ -239,7 +239,8 @@ struct M_EXPORT PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
     void reset_costs() {
         for (size_type i = 0; i < 1UL << num_sources(); ++i) {
             Subproblem S(i);
-            operator[](S).cost = std::numeric_limits<decltype(PlanTableEntry::cost)>::infinity();
+            if (not S.singleton())
+                operator[](S).cost = std::numeric_limits<decltype(PlanTableEntry::cost)>::infinity();
         }
     }
 
@@ -316,7 +317,12 @@ struct M_EXPORT PlanTableLargeAndSparse : PlanTableBase<PlanTableLargeAndSparse>
         }
     }
 
-    void reset_costs() { table_.clear(); }
+    void reset_costs() {
+        for (auto &entry : table_) {
+            if (not entry.first.singleton())
+                entry.second.cost = std::numeric_limits<decltype(PlanTableEntry::cost)>::infinity();
+        }
+    }
 
     friend std::ostream & M_EXPORT operator<<(std::ostream &out, const PlanTableLargeAndSparse &PT);
 

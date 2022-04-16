@@ -230,6 +230,7 @@ void generate_correlated_cardinalities(table_type &table, const m::QueryGraph &G
             const double max_cardinality = std::min<double>(it->second, args.max_cardinality * args.max_cardinality);
             M_insist(max_cardinality >= args.min_cardinality);
             const double c = args.min_cardinality + (max_cardinality - args.min_cardinality) * selectivity_dist(g);
+            M_insist(c != std::numeric_limits<double>::infinity());
             max_cardinalities.erase(it);
             table.emplace_hint(table_it, S, c);
             return c;

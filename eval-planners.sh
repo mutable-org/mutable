@@ -5,6 +5,8 @@ trap "exit 1" SIGINT
 
 set -o pipefail -o nounset
 
+source planner-configs.sh
+
 
 ########################################################################################################################
 # Globals
@@ -47,37 +49,37 @@ declare -A TOPOLOGIES=(
     [clique]=14
 )
 
-declare -A PLANNER_CONFIGS=(
+ORDERED_PLANNERS=(
     ###### Traditional Planners #####
-    # [DPsub]="--plan-enumerator DPsubOpt"
-    [DPccp]="--plan-enumerator DPccp"
-    # [TDMinCutAGaT]="--plan-enumerator TDMinCutAGaT"
-    # [IKKBZ]="--plan-enumerator IKKBZ"
-    [linDP]="--plan-enumerator LinearizedDP"
-    [GOO]="--plan-enumerator GOO"
+    # "DPsub"
+    "DPccp"
+    # "TDMinCutAGaT"
+    # "IKKBZ"
+    "linDP"
+    "GOO"
     ##### Heuristic Search #####
     # BottomUp
     ## A*
-    [BU-A*-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search AStar"
-    [BU-A*-avg_sel]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic avg_sel --hs-search AStar"
-    [BU-A*-GOO]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic GOO --hs-search AStar"
+    "BU-A*-zero"
+    "BU-A*-avg_sel"
+    "BU-A*-GOO"
     ## beam
-    [BU-beam-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search monotone_beam_search"
-    [BU-beam-avg_sel]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic avg_sel --hs-search monotone_beam_search"
-    [BU-beam-GOO]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic GOO --hs-search monotone_beam_search"
+    "BU-beam-zero"
+    "BU-beam-avg_sel"
+    "BU-beam-GOO"
     ## relative beam
-    [BU-rel_beam-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search monotone_dynamic_beam_search"
+    "BU-rel_beam-zero"
     # TopDown
     ## A*
-    [TD-A*-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic zero --hs-search AStar"
-    [TD-A*-sum]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic sum --hs-search AStar"
-    [TD-A*-GOO]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic GOO --hs-search AStar"
+    "TD-A*-zero"
+    "TD-A*-sum"
+    "TD-A*-GOO"
     ## beam
-    [TD-beam-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic zero --hs-search monotone_beam_search"
-    [TD-beam-sum]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic sum --hs-search monotone_beam_search"
-    [TD-beam-GOO]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic GOO --hs-search monotone_beam_search"
+    "TD-beam-zero"
+    "TD-beam-sum"
+    "TD-beam-GOO"
     ## relative beam
-    [TD-rel_beam-zero]="--plan-enumerator HeuristicSearch --hs-state SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic zero --hs-search monotone_dynamic_beam_search"
+    "TD-rel_beam-zero"
 )
 
 declare -A TOPOLOGY_STEPS=(
@@ -183,7 +185,7 @@ main() {
 
         # Initialize timeout counters
         declare -A PLANNER_TIME_OUTS
-        for PLANNER in "${!PLANNER_CONFIGS[@]}";
+        for PLANNER in "${ORDERED_PLANNERS[@]}";
         do
             PLANNER_TIME_OUTS[${PLANNER}]=0
         done
@@ -216,7 +218,7 @@ main() {
 
                 # Evaluate problem with each planner
                 echo '` Running planner'
-                for PLANNER in "${!PLANNER_CONFIGS[@]}";
+                for PLANNER in "${ORDERED_PLANNERS[@]}";
                 do
                     if [ ${PLANNER_TIME_OUTS[${PLANNER}]} -ge ${MAX_TIMEOUTS_PER_CONFIG} ];
                     then
@@ -224,7 +226,11 @@ main() {
                         continue
                     fi
 
-                    # set -x;
+                    if [ ! -v 'PLANNER_CONFIGS[$PLANNER]' ];
+                    then
+                        >&2 echo "ERROR: no configuration found for ${PLANNER}"
+                        continue
+                    fi
                     PLANNER_CONFIG=${PLANNER_CONFIGS[$PLANNER]}
 
                     unset COST

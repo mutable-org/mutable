@@ -24,7 +24,7 @@ for T in {chain,cycle,star,clique};
 do
     for I in $(seq 1 ${NUM_REPETITIONS});
     do
-        for N in {5..10}; do
+        for N in {5..15}; do
             NAME="$T-${N}"
 
             python3 querygen.py -t $T -n ${N} > /dev/null
@@ -53,6 +53,23 @@ do
                     "${NAME}.schema.sql" \
                     "${NAME}.query.sql" \
                     2>&1 | ack --nocolor '^States generated:' | cut -d ':' -f 2 | tr -d ' '
+                SAVED_PIPESTATUS=("${PIPESTATUS[@]}")
+                TIMEOUT_RET=${SAVED_PIPESTATUS[0]}
+                ERR=0
+                for RET in "${SAVED_PIPESTATUS[@]}";
+                do
+                    if [ ${RET} -ne 0 ];
+                    then
+                        ERR=${RET}
+                        break
+                    fi
+                done
+
+                if [ ${TIMEOUT_RET} -eq 124 ] || [ ${TIMEOUT_RET} -eq 137 ]; # timed out
+                then
+                    >&2 echo "  \` Configuration '${PLANNER}' timed out."
+                    echo "0"
+                fi
             done
 
             rm -f "${NAME}.schema.sql" "${NAME}.query.sql" "${NAME}.cardinalities.json"

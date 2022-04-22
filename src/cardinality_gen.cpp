@@ -220,10 +220,11 @@ void generate_correlated_cardinalities(table_type &table, const m::QueryGraph &G
 
     auto cardinality = [&](const Subproblem S) -> double {
         auto table_it = table.find(S);
-        if (table_it != table.end()) [[likely]] {
+        if (table_it != table.end()) [[likely]] { // we already know the cardinality of S
+            M_insist(table_it->second <= args.max_cardinality * args.max_cardinality);
             return table_it->second;
         } else {
-            auto it = max_cardinalities.find(S);
+            const auto it = max_cardinalities.find(S);
             M_insist(it != max_cardinalities.end());
             M_insist(it->second > args.min_cardinality);
             skewed_distribution<double> selectivity_dist(args.alpha);
@@ -231,8 +232,10 @@ void generate_correlated_cardinalities(table_type &table, const m::QueryGraph &G
             M_insist(max_cardinality >= args.min_cardinality);
             const double c = args.min_cardinality + (max_cardinality - args.min_cardinality) * selectivity_dist(g);
             M_insist(c != std::numeric_limits<double>::infinity());
+            M_insist(c <= double(args.max_cardinality) * args.max_cardinality);
             max_cardinalities.erase(it);
-            table.emplace_hint(table_it, S, c);
+            table_it = table.emplace_hint(table_it, S, c);
+            M_insist(table_it->second == c);
             return c;
         }
     };
@@ -249,7 +252,7 @@ void generate_correlated_cardinalities(table_type &table, const m::QueryGraph &G
 
     M.for_each_CSG_pair_undirected(All, update);
     M_insist(max_cardinalities.size() == 1);
-    table[All] = max_cardinalities.at(All);
+    table[All] = cardinality(All);
 }
 
 template<typename Generator>

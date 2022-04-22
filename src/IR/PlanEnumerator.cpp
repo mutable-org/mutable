@@ -917,7 +917,7 @@ inline bool subproblem_lt(Subproblem left, Subproblem right) { return uint64_t(l
 
 namespace search_states {
 
-// #define WITH_STATE_COUNTERS
+#define WITH_STATE_COUNTERS
 #if !defined(NDEBUG) && !defined(WITH_STATE_COUNTERS)
 #define WITH_STATE_COUNTERS
 #endif

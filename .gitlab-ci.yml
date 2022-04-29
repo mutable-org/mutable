@@ -202,7 +202,7 @@ build:release:linux-amd64:
             - branches
     except:
         variables:
-            - '$CI_MERGE_REQUEST_TITLE =~ /^wip:/i || $CI_MERGE_REQUEST_TITLE =~ /^draft:/i'
+            - '$CI_MERGE_REQUEST_TITLE == null || ($CI_MERGE_REQUEST_TITLE =~ /^wip:/i || $CI_MERGE_REQUEST_TITLE =~ /^draft:/i)'
 
 build:release:macos-amd64:
     stage: build:release
@@ -236,7 +236,7 @@ build:release:macos-amd64:
             - branches
     except:
         variables:
-            - '$CI_MERGE_REQUEST_TITLE =~ /^wip:/i || $CI_MERGE_REQUEST_TITLE =~ /^draft:/i'
+            - '$CI_MERGE_REQUEST_TITLE == null || ($CI_MERGE_REQUEST_TITLE =~ /^wip:/i || $CI_MERGE_REQUEST_TITLE =~ /^draft:/i)'
 
 
 #-----------------------------------------------------------------------------------------------------------------------

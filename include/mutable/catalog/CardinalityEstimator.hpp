@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <mutable/mutable-config.hpp>
 #include <mutable/util/ADT.hpp>
 #include <mutable/util/crtp.hpp>
 #include <nlohmann/json.hpp>
@@ -33,18 +34,18 @@ using Subproblem = SmallBitset;
  * limit of the tuples in the data set.  More sophisticated models may express statistical information, such as
  * correlation of attributes and frequency of individual values.
  */
-struct DataModel
+struct M_EXPORT DataModel
 {
     virtual ~DataModel() = 0;
 };
 
 
-struct estimate_join_all_tag : const_virtual_crtp_helper<estimate_join_all_tag>::
+struct M_EXPORT estimate_join_all_tag : const_virtual_crtp_helper<estimate_join_all_tag>::
     returns<std::unique_ptr<DataModel>>::
     crtp_args<const PlanTableSmallOrDense&, const PlanTableLargeAndSparse&>::
     args<const QueryGraph&, Subproblem, const cnf::CNF&> { };
 
-struct CardinalityEstimator : estimate_join_all_tag::base_type
+struct M_EXPORT CardinalityEstimator : estimate_join_all_tag::base_type
 {
     using estimate_join_all_tag::base_type::operator();
 
@@ -181,7 +182,7 @@ struct CardinalityEstimatorCRTP : CardinalityEstimator
 /**
  * DummyEstimator that always returns the size of the cartesian product of the given subproblems
  */
-struct CartesianProductEstimator : CardinalityEstimatorCRTP<CartesianProductEstimator>
+struct M_EXPORT CartesianProductEstimator : CardinalityEstimatorCRTP<CartesianProductEstimator>
 {
     struct CartesianProductDataModel : DataModel
     {
@@ -233,7 +234,7 @@ struct CartesianProductEstimator : CardinalityEstimatorCRTP<CartesianProductEsti
  * Table is initialized in the constructor by using an external json-file
  * If no entry is found, uses the DummyEstimator to return an estimate
  */
-struct InjectionCardinalityEstimator : CardinalityEstimatorCRTP<InjectionCardinalityEstimator>
+struct M_EXPORT InjectionCardinalityEstimator : CardinalityEstimatorCRTP<InjectionCardinalityEstimator>
 {
     using Subproblem = SmallBitset;
 

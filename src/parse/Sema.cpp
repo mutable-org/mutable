@@ -1,8 +1,8 @@
 #include "parse/Sema.hpp"
 
 #include "catalog/Schema.hpp"
-#include "globals.hpp"
 #include <cstdint>
+#include <mutable/Options.hpp>
 #include <sstream>
 #include <unordered_map>
 

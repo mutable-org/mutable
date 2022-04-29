@@ -28,6 +28,7 @@ void generate_primary_keys(ColumnStore &store, const Attribute &attr, const std:
  * of `values` were used exactly once, shuffles `values` again with `g` as URBG and repeats.  */
 template<typename T, typename Generator = std::mt19937_64>
 std::enable_if_t<std::is_arithmetic_v<T>, void>
+M_EXPORT
 fill_uniform(ColumnStore &store, const Attribute &attr, std::vector<T> values,
              const std::size_t begin, const std::size_t end, Generator &&g = Generator())
 {

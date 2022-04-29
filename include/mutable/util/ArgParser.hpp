@@ -14,7 +14,7 @@ namespace m {
 /** A parser for command line arguments.  Automates the parsing of command line arguments such as short options `-s`,
  * long options `--long`, and positional arguments.  Can print a nicely formatted help message with a synopsis and
  * explanations of all available options.  */
-class ArgParser
+class M_EXPORT ArgParser
 {
     /* Option for the ArgParser. */
     struct Option
@@ -37,9 +37,10 @@ class ArgParser
     template<typename T>
     struct OptionImpl : public Option
     {
-        OptionImpl(const char *shortName, const char *longName, const char* descr, std::function<void(T)> callback)
+        template<typename Callback>
+        OptionImpl(const char *shortName, const char *longName, const char* descr, Callback &&callback)
             : Option(shortName, longName, descr)
-            , callback(callback)
+            , callback(std::forward<Callback>(callback))
         { }
 
         void parse(const char **&argv) const override;
@@ -66,11 +67,11 @@ class ArgParser
      * @param descr a textual description of the option
      * @param callback a callback function that is invoked if the option is given
      */
-    template<typename T>
-    void add(const char *shortName, const char *longName, const char *descr, std::function<void(T)> callback) {
+    template<typename T, typename Callback>
+    void add(const char *shortName, const char *longName, const char *descr, Callback &&callback) {
         if (shortName) shortName = pool_(shortName);
         if (longName)  longName  = pool_(longName);
-        auto opt = new OptionImpl<T>(shortName, longName, descr, callback);
+        auto opt = new OptionImpl<T>(shortName, longName, descr, std::forward<Callback>(callback));
         opts_.push_back(opt);
 
         if (shortName) {

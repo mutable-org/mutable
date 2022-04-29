@@ -1,5 +1,3 @@
-#include "globals.hpp"
-#include "util/ArgParser.hpp"
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
@@ -10,6 +8,8 @@
 #include <memory>
 #include <mutable/IR/PlanTable.hpp>
 #include <mutable/mutable.hpp>
+#include <mutable/Options.hpp>
+#include <mutable/util/ArgParser.hpp>
 #include <mutable/util/fn.hpp>
 #include <random>
 #include <stdexcept>
@@ -89,8 +89,7 @@ int main(int argc, const char **argv)
 #define ADD(TYPE, VAR, INIT, SHORT, LONG, DESCR, CALLBACK)\
     VAR = INIT;\
     {\
-        std::function<void(TYPE)> callback = CALLBACK;\
-        AP.add(SHORT, LONG, DESCR, callback);\
+        AP.add<TYPE>(SHORT, LONG, DESCR, CALLBACK);\
     }
     /*----- Help message ---------------------------------------------------------------------------------------------*/
     ADD(bool, args.show_help, false,                                        /* Type, Var, Init  */

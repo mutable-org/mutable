@@ -1,12 +1,12 @@
 #include <mutable/catalog/CardinalityEstimator.hpp>
 
-#include "globals.hpp"
 #include <algorithm>
 #include <cstring>
 #include <mutable/IR/CNF.hpp>
 #include <mutable/IR/Operator.hpp>
 #include <mutable/IR/PlanTable.hpp>
 #include <mutable/IR/QueryGraph.hpp>
+#include <mutable/Options.hpp>
 #include <mutable/util/Diagnostic.hpp>
 #include <nlohmann/json.hpp>
 

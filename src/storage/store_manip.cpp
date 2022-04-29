@@ -1,14 +1,14 @@
 #include "store_manip.hpp"
 
 #include "catalog/Schema.hpp"
-#include "globals.hpp"
-#include <mutable/util/fn.hpp>
 #include "storage/ColumnStore.hpp"
 #include "util/datagen.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <limits>
+#include <mutable/Options.hpp>
+#include <mutable/util/fn.hpp>
 #include <random>
 #include <unordered_set>
 

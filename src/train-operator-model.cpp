@@ -1,12 +1,12 @@
-#include <Eigen/LU>
-#include <iostream>
-#include <fstream>
-#include <util/ArgParser.hpp>
-#include "globals.hpp"
-#include <mutable/catalog/CostModel.hpp>
-#include <mutable/IR/Operator.hpp>
 #include "storage/store_manip.hpp"
 #include "util/GridSearch.hpp"
+#include <Eigen/LU>
+#include <fstream>
+#include <iostream>
+#include <mutable/catalog/CostModel.hpp>
+#include <mutable/IR/Operator.hpp>
+#include <mutable/Options.hpp>
+#include <mutable/util/ArgParser.hpp>
 
 
 using namespace m;
@@ -179,8 +179,7 @@ int main(int argc, const char **argv)
 #define ADD(TYPE, VAR, INIT, SHORT, LONG, DESCR, CALLBACK)\
     VAR = INIT;\
     {\
-        std::function<void(TYPE)> callback = CALLBACK;\
-        AP.add(SHORT, LONG, DESCR, callback);\
+        AP.add<TYPE>(SHORT, LONG, DESCR, CALLBACK);\
     }
     ADD(bool, args.show_help, false,                                                /* Type, Var, Init  */
         "-h", "--help",                                                             /* Short, Long      */
@@ -265,17 +264,16 @@ int main(int argc, const char **argv)
         "specify the execution backend",                                            /* Description      */
         /* Callback         */
         [&](const char *str) {
-            if (Backend::STR_TO_KIND.find(str) == Backend::STR_TO_KIND.end()) {
+            try {
+                Catalog::Get().default_backend(str);
+                args.backend = str;
+            } catch (std::invalid_argument) {
                 std::cerr << "There is no execution backend with the name \"" << str << "\"." << std::endl;
                 AP.print_args(stderr);
                 std::exit(EXIT_FAILURE);
             }
-            args.backend = str;
         }
     );
-
-
-#if M_WITH_V8
     ADD(int, Options::Get().wasm_optimization_level, 0,                             /* Type, Var, Init  */
         "-O", "--wasm-opt",                                                         /* Short, Long      */
         "set the optimization level for Wasm modules (0, 1, or 2)",                 /* Description      */
@@ -284,7 +282,6 @@ int main(int argc, const char **argv)
         nullptr, "--CDT",                                                           /* Short, Long      */
         "specify the port for debugging via ChomeDevTools",                         /* Description      */
         [&](int port) { Options::Get().cdt_port = port; });                         /* Callback         */
-#endif
 #undef ADD
     AP.parse_args(argc, argv);
 
@@ -301,15 +298,11 @@ int main(int argc, const char **argv)
         std::exit(EXIT_FAILURE);
     }
 
-    Catalog::Get().backend(Backend::Create(args.backend));
-
-#if M_WITH_V8
     if (not (Options::Get().wasm_optimization_level >= 0 and Options::Get().wasm_optimization_level <= 2)) {
         std::cerr << "level " << Options::Get().wasm_optimization_level << " is not a valid Wasm optimization level"
                   << std::endl;
         std::exit(EXIT_FAILURE);
     }
-#endif
 
     if (args.gen_filter_model) {
         std::cout << "Measurement data will be written to '" << args.gen_filter_model << "'.\n";

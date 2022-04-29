@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutable/mutable-config.hpp>
 #include <mutable/catalog/Schema.hpp>
 #include <mutable/IR/CNF.hpp>
 #include <mutable/IR/QueryGraph.hpp>
@@ -22,7 +23,7 @@ struct Tuple;
 
 /** This class provides additional information about an `Operator`, e.g. the tables processed by this operator or the
  * estimated cardinality of its result set. */
-struct OperatorInformation
+struct M_EXPORT OperatorInformation
 {
     ///> the subproblem processed by this `Operator`'s subplan
     QueryGraph::Subproblem subproblem;
@@ -32,14 +33,14 @@ struct OperatorInformation
 };
 
 /** This interface allows for attaching arbitrary data to `Operator` instances. */
-struct OperatorData
+struct M_EXPORT OperatorData
 {
     virtual ~OperatorData() = 0;
 };
 
 /** An `Operator` represents an operation in a *query plan*.  A plan is a tree structure of `Operator`s.  `Operator`s
  * can be evaluated to a sequence of tuples and have a `Schema`. */
-struct Operator
+struct M_EXPORT Operator
 {
     private:
     Schema schema_; ///< the schema of this `Operator`
@@ -87,7 +88,7 @@ struct Operator
 struct Consumer;
 
 /** A `Producer` is an `Operator` that can be evaluated to a sequence of tuples. */
-struct Producer : virtual Operator
+struct M_EXPORT Producer : virtual Operator
 {
     private:
     Consumer *parent_; ///< the parent of this `Producer`
@@ -102,7 +103,7 @@ struct Producer : virtual Operator
 };
 
 /** A `Consumer` is an `Operator` that can be evaluated on a sequence of tuples. */
-struct Consumer : virtual Operator
+struct M_EXPORT Consumer : virtual Operator
 {
     private:
     std::vector<Producer*> children_; ///< the children of this `Consumer`
@@ -154,7 +155,7 @@ struct Consumer : virtual Operator
     std::vector<Producer*> & children() { return children_; }
 };
 
-struct CallbackOperator : Consumer
+struct M_EXPORT CallbackOperator : Consumer
 {
     using callback_type = std::function<void(const Schema &, const Tuple&)>;
 
@@ -171,7 +172,7 @@ struct CallbackOperator : Consumer
 };
 
 /** Prints the produced `Tuple`s to a `std::ostream` instance. */
-struct PrintOperator : Consumer
+struct M_EXPORT PrintOperator : Consumer
 {
     std::ostream &out;
 
@@ -182,7 +183,7 @@ struct PrintOperator : Consumer
 };
 
 /** Drops the produced results and outputs only the number of result tuples produced.  This is used for benchmarking. */
-struct NoOpOperator : Consumer
+struct M_EXPORT NoOpOperator : Consumer
 {
     std::ostream &out;
 
@@ -192,7 +193,7 @@ struct NoOpOperator : Consumer
     void accept(ConstOperatorVisitor &v) const override;
 };
 
-struct ScanOperator : Producer
+struct M_EXPORT ScanOperator : Producer
 {
     private:
     const Store &store_;
@@ -215,7 +216,7 @@ struct ScanOperator : Producer
     void accept(ConstOperatorVisitor &v) const override;
 };
 
-struct FilterOperator : Producer, Consumer
+struct M_EXPORT FilterOperator : Producer, Consumer
 {
     private:
     cnf::CNF filter_;
@@ -234,7 +235,7 @@ struct FilterOperator : Producer, Consumer
     void accept(ConstOperatorVisitor &v) const override;
 };
 
-struct JoinOperator : Producer, Consumer
+struct M_EXPORT JoinOperator : Producer, Consumer
 {
 #define algorithm(X) \
     X(J_Undefined) \
@@ -262,7 +263,7 @@ struct JoinOperator : Producer, Consumer
 #undef algorithm
 };
 
-struct ProjectionOperator : Producer, Consumer
+struct M_EXPORT ProjectionOperator : Producer, Consumer
 {
     using projection_type = std::pair<const Expr*, const char*>; // a named expression
 
@@ -289,7 +290,7 @@ struct ProjectionOperator : Producer, Consumer
     void accept(ConstOperatorVisitor &v) const override;
 };
 
-struct LimitOperator : Producer, Consumer
+struct M_EXPORT LimitOperator : Producer, Consumer
 {
     /* This class is used to unwind the stack when the limit of produced tuples is reached. */
     struct stack_unwind : std::exception { };
@@ -311,7 +312,7 @@ struct LimitOperator : Producer, Consumer
     void accept(ConstOperatorVisitor &v) const override;
 };
 
-struct GroupingOperator : Producer, Consumer
+struct M_EXPORT GroupingOperator : Producer, Consumer
 {
 #define algorithm(X) \
     X(G_Undefined) \
@@ -359,7 +360,7 @@ struct GroupingOperator : Producer, Consumer
 #undef algorithm
 };
 
-struct AggregationOperator : Producer, Consumer
+struct M_EXPORT AggregationOperator : Producer, Consumer
 {
     private:
     std::vector<const Expr*> aggregates_; ///< the aggregates to compute
@@ -391,7 +392,7 @@ struct AggregationOperator : Producer, Consumer
     void accept(ConstOperatorVisitor &v) const override;
 };
 
-struct SortingOperator : Producer, Consumer
+struct M_EXPORT SortingOperator : Producer, Consumer
 {
     /** A list of expressions to sort by.  True means ascending, false means descending. */
     using order_type = std::pair<const Expr*, bool>;

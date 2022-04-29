@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <mutable/mutable-config.hpp>
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/IR/QueryGraph.hpp>
 #include <mutable/util/crtp.hpp>
@@ -17,7 +18,7 @@ struct enumerate_tag : const_virtual_crtp_helper<enumerate_tag>::
     args<const QueryGraph&, const CostFunction&> { };
 
 /** An interface for all plan enumerators. */
-struct PlanEnumerator : enumerate_tag::base_type
+struct M_EXPORT PlanEnumerator : enumerate_tag::base_type
 {
     using Subproblem = QueryGraph::Subproblem;
     using enumerate_tag::base_type::operator();
@@ -33,9 +34,9 @@ struct PlanEnumerator : enumerate_tag::base_type
     virtual ~PlanEnumerator() { }
 
     /** Create a `PlanEnumerator` instance given the kind of plan enumerator. */
-    static std::unique_ptr<PlanEnumerator> Create(kind_t kind);
+    static std::unique_ptr<PlanEnumerator> M_EXPORT Create(kind_t kind);
     /** Create a `PlanEnumerator` instance given the name of a plan enumerator. */
-    static std::unique_ptr<PlanEnumerator> Create(const char *kind) { return Create(STR_TO_KIND.at(kind)); }
+    static std::unique_ptr<PlanEnumerator> M_EXPORT Create(const char *kind) { return Create(STR_TO_KIND.at(kind)); }
 
 #define M_PLAN_ENUMERATOR(NAME, _) \
     static std::unique_ptr<PlanEnumerator> Create ## NAME();

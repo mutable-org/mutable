@@ -1,9 +1,9 @@
 #include <mutable/IR/Optimizer.hpp>
 
-#include "globals.hpp"
 #include <algorithm>
 #include <mutable/IR/Operator.hpp>
 #include <mutable/IR/Operator.hpp>
+#include <mutable/Options.hpp>
 #include <mutable/storage/Store.hpp>
 #include <mutable/storage/Store.hpp>
 #include <vector>

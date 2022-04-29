@@ -9,10 +9,15 @@ namespace m {
 
 struct StringPool
 {
+    private:
+    using table_t = std::unordered_set<const char*, StrHash, StrEqual>;
+    table_t table_;
+
+    public:
     StringPool(std::size_t n = 1024) : table_(n) { }
 
     ~StringPool() {
-        for (auto elem : table_)
+        for (const char *elem : table_)
             free((void*) elem);
     }
 
@@ -29,10 +34,6 @@ struct StringPool
         }
         return *it;
     }
-
-    private:
-    using table_t = std::unordered_set<const char *, StrHash, StrEqual>;
-    table_t table_;
 };
 
 }

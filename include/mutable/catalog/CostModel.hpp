@@ -2,6 +2,7 @@
 
 #include <Eigen/Core>
 #include <Eigen/LU>
+#include <mutable/mutable-config.hpp>
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/IR/Operator.hpp>
 #include <mutable/IR/PlanTable.hpp>
@@ -14,7 +15,7 @@ namespace m {
 /* We use LinearModel to express our learned cost models. */
 using CostModel = LinearModel;
 
-struct CostModelFactory
+struct M_EXPORT CostModelFactory
 {
     /** Generates a cost model for the filter operator.
      * @tparam T the type the filter has to process

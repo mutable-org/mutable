@@ -1,22 +1,23 @@
 #include "catalog/Schema.hpp"
 
-#include <algorithm>
-#include "globals.hpp"
-#include <mutable/catalog/CardinalityEstimator.hpp>
-#include <mutable/catalog/CostFunction.hpp>
-#include <mutable/catalog/SimpleCostFunction.hpp>
-#include <mutable/IR/PlanTable.hpp>
-#include <mutable/util/fn.hpp>
+#include "backend/Interpreter.hpp"
 #include "storage/ColumnStore.hpp"
 #include "storage/PaxStore.hpp"
 #include "storage/RowStore.hpp"
 #include <algorithm>
+#include <algorithm>
 #include <cmath>
 #include <iterator>
 #include <mutable/catalog/CardinalityEstimator.hpp>
+#include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/CostFunction.hpp>
+#include <mutable/catalog/CostFunction.hpp>
+#include <mutable/catalog/SimpleCostFunction.hpp>
 #include <mutable/IR/Operator.hpp>
 #include <mutable/IR/PlanTable.hpp>
+#include <mutable/IR/PlanTable.hpp>
+#include <mutable/Options.hpp>
+#include <mutable/util/fn.hpp>
 #include <stdexcept>
 
 
@@ -130,13 +131,15 @@ const Function * Database::get_function(const char *name) const
  * Catalog
  *====================================================================================================================*/
 
+Catalog * Catalog::the_catalog_(nullptr);
+
 Catalog::Catalog()
     : allocator_(new memory::LinearAllocator())
-    , backend_(Backend::CreateInterpreter())
     /* Initialize dummy cost function. */
     , cost_function_(std::make_unique<SimpleCostFunction>())
+    , default_backend_(backends_.end())
 {
-    /* Initialize standard functions. */
+    /*----- Initialize standard functions. ---------------------------------------------------------------------------*/
 #define M_FUNCTION(NAME, KIND) { \
     auto name = pool(#NAME); \
     auto res = standard_functions_.emplace(name, new Function(name, Function::FN_ ## NAME, Function::KIND)); \
@@ -145,7 +148,7 @@ Catalog::Catalog()
 #include <mutable/tables/Functions.tbl>
 #undef M_FUNCTION
 
-    /* Initialize stores. */
+    /*----- Initialize stores. ---------------------------------------------------------------------------------------*/
 #define M_STORE(NAME, _) { \
     auto name = pool(#NAME); \
     auto res = store_factories_.emplace(name, new ConcreteStoreFactory<NAME>()); \
@@ -156,7 +159,7 @@ Catalog::Catalog()
     M_insist(store_factories_.size() != 0);
     default_store(store_factories_.begin()->first); // set default store
 
-    /* Initialize cardinality estimators. */
+    /*----- Initialize cardinality estimators. -----------------------------------------------------------------------*/
 #define M_CARDINALITY_ESTIMATOR(NAME, _) { \
     auto name = pool(#NAME); \
     auto res = cardinality_estimator_factories_.emplace(name, new ConcreteCardinalityEstimatorFactory<NAME>()); \
@@ -166,6 +169,16 @@ Catalog::Catalog()
 #undef M_CARDINALITY_ESTIMATOR
     M_insist(cardinality_estimator_factories_.size() != 0);
     default_cardinality_estimator(cardinality_estimator_factories_.begin()->first); // set default cardinality estimator
+
+    /*----- Initialize backends. -------------------------------------------------------------------------------------*/
+#define M_BACKEND(NAME, _) { \
+    auto name = pool(#NAME); \
+    auto res = backends_.emplace(name, std::make_unique<NAME>()); \
+}
+#include <mutable/tables/Backend.tbl>
+#undef M_BACKEND
+    M_insist(backends_.size() != 0);
+    default_backend(backends_.begin()->first);
 }
 
 
@@ -177,7 +190,19 @@ Catalog::~Catalog()
         delete fn.second;
 }
 
-Catalog Catalog::the_catalog_;
+__attribute__((constructor(200)))
+Catalog & Catalog::Get()
+{
+    if (not the_catalog_)
+        the_catalog_ = new Catalog();
+    return *the_catalog_;
+}
+
+__attribute__((destructor(200)))
+void destroy_catalog()
+{
+    Catalog::Clear();
+}
 
 Database & Catalog::add_database(const char *name)
 {

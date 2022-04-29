@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <mutable/mutable-config.hpp>
 #include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/IR/Operator.hpp>
@@ -24,7 +25,7 @@ namespace m {
 
 using Subproblem = SmallBitset;
 
-struct PlanTableEntry
+struct M_EXPORT PlanTableEntry
 {
     Subproblem left; ///< the left subproblem
     Subproblem right; ///< the right subproblem
@@ -54,7 +55,7 @@ struct SubproblemHash
 };
 
 template<typename Actual>
-struct PlanTableBase : crtp<Actual, PlanTableBase>
+struct M_EXPORT PlanTableBase : crtp<Actual, PlanTableBase>
 {
     using crtp<Actual, PlanTableBase>::actual;
     using size_type = std::size_t;
@@ -132,7 +133,7 @@ struct PlanTableBase : crtp<Actual, PlanTableBase>
     void reset_costs() { actual().reset_costs(); }
 
 M_LCOV_EXCL_START
-    friend std::ostream & operator<<(std::ostream &out, const PlanTableBase &PT);
+    friend std::ostream & M_EXPORT operator<<(std::ostream &out, const PlanTableBase &PT);
 
     friend std::string to_string(const PlanTableBase &PT) {
         std::ostringstream oss;
@@ -148,7 +149,7 @@ M_LCOV_EXCL_STOP
 /** This table represents all explored plans with their sub-plans, estimated size, cost, and further optional
  * properties.  The `PlanTableSmallOrDense` is optimized for "small" queries, i.e. queries of few relations and/or a
  * dense query graph. */
-struct PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
+struct M_EXPORT PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
 {
     using allocator_type = malloc_allocator;
 
@@ -228,7 +229,7 @@ struct PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
         }
     }
 
-    friend std::ostream & operator<<(std::ostream &out, const PlanTableSmallOrDense &PT);
+    friend std::ostream & M_EXPORT operator<<(std::ostream &out, const PlanTableSmallOrDense &PT);
 
     void dump(std::ostream &out) const;
     void dump() const;
@@ -237,7 +238,7 @@ struct PlanTableSmallOrDense : PlanTableBase<PlanTableSmallOrDense>
 /** This table represents all explored plans with their sub-plans, estimated size, cost, and further optional
  * properties.  The `PlanTableLargeAndSparse` is optimized for "large" queries, i.e. queries of many relations or with a
  * sparse query graph. */
-struct PlanTableLargeAndSparse : PlanTableBase<PlanTableLargeAndSparse>
+struct M_EXPORT PlanTableLargeAndSparse : PlanTableBase<PlanTableLargeAndSparse>
 {
     private:
     ///> the number of `DataSource`s in the query
@@ -303,7 +304,7 @@ struct PlanTableLargeAndSparse : PlanTableBase<PlanTableLargeAndSparse>
 
     void reset_costs() { table_.clear(); }
 
-    friend std::ostream & operator<<(std::ostream &out, const PlanTableLargeAndSparse &PT);
+    friend std::ostream & M_EXPORT operator<<(std::ostream &out, const PlanTableLargeAndSparse &PT);
 
     void dump(std::ostream &out) const;
     void dump() const;

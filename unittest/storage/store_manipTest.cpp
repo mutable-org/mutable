@@ -51,10 +51,11 @@ Table & create_table()
 
 TEST_CASE("Null Bitmap Manipulation", "[core][storage][store_manip]")
 {
+    auto &table = create_table();
+    auto &store = as<ColumnStore>(table.store());
+
     SECTION("set_null_bitmap")
     {
-        auto &table = create_table();
-        auto &store = as<ColumnStore>(table.store());
         const std::size_t num_attrs = table.size();
         for (unsigned i = 0; i != NUM_ROWS; ++i) store.append();
 
@@ -89,8 +90,6 @@ TEST_CASE("Null Bitmap Manipulation", "[core][storage][store_manip]")
 
     SECTION("set_all_null & set_all_not_null")
     {
-        auto &table = create_table();
-        auto &store = as<ColumnStore>(table.store());
         const std::size_t num_attrs = table.size();
         for (unsigned i = 0; i != NUM_ROWS; ++i) store.append();
 
@@ -133,10 +132,11 @@ TEST_CASE("Null Bitmap Manipulation", "[core][storage][store_manip]")
 
 TEST_CASE("Store Data Manipulation", "[core][storage][store_manip]")
 {
+    auto &table = create_table();
+    auto &store = as<ColumnStore>(table.store());
+
     SECTION("generate_primary_keys") {
         auto &C = Catalog::Get();
-        auto &table = create_table();
-        auto &store = as<ColumnStore>(table.store());
         for (unsigned i = 0; i != NUM_ROWS; ++i) store.append();
 
         auto &attr_i32 = table.at(C.pool("i4"));
@@ -165,12 +165,10 @@ TEST_CASE("Store Data Manipulation", "[core][storage][store_manip]")
     SECTION("fill_uniform")
     {
         auto &C = Catalog::Get();
-        auto &table = create_table();
-        auto &store = as<ColumnStore>(table.store());
         for (unsigned i = 0; i != NUM_ROWS; ++i) store.append();
 
         auto &attr = table.at(C.pool("i4"));
-        uint32_t *attr_col = store.memory(attr.id).as<uint32_t *>();
+        uint32_t *attr_col = store.memory(attr.id).as<uint32_t*>();
         std::vector<uint32_t> values{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
         std::array<uint32_t, 10> num_values{};
 
@@ -188,8 +186,6 @@ TEST_CASE("Store Data Manipulation", "[core][storage][store_manip]")
     SECTION("generate_column_data")
     {
         auto &C = Catalog::Get();
-        auto &table = create_table();
-        auto &store = as<ColumnStore>(table.store());
         for (unsigned i = 0; i != NUM_ROWS; ++i) store.append();
 
         SECTION("special case: attr == id")

@@ -1,7 +1,6 @@
 #include "catch2/catch.hpp"
 
 #include "lex/Lexer.hpp"
-#include "lex/Lexer.cpp"
 #include "testutil.hpp"
 
 using namespace m;

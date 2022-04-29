@@ -41,16 +41,16 @@ namespace m {
  *
  * @return `true` on initialization success, `false` otherwise
  */
-bool init(void);
+bool M_EXPORT init(void);
 
 /** Use lexer, parser, and semantic analysis to create a `Stmt` from `str`. */
-std::unique_ptr<Stmt> statement_from_string(Diagnostic &diag, const std::string &str);
+std::unique_ptr<Stmt> M_EXPORT statement_from_string(Diagnostic &diag, const std::string &str);
 
 /** Optimizes and executes the given `Stmt`. */
-void execute_statement(Diagnostic &diag, const Stmt &stmt);
+void M_EXPORT execute_statement(Diagnostic &diag, const Stmt &stmt);
 
 /** Optimizes and executes the given `SelectStmt`.  Result tuples are passed to the given `consumer`. */
-void execute_query(Diagnostic &diag, const SelectStmt &stmt, std::unique_ptr<Consumer> consumer);
+void M_EXPORT execute_query(Diagnostic &diag, const SelectStmt &stmt, std::unique_ptr<Consumer> consumer);
 
 /**
  * Loads a CSV file into a `Table`.
@@ -62,12 +62,12 @@ void execute_query(Diagnostic &diag, const SelectStmt &stmt, std::unique_ptr<Con
  * @param has_header    whether the CSV file contains a header
  * @param skip_header   whether to ignore the header
  */
-void load_from_CSV(Diagnostic &diag,
-                   Table &table,
-                   const std::filesystem::path &path,
-                   std::size_t num_rows = std::numeric_limits<std::size_t>::max(),
-                   bool has_header = false,
-                   bool skip_header = false);
+void M_EXPORT load_from_CSV(Diagnostic &diag,
+                            Table &table,
+                            const std::filesystem::path &path,
+                            std::size_t num_rows = std::numeric_limits<std::size_t>::max(),
+                            bool has_header = false,
+                            bool skip_header = false);
 
 /**
  * Execute the SQL file at `path`.
@@ -75,10 +75,10 @@ void load_from_CSV(Diagnostic &diag,
  * @param diag  the diagnostic object
  * @param path  the path to the SQL file
  */
-void execute_file(Diagnostic &diag, const std::filesystem::path &path);
+void M_EXPORT execute_file(Diagnostic &diag, const std::filesystem::path &path);
 
 /** This class provides direct write access to the contents of a `Store`.  */
-struct StoreWriter
+struct M_EXPORT StoreWriter
 {
     private:
     Store &store_; ///< the store to access

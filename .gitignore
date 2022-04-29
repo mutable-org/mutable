@@ -8,3 +8,6 @@ catch.xml
 
 # Git version information
 include/mutable/gitversion.tbl
+
+# cmake export macros
+include/mutable/mutable-config.hpp

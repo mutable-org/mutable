@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutable/mutable-config.hpp>
 #include <mutable/util/exception.hpp>
 #include <mutable/util/macro.hpp>
 #include <algorithm>
@@ -37,7 +38,7 @@ inline std::string replace_all(std::string str, const std::string &from, const s
 }
 
 /** Computes the FNV-1a 64-bit hash of a cstring. */
-struct StrHash
+struct M_EXPORT StrHash
 {
     uint64_t operator()(const char *c_str) const {
         /* FNV-1a 64 bit */
@@ -64,13 +65,13 @@ struct StrHash
 };
 
 /** Compares two cstrings for equality. */
-struct StrEqual
+struct M_EXPORT StrEqual
 {
     bool operator()(const char *first, const char *second) const { return streq(first, second); }
 };
 
 /** Compares two cstrings for equality.  Allows `nullptr`. */
-struct StrEqualWithNull
+struct M_EXPORT StrEqualWithNull
 {
     bool operator()(const char *first, const char *second) const {
         return first == second or (first != nullptr and second != nullptr and streq(first, second));
@@ -79,7 +80,7 @@ struct StrEqualWithNull
 
 /** Computes the XOR-hash for a pair. */
 template<typename T1, typename T2, typename H1 = std::hash<T1>, typename H2 = std::hash<T2>>
-struct PairHash
+struct M_EXPORT PairHash
 {
     uint64_t operator()(const std::pair<T1, T2> &p) const {
         H1 h1;
@@ -90,6 +91,7 @@ struct PairHash
 
 template<typename T>
 typename std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T>, bool>
+M_EXPORT
 is_pow_2(T n)
 {
     return n ? (n & (n - T(1))) == T(0) : false;
@@ -97,6 +99,7 @@ is_pow_2(T n)
 
 template<typename T>
 typename std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T> and sizeof(T) <= sizeof(unsigned long long), T>
+M_EXPORT
 ceil_to_pow_2(T n)
 {
     if (n <= 1) return 1;
@@ -121,6 +124,7 @@ ceil_to_pow_2(T n)
 }
 template<typename T>
 typename std::enable_if<std::is_floating_point<T>::value, T>::type
+M_EXPORT
 ceil_to_pow_2(T f)
 {
     return ceil_to_pow_2((unsigned long) std::ceil(f));
@@ -129,6 +133,7 @@ ceil_to_pow_2(T f)
 /** Ceils number `n` to the next whole multiple of `power_of_two`.  `power_of_two` must be a power of 2. */
 template<typename T>
 typename std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T>, T>
+M_EXPORT
 ceil_to_multiple_of_pow_2(T n, T power_of_two)
 {
     M_insist(is_pow_2(power_of_two));
@@ -139,6 +144,7 @@ ceil_to_multiple_of_pow_2(T n, T power_of_two)
 
 template<typename T>
 typename std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T>, T>
+M_EXPORT
 round_up_to_multiple(T val, T factor)
 {
     if (val == 0) return val;
@@ -151,6 +157,7 @@ round_up_to_multiple(T val, T factor)
 
 template<typename T>
 typename std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T> and sizeof(T) <= sizeof(unsigned long long), T>
+M_EXPORT
 log2_floor(T n)
 {
     if constexpr (sizeof(T) <= sizeof(unsigned)) {
@@ -166,6 +173,7 @@ log2_floor(T n)
 
 template<typename T>
 typename std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T> and sizeof(T) <= sizeof(unsigned long long), T>
+M_EXPORT
 log2_ceil(T n)
 {
     return n <= 1 ? 0 : log2_floor(n - T(1)) + T(1);
@@ -173,20 +181,20 @@ log2_ceil(T n)
 
 /** Short version of dynamic_cast that works for pointers and references. */
 template<typename T, typename U>
-T * cast(U *u) { return dynamic_cast<T*>(u); }
+T * M_EXPORT cast(U *u) { return dynamic_cast<T*>(u); }
 
 /** Short version of static_cast that works for pointers and references.  In debug build, check that the cast is legit.
  */
 template<typename T, typename U>
-T * as(U *u) { M_insist(cast<T>(u)); return static_cast<T*>(u); }
+T * M_EXPORT as(U *u) { M_insist(cast<T>(u)); return static_cast<T*>(u); }
 template<typename T, typename U>
-T & as(U &u) { return *as<T>(&u); }
+T & M_EXPORT as(U &u) { return *as<T>(&u); }
 
 /** Simple test whether expression u is of type T.  Works with pointers and references. */
 template<typename T, typename U>
-bool is(U *u) { return cast<T>(u) != nullptr; }
+bool M_EXPORT is(U *u) { return cast<T>(u) != nullptr; }
 template<typename T, typename U>
-bool is(U &u) { return is<T>(&u); }
+bool M_EXPORT is(U &u) { return is<T>(&u); }
 
 inline std::string escape(char c)
 {
@@ -198,9 +206,9 @@ inline std::string escape(char c)
     }
 }
 
-std::string escape(const std::string &str, char esc = '\\', char quote = '"');
+std::string M_EXPORT escape(const std::string &str, char esc = '\\', char quote = '"');
 
-std::string unescape(const std::string &str, char esc = '\\', char quote = '"');
+std::string M_EXPORT unescape(const std::string &str, char esc = '\\', char quote = '"');
 
 inline std::string quote(const std::string &str) { return std::string("\"") + str + '"'; }
 
@@ -221,7 +229,7 @@ inline std::string interpret(const std::string &str, char esc = '\\', char quote
 }
 
 /** Escapes special characters in a string to be printable in HTML documents.  Primarily used for DOT. */
-std::string html_escape(std::string str);
+std::string M_EXPORT html_escape(std::string str);
 
 /** Transforms a SQL-style LIKE pattern into a std::regex. */
 inline std::regex pattern_to_regex(const char *pattern, const bool optimize = false, const char escape_char = '\\')
@@ -275,11 +283,11 @@ inline std::regex pattern_to_regex(const char *pattern, const bool optimize = fa
 }
 
 /** Compares a SQL-style LIKE pattern with the given `std::string`. */
-bool like(const std::string &str, const std::string &pattern, const char escape_char = '\\');
+bool M_EXPORT like(const std::string &str, const std::string &pattern, const char escape_char = '\\');
 
 /** Checks whether haystack contains needle. */
 template<typename H, typename N>
-bool contains(const H &haystack, const N &needle)
+bool M_EXPORT contains(const H &haystack, const N &needle)
 {
     using std::find, std::begin, std::end;
     return find(begin(haystack), end(haystack), needle) != end(haystack);
@@ -287,7 +295,7 @@ bool contains(const H &haystack, const N &needle)
 
 /** Checks whether first and second are equal considering permutations. */
 template<typename T, typename U>
-bool equal(const T &first, const U &second)
+bool M_EXPORT equal(const T &first, const U &second)
 {
     for (auto t : first) {
         if (not contains(second, t))
@@ -302,7 +310,7 @@ bool equal(const T &first, const U &second)
 
 /** Checks whether `subset` is a subset of `set`. */
 template<typename Container, typename Set>
-bool subset(const Container &subset, const Set &set)
+bool M_EXPORT subset(const Container &subset, const Set &set)
 {
     for (auto t : subset) {
         if (set.count(t) == 0)
@@ -313,7 +321,7 @@ bool subset(const Container &subset, const Set &set)
 
 /** Checks whether `first` and `second` intersect. */
 template<typename Container, typename Set>
-bool intersect(const Container &first, const Set &second)
+bool M_EXPORT intersect(const Container &first, const Set &second)
 {
     for (auto t : first) {
         if (second.count(t))
@@ -324,7 +332,7 @@ bool intersect(const Container &first, const Set &second)
 
 /** Power function for integral types. */
 template<typename T, typename U>
-auto powi(const T base, const U exp) ->
+auto M_EXPORT powi(const T base, const U exp) ->
 std::enable_if_t< std::is_integral_v<T> and std::is_integral_v<U>, std::common_type_t<T, U> >
 {
     if (exp == 0)
@@ -338,20 +346,20 @@ std::enable_if_t< std::is_integral_v<T> and std::is_integral_v<U>, std::common_t
 }
 
 template<typename T>
-void setbit(T *bytes, bool value, uint32_t n)
+void M_EXPORT setbit(T *bytes, bool value, uint32_t n)
 {
     *bytes ^= (-T(value) ^ *bytes) & (T(1) << n); // set n-th bit to `value`
 }
 
 template<typename T, typename... Args>
-std::ostream & operator<<(std::ostream &out, const std::variant<T, Args...> value)
+std::ostream & M_EXPORT operator<<(std::ostream &out, const std::variant<T, Args...> value)
 {
     std::visit([&](auto &&arg) { out << arg; }, value);
     return out;
 }
 
 /* Helper type to define visitors of std::variant */
-template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
+template<class... Ts> struct M_EXPORT overloaded : Ts... { using Ts::operator()...; };
 template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
 /** This function implements the 64-bit finalizer of Murmur3_x64 by Austin Appleby, available at
@@ -372,7 +380,7 @@ inline uint64_t murmur3_64(uint64_t v)
     return v;
 }
 
-struct put_tm
+struct M_EXPORT put_tm
 {
     private:
     std::tm tm_;
@@ -401,7 +409,7 @@ struct put_tm
     }
 };
 
-struct get_tm
+struct M_EXPORT get_tm
 {
     private:
     std::tm &tm_;
@@ -429,7 +437,7 @@ struct get_tm
 };
 
 template<typename Clock, typename Duration>
-struct put_timepoint
+struct M_EXPORT put_timepoint
 {
     private:
     std::chrono::time_point<Clock, Duration> tp_;
@@ -473,7 +481,7 @@ struct put_timepoint
 template <typename T, typename... Args> struct Concat;
 
 template <typename... Args0, typename... Args1>
-struct Concat<std::variant<Args0...>, Args1...> {
+struct M_EXPORT Concat<std::variant<Args0...>, Args1...> {
     using type = std::variant<Args0..., Args1...>;
 };
 
@@ -525,11 +533,11 @@ inline bool isspace(const char *s, std::size_t len)
 
 inline bool isspace(const char *s) { return isspace(s, strlen(s)); }
 
-void exec(const char *executable, std::initializer_list<const char*> args);
+void M_EXPORT exec(const char *executable, std::initializer_list<const char*> args);
 
 /*--- Add without overflow; clamp at max value. ----------------------------------------------------------------------*/
 template<typename T, typename U>
-auto add_wo_overflow(T left, U right)
+auto M_EXPORT add_wo_overflow(T left, U right)
 {
     static_assert(std::is_integral_v<T>, "LHS must be an integral type");
     static_assert(std::is_integral_v<U>, "RHS must be an integral type");
@@ -545,7 +553,7 @@ auto add_wo_overflow(T left, U right)
 }
 
 template<typename N0, typename N1>
-auto sum_wo_overflow(N0 n0, N1 n1)
+auto M_EXPORT sum_wo_overflow(N0 n0, N1 n1)
 {
     return add_wo_overflow(n0, n1);
 }
@@ -553,14 +561,14 @@ auto sum_wo_overflow(N0 n0, N1 n1)
 /** Returns the sum of the given parameters. In case the addition overflows, the maximal numeric value for the common
  * type is returned.*/
 template<typename N0, typename N1, typename... Numbers>
-auto sum_wo_overflow(N0 n0, N1 n1, Numbers... numbers)
+auto M_EXPORT sum_wo_overflow(N0 n0, N1 n1, Numbers... numbers)
 {
     return sum_wo_overflow(add_wo_overflow(n0, n1), numbers...);
 }
 
 /*--- Multiply without overflow; clamp at max value. -----------------------------------------------------------------*/
 template<typename T, typename U>
-auto mul_wo_overflow(T left, U right)
+auto M_EXPORT mul_wo_overflow(T left, U right)
 {
     static_assert(std::is_integral_v<T>, "LHS must be an integral type");
     static_assert(std::is_integral_v<U>, "RHS must be an integral type");
@@ -576,7 +584,7 @@ auto mul_wo_overflow(T left, U right)
 }
 
 template<typename N0, typename N1>
-auto prod_wo_overflow(N0 n0, N1 n1)
+auto M_EXPORT prod_wo_overflow(N0 n0, N1 n1)
 {
     return mul_wo_overflow(n0, n1);
 }
@@ -584,7 +592,7 @@ auto prod_wo_overflow(N0 n0, N1 n1)
 /** Returns the product of the given parameters. In case the multiplication overflows, the maximal numeric value for the
  * common type is returned.*/
 template<typename N0, typename N1, typename... Numbers>
-auto prod_wo_overflow(N0 n0, N1 n1, Numbers... numbers)
+auto M_EXPORT prod_wo_overflow(N0 n0, N1 n1, Numbers... numbers)
 {
     return prod_wo_overflow(prod_wo_overflow(n0, n1), numbers...);
 }
@@ -593,7 +601,7 @@ auto prod_wo_overflow(N0 n0, N1 n1, Numbers... numbers)
 inline const char * strdupn(const char *str) { return str ? strdup(str) : nullptr; }
 
 /** Returns the page size of the system. */
-std::size_t get_pagesize();
+std::size_t M_EXPORT get_pagesize();
 
 /** Returns `true` iff `n` is a integral multiple of the page size (in bytes). */
 inline std::size_t Is_Page_Aligned(std::size_t n) { return (n & (get_pagesize() - 1UL)) == 0; }
@@ -631,7 +639,7 @@ inline uint32_t sequence_number(float x)
 
 /** Checks whether the range `[a, b]` contains at least `n` distinct values. */
 template<typename T>
-constexpr bool is_range_wide_enough(T a, T b, std::size_t n)
+constexpr bool M_EXPORT is_range_wide_enough(T a, T b, std::size_t n)
 {
     using std::swap;
     if (a > b) swap(a, b);
@@ -666,6 +674,7 @@ constexpr bool is_range_wide_enough(T a, T b, std::size_t n)
  * https://en.wikipedia.org/wiki/Binomial_coefficient#In_programming_languages */
 template<typename T>
 std::enable_if_t<std::is_integral_v<T>, unsigned long long>
+M_EXPORT
 n_choose_k_approx(T n, T k)
 {
     return std::exp(std::lgamma(n + T(1)) - std::lgamma(k + T(1)) - std::lgamma(n - k + T(1)));

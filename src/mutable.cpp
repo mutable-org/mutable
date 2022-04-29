@@ -3,7 +3,6 @@
 #include "backend/Interpreter.hpp"
 #include "backend/StackMachine.hpp"
 #include "backend/WebAssembly.hpp"
-#include "globals.hpp"
 #include "io/Reader.hpp"
 #include "lex/Lexer.hpp"
 #include <mutable/IR/Tuple.hpp>
@@ -56,7 +55,7 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
         PrintOperator print(std::cout);
         print.add_child(optree.release());
 
-        auto &backend = C.backend();
+        auto &backend = C.default_backend();
         M_TIME_EXPR(backend.execute(print), "Execute the query", C.timer());
     } else if (auto I = cast<const InsertStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
@@ -156,7 +155,7 @@ void m::execute_query(Diagnostic&, const SelectStmt &stmt, std::unique_ptr<Consu
 
     consumer->add_child(optree.release());
 
-    auto &backend = C.backend();
+    auto &backend = C.default_backend();
     M_TIME_EXPR(backend.execute(*consumer), "Execute the query", C.timer());
 }
 

@@ -1,14 +1,14 @@
 #include "lex/Lexer.hpp"
-#include <mutable/util/Diagnostic.hpp>
-#include <mutable/util/fn.hpp>
 #include "parse/ASTPrinter.hpp"
 #include "parse/Parser.hpp"
-#include "util/ArgParser.hpp"
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <mutable/util/ArgParser.hpp>
+#include <mutable/util/Diagnostic.hpp>
+#include <mutable/util/fn.hpp>
 
 
 using namespace m;
@@ -28,8 +28,7 @@ int main(int argc, const char **argv)
 #define ADD(TYPE, VAR, INIT, SHORT, LONG, DESCR, CALLBACK)\
     TYPE VAR = INIT;\
     {\
-        std::function<void(TYPE)> callback = CALLBACK;\
-        AP.add(SHORT, LONG, DESCR, callback);\
+        AP.add<TYPE>(SHORT, LONG, DESCR, CALLBACK);\
     }
     ADD(bool, show_help, false,             /* Type, Var, Init  */
         "-h", "--help",                     /* Short, Long      */

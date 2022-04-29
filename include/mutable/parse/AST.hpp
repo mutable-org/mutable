@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <mutable/mutable-config.hpp>
 #include <mutable/catalog/Schema.hpp>
 #include <mutable/lex/Token.hpp>
 #include <variant>
@@ -34,7 +35,7 @@ struct Stmt;
 *====================================================================================================================*/
 
 /** An expression. */
-struct Expr
+struct M_EXPORT Expr
 {
     friend struct Sema;
     friend struct GetCorrelationInfo;
@@ -74,7 +75,7 @@ struct Expr
     /** Writes a Graphivz dot representation of this `Expr` to `out`.  Used to render ASTs with Graphivz. */
     void dot(std::ostream &out) const;
 
-    friend std::ostream & operator<<(std::ostream &out, const Expr &e);
+    friend std::ostream & M_EXPORT operator<<(std::ostream &out, const Expr &e);
 
 M_LCOV_EXCL_START
     friend std::string to_string(const Expr &e) {
@@ -89,7 +90,7 @@ M_LCOV_EXCL_STOP
 };
 
 /** The error expression.  Used when the parser encountered a syntactical error. */
-struct ErrorExpr : Expr
+struct M_EXPORT ErrorExpr : Expr
 {
     explicit ErrorExpr(Token tok) : Expr(tok) {}
 
@@ -103,7 +104,7 @@ struct ErrorExpr : Expr
 };
 
 /** A designator.  Identifies an attribute, optionally preceeded by a table name, a named expression, or a function. */
-struct Designator : Expr
+struct M_EXPORT Designator : Expr
 {
     friend struct Sema;
 
@@ -157,7 +158,7 @@ struct Designator : Expr
 };
 
 /** A constant: a string literal or a numeric constant. */
-struct Constant : Expr
+struct M_EXPORT Constant : Expr
 {
     Constant(Token tok) : Expr(tok) {}
 
@@ -189,13 +190,13 @@ struct Constant : Expr
 };
 
 /** A postfix expression. */
-struct PostfixExpr : Expr
+struct M_EXPORT PostfixExpr : Expr
 {
     PostfixExpr(Token tok) : Expr(tok) {}
 };
 
 /** A function application. */
-struct FnApplicationExpr : PostfixExpr
+struct M_EXPORT FnApplicationExpr : PostfixExpr
 {
     friend struct Sema;
 
@@ -225,7 +226,7 @@ struct FnApplicationExpr : PostfixExpr
 };
 
 /** A unary expression: "+e", "-e", "~e", "NOT e". */
-struct UnaryExpr : Expr
+struct M_EXPORT UnaryExpr : Expr
 {
     Expr *expr;
 
@@ -243,7 +244,7 @@ struct UnaryExpr : Expr
 };
 
 /** A binary expression.  This includes all arithmetic and logical binary operations. */
-struct BinaryExpr : Expr
+struct M_EXPORT BinaryExpr : Expr
 {
     Expr *lhs;
     Expr *rhs;
@@ -265,7 +266,7 @@ struct BinaryExpr : Expr
 };
 
 /** A query expression for nested queries. */
-struct QueryExpr : Expr
+struct M_EXPORT QueryExpr : Expr
 {
     Stmt *query;
 
@@ -313,7 +314,7 @@ M_DECLARE_VISITOR(ConstASTExprVisitor, const Expr, M_AST_EXPR_LIST)
  * Clauses
  *====================================================================================================================*/
 
-struct Clause
+struct M_EXPORT Clause
 {
     Token tok;
 
@@ -328,10 +329,10 @@ struct Clause
     void dump(std::ostream &out) const;
     void dump() const;
 
-    friend std::ostream & operator<<(std::ostream &out, const Clause &c);
+    friend std::ostream & M_EXPORT operator<<(std::ostream &out, const Clause &c);
 };
 
-struct ErrorClause : Clause
+struct M_EXPORT ErrorClause : Clause
 {
     ErrorClause(Token tok) : Clause(tok) { }
 
@@ -339,7 +340,7 @@ struct ErrorClause : Clause
     void accept(ConstASTClauseVisitor &v) const override;
 };
 
-struct SelectClause : Clause
+struct M_EXPORT SelectClause : Clause
 {
     using select_type = std::pair<Expr*, Token>; ///> list of selected elements; expr AS name
 
@@ -358,7 +359,7 @@ struct SelectClause : Clause
     void accept(ConstASTClauseVisitor &v) const override;
 };
 
-struct FromClause : Clause
+struct M_EXPORT FromClause : Clause
 {
     struct from_type
     {
@@ -388,7 +389,7 @@ struct FromClause : Clause
     void accept(ConstASTClauseVisitor &v) const override;
 };
 
-struct WhereClause : Clause
+struct M_EXPORT WhereClause : Clause
 {
     Expr *where;
 
@@ -399,7 +400,7 @@ struct WhereClause : Clause
     void accept(ConstASTClauseVisitor &v) const override;
 };
 
-struct GroupByClause : Clause
+struct M_EXPORT GroupByClause : Clause
 {
     std::vector<Expr*> group_by; ///> a list of expressions to group by
 
@@ -410,7 +411,7 @@ struct GroupByClause : Clause
     void accept(ConstASTClauseVisitor &v) const override;
 };
 
-struct HavingClause : Clause
+struct M_EXPORT HavingClause : Clause
 {
     Expr *having;
 
@@ -421,7 +422,7 @@ struct HavingClause : Clause
     void accept(ConstASTClauseVisitor &v) const override;
 };
 
-struct OrderByClause : Clause
+struct M_EXPORT OrderByClause : Clause
 {
     using order_type = std::pair<Expr*, bool>; ///> true means ascending, false means descending
 
@@ -434,7 +435,7 @@ struct OrderByClause : Clause
     void accept(ConstASTClauseVisitor &v) const override;
 };
 
-struct LimitClause : Clause
+struct M_EXPORT LimitClause : Clause
 {
     Token limit;
     Token offset;
@@ -464,7 +465,7 @@ M_DECLARE_VISITOR(ConstASTClauseVisitor, const Clause, M_AST_CLAUSE_LIST)
  *====================================================================================================================*/
 
 /** Abstract class to represent constraints attached to attributes of a table. */
-struct Constraint
+struct M_EXPORT Constraint
 {
     Token tok;
 
@@ -476,7 +477,7 @@ struct Constraint
     virtual void accept(ConstASTConstraintVisitor &v) const = 0;
 };
 
-struct PrimaryKeyConstraint : Constraint
+struct M_EXPORT PrimaryKeyConstraint : Constraint
 {
     PrimaryKeyConstraint(Token tok) : Constraint(tok) { }
 
@@ -484,7 +485,7 @@ struct PrimaryKeyConstraint : Constraint
     void accept(ConstASTConstraintVisitor &v) const override;
 };
 
-struct UniqueConstraint : Constraint
+struct M_EXPORT UniqueConstraint : Constraint
 {
     UniqueConstraint(Token tok) : Constraint(tok) { }
 
@@ -492,7 +493,7 @@ struct UniqueConstraint : Constraint
     void accept(ConstASTConstraintVisitor &v) const override;
 };
 
-struct NotNullConstraint : Constraint
+struct M_EXPORT NotNullConstraint : Constraint
 {
     NotNullConstraint(Token tok) : Constraint(tok) { }
 
@@ -500,7 +501,7 @@ struct NotNullConstraint : Constraint
     void accept(ConstASTConstraintVisitor &v) const override;
 };
 
-struct CheckConditionConstraint : Constraint
+struct M_EXPORT CheckConditionConstraint : Constraint
 {
     Expr *cond;
 
@@ -512,7 +513,7 @@ struct CheckConditionConstraint : Constraint
     void accept(ConstASTConstraintVisitor &v) const override;
 };
 
-struct ReferenceConstraint : Constraint
+struct M_EXPORT ReferenceConstraint : Constraint
 {
     enum OnDeleteAction
     {
@@ -551,7 +552,7 @@ M_DECLARE_VISITOR(ConstASTConstraintVisitor, const Constraint, M_AST_CONSTRAINT_
  *====================================================================================================================*/
 
 /** A SQL statement. */
-struct Stmt
+struct M_EXPORT Stmt
 {
     virtual ~Stmt() { }
 
@@ -563,11 +564,11 @@ struct Stmt
     void dump(std::ostream &out) const;
     void dump() const;
 
-    friend std::ostream & operator<<(std::ostream &out, const Stmt &s);
+    friend std::ostream & M_EXPORT operator<<(std::ostream &out, const Stmt &s);
 };
 
 /** The error statement.  Used when the parser encountered a syntactical error. */
-struct ErrorStmt : Stmt
+struct M_EXPORT ErrorStmt : Stmt
 {
     Token tok;
 
@@ -577,7 +578,7 @@ struct ErrorStmt : Stmt
     void accept(ConstASTStmtVisitor &v) const override;
 };
 
-struct EmptyStmt : Stmt
+struct M_EXPORT EmptyStmt : Stmt
 {
     Token tok;
 
@@ -587,7 +588,7 @@ struct EmptyStmt : Stmt
     void accept(ConstASTStmtVisitor &v) const override;
 };
 
-struct CreateDatabaseStmt : Stmt
+struct M_EXPORT CreateDatabaseStmt : Stmt
 {
     Token database_name;
 
@@ -597,7 +598,7 @@ struct CreateDatabaseStmt : Stmt
     void accept(ConstASTStmtVisitor &v) const override;
 };
 
-struct UseDatabaseStmt : Stmt
+struct M_EXPORT UseDatabaseStmt : Stmt
 {
     Token database_name;
 
@@ -607,7 +608,7 @@ struct UseDatabaseStmt : Stmt
     void accept(ConstASTStmtVisitor &v) const override;
 };
 
-struct CreateTableStmt : Stmt
+struct M_EXPORT CreateTableStmt : Stmt
 {
     struct attribute_definition
     {
@@ -645,7 +646,7 @@ struct CreateTableStmt : Stmt
 };
 
 /** A SQL select statement. */
-struct SelectStmt : Stmt
+struct M_EXPORT SelectStmt : Stmt
 {
     Clause *select;
     Clause *from;
@@ -678,7 +679,7 @@ struct SelectStmt : Stmt
 };
 
 /** A SQL insert statement. */
-struct InsertStmt : Stmt
+struct M_EXPORT InsertStmt : Stmt
 {
     enum kind_t { I_Default, I_Null, I_Expr };
     using element_type = std::pair<kind_t, Expr*>;
@@ -695,7 +696,7 @@ struct InsertStmt : Stmt
 };
 
 /** A SQL update statement. */
-struct UpdateStmt : Stmt
+struct M_EXPORT UpdateStmt : Stmt
 {
     using set_type = std::pair<Token, Expr*>;
 
@@ -716,7 +717,7 @@ struct UpdateStmt : Stmt
 };
 
 /** A SQL delete statement. */
-struct DeleteStmt : Stmt
+struct M_EXPORT DeleteStmt : Stmt
 {
     Token table_name;
     Clause *where = nullptr;
@@ -729,13 +730,13 @@ struct DeleteStmt : Stmt
 };
 
 /** A SQL import statement. */
-struct ImportStmt : Stmt
+struct M_EXPORT ImportStmt : Stmt
 {
     Token table_name;
 };
 
 /** An import statement for a delimiter separated values (DSV) file. */
-struct DSVImportStmt : ImportStmt
+struct M_EXPORT DSVImportStmt : ImportStmt
 {
     Token path;
     Token delimiter;
@@ -771,7 +772,7 @@ M_DECLARE_VISITOR(ConstASTStmtVisitor, const Stmt, M_AST_STMT_LIST)
     M_AST_STMT_LIST(X)
 
 
-struct ASTVisitor : ASTExprVisitor, ASTClauseVisitor, ASTConstraintVisitor, ASTStmtVisitor
+struct M_EXPORT ASTVisitor : ASTExprVisitor, ASTClauseVisitor, ASTConstraintVisitor, ASTStmtVisitor
 {
     template<typename T> using Const = ASTExprVisitor::Const<T>; // resolve ambiguous name lookup
     using ASTExprVisitor::operator();
@@ -779,7 +780,7 @@ struct ASTVisitor : ASTExprVisitor, ASTClauseVisitor, ASTConstraintVisitor, ASTS
     using ASTConstraintVisitor::operator();
     using ASTStmtVisitor::operator();
 };
-struct ConstASTVisitor : ConstASTExprVisitor, ConstASTClauseVisitor, ConstASTConstraintVisitor, ConstASTStmtVisitor
+struct M_EXPORT ConstASTVisitor : ConstASTExprVisitor, ConstASTClauseVisitor, ConstASTConstraintVisitor, ConstASTStmtVisitor
 {
     template<typename T> using Const = ConstASTExprVisitor::Const<T>; // resolve ambiguous name lookup
     using ConstASTExprVisitor::operator();

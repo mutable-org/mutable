@@ -7,11 +7,13 @@ add_subdirectory(io)
 add_subdirectory(IR)
 add_subdirectory(backend)
 
+
+########################################################################################################################
+# libmutable
+########################################################################################################################
+
 add_library(
     ${PROJECT_NAME}
-    mutable.cpp
-    globals.cpp
-    version.cpp
     $<TARGET_OBJECTS:backend>
     $<TARGET_OBJECTS:IR>
     $<TARGET_OBJECTS:io>
@@ -20,38 +22,60 @@ add_library(
     $<TARGET_OBJECTS:lex>
     $<TARGET_OBJECTS:catalog>
     $<TARGET_OBJECTS:util>
+    mutable.cpp
+    Options.cpp
+    version.cpp
 )
-target_link_libraries(${PROJECT_NAME} PRIVATE binaryen ${Boost_LIBRARIES} dl)
+
+# When creating a STATIC library, ensure that we don't strip unused symbols.  We need them because plugins register
+# themselves with the `Catalog` via `__attribute__((constructor))` et al
+if(NOT ${BUILD_SHARED_LIBS})
+    if(APPLE)
+        target_link_options(
+            ${PROJECT_NAME}
+            INTERFACE
+            -Wl,-force_load $<TARGET_LINKER_FILE:${PROJECT_NAME}> -Wl,-noall_load
+        )
+    else()
+        target_link_options(
+            ${PROJECT_NAME}
+            INTERFACE
+            -Wl,--whole-archive $<TARGET_LINKER_FILE:${PROJECT_NAME}> -Wl,--no-whole-archive
+        )
+    endif()
+endif()
+
+# V8
 if(${WITH_V8})
     target_link_libraries(${PROJECT_NAME} PRIVATE v8)
-endif()
-if(${WITH_SPIDERMONKEY})
-    target_link_libraries(${PROJECT_NAME} PRIVATE spidermonkey)
+    if (${BUILD_SHARED_LIBS})
+        target_link_libraries(${PROJECT_NAME} PRIVATE v8_platform)
+    endif()
 endif()
 
-add_library(
-    frontend
-    globals.cpp
-    $<TARGET_OBJECTS:backend>
-    $<TARGET_OBJECTS:IR>
-    $<TARGET_OBJECTS:storage>
-    $<TARGET_OBJECTS:parse>
-    $<TARGET_OBJECTS:lex>
-    $<TARGET_OBJECTS:catalog>
-    $<TARGET_OBJECTS:util>
-)
-target_link_libraries(frontend ${Boost_LIBRARIES})
+# Binaryen
+if(${WITH_V8} OR ${WITH_SPIDERMONKEY})
+    target_link_libraries(${PROJECT_NAME} PRIVATE binaryen)
+endif()
+
+# others
+target_link_libraries(${PROJECT_NAME} PUBLIC ${Boost_LIBRARIES} dl)
+
+
+########################################################################################################################
+# executables
+########################################################################################################################
 
 add_executable(lex-bin lex.cpp)
-target_link_libraries(lex-bin frontend)
+target_link_libraries(lex-bin ${PROJECT_NAME})
 set_target_properties(lex-bin PROPERTIES OUTPUT_NAME lex)
 
 add_executable(parse-bin parse.cpp)
-target_link_libraries(parse-bin frontend)
+target_link_libraries(parse-bin ${PROJECT_NAME})
 set_target_properties(parse-bin PROPERTIES OUTPUT_NAME parse)
 
 add_executable(check-bin check.cpp)
-target_link_libraries(check-bin frontend)
+target_link_libraries(check-bin ${PROJECT_NAME})
 set_target_properties(check-bin PROPERTIES OUTPUT_NAME check)
 
 add_executable(shell shell.cpp)
@@ -64,8 +88,8 @@ target_link_libraries(train-operator-model ${PROJECT_NAME} Threads::Threads)
 add_executable(allocator_benchmark allocator_benchmark.cpp $<TARGET_OBJECTS:util>)
 target_link_libraries(allocator_benchmark dl Threads::Threads)
 
-add_executable(cardinality_gen cardinality_gen.cpp $<TARGET_OBJECTS:io> version.cpp mutable.cpp)
-target_link_libraries(cardinality_gen frontend)
+add_executable(cardinality_gen cardinality_gen.cpp)
+target_link_libraries(cardinality_gen ${PROJECT_NAME})
 
-add_executable(query_slicer query_slicer.cpp $<TARGET_OBJECTS:io> version.cpp mutable.cpp)
-target_link_libraries(query_slicer frontend)
+add_executable(query_slicer query_slicer.cpp)
+target_link_libraries(query_slicer ${PROJECT_NAME})

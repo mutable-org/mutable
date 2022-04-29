@@ -5,6 +5,7 @@
 #include <deque>
 #include <functional>
 #include <memory>
+#include <mutable/mutable-config.hpp>
 #include <mutable/IR/CNF.hpp>
 #include <mutable/util/ADT.hpp>
 #include <sstream>
@@ -22,7 +23,7 @@ struct GetCorrelationInfo;
 
 /** A `DataSource` in a `QueryGraph`.  Represents something that can be evaluated to a sequence of tuples, optionally
  * filtered by a filter condition.  A `DataSource` can be joined with one or more other `DataSource`s by a `Join`. */
-struct DataSource
+struct M_EXPORT DataSource
 {
     friend struct QueryGraph;
     friend struct GraphBuilder;
@@ -78,7 +79,7 @@ struct DataSource
 };
 
 /** A `BaseTable` is a `DataSource` that is materialized and stored persistently by the database system. */
-struct BaseTable : DataSource
+struct M_EXPORT BaseTable : DataSource
 {
     friend struct QueryGraph;
     friend struct GetPrimaryKey;
@@ -103,7 +104,7 @@ struct BaseTable : DataSource
 
 /** A `Query` in a `QueryGraph` is a `DataSource` that represents a nested query.  As such, a `Query` contains a
  * `QueryGraph`.  A `Query` must be evaluated to acquire its sequence of tuples. */
-struct Query : DataSource
+struct M_EXPORT Query : DataSource
 {
     friend struct QueryGraph;
 
@@ -126,7 +127,7 @@ struct Query : DataSource
 };
 
 /** A `Join` in a `QueryGraph` combines `DataSource`s by a join condition. */
-struct Join
+struct M_EXPORT Join
 {
     using sources_t = std::vector<DataSource*>;
 
@@ -152,7 +153,7 @@ struct Join
 
 /** The query graph represents all data sources and joins in a graph structure.  It is used as an intermediate
  * representation of a query. */
-struct QueryGraph
+struct M_EXPORT QueryGraph
 {
     friend struct GraphBuilder;
     friend struct Decorrelation;
@@ -273,7 +274,7 @@ struct QueryGraph
 
 
 /** An adjacency matrix for a given query graph. Represents the join graph. */
-struct AdjacencyMatrix
+struct M_EXPORT AdjacencyMatrix
 {
     /** A proxy to access single entries in the `AdjacencyMatrix`. */
     template<bool C>

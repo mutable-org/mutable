@@ -1,6 +1,6 @@
 #include "catch2/catch.hpp"
 
-#include "globals.hpp"
+#include <mutable/Options.hpp>
 
 
 using namespace m;
@@ -8,7 +8,7 @@ using namespace m;
 
 TEST_CASE("Options", "[core][globals]")
 {
-    Options options = Options::Get();
+    Options &options = Options::Get();
 
     REQUIRE_FALSE(options.quiet);
     options.quiet = true;

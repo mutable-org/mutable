@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutable/mutable-config.hpp>
 
 namespace m {
 
@@ -15,7 +16,7 @@ struct version_info
     const char *GIT_BRANCH;
 };
 
-const version_info & get();
+M_EXPORT const version_info & get();
 
 }
 

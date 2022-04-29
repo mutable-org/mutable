@@ -9,7 +9,7 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
         main.cpp
 
         # src
-        GlobalsTest.cpp
+        OptionsTest.cpp
 
         # util
         util/ADTTest.cpp

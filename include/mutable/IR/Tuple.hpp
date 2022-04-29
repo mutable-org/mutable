@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutable/mutable-config.hpp>
 #include <mutable/util/ADT.hpp>
 #include <functional>
 #include <iomanip>
@@ -13,7 +14,7 @@ struct Schema;
 struct Type;
 
 /** This class holds a SQL attribute value.  It **cannot** represent `NULL`. */
-struct Value
+struct M_EXPORT Value
 {
     friend std::hash<Value>;
 
@@ -172,7 +173,7 @@ static_assert(std::is_trivially_destructible_v<Value>, "Value must be trivially 
 static_assert(sizeof(Value) == 8, "Value exceeds expected size");
 #endif
 
-struct Tuple
+struct M_EXPORT Tuple
 {
     friend std::hash<Tuple>;
 

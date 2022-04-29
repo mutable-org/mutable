@@ -1,74 +1,234 @@
-#include "V8Platform.hpp"
+#include "backend/V8Platform.hpp"
 
 #include "backend/Interpreter.hpp"
+#include "backend/WasmUtil.hpp"
 #include "catalog/Schema.hpp"
-#include "globals.hpp"
 #include "storage/Store.hpp"
+#include "util/WebSocketServer.hpp"
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
+#include <libplatform/libplatform.h>
 #include <mutable/IR/Tuple.hpp>
+#include <mutable/Options.hpp>
 #include <mutable/storage/Store.hpp>
+#include <mutable/util/memory.hpp>
 #include <mutable/util/Timer.hpp>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <v8-inspector.h>
+#include <v8.h>
 
 
 using namespace m;
+using namespace m::detail;
 using args_t = v8::Local<v8::Value>[];
+
+
+namespace {
+
+/** The Wasm optimization level. */
+int wasm_optimization_level = 0;
+/** Whether to execute Wasm adaptively. */
+bool wasm_adaptive = false;
+/** The port to use for the Chrome DevTools web socket. */
+uint16_t cdt_port = 0;
+
+}
 
 
 /*======================================================================================================================
  * V8Inspector and helper classes
  *====================================================================================================================*/
 
-void v8_helper::V8InspectorClientImpl::register_context(v8::Local<v8::Context> context)
-{
-    std::string ctx_name("query");
-    inspector_->contextCreated(
-        v8_inspector::V8ContextInfo(
-            context,
-            1,
-            v8_helper::make_string_view(ctx_name)
-        )
-    );
+namespace m::detail::v8_helper {
+
+inline v8::Local<v8::String> to_v8_string(v8::Isolate *isolate, std::string_view sv) {
+    M_insist(isolate);
+    return v8::String::NewFromUtf8(isolate, sv.data(), v8::NewStringType::kNormal, sv.length()).ToLocalChecked();
 }
 
-void v8_helper::V8InspectorClientImpl::deregister_context(v8::Local<v8::Context> context)
+inline std::string to_std_string(v8::Isolate *isolate, v8::Local<v8::Value> val) {
+    v8::String::Utf8Value utf8(isolate, val);
+    return *utf8;
+}
+
+inline v8::Local<v8::String> to_json(v8::Isolate *isolate, v8::Local<v8::Value> val) {
+    M_insist(isolate);
+    auto Ctx = isolate->GetCurrentContext();
+    return v8::JSON::Stringify(Ctx, val).ToLocalChecked();
+}
+
+inline v8::Local<v8::Object> parse_json(v8::Isolate *isolate, std::string_view json) {
+    M_insist(isolate);
+    auto Ctx = isolate->GetCurrentContext();
+    auto value = v8::JSON::Parse(Ctx, to_v8_string(isolate, json)).ToLocalChecked();
+    if (value.IsEmpty())
+        return v8::Local<v8::Object>();
+    return value->ToObject(Ctx).ToLocalChecked();
+}
+
+inline v8_inspector::StringView make_string_view(const std::string &str) {
+    return v8_inspector::StringView(reinterpret_cast<const uint8_t*>(str.data()), str.length());
+}
+
+inline std::string to_std_string(v8::Isolate *isolate, const v8_inspector::StringView sv) {
+    int length = static_cast<int>(sv.length());
+    v8::Local<v8::String> message = (
+        sv.is8Bit()
+        ? v8::String::NewFromOneByte(isolate, reinterpret_cast<const uint8_t*>(sv.characters8()), v8::NewStringType::kNormal, length)
+        : v8::String::NewFromTwoByte(isolate, reinterpret_cast<const uint16_t*>(sv.characters16()), v8::NewStringType::kNormal, length)
+    ).ToLocalChecked();
+    v8::String::Utf8Value result(isolate, message);
+    return std::string(*result, result.length());
+}
+
+struct WebSocketChannel : v8_inspector::V8Inspector::Channel
+{
+    private:
+    v8::Isolate *isolate_;
+    WebSocketServer::Connection &conn_;
+
+    public:
+    WebSocketChannel(v8::Isolate *isolate, WebSocketServer::Connection &conn)
+        : isolate_(isolate)
+        , conn_(conn)
+    { }
+
+    WebSocketServer::Connection & connection() const { return conn_; }
+
+    private:
+    void sendResponse(int, std::unique_ptr<v8_inspector::StringBuffer> message) override {
+        v8::HandleScope handle_scope(isolate_);
+        auto str = to_std_string(isolate_, message->string());
+        conn_.send(str);
+    }
+
+    void sendNotification(std::unique_ptr<v8_inspector::StringBuffer> message) override {
+        v8::HandleScope handle_scope(isolate_);
+        auto str = to_std_string(isolate_, message->string());
+        conn_.send(str);
+    }
+
+    void flushProtocolNotifications() override { }
+};
+
+struct V8InspectorClientImpl : v8_inspector::V8InspectorClient
+{
+    private:
+    v8::Isolate *isolate_ = nullptr;
+    WebSocketServer server_;
+    std::unique_ptr<WebSocketServer::Connection> conn_;
+    std::unique_ptr<WebSocketChannel> channel_;
+    std::unique_ptr<v8_inspector::V8Inspector> inspector_;
+    std::unique_ptr<v8_inspector::V8InspectorSession> session_;
+    std::function<void(void)> code_; ///< the code to execute in the debugger
+    bool is_terminated_ = true;
+
+    public:
+    V8InspectorClientImpl(int16_t port, v8::Isolate *isolate)
+        : isolate_(M_notnull(isolate))
+        , server_(port, std::bind(&V8InspectorClientImpl::on_message, this, std::placeholders::_1))
+    {
+        std::cout << "Initiating the V8 inspector server.  To attach to the inspector, open Chrome/Chromium and "
+                     "visit\n\n\t"
+                     "devtools://devtools/bundled/inspector.html?experiments=true&v8only=true&ws=127.0.0.1:"
+                  << port << '\n' << std::endl;
+
+        inspector_ = v8_inspector::V8Inspector::create(isolate, this);
+        conn_ = std::make_unique<WebSocketServer::Connection>(server_.await());
+        channel_ = std::make_unique<WebSocketChannel>(isolate_, *conn_);
+
+        /* Create a debugging session by connecting the V8Inspector instance to the channel. */
+        std::string state("mutable");
+        session_ = inspector_->connect(
+            /* contextGroupId= */ 1,
+            /* channel=        */ channel_.get(),
+            /* state=          */ make_string_view(state)
+        );
+    }
+
+    V8InspectorClientImpl(const V8InspectorClientImpl&) = delete;
+
+    ~V8InspectorClientImpl() {
+        session_.reset();
+        channel_.reset();
+        conn_.reset();
+        inspector_.reset();
+    }
+
+    void start(std::function<void(void)> code) {
+        code_ = std::move(code);
+        conn_->listen();
+    }
+
+    /* Register the context object in the V8Inspector instance. */
+    void register_context(v8::Local<v8::Context> context);
+
+    /* Deregister the context object in the V8Inspector instance. */
+    void deregister_context(v8::Local<v8::Context> context);
+
+    void on_message(std::string_view sv);
+
+    /** Synchronously consume all front end (CDT) debugging messages. */
+    void runMessageLoopOnPause(int) override;
+
+    /** Called by V8 when no more inspector messages are pending. */
+    void quitMessageLoopOnPause() override { is_terminated_ = true; }
+
+    void waitFrontendMessageOnPause() { is_terminated_ = false; }
+};
+
+}
+
+
+/*======================================================================================================================
+ * V8Inspector and helper classes implementation
+ *====================================================================================================================*/
+
+namespace m::detail::v8_helper {
+
+void V8InspectorClientImpl::register_context(v8::Local<v8::Context> context)
+{
+    std::string ctx_name("query");
+    inspector_->contextCreated(v8_inspector::V8ContextInfo( context, 1, make_string_view(ctx_name)));
+}
+
+void V8InspectorClientImpl::deregister_context(v8::Local<v8::Context> context)
 {
     inspector_->contextDestroyed(context);
 }
 
-void v8_helper::V8InspectorClientImpl::on_message(std::string_view sv)
+void V8InspectorClientImpl::on_message(std::string_view sv)
 {
     v8_inspector::StringView msg(reinterpret_cast<const uint8_t*>(sv.data()), sv.length());
 
     auto Ctx = isolate_->GetCurrentContext();
     v8::HandleScope handle_scope(isolate_);
-    auto obj = v8_helper::parse_json(isolate_, sv);
+    auto obj = parse_json(isolate_, sv);
 
     session_->dispatchProtocolMessage(msg);
 
     if (not obj.IsEmpty()) {
-        auto method = obj->Get(Ctx, v8_helper::to_v8_string(isolate_, "method")).ToLocalChecked();
-        auto method_name = v8_helper::to_std_string(isolate_, method);
+        auto method = obj->Get(Ctx, to_v8_string(isolate_, "method")).ToLocalChecked();
+        auto method_name = to_std_string(isolate_, method);
 
         if (method_name == "Runtime.runIfWaitingForDebugger") {
             std::string reason("CDT");
-            session_->schedulePauseOnNextStatement(v8_helper::make_string_view(reason),
-                                                   v8_helper::make_string_view(reason));
+            session_->schedulePauseOnNextStatement(make_string_view(reason),
+                                                   make_string_view(reason));
             waitFrontendMessageOnPause();
             code_(); // execute the code to debug
         }
     }
 }
 
-void v8_helper::V8InspectorClientImpl::runMessageLoopOnPause(int)
+void V8InspectorClientImpl::runMessageLoopOnPause(int)
 {
     static bool is_nested = false;
     if (is_nested) return;
@@ -79,6 +239,8 @@ void v8_helper::V8InspectorClientImpl::runMessageLoopOnPause(int)
         while (v8::platform::PumpMessageLoop(V8Platform::platform(), isolate_)) { }
     is_terminated_ = true;
     is_nested = false;
+}
+
 }
 
 
@@ -137,28 +299,26 @@ namespace {
 
 struct Store2Wasm
 {
-    private:
-    v8::Isolate *isolate_;
+private:
+    v8::Isolate * isolate_;
     v8::Local<v8::Object> env_;
-    const WasmPlatform::WasmContext &wasm_context_;
+    const WasmPlatform::WasmContext & wasm_context_;
     std::size_t next_page_ = 0;
 
-    public:
-    Store2Wasm(v8::Isolate *isolate, v8::Local<v8::Object> env, const WasmPlatform::WasmContext &wasm_context)
-        : isolate_(isolate)
-        , env_(env)
-        , wasm_context_(wasm_context)
-    { }
+public:
+    Store2Wasm(v8::Isolate * isolate, v8::Local<v8::Object> env, const WasmPlatform::WasmContext & wasm_context)
+            : isolate_(isolate), env_(env), wasm_context_(wasm_context) { }
 
     std::size_t get_next_page() const { return next_page_; }
 
-    void map(const Store &s) {
+    void map(const Store & s)
+    {
         std::ostringstream oss;
         auto Ctx = isolate_->GetCurrentContext();
-        auto &table = s.table();
+        auto & table = s.table();
 
         std::size_t idx = 0;
-        for (const auto &e : s.linearization()) {
+        for (const auto & e: s.linearization()) {
             std::size_t bytes;
             if (e.is_null_bitmap() or e.is_attribute()) {
                 bytes = (s.num_rows() * e.stride + 7) / 8;
@@ -172,7 +332,7 @@ struct Store2Wasm
             const auto ptr = get_pagesize() * next_page_;
             const auto aligned_bytes = Ceil_To_Next_Page(bytes);
             const auto num_pages = aligned_bytes / get_pagesize();
-            const auto &mem = s.memory(idx);
+            const auto & mem = s.memory(idx);
             if (aligned_bytes) {
                 mem.map(aligned_bytes, 0, wasm_context_.vm, ptr);
                 next_page_ += num_pages + 1; // "install" a guard page after the mapping to fault on oob
@@ -193,95 +353,117 @@ struct Store2Wasm
 
 struct CollectStringLiterals : ConstOperatorVisitor, ConstASTExprVisitor
 {
-    private:
-    std::unordered_set<const char*> literals_; ///< the collected literals
+private:
+    std::unordered_set<const char *> literals_; ///< the collected literals
 
-    public:
-    static std::vector<const char*> Collect(const Operator &plan) {
+public:
+    static std::vector<const char *> Collect(const Operator & plan)
+    {
         CollectStringLiterals CSL;
         CSL(plan);
-        return std::vector<const char*>(CSL.literals_.begin(), CSL.literals_.end());
+        return std::vector<const char *>(CSL.literals_.begin(), CSL.literals_.end());
     }
 
-    private:
+private:
     CollectStringLiterals() = default;
 
     using ConstOperatorVisitor::operator();
     using ConstASTExprVisitor::operator();
-    void recurse(const Consumer &C) {
-        for (auto &c : C.children())
+
+    void recurse(const Consumer & C)
+    {
+        for (auto & c: C.children())
             (*this)(*c);
     }
 
     /*----- Operator -------------------------------------------------------------------------------------------------*/
-    void operator()(const ScanOperator&) override { /* nothing to be done */ }
-    void operator()(const CallbackOperator &op) override { recurse(op); }
-    void operator()(const PrintOperator &op) override { recurse(op); }
-    void operator()(const NoOpOperator &op) override { recurse(op); }
-    void operator()(const FilterOperator &op) override {
-        for (auto &c : op.filter()) {
-            for (auto &p : c)
+    void operator()(const ScanOperator &) override { /* nothing to be done */ }
+
+    void operator()(const CallbackOperator & op) override { recurse(op); }
+
+    void operator()(const PrintOperator & op) override { recurse(op); }
+
+    void operator()(const NoOpOperator & op) override { recurse(op); }
+
+    void operator()(const FilterOperator & op) override
+    {
+        for (auto & c: op.filter()) {
+            for (auto & p: c)
                 (*this)(*p.expr());
         }
         recurse(op);
     }
-    void operator()(const JoinOperator &op) override {
-        for (auto &c : op.predicate()) {
-            for (auto &p : c)
+
+    void operator()(const JoinOperator & op) override
+    {
+        for (auto & c: op.predicate()) {
+            for (auto & p: c)
                 (*this)(*p.expr());
         }
         recurse(op);
     }
-    void operator()(const ProjectionOperator &op) override {
-        for (auto &p : op.projections())
+
+    void operator()(const ProjectionOperator & op) override
+    {
+        for (auto & p: op.projections())
             (*this)(*p.first);
         recurse(op);
     }
-    void operator()(const LimitOperator &op) override { recurse(op); }
-    void operator()(const GroupingOperator &op) override {
-        for (auto &g : op.group_by())
+
+    void operator()(const LimitOperator & op) override { recurse(op); }
+
+    void operator()(const GroupingOperator & op) override
+    {
+        for (auto & g: op.group_by())
             (*this)(*g);
         recurse(op);
     }
-    void operator()(const AggregationOperator &op) override { recurse(op); }
-    void operator()(const SortingOperator &op) override { recurse(op); }
+
+    void operator()(const AggregationOperator & op) override { recurse(op); }
+
+    void operator()(const SortingOperator & op) override { recurse(op); }
 
     /*----- Expr -----------------------------------------------------------------------------------------------------*/
-    void operator()(const ErrorExpr&) override { M_unreachable("no errors at this stage"); }
-    void operator()(const Designator&) override { /* nothing to be done */ }
-    void operator()(const Constant &e) override {
+    void operator()(const ErrorExpr &) override { M_unreachable("no errors at this stage"); }
+
+    void operator()(const Designator &) override { /* nothing to be done */ }
+
+    void operator()(const Constant & e) override
+    {
         if (e.is_string()) {
             auto s = Interpreter::eval(e);
-            literals_.emplace(s.as<const char*>());
+            literals_.emplace(s.as<const char *>());
         }
     }
-    void operator()(const FnApplicationExpr&) override { /* nothing to be done */ } // XXX can string literals be arguments?
-    void operator()(const UnaryExpr &e) override { (*this)(*e.expr); }
-    void operator()(const BinaryExpr &e) override { (*this)(*e.lhs); (*this)(*e.rhs); }
-    void operator()(const QueryExpr&) override { /* nothing to be done */ }
+
+    void
+    operator()(const FnApplicationExpr &) override { /* nothing to be done */ } // XXX can string literals be arguments?
+    void operator()(const UnaryExpr & e) override { (*this)(*e.expr); }
+
+    void operator()(const BinaryExpr & e) override
+    {
+        (*this)(*e.lhs);
+        (*this)(*e.rhs);
+    }
+
+    void operator()(const QueryExpr &) override { /* nothing to be done */ }
 };
 
 }
 
 
 /*======================================================================================================================
- * V8Platform
+ * V8Platform implementation
  *====================================================================================================================*/
 
-std::unique_ptr<v8::Platform> V8Platform::PLATFORM_(nullptr);
+v8::Platform *V8Platform::PLATFORM_(nullptr);
 
 V8Platform::V8Platform()
 {
-    if (PLATFORM_ == nullptr) {
-        PLATFORM_ = v8::platform::NewDefaultPlatform();
-        v8::V8::InitializePlatform(PLATFORM_.get());
-        v8::V8::Initialize();
-    }
-
     /*----- Set V8 flags. --------------------------------------------------------------------------------------------*/
     std::ostringstream flags;
     flags << "--stack_size 1000000 ";
-    if (Options::Get().wasm_adaptive) {
+    if (wasm_adaptive) {
         flags << "--opt "
               << "--liftoff "
               << "--wasm-tier-up "
@@ -290,7 +472,7 @@ V8Platform::V8Platform()
     } else {
         flags << "--no-liftoff ";
     }
-    if (Options::Get().cdt_port > 0) {
+    if (cdt_port > 0) {
         flags << "--log "
               << "--log-all "
               << "--expose-wasm "
@@ -309,14 +491,16 @@ V8Platform::V8Platform()
     isolate_ = v8::Isolate::New(create_params);
 
     /* If a debugging port is specified, set up the inspector. */
-    if (Options::Get().cdt_port > 0)
-        inspector_ = std::make_unique<v8_helper::V8InspectorClientImpl>(Options::Get().cdt_port, isolate_);
+    if (cdt_port > 0)
+        inspector_ = std::make_unique<v8_helper::V8InspectorClientImpl>(cdt_port, isolate_);
 }
 
 V8Platform::~V8Platform()
 {
     inspector_.reset();
     isolate_->Dispose();
+    v8::V8::Dispose();
+    v8::V8::ShutdownPlatform();
     delete allocator_;
 }
 
@@ -487,8 +671,8 @@ WasmModule V8Platform::compile(const Operator &plan) const
     std::ostringstream dump_before_opt;
     module.dump(dump_before_opt);
 #endif
-    if (Options::Get().wasm_optimization_level) {
-        BinaryenSetOptimizeLevel(Options::Get().wasm_optimization_level);
+    if (wasm_optimization_level) {
+        BinaryenSetOptimizeLevel(wasm_optimization_level);
         BinaryenSetShrinkLevel(0); // shrinking not required
         BinaryenModuleOptimize(module.ref());
     }
@@ -511,6 +695,9 @@ void V8Platform::execute(const Operator &plan)
 {
     Catalog &C = Catalog::Get();
     auto module = M_TIME_EXPR(compile(plan), "Compile to WebAssembly", C.timer());
+
+    v8::Locker locker(isolate_);
+    isolate_->Enter();
 
     /* Create required V8 scopes. */
     v8::Isolate::Scope isolate_scope(isolate_);
@@ -661,6 +848,7 @@ void V8Platform::execute(const Operator &plan)
     }
 
     Dispose_Wasm_Context(wasm_context);
+    isolate_->Exit();
 }
 
 v8::Local<v8::WasmModuleObject> V8Platform::instantiate(const WasmModule &module, v8::Local<v8::Object> imports)
@@ -783,12 +971,43 @@ debugger;";
     return std::string(name);
 }
 
-
-/*======================================================================================================================
- * Backend
- *====================================================================================================================*/
-
-std::unique_ptr<Backend> Backend::CreateWasmV8()
+__attribute__((constructor(101)))
+void m::detail::create_V8Platform()
 {
-    return std::make_unique<WasmBackend>(std::make_unique<V8Platform>());
+    V8Platform::PLATFORM_ = v8::platform::NewDefaultPlatform().release();
+    v8::V8::InitializePlatform(V8Platform::PLATFORM_);
+    v8::V8::Initialize();
+}
+
+__attribute__((destructor(101)))
+void m::detail::destroy_V8Platform()
+{
+    delete V8Platform::PLATFORM_;
+}
+
+__attribute__((constructor(201)))
+void m::detail::register_WasmV8()
+{
+    Catalog &C = Catalog::Get();
+    C.register_backend("WasmV8", std::make_unique<WasmBackend>(std::make_unique<V8Platform>()));
+
+    /*----- Command-line arguments -----------------------------------------------------------------------------------*/
+    C.arg_parser().add<int>(
+        /* short=       */ nullptr,
+        /* long=        */ "--wasm-opt",
+        /* description= */ "set the optimization level for Wasm modules (0, 1, or 2)",
+        [] (int i) { wasm_optimization_level = i; }
+    );
+    C.arg_parser().add<bool>(
+        /* short=       */ nullptr,
+        /* long=        */ "--wasm-adaptive",
+        /* description= */ "enable adaptive execution of Wasm with Liftoff and dynamic tier-up",
+        [] (bool b) { wasm_adaptive = b; }
+    );
+    C.arg_parser().add<int>(
+        /* short=       */ nullptr,
+        /* long=        */ "--CDT",
+        /* description= */ "specify the port for debugging via ChomeDevTools",
+        [] (int i) { cdt_port = i; }
+    );
 }

@@ -9,8 +9,10 @@
 #include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/catalog/Type.hpp>
+#include <mutable/mutable-config.hpp>
 #include <mutable/storage/Store.hpp>
 #include <mutable/util/ADT.hpp>
+#include <mutable/util/ArgParser.hpp>
 #include <mutable/util/fn.hpp>
 #include <mutable/util/macro.hpp>
 #include <mutable/util/memory.hpp>
@@ -29,7 +31,7 @@ namespace m {
 
 /** A `Schema` represents a sequence of identifiers, optionally with a prefix, and their associated types.  The `Schema`
  * allows identifiers of the same name with different prefix.  */
-struct Schema
+struct M_EXPORT Schema
 {
     /** An `Identifier` is composed of a name and an optional prefix. */
     struct Identifier
@@ -195,7 +197,7 @@ inline Schema operator|(const Schema &left, const Schema &right)
 struct Table;
 
 /** An attribute of a table.  Every attribute belongs to exactly one table.  */
-struct Attribute
+struct M_EXPORT Attribute
 {
     friend struct Table;
 
@@ -238,7 +240,7 @@ template<typename T>
 bool type_check(const Attribute &attr);
 
 /** A table is a sorted set of attributes. */
-struct Table
+struct M_EXPORT Table
 {
     const char *name; ///< the name of the table
     private:
@@ -313,7 +315,7 @@ struct Table
 };
 
 /** Defines a function.  There are functions pre-defined in the SQL standard and user-defined functions. */
-struct Function
+struct M_EXPORT Function
 {
 #define kind_t(X) \
     X(FN_Scalar) \
@@ -355,7 +357,7 @@ struct Function
 };
 
 /** A `Database` is a set of `Table`s, `Function`s, and `Statistics`. */
-struct Database
+struct M_EXPORT Database
 {
     friend struct Catalog;
 
@@ -460,43 +462,60 @@ struct ConcreteCardinalityEstimatorFactory : CardinalityEstimatorFactory
 
 /** The catalog contains all `Database`s and keeps track of all meta information of the database system.  There is
  * always exactly one catalog. */
-struct Catalog
+struct M_EXPORT Catalog
 {
     private:
+    /** Singleton `Catalog` instance. */
+    static Catalog *the_catalog_;
+
+    m::ArgParser arg_parser_;
+
     std::unique_ptr<memory::Allocator> allocator_; ///< our custom allocator
     mutable StringPool pool_; ///< pool of strings
     std::unordered_map<const char*, Database*> databases_; ///< the databases
     Database *database_in_use_ = nullptr; ///< the currently used database
     std::unordered_map<const char*, Function*> standard_functions_; ///< functions defined by the SQL standard
     Timer timer_; ///< a global timer
-    std::unique_ptr<Backend> backend_; ///< the active backend
+
+    /*----- Stores ---------------------------------------------------------------------------------------------------*/
+    ///> store factories to create new stores
+    std::unordered_map<const char*, std::unique_ptr<StoreFactory>> store_factories_;
+    ///> the default store to use
+    StoreFactory *default_store_ = nullptr;
+
+    /*----- Cardinality Estimators -----------------------------------------------------------------------------------*/
+    ///> cardinality estimator factories to create new cardinality estimators
+    std::unordered_map<const char*, std::unique_ptr<CardinalityEstimatorFactory>> cardinality_estimator_factories_;
+    ///> the default cardinality estimator to use
+    CardinalityEstimatorFactory *default_cardinality_estimator_ = nullptr;
+
+    /*----- Cost Functions -------------------------------------------------------------------------------------------*/
     std::unique_ptr<CostFunction> cost_function_; ///< the default cost function
 
-    /*----- Factories ------------------------------------------------------------------------------------------------*/
-    std::unordered_map<const char*, std::unique_ptr<StoreFactory>> store_factories_; ///< store factories to create new stores
-    std::unordered_map<const char*, std::unique_ptr<CardinalityEstimatorFactory>> cardinality_estimator_factories_; ///< cardinality
-    ///< estimator factories to create new cardinality estimators
-
-    StoreFactory *default_store_ = nullptr; ///< the default store to use
-    CardinalityEstimatorFactory *default_cardinality_estimator_ = nullptr; ///< the default cardinality estimator to use
+    /*----- Backends -------------------------------------------------------------------------------------------------*/
+    ///> the available backends
+    std::unordered_map<const char*, std::unique_ptr<Backend>> backends_;
+    ///> the default backend to use
+    decltype(backends_)::iterator default_backend_;
 
     private:
     Catalog();
     Catalog(const Catalog&) = delete;
-
-    static Catalog the_catalog_; ///< the single catalog instance
+    Catalog & operator=(const Catalog&) = delete;
 
     public:
     ~Catalog();
 
     /** Return a reference to the single `Catalog` instance. */
-    static Catalog & Get() { return the_catalog_; }
+    static Catalog & Get();
 
     /** Destroys the current `Catalog` instance and immediately replaces it by a new one. */
     static void Clear() {
-        the_catalog_.~Catalog();
-        new (&the_catalog_) Catalog();
+        delete the_catalog_;
+        the_catalog_ = nullptr;
     }
+
+    m::ArgParser & arg_parser() { return arg_parser_; }
 
     /** Returns the number of `Database`s. */
     std::size_t num_databases() const { return databases_.size(); }
@@ -572,21 +591,41 @@ struct Catalog
     std::unique_ptr<Store> create_store(const Table &tbl) const;
 
     /*===== Backends =================================================================================================*/
+    void register_backend(const char *name, std::unique_ptr<Backend> backend) {
+        name = pool(name);
+        auto it = backends_.find(name);
+        if (it != backends_.end()) throw std::invalid_argument("backend with that name already exists");
+        backends_.emplace_hint(it, name, std::move(backend));
+    }
+
+    void default_backend(const char *name) {
+        name = pool(name);
+        auto it = backends_.find(name);
+        if (it == backends_.end())
+            throw std::invalid_argument("backend not found");
+        default_backend_ = it;
+    }
+
     /** Returns `true` iff a `Backend` is set. */
-    bool has_backend() const { return bool(backend_); }
+    bool has_default_backend() const { return default_backend_ != backends_.end(); }
 
-    /** Returns the active `Backend`. */
-    Backend & backend() const {
-        M_insist(has_backend(), "must have set a backend");
-        return *backend_;
+    /** Returns the default `Backend`. */
+    Backend & default_backend() const {
+        M_insist(has_default_backend(), "must have set a backend");
+        return *default_backend_->second;
     }
 
-    /** Sets the new `Backend` and returns the old one. */
-    std::unique_ptr<Backend> backend(std::unique_ptr<Backend> new_backend) {
-        using std::swap;
-        swap(new_backend, backend_);
-        return new_backend;
+    const char * default_backend_name() const {
+        M_insist(has_default_backend(), "must have set a backend");
+        return default_backend_->first;
     }
+
+    auto backends_begin() { return backends_.begin(); }
+    auto backends_end() { return backends_.end(); }
+    auto backends_begin() const { return backends_.begin(); }
+    auto backends_end() const { return backends_.end(); }
+    auto backends_cbegin() const { return backends_begin(); }
+    auto backends_cend() const { return backends_end(); }
 
     /*===== CardinalityEstimators ====================================================================================*/
     /** Registers a new `CardinalityEstimator` with the given `name`. */

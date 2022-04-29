@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutable/mutable-config.hpp>
 #include <mutable/util/fn.hpp>
 #include <cstdint>
 #include <iostream>
@@ -13,7 +14,7 @@ namespace memory {
 struct Memory;
 
 /** This is the common interface for all memory allocators that support *rewiring*.  */
-struct Allocator
+struct M_EXPORT Allocator
 {
     friend struct Memory;
 
@@ -40,7 +41,7 @@ struct Allocator
 
 /** This class represents a reserved address space in virtual memory.  It can be used to map the contents of
  * `memory::Memory` instances into one contiguous virtual address range. */
-struct AddressSpace
+struct M_EXPORT AddressSpace
 {
     friend void swap(AddressSpace &first, AddressSpace &second) {
         using std::swap;
@@ -73,7 +74,7 @@ struct AddressSpace
 /** Represents a mapping created by a `memory::Allocator`.  The class holds all information on the mapping, i.e. a
  * reference to the allocator that created the mapping, a pointer to the beginning of the virtual address range that was
  * mapped to, the offset within the allocator, and the size of the allocation.  */
-struct Memory
+struct M_EXPORT Memory
 {
     friend struct Allocator;
 
@@ -134,7 +135,7 @@ struct Memory
  * allocation and existing allocations are never modified.  Deallocation can only reclaim memory if all chronologically
  * later allocations have been deallocated before.  If possible, deallocate memory in the inverse order of allocation.
  */
-struct LinearAllocator : Allocator
+struct M_EXPORT LinearAllocator : Allocator
 {
     private:
     std::size_t offset_ = 0; ///< the offset from the start of the memory file of the next allocation

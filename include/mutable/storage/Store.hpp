@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <memory>
+#include <mutable/mutable-config.hpp>
 #include <mutable/catalog/Type.hpp>
 #include <mutable/storage/Linearization.hpp>
 #include <mutable/util/macro.hpp>
@@ -23,7 +24,7 @@ struct StoreVisitor;
 struct ConstStoreVisitor;
 
 /** Defines a generic store interface. */
-struct Store
+struct M_EXPORT Store
 {
     enum kind_t {
 #define M_STORE(NAME, _) S_ ## NAME,

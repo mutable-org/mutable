@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutable/mutable-config.hpp>
 #include <Eigen/Core>
 
 
@@ -7,7 +8,7 @@ namespace m {
 
 /** A model for predicting the costs of a physical operator.
  */
-class LinearModel {
+class M_EXPORT LinearModel {
 private:
     Eigen::VectorXd coefficients_; ///< vector of coefficients for every feature
     /// transformation that is applied on the feature matrix

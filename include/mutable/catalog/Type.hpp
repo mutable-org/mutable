@@ -26,7 +26,7 @@ struct TypeVisitor;
 struct ConstTypeVisitor;
 
 /** This class represents types in the SQL type system. */
-struct Type
+struct M_EXPORT Type
 {
 #define category_t(X) X(TY_Scalar) X(TY_Vector)
     M_DECLARE_ENUM(category_t); ///< a category for whether this type is *scalar* or *vectorial*
@@ -119,14 +119,14 @@ M_LCOV_EXCL_STOP
 };
 
 template<typename T>
-bool is_convertible(const Type *attr);
+bool M_EXPORT is_convertible(const Type *attr);
 
 /** Returns true iff both types have the same `PrimitiveType`, i.e. `Boolean`, `CharacterSequence`, `Date`, `DateTime`,
  * or `Numeric`. */
-bool is_comparable(const Type *first, const Type *second);
+bool M_EXPORT is_comparable(const Type *first, const Type *second);
 
 template<typename T>
-const PrimitiveType * get_runtime_type();
+const PrimitiveType * M_EXPORT get_runtime_type();
 
 }
 
@@ -143,7 +143,7 @@ namespace std {
 namespace m {
 
 /** `PrimitiveType`s represent `Type`s of values. */
-struct PrimitiveType : Type
+struct M_EXPORT PrimitiveType : Type
 {
     category_t category; ///< whether this type is scalar or vector
 
@@ -165,7 +165,7 @@ struct PrimitiveType : Type
 };
 
 /** This `Type` is assigned when parsing of a data type fails or when semantic analysis detects a type error. */
-struct ErrorType: Type
+struct M_EXPORT ErrorType: Type
 {
     friend struct Type;
 
@@ -188,7 +188,7 @@ struct ErrorType: Type
 };
 
 /** A `Type` that represents the absence of any other type.  Used to represent the type of `NULL`. */
-struct NoneType: Type
+struct M_EXPORT NoneType: Type
 {
     friend struct Type;
 
@@ -211,7 +211,7 @@ struct NoneType: Type
 };
 
 /** The boolean type. */
-struct Boolean : PrimitiveType
+struct M_EXPORT Boolean : PrimitiveType
 {
     friend struct Type;
 
@@ -240,7 +240,7 @@ struct Boolean : PrimitiveType
 };
 
 /** The type of character strings, both fixed length and varying length. */
-struct CharacterSequence : PrimitiveType
+struct M_EXPORT CharacterSequence : PrimitiveType
 {
     friend struct Type;
 
@@ -285,7 +285,7 @@ struct CharacterSequence : PrimitiveType
 };
 
 /** The date type. */
-struct Date : PrimitiveType
+struct M_EXPORT Date : PrimitiveType
 {
     friend struct Type;
 
@@ -314,7 +314,7 @@ struct Date : PrimitiveType
 };
 
 /** The date type. */
-struct DateTime : PrimitiveType
+struct M_EXPORT DateTime : PrimitiveType
 {
     friend struct Type;
 
@@ -343,7 +343,7 @@ struct DateTime : PrimitiveType
 };
 
 /** The numeric type represents integer and floating-point types of different precision and scale. */
-struct Numeric : PrimitiveType
+struct M_EXPORT Numeric : PrimitiveType
 {
     friend struct Type;
 
@@ -406,7 +406,7 @@ private:
 };
 
 /** The function type defines the type and count of the arguments and the type of the return value of a SQL function. */
-struct FnType : Type
+struct M_EXPORT FnType : Type
 {
     friend struct Type;
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutable/mutable-config.hpp>
 #include <mutable/util/Diagnostic.hpp>
 #include <sstream>
 #include <utility>
@@ -9,7 +10,7 @@ namespace m {
 
 /** This class enables direct rendering of dot output (e.g. that of `ASTDot`).  It uses the graphviz library to render
  * the dot output directly to PDF. */
-struct DotTool
+struct M_EXPORT DotTool
 {
     static constexpr const char *DEFAULT_LAYOUT_ALGORITHM = "dot";
 

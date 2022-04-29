@@ -637,4 +637,18 @@ M_LCOV_EXCL_STOP
     void deallocate_node(node_type *ptr) { allocator_.template deallocate<node_type>(ptr); }
 };
 
+template<typename It>
+struct range
+{
+    private:
+    It begin_, end_;
+
+    public:
+    range() { }
+    range(It begin, It end) : begin_(begin), end_(end) { }
+
+    It begin() { return begin_; }
+    It end() { return end_; }
+};
+
 }

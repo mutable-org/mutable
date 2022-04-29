@@ -15,13 +15,15 @@ namespace {
 
 struct TestStore : Store
 {
+    private:
+    memory::Memory memory_;
     public:
     TestStore(const Table &table) : Store(table) { }
 
     virtual std::size_t num_rows() const override { return 0; }
     void append() override { }
     void drop() override { }
-    const memory::Memory & memory(std::size_t attr_id) const override { return memory::Memory(); }
+    const memory::Memory & memory(std::size_t attr_id) const override { return memory_; }
     void accept(StoreVisitor &v) override { }
     void accept(ConstStoreVisitor &v) const override { }
     void dump(std::ostream &out) const override { }

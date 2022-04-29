@@ -3,6 +3,15 @@
 # GENERAL
 #-----------------------------------------------------------------------------------------------------------------------
 
+before_script:
+    - mkdir -p "${HOME}/.ssh"
+    - chmod 700 "${HOME}/.ssh"
+    - eval $(ssh-agent -s)
+    - echo "${SSH_PRIVATE_KEY}" | tr -d '\r' | ssh-add -
+    - echo "${SSH_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
+    - chmod 644 "${HOME}/.ssh/known_hosts"
+
+
 # Define the stages of the pipeline.
 stages:
     - check
@@ -13,16 +22,28 @@ stages:
 
 .build_cache:
     cache:
-        - key: third-party
+        - key: "third-party"
           paths:
               - "third-party"
-              - "build/${BUILD_TYPE}/third-party/src/*-stamp/*-download"
-              - "build/${BUILD_TYPE}/*-subbuild/*-populate-prefix/src/*-populate-stamp/*-populate-download"
-        - key: "build:${BUILD_TYPE}"
+              - "build/{debug,release,coverage}/**/*-download"                          # cache CMake download stamps
+              - "build/{debug,release,coverage}/**/*-gitclone-lastrun.txt"              # cache CMake Git stamps
+              - "build/{debug,release,coverage}/**/*-gitinfo.txt"                       # cache CMake Git stamps
+              - "build/{debug,release,coverage}/**/*-configure"                         # cache CMake configure stamps
+
+        - key: "build:${BUILD_TYPE}:${LIBRARY_TYPE}"
           paths:
-              - "build/${BUILD_TYPE}/bin"
-              - "build/${BUILD_TYPE}/lib"
-              - "build/${BUILD_TYPE}/third-party/src/*-build"
+              - "build/${BUILD_TYPE}/bin"                                               # cache our executables
+              - "build/${BUILD_TYPE}/lib/libmutable.{a,so,dylib,dll}"                   # cache our library
+              - "build/${BUILD_TYPE}/third-party/src/*-build"                           # cache third-party build
+              - "build/${BUILD_TYPE}/src/**/*.o"                                        # cache all object files
+
+.static:
+    variables:
+        LIBRARY_TYPE: static
+
+.shared:
+    variables:
+        LIBRARY_TYPE: shared
 
 .debug:
     variables:
@@ -56,22 +77,21 @@ build:debug:linux-amd64:
     tags:
         - linux
         - amd64
-    script:
-        - mkdir -p build/debug
-        - cd build/debug
-        - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DWITH_V8=1 ../..
-        - ninja gitversion
-        - ninja all unittest
     extends:
         - .debug
+        - .shared
         - .build_cache
+    script:
+        - mkdir -p build/${BUILD_TYPE}
+        - cd build/${BUILD_TYPE}
+        - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=On -DWITH_V8=1 ../..
+        - ninja gitversion
+        - ninja all unittest
+        - find third-party -name '*.so' -exec cp {} lib \;     # collect shared libraries
     artifacts:
         paths:
-            - "build/debug/bin/lex"
-            - "build/debug/bin/parse"
-            - "build/debug/bin/check"
-            - "build/debug/bin/shell"
-            - "build/debug/bin/unittest"
+            - "build/${BUILD_TYPE}/bin/"
+            - "build/${BUILD_TYPE}/lib/"
         expire_in: 1 day
 
 build:debug:macos-amd64:
@@ -79,22 +99,21 @@ build:debug:macos-amd64:
     tags:
         - macos
         - amd64
-    script:
-        - mkdir -p build/debug
-        - cd build/debug
-        - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DWITH_V8=1 ../..
-        - ninja gitversion
-        - ninja all unittest
     extends:
         - .debug
+        - .shared
         - .build_cache
+    script:
+        - mkdir -p build/${BUILD_TYPE}
+        - cd build/${BUILD_TYPE}
+        - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=On -DWITH_V8=1 ../..
+        - ninja gitversion
+        - ninja all unittest
+        - find third-party -name '*.dylib' -exec cp {} lib \;  # collect shared libraries
     artifacts:
         paths:
-            - "build/debug/bin/lex"
-            - "build/debug/bin/parse"
-            - "build/debug/bin/check"
-            - "build/debug/bin/shell"
-            - "build/debug/bin/unittest"
+            - "build/${BUILD_TYPE}/bin/"
+            - "build/${BUILD_TYPE}/lib/"
         expire_in: 1 day
 
 
@@ -132,7 +151,7 @@ integrationtest:linux-amd64:
           artifacts: true
     script:
         - pip3 install --user --upgrade colorama pyyaml yamale tqdm
-        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 python3 test/IntegrationTest.py --verbose --required-only --debug build/debug
+        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 --unset=TERM python3 test/IntegrationTest.py --verbose --required-only --debug build/debug
 
 integrationtest:macos-amd64:
     stage: test
@@ -144,7 +163,7 @@ integrationtest:macos-amd64:
           artifacts: true
     script:
         - pip3 install --user --upgrade colorama pyyaml yamale tqdm
-        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 python3 test/IntegrationTest.py --verbose --required-only --debug build/debug
+        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 --unset=TERM python3 test/IntegrationTest.py --verbose --required-only --debug build/debug
 
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -156,9 +175,13 @@ build:release:linux-amd64:
     tags:
         - linux
         - amd64
+    extends:
+        - .release
+        - .static
+        - .build_cache
     script:
-        - mkdir -p build/release
-        - cd build/release
+        - mkdir -p build/${BUILD_TYPE}
+        - cd build/${BUILD_TYPE}
         - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DWITH_V8=1 ../..
         - ninja gitversion
         - ninja
@@ -167,29 +190,32 @@ build:release:linux-amd64:
         - cp -R include mutable
         - find mutable/include -type f -iname '*.hpp' | xargs perl -i -pe 'BEGIN{undef $/;} s/^\#ifndef NDEBUG.*?(\#else(.*?))?\#endif/$2/smg'
         - mkdir mutable/lib
-        - cp build/release/lib/libmutable.a mutable/lib
-    extends:
-        - .release
-        - .build_cache
-    needs:
-        - job: "unittest:linux-amd64"
-        - job: "integrationtest:linux-amd64"
+        - cp build/${BUILD_TYPE}/lib/libmutable.a mutable/lib
     artifacts:
         paths:
             - "mutable"
         expire_in: 1 day
     only:
-        - master
-        - /release/i
+        refs:
+            - master
+            - /release/i
+            - branches
+    except:
+        variables:
+            - '$CI_MERGE_REQUEST_TITLE =~ /^wip:/i || $CI_MERGE_REQUEST_TITLE =~ /^draft:/i'
 
 build:release:macos-amd64:
     stage: build:release
     tags:
         - macos
         - amd64
+    extends:
+        - .release
+        - .static
+        - .build_cache
     script:
-        - mkdir -p build/release
-        - cd build/release
+        - mkdir -p build/${BUILD_TYPE}
+        - cd build/${BUILD_TYPE}
         - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DWITH_V8=1 ../..
         - ninja gitversion
         - ninja
@@ -198,20 +224,19 @@ build:release:macos-amd64:
         - cp -R include mutable
         - find mutable/include -type f -iname '*.hpp' | xargs perl -i -pe 'BEGIN{undef $/;} s/^\#ifndef NDEBUG.*?(\#else(.*?))?\#endif/$2/smg'
         - mkdir mutable/lib
-        - cp build/release/lib/libmutable.a mutable/lib
-    extends:
-        - .release
-        - .build_cache
-    needs:
-        - job: "unittest:macos-amd64"
-        - job: "integrationtest:macos-amd64"
+        - cp build/${BUILD_TYPE}/lib/libmutable.a mutable/lib
     artifacts:
         paths:
             - "mutable"
         expire_in: 1 day
     only:
-        - master
-        - /release/i
+        refs:
+            - master
+            - /release/i
+            - branches
+    except:
+        variables:
+            - '$CI_MERGE_REQUEST_TITLE =~ /^wip:/i || $CI_MERGE_REQUEST_TITLE =~ /^draft:/i'
 
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -250,16 +275,17 @@ report:coverage:
     script:
         - ./coverage.sh
         - rm -rf /srv/http/mutable/coverage
-        - mv build/coverage/html /srv/http/mutable/coverage
+        - mv build/${BUILD_TYPE}/html /srv/http/mutable/coverage
     coverage: '/branches\.\.\.: \d+\.\d+/'
     extends:
         - .coverage
+        - .shared
         - .build_cache
     artifacts:
         paths:
-            - "build/coverage/catch.xml"
+            - "build/${BUILD_TYPE}/catch.xml"
         reports:
-            junit: "build/coverage/catch.xml"
+            junit: "build/${BUILD_TYPE}/catch.xml"
     only:
         - master
         - /coverage/i

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutable/mutable-config.hpp>
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/IR/PlanEnumerator.hpp>
 #include <mutable/IR/PlanTable.hpp>
@@ -14,7 +15,7 @@ namespace m {
  * Additionally, the optimizer may apply several semantics preserving transformations to improve performance.  Such
  * transformations include query unnesting and predicate inference.
  */
-struct Optimizer
+struct M_EXPORT Optimizer
 {
     using Subproblem = QueryGraph::Subproblem;
     using projection_type = QueryGraph::projection_type;

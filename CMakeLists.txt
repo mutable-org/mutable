@@ -1,12 +1,16 @@
-cmake_minimum_required(VERSION 3.11)
+cmake_minimum_required(VERSION 3.20)
+set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 
 project("mutable" C CXX)
 
 include(ExternalProject)
 include(FetchContent)
+include(GenerateExportHeader)
 enable_testing()
 
 OPTION(BUILD_SHARED_LIBS "Build mutable as a shared library" OFF)
+
+# Backends
 set(WITH_V8 FALSE CACHE BOOL "Enable the V8 platform.")
 set(WITH_SPIDERMONKEY FALSE CACHE BOOL "Enable the SpiderMonkey platform.")
 
@@ -23,6 +27,22 @@ else()
 endif()
 set(Boost_USE_MULTITHREADED ON)
 find_package(Boost REQUIRED COMPONENTS system container)
+
+# Loading whole static library
+set(CMAKE_C_LINK_LIBRARY_USING_load_archive_SUPPORTED TRUE)
+if(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
+    set(CMAKE_C_LINK_LIBRARY_USING_load_archive "-force_load <LIB_ITEM>")
+elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU"
+        AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(CMAKE_C_LINK_LIBRARY_USING_load_archive "LINKER:--push-state,--whole-archive"
+        "<LINK_ITEM>"
+        "LINKER:--pop-state")
+elseif(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
+    set(CMAKE_C_LINK_LIBRARY_USING_load_archive "/WHOLEARCHIVE:<LIBRARY>")
+else()
+    # feature not yet supported for the other environments
+    set(CMAKE_C_LINK_LIBRARY_USING_load_archive_SUPPORTED FALSE)
+endif()
 
 # Git
 find_package(Git REQUIRED)
@@ -60,6 +80,18 @@ else()
     set(SHARED_LIB_SUFFIX so)
 endif()
 
+# Shared or Static library suffix & type
+if(${BUILD_SHARED_LIBS})
+    set(BUILD_STATIC_LIBS OFF)
+    set(LIB_SUFFIX ${SHARED_LIB_SUFFIX})
+    set(LIB_TYPE SHARED)
+else()
+    set(BUILD_STATIC_LIBS ON)
+    set(LIB_SUFFIX a)
+    set(LIB_TYPE STATIC)
+endif()
+
+
 # Deviant binaries
 if(APPLE)
     set(AUTOCONF_BINARY autoconf213)
@@ -70,9 +102,18 @@ endif()
 set(CMAKE_COMPILE_FLAGS             "${CMAKE_COMPILE_FLAGS} -W -Wall -pedantic -Wno-variadic-macros -Wno-gnu-zero-variadic-macro-arguments -Wno-gnu-label-as-value -Wno-c++20-designator -Wno-c++20-extensions -Wno-vla-extension -Wno-gnu-conditional-omitted-operand -mavx2 -mbmi2 -mavx -msse4.2 -mbmi")
 set(CMAKE_C_FLAGS                   "${CMAKE_C_FLAGS} ${CMAKE_COMPILE_FLAGS}")
 set(CMAKE_CXX_FLAGS                 "-std=c++17 ${CMAKE_CXX_FLAGS} ${CMAKE_COMPILE_FLAGS}")
-set(CMAKE_CXX_FLAGS_DEBUG           "-ggdb3 -fno-omit-frame-pointer -fno-optimize-sibling-calls -fsanitize=address,undefined -fno-sanitize=vptr -fsanitize-address-use-after-scope")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "-DNDEBUG -ggdb3 -fno-omit-frame-pointer -fno-optimize-sibling-calls -O2")
+set(CMAKE_CXX_FLAGS_DEBUG           "-fno-omit-frame-pointer -fno-optimize-sibling-calls")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "-DNDEBUG -fno-omit-frame-pointer -fno-optimize-sibling-calls -O2")
 set(CMAKE_POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS})
+
+# OS dependent debug annotations
+if(APPLE)
+    set(CMAKE_CXX_FLAGS_DEBUG           "${CMAKE_CXX_FLAGS_DEBUG} -glldb")
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -glldb")
+else()
+    set(CMAKE_CXX_FLAGS_DEBUG           "${CMAKE_CXX_FLAGS_DEBUG} -ggdb3")
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -ggdb3")
+endif()
 
 
 ########################################################################################################################
@@ -120,6 +161,11 @@ FetchContent_Populate(
 )
 
 # Replxx - Interactive Command Line Tool with History and Completions
+if(${BUILD_SHARED_LIBS})
+    set(REPLXX_LIB_SUFFIX .${LIB_SUFFIX})
+else()
+    set(REPLXX_LIB_SUFFIX -static.a)
+endif()
 ExternalProject_Add(
     Replxx
     PREFIX third-party
@@ -129,13 +175,14 @@ ExternalProject_Add(
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/replxx"
     PATCH_COMMAND sed -i.origin "s/^.*set_property.*DEBUG_POSTFIX.*//" "CMakeLists.txt"
     COMMAND       sed -i.origin "s/^if *( *NOT BUILD_SHARED_LIBS AND MSVC *)/if ( NOT BUILD_SHARED_LIBS )/" "CMakeLists.txt"
-    CMAKE_ARGS -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-    BUILD_BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/third-party/src/Replxx-build/libreplxx-static.a"
+    CMAKE_ARGS -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+    CONFIGURE_HANDLED_BY_BUILD true
+    BUILD_BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/third-party/src/Replxx-build/libreplxx${REPLXX_LIB_SUFFIX}"
     INSTALL_COMMAND ""
 )
 include_directories(SYSTEM third-party/replxx/include)
-add_library(replxx STATIC IMPORTED)
-set_target_properties(replxx PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/third-party/src/Replxx-build/libreplxx-static.a")
+add_library(replxx ${LIB_TYPE} IMPORTED)
+set_target_properties(replxx PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/third-party/src/Replxx-build/libreplxx${REPLXX_LIB_SUFFIX}")
 add_dependencies(replxx Replxx)
 
 # Binaryen - WebAssembly CodeGen API with WASM-specific Optimizations
@@ -146,21 +193,22 @@ ExternalProject_Add(
     GIT_REPOSITORY "https://github.com/WebAssembly/binaryen.git"
     GIT_TAG 96f7acf09aae1ec6e8bc573dfa8f309c4f892a40 # version_102
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/binaryen"
-    CMAKE_ARGS -DBUILD_STATIC_LIB=ON -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-    BUILD_BYPRODUCTS "${PROJECT_BINARY_DIR}/third-party/src/Binaryen-build/lib/libbinaryen.a"
+    CMAKE_ARGS -DBUILD_STATIC_LIB=${BUILD_STATIC_LIBS} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+    CONFIGURE_HANDLED_BY_BUILD true
+    BUILD_BYPRODUCTS "${PROJECT_BINARY_DIR}/third-party/src/Binaryen-build/lib/libbinaryen.${LIB_SUFFIX}"
     BUILD_COMMAND ${CMAKE_BUILD_TOOL} binaryen
     INSTALL_COMMAND ""
 )
 include_directories(SYSTEM third-party/binaryen/src)
-add_library(binaryen STATIC IMPORTED)
-set_target_properties(binaryen PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/third-party/src/Binaryen-build/lib/libbinaryen.a")
+add_library(binaryen ${LIB_TYPE} IMPORTED)
+set_target_properties(binaryen PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/third-party/src/Binaryen-build/lib/libbinaryen.${LIB_SUFFIX}")
 add_dependencies(binaryen Binaryen)
 
 # nlohmann_json - A simple, header-only JSON parser
 FetchContent_Populate(
     Json
     GIT_REPOSITORY https://github.com/ArthurSonzogni/nlohmann_json_cmake_fetchcontent.git
-    GIT_TAG "v3.9.0"
+    GIT_TAG dcfd3ee9de4e50e077c230cbf27c77aa8d760327 # v3.9.0
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/json"
 )
 include_directories(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/third-party/json/include")
@@ -169,7 +217,7 @@ include_directories(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/third-party/json/include
 FetchContent_Populate(
     Eigen
     GIT_REPOSITORY "https://gitlab.com/libeigen/eigen.git"
-    GIT_TAG "3.3.9"
+    GIT_TAG 0fd6b4f71dd85b2009ee4d1aeb296e2c11fc9d68 # v3.3.9
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/eigen"
 )
 include_directories(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/third-party/eigen")
@@ -177,8 +225,19 @@ include_directories(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/third-party/eigen")
 # V8 - Google's JavaScript and WebAssembly Engine (used in Chrome, Node.js)
 if(${WITH_V8})
     set(V8_VERSION "9.8.178")
-    set(V8_BUILD_ARGS "is_clang=true is_component_build=false v8_monolithic=true v8_enable_pointer_compression=true treat_warnings_as_errors=false v8_use_external_startup_data=false use_sysroot=false use_custom_libcxx=false clang_use_chrome_plugins=false target_cpu=\"x64\"")
+    set(V8_BUILD_ARGS "is_clang=true v8_enable_pointer_compression=true treat_warnings_as_errors=false v8_use_external_startup_data=false use_sysroot=false use_custom_libcxx=false clang_use_chrome_plugins=false target_cpu=\"x64\"")
     add_definitions("-DV8_COMPRESS_POINTERS")
+    if(${BUILD_SHARED_LIBS})
+        set(V8_BUILD_ARGS "${V8_BUILD_ARGS} v8_monolithic=false is_component_build=true")
+        set(V8_LIBRARY_PATH "${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/libv8.${LIB_SUFFIX}")
+        set(V8_PLATFORM_PATH "${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/libv8_libplatform.${LIB_SUFFIX}")
+        set(V8_BUILD_TARGETS v8 v8_libplatform)
+    else()
+        set(V8_BUILD_ARGS "${V8_BUILD_ARGS} v8_monolithic=true is_component_build=false")
+        set(V8_LIBRARY_PATH "${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/obj/libv8_monolith.a")
+        set(V8_PLATFORM_PATH)
+        set(V8_BUILD_TARGETS v8_monolith)
+    endif()
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         message(STATUS "Building V8 in debug mode")
         set(V8_BUILD_ARGS "${V8_BUILD_ARGS} is_debug=true use_debug_fission=true")
@@ -199,15 +258,21 @@ if(${WITH_V8})
         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/third_party/depot_tools/gclient sync
         UPDATE_COMMAND ""
         CONFIGURE_COMMAND gn gen out --root=${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8 --args=${V8_BUILD_ARGS}
-        BUILD_COMMAND ninja -C out
-        BUILD_BYPRODUCTS "${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/obj/libv8_monolith.a"
+        CONFIGURE_HANDLED_BY_BUILD true
+        BUILD_COMMAND ninja -C out ${V8_BUILD_TARGETS}
+        BUILD_BYPRODUCTS ${V8_LIBRARY_PATH} ${V8_PLATFORM_PATH}
         INSTALL_COMMAND ""
     )
-    add_definitions(-DM_WITH_V8)
+    # add_definitions(-DM_WITH_V8)
     include_directories(SYSTEM third-party/v8/v8/include)
-    add_library(v8 STATIC IMPORTED)
-    set_target_properties(v8 PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/obj/libv8_monolith.a")
+    add_library(v8 ${LIB_TYPE} IMPORTED)
+    set_target_properties(v8 PROPERTIES IMPORTED_LOCATION ${V8_LIBRARY_PATH})
     add_dependencies(v8 V8)
+    if(${BUILD_SHARED_LIBS})
+        add_library(v8_platform ${LIB_TYPE} IMPORTED)
+        set_target_properties(v8_platform PROPERTIES IMPORTED_LOCATION ${V8_PLATFORM_PATH})
+        add_dependencies(v8_platform V8)
+    endif()
 endif()
 
 # SpiderMonkey - Mozilla's JavaScript and WebAssembly Engine (used in Firefox)
@@ -254,6 +319,15 @@ endif()
 include_directories(include src)
 add_subdirectory(src)
 add_subdirectory(unittest)
+
+# generate export macros
+set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
+generate_export_header(
+    ${PROJECT_NAME}
+    BASE_NAME "M"
+    EXPORT_FILE_NAME "${CMAKE_CURRENT_SOURCE_DIR}/include/mutable/mutable-config.hpp"
+)
 
 # Tests
 if(APPLE)

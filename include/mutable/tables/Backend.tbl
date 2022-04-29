@@ -6,9 +6,6 @@
 
 /*         NAME           | Description */
 M_BACKEND( Interpreter,     "interperter backend" )
-#ifdef M_WITH_V8
-M_BACKEND( WasmV8,          "WebAssembly backend using Google's V8 engine" )
-#endif
 #ifdef M_WITH_SPIDERMONKEY
 M_BACKEND( WasmSM,          "WebAssembly backend using Mozilla's SpiderMonkey engine" )
 #endif

@@ -1,16 +1,11 @@
 #include "backend/Interpreter.hpp"
 #include "backend/StackMachine.hpp"
-#include "backend/WebAssembly.hpp"
 #include "catalog/Schema.hpp"
-#include "globals.hpp"
 #include "io/Reader.hpp"
 #include "IR/PartialPlanGenerator.hpp"
 #include "IR/PDDL.hpp"
-#include <mutable/catalog/CostModel.hpp>
-#include <mutable/mutable.hpp>
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
-#include "util/ArgParser.hpp"
 #include "util/glyphs.hpp"
 #include "util/terminal.hpp"
 #include <cerrno>
@@ -20,6 +15,10 @@
 #include <iomanip>
 #include <ios>
 #include <iostream>
+#include <mutable/catalog/CostModel.hpp>
+#include <mutable/mutable.hpp>
+#include <mutable/Options.hpp>
+#include <mutable/util/ArgParser.hpp>
 #include <regex>
 #include <replxx.hxx>
 #include <vector>
@@ -186,19 +185,18 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             }
             plan->add_child(optree.release());
 
-#if M_WITH_V8
-            if (Options::Get().dryrun and streq("WasmV8", Options::Get().backend)) {
-                auto backend = Backend::Create(Options::Get().backend);
-                auto &platform = as<WasmBackend>(*backend).platform();
+/* TODO implement as command line argument of plugin
+            if (Options::Get().dryrun and streq("WasmV8", C.default_backend_name())) {
+                Backend &backend = C.default_backend();
+                auto &platform = as<WasmBackend>(backend).platform();
                 WasmModule wasm = M_TIME_EXPR(platform.compile(*plan), "Compile to WebAssembly", timer);
                 wasm.dump(std::cout);
             }
-#endif
+*/
 
             if (not Options::Get().dryrun) {
-                auto backend = Backend::Create(Options::Get().backend);
                 M_TIME_THIS("Execute query", timer);
-                backend->execute(*plan);
+                C.default_backend().execute(*plan);
             }
         } else if (auto I = cast<InsertStmt>(stmt)) {
             auto &DB = C.get_database_in_use();
@@ -419,18 +417,19 @@ Replxx::hints_t hook_hint(const std::string &prefix, int &context_len, Replxx::C
 
 int main(int argc, const char **argv)
 {
+    Catalog &C = Catalog::Get();
+
     /* Identify whether the terminal supports colors. */
     const bool term_has_color = term::has_color();
     /* TODO Identify whether the terminal uses a unicode character encoding. */
     (void) term_has_color;
 
     /*----- Parse command line arguments. ----------------------------------------------------------------------------*/
-    ArgParser AP;
+    ArgParser &AP = C.arg_parser();
 #define ADD(TYPE, VAR, INIT, SHORT, LONG, DESCR, CALLBACK)\
     VAR = INIT;\
     {\
-        std::function<void(TYPE)> callback = CALLBACK;\
-        AP.add(SHORT, LONG, DESCR, callback);\
+        AP.add<TYPE>(SHORT, LONG, DESCR, CALLBACK);\
     }
     /*----- Help message ---------------------------------------------------------------------------------------------*/
     ADD(bool, Options::Get().show_help, false,              /* Type, Var, Init  */
@@ -513,23 +512,6 @@ int main(int argc, const char **argv)
         nullptr, "--plan-table-las",                                                    /* Short, Long      */
         "use the plan table optimized for large and sparse query graphs",               /* Description      */
         [&](bool) { Options::Get().plan_table_type = Options::PT_LargeAndSparse; });    /* Callback         */
-#if M_WITH_V8
-    /*----- Enable Chrome DevTools debugging via web socket ----------------------------------------------------------*/
-    ADD(int, Options::Get().cdt_port, 0,                    /* Type, Var, Init  */
-        nullptr, "--CDT",                                   /* Short, Long      */
-        "specify the port for debugging via ChomeDevTools", /* Description      */
-        [&](int port) { Options::Get().cdt_port = port; }); /* Callback         */
-    /*----- Add optimization flag ------------------------------------------------------------------------------------*/
-    ADD(int, Options::Get().wasm_optimization_level, 0,                         /* Type, Var, Init  */
-        "-O", "--wasm-opt",                                                     /* Short, Long      */
-        "set the optimization level for Wasm modules (0, 1, or 2)",             /* Description      */
-        [&](int olevel) { Options::Get().wasm_optimization_level = olevel; });  /* Callback         */
-    /*----- Add flag to enable adaptive mode (Liftoff + dynamic tier-up) ---------------------------------------------*/
-    ADD(bool, Options::Get().wasm_adaptive, false,                              /* Type, Var, Init  */
-        nullptr, "--wasm-adaptive",                                             /* Short, Long      */
-        "enable adaptive execution of Wasm with Liftoff and dynamic tier-up",   /* Description      */
-        [&](bool) { Options::Get().wasm_adaptive = true; });                    /* Callback         */
-#endif
 
     /*----- Select store implementation ------------------------------------------------------------------------------*/
     ADD(const char *, Options::Get().store,                 /* Type, Var        */
@@ -582,12 +564,14 @@ int main(int argc, const char **argv)
         "specify the execution backend",                    /* Description      */
         /* Callback         */
         [&](const char *str) {
-            if (Backend::STR_TO_KIND.find(str) == Backend::STR_TO_KIND.end()) {
+            try {
+                Catalog::Get().default_backend(str);
+                Options::Get().backend = str;
+            } catch (std::invalid_argument) {
                 std::cerr << "There is no execution backend with the name \"" << str << "\"." << std::endl;
                 AP.print_args(stderr);
                 std::exit(EXIT_FAILURE);
             }
-            Options::Get().backend = str;
         }
        );
     ADD(bool, Options::Get().list_backends, false,          /* Type, Var, Init  */
@@ -638,7 +622,7 @@ int main(int argc, const char **argv)
     ADD(int, Options::Get().pddl_actions, 4,                                /* Type, Var, Init  */
         nullptr, "--pddl-actions",                                          /* Short, Long      */
         /* Description      */
-        "specify the number of actions used for the PDDL files (2,3 or 4), 0 will create all 3 models",
+        "specify the number of actions used for the PDDL files (2, 3, or 4), 0 will create all 3 models",
         [&](int number) { Options::Get().pddl_actions = number; }           /* Callback         */
     );
     /*------ Cost Model Generation -----------------------------------------------------------------------------------*/
@@ -713,15 +697,11 @@ Immanuel Haffner\
 
     if (Options::Get().list_backends) {
         std::cout << "List of available backends:";
-        constexpr std::pair<const char*, const char*> backends[] = {
-#define M_BACKEND(NAME, DESCR) { #NAME, DESCR },
-#include <mutable/tables/Backend.tbl>
-#undef M_BACKEND
-        };
         std::size_t max_len = 0;
-        for (auto backend : backends) max_len = std::max(max_len, strlen(backend.first));
-        for (auto backend : backends)
-            std::cout << "\n    " << std::setw(max_len) << std::left << backend.first << "    -    " << backend.second;
+        range backends(Catalog::Get().backends_begin(), Catalog::Get().backends_end());
+        for (auto &backend : backends) max_len = std::max(max_len, strlen(backend.first));
+        for (auto &backend : backends)
+            std::cout << "\n    " << std::setw(max_len) << std::left << backend.first; // << "    -    " << backend.second;
         std::cout << std::endl;
         std::exit(EXIT_SUCCESS);
     }
@@ -792,13 +772,11 @@ Example for injected cardinalities file:\n\
         std::cout << std::endl;
     }
 
-#if M_WITH_V8
     if (not (Options::Get().wasm_optimization_level >= 0 and Options::Get().wasm_optimization_level <= 2)) {
         std::cerr << "level " << Options::Get().wasm_optimization_level << " is not a valid Wasm optimization level"
                   << std::endl;
         std::exit(EXIT_FAILURE);
     }
-#endif
 
     /* Disable synchronisation between C and C++ I/O (e.g. stdin vs std::cin). */
     std::ios_base::sync_with_stdio(false);

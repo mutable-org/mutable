@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <iostream>
+#include <mutable/mutable-config.hpp>
 #include <mutable/parse/AST.hpp>
 #include <vector>
 
@@ -13,7 +14,7 @@ struct Expr;
 namespace cnf {
 
 /** A `Predicate` contains a `Expr` of `Boolean` type in either *positive* or *negative* form. */
-struct Predicate
+struct M_EXPORT Predicate
 {
     private:
     uintptr_t literal_; ///< pointer to Expr; LSB is 1 iff literal is negated
@@ -61,14 +62,14 @@ struct Predicate
     void to_sql(std::ostream &out) const;
 
     /** Print a textual representation of `pred` to `out`. */
-    friend std::ostream & operator<<(std::ostream &out, const Predicate &pred);
+    friend std::ostream & M_EXPORT operator<<(std::ostream &out, const Predicate &pred);
 
     void dump(std::ostream &out) const;
     void dump() const;
 };
 
 /** A `cnf::Clause` represents a **disjunction** of `Predicate`s. */
-struct Clause : public std::vector<Predicate>
+struct M_EXPORT Clause : public std::vector<Predicate>
 {
     using std::vector<Predicate>::vector; // c'tor
 
@@ -89,14 +90,14 @@ struct Clause : public std::vector<Predicate>
     void to_sql(std::ostream &out) const;
 
     /** Print a textual representation of `clause` to `out`. */
-    friend std::ostream & operator<<(std::ostream &out, const Clause &clause);
+    friend std::ostream & M_EXPORT operator<<(std::ostream &out, const Clause &clause);
 
     void dump(std::ostream &out) const;
     void dump() const;
 };
 
 /** A `CNF` represents a **conjunction** of `cnf::Clause`s. */
-struct CNF : public std::vector<Clause>
+struct M_EXPORT CNF : public std::vector<Clause>
 {
     using std::vector<Clause>::vector; // c'tor
 
@@ -117,7 +118,7 @@ struct CNF : public std::vector<Clause>
     void to_sql(std::ostream &out) const;
 
     /** Print a textual representation of `cnf` to `out`. */
-    friend std::ostream & operator<<(std::ostream &out, const CNF &cnf);
+    friend M_EXPORT std::ostream & operator<<(std::ostream &out, const CNF &cnf);
     friend std::string to_string(const CNF &cnf) {
         std::ostringstream oss;
         oss << cnf;
@@ -130,31 +131,31 @@ struct CNF : public std::vector<Clause>
 
 /** Returns the **logical or** of two `cnf::Clause`s, i.e.\ the disjunction of the `Predicate`s of `lhs` and `rhs`.
  */
-Clause operator||(const Clause &lhs, const Clause &rhs);
+Clause M_EXPORT operator||(const Clause &lhs, const Clause &rhs);
 
 /** Returns the **logical and** of two `cnf::Clause`s, i.e.\ a `CNF` with the two `cnf::Clause`s `lhs` and `rhs`.
  */
-CNF operator&&(const Clause &lhs, const Clause &rhs);
+CNF M_EXPORT operator&&(const Clause &lhs, const Clause &rhs);
 
 /** Returns the **logical and** of two `CNF`s, i.e.\ the conjunction of the `cnf::Clause`s of `lhs` and `rhs`. */
-CNF operator&&(const CNF &lhs, const CNF &rhs);
+CNF M_EXPORT operator&&(const CNF &lhs, const CNF &rhs);
 
 /** Returns the **logical or** of two `CNF`s.  It is computed using the [*distributive law* from Boolean
  * algebra](https://en.wikipedia.org/wiki/Distributive_property): *P ∨ (Q ∧ R) ↔ ((P ∨ Q) ∧ (P ∨ R))* */
-CNF operator||(const CNF &lhs, const CNF &rhs);
+CNF M_EXPORT operator||(const CNF &lhs, const CNF &rhs);
 
 /** Returns the **logical negation** of a `cnf::Clause`.  It is computed using [De Morgan's laws]
  * (https://en.wikipedia.org/wiki/De_Morgan%27s_laws): *¬(P ∨ Q) ↔ ¬P ∧ ¬Q*. */
-CNF operator!(const Clause &clause);
+CNF M_EXPORT operator!(const Clause &clause);
 
 /** Returns the **logical negation** of a `CNF`.  It is computed using [De Morgan's laws]
  * (https://en.wikipedia.org/wiki/De_Morgan%27s_laws): *¬(P ∧ Q) ↔ ¬P ∨ ¬Q*. */
-CNF operator!(const CNF &cnf);
+CNF M_EXPORT operator!(const CNF &cnf);
 
 /** Converts the `Boolean` `Expr` `e` to a `CNF`. */
-CNF to_CNF(const Expr &e);
+CNF M_EXPORT to_CNF(const Expr &e);
 /** Converts the `Boolean` `Expr` of `c` to a `CNF`. */
-CNF get_CNF(const m::Clause &c);
+CNF M_EXPORT get_CNF(const m::Clause &c);
 
 
 }

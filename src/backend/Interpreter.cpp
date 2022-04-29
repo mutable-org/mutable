@@ -1,13 +1,13 @@
 #include "backend/Interpreter.hpp"
 
-#include "globals.hpp"
-#include <mutable/util/fn.hpp>
 #include "util/container/RefCountingHashMap.hpp"
 #include <algorithm>
 #include <cerrno>
 #include <cstdlib>
 #include <iterator>
+#include <mutable/Options.hpp>
 #include <mutable/parse/AST.hpp>
+#include <mutable/util/fn.hpp>
 #include <type_traits>
 
 
@@ -1537,4 +1537,8 @@ void Interpreter::operator()(const SortingOperator &op)
     data->pipeline.push(parent);
 }
 
-std::unique_ptr<Backend> Backend::CreateInterpreter() { return std::make_unique<Interpreter>(); }
+namespace m {
+
+// std::unique_ptr<Backend> Backend::CreateInterpreter() { return std::make_unique<Interpreter>(); }
+
+}

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e -o pipefail
+
 trap "exit" INT
 
 # Ignore List: Remove data for files that should be ignored in the final coverage report

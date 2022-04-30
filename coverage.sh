@@ -17,12 +17,14 @@ cd build/coverage
 
 cmake -G Ninja \
     -DCMAKE_BUILD_TYPE=Debug \
+    -DBUILD_SHARED_LIBS=On \
     -DCMAKE_C_COMPILER=clang \
     -DCMAKE_CXX_COMPILER=clang++ \
     -DCMAKE_COMPILE_FLAGS=--coverage \
     ../..
 # ninja clean
-ninja -v
+ninja gitversion
+ninja -v unittest
 
 # Produce gcov alias for llvm-cov gcov
 GCOV="$(pwd)/gcov.sh"

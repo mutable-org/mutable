@@ -12,6 +12,15 @@ before_script:
     - chmod 644 "${HOME}/.ssh/known_hosts"
 
 
+workflow:
+    rules:
+        - if: $CI_MERGE_REQUEST_IID
+        - if: $CI_COMMIT_TAG
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+        - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+          when: never # prevent duplicate pipelines of branches with MR
+
+
 # Define the stages of the pipeline.
 stages:
     - check
@@ -195,14 +204,19 @@ build:release:linux-amd64:
         paths:
             - "mutable"
         expire_in: 1 day
-    only:
-        refs:
-            - master
-            - /release/i
-            - branches
-    except:
-        variables:
-            - '$CI_MERGE_REQUEST_TITLE == null || ($CI_MERGE_REQUEST_TITLE =~ /^wip:/i || $CI_MERGE_REQUEST_TITLE =~ /^draft:/i)'
+    rules:
+        # run on default branch
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+          when: on_success
+        # run on branches with `release` in their name
+        - if: $CI_COMMIT_BRANCH =~ /release/i
+          when: on_success
+        # never run on merge requests in WIP/Draft mode
+        - if: $CI_MERGE_REQUEST_TITLE == null || ($CI_MERGE_REQUEST_TITLE =~ /^wip:/i || $CI_MERGE_REQUEST_TITLE =~ /^draft:/i)
+          when: never
+        # run on other merge requests (i.e. not marked as WIP/Draft)
+        - if: $CI_MERGE_REQUEST_TITLE
+          when: on_success
 
 build:release:macos-amd64:
     stage: build:release
@@ -229,14 +243,19 @@ build:release:macos-amd64:
         paths:
             - "mutable"
         expire_in: 1 day
-    only:
-        refs:
-            - master
-            - /release/i
-            - branches
-    except:
-        variables:
-            - '$CI_MERGE_REQUEST_TITLE == null || ($CI_MERGE_REQUEST_TITLE =~ /^wip:/i || $CI_MERGE_REQUEST_TITLE =~ /^draft:/i)'
+    rules:
+        # run on default branch
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+          when: on_success
+        # run on branches with `release` in their name
+        - if: $CI_COMMIT_BRANCH =~ /release/i
+          when: on_success
+        # never run on merge requests in WIP/Draft mode
+        - if: $CI_MERGE_REQUEST_TITLE == null || ($CI_MERGE_REQUEST_TITLE =~ /^wip:/i || $CI_MERGE_REQUEST_TITLE =~ /^draft:/i)
+          when: never
+        # run on other merge requests (i.e. not marked as WIP/Draft)
+        - if: $CI_MERGE_REQUEST_TITLE
+          when: on_success
 
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -252,8 +271,8 @@ report:doxygen:
         - rm -rf /srv/http/mutable/doxy
         - mkdir -p /srv/http/mutable/doxy
         - mv doxy/html/* /srv/http/mutable/doxy
-    only:
-        - master
+    rules:
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 report:doxygen:api:
     stage: report
@@ -264,8 +283,8 @@ report:doxygen:api:
     artifacts:
         paths:
             - "doxy-api/html"
-    only:
-        - master
+    rules:
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 report:coverage:
     stage: report
@@ -286,6 +305,8 @@ report:coverage:
             - "build/${BUILD_TYPE}/catch.xml"
         reports:
             junit: "build/${BUILD_TYPE}/catch.xml"
-    only:
-        - master
-        - /coverage/i
+    rules:
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+          when: on_success
+        - if: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /coverage/i
+          when: on_success

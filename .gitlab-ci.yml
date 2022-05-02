@@ -295,7 +295,7 @@ report:coverage:
         - ./coverage.sh
         - rm -rf /srv/http/mutable/coverage
         - mv build/${BUILD_TYPE}/html /srv/http/mutable/coverage
-    coverage: '/branches\.\.\.: \d+\.\d+/'
+    coverage: '/lines\.+: \d+\.\d+/'
     extends:
         - .coverage
         - .shared

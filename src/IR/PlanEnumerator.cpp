@@ -256,85 +256,83 @@ struct DPsubOpt final : PlanEnumeratorCRTP<DPsubOpt>
  * DPccp
  *====================================================================================================================*/
 
-/** Computes the join order using connected subgraph complement pairs (CCP). */
-struct DPccp final : PlanEnumeratorCRTP<DPccp>
+namespace {
+
+/** For each connected subgraph (csg) `S1` of `G`, enumerate all complement connected subgraphs,
+ * i.e.\ all csgs of `G - S1` that are connected to `S1`. */
+template<typename PlanTable>
+void enumerate_cmp(const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF, PlanTable &PT,
+                   const CardinalityEstimator &CE, Subproblem S1)
 {
-    using base_type = PlanEnumeratorCRTP<DPccp>;
-    using base_type::operator();
+    SmallBitset min = least_subset(S1); // node in `S1` with the lowest ID
+    Subproblem Bmin((uint64_t(min) << 1UL) - 1UL); // all nodes 'smaller' than `min`
+    Subproblem X(Bmin | S1); // exclude `S1` and all nodes with a lower ID than the smallest node in `S1`
 
-    /** For each connected subgraph (csg) `S1` of `G`, enumerate all complement connected subgraphs,
-     * i.e.\ all csgs of `G - S1` that are connected to `S1`. */
-    template<typename PlanTable>
-    void enumerate_cmp(const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF, PlanTable &PT,
-                       const CardinalityEstimator &CE, Subproblem S1) const
-    {
-        SmallBitset min = least_subset(S1); // node in `S1` with the lowest ID
-        Subproblem Bmin((uint64_t(min) << 1UL) - 1UL); // all nodes 'smaller' than `min`
-        Subproblem X(Bmin | S1); // exclude `S1` and all nodes with a lower ID than the smallest node in `S1`
+    Subproblem N = M.neighbors(S1) - X;
+    if (not N) return; // empty neighborhood
 
-        Subproblem N = M.neighbors(S1) - X;
-        if (not N) return; // empty neighborhood
+    /* Process subgraphs in breadth-first order.  The queue contains pairs of connected subgraphs and the corresponding
+     * set of nodes to exclude. */
+    std::queue<std::pair<Subproblem, Subproblem>> Q;
 
-        /* Process subgraphs in breadth-first order.  The queue contains pairs of connected subgraphs and the corresponding
-         * set of nodes to exclude. */
-        std::queue<std::pair<Subproblem, Subproblem>> Q;
+    for (std::size_t i = G.sources().size(); i != 0; --i) {
+        Subproblem vi(1UL << (i - 1));
+        if (not (vi & N)) continue; // `vi` is in neighborhood of `S1`
+        /* Compute exclude set. */
+        Subproblem excluded((1UL << i) - 1); // all nodes 'smaller' than the current node `vi`
+        Subproblem excluded_N = excluded & N; // only exclude nodes in the neighborhood of `S1`
+        Q.emplace(std::make_pair(vi, X | excluded_N));
+        while (not Q.empty()) {
+            auto [S, X] = Q.front();
+            Q.pop();
+            /* Update `PlanTable` with connected subgraph complement pair (S1, S). */
+            cnf::CNF condition; // TODO use join condition
+            PT.update(G, CE, CF, S1, S, condition);
 
-        for (std::size_t i = G.sources().size(); i != 0; --i) {
-            Subproblem vi(1UL << (i - 1));
-            if (not (vi & N)) continue; // `vi` is in neighborhood of `S1`
-            /* Compute exclude set. */
-            Subproblem excluded((1UL << i) - 1); // all nodes 'smaller' than the current node `vi`
-            Subproblem excluded_N = excluded & N; // only exclude nodes in the neighborhood of `S1`
-            Q.emplace(std::make_pair(vi, X | excluded_N));
-            while (not Q.empty()) {
-                auto [S, X] = Q.front();
-                Q.pop();
-                /* Update `PlanTable` with connected subgraph complement pair (S1, S). */
-                cnf::CNF condition; // TODO use join condition
-                PT.update(G, CE, CF, S1, S, condition);
-
-                Subproblem N = M.neighbors(S) - X;
-                /* Iterate over all subsets `sub` in `N` */
-                for (Subproblem sub(least_subset(N)); bool(sub); sub = Subproblem(next_subset(sub, N))) {
-                    /* Connected subgraph `S` expanded by `sub` constitutes a new connected subgraph.  For each of those
-                     * connected subgraphs, do not consider the neighborhood `N` in addition to the existing set of excluded
-                     * nodes. */
-                    Q.emplace(std::make_pair(S | sub, X | N));
-                }
+            Subproblem N = M.neighbors(S) - X;
+            /* Iterate over all subsets `sub` in `N` */
+            for (Subproblem sub(least_subset(N)); bool(sub); sub = Subproblem(next_subset(sub, N))) {
+                /* Connected subgraph `S` expanded by `sub` constitutes a new connected subgraph.  For each of those
+                 * connected subgraphs, do not consider the neighborhood `N` in addition to the existing set of excluded
+                 * nodes. */
+                Q.emplace(std::make_pair(S | sub, X | N));
             }
         }
     }
+}
 
-    template<typename PlanTable>
-    void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
-        auto &sources = G.sources();
-        const std::size_t n = sources.size();
-        const AdjacencyMatrix &M = G.adjacency_matrix();
-        auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
+}
 
-        /* Process subgraphs in breadth-first order.  The queue contains pairs of connected subgraphs and the corresponding
-         * set of nodes to exclude. */
-        std::queue<std::pair<Subproblem, Subproblem>> Q;
+template<typename PlanTable>
+void DPccp::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const
+{
+    auto &sources = G.sources();
+    const std::size_t n = sources.size();
+    const AdjacencyMatrix &M = G.adjacency_matrix();
+    auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
-        for (std::size_t i = n; i != 0; --i) {
-            /* For a given single node subgraph, the node itself and all nodes with a lower ID are excluded. */
-            Q.emplace(std::make_pair(Subproblem(1UL << (i - 1)), Subproblem ((1UL << i) - 1)));
-            while (not Q.empty()) {
-                auto [S, X] = Q.front();
-                Q.pop();
-                enumerate_cmp(G, M, CF, PT, CE, S);
+    /* Process subgraphs in breadth-first order.  The queue contains pairs of connected subgraphs and the corresponding
+     * set of nodes to exclude. */
+    std::queue<std::pair<Subproblem, Subproblem>> Q;
 
-                Subproblem N = M.neighbors(S) - X;
-                /* Iterate over all subsets `sub` in `N` */
-                for (Subproblem sub(least_subset(N)); bool(sub); sub = Subproblem(next_subset(sub, N)))
-                    /* Connected subgraph `S` expanded by `sub` constitutes a new connected subgraph.  For each of those
-                     * connected subgraphs, do not consider the neighborhood `N` in addition to the existing set of excluded
-                     * nodes. */
-                    Q.emplace(std::make_pair(S | sub, X | N));
-            }
+    for (std::size_t i = n; i != 0; --i) {
+        /* For a given single node subgraph, the node itself and all nodes with a lower ID are excluded. */
+        Q.emplace(std::make_pair(Subproblem(1UL << (i - 1)), Subproblem ((1UL << i) - 1)));
+        while (not Q.empty()) {
+            auto [S, X] = Q.front();
+            Q.pop();
+            enumerate_cmp(G, M, CF, PT, CE, S);
+
+            Subproblem N = M.neighbors(S) - X;
+            /* Iterate over all subsets `sub` in `N` */
+            for (Subproblem sub(least_subset(N)); bool(sub); sub = Subproblem(next_subset(sub, N)))
+                /* Connected subgraph `S` expanded by `sub` constitutes a new connected subgraph.  For each of those
+                 * connected subgraphs, do not consider the neighborhood `N` in addition to the existing set of excluded
+                 * nodes. */
+                Q.emplace(std::make_pair(S | sub, X | N));
         }
     }
-};
+}
 
 
 /*======================================================================================================================
@@ -729,107 +727,25 @@ struct TDMinCutAGaT final : PlanEnumeratorCRTP<TDMinCutAGaT>
  * GOO
  *====================================================================================================================*/
 
-struct GOO : PlanEnumeratorCRTP<GOO>
-{
-    using base_type = PlanEnumeratorCRTP<GOO>;
-    using base_type::operator();
+template<typename PlanTable>
+void m::GOO::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
+    const AdjacencyMatrix &M = G.adjacency_matrix();
+    auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
-    struct node
-    {
-        Subproblem subproblem;
-        Subproblem neighbors;
-
-        node() = default;
-        node(Subproblem subproblem, Subproblem neighbors)
-            : subproblem(subproblem), neighbors(neighbors)
-        { }
-
-        /** Checks whether two nodes can be merged. */
-        bool can_merge_with(const node &other) const {
-            M_insist(bool(this->subproblem & other.neighbors) == bool(other.subproblem & this->neighbors));
-            return bool(this->subproblem & other.neighbors);
-        }
-
-        /** Merge two nodes. */
-        node merge(const node &other) const {
-            M_insist(can_merge_with(other));
-            const Subproblem S = this->subproblem | other.subproblem;
-            return node(S, (this->neighbors | other.neighbors) - S);
-        }
-
-        /** Merges `this` and `other`. */
-        node operator+(const node &other) const { return merge(other); }
-        /** Merges `other` *into* `this` node. */
-        node & operator+=(const node &other) { *this = *this + other; return *this; }
-
-        /** Checks whether `this` node node can be merged with `other`. */
-        bool operator&(const node &other) const { return can_merge_with(other); }
-    };
-
-    template<typename Callback, typename PlanTable>
-    void for_each_join(Callback &&callback, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
-                       const CostFunction &CF, const CardinalityEstimator &CE, node *begin, node *end) const
-    {
-        cnf::CNF condition; // TODO use join condition
-        while (begin + 1 != end) {
-            using std::swap;
-
-            /*----- Find two most promising subproblems to join. -----*/
-            node *left = nullptr, *right = nullptr;
-            double least_cardinality = std::numeric_limits<double>::infinity();
-            for (node *outer = begin; outer != end; ++outer) {
-                for (node *inner = std::next(outer); inner != end; ++inner) {
-                    if (*outer & *inner) { // can be merged
-                        M_insist((outer->subproblem & inner->subproblem).empty());
-                        M_insist(M.is_connected(outer->subproblem, inner->subproblem));
-                        const Subproblem joined = outer->subproblem | inner->subproblem;
-                        if (not PT[joined].model)
-                            PT[joined].model = CE.estimate_join(G, *PT[outer->subproblem].model,
-                                                                *PT[inner->subproblem].model, condition);
-                        const double C_joined = CE.predict_cardinality(*PT[joined].model);
-                        if (C_joined < least_cardinality) {
-                            least_cardinality = C_joined;
-                            left = outer;
-                            right = inner;
-                        }
-                    }
-                }
-            }
-
-            /*----- Issue callback. -----*/
-            M_insist((left->subproblem & right->subproblem).empty());
-            M_insist(M.is_connected((left->subproblem & right->subproblem)));
-            callback(left->subproblem, right->subproblem);
-
-            /*----- Join the two most promising subproblems found. -----*/
-            M_insist(left);
-            M_insist(right);
-            M_insist(left < right);
-            *left += *right; // merge `right` into `left`
-            swap(*right, *--end); // erase old `right`
-        }
+    /*----- Initialize subproblems and their neighbors. -----*/
+    node nodes[G.num_sources()];
+    for (std::size_t i = 0; i != G.num_sources(); ++i) {
+        Subproblem S(1UL << i);
+        Subproblem N = M.neighbors(S);
+        nodes[i] = node(S, N);
     }
 
-    template<typename PlanTable>
-    void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
-        const AdjacencyMatrix &M = G.adjacency_matrix();
-        auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
-
-        /*----- Initialize subproblems and their neighbors. -----*/
-        node nodes[G.num_sources()];
-        for (std::size_t i = 0; i != G.num_sources(); ++i) {
-            Subproblem S(1UL << i);
-            Subproblem N = M.neighbors(S);
-            nodes[i] = node(S, N);
-        }
-
-        /*----- Greedyly enumerate joins, thereby computing a plan. -----*/
-        for_each_join([&](const Subproblem left, const Subproblem right){
-            static cnf::CNF condition;
-            PT.update(G, CE, CF, left, right, condition);
-        }, PT, G, M, CF, CE, nodes, nodes + G.num_sources());
-    }
-};
+    /*----- Greedyly enumerate joins, thereby computing a plan. -----*/
+    for_each_join([&](const Subproblem left, const Subproblem right){
+        static cnf::CNF condition;
+        PT.update(G, CE, CF, left, right, condition);
+    }, PT, G, M, CF, CE, nodes, nodes + G.num_sources());
+}
 
 
 /*======================================================================================================================

@@ -20,6 +20,7 @@
 #include <mutable/util/list_allocator.hpp>
 #include <mutable/util/malloc_allocator.hpp>
 #include <mutable/util/Timer.hpp>
+#include <mutable/util/MinCutAGaT.hpp>
 #include <queue>
 #include <set>
 #include <type_traits>
@@ -694,78 +695,6 @@ struct TDMinCutAGaT final : PlanEnumeratorCRTP<TDMinCutAGaT>
     using base_type = PlanEnumeratorCRTP<TDMinCutAGaT>;
     using base_type::operator();
 
-    template<typename Callback>
-    void MinCutAGaT(const AdjacencyMatrix &M, Callback &&callback, const Subproblem S,
-                    const Subproblem C, const Subproblem X, const Subproblem T) const
-    {
-        M_insist(not S.empty());
-        M_insist(not S.singleton());
-        M_insist(M.is_connected(S));
-        M_insist(T.is_subset(C));
-        M_insist(C.is_subset(S));
-        M_insist((C & X).empty());
-
-        using queue_entry = std::tuple<Subproblem, Subproblem, Subproblem>;
-        std::vector<queue_entry> worklist;
-        worklist.emplace_back(C, X, T);
-
-        while (not worklist.empty()) {
-            auto [C, X, T] = worklist.back();
-            worklist.pop_back();
-
-            M_insist(C.is_subset(S));
-            M_insist(M.is_connected(C));
-            M_insist(T.is_subset(C));
-
-            /*----- IsConnectedImp() check. -----*/
-            const Subproblem N_T = (M.neighbors(T) & S) - C; // sufficient to check if neighbors of T are connected
-            bool is_connected;
-            if (N_T.size() <= 1) {
-                is_connected = true; // trivial
-            } else {
-                const Subproblem n = N_T.begin().as_set(); // single, random vertex from the neighborhood of T
-                const Subproblem reachable = M.reachable(n, S - C); // compute vertices reachable from n in S - C
-                is_connected = N_T.is_subset(reachable); // if reachable vertices contain N_T, then S - C is connected
-            }
-
-            Subproblem T_tmp;
-            if (is_connected) { // found ccp (C, S\C)
-                M_insist(M.is_connected(S - C));
-                M_insist(M.is_connected(C, S - C));
-                callback(C, S - C);
-            } else {
-                M_insist(not M.is_connected(S - C) or not M.is_connected(C, S - C));
-                T_tmp = C;
-            }
-
-            if (C.size() + 1 >= S.size()) continue;
-
-            Subproblem X_tmp = X;
-            const Subproblem N_C = (M.neighbors(C) & S) - X;
-            for (auto it = N_C.begin(); it != N_C.end(); ++it) {
-                const Subproblem v = it.as_set();
-                worklist.emplace_back(C | v, X_tmp, T_tmp | v);
-                X_tmp = X_tmp | v;
-            }
-        }
-    }
-
-    template<typename Callback>
-    void partition(const AdjacencyMatrix &M, Callback &&callback, const Subproblem S) const {
-        M_insist(not S.empty());
-        M_insist(not S.singleton());
-        const Subproblem C = S.begin().as_set();
-        M_insist(not C.empty());
-        MinCutAGaT(
-            /* Matrix=   */ M,
-            /* Callback= */ std::forward<Callback>(callback),
-            /* S=        */ S,
-            /* C=        */ C,
-            /* X=        */ Subproblem(),
-            /* T=        */ C
-        );
-    }
-
     template<typename PlanTable>
     void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
         const AdjacencyMatrix &M = G.adjacency_matrix();
@@ -776,10 +705,10 @@ struct TDMinCutAGaT final : PlanEnumeratorCRTP<TDMinCutAGaT>
                 auto handle_ccp = std::bind(recurse, std::placeholders::_1, std::placeholders::_2, recurse);
                 /*----- Solve recursively. -----*/
                 if (not PT.has_plan(first))
-                    partition(M, handle_ccp, first);
+                    MinCutAGaT{}.partition(M, handle_ccp, first);
                 M_insist(PT.has_plan(first));
                 if (not PT.has_plan(second))
-                    partition(M, handle_ccp, second);
+                    MinCutAGaT{}.partition(M, handle_ccp, second);
                 M_insist(PT.has_plan(second));
 
                 /*----- Update `PlanTable`. -----*/
@@ -791,7 +720,7 @@ struct TDMinCutAGaT final : PlanEnumeratorCRTP<TDMinCutAGaT>
 
         if (G.num_sources() > 1) {
             const Subproblem All((1UL << G.num_sources()) - 1UL);
-            partition(M, handle_ccp, All);
+            MinCutAGaT{}.partition(M, handle_ccp, All);
         }
     }
 };
@@ -2480,7 +2409,6 @@ struct TopDownComplete : TopDown
         bool has_successor = false;
 #endif
 
-        TDMinCutAGaT TD;
         const Subproblem All((1UL << G.num_sources()) - 1UL);
         auto enumerate_ccp = [&](Subproblem S1, Subproblem S2) {
             using std::swap;
@@ -2544,7 +2472,7 @@ struct TopDownComplete : TopDown
 
         for (const Subproblem S : state) {
             if (not S.singleton()) { // partition only the first non-singleton
-                TD.partition(M, enumerate_ccp, S);
+                MinCutAGaT{}.partition(M, enumerate_ccp, S);
                 break;
             }
         }
@@ -2937,7 +2865,7 @@ struct GOO<PlanTable, State, TopDown>
                 continue;
 
             C_min = std::numeric_limits<decltype(C_min)>::infinity();
-            TDMinCutAGaT{}.partition(M, enumerate_ccp, S);
+            MinCutAGaT{}.partition(M, enumerate_ccp, S);
 
             cost += C_min;
             worklist.emplace_back(min_left);

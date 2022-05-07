@@ -59,7 +59,7 @@ struct DPsize final : PlanEnumeratorCRTP<DPsize>
     void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
         auto &sources = G.sources();
         std::size_t n = sources.size();
-        AdjacencyMatrix M(G);
+        const AdjacencyMatrix &M = G.adjacency_matrix();
         auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
         /* Process all subplans of size greater than one. */
@@ -100,7 +100,7 @@ struct DPsizeOpt final : PlanEnumeratorCRTP<DPsizeOpt>
     void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
         auto &sources = G.sources();
         std::size_t n = sources.size();
-        AdjacencyMatrix M(G);
+        const AdjacencyMatrix &M = G.adjacency_matrix();
         auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
         /* Process all subplans of size greater than one. */
@@ -156,7 +156,7 @@ struct DPsizeSub final : PlanEnumeratorCRTP<DPsizeSub>
     void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
         auto &sources = G.sources();
         std::size_t n = sources.size();
-        AdjacencyMatrix M(G);
+        const AdjacencyMatrix &M = G.adjacency_matrix();
         auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
         /* Process all subplans of size greater than one. */
@@ -191,7 +191,7 @@ struct DPsub final : PlanEnumeratorCRTP<DPsub>
     void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
         auto &sources = G.sources();
         const std::size_t n = sources.size();
-        const AdjacencyMatrix M(G);
+        const AdjacencyMatrix &M = G.adjacency_matrix();
         auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
         for (std::size_t i = 1, end = 1UL << n; i < end; ++i) {
@@ -226,7 +226,7 @@ struct DPsubOpt final : PlanEnumeratorCRTP<DPsubOpt>
     void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
         auto &sources = G.sources();
         const std::size_t n = sources.size();
-        const AdjacencyMatrix M(G);
+        const AdjacencyMatrix &M = G.adjacency_matrix();
         auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
         for (std::size_t i = 1, end = 1UL << n; i < end; ++i) {
@@ -308,7 +308,7 @@ struct DPccp final : PlanEnumeratorCRTP<DPccp>
     void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
         auto &sources = G.sources();
         const std::size_t n = sources.size();
-        const AdjacencyMatrix M(G);
+        const AdjacencyMatrix &M = G.adjacency_matrix();
         auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
         /* Process subgraphs in breadth-first order.  The queue contains pairs of connected subgraphs and the corresponding
@@ -480,7 +480,7 @@ struct IKKBZ final : PlanEnumeratorCRTP<IKKBZ>
 
     template<typename PlanTable>
     void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
-        AdjacencyMatrix M(G);
+        const AdjacencyMatrix &M = G.adjacency_matrix();
         auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
         /* Linearize the vertices. */
@@ -591,7 +591,7 @@ struct LinearizedDP final : PlanEnumeratorCRTP<LinearizedDP>
         if (G.num_sources() <= 1) return;
 
         auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
-        const AdjacencyMatrix M(G);
+        const AdjacencyMatrix &M = G.adjacency_matrix();
         const std::vector<std::size_t> linearization = IKKBZ{}.linearize(PT, G, M, CF, CE);
         const std::size_t num_relations = G.num_sources();
 
@@ -677,7 +677,7 @@ struct TDbasic final : PlanEnumeratorCRTP<TDbasic>
     void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
         auto &sources = G.sources();
         std::size_t n = sources.size();
-        AdjacencyMatrix M(G);
+        const AdjacencyMatrix &M = G.adjacency_matrix();
         auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
         PlanGen(G, M, CF, CE, PT, Subproblem((1UL << n) - 1));
@@ -768,7 +768,7 @@ struct TDMinCutAGaT final : PlanEnumeratorCRTP<TDMinCutAGaT>
 
     template<typename PlanTable>
     void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
-        const AdjacencyMatrix M(G);
+        const AdjacencyMatrix &M = G.adjacency_matrix();
         auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
         auto handle_ccp = [&](const Subproblem first, const Subproblem second) -> void {
@@ -883,7 +883,7 @@ struct GOO : PlanEnumeratorCRTP<GOO>
 
     template<typename PlanTable>
     void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
-        const AdjacencyMatrix M(G);
+        const AdjacencyMatrix &M = G.adjacency_matrix();
         auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
 
         /*----- Initialize subproblems and their neighbors. -----*/
@@ -3445,7 +3445,7 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
     void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
         Catalog &C = Catalog::Get();
         auto &CE = C.get_database_in_use().cardinality_estimator();
-        AdjacencyMatrix M(G);
+        const AdjacencyMatrix &M = G.adjacency_matrix();
 
 #define HEURISTIC_SEARCH(STATE, EXPAND, HEURISTIC, SEARCH) \
         if (heuristic_search_helper<PlanTable, \

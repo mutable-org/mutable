@@ -215,7 +215,7 @@ template<typename Generator>
 void generate_correlated_cardinalities(table_type &table, const m::QueryGraph &G, Generator &&g)
 {
     const Subproblem All((1UL << G.num_sources()) - 1UL);
-    const m::AdjacencyMatrix M(G);
+    const m::AdjacencyMatrix &M = G.adjacency_matrix();
     std::unordered_map<Subproblem, double, m::SubproblemHash> max_cardinalities;
 
     auto cardinality = [&](const Subproblem S) -> double {
@@ -259,7 +259,7 @@ template<typename Generator>
 void generate_uncorrelated_cardinalities(table_type &table, const m::QueryGraph &G, Generator &&g)
 {
     const Subproblem All((1UL << G.num_sources()) - 1UL);
-    const m::AdjacencyMatrix M(G);
+    const m::AdjacencyMatrix &M = G.adjacency_matrix();
     skewed_distribution<double> selectivity_dist(args.alpha);
     // std::uniform_real_distribution<double> selectivity_dist(0, 1);
     const std::size_t delta = args.max_cardinality - args.min_cardinality;

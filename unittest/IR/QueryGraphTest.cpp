@@ -285,7 +285,7 @@ TEST_CASE("AdjacencyMatrix/QueryGraph Matrix", "[core][IR][unit]")
     auto stmt = as<const SelectStmt>(get_Stmt(query));
     auto query_graph = QueryGraph::Build(*stmt);
 
-    AdjacencyMatrix adj_mat(*query_graph);
+    const AdjacencyMatrix &adj_mat = query_graph->adjacency_matrix();
 
     /* Mapping of relation name to SmallBitset of data source ID. */
     std::unordered_map<const char *, SmallBitset> map;
@@ -508,7 +508,7 @@ TEST_CASE("AdjacencyMatrix/QueryGraph Matrix Negative", "[core][IR][unit]")
 
         delete stmt;
 
-        REQUIRE_THROWS_AS(AdjacencyMatrix(*query_graph), std::invalid_argument);
+        REQUIRE_THROWS_AS(query_graph->adjacency_matrix(), std::invalid_argument);
     }
 
     SECTION("create no join")
@@ -519,7 +519,7 @@ TEST_CASE("AdjacencyMatrix/QueryGraph Matrix Negative", "[core][IR][unit]")
                          WHERE A.id = 0;";
         auto stmt = as<const SelectStmt>(get_Stmt(query));
         auto query_graph = QueryGraph::Build(*stmt);
-        AdjacencyMatrix adj_mat(*query_graph);
+        const AdjacencyMatrix &adj_mat = query_graph->adjacency_matrix();
 
         delete stmt;
 

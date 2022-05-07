@@ -110,7 +110,7 @@ int main(int argc, const char **argv)
     }();
 
     auto G = m::QueryGraph::Build(*select);
-    m::AdjacencyMatrix M(*G);
+    m::AdjacencyMatrix &M = G->adjacency_matrix();
 
     /*----- Emit the queries. ----------------------------------------------------------------------------------------*/
     const Subproblem All((1UL << G->num_sources()) - 1UL);

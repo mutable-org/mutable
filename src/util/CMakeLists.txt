@@ -1,6 +1,7 @@
 add_library(
     util
     OBJECT
+    AdjacencyMatrix.cpp
     ADT.cpp
     ArgParser.cpp
     DotTool.cpp

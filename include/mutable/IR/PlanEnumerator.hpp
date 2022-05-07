@@ -1,13 +1,13 @@
 #pragma once
 
 #include <cstdint>
-#include <mutable/mutable-config.hpp>
 #include <mutable/catalog/CostFunction.hpp>
+#include <mutable/IR/PlanTable.hpp>
 #include <mutable/IR/QueryGraph.hpp>
+#include <mutable/mutable-config.hpp>
 #include <mutable/util/crtp.hpp>
 #include <mutable/util/macro.hpp>
 #include <unordered_map>
-#include <vector>
 
 
 namespace m {

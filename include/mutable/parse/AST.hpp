@@ -1,9 +1,9 @@
 #pragma once
 
 #include <iostream>
-#include <mutable/mutable-config.hpp>
-#include <mutable/catalog/Schema.hpp>
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/lex/Token.hpp>
+#include <mutable/mutable-config.hpp>
 #include <variant>
 #include <vector>
 

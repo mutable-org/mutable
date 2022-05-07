@@ -1,6 +1,6 @@
 #pragma once
 
-#include "catalog/Schema.hpp"
+#include <mutable/catalog/Schema.hpp>
 #include <mutable/storage/Store.hpp>
 #include <mutable/util/memory.hpp>
 

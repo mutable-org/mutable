@@ -1,6 +1,6 @@
 #include "catch2/catch.hpp"
 
-#include "catalog/Schema.hpp"
+#include <mutable/catalog/Schema.hpp>
 #include <mutable/IR/Tuple.hpp>
 
 

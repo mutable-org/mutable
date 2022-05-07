@@ -2,11 +2,11 @@
 
 #include "backend/RuntimeStruct.hpp"
 #include "backend/WebAssembly.hpp"
-#include "catalog/Schema.hpp"
 #include "storage/Store.hpp"
 #include <binaryen-c.h>
 #include <cstring>
 #include <iostream>
+#include <mutable/catalog/Schema.hpp>
 #include <mutable/catalog/Type.hpp>
 #include <mutable/IR/CNF.hpp>
 #include <mutable/IR/Operator.hpp>

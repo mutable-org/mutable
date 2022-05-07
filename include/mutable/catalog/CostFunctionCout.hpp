@@ -2,6 +2,7 @@
 
 #include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/CostFunction.hpp>
+#include <mutable/IR/PlanTable.hpp>
 
 
 namespace m {

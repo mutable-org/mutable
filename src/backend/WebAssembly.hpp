@@ -1,8 +1,8 @@
 #pragma once
 
-#include "catalog/Schema.hpp"
 #include <memory>
 #include <mutable/backend/Backend.hpp>
+#include <mutable/catalog/Schema.hpp>
 #include <mutable/IR/Operator.hpp>
 #include <mutable/parse/AST.hpp>
 #include <mutable/util/macro.hpp>

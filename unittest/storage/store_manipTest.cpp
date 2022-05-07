@@ -1,7 +1,8 @@
 #include "catch2/catch.hpp"
 
-#include "storage/store_manip.hpp"
 #include "storage/ColumnStore.hpp"
+#include "storage/store_manip.hpp"
+#include <mutable/catalog/Catalog.hpp>
 #include <set>
 
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "catalog/Schema.hpp"
 #include "lex/Lexer.hpp"
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/util/Diagnostic.hpp>
 #include <mutable/util/StringPool.hpp>
 #include <sstream>

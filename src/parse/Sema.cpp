@@ -1,7 +1,7 @@
 #include "parse/Sema.hpp"
 
-#include "catalog/Schema.hpp"
 #include <cstdint>
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/Options.hpp>
 #include <sstream>
 #include <unordered_map>

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "catalog/Schema.hpp"
 #include "storage/ColumnStore.hpp"
+#include <mutable/catalog/Schema.hpp>
 #include <random>
 #include <utility>
 #include <vector>

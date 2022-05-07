@@ -1,6 +1,6 @@
 #include "parse/ASTPrinter.hpp"
 
-#include "catalog/Schema.hpp"
+#include <mutable/catalog/Schema.hpp>
 
 
 using namespace m;

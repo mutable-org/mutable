@@ -1,10 +1,10 @@
 #include "catch2/catch.hpp"
 
-#include "catalog/Schema.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "testutil.hpp"
 #include "util/ADT.hpp"
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/catalog/Type.hpp>
 #include <mutable/IR/QueryGraph.hpp>
 #include <mutable/util/fn.hpp>

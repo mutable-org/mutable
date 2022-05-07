@@ -1,6 +1,5 @@
 #include "backend/Interpreter.hpp"
 #include "backend/WasmUtil.hpp"
-#include "catalog/Schema.hpp"
 #include "storage/Store.hpp"
 #include "util/WebSocketServer.hpp"
 #include <chrono>
@@ -9,6 +8,7 @@
 #include <ctime>
 #include <fstream>
 #include <libplatform/libplatform.h>
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/IR/Tuple.hpp>
 #include <mutable/Options.hpp>
 #include <mutable/storage/Store.hpp>

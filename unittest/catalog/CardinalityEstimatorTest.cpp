@@ -1,11 +1,11 @@
 #include "catch2/catch.hpp"
 
-#include "catalog/Schema.hpp"
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "util/ADT.hpp"
 #include <cstring>
 #include <mutable/catalog/CardinalityEstimator.hpp>
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/mutable.hpp>
 #include <sstream>
 

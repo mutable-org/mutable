@@ -1,6 +1,6 @@
 #pragma once
 
-#include "catalog/Schema.hpp"
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/parse/AST.hpp>
 #include <mutable/util/Diagnostic.hpp>
 #include <unordered_map>

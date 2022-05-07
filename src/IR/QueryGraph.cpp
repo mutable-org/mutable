@@ -1,8 +1,8 @@
 #include <mutable/IR/QueryGraph.hpp>
 
-#include "catalog/Schema.hpp"
 #include "IR/QueryGraph2SQL.hpp"
 #include "parse/ASTDumper.hpp"
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/parse/AST.hpp>
 #include <mutable/util/macro.hpp>
 #include <queue>

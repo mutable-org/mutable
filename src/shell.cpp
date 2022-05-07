@@ -1,6 +1,5 @@
 #include "backend/Interpreter.hpp"
 #include "backend/StackMachine.hpp"
-#include "catalog/Schema.hpp"
 #include "io/Reader.hpp"
 #include "IR/PartialPlanGenerator.hpp"
 #include "IR/PDDL.hpp"
@@ -18,7 +17,6 @@
 #include <mutable/catalog/CostModel.hpp>
 #include <mutable/mutable.hpp>
 #include <mutable/Options.hpp>
-#include <mutable/util/ArgParser.hpp>
 #include <regex>
 #include <replxx.hxx>
 #include <vector>

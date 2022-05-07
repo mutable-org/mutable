@@ -1,10 +1,10 @@
 #pragma once
 
-#include "catalog/Schema.hpp"
+#include <iostream>
+#include <mutable/catalog/Schema.hpp>
 #include <mutable/IR/Tuple.hpp>
 #include <mutable/storage/Store.hpp>
 #include <mutable/util/Diagnostic.hpp>
-#include <iostream>
 
 
 namespace m {

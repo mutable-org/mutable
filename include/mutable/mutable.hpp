@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <mutable/backend/Backend.hpp>
 #include <mutable/catalog/CardinalityEstimator.hpp>
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/catalog/Schema.hpp>
 #include <mutable/catalog/Type.hpp>
@@ -21,6 +22,7 @@
 #include <mutable/storage/Linearization.hpp>
 #include <mutable/storage/Store.hpp>
 #include <mutable/util/ADT.hpp>
+#include <mutable/util/ArgParser.hpp>
 #include <mutable/util/Diagnostic.hpp>
 #include <mutable/util/Diagnostic.hpp>
 #include <mutable/util/DotTool.hpp>

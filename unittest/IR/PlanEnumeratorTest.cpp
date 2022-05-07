@@ -1,6 +1,6 @@
 #include "catch2/catch.hpp"
 
-#include <catalog/Schema.hpp>
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/catalog/CostFunctionCout.hpp>
 #include <mutable/catalog/Type.hpp>

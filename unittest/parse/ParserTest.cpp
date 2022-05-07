@@ -1,9 +1,9 @@
 #include "catch2/catch.hpp"
 
-#include "catalog/Schema.hpp"
 #include "parse/ASTPrinter.hpp"
 #include "parse/Parser.hpp"
 #include "testutil.hpp"
+#include <mutable/catalog/Schema.hpp>
 #include <mutable/util/fn.hpp>
 
 

@@ -1,8 +1,8 @@
 #include <mutable/storage/Linearization.hpp>
 
-#include "catalog/Schema.hpp"
 #include <cmath>
 #include <iomanip>
+#include <mutable/catalog/Schema.hpp>
 
 
 using namespace m;

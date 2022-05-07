@@ -1,10 +1,10 @@
 #pragma once
 
 #include "backend/StackMachine.hpp"
-#include "catalog/Schema.hpp"
 #include <cerrno>
 #include <ctime>
 #include <mutable/backend/Backend.hpp>
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/IR/Operator.hpp>
 #include <mutable/IR/Tuple.hpp>
 #include <mutable/util/macro.hpp>

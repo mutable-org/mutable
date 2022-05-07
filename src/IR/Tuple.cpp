@@ -1,7 +1,7 @@
 #include <mutable/IR/Tuple.hpp>
 
-#include "catalog/Schema.hpp"
 #include <ctime>
+#include <mutable/catalog/Schema.hpp>
 #include <mutable/catalog/Type.hpp>
 #include <mutable/util/fn.hpp>
 

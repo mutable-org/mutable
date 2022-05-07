@@ -1,9 +1,9 @@
 #include <mutable/parse/AST.hpp>
 
-#include "catalog/Schema.hpp"
 #include "parse/ASTDot.hpp"
 #include "parse/ASTDumper.hpp"
 #include "parse/ASTPrinter.hpp"
+#include <mutable/catalog/Schema.hpp>
 
 
 using namespace m;

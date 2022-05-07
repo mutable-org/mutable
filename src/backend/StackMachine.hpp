@@ -1,7 +1,7 @@
 #pragma once
 
-#include "catalog/Schema.hpp"
 #include <cstdint>
+#include <mutable/catalog/Schema.hpp>
 #include <mutable/IR/Tuple.hpp>
 
 

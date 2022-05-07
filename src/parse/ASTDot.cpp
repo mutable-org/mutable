@@ -1,7 +1,7 @@
 #include "parse/ASTDot.hpp"
 
-#include "catalog/Schema.hpp"
 #include <iomanip>
+#include <mutable/catalog/Schema.hpp>
 #include <sstream>
 
 #define q(X) '"' << X << '"' // quote

@@ -1,3 +1,5 @@
+#pragma once
+
 #include <mutable/IR/CNF.hpp>
 #include <mutable/parse/AST.hpp>
 
@@ -37,13 +39,7 @@ struct QueryGraph2SQL : private ConstASTExprVisitor
     /** Checks whether the given target references an expression contained in the group_by clause. */
     bool references_group_by(Designator::target_type);
 
-    static const char * make_unique_alias() {
-        static uint64_t id(0);
-        std::ostringstream oss;
-        oss << "alias_" << id++;
-        Catalog &C = Catalog::Get();
-        return C.pool(oss.str().c_str());
-    }
+    static const char * make_unique_alias();
 
     using ConstASTExprVisitor::operator();
 #define DECLARE(CLASS) void operator()(Const<CLASS>&) override;

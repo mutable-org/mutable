@@ -4,6 +4,7 @@
 #include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/catalog/Schema.hpp>
+#include <mutable/IR/PlanEnumerator.hpp>
 #include <mutable/util/ArgParser.hpp>
 #include <mutable/util/macro.hpp>
 #include <mutable/util/memory.hpp>

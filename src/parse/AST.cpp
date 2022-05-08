@@ -3,7 +3,7 @@
 #include "parse/ASTDot.hpp"
 #include "parse/ASTDumper.hpp"
 #include "parse/ASTPrinter.hpp"
-#include <mutable/catalog/Schema.hpp>
+#include <mutable/catalog/Catalog.hpp>
 
 
 using namespace m;
@@ -25,6 +25,14 @@ FnApplicationExpr::~FnApplicationExpr()
 QueryExpr::~QueryExpr()
 {
     delete query;
+}
+
+const char * QueryExpr::make_unique_alias() {
+    static uint64_t id(0);
+    std::ostringstream oss;
+    oss << "q_" << id++;
+    Catalog &C = Catalog::Get();
+    return C.pool(oss.str().c_str());
 }
 
 /*===== Clause =======================================================================================================*/

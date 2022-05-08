@@ -1,7 +1,7 @@
 #pragma once
 
 #include <iostream>
-#include <mutable/catalog/Catalog.hpp>
+#include <mutable/catalog/Schema.hpp>
 #include <mutable/lex/Token.hpp>
 #include <mutable/mutable-config.hpp>
 #include <variant>
@@ -288,13 +288,7 @@ struct M_EXPORT QueryExpr : Expr
     const char * alias() const { return alias_; }
 
     private:
-    static const char * make_unique_alias() {
-        static uint64_t id(0);
-        std::ostringstream oss;
-        oss << "q_" << id++;
-        Catalog &C = Catalog::Get();
-        return C.pool(oss.str().c_str());
-    }
+    static const char * make_unique_alias();
 };
 
 #define M_AST_EXPR_LIST(X) \

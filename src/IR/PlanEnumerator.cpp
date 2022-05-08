@@ -8,6 +8,7 @@
 #include <iostream>
 #include <iterator>
 #include <memory>
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/util/fn.hpp>
 #include <mutable/util/list_allocator.hpp>

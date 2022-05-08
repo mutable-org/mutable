@@ -4,6 +4,7 @@
 #include <cmath>
 #include <iterator>
 #include <mutable/catalog/CardinalityEstimator.hpp>
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/catalog/CostFunctionCout.hpp>
 #include <mutable/IR/Operator.hpp>

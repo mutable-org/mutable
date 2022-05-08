@@ -4,6 +4,7 @@
 #include <cmath>
 #include <iomanip>
 #include <ios>
+#include <mutable/catalog/Catalog.hpp>
 #include <vector>
 
 

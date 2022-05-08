@@ -1,6 +1,7 @@
 #include <mutable/IR/Optimizer.hpp>
 
 #include <algorithm>
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/IR/Operator.hpp>
 #include <mutable/IR/Operator.hpp>
 #include <mutable/Options.hpp>

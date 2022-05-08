@@ -3,6 +3,7 @@
 #include <Eigen/LU>
 #include <fstream>
 #include <iostream>
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/catalog/CostModel.hpp>
 #include <mutable/IR/Operator.hpp>
 #include <mutable/Options.hpp>

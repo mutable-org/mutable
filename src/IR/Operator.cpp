@@ -1,5 +1,7 @@
 #include <mutable/IR/Operator.hpp>
 
+#include <mutable/catalog/Catalog.hpp>
+
 
 using namespace m;
 

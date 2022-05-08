@@ -9,8 +9,6 @@
 
 namespace m {
 
-struct Expr;
-
 namespace cnf {
 
 /** A `Predicate` contains a `Expr` of `Boolean` type in either *positive* or *negative* form. */
@@ -156,7 +154,6 @@ CNF M_EXPORT operator!(const CNF &cnf);
 CNF M_EXPORT to_CNF(const Expr &e);
 /** Converts the `Boolean` `Expr` of `c` to a `CNF`. */
 CNF M_EXPORT get_CNF(const m::Clause &c);
-
 
 }
 

@@ -1,5 +1,6 @@
 #include "IR/QueryGraph2SQL.hpp"
 
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/IR/QueryGraph.hpp>
 
 
@@ -156,6 +157,15 @@ bool QueryGraph2SQL::references_group_by(Designator::target_type t)
         return contains(graph_->group_by(), std::get<const Expr*>(t));
     else
         return false;
+}
+
+const char * QueryGraph2SQL::make_unique_alias()
+{
+    static uint64_t id(0);
+    std::ostringstream oss;
+    oss << "alias_" << id++;
+    Catalog &C = Catalog::Get();
+    return C.pool(oss.str().c_str());
 }
 
 void QueryGraph2SQL::operator()(Const<ErrorExpr>&)

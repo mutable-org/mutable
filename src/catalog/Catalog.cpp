@@ -134,6 +134,15 @@ std::unique_ptr<CostFunction> Catalog::cost_function(std::unique_ptr<CostFunctio
 }
 
 
+/*===== Plan Enumerators =============================================================================================*/
+
+PlanEnumerator & Catalog::plan_enumerator() const
+{
+    M_insist(default_plan_enumerator_ != plan_enumerators_.cend());
+    return *default_plan_enumerator_->second;
+}
+
+
 /*===== Databases ====================================================================================================*/
 
 Database & Catalog::add_database(const char *name)

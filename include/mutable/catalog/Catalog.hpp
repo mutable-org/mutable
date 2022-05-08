@@ -93,6 +93,10 @@ struct M_EXPORT Catalog
     /*----- Cost Functions -------------------------------------------------------------------------------------------*/
     std::unique_ptr<CostFunction> cost_function_; ///< the default cost function
 
+    /*----- Plan Enumerators -----------------------------------------------------------------------------------------*/
+    std::unordered_map<const char*, std::unique_ptr<PlanEnumerator>> plan_enumerators_;
+    decltype(plan_enumerators_)::iterator default_plan_enumerator_;
+
     /*----- Backends -------------------------------------------------------------------------------------------------*/
     ///> the available backends
     std::unordered_map<const char*, std::unique_ptr<Backend>> backends_;
@@ -191,6 +195,79 @@ struct M_EXPORT Catalog
     std::unique_ptr<Store> create_store(const char *name, const Table &tbl) const;
     std::unique_ptr<Store> create_store(const Table &tbl) const;
 
+    /*===== CardinalityEstimators ====================================================================================*/
+    /** Registers a new `CardinalityEstimator` with the given `name`. */
+    template<typename T>
+    void register_cardinality_estimator(const char *name) {
+        name = pool(name);
+        auto it = cardinality_estimator_factories_.find(name);
+        if (it != cardinality_estimator_factories_.end())
+            throw std::invalid_argument("cardinality estimator with that name already exists");
+        cardinality_estimator_factories_.emplace_hint(it, name, new ConcreteCardinalityEstimatorFactory<T>());
+    }
+
+    /** Sets `name` as the default cardinality estimator to use. */
+    void default_cardinality_estimator(const char *name) {
+        name = pool(name);
+        auto it = cardinality_estimator_factories_.find(name);
+        if (it == cardinality_estimator_factories_.end())
+            throw std::invalid_argument("cardinality estimator not found");
+        default_cardinality_estimator_ = it->second.get();
+    }
+
+    std::unique_ptr<CardinalityEstimator> create_cardinality_estimator(const char *name) const;
+    std::unique_ptr<CardinalityEstimator> create_cardinality_estimator() const;
+
+    /*===== CostFunction =============================================================================================*/
+    /** Returns the active `CostFunction`. */
+    const CostFunction & cost_function() const;
+
+    /** Sets the new `CostFunction` and returns the old one. */
+    std::unique_ptr<CostFunction> cost_function(std::unique_ptr<CostFunction> cost_function);
+
+    /*===== Plan Enumerators =========================================================================================*/
+    PlanEnumerator & plan_enumerator() const;
+
+    PlanEnumerator & plan_enumerator(const char *name) const {
+        name = pool(name);
+        auto it = plan_enumerators_.find(name);
+        if (it == plan_enumerators_.end())
+            throw std::invalid_argument("plan enumerator not found");
+        return *it->second;
+
+    }
+
+    void register_plan_enumerator(const char *name, std::unique_ptr<PlanEnumerator> PE) {
+        name = pool(name);
+        auto it = plan_enumerators_.find(name);
+        if (it != plan_enumerators_.end()) throw std::invalid_argument("plan enumerator with that name already exists");
+        it = plan_enumerators_.emplace_hint(it, name, std::move(PE));
+        if (default_plan_enumerator_ == plan_enumerators_.end())
+            default_plan_enumerator_ = it; // set default
+    }
+
+    void default_plan_enumerator(const char *name) {
+        name = pool(name);
+        auto it = plan_enumerators_.find(name);
+        if (it == plan_enumerators_.end())
+            throw std::invalid_argument("plan enumerator not found");
+        default_plan_enumerator_ = it;
+    }
+
+    bool has_default_plan_enumerator() const { return default_plan_enumerator_ != plan_enumerators_.end(); }
+
+    const char * default_plan_enumerator_name() const {
+        M_insist(has_default_plan_enumerator(), "must have set a default plan enumerator");
+        return default_plan_enumerator_->first;
+    }
+
+    auto plan_enumerators_begin() { return plan_enumerators_.begin(); }
+    auto plan_enumerators_end() { return plan_enumerators_.end(); }
+    auto plan_enumerators_begin() const { return plan_enumerators_.begin(); }
+    auto plan_enumerators_end() const { return plan_enumerators_.end(); }
+    auto plan_enumerators_cbegin() const { return plan_enumerators_.begin(); }
+    auto plan_enumerators_cend() const { return plan_enumerators_.end(); }
+
     /*===== Backends =================================================================================================*/
     void register_backend(const char *name, std::unique_ptr<Backend> backend) {
         name = pool(name);
@@ -227,36 +304,6 @@ struct M_EXPORT Catalog
     auto backends_end() const { return backends_.end(); }
     auto backends_cbegin() const { return backends_begin(); }
     auto backends_cend() const { return backends_end(); }
-
-    /*===== CardinalityEstimators ====================================================================================*/
-    /** Registers a new `CardinalityEstimator` with the given `name`. */
-    template<typename T>
-    void register_cardinality_estimator(const char *name) {
-        name = pool(name);
-        auto it = cardinality_estimator_factories_.find(name);
-        if (it != cardinality_estimator_factories_.end())
-            throw std::invalid_argument("cardinality estimator with that name already exists");
-        cardinality_estimator_factories_.emplace_hint(it, name, new ConcreteCardinalityEstimatorFactory<T>());
-    }
-
-    /** Sets `name` as the default cardinality estimator to use. */
-    void default_cardinality_estimator(const char *name) {
-        name = pool(name);
-        auto it = cardinality_estimator_factories_.find(name);
-        if (it == cardinality_estimator_factories_.end())
-            throw std::invalid_argument("cardinality estimator not found");
-        default_cardinality_estimator_ = it->second.get();
-    }
-
-    std::unique_ptr<CardinalityEstimator> create_cardinality_estimator(const char *name) const;
-    std::unique_ptr<CardinalityEstimator> create_cardinality_estimator() const;
-
-    /*===== CostFunction =============================================================================================*/
-    /** Returns the active `CostFunction`. */
-    const CostFunction & cost_function() const;
-
-    /** Sets the new `CostFunction` and returns the old one. */
-    std::unique_ptr<CostFunction> cost_function(std::unique_ptr<CostFunction> cost_function);
 };
 
 }

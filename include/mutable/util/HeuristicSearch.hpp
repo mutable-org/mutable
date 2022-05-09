@@ -230,12 +230,12 @@ struct StateManager
         Partitions(Partitions&&) = default;
 
         ~Partitions() {
-#ifndef NDEBUG
-            std::cerr << partitions_.size() << " partitions:";
-            for (auto &P : partitions_)
-                std::cerr << "\n  " << P.size();
-            std::cerr << std::endl;
-#endif
+            if (Options::Get().statistics) {
+                std::cout << partitions_.size() << " partitions:";
+                for (auto &P : partitions_)
+                    std::cout << "\n  " << P.size();
+                std::cout << std::endl;
+            }
         }
 
         map_type & operator()(const state_type &state, Context&... context) {

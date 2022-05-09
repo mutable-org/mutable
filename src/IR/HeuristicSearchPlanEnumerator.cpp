@@ -2535,11 +2535,13 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
             DPccp{}(G, CF, PT);
         }
 #ifdef WITH_STATE_COUNTERS
-        std::cerr <<   "States generated: " << State::NUM_STATES_GENERATED()
-                  << "\nStates expanded: " << State::NUM_STATES_EXPANDED()
-                  << "\nStates constructed: " << State::NUM_STATES_CONSTRUCTED()
-                  << "\nStates disposed: " << State::NUM_STATES_DISPOSED()
-                  << std::endl;
+        if (Options::Get().statistics) {
+            std::cerr <<   "States generated: " << State::NUM_STATES_GENERATED()
+                      << "\nStates expanded: " << State::NUM_STATES_EXPANDED()
+                      << "\nStates constructed: " << State::NUM_STATES_CONSTRUCTED()
+                      << "\nStates disposed: " << State::NUM_STATES_DISPOSED()
+                      << std::endl;
+        }
 #endif
         return true;
     }
@@ -2622,7 +2624,7 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
 
 matched_heuristic_search:;
 #ifndef NDEBUG
-        {
+        if (Options::Get().statistics) {
             auto plan_cost = [&PT]() -> double {
                 const Subproblem left  = PT.get_final().left;
                 const Subproblem right = PT.get_final().right;
@@ -2634,9 +2636,9 @@ matched_heuristic_search:;
             dpccp(G, CF, PT);
             const double dp_cost = plan_cost();
 
-            std::cerr << "AI: " << hs_cost << ", DP: " << dp_cost << ", Δ " << hs_cost / dp_cost << 'x' << std::endl;
+            std::cout << "AI: " << hs_cost << ", DP: " << dp_cost << ", Δ " << hs_cost / dp_cost << 'x' << std::endl;
             if (hs_cost > dp_cost)
-                std::cerr << "WARNING: Suboptimal solution!" << std::endl;
+                std::cout << "WARNING: Suboptimal solution!" << std::endl;
         }
 #endif
     }

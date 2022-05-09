@@ -82,9 +82,10 @@ Catalog & Catalog::Get()
 }
 
 __attribute__((destructor(200)))
-void destroy_catalog()
+void Catalog::Destroy()
 {
-    Catalog::Clear();
+    delete Catalog::the_catalog_;
+    Catalog::the_catalog_ = nullptr;
 }
 
 

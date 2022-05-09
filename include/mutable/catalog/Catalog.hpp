@@ -114,11 +114,18 @@ struct M_EXPORT Catalog
     /** Return a reference to the single `Catalog` instance. */
     static Catalog & Get();
 
-    /** Destroys the current `Catalog` instance and immediately replaces it by a new one. */
+    /** Removes all content from the `Catalog` instance. */
     static void Clear() {
-        delete the_catalog_;
-        the_catalog_ = nullptr;
+        if (the_catalog_) {
+            for (auto DB : the_catalog_->databases_)
+                delete DB.second;
+            the_catalog_->databases_.clear();
+            the_catalog_->database_in_use_ = nullptr;
+        }
     }
+
+    /** Destroys the current `Catalog` instance. */
+    static void Destroy();
 
     m::ArgParser & arg_parser() { return arg_parser_; }
 

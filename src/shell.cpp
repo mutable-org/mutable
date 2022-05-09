@@ -456,6 +456,10 @@ int main(int argc, const char **argv)
         "-t", "--times",                                    /* Short, Long      */
         "report exact timings",                             /* Description      */
         [&](bool) { Options::Get().times = true; });        /* Callback         */
+    ADD(bool, Options::Get().statistics, false,             /* Type, Var, Init  */
+        "-s", "--statistics",                               /* Short, Long      */
+        "show some statistics",                             /* Description      */
+        [&](bool) { Options::Get().statistics = true; });   /* Callback         */
     ADD(bool, Options::Get().echo, false,                   /* Type, Var, Init  */
         nullptr, "--echo",                                  /* Short, Long      */
         "echo statements",                                  /* Description      */

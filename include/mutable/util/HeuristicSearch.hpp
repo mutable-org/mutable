@@ -574,12 +574,6 @@ struct genericAStar
         }
     }
 
-    ~genericAStar() {
-#ifndef NDEBUG
-        dump();
-#endif
-    }
-
     genericAStar(const genericAStar&) = delete;
     genericAStar(genericAStar&&) = default;
 

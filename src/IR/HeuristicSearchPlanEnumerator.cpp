@@ -14,6 +14,7 @@
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/IR/PlanTable.hpp>
 #include <mutable/IR/QueryGraph.hpp>
+#include <mutable/Options.hpp>
 #include <mutable/util/crtp.hpp>
 #include <mutable/util/fn.hpp>
 #include <mutable/util/HeuristicSearch.hpp>
@@ -2518,6 +2519,8 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
             >;
             search_algorithm S(PT, G, M, CF, CE);
             const State &goal = S.search(std::move(initial_state), h, Expand{}, PT, G, M, CF, CE);
+            if (Options::Get().statistics)
+                S.dump(std::cout);
 
             /*----- Reconstruct the plan from the found path to goal. -----*/
             if constexpr (std::is_base_of_v<expansions::TopDown, Expand>) {
@@ -2526,10 +2529,6 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
                 static_assert(std::is_base_of_v<expansions::BottomUp, Expand>, "unexpected expansion");
                 reconstruct_plan_bottom_up(goal, PT, G, CE, CF);
             }
-
-#ifndef NDEBUG
-            // PT.dump();
-#endif
         } catch (std::logic_error err) {
             std::cerr << "search " << search_str << '+' << vertex_str << '+' << expand_str << '+' << heuristic_str
                       << " did not reach a goal state, fall back to DPccp" << std::endl;

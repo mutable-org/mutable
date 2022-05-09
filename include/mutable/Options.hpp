@@ -33,6 +33,7 @@ struct Options
 
     /*----- Additional outputs ---------------------------------------------------------------------------------------*/
     bool times;
+    bool statistics;
     bool echo;
     bool ast;
     bool astdot;

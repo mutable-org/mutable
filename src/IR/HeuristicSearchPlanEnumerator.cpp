@@ -14,7 +14,6 @@
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/IR/PlanTable.hpp>
 #include <mutable/IR/QueryGraph.hpp>
-#include <mutable/Options.hpp>
 #include <mutable/util/crtp.hpp>
 #include <mutable/util/fn.hpp>
 #include <mutable/util/HeuristicSearch.hpp>
@@ -29,6 +28,21 @@ using namespace m;
 /*======================================================================================================================
  * Heuristic Search
  *====================================================================================================================*/
+
+namespace {
+namespace options {
+
+/** The heuristic search vertex to use. */
+const char *vertex = "SubproblemsArray";
+/** The vertex expansion to use. */
+const char *expand = "BottomUpComplete";
+/** The heuristic function to use. */
+const char *heuristic = "zero";
+/** The search method to use. */
+const char *search = "AStar";
+
+}
+}
 
 /** A "less than" comparator for `Subproblem`s. */
 inline bool subproblem_lt(Subproblem left, Subproblem right) { return uint64_t(left) < uint64_t(right); };
@@ -2479,14 +2493,14 @@ template<
     template<typename, typename, typename> typename Heuristic,
     template<typename, typename, typename, typename...> typename Search
 >
-bool heuristic_search_helper(const char *state_str, const char *expand_str, const char *heuristic_str,
+bool heuristic_search_helper(const char *vertex_str, const char *expand_str, const char *heuristic_str,
                              const char *search_str, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                              const CostFunction &CF, const CardinalityEstimator &CE)
 {
-    if (streq(Options::Get().hs_state,     state_str    ) and
-        streq(Options::Get().hs_expand,    expand_str   ) and
-        streq(Options::Get().hs_heuristic, heuristic_str) and
-        streq(Options::Get().hs_search,    search_str   ))
+    if (streq(options::vertex,    vertex_str   ) and
+        streq(options::expand,    expand_str   ) and
+        streq(options::heuristic, heuristic_str) and
+        streq(options::search,    search_str   ))
     {
         using H = Heuristic<PlanTable, State, Expand>;
         State::RESET_STATE_COUNTERS();
@@ -2517,7 +2531,7 @@ bool heuristic_search_helper(const char *state_str, const char *expand_str, cons
             // PT.dump();
 #endif
         } catch (std::logic_error err) {
-            std::cerr << "search " << search_str << '+' << state_str << '+' << expand_str << '+' << heuristic_str
+            std::cerr << "search " << search_str << '+' << vertex_str << '+' << expand_str << '+' << heuristic_str
                       << " did not reach a goal state, fall back to DPccp" << std::endl;
             DPccp{}(G, CF, PT);
         }
@@ -2628,3 +2642,36 @@ matched_heuristic_search:;
 #endif
     }
 };
+
+__attribute__((constructor(202)))
+inline void register_heuristic_search_plan_enumerator()
+{
+    Catalog &C = Catalog::Get();
+    C.register_plan_enumerator("HeuristicSearch", std::make_unique<HeuristicSearch>());
+
+    /*----- Command-line arguments -----------------------------------------------------------------------------------*/
+    C.arg_parser().add<const char*>(
+        /* short=       */ nullptr,
+        /* long=        */ "--hs-vertex",
+        /* description= */ "the heuristic search vertex to use",
+        [] (const char *str) { options::vertex = str; }
+    );
+    C.arg_parser().add<const char*>(
+        /* short=       */ nullptr,
+        /* long=        */ "--hs-expand",
+        /* description= */ "the vertex expansion to use",
+        [] (const char *str) { options::expand = str; }
+    );
+    C.arg_parser().add<const char*>(
+        /* short=       */ nullptr,
+        /* long=        */ "--hs-heuristic",
+        /* description= */ "the heuristic function to use",
+        [] (const char *str) { options::heuristic = str; }
+    );
+    C.arg_parser().add<const char*>(
+        /* short=       */ nullptr,
+        /* long=        */ "--hs-search",
+        /* description= */ "the search method to use",
+        [] (const char *str) { options::search = str; }
+    );
+}

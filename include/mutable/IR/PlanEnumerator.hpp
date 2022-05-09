@@ -23,25 +23,7 @@ struct M_EXPORT PlanEnumerator : enumerate_tag::base_type
     using Subproblem = QueryGraph::Subproblem;
     using enumerate_tag::base_type::operator();
 
-    enum kind_t {
-#define M_PLAN_ENUMERATOR(NAME, _) PE_ ## NAME,
-#include <mutable/tables/PlanEnumerator.tbl>
-#undef M_PLAN_ENUMERATOR
-    };
-
-    static const std::unordered_map<std::string, kind_t> STR_TO_KIND;
-
     virtual ~PlanEnumerator() { }
-
-    /** Create a `PlanEnumerator` instance given the kind of plan enumerator. */
-    static std::unique_ptr<PlanEnumerator> M_EXPORT Create(kind_t kind);
-    /** Create a `PlanEnumerator` instance given the name of a plan enumerator. */
-    static std::unique_ptr<PlanEnumerator> M_EXPORT Create(const char *kind) { return Create(STR_TO_KIND.at(kind)); }
-
-#define M_PLAN_ENUMERATOR(NAME, _) \
-    static std::unique_ptr<PlanEnumerator> Create ## NAME();
-#include <mutable/tables/PlanEnumerator.tbl>
-#undef M_PLAN_ENUMERATOR
 
     /** Enumerate subplans and fill plan table. */
     template<typename PlanTable>

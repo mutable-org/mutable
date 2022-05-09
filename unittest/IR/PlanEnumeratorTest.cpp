@@ -144,8 +144,8 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
         make_entry(B, C|D);
         make_entry(A|C, B|D);
 
-        auto dp_size = PlanEnumerator::CreateDPsize();
-        (*dp_size)(G, C_out, plan_table);
+        auto &PE = Catalog::Get().plan_enumerator("DPsize");
+        PE(G, C_out, plan_table);
         REQUIRE(expected == plan_table);
     }
 
@@ -160,8 +160,8 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
         make_entry(B, C|D);
         make_entry(A|C, B|D);
 
-        auto dp_size_opt = PlanEnumerator::CreateDPsizeOpt();
-        (*dp_size_opt)(G, C_out, plan_table);
+        auto &PE = Catalog::Get().plan_enumerator("DPsizeOpt");
+        PE(G, C_out, plan_table);
         REQUIRE(expected == plan_table);
     }
 
@@ -176,8 +176,8 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
         make_entry(B, C|D);
         make_entry(A|C, B|D);
 
-        auto dp_size_sub = PlanEnumerator::CreateDPsizeSub();
-        (*dp_size_sub)(G, C_out, plan_table);
+        auto &PE = Catalog::Get().plan_enumerator("DPsizeSub");
+        PE(G, C_out, plan_table);
         REQUIRE(expected == plan_table);
     }
 
@@ -192,8 +192,8 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
         make_entry(B, C|D);
         make_entry(A|C, B|D);
 
-        auto dp_sub = PlanEnumerator::CreateDPsub();
-        (*dp_sub)(G, C_out, plan_table);
+        auto &PE = Catalog::Get().plan_enumerator("DPsub");
+        PE(G, C_out, plan_table);
         REQUIRE(expected == plan_table);
     }
 
@@ -208,8 +208,8 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
         make_entry(B, C|D);
         make_entry(A|C, B|D);
 
-        auto dp_sub_opt = PlanEnumerator::CreateDPsubOpt();
-        (*dp_sub_opt)(G, C_out, plan_table);
+        auto &PE = Catalog::Get().plan_enumerator("DPsubOpt");
+        PE(G, C_out, plan_table);
         REQUIRE(expected == plan_table);
     }
 
@@ -224,8 +224,9 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
         make_entry(B, C|D);
         make_entry(A|C, B|D);
 
-        auto dp_ccp = PlanEnumerator::CreateDPccp();
-        (*dp_ccp)(G, C_out, plan_table);
+        auto &PE = Catalog::Get().plan_enumerator("DPsizeOpt");
+        DPccp dp_ccp;
+        dp_ccp(G, C_out, plan_table);
         REQUIRE(expected == plan_table);
     }
 
@@ -240,8 +241,8 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
         make_entry(B, C|D);
         make_entry(A|C, B|D);
 
-        auto td_basic = PlanEnumerator::CreateTDbasic();
-        (*td_basic)(G, C_out, plan_table);
+        auto &PE = Catalog::Get().plan_enumerator("TDbasic");
+        PE(G, C_out, plan_table);
         REQUIRE(expected == plan_table);
     }
 
@@ -256,8 +257,8 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
         make_entry(B, C|D);
         make_entry(A|C, B|D);
 
-        auto td_mincut_agat = PlanEnumerator::CreateTDMinCutAGaT();
-        (*td_mincut_agat)(G, C_out, plan_table);
+        auto &PE = Catalog::Get().plan_enumerator("TDMinCutAGaT");
+        PE(G, C_out, plan_table);
         REQUIRE(expected == plan_table);
     }
 }

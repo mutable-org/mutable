@@ -131,8 +131,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
                 PDDL.generate_files(*query_graph, Options::Get().pddl_actions, domain_path, problem_path);
             }
 
-            std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::Create(Options::Get().plan_enumerator);
-            Optimizer Opt(*pe.get(), C.cost_function());
+            Optimizer Opt(C.plan_enumerator(), C.cost_function());
             std::unique_ptr<Producer> optree;
             if (Options::Get().output_partial_plans_file) {
                 auto res = M_TIME_EXPR(
@@ -540,12 +539,14 @@ int main(int argc, const char **argv)
         "specify the plan enumerator",                      /* Description      */
         /* Callback         */
         [&](const char *str) {
-            if (PlanEnumerator::STR_TO_KIND.find(str) == PlanEnumerator::STR_TO_KIND.end()) {
+            try {
+                C.default_plan_enumerator(str);
+                Options::Get().plan_enumerator = str;
+            } catch (std::invalid_argument) {
                 std::cerr << "There is no plan enumerator with the name \"" << str << "\"." << std::endl;
                 AP.print_args(stderr);
                 std::exit(EXIT_FAILURE);
             }
-            Options::Get().plan_enumerator = str;
         }
        );
     ADD(bool, Options::Get().list_plan_enumerators, false,  /* Type, Var, Init  */
@@ -629,27 +630,6 @@ int main(int argc, const char **argv)
         "train cost models (may take a couple of minutes)",             /* Description      */
         [&](bool) { Options::Get().train_cost_models = true; }          /* Callback         */
     );
-    /*----- AIPlanning Config ----------------------------------------------------------------------------------------*/
-    ADD(const char*, Options::Get().hs_state, "SubproblemsArray",                       /* Type, Var, Init  */
-        nullptr, "--hs-state",                                                          /* Short, Long      */
-        "specify which state definition to use for heuristic search",                   /* Description      */
-        [&](const char *str) { Options::Get().hs_state = str; }                         /* Callback         */
-    );
-    ADD(const char*, Options::Get().hs_expand, "BottomUpComplete",                      /* Type, Var, Init  */
-        nullptr, "--hs-expand",                                                         /* Short, Long      */
-        "specify how the search expands vertices",                                      /* Description      */
-        [&](const char *str) { Options::Get().hs_expand = str; }                        /* Callback         */
-    );
-    ADD(const char*, Options::Get().hs_heuristic, "sum",                                /* Type, Var, Init  */
-        nullptr, "--hs-heuristic",                                                      /* Short, Long      */
-        "specify which heuristic to use for heuristic search",                          /* Description      */
-        [&](const char *str) { Options::Get().hs_heuristic = str; }                     /* Callback         */
-    );
-    ADD(const char*, Options::Get().hs_search, "AStar",                                 /* Type, Var, Init  */
-        nullptr, "--hs-search",                                                         /* Short, Long      */
-        "specify which search algorithm to use for heuristic search",                   /* Description      */
-        [&](const char *str) { Options::Get().hs_search = str; }                        /* Callback         */
-    );
 #undef ADD
     AP.parse_args(argc, argv);
 
@@ -701,7 +681,7 @@ Immanuel Haffner\
     if (Options::Get().list_backends) {
         std::cout << "List of available backends:";
         std::size_t max_len = 0;
-        range backends(Catalog::Get().backends_begin(), Catalog::Get().backends_end());
+        range backends(C.backends_cbegin(), C.backends_cend());
         for (auto &backend : backends) max_len = std::max(max_len, strlen(backend.first));
         for (auto &backend : backends)
             std::cout << "\n    " << std::setw(max_len) << std::left << backend.first; // << "    -    " << backend.second;
@@ -711,15 +691,16 @@ Immanuel Haffner\
 
     if (Options::Get().list_plan_enumerators) {
         std::cout << "List of available plan enumerators:";
-        constexpr std::pair<const char*, const char*> PE[] = {
-#define M_PLAN_ENUMERATOR(NAME, DESCR) { #NAME, DESCR },
-#include <mutable/tables/PlanEnumerator.tbl>
-#undef M_PLAN_ENUMERATOR
-        };
+//         constexpr std::pair<const char*, const char*> PE[] = {
+// #define M_PLAN_ENUMERATOR(NAME, DESCR) { #NAME, DESCR },
+// #include <mutable/tables/PlanEnumerator.tbl>
+// #undef M_PLAN_ENUMERATOR
+//         };
+        range plan_enumerators(C.plan_enumerators_cbegin(), C.plan_enumerators_cend());
         std::size_t max_len = 0;
-        for (auto pe : PE) max_len = std::max(max_len, strlen(pe.first));
-        for (auto pe : PE)
-            std::cout << "\n    " << std::setw(max_len) << std::left << pe.first << "    -    " << pe.second;
+        for (auto &pe : plan_enumerators) max_len = std::max(max_len, strlen(pe.first));
+        for (auto &pe : plan_enumerators)
+            std::cout << "\n    " << std::setw(max_len) << std::left << pe.first; // << "    -    " << pe.second;
         std::cout << std::endl;
         std::exit(EXIT_SUCCESS);
     }

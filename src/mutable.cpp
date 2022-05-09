@@ -48,8 +48,7 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
     if (is<const SelectStmt>(stmt)) {
         auto query_graph = M_TIME_EXPR(QueryGraph::Build(stmt), "Construct the query graph", C.timer());
 
-        std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::CreateDPccp();
-        Optimizer Opt(*pe, C.cost_function());
+        Optimizer Opt(C.plan_enumerator(), C.cost_function());
         auto optree = M_TIME_EXPR(Opt(*query_graph), "Compute the query plan", C.timer());
 
         PrintOperator print(std::cout);
@@ -149,8 +148,7 @@ void m::execute_query(Diagnostic&, const SelectStmt &stmt, std::unique_ptr<Consu
     Catalog &C = Catalog::Get();
     auto query_graph = QueryGraph::Build(stmt);
 
-    std::unique_ptr<PlanEnumerator> pe = PlanEnumerator::CreateDPccp();
-    Optimizer Opt(*pe, C.cost_function());
+    Optimizer Opt(C.plan_enumerator(), C.cost_function());
     auto optree = Opt(*query_graph);
 
     consumer->add_child(optree.release());

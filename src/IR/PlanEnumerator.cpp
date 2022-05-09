@@ -23,21 +23,6 @@
 using namespace m;
 
 
-const std::unordered_map<std::string, PlanEnumerator::kind_t> PlanEnumerator::STR_TO_KIND = {
-#define M_PLAN_ENUMERATOR(NAME, _) { #NAME,  PlanEnumerator::PE_ ## NAME },
-#include <mutable/tables/PlanEnumerator.tbl>
-#undef M_PLAN_ENUMERATOR
-};
-
-std::unique_ptr<PlanEnumerator> PlanEnumerator::Create(PlanEnumerator::kind_t kind) {
-    switch(kind) {
-#define M_PLAN_ENUMERATOR(NAME, _) case PE_ ## NAME: return Create ## NAME();
-#include <mutable/tables/PlanEnumerator.tbl>
-#undef M_PLAN_ENUMERATOR
-    }
-}
-
-
 /*======================================================================================================================
  * DPsize
  *====================================================================================================================*/
@@ -739,9 +724,22 @@ void m::GOO::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const
     }, PT, G, M, CF, CE, nodes, nodes + G.num_sources());
 }
 
-#define M_PLAN_ENUMERATOR(NAME, _) \
-    std::unique_ptr<PlanEnumerator> PlanEnumerator::Create ## NAME() { \
-        return std::make_unique<NAME>(); \
-    }
-#include <mutable/tables/PlanEnumerator.tbl>
-#undef M_PLAN_ENUMERATOR
+__attribute__((constructor(201)))
+inline void register_plan_enumerators()
+{
+    Catalog &C = Catalog::Get();
+#define REGISTER(NAME) \
+    C.register_plan_enumerator(#NAME, std::make_unique<NAME>())
+    REGISTER(DPccp); // register DPccp first to be default
+    REGISTER(DPsize);
+    REGISTER(DPsizeOpt);
+    REGISTER(DPsizeSub);
+    REGISTER(DPsub);
+    REGISTER(DPsubOpt);
+    REGISTER(GOO);
+    REGISTER(IKKBZ);
+    REGISTER(LinearizedDP);
+    REGISTER(TDbasic);
+    REGISTER(TDMinCutAGaT);
+#undef REGISTER
+}

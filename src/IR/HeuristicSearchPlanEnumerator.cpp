@@ -2536,7 +2536,7 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
         }
 #ifdef WITH_STATE_COUNTERS
         if (Options::Get().statistics) {
-            std::cerr <<   "States generated: " << State::NUM_STATES_GENERATED()
+            std::cout <<   "States generated: " << State::NUM_STATES_GENERATED()
                       << "\nStates expanded: " << State::NUM_STATES_EXPANDED()
                       << "\nStates constructed: " << State::NUM_STATES_CONSTRUCTED()
                       << "\nStates disposed: " << State::NUM_STATES_DISPOSED()

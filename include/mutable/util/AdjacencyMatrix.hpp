@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <mutable/util/ADT.hpp>
 
 
@@ -27,6 +28,7 @@ struct M_EXPORT AdjacencyMatrix
             M_insist(i < M_.num_vertices_);
             M_insist(j < M_.num_vertices_);
         }
+        Proxy(Proxy&&) = default;
 
         public:
         operator bool() const { return M_.m_[i_][j_]; }
@@ -35,8 +37,22 @@ struct M_EXPORT AdjacencyMatrix
         std::enable_if_t<not C_, Proxy&>
         operator=(bool val) { M_.m_[i_][j_] = val; return *this; }
 
-        Proxy & operator=(const Proxy &other) {
-            static_assert(not Is_Const, "can only assign to proxy of non-const matrix");
+        Proxy & operator=(const Proxy<false> &other) {
+            static_assert(not C);
+            return operator=(bool(other));
+        }
+
+        Proxy & operator=(const Proxy<true> &other) {
+            static_assert(not C);
+            return operator=(bool(other));
+        }
+
+        Proxy & operator=(Proxy<false> &&other) {
+            static_assert(not C);
+            return operator=(bool(other));
+        }
+        Proxy & operator=(Proxy<true> &&other) {
+            static_assert(not C);
             return operator=(bool(other));
         }
     };

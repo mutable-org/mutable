@@ -2645,7 +2645,7 @@ matched_heuristic_search:;
 };
 
 __attribute__((constructor(202)))
-inline void register_heuristic_search_plan_enumerator()
+static void register_heuristic_search_plan_enumerator()
 {
     Catalog &C = Catalog::Get();
     C.register_plan_enumerator("HeuristicSearch", std::make_unique<HeuristicSearch>());

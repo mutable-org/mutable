@@ -152,7 +152,13 @@ main() {
             # nothing to be done
             ;;
         1)
-            CSV=$1
+            RANDOM=$1
+            echo "Seeding PRNG with $1."
+            ;;
+        2)
+            RANDOM=$1
+            CSV=$2
+            echo "Seeding PRNG with $1."
             ;;
         *)
             >&2 echo "error: too many positional arguments"
@@ -241,7 +247,7 @@ main() {
                         --quiet --dryrun --times \
                         --plan-table-las \
                         ${PLANNER_CONFIG} \
-                        --cardinality-estimator InjectionCardinalityEstimator \
+                        --cardinality-estimator Injected \
                         --use-cardinality-file "${NAME}.cardinalities.json" \
                         "${NAME}.schema.sql" \
                         "${NAME}.query.sql" \
@@ -274,7 +280,7 @@ main() {
 --quiet --dryrun --times \
 --plan-table-las \
 ${PLANNER_CONFIG} \
---cardinality-estimator InjectionCardinalityEstimator \
+--cardinality-estimator Injected \
 --use-cardinality-file "${NAME}.cardinalities.json" \
 "${NAME}.schema.sql" \
 "${NAME}.query.sql"

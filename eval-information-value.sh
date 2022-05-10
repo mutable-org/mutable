@@ -7,7 +7,7 @@ set -o pipefail -o nounset
 
 source planner-configs.sh
 
-BINDIR=build/release/bin
+BINDIR=build/debug_shared/bin
 BIN=${BINDIR}/shell
 
 ORDERED_PLANNERS=(
@@ -19,12 +19,19 @@ ORDERED_PLANNERS=(
 )
 NUM_REPETITIONS=5
 
+RANDOM=42
+if [ $# -ge 1 ];
+then
+    RANDOM=$1
+fi
+
+
 echo "planner,topology,relations,iteration,vertices"
-for T in {chain,cycle,star,clique};
+for T in star;
 do
     for I in $(seq 1 ${NUM_REPETITIONS});
     do
-        for N in {5..15}; do
+        for N in 15; do
             NAME="$T-${N}"
 
             python3 querygen.py -t $T -n ${N} > /dev/null
@@ -44,15 +51,16 @@ do
                 PLANNER_CONFIG=${PLANNER_CONFIGS[$PLANNER]}
 
                 echo -n "${PLANNER},${T},${N},${I},"
-                timeout --signal=SIGTERM --kill-after=7s 5s ${BIN} \
+                timeout --signal=SIGTERM --kill-after=12s 10s ${BIN} \
                     --quiet --dryrun \
                     --plan-table-las \
-                    --cardinality-estimator InjectionCardinalityEstimator \
+                    --cardinality-estimator Injected \
                     --use-cardinality-file "${NAME}.cardinalities.json" \
+                    --statistics \
                     ${PLANNER_CONFIG} \
                     "${NAME}.schema.sql" \
                     "${NAME}.query.sql" \
-                    2>&1 | ack --nocolor '^States generated:' | cut -d ':' -f 2 | tr -d ' '
+                    2>&1 | ack --nocolor '^Vertices generated:' | cut -d ':' -f 2 | tr -d ' '
                 SAVED_PIPESTATUS=("${PIPESTATUS[@]}")
                 TIMEOUT_RET=${SAVED_PIPESTATUS[0]}
                 ERR=0
@@ -67,8 +75,12 @@ do
 
                 if [ ${TIMEOUT_RET} -eq 124 ] || [ ${TIMEOUT_RET} -eq 137 ]; # timed out
                 then
+                    echo "inf"
                     >&2 echo "  \` Configuration '${PLANNER}' timed out."
-                    echo "0"
+                elif [ ${ERR} -ne 0 ];
+                then
+                    echo "inf"
+                    >&2 echo "  \` Unexpected error in configuration '${PLANNER}'."
                 fi
             done
 

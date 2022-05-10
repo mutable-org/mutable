@@ -55,7 +55,10 @@ inline bool subproblem_lt(Subproblem left, Subproblem right) { return uint64_t(l
 
 namespace search_states {
 
-// #define WITH_STATE_COUNTERS
+// #define COUNTERS
+#if !defined(NDEBUG) && !defined(COUNTERS)
+#define COUNTERS
+#endif
 
 /** A state in the search space.
  *
@@ -70,7 +73,7 @@ struct Base : crtp<Actual, Base>
     using size_type = std::size_t;
 
     /*----- State counters -------------------------------------------------------------------------------------------*/
-#ifdef WITH_STATE_COUNTERS
+#ifdef COUNTERS
     struct state_counters_t
     {
         unsigned num_states_generated;
@@ -174,7 +177,7 @@ M_LCOV_EXCL_START
 M_LCOV_EXCL_STOP
 };
 
-#ifdef WITH_STATE_COUNTERS
+#ifdef COUNTERS
 template<typename Actual>
 typename Base<Actual>::state_counters_t
 Base<Actual>::state_counters_;
@@ -718,7 +721,7 @@ struct EdgesBottomUp : Base<EdgesBottomUp>
     {
         M_insist(num_joins_ == 0 or bool(joins_));
         M_insist(std::is_sorted(cbegin(), cend()), "joins must be sorted by index");
-#ifdef WITH_STATE_COUNTERS
+#ifdef COUNTERS
         if (num_joins_)
             base_type::INCREMENT_NUM_STATES_CONSTRUCTED();
 #endif
@@ -740,7 +743,7 @@ struct EdgesBottomUp : Base<EdgesBottomUp>
         M_insist(begin != end);
         std::copy(begin, end, this->begin());
         M_insist(std::is_sorted(cbegin(), cend()), "joins must be sorted by index");
-#ifdef WITH_STATE_COUNTERS
+#ifdef COUNTERS
         if (num_joins_)
             base_type::INCREMENT_NUM_STATES_CONSTRUCTED();
 #endif
@@ -756,7 +759,7 @@ struct EdgesBottomUp : Base<EdgesBottomUp>
         M_insist(bool(joins_));
         M_insist(std::is_sorted(cbegin(), cend()), "joins must be sorted by index");
         std::copy(other.begin(), other.end(), this->begin());
-#ifdef WITH_STATE_COUNTERS
+#ifdef COUNTERS
         if (num_joins_)
             base_type::INCREMENT_NUM_STATES_CONSTRUCTED();
 #endif
@@ -770,7 +773,7 @@ struct EdgesBottomUp : Base<EdgesBottomUp>
 
     /** D'tor. */
     ~EdgesBottomUp() {
-#ifdef WITH_STATE_COUNTERS
+#ifdef COUNTERS
         if (num_joins_) {
             M_insist(bool(joins_));
             base_type::INCREMENT_NUM_STATES_DISPOSED();
@@ -2534,12 +2537,12 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
                       << " did not reach a goal state, fall back to DPccp" << std::endl;
             DPccp{}(G, CF, PT);
         }
-#ifdef WITH_STATE_COUNTERS
+#ifdef COUNTERS
         if (Options::Get().statistics) {
-            std::cout <<   "States generated: " << State::NUM_STATES_GENERATED()
-                      << "\nStates expanded: " << State::NUM_STATES_EXPANDED()
-                      << "\nStates constructed: " << State::NUM_STATES_CONSTRUCTED()
-                      << "\nStates disposed: " << State::NUM_STATES_DISPOSED()
+            std::cout <<   "Vertices generated: " << State::NUM_STATES_GENERATED()
+                      << "\nVertices expanded: " << State::NUM_STATES_EXPANDED()
+                      << "\nVertices constructed: " << State::NUM_STATES_CONSTRUCTED()
+                      << "\nVertices disposed: " << State::NUM_STATES_DISPOSED()
                       << std::endl;
         }
 #endif

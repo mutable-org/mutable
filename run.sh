@@ -7,8 +7,6 @@ set -o pipefail -o nounset
 
 source planner-configs.sh
 
-BINDIR=build/debug/bin
-
 function printbox()
 {
     NAME=$1
@@ -54,18 +52,19 @@ ORDERED_PLANNERS=(
     # "TD-rel_beam-zero"
 )
 
-if [ $# -lt 2 ];
+if [ $# -lt 3 ];
 then
-    >&2 echo "ERROR: expected two arguments, topology and number of relations"
-    >&2 echo -e "USAGE:\n\trun.sh <TOPOLOGY> <NUM_RELATIONS>"
+    >&2 echo "ERROR: expected three arguments, topology and number of relations"
+    >&2 echo -e "USAGE:\n\trun.sh <BUILDDIR> <TOPOLOGY> <NUM_RELATIONS>"
     exit 1
 fi
 
-T=$1
-N=$2
+BUILDDIR=$1
+T=$2
+N=$3
 SEED=42
 
-if [ $# -ge 3 ];
+if [ $# -ge 4 ];
 then
     SEED=$3
 fi
@@ -78,7 +77,7 @@ CARDINALITIES="${NAME}.cardinalities.json"
 
 python3 querygen.py -t $T -n $N
 
-${BINDIR}/cardinality_gen "${SCHEMA}" "${QUERY}" --seed ${SEED} > "${CARDINALITIES}"
+${BUILDDIR}/bin/cardinality_gen "${SCHEMA}" "${QUERY}" --seed ${SEED} > "${CARDINALITIES}"
 
 for PLANNER in "${ORDERED_PLANNERS[@]}";
 do
@@ -93,9 +92,9 @@ do
 
     read -r -d '' CMD <<EOF
 env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 \
-${BINDIR}/shell \
+${BUILDDIR}/bin/shell \
 --noprompt --times --dryrun \
---cardinality-estimator InjectionCardinalityEstimator \
+--cardinality-estimator Injected \
 --use-cardinality-file "${CARDINALITIES}" \
 ${PLANNER_CONFIG} \
 "${SCHEMA}" "${QUERY}" | tail -n +$((2*N+6))

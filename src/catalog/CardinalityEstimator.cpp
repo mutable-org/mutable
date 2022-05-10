@@ -392,8 +392,8 @@ __attribute__((constructor(202)))
 static void register_cardinality_estimators()
 {
     Catalog &C = Catalog::Get();
-    C.register_cardinality_estimator<CartesianProductEstimator>("CartesianProduct");
-    C.register_cardinality_estimator<InjectionCardinalityEstimator>("Injected");
+    C.register_cardinality_estimator<CartesianProductEstimator>("CartesianProduct", "estimates cardinalities as Cartesian product");
+    C.register_cardinality_estimator<InjectionCardinalityEstimator>("Injected", "estimates cardinalities based on a JSON file");
 
     C.arg_parser().add<bool>(
         /* group=       */ "Cardinality estimation",

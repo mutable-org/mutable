@@ -728,18 +728,18 @@ __attribute__((constructor(201)))
 inline void register_plan_enumerators()
 {
     Catalog &C = Catalog::Get();
-#define REGISTER(NAME) \
-    C.register_plan_enumerator(#NAME, std::make_unique<NAME>())
-    REGISTER(DPccp); // register DPccp first to be default
-    REGISTER(DPsize);
-    REGISTER(DPsizeOpt);
-    REGISTER(DPsizeSub);
-    REGISTER(DPsub);
-    REGISTER(DPsubOpt);
-    REGISTER(GOO);
-    REGISTER(IKKBZ);
-    REGISTER(LinearizedDP);
-    REGISTER(TDbasic);
-    REGISTER(TDMinCutAGaT);
+#define REGISTER(NAME, DESCRIPTION) \
+    C.register_plan_enumerator(#NAME, std::make_unique<NAME>(), DESCRIPTION)
+    REGISTER(DPccp,        "enumerates connected subgraph complement pairs"); // register DPccp first to be default
+    REGISTER(DPsize,       "size-based subproblem enumeration");
+    REGISTER(DPsizeOpt,    "optimized DPsize: does not enumerate symmetric subproblems");
+    REGISTER(DPsizeSub,    "DPsize with enumeration of subset complement pairs");
+    REGISTER(DPsub,        "subset-based subproblem enumeration");
+    REGISTER(DPsubOpt,     "optimized DPsub: does not enumerate symmetric subproblems");
+    REGISTER(GOO,          "Greedy Operator Ordering");
+    REGISTER(IKKBZ,        "greedy algorithm by IK/KBZ, ordering joins by rank");
+    REGISTER(LinearizedDP, "DP with search space linearization based on IK/KBZ");
+    REGISTER(TDbasic,      "basic top-down join enumeration using generate-and-test partitioning");
+    REGISTER(TDMinCutAGaT, "top-down join enumeration using minimal graph cuts and advanced generate-and-test partitioning");
 #undef REGISTER
 }

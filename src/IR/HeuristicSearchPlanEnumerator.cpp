@@ -2648,7 +2648,12 @@ __attribute__((constructor(202)))
 static void register_heuristic_search_plan_enumerator()
 {
     Catalog &C = Catalog::Get();
-    C.register_plan_enumerator("HeuristicSearch", std::make_unique<HeuristicSearch>());
+    C.register_plan_enumerator(
+        "HeuristicSearch",
+        std::make_unique<HeuristicSearch>(),
+        "uses heuristic search to find a plan; "
+        "found plans are optimal when the search method is optimal and the heuristic is admissible"
+    );
 
     /*----- Command-line arguments -----------------------------------------------------------------------------------*/
     C.arg_parser().add<const char*>(

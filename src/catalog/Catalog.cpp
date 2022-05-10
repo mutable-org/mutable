@@ -20,7 +20,6 @@ Catalog::Catalog()
     : allocator_(new memory::LinearAllocator())
     /* Initialize dummy cost function. */
     , cost_function_(std::make_unique<CostFunctionCout>())
-    , default_backend_(backends_.end())
 {
     /*----- Initialize standard functions. ---------------------------------------------------------------------------*/
 #define M_FUNCTION(NAME, KIND) { \

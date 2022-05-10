@@ -76,5 +76,5 @@ __attribute__((constructor(202)))
 static void register_store()
 {
     Catalog &C = Catalog::Get();
-    C.register_store<ColumnStore>("ColumnStore");
+    C.register_store<ColumnStore>("ColumnStore", "stores attributes in column-major order");
 }

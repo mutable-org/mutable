@@ -90,5 +90,5 @@ __attribute__((constructor(202)))
 static void register_store()
 {
     Catalog &C = Catalog::Get();
-    C.register_store<RowStore>("RowStore");
+    C.register_store<RowStore>("RowStore", "stores attributes in row-major order");
 }

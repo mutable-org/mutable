@@ -604,8 +604,11 @@ Immanuel Haffner\
         range stores(C.stores_cbegin(), C.stores_cend());
         std::size_t max_len = 0;
         for (auto &store : stores) max_len = std::max(max_len, strlen(store.first));
-        for (auto &store : stores)
-            std::cout << "\n    " << std::setw(max_len) << std::left << store.first; // << "    -    " << store.second;
+        for (auto &store : stores) {
+            std::cout << "\n    " << std::setw(max_len) << std::left << store.first;
+            if (store.second.description())
+                std::cout << "    -    " << store.second.description();
+        }
         std::cout << std::endl;
     }
 
@@ -614,8 +617,11 @@ Immanuel Haffner\
         range cardinality_estimators(C.cardinality_estimators_cbegin(), C.cardinality_estimators_cend());
         std::size_t max_len = 0;
         for (auto &ce : cardinality_estimators) max_len = std::max(max_len, strlen(ce.first));
-        for (auto &ce : cardinality_estimators)
-            std::cout << "\n    " << std::setw(max_len) << std::left << ce.first; // << "    -    " << ce.second;
+        for (auto &ce : cardinality_estimators) {
+            std::cout << "\n    " << std::setw(max_len) << std::left << ce.first;
+            if (ce.second.description())
+                std::cout << "    -    " << ce.second.description();
+        }
         std::cout << std::endl;
     }
 
@@ -624,8 +630,11 @@ Immanuel Haffner\
         range plan_enumerators(C.plan_enumerators_cbegin(), C.plan_enumerators_cend());
         std::size_t max_len = 0;
         for (auto &pe : plan_enumerators) max_len = std::max(max_len, strlen(pe.first));
-        for (auto &pe : plan_enumerators)
-            std::cout << "\n    " << std::setw(max_len) << std::left << pe.first; // << "    -    " << pe.second;
+        for (auto &pe : plan_enumerators) {
+            std::cout << "\n    " << std::setw(max_len) << std::left << pe.first;
+            if (pe.second.description())
+                std::cout << "    -    " << pe.second.description();
+        }
         std::cout << std::endl;
     }
 
@@ -634,8 +643,11 @@ Immanuel Haffner\
         std::size_t max_len = 0;
         range backends(C.backends_cbegin(), C.backends_cend());
         for (auto &backend : backends) max_len = std::max(max_len, strlen(backend.first));
-        for (auto &backend : backends)
-            std::cout << "\n    " << std::setw(max_len) << std::left << backend.first; // << "    -    " << backend.second;
+        for (auto &backend : backends) {
+            std::cout << "\n    " << std::setw(max_len) << std::left << backend.first;
+            if (backend.second.description())
+                std::cout << "    -    " << backend.second.description();
+        }
         std::cout << std::endl;
     }
 

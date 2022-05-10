@@ -36,14 +36,10 @@ bool wasm_adaptive = false;
 /** The port to use for the Chrome DevTools web socket. */
 uint16_t cdt_port = 0;
 
-}
-
 
 /*======================================================================================================================
  * V8Inspector and helper classes
  *====================================================================================================================*/
-
-namespace m::detail::v8_helper {
 
 inline v8::Local<v8::String> to_v8_string(v8::Isolate *isolate, std::string_view sv) {
     M_insist(isolate);
@@ -53,12 +49,6 @@ inline v8::Local<v8::String> to_v8_string(v8::Isolate *isolate, std::string_view
 inline std::string to_std_string(v8::Isolate *isolate, v8::Local<v8::Value> val) {
     v8::String::Utf8Value utf8(isolate, val);
     return *utf8;
-}
-
-inline v8::Local<v8::String> to_json(v8::Isolate *isolate, v8::Local<v8::Value> val) {
-    M_insist(isolate);
-    auto Ctx = isolate->GetCurrentContext();
-    return v8::JSON::Stringify(Ctx, val).ToLocalChecked();
 }
 
 inline v8::Local<v8::Object> parse_json(v8::Isolate *isolate, std::string_view json) {
@@ -181,10 +171,6 @@ struct V8InspectorClientImpl : v8_inspector::V8InspectorClient
     void waitFrontendMessageOnPause() { is_terminated_ = false; }
 };
 
-}
-
-namespace m::detail {
-
 /*======================================================================================================================
  * V8Platform
  *====================================================================================================================*/
@@ -203,7 +189,7 @@ struct V8Platform : m::WasmPlatform
     v8::Isolate *isolate_ = nullptr;
 
     /*----- Objects for remote debugging via CDT. --------------------------------------------------------------------*/
-    std::unique_ptr<v8_helper::V8InspectorClientImpl> inspector_;
+    std::unique_ptr<V8InspectorClientImpl> inspector_;
 
     public:
     V8Platform();
@@ -242,14 +228,10 @@ struct V8Platform : m::WasmPlatform
                                        const WasmPlatform::WasmContext & wasm_context);
 };
 
-}
-
 
 /*======================================================================================================================
  * V8Inspector and helper classes implementation
  *====================================================================================================================*/
-
-namespace m::detail::v8_helper {
 
 void V8InspectorClientImpl::register_context(v8::Local<v8::Context> context)
 {
@@ -299,16 +281,12 @@ void V8InspectorClientImpl::runMessageLoopOnPause(int)
     is_nested = false;
 }
 
-}
-
 
 /*======================================================================================================================
  * V8 Callback Functions
  *
  * Functions to be called from the WebAssembly module to give control flow and pass data to the host.
  *====================================================================================================================*/
-
-namespace {
 
 void print(const v8::FunctionCallbackInfo<v8::Value> &info)
 {
@@ -346,14 +324,10 @@ void throw_invalid_escape_sequence(const v8::FunctionCallbackInfo<v8::Value>&)
     throw m::runtime_error("invalid escape sequence");
 }
 
-}
-
 
 /*======================================================================================================================
  * V8Platform helper classes
  *====================================================================================================================*/
-
-namespace {
 
 struct Store2Wasm
 {
@@ -399,13 +373,13 @@ public:
             /* Add entry address to env. */
             oss.str("");
             oss << table.name << "_mem_" << idx++;
-            M_DISCARD env_->Set(Ctx, m::detail::v8_helper::to_v8_string(isolate_, oss.str()), v8::Int32::New(isolate_, ptr));
+            M_DISCARD env_->Set(Ctx, to_v8_string(isolate_, oss.str()), v8::Int32::New(isolate_, ptr));
         }
 
         /* Add table size (num_rows) to env. */
         oss.str("");
         oss << table.name << "_num_rows";
-        M_DISCARD env_->Set(Ctx, m::detail::v8_helper::to_v8_string(isolate_, oss.str()), v8::Int32::New(isolate_, s.num_rows()));
+        M_DISCARD env_->Set(Ctx, to_v8_string(isolate_, oss.str()), v8::Int32::New(isolate_, s.num_rows()));
     }
 };
 
@@ -507,16 +481,14 @@ private:
     void operator()(const QueryExpr &) override { /* nothing to be done */ }
 };
 
-}
-
 
 /*======================================================================================================================
  * V8Platform implementation
  *====================================================================================================================*/
 
-v8::Platform *m::detail::V8Platform::PLATFORM_(nullptr);
+v8::Platform *V8Platform::PLATFORM_(nullptr);
 
-m::detail::V8Platform::V8Platform()
+V8Platform::V8Platform()
 {
     /*----- Set V8 flags. --------------------------------------------------------------------------------------------*/
     std::ostringstream flags;
@@ -550,10 +522,10 @@ m::detail::V8Platform::V8Platform()
 
     /* If a debugging port is specified, set up the inspector. */
     if (cdt_port > 0)
-        inspector_ = std::make_unique<v8_helper::V8InspectorClientImpl>(cdt_port, isolate_);
+        inspector_ = std::make_unique<V8InspectorClientImpl>(cdt_port, isolate_);
 }
 
-m::detail::V8Platform::~V8Platform()
+V8Platform::~V8Platform()
 {
     inspector_.reset();
     isolate_->Dispose();
@@ -562,7 +534,7 @@ m::detail::V8Platform::~V8Platform()
     delete allocator_;
 }
 
-WasmModule m::detail::V8Platform::compile(const Operator &plan) const
+WasmModule V8Platform::compile(const Operator &plan) const
 {
     WasmModule module; // fresh module
     BinaryenModuleSetFeatures(module.ref(), BinaryenFeatureBulkMemory());
@@ -749,7 +721,7 @@ WasmModule m::detail::V8Platform::compile(const Operator &plan) const
     return module;
 }
 
-void m::detail::V8Platform::execute(const Operator &plan)
+void V8Platform::execute(const Operator &plan)
 {
     Catalog &C = Catalog::Get();
     auto module = M_TIME_EXPR(compile(plan), "Compile to WebAssembly", C.timer());
@@ -909,7 +881,7 @@ void m::detail::V8Platform::execute(const Operator &plan)
     isolate_->Exit();
 }
 
-v8::Local<v8::WasmModuleObject> m::detail::V8Platform::instantiate(const WasmModule &module, v8::Local<v8::Object> imports)
+v8::Local<v8::WasmModuleObject> V8Platform::instantiate(const WasmModule &module, v8::Local<v8::Object> imports)
 {
     auto Ctx = isolate_->GetCurrentContext();
     auto [binary_addr, binary_size] = module.binary();
@@ -932,7 +904,7 @@ v8::Local<v8::WasmModuleObject> m::detail::V8Platform::instantiate(const WasmMod
                ->CallAsConstructor(Ctx, 2, instance_args).ToLocalChecked().As<v8::WasmModuleObject>();
 }
 
-v8::Local<v8::Object> m::detail::V8Platform::create_env(WasmContext &wasm_context, const Operator &plan) const
+v8::Local<v8::Object> V8Platform::create_env(WasmContext &wasm_context, const Operator &plan) const
 {
     (void) plan; // TODO map only tables/indexes that are being accessed
     auto Ctx = isolate_->GetCurrentContext();
@@ -961,17 +933,19 @@ v8::Local<v8::Object> m::detail::V8Platform::create_env(WasmContext &wasm_contex
     return env;
 }
 
-v8::Local<v8::String> m::detail::V8Platform::mkstr(const std::string &str) const
+v8::Local<v8::String> V8Platform::mkstr(const std::string &str) const
 {
-    return v8_helper::to_v8_string(isolate_, str);
+    return to_v8_string(isolate_, str);
 }
 
-v8::Local<v8::String> m::detail::V8Platform::to_json(v8::Local<v8::Value> val) const
+v8::Local<v8::String> V8Platform::to_json(v8::Local<v8::Value> val) const
 {
-    return v8_helper::to_json(isolate_, val);
+    M_insist(isolate_);
+    auto Ctx = isolate_->GetCurrentContext();
+    return v8::JSON::Stringify(Ctx, val).ToLocalChecked();
 }
 
-std::string m::detail::V8Platform::create_js_debug_script(const WasmModule &module, v8::Local<v8::Object> env,
+std::string V8Platform::create_js_debug_script(const WasmModule &module, v8::Local<v8::Object> env,
                                                           const WasmPlatform::WasmContext &wasm_context)
 {
     std::ostringstream oss;
@@ -1030,7 +1004,7 @@ debugger;";
 }
 
 __attribute__((constructor(101)))
-void m::detail::create_V8Platform()
+static void create_V8Platform()
 {
     V8Platform::PLATFORM_ = v8::platform::NewDefaultPlatform().release();
     v8::V8::InitializePlatform(V8Platform::PLATFORM_);
@@ -1038,13 +1012,13 @@ void m::detail::create_V8Platform()
 }
 
 __attribute__((destructor(101)))
-void m::detail::destroy_V8Platform()
+static void destroy_V8Platform()
 {
     delete V8Platform::PLATFORM_;
 }
 
-__attribute__((constructor(201)))
-void m::detail::register_WasmV8()
+__attribute__((constructor(202)))
+static void register_WasmV8()
 {
     Catalog &C = Catalog::Get();
     C.register_backend("WasmV8", std::make_unique<WasmBackend>(std::make_unique<V8Platform>()));

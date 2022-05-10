@@ -65,11 +65,6 @@ struct Options
     /** If `true`, run the procedure to train cost models for query building blocks at startup. */
     bool train_cost_models;
 
-    ///> Specify the port for debugging via ChromeDevTools (CDT)
-    int16_t cdt_port = -1;
-    int wasm_optimization_level = 2;
-    bool wasm_adaptive = false;
-
     private:
     Options() = default;
     public:

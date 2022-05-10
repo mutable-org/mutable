@@ -29,12 +29,16 @@ using args_t = v8::Local<v8::Value>[];
 
 namespace {
 
+namespace options {
+
 /** The Wasm optimization level. */
 int wasm_optimization_level = 0;
 /** Whether to execute Wasm adaptively. */
 bool wasm_adaptive = false;
 /** The port to use for the Chrome DevTools web socket. */
 uint16_t cdt_port = 0;
+
+}
 
 
 /*======================================================================================================================
@@ -493,7 +497,7 @@ V8Platform::V8Platform()
     /*----- Set V8 flags. --------------------------------------------------------------------------------------------*/
     std::ostringstream flags;
     flags << "--stack_size 1000000 ";
-    if (wasm_adaptive) {
+    if (options::wasm_adaptive) {
         flags << "--opt "
               << "--liftoff "
               << "--wasm-tier-up "
@@ -502,7 +506,7 @@ V8Platform::V8Platform()
     } else {
         flags << "--no-liftoff ";
     }
-    if (cdt_port > 0) {
+    if (options::cdt_port > 0) {
         flags << "--log "
               << "--log-all "
               << "--expose-wasm "
@@ -521,8 +525,8 @@ V8Platform::V8Platform()
     isolate_ = v8::Isolate::New(create_params);
 
     /* If a debugging port is specified, set up the inspector. */
-    if (cdt_port > 0)
-        inspector_ = std::make_unique<V8InspectorClientImpl>(cdt_port, isolate_);
+    if (options::cdt_port > 0)
+        inspector_ = std::make_unique<V8InspectorClientImpl>(options::cdt_port, isolate_);
 }
 
 V8Platform::~V8Platform()
@@ -701,8 +705,8 @@ WasmModule V8Platform::compile(const Operator &plan) const
     std::ostringstream dump_before_opt;
     module.dump(dump_before_opt);
 #endif
-    if (wasm_optimization_level) {
-        BinaryenSetOptimizeLevel(wasm_optimization_level);
+    if (options::wasm_optimization_level) {
+        BinaryenSetOptimizeLevel(options::wasm_optimization_level);
         BinaryenSetShrinkLevel(0); // shrinking not required
         BinaryenModuleOptimize(module.ref());
     }
@@ -1025,21 +1029,26 @@ static void register_WasmV8()
 
     /*----- Command-line arguments -----------------------------------------------------------------------------------*/
     C.arg_parser().add<int>(
+        /* group=       */ "WasmV8",
         /* short=       */ nullptr,
         /* long=        */ "--wasm-opt",
         /* description= */ "set the optimization level for Wasm modules (0, 1, or 2)",
-        [] (int i) { wasm_optimization_level = i; }
+        [] (int i) { options::wasm_optimization_level = i; }
     );
     C.arg_parser().add<bool>(
+        /* group=       */ "WasmV8",
         /* short=       */ nullptr,
         /* long=        */ "--wasm-adaptive",
         /* description= */ "enable adaptive execution of Wasm with Liftoff and dynamic tier-up",
-        [] (bool b) { wasm_adaptive = b; }
+        [] (bool b) { options::wasm_adaptive = b; }
     );
     C.arg_parser().add<int>(
+        /* group=       */ "WasmV8",
         /* short=       */ nullptr,
         /* long=        */ "--CDT",
         /* description= */ "specify the port for debugging via ChomeDevTools",
-        [] (int i) { cdt_port = i; }
+        [] (int i) { options::cdt_port = i; }
     );
+}
+
 }

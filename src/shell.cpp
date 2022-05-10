@@ -744,12 +744,6 @@ Example for injected cardinalities file:\n\
         std::cout << std::endl;
     }
 
-    if (not (Options::Get().wasm_optimization_level >= 0 and Options::Get().wasm_optimization_level <= 2)) {
-        std::cerr << "level " << Options::Get().wasm_optimization_level << " is not a valid Wasm optimization level"
-                  << std::endl;
-        std::exit(EXIT_FAILURE);
-    }
-
     /* Disable synchronisation between C and C++ I/O (e.g. stdin vs std::cin). */
     std::ios_base::sync_with_stdio(false);
 

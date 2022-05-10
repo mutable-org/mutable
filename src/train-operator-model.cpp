@@ -274,14 +274,6 @@ int main(int argc, const char **argv)
             }
         }
     );
-    ADD(int, Options::Get().wasm_optimization_level, 0,                             /* Type, Var, Init  */
-        "-O", "--wasm-opt",                                                         /* Short, Long      */
-        "set the optimization level for Wasm modules (0, 1, or 2)",                 /* Description      */
-        [&](int olevel) { Options::Get().wasm_optimization_level = olevel; });      /* Callback         */
-    ADD(int, Options::Get().cdt_port, 0,                                            /* Type, Var, Init  */
-        nullptr, "--CDT",                                                           /* Short, Long      */
-        "specify the port for debugging via ChomeDevTools",                         /* Description      */
-        [&](int port) { Options::Get().cdt_port = port; });                         /* Callback         */
 #undef ADD
     AP.parse_args(argc, argv);
 
@@ -294,12 +286,6 @@ int main(int argc, const char **argv)
     if (AP.args().size() != 0) {
         std::cerr << "ERROR: Too many arguments.\n";
         usage(std::cerr, argv[0]);
-        std::exit(EXIT_FAILURE);
-    }
-
-    if (not (Options::Get().wasm_optimization_level >= 0 and Options::Get().wasm_optimization_level <= 2)) {
-        std::cerr << "level " << Options::Get().wasm_optimization_level << " is not a valid Wasm optimization level"
-                  << std::endl;
         std::exit(EXIT_FAILURE);
     }
 

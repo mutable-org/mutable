@@ -55,10 +55,6 @@ struct Options
     PlanTableType plan_table_type = PT_auto;
 
     /*----- Database configuration. ----------------------------------------------------------------------------------*/
-    const char *store;
-    const char *plan_enumerator;
-    const char *backend;
-    const char *cardinality_estimator;
     const char *injected_cardinalities_file;
     const char *output_partial_plans_file;
 

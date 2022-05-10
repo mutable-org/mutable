@@ -1,10 +1,11 @@
 #include "catch2/catch.hpp"
 
-#include <mutable/catalog/Schema.hpp>
-#include <mutable/storage/Store.hpp>
 #include "storage/ColumnStore.hpp"
 #include "storage/PaxStore.hpp"
 #include "storage/RowStore.hpp"
+#include <mutable/catalog/Catalog.hpp>
+#include <mutable/catalog/Schema.hpp>
+#include <mutable/storage/Store.hpp>
 #include <mutable/util/memory.hpp>
 
 
@@ -32,24 +33,23 @@ struct TestStore : Store
 }
 
 
-TEST_CASE("Store", "[core][storage][store]")
+TEST_CASE("Store", "[core][storage]")
 {
+    Catalog &C = Catalog::Get();
     /* Construct a table definition. */
     Table table("mytable");
     table.push_back("i1", Type::Get_Integer(Type::TY_Vector, 1)); // 1 byte
 
-    SECTION("Create from Store::kind_t")
-    {
-#define M_STORE(NAME, _) REQUIRE(cast<NAME>(&*Store::Create(Store::S_ ## NAME, table)));
-#include <mutable/tables/Store.tbl>
-#undef M_STORE
-    }
-
     SECTION("Create from string")
     {
-#define M_STORE(NAME, _) REQUIRE(cast<NAME>(&*Store::Create(#NAME, table)));
-#include <mutable/tables/Store.tbl>
-#undef M_STORE
+#define TEST(NAME) { \
+    auto store = C.create_store(#NAME, table); \
+    REQUIRE(cast<NAME>(store.get())); \
+}
+
+        TEST(RowStore);
+        TEST(ColumnStore);
+        TEST(PaxStore);
     }
 
     SECTION("linearization() sanity check")

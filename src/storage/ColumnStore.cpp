@@ -1,6 +1,7 @@
 #include "storage/ColumnStore.hpp"
 
 #include "backend/StackMachine.hpp"
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/storage/Linearization.hpp>
 #include <numeric>
 
@@ -71,4 +72,9 @@ void ColumnStore::dump(std::ostream &out) const
 }
 M_LCOV_EXCL_STOP
 
-std::unique_ptr<Store> Store::CreateColumnStore(const Table &table) { return std::make_unique<ColumnStore>(table); }
+__attribute__((constructor(202)))
+static void register_store()
+{
+    Catalog &C = Catalog::Get();
+    C.register_store<ColumnStore>("ColumnStore");
+}

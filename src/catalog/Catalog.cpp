@@ -30,38 +30,6 @@ Catalog::Catalog()
 }
 #include <mutable/tables/Functions.tbl>
 #undef M_FUNCTION
-
-    /*----- Initialize stores. ---------------------------------------------------------------------------------------*/
-#define M_STORE(NAME, _) { \
-    auto name = pool(#NAME); \
-    auto res = store_factories_.emplace(name, new ConcreteStoreFactory<NAME>()); \
-    M_insist(res.second, "store already defined"); \
-}
-#include <mutable/tables/Store.tbl>
-#undef M_STORE
-    M_insist(store_factories_.size() != 0);
-    default_store(store_factories_.begin()->first); // set default store
-
-    /*----- Initialize cardinality estimators. -----------------------------------------------------------------------*/
-#define M_CARDINALITY_ESTIMATOR(NAME, _) { \
-    auto name = pool(#NAME); \
-    auto res = cardinality_estimator_factories_.emplace(name, new ConcreteCardinalityEstimatorFactory<NAME>()); \
-    M_insist(res.second, "cardinality estimator already defined"); \
-}
-#include <mutable/tables/CardinalityEstimator.tbl>
-#undef M_CARDINALITY_ESTIMATOR
-    M_insist(cardinality_estimator_factories_.size() != 0);
-    default_cardinality_estimator(cardinality_estimator_factories_.begin()->first); // set default cardinality estimator
-
-    /*----- Initialize backends. -------------------------------------------------------------------------------------*/
-#define M_BACKEND(NAME, _) { \
-    auto name = pool(#NAME); \
-    auto res = backends_.emplace(name, std::make_unique<NAME>()); \
-}
-#include <mutable/tables/Backend.tbl>
-#undef M_BACKEND
-    M_insist(backends_.size() != 0);
-    default_backend(backends_.begin()->first);
 }
 
 
@@ -88,62 +56,6 @@ void Catalog::Destroy()
     Catalog::the_catalog_ = nullptr;
 }
 
-
-/*===== Stores =======================================================================================================*/
-
-std::unique_ptr<Store> Catalog::create_store(const char *name, const Table &tbl) const
-{
-    name = pool(name);
-    auto it = store_factories_.find(name);
-    if (it == store_factories_.end()) throw std::invalid_argument("store not found");
-    return it->second->make(tbl);
-}
-
-std::unique_ptr<Store> Catalog::create_store(const Table &tbl) const
-{
-    M_insist(default_store_, "there must always be a default store");
-    return default_store_->make(tbl);
-}
-
-
-/*===== Cardinality Estimators =======================================================================================*/
-
-std::unique_ptr<CardinalityEstimator> Catalog::create_cardinality_estimator(const char *name) const
-{
-    name = pool(name);
-    auto it = cardinality_estimator_factories_.find(name);
-    if (it == cardinality_estimator_factories_.end()) throw std::invalid_argument("estimator not found");
-    return it->second->make();
-}
-
-std::unique_ptr<CardinalityEstimator> Catalog::create_cardinality_estimator() const
-{
-    M_insist(default_cardinality_estimator_, "there must always be a default cardinality estimator");
-    return default_cardinality_estimator_->make();
-}
-
-
-/*===== Cost Functions ===============================================================================================*/
-
-const CostFunction & Catalog::cost_function() const {
-    return *cost_function_;
-}
-
-std::unique_ptr<CostFunction> Catalog::cost_function(std::unique_ptr<CostFunction> cost_function) {
-    cost_function_.swap(cost_function);
-    return cost_function;
-}
-
-
-/*===== Plan Enumerators =============================================================================================*/
-
-PlanEnumerator & Catalog::plan_enumerator() const
-{
-    M_insist(default_plan_enumerator_ != plan_enumerators_.cend());
-    return *default_plan_enumerator_->second;
-}
-
-
 /*===== Databases ====================================================================================================*/
 
 Database & Catalog::add_database(const char *name)
@@ -163,4 +75,68 @@ void Catalog::drop_database(const char *name)
         throw std::invalid_argument("Database of that name does not exist.");
     delete it->second;
     databases_.erase(it);
+}
+
+__attribute__((constructor(201)))
+static void add_catalog_args()
+{
+    Catalog &C = Catalog::Get();
+
+    /*----- Command-line arguments -----------------------------------------------------------------------------------*/
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Catalog",
+        /* short=       */ nullptr,
+        /* long=        */ "--store",
+        /* description= */ "store implementation to use",
+        [&C] (const char *str) {
+            try {
+                C.default_store(str);
+            } catch (std::invalid_argument) {
+                std::cerr << "There is no store with the name \"" << str << "\".\n";
+                std::exit(EXIT_FAILURE);
+            }
+        }
+    );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Catalog",
+        /* short=       */ nullptr,
+        /* long=        */ "--cardinality-estimator",
+        /* description= */ "cardinality estimator to use",
+        [&C] (const char *str) {
+            try {
+                C.default_cardinality_estimator(str);
+            } catch (std::invalid_argument) {
+                std::cerr << "There is no cardinality estimator with the name \"" << str << "\".\n";
+                std::exit(EXIT_FAILURE);
+            }
+        }
+    );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Catalog",
+        /* short=       */ nullptr,
+        /* long=        */ "--plan-enumerator",
+        /* description= */ "plan enumerator to use",
+        [&C] (const char *str) {
+            try {
+                C.default_plan_enumerator(str);
+            } catch (std::invalid_argument) {
+                std::cerr << "There is no plan enumerator with the name \"" << str << "\".\n";
+                std::exit(EXIT_FAILURE);
+            }
+        }
+    );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Catalog",
+        /* short=       */ nullptr,
+        /* long=        */ "--backend",
+        /* description= */ "execution backend to use",
+        [&C] (const char *str) {
+            try {
+                C.default_backend(str);
+            } catch (std::invalid_argument) {
+                std::cerr << "There is no execution backend with the name \"" << str << "\".\n";
+                std::exit(EXIT_FAILURE);
+            }
+        }
+    );
 }

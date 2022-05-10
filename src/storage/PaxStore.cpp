@@ -1,10 +1,11 @@
 #include "storage/PaxStore.hpp"
 
-#include <mutable/storage/Linearization.hpp>
 #include <algorithm>
 #include <exception>
 #include <fstream>
 #include <iomanip>
+#include <mutable/catalog/Catalog.hpp>
+#include <mutable/storage/Linearization.hpp>
 #include <numeric>
 
 
@@ -13,8 +14,8 @@ using namespace m;
 
 PaxStore::PaxStore(const Table &table, uint32_t block_size_in_bytes)
         : Store(table)
-        , block_size_(block_size_in_bytes)
         , offsets_(new uint32_t[table.size() + 1]) // add one slot for the offset of the meta data
+        , block_size_(block_size_in_bytes)
 {
     compute_block_offsets();
 
@@ -107,4 +108,9 @@ void PaxStore::dump(std::ostream &out) const
 }
 M_LCOV_EXCL_STOP
 
-std::unique_ptr<Store> Store::CreatePaxStore(const Table &table) { return std::make_unique<PaxStore>(table); }
+__attribute__((constructor(202)))
+static void register_store()
+{
+    Catalog &C = Catalog::Get();
+    C.register_store<PaxStore>("PaxStore");
+}

@@ -55,27 +55,6 @@ struct M_EXPORT CardinalityEstimator : estimate_join_all_tag::base_type
         explicit data_model_exception(std::string message) : m::exception(std::move(message)) { }
     };
 
-    enum kind_t {
-#define M_CARDINALITY_ESTIMATOR(NAME, _) CE_ ## NAME,
-#include <mutable/tables/CardinalityEstimator.tbl>
-#undef M_CARDINALITY_ESTIMATOR
-    };
-
-    static const std::unordered_map<std::string, kind_t> STR_TO_KIND;
-
-    /** Create a `CardinalityEstimator` instance given the kind of cardinality estimator. */
-    static std::unique_ptr<CardinalityEstimator> Create(kind_t kind, const char *name_of_database);
-
-    /** Create a `CardinalityEstimator` instance given the name of a cardinality estimator. */
-    static std::unique_ptr<CardinalityEstimator> Create(const char *kind, const char *name_of_database) {
-        return Create(STR_TO_KIND.at(kind), name_of_database);
-    }
-
-#define M_CARDINALITY_ESTIMATOR(NAME, _) \
-    static std::unique_ptr<CardinalityEstimator> Create ## NAME(const char *name_of_database);
-#include <mutable/tables/CardinalityEstimator.tbl>
-#undef M_CARDINALITY_ESTIMATOR
-
     virtual ~CardinalityEstimator() = 0;
 
 

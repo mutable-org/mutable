@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/IR/CNF.hpp>
 #include <mutable/IR/Operator.hpp>
 #include <mutable/IR/PlanTable.hpp>
@@ -36,21 +37,6 @@ void CardinalityEstimator::dump(std::ostream &out) const
 
 void CardinalityEstimator::dump() const { dump(std::cerr); }
 M_LCOV_EXCL_STOP
-
-const std::unordered_map<std::string, CardinalityEstimator::kind_t> CardinalityEstimator::STR_TO_KIND = {
-#define M_CARDINALITY_ESTIMATOR(NAME, _) { #NAME,  CardinalityEstimator::CE_ ## NAME },
-#include <mutable/tables/CardinalityEstimator.tbl>
-#undef M_CARDINALITY_ESTIMATOR
-};
-
-std::unique_ptr<CardinalityEstimator>
-CardinalityEstimator::Create(CardinalityEstimator::kind_t kind, const char *name_of_database) {
-    switch(kind) {
-#define M_CARDINALITY_ESTIMATOR(NAME, _) case CE_ ## NAME: return Create ## NAME(name_of_database);
-#include <mutable/tables/CardinalityEstimator.tbl>
-#undef M_CARDINALITY_ESTIMATOR
-    }
-}
 
 
 /*======================================================================================================================
@@ -153,12 +139,6 @@ void CartesianProductEstimator::print(std::ostream &out) const
     out << "CartesianProductEstimator - returns size of the Cartesian product of the given subproblems";
 }
 M_LCOV_EXCL_STOP
-
-std::unique_ptr<CardinalityEstimator>
-CardinalityEstimator::CreateCartesianProductEstimator(const char*)
-{
-    return std::make_unique<CartesianProductEstimator>();
-}
 
 
 /*======================================================================================================================
@@ -406,8 +386,10 @@ const char * InjectionCardinalityEstimator::make_identifier(const QueryGraph &G,
     return buf_view();
 }
 
-std::unique_ptr<CardinalityEstimator>
-CardinalityEstimator::CreateInjectionCardinalityEstimator(const char *name_of_database)
+__attribute__((constructor(202)))
+static void register_cardinality_estimators()
 {
-    return std::make_unique<InjectionCardinalityEstimator>(name_of_database);
+    Catalog &C = Catalog::Get();
+    C.register_cardinality_estimator<CartesianProductEstimator>("CartesianProduct");
+    C.register_cardinality_estimator<InjectionCardinalityEstimator>("Injected");
 }

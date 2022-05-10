@@ -105,7 +105,7 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_filter()
     table.push_back(C.pool("id"), Type::Get_Integer(Type::TY_Vector, 4));
     table.push_back(C.pool("val"), get_runtime_type<T>());
     /* Set table store and get a handle. */
-    table.store(Store::CreateColumnStore(table));
+    table.store(C.create_store("ColumnStore", table));
     ColumnStore &store = as<ColumnStore>(table.store());
 
     /*----- Prepare data. --------------------------------------------------------------------------------------------*/
@@ -198,7 +198,7 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_group_by()
     table.push_back(C.pool("id"), Type::Get_Integer(Type::TY_Vector, 4));
     table.push_back(C.pool("val"), get_runtime_type<T>());
     /* Set table store and get a handle. */
-    table.store(Store::CreateColumnStore(table));
+    table.store(C.create_store("ColumnStore", table));
     ColumnStore &store = as<ColumnStore>(table.store());
 
     std::vector<T> distinct_values;
@@ -332,9 +332,9 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_join()
     table_right.push_back(C.pool("id"), Type::Get_Integer(Type::TY_Vector, 4));
     table_right.push_back(C.pool("val"), get_runtime_type<T>());
     /* Set table stores and get a handle. */
-    table_left.store(Store::CreateColumnStore(table_left));
+    table_left.store(C.create_store("ColumnStore", table_left));
     ColumnStore &store_left = as<ColumnStore>(table_left.store());
-    table_right.store(Store::CreateColumnStore(table_right));
+    table_right.store(C.create_store("ColumnStore", table_right));
     ColumnStore &store_right = as<ColumnStore>(table_right.store());
 
     std::vector<T> distinct_values;

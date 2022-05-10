@@ -39,6 +39,7 @@ TEST_CASE("RowStore/access", "[core][backend]")
 {
     Catalog::Clear();
     auto &C = Catalog::Get();
+    C.default_backend("Interpreter");
 
     auto &DB = C.add_database(C.pool("test_db"));
     auto &table = DB.add_table(C.pool("test"));
@@ -66,6 +67,7 @@ TEST_CASE("RowStore/access", "[core][backend]")
 
         /* Test table without any inserted tuples. */
         test_table_is_empty(diag, err, "test");
+        REQUIRE(table.store().num_rows() == 0);
 
         auto insertions = statement_from_string(diag, "INSERT INTO test VALUES \
             ( NULL, NULL, NULL, NULL, NULL );");
@@ -99,6 +101,7 @@ TEST_CASE("RowStore/access", "[core][backend]")
 
         std::unique_ptr<SelectStmt> select_stmt(static_cast<SelectStmt*>(stmt.release()));
         execute_query(diag, *select_stmt, std::move(callback));
+        REQUIRE(table.store().num_rows() == 1);
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
         REQUIRE(num_tuples == 1);
@@ -492,6 +495,7 @@ TEST_CASE("ColumnStore/access", "[core][backend]")
 {
     Catalog::Clear();
     auto &C = Catalog::Get();
+    C.default_backend("Interpreter");
 
     auto &DB = C.add_database(C.pool("test_db"));
     auto &table = DB.add_table(C.pool("test"));
@@ -1020,6 +1024,7 @@ TEST_CASE("PaxStore/access", "[core][backend]")
 {
     Catalog::Clear();
     auto &C = Catalog::Get();
+    C.default_backend("Interpreter");
 
     auto &DB = C.add_database(C.pool("test_db"));
     auto &table = DB.add_table(C.pool("test"));

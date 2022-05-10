@@ -26,27 +26,6 @@ struct ConstStoreVisitor;
 /** Defines a generic store interface. */
 struct M_EXPORT Store
 {
-    enum kind_t {
-#define M_STORE(NAME, _) S_ ## NAME,
-#include <mutable/tables/Store.tbl>
-#undef M_STORE
-    };
-
-    static const std::unordered_map<std::string, kind_t> STR_TO_KIND;
-
-    /** Create a `Store` instance given the kind of store. */
-    static std::unique_ptr<Store> Create(kind_t kind, const Table &table);
-
-    /** Create a `Store` instance given the name of a store. */
-    static std::unique_ptr<Store> Create(const char *kind, const Table &table) {
-        return Create(STR_TO_KIND.at(kind), table);
-    }
-
-#define M_STORE(NAME, _) \
-    static std::unique_ptr<Store> Create ## NAME(const Table &table);
-#include <mutable/tables/Store.tbl>
-#undef M_STORE
-
     private:
     const Table &table_; ///< the table defining this store's schema
     std::unique_ptr<Linearization> lin_; ///< the linearization describing the layout of this store

@@ -1,13 +1,14 @@
 #include "storage/RowStore.hpp"
 
 #include "backend/StackMachine.hpp"
-#include <mutable/catalog/Type.hpp>
-#include <mutable/util/fn.hpp>
-#include <mutable/storage/Linearization.hpp>
 #include <algorithm>
 #include <exception>
 #include <fstream>
 #include <iomanip>
+#include <mutable/catalog/Catalog.hpp>
+#include <mutable/catalog/Type.hpp>
+#include <mutable/storage/Linearization.hpp>
+#include <mutable/util/fn.hpp>
 #include <typeinfo>
 
 
@@ -85,4 +86,9 @@ void RowStore::dump(std::ostream &out) const
 }
 M_LCOV_EXCL_STOP
 
-std::unique_ptr<Store> Store::CreateRowStore(const Table &table) { return std::make_unique<RowStore>(table); }
+__attribute__((constructor(202)))
+static void register_store()
+{
+    Catalog &C = Catalog::Get();
+    C.register_store<RowStore>("RowStore");
+}

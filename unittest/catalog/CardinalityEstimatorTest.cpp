@@ -49,9 +49,9 @@ TEST_CASE("Injection estimator estimates", "[core][catalog][cardinality]")
     std::size_t num_rows_A = 5;
     std::size_t num_rows_B = 10;
     std::size_t num_rows_C = 8;
-    tbl_A.store(Store::CreateRowStore(tbl_A));
-    tbl_B.store(Store::CreateRowStore(tbl_B));
-    tbl_C.store(Store::CreateRowStore(tbl_C));
+    tbl_A.store(Cat.create_store(tbl_A));
+    tbl_B.store(Cat.create_store(tbl_B));
+    tbl_C.store(Cat.create_store(tbl_C));
     for (std::size_t i = 0; i < num_rows_A; ++i) { tbl_A.store().append(); }
     for (std::size_t i = 0; i < num_rows_B; ++i) { tbl_B.store().append(); }
     for (std::size_t i = 0; i < num_rows_C; ++i) { tbl_C.store().append(); }
@@ -191,9 +191,9 @@ TEST_CASE("Cartesian estimator estimates", "[core][catalog][cardinality]")
     std::size_t num_rows_A = 5;
     std::size_t num_rows_B = 10;
     std::size_t num_rows_C = 8;
-    tbl_A.store(Store::CreateRowStore(tbl_A));
-    tbl_B.store(Store::CreateRowStore(tbl_B));
-    tbl_C.store(Store::CreateRowStore(tbl_C));
+    tbl_A.store(Cat.create_store(tbl_A));
+    tbl_B.store(Cat.create_store(tbl_B));
+    tbl_C.store(Cat.create_store(tbl_C));
     for (std::size_t i = 0; i < num_rows_A; ++i) { tbl_A.store().append(); }
     for (std::size_t i = 0; i < num_rows_B; ++i) { tbl_B.store().append(); }
     for (std::size_t i = 0; i < num_rows_C; ++i) { tbl_C.store().append(); }

@@ -184,7 +184,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
 
 /* TODO implement as command line argument of plugin
             if (Options::Get().dryrun and streq("WasmV8", C.default_backend_name())) {
-                Backend &backend = C.default_backend();
+                Backend &backend = C.backend();
                 auto &platform = as<WasmBackend>(backend).platform();
                 WasmModule wasm = M_TIME_EXPR(platform.compile(*plan), "Compile to WebAssembly", timer);
                 wasm.dump(std::cout);
@@ -193,7 +193,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
 
             if (not Options::Get().dryrun) {
                 M_TIME_THIS("Execute query", timer);
-                C.default_backend().execute(*plan);
+                C.backend().execute(*plan);
             }
         } else if (auto I = cast<InsertStmt>(stmt)) {
             auto &DB = C.get_database_in_use();
@@ -418,8 +418,8 @@ int main(int argc, const char **argv)
 
     /* Identify whether the terminal supports colors. */
     const bool term_has_color = term::has_color();
-    /* TODO Identify whether the terminal uses a unicode character encoding. */
-    (void) term_has_color;
+
+    bool show_any_help = false;
 
     /*----- Parse command line arguments. ----------------------------------------------------------------------------*/
     ArgParser &AP = C.arg_parser();
@@ -432,7 +432,10 @@ int main(int argc, const char **argv)
     ADD(bool, Options::Get().show_help, false,              /* Type, Var, Init  */
         "-h", "--help",                                     /* Short, Long      */
         "prints this help message",                         /* Description      */
-        [&](bool) { Options::Get().show_help = true; });    /* Callback         */
+        [&](bool) {                                         /* Callback         */
+            show_any_help = true;
+            Options::Get().show_help = true;
+        });
     ADD(bool, Options::Get().show_version, false,           /* Type, Var, Init  */
         nullptr, "--version",                               /* Short, Long      */
         "shows version information",                        /* Description      */
@@ -514,97 +517,46 @@ int main(int argc, const char **argv)
         "use the plan table optimized for large and sparse query graphs",               /* Description      */
         [&](bool) { Options::Get().plan_table_type = Options::PT_LargeAndSparse; });    /* Callback         */
 
-    /*----- Select store implementation ------------------------------------------------------------------------------*/
-    ADD(const char *, Options::Get().store,                 /* Type, Var        */
-        "RowStore",                                         /* Init             */
-        nullptr, "--store",                                 /* Short, Long      */
-        "specify the store",                                /* Description      */
-        /* Callback         */
-        [&](const char *str) {
-            if (Store::STR_TO_KIND.find(str) == Store::STR_TO_KIND.end()) {
-                std::cerr << "There is no store with the name \"" << str << "\".\n" << AP;
-                std::exit(EXIT_FAILURE);
-            }
-            Options::Get().store = str;
-        }
-       );
     ADD(bool, Options::Get().list_stores, false,            /* Type, Var, Init  */
         nullptr, "--list-stores",                           /* Short, Long      */
         "list all available stores",                        /* Description      */
-        /* Callback */
-        [&](bool) { Options::Get().list_stores = true; }
-    );
-
-    /*----- Select plan enumerator implementation --------------------------------------------------------------------*/
-    ADD(const char *, Options::Get().plan_enumerator,       /* Type, Var        */
-        "DPccp",                                            /* Init             */
-        nullptr, "--plan-enumerator",                       /* Short, Long      */
-        "specify the plan enumerator",                      /* Description      */
-        /* Callback         */
-        [&](const char *str) {
-            try {
-                C.default_plan_enumerator(str);
-                Options::Get().plan_enumerator = str;
-            } catch (std::invalid_argument) {
-                std::cerr << "There is no plan enumerator with the name \"" << str << "\".\n" << AP;
-                std::exit(EXIT_FAILURE);
-            }
-        }
-       );
-    ADD(bool, Options::Get().list_plan_enumerators, false,  /* Type, Var, Init  */
-        nullptr, "--list-plan-enumerators",                 /* Short, Long      */
-        "list all available plan enumerators",              /* Description      */
-        /* Callback */
-        [&](bool) { Options::Get().list_plan_enumerators = true; }
-    );
-
-    /*----- Select backend implementation ----------------------------------------------------------------------------*/
-    ADD(const char *, Options::Get().backend,               /* Type, Var        */
-        "Interpreter",                                      /* Init             */
-        nullptr, "--backend",                               /* Short, Long      */
-        "specify the execution backend",                    /* Description      */
-        /* Callback         */
-        [&](const char *str) {
-            try {
-                Catalog::Get().default_backend(str);
-                Options::Get().backend = str;
-            } catch (std::invalid_argument) {
-                std::cerr << "There is no execution backend with the name \"" << str << "\".\n" << AP;
-                std::exit(EXIT_FAILURE);
-            }
-        }
-       );
-    ADD(bool, Options::Get().list_backends, false,          /* Type, Var, Init  */
-        nullptr, "--list-backends",                         /* Short, Long      */
-        "list all available backends",                      /* Description      */
-        /* Callback */
-        [&](bool) { Options::Get().list_backends = true; }
-    );
-    /*----- Select cardinality estimator -----------------------------------------------------------------------------*/
-    ADD(const char *, Options::Get().cardinality_estimator,       /* Type, Var        */
-        "CartesianProductEstimator",                              /* Init             */
-        nullptr, "--cardinality-estimator",                       /* Short, Long      */
-        "specify the cardinality estimator",                      /* Description      */
-        /* Callback         */
-        [&](const char *str) {
-            if (CardinalityEstimator::STR_TO_KIND.find(str) == CardinalityEstimator::STR_TO_KIND.end()) {
-                std::cerr << "There is no cardinality estimator with the name \"" << str << "\".\n" << AP;
-                std::exit(EXIT_FAILURE);
-            }
-            Options::Get().cardinality_estimator = str;
+        [&](bool) {                                         /* Callback         */
+            Options::Get().list_stores = true;
+            show_any_help = true;
         }
     );
-
     ADD(bool, Options::Get().list_cardinality_estimators, false,    /* Type, Var, Init  */
         nullptr, "--list-cardinality-estimators",                   /* Short, Long      */
         "list all available cardinality estimators",                /* Description      */
-        /* Callback */
-        [&](bool) { Options::Get().list_cardinality_estimators = true; }
+        [&](bool) {                                                 /* Callback         */
+            Options::Get().list_cardinality_estimators = true;
+            show_any_help = true;
+        }
+    );
+
+    ADD(bool, Options::Get().list_plan_enumerators, false,  /* Type, Var, Init  */
+        nullptr, "--list-plan-enumerators",                 /* Short, Long      */
+        "list all available plan enumerators",              /* Description      */
+        [&](bool) {                                         /* Callback         */
+            Options::Get().list_plan_enumerators = true;
+            show_any_help = true;
+        }
+    );
+    ADD(bool, Options::Get().list_backends, false,          /* Type, Var, Init  */
+        nullptr, "--list-backends",                         /* Short, Long      */
+        "list all available backends",                      /* Description      */
+        [&](bool) {                                         /* Callback         */
+            Options::Get().list_backends = true;
+            show_any_help = true;
+        }
     );
     ADD(bool, Options::Get().show_injected_cardinalities_example, false,            /* Type, Var, Init  */
         nullptr, "--show-cardinality-example",                                      /* Short, Long      */
         "show example input for injected cardinalities",                            /* Description      */
-        [&](bool) { Options::Get().show_injected_cardinalities_example = true; }    /* Callback         */
+        [&](bool) {                                                                 /* Callback         */
+            Options::Get().show_injected_cardinalities_example = true;
+            show_any_help = true;
+        }
     );
     ADD(const char *, Options::Get().injected_cardinalities_file, nullptr,          /* Type, Var, Init  */
         nullptr, "--use-cardinality-file",                                          /* Short, Long      */
@@ -626,12 +578,6 @@ int main(int argc, const char **argv)
     );
 #undef ADD
     AP.parse_args(argc, argv);
-
-    if (Options::Get().show_help) {
-        usage(std::cout, argv[0]);
-        std::cout << "WHERE\n" << AP;
-        std::exit(EXIT_SUCCESS);
-    }
 
     if (Options::Get().show_version) {
         if (term_has_color)
@@ -656,30 +602,29 @@ Immanuel Haffner\
         std::exit(EXIT_SUCCESS);
     }
 
-    if (Options::Get().list_stores) {
-        std::cout << "List of available stores:";
-        constexpr std::pair<const char*, const char*> stores[] = {
-#define M_STORE(NAME, DESCR) { #NAME, DESCR },
-#include <mutable/tables/Store.tbl>
-#undef M_STORE
-        };
-        std::size_t max_len = 0;
-        for (auto store : stores) max_len = std::max(max_len, strlen(store.first));
-        for (auto store : stores)
-            std::cout << "\n    " << std::setw(max_len) << std::left << store.first << "    -    " << store.second;
-        std::cout << std::endl;
-        std::exit(EXIT_SUCCESS);
+    if (Options::Get().show_help) {
+        usage(std::cout, argv[0]);
+        std::cout << "WHERE\n" << AP;
     }
 
-    if (Options::Get().list_backends) {
-        std::cout << "List of available backends:";
+    if (Options::Get().list_stores) {
+        std::cout << "List of available stores:";
+        range stores(C.stores_cbegin(), C.stores_cend());
         std::size_t max_len = 0;
-        range backends(C.backends_cbegin(), C.backends_cend());
-        for (auto &backend : backends) max_len = std::max(max_len, strlen(backend.first));
-        for (auto &backend : backends)
-            std::cout << "\n    " << std::setw(max_len) << std::left << backend.first; // << "    -    " << backend.second;
+        for (auto &store : stores) max_len = std::max(max_len, strlen(store.first));
+        for (auto &store : stores)
+            std::cout << "\n    " << std::setw(max_len) << std::left << store.first; // << "    -    " << store.second;
         std::cout << std::endl;
-        std::exit(EXIT_SUCCESS);
+    }
+
+    if (Options::Get().list_cardinality_estimators) {
+        std::cout << "List of available cardinality estimators:";
+        range cardinality_estimators(C.cardinality_estimators_cbegin(), C.cardinality_estimators_cend());
+        std::size_t max_len = 0;
+        for (auto &ce : cardinality_estimators) max_len = std::max(max_len, strlen(ce.first));
+        for (auto &ce : cardinality_estimators)
+            std::cout << "\n    " << std::setw(max_len) << std::left << ce.first; // << "    -    " << ce.second;
+        std::cout << std::endl;
     }
 
     if (Options::Get().list_plan_enumerators) {
@@ -690,22 +635,16 @@ Immanuel Haffner\
         for (auto &pe : plan_enumerators)
             std::cout << "\n    " << std::setw(max_len) << std::left << pe.first; // << "    -    " << pe.second;
         std::cout << std::endl;
-        std::exit(EXIT_SUCCESS);
     }
 
-    if (Options::Get().list_cardinality_estimators) {
-        std::cout << "List of available cardinality estimators:";
-        constexpr std::pair<const char*, const char*> CE[] = {
-#define M_CARDINALITY_ESTIMATOR(NAME, DESCR) { #NAME, DESCR },
-#include <mutable/tables/CardinalityEstimator.tbl>
-#undef M_CARDINALITY_ESTIMATOR
-        };
+    if (Options::Get().list_backends) {
+        std::cout << "List of available backends:";
         std::size_t max_len = 0;
-        for (auto ce : CE) max_len = std::max(max_len, strlen(ce.first));
-        for (auto ce : CE)
-            std::cout << "\n    " << std::setw(max_len) << std::left << ce.first << "    -    " << ce.second;
+        range backends(C.backends_cbegin(), C.backends_cend());
+        for (auto &backend : backends) max_len = std::max(max_len, strlen(backend.first));
+        for (auto &backend : backends)
+            std::cout << "\n    " << std::setw(max_len) << std::left << backend.first; // << "    -    " << backend.second;
         std::cout << std::endl;
-        std::exit(EXIT_SUCCESS);
     }
 
     if (Options::Get().show_injected_cardinalities_example) {
@@ -735,6 +674,9 @@ Example for injected cardinalities file:\n\
 }\n";
         std::exit(EXIT_SUCCESS);
     }
+
+    if (show_any_help)
+        exit(EXIT_SUCCESS);
 
     if (not Options::Get().quiet) {
         std::cout << "PID";

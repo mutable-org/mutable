@@ -82,13 +82,13 @@ struct M_EXPORT Catalog
     ///> store factories to create new stores
     std::unordered_map<const char*, std::unique_ptr<StoreFactory>> store_factories_;
     ///> the default store to use
-    StoreFactory *default_store_ = nullptr;
+    decltype(store_factories_)::iterator default_store_;
 
     /*----- Cardinality Estimators -----------------------------------------------------------------------------------*/
     ///> cardinality estimator factories to create new cardinality estimators
     std::unordered_map<const char*, std::unique_ptr<CardinalityEstimatorFactory>> cardinality_estimator_factories_;
     ///> the default cardinality estimator to use
-    CardinalityEstimatorFactory *default_cardinality_estimator_ = nullptr;
+    decltype(cardinality_estimator_factories_)::iterator default_cardinality_estimator_;
 
     /*----- Cost Functions -------------------------------------------------------------------------------------------*/
     std::unique_ptr<CostFunction> cost_function_; ///< the default cost function
@@ -188,19 +188,46 @@ struct M_EXPORT Catalog
         name = pool(name);
         auto it = store_factories_.find(name);
         if (it != store_factories_.end()) throw std::invalid_argument("store with that name already exists");
-        store_factories_.emplace_hint(it, name, new ConcreteStoreFactory<T>());
+        it = store_factories_.emplace_hint(it, name, new ConcreteStoreFactory<T>());
+        if (default_store_ == store_factories_.end())
+            default_store_ = it; // set default
+
     }
 
     /** Sets `store` as the default store to use. */
     void default_store(const char *name) {
         name = pool(name);
         auto it = store_factories_.find(name);
-        if (it == store_factories_.end()) throw std::invalid_argument("store not found");
-        default_store_ = it->second.get();
+        if (it == store_factories_.end())
+            throw std::invalid_argument("store not found");
+        default_store_ = it;
     }
 
-    std::unique_ptr<Store> create_store(const char *name, const Table &tbl) const;
-    std::unique_ptr<Store> create_store(const Table &tbl) const;
+    bool has_default_store() const { return default_store_ != store_factories_.end(); }
+
+    std::unique_ptr<Store> create_store(const Table &tbl) const {
+        M_insist(has_default_store());
+        return default_store_->second->make(tbl);
+    }
+
+    std::unique_ptr<Store> create_store(const char *name, const Table &tbl) const {
+        name = pool(name);
+        auto it = store_factories_.find(name);
+        if (it == store_factories_.end()) throw std::invalid_argument("store not found");
+        return it->second->make(tbl);
+    }
+
+    const char * default_store_name() const {
+        M_insist(has_default_store());
+        return default_store_->first;
+    }
+
+    auto stores_begin() { return store_factories_.begin(); }
+    auto stores_end() { return store_factories_.end(); }
+    auto stores_begin() const { return store_factories_.begin(); }
+    auto stores_end() const { return store_factories_.end(); }
+    auto stores_cbegin() const { return store_factories_.begin(); }
+    auto stores_cend() const { return store_factories_.end(); }
 
     /*===== CardinalityEstimators ====================================================================================*/
     /** Registers a new `CardinalityEstimator` with the given `name`. */
@@ -210,7 +237,9 @@ struct M_EXPORT Catalog
         auto it = cardinality_estimator_factories_.find(name);
         if (it != cardinality_estimator_factories_.end())
             throw std::invalid_argument("cardinality estimator with that name already exists");
-        cardinality_estimator_factories_.emplace_hint(it, name, new ConcreteCardinalityEstimatorFactory<T>());
+        it = cardinality_estimator_factories_.emplace_hint(it, name, new ConcreteCardinalityEstimatorFactory<T>());
+        if (default_cardinality_estimator_ == cardinality_estimator_factories_.end())
+            default_cardinality_estimator_ = it; // set default
     }
 
     /** Sets `name` as the default cardinality estimator to use. */
@@ -219,31 +248,48 @@ struct M_EXPORT Catalog
         auto it = cardinality_estimator_factories_.find(name);
         if (it == cardinality_estimator_factories_.end())
             throw std::invalid_argument("cardinality estimator not found");
-        default_cardinality_estimator_ = it->second.get();
+        default_cardinality_estimator_ = it;
     }
 
-    std::unique_ptr<CardinalityEstimator> create_cardinality_estimator(const char *name) const;
-    std::unique_ptr<CardinalityEstimator> create_cardinality_estimator() const;
+    bool has_default_cardinality_estimator() const {
+        return default_cardinality_estimator_ != cardinality_estimator_factories_.end();
+    }
+
+    std::unique_ptr<CardinalityEstimator> create_cardinality_estimator() const {
+        M_insist(has_default_cardinality_estimator());
+        return default_cardinality_estimator_->second->make();
+    }
+
+    std::unique_ptr<CardinalityEstimator> create_cardinality_estimator(const char *name) const {
+        name = pool(name);
+        auto it = cardinality_estimator_factories_.find(name);
+        if (it == cardinality_estimator_factories_.end()) throw std::invalid_argument("estimator not found");
+        return it->second->make();
+    }
+
+    const char * default_cardinality_estimator() const {
+        M_insist(has_default_cardinality_estimator());
+        return default_cardinality_estimator_->first;
+    }
+
+    auto cardinality_estimators_begin() { return cardinality_estimator_factories_.begin(); }
+    auto cardinality_estimators_end() { return cardinality_estimator_factories_.end(); }
+    auto cardinality_estimators_begin() const { return cardinality_estimator_factories_.begin(); }
+    auto cardinality_estimators_end() const { return cardinality_estimator_factories_.end(); }
+    auto cardinality_estimators_cbegin() const { return cardinality_estimator_factories_.begin(); }
+    auto cardinality_estimators_cend() const { return cardinality_estimator_factories_.end(); }
 
     /*===== CostFunction =============================================================================================*/
     /** Returns the active `CostFunction`. */
-    const CostFunction & cost_function() const;
+    const CostFunction & cost_function() const { return *cost_function_; }
 
     /** Sets the new `CostFunction` and returns the old one. */
-    std::unique_ptr<CostFunction> cost_function(std::unique_ptr<CostFunction> cost_function);
-
-    /*===== Plan Enumerators =========================================================================================*/
-    PlanEnumerator & plan_enumerator() const;
-
-    PlanEnumerator & plan_enumerator(const char *name) const {
-        name = pool(name);
-        auto it = plan_enumerators_.find(name);
-        if (it == plan_enumerators_.end())
-            throw std::invalid_argument("plan enumerator not found");
-        return *it->second;
-
+    std::unique_ptr<CostFunction> cost_function(std::unique_ptr<CostFunction> cost_function) {
+        cost_function_.swap(cost_function);
+        return cost_function;
     }
 
+    /*===== Plan Enumerators =========================================================================================*/
     void register_plan_enumerator(const char *name, std::unique_ptr<PlanEnumerator> PE) {
         name = pool(name);
         auto it = plan_enumerators_.find(name);
@@ -263,6 +309,20 @@ struct M_EXPORT Catalog
 
     bool has_default_plan_enumerator() const { return default_plan_enumerator_ != plan_enumerators_.end(); }
 
+    PlanEnumerator & plan_enumerator() const {
+        M_insist(default_plan_enumerator_ != plan_enumerators_.cend());
+        return *default_plan_enumerator_->second;
+    }
+
+    PlanEnumerator & plan_enumerator(const char *name) const {
+        name = pool(name);
+        auto it = plan_enumerators_.find(name);
+        if (it == plan_enumerators_.end())
+            throw std::invalid_argument("plan enumerator not found");
+        return *it->second;
+
+    }
+
     const char * default_plan_enumerator_name() const {
         M_insist(has_default_plan_enumerator(), "must have set a default plan enumerator");
         return default_plan_enumerator_->first;
@@ -279,8 +339,11 @@ struct M_EXPORT Catalog
     void register_backend(const char *name, std::unique_ptr<Backend> backend) {
         name = pool(name);
         auto it = backends_.find(name);
-        if (it != backends_.end()) throw std::invalid_argument("backend with that name already exists");
-        backends_.emplace_hint(it, name, std::move(backend));
+        if (it != backends_.end())
+            throw std::invalid_argument("backend with that name already exists");
+        it = backends_.emplace_hint(it, name, std::move(backend));
+        if (default_backend_ == backends_.end())
+            default_backend_ = it; // set default
     }
 
     void default_backend(const char *name) {
@@ -295,13 +358,13 @@ struct M_EXPORT Catalog
     bool has_default_backend() const { return default_backend_ != backends_.end(); }
 
     /** Returns the default `Backend`. */
-    Backend & default_backend() const {
-        M_insist(has_default_backend(), "must have set a backend");
+    Backend & backend() const {
+        M_insist(has_default_backend());
         return *default_backend_->second;
     }
 
     const char * default_backend_name() const {
-        M_insist(has_default_backend(), "must have set a backend");
+        M_insist(has_default_backend());
         return default_backend_->first;
     }
 

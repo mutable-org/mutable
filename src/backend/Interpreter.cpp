@@ -1537,8 +1537,9 @@ void Interpreter::operator()(const SortingOperator &op)
     data->pipeline.push(parent);
 }
 
-namespace m {
-
-// std::unique_ptr<Backend> Backend::CreateInterpreter() { return std::make_unique<Interpreter>(); }
-
+__attribute__((constructor(202)))
+static void register_interpreter()
+{
+    Catalog &C = Catalog::Get();
+    C.register_backend("Interpreter", std::make_unique<Interpreter>());
 }

@@ -142,7 +142,7 @@ add_custom_command(
 add_custom_target(gitversion ALL DEPENDS "${GITREV_FILE}")
 # Apparently, CMake's dependency scanner does not recognize the dependency to the GITREV_FILE.  We add it manually.
 set_source_files_properties(
-    "${CMAKE_SOURCE_DIR}/include/mutable/version.hpp"
+    "${CMAKE_SOURCE_DIR}/include/mutable/version.cpp"
     PROPERTIES OBJECT_DEPENDS "${GITREV_FILE}"
 )
 

@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <iomanip>
 #include <limits>
 #include <string>
 #include <type_traits>
@@ -79,25 +80,26 @@ void ArgParser::OptionImpl<const char*>::parse(const char **&argv) const
 
 //----------------------------------------------------------------------------------------------------------------------
 
-ArgParser::~ArgParser()
+void ArgParser::print_args(std::ostream &out) const
 {
-    for (auto opt : opts_)
-        delete opt;
-}
+    auto print = [this, &out](const char *Short, const char *Long, const char *Descr) {
+        using std::setw, std::left, std::right;
+        out << "    "
+            << left << setw(short_len_) << Short << right
+            << "  "
+            << left << setw(long_len_) << Long << right
+            << "    -    "
+            << Descr
+            << '\n';
+    };
 
-void ArgParser::print_args(FILE *out) const
-{
-    std::string Short = "Short:";
-    std::string Long  = "Long:";
-
-    int s = (int) std::max(short_len_, Short.length());
-    int l = (int) std::max(long_len_,  Long.length());
-
-    for (auto opt : opts_) {
-        fprintf(out, "\t%-*s    %-*s    -    %s\n",
-                s, opt->shortName ? opt->shortName : "",
-                l, opt->longName ? opt->longName : "",
-                opt->descr);
+    out << "General:\n";
+    for (auto &opt : general_options_)
+        print(opt->short_name ? opt->short_name : "", opt->long_name ? opt->long_name : "", opt->description);
+    for (auto &grp : grouped_options_) {
+        out << grp.first << ":\n";
+        for (auto &opt : grp.second)
+            print(opt->short_name ? opt->short_name : "", opt->long_name ? opt->long_name : "", opt->description);
     }
 }
 
@@ -105,16 +107,16 @@ void ArgParser::parse_args(int, const char **argv) {
     for (++argv; *argv; ++argv) {
         if (streq(*argv, "--"))
             goto positional;
-        auto it = key_map.find(pool_(*argv));
-        if (it != key_map.end())
-            it->second->parse(argv); // option
+        auto it = key_map_.find(pool_(*argv));
+        if (it != key_map_.end())
+            it->second.get().parse(argv); // option
         else
-            args_.push_back(*argv); // positional argument
+            args_.emplace_back(*argv); // positional argument
     }
     return;
 
     /* Read all following arguments as positional arguments. */
 positional:
     for (++argv; *argv; ++argv)
-        args_.push_back(*argv);
+        args_.emplace_back(*argv);
 }

@@ -1,8 +1,5 @@
 #pragma once
 
-#include <mutable/mutable-config.hpp>
-#include <mutable/util/exception.hpp>
-#include <mutable/util/macro.hpp>
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -14,6 +11,10 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <memory>
+#include <mutable/mutable-config.hpp>
+#include <mutable/util/exception.hpp>
+#include <mutable/util/macro.hpp>
 #include <regex>
 #include <sstream>
 #include <type_traits>
@@ -185,16 +186,18 @@ T * M_EXPORT cast(U *u) { return dynamic_cast<T*>(u); }
 
 /** Short version of static_cast that works for pointers and references.  In debug build, check that the cast is legit.
  */
-template<typename T, typename U>
-T * M_EXPORT as(U *u) { M_insist(cast<T>(u)); return static_cast<T*>(u); }
-template<typename T, typename U>
-T & M_EXPORT as(U &u) { return *as<T>(&u); }
+template<typename To, typename From>
+To * M_EXPORT as(From *v) { M_insist(cast<To>(v)); return static_cast<To*>(v); }
+template<typename To, typename From>
+To & M_EXPORT as(From &v) { return *as<To>(&v); }
+template<typename To, typename From>
+std::unique_ptr<To> M_EXPORT as(std::unique_ptr<From> v) { return std::unique_ptr<To>(as<To>(v.release())); }
 
-/** Simple test whether expression u is of type T.  Works with pointers and references. */
-template<typename T, typename U>
-bool M_EXPORT is(U *u) { return cast<T>(u) != nullptr; }
-template<typename T, typename U>
-bool M_EXPORT is(U &u) { return is<T>(&u); }
+/** Simple test whether expression v is of type To.  Works with pointers and references. */
+template<typename To, typename From>
+bool M_EXPORT is(From *v) { return cast<To>(v) != nullptr; }
+template<typename To, typename From>
+bool M_EXPORT is(From &v) { return is<To>(&v); }
 
 inline std::string escape(char c)
 {

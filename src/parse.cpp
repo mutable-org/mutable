@@ -47,15 +47,13 @@ int main(int argc, const char **argv)
 
     if (show_help) {
         usage(std::cout, argv[0]);
-        std::cout << "WHERE\n";
-        AP.print_args(stdout);
+        std::cout << "WHERE\n" << AP;
         std::exit(EXIT_SUCCESS);
     }
 
     if (AP.args().size() != 1) {
         usage(std::cerr, argv[0]);
-        std::cerr << "WHERE\n";
-        AP.print_args(stderr);
+        std::cerr << "WHERE\n" << AP;
         std::exit(EXIT_FAILURE);
     }
 

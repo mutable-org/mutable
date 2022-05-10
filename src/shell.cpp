@@ -522,8 +522,7 @@ int main(int argc, const char **argv)
         /* Callback         */
         [&](const char *str) {
             if (Store::STR_TO_KIND.find(str) == Store::STR_TO_KIND.end()) {
-                std::cerr << "There is no store with the name \"" << str << "\"." << std::endl;
-                AP.print_args(stderr);
+                std::cerr << "There is no store with the name \"" << str << "\".\n" << AP;
                 std::exit(EXIT_FAILURE);
             }
             Options::Get().store = str;
@@ -547,8 +546,7 @@ int main(int argc, const char **argv)
                 C.default_plan_enumerator(str);
                 Options::Get().plan_enumerator = str;
             } catch (std::invalid_argument) {
-                std::cerr << "There is no plan enumerator with the name \"" << str << "\"." << std::endl;
-                AP.print_args(stderr);
+                std::cerr << "There is no plan enumerator with the name \"" << str << "\".\n" << AP;
                 std::exit(EXIT_FAILURE);
             }
         }
@@ -571,8 +569,7 @@ int main(int argc, const char **argv)
                 Catalog::Get().default_backend(str);
                 Options::Get().backend = str;
             } catch (std::invalid_argument) {
-                std::cerr << "There is no execution backend with the name \"" << str << "\"." << std::endl;
-                AP.print_args(stderr);
+                std::cerr << "There is no execution backend with the name \"" << str << "\".\n" << AP;
                 std::exit(EXIT_FAILURE);
             }
         }
@@ -591,8 +588,7 @@ int main(int argc, const char **argv)
         /* Callback         */
         [&](const char *str) {
             if (CardinalityEstimator::STR_TO_KIND.find(str) == CardinalityEstimator::STR_TO_KIND.end()) {
-                std::cerr << "There is no cardinality estimator with the name \"" << str << "\"." << std::endl;
-                AP.print_args(stderr);
+                std::cerr << "There is no cardinality estimator with the name \"" << str << "\".\n" << AP;
                 std::exit(EXIT_FAILURE);
             }
             Options::Get().cardinality_estimator = str;
@@ -639,8 +635,7 @@ int main(int argc, const char **argv)
 
     if (Options::Get().show_help) {
         usage(std::cout, argv[0]);
-        std::cout << "WHERE\n";
-        AP.print_args(stdout);
+        std::cout << "WHERE\n" << AP;
         std::exit(EXIT_SUCCESS);
     }
 
@@ -695,11 +690,6 @@ Immanuel Haffner\
 
     if (Options::Get().list_plan_enumerators) {
         std::cout << "List of available plan enumerators:";
-//         constexpr std::pair<const char*, const char*> PE[] = {
-// #define M_PLAN_ENUMERATOR(NAME, DESCR) { #NAME, DESCR },
-// #include <mutable/tables/PlanEnumerator.tbl>
-// #undef M_PLAN_ENUMERATOR
-//         };
         range plan_enumerators(C.plan_enumerators_cbegin(), C.plan_enumerators_cend());
         std::size_t max_len = 0;
         for (auto &pe : plan_enumerators) max_len = std::max(max_len, strlen(pe.first));

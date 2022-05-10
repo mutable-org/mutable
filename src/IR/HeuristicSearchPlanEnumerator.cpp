@@ -2652,24 +2652,28 @@ inline void register_heuristic_search_plan_enumerator()
 
     /*----- Command-line arguments -----------------------------------------------------------------------------------*/
     C.arg_parser().add<const char*>(
+        /* group=       */ "HeuristicSearch",
         /* short=       */ nullptr,
         /* long=        */ "--hs-vertex",
         /* description= */ "the heuristic search vertex to use",
         [] (const char *str) { options::vertex = str; }
     );
     C.arg_parser().add<const char*>(
+        /* group=       */ "HeuristicSearch",
         /* short=       */ nullptr,
         /* long=        */ "--hs-expand",
         /* description= */ "the vertex expansion to use",
         [] (const char *str) { options::expand = str; }
     );
     C.arg_parser().add<const char*>(
+        /* group=       */ "HeuristicSearch",
         /* short=       */ nullptr,
         /* long=        */ "--hs-heuristic",
         /* description= */ "the heuristic function to use",
         [] (const char *str) { options::heuristic = str; }
     );
     C.arg_parser().add<const char*>(
+        /* group=       */ "HeuristicSearch",
         /* short=       */ nullptr,
         /* long=        */ "--hs-search",
         /* description= */ "the search method to use",

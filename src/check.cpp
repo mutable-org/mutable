@@ -53,8 +53,7 @@ int main(int argc, const char **argv)
 
     if (Options::Get().show_help) {
         usage(std::cout, argv[0]);
-        std::cout << "WHERE\n";
-        AP.print_args(stdout);
+        std::cout << "WHERE\n" << AP;
         std::exit(EXIT_SUCCESS);
     }
 

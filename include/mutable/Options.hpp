@@ -24,7 +24,6 @@ struct Options
     bool list_plan_enumerators;
     bool list_backends;
     bool list_cardinality_estimators;
-    bool show_injected_cardinalities_example;
 
     /*----- Shell configuration --------------------------------------------------------------------------------------*/
     bool has_color;

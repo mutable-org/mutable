@@ -550,14 +550,6 @@ int main(int argc, const char **argv)
             show_any_help = true;
         }
     );
-    ADD(bool, Options::Get().show_injected_cardinalities_example, false,            /* Type, Var, Init  */
-        nullptr, "--show-cardinality-example",                                      /* Short, Long      */
-        "show example input for injected cardinalities",                            /* Description      */
-        [&](bool) {                                                                 /* Callback         */
-            Options::Get().show_injected_cardinalities_example = true;
-            show_any_help = true;
-        }
-    );
     ADD(const char *, Options::Get().injected_cardinalities_file, nullptr,          /* Type, Var, Init  */
         nullptr, "--use-cardinality-file",                                          /* Short, Long      */
         "specify file with cardinalities to inject",                                /* Description      */
@@ -645,34 +637,6 @@ Immanuel Haffner\
         for (auto &backend : backends)
             std::cout << "\n    " << std::setw(max_len) << std::left << backend.first; // << "    -    " << backend.second;
         std::cout << std::endl;
-    }
-
-    if (Options::Get().show_injected_cardinalities_example) {
-        std::cout << "\
-Example for injected cardinalities file:\n\
-{\n\
-    database1: [\n\
-            {\n\
-                \"relations\": [\"A\", \"B\", ...],\n\
-                \"size\": 150\n\
-            },\n\
-            {\n\
-                \"relations\": [\"C\", \"A\", ...],\n\
-                \"size\": 100\n\
-            },\n\
-    },\n\
-    database2: [\n\
-            {\n\
-                \"relations\": [\"customers\"],\n\
-                \"size\": 1000\n\
-            },\n\
-            {\n\
-                \"relations\": [\"customers\", \"orders\", ...],\n\
-                \"size\": 50\n\
-            },\n\
-    },\n\
-}\n";
-        std::exit(EXIT_SUCCESS);
     }
 
     if (show_any_help)

@@ -1,6 +1,8 @@
 #include <mutable/catalog/CardinalityEstimator.hpp>
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <mutable/catalog/Catalog.hpp>
 #include <mutable/IR/CNF.hpp>
@@ -392,4 +394,38 @@ static void register_cardinality_estimators()
     Catalog &C = Catalog::Get();
     C.register_cardinality_estimator<CartesianProductEstimator>("CartesianProduct");
     C.register_cardinality_estimator<InjectionCardinalityEstimator>("Injected");
+
+    C.arg_parser().add<bool>(
+        /* group=       */ "Cardinality estimation",
+        /* short=       */ nullptr,
+        /* long=        */ "--show-cardinality-file-example",
+        /* description= */ "show an example of an input JSON file for cardinality injection",
+        [] (bool) {
+            std::cout << "\
+Example for injected cardinalities file:\n\
+{\n\
+    database1: [\n\
+            {\n\
+                \"relations\": [\"A\", \"B\", ...],\n\
+                \"size\": 150\n\
+            },\n\
+            {\n\
+                \"relations\": [\"C\", \"A\", ...],\n\
+                \"size\": 100\n\
+            },\n\
+    },\n\
+    database2: [\n\
+            {\n\
+                \"relations\": [\"customers\"],\n\
+                \"size\": 1000\n\
+            },\n\
+            {\n\
+                \"relations\": [\"customers\", \"orders\", ...],\n\
+                \"size\": 50\n\
+            },\n\
+    },\n\
+}\n";
+            exit(EXIT_SUCCESS);
+        }
+    );
 }

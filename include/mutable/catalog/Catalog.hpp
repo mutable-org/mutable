@@ -39,7 +39,7 @@ struct CardinalityEstimatorFactory
 {
     virtual ~CardinalityEstimatorFactory() { }
 
-    virtual std::unique_ptr<m::CardinalityEstimator> make() const = 0;
+    virtual std::unique_ptr<m::CardinalityEstimator> make(const char *database) const = 0;
 };
 
 template<typename T>
@@ -47,8 +47,8 @@ struct ConcreteCardinalityEstimatorFactory : CardinalityEstimatorFactory
 {
     static_assert(std::is_base_of_v<m::CardinalityEstimator, T>, "not a subclass of CardinalityEstimator");
 
-    std::unique_ptr<m::CardinalityEstimator> make() const override {
-        return std::make_unique<T>();
+    std::unique_ptr<m::CardinalityEstimator> make(const char *database) const override {
+        return std::make_unique<T>(database);
     }
 };
 
@@ -293,12 +293,12 @@ struct M_EXPORT Catalog
     /** Returns `true` iff the `Catalog` has a default `CardinalityEstimator`. */
     bool has_default_cardinality_estimator() const { return cardinality_estimators_.has_default(); }
     /** Creates a new `CardinalityEstimator`. */
-    std::unique_ptr<CardinalityEstimator> create_cardinality_estimator() const {
-        return cardinality_estimators_.get_default().make();
+    std::unique_ptr<CardinalityEstimator> create_cardinality_estimator(const char *database) const {
+        return cardinality_estimators_.get_default().make(database);
     }
     /** Creates a new `CardinalityEstimator` of name `name`. */
-    std::unique_ptr<CardinalityEstimator> create_cardinality_estimator(const char *name) const {
-        return cardinality_estimators_.get(pool(name)).make();
+    std::unique_ptr<CardinalityEstimator> create_cardinality_estimator(const char *name, const char *database) const {
+        return cardinality_estimators_.get(pool(name)).make(database);
     }
     /** Returns the name of the default `CardinalityEstimator`. */
     const char * default_cardinality_estimator_name() const { return cardinality_estimators_.get_default_name(); }

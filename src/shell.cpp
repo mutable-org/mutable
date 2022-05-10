@@ -550,11 +550,6 @@ int main(int argc, const char **argv)
             show_any_help = true;
         }
     );
-    ADD(const char *, Options::Get().injected_cardinalities_file, nullptr,          /* Type, Var, Init  */
-        nullptr, "--use-cardinality-file",                                          /* Short, Long      */
-        "specify file with cardinalities to inject",                                /* Description      */
-        [&](const char *str) { Options::Get().injected_cardinalities_file = str; }  /* Callback         */
-    );
     /*----- PDDL Generation ------------------------------------------------------------------------------------------*/
     ADD(const char *, Options::Get().pddl, nullptr,                     /* Type, Var, Init  */
         nullptr, "--pddl",                                              /* Short, Long      */

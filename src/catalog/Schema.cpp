@@ -92,7 +92,7 @@ M_LCOV_EXCL_STOP
 Database::Database(const char *name)
     : name(name)
 {
-    cardinality_estimator_ = Catalog::Get().create_cardinality_estimator();
+    cardinality_estimator_ = Catalog::Get().create_cardinality_estimator(name);
 }
 
 Database::~Database()

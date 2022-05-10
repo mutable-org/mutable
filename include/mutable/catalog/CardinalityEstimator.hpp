@@ -171,7 +171,8 @@ struct M_EXPORT CartesianProductEstimator : CardinalityEstimatorCRTP<CartesianPr
         CartesianProductDataModel(std::size_t size) : size(size) { }
     };
 
-    CartesianProductEstimator() { };
+    CartesianProductEstimator() { }
+    CartesianProductEstimator(const char*) { }
 
 
     /*==================================================================================================================
@@ -243,9 +244,6 @@ struct M_EXPORT InjectionCardinalityEstimator : CardinalityEstimatorCRTP<Injecti
     CartesianProductEstimator fallback_;
 
     public:
-    /** Create an `InjectionCardinalityEstimator` for the database "default" */
-    InjectionCardinalityEstimator();
-
     /** Create an `InjectionCardinalityEstimator` for the database `name_of_database` from file that was passed by the
      * user via commandline, saved in `Options::Get().injected_cardinalities_file`
      *

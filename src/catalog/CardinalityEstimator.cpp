@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <mutable/catalog/Catalog.hpp>
 #include <mutable/IR/CNF.hpp>
 #include <mutable/IR/Operator.hpp>
@@ -16,6 +17,14 @@
 
 using namespace m;
 
+
+namespace {
+namespace options {
+
+std::filesystem::path injected_cardinalities_file;
+
+}
+}
 
 /*======================================================================================================================
  * CardinalityEstimator
@@ -149,28 +158,28 @@ M_LCOV_EXCL_STOP
 
 /*----- Constructors -------------------------------------------------------------------------------------------------*/
 
-InjectionCardinalityEstimator::InjectionCardinalityEstimator() : InjectionCardinalityEstimator("default") {}
-
 InjectionCardinalityEstimator::InjectionCardinalityEstimator(const char *name_of_database)
+    : fallback_(name_of_database)
 {
     Diagnostic diag(Options::Get().has_color, std::cout, std::cerr);
     Position pos("InjectionCardinalityEstimator");
 
-    if (Options::Get().injected_cardinalities_file) {
-        std::ifstream in(Options::Get().injected_cardinalities_file);
+    if (options::injected_cardinalities_file.empty()) {
+        std::cout << "No injection file was passed.\n";
+    } else {
+        std::ifstream in(options::injected_cardinalities_file);
         if (in) {
             read_json(diag, in, name_of_database);
         } else {
-            diag.w(pos) << "Could not open file " << Options::Get().injected_cardinalities_file << ".\n"
+            diag.w(pos) << "Could not open file " << options::injected_cardinalities_file << ".\n"
                         << "A dummy estimator will be used to do estimations.\n";
         }
-    } else {
-        std::cout << "No injection file was passed.\n";
     }
 }
 
 InjectionCardinalityEstimator::InjectionCardinalityEstimator(Diagnostic &diag, const char *name_of_database,
                                                              std::istream &in)
+    : fallback_(name_of_database)
 {
     read_json(diag, in, name_of_database);
 }
@@ -426,6 +435,15 @@ Example for injected cardinalities file:\n\
     },\n\
 }\n";
             exit(EXIT_SUCCESS);
+        }
+    );
+    C.arg_parser().add<const char*>(
+        /* group=       */ "Cardinality estimation",
+        /* short=       */ nullptr,
+        /* long=        */ "--use-cardinality-file",
+        /* description= */ "inject cardinalities from the given JSON file",
+        [] (const char *path) {
+            options::injected_cardinalities_file = path;
         }
     );
 }

@@ -37,6 +37,7 @@ struct PDDLGenerator
      */
     void generate_files(const QueryGraph &G, std::size_t number_of_actions, std::filesystem::path domain_path,
                         std::filesystem::path problem_path);
+    void generate_files(const QueryGraph &G, std::filesystem::path domain_path, std::filesystem::path problem_path);
 
     private:
     /**

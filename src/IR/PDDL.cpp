@@ -1,11 +1,23 @@
 #include "IR/PDDL.hpp"
 
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/util/fn.hpp>
 #include <sys/stat.h>
 #include <unordered_set>
 
 
 using namespace m;
+
+
+namespace {
+
+namespace options {
+
+int pddl_actions = 0;
+
+}
+
+}
 
 
 /** Class to represent a resultSizeFact to be able to hold them in a set and identify whether the fact has already
@@ -367,6 +379,12 @@ void PDDLGenerator::generate_files(const QueryGraph &G, std::size_t number_of_ac
     }
 
     generate_problem_file(G, number_of_actions, problem_path);
+}
+
+void PDDLGenerator::generate_files(const QueryGraph &G, std::filesystem::path domain_path,
+                                   std::filesystem::path problem_path)
+{
+    generate_files(G, options::pddl_actions, domain_path, problem_path);
 }
 
 void PDDLGenerator::generate_domain_file(std::size_t number_of_relations, std::size_t number_of_actions,
@@ -953,3 +971,16 @@ std::vector<std::string> PDDLGenerator::generate_views(std::vector<std::string> 
 M_LCOV_EXCL_START
 void PDDLGenerator::dump() const { std::cout << "This is a PDDLGenerator"; }
 M_LCOV_EXCL_STOP
+
+__attribute__((constructor(202)))
+static void add_pddl_args()
+{
+    Catalog &C = Catalog::Get();
+    C.arg_parser().add<int>(
+        /* group=       */ "PDDL",
+        /* short=       */ nullptr,
+        /* long=        */ "--pddl-actions",
+        /* description= */ "number of actions used for the PDDL files (2, 3, or 4); 0 will create all 3 models",
+        [] (int i) { options::pddl_actions = i; }
+    );
+}

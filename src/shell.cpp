@@ -128,7 +128,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
                 problem_path.append("problem/");
 
                 PDDLGenerator PDDL(Catalog::Get().get_database_in_use().cardinality_estimator(), diag);
-                PDDL.generate_files(*query_graph, Options::Get().pddl_actions, domain_path, problem_path);
+                PDDL.generate_files(*query_graph, domain_path, problem_path);
             }
 
             Optimizer Opt(C.plan_enumerator(), C.cost_function());
@@ -617,12 +617,6 @@ int main(int argc, const char **argv)
         /* Description      */
         "generate PDDL files for the query, as a parameter specify where to save the PDDL files",
         [&](const char *str) { Options::Get().pddl = str; }             /* Callback         */
-    );
-    ADD(int, Options::Get().pddl_actions, 4,                                /* Type, Var, Init  */
-        nullptr, "--pddl-actions",                                          /* Short, Long      */
-        /* Description      */
-        "specify the number of actions used for the PDDL files (2, 3, or 4), 0 will create all 3 models",
-        [&](int number) { Options::Get().pddl_actions = number; }           /* Callback         */
     );
     /*------ Cost Model Generation -----------------------------------------------------------------------------------*/
     ADD(bool, Options::Get().train_cost_models, false,                  /* Type, Var, Init  */

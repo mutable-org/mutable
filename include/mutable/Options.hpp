@@ -44,7 +44,6 @@ struct Options
     bool plandot;
 
     const char *pddl;
-    int pddl_actions;
 
     /** If `true`, do not pass the query to the backend for execution. */
     bool dryrun;

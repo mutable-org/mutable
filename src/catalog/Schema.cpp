@@ -92,13 +92,7 @@ M_LCOV_EXCL_STOP
 Database::Database(const char *name)
     : name(name)
 {
-
-    //TODO how to incorporate the injected file, pass as argument or do that inside the estimator?
-    //TODO currently a workaround for the Integration Tests, maybe find a different solution?
-    if (Options::Get().cardinality_estimator)
-        cardinality_estimator_ = CardinalityEstimator::Create(Options::Get().cardinality_estimator, name);
-    else
-        cardinality_estimator_ = std::make_unique<CartesianProductEstimator>();
+    cardinality_estimator_ = Catalog::Get().create_cardinality_estimator();
 }
 
 Database::~Database()

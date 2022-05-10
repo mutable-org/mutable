@@ -231,7 +231,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
         } else if (auto S = cast<CreateTableStmt>(stmt)) {
             auto &DB = C.get_database_in_use();
             auto &T = DB.get_table(S->table_name.text);
-            T.store(Store::Create(Options::Get().store, T));
+            T.store(C.create_store(T));
         } else if (auto S = cast<DSVImportStmt>(stmt)) {
             auto &DB = C.get_database_in_use();
             auto &T = DB.get_table(S->table_name.text);

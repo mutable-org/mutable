@@ -169,7 +169,7 @@ struct StateManager
     // using heap_type = boost::heap::pairing_heap<pointer_type, boost::heap::compare<comparator>>;
 
     /*----- Counters -------------------------------------------------------------------------------------------------*/
-#if 1
+#ifndef NDEBUG
 #define DEF_COUNTER(NAME) \
     std::size_t num_##NAME##_ = 0; \
     void inc_##NAME() { ++num_##NAME##_; } \
@@ -457,8 +457,11 @@ struct StateManager
     }
 
     friend std::ostream & operator<<(std::ostream &out, const StateManager &SM) {
+#ifndef NDEBUG
         SM.print_counters(out);
-        out << ", " << SM.partitions_.size() << " seen, " << SM.regular_queue_.size() << " currently in regular queue, "
+        out << ", ";
+#endif
+        out << SM.partitions_.size() << " seen, " << SM.regular_queue_.size() << " currently in regular queue, "
             << SM.beam_queue_.size() << " currently in beam queue";
         return out;
     }

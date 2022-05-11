@@ -314,7 +314,21 @@ void Optimizer::optimize_locally(const QueryGraph &G, PlanTable &PT) const
     Catalog &C = Catalog::Get();
     auto &DB = C.get_database_in_use();
     auto &CE = DB.cardinality_estimator();
+
+#ifndef NDEBUG
+    if (Options::Get().statistics) {
+        std::size_t num_CSGs = 0, num_CCPs = 0;
+        const SmallBitset All((1UL << G.num_sources()) - 1UL);
+        auto inc_CSGs = [&num_CSGs](SmallBitset) { ++num_CSGs; };
+        auto inc_CCPs = [&num_CCPs](SmallBitset, SmallBitset) { ++num_CCPs; };
+        G.adjacency_matrix().for_each_CSG_undirected(All, inc_CSGs);
+        G.adjacency_matrix().for_each_CSG_pair_undirected(All, inc_CCPs);
+        std::cout << num_CSGs << " CSGs, " << num_CCPs << " CCPs" << std::endl;
+    }
+#endif
+
     M_TIME_EXPR(plan_enumerator()(G, cost_function(), PT), "Plan enumeration", C.timer());
+
     if (Options::Get().statistics) {
         std::cout << "Est. total cost: " << PT.get_final().cost
                   << "\nEst. result set size: " << CE.predict_cardinality(*PT.get_final().model)

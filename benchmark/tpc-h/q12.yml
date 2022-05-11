@@ -8,7 +8,7 @@ configurations:
     'WebAssembly': >-
       --backend WasmV8
       --store ColumnStore
-      --cardinality-estimator InjectionCardinalityEstimator
+      --cardinality-estimator Injected
       --use-cardinality-file benchmark/tpc-h/q12.json
 tables: [ ]
 cases:

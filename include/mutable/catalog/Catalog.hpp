@@ -75,7 +75,7 @@ struct Component
         : description_(description), instance_(instance)
     { }
 
-    const char *description() const { return description_; }
+    const char * description() const { return description_; }
     T & operator*() const { return *instance_; }
 };
 

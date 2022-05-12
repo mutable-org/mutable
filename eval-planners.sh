@@ -123,160 +123,160 @@ function has_planners_to_run()
 # main
 ########################################################################################################################
 
-main() {
-    ##### parse command line arguments #################################################################################
-    POSITIONAL_ARGS=()
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --uncorrelated)
-                CORRELATED=0
-                shift # past argument
-                ;;
-            --correlated)
-                CORRELATED=1
-                shift # past argument
-                ;;
-            -*|--*)
-                echo "Unknown option $1"
-                exit 1
-                ;;
-            *)
-                POSITIONAL_ARGS+=("$1") # save positional arg
-                shift # past argument
-                ;;
-        esac
-    done
-    set -- "${POSITIONAL_ARGS[@]}" # restore positional parameters
-    case $# in
-        0)
-            # nothing to be done
+##### parse command line arguments #####################################################################################
+POSITIONAL_ARGS=()
+unset RND
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --uncorrelated)
+            CORRELATED=0
+            shift # past argument
             ;;
-        1)
-            RANDOM=$1
-            echo "Seeding PRNG with $1."
+        --correlated)
+            CORRELATED=1
+            shift # past argument
             ;;
-        2)
-            RANDOM=$1
-            CSV=$2
-            echo "Seeding PRNG with $1."
-            ;;
-        *)
-            >&2 echo "error: too many positional arguments"
+        -*|--*)
+            echo "Unknown option $1"
             exit 1
             ;;
+        *)
+            POSITIONAL_ARGS+=("$1") # save positional arg
+            shift # past argument
+            ;;
     esac
+done
+set -- "${POSITIONAL_ARGS[@]}" # restore positional parameters
+case $# in
+    0)
+        # nothing to be done
+        ;;
+    1)
+        RANDOM=$1
+        echo "Seeding PRNG with $1."
+        ;;
+    2)
+        RANDOM=$1
+        CSV=$2
+        echo "Seeding PRNG with $1."
+        ;;
+    *)
+        >&2 echo "error: too many positional arguments"
+        exit 1
+        ;;
+esac
 
-    ##### assemble command line arguments for shell invocation #########################################################
-    FLAGS=
-    case ${CORRELATED} in
-        0) FLAGS="${FLAGS} --uncorrelated";;
-        1) ;; # nothing to be done
-    esac
+##### assemble command line arguments for shell invocation #############################################################
+FLAGS=
+case ${CORRELATED} in
+    0) FLAGS="${FLAGS} --uncorrelated";;
+    1) ;; # nothing to be done
+esac
 
-    echo -n "Generating cardinalities with "
-    case ${CORRELATED} in
-        0) echo -n "uncorrelated";;
-        1) echo -n "correlated";;
-    esac
-    echo " selectivities."
+echo -n "Generating cardinalities with "
+case ${CORRELATED} in
+    0) echo -n "uncorrelated";;
+    1) echo -n "correlated";;
+esac
+echo " selectivities."
 
-    # Truncate file
-    echo "Writing measurements to '${CSV}'"
-    echo "topology,size,planner,cost,time,seed" > "${CSV}"
+# Truncate file
+echo "Writing measurements to '${CSV}'"
+echo "topology,size,planner,cost,time,seed" > "${CSV}"
 
-    for TOPOLOGY in "${!TOPOLOGIES[@]}";
+for TOPOLOGY in "${!TOPOLOGIES[@]}";
+do
+    MAX_RELATIONS=${TOPOLOGIES[$TOPOLOGY]}
+    STEP=${TOPOLOGY_STEPS[$TOPOLOGY]}
+
+    # Initialize timeout counters
+    declare -A PLANNER_TIME_OUTS
+    for PLANNER in "${ORDERED_PLANNERS[@]}";
     do
-        MAX_RELATIONS=${TOPOLOGIES[$TOPOLOGY]}
-        STEP=${TOPOLOGY_STEPS[$TOPOLOGY]}
+        PLANNER_TIME_OUTS[${PLANNER}]=0
+    done
 
-        # Initialize timeout counters
-        declare -A PLANNER_TIME_OUTS
-        for PLANNER in "${ORDERED_PLANNERS[@]}";
+    for ((N=${MIN_RELATIONS}; N <= ${MAX_RELATIONS}; N = N + ${STEP}));
+    do
+        NAME="${TOPOLOGY}-${N}"
+        echo "Evaluate ${NAME}"
+
+        for ((R=0; R < ${REPETITIONS_PER_NUM_RELATIONS}; ++R));
         do
-            PLANNER_TIME_OUTS[${PLANNER}]=0
-        done
+            if ! has_planners_to_run;
+            then
+                >&2 echo '` No more planners to run.  Skipping rest of topology.'
+                break 2;
+            fi
 
-        for ((N=${MIN_RELATIONS}; N <= ${MAX_RELATIONS}; N = N + ${STEP}));
-        do
-            NAME="${TOPOLOGY}-${N}"
-            echo "Evaluate ${NAME}"
+            # Generate problem
+            SEED=${RANDOM}
+            echo -n '` '
+            python3 querygen.py -t "${TOPOLOGY}" -n ${N} --count=${QUERY_REPEAT_COUNT} | tr -d '\n'
+            (time build/release/bin/cardinality_gen \
+                ${FLAGS} \
+                --seed "${SEED}" \
+                --min "${MIN_CARDINALITY}" \
+                --max "${MAX_CARDINALITY}" \
+                "${NAME}.schema.sql" \
+                "${NAME}.query.sql") \
+                3>&1 1>"${NAME}.cardinalities.json" 2>&3 3>&- | ack real | cut -d$'\t' -f 2 | (read -r TIME; echo " (${TIME})";)
 
-            for ((R=0; R < ${REPETITIONS_PER_NUM_RELATIONS}; ++R));
+            # Evaluate problem with each planner
+            echo '` Running planner'
+            for PLANNER in "${ORDERED_PLANNERS[@]}";
             do
-                if ! has_planners_to_run;
+                if [ ${PLANNER_TIME_OUTS[${PLANNER}]} -ge ${MAX_TIMEOUTS_PER_CONFIG} ];
                 then
-                    >&2 echo '` No more planners to run.  Skipping rest of topology.'
-                    break 2;
+                    >&2 echo "  \` Skipping configuration '${PLANNER}' because of too many timeouts."
+                    continue
                 fi
 
-                # Generate problem
-                SEED=${RANDOM}
-                echo -n '` '
-                python3 querygen.py -t "${TOPOLOGY}" -n ${N} --count=${QUERY_REPEAT_COUNT} | tr -d '\n'
-                (time build/release/bin/cardinality_gen \
-                    ${FLAGS} \
-                    --seed "${SEED}" \
-                    --min "${MIN_CARDINALITY}" \
-                    --max "${MAX_CARDINALITY}" \
+                if [ ! -v 'PLANNER_CONFIGS[$PLANNER]' ];
+                then
+                    >&2 echo "ERROR: no configuration found for ${PLANNER}"
+                    continue
+                fi
+                PLANNER_CONFIG=${PLANNER_CONFIGS[$PLANNER]}
+
+                unset COST
+                unset TIME
+                set +m
+                # The following command needs pipefail
+                timeout --signal=TERM --kill-after=3s ${TIMEOUT} taskset -c 2 ${BIN} \
+                    --quiet --dryrun --times \
+                    --plan-table-las \
+                    ${PLANNER_CONFIG} \
+                    --cardinality-estimator Injected \
+                    --use-cardinality-file "${NAME}.cardinalities.json" \
                     "${NAME}.schema.sql" \
-                    "${NAME}.query.sql") \
-                    3>&1 1>"${NAME}.cardinalities.json" 2>&3 3>&- | ack real | cut -d$'\t' -f 2 | (read -r TIME; echo " (${TIME})";)
-
-                # Evaluate problem with each planner
-                echo '` Running planner'
-                for PLANNER in "${ORDERED_PLANNERS[@]}";
+                    "${NAME}.query.sql" \
+                    | grep -e 'Plan enumeration:' -e 'Plan cost:' \
+                    | cut --delimiter=':' --fields=2 \
+                    | paste -sd ' \n' \
+                    | while read -r COST TIME; do echo "${TOPOLOGY},${N},${PLANNER},${COST},${TIME},${SEED}" >> "${CSV}"; done
+                # Save and aggregate PIPESTATUS
+                SAVED_PIPESTATUS=("${PIPESTATUS[@]}")
+                TIMEOUT_RET=${SAVED_PIPESTATUS[0]}
+                ERR=0
+                for RET in "${SAVED_PIPESTATUS[@]}";
                 do
-                    if [ ${PLANNER_TIME_OUTS[${PLANNER}]} -ge ${MAX_TIMEOUTS_PER_CONFIG} ];
+                    if [ ${RET} -ne 0 ];
                     then
-                        >&2 echo "  \` Skipping configuration '${PLANNER}' because of too many timeouts."
-                        continue
+                        ERR=${RET}
+                        break
                     fi
+                done
 
-                    if [ ! -v 'PLANNER_CONFIGS[$PLANNER]' ];
-                    then
-                        >&2 echo "ERROR: no configuration found for ${PLANNER}"
-                        continue
-                    fi
-                    PLANNER_CONFIG=${PLANNER_CONFIGS[$PLANNER]}
-
-                    unset COST
-                    unset TIME
-                    set +m
-                    # The following command needs pipefail
-                    timeout --signal=TERM --kill-after=3s ${TIMEOUT} taskset -c 2 ${BIN} \
-                        --quiet --dryrun --times \
-                        --plan-table-las \
-                        ${PLANNER_CONFIG} \
-                        --cardinality-estimator Injected \
-                        --use-cardinality-file "${NAME}.cardinalities.json" \
-                        "${NAME}.schema.sql" \
-                        "${NAME}.query.sql" \
-                        | grep -e 'Plan enumeration:' -e 'Plan cost:' \
-                        | cut --delimiter=':' --fields=2 \
-                        | paste -sd ' \n' \
-                        | while read -r COST TIME; do echo "${TOPOLOGY},${N},${PLANNER},${COST},${TIME},${SEED}" >> "${CSV}"; done
-                    # Save and aggregate PIPESTATUS
-                    SAVED_PIPESTATUS=("${PIPESTATUS[@]}")
-                    TIMEOUT_RET=${SAVED_PIPESTATUS[0]}
-                    ERR=0
-                    for RET in "${SAVED_PIPESTATUS[@]}";
-                    do
-                        if [ ${RET} -ne 0 ];
-                        then
-                            ERR=${RET}
-                            break
-                        fi
-                    done
-
-                    if [ ${TIMEOUT_RET} -eq 124 ] || [ ${TIMEOUT_RET} -eq 137 ]; # timed out
-                    then
-                        >&2 echo "  \` Configuration '${PLANNER}' timed out."
-                        ((PLANNER_TIME_OUTS[${PLANNER}]++)) # increment number of timeouts
-                    elif [ ${ERR} -ne 0 ];
-                    then
-                        >&2 echo "  \` Unexpected termination: ERR=${ERR}, PIPESTATUS=(${SAVED_PIPESTATUS[@]}), configuration '${PLANNER}':"
-                        >&2 cat << EOF
-    timeout --signal=TERM --kill-after=3s ${TIMEOUT} taskset -c 2 ${BIN} \
+                if [ ${TIMEOUT_RET} -eq 124 ] || [ ${TIMEOUT_RET} -eq 137 ]; # timed out
+                then
+                    >&2 echo "  \` Configuration '${PLANNER}' timed out."
+                    ((PLANNER_TIME_OUTS[${PLANNER}]++)) # increment number of timeouts
+                elif [ ${ERR} -ne 0 ];
+                then
+                    >&2 echo "  \` Unexpected termination: ERR=${ERR}, PIPESTATUS=(${SAVED_PIPESTATUS[@]}), configuration '${PLANNER}':"
+                    >&2 cat << EOF
+timeout --signal=TERM --kill-after=3s ${TIMEOUT} taskset -c 2 ${BIN} \
 --quiet --dryrun --times \
 --plan-table-las \
 ${PLANNER_CONFIG} \
@@ -285,22 +285,19 @@ ${PLANNER_CONFIG} \
 "${NAME}.schema.sql" \
 "${NAME}.query.sql"
 EOF
-                    fi
+                fi
 
-                    # set +x;
-                done
+                # set +x;
             done
-
-            echo '` Cleanup files.'
-            rm -f "${NAME}.schema.sql"
-            rm -f "${NAME}.query.sql"
-            rm -f "${NAME}.cardinalities.json"
         done
+
+        echo '` Cleanup files.'
+        rm -f "${NAME}.schema.sql"
+        rm -f "${NAME}.query.sql"
+        rm -f "${NAME}.cardinalities.json"
     done
+done
 
-    TIME_TOTAL=$SECONDS
-    echo "All measurements have been written to '${CSV}'"
-    echo "Evaluation took " $(date -ud "@${TIME_TOTAL}" '+%T')
-}
-
-main "$@"
+TIME_TOTAL=$SECONDS
+echo "All measurements have been written to '${CSV}'"
+echo "Evaluation took " $(date -ud "@${TIME_TOTAL}" '+%T')

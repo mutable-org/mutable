@@ -244,10 +244,12 @@ do
                     ${PLANNER_CONFIG} \
                     --cardinality-estimator Injected \
                     --use-cardinality-file "${NAME}.cardinalities.json" \
+                    --statistics \
                     "${NAME}.schema.sql" \
                     "${NAME}.query.sql" \
-                    | grep -e 'Plan enumeration:' -e 'Plan cost:' \
+                    | grep -e '^Plan cost:' -e '^Plan enumeration:' \
                     | cut --delimiter=':' --fields=2 \
+                    | tr -d ' ' \
                     | paste -sd ' \n' \
                     | while read -r COST TIME; do echo "${TOPOLOGY},${N},${PLANNER},${COST},${TIME},${SEED}" >> "${CSV}"; done
                 # Save and aggregate PIPESTATUS

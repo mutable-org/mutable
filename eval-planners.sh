@@ -19,8 +19,7 @@ SECONDS=0
 RANDOM=42
 
 # Timeout for single invocations
-# TIMEOUT=15s
-TIMEOUT=5s
+TIMEOUT=15s
 
 # Maximum number of timeouts allowed per planner configuration.  If this value is reached, the configuration is skipped.
 MAX_TIMEOUTS_PER_CONFIG=1
@@ -39,47 +38,43 @@ MAX_CARDINALITY=10000
 
 # Associative array mapping topologies to their max. number of relations tested
 declare -A TOPOLOGIES=(
-    # [chain]=63
-    # [cycle]=63
-    # [star]=28
-    # [clique]=19
-    [chain]=31
-    [cycle]=31
-    [star]=22
-    [clique]=14
+    [chain]=50
+    [cycle]=50
+    [star]=28
+    [clique]=19
 )
 
 ORDERED_PLANNERS=(
     ###### Traditional Planners #####
     # "DPsub"
     "DPccp"
-    # "TDMinCutAGaT"
-    # "IKKBZ"
+    "TDMinCutAGaT"
+    "IKKBZ"
     "linDP"
     "GOO"
     ##### Heuristic Search #####
     # BottomUp
     ## A*
     "BU-A*-zero"
-    "BU-A*-avg_sel"
+    # "BU-A*-avg_sel"
     "BU-A*-GOO"
     ## beam
-    "BU-beam-zero"
-    "BU-beam-avg_sel"
-    "BU-beam-GOO"
+    # "BU-beam-zero"
+    # "BU-beam-avg_sel"
+    # "BU-beam-GOO"
     ## relative beam
-    "BU-rel_beam-zero"
+    # "BU-rel_beam-zero"
     # TopDown
     ## A*
     "TD-A*-zero"
     "TD-A*-sum"
     "TD-A*-GOO"
     ## beam
-    "TD-beam-zero"
-    "TD-beam-sum"
-    "TD-beam-GOO"
+    # "TD-beam-zero"
+    # "TD-beam-sum"
+    # "TD-beam-GOO"
     ## relative beam
-    "TD-rel_beam-zero"
+    # "TD-rel_beam-zero"
 )
 
 declare -A TOPOLOGY_STEPS=(

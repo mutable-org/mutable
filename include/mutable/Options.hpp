@@ -60,6 +60,9 @@ struct Options
     /** If `true`, run the procedure to train cost models for query building blocks at startup. */
     bool train_cost_models;
 
+    /** A comma seperated list of libraries that are loaded dynamically. */
+    const char *plugins;
+
     private:
     Options() = default;
     public:

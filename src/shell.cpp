@@ -9,6 +9,8 @@
 #include "util/terminal.hpp"
 #include <cerrno>
 #include <cstdlib>
+#include <dlfcn.h>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iomanip>
@@ -46,6 +48,29 @@ void usage(std::ostream &out, const char *name)
     out << "An interactive shell to communicate with the database system.\n"
         << "USAGE:\n\t" << name << " [<FILE>...]"
         << std::endl;
+}
+
+void load_plugins(std::string list)
+{
+    std::string delimiter = ",";
+    size_t last = 0;
+    size_t next = list.find(delimiter, last);
+    std::filesystem::path cwd(".");
+    for (;;) {
+        std::filesystem::path path_to_shared = list.substr(last, next - last);
+        if (path_to_shared.is_relative() and path_to_shared.string().find("./") != 0)
+                path_to_shared = cwd / path_to_shared; // prepend './'
+        if (not Options::Get().quiet)
+            std::cerr << "loading plugin " << path_to_shared << "\n";
+        void *handle = dlopen(path_to_shared.c_str(), RTLD_NOW);
+        if (not handle) {
+            std::cerr << "WARNING: Failed to load " << path_to_shared << ": " << dlerror() << '\n';
+        }
+        if (next == std::string::npos)
+            break;
+        last = next + 1;
+        next = list.find(delimiter, last);
+    }
 }
 
 std::string prompt(bool is_editing, Timer::duration dur = Timer::duration())
@@ -483,7 +508,7 @@ int main(int argc, const char **argv)
         nullptr, "--graphdot",                              /* Short, Long      */
         "dot the computed query graph",                     /* Description      */
         [&](bool) { Options::Get().graphdot = true; });     /* Callback         */
-    ADD(bool, Options::Get().graph2sql, false,               /* Type, Var, Init  */
+    ADD(bool, Options::Get().graph2sql, false,              /* Type, Var, Init  */
         nullptr, "--graph2sql",                             /* Short, Long      */
         "translate the computed query graph into SQL",      /* Description      */
         [&](bool) { Options::Get().graph2sql = true; });    /* Callback         */
@@ -563,6 +588,11 @@ int main(int argc, const char **argv)
         "train cost models (may take a couple of minutes)",             /* Description      */
         [&](bool) { Options::Get().train_cost_models = true; }          /* Callback         */
     );
+    /*------ Plugins -------------------------------------------------------------------------------------------------*/
+    ADD(const char*, Options::Get().plugins, nullptr,                                   /* Type, Var, Init  */
+        nullptr, "--plugins",                                                           /* Short, Long      */
+        "A comma seperated list of libraries that are loaded dynamically.",             /* Description      */
+        [&](const char *str) { load_plugins(str); });                  /* Callback         */
 #undef ADD
     AP.parse_args(argc, argv);
 

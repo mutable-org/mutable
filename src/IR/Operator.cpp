@@ -242,10 +242,15 @@ GroupingOperator::GroupingOperator(std::vector<const Expr*> group_by,
     auto &S = schema();
     for (auto e : group_by) {
         auto pt = as<const PrimitiveType>(e->type());
-        std::ostringstream oss;
-        oss << *e;
-        auto alias = C.pool(oss.str().c_str());
-        S.add(alias, pt->as_scalar());
+        if (auto D = cast<const Designator>(e)) { // designator -> keep name
+            Schema::Identifier id(D->table_name.text, D->attr_name.text);
+            S.add(id, pt->as_scalar());
+        } else {
+            std::ostringstream oss;
+            oss << *e;
+            auto alias = C.pool(oss.str().c_str());
+            S.add(alias, pt->as_scalar());
+        }
     }
 
     for (auto e : aggregates) {

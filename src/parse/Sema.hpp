@@ -111,10 +111,16 @@ struct Sema : ASTExprVisitor, ASTClauseVisitor, ASTStmtVisitor
     /** Creates a new designator that has the same textual representation as `from` and has `to` as target. */
     Designator * make_designator(const Expr *from, const Expr *to) {
         auto &C = Catalog::Get();
-        std::ostringstream oss;
-        oss << *from;
-        Token tok(from->tok.pos, C.pool(oss.str().c_str()), TK_IDENTIFIER);
-        auto d = new Designator(tok);
+        Designator *d;
+        if (auto des = cast<const Designator>(to)) {
+            M_insist(is<const Designator>(from));
+            d = new Designator(des->tok, des->table_name, des->attr_name);
+        } else {
+            std::ostringstream oss;
+            oss << *from;
+            Token tok(from->tok.pos, C.pool(oss.str().c_str()), TK_IDENTIFIER);
+            d = new Designator(tok);
+        }
         d->type_ = to->type();
         d->target_ = to;
         return d;

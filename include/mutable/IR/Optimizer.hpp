@@ -24,6 +24,7 @@ struct M_EXPORT Optimizer
     private:
     const PlanEnumerator &pe_;
     const CostFunction &cf_;
+    mutable std::vector<std::unique_ptr<const Expr>> created_exprs_; ///< additionally created expressions
 
     public:
     Optimizer(const PlanEnumerator &pe, const CostFunction &cf) : pe_(pe), cf_(cf) { }
@@ -55,9 +56,11 @@ struct M_EXPORT Optimizer
     std::unique_ptr<Producer> construct_plan(const QueryGraph &G, const PlanTable &plan_table,
                                              Producer * const *source_plans) const;
 
-    /** Returns `true` iff there is an element in `projections` which is needed by `order_by`. */
-    bool projection_needed(const std::vector<projection_type> &projections,
-                           const std::vector<order_type> &order_by) const;
+    /** Returns a pair where the first element is `true` iff there is an element in `projections` which is needed by
+     * `order_by` and the second element are all designators in `order_by` which are not contained in `projections`
+     * as projection without alias (if the first element is `true`, otherwise always empty). */
+    std::pair<bool, std::vector<projection_type>> projection_needed(const std::vector<projection_type> &projections,
+                                                                    const std::vector<order_type> &order_by) const;
 };
 
 }

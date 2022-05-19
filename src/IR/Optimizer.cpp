@@ -266,17 +266,26 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
         plan = std::move(agg);
     }
 
+    bool perform_projection = not G.projections().empty(); // indicate whether a top-level projection must be performed
     bool additional_projection = false; // indicate whether an additional projection must be performed before ordering
 
     /* Perform ordering. */
     if (not G.order_by().empty()) {
         /* Perform additional projection to provide all attributes needed to perform ordering. */
-        if (projection_needed(G.projections(), G.order_by())) {
+        if (auto p = projection_needed(G.projections(), G.order_by()); p.first) {
             // TODO estimate data model
-            additional_projection = true;
-            auto projection = std::make_unique<ProjectionOperator>(G.projections()); // projection on all attributes
+            std::unique_ptr<ProjectionOperator> projection;
+            if (not p.second.empty()) {
+                M_insist(perform_projection); // additional projection needed to remove attributes for ordering again
+                p.second.insert(p.second.end(), G.projections().begin(), G.projections().end()); // insert all projections
+                projection = std::make_unique<ProjectionOperator>(std::move(p.second));
+            } else {
+                perform_projection = false; // no additional projection needed
+                projection = std::make_unique<ProjectionOperator>(G.projections());
+            }
             projection->add_child(plan.release());
             plan = std::move(projection);
+            additional_projection = true;
         }
         // TODO estimate data model
         auto order_by = std::make_unique<SortingOperator>(G.order_by());
@@ -285,9 +294,27 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
     }
 
     /* Perform projection. */
-    if (not additional_projection and not G.projections().empty()) {
+    if (perform_projection) {
         // TODO estimate data model
-        auto projection = std::make_unique<ProjectionOperator>(G.projections());
+        std::unique_ptr<ProjectionOperator> projection;
+        if (additional_projection) {
+            /* Change aliased projections in designators with the alias as name since original projection is
+             * performed beforehand. */
+            std::vector<projection_type> adapted_projections;
+            for (const auto &p : G.projections()) {
+                if (p.second) {
+                    Token name(p.first->tok.pos, p.second, TK_IDENTIFIER);
+                    auto d = std::make_unique<const Designator>(Token(), Token(), name, p.first->type(), p.first);
+                    adapted_projections.emplace_back(d.get(), nullptr);
+                    created_exprs_.push_back(std::move(d));
+                } else {
+                    adapted_projections.push_back(p);
+                }
+            }
+            projection = std::make_unique<ProjectionOperator>(std::move(adapted_projections));
+        } else {
+            projection = std::make_unique<ProjectionOperator>(G.projections());
+        }
         projection->add_child(plan.release());
         plan = std::move(projection);
     }
@@ -400,18 +427,23 @@ Optimizer::construct_plan(const QueryGraph &G, const PlanTable &plan_table, Prod
     return std::unique_ptr<Producer>(construct_recursive(Subproblem((1UL << G.sources().size()) - 1)));
 }
 
-bool Optimizer::projection_needed(const std::vector<projection_type> &projections,
-                                  const std::vector<order_type> &order_by) const
+std::pair<bool, std::vector<Optimizer::projection_type>>
+Optimizer::projection_needed(const std::vector<projection_type> &projections,
+                             const std::vector<order_type> &order_by) const
 {
     struct GetDesignatorTargets : ConstASTExprVisitor
     {
         private:
+        std::vector<const Designator*> designators;
         std::vector<std::pair<const Designator*, const Expr*>> designator_targets;
 
         public:
         GetDesignatorTargets() { }
 
-        std::vector<std::pair<const Designator*, const Expr*>> get() { return std::move(designator_targets); }
+        std::vector<const Designator*> get_designators() { return std::move(designators); }
+        std::vector<std::pair<const Designator*, const Expr*>> get_designator_targets() {
+            return std::move(designator_targets);
+        }
 
         void compute(const std::vector<order_type> &order_by) {
             for (auto &p : order_by)
@@ -422,6 +454,7 @@ bool Optimizer::projection_needed(const std::vector<projection_type> &projection
         using ConstASTExprVisitor::operator();
         void operator()(Const<ErrorExpr>&) override { M_unreachable("order by must not contain errors"); }
         void operator()(Const<Designator> &e) override {
+            designators.push_back(&e);
             if (not e.table_name.text) {
                 auto target = e.target();
                 if (auto t = std::get_if<const Expr*>(&target))
@@ -435,20 +468,43 @@ bool Optimizer::projection_needed(const std::vector<projection_type> &projection
         void operator()(Const<QueryExpr>&) override { M_unreachable("unexpected QueryExpr"); }
     };
 
-    /* Compute all expression targets of designators without table name in `order_by`. */
+    /* Compute all designators and all expression targets of designators without table name in `order_by`. */
     GetDesignatorTargets GDT;
     GDT.compute(order_by);
-    auto designator_targets = GDT.get();
+    auto designator_targets = GDT.get_designator_targets();
 
     /* Check if there is an element of `projections` which is needed by `order_by`, i.e. which is target and creates
      * the needed attribute name by renaming. */
+    bool projection_needed = false;
     for (auto &p : projections) {
         auto pred = [&p](const std::pair<const Designator*, const Expr*> &des_target) -> bool {
             return des_target.second == p.first and des_target.first->attr_name.text == p.second;
         };
-        if (std::find_if(designator_targets.begin(), designator_targets.end(), pred) != designator_targets.end())
-            return true;
+        if (std::any_of(designator_targets.begin(), designator_targets.end(), pred)) {
+            projection_needed = true;
+            break;
+        }
     }
 
-    return false;
+    std::vector<projection_type> additional_projections;
+    if (projection_needed) {
+        /* Compute all designators in `order_by` which  are not contained in `projections`, i.e. which are neither
+         * directly projected nor created by renaming. */
+        for (auto d : GDT.get_designators()) {
+            auto pred = [&d](const projection_type &projection) -> bool {
+                if (projection.second)
+                    return not d->table_name.text and projection.second == d->attr_name.text;
+                else
+                    return projection.first == d;
+            };
+            if (std::none_of(projections.begin(), projections.end(), pred) and
+                not std::any_of(additional_projections.begin(), additional_projections.end(),
+                                [&d](const projection_type &p) { return *p.first == *d; }))
+            {
+                additional_projections.emplace_back(d, nullptr);
+            }
+        }
+    }
+
+    return { projection_needed, std::move(additional_projections) };
 }

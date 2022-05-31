@@ -56,9 +56,6 @@ struct RowStore : Store
     /** Sets the memory of the store to `memory`. */
     void memory(memory::Memory memory) { data_ = std::move(memory); }
 
-    void accept(StoreVisitor &v) override;
-    void accept(ConstStoreVisitor &v) const override;
-
     void dump(std::ostream &out) const override;
     using Store::dump;
 

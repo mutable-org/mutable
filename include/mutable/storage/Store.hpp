@@ -7,7 +7,6 @@
 #include <mutable/storage/Linearization.hpp>
 #include <mutable/util/macro.hpp>
 #include <mutable/util/memory.hpp>
-#include <mutable/util/Visitor.hpp>
 #include <string>
 #include <unordered_map>
 
@@ -19,9 +18,6 @@ struct Attribute;
 struct Schema;
 struct StackMachine;
 struct Table;
-
-struct StoreVisitor;
-struct ConstStoreVisitor;
 
 /** Defines a generic store interface. */
 struct M_EXPORT Store
@@ -63,11 +59,6 @@ struct M_EXPORT Store
 
     /** Drop the most recently appended row. */
     virtual void drop() = 0;
-
-    /** Accept a store visitor. */
-    virtual void accept(StoreVisitor &v) = 0;
-    /** Accept a store visitor. */
-    virtual void accept(ConstStoreVisitor &v) const = 0;
 
     virtual void dump(std::ostream &out) const = 0;
     void dump() const;

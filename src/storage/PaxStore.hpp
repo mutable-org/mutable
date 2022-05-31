@@ -56,9 +56,6 @@ struct PaxStore : Store
     const memory::Memory & memory() const { return data_; }
     const memory::Memory & memory(std::size_t idx) const override { M_insist(idx == 0); return data_; }
 
-    void accept(StoreVisitor &v) override;
-    void accept(ConstStoreVisitor &v) const override;
-
     void dump(std::ostream &out) const override;
     using Store::dump;
 

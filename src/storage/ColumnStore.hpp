@@ -49,9 +49,6 @@ struct ColumnStore : Store
         return columns_[attr_id]; // XXX What if attributes were erased and added again to a table?
     }
 
-    void accept(StoreVisitor &v) override;
-    void accept(ConstStoreVisitor &v) const override;
-
     void dump(std::ostream &out) const override;
     using Store::dump;
 };

@@ -15,8 +15,4 @@ namespace m {
     X(PaxStore) \
     X(RowStore)
 
-/*----- Generate visitors for the internal `Store` class hierarchy. --------------------------------------------------*/
-M_DECLARE_VISITOR(StoreVisitor, Store, M_STORE_LIST);
-M_DECLARE_VISITOR(ConstStoreVisitor, const Store, M_STORE_LIST);
-
 }

@@ -19,6 +19,7 @@
 #include <mutable/util/fn.hpp>
 #include <mutable/util/HeuristicSearch.hpp>
 #include <mutable/util/MinCutAGaT.hpp>
+#include <numeric>
 #include <type_traits>
 #include <x86intrin.h>
 

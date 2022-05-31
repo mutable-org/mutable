@@ -5,6 +5,7 @@
 #include "storage/ColumnStore.hpp"
 #include "storage/RowStore.hpp"
 #include <limits>
+#include <numeric>
 
 
 using namespace m;

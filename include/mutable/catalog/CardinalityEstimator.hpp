@@ -5,7 +5,6 @@
 #include <mutable/mutable-config.hpp>
 #include <mutable/util/ADT.hpp>
 #include <mutable/util/crtp.hpp>
-#include <nlohmann/json.hpp>
 #include <sstream>
 #include <unordered_map>
 #include <vector>

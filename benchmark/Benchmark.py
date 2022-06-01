@@ -163,6 +163,7 @@ def run_configuration(experiment, name, config, yml):
     suite = yml['suite']
     benchmark = yml['benchmark']
     is_readonly = yml['readonly']
+    assert type(is_readonly) == bool
     cases = yml['cases']
     supplementary_args = yml.get('args', None)
 
@@ -316,18 +317,18 @@ CREATE OR REPLACE FUNCTION insert_timestamp(text, timestamptz, text)
 RETURNS void
 LANGUAGE SQL
 AS $func$
-    INSERT INTO "Timestamps" (commit, timestamp, host)
+    INSERT INTO "Timestamps" ("commit", "timestamp", "host")
     SELECT $1, $2, $3
     WHERE NOT ($2, $3) IN (SELECT timestamp, host FROM "Timestamps");
 $func$;
 
-CREATE OR REPLACE FUNCTION insert_experiment(int, int, text, int, text, bool, int)
+CREATE OR REPLACE FUNCTION insert_experiment(int, text, int, text, bool, int)
 RETURNS void
 LANGUAGE SQL
 AS $func$
-    INSERT INTO "Experiments" (benchmark, suite, name, version, description, is_read_only, chart_config)
-    SELECT $1, $2, $3, $4, $5, $6, $7
-    WHERE NOT ($1, $2, $3, $4) IN (SELECT benchmark, suite, name, version FROM "Experiments");
+    INSERT INTO "Experiments" (benchmark, name, version, description, is_read_only, chart_config)
+    SELECT $1, $2, $3, $4, $5, $6
+    WHERE NOT ($1, $2, $3) IN (SELECT benchmark, name, version FROM "Experiments");
 $func$;
 
 CREATE OR REPLACE FUNCTION insert_chartconfig(text, text, text, text, text, text)
@@ -351,9 +352,9 @@ BEGIN
     -- Get timestamp
     PERFORM insert_timestamp({dbstr(commit.hexsha)}, {dbstr(now)}, {dbstr(nodename)});
     SELECT id FROM "Timestamps"
-    WHERE commit={dbstr(commit.hexsha)}
-      AND timestamp={dbstr(now)}
-      AND host={dbstr(nodename)}
+    WHERE "commit"={dbstr(commit.hexsha)}
+      AND "timestamp"={dbstr(now)}
+      AND "host"={dbstr(nodename)}
     INTO timestamp_id;
 ''')
 
@@ -407,17 +408,16 @@ BEGIN
 
                     version = int(yml.get('version', 1))
                     description = str(yml['description'])
-                    read_only = 'TRUE' if (str(yml['readonly']) == 'yes') else 'FALSE'
+                    read_only = 'TRUE' if (bool(yml['readonly'])) else 'FALSE'
                     experiment_params = None
                     if 'args' in yml and yml['args']:
                         experiment_params = yml['args']
 
                     output_sql_file.write(f'''
     -- Get experiment
-    PERFORM insert_experiment(benchmark_id, suite_id, {dbstr(experiment)}, {version}, {dbstr(description)}, {read_only}, chartconfig_id);
+    PERFORM insert_experiment(benchmark_id, {dbstr(experiment)}, {version}, {dbstr(description)}, {read_only}, chartconfig_id);
     SELECT id FROM "Experiments"
     WHERE benchmark=benchmark_id
-      AND suite=suite_id
       AND name={dbstr(experiment)}
       AND version={version}
     INTO experiment_id;
@@ -445,13 +445,13 @@ BEGIN
     --  benchmark:  '{benchmark}'
     --  experiment: '{experiment}'
     --  config:     '{config}'
-    INSERT INTO "Measurements"
+    INSERT INTO "Measurements" ("timestamp", "experiment", "config", "case", "value")
     VALUES
 ''')
 
                         with_nan = lambda flt: "'NaN'" if math.isnan(flt) else flt
-                        insert = lambda case, time: ' '*8 + f'(default, timestamp_id, experiment_id, benchmark_id, suite_id, configuration_id, {case}, {with_nan(time)})'
-                        values = [ insert(row[0], row[1]) for row in zip(measurements['case'], measurements['time']) ]
+                        combine = lambda case, time: ' '*8 + f'(timestamp_id, experiment_id, configuration_id, {case}, {with_nan(time)})'
+                        values = [ combine(case, time) for case, time in zip(measurements['case'], measurements['time']) ]
                         output_sql_file.write(',\n'.join(values))
                         output_sql_file.write(';\n')
 

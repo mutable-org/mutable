@@ -2,7 +2,7 @@ description: TPC-H Query 14
 suite: TPC
 benchmark: TPC-H
 name: Q14
-readonly: yes
+readonly: true
 pattern: '^Execute query:.*'
 configurations:
     'WebAssembly': >-

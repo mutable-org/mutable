@@ -2,7 +2,7 @@ description: Order by single attribute of type INT(4) and varying number or dist
 suite: operators
 benchmark: ordering
 name: distinct INT(4)
-readonly: yes
+readonly: true
 pattern: '^Execute query:.*'
 configurations:
     Interpreter:                 --backend Interpreter

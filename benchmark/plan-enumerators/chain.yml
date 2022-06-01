@@ -2,7 +2,7 @@ description: Plan enumeration of chain queries.
 suite: plan-enumerators
 benchmark: chain
 name: small
-readonly: yes
+readonly: true
 pattern: '^Compute the query plan:.*'
 args: --dryrun
 configurations:

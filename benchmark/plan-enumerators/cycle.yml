@@ -2,7 +2,7 @@ description: Plan enumeration of cycle queries.
 suite: plan-enumerators
 benchmark: cycle
 name: small
-readonly: yes
+readonly: true
 pattern: '^Compute the query plan:.*'
 args: --dryrun
 configurations:

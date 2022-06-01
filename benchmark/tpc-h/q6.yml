@@ -2,7 +2,7 @@ description: TPC-H Query 6
 suite: TPC
 benchmark: TPC-H
 name: Q6
-readonly: yes
+readonly: true
 pattern: '^Execute query:.*'
 configurations:
     'WebAssembly': --backend WasmV8 --store ColumnStore

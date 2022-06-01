@@ -2,7 +2,7 @@ description: Compute varying number of aggregates while grouping.
 suite: operators
 benchmark: grouping
 name: aggregates
-readonly: yes
+readonly: true
 pattern: '^Execute query:.*'
 configurations:
     Interpreter: >-

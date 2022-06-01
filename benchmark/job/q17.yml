@@ -1,7 +1,7 @@
 description: Join Order Benchmark Query 17
 suite: job
 benchmark: q17
-readonly: yes
+readonly: true
 pattern: '^Execute query:.*'
 cases:
     a: |

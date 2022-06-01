@@ -2,7 +2,7 @@ description: Foreign key join with key of type INT(4).
 suite: operators
 benchmark: equi_join
 name: 'Foreign Key Join'
-readonly: yes
+readonly: true
 pattern: '^Execute query:.*'
 configurations:
     Interpreter:                 --backend Interpreter

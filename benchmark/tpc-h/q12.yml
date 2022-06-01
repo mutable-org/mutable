@@ -2,7 +2,7 @@ description: TPC-H Query 12
 suite: TPC
 benchmark: TPC-H
 name: Q12
-readonly: yes
+readonly: true
 pattern: '^Execute query:.*'
 configurations:
     'WebAssembly': >-

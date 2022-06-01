@@ -2,7 +2,7 @@ description: Order by multiple attributes of type INT(4).
 suite: operators
 benchmark: ordering
 name: multiple INT(4)
-readonly: yes
+readonly: true
 pattern: '^Execute query:.*'
 configurations:
     Interpreter:                 --backend Interpreter

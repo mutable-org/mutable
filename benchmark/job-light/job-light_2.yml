@@ -1,7 +1,7 @@
 description: job-light queries with 2 joins
 suite: job-light
 benchmark: job-light_2
-readonly: yes
+readonly: true
 pattern: '^Execute query:.*'
 cases:
     1: SELECT COUNT(*) FROM cast_info ci,title t,movie_companies mc WHERE t.id=ci.movie_id AND t.id=mc.movie_id AND ci.role_id=2;

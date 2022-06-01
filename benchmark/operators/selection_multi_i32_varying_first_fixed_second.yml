@@ -4,7 +4,7 @@ description: |
 suite: operators
 benchmark: selection-multiple
 name: one varying, one fixed
-readonly: yes
+readonly: true
 pattern: '^Execute query:.*'
 configurations:
     'WebAssembly (RowStore)':    --backend WasmV8 --store RowStore

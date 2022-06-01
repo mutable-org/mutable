@@ -1,7 +1,7 @@
 description: job-light queries with 3 joins
 suite: job-light
 benchmark: job-light_3
-readonly: yes
+readonly: true
 pattern: '^Execute query:.*'
 cases:
     1: SELECT COUNT(*) FROM cast_info ci,title t,movie_keyword mk,movie_companies mc WHERE t.id=ci.movie_id AND t.id=mk.movie_id AND t.id=mc.movie_id AND mk.keyword_id=117;

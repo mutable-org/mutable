@@ -2,7 +2,7 @@ description: TPC-H Query 3
 suite: TPC
 benchmark: TPC-H
 name: Q3
-readonly: yes
+readonly: true
 pattern: '^Execute query:.*'
 configurations:
     'WebAssembly': >-

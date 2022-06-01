@@ -2,7 +2,7 @@ description: One-sided range selection on attribute of type INT(8).
 suite: operators
 benchmark: selection-onesided
 name: INT(8)
-readonly: yes
+readonly: true
 pattern: '^Execute query:.*'
 configurations:
     WebAssembly: --backend WasmV8 --store ColumnStore

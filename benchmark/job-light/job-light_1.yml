@@ -1,7 +1,7 @@
 description: job-light queries with 1 join
 suite: job-light
 benchmark: job-light_1
-readonly: yes
+readonly: true
 pattern: '^Execute query:.*'
 cases:
     1: SELECT COUNT(*) FROM cast_info ci,title t WHERE t.id=ci.movie_id AND t.production_year>1980 AND t.production_year<1984;

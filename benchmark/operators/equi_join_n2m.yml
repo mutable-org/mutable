@@ -2,7 +2,7 @@ description: n-to-m equi-join with a selectivity of 1e-6
 suite: operators
 benchmark: equi_join
 name: 'N:M Join'
-readonly: yes
+readonly: true
 pattern: '^Execute query:.*'
 configurations:
     Interpreter:                 --backend Interpreter

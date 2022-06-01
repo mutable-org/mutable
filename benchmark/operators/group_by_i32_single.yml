@@ -2,7 +2,7 @@ description: Group by a single attribute of type INT(4).
 suite: operators
 benchmark: grouping
 name: single INT(4)
-readonly: yes
+readonly: true
 pattern: '^Execute query:.*'
 configurations:
     'Interpreter': >-

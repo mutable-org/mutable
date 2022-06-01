@@ -2,7 +2,7 @@ description: Plan enumeration of star queries.
 suite: plan-enumerators
 benchmark: star
 name: small
-readonly: yes
+readonly: true
 pattern: '^Compute the query plan:.*'
 args: --dryrun
 configurations:

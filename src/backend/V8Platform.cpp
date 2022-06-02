@@ -533,8 +533,6 @@ V8Platform::~V8Platform()
 {
     inspector_.reset();
     isolate_->Dispose();
-    v8::V8::Dispose();
-    v8::V8::ShutdownPlatform();
     delete allocator_;
 }
 
@@ -775,7 +773,7 @@ void V8Platform::execute(const Operator &plan)
             std::string js(std::istreambuf_iterator<char>(js_in), std::istreambuf_iterator<char>{});
             v8::Local<v8::String> js_src = mkstr(js);
             std::string path = std::string("file://./") + filename;
-            v8::ScriptOrigin js_origin = v8::ScriptOrigin(mkstr(path));
+            v8::ScriptOrigin js_origin = v8::ScriptOrigin(isolate_, mkstr(path));
             auto script = v8::Script::Compile(context, js_src, &js_origin);
             if (script.IsEmpty())
                 throw std::runtime_error("failed to compile script");
@@ -1018,6 +1016,7 @@ static void create_V8Platform()
 __attribute__((destructor(101)))
 static void destroy_V8Platform()
 {
+    v8::V8::Dispose();
     delete V8Platform::PLATFORM_;
 }
 

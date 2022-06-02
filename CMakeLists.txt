@@ -224,8 +224,8 @@ include_directories(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/third-party/eigen")
 
 # V8 - Google's JavaScript and WebAssembly Engine (used in Chrome, Node.js)
 if(${WITH_V8})
-    set(V8_VERSION "9.8.178")
-    set(V8_BUILD_ARGS "is_clang=true v8_enable_pointer_compression=true treat_warnings_as_errors=false v8_use_external_startup_data=false use_sysroot=false use_custom_libcxx=false clang_use_chrome_plugins=false target_cpu=\"x64\" enable_nacl=false blink_symbol_level=0")
+    set(V8_VERSION "10.3.174.10")
+    set(V8_BUILD_ARGS "is_clang=true v8_enable_pointer_compression=true treat_warnings_as_errors=false v8_use_external_startup_data=false use_sysroot=false use_custom_libcxx=false clang_use_chrome_plugins=false target_cpu=\"x64\"")
     add_definitions("-DV8_COMPRESS_POINTERS")
     if(${BUILD_SHARED_LIBS})
         set(V8_BUILD_ARGS "${V8_BUILD_ARGS} v8_monolithic=false is_component_build=true")
@@ -256,7 +256,7 @@ if(${WITH_V8})
         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/third_party/depot_tools/gclient sync -D
         COMMAND git remote | grep ^mutable$ || git remote add mutable git@gitlab.cs.uni-saarland.de:bigdata/mutable/v8.git
         COMMAND git fetch mutable
-        COMMAND git checkout ff478912cd9e0f79dff0c8d930bfaf79c2b788e2
+        COMMAND git checkout 92a5396706753c802ab76e5c5be0982d5a49f011
         UPDATE_COMMAND ""
         CONFIGURE_COMMAND gn gen out --root=${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8 --args=${V8_BUILD_ARGS}
         CONFIGURE_HANDLED_BY_BUILD true

@@ -18,8 +18,6 @@ Catalog * Catalog::the_catalog_(nullptr);
 
 Catalog::Catalog()
     : allocator_(new memory::LinearAllocator())
-    /* Initialize dummy cost function. */
-    , cost_function_(std::make_unique<CostFunctionCout>())
 {
     /*----- Initialize standard functions. ---------------------------------------------------------------------------*/
 #define M_FUNCTION(NAME, KIND) { \

@@ -7,7 +7,7 @@
 
 namespace m {
 
-/** Implements the cassical, widely used cost function *C_out* from Cluet, Sophie, and Guido Moerkotte. "On the
+/** Implements the cassical, widely used cost function *C_out* from Sophie Cluet and Guido Moerkotte. "On the
  * complexity of generating optimal left-deep processing trees with cross products." 1995.
  * *C_out* provides the *adjacent sequence interchange* (ASI) property.
  */

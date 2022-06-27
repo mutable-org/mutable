@@ -575,6 +575,14 @@ int main(int argc, const char **argv)
             show_any_help = true;
         }
     );
+    ADD(bool, Options::Get().list_cost_functions, false,          /* Type, Var, Init  */
+        nullptr, "--list-cost-functions",                         /* Short, Long      */
+        "list all available cost functions",                      /* Description      */
+        [&](bool) {                                         /* Callback         */
+            Options::Get().list_cost_functions = true;
+            show_any_help = true;
+        }
+    );
     /*----- PDDL Generation ------------------------------------------------------------------------------------------*/
     ADD(const char *, Options::Get().pddl, nullptr,                     /* Type, Var, Init  */
         nullptr, "--pddl",                                              /* Short, Long      */
@@ -676,6 +684,20 @@ Immanuel Haffner\
         std::cout << std::endl;
     }
 
+    if (Options::Get().list_cost_functions) {
+        std::cout << "List of available cost functions:";
+        std::size_t max_len = 0;
+        range cost_functions(C.cost_functions_cbegin(), C.cost_functions_cend());
+        for (auto &cost_function : cost_functions) max_len = std::max(max_len, strlen(cost_function.first));
+        for (auto &cost_function : cost_functions) {
+            std::cout << "\n    " << std::setw(max_len) << std::left << cost_function.first;
+            if (cost_function.second.description())
+                std::cout << "    -    " << cost_function.second.description();
+        }
+        std::cout << "\n    (Use --train-cost-models to train a cost function on your specific hardware)";
+        std::cout << std::endl;
+    }
+
     if (show_any_help)
         exit(EXIT_SUCCESS);
 
@@ -696,7 +718,9 @@ Immanuel Haffner\
     /* ----- Cost model training -------------------------------------------------------------------------------------*/
     if (Options::Get().train_cost_models) {
         auto CF = CostModelFactory::get_cost_function();
-        Catalog::Get().cost_function(std::move(CF));
+        C.register_cost_function("TrainedCostFunction", std::move(CF),
+                                 "cost models trained on current hardware using linear regression");
+        C.default_cost_function("TrainedCostFunction");
     }
 
     /* ----- Replxx configuration ------------------------------------------------------------------------------------*/

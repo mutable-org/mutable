@@ -21,9 +21,10 @@ struct Options
     bool show_help;
     bool show_version;
     bool list_stores;
+    bool list_cardinality_estimators;
     bool list_plan_enumerators;
     bool list_backends;
-    bool list_cardinality_estimators;
+    bool list_cost_functions;
 
     /*----- Shell configuration --------------------------------------------------------------------------------------*/
     bool has_color;

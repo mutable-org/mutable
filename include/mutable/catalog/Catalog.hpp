@@ -248,6 +248,7 @@ struct M_EXPORT Catalog
     ComponentSet<CardinalityEstimatorFactory> cardinality_estimators_;
     ComponentSet<PlanEnumerator> plan_enumerators_;
     ComponentSet<Backend> backends_;
+    ComponentSet<CostFunction> cost_functions_;
 
     public:
     /*===== Stores ===================================================================================================*/
@@ -359,19 +360,29 @@ struct M_EXPORT Catalog
     auto backends_cend()   const { return backends_end(); }
 
     /*===== CostFunction =============================================================================================*/
-    private:
-    /*----- Cost Functions -------------------------------------------------------------------------------------------*/
-    std::unique_ptr<CostFunction> cost_function_; ///< the default cost function
-
-    public:
-    /** Returns the active `CostFunction`. */
-    const CostFunction & cost_function() const { return *cost_function_; }
-
-    /** Sets the new `CostFunction` and returns the old one. */
-    std::unique_ptr<CostFunction> cost_function(std::unique_ptr<CostFunction> cost_function) {
-        cost_function_.swap(cost_function);
-        return cost_function;
+    /** Registers a new `CostFunction` with the given `name`. */
+    void register_cost_function(const char *name, std::unique_ptr<CostFunction> CF,
+                                const char *description = nullptr)
+    {
+        cost_functions_.add(pool(name), Component<CostFunction>(description, std::move(CF)));
     }
+    /** Sets the default `CostFunction` to use. */
+    void default_cost_function(const char *name) { cost_functions_.set_default(pool(name)); }
+    /** Returns `true` iff the `Catalog` has a default `CostFunction`. */
+    bool has_default_cost_function() const { return cost_functions_.has_default(); }
+    /** Returns a reference to the default `CostFunction`. */
+    CostFunction & cost_function() const { return cost_functions_.get_default(); }
+    /** Returns a reference to the `CostFunction` with the given `name`. */
+    CostFunction & cost_function(const char *name) const { return cost_functions_.get(pool(name)); }
+    /** Returns the name of the default `CostFunction`. */
+    const char * default_cost_function_name() const { return cost_functions_.get_default_name(); }
+
+    auto cost_functions_begin()        { return cost_functions_.begin(); }
+    auto cost_functions_end()          { return cost_functions_.end(); }
+    auto cost_functions_begin()  const { return cost_functions_.begin(); }
+    auto cost_functions_end()    const { return cost_functions_.end(); }
+    auto cost_functions_cbegin() const { return cost_functions_begin(); }
+    auto cost_functions_cend()   const { return cost_functions_end(); }
 };
 
 }

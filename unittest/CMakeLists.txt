@@ -16,10 +16,12 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
         util/AlgorithmsTest.cpp
         util/AllocatorTest.cpp
         util/FnTest.cpp
+        util/KmeansTest.cpp
         util/LinearModelTest.cpp
         util/MemoryTest.cpp
         util/PoolTest.cpp
         util/PositionTest.cpp
+        util/SpnTest.cpp
         util/StringPoolTest.cpp
 
         # util/container

@@ -1,6 +1,7 @@
 #include <mutable/catalog/CardinalityEstimator.hpp>
 
 #include <algorithm>
+#include "backend/Interpreter.hpp"
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
@@ -98,7 +99,7 @@ CartesianProductEstimator::estimate_limit(const QueryGraph&, const DataModel &_d
 
 std::unique_ptr<DataModel>
 CartesianProductEstimator::estimate_grouping(const QueryGraph&, const DataModel &_data,
-                                             const std::vector<const Expr*>&) const
+                                             const std::vector<const Expr*>& test) const
 {
     auto &data = as<const CartesianProductDataModel>(_data);
     auto model = std::make_unique<CartesianProductDataModel>();
@@ -397,12 +398,378 @@ const char * InjectionCardinalityEstimator::make_identifier(const QueryGraph &G,
     return buf_view();
 }
 
+/*======================================================================================================================
+ * SpnEstimator
+ *====================================================================================================================*/
+
+namespace {
+
+/** Visitor to translate a CNF to an Spn filter. Only consider sargable expressions. */
+struct FilterTranslator : ConstASTExprVisitor {
+
+    const char* attribute;
+    float value;
+    Spn::SpnOperator op;
+
+    FilterTranslator() : attribute(""), value(0), op(Spn::EQUAL) { }
+
+    using ConstASTExprVisitor::operator();
+
+    void operator()(const Designator &designator) { attribute = designator.attr_name.text; }
+
+    void operator()(const Constant &constant) {
+        auto val = Interpreter::eval(constant);
+
+        visit(overloaded {
+                [&val, this](const Numeric &numeric) {
+                    switch (numeric.kind) {
+                        case Numeric::N_Int:
+                            value = float(val.as_i());
+                            break;
+                        case Numeric::N_Float:
+                            value = val.as_f();
+                            break;
+                        case Numeric::N_Decimal:
+                            value = float(val.as_d());
+                            break;
+                    }
+                },
+                [this](const NoneType &none_type) { op = Spn::IS_NULL; },
+                [](auto&&) { M_unreachable("Unsupported type."); },
+        }, *constant.type());
+    }
+
+    void operator()(const BinaryExpr &binary_expr) {
+        switch (binary_expr.op().type) {
+            case TK_EQUAL:
+                op = Spn::EQUAL;
+                break;
+            case TK_LESS:
+                op = Spn::LESS;
+                break;
+            case TK_LESS_EQUAL:
+                op = Spn::LESS_EQUAL;
+                break;
+            case TK_GREATER:
+                op = Spn::GREATER;
+                break;
+            case TK_GREATER_EQUAL:
+                op = Spn::GREATER_EQUAL;
+                break;
+            default:
+                M_unreachable("Operator can't be handled");
+        }
+
+        (*this)(*binary_expr.lhs);
+        (*this)(*binary_expr.rhs);
+    }
+
+    void operator()(const ErrorExpr&) { /* nothing to be done */ }
+    void operator()(const FnApplicationExpr &) { /* nothing to be done */ }
+    void operator()(const UnaryExpr &) { /* nothing to be done */ }
+    void operator()(const QueryExpr &) { /* nothing to be done */ }
+};
+
+/** Visitor to translate a CNF join condition (get the two identifiers of an equi Join). */
+struct JoinTranslator : ConstASTExprVisitor {
+
+    std::vector<std::pair<const char*, const char*>> join_designator;
+
+    using ConstASTExprVisitor::operator();
+
+    void operator()(const Designator &designator) {
+        join_designator.emplace_back(designator.table_name.text, designator.attr_name.text);
+    }
+
+    void operator()(const BinaryExpr &binary_expr) {
+
+        if (binary_expr.op().type != m::TK_EQUAL) { M_unreachable("Operator can't be handled"); }
+
+        (*this)(*binary_expr.lhs);
+        (*this)(*binary_expr.rhs);
+    }
+
+    void operator()(const Constant &) { /* nothing to be done */ }
+    void operator()(const ErrorExpr&) { /* nothing to be done */ }
+    void operator()(const FnApplicationExpr &) { /* nothing to be done */ }
+    void operator()(const UnaryExpr &) { /* nothing to be done */ }
+    void operator()(const QueryExpr &) { /* nothing to be done */ }
+};
+
+}
+
+std::pair<unsigned, bool> SpnEstimator::find_spn_id(const SpnDataModel &data, SpnJoin &join)
+{
+    /* we only have a single spn */
+    const char* table_name = data.spns_.begin()->first;
+    auto &attr_to_id = data.spns_.begin()->second.get().get_attribute_to_id();
+
+    unsigned spn_id = 0;
+    bool is_primary_key = false;
+
+    /* check which identifier of the join corresponds to the table of the spn, get the corresponding attribute id */
+    auto find_iter = table_name == join.first.first ?
+            attr_to_id.find(join.first.second) : attr_to_id.find(join.second.second);
+
+    if (find_iter != attr_to_id.end()) { spn_id = find_iter->second; }
+    else { is_primary_key = true; }
+
+    return {spn_id, is_primary_key};
+}
+
+std::size_t SpnEstimator::max_frequency(const SpnDataModel &data, SpnJoin &join)
+{
+    auto [spn_id, is_primary_key] = find_spn_id(data, join);
+
+    /* maximum frequency is only computed on data models which only have one Spn */
+    const SpnWrapper &spn = data.spns_.begin()->second.get();
+
+    return is_primary_key ? 1 : data.num_rows_ / spn.estimate_number_distinct_values(spn_id);
+}
+
+std::size_t SpnEstimator::max_frequency(const SpnDataModel &data, const char *attribute)
+{
+    /* maximum frequency is only computed on data models which only have one Spn */
+    const SpnWrapper &spn = data.spns_.begin()->second.get();
+    auto &attr_to_id = spn.get_attribute_to_id();
+    auto find_iter = attr_to_id.find(attribute);
+
+    return find_iter == attr_to_id.end() ? 1 : data.num_rows_ / spn.estimate_number_distinct_values(find_iter->second);
+}
+
+/*----- Model calculation --------------------------------------------------------------------------------------------*/
+
+std::unique_ptr<DataModel> SpnEstimator::empty_model() const
+{
+    return std::make_unique<SpnDataModel>(table_spn_map(), 0);
+}
+
+std::unique_ptr<DataModel> SpnEstimator::estimate_scan(const QueryGraph &G, Subproblem P) const
+{
+    M_insist(P.size() == 1);
+    const auto idx = *P.begin();
+    auto DS = G.sources()[idx];
+
+
+    if (auto BT = cast<const BaseTable>(DS)) {
+        /* get the Spn corresponding for the table to scan */
+        if (auto it = table_to_spn_.find(BT->name()); it != table_to_spn_.end()) {
+            table_spn_map spns;
+            const SpnWrapper &spn = it->second;
+            spns.emplace(BT->name(), spn);
+            return std::make_unique<SpnDataModel>(std::move(spns), spn.num_rows());
+        } else {
+            throw data_model_exception("Table does not exist.");
+        }
+    } else {
+       throw data_model_exception("nested queries should be estimated when they are planned and their model must be "
+                                  "passed to the planning process of the outer query");
+    }
+}
+
+std::unique_ptr<DataModel>
+SpnEstimator::estimate_filter(const QueryGraph&, const DataModel &_data, const cnf::CNF &filter) const
+{
+    auto &data = as<const SpnDataModel>(_data);
+    M_insist(data.spns_.size() == 1);
+    auto new_data = std::make_unique<SpnDataModel>(data);
+    auto &spn = new_data->spns_.begin()->second.get();
+    auto &attribute_to_id = spn.get_attribute_to_id();
+
+    SpnFilter translated_filter;
+    FilterTranslator ft;
+
+    /* only consider clauses with one element, since Spns cannot estimate disjunctions */
+    for (auto &clause : filter) {
+        M_insist(clause.size() == 1);
+        ft(*clause[0].expr());
+        unsigned spn_id;
+
+        if (auto it = attribute_to_id.find(ft.attribute); it != attribute_to_id.end()) {
+            spn_id = it->second;
+        } else {
+            throw data_model_exception("Attribute does not exist.");
+        }
+
+        translated_filter.emplace(spn_id, std::make_pair(ft.op, ft.value));
+    }
+
+    /* Save number of rows in the newly constructed data model with the filter applied */
+    new_data->num_rows_ = float(new_data->num_rows_) * spn.likelihood(translated_filter);
+    return new_data;
+}
+
+std::unique_ptr<DataModel>
+SpnEstimator::estimate_limit(const QueryGraph&, const DataModel &data, std::size_t limit, std::size_t) const
+{
+    auto model = std::make_unique<SpnDataModel>(as<const SpnDataModel>(data));
+    model->num_rows_ = std::min(model->num_rows_, limit);
+    return model;
+}
+
+std::unique_ptr<DataModel> SpnEstimator::estimate_grouping(const QueryGraph&, const DataModel &data,
+                                                           const std::vector<const Expr *> &groups) const
+{
+    auto model = std::make_unique<SpnDataModel>(as<const SpnDataModel>(data));
+    std::size_t num_rows = 1;
+    for (auto group : groups) {
+        auto designator = as<const Designator>(group);
+        if (auto spn_it = model->spns_.find(designator->table_name.text); spn_it != model->spns_.end()) {
+            auto &spn = spn_it->second.get();
+            auto &attr_to_id = spn.get_attribute_to_id();
+            if (auto attr_it = attr_to_id.find(designator->attr_name.text); attr_it != attr_to_id.end()) {
+                num_rows *= spn.estimate_number_distinct_values(attr_it->second);
+            } else {
+                num_rows *= spn.num_rows(); // if attribute is primary key, distinct values = num rows
+            }
+        } else {
+            throw data_model_exception("Could not find table for grouping.");
+        }
+    }
+    model->num_rows_ = num_rows;
+    return model;
+}
+
+std::unique_ptr<DataModel>
+SpnEstimator::estimate_join(const QueryGraph&, const DataModel &_left, const DataModel &_right,
+                            const cnf::CNF &condition) const
+{
+    auto &left = as<const SpnDataModel>(_left);
+    auto &right = as<const SpnDataModel>(_right);
+
+    auto new_left = std::make_unique<SpnDataModel>(left);
+    auto new_right = std::make_unique<SpnDataModel>(right);
+
+    SpnJoin join;
+    JoinTranslator jt;
+
+    if (not condition.empty()) {
+        /* only consider single equi join */
+        jt(*condition[0][0].expr());
+        auto first_identifier = std::make_pair(jt.join_designator[0].first, jt.join_designator[0].second);
+        auto second_identifier = std::make_pair(jt.join_designator[1].first, jt.join_designator[1].second);
+        join = std::make_pair(first_identifier, second_identifier);
+
+        /* if a data model is only responsible for one table (one spn) add the maximum frequency of the value
+        * of the joined attribute */
+        if (left.spns_.size() == 1) { new_left->max_frequencies_.emplace_back(max_frequency(left, join)); }
+        if (right.spns_.size() == 1) { new_right->max_frequencies_.emplace_back(max_frequency(right, join)); }
+
+        /* compute the estimated cardinality of the join via distinct count estimates.
+         * See http://www.cidrdb.org/cidr2021/papers/cidr2021_paper01.pdf */
+        std::size_t mf_left = std::accumulate(
+                new_left->max_frequencies_.begin(), new_left->max_frequencies_.end(), 1, std::multiplies<>());
+
+        std::size_t mf_right = std::accumulate(
+                new_right->max_frequencies_.begin(), new_right->max_frequencies_.end(), 1, std::multiplies<>());
+
+        std::size_t left_clause = new_left->num_rows_ / mf_left;
+        std::size_t right_clause = new_right->num_rows_ / mf_right;
+
+        std::size_t num_rows_join = std::min<std::size_t>(left_clause, right_clause) * mf_left * mf_right;
+
+        new_left->num_rows_ = num_rows_join;
+    } else {
+        /* compute cartesian product since there is no join condition */
+        if (left.spns_.size() == 1) { new_left->max_frequencies_.emplace_back(left.num_rows_); }
+        if (right.spns_.size() == 1) { new_right->max_frequencies_.emplace_back(right.num_rows_); }
+
+        new_left->num_rows_ = left.num_rows_ * right.num_rows_;
+    }
+
+    /* copy data from new_right to new_left to collect all information in one DataModel */
+    new_left->spns_.insert(new_right->spns_.begin(), new_right->spns_.end());
+    new_left->max_frequencies_.insert(
+            new_left->max_frequencies_.end(), new_right->max_frequencies_.begin(), new_right->max_frequencies_.end());
+
+    return new_left;
+}
+
+template<typename PlanTable>
+std::unique_ptr<DataModel>
+SpnEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph&, Subproblem to_join,
+                         const cnf::CNF &condition) const
+{
+    M_insist(not to_join.empty());
+    /* compute cartesian product */
+    if (condition.empty()) {
+        auto model = std::make_unique<SpnDataModel>();
+        model->num_rows_ = 1UL;
+        for (auto it = to_join.begin(); it != to_join.end(); ++it)
+            model->num_rows_ *= as<const SpnDataModel>(*PT[it.as_set()].model).num_rows_;
+        return model;
+    }
+
+    /* get all attributes to join on */
+    JoinTranslator jt;
+    std::unordered_map<const char*, const char*> table_to_attribute;
+    for (auto clause : condition) {
+        jt(*clause[0].expr());
+        table_to_attribute.emplace(jt.join_designator[0].first, jt.join_designator[0].second);
+        table_to_attribute.emplace(jt.join_designator[1].first, jt.join_designator[1].second);
+    }
+
+    /* get first model to join */
+    SpnDataModel final_model = as<const SpnDataModel>(*PT[to_join.begin().as_set()].model);
+    const char *first_table_name = final_model.spns_.begin()->first;
+
+    /* if there is a join condition on this model, get the maximum frequency of the attribute */
+    if (auto find_iter = table_to_attribute.find(first_table_name); find_iter != table_to_attribute.end()) {
+        final_model.max_frequencies_.emplace_back(max_frequency(final_model, find_iter->second));
+    }
+    /* else, maximum frequency is set as the number of rows (to compute the cartesian product) */
+    else {
+        final_model.max_frequencies_.emplace_back(final_model.spns_.begin()->second.get().num_rows());
+    }
+
+    /* iteratively add the next model to join via distinct count estimates */
+    for (auto it = ++to_join.begin(); it != to_join.end(); it++) {
+        SpnDataModel model = as<const SpnDataModel>(*PT[it.as_set()].model);
+        const char *table_name = model.spns_.begin()->first;
+
+        if (auto find_iter = table_to_attribute.find(table_name); find_iter != table_to_attribute.end()) {
+            model.max_frequencies_.emplace_back(max_frequency(model, find_iter->second));
+        } else {
+            model.max_frequencies_.emplace_back(model.spns_.begin()->second.get().num_rows());
+        }
+
+        std::size_t mf_left = std::accumulate(
+                final_model.max_frequencies_.begin(), final_model.max_frequencies_.end(), 1, std::multiplies<>());
+        std::size_t mf_right = model.max_frequencies_[0];
+
+        std::size_t left_clause = final_model.num_rows_ / mf_left;
+        std::size_t right_clause = model.num_rows_ / mf_right;
+
+        std::size_t num_rows_join = std::min<std::size_t>(left_clause, right_clause) * mf_left * mf_right;
+
+        final_model.num_rows_ = num_rows_join;
+
+        /* copy data from model to final_model to collect all information in one DataModel */
+        final_model.spns_.emplace(*model.spns_.begin());
+        final_model.max_frequencies_.emplace_back(model.max_frequencies_[0]);
+    }
+
+    return std::make_unique<SpnDataModel>(final_model);
+}
+
+std::size_t SpnEstimator::predict_cardinality(const DataModel &_data) const
+{
+    auto &data = as<const SpnDataModel>(_data);
+    return data.num_rows_;
+}
+
+void SpnEstimator::print(std::ostream &out) const
+{
+
+}
+
 __attribute__((constructor(202)))
 static void register_cardinality_estimators()
 {
     Catalog &C = Catalog::Get();
     C.register_cardinality_estimator<CartesianProductEstimator>("CartesianProduct", "estimates cardinalities as Cartesian product");
     C.register_cardinality_estimator<InjectionCardinalityEstimator>("Injected", "estimates cardinalities based on a JSON file");
+    C.register_cardinality_estimator<SpnEstimator>("Spn", "estimates cardinalities based on Sum-Product Networks");
 
     C.arg_parser().add<bool>(
         /* group=       */ "Cardinality estimation",

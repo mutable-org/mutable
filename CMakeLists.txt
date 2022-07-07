@@ -217,7 +217,7 @@ include_directories(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/third-party/json/include
 FetchContent_Populate(
     Eigen
     GIT_REPOSITORY "https://gitlab.com/libeigen/eigen.git"
-    GIT_TAG 0fd6b4f71dd85b2009ee4d1aeb296e2c11fc9d68 # v3.3.9
+    GIT_TAG 3147391d946bb4b6c68edd901f2add6ac1f31f8c # v3.4.0
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/eigen"
 )
 include_directories(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/third-party/eigen")

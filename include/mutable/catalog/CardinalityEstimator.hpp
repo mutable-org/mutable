@@ -1,5 +1,6 @@
 #pragma once
 
+#include "catalog/SpnWrapper.hpp"
 #include <fstream>
 #include <iostream>
 #include <mutable/mutable-config.hpp>
@@ -7,6 +8,7 @@
 #include <mutable/util/crtp.hpp>
 #include <sstream>
 #include <unordered_map>
+#include "util/Spn.hpp"
 #include <vector>
 
 
@@ -303,6 +305,109 @@ struct M_EXPORT InjectionCardinalityEstimator : CardinalityEstimatorCRTP<Injecti
     }
     const char * buf_view() const { return &buf_[0]; }
     const char * make_identifier(const QueryGraph &G, const Subproblem S) const;
+};
+
+/**
+ * SpnEstimator that estimates cardinalities based on Sum-Product Networks.
+ */
+struct M_EXPORT SpnEstimator : CardinalityEstimatorCRTP<SpnEstimator>
+{
+    using SpnFilter = Spn::Filter;
+    using SpnIdentifier = std::pair<const char*, const char*>;
+    using SpnJoin = std::pair<SpnIdentifier, SpnIdentifier>;
+    using table_spn_map = std::unordered_map<const char*, std::reference_wrapper<const SpnWrapper>>;
+
+    struct SpnDataModel : DataModel
+    {
+        friend struct SpnEstimator;
+
+        private:
+        table_spn_map spns_; ///< a map from table to Spn
+        std::vector<std::size_t> max_frequencies_; ///< the maximum frequencies of values of attributes to join
+        std::size_t num_rows_;
+
+        public:
+        SpnDataModel() = default;
+        SpnDataModel(table_spn_map spns, std::size_t num_rows)
+            : spns_(std::move(spns))
+            , num_rows_(num_rows)
+        { }
+    };
+
+    private:
+    ///> the map from every table to its respective Spn, initially empty
+    std::unordered_map<const char*, SpnWrapper> table_to_spn_;
+    ///> the name of the database, the estimator is built on
+    const char *name_of_database_;
+
+    public:
+    explicit SpnEstimator(const char *name_of_database) : name_of_database_(name_of_database) { }
+
+    /** Learn an Spn on every table in the database. Also used to initialize spns after data inserted in tables. */
+    void learn_spns() { table_to_spn_ = SpnWrapper::learn_spn_database(name_of_database_); }
+
+    /** Add a new Spn for a table in the database. */
+    void learn_new_spn(const char* name_of_table) {
+        table_to_spn_.emplace(name_of_table, SpnWrapper::learn_spn_table(name_of_database_, name_of_table));
+    }
+
+    private:
+    /** Function to compute which of the two join identifiers belongs to the given data model and which attribute to choose.
+     *
+     * @param data  the data model
+     * @param join  the join condition as a pair of identifiers
+     * @return      a pair of the spn internal id of the attribute and whether the attribute is a primary key
+     */
+    static std::pair<unsigned, bool> find_spn_id(const SpnDataModel &data, SpnJoin &join);
+
+    /** Compute the maximum frequency of values of the attribute in the join.
+     *
+     * @param data  the data model
+     * @param join  the join condition as a pair of identifiers
+     * @return      the maximum frequency of the values of the attribute
+     */
+    static std::size_t max_frequency(const SpnDataModel &data, SpnJoin &join);
+
+    /** Compute the maximum frequency of values of the attribute .
+     *
+     * @param data      the data model
+     * @param attribute the attribute
+     * @return          the maximum frequency of the values of the attribute
+     */
+    static std::size_t max_frequency(const SpnDataModel &data, const char *attribute);
+
+    /*==================================================================================================================
+     * Model calculation
+     *================================================================================================================*/
+
+    public:
+    std::unique_ptr<DataModel> empty_model() const override;
+    std::unique_ptr<DataModel> estimate_scan(const QueryGraph &G, Subproblem P) const override;
+    std::unique_ptr<DataModel>
+    estimate_filter(const QueryGraph &G, const DataModel &data, const cnf::CNF &filter) const override;
+    std::unique_ptr<DataModel>
+    estimate_limit(const QueryGraph &G, const DataModel &data, std::size_t limit, std::size_t offset) const override;
+    std::unique_ptr<DataModel>
+    estimate_grouping(const QueryGraph &G, const DataModel &data,
+                      const std::vector<const Expr*> &groups) const override;
+    std::unique_ptr<DataModel>
+    estimate_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
+                  const cnf::CNF &condition) const override;
+
+    template<typename PlanTable>
+    std::unique_ptr<DataModel>
+    operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph &G, Subproblem to_join,
+               const cnf::CNF &condition) const;
+
+
+    /*==================================================================================================================
+     * Prediction via model use
+     *================================================================================================================*/
+
+    std::size_t predict_cardinality(const DataModel &data) const override;
+
+    private:
+    void print(std::ostream &out) const override;
 };
 
 }

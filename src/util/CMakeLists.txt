@@ -6,9 +6,12 @@ add_library(
     ArgParser.cpp
     DotTool.cpp
     fn.cpp
+    Kmeans.cpp
     LinearModel.cpp
     memory.cpp
     Position.cpp
+    RDC.cpp
+    Spn.cpp
     terminal.cpp
     Timer.cpp
     WebSocketServer.cpp

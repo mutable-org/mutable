@@ -1,7 +1,9 @@
 #include <mutable/catalog/CardinalityEstimator.hpp>
 
-#include <algorithm>
 #include "backend/Interpreter.hpp"
+#include "catalog/SpnWrapper.hpp"
+#include "util/Spn.hpp"
+#include <algorithm>
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
@@ -398,6 +400,7 @@ const char * InjectionCardinalityEstimator::make_identifier(const QueryGraph &G,
     return buf_view();
 }
 
+
 /*======================================================================================================================
  * SpnEstimator
  *====================================================================================================================*/
@@ -498,10 +501,26 @@ struct JoinTranslator : ConstASTExprVisitor {
 
 }
 
+SpnEstimator::~SpnEstimator()
+{
+    for (auto &e : table_to_spn_)
+        delete e.second;
+}
+
+void SpnEstimator::learn_spns() { table_to_spn_ = SpnWrapper::learn_spn_database(name_of_database_); }
+
+void SpnEstimator::learn_new_spn(const char *name_of_table)
+{
+    table_to_spn_.emplace(
+        name_of_table,
+        new SpnWrapper(SpnWrapper::learn_spn_table(name_of_database_, name_of_table))
+    );
+}
+
 std::pair<unsigned, bool> SpnEstimator::find_spn_id(const SpnDataModel &data, SpnJoin &join)
 {
     /* we only have a single spn */
-    const char* table_name = data.spns_.begin()->first;
+    const char *table_name = data.spns_.begin()->first;
     auto &attr_to_id = data.spns_.begin()->second.get().get_attribute_to_id();
 
     unsigned spn_id = 0;
@@ -555,7 +574,7 @@ std::unique_ptr<DataModel> SpnEstimator::estimate_scan(const QueryGraph &G, Subp
         /* get the Spn corresponding for the table to scan */
         if (auto it = table_to_spn_.find(BT->name()); it != table_to_spn_.end()) {
             table_spn_map spns;
-            const SpnWrapper &spn = it->second;
+            const SpnWrapper &spn = *it->second;
             spns.emplace(BT->name(), spn);
             return std::make_unique<SpnDataModel>(std::move(spns), spn.num_rows());
         } else {
@@ -576,7 +595,7 @@ SpnEstimator::estimate_filter(const QueryGraph&, const DataModel &_data, const c
     auto &spn = new_data->spns_.begin()->second.get();
     auto &attribute_to_id = spn.get_attribute_to_id();
 
-    SpnFilter translated_filter;
+    Spn::Filter translated_filter;
     FilterTranslator ft;
 
     /* only consider clauses with one element, since Spns cannot estimate disjunctions */
@@ -608,7 +627,7 @@ SpnEstimator::estimate_limit(const QueryGraph&, const DataModel &data, std::size
 }
 
 std::unique_ptr<DataModel> SpnEstimator::estimate_grouping(const QueryGraph&, const DataModel &data,
-                                                           const std::vector<const Expr *> &groups) const
+                                                           const std::vector<const Expr*> &groups) const
 {
     auto model = std::make_unique<SpnDataModel>(as<const SpnDataModel>(data));
     std::size_t num_rows = 1;

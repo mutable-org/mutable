@@ -1,7 +1,9 @@
 #pragma once
 
-#include <unordered_map>
 #include "util/Spn.hpp"
+#include <memory>
+#include <unordered_map>
+#include <vector>
 
 
 namespace m {
@@ -36,17 +38,11 @@ struct SpnWrapper
     }
 
     public:
+    SpnWrapper(const SpnWrapper&) = delete;
+    SpnWrapper(SpnWrapper&&) = default;
 
     /** Get the reference to the attribute to spn internal id mapping. */
     const std::unordered_map<const char*, unsigned> & get_attribute_to_id() const { return attribute_to_id_; }
-
-    /** Learn an SPN over the given table. Make integers discrete and floating points continuous.
-     *
-     * @param name_of_database  the database
-     * @param name_of_table     the table in the database
-     * @return                  the learned SPN
-     */
-    static SpnWrapper learn_spn_table(const char *name_of_database, const char *name_of_table);
 
     /** Learn an SPN over the given table.
      *
@@ -56,14 +52,7 @@ struct SpnWrapper
      * @return                  the learned SPN
      */
     static SpnWrapper learn_spn_table(const char *name_of_database, const char *name_of_table,
-                                      std::vector<Spn::LeafType> &leaf_types);
-
-    /** Learn SPNs over the tables in the given database. Make integers discrete and floating points continuous.
-    *
-    * @param name_of_database   the database
-    * @return                   the learned SPNs
-    */
-    static std::unordered_map<const char*, SpnWrapper> learn_spn_database(const char *name_of_database);
+                                      std::vector<Spn::LeafType> leaf_types = decltype(leaf_types)());
 
     /** Learn SPNs over the tables in the given database.
      *
@@ -71,8 +60,11 @@ struct SpnWrapper
      * @param leaf_types        the type of a leaf for a non-primary key attribute in the respective table
      * @return                  the learned SPNs
      */
-    static std::unordered_map<const char*, SpnWrapper> learn_spn_database(const char *name_of_database,
-                                              std::unordered_map<const char*, std::vector<Spn::LeafType>> &leaf_types);
+    static std::unordered_map<const char*, SpnWrapper*>
+    learn_spn_database(
+        const char *name_of_database,
+        std::unordered_map<const char*, std::vector<Spn::LeafType>> leaf_types = decltype(leaf_types)()
+    );
 
 
     /** returns the number of rows in the SPN. */

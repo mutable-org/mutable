@@ -8,22 +8,14 @@ using namespace m;
 using namespace Eigen;
 
 
-SpnWrapper SpnWrapper::learn_spn_table(const char *name_of_database, const char *name_of_table)
-{
-    auto &C = Catalog::Get();
-    auto &table = C.get_database(C.pool(name_of_database)).get_table(C.pool(name_of_table));
-
-    std::size_t num_attributes = table.size() - table.primary_key().size();
-    std::vector<Spn::LeafType> leaf_types(num_attributes, Spn::AUTO);
-    return learn_spn_table(name_of_database, name_of_table, leaf_types);
-}
-
 SpnWrapper SpnWrapper::learn_spn_table(const char *name_of_database, const char *name_of_table,
-                                       std::vector<Spn::LeafType> &leaf_types)
+                                       std::vector<Spn::LeafType> leaf_types)
 {
     auto &C = Catalog::Get();
     auto &db = C.get_database(C.pool(name_of_database));
     auto &table = db.get_table(C.pool(name_of_table));
+
+    leaf_types.resize(table.size(), Spn::AUTO); // pad with AUTO
 
     /* use CartesianProductEstimator to query data since there currently are no SPNs on the data. */
     auto old_estimator = db.cardinality_estimator(C.create_cardinality_estimator("CartesianProduct", name_of_database));
@@ -136,29 +128,22 @@ SpnWrapper SpnWrapper::learn_spn_table(const char *name_of_database, const char 
     return SpnWrapper(Spn::learn_spn(data, null_matrix, leaf_types), std::move(attribute_to_id));
 }
 
-std::unordered_map<const char*, SpnWrapper> SpnWrapper::learn_spn_database(const char *name_of_database)
-{
-    std::unordered_map<const char*, std::vector<Spn::LeafType>> leaf_types;
-    return learn_spn_database(name_of_database, leaf_types);
-}
-
-std::unordered_map<const char*, SpnWrapper> SpnWrapper::learn_spn_database(const char *name_of_database,
-                                             std::unordered_map<const char *, std::vector<Spn::LeafType>> &leaf_types)
+std::unordered_map<const char*, SpnWrapper*>
+SpnWrapper::learn_spn_database(const char *name_of_database,
+                               std::unordered_map<const char*, std::vector<Spn::LeafType>> leaf_types)
 {
     auto &C = Catalog::Get();
     auto &db = C.get_database(C.pool(name_of_database));
 
-    std::unordered_map<const char*, SpnWrapper> spns;
+    std::unordered_map<const char*, SpnWrapper*> spns;
 
     for (auto table_it = db.begin_tables(); table_it != db.end_tables(); table_it++) {
-        if (leaf_types.find(table_it->first) != leaf_types.end()) {
-            spns.emplace(
-                table_it->first,
-                learn_spn_table(name_of_database, table_it->first, leaf_types[table_it->first])
-            );
-        } else {
-            spns.emplace(table_it->first, learn_spn_table(name_of_database, table_it->first));
-        }
+        spns.emplace(
+            table_it->first,
+            new SpnWrapper(
+                learn_spn_table(name_of_database, table_it->first, std::move(leaf_types[table_it->first]))
+            )
+        );
     }
 
     return spns;

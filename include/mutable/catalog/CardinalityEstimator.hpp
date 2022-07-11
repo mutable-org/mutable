@@ -1,6 +1,5 @@
 #pragma once
 
-#include "catalog/SpnWrapper.hpp"
 #include <fstream>
 #include <iostream>
 #include <mutable/mutable-config.hpp>
@@ -8,7 +7,6 @@
 #include <mutable/util/crtp.hpp>
 #include <sstream>
 #include <unordered_map>
-#include "util/Spn.hpp"
 #include <vector>
 
 
@@ -24,6 +22,7 @@ struct Operator;
 struct PlanTableLargeAndSparse;
 struct PlanTableSmallOrDense;
 struct QueryGraph;
+struct SpnWrapper;
 
 using Subproblem = SmallBitset;
 
@@ -312,7 +311,6 @@ struct M_EXPORT InjectionCardinalityEstimator : CardinalityEstimatorCRTP<Injecti
  */
 struct M_EXPORT SpnEstimator : CardinalityEstimatorCRTP<SpnEstimator>
 {
-    using SpnFilter = Spn::Filter;
     using SpnIdentifier = std::pair<const char*, const char*>;
     using SpnJoin = std::pair<SpnIdentifier, SpnIdentifier>;
     using table_spn_map = std::unordered_map<const char*, std::reference_wrapper<const SpnWrapper>>;
@@ -336,20 +334,20 @@ struct M_EXPORT SpnEstimator : CardinalityEstimatorCRTP<SpnEstimator>
 
     private:
     ///> the map from every table to its respective Spn, initially empty
-    std::unordered_map<const char*, SpnWrapper> table_to_spn_;
+    std::unordered_map<const char*, SpnWrapper*> table_to_spn_;
     ///> the name of the database, the estimator is built on
     const char *name_of_database_;
 
     public:
     explicit SpnEstimator(const char *name_of_database) : name_of_database_(name_of_database) { }
 
+    ~SpnEstimator();
+
     /** Learn an Spn on every table in the database. Also used to initialize spns after data inserted in tables. */
-    void learn_spns() { table_to_spn_ = SpnWrapper::learn_spn_database(name_of_database_); }
+    void learn_spns();
 
     /** Add a new Spn for a table in the database. */
-    void learn_new_spn(const char* name_of_table) {
-        table_to_spn_.emplace(name_of_table, SpnWrapper::learn_spn_table(name_of_database_, name_of_table));
-    }
+    void learn_new_spn(const char *name_of_table);
 
     private:
     /** Function to compute which of the two join identifiers belongs to the given data model and which attribute to choose.

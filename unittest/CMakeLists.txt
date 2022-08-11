@@ -12,6 +12,7 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
         OptionsTest.cpp
 
         # util
+        util/AdjacencyMatrixTest.cpp
         util/ADTTest.cpp
         util/AlgorithmsTest.cpp
         util/AllocatorTest.cpp

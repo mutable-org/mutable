@@ -156,24 +156,24 @@ exit:
      * nodes in `source`. */
     void for_each_CSG_undirected(SmallBitset super, SmallBitset source, std::function<void(SmallBitset)> callback) const
     {
-        const SmallBitset X_super = SmallBitset((1UL << num_vertices_) - 1U) - super; // inverse of `super`
         source = source & super; // restrict sources to vertices in `super`
 
         std::deque<std::pair<SmallBitset, SmallBitset>> Q;
-        for (auto it = source.rbegin(); it != source.rend(); ++it) {
-            SmallBitset I = it.as_set();
+        for (auto it = source.begin(); it != source.end(); ++it) {
+            const SmallBitset I = it.as_set();
             M_insist(I.singleton());
-            Q.emplace_back(I, X_super | I.singleton_to_lo_mask()); // vertex i and excluding all "lower" vertices
+            Q.emplace_back(I, source & ~I.mask_to_lo()); // exclude larger sources
 
             while (not Q.empty()) {
-                auto [S, X] = Q.front();
+                auto [S, X_old] = Q.front();
                 Q.pop_front();
 
                 callback(S);
 
-                const SmallBitset N = neighbors(S) - X;
+                const SmallBitset N = (neighbors(S) & super) - X_old;
+                const SmallBitset X_new = X_old | N;
                 for (SmallBitset n = least_subset(N); bool(n); n = next_subset(n, N)) // enumerate 2^{neighbors of S}
-                    Q.emplace_back(S | n, X | N);
+                    Q.emplace_back(S | n, X_new);
             }
         }
     }
@@ -188,13 +188,12 @@ exit:
      * matrix is symmetric. */
     void for_each_CSG_pair_undirected(SmallBitset super, std::function<void(SmallBitset, SmallBitset)> callback) const {
         auto callback_CSG = [this, super, &callback](SmallBitset first) {
-            auto callback_partial = [&callback, first](SmallBitset second) { callback(first, second); };
-            const SmallBitset X_first = first | first.mask_to_lo();
-            const SmallBitset N_first = neighbors(first) - X_first;
-            for (auto it = N_first.begin(); it != N_first.end(); ++it) {
-                const SmallBitset n = it.as_set();
-                for_each_CSG_undirected(super - X_first - (N_first & n.singleton_to_lo_mask()), n, callback_partial);
-            }
+            auto callback_partial = [&callback, first](SmallBitset second) {
+                callback(first, second);
+            };
+            const SmallBitset N_first = neighbors(first) & super;
+            const SmallBitset super_second = (super - first) & first.hi().mask_to_lo();
+            for_each_CSG_undirected(super_second, N_first, callback_partial);
         };
         for_each_CSG_undirected(super, callback_CSG);
     }

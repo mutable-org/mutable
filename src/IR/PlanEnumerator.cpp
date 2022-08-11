@@ -233,82 +233,19 @@ struct DPsubOpt final : PlanEnumeratorCRTP<DPsubOpt>
  * DPccp
  *====================================================================================================================*/
 
-namespace {
-
-/** For each connected subgraph (csg) `S1` of `G`, enumerate all complement connected subgraphs,
- * i.e.\ all csgs of `G - S1` that are connected to `S1`. */
-template<typename PlanTable>
-void enumerate_cmp(const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF, PlanTable &PT,
-                   const CardinalityEstimator &CE, Subproblem S1)
-{
-    SmallBitset min = least_subset(S1); // node in `S1` with the lowest ID
-    Subproblem Bmin((uint64_t(min) << 1UL) - 1UL); // all nodes 'smaller' than `min`
-    Subproblem X(Bmin | S1); // exclude `S1` and all nodes with a lower ID than the smallest node in `S1`
-
-    Subproblem N = M.neighbors(S1) - X;
-    if (not N) return; // empty neighborhood
-
-    /* Process subgraphs in breadth-first order.  The queue contains pairs of connected subgraphs and the corresponding
-     * set of nodes to exclude. */
-    std::queue<std::pair<Subproblem, Subproblem>> Q;
-
-    for (std::size_t i = G.sources().size(); i != 0; --i) {
-        Subproblem vi(1UL << (i - 1));
-        if (not (vi & N)) continue; // `vi` is in neighborhood of `S1`
-        /* Compute exclude set. */
-        Subproblem excluded((1UL << i) - 1); // all nodes 'smaller' than the current node `vi`
-        Subproblem excluded_N = excluded & N; // only exclude nodes in the neighborhood of `S1`
-        Q.emplace(std::make_pair(vi, X | excluded_N));
-        while (not Q.empty()) {
-            auto [S, X] = Q.front();
-            Q.pop();
-            /* Update `PlanTable` with connected subgraph complement pair (S1, S). */
-            cnf::CNF condition; // TODO use join condition
-            PT.update(G, CE, CF, S1, S, condition);
-
-            Subproblem N = M.neighbors(S) - X;
-            /* Iterate over all subsets `sub` in `N` */
-            for (Subproblem sub(least_subset(N)); bool(sub); sub = Subproblem(next_subset(sub, N))) {
-                /* Connected subgraph `S` expanded by `sub` constitutes a new connected subgraph.  For each of those
-                 * connected subgraphs, do not consider the neighborhood `N` in addition to the existing set of excluded
-                 * nodes. */
-                Q.emplace(std::make_pair(S | sub, X | N));
-            }
-        }
-    }
-}
-
-}
-
 template<typename PlanTable>
 void DPccp::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const
 {
-    auto &sources = G.sources();
-    const std::size_t n = sources.size();
     const AdjacencyMatrix &M = G.adjacency_matrix();
     auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
+    const Subproblem All((1UL << G.num_sources()) - 1UL);
+    cnf::CNF condition; // TODO use join condition
 
-    /* Process subgraphs in breadth-first order.  The queue contains pairs of connected subgraphs and the corresponding
-     * set of nodes to exclude. */
-    std::queue<std::pair<Subproblem, Subproblem>> Q;
+    auto handle_CSG_pair = [&](const Subproblem left, const Subproblem right) {
+        PT.update(G, CE, CF, left, right, condition);
+    };
 
-    for (std::size_t i = n; i != 0; --i) {
-        /* For a given single node subgraph, the node itself and all nodes with a lower ID are excluded. */
-        Q.emplace(std::make_pair(Subproblem(1UL << (i - 1)), Subproblem ((1UL << i) - 1)));
-        while (not Q.empty()) {
-            auto [S, X] = Q.front();
-            Q.pop();
-            enumerate_cmp(G, M, CF, PT, CE, S);
-
-            Subproblem N = M.neighbors(S) - X;
-            /* Iterate over all subsets `sub` in `N` */
-            for (Subproblem sub(least_subset(N)); bool(sub); sub = Subproblem(next_subset(sub, N)))
-                /* Connected subgraph `S` expanded by `sub` constitutes a new connected subgraph.  For each of those
-                 * connected subgraphs, do not consider the neighborhood `N` in addition to the existing set of excluded
-                 * nodes. */
-                Q.emplace(std::make_pair(S | sub, X | N));
-        }
-    }
+    M.for_each_CSG_pair_undirected(All, handle_CSG_pair);
 }
 
 

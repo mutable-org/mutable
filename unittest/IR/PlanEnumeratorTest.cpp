@@ -1,5 +1,6 @@
 #include "catch2/catch.hpp"
 
+#include <iostream>
 #include <mutable/catalog/Catalog.hpp>
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/catalog/CostFunctionCout.hpp>
@@ -215,18 +216,17 @@ WHERE A.id = C.aid AND A.id = D.aid AND B.id = D.bid AND C.id = D.cid;";
 
     SECTION("DPccp")
     {
-        make_entry(A, C);
-        make_entry(A, D);
-        make_entry(B, D);
+        make_entry(C, A);
+        make_entry(D, A);
+        make_entry(D, B);
+        make_entry(D, C);
         make_entry(A|D, B);
-        make_entry(C, D);
-        make_entry(A|C, D);
-        make_entry(B, C|D);
-        make_entry(A|C, B|D);
+        make_entry(D, A|C);
+        make_entry(C|D, B);
+        make_entry(B|D, A|C);
 
-        auto &PE = Catalog::Get().plan_enumerator("DPsizeOpt");
-        DPccp dp_ccp;
-        dp_ccp(G, C_out, plan_table);
+        auto &PE = Catalog::Get().plan_enumerator("DPccp");
+        PE(G, C_out, plan_table);
         REQUIRE(expected == plan_table);
     }
 

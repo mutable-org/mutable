@@ -206,30 +206,28 @@ void DSVReader::operator()(Const<Date>&)
     buf.clear();
     buf.push_back('d');
     buf.push_back('\'');
-    bool invalid = false;
 
     const bool has_quote = accept(quote_);
-#define DIGITS(num) for (auto i = 0; i < num; ++i) if (is_dec(c)) push(); else invalid = true;
+#define DIGITS(num) for (auto i = 0; i < num; ++i) if (is_dec(c)) push(); else goto invalid;
     if ('-' == c) push();
     DIGITS(4);
-    if ('-' == c) push(); else invalid = true;
+    if ('-' == c) push(); else goto invalid;
     DIGITS(2);
-    if ('-' == c) push(); else invalid = true;
+    if ('-' == c) push(); else goto invalid;
     DIGITS(2);
 #undef DIGITS
-    if (has_quote)
-        invalid |= not accept(quote_);
+    if (has_quote and not accept(quote_))
+        goto invalid;
 
-    if (invalid) {
-        diag.e(pos) << "WARNING: Invalid date.\n";
-        tup.null(col_idx);
-    } else {
-        buf.push_back('\'');
-        buf.push_back(0);
+    buf.push_back('\'');
+    buf.push_back(0);
 
-        auto val = Interpreter::eval(Constant(Token(pos, &buf[0], TK_DATE)));
-        tup.set(col_idx, val);
-    }
+    tup.set(col_idx, Interpreter::eval(Constant(Token(pos, &buf[0], TK_DATE))));
+    return;
+
+invalid:
+    diag.e(pos) << "WARNING: Invalid date.\n";
+    tup.null(col_idx);
 }
 
 void DSVReader::operator()(Const<DateTime>&)
@@ -237,36 +235,33 @@ void DSVReader::operator()(Const<DateTime>&)
     buf.clear();
     buf.push_back('d');
     buf.push_back('\'');
-    bool invalid = false;
 
     const bool has_quote = accept(quote_);
-#define DIGITS(num) for (auto i = 0; i < num; ++i) if (is_dec(c)) push(); else invalid = true;
+#define DIGITS(num) for (auto i = 0; i < num; ++i) if (is_dec(c)) push(); else goto invalid;
     if ('-' == c) push();
     DIGITS(4);
-    if ('-' == c) push(); else invalid = true;
+    if ('-' == c) push(); else goto invalid;
     DIGITS(2);
-    if ('-' == c) push(); else invalid = true;
+    if ('-' == c) push(); else goto invalid;
     DIGITS(2);
-    if (' ' == c) push(); else invalid = true;
+    if (' ' == c) push(); else goto invalid;
     DIGITS(2);
-    if (':' == c) push(); else invalid = true;
+    if (':' == c) push(); else goto invalid;
     DIGITS(2);
-    if (':' == c) push(); else invalid = true;
+    if (':' == c) push(); else goto invalid;
     DIGITS(2);
 #undef DIGITS
-    if (has_quote)
-        invalid |= not accept(quote_);
+    if (has_quote and not accept(quote_))
+        goto invalid;
 
-    if (invalid) {
-        diag.e(pos) << "WARNING: Invalid datetime.\n";
-        tup.null(col_idx);
-    } else {
-        buf.push_back('\'');
-        buf.push_back(0);
+    buf.push_back('\'');
+    buf.push_back(0);
+    tup.set(col_idx, Interpreter::eval(Constant(Token(pos, &buf[0], TK_DATE_TIME))));
+    return;
 
-        auto val = Interpreter::eval(Constant(Token(pos, &buf[0], TK_DATE_TIME)));
-        tup.set(col_idx, val);
-    }
+invalid:
+    diag.e(pos) << "WARNING: Invalid datetime.\n";
+    tup.null(col_idx);
 }
 
 void DSVReader::operator()(Const<Numeric> &ty)

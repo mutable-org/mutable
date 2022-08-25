@@ -713,7 +713,7 @@ TEST_CASE("DSVReader::operator() sanity tests", "[core][io][unit]")
 
         R(in, "stringstream_in");
 
-        REQUIRE(diag.num_errors() == 2);
+        REQUIRE(diag.num_errors() == 1);
         REQUIRE(table.store().num_rows() == 3);
 
         Schema S;
@@ -724,11 +724,13 @@ TEST_CASE("DSVReader::operator() sanity tests", "[core][io][unit]")
         W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().linearization()));
         Tuple *args[] = { &tup };
         (*W)(args);
-        REQUIRE(tup.is_null(0));
+        REQUIRE(not tup.is_null(0));
+        REQUIRE(tup.get(0).as<int64_t>() == 1033473UL);
         (*W)(args);
         REQUIRE(tup.is_null(0));
         (*W)(args);
-        REQUIRE(tup.get(0).as<int64_t>() == 1033473);
+        REQUIRE(not tup.is_null(0));
+        REQUIRE(tup.get(0).as<int64_t>() == 1033473UL);
     }
 
     SECTION("Const<DateTime>&")

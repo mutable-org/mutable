@@ -138,7 +138,13 @@ unittest:linux-amd64:
     needs:
         - job: "build:debug:linux-amd64"
           artifacts: true
-    script: env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 build/debug/bin/unittest \[core\]
+    script: env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 build/debug/bin/unittest --reporter junit --out unittest-results.xml '[core]'
+    artifacts:
+        when: always
+        paths:
+            - unittest-results.xml
+        reports:
+            junit: unittest-results.xml
 
 unittest:macos-amd64:
     stage: test
@@ -148,7 +154,13 @@ unittest:macos-amd64:
     needs:
         - job: "build:debug:macos-amd64"
           artifacts: true
-    script: env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 build/debug/bin/unittest \[core\]
+    script: env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 build/debug/bin/unittest --reporter junit --out unittest-results.xml '[core]'
+    artifacts:
+        when: always
+        paths:
+            - unittest-results.xml
+        reports:
+            junit: unittest-results.xml
 
 integrationtest:linux-amd64:
     stage: test

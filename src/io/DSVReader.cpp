@@ -112,6 +112,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
                 }
                 col_idx = col->id;
                 (*this)(*col->type); // dynamic dispatch based on column type
+                discard_cell(); // discard remainder of the cell
             } else {
                 discard_cell();
             }

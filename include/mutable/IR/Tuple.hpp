@@ -235,7 +235,7 @@ struct M_EXPORT Tuple
     /** Assigns the `Value` `val` to this `Tuple` at index `idx` and clears the respective `NULL` bit. */
     void set(std::size_t idx, Value val) {
         INBOUNDS(idx);
-        null_mask_(idx) = false;
+        not_null(idx);
         values_[idx] = val;
     }
 
@@ -258,7 +258,7 @@ struct M_EXPORT Tuple
     /** Returns a reference to the `Value` at index `idx`.  Must not be `NULL`. */
     Value & get(std::size_t idx) {
         INBOUNDS(idx);
-        M_insist(not null_mask_(idx), "Value must not be NULL");
+        M_insist(not is_null(idx), "Value must not be NULL");
         return values_[idx];
     }
 #undef INBOUNDS

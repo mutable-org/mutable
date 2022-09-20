@@ -3,13 +3,13 @@
 
 namespace glyphs {
 
-constexpr auto CHEVRON_RIGHT    = u8"\uf054"; // 
-constexpr auto TRIANGLE_RIGHT   = u8"\uf44a"; // 
-constexpr auto DATABASE         = u8"\uf6b7"; // 
-constexpr auto LIGHTNING        = u8"\ue00a"; // 
-constexpr auto ELECTRON         = u8"\ue62e"; // 
-constexpr auto RIGHT            = u8"\ue0b0"; // 
+constexpr auto CHEVRON_RIGHT    = "\uf054"; // 
+constexpr auto TRIANGLE_RIGHT   = "\uf44a"; // 
+constexpr auto DATABASE         = "\uf6b7"; // 
+constexpr auto LIGHTNING        = "\ue00a"; // 
+constexpr auto ELECTRON         = "\ue62e"; // 
+constexpr auto RIGHT            = "\ue0b0"; // 
 //  ﱦ  
-constexpr auto CLOCK_FAST       = u8"\uf651"; // 
+constexpr auto CLOCK_FAST       = "\uf651"; // 
 
 }

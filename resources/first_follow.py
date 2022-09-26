@@ -6,7 +6,7 @@ import sys
 
 import requests
 
-LEX_BINARY = os.path.join(os.path.dirname(sys.argv[0]), '../build/debug/bin/lex')
+LEX_BINARY = os.path.join(os.path.dirname(sys.argv[0]), '../build/release-static/bin/lex')
 FOLLOW_SET_TABLE = os.path.join(os.path.dirname(sys.argv[0]), '../src/tables/FollowSet.tbl')
 
 
@@ -232,11 +232,15 @@ def followSet(G: dict, Fi: dict):
             if rhs[i][0] == 'REPETITION':
                 rule2(rhs[i][1], rhs[i][1])
             if i + offset < len(rhs):
-                rule2(rhs[i], rhs[i + offset])
-                if type(rhs[i + offset]) is tuple \
-                        and (rhs[i + offset][0] == 'OPTIONAL' or rhs[i + offset][0] == 'REPETITION'):
-                    offset += 1
-                    continue
+                if type(rhs[i]) is list and type(rhs[i + offset]):  # expressions seperated by OR-Operator
+                    follow(rhs[i], lhs)
+                    follow(rhs[i + offset], lhs)
+                else:
+                    rule2(rhs[i], rhs[i + offset])
+                    if type(rhs[i + offset]) is tuple \
+                            and (rhs[i + offset][0] == 'OPTIONAL' or rhs[i + offset][0] == 'REPETITION'):
+                        offset += 1
+                        continue
             elif lhs is not None:
                 rule3(lhs, rhs[i])
             i += 1

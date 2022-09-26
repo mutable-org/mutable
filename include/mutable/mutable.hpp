@@ -48,8 +48,14 @@ bool M_EXPORT init(void);
 /** Use lexer, parser, and semantic analysis to create a `Stmt` from `str`. */
 std::unique_ptr<Stmt> M_EXPORT statement_from_string(Diagnostic &diag, const std::string &str);
 
+/** Use lexer and parser to create an `Instruction` from `str`. */
+std::unique_ptr<Instruction> M_EXPORT instruction_from_string(Diagnostic &diag, const std::string &str);
+
 /** Optimizes and executes the given `Stmt`. */
 void M_EXPORT execute_statement(Diagnostic &diag, const Stmt &stmt);
+
+/** Executes the given `Instruction`. */
+void M_EXPORT execute_instruction(Diagnostic &diag, const Instruction &instruction);
 
 /** Optimizes and executes the given `SelectStmt`.  Result tuples are passed to the given `consumer`. */
 void M_EXPORT execute_query(Diagnostic &diag, const SelectStmt &stmt, std::unique_ptr<Consumer> consumer);

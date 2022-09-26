@@ -120,7 +120,22 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
 
     while (parser.token()) {
         Timer &timer = C.timer();
-        auto stmt = parser.parse();
+        auto command = parser.parse();
+        Stmt *stmt = nullptr;
+        if (is<Instruction>(command)) {
+            auto instruction = cast<Instruction>(command);
+            auto instruction_name = instruction->name;
+
+            try {
+                auto &concrete_instruction = C.instruction(instruction_name);
+                concrete_instruction.execute_instruction(instruction->args, diag);
+            } catch (const std::exception &e) {
+                diag.err() << "Instruction " << instruction_name << " does not exist.\n";
+            }
+
+            goto next;
+        }
+        stmt = cast<Stmt>(command);
         if (Options::Get().echo)
             std::cout << *stmt << std::endl;
         if (diag.num_errors() != num_errors) goto next;
@@ -299,7 +314,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
         }
 next:
         num_errors = diag.num_errors();
-        delete stmt;
+        delete command;
 
         if (Options::Get().times) {
             using namespace std::chrono;

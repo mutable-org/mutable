@@ -88,6 +88,8 @@ after:
             case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
                 UNDO('.');
                 return read_number(););
+        case '\\':
+            return read_instruction();
 
 #undef LEX
 #undef GUESS
@@ -262,4 +264,12 @@ Token Lexer::read_date_or_datetime()
     }
 
     return Token(start_, str, datetime ? TK_DATE_TIME : TK_DATE);
+}
+
+Token Lexer::read_instruction()
+{
+    step(); // initial '\'
+    while (';' != c_ and EOF != c_)
+        push();
+    return Token(start_, internalize(), TK_INSTRUCTION);
 }

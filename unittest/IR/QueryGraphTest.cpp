@@ -30,7 +30,7 @@ Stmt * get_Stmt(const char *sql) {
     LEXER(sql);
     Parser parser(lexer);
     Sema sema(diag);
-    auto stmt = parser.parse();
+    auto stmt = parser.parse_Stmt();
     sema(*stmt);
     if (diag.num_errors() != 0) {
         std::cout << out.str() << std::endl;

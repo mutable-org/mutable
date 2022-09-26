@@ -3,6 +3,7 @@
 #include <cerrno>
 #include <cstdlib>
 #include <initializer_list>
+#include <mutable/catalog/Catalog.hpp>
 #include <mutable/catalog/Schema.hpp>
 #include <utility>
 
@@ -81,7 +82,46 @@ const Parser::follow_set_t follow_set_##NAME = make_follow_set SET ;
 
 }
 
-Stmt * Parser::parse()
+Command * Parser::parse()
+{
+    if (token().type == TK_INSTRUCTION)
+        return parse_Instruction();
+    else
+        return parse_Stmt();
+}
+
+Instruction * Parser::parse_Instruction()
+{
+    auto &C = Catalog::Get();
+    Token tok = token();
+    if (not expect(TK_INSTRUCTION)) {
+        recover(follow_set_COMMAND);
+    }
+
+    std::string_view instruction_text(tok.text);
+    const char *delimiter = " \n";
+
+    const char *instruction_name;
+    std::vector<const char*> args;
+
+    std::string::size_type start = 0;
+    std::string::size_type end = instruction_text.find_first_of(delimiter);
+    instruction_name = C.pool(instruction_text.substr(start, end - start));
+    start = instruction_text.find_first_not_of(delimiter, end);
+    end = instruction_text.find_first_of(delimiter, start);
+    while (start != std::string::npos) {
+        if (end == std::string::npos) { end = instruction_text.length(); }
+
+        args.emplace_back(C.pool(instruction_text.substr(start, end - start)));
+        start = instruction_text.find_first_not_of(delimiter, end);
+        end = instruction_text.find_first_of(delimiter, start);
+    }
+
+    if (not expect(TK_SEMICOL)) { recover(follow_set_COMMAND); };
+    return new Instruction(tok, instruction_name, std::move(args));
+}
+
+Stmt * Parser::parse_Stmt()
 {
     Stmt *stmt = nullptr;
     switch (token().type) {

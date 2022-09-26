@@ -92,7 +92,7 @@ int main(int argc, const char **argv)
         Sema sema(diag);
 
         while (parser.token()) {
-            auto stmt = parser.parse();
+            auto stmt = parser.parse_Stmt();
             if (diag.num_errors()) {
                 diag.clear();
                 delete stmt;

@@ -133,6 +133,10 @@ TEST_CASE("Lexer::next()", "[core][lex][unit]")
             { "d'0099-17-49 29:93:67'", TK_DATE_TIME, "d'0099-17-49 29:93:67'", TK_EOF },
             { "date'2021-01-29 12:17:49'", TK_IDENTIFIER, "date", TK_ERROR },
             { "d2021-01-29 12:17:49'", TK_IDENTIFIER, "d2021", TK_MINUS },
+
+            /* instructions */
+            { "\\instr", TK_INSTRUCTION, "instr", TK_EOF },
+            { "\\instr arg1\narg2", TK_INSTRUCTION, "instr arg1\narg2", TK_EOF },
         };
 
         for (auto e : expr) {

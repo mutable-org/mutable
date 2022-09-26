@@ -540,13 +540,38 @@ struct M_EXPORT ReferenceConstraint : Constraint
 M_DECLARE_VISITOR(ASTConstraintVisitor, Constraint, M_AST_CONSTRAINT_LIST)
 M_DECLARE_VISITOR(ConstASTConstraintVisitor, const Constraint, M_AST_CONSTRAINT_LIST)
 
+/*======================================================================================================================
+ * Command
+ *====================================================================================================================*/
+
+struct M_EXPORT Command
+{
+    virtual ~Command() = default;
+};
+
+/*======================================================================================================================
+ * Instruction
+ *====================================================================================================================*/
+
+struct M_EXPORT Instruction : Command
+{
+    Token tok;
+    const char *name;
+    std::vector<const char*> args;
+
+    Instruction(Token tok, const char *name, std::vector<const char*> args)
+        : tok(tok)
+        , name(name)
+        , args(std::move(args))
+    { }
+};
 
 /*======================================================================================================================
  * Statements
  *====================================================================================================================*/
 
 /** A SQL statement. */
-struct M_EXPORT Stmt
+struct M_EXPORT Stmt : Command
 {
     virtual ~Stmt() { }
 

@@ -67,7 +67,9 @@ struct Parser
 
     void recover(const follow_set_t &FS) { while (not FS[token().type]) consume(); }
 
-    Stmt * parse();
+    Command * parse();
+    Instruction * parse_Instruction();
+    Stmt * parse_Stmt();
 
     /* Statements */
     Stmt * parse_CreateDatabaseStmt();

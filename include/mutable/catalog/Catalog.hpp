@@ -3,6 +3,7 @@
 #include <memory>
 #include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/CostFunction.hpp>
+#include <mutable/catalog/DatabaseCommand.hpp>
 #include <mutable/catalog/Schema.hpp>
 #include <mutable/IR/PlanEnumerator.hpp>
 #include <mutable/util/ArgParser.hpp>
@@ -207,6 +208,8 @@ struct M_EXPORT Catalog
 
     /** Creates an internalized copy of the string `str` by adding it to the internal `StringPool`. */
     const char * pool(const char *str) const { return pool_(str); }
+    /** Creates an internalized copy of the string `str` by adding it to the internal `StringPool`. */
+    const char * pool(std::string_view str) const { return pool_(str); }
 
     /*===== Database =================================================================================================*/
     /** Creates a new `Database` with the given `name`. */
@@ -249,6 +252,7 @@ struct M_EXPORT Catalog
     ComponentSet<PlanEnumerator> plan_enumerators_;
     ComponentSet<Backend> backends_;
     ComponentSet<CostFunction> cost_functions_;
+    ComponentSet<DatabaseInstruction> instructions_;
 
     public:
     /*===== Stores ===================================================================================================*/
@@ -383,6 +387,24 @@ struct M_EXPORT Catalog
     auto cost_functions_end()    const { return cost_functions_.end(); }
     auto cost_functions_cbegin() const { return cost_functions_begin(); }
     auto cost_functions_cend()   const { return cost_functions_end(); }
+
+    /*===== Instructions =============================================================================================*/
+    /** Registers a new `DatabaseCommand` with the given `name`. */
+    void register_instruction(const char *name,
+                              std::unique_ptr<DatabaseInstruction> I,
+                              const char *description = nullptr)
+    {
+        instructions_.add(pool(name), Component<DatabaseInstruction>(description, std::move(I)));
+    }
+    /** Returns a reference to the `DatabaseCommand` with the given `name`. */
+    DatabaseInstruction & instruction(const char *name) const { return instructions_.get(pool(name)); }
+
+    auto instructions_begin() { return instructions_.begin(); }
+    auto instructions_end() { return instructions_.end(); }
+    auto instructions_begin() const { return instructions_.begin(); }
+    auto instructions_end() const { return instructions_.end(); }
+    auto instructions_cbegin() const { return instructions_.begin(); }
+    auto instructions_cend() const { return instructions_.end(); }
 };
 
 }

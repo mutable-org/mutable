@@ -82,7 +82,7 @@ int main(int argc, const char **argv)
     ASTPrinter printer(std::cout);
 
     while (parser.token()) {
-        auto stmt = parser.parse();
+        auto stmt = parser.parse_Stmt();
         if (ast) {
             stmt->dump(std::cout);
         } else {

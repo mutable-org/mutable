@@ -34,6 +34,12 @@ struct StringPool
         }
         return *it;
     }
+
+    const char * operator()(std::string_view str) {
+        auto temp_str = std::string(str);
+        auto c_str = temp_str.c_str();
+        return operator()(c_str);
+    }
 };
 
 }

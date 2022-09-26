@@ -24,6 +24,7 @@ inline char const * get_name(const TokenType tt)
         case TK_STRING_LITERAL: return "string-literal";
         case TK_DATE:           return "date";
         case TK_DATE_TIME:      return "datetime";
+        case TK_INSTRUCTION:    return "instruction";
 
         case TK_OCT_INT:
         case TK_DEC_INT:

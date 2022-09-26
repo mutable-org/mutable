@@ -1474,12 +1474,12 @@ TEST_CASE("Parser::parse_ImportStmt() sanity tests", "[core][parse][unit]")
 }
 
 /*======================================================================================================================
- * Test Parser::parse().
+ * Test Parser::parse_Stmt().
  *====================================================================================================================*/
 
-TEST_CASE("Parser::parse()", "[core][parse][unit]")
+TEST_CASE("Parser::parse_Stmt()", "[core][parse][unit]")
 {
-    auto parse = [](Parser &p) { return p.parse(); };
+    auto parse = [](Parser &p) { return p.parse_Stmt(); };
 
     {
         test_triple_t triple = { ";", ";", TK_EOF };
@@ -1527,7 +1527,7 @@ TEST_CASE("Parser::parse()", "[core][parse][unit]")
     }
 }
 
-TEST_CASE("Parser::parse() sanity tests", "[core][parse][unit]")
+TEST_CASE("Parser::parse_Stmt() sanity tests", "[core][parse][unit]")
 {
     SECTION("underlying errors")
     {
@@ -1545,7 +1545,7 @@ TEST_CASE("Parser::parse() sanity tests", "[core][parse][unit]")
         for (auto s : statements) {
             LEXER(s);
             Parser parser(lexer);
-            auto ast = parser.parse();
+            auto ast = parser.parse_Stmt();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
@@ -1565,7 +1565,7 @@ TEST_CASE("Parser::parse() sanity tests", "[core][parse][unit]")
         for (auto s : statements) {
             LEXER(s);
             Parser parser(lexer);
-            auto ast = parser.parse();
+            auto ast = parser.parse_Stmt();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
@@ -1574,6 +1574,128 @@ TEST_CASE("Parser::parse() sanity tests", "[core][parse][unit]")
                 std::cerr << "Input \"" << s << "\" is not parsed as ErrorStmt" << std::endl;
             CHECK(is<ErrorStmt>(ast));
             delete ast;
+        }
+    }
+}
+
+/*======================================================================================================================
+ * Test Parser::parse_Instruction().
+ *====================================================================================================================*/
+
+TEST_CASE("Parser::parse_Instruction()", "[core][parse][unit]")
+{
+    std::pair<const char*, Instruction> instruction_pairs[] = {
+            /* { instruction, expected resulting instruction } */
+
+            { "\\instr;", Instruction(Token(), "instr", {}) },
+            { "\\instr\n ;", Instruction(Token(), "instr", {}) },
+            { "\\instr arg1;", Instruction(Token(), "instr", {"arg1"}) },
+            { "\\instr arg1\n;", Instruction(Token(), "instr", {"arg1"}) },
+            { "\\instr arg1 ;", Instruction(Token(), "instr", {"arg1"}) },
+            { "\\instr\narg1;", Instruction(Token(), "instr", {"arg1"}) },
+            { "\\instr arg1 arg2;", Instruction(Token(), "instr", {"arg1", "arg2"}) },
+            { "\\instr arg1\narg2;", Instruction(Token(), "instr", {"arg1", "arg2"}) },
+            { "\\instr\narg1\n  arg2;", Instruction(Token(), "instr", {"arg1", "arg2"}) },
+            { "\\instr arg1 arg2 arg3;", Instruction(Token(), "instr", {"arg1", "arg2", "arg3"}) },
+            { "\\instr \narg1 arg2\n   arg3  ;", Instruction(Token(), "instr", {"arg1", "arg2", "arg3"}) }
+    };
+
+    for (const auto &test_pair : instruction_pairs) {
+        LEXER(test_pair.first);
+        Parser parser(lexer);
+        auto instruction = parser.parse_Instruction();
+        CHECK(instruction->name == C.pool(test_pair.second.name));
+        CHECK(instruction->args.size() == test_pair.second.args.size());
+        for (std::size_t i = 0; i < instruction->args.size(); ++i) {
+            CHECK(instruction->args[i] == C.pool(test_pair.second.args[i]));
+        }
+        delete instruction;
+
+        CHECK(diag.num_errors() == 0);
+        CHECK(err.str().empty());
+        if (diag.num_errors()) {
+            std::cerr << "ERROR for input \"" << test_pair.first << "\": " << err.str() << std::endl;
+            return;
+        }
+
+        auto tok = parser.token();
+        CHECK(tok == TK_EOF);
+        if (tok != TK_EOF) {
+            std::cerr << "Expected next token " << TK_EOF << ", got " << tok << " for input \"" << test_pair.first
+                      << "\"" << std::endl;
+        }
+    }
+}
+
+TEST_CASE("Parser::parse_Instruction() sanity tests", "[core][parse][unit]")
+{
+    SECTION("errors")
+    {
+        const char * instructions[] = {
+            "",
+            "\\instr",
+            "\\instr\n ",
+            "\\instr arg1\n",
+            "\\instr arg1 arg2",
+            "\\instr \narg1 arg2\n   arg3  ",
+            "instr arg1;",
+            "/instr ;"
+        };
+
+        for (auto instruction_text : instructions) {
+            LEXER(instruction_text);
+            Parser parser(lexer);
+            auto instruction = parser.parse_Instruction();
+            if (diag.num_errors() == 0)
+                std::cerr << "UNEXPECTED PASS for input \"" << instruction_text << '"' << std::endl;
+            CHECK(diag.num_errors() > 0);
+            CHECK_FALSE(err.str().empty());
+            delete instruction;
+        }
+    }
+}
+
+/*======================================================================================================================
+ * Test Parser::parse().
+ *====================================================================================================================*/
+
+TEST_CASE("Parser::parse()", "[core][parse][unit]")
+{
+    SECTION("instructions")
+    {
+        const char * instructions[] = {
+            "\\instr;",
+            "\\instr arg1\n;",
+            "\\instr \narg1 arg2\n   arg3  ;"
+        };
+
+        for (auto instruction_text : instructions) {
+            LEXER(instruction_text);
+            Parser parser(lexer);
+            auto command = parser.parse();
+            CHECK(diag.num_errors() == 0);
+            CHECK(err.str().empty());
+            CHECK(is<Instruction>(command));
+            delete command;
+        }
+    }
+
+    SECTION("statements")
+    {
+        const char * statements[] = {
+            "SELECT * FROM A;",
+            "UPDATE A SET key = 17;",
+            "CREATE TABLE A ( key INT(32) );"
+        };
+
+        for (auto stmt : statements) {
+            LEXER(stmt);
+            Parser parser(lexer);
+            auto command = parser.parse();
+            CHECK(diag.num_errors() == 0);
+            CHECK(err.str().empty());
+            CHECK(is<Stmt>(command));
+            delete command;
         }
     }
 }

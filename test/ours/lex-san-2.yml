@@ -1,6 +1,6 @@
 description: Lexer sanity check.
 db: ours
-query: '\xff' # ÿ
+query: '^'
 required: YES
 
 stages:

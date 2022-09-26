@@ -5,6 +5,7 @@ add_library(
     CostFunctionCout.cpp
     Catalog.cpp
     CostModel.cpp
+    DatabaseCommand.cpp
     Schema.cpp
     SpnWrapper.cpp
     TrainedCostFunction.cpp

@@ -108,6 +108,7 @@ struct Lexer
     Token read_number();
     Token read_string_literal();
     Token read_date_or_datetime();
+    Token read_instruction();
 };
 
 }

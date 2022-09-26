@@ -26,7 +26,7 @@ std::unique_ptr<Stmt> m::statement_from_string(Diagnostic &diag, const std::stri
     std::istringstream in(str);
     Lexer lexer(diag, C.get_pool(), "-", in);
     Parser parser(lexer);
-    auto stmt = M_TIME_EXPR(std::unique_ptr<Stmt>(parser.parse()), "Parse the statement", C.timer());
+    auto stmt = M_TIME_EXPR(std::unique_ptr<Stmt>(parser.parse_Stmt()), "Parse the statement", C.timer());
     if (diag.num_errors() != 0)
         throw frontend_exception("syntactic error in statement");
     M_insist(diag.num_errors() == 0);
@@ -38,6 +38,22 @@ std::unique_ptr<Stmt> m::statement_from_string(Diagnostic &diag, const std::stri
     M_insist(diag.num_errors() == 0);
 
     return stmt;
+}
+
+std::unique_ptr<Instruction> m::instruction_from_string(Diagnostic &diag, const std::string &str)
+{
+    Catalog &C = Catalog::Get();
+
+    std::istringstream in(str);
+    Lexer lexer(diag, C.get_pool(), "-", in);
+    Parser parser(lexer);
+    auto instruction =
+            M_TIME_EXPR(std::unique_ptr<Instruction>(parser.parse_Instruction()), "Parse the instruction", C.timer());
+    if (diag.num_errors() != 0)
+        throw frontend_exception("syntactic error in instruction");
+    M_insist(diag.num_errors() == 0);
+
+    return instruction;
 }
 
 void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
@@ -142,6 +158,21 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
     std::cerr.flush();
 }
 
+void m::execute_instruction(Diagnostic &diag, const Instruction &instruction)
+{
+    diag.clear();
+    Catalog &C = Catalog::Get();
+
+    auto instruction_name = instruction.name;
+
+    try {
+        auto &concrete_instruction = C.instruction(instruction_name);
+        concrete_instruction.execute_instruction(instruction.args, diag);
+    } catch (const std::exception &e) {
+        diag.e(instruction.tok.pos) << "Instruction " << instruction_name << " does not exist.\n";
+    }
+}
+
 void m::execute_query(Diagnostic&, const SelectStmt &stmt, std::unique_ptr<Consumer> consumer)
 {
     Catalog &C = Catalog::Get();
@@ -197,11 +228,17 @@ void m::execute_file(Diagnostic &diag, const std::filesystem::path &path)
     Sema sema(diag);
 
     while (parser.token()) {
-        auto stmt = std::unique_ptr<Stmt>(parser.parse());
+        auto command = parser.parse();
         if (diag.num_errors()) return;
-        sema(*stmt);
-        if (diag.num_errors()) return;
-        execute_statement(diag, *stmt);
+        if (is<Instruction>(command)) {
+            auto instruction = cast<Instruction>(command);
+            execute_instruction(diag, *instruction);
+        } else {
+            auto stmt = cast<Stmt>(command);
+            sema(*stmt);
+            if (diag.num_errors()) return;
+            execute_statement(diag, *stmt);
+        }
     }
 }
 

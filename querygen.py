@@ -1,16 +1,13 @@
 #!env python3
 
 import argparse
+import easygraph as eg
 import io
 import itertools
 import sys
 
 
 DATABASE = 'db'
-RELATION_SIZE_MIN = 10
-RELATION_SIZE_MAX = 100
-JOIN_SELECTIVITY_MIN = .01
-JOIN_SELECTIVITY_MAX = .1
 
 
 #=======================================================================================================================
@@ -123,23 +120,55 @@ def write_clique_query(file: io.TextIOBase, relations: list):
 
     print(';', file=file)
 
+#===== Thinned-out clique ==============================================================================================
+
+def gen_graph(num_nodes :int, num_edges :int):
+    assert num_edges + 1 >= num_nodes, 'graph would be disconnected'
+    G = eg.Graph()
+
+    # Create nodes
+    for i in range(num_nodes):
+        G.add_node(i, node_attr = { 'name': f'R{i}' })
+
+    # Create edges of clique
+    for i in range(num_nodes - 1):
+        for j in range(i+1, num_nodes):
+            G.add_edge(i, j)
+
+    print(G.edges)
+
+    # TODO thin out clique
+
+    return G
+
+def write_thinned_clique():
+    pass
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generate problem statements in form of a SQL query and a JSON '
                                                  'specification of cardinalities of subproblems.')
     parser.add_argument('-n', help='Number of relations in the problem', dest='num_relations', type=int, default=3,
                         metavar='N')
-    parser.add_argument('-t', help='Type of problem (chain, cycle, star, clique)', dest='query_type', default='chain',
-                        action='store', metavar='TYPE')
+    parser.add_argument('-t', help='Type of problem (chain, cycle, star, clique)',
+                        dest='query_type', default='chain', action='store', metavar='TYPE')
     parser.add_argument('--count', help='Repeat query multiple times', dest='count', type=int, default=1,
                         metavar='COUNT')
+    parser.add_argument('--thinning', help='Number of edges to remove from a clique', dest='num_thinning', type=int,
+                        default=0, metavar='N')
     args = parser.parse_args()
 
-    try:
-        write_schema = globals()[f'write_{args.query_type}_schema']
-        write_query  = globals()[f'write_{args.query_type}_query']
-    except KeyError:
-        print(f'Unsupported query type "{args.query_type}".', file=sys.stderr)
-        sys.exit(1)
+    write_schema = globals()[f'write_{args.query_type}_schema']
+
+    if args.num_thinning != 0:
+        gen_graph(args.num_relations, args.num_relations**2 - args.num_thinning)
+        write_query = write_thinned_clique
+        pass
+    else:
+        try:
+            write_query  = globals()[f'write_{args.query_type}_query']
+        except KeyError:
+            print(f'Unsupported query type "{args.query_type}".', file=sys.stderr)
+            sys.exit(1)
 
     filename_base = f'{args.query_type}-{args.num_relations}'
     schema_filename = f'{filename_base}.schema.sql'

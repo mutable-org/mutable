@@ -223,7 +223,7 @@ do
             do
                 if [ ${PLANNER_TIME_OUTS[${PLANNER}]} -ge ${MAX_TIMEOUTS_PER_CONFIG} ];
                 then
-                    >&2 echo "  \` Skipping configuration '${PLANNER}' because of too many timeouts."
+                    >&2 echo '  `'" Skipping configuration '${PLANNER}' because of too many timeouts."
                     continue
                 fi
 
@@ -267,11 +267,11 @@ do
 
                 if [ ${TIMEOUT_RET} -eq 124 ] || [ ${TIMEOUT_RET} -eq 137 ]; # timed out
                 then
-                    >&2 echo "  \` Configuration '${PLANNER}' timed out."
+                    >&2 echo '  `'" Configuration '${PLANNER}' timed out."
                     ((PLANNER_TIME_OUTS[${PLANNER}]++)) # increment number of timeouts
                 elif [ ${ERR} -ne 0 ];
                 then
-                    >&2 echo "  \` Unexpected termination: ERR=${ERR}, PIPESTATUS=(${SAVED_PIPESTATUS[@]}), configuration '${PLANNER}':"
+                    >&2 echo '  `'" Unexpected termination: ERR=${ERR}, PIPESTATUS=(${SAVED_PIPESTATUS[@]}), configuration '${PLANNER}':"
                     >&2 cat << EOF
 timeout --signal=TERM --kill-after=3s ${TIMEOUT} taskset -c 2 ${BIN} \
 --quiet --dryrun --times \

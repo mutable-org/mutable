@@ -53,7 +53,6 @@ def compute_graph_density(G :eg.Graph):
 
 def compute_graph_skew(G :eg.Graph):
     degrees = sorted(list(G.degree().values()))
-    #  print(f'Degrees: {degrees}')
     try:
         with warnings.catch_warnings():
             warnings.simplefilter('error') # turn warnings into errors
@@ -190,15 +189,11 @@ def gen_thinned_clique(num_nodes :int, num_thinning :int):
     # Remove edges from clique
     for i in range(num_thinning):
         edges = set([(e[0], e[1]) for e in G.edges])
-        #  print(f'Edges:   {sorted(edges)}')
-        #  bridges = set(eg.bridges(G))
         bridges = set(compute_bridges(G))
-        #  print(f'Bridges: {sorted(bridges)}')
         for e in bridges: assert e[0] < e[1]
         for e in edges: assert e[0] < e[1]
         removable_edges = sorted(list(edges - bridges))
         for e in removable_edges: assert e[0] < e[1]
-        print(f'Removable edges: {removable_edges}')
         assert len(removable_edges) > 0, 'there must be another edge that can be removed'
 
         #===============================================================================================================
@@ -218,12 +213,7 @@ def gen_thinned_clique(num_nodes :int, num_thinning :int):
             raise ValueError(f'invalid skew method')
 
         #===== Remove one removable edge. =====
-        #  e = removable_edges[edge_idx]
-        #  print(f'Removing edge {e}.')
-        #  G.remove_edge(e[0], e[1])
-        print(f'Removing edge {removable_edges[edge_idx]}.')
         G.remove_edge(*removable_edges[edge_idx])
-        print()
 
     assert eg.is_connected(G)
 

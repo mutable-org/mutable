@@ -98,7 +98,7 @@ def create_bounded_Zipf_distribution(values, seed=None) -> scipy.stats.rv_discre
         weights = indices ** (-args.skew) # Zipf weight
         assert len(weights) == len(values)
         weights /= weights.sum() # normalize
-        return scipy.stats.rv_discrete(values=(values, weights))
+        return scipy.stats.rv_discrete(values=(values, weights), seed=seed)
 
 
 #=======================================================================================================================
@@ -184,6 +184,9 @@ def gen_thinned_clique(num_nodes :int, num_thinning :int):
     assert num_edges + 1 >= num_nodes, 'graph would be disconnected'
     G = gen_clique(num_nodes)
 
+    # Create PRNG
+    PRNG = numpy.random.Generator(numpy.random.MT19937(seed=args.seed))
+
     # Remove edges from clique
     for i in range(num_thinning):
         edges = set([(e[0], e[1]) for e in G.edges])
@@ -204,7 +207,7 @@ def gen_thinned_clique(num_nodes :int, num_thinning :int):
 
         if SKEW_METHOD == SkewMethod.SELECT_EDGE:
             # Select edge from all removable edges using a bounded Zipf distribution
-            dist = create_bounded_Zipf_distribution(range(len(removable_edges)))
+            dist = create_bounded_Zipf_distribution(range(len(removable_edges)), seed=PRNG)
             edge_idx = dist.rvs()
             assert edge_idx >= 0 and edge_idx < len(removable_edges)
         elif SKEW_METHOD == SkewMethod.SELECT_SOURCE_THEN_SINK:

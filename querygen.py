@@ -61,13 +61,16 @@ def compute_graph_skew(G :eg.Graph):
         return 0 # on RuntimeWarning, the degrees are identical ⇒ return skew 0
 
 def compute_bridges(G :eg.Graph) -> set:
+    visited = set()
     bridges = set((e[0], e[1]) for e in G.edges)
     assert eg.is_connected(G), 'graph must be connected'
 
-    def dfs(n :int, path=list()):
+    def dfs(n :int, path :list=list()):
+        visited.add(n)
         neighbors = set(G.neighbors(n))
 
         #===== Neighbors in the path (excluding the parent) form back edges and back edges form cycles. =====
+        assert neighbors.intersection(visited).issubset(path), 'there can only be back edges to nodes in the path'
         back_edges = neighbors.intersection(path)
         if path:
             back_edges.remove(path[-1]) # exclude parent from back edges
@@ -82,10 +85,10 @@ def compute_bridges(G :eg.Graph) -> set:
             bridges.discard((cycle[-1], cycle[0]))
 
         #===== Recurse =====
-        successors = neighbors.difference(path)
         path.append(n)
-        for s in successors:
-            dfs(s, path)
+        for s in neighbors:
+            if s not in visited:
+                dfs(s, path)
         path.pop()
 
     dfs(0)

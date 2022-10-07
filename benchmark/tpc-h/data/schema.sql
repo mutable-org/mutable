@@ -32,23 +32,23 @@ CREATE TABLE Part (
     p_comment       CHAR(23)
 );
 
---  CREATE TABLE SUPPLIER (
---      s_suppkey       INT(4),
---      s_name          CHAR(25),
---      s_address       VARCHAR(40),
---      s_nationkey     INT(4),
---      s_phone         CHAR(15),
---      s_acctbal       DECIMAL(10,2),
---      s_comment       VARCHAR(101)
---  );
+CREATE TABLE Supplier (
+    s_suppkey       INT(4),
+    s_name          CHAR(25),
+    s_address       VARCHAR(40),
+    s_nationkey     INT(4),
+    s_phone         CHAR(15),
+    s_acctbal       DECIMAL(10,2),
+    s_comment       VARCHAR(101)
+);
 
---  CREATE TABLE PARTSUPP (
---      ps_partkey      INT(4),
---      ps_suppkey      INT(4),
---      ps_availqty     INT(4),
---      ps_supplycost   DECIMAL(10,2),
---      ps_comment      VARCHAR(199)
---  );
+CREATE TABLE Partsupp (
+    ps_partkey      INT(4),
+    ps_suppkey      INT(4),
+    ps_availqty     INT(4),
+    ps_supplycost   DECIMAL(10,2),
+    ps_comment      VARCHAR(199)
+);
 
 CREATE TABLE Customer (
     c_custkey       INT(4),
@@ -73,15 +73,15 @@ CREATE TABLE Orders (
     o_comment       CHAR(80)
 );
 
---  CREATE TABLE NATION (
---      n_nationkey     INT(4),
---      n_name          CHAR(25),
---      n_regionkey     INT(4),
---      n_comment       VARCHAR(152)
---  );
+CREATE TABLE Nation (
+    n_nationkey     INT(4),
+    n_name          CHAR(25),
+    n_regionkey     INT(4),
+    n_comment       VARCHAR(152)
+);
 
---  CREATE TABLE REGION (
---      r_regionkey     INT(4),
---      r_name          CHAR(25),
---      r_comment       VARCHAR(152)
---  );
+CREATE TABLE Region (
+    r_regionkey     INT(4),
+    r_name          CHAR(25),
+    r_comment       VARCHAR(152)
+);

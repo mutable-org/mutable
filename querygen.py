@@ -46,12 +46,20 @@ def default_open(filepath):
     else:                                   # linux variants
         subprocess.call(('xdg-open', filepath))
 
+def generate_uniform_degrees(G :eg.Graph):
+    degrees = list(G.degree().values())
+    mean = sum(degrees) // len(G.nodes)
+    uniform_degrees = [mean] * len(G.nodes)
+    for i in range(sum(degrees) - mean * len(G.nodes)):
+        uniform_degrees[i] = uniform_degrees[i] + 1
+    return uniform_degrees
+
 def compute_graph_density(G :eg.Graph):
     n = G.number_of_nodes()
     m = G.number_of_edges()
     return 2 * m / (n * (n-1))
 
-def compute_graph_skew(G :eg.Graph):
+def compute_edge_skewness(G :eg.Graph):
     degrees = sorted(list(G.degree().values()))
     try:
         with warnings.catch_warnings():
@@ -59,6 +67,21 @@ def compute_graph_skew(G :eg.Graph):
             return abs(scipy.stats.skew(degrees, nan_policy='raise')) # abs(): we don't care whether tail is left or right
     except RuntimeWarning:
         return 0 # on RuntimeWarning, the degrees are identical ⇒ return skew 0
+
+def compute_edge_p_value(G :eg.Graph):
+    degrees = list(G.degree().values())
+    uniform_degrees = generate_uniform_degrees(G)
+    _, p = scipy.stats.chisquare(f_obs=degrees, f_exp=uniform_degrees)
+    return p
+
+def compute_edge_stddev(G :eg.Graph):
+    degrees = list(G.degree().values())
+    return scipy.stats.tstd(degrees)
+
+def compute_edge_entropy(G :eg.Graph):
+    degrees = list(G.degree().values())
+    uniform_degrees = generate_uniform_degrees(G)
+    return scipy.stats.entropy(pk=degrees, qk=uniform_degrees)
 
 def compute_bridges(G :eg.Graph) -> set:
     visited = set()
@@ -101,6 +124,20 @@ def create_bounded_Zipf_distribution(values, seed=None) -> scipy.stats.rv_discre
         assert len(weights) == len(values)
         weights /= weights.sum() # normalize
         return scipy.stats.rv_discrete(values=(values, weights), seed=seed)
+
+def show_graph(filename :str, G :eg.Graph):
+    if os.fork() == 0:
+        with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8') as dotfile:
+            eg.write_dot(G, dotfile.name)
+            dotfile.seek(0)
+            #  with tempfile.NamedTemporaryFile() as pdf:
+            with open(filename, 'wb') as pdf:
+                source = dotfile.read()
+                pdf.write(
+                    graphviz.Source(source, format='pdf', engine='circo').pipe()
+                )
+                pdf.flush()
+                default_open(pdf.name)
 
 
 #=======================================================================================================================
@@ -250,6 +287,8 @@ if __name__ == '__main__':
         if not args.quiet:
             print(f'Seeding PRNG with seed {args.seed}.')
         random.seed(args.seed)
+    else:
+        random.seed()
 
     if args.num_thinning != 0:
         assert args.query_type == 'clique', 'thinning is only meaningful for clique queries'
@@ -265,33 +304,24 @@ if __name__ == '__main__':
 
     filename_schema = filename_base + '.schema.sql'
     filename_query  = filename_base + '.query.sql'
-    filename_gv     = filename_base + '.pdf'
 
     if args.show:
-        if os.fork() == 0:
-            with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8') as dotfile:
-                eg.write_dot(G, dotfile.name)
-                dotfile.seek(0)
-                #  with tempfile.NamedTemporaryFile() as pdf:
-                with open(filename_gv, 'wb') as pdf:
-                    source = dotfile.read()
-                    pdf.write(
-                        graphviz.Source(source, format='pdf', engine='circo').pipe()
-                    )
-                    pdf.flush()
-                    default_open(pdf.name)
+        show_graph(filename_base + '.pdf', G)
 
     density = compute_graph_density(G)
-    skew = compute_graph_skew(G)
+    skewness = compute_edge_skewness(G)
+    p_value = compute_edge_p_value(G)
+    stddev = compute_edge_stddev(G)
+    entropy = compute_edge_entropy(G)
 
     if args.quiet:
-        print(f'{filename_schema} {filename_query} {density:.2f} {skew:.2f}')
+        print(f'{filename_schema} {filename_query} {density:.3f} {skewness:.3f} {p_value:.3f} {stddev:.3f} {entropy:.3f}')
     else:
         print(f'Generating problem statement {filename_base}.{{schema,query}}.sql for {args.query_type} query of '
               f'{args.num_relations} relations', end='')
         if args.num_thinning:
-            print(f' and thinning out by {args.num_thinning} edges', end='')
-        print(f'.  The graph has a density of {density:.2f} and an edge skew of {skew:.2f}.')
+            print(f' and thinning out by {args.num_thinning} edges.')
+        print(f'  Density: {density:.3f} Skewness: {skewness:.3f} p-value: {p_value:.2f} Stddev: {stddev:.3f} Entropy: {entropy:.3f}')
 
     with open(filename_schema, 'w') as schema:
         write_header(schema)

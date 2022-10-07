@@ -17,22 +17,21 @@ SECONDS=0
 RANDOM=42
 
 # Timeout for single invocations
-TIMEOUT=15s
+TIMEOUT=5s
 
 BIN=build/release/bin/shell
 CSV=planner-benchmark.csv
 CORRELATED=1
 
-MIN_RELATIONS=12
-MAX_RELATIONS=18
+MIN_RELATIONS=6
+MAX_RELATIONS=38
+STEP_RELATIONS=2
 
-NUM_REPETITIONS=5
+NUM_REPETITIONS=10
+MAX_TIMEOUTS=3
 
 MIN_CARDINALITY=10
 MAX_CARDINALITY=10000
-
-SIZE=4
-THINNING=2
 
 function usage() {
     cat <<EOF
@@ -49,17 +48,19 @@ then
 fi
 
 CSV=$1
-SEED=$2
 
+RANDOM=$2
+echo "Seeding PRNG with $2."
 
 
 function run_experiment()
 {
     SIZE=$1
     THINNING=$2
-    SEED=$3
+    SKEWNESS=$3
+    SEED=$4
 
-    OUT=$(python querygen.py --quiet --seed ${SEED} -t clique -n ${SIZE} --thinning=${THINNING})
+    OUT=$(python querygen.py --quiet --seed ${SEED} -t clique -n ${SIZE} --thinning=${THINNING} --skew=${SKEWNESS})
     RES=$?
     # echo "${OUT}"
     if [ ${RES} -ne 0 ];
@@ -70,18 +71,24 @@ function run_experiment()
 
     SCHEMA=$(echo "${OUT}" | cut -d ' ' -f 1)
     QUERY=$(echo "${OUT}" | cut -d ' ' -f 2)
+
     DENSITY=$(echo "${OUT}" | cut -d ' ' -f 3)
-    SKEW=$(echo "${OUT}" | cut -d ' ' -f 4)
+    SKEWNESS=$(echo "${OUT}" | cut -d ' ' -f 4)
+    P_VALUE=$(echo "${OUT}" | cut -d ' ' -f 5)
+    STDDEV=$(echo "${OUT}" | cut -d ' ' -f 6)
+    ENTROPY=$(echo "${OUT}" | cut -d ' ' -f 7)
 
     BASE=$(basename "${SCHEMA}" .schema.sql)
     JSON="${BASE}.cardinalities.json"
 
-    echo "  \` Evaluate clique-${SIZE} with thinning out ${THINNING} edges and seed ${SEED}."
-    # echo -n "    SIZE=${size} THINNING=${thinning} SEED=${SEED} : "
+    echo '    ` '"Evaluate clique-${SIZE} with seed ${SEED} and thinning out ${THINNING} edges. "
+    echo "        Density: ${DENSITY} Skew: ${SKEWNESS} p-value: ${P_VALUE} Stddev: ${STDDEV} Entropy: ${ENTROPY}"
 
-    build/release/bin/cardinality_gen "${SCHEMA}" "${QUERY}" > "${JSON}"
+    build/release/bin/cardinality_gen --seed ${SEED} "${SCHEMA}" "${QUERY}" > "${JSON}"
 
-    timeout --signal=TERM --kill-after=3s ${TIMEOUT} taskset -c 2 ${BIN} \
+    unset COST
+    unset TIME
+    timeout --signal=TERM --kill-after=2s ${TIMEOUT} taskset -c 2 ${BIN} \
         --dryrun \
         --statistics \
         --cardinality-estimator Injected \
@@ -96,9 +103,33 @@ function run_experiment()
         | tr -d ' ' \
         | paste -sd ' \n' \
         | while read -r COST TIME; do \
-            echo "clique,${SIZE},${THINNING},${DENSITY},${SKEW},A*-BU,${COST},${TIME},${SEED}" >> "${CSV}"; \
+            echo "clique,${SIZE},${THINNING},${DENSITY},${SKEWNESS},${P_VALUE},${STDDEV},${ENTROPY},BU-A*-zero,${COST},${TIME},${SEED}" >> "${CSV}"; \
         done
+    SAVED_PIPESTATUS=("${PIPESTATUS[@]}")
+    TIMEOUT_RET=${SAVED_PIPESTATUS[0]}
+    ERR=0
+    for RET in "${SAVED_PIPESTATUS[@]}";
+    do
+        if [ ${RET} -ne 0 ];
+        then
+            ERR=${RET}
+            break
+        fi
+    done
+    if [ ${TIMEOUT_RET} -eq 124 ] || [ ${TIMEOUT_RET} -eq 137 ]; # timed out
+    then
+        >&2 echo '    `'" BU-A*-zero timed out."
+        rm -f "${SCHEMA}" "${QUERY}" "${JSON}"
+        return 1 # signal timeout to caller
+    elif [ ${ERR} -ne 0 ];
+    then
+        >&2 echo '    `'" Unexpected termination: ERR=${ERR}, PIPESTATUS=(${SAVED_PIPESTATUS[@]}), configuration: BU-A*-zero"
+        rm -f "${SCHEMA}" "${QUERY}" "${JSON}"
+        return 137 # signal error to caller
+    fi
 
+    unset COST
+    unset TIME
     timeout --signal=TERM --kill-after=3s ${TIMEOUT} taskset -c 2 ${BIN} \
         --dryrun \
         --statistics \
@@ -112,30 +143,74 @@ function run_experiment()
         | tr -d ' ' \
         | paste -sd ' \n' \
         | while read -r COST TIME; do \
-            echo "clique,${SIZE},${THINNING},DPccp,${COST},${TIME},${SEED}" >> "${CSV}"; \
+            echo "clique,${SIZE},${THINNING},${DENSITY},${SKEWNESS},${P_VALUE},${STDDEV},${ENTROPY},DPccp,${COST},${TIME},${SEED}" >> "${CSV}"; \
         done
+    SAVED_PIPESTATUS=("${PIPESTATUS[@]}")
+    TIMEOUT_RET=${SAVED_PIPESTATUS[0]}
+    ERR=0
+    for RET in "${SAVED_PIPESTATUS[@]}";
+    do
+        if [ ${RET} -ne 0 ];
+        then
+            ERR=${RET}
+            break
+        fi
+    done
+    if [ ${TIMEOUT_RET} -eq 124 ] || [ ${TIMEOUT_RET} -eq 137 ]; # timed out
+    then
+        >&2 echo '    `'" DPccp timed out."
+        rm -f "${SCHEMA}" "${QUERY}" "${JSON}"
+        return 1 # signal timeout to caller
+    elif [ ${ERR} -ne 0 ];
+    then
+        >&2 echo '    `'" Unexpected termination: ERR=${ERR}, PIPESTATUS=(${SAVED_PIPESTATUS[@]}), configuration: DPccp"
+        rm -f "${SCHEMA}" "${QUERY}" "${JSON}"
+        return 137 # signal error to caller
+    fi
 
-    rm "${SCHEMA}" "${QUERY}" "${JSON}"
+    # Clean up generated files
+    rm -f "${SCHEMA}" "${QUERY}" "${JSON}"
 }
 
 
 
 echo "Writing measurements to '${CSV}'"
-echo "topology,size,thinning,density,skew,planner,cost,time,seed" > "${CSV}"
+echo "topology,size,thinning,density,skewness,p_value,stddev,entropy,planner,cost,time,seed" > "${CSV}"
 
-for ((size=${MIN_RELATIONS}; size <= ${MAX_RELATIONS}; ++size));
+for ((size=MIN_RELATIONS; size <= MAX_RELATIONS; size+=STEP_RELATIONS));
 do
-    ((max_edges=size * (size - 1) / 2))
+    echo "Evaluating graph with ${size} relations."
+    ((num_edges=size * (size - 1) / 2))
     ((min_edges=size - 1))
-    ((max_thinning=max_edges - min_edges))
-    thinning_step=$(bc <<< "(${max_thinning} + 4) / 5")
-    echo "Evaluate clique-${size} with thinning out 1 to ${max_thinning} edges"
-    for ((thinning=thinning_step; thinning <= ${max_thinning}; thinning+=thinning_step));
+    ((max_thinning=num_edges - min_edges))
+    # thinning_step=$(bc <<< "(${max_thinning} + 4) / 5")
+    # echo "Evaluate clique-${size} with thinning out 1 to ${max_thinning} edges"
+    # for ((thinning=thinning_step; thinning <= ${max_thinning}; thinning+=thinning_step));
+    thinning_step=1
+    timeouts=0
+    skew=0
+    for ((i_skew=0; i_skew <= 5; ++i_skew));
     do
-        echo '`'" Thinning out by ${thinning} edges"
-        for ((i=0; i < ${NUM_REPETITIONS}; ++i));
+        echo '`'" Skew ${skew}"
+        for ((thinning=max_thinning; thinning > 0; thinning-=thinning_step, ++thinning_step));
         do
-            run_experiment ${size} ${thinning} ${RANDOM}
+            echo '  `'" Thinning out by ${thinning} edges."
+            for ((i_rep=0; i_rep < NUM_REPETITIONS; ++i_rep));
+            do
+                run_experiment ${size} ${thinning} ${skew} ${RANDOM}
+                RET=$?
+                if [ ${RET} -eq 1 ];
+                then # timeout
+                    ((timeouts++))
+                    if [ ${timeouts} -ge ${MAX_TIMEOUTS} ];
+                    then
+                        echo '`'" Reached maximum of ${MAX_TIMEOUTS} timeouts."\
+                                " Stopping evaluation of ${size} relations."
+                        break 3; # skip *less* thinning, we already have timeouts
+                    fi
+                fi
+            done
         done
+        skew=$(bc <<< "${skew} + .4")
     done
 done

@@ -2,7 +2,7 @@ description: aggregation without groupby
 db: ours
 query: |
     SELECT COUNT(fkey) FROM R;
-required: YES
+required: NO
 
 stages:
 

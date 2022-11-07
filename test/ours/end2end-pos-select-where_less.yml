@@ -2,7 +2,7 @@ description: where less
 db: ours
 query: |
     SELECT key FROM R WHERE key < 42 ORDER BY key;
-required: YES
+required: NO
 
 stages:
 

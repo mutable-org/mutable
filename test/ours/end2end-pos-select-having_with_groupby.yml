@@ -2,7 +2,7 @@ description: having with groupby
 db: ours
 query: |
     SELECT fkey FROM R GROUP BY fkey HAVING COUNT(key) > 1 ORDER BY fkey;
-required: YES
+required: NO
 
 stages:
 

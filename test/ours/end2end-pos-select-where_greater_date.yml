@@ -2,7 +2,7 @@ description: where greater date
 db: ours
 query: |
     SELECT key FROM D WHERE rdate > d'-1167-12-14' ORDER BY key;
-required: YES
+required: NO
 
 stages:
 

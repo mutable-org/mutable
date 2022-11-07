@@ -2,7 +2,7 @@ description: where less datetime
 db: ours
 query: |
     SELECT key FROM D WHERE rdatetime < d'-3026-02-28 23:47:35' ORDER BY key;
-required: YES
+required: NO
 
 stages:
 

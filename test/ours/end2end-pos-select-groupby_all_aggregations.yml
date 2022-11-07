@@ -19,7 +19,7 @@ query: |
     ORDER BY
         fkey
     ;
-required: YES
+required: NO
 
 stages:
     lexer:

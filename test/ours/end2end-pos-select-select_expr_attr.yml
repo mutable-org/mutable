@@ -2,7 +2,7 @@ description: select expr attr
 db: ours
 query: |
     SELECT key, fkey - key FROM R ORDER BY key;
-required: YES
+required: NO
 
 stages:
 

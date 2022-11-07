@@ -2,7 +2,7 @@ description: select groupby attribute
 db: ours
 query: |
     SELECT R.key FROM R GROUP BY R.key ORDER BY key;
-required: YES
+required: NO
 
 stages:
 

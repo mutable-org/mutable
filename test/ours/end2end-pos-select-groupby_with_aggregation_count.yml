@@ -2,7 +2,7 @@ description: groupby with aggregation count
 db: ours
 query: |
     SELECT fkey, COUNT(key) FROM R GROUP BY fkey ORDER BY fkey;
-required: YES
+required: NO
 
 stages:
     lexer:

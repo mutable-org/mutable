@@ -4,6 +4,7 @@
 #include "backend/WasmDSL.hpp"
 #include <mutable/catalog/Schema.hpp>
 #include <mutable/parse/AST.hpp>
+#include <functional>
 #include <optional>
 #include <variant>
 
@@ -14,6 +15,9 @@ namespace wasm {
 
 // forward declarations
 struct Environment;
+template<bool IsGlobal> struct buffer_load_proxy_t;
+template<bool IsGlobal> struct buffer_store_proxy_t;
+template<bool IsGlobal> struct buffer_swap_proxy_t;
 
 
 /*======================================================================================================================
@@ -372,6 +376,20 @@ compile_load_sequential(const Schema &tuple_schema, Ptr<void> base_address, cons
                         const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id,
                         uint32_t initial_tuple_id = 0);
 
+/** Compiles the data layout \p layout starting at memory address \p base_address and containing tuples of schema
+ * \p layout_schema such that it stores the single tuple with schema \p tuple_schema and ID \p tuple_id.
+ *
+ * Emits the storing code into the current block. */
+void compile_store_point_access(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
+                                const Schema &layout_schema, U32 tuple_id);
+
+/** Compiles the data layout \p layout starting at memory address \p base_address and containing tuples of schema
+ * \p layout_schema such that it loads the single tuple with schema \p tuple_schema and ID \p tuple_id.
+ *
+ * Emits the loading code into the current block and adds the loaded values into the current environment. */
+void compile_load_point_access(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
+                               const Schema &layout_schema, U32 tuple_id);
+
 
 /*======================================================================================================================
  * Buffer
@@ -387,6 +405,8 @@ struct Buffer
     using var_t = std::conditional_t<IsGlobal, Global<T>, Var<T>>;
     ///> function type for resuming pipeline dependent on whether buffer should be globally usable
     using fn_t = std::conditional_t<IsGlobal, void(void), void(void*, uint32_t)>;
+    ///> parameter type for proxy creation methods
+    using proxy_param_t = std::optional<std::reference_wrapper<const Schema>>;
 
     std::reference_wrapper<const Schema> schema_; ///< schema of buffer
     storage::DataLayout layout_; ///< data layout of buffer
@@ -404,6 +424,7 @@ struct Buffer
     Buffer(const Schema &schema, const storage::DataLayoutFactory &factory, std::size_t num_tuples = 0,
            MatchBase::callback_t Pipeline = MatchBase::callback_t());
 
+    Buffer(const Buffer&) = delete;
     Buffer(Buffer&&) = default;
 
     Buffer & operator=(Buffer&&) = default;
@@ -416,6 +437,16 @@ struct Buffer
     Ptr<void> base_address() const { return base_address_; }
     /** Returns the current size of the buffer. */
     U32 size() const { return size_; }
+
+    /** Creates and returns a proxy object to load tuples of schema \p tuple_schema (default: entire tuples) from the
+     * buffer. */
+    buffer_load_proxy_t<IsGlobal> create_load_proxy(proxy_param_t tuple_schema = proxy_param_t()) const;
+    /** Creates and returns a proxy object to store tuples of schema \p tuple_schema (default: entire tuples) to the
+     * buffer. */
+    buffer_store_proxy_t<IsGlobal> create_store_proxy(proxy_param_t tuple_schema = proxy_param_t()) const;
+    /** Creates and returns a proxy object to swap tuples of schema \p tuple_schema (default: entire tuples) in the
+     * buffer. */
+    buffer_swap_proxy_t<IsGlobal> create_swap_proxy(proxy_param_t tuple_schema = proxy_param_t()) const;
 
     /** Emits code into a separate function to resume the pipeline for each tuple in the buffer.  Used to explicitly
      * resume pipeline for infinite or partially filled buffers. */
@@ -435,6 +466,98 @@ struct Buffer
 
 using LocalBuffer = Buffer<false>;
 using GlobalBuffer = Buffer<true>;
+
+
+/*======================================================================================================================
+ * buffer accesses
+ *====================================================================================================================*/
+
+/** Proxy to implement loads from a buffer. */
+template<bool IsGlobal>
+struct buffer_load_proxy_t
+{
+    friend struct Buffer<IsGlobal>;
+
+    private:
+    std::reference_wrapper<const Buffer<IsGlobal>> buffer_; ///< buffer to load from
+    std::reference_wrapper<const Schema> schema_; ///< entries to load
+
+    buffer_load_proxy_t(const Buffer<IsGlobal> &buffer, const Schema &schema)
+        : buffer_(std::cref(buffer))
+        , schema_(std::cref(schema))
+    { }
+
+    public:
+    buffer_load_proxy_t(const buffer_load_proxy_t&) = delete;
+    buffer_load_proxy_t(buffer_load_proxy_t&&) = default;
+
+    buffer_load_proxy_t & operator=(buffer_load_proxy_t&&) = default;
+
+    /** Returns the entries to load. */
+    const Schema & schema() const { return schema_; }
+
+    /** Loads tuple with ID \p tuple_id into the current environment. */
+    void operator()(U32 tuple_id) {
+        Wasm_insist(tuple_id.clone() < buffer_.get().size(), "tuple ID out of bounds");
+        compile_load_point_access(schema_, buffer_.get().base_address(), buffer_.get().layout(),
+                                  buffer_.get().schema(), tuple_id);
+    }
+};
+
+/** Proxy to implement stores to a buffer. */
+template<bool IsGlobal>
+struct buffer_store_proxy_t
+{
+    friend struct Buffer<IsGlobal>;
+
+    private:
+    std::reference_wrapper<const Buffer<IsGlobal>> buffer_; ///< buffer to store to
+    std::reference_wrapper<const Schema> schema_; ///< entries to store
+
+    buffer_store_proxy_t(const Buffer<IsGlobal> &buffer, const Schema &schema)
+        : buffer_(std::cref(buffer))
+        , schema_(std::cref(schema))
+    { }
+
+    public:
+    buffer_store_proxy_t(const buffer_store_proxy_t&) = delete;
+    buffer_store_proxy_t(buffer_store_proxy_t&&) = default;
+
+    buffer_store_proxy_t & operator=(buffer_store_proxy_t&&) = default;
+
+    /** Returns the entries to store. */
+    const Schema & schema() const { return schema_; }
+
+    /** Stores values from the current environment to tuple with ID \p tuple_id. */
+    void operator()(U32 tuple_id) {
+        Wasm_insist(tuple_id.clone() < buffer_.get().size(), "tuple ID out of bounds");
+        compile_store_point_access(schema_, buffer_.get().base_address(), buffer_.get().layout(),
+                                   buffer_.get().schema(), tuple_id);
+    }
+};
+
+/** Proxy to implement swaps in a buffer. */
+template<bool IsGlobal>
+struct buffer_swap_proxy_t
+{
+    friend struct Buffer<IsGlobal>;
+
+    private:
+    std::reference_wrapper<const Buffer<IsGlobal>> buffer_; ///< buffer in which swaps are performed
+    std::reference_wrapper<const Schema> schema_; ///< entries to swap
+
+    buffer_swap_proxy_t(const Buffer<IsGlobal> &buffer, const Schema &schema)
+        : buffer_(std::cref(buffer))
+        , schema_(std::cref(schema))
+    { }
+
+    public:
+    /** Returns the entries to swap. */
+    const Schema & schema() const { return schema_; }
+
+    /** Swaps tuples with IDs \p first and \p second. */
+    void operator()(U32 first, U32 second);
+};
 
 
 /*======================================================================================================================
@@ -506,11 +629,41 @@ _Bool like(const CharacterSequence &ty_str, const CharacterSequence &ty_pattern,
 
 
 /*======================================================================================================================
+ * signum and comparator
+ *====================================================================================================================*/
+
+/** Returns the signum of \p value, i.e. -1 for negative values, 0 for zero, and 1 for positive values.. */
+template<typename T>
+requires arithmetic<typename T::type>
+T signum(T value)
+{
+    using type = typename T::type;
+    return (value.clone() > type(0)).template to<type>() - (value < type(0)).template to<type>();
+}
+
+/** Compares two tuples with IDs \p left and \p right, loadable using the buffer load handle \p load, according to
+ * the ordering \p order (the second element of each pair is `true` iff the corresponding sorting should be
+ * ascending).  Note that the value NULL is always considered smaller regardless of the ordering.
+ *
+ * Returns a negative number if \p left is smaller than \p right, 0 if both are equal, and a positive number if
+ * \p left is greater than \p right, according to the ordering. */
+template<bool IsGlobal>
+I32 compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
+            const std::vector<std::pair<const m::Expr*, bool>> &order);
+
+
+/*======================================================================================================================
  * explicit instantiation declarations
  *====================================================================================================================*/
 
 extern template struct Buffer<false>;
 extern template struct Buffer<true>;
+extern template struct buffer_swap_proxy_t<false>;
+extern template struct buffer_swap_proxy_t<true>;
+extern template I32 compare(buffer_load_proxy_t<false> &load, U32 left, U32 right,
+                            const std::vector<std::pair<const m::Expr*, bool>> &order);
+extern template I32 compare(buffer_load_proxy_t<true> &load, U32 left, U32 right,
+                            const std::vector<std::pair<const m::Expr*, bool>> &order);
 
 }
 

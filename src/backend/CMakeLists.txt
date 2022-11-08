@@ -9,6 +9,7 @@ if(${WITH_V8})
         PhysicalOperator.cpp
         V8Platform.cpp
         WasmDSL.cpp
+        WasmAlgo.cpp
         WasmOperator.cpp
         WasmUtil.cpp
         WebAssembly.cpp

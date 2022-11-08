@@ -1,5 +1,6 @@
 #include "backend/WasmOperator.hpp"
 
+#include "backend/WasmAlgo.hpp"
 #include "backend/WasmMacro.hpp"
 
 
@@ -324,7 +325,7 @@ void WasmSorting::execute(const Match<WasmSorting> &M, callback_t Pipeline)
     sorting_child_pipeline(); // call child function
 
     /*----- Invoke sorting algorithm with buffer to sort. -----*/
-    M_unreachable("not implemented");
+    quicksort(buffer, M.sorting.order_by());
 
     /*----- Process sorted buffer. -----*/
     buffer.resume_pipeline();
@@ -406,7 +407,9 @@ void WasmNestedLoopsJoin::execute(const Match<WasmNestedLoopsJoin> &M, callback_
 
 void WasmLimit::execute(const Match<WasmLimit> &M, callback_t Pipeline)
 {
-    Var<U32> counter; // default initialized to 0
+    /* Create *global* counter since e.g. `Buffer::resume_pipeline()` may create new function in which the following
+     * code is emitted. */
+    Global<U32> counter; // default initialized to 0
 
     M.child.execute([&, Pipeline=std::move(Pipeline)](){
         const uint32_t limit = M.limit.offset() + M.limit.limit();

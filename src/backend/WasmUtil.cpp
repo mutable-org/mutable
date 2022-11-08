@@ -1139,6 +1139,323 @@ m::wasm::compile_load_sequential(const Schema &tuple_schema, Ptr<void> base_addr
                                                  initial_tuple_id);
 }
 
+namespace m {
+
+namespace wasm {
+
+/** Compiles the data layout \p layout starting at memory address \p base_address and containing tuples of schema
+ * \p layout_schema such that it stores/loads the single tuple with schema \p tuple_schema and ID \p tuple_id.
+ *
+ * If \tparam IsStore, emits the storing code into the current block, otherwise, emits the loading code into the
+ * current block and adds the loaded values into the current environment. */
+template<bool IsStore>
+void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base_address,
+                                      const storage::DataLayout &layout, const Schema &layout_schema, U32 tuple_id)
+{
+    ///> the values loaded for the entries in `tuple_schema`
+    SQL_t values[tuple_schema.num_entries()];
+    ///> the NULL information loaded for the entries in `tuple_schema`
+    Bool *null_bits;
+    if constexpr (not IsStore)
+        null_bits = static_cast<Bool*>(alloca(sizeof(Bool) * tuple_schema.num_entries()));
+
+    auto &env = CodeGenContext::Get().env(); // the current codegen environment
+
+    /*----- Check whether any of the entries in `tuple_schema` can be NULL, so that we need the NULL bitmap. -----*/
+    const bool needs_null_bitmap = [&]() {
+        for (auto &tuple_entry : tuple_schema) {
+            M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
+            if (tuple_entry.nullable()) return true; // found an entry in `tuple_schema` that can be NULL
+        }
+        return false; // no attribute in `schema` can be NULL
+    }();
+    bool has_null_bitmap = false; // indicates whether the data layout specifies a NULL bitmap
+
+    /*----- Visit the data layout. -----*/
+    layout.for_sibling_leaves([&](const std::vector<DataLayout::leaf_info_t> &leaves,
+                                  const DataLayout::level_info_stack_t &levels, uint64_t inode_offset_in_bits)
+    {
+        M_insist(inode_offset_in_bits % 8 == 0, "inode offset must be byte aligned");
+
+        /*----- Compute additional initial INode offset in bits depending on the given initial tuple ID. -----*/
+        auto compute_additional_offset = [&](U32 tuple_id) -> U64 {
+            auto rec = [&](U32 curr_tuple_id, decltype(levels.cbegin()) curr, const decltype(levels.cend()) end,
+                           auto rec) -> U64
+            {
+                if (curr == end) {
+                    curr_tuple_id.discard();
+                    return U64(0);
+                }
+
+                if (is_pow_2(curr->num_tuples)) {
+                    U32 child_iter = curr_tuple_id.clone() >> uint32_t(__builtin_ctzl(curr->num_tuples));
+                    U32 inner_tuple_id = curr_tuple_id bitand uint32_t(curr->num_tuples - 1U);
+                    U64 offset_in_bits = child_iter * curr->stride_in_bits;
+                    return offset_in_bits + rec(inner_tuple_id, std::next(curr), end, rec);
+                } else {
+                    U32 child_iter = curr_tuple_id.clone() / uint32_t(curr->num_tuples);
+                    U32 inner_tuple_id = curr_tuple_id % uint32_t(curr->num_tuples);
+                    U64 offset_in_bits = child_iter * curr->stride_in_bits;
+                    return offset_in_bits + rec(inner_tuple_id, std::next(curr), end, rec);
+                }
+            };
+            return rec(tuple_id, levels.cbegin(), levels.cend(), rec);
+        };
+        Var<U64> additional_inode_offset_in_bits(compute_additional_offset(tuple_id));
+
+        /*----- Iterate over sibling leaves, i.e. leaf children of a common parent INode, to emit code. -----*/
+        for (auto &leaf_info : leaves) {
+            if (leaf_info.leaf.index() == layout_schema.num_entries()) { // NULL bitmap
+                if (not needs_null_bitmap)
+                    continue;
+
+                M_insist(not has_null_bitmap, "at most one bitmap may be specified");
+                has_null_bitmap = true;
+
+                Var<Ptr<void>> ptr(base_address.clone() + inode_offset_in_bits / 8); // pointer to NULL bitmap
+
+                /*----- For each tuple entry that can be NULL, create a store/load with offset and mask. --*/
+                for (std::size_t tuple_idx = 0; tuple_idx != tuple_schema.num_entries(); ++tuple_idx) {
+                    auto &tuple_entry = tuple_schema[tuple_idx];
+                    M_insist(*tuple_entry.type == *layout_schema[tuple_entry.id].second.type);
+                    M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
+                    if (tuple_entry.nullable()) { // entry may be NULL
+                        const auto& [layout_idx, layout_entry] = layout_schema[tuple_entry.id];
+                        auto offset_in_bits = additional_inode_offset_in_bits + (leaf_info.offset_in_bits + layout_idx);
+                        U8  bit_offset  = (offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
+                        I32 byte_offset = (offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                        if constexpr (IsStore) {
+                            /*----- Store NULL bit depending on its type. -----*/
+                            auto store = [&]<typename T>() {
+                                auto [value, is_null] = env.get<T>(tuple_entry.id).split(); // get value
+                                value.discard(); // handled at entry leaf
+                                Ptr<U8> byte_ptr = (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
+                                setbit<U8>(byte_ptr, is_null, uint8_t(1) << bit_offset); // update bit
+                            };
+                            visit(overloaded{
+                                [&](const Boolean&) { store.template operator()<_Bool>(); },
+                                [&](const Numeric &n) {
+                                    switch (n.kind) {
+                                        case Numeric::N_Int:
+                                        case Numeric::N_Decimal:
+                                            switch (n.size()) {
+                                                default: M_unreachable("invalid size");
+                                                case  8: store.template operator()<_I8 >(); break;
+                                                case 16: store.template operator()<_I16>(); break;
+                                                case 32: store.template operator()<_I32>(); break;
+                                                case 64: store.template operator()<_I64>(); break;
+                                            }
+                                            break;
+                                        case Numeric::N_Float:
+                                            if (n.size() <= 32)
+                                                store.template operator()<_Float>();
+                                            else
+                                                store.template operator()<_Double>();
+                                    }
+                                },
+                                [&](const CharacterSequence&) {
+                                    auto value = env.get<Ptr<Char>>(tuple_entry.id); // get value
+                                    Ptr<U8> byte_ptr =
+                                        (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
+                                    setbit<U8>(byte_ptr, value.is_nullptr(), uint8_t(1) << bit_offset); // update bit
+                                },
+                                [&](const Date&) { store.template operator()<_I32>(); },
+                                [&](const DateTime&) { store.template operator()<_I64>(); },
+                                [](auto&&) { M_unreachable("invalid type"); },
+                            }, *tuple_entry.type);
+                        } else {
+                            /*----- Load NULL bit. -----*/
+                            U8 byte = *(ptr + byte_offset).template to<uint8_t*>(); // load the byte
+                            Var<Bool> value((byte bitand (uint8_t(1) << bit_offset)).to<bool>()); // mask bit
+                            new (&null_bits[tuple_idx]) Bool(value);
+                        }
+                    } else { // entry must not be NULL
+#ifndef NDEBUG
+                        if constexpr (IsStore) {
+                            /*----- Check that value is also not NULL. -----*/
+                            auto check = [&]<typename T>() {
+                                Wasm_insist(env.get<T>(tuple_entry.id).not_null(),
+                                            "value of non-nullable entry must not be NULL");
+                            };
+                            visit(overloaded{
+                                [&](const Boolean&) { check.template operator()<_Bool>(); },
+                                [&](const Numeric &n) {
+                                    switch (n.kind) {
+                                        case Numeric::N_Int:
+                                        case Numeric::N_Decimal:
+                                            switch (n.size()) {
+                                                default: M_unreachable("invalid size");
+                                                case  8: check.template operator()<_I8 >(); break;
+                                                case 16: check.template operator()<_I16>(); break;
+                                                case 32: check.template operator()<_I32>(); break;
+                                                case 64: check.template operator()<_I64>(); break;
+                                            }
+                                            break;
+                                        case Numeric::N_Float:
+                                            if (n.size() <= 32)
+                                                check.template operator()<_Float>();
+                                            else
+                                                check.template operator()<_Double>();
+                                    }
+                                },
+                                [&](const CharacterSequence&) {
+                                    Wasm_insist(not env.get<Ptr<Char>>(tuple_entry.id).is_nullptr(),
+                                                "value of non-nullable entry must not be NULL");
+                                },
+                                [&](const Date&) { check.template operator()<_I32>(); },
+                                [&](const DateTime&) { check.template operator()<_I64>(); },
+                                [](auto&&) { M_unreachable("invalid type"); },
+                            }, *tuple_entry.type);
+                        }
+#endif
+                    }
+                }
+            } else { // regular entry
+                auto &layout_entry = layout_schema[leaf_info.leaf.index()];
+                M_insist(*layout_entry.type == *leaf_info.leaf.type());
+                auto tuple_it = tuple_schema.find(layout_entry.id);
+                if (tuple_it == tuple_schema.end())
+                    continue; // entry not contained in tuple schema
+                M_insist(*tuple_it->type == *layout_entry.type);
+                const auto tuple_idx = std::distance(tuple_schema.begin(), tuple_it);
+
+                auto offset_in_bits = additional_inode_offset_in_bits + leaf_info.offset_in_bits;
+                U8  bit_offset  = (offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
+                I32 byte_offset = (offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+
+                Ptr<void> ptr = base_address.clone() + byte_offset + inode_offset_in_bits / 8; // pointer to entry
+
+                /*----- Store value depending on its type. -----*/
+                auto store = [&]<typename T>() {
+                    using type = typename T::type;
+                    Wasm_insist(bit_offset == 0U,
+                                "leaf offset of `Numeric`, `Date`, or `DateTime` must be byte aligned");
+                    auto [value, is_null] = env.get<T>(tuple_it->id).split();
+                    is_null.discard(); // handled at NULL bitmap leaf
+                    *ptr.template to<type*>() = value;
+                };
+                /*----- Load value depending on its type. -----*/
+                auto load = [&]<typename T>() {
+                    using type = typename T::type;
+                    Wasm_insist(bit_offset == 0U,
+                                "leaf offset of `Numeric`, `Date`, or `DateTime` must be byte aligned");
+                    Var<PrimitiveExpr<type>> value(*ptr.template to<type*>());
+                    values[tuple_idx].emplace<T>(value);
+                };
+                /*----- Select call target (store or load) and visit attribute type. -----*/
+#define CALL(TYPE) if constexpr (IsStore) store.template operator()<TYPE>(); else load.template operator()<TYPE>()
+                visit(overloaded{
+                    [&](const Boolean&) {
+                        if constexpr (IsStore) {
+                            /*----- Store value. -----*/
+                            auto [value, is_null] = env.get<_Bool>(tuple_it->id).split(); // get value
+                            is_null.discard(); // handled at NULL bitmap leaf
+                            setbit<U8>(ptr.template to<uint8_t*>(), value, uint8_t(1) << bit_offset); // update bit
+                        } else {
+                            /*----- Load value. -----*/
+                            /* TODO: load byte once, create values with respective mask */
+                            U8 byte = *ptr.template to<uint8_t*>(); // load byte
+                            Var<Bool> value((byte bitand (uint8_t(1) << bit_offset)).to<bool>()); // mask bit
+                            values[tuple_idx].emplace<_Bool>(value);
+                        }
+                    },
+                    [&](const Numeric &n) {
+                        switch (n.kind) {
+                            case Numeric::N_Int:
+                            case Numeric::N_Decimal:
+                                switch (n.size()) {
+                                    default: M_unreachable("invalid size");
+                                    case  8: CALL(_I8 ); break;
+                                    case 16: CALL(_I16); break;
+                                    case 32: CALL(_I32); break;
+                                    case 64: CALL(_I64); break;
+                                }
+                                break;
+                            case Numeric::N_Float:
+                                if (n.size() <= 32)
+                                    CALL(_Float);
+                                else
+                                    CALL(_Double);
+                        }
+                    },
+                    [&](const CharacterSequence &cs) {
+                        Wasm_insist(bit_offset == 0U, "leaf offset of `CharacterSequence` must be byte aligned");
+                        if constexpr (IsStore) {
+                            /*----- Store value. -----*/
+                            auto value = env.get<Ptr<Char>>(tuple_it->id);
+                            IF (not value.clone().is_nullptr()) {
+                                strncpy(ptr.template to<char*>(), value, U32(cs.size() / 8)).discard();
+                            };
+                        } else {
+                            /*----- Load value. -----*/
+                            values[tuple_idx].emplace<Ptr<Char>>(ptr.template to<char*>());
+                        }
+                    },
+                    [&](const Date&) { CALL(_I32); },
+                    [&](const DateTime&) { CALL(_I64); },
+                    [](auto&&) { M_unreachable("invalid type"); },
+                }, *tuple_it->type);
+#undef CALL
+            }
+        }
+    });
+
+    if constexpr (not IsStore) {
+        /*----- Combine actual values and possible NULL bits to a new `SQL_t` and add this to the environment. -----*/
+        for (std::size_t idx = 0; idx != tuple_schema.num_entries(); ++idx) {
+            auto &tuple_entry = tuple_schema[idx];
+            std::visit(overloaded{
+                [&]<typename T>(Expr<T> value) {
+                    M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
+                    if (has_null_bitmap and tuple_entry.nullable()) {
+                        Expr<T> combined(value.insist_not_null(), null_bits[idx]);
+                        env.add(tuple_entry.id, combined);
+                    } else {
+                        env.add(tuple_entry.id, value);
+                    }
+                },
+                [&](Ptr<Char> value) {
+                    M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
+                    if (has_null_bitmap and tuple_entry.nullable()) {
+                        Var<Ptr<Char>> combined(Select(null_bits[idx], Ptr<Char>::Nullptr(), value));
+                        env.add(tuple_entry.id, combined);
+                    } else {
+                        Var<Ptr<Char>> _value(value); // introduce variable s.t. uses only load from it
+                        env.add(tuple_entry.id, _value);
+                    }
+                },
+                [](std::monostate) { M_unreachable("value must be loaded beforehand"); },
+            }, values[idx]);
+        }
+    }
+
+    if constexpr (not IsStore) {
+        /*----- Destroy created NULL bits. -----*/
+        for (std::size_t idx = 0; idx != tuple_schema.num_entries(); ++idx) {
+            M_insist(tuple_schema[idx].nullable() == layout_schema[tuple_schema[idx].id].second.nullable());
+            if (has_null_bitmap and tuple_schema[idx].nullable())
+                null_bits[idx].~Bool();
+        }
+    }
+    base_address.discard(); // discard base address (as it was always cloned)
+}
+
+}
+
+}
+
+void m::wasm::compile_store_point_access(const Schema &tuple_schema, Ptr<void> base_address, const DataLayout &layout,
+                                         const Schema &layout_schema, U32 tuple_id)
+{
+    return compile_data_layout_point_access<true>(tuple_schema, base_address, layout, layout_schema, tuple_id);
+}
+
+void m::wasm::compile_load_point_access(const Schema &tuple_schema, Ptr<void> base_address, const DataLayout &layout,
+                                        const Schema &layout_schema, U32 tuple_id)
+{
+    return compile_data_layout_point_access<false>(tuple_schema, base_address, layout, layout_schema, tuple_id);
+}
+
 
 /*======================================================================================================================
  * Buffer
@@ -1161,13 +1478,29 @@ Buffer<IsGlobal>::Buffer(const Schema &schema, const DataLayoutFactory &factory,
 }
 
 template<bool IsGlobal>
+buffer_load_proxy_t<IsGlobal> Buffer<IsGlobal>::create_load_proxy(proxy_param_t tuple_schema) const
+{
+    return tuple_schema ? buffer_load_proxy_t(*this, tuple_schema->get()) : buffer_load_proxy_t(*this, schema_);
+}
+
+template<bool IsGlobal>
+buffer_store_proxy_t<IsGlobal> Buffer<IsGlobal>::create_store_proxy(proxy_param_t tuple_schema) const
+{
+    return tuple_schema ? buffer_store_proxy_t(*this, tuple_schema->get()) : buffer_store_proxy_t(*this, schema_);
+}
+
+template<bool IsGlobal>
+buffer_swap_proxy_t<IsGlobal> Buffer<IsGlobal>::create_swap_proxy(proxy_param_t tuple_schema) const
+{
+    return tuple_schema ? buffer_swap_proxy_t(*this, tuple_schema->get()) : buffer_swap_proxy_t(*this, schema_);
+}
+
+template<bool IsGlobal>
 void Buffer<IsGlobal>::resume_pipeline()
 {
     /*----- Create function on-demand to assert that all needed identifiers are already created. -----*/
     if (not resume_pipeline_) {
         /*----- Create function to resume the pipeline for each tuple contained in the buffer. -----*/
-        Environment new_env;
-        std::swap(CodeGenContext::Get().env(), new_env); // create and set fresh environment
         FUNCTION(resume_pipeline, fn_t)
         {
             auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
@@ -1193,7 +1526,6 @@ void Buffer<IsGlobal>::resume_pipeline()
             }
         }
         resume_pipeline_ = std::move(resume_pipeline);
-        std::swap(CodeGenContext::Get().env(), new_env); // reset to old environment
     }
 
     /*----- Call created function. -----*/
@@ -1278,6 +1610,69 @@ void Buffer<IsGlobal>::consume()
 // explicit instantiations to prevent linker errors
 template struct m::wasm::Buffer<false>;
 template struct m::wasm::Buffer<true>;
+
+
+/*======================================================================================================================
+ * buffer accesses
+ *====================================================================================================================*/
+
+template<bool IsGlobal>
+void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second)
+{
+    using std::swap;
+
+    auto &old_env = CodeGenContext::Get().env();
+    Environment env;
+
+    /*---- Swap each entry individually to reduce number of variables needed at once. -----*/
+    for (auto &e : schema_.get()) {
+        /*----- Create schema for single entry and load and store proxies for it. -----*/
+        Schema entry_schema;
+        entry_schema.add(e.id, e.type);
+        auto load  = buffer_.get().create_load_proxy(entry_schema);
+        auto store = buffer_.get().create_store_proxy(entry_schema);
+
+        /*----- Load entry of first tuple into fresh environment. -----*/
+        swap(old_env, env);
+        load(first.clone());
+        swap(old_env, env);
+
+        /*----- Temporarily save entry of first tuple by creating variable or separate string buffer. -----*/
+        std::visit(overloaded {
+            [&](Ptr<Char> value) -> void {
+                auto &cs = as<const CharacterSequence>(*e.type);
+                const uint32_t length = cs.size() / 8;
+                auto ptr = Module::Allocator().pre_malloc<char>(length);
+                strncpy(ptr.clone(), value, U32(length)).discard();
+                env.add(e.id, ptr);
+            },
+            [&]<typename T>(Expr<T> value) -> void {
+                Var<Expr<T>> var(value);
+                env.add(e.id, var);
+            },
+            [](std::monostate) -> void { M_unreachable("value must be loaded beforehand"); }
+        }, env.extract(e.id));
+
+        /*----- Load entry of second tuple in scoped environment and store it directly at first tuples address. -----*/
+        {
+            auto S = CodeGenContext::Get().scoped_environment();
+            load(second.clone());
+            store(first.clone());
+        }
+
+        /*----- Store temporarily saved entry of first tuple at second tuples address. ----*/
+        swap(old_env, env);
+        store(second.clone());
+        swap(old_env, env);
+    }
+
+    first.discard(); // since it was always cloned
+    second.discard(); // since it was always cloned
+}
+
+// explicit instantiations to prevent linker errors
+template struct m::wasm::buffer_swap_proxy_t<false>;
+template struct m::wasm::buffer_swap_proxy_t<true>;
 
 
 /*======================================================================================================================
@@ -1562,3 +1957,109 @@ _Bool m::wasm::like(const CharacterSequence &ty_str, const CharacterSequence &ty
     return result;
 }
 
+
+/*======================================================================================================================
+ * comparator
+ *====================================================================================================================*/
+
+template<bool IsGlobal>
+I32 m::wasm::compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
+                     const std::vector<std::pair<const m::Expr*, bool>> &order)
+{
+    using std::swap;
+
+    Var<I32> result(0); // explicitly (re-)set result to 0
+
+    auto &old_env = CodeGenContext::Get().env();
+    Environment env_left, env_right;
+
+    /*----- Load left tuple. -----*/
+    swap(old_env, env_left);
+    load(left);
+    swap(old_env, env_left);
+
+    /*----- Load right tuple. -----*/
+    swap(old_env, env_right);
+    load(right);
+    swap(old_env, env_right);
+
+    /*----- Compile ordering. -----*/
+    for (auto &o : order) {
+        SQL_t _val_left = env_left.compile(*o.first); // compile order expression for left tuple
+
+        std::visit(overloaded {
+            [&]<typename T>(Expr<T> val_left) -> void {
+                Expr<T> val_right = env_right.compile<Expr<T>>(*o.first); // compile order expression for right tuple
+
+#if 0
+                /* XXX: default c'tor not (yet) viable because its constraint is checked before variable_storage
+                 *      types are instantiated, once this is supported use the following code and remove the lambda
+                 *      for the _Bool case */
+                using type = std::conditional_t<std::is_same_v<T, bool>, _I32, Expr<T>>;
+                Var<type> left, right;
+                if constexpr (std::is_same_v<T, bool>) {
+                    left  = val_left.template to<int32_t>();
+                    right = val_right.template to<int32_t>();
+                } else {
+                    left  = val_left;
+                    right = val_right;
+                }
+#else
+                Var<Expr<T>> left(val_left), right(val_right);
+#endif
+
+                /*----- Compare both with current order expression and update result. -----*/
+                I32 cmp_null = right.is_null().template to<int32_t>() - left.is_null().template to<int32_t>();
+                _I32 _val_lt = (left < right).template to<int32_t>();
+                _I32 _val_gt = (left > right).template to<int32_t>();
+                _I32 _cmp_val = o.second ? _val_gt - _val_lt : _val_lt - _val_gt;
+                auto [cmp_val, cmp_is_null] = _cmp_val.split();
+                cmp_is_null.discard();
+                I32 cmp = (cmp_null << 1) + cmp_val; // potentially-null value of comparison is overruled by cmp_null
+                result <<= 1; // shift result s.t. first difference will determine order
+                result += cmp; // add current comparison to result
+            },
+            [&](_Bool val_left) -> void {
+                _Bool val_right = env_right.compile<_Bool>(*o.first); // compile order expression for right tuple
+
+                _Var<I32> left(val_left.template to<int32_t>()), right(val_right.template to<int32_t>());
+
+                /*----- Compare both with current order expression and update result. -----*/
+                I32 cmp_null = right.is_null().template to<int32_t>() - left.is_null().template to<int32_t>();
+                _I32 _val_lt = (left < right).template to<int32_t>();
+                _I32 _val_gt = (left > right).template to<int32_t>();
+                _I32 _cmp_val = o.second ? _val_gt - _val_lt : _val_lt - _val_gt;
+                auto [cmp_val, cmp_is_null] = _cmp_val.split();
+                cmp_is_null.discard();
+                I32 cmp = (cmp_null << 1) + cmp_val; // potentially-null value of comparison is overruled by cmp_null
+                result <<= 1; // shift result s.t. first difference will determine order
+                result += cmp; // add current comparison to result
+            },
+            [&](Ptr<Char> val_left) -> void {
+                auto &cs = as<const CharacterSequence>(*o.first->type());
+
+                Ptr<Char> val_right = env_right.compile<Ptr<Char>>(*o.first); // compile order expression for right tuple
+
+                Var<Ptr<Char>> left(val_left), right(val_right);
+
+                /*----- Compare both with current order expression and update result. -----*/
+                I32 cmp_null = right.is_nullptr().to<int32_t>() - left.is_nullptr().to<int32_t>();
+                _I32 _delta = o.second ? strcmp(cs, cs, left, right) : strcmp(cs, cs, right, left);
+                auto [cmp_val, cmp_is_null] = signum(_delta).split();
+                cmp_is_null.discard();
+                I32 cmp = (cmp_null << 1) + cmp_val; // potentially-null value of comparison is overruled by cmp_null
+                result <<= 1; // shift result s.t. first difference will determine order
+                result += cmp; // add current comparison to result
+            },
+            [](std::monostate) -> void { M_unreachable("invalid expression"); }
+        }, _val_left);
+    }
+
+    return result;
+}
+
+// explicit instantiations to prevent linker errors
+template I32 m::wasm::compare(buffer_load_proxy_t<false> &load, U32 left, U32 right,
+                              const std::vector<std::pair<const m::Expr*, bool>> &order);
+template I32 m::wasm::compare(buffer_load_proxy_t<true> &load, U32 left, U32 right,
+                              const std::vector<std::pair<const m::Expr*, bool>> &order);

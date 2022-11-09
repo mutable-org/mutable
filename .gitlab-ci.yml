@@ -209,7 +209,6 @@ build:release:linux-amd64:
         - cd ../..
         - mkdir mutable
         - cp -R include mutable
-        - find mutable/include -type f -iname '*.hpp' | xargs perl -i -pe 'BEGIN{undef $/;} s/^\#ifndef NDEBUG.*?(\#else(.*?))?\#endif/$2/smg'
         - mkdir mutable/lib
         - cp build/${BUILD_TYPE}/lib/libmutable.a mutable/lib
     artifacts:
@@ -248,7 +247,6 @@ build:release:macos-amd64:
         - cd ../..
         - mkdir mutable
         - cp -R include mutable
-        - find mutable/include -type f -iname '*.hpp' | xargs perl -i -pe 'BEGIN{undef $/;} s/^\#ifndef NDEBUG.*?(\#else(.*?))?\#endif/$2/smg'
         - mkdir mutable/lib
         - cp build/${BUILD_TYPE}/lib/libmutable.a mutable/lib
     artifacts:

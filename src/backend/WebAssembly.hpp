@@ -2,10 +2,9 @@
 
 #include <memory>
 #include <mutable/backend/Backend.hpp>
-#include <mutable/catalog/Schema.hpp>
 #include <mutable/IR/Operator.hpp>
-#include <mutable/parse/AST.hpp>
 #include <mutable/util/macro.hpp>
+#include <mutable/util/memory.hpp>
 #include <unordered_map>
 
 
@@ -60,44 +59,65 @@ struct WasmPlatform
     /** A `WasmContext` holds associated information of a WebAssembly module instance. */
     struct WasmContext
     {
-        uint32_t id; ///< a unique ID
-        memory::AddressSpace vm; ///< the WebAssembly module instance's virtual address space aka.\ *linear memory*
-        uint32_t heap; ///< the beginning of the heap, encoded as offset from the beginning of the virtual address sapce
+        enum config_t : uint64_t
+        {
+            TRAP_GUARD_PAGES = 0b1, ///< map guard pages with PROT_NONE to trap any accesses
+        };
 
-        WasmContext(uint32_t id, std::size_t size) : id(id), vm(size) { }
+        private:
+        config_t config_;
+
+        public:
+        unsigned id; ///< a unique ID
+        const Operator &plan; ///< current plan
+        memory::AddressSpace vm; ///<  WebAssembly module instance's virtual address space aka.\ *linear memory*
+        uint32_t heap = 0; ///< beginning of the heap, encoded as offset from the beginning of the virtual address space
+
+        WasmContext(uint32_t id, config_t configuration, const Operator &plan, std::size_t size);
+
+        bool config(config_t cfg) const { return bool(cfg & config_); }
+
+        /** Installs a guard page at the current `heap` and increments `heap` to the next page.  Acknowledges
+         * `TRAP_GUARD_PAGES`. */
+        void install_guard_page();
     };
 
     private:
-    static uint32_t wasm_counter_; ///< a counter used to generate unique IDs
     ///> maps unique IDs to `WasmContext` instances
-    static std::unordered_map<uint32_t, std::unique_ptr<WasmContext>> contexts_;
+    static inline std::unordered_map<unsigned, std::unique_ptr<WasmContext>> contexts_;
 
-    protected:
+    public:
     /** Creates a new `WasmContext` with `size` bytes of virtual address space. */
-    static WasmContext & Create_Wasm_Context(std::size_t size) {
-        auto wasm_context = std::make_unique<WasmContext>(wasm_counter_, size);
-        auto res = contexts_.emplace(wasm_counter_, std::move(wasm_context));
+    static WasmContext & Create_Wasm_Context_For_ID(unsigned id,
+                                                    WasmContext::config_t configuration = WasmContext::config_t(0x0),
+                                                    const Operator &plan = NoOpOperator(std::cout),
+                                                    std::size_t size = WASM_MAX_MEMORY)
+    {
+        auto wasm_context = std::make_unique<WasmContext>(id, configuration, plan, size);
+        auto res = contexts_.emplace(id, std::move(wasm_context));
         M_insist(res.second, "WasmContext with that ID already exists");
-        ++wasm_counter_;
         return *res.first->second;
     }
 
-    /** Disposes of the `WasmContext` with ID `id`. */
-    static void Dispose_Wasm_Context(uint32_t id) {
+    /** Disposes the `WasmContext` with ID `id`. */
+    static void Dispose_Wasm_Context(unsigned id) {
         auto res = contexts_.erase(id);
         (void) res;
         M_insist(res == 1, "There is no context with the given ID to erase");
     }
 
+    /** Disposes the `WasmContext` `ctx`. */
     static void Dispose_Wasm_Context(const WasmContext &ctx) { Dispose_Wasm_Context(ctx.id); }
 
-    public:
     /** Returns a reference to the `WasmContext` with ID `id`. */
-    static WasmContext & Get_Wasm_Context_By_ID(uint32_t id) {
+    static WasmContext & Get_Wasm_Context_By_ID(unsigned id) {
         auto it = contexts_.find(id);
         M_insist(it != contexts_.end(), "There is no context with the given ID");
         return *it->second;
     }
+
+    /** Tests if the `WasmContext` with ID `id` exists. */
+    static bool Has_Wasm_Context(unsigned id) { return contexts_.find(id) != contexts_.end(); }
 
     WasmPlatform() = default;
     virtual ~WasmPlatform() { }

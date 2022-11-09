@@ -2,6 +2,7 @@
 
 #include <binaryen-c.h>
 #include <iostream>
+#include <sys/mman.h>
 #include <utility>
 
 
@@ -51,8 +52,24 @@ M_LCOV_EXCL_STOP
  * WasmPlatform
  *====================================================================================================================*/
 
-uint32_t WasmPlatform::wasm_counter_ = 0;
-std::unordered_map<uint32_t, std::unique_ptr<WasmPlatform::WasmContext>> WasmPlatform::contexts_;
+WasmPlatform::WasmContext::WasmContext(uint32_t id, config_t config, const Operator &plan, std::size_t size)
+    : config_(config)
+    , id(id)
+    , plan(plan)
+    , vm(size)
+{
+    install_guard_page();
+}
+
+void WasmPlatform::WasmContext::install_guard_page()
+{
+    M_insist(Is_Page_Aligned(heap));
+    if (not config(TRAP_GUARD_PAGES)) {
+        /* Map the guard page to a fresh, zeroed page. */
+        M_DISCARD mmap(vm.as<uint8_t*>() + heap, get_pagesize(), PROT_READ, MAP_FIXED|MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
+    }
+    heap += get_pagesize(); // install guard page
+}
 
 
 /*======================================================================================================================

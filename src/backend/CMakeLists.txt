@@ -6,7 +6,7 @@ set(
 )
 
 if(${WITH_V8})
-    list(APPEND BACKEND_SOURCES WasmAlgo.cpp WasmUtil.cpp WebAssembly.cpp V8Platform.cpp)
+    list(APPEND BACKEND_SOURCES WasmAlgo.cpp WasmDSL.cpp WasmUtil.cpp WebAssembly.cpp V8Platform.cpp)
 endif()
 
 add_library(

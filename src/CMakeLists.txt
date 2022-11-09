@@ -47,15 +47,15 @@ endif()
 
 # V8
 if(${WITH_V8})
-    target_link_libraries(${PROJECT_NAME} PRIVATE v8)
+    target_link_libraries(${PROJECT_NAME} PUBLIC v8)
     if (${BUILD_SHARED_LIBS})
-        target_link_libraries(${PROJECT_NAME} PRIVATE v8_platform)
+        target_link_libraries(${PROJECT_NAME} PUBLIC v8_platform)
     endif()
 endif()
 
 # Binaryen
 if(${WITH_V8} OR ${WITH_SPIDERMONKEY})
-    target_link_libraries(${PROJECT_NAME} PRIVATE binaryen)
+    target_link_libraries(${PROJECT_NAME} PUBLIC binaryen)
 endif()
 
 # others

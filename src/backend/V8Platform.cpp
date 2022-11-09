@@ -741,9 +741,8 @@ void V8Platform::execute(const Operator &plan)
     v8::Local<v8::Context> context = v8::Context::New(isolate_, /* extensions= */ nullptr, global);
     v8::Context::Scope context_scope(context);
 
-    auto &wasm_context = Create_Wasm_Context(WASM_MAX_MEMORY);
-
     /* Create the import object for instantiating the WebAssembly module. */
+    auto &wasm_context = Create_Wasm_Context_For_ID(/* id= */ 0);
     auto imports = v8::Object::New(isolate_);
     auto env = create_env(wasm_context, plan);
     M_DISCARD imports->Set(context, mkstr("env"), env);

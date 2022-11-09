@@ -3,11 +3,11 @@
 
 namespace m {
 
-template<typename T>
+template<typename... Ts>
 struct tag
 {
-    tag() = default;
-    tag(T&&) { } // allow implicit construction from instance of T
+    explicit tag() = default;
+    explicit tag(Ts&&...) { } // allow construction from instance of Ts
 };
 
 }

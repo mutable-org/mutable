@@ -77,6 +77,11 @@ const Boolean * Type::Get_Boolean(category_t category)
     return category == TY_Scalar ? &b_scalar : &b_vector;
 }
 
+const Bitmap * Type::Get_Bitmap(category_t category, std::size_t length)
+{
+    return static_cast<const Bitmap*>(types_(Bitmap(category, length)));
+}
+
 const CharacterSequence * Type::Get_Char(category_t category, std::size_t length)
 {
     return static_cast<const CharacterSequence*>(types_(CharacterSequence(category, length, false)));
@@ -147,6 +152,13 @@ bool Boolean::operator==(const Type &other) const
     return false;
 }
 
+bool Bitmap::operator==(const Type &other) const
+{
+    if (auto o = cast<const Bitmap>(&other))
+        return this->category == o->category and this->length == o->length;
+    return false;
+}
+
 bool CharacterSequence::operator==(const Type &other) const
 {
     if (auto o = cast<const CharacterSequence>(&other))
@@ -199,6 +211,11 @@ uint64_t NoneType::hash() const { return -1UL; }
 
 uint64_t Boolean::hash() const { return 0b10UL | uint64_t(category); }
 
+uint64_t Bitmap::hash() const
+{
+    return uint64_t(length) << 1 | uint64_t(category);
+}
+
 uint64_t CharacterSequence::hash() const
 {
     return uint64_t(length) << 2 | uint64_t(is_varying) << 1 | uint64_t(category);
@@ -226,6 +243,17 @@ uint64_t FnType::hash() const
 const PrimitiveType * Boolean::as_scalar() const { return Type::Get_Boolean(TY_Scalar); }
 
 const PrimitiveType * Boolean::as_vectorial() const { return Type::Get_Boolean(TY_Vector); }
+
+const PrimitiveType * Bitmap::as_scalar() const
+{
+    if (is_scalar()) return this;
+    return static_cast<const Bitmap*>(types_(Bitmap(TY_Scalar, length)));
+}
+const PrimitiveType * Bitmap::as_vectorial() const
+{
+    if (is_vectorial()) return this;
+    return static_cast<const Bitmap*>(types_(Bitmap(TY_Vector, length)));
+}
 
 const PrimitiveType * CharacterSequence::as_scalar() const
 {
@@ -263,6 +291,8 @@ void ErrorType::print(std::ostream &out) const { out << "[ErrorType]"; }
 void NoneType::print(std::ostream &out) const { out << "[none]"; }
 
 void Boolean::print(std::ostream &out) const { out << "BOOL"; }
+
+void Bitmap::print(std::ostream &out) const { out << "BITMAP" << '(' << length << ')'; }
 
 void CharacterSequence::print(std::ostream &out) const
 {
@@ -314,6 +344,11 @@ void NoneType::dump(std::ostream &out) const { out << "[NoneType]" << std::endl;
 void Boolean::dump(std::ostream &out) const
 {
     out << "Boolean{ category = " << CATEGORY_TO_STR_[category] << " }" << std::endl;
+}
+
+void Bitmap::dump(std::ostream &out) const
+{
+    out << "Bitmap{ category = " << CATEGORY_TO_STR_[category] << ", length = " << length << " }" << std::endl;
 }
 
 void CharacterSequence::dump(std::ostream &out) const

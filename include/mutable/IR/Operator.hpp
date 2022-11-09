@@ -46,6 +46,8 @@ struct M_EXPORT Operator
     Schema schema_; ///< the schema of this `Operator`
     std::unique_ptr<OperatorInformation> info_; ///< additional information about this `Operator`
     mutable OperatorData *data_ = nullptr; ///< the data object associated to this `Operator`; may be `nullptr`
+    protected:
+    mutable std::size_t id_ = -1UL; ///< the ID of this `Operator`; used as index in the DP table of `PhysicalOperator`
 
     public:
     virtual ~Operator() { delete data_; }
@@ -63,6 +65,17 @@ struct M_EXPORT Operator
         return new_info;
     }
 
+    /** Assigns IDs to the operator tree rooted in `this` in post-order starting with ID `start_id`. */
+    virtual void assign_post_order_ids(std::size_t start_id = 0UL) const { id_ = start_id; }
+    /** Resets the IDs of the operator tree rooted in `this`. */
+    virtual void reset_ids() const { id_ = -1UL; }
+    /** Returns the ID of `this`. */
+    std::size_t id() const {
+        M_insist(id_ != -1UL, "id must be first set by calling `assign_post_order_ids()`");
+        return id_;
+    }
+
+    public:
     /** Attached `OperatorData` `data` to this `Operator`.  Returns the previously attached `OperatorData`.  May return
      * `nullptr`. */
     OperatorData * data(OperatorData *data) const { std::swap(data, data_); return data; }
@@ -153,6 +166,21 @@ struct M_EXPORT Consumer : virtual Operator
 
     protected:
     std::vector<Producer*> & children() { return children_; }
+
+    public:
+    void assign_post_order_ids(std::size_t start_id = 0UL) const override {
+        auto next_start_id = start_id;
+        for (auto c : children_) {
+            c->assign_post_order_ids(next_start_id);
+            next_start_id = c->id() + 1;
+        }
+        id_ = next_start_id;
+    }
+    void reset_ids() const override {
+        id_ = -1UL;
+        for (auto c : children_)
+            c->reset_ids();
+    }
 };
 
 struct M_EXPORT CallbackOperator : Consumer

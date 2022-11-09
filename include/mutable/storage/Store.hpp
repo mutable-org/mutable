@@ -3,8 +3,6 @@
 #include <iostream>
 #include <memory>
 #include <mutable/mutable-config.hpp>
-#include <mutable/catalog/Type.hpp>
-#include <mutable/storage/Linearization.hpp>
 #include <mutable/util/macro.hpp>
 #include <mutable/util/memory.hpp>
 #include <string>
@@ -24,7 +22,6 @@ struct M_EXPORT Store
 {
     private:
     const Table &table_; ///< the table defining this store's schema
-    std::unique_ptr<Linearization> lin_; ///< the linearization describing the layout of this store
 
     protected:
     Store(const Table &table) : table_(table) {}
@@ -38,18 +35,8 @@ struct M_EXPORT Store
 
     const Table &table() const { return table_; }
 
-    const Linearization &linearization() const {
-        if (not bool(lin_))
-            throw runtime_error("no linearization provided");
-        return *lin_;
-    }
-
-    protected:
-    void linearization(std::unique_ptr<Linearization> lin) { lin_ = std::move(lin); }
-
-    public:
-    /** Returns the memory corresponding to the `idx`-th entry in the `Linearization`'s root node. */
-    virtual const memory::Memory & memory(std::size_t idx) const = 0;
+    /** Returns the memory corresponding to the `Linearization`'s root node. */
+    virtual const memory::Memory & memory() const = 0;
 
     /** Return the number of rows in this store. */
     virtual std::size_t num_rows() const = 0;

@@ -9,7 +9,7 @@ namespace m {
  *
  * Taken from [An Implementation Helper For The Curiously Recurring Template Pattern - Fluent
  * C++](https://www.fluentcpp.com/2017/05/19/crtp-helper/). */
-template<typename T, template<typename> typename crtpType>
+template<typename T, template<typename...> typename crtpType, typename... Others>
 struct crtp
 {
     using actual_type = T;
@@ -18,7 +18,7 @@ struct crtp
 
     private:
     crtp() { }                      // no one can construct this
-    friend crtpType<actual_type>;   // except classes that properly inherit from this class
+    friend crtpType<actual_type, Others...>;   // except classes that properly inherit from this class
 };
 
 /** A helper class to introduce a virtual method overload per type to a class hierarchy. */

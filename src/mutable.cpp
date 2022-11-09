@@ -109,6 +109,7 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
         auto &DB = C.get_database_in_use();
         auto &T = DB.get_table(S->table_name.text);
         T.store(C.create_store(T));
+        T.layout(C.data_layout());
     } else if (auto S = cast<const DSVImportStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
         auto &T = DB.get_table(S->table_name.text);
@@ -254,9 +255,10 @@ m::StoreWriter::~StoreWriter() { }
 void m::StoreWriter::append(const Tuple &tup) const
 {
     store_.append();
-    if (lin_ != &store_.linearization()) {
-        lin_ = &store_.linearization();
-        writer_ = std::make_unique<m::StackMachine>(m::Interpreter::compile_store(S, *lin_, store_.num_rows() - 1));
+    if (layout_ != &store_.table().layout()) {
+        layout_ = &store_.table().layout();
+        writer_ = std::make_unique<m::StackMachine>(m::Interpreter::compile_store(S, store_.memory().addr(), *layout_,
+                                                                                  S, store_.num_rows() - 1));
     }
 
     Tuple *args[] = { const_cast<Tuple*>(&tup) };

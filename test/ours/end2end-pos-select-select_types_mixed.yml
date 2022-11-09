@@ -2,7 +2,7 @@ description: select types mixed
 db: ours
 query: |
     SELECT 42, 13.37, "Hello, wolrd!", TRUE, d'2001-09-28', d'2001-09-28 20:38:40', NULL;
-required: NO
+required: YES
 
 stages:
 

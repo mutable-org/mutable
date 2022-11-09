@@ -36,7 +36,7 @@ struct PaxStore : Store
     uint32_t block_size() const { return block_size_; }
 
     uint32_t offset(uint32_t idx) const {
-        M_insist(idx <= table().size(), "index out of range");
+        M_insist(idx <= table().num_attrs(), "index out of range");
         return offsets_[idx];
     }
     uint32_t offset(const Attribute &attr) const { return offset(attr.id); }
@@ -53,8 +53,7 @@ struct PaxStore : Store
     }
 
     /** Returns the memory of the store. */
-    const memory::Memory & memory() const { return data_; }
-    const memory::Memory & memory(std::size_t idx) const override { M_insist(idx == 0); return data_; }
+    const memory::Memory & memory() const override { return data_; }
 
     void dump(std::ostream &out) const override;
     using Store::dump;

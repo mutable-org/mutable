@@ -35,13 +35,18 @@ struct M_EXPORT Optimizer
     /** Apply this optimizer to the given query graph to compute an operator tree. */
     std::unique_ptr<Producer> operator()(const QueryGraph &G) const { return optimize(G).first; }
 
-    /** Recursively computes and constructs an optimial plan for the given query graph.  Selects a `PlanTable*` type to
-     * represent the internal state of planning progress, then delegates to `optimize_with_plantable<>()`.  */
+    /** Computes and constructs an optimal plan for the given query graph.  Delegates to `optimize_recursive()`, then
+     * assigns IDs to the optimal plan in post-order. */
     std::pair<std::unique_ptr<Producer>, PlanTableEntry>
     optimize(const QueryGraph &G) const;
 
-    /** Recursively computes and constructs an optimial plan for the given query graph, using the given `PlanTable` type
-     * to represent the state of planning progress.  */
+    /** Recursively computes and constructs an optimal plan for the given query graph.  Selects a `PlanTable*` type to
+     * represent the internal state of planning progress, then delegates to `optimize_with_plantable<>()`. */
+    std::pair<std::unique_ptr<Producer>, PlanTableEntry>
+    optimize_recursive(const QueryGraph &G) const;
+
+    /** Recursively computes and constructs an optimal plan for the given query graph, using the given `PlanTable` type
+     * to represent the state of planning progress. */
     template<typename PlanTable>
     std::pair<std::unique_ptr<Producer>, PlanTable>
     optimize_with_plantable(const QueryGraph &G) const;

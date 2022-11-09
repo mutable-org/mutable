@@ -4,10 +4,10 @@
 #include <functional>
 #include <iostream>
 #include <memory>
-#include <mutable/backend/Backend.hpp>
 #include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/Type.hpp>
 #include <mutable/mutable-config.hpp>
+#include <mutable/storage/DataLayout.hpp>
 #include <mutable/storage/Store.hpp>
 #include <mutable/util/ADT.hpp>
 #include <mutable/util/exception.hpp>
@@ -20,6 +20,13 @@
 
 namespace m {
 
+namespace storage {
+
+// forward declarations
+struct DataLayoutFactory;
+
+}
+
 /** A `Schema` represents a sequence of identifiers, optionally with a prefix, and their associated types.  The `Schema`
  * allows identifiers of the same name with different prefix.  */
 struct M_EXPORT Schema
@@ -30,11 +37,13 @@ struct M_EXPORT Schema
         const char *prefix; ///< prefix of this `Identifier`, may be `nullptr`
         const char *name; ///< the name of this `Identifier`
 
-        Identifier(const char *prefix, const char *name) : prefix(prefix) , name(name) {
+        Identifier(const char *name) : prefix(nullptr), name(name) { }
+        Identifier(const char *prefix, const char *name)
+            : prefix(prefix) , name(name)
+        {
             if (prefix != nullptr and strlen(prefix) == 0)
                 throw invalid_argument("prefix must not be the empty string");
         }
-        Identifier(const char *name) : prefix(nullptr), name(name) { }
 
         bool operator==(Identifier other) const {
             return this->prefix == other.prefix and this->name == other.name;
@@ -56,6 +65,8 @@ M_LCOV_EXCL_STOP
         const Type *type;
 
         entry_type(Identifier id, const Type *type) : id(id), type(M_notnull(type)) { }
+
+        bool nullable() const { return true; /* TODO: compute from table constraint */ }
     };
 
     private:
@@ -91,18 +102,30 @@ M_LCOV_EXCL_STOP
     /** Returns `true` iff this `Schema` contains an entry with `Identifier` `id`. */
     bool has(Identifier id) const { return find(id) != end(); }
 
-    /** Returns the entry at index `idx`. */
-    const entry_type & operator[](std::size_t idx) const {
+    /** Returns the entry at index `idx` with in-bounds checking. */
+    const entry_type & at(std::size_t idx) const {
         if (idx >= entries_.size())
             throw out_of_range("index out of bounds");
         return entries_[idx];
     }
+    /** Returns the entry at index `idx`. */
+    const entry_type & operator[](std::size_t idx) const {
+        M_insist(idx < entries_.size(), "index out of bounds");
+        return entries_[idx];
+    }
 
-    /** Returns a `std::pair` of the index and a reference to the entry with `Identifier` `id`. */
-    std::pair<std::size_t, const entry_type&> operator[](Identifier id) const {
+    /** Returns a `std::pair` of the index and a reference to the entry with `Identifier` `id` with in-bounds checking.
+     */
+    std::pair<std::size_t, const entry_type&> at(Identifier id) const {
         auto pos = find(id);
         if (pos == end())
             throw out_of_range("identifier not found");
+        return { std::distance(begin(), pos), *pos };
+    }
+    /** Returns a `std::pair` of the index and a reference to the entry with `Identifier` `id`. */
+    std::pair<std::size_t, const entry_type&> operator[](Identifier id) const {
+        auto pos = find(id);
+        M_insist(pos != end(), "identifier not found");
         return { std::distance(begin(), pos), *pos };
     }
 
@@ -114,6 +137,16 @@ M_LCOV_EXCL_STOP
         Schema res;
         for (auto &e : *this) {
             if (not res.has(e.id))
+                res.add(e.id, e.type);
+        }
+        return res;
+    }
+
+    /** Returns a copy of `this` `Schema` where all entries with `NoneType` are removed..  */
+    Schema drop_none() const {
+        Schema res;
+        for (auto &e : *this) {
+            if (not e.type->is_none())
                 res.add(e.id, e.type);
         }
         return res;
@@ -135,6 +168,12 @@ M_LCOV_EXCL_STOP
         }
         return *this;
     }
+
+    bool operator==(const Schema &other) const {
+        return std::all_of(this->begin(), this->end(), [&](const entry_type &p) { return other.has(p.id); }) and
+               std::all_of(other.begin(), other.end(), [&](const entry_type &p) { return this->has(p.id); });
+    }
+    bool operator!=(const Schema &other) const { return not operator==(other); }
 
 M_LCOV_EXCL_START
     friend std::ostream & operator<<(std::ostream &out, const Schema &schema) {
@@ -196,13 +235,14 @@ struct M_EXPORT Attribute
     const Table &table; ///< the table the attribute belongs to
     const PrimitiveType *type; ///< the type of the attribute
     const char *name; ///< the name of the attribute
+    bool nullable = true; ///< the flag indicating whether the attribute may be NULL
 
     private:
     explicit Attribute(std::size_t id, const Table &table, const PrimitiveType *type, const char *name)
-            : id(id)
-            , table(table)
-            , type(M_notnull(type))
-            , name(M_notnull(name))
+        : id(id)
+        , table(table)
+        , type(M_notnull(type))
+        , name(M_notnull(name))
     {
         if (not type->is_vectorial())
             throw invalid_argument("attributes must be of vectorial type");
@@ -286,47 +326,67 @@ struct M_EXPORT Table
     table_type attrs_; ///< the attributes of this table, maintained as a sorted set
     std::unordered_map<const char*, table_type::size_type> name_to_attr_; ///< maps attribute names to attributes
     std::unique_ptr<Store> store_; ///< the store backing this table; may be `nullptr`
+    storage::DataLayout layout_; ///< the physical data layout for this table
     SmallBitset primary_key_; ///< the primary key of this table, maintained as a `SmallBitset` over attribute id's
 
     public:
     Table(const char *name) : name(name) { }
 
     /** Returns the number of attributes in this table. */
-    std::size_t size() const { return attrs_.size(); }
+    std::size_t num_attrs() const { return attrs_.size(); }
 
     table_type::const_iterator begin()  const { return attrs_.cbegin(); }
     table_type::const_iterator end()    const { return attrs_.cend(); }
     table_type::const_iterator cbegin() const { return attrs_.cbegin(); }
     table_type::const_iterator cend()   const { return attrs_.cend(); }
 
-    /** Returns the attribute with the given `id`. */
-    const Attribute & at(std::size_t id) const {
+    /** Returns the attribute with the given `id`.  Throws `std::out_of_range` if no attribute with the given `id`
+     * exists. */
+    Attribute & at(std::size_t id) {
         if (id >= attrs_.size())
-            throw out_of_range("id out of bounds");
+            throw std::out_of_range("id out of bounds");
         auto &attr = attrs_[id];
         M_insist(attr.id == id, "attribute ID mismatch");
         return attr;
     }
+    const Attribute & at(std::size_t id) const { return const_cast<Table*>(this)->at(id); }
     /** Returns the attribute with the given `id`. */
-    const Attribute & operator[](std::size_t i) const { return at(i); }
+    Attribute & operator[](std::size_t id) {
+        auto &attr = attrs_[id];
+        M_insist(attr.id == id, "attribute ID mismatch");
+        return attr;
+    }
+    const Attribute & operator[](std::size_t id) const { return const_cast<Table*>(this)->operator[](id); }
 
     /** Returns the attribute with the given `name`.  Throws `std::out_of_range` if no attribute with the given `name`
      * exists. */
-    const Attribute & at(const char *name) const { return at(name_to_attr_.at(name)); }
-    /** Returns the attribute with the given `name`.  Throws `std::out_of_range` if no attribute with the given `name`
-     * exists. */
-    const Attribute & operator[](const char *name) const { return at(name); }
+    Attribute & at(const char *name) {
+        if (auto it = name_to_attr_.find(name); it != name_to_attr_.end())
+            return at(it->second);
+        throw std::out_of_range("name does not exists");
+    }
+    const Attribute & at(const char *name) const { return const_cast<Table*>(this)->at(name_to_attr_.at(name)); }
+    /** Returns the attribute with the given `name`. */
+    Attribute & operator[](const char *name) { return operator[](name_to_attr_.find(name)->second); }
+    const Attribute & operator[](const char *name) const { return const_cast<Table*>(this)->operator[](name); }
 
     /** Returns a reference to the backing store. */
     Store & store() const { return *store_; }
     /** Sets the backing store for this table.  `new_store` must not be `nullptr`. */
     void store(std::unique_ptr<Store> new_store) { using std::swap; swap(store_, new_store); }
 
+    /** Returns a reference to the physical data layout. */
+    const storage::DataLayout & layout() const { M_insist(bool(layout_)); return layout_; }
+    /** Sets the physical data layout for this table. */
+    void layout(storage::DataLayout &&new_layout) { layout_ = std::move(new_layout); }
+    /** Sets the physical data layout for this table by calling `factory.make()`. */
+    void layout(const storage::DataLayoutFactory &factory);
+
     /** Returns all attributes forming the primary key. */
     std::vector<const Attribute*> primary_key() const {
         std::vector<const Attribute*> res;
         for (auto id : primary_key_)
-            res.push_back(&at(id));
+            res.push_back(&operator[](id));
         return res;
     }
     /** Adds an attribute with the given `name` to the primary key of this table. Throws `std::out_of_range` if no

@@ -660,6 +660,8 @@ M_LCOV_EXCL_STOP
 template<typename It>
 struct range
 {
+    using iterator_type = It;
+
     private:
     It begin_, end_;
 
@@ -667,8 +669,83 @@ struct range
     range() { }
     range(It begin, It end) : begin_(begin), end_(end) { }
 
-    It begin() { return begin_; }
-    It end() { return end_; }
+    It begin() const { return begin_; }
+    It end() const { return end_; }
 };
+
+template<typename It, typename Fn>
+struct view;
+
+template<typename It, typename ReturnType>
+struct view<It, ReturnType&(It)>
+{
+    using iterator_type = It;
+    using projection_type = std::function<ReturnType&(It)>;
+
+    private:
+    range<It> range_;
+    projection_type project_;
+
+    struct iterator
+    {
+        using difference_type = typename It::difference_type;
+        using value_type = ReturnType;
+        using pointer = value_type*;
+        using reference = value_type&;
+        using iterator_category = std::random_access_iterator_tag;
+
+        private:
+        It it_;
+        const projection_type &project_;
+
+        public:
+        iterator(It it, const projection_type &project) : it_(it), project_(project) { }
+
+        template<typename = decltype(std::declval<It>() == std::declval<It>())>
+        bool operator==(iterator other) const { return this->it_ == other.it_; }
+        template<typename = decltype(std::declval<It>() != std::declval<It>())>
+        bool operator!=(iterator other) const { return this->it_ != other.it_; }
+
+        template<typename = decltype(++std::declval<It>())>
+        iterator & operator++() { ++it_; return *this; }
+        template<typename = decltype(std::declval<It>()++)>
+        iterator operator++(int) { return it_++; }
+
+        template<typename = decltype(--std::declval<It>())>
+        iterator & operator--() { --it_; return *this; }
+        template<typename = decltype(std::declval<It>()--)>
+        iterator operator--(int) { return it_--; }
+
+        template<typename = decltype(std::declval<It>() += int())>
+        iterator & operator+=(int offset) { it_ += offset; return *this; }
+        template<typename = decltype(std::declval<It>() -= int())>
+        iterator & operator-=(int offset) { it_ -= offset; return *this; }
+
+        template<typename = decltype(std::declval<It>() - std::declval<It>())>
+        difference_type operator-(iterator other) const { return this->it_ - other.it_; }
+
+        template<typename = decltype(std::declval<projection_type>()(std::declval<It>()))>
+        reference operator*() const { return project_(it_); }
+        template<typename = decltype(std::declval<projection_type>()(std::declval<It>()))>
+        reference operator->() const { return project_(it_); }
+    };
+
+    public:
+    view(range<It> range, projection_type project) : range_(range), project_(project) { }
+    view(It begin, It end, projection_type project) : range_(begin, end), project_(project) { }
+    template<typename Fn>
+    view(range<It> range, Fn &&fn) : range_(range), project_(std::forward<Fn>(fn)) { }
+    template<typename Fn>
+    view(It begin, It end, Fn &&fn) : range_(begin, end), project_(std::forward<Fn>(fn)) { }
+
+    iterator begin() const { return iterator(range_.begin(), project_); }
+    iterator end() const { return iterator(range_.end(), project_); }
+};
+
+// class template argument deduction guides
+template<typename It, typename Fn>
+view(range<It>, Fn&&) -> view<It, std::invoke_result_t<Fn&&, It>(It)>;
+template<typename It, typename Fn>
+view(It, It, Fn&&) -> view<It, std::invoke_result_t<Fn&&, It>(It)>;
 
 }

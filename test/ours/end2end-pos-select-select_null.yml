@@ -2,7 +2,7 @@ description: select null
 db: ours
 query: |
     SELECT NULL;
-required: NO
+required: YES
 
 stages:
 

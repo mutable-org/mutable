@@ -7,7 +7,6 @@
 #include <iomanip>
 #include <mutable/catalog/Catalog.hpp>
 #include <mutable/catalog/Type.hpp>
-#include <mutable/storage/Linearization.hpp>
 #include <mutable/util/fn.hpp>
 #include <typeinfo>
 
@@ -17,20 +16,11 @@ using namespace m;
 
 RowStore::RowStore(const Table &table)
     : Store(table)
-    , offsets_(new uint32_t[table.size() + 1]) // add one slot for the offset of the meta data
+    , offsets_(new uint32_t[table.num_attrs() + 1]) // add one slot for the offset of the meta data
 {
     compute_offsets();
     capacity_ = ALLOCATION_SIZE / (row_size_ / 8);
     data_ = allocator_.allocate(ALLOCATION_SIZE);
-
-    /* Initialize linearization. */
-    auto lin = std::make_unique<Linearization>(Linearization::CreateInfinite(1));
-    auto child = std::make_unique<Linearization>(Linearization::CreateFinite(table.size() + 1, 1));
-    for (auto &attr : table)
-        child->add_sequence(offset(attr), 0, attr);
-    child->add_null_bitmap(offset(table.size()), 0);
-    lin->add_sequence(uintptr_t(memory().addr()), row_size_ / 8, std::move(child));
-    linearization(std::move(lin));
 }
 
 RowStore::~RowStore()
@@ -43,7 +33,7 @@ void RowStore::compute_offsets()
     /* TODO: use `PhysicalSchema` with additional bitmap-type to compute offsets. */
     using std::max;
 
-    const auto num_attrs = table().size();
+    const auto num_attrs = table().num_attrs();
     const Attribute **attrs = new const Attribute*[num_attrs];
 
     for (uint32_t pos = 0; pos != num_attrs; ++pos)
@@ -55,8 +45,8 @@ void RowStore::compute_offsets()
     });
 
     /* Compute offsets. */
-    uint32_t off = 0;
-    uint32_t alignment = 8;
+    uint64_t off = 0;
+    uint64_t alignment = 8;
     for (uint32_t pos = 0; pos != num_attrs; ++pos) {
         const Attribute &attr = *attrs[pos];
         offsets_[attr.id] = off;
@@ -78,7 +68,7 @@ void RowStore::dump(std::ostream &out) const
 {
     out << "RowStore at " << data_.addr() << " for table \"" << table().name << "\": " << num_rows_ << '/' << capacity_
         << " rows, " << row_size_ << " bits per row, offsets [";
-    for (uint32_t i = 0, end = table().size(); i != end; ++i) {
+    for (uint32_t i = 0, end = table().num_attrs(); i != end; ++i) {
         if (i != 0) out << ", ";
         out << offsets_[i];
     }

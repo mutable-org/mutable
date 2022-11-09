@@ -24,8 +24,8 @@ struct TestStore : Store
     virtual std::size_t num_rows() const override { return 0; }
     void append() override { }
     void drop() override { }
-    const memory::Memory & memory(std::size_t attr_id) const override { return memory_; }
-    void dump(std::ostream &out) const override { }
+    const memory::Memory & memory() const override { return memory_; }
+    void dump(std::ostream&) const override { }
 };
 
 }
@@ -48,10 +48,5 @@ TEST_CASE("Store", "[core][storage]")
         TEST(RowStore);
         TEST(ColumnStore);
         TEST(PaxStore);
-    }
-
-    SECTION("linearization() sanity check")
-    {
-        REQUIRE_THROWS_AS(TestStore(table).linearization(), m::runtime_error);
     }
 }

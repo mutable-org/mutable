@@ -298,25 +298,31 @@ struct Interpreter : Backend, ConstOperatorVisitor
         M_insist(errno == 0, "constant could not be parsed");
     }
 
-    /** Compile a `StackMachine` to load a tuple of `Schema` `S` using a given `Linearization`.
+    /** Compile a `StackMachine` to load a tuple of `Schema` `tuple_schema` using a given memory address and a given
+     * `DataLayout`.
      *
-     * @param S        the `Schema` of the tuple to load to, specifying the attributes to load
-     * @param L        the `Linearization` of the `Store` we are loading from
-     * @param row_id   the ID of the *first* row to load from
-     * @param tuple_id the ID of the tuple to load to
+     * @param tuple_schema  the `Schema` of the tuple to load, specifying the `Schema::Identifier`s to load
+     * @param address       the memory address of the `Store` we are loading from
+     * @param layout        the `DataLayout` of the `Table` we are loading from
+     * @param layout_schema the `Schema` of `layout`, specifying the `Schema::Identifier`s present in `layout`
+     * @param row_id        the ID of the *first* row to load
+     * @param tuple_id      the ID of the tuple used for loading
      */
-    static StackMachine compile_load(const Schema &S, const Linearization &L, std::size_t row_id = 0,
-                                     std::size_t tuple_id = 0);
+    static StackMachine compile_load(const Schema &tuple_schema, void *address, const storage::DataLayout &layout,
+                                     const Schema &layout_schema, std::size_t row_id = 0, std::size_t tuple_id = 0);
 
-    /** Compile a `StackMachine` to store a tuple of `Schema` `S` using a given `Linearization`.
+    /** Compile a `StackMachine` to store a tuple of `Schema` `tuple_schema` using a given memory address and a given
+     * `DataLayout`.
      *
-     * @param S        the `Schema` of the tuple to store, specifying the attributes to store
-     * @param L        the `Linearization` of the `Store` we are storing to
-     * @param row_id   the ID of the *first* row to store to
-     * @param tuple_id the ID of the tuple to store
+     * @param tuple_schema  the `Schema` of the tuple to store, specifying the `Schema::Identifier`s to store
+     * @param address       the memory address of the `Store` we are storing to
+     * @param layout        the `DataLayout` of the `Table` we are storing to
+     * @param layout_schema the `Schema` of `layout`, specifying the `Schema::Identifier`s present in `layout`
+     * @param row_id        the ID of the *first* row to store
+     * @param tuple_id      the ID of the tuple used for storing
      */
-    static StackMachine compile_store(const Schema &S, const Linearization &L, std::size_t row_id = 0,
-                                      std::size_t tuple_id = 0);
+    static StackMachine compile_store(const Schema &tuple_schema, void *address, const storage::DataLayout &layout,
+                                      const Schema &layout_schema, std::size_t row_id = 0, std::size_t tuple_id = 0);
 };
 
 }

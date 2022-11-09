@@ -91,12 +91,12 @@ TEST_CASE("RowStore sanity checks", "[core][storage][columnstore]")
     RowStore store(table);
 
     std::size_t row_size = 0;
-    uint32_t alignment = 8;
+    uint64_t alignment = 8;
     for (auto &attr : table) {
         row_size += attr.type->size();
         alignment = std::max(alignment, attr.type->alignment());
     }
-    row_size += table.size(); // reserve space for the NULL bitmap
+    row_size += table.num_attrs(); // reserve space for the NULL bitmap
     if (row_size % alignment)
         row_size += (alignment - row_size % alignment); // the offset is padded to fulfill the alignment requirements
     std::size_t capacity = RowStore::ALLOCATION_SIZE / (row_size / 8);

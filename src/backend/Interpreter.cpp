@@ -12,22 +12,26 @@
 
 
 using namespace m;
+using namespace m::storage;
 
 
 /*======================================================================================================================
  * Helper function
  *====================================================================================================================*/
 
-/** Compile a `StackMachine` to load or store a tuple of `Schema` `S` using a given `Linearization`.
+/** Compile a `StackMachine` to load or store a tuple of `Schema` `tuple_schema` using a given memory address and a
+ * given `DataLayout`.
  *
- * @param S        the `Schema` of the tuple to load/store, specifying the attributes to load/store
- * @param L        the `Linearization` of the `Store` we are loading from / storing to
- * @param row_id   the ID of the *first* row to load/store
- * @param tuple_id the ID of the tuple used for loading/storing
+ * @param tuple_schema  the `Schema` of the tuple to load/store, specifying the `Schema::Identifier`s to load/store
+ * @param address       the memory address of the `Store` we are loading from / storing to
+ * @param layout        the `DataLayout` of the `Table` we are loading from / storing to
+ * @param layout_schema the `Schema` of `layout`, specifying the `Schema::Identifier`s present in `layout`
+ * @param row_id        the ID of the *first* row to load/store
+ * @param tuple_id      the ID of the tuple used for loading/storing
  */
 template<bool IsStore>
-static StackMachine compile_linearization(const Schema &S, const Linearization &L, std::size_t row_id,
-                                          std::size_t tuple_id)
+static StackMachine compile_data_layout(const Schema &tuple_schema, void *address, const DataLayout &layout,
+                                        const Schema &layout_schema, std::size_t row_id, std::size_t tuple_id)
 {
     StackMachine SM; // the `StackMachine` to compile
 
@@ -35,7 +39,7 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
     {
         std::size_t counter_id;
         uint64_t num_tuples;
-        uint64_t stride;
+        uint64_t stride_in_bits;
     };
     std::vector<stride_info_t> stride_info_stack; // used to track all strides from root to leaf
 
@@ -51,282 +55,291 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
         bool adjustable_offset() { return offset_id != -1UL; }
     } null_bitmap_info;
 
-    std::unordered_map<decltype(Attribute::id), std::size_t> attr2id;
-    std::unordered_map<decltype(Attribute::id), std::size_t> attr2mask;
+    std::unordered_map<std::size_t, std::size_t> leaf2id;
+    std::unordered_map<std::size_t, std::size_t> leaf2mask;
 
     /* Compute location of NULL bitmap. */
-    auto find_null_bitmap = [&](const Linearization &L, std::size_t row_id) -> void {
-        auto find_null_bitmap_impl = [&](const Linearization &L, uintptr_t offset, std::size_t row_id, auto &find_null_bitmap_ref) -> void {
-            for (auto e : L) {
-                if (e.is_null_bitmap()) {
-                    M_insist(not null_bitmap_info, "there must be at most one null bitmap in the linearization");
-                    null_bitmap_info.id = SM.add(reinterpret_cast<void*>(offset + (e.offset + row_id * e.stride) / 8)); // add NULL bitmap address to context
-                    null_bitmap_info.bit_offset = (e.offset + row_id * e.stride) % 8;
-                    null_bitmap_info.bit_stride = e.stride;
-                    null_bitmap_info.num_tuples = L.num_tuples();
-                    null_bitmap_info.row_id = row_id;
-                } else if (e.is_linearization()) {
-                    auto &lin = e.as_linearization();
-                    M_insist(lin.num_tuples() != 0);
-                    const std::size_t lin_id = row_id / lin.num_tuples();
-                    const std::size_t inner_row_id = row_id % lin.num_tuples();
-                    find_null_bitmap_ref(e.as_linearization(), offset + e.offset + e.stride * lin_id, inner_row_id, find_null_bitmap_ref);
+    const auto null_bitmap_idx = layout_schema.num_entries();
+    auto find_null_bitmap = [&](const DataLayout &layout, std::size_t row_id) -> void {
+        auto find_null_bitmap_impl = [&](const DataLayout::INode &node, uintptr_t offset, std::size_t row_id,
+                                         auto &find_null_bitmap_ref) -> void
+        {
+            for (auto &child : node) {
+                if (auto child_leaf = cast<const DataLayout::Leaf>(child.ptr.get())) {
+                    if (child_leaf->index() == null_bitmap_idx) {
+                        M_insist(not null_bitmap_info, "there must be at most one null bitmap in the linearization");
+                        const uint64_t additional_offset_in_bits = child.offset_in_bits + row_id * child.stride_in_bits;
+                        /* add NULL bitmap address to context */
+                        null_bitmap_info.id = SM.add(reinterpret_cast<void*>(offset + additional_offset_in_bits / 8));
+                        null_bitmap_info.bit_offset = (additional_offset_in_bits) % 8;
+                        null_bitmap_info.bit_stride = child.stride_in_bits;
+                        null_bitmap_info.num_tuples = node.num_tuples();
+                        null_bitmap_info.row_id = row_id;
+                    }
+                } else {
+                    auto child_inode = as<const DataLayout::INode>(child.ptr.get());
+                    const std::size_t lin_id = row_id / child_inode->num_tuples();
+                    const std::size_t inner_row_id = row_id % child_inode->num_tuples();
+                    const uint64_t additional_offset = child.offset_in_bits / 8 + lin_id * child.stride_in_bits / 8;
+                    find_null_bitmap_ref(*child_inode, offset + additional_offset, inner_row_id, find_null_bitmap_ref);
                 }
             }
         };
-        find_null_bitmap_impl(L, 0, row_id, find_null_bitmap_impl);
+        find_null_bitmap_impl(static_cast<const DataLayout::INode&>(layout), uintptr_t(address), row_id,
+                              find_null_bitmap_impl);
     };
-    find_null_bitmap(L, row_id);
+    find_null_bitmap(layout, row_id);
     if (null_bitmap_info and null_bitmap_info.bit_stride) {
         null_bitmap_info.offset_id = SM.add(null_bitmap_info.bit_offset); // add initial NULL bitmap offset to context
     }
 
     /* Emit code for attribute access and pointer increment. */
-    auto compile_access_rec = [&](const Linearization &L, std::size_t row_id) -> void {
-        auto compile_rec_impl = [&](const Linearization &L, uintptr_t offset, std::size_t row_id, auto &compile_rec_ref) -> void {
-            for (auto e : L) {
-                if (e.is_null_bitmap()) {
-                    /* nothing to be done */
-                } else if (e.is_attribute()) {
-                    auto &attr = e.as_attribute();
+    auto compile_accesses = [&](const DataLayout &layout, std::size_t row_id) -> void {
+        auto compile_accesses_impl = [&](const DataLayout::INode &node, uintptr_t offset, std::size_t row_id,
+                                         auto &compile_accesses_ref) -> void
+        {
+            for (auto &child : node) {
+                if (auto child_leaf = cast<const DataLayout::Leaf>(child.ptr.get())) {
+                    if (child_leaf->index() != null_bitmap_idx) {
+                        auto &id = layout_schema[child_leaf->index()].id;
 
-                    /* Locate the attribute in the operator schema. */
-                    if (auto it = S.find({attr.table.name, attr.name}); it != S.end()) {
-                        uint64_t idx = std::distance(S.begin(), it); // get attribute index in schema
-                        const std::size_t byte_offset = (e.offset + row_id * e.stride) / 8;
-                        const std::size_t bit_offset = (e.offset + row_id * e.stride) % 8;
-                        M_insist(not bit_offset or attr.type->is_boolean(), "only booleans may not be byte aligned");
+                        /* Locate the attribute in the operator schema. */
+                        if (auto it = tuple_schema.find(id); it != tuple_schema.end()) {
+                            uint64_t idx = std::distance(tuple_schema.begin(), it); // get attribute index in schema
+                            const uint64_t additional_offset_in_bits = child.offset_in_bits + row_id * child.stride_in_bits;
+                            const std::size_t byte_offset = additional_offset_in_bits / 8;
+                            const std::size_t bit_offset = additional_offset_in_bits % 8;
+                            M_insist(not bit_offset or child_leaf->type()->is_boolean() or child_leaf->type()->is_bitmap(),
+                                     "only booleans and bitmaps may not be byte aligned");
 
-                        const std::size_t byte_stride = e.stride / 8;
-                        const std::size_t bit_stride  = e.stride % 8;
-                        M_insist(not bit_stride or attr.type->is_boolean(), "only booleans may not be byte aligned");
-                        M_insist(bit_stride == 0 or byte_stride == 0, "the stride must be a whole multiple of a byte or "
-                                                                    "less than a byte");
+                            const std::size_t byte_stride = child.stride_in_bits / 8;
+                            const std::size_t bit_stride  = child.stride_in_bits % 8;
+                            M_insist(not bit_stride or child_leaf->type()->is_boolean() or child_leaf->type()->is_bitmap(),
+                                     "only booleans and bitmaps may not be byte aligned");
+                            M_insist(bit_stride == 0 or byte_stride == 0,
+                                     "the stride must be a whole multiple of a byte or less than a byte");
 
-                        /* Access NULL bit. */
-                        if (null_bitmap_info) {
-                            if (not null_bitmap_info.bit_stride) {
-                                /* No bit stride means the NULL bitmap only advances with parent sequence. */
-                                const std::size_t bit_offset = null_bitmap_info.bit_offset + attr.id;
-                                if (bit_offset < 8) {
-                                    SM.emit_Ld_Ctx(null_bitmap_info.id);
-                                    if constexpr (IsStore) {
-                                        SM.emit_Ld_Tup(tuple_id, idx);
-                                        SM.emit_Is_Null();
-                                        SM.emit_Not_b();
-                                        SM.emit_St_b(bit_offset);
+                            /* Access NULL bit. */
+                            if (null_bitmap_info) {
+                                if (not null_bitmap_info.bit_stride) {
+                                    /* No bit stride means the NULL bitmap only advances with parent sequence. */
+                                    const std::size_t bit_offset = null_bitmap_info.bit_offset + child_leaf->index();
+                                    if (bit_offset < 8) {
+                                        SM.emit_Ld_Ctx(null_bitmap_info.id);
+                                        if constexpr (IsStore) {
+                                            SM.emit_Ld_Tup(tuple_id, idx);
+                                            SM.emit_Is_Null();
+                                            SM.emit_St_b(bit_offset);
+                                        } else {
+                                            SM.emit_Ld_b(0x1UL << bit_offset);
+                                        }
                                     } else {
-                                        SM.emit_Ld_b(0x1UL << bit_offset);
+                                        /* Advance to respective byte. */
+                                        SM.add_and_emit_load(uint64_t(bit_offset / 8));
+                                        SM.emit_Ld_Ctx(null_bitmap_info.id);
+                                        SM.emit_Add_p();
+                                        if constexpr (IsStore) {
+                                            SM.emit_Ld_Tup(tuple_id, idx);
+                                            SM.emit_Is_Null();
+                                            SM.emit_St_b(bit_offset % 8);
+                                        } else {
+                                            SM.emit_Ld_b(0x1UL << (bit_offset % 8));
+                                        }
                                     }
                                 } else {
-                                    /* Advance to respective byte. */
-                                    SM.add_and_emit_load(uint64_t(bit_offset / 8));
+                                    /* With bit stride. Use adjustable offset instead of fixed offset. */
+                                    M_insist(null_bitmap_info.adjustable_offset());
+
+                                    /* Create variables for address and mask in context. Only used for storing.*/
+                                    std::size_t address_id, mask_id;
+                                    if constexpr (IsStore) {
+                                        address_id = SM.add(reinterpret_cast<void*>(0));
+                                        mask_id = SM.add(uint64_t(0));
+                                    }
+
+                                    /* Compute address of entire byte containing the NULL bit. */
+                                    SM.emit_Ld_Ctx(null_bitmap_info.offset_id);
+                                    SM.add_and_emit_load(child_leaf->index());
+                                    SM.emit_Add_i();
+                                    SM.emit_SARi_i(3); // (adj_offset + attr.id) / 8
                                     SM.emit_Ld_Ctx(null_bitmap_info.id);
                                     SM.emit_Add_p();
+                                    if constexpr (IsStore)
+                                        SM.emit_Upd_Ctx(address_id); // store address in context
+                                    else
+                                        SM.emit_Ld_i8(); // load byte from address
+
                                     if constexpr (IsStore) {
+                                        /* Test whether value equals NULL. */
                                         SM.emit_Ld_Tup(tuple_id, idx);
                                         SM.emit_Is_Null();
-                                        SM.emit_Not_b();
-                                        SM.emit_St_b(bit_offset % 8);
+                                    }
+
+                                    /* Initialize mask. */
+                                    SM.add_and_emit_load(uint64_t(0x1UL));
+
+                                    /* Compute offset of NULL bit. */
+                                    SM.emit_Ld_Ctx(null_bitmap_info.offset_id);
+                                    SM.add_and_emit_load(child_leaf->index());
+                                    SM.emit_Add_i();
+                                    SM.add_and_emit_load(uint64_t(0b111));
+                                    SM.emit_And_i(); // (adj_offset + attr.id) % 8
+
+                                    /* Shift mask by offset. */
+                                    SM.emit_ShL_i();
+                                    if constexpr (IsStore) {
+                                        SM.emit_Upd_Ctx(mask_id); // store mask in context
+
+                                        /* Load byte and set NULL bit to 1. */
+                                        SM.emit_Ld_Ctx(address_id);
+                                        SM.emit_Ld_i8();
+                                        SM.emit_Or_i(); // in case of NULL
+
+                                        /* Load byte and set NULL bit to 0. */
+                                        SM.emit_Ld_Ctx(mask_id);
+                                        SM.emit_Neg_i();
+                                        SM.emit_Ld_Ctx(address_id);
+                                        SM.emit_Ld_i8();
+                                        SM.emit_And_i(); // in case of not NULL
+
+                                        SM.emit_Sel(); // select the respective modified byte
+
+                                        /* Write entire byte back to the store. */
+                                        SM.emit_St_i8();
                                     } else {
-                                        SM.emit_Ld_b(0x1UL << (bit_offset % 8));
+                                        /* Apply mask and cast to boolean. */
+                                        SM.emit_And_i();
+                                        SM.emit_NEZ_i();
                                     }
                                 }
-                            } else {
-                                /* With bit stride. Use adjustable offset instead of fixed offset. */
-                                M_insist(null_bitmap_info.adjustable_offset());
+                                if constexpr (not IsStore)
+                                    SM.emit_Push_Null(); // to select it later if NULL
+                            }
 
-                                /* Create variables for address and mask in context. Only used for storing.*/
-                                std::size_t address_id, mask_id;
-                                if constexpr (IsStore) {
-                                    address_id = SM.add(reinterpret_cast<void*>(0));
-                                    mask_id = SM.add(uint64_t(0));
-                                }
+                            /* Introduce leaf pointer. */
+                            const std::size_t offset_id = SM.add_and_emit_load(reinterpret_cast<void*>(offset + byte_offset));
+                            leaf2id[child_leaf->index()] = offset_id;
 
-                                /* Compute address of entire byte containing the NULL bit. */
-                                SM.emit_Ld_Ctx(null_bitmap_info.offset_id);
-                                SM.add_and_emit_load(attr.id);
-                                SM.emit_Add_i();
-                                SM.emit_SARi_i(3); // (adj_offset + attr.id) / 8
-                                SM.emit_Ld_Ctx(null_bitmap_info.id);
-                                SM.emit_Add_p();
-                                if constexpr (IsStore)
-                                    SM.emit_Upd_Ctx(address_id); // store address in context
-                                else
-                                    SM.emit_Ld_i8(); // load byte from address
+                            if (bit_stride) {
+                                M_insist(child_leaf->type()->is_boolean(), "only booleans are supported yet");
 
                                 if constexpr (IsStore) {
-                                    /* Test whether value equals NULL. */
-                                    SM.emit_Ld_Tup(tuple_id, idx);
-                                    SM.emit_Is_Null();
-                                }
-
-                                /* Initialize mask. */
-                                SM.add_and_emit_load(uint64_t(0x1UL));
-
-                                /* Compute offset of NULL bit. */
-                                SM.emit_Ld_Ctx(null_bitmap_info.offset_id);
-                                SM.add_and_emit_load(attr.id);
-                                SM.emit_Add_i();
-                                SM.add_and_emit_load(uint64_t(0b111));
-                                SM.emit_And_i(); // (adj_offset + attr.id) % 8
-
-                                /* Shift mask by offset. */
-                                SM.emit_ShL_i();
-                                if constexpr (IsStore) {
-                                    SM.emit_Upd_Ctx(mask_id); // store mask in context
-
-                                    /* Load byte and set NULL bit to 0. */
-                                    SM.emit_Neg_i(); // negate mask which is currently on stack
-                                    SM.emit_Ld_Ctx(address_id);
+                                    /* Load value to stack. */
+                                    SM.emit_Ld_Tup(tuple_id, idx); // boolean
+                                } else {
+                                    /* Load byte with the respective value. */
                                     SM.emit_Ld_i8();
-                                    SM.emit_And_i(); // in case of NULL
+                                }
 
-                                    /* Load byte and set NULL bit to 1. */
+                                /* Introduce mask. */
+                                const std::size_t mask_id = SM.add(uint64_t(0x1UL << bit_offset));
+                                leaf2mask[child_leaf->index()] = mask_id;
+
+                                if constexpr (IsStore) {
+                                    /* Load byte and set bit to 1. */
+                                    SM.emit_Ld_Ctx(offset_id);
+                                    SM.emit_Ld_i8();
                                     SM.emit_Ld_Ctx(mask_id);
-                                    SM.emit_Ld_Ctx(address_id);
+                                    SM.emit_Or_i(); // in case of TRUE
+
+                                    /* Load byte and set bit to 0. */
+                                    SM.emit_Ld_Ctx(offset_id);
                                     SM.emit_Ld_i8();
-                                    SM.emit_Or_i(); // in case of not NULL
+                                    SM.emit_Ld_Ctx(mask_id);
+                                    SM.emit_Neg_i(); // negate mask
+                                    SM.emit_And_i(); // in case of FALSE
 
                                     SM.emit_Sel(); // select the respective modified byte
 
                                     /* Write entire byte back to the store. */
                                     SM.emit_St_i8();
                                 } else {
-                                    /* Apply mask and cast to boolean. */
+                                    /* Load and apply mask and convert to bool. */
+                                    SM.emit_Ld_Ctx(mask_id);
                                     SM.emit_And_i();
                                     SM.emit_NEZ_i();
-                                }
-                            }
-                        }
 
-                        const std::size_t offset_id = SM.add_and_emit_load(reinterpret_cast<void*>(offset + byte_offset)); // attribute pointer
-                        attr2id[attr.id] = offset_id;
+                                    if (null_bitmap_info)
+                                        SM.emit_Sel();
 
-                        if (bit_stride) {
-                            M_insist(attr.type->is_boolean(), "only booleans may not be byte aligned");
-
-                            if constexpr (IsStore) {
-                                /* Load value to stack. */
-                                SM.emit_Ld_Tup(tuple_id, idx); // boolean
-                            } else {
-                                /* Load byte with the respective value. */
-                                SM.emit_Ld_i8();
-                            }
-
-                            /* Introduce mask. */
-                            const std::size_t mask_id = SM.add(uint64_t(0x1UL << bit_offset));
-                            attr2mask[attr.id] = mask_id;
-
-                            if constexpr (IsStore) {
-                                /* Load byte and set bit to 1. */
-                                SM.emit_Ld_Ctx(offset_id);
-                                SM.emit_Ld_i8();
-                                SM.emit_Ld_Ctx(mask_id);
-                                SM.emit_Or_i(); // in case of TRUE
-
-                                /* Load byte and set bit to 0. */
-                                SM.emit_Ld_Ctx(offset_id);
-                                SM.emit_Ld_i8();
-                                SM.emit_Ld_Ctx(mask_id);
-                                SM.emit_Neg_i(); // negate mask
-                                SM.emit_And_i(); // in case of FALSE
-
-                                SM.emit_Sel(); // select the respective modified byte
-
-                                /* Write entire byte back to the store. */
-                                SM.emit_St_i8();
-                            } else {
-                                /* Load and apply mask and convert to bool. */
-                                SM.emit_Ld_Ctx(mask_id);
-                                SM.emit_And_i();
-                                SM.emit_NEZ_i();
-
-                                if (null_bitmap_info) {
-                                    SM.emit_Push_Null();
-                                    SM.emit_Sel();
+                                    /* Store value in output tuple. */
+                                    SM.emit_St_Tup(tuple_id, idx, child_leaf->type());
+                                    SM.emit_Pop();
                                 }
 
-                                /* Store value in output tuple. */
-                                SM.emit_St_Tup(tuple_id, idx, attr.type);
+                                /* Update the mask. */
+                                SM.emit_Ld_Ctx(mask_id);
+                                SM.emit_ShLi_i(1);
+                                SM.emit_Upd_Ctx(mask_id);
+
+                                /* Check whether we are in the 8th iteration and reset mask. */
+                                SM.add_and_emit_load(uint64_t(0x1UL) << 8);
+                                SM.emit_Eq_i();
+                                SM.emit_Dup(); // duplicate outcome for later use
+                                SM.add_and_emit_load(uint64_t(0x1UL));
+                                SM.emit_Ld_Ctx(mask_id);
+                                SM.emit_Sel();
+                                SM.emit_Upd_Ctx(mask_id); // mask <- mask == 256 ? 1 : mask
                                 SM.emit_Pop();
-                            }
 
-                            /* Update the mask. */
-                            SM.emit_Ld_Ctx(mask_id);
-                            SM.emit_ShLi_i(1);
-                            SM.emit_Upd_Ctx(mask_id);
-
-                            /* Check whether we are in the 8th iteration and reset mask. */
-                            SM.add_and_emit_load(uint64_t(0x1UL) << 8);
-                            SM.emit_Eq_i();
-                            SM.emit_Dup(); // duplicate outcome for later use
-                            SM.add_and_emit_load(uint64_t(0x1UL));
-                            SM.emit_Ld_Ctx(mask_id);
-                            SM.emit_Sel();
-                            SM.emit_Upd_Ctx(mask_id); // mask <- mask == 256 ? 1 : mask
-                            SM.emit_Pop();
-
-                            /* If the mask was reset, advance to the next byte. */
-                            SM.emit_Cast_i_b(); // convert outcome of previous check to int
-                            SM.emit_Ld_Ctx(offset_id);
-                            SM.emit_Add_p();
-                            SM.emit_Upd_Ctx(offset_id);
-                            SM.emit_Pop();
-                        } else {
-                            if constexpr (IsStore) {
-                                /* Load value to stack. */
-                                SM.emit_Ld_Tup(tuple_id, idx);
-
-                                /* Store value. */
-                                if (attr.type->is_boolean())
-                                    SM.emit_St_b(bit_offset);
-                                else
-                                    SM.emit_St(attr.type);
-                            } else {
-                                /* Load value. */
-                                if (attr.type->is_boolean())
-                                    SM.emit_Ld_b(0x1UL << bit_offset); // convert the fixed bit offset to a fixed mask
-                                else
-                                    SM.emit_Ld(attr.type);
-
-                                if (null_bitmap_info) {
-                                    SM.emit_Push_Null();
-                                    SM.emit_Sel();
-                                }
-
-                                /* Store value in output tuple. */
-                                SM.emit_St_Tup(tuple_id, idx, attr.type);
-                                SM.emit_Pop();
-                            }
-
-                            /* If the attribute has a stride, advance the pointer accordingly. */
-                            M_insist(not bit_stride);
-                            if (byte_stride) {
-                                /* Advance the attribute pointer by the attribute's stride. */
-                                SM.add_and_emit_load(int64_t(byte_stride));
+                                /* If the mask was reset, advance to the next byte. */
+                                SM.emit_Cast_i_b(); // convert outcome of previous check to int
                                 SM.emit_Ld_Ctx(offset_id);
                                 SM.emit_Add_p();
                                 SM.emit_Upd_Ctx(offset_id);
                                 SM.emit_Pop();
-                            }
-                        }
+                            } else {
+                                if constexpr (IsStore) {
+                                    /* Load value to stack. */
+                                    SM.emit_Ld_Tup(tuple_id, idx);
 
+                                    /* Store value. */
+                                    if (child_leaf->type()->is_boolean())
+                                        SM.emit_St_b(bit_offset);
+                                    else
+                                        SM.emit_St(child_leaf->type());
+                                } else {
+                                    /* Load value. */
+                                    if (child_leaf->type()->is_boolean())
+                                        SM.emit_Ld_b(0x1UL << bit_offset); // convert the fixed bit offset to a fixed mask
+                                    else
+                                        SM.emit_Ld(child_leaf->type());
+
+                                    if (null_bitmap_info)
+                                        SM.emit_Sel();
+
+                                    /* Store value in output tuple. */
+                                    SM.emit_St_Tup(tuple_id, idx, child_leaf->type());
+                                    SM.emit_Pop();
+                                }
+
+                                /* If the attribute has a stride, advance the pointer accordingly. */
+                                M_insist(not bit_stride);
+                                if (byte_stride) {
+                                    /* Advance the attribute pointer by the attribute's stride. */
+                                    SM.add_and_emit_load(int64_t(byte_stride));
+                                    SM.emit_Ld_Ctx(offset_id);
+                                    SM.emit_Add_p();
+                                    SM.emit_Upd_Ctx(offset_id);
+                                    SM.emit_Pop();
+                                }
+                            }
+
+                        }
                     }
                 } else {
-                    M_insist(e.is_linearization());
-
-                    auto &lin = e.as_linearization();
-                    M_insist(lin.num_tuples() != 0);
-                    const std::size_t lin_id = row_id / lin.num_tuples();
-                    const std::size_t inner_row_id = row_id % lin.num_tuples();
-                    compile_rec_ref(e.as_linearization(), offset + e.offset + e.stride * lin_id, inner_row_id, compile_rec_ref);
+                    auto child_inode = as<const DataLayout::INode>(child.ptr.get());
+                    const std::size_t lin_id = row_id / child_inode->num_tuples();
+                    const std::size_t inner_row_id = row_id % child_inode->num_tuples();
+                    const uint64_t additional_offset = child.offset_in_bits / 8 + lin_id * child.stride_in_bits / 8;
+                    compile_accesses_ref(*child_inode, offset + additional_offset, inner_row_id, compile_accesses_ref);
                 }
             }
         };
-        compile_rec_impl(L, 0, row_id, compile_rec_impl);
+        compile_accesses_impl(static_cast<const DataLayout::INode&>(layout), uintptr_t(address), row_id,
+                              compile_accesses_impl);
     };
-    compile_access_rec(L, row_id);
+    compile_accesses(layout, row_id);
 
     /* If the NULL bitmap has a stride, advance the adjustable offset accordingly. */
     if (null_bitmap_info and null_bitmap_info.bit_stride) {
@@ -373,18 +386,19 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
     }
 
     /* Emit code to gap strides. */
-    auto compile_stride_rec = [&](const Linearization &L, std::size_t row_id) -> void {
-        auto compile_rec_impl = [&](const Linearization &L, std::size_t row_id, auto &compile_rec_ref) -> void {
-            for (auto e : L) {
-                if (e.is_null_bitmap() or e.is_attribute()) {
+    auto compile_strides = [&](const DataLayout &layout, std::size_t row_id) -> void {
+        auto compile_strides_impl = [&](const DataLayout::INode &node, std::size_t row_id,
+                                        auto &compile_strides_ref) -> void {
+            for (auto &child : node) {
+                if (auto child_leaf = cast<const DataLayout::Leaf>(child.ptr.get())) {
                     std::size_t offset_id;
                     std::size_t mask_id = -1UL;
-                    if (e.is_null_bitmap()) {
+                    if (child_leaf->index() == null_bitmap_idx) {
                         offset_id = null_bitmap_info.id;
                         mask_id = null_bitmap_info.offset_id;
-                    } else if (auto it = attr2id.find(e.as_attribute().id); it != attr2id.end()) {
+                    } else if (auto it = leaf2id.find(child_leaf->index()); it != leaf2id.end()) {
                         offset_id = it->second;
-                        if (auto it = attr2mask.find(e.as_attribute().id); it != attr2mask.end())
+                        if (auto it = leaf2mask.find(child_leaf->index()); it != leaf2mask.end())
                             mask_id = it->second;
                     } else {
                         continue; // nothing to be done
@@ -392,27 +406,29 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
 
                     /* Emit code for stride jumps. */
                     std::size_t prev_num_tuples = 1;
-                    std::size_t prev_stride = e.stride;
+                    std::size_t prev_stride_in_bits = child.stride_in_bits;
                     for (auto it = stride_info_stack.rbegin(), end = stride_info_stack.rend(); it != end; ++it) {
                         auto &info = *it;
 
                         /* Compute the remaining stride in bits. */
-                        const std::size_t stride_remaining = info.stride * 8 - (info.num_tuples / prev_num_tuples) * prev_stride;
+                        const std::size_t stride_remaining_in_bits =
+                            info.stride_in_bits - (info.num_tuples / prev_num_tuples) * prev_stride_in_bits;
 
                         /* Perform stride jump, if necessary. */
-                        if (stride_remaining) {
-                            std::size_t byte_stride = stride_remaining / 8;
-                            const std::size_t bit_stride = stride_remaining % 8;
+                        if (stride_remaining_in_bits) {
+                            std::size_t byte_stride = stride_remaining_in_bits / 8;
+                            const std::size_t bit_stride = stride_remaining_in_bits % 8;
 
                             if (bit_stride) {
-                                M_insist(e.is_null_bitmap() or e.as_attribute().type->is_boolean(),
-                                       "only the null bitmap or booleans may cause not byte aligned stride jumps");
-                                M_insist(not e.is_null_bitmap() or null_bitmap_info.adjustable_offset(),
+                                M_insist(child_leaf->index() == null_bitmap_idx or child_leaf->type()->is_boolean(),
+                                       "only the null bitmap or booleans may cause not byte aligned stride jumps, "
+                                       "bitmaps are not supported yet");
+                                M_insist(child_leaf->index() != null_bitmap_idx or null_bitmap_info.adjustable_offset(),
                                        "only null bitmaps with adjustable offset may cause not byte aligned stride jumps");
                                 M_insist(mask_id != -1UL);
 
                                 /* Reset mask. */
-                                if (e.is_null_bitmap()) {
+                                if (child_leaf->index() == null_bitmap_idx) {
                                     /* Reset adjustable bit offset to 0. */
                                     if (info.num_tuples != 1) {
                                         /* Check whether counter equals num_tuples. */
@@ -469,13 +485,13 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
 
                         /* Update variables for next iteration. */
                         prev_num_tuples = info.num_tuples;
-                        prev_stride = info.stride * 8;
+                        prev_stride_in_bits = info.stride_in_bits;
                     }
                 } else {
-                    M_insist(e.is_linearization());
+                    auto child_inode = as<const DataLayout::INode>(child.ptr.get());
 
                     /* Initialize counter and emit increment. */
-                    const std::size_t inner_row_id = row_id % e.as_linearization().num_tuples();
+                    const std::size_t inner_row_id = row_id % child_inode->num_tuples();
                     const auto counter_id = SM.add_and_emit_load(inner_row_id); // introduce counter to track iteration count
                     SM.emit_Inc();
                     SM.emit_Upd_Ctx(counter_id);
@@ -484,17 +500,16 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                     /* Put context on stack and perform recursive descend. */
                     stride_info_stack.push_back(stride_info_t{
                         .counter_id = counter_id,
-                        .num_tuples = e.as_linearization().num_tuples(),
-                        .stride = e.stride
+                        .num_tuples = child_inode->num_tuples(),
+                        .stride_in_bits = child.stride_in_bits
                     });
-                    compile_rec_ref(e.as_linearization(), inner_row_id, compile_rec_ref);
+                    compile_strides_ref(*child_inode, inner_row_id, compile_strides_ref);
                     stride_info_stack.pop_back();
 
                     /* Reset counter if iteration is whole multiple of num_tuples. */
-                    M_insist(e.as_linearization().num_tuples() != 0, "must not be an infinite sequence");
-                    if (e.as_linearization().num_tuples() != 1) {
+                    if (child_inode->num_tuples() != 1) {
                         SM.emit_Ld_Ctx(counter_id); // XXX: not needed if recursion cleans up stack properly
-                        SM.add_and_emit_load(e.as_linearization().num_tuples());
+                        SM.add_and_emit_load(child_inode->num_tuples());
                         SM.emit_NE_i();
                         SM.emit_Cast_i_b();
                         SM.emit_Ld_Ctx(counter_id);
@@ -506,23 +521,23 @@ static StackMachine compile_linearization(const Schema &S, const Linearization &
                 }
             }
         };
-        compile_rec_impl(L, row_id, compile_rec_impl);
+        compile_strides_impl(static_cast<const DataLayout::INode&>(layout), row_id, compile_strides_impl);
     };
-    compile_stride_rec(L, row_id);
+    compile_strides(layout, row_id);
 
     return SM;
 }
 
-StackMachine Interpreter::compile_load(const Schema &S, const Linearization &L, std::size_t row_id,
-                                       std::size_t tuple_id)
+StackMachine Interpreter::compile_load(const Schema &tuple_schema, void *address, const storage::DataLayout &layout,
+                                       const Schema &layout_schema, std::size_t row_id, std::size_t tuple_id)
 {
-    return compile_linearization<false>(S, L, row_id, tuple_id);
+    return compile_data_layout<false>(tuple_schema, address, layout, layout_schema, row_id, tuple_id);
 }
 
-StackMachine Interpreter::compile_store(const Schema &S, const Linearization &L, std::size_t row_id,
-                                        std::size_t tuple_id)
+StackMachine Interpreter::compile_store(const Schema &tuple_schema, void *address, const storage::DataLayout &layout,
+                                        const Schema &layout_schema, std::size_t row_id, std::size_t tuple_id)
 {
-    return compile_linearization<true>(S, L, row_id, tuple_id);
+    return compile_data_layout<true>(tuple_schema, address, layout, layout_schema, row_id, tuple_id);
 }
 
 /*======================================================================================================================
@@ -820,10 +835,11 @@ struct FilterData : OperatorData
 void Pipeline::operator()(const ScanOperator &op)
 {
     auto &store = op.store();
+    auto &table = store.table();
     const auto num_rows = store.num_rows();
 
     /* Compile StackMachine to load tuples from store. */
-    auto loader = Interpreter::compile_load(op.schema(), store.linearization());
+    auto loader = Interpreter::compile_load(op.schema(), store.memory().addr(), table.layout(), table.schema());
 
     const auto remainder = num_rows % block_.capacity();
     std::size_t i = 0;
@@ -834,7 +850,6 @@ void Pipeline::operator()(const ScanOperator &op)
         for (std::size_t j = 0; j != block_.capacity(); ++j) {
             Tuple *args[] = { &block_[j] };
             loader(args);
-            // std::cerr << "next tuple is " << block_[j] << std::endl;
         }
         op.parent()->accept(*this);
     }
@@ -846,7 +861,6 @@ void Pipeline::operator()(const ScanOperator &op)
             M_insist(j < block_.capacity());
             Tuple *args[] = { &block_[j] };
             loader(args);
-            // std::cerr << "next tuple is " << block_[j] << std::endl;
         }
         op.parent()->accept(*this);
     }

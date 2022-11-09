@@ -89,6 +89,10 @@ TEST_CASE("PlanEnumerator", "[core][IR]")
     tbl_B.store(Cat.create_store(tbl_B));
     tbl_C.store(Cat.create_store(tbl_C));
     tbl_D.store(Cat.create_store(tbl_D));
+    tbl_A.layout(Cat.data_layout());
+    tbl_B.layout(Cat.data_layout());
+    tbl_C.layout(Cat.data_layout());
+    tbl_D.layout(Cat.data_layout());
     for (std::size_t i = 0; i < num_rows_A; ++i) { tbl_A.store().append(); }
     for (std::size_t i = 0; i < num_rows_B; ++i) { tbl_B.store().append(); }
     for (std::size_t i = 0; i < num_rows_C; ++i) { tbl_C.store().append(); }

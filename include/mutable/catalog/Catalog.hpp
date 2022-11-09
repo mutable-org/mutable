@@ -1,11 +1,13 @@
 #pragma once
 
 #include <memory>
+#include <mutable/backend/Backend.hpp>
 #include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/catalog/DatabaseCommand.hpp>
 #include <mutable/catalog/Schema.hpp>
 #include <mutable/IR/PlanEnumerator.hpp>
+#include <mutable/storage/DataLayoutFactory.hpp>
 #include <mutable/util/ArgParser.hpp>
 #include <mutable/util/macro.hpp>
 #include <mutable/util/memory.hpp>
@@ -248,6 +250,7 @@ struct M_EXPORT Catalog
      *----------------------------------------------------------------------------------------------------------------*/
     private:
     ComponentSet<StoreFactory> stores_;
+    ComponentSet<storage::DataLayoutFactory> data_layouts_;
     ComponentSet<CardinalityEstimatorFactory> cardinality_estimators_;
     ComponentSet<PlanEnumerator> plan_enumerators_;
     ComponentSet<Backend> backends_;
@@ -281,6 +284,31 @@ struct M_EXPORT Catalog
     auto stores_end()    const { return stores_.end(); }
     auto stores_cbegin() const { return stores_.begin(); }
     auto stores_cend()   const { return stores_.end(); }
+
+    /*===== DataLayouts ==============================================================================================*/
+    /** Registers a new `DataLayoutFactory` with the given `name`. */
+    void register_data_layout(const char *name, std::unique_ptr<storage::DataLayoutFactory> data_layout,
+                              const char *description = nullptr)
+    {
+        data_layouts_.add(pool(name), Component<storage::DataLayoutFactory>(description, std::move(data_layout)));
+    }
+    /** Sets the default `DataLayoutFactory` to use. */
+    void default_data_layout(const char *name) { data_layouts_.set_default(pool(name)); }
+    /** Returns `true` iff the `Catalog` has a default `DataLayoutFactory`. */
+    bool has_default_data_layout() const { return data_layouts_.has_default(); }
+    /** Returns a reference to the default `DataLayoutFactory`. */
+    storage::DataLayoutFactory & data_layout() const { return data_layouts_.get_default(); }
+    /** Returns a reference to the `DataLayoutFactory` with the given `name`. */
+    storage::DataLayoutFactory & data_layout(const char *name) const { return data_layouts_.get(pool(name)); }
+    /** Returns the name of the default `DataLayoutFactory`. */
+    const char * default_data_layout_name() const { return data_layouts_.get_default_name(); }
+
+    auto data_layouts_begin()        { return data_layouts_.begin(); }
+    auto data_layouts_end()          { return data_layouts_.end(); }
+    auto data_layouts_begin()  const { return data_layouts_.begin(); }
+    auto data_layouts_end()    const { return data_layouts_.end(); }
+    auto data_layouts_cbegin() const { return data_layouts_.begin(); }
+    auto data_layouts_cend()   const { return data_layouts_.end(); }
 
     /*===== CardinalityEstimators ====================================================================================*/
     /** Registers a new `CardinalityEstimator` with the given `name`. */

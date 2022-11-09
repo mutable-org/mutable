@@ -117,7 +117,7 @@ void Sema::operator()(Const<Designator> &e)
                     if (auto T = std::get_if<const Table*>(&src.second.first)) {
                         const Table &tbl = **T;
                         try {
-                            const Attribute &A = tbl[e.attr_name.text];
+                            const Attribute &A = tbl.at(e.attr_name.text);
                             if (not std::holds_alternative<std::monostate>(target)) {
                                 /* ambiguous attribute name */
                                 diag.e(e.attr_name.pos) << "Attribute specifier " << e.attr_name.text
@@ -634,7 +634,7 @@ void Sema::operator()(Const<BinaryExpr> &e)
             M_insist(ty_rhs);
 
             /* Compute type of the binary expression. */
-            e.type_ = arithmetic_join(ty_lhs, ty_rhs);
+            e.common_operand_type = e.type_ = arithmetic_join(ty_lhs, ty_rhs);
             break;
         }
 
@@ -677,6 +677,7 @@ void Sema::operator()(Const<BinaryExpr> &e)
 
                 /* Comparisons always have boolean type. */
                 e.type_ = Type::Get_Boolean(c);
+                e.common_operand_type = arithmetic_join(ty_lhs, ty_rhs);
             } else if (auto ty_lhs = cast<const CharacterSequence>(e.lhs->type())) {
                 /* Verify that both operands are character sequences. */
                 auto ty_rhs = cast<const CharacterSequence>(e.rhs->type());
@@ -748,6 +749,8 @@ void Sema::operator()(Const<BinaryExpr> &e)
 
             /* Comparisons always have boolean type. */
             e.type_ = Type::Get_Boolean(c);
+            if (auto ty_lhs = cast<const Numeric>(e.lhs->type()))
+                e.common_operand_type = arithmetic_join(ty_lhs, as<const Numeric>(e.rhs->type()));
             break;
         }
 
@@ -1305,8 +1308,9 @@ void Sema::operator()(Const<CreateTableStmt> &s)
 
             if (is<NotNullConstraint>(c)) {
                 if (is_not_null)
-                    diag.w(c->tok.pos) << "Duplicate definition of attribute " << attr->name.text << " as UNIQUE.\n";
+                    diag.w(c->tok.pos) << "Duplicate definition of attribute " << attr->name.text << " as NOT NULL.\n";
                 is_not_null = true;
+                T->at(attr->name.text).nullable = false;
             }
 
             if (auto check = cast<CheckConditionConstraint>(c)) {
@@ -1411,7 +1415,7 @@ void Sema::operator()(Const<InsertStmt> &s)
         auto &t = s.tuples[i];
         if (t.empty())
             continue; // syntax error, already reported
-        if (t.size() != tbl->size()) {
+        if (t.size() != tbl->num_attrs()) {
             diag.e(s.table_name.pos) << "Tuple " << (i + 1) << " has not enough values.\n";
             continue;
         }
@@ -1438,9 +1442,12 @@ void Sema::operator()(Const<InsertStmt> &s)
                     break;
                 }
 
-                case InsertStmt::I_Null:
-                    /* TODO is null-able? */
+                case InsertStmt::I_Null: {
+                    if (not attr.nullable)
+                        diag.e(s.table_name.pos) << "Value NULL is not valid for attribute " << attr.name
+                                                 << " declared as NOT NULL.\n";
                     break;
+                }
 
                 case InsertStmt::I_Default:
                     /* TODO has default? */

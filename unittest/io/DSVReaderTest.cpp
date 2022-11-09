@@ -2,12 +2,13 @@
 
 #include "backend/Interpreter.hpp"
 #include "io/Reader.hpp"
-#include "storage/ColumnStore.hpp"
+#include "storage/PaxStore.hpp"
 #include "storage/RowStore.hpp"
 #include "mutable/storage/Store.hpp"
 
 
 using namespace m;
+using namespace m::storage;
 
 
 typedef std::vector< std::tuple<int16_t, int32_t, float, const char*> > tuple_list;
@@ -36,15 +37,17 @@ Table & create_table()
     table.push_back(C.pool("char15"),  Type::Get_Char(Type::TY_Vector, 15));
 
     table.store(std::make_unique<RowStore>(table));
+    RowLayoutFactory layout;
+    table.layout(layout);
     return table;
 }
 
 void test_table_imports(const Table &table, const tuple_list &rows)
 {
-    Schema S;
-    for (auto &attr : table) S.add({table.name, attr.name}, attr.type);
+    Schema S = table.schema();
     Tuple tup = Tuple(S);
-    auto W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().linearization()));
+    auto W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().memory().addr(),
+                                                                      table.layout(), S));
 
     for (auto row : rows) {
         Tuple *args[] = { &tup };
@@ -210,13 +213,13 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
 
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(table.store().num_rows() == 5);
-        Schema S;
-        for (auto &attr : table) S.add({table.name, attr.name}, attr.type);
+        Schema S = table.schema();
         Tuple tup = Tuple(S);
         std::unique_ptr<StackMachine> W;
 
         for (unsigned i = 0; i < rows.size(); ++i) {
-            W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().linearization(), i));
+            W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().memory().addr(),
+                                                                         table.layout(), S, i));
             Tuple *args[] = { &tup };
             (*W)(args);
             REQUIRE(tup.get(0).as<int64_t>() == std::get<0>(rows[i]));
@@ -415,7 +418,9 @@ TEST_CASE("DSVReader sanity tests", "[core][io][unit]")
         table.push_back(C.pool("int"), Type::Get_Integer(Type::TY_Vector, 4));
         table.push_back(C.pool("decimal"), Type::Get_Decimal(Type::TY_Vector, 5, 4));
         table.push_back(C.pool("float"), Type::Get_Float(Type::TY_Vector));
-        table.store(std::make_unique<ColumnStore>(table));
+        table.store(std::make_unique<PaxStore>(table));
+        PAXLayoutFactory factory;
+        table.layout(factory);
 
         /* Construct DSVReader. */
         std::ostringstream out, err;
@@ -431,12 +436,12 @@ TEST_CASE("DSVReader sanity tests", "[core][io][unit]")
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(table.store().num_rows() == 1);
 
-        Schema S;
-        for (auto &attr : table) S.add({table.name, attr.name}, attr.type);
+        Schema S = table.schema();
         Tuple tup = Tuple(S);
         std::unique_ptr<StackMachine> W;
 
-        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().linearization()));
+        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().memory().addr(),
+                                                                     table.layout(), S));
         Tuple *args[] = { &tup };
         (*W)(args);
         REQUIRE(tup.get(0).as<int64_t>() == 42);
@@ -448,6 +453,8 @@ TEST_CASE("DSVReader sanity tests", "[core][io][unit]")
 
 TEST_CASE("DSVReader::operator()", "[core][io][unit]")
 {
+    PAXLayoutFactory factory;
+
     SECTION("Const<Boolean>&")
     {
         Catalog::Clear();
@@ -457,7 +464,8 @@ TEST_CASE("DSVReader::operator()", "[core][io][unit]")
         auto &DB = C.add_database(C.pool("test_db"));
         auto &table = DB.add_table(C.pool("test"));
         table.push_back(C.pool("bool"), Type::Get_Boolean(Type::TY_Vector));
-        table.store(std::make_unique<ColumnStore>(table));
+        table.store(std::make_unique<PaxStore>(table));
+        table.layout(factory);
 
         /* Construct DSVReader. */
         std::ostringstream out, err;
@@ -473,12 +481,12 @@ TEST_CASE("DSVReader::operator()", "[core][io][unit]")
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(table.store().num_rows() == 2);
 
-        Schema S;
-        for (auto &attr : table) S.add({table.name, attr.name}, attr.type);
+        Schema S = table.schema();
         Tuple tup = Tuple(S);
         std::unique_ptr<StackMachine> W;
 
-        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().linearization()));
+        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().memory().addr(),
+                                                                     table.layout(), S));
         Tuple *args[] = { &tup };
         (*W)(args);
         REQUIRE(tup.get(0).as<bool>() == true);
@@ -495,7 +503,8 @@ TEST_CASE("DSVReader::operator()", "[core][io][unit]")
         auto &DB = C.add_database(C.pool("test_db"));
         auto &table = DB.add_table(C.pool("test"));
         table.push_back(C.pool("date"), Type::Get_Date(Type::TY_Vector));
-        table.store(std::make_unique<ColumnStore>(table));
+        table.store(std::make_unique<PaxStore>(table));
+        table.layout(factory);
 
         /* Construct DSVReader. */
         std::ostringstream out, err;
@@ -511,12 +520,12 @@ TEST_CASE("DSVReader::operator()", "[core][io][unit]")
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(table.store().num_rows() == 2);
 
-        Schema S;
-        for (auto &attr : table) S.add({table.name, attr.name}, attr.type);
+        Schema S = table.schema();
         Tuple tup = Tuple(S);
         std::unique_ptr<StackMachine> W;
 
-        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().linearization()));
+        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().memory().addr(),
+                                                                     table.layout(), S));
         Tuple *args[] = { &tup };
         (*W)(args);
         REQUIRE(tup.get(0).as<int64_t>() == 1031788);
@@ -533,7 +542,8 @@ TEST_CASE("DSVReader::operator()", "[core][io][unit]")
         auto &DB = C.add_database(C.pool("test_db"));
         auto &table = DB.add_table(C.pool("test"));
         table.push_back(C.pool("datetime"), Type::Get_Datetime(Type::TY_Vector));
-        table.store(std::make_unique<ColumnStore>(table));
+        table.store(std::make_unique<PaxStore>(table));
+        table.layout(factory);
 
         /* Construct DSVReader. */
         std::ostringstream out, err;
@@ -549,12 +559,12 @@ TEST_CASE("DSVReader::operator()", "[core][io][unit]")
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(table.store().num_rows() == 2);
 
-        Schema S;
-        for (auto &attr : table) S.add({table.name, attr.name}, attr.type);
+        Schema S = table.schema();
         Tuple tup = Tuple(S);
         std::unique_ptr<StackMachine> W;
 
-        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().linearization()));
+        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().memory().addr(),
+                                                                     table.layout(), S));
         Tuple *args[] = { &tup };
         (*W)(args);
         REQUIRE(tup.get(0).as<int64_t>() == 1512620400);
@@ -573,7 +583,8 @@ TEST_CASE("DSVReader::operator()", "[core][io][unit]")
         table.push_back(C.pool("int"), Type::Get_Integer(Type::TY_Vector, 4));
         table.push_back(C.pool("decimal"), Type::Get_Decimal(Type::TY_Vector, 5, 4));
         table.push_back(C.pool("float"), Type::Get_Float(Type::TY_Vector));
-        table.store(std::make_unique<ColumnStore>(table));
+        table.store(std::make_unique<PaxStore>(table));
+        table.layout(factory);
 
         /* Construct DSVReader. */
         std::ostringstream out, err;
@@ -590,12 +601,12 @@ TEST_CASE("DSVReader::operator()", "[core][io][unit]")
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(table.store().num_rows() == 2);
 
-        Schema S;
-        for (auto &attr : table) S.add({table.name, attr.name}, attr.type);
+        Schema S = table.schema();
         Tuple tup = Tuple(S);
         std::unique_ptr<StackMachine> W;
 
-        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().linearization()));
+        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().memory().addr(),
+                                                                     table.layout(), S));
         Tuple *args[] = { &tup };
         (*W)(args);
         REQUIRE(tup.get(0).as<int64_t>() == 1234);
@@ -613,6 +624,8 @@ TEST_CASE("DSVReader::operator()", "[core][io][unit]")
 
 TEST_CASE("DSVReader::operator() sanity tests", "[core][io][unit]")
 {
+    PAXLayoutFactory factory;
+
     SECTION("Const<Boolean>& sanity tests")
     {
         Catalog::Clear();
@@ -622,7 +635,8 @@ TEST_CASE("DSVReader::operator() sanity tests", "[core][io][unit]")
         auto &DB = C.add_database(C.pool("test_db"));
         auto &table = DB.add_table(C.pool("test"));
         table.push_back(C.pool("bool"), Type::Get_Boolean(Type::TY_Vector));
-        table.store(std::make_unique<ColumnStore>(table));
+        table.store(std::make_unique<PaxStore>(table));
+        table.layout(factory);
 
         /* Construct DSVReader. */
         std::ostringstream out, err;
@@ -638,12 +652,12 @@ TEST_CASE("DSVReader::operator() sanity tests", "[core][io][unit]")
         REQUIRE(diag.num_errors() == 3);
         REQUIRE(table.store().num_rows() == 3);
 
-        Schema S;
-        for (auto &attr : table) S.add({table.name, attr.name}, attr.type);
+        Schema S = table.schema();
         Tuple tup = Tuple(S);
         std::unique_ptr<StackMachine> W;
 
-        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().linearization()));
+        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().memory().addr(),
+                                                                     table.layout(), S));
         Tuple *args[] = { &tup };
         (*W)(args);
         REQUIRE(tup[0].type == m::Value::VNone);
@@ -662,7 +676,8 @@ TEST_CASE("DSVReader::operator() sanity tests", "[core][io][unit]")
         auto &DB = C.add_database(C.pool("test_db"));
         auto &table = DB.add_table(C.pool("test"));
         table.push_back(C.pool("char15"), Type::Get_Char(Type::TY_Vector, 15));
-        table.store(std::make_unique<ColumnStore>(table));
+        table.store(std::make_unique<PaxStore>(table));
+        table.layout(factory);
 
         /* Construct DSVReader. */
         std::ostringstream out, err;
@@ -678,12 +693,12 @@ TEST_CASE("DSVReader::operator() sanity tests", "[core][io][unit]")
         REQUIRE(diag.num_errors() == 1);
         REQUIRE(table.store().num_rows() == 2);
 
-        Schema S;
-        for (auto &attr : table) S.add({table.name, attr.name}, attr.type);
+        Schema S = table.schema();
         Tuple tup = Tuple(S);
         std::unique_ptr<StackMachine> W;
 
-        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().linearization()));
+        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().memory().addr(),
+                                                                     table.layout(), S));
         Tuple *args[] = { &tup };
         (*W)(args);
         REQUIRE(tup.is_null(0));
@@ -700,7 +715,8 @@ TEST_CASE("DSVReader::operator() sanity tests", "[core][io][unit]")
         auto &DB = C.add_database(C.pool("test_db"));
         auto &table = DB.add_table(C.pool("test"));
         table.push_back(C.pool("date"), Type::Get_Date(Type::TY_Vector));
-        table.store(std::make_unique<ColumnStore>(table));
+        table.store(std::make_unique<PaxStore>(table));
+        table.layout(factory);
 
         /* Construct DSVReader. */
         std::ostringstream out, err;
@@ -716,12 +732,12 @@ TEST_CASE("DSVReader::operator() sanity tests", "[core][io][unit]")
         REQUIRE(diag.num_errors() == 1);
         REQUIRE(table.store().num_rows() == 3);
 
-        Schema S;
-        for (auto &attr : table) S.add({table.name, attr.name}, attr.type);
+        Schema S = table.schema();
         Tuple tup = Tuple(S);
         std::unique_ptr<StackMachine> W;
 
-        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().linearization()));
+        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().memory().addr(),
+                                                                     table.layout(), S));
         Tuple *args[] = { &tup };
         (*W)(args);
         REQUIRE(not tup.is_null(0));
@@ -742,7 +758,8 @@ TEST_CASE("DSVReader::operator() sanity tests", "[core][io][unit]")
         auto &DB = C.add_database(C.pool("test_db"));
         auto &table = DB.add_table(C.pool("test"));
         table.push_back(C.pool("datetime"), Type::Get_Datetime(Type::TY_Vector));
-        table.store(std::make_unique<ColumnStore>(table));
+        table.store(std::make_unique<PaxStore>(table));
+        table.layout(factory);
 
         /* Construct DSVReader. */
         std::ostringstream out, err;
@@ -758,12 +775,12 @@ TEST_CASE("DSVReader::operator() sanity tests", "[core][io][unit]")
         REQUIRE(diag.num_errors() == 2);
         REQUIRE(table.store().num_rows() == 3);
 
-        Schema S;
-        for (auto &attr : table) S.add({table.name, attr.name}, attr.type);
+        Schema S = table.schema();
         Tuple tup = Tuple(S);
         std::unique_ptr<StackMachine> W;
 
-        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().linearization()));
+        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().memory().addr(),
+                                                                     table.layout(), S));
         Tuple *args[] = { &tup };
         (*W)(args);
         REQUIRE(tup.is_null(0));
@@ -784,7 +801,8 @@ TEST_CASE("DSVReader::operator() sanity tests", "[core][io][unit]")
         table.push_back(C.pool("int"), Type::Get_Integer(Type::TY_Vector, 4));
         table.push_back(C.pool("decimal"), Type::Get_Decimal(Type::TY_Vector, 5, 4));
         table.push_back(C.pool("float"), Type::Get_Float(Type::TY_Vector));
-        table.store(std::make_unique<ColumnStore>(table));
+        table.store(std::make_unique<PaxStore>(table));
+        table.layout(factory);
 
         /* Construct DSVReader. */
         std::ostringstream out, err;
@@ -801,12 +819,12 @@ TEST_CASE("DSVReader::operator() sanity tests", "[core][io][unit]")
         REQUIRE(diag.num_errors() == 6);
         REQUIRE(table.store().num_rows() == 2);
 
-        Schema S;
-        for (auto &attr : table) S.add({table.name, attr.name}, attr.type);
+        Schema S = table.schema();
         Tuple tup = Tuple(S);
         std::unique_ptr<StackMachine> W;
 
-        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().linearization()));
+        W = std::make_unique<StackMachine>(Interpreter::compile_load(S, table.store().memory().addr(),
+                                                                     table.layout(), S));
         Tuple *args[] = { &tup };
         (*W)(args);
         REQUIRE(tup.is_null(0));

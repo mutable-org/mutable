@@ -56,6 +56,11 @@ Schema Table::schema() const
     return S;
 }
 
+void Table::layout(const storage::DataLayoutFactory &factory) {
+    view v(cbegin(), cend(), [](auto it) -> auto & { return it->type; });
+    layout_ = factory.make(v.begin(), v.end());
+}
+
 M_LCOV_EXCL_START
 void Table::dump(std::ostream &out) const
 {

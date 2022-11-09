@@ -18,7 +18,7 @@ struct ColumnStore : Store
 
     private:
     memory::LinearAllocator allocator_; ///< the memory allocator
-    std::vector<memory::Memory> columns_;
+    memory::Memory data_;
     std::size_t num_rows_ = 0;
     std::size_t capacity_;
     std::size_t row_size_ = 0;
@@ -43,10 +43,14 @@ struct ColumnStore : Store
         --num_rows_;
     }
 
-    /** Returns the memory of the column assigned to the attribute with id `attr_id`. */
-    const memory::Memory & memory(std::size_t attr_id) const override {
-        M_insist(attr_id < columns_.size());
-        return columns_[attr_id]; // XXX What if attributes were erased and added again to a table?
+    /** Returns the memory of the store. */
+    const memory::Memory & memory() const override { return data_; }
+    /** Returns the memory address where the column assigned to the attribute with id `attr_id` starts.
+     * Return the address of the NULL bitmap column if `attr_id == table().size()`. */
+    void * memory(std::size_t attr_id) const {
+        M_insist(attr_id <= table().num_attrs());
+        auto offset = ALLOCATION_SIZE * attr_id;
+        return reinterpret_cast<uint8_t*>(data_.addr()) + offset;
     }
 
     void dump(std::ostream &out) const override;

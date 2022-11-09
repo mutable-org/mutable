@@ -99,3 +99,5 @@ struct invoke_interpreter<ReturnType(ParamTypes...)>
 #define BACKEND_NAME "Interpreter"
 
 #include "WasmDSLTest.tpp"
+#include "WasmOperatorTest.tpp"
+#include "WasmUtilTest.tpp"

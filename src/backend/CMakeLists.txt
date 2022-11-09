@@ -1,12 +1,18 @@
 set(
     BACKEND_SOURCES
     Interpreter.cpp
-    RuntimeStruct.cpp
     StackMachine.cpp
 )
 
 if(${WITH_V8})
-    list(APPEND BACKEND_SOURCES WasmAlgo.cpp WasmDSL.cpp WasmUtil.cpp WebAssembly.cpp V8Platform.cpp)
+    list(APPEND BACKEND_SOURCES
+        PhysicalOperator.cpp
+        V8Platform.cpp
+        WasmDSL.cpp
+        WasmOperator.cpp
+        WasmUtil.cpp
+        WebAssembly.cpp
+    )
 endif()
 
 add_library(

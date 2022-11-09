@@ -10,6 +10,7 @@
 
 
 using namespace m;
+using namespace m::storage;
 
 
 static constexpr std::size_t NUM_DISTINCT_VALUES_IN_FILTER_EXPERIMENT = 100;
@@ -22,9 +23,17 @@ constexpr unsigned NUM_REPETITIONS = 5;
 // Helper Functions
 //======================================================================================================================
 
-/**
- * Save matrix in a csv file.
- */
+/** Returns the offset in bytes of the `idx`-th column in the `DataLayout` `layout` which is considered to  represent
+ * a **PAX**-layout. */
+uint64_t get_column_offset_in_bytes(const DataLayout &layout, std::size_t idx)
+{
+    auto &child = as<const DataLayout::INode>(layout.child()).at(idx);
+    M_insist(as<DataLayout::Leaf>(child.ptr.get())->index() == idx, "index of entry must match index in leaf");
+    M_insist(child.offset_in_bits % 8 == 0, "column must be byte-aligned");
+    return child.offset_in_bits / 8;
+}
+
+/** Save matrix in a csv file. */
 void save_csv(const std::string &csv_path, const Eigen::MatrixXd &matrix, const std::string &header = "")
 {
     std::ofstream csv_file(csv_path);
@@ -85,10 +94,11 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_filter()
 {
     Catalog &C = Catalog::Get();
 
+    /* Consider cardinalities from 0 to 1e7. */
+    gs::LinearSpace<unsigned> space_cardinality(0, 1e7, 4);
     /* Define grid search. */
     gs::GridSearch GS(
-        /* Consider cardinalities from 0 to 1e7. */
-        gs::LinearSpace<unsigned>(0, 1e7, 4),
+        space_cardinality,
         /* Consider selectivities from 0 to 1 (0% to 100%). */
         gs::LinearSpace<double>(0, 1, 25)
     );
@@ -104,9 +114,14 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_filter()
     auto &table = DB.add_table(C.pool("filter"));
     table.push_back(C.pool("id"), Type::Get_Integer(Type::TY_Vector, 4));
     table.push_back(C.pool("val"), get_runtime_type<T>());
-    /* Set table store and get a handle. */
-    table.store(C.create_store("ColumnStore", table));
-    ColumnStore &store = as<ColumnStore>(table.store());
+    /* Set table store and data layout. */
+    table.store(C.create_store("PaxStore", table));
+    PAXLayoutFactory factory(PAXLayoutFactory::NTuples, space_cardinality.hi());
+    table.layout(factory); // consider maximal cardinality to reuse data layout
+    uint8_t *mem_ptr = reinterpret_cast<uint8_t*>(table.store().memory().addr());
+    uint8_t *null_bitmap_column = mem_ptr + get_column_offset_in_bytes(table.layout(), table.num_attrs());
+    void *id_column = reinterpret_cast<void*>(mem_ptr + get_column_offset_in_bytes(table.layout(), 0));
+    T *val_column = reinterpret_cast<T*>(mem_ptr + get_column_offset_in_bytes(table.layout(), 1));
 
     /*----- Prepare data. --------------------------------------------------------------------------------------------*/
     gs::LinearSpace<T> value_space = []() -> gs::LinearSpace<T> {
@@ -137,12 +152,12 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_filter()
             const std::size_t delta_cardinality = cardinality - old_cardinality;
 
             /* Fill store with new data. */
-            for (unsigned i = 0; i != delta_cardinality; ++i) store.append(); // allocate fresh rows in store
-            M_insist(store.num_rows() == cardinality);
-            set_all_not_null(store, old_cardinality, cardinality);
-            generate_primary_keys(store, table[0UL], old_cardinality, cardinality);
-            fill_uniform<T>(store, table[1], values, old_cardinality, cardinality);
-            M_insist(store.num_rows() == cardinality);
+            for (unsigned i = 0; i != delta_cardinality; ++i) table.store().append(); // allocate fresh rows in store
+            M_insist(table.store().num_rows() == cardinality);
+            set_all_not_null(null_bitmap_column, table.num_attrs(), old_cardinality, cardinality);
+            generate_primary_keys(id_column, *table[0UL].type, old_cardinality, cardinality);
+            fill_uniform(val_column, values, old_cardinality, cardinality);
+            M_insist(table.store().num_rows() == cardinality);
             old_cardinality = cardinality;
 
             /* Measure time to scan table. */
@@ -178,11 +193,12 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_group_by()
 
     /* Consider the number of distinct values from 1 to 1e4. */
     gs::LinearSpace<unsigned> space_of_distinct_values(1, 1e4, 10);
+    /* Consider cardinalities from 0 to 1e7. */
+    gs::LinearSpace<unsigned> space_cardinality(0, 1e7, 10);
     /* Define grid search. */
     gs::GridSearch GS(
         space_of_distinct_values,
-        /* Consider cardinalities from 0 to 1e7. */
-        gs::LinearSpace<unsigned>(0, 1e7, 10)
+        space_cardinality
     );
 
     /* Allocate feature matrix and target vector. */
@@ -197,31 +213,36 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_group_by()
     auto &table = DB.add_table(C.pool("group_by"));
     table.push_back(C.pool("id"), Type::Get_Integer(Type::TY_Vector, 4));
     table.push_back(C.pool("val"), get_runtime_type<T>());
-    /* Set table store and get a handle. */
-    table.store(C.create_store("ColumnStore", table));
-    ColumnStore &store = as<ColumnStore>(table.store());
+    /* Set table store and data layout. */
+    table.store(C.create_store("PaxStore", table));
+    PAXLayoutFactory factory(PAXLayoutFactory::NTuples, space_cardinality.hi());
+    table.layout(factory); // consider maximal cardinality to reuse data layout
+    uint8_t *mem_ptr = reinterpret_cast<uint8_t*>(table.store().memory().addr());
+    uint8_t *null_bitmap_column = mem_ptr + get_column_offset_in_bytes(table.layout(), table.num_attrs());
+    void *id_column = reinterpret_cast<void*>(mem_ptr + get_column_offset_in_bytes(table.layout(), 0));
+    T *val_column = reinterpret_cast<T*>(mem_ptr + get_column_offset_in_bytes(table.layout(), 1));
 
     std::vector<T> distinct_values;
     std::size_t row_index = 0;
     std::ostringstream oss;
-    unsigned old_cardinality = store.num_rows();
+    unsigned old_cardinality = table.store().num_rows();
     unsigned old_num_distinct_values = 0;
     auto scan_time = time_select_query_execution(DB, "SELECT val FROM group_by;");
     GS([&](unsigned num_distinct_values, unsigned cardinality) {
-        M_insist(store.num_rows() == old_cardinality);
+        M_insist(table.store().num_rows() == old_cardinality);
 
         if (old_num_distinct_values != num_distinct_values) {
             if (old_cardinality > cardinality) {
                 /*  Shrink store. */
-                for (unsigned i = old_cardinality; i != cardinality; --i) store.drop();
+                for (unsigned i = old_cardinality; i != cardinality; --i) table.store().drop();
             } else if (old_cardinality < cardinality) {
                 /* Grow store. */
-                for (unsigned i = old_cardinality; i != cardinality; ++i) store.append();
-                M_insist(store.num_rows() == cardinality);
-                set_all_not_null(store, cardinality, old_cardinality);
-                generate_primary_keys(store, table[0UL], old_cardinality, cardinality);
+                for (unsigned i = old_cardinality; i != cardinality; ++i) table.store().append();
+                M_insist(table.store().num_rows() == cardinality);
+                set_all_not_null(null_bitmap_column, table.num_attrs(), cardinality, old_cardinality);
+                generate_primary_keys(id_column, *table[0UL].type, old_cardinality, cardinality);
             }
-            M_insist(store.num_rows() == cardinality);
+            M_insist(table.store().num_rows() == cardinality);
 
             /*----- Generate distinct values. ------------------------------------------------------------------------*/
             if (num_distinct_values == 1) {
@@ -247,7 +268,7 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_group_by()
             M_insist(distinct_values.size() == num_distinct_values);
 
             /* Completely fill the entire column with the new distinct values. */
-            fill_uniform<T>(store, table[1], distinct_values, 0, cardinality);
+            fill_uniform(val_column, distinct_values, 0, cardinality);
 
             old_cardinality = cardinality;
             old_num_distinct_values = num_distinct_values;
@@ -256,11 +277,11 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_group_by()
             scan_time = time_select_query_execution(DB, "SELECT val FROM group_by;");
         } else if (old_cardinality < cardinality) {
             /* Grow store. */
-            for (unsigned i = old_cardinality; i != cardinality; ++i) store.append();
-            M_insist(store.num_rows() == cardinality);
-            set_all_not_null(store, old_cardinality, cardinality);
-            generate_primary_keys(store, table[0UL], old_cardinality, cardinality);
-            fill_uniform<T>(store, table[1], distinct_values, old_cardinality, cardinality);
+            for (unsigned i = old_cardinality; i != cardinality; ++i) table.store().append();
+            M_insist(table.store().num_rows() == cardinality);
+            set_all_not_null(null_bitmap_column, table.num_attrs(), old_cardinality, cardinality);
+            generate_primary_keys(id_column, *table[0UL].type, old_cardinality, cardinality);
+            fill_uniform(val_column, distinct_values, old_cardinality, cardinality);
 
             old_cardinality = cardinality;
 
@@ -268,8 +289,8 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_group_by()
             scan_time = time_select_query_execution(DB, "SELECT val FROM group_by;");
         } else if (old_cardinality > cardinality) {
             /* Shrink store. */
-            for (unsigned i = old_cardinality; i != cardinality; --i) store.drop();
-            M_insist(store.num_rows() == cardinality);
+            for (unsigned i = old_cardinality; i != cardinality; --i) table.store().drop();
+            M_insist(table.store().num_rows() == cardinality);
 
             /* Measure time to scan table. */
             scan_time = time_select_query_execution(DB, "SELECT val FROM group_by;");
@@ -331,19 +352,30 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_join()
     auto &table_right = DB.add_table(C.pool("join_right"));
     table_right.push_back(C.pool("id"), Type::Get_Integer(Type::TY_Vector, 4));
     table_right.push_back(C.pool("val"), get_runtime_type<T>());
-    /* Set table stores and get a handle. */
-    table_left.store(C.create_store("ColumnStore", table_left));
-    ColumnStore &store_left = as<ColumnStore>(table_left.store());
-    table_right.store(C.create_store("ColumnStore", table_right));
-    ColumnStore &store_right = as<ColumnStore>(table_right.store());
+    /* Set table stores and data layouts. */
+    table_left.store(C.create_store("PaxStore", table_left));
+    table_right.store(C.create_store("PaxStore", table_right));
+    PAXLayoutFactory factory_left(PAXLayoutFactory::NTuples, space_cardinality_left.hi());
+    PAXLayoutFactory factory_right(PAXLayoutFactory::NTuples, space_cardinality_right.hi());
+    table_left.layout(factory_left); // consider maximal cardinality to reuse data layout
+    table_right.layout(factory_right); // consider maximal cardinality to reuse data layout
+    uint8_t *mem_ptr_left = reinterpret_cast<uint8_t*>(table_left.store().memory().addr());
+    uint8_t *mem_ptr_right = reinterpret_cast<uint8_t*>(table_right.store().memory().addr());
+    uint8_t *null_bitmap_column_left = mem_ptr_left + get_column_offset_in_bytes(table_left.layout(), table_left.num_attrs());
+    uint8_t *null_bitmap_column_right = mem_ptr_right + get_column_offset_in_bytes(table_right.layout(), table_right.num_attrs());
+    void *id_column_left = reinterpret_cast<void*>(mem_ptr_left + get_column_offset_in_bytes(table_left.layout(), 0));
+    void *id_column_right = reinterpret_cast<void*>(mem_ptr_right + get_column_offset_in_bytes(table_right.layout(), 0));
+    T *val_column_left = reinterpret_cast<T*>(mem_ptr_left + get_column_offset_in_bytes(table_left.layout(), 1));
+    T *val_column_right = reinterpret_cast<T*>(mem_ptr_right + get_column_offset_in_bytes(table_right.layout(), 1));
 
     std::vector<T> distinct_values;
     std::size_t row_index = 0;
-    unsigned old_cardinality_left = store_left.num_rows();
-    unsigned old_cardinality_right = store_right.num_rows();
+    unsigned old_cardinality_left = table_left.store().num_rows();
+    unsigned old_cardinality_right = table_right.store().num_rows();
     GS([&](unsigned result_size, unsigned redundancy_left, unsigned redundancy_right,
             unsigned cardinality_left, unsigned cardinality_right) {
-        M_insist(store_left.num_rows() == old_cardinality_left and store_right.num_rows() == old_cardinality_right);
+        M_insist(table_left.store().num_rows() == old_cardinality_left and
+                 table_right.store().num_rows() == old_cardinality_right);
 
         /* Check if current feature state is valid. */
         const unsigned num_distinct_values_left = cardinality_left / redundancy_left;
@@ -355,24 +387,24 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_join()
 
         if (old_cardinality_left < cardinality_left) {
             /* Grow store. */
-            for (unsigned i = old_cardinality_left; i != cardinality_left; ++i) store_left.append();
-            M_insist(store_left.num_rows() == cardinality_left);
-            set_all_not_null(store_left, old_cardinality_left, cardinality_left);
-            generate_primary_keys(store_left, table_left[0UL], old_cardinality_left, cardinality_left);
+            for (unsigned i = old_cardinality_left; i != cardinality_left; ++i) table_left.store().append();
+            M_insist(table_left.store().num_rows() == cardinality_left);
+            set_all_not_null(null_bitmap_column_left, table_left.num_attrs(), old_cardinality_left, cardinality_left);
+            generate_primary_keys(id_column_left, *table_left[0UL].type, old_cardinality_left, cardinality_left);
         } else if (old_cardinality_left > cardinality_left) {
             /* Shrink store. */
-            for (unsigned i = old_cardinality_left; i != cardinality_left; --i) store_left.drop();
+            for (unsigned i = old_cardinality_left; i != cardinality_left; --i) table_left.store().drop();
         }
-        M_insist(store_left.num_rows() == cardinality_left);
+        M_insist(table_left.store().num_rows() == cardinality_left);
         if (old_cardinality_right < cardinality_right) {
             /* Grow store. */
-            for (unsigned i = old_cardinality_right; i != cardinality_right; ++i) store_right.append();
-            M_insist(store_right.num_rows() == cardinality_right);
-            set_all_not_null(store_right, old_cardinality_right, cardinality_right);
-            generate_primary_keys(store_right, table_right[0UL], old_cardinality_right, cardinality_right);
+            for (unsigned i = old_cardinality_right; i != cardinality_right; ++i) table_right.store().append();
+            M_insist(table_right.store().num_rows() == cardinality_right);
+            set_all_not_null(null_bitmap_column_right, table_right.num_attrs(), old_cardinality_right, cardinality_right);
+            generate_primary_keys(id_column_right, *table_right[0UL].type, old_cardinality_right, cardinality_right);
         } else if (old_cardinality_right > cardinality_right) {
             /* Shrink store. */
-            for (unsigned i = old_cardinality_right; i != cardinality_right; --i) store_right.drop();
+            for (unsigned i = old_cardinality_right; i != cardinality_right; --i) table_right.store().drop();
         }
 
         /*----- Generate distinct values. ----------------------------------------------------------------------------*/
@@ -414,8 +446,8 @@ std::pair<Eigen::MatrixXd, Eigen::VectorXd> generate_training_suite_join()
 
 
         /* Completely fill the entire column with the new distinct values. */
-        fill_uniform<T>(store_left, table_left[1], distinct_values_left, 0, cardinality_left);
-        fill_uniform<T>(store_right, table_left[1], distinct_values_right, 0, cardinality_right);
+        fill_uniform(val_column_left, distinct_values_left, 0, cardinality_left);
+        fill_uniform(val_column_right, distinct_values_right, 0, cardinality_right);
 
         old_cardinality_left = cardinality_left;
         old_cardinality_right = cardinality_right;

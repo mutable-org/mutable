@@ -2,9 +2,10 @@ add_library(
     storage
     OBJECT
     ColumnStore.cpp
-    Linearization.cpp
+    DataLayout.cpp
+    DataLayoutFactory.cpp
+    PaxStore.cpp
     RowStore.cpp
     Store.cpp
     store_manip.cpp
-    PaxStore.cpp
 )

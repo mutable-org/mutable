@@ -101,7 +101,7 @@ TEST_CASE("PaxStore sanity checks", "[core][storage][columnstore]")
         row_size += attr.type->size();
         if (attr.type->size() % 8) ++num_not_byte_aligned;
     }
-    row_size += table.size(); // add size of NULL bitmap
+    row_size += table.num_attrs(); // add size of NULL bitmap
     std::size_t num_rows_per_block = (BLOCK_SIZE * 8 - num_not_byte_aligned * 7) / row_size;
     std::size_t capacity = (PaxStore::ALLOCATION_SIZE / BLOCK_SIZE) * num_rows_per_block // entire blocks
             + ((PaxStore::ALLOCATION_SIZE % BLOCK_SIZE) * 8) / row_size;  // last partial filled block

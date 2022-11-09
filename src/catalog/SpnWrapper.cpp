@@ -15,12 +15,12 @@ SpnWrapper SpnWrapper::learn_spn_table(const char *name_of_database, const char 
     auto &db = C.get_database(C.pool(name_of_database));
     auto &table = db.get_table(C.pool(name_of_table));
 
-    leaf_types.resize(table.size(), Spn::AUTO); // pad with AUTO
+    leaf_types.resize(table.num_attrs(), Spn::AUTO); // pad with AUTO
 
     /* use CartesianProductEstimator to query data since there currently are no SPNs on the data. */
     auto old_estimator = db.cardinality_estimator(C.create_cardinality_estimator("CartesianProduct", name_of_database));
 
-    std::size_t num_columns = table.size();
+    std::size_t num_columns = table.num_attrs();
     std::size_t num_rows = table.store().num_rows();
 
     Diagnostic diag(false, std::cout, std::cerr);

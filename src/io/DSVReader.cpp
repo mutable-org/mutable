@@ -1,5 +1,7 @@
+
 #include "io/Reader.hpp"
 
+#include <mutable/storage/DataLayout.hpp>
 #include <mutable/storage/Store.hpp>
 #include <mutable/util/macro.hpp>
 #include "backend/Interpreter.hpp"
@@ -15,6 +17,7 @@
 
 
 using namespace m;
+using namespace m::storage;
 
 
 DSVReader::DSVReader(const Table &table, Diagnostic &diag,
@@ -45,7 +48,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
 
     /* Declare reference to the `StackMachine` for the current `Linearization`. */
     std::unique_ptr<StackMachine> W;
-    const Linearization *lin = nullptr;
+    const DataLayout *layout = nullptr;
 
     /* Allocate intermediate tuple. */
     tup = Tuple(S);
@@ -121,10 +124,11 @@ void DSVReader::operator()(std::istream &in, const char *name)
             diag.e(pos) << "Expected end of row.\n";
             discard_row();
         } else {
-            if (lin != &store.linearization()) {
-                /* The linearization was updated, recompile stack machine. */
-                W = std::make_unique<StackMachine>(Interpreter::compile_store(S, store.linearization(), store.num_rows() - 1));
-                lin = &store.linearization();
+            if (layout != &table.layout()) {
+                /* The data layout was updated, recompile stack machine. */
+                layout = &table.layout();
+                W = std::make_unique<StackMachine>(Interpreter::compile_store(S, store.memory().addr(), *layout,
+                                                                              S, store.num_rows() - 1));
             }
             Tuple *args[] = { &tup };
             (*W)(args); // write tuple to store
@@ -354,6 +358,7 @@ void DSVReader::operator()(Const<Numeric> &ty)
 
 void DSVReader::operator()(Const<ErrorType>&) { M_unreachable("invalid type"); }
 void DSVReader::operator()(Const<NoneType>&) { M_unreachable("invalid type"); }
+void DSVReader::operator()(Const<Bitmap>&) { M_unreachable("invalid type"); }
 void DSVReader::operator()(Const<FnType>&) { M_unreachable("invalid type"); }
 
 int64_t DSVReader::read_unsigned_int()

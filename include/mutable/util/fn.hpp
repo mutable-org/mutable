@@ -180,7 +180,7 @@ log2_ceil(T n)
     return n <= 1 ? 0 : log2_floor(n - T(1)) + T(1);
 }
 
-/** Short version of dynamic_cast that works for pointers and references. */
+/** Short version of dynamic_cast that works for pointers. */
 template<typename T, typename U>
 T * M_EXPORT cast(U *u) { return dynamic_cast<T*>(u); }
 

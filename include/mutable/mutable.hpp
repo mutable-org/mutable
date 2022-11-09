@@ -19,7 +19,7 @@
 #include <mutable/lex/Token.hpp>
 #include <mutable/lex/TokenType.hpp>
 #include <mutable/parse/AST.hpp>
-#include <mutable/storage/Linearization.hpp>
+#include <mutable/storage/DataLayout.hpp>
 #include <mutable/storage/Store.hpp>
 #include <mutable/util/ADT.hpp>
 #include <mutable/util/ArgParser.hpp>
@@ -92,7 +92,7 @@ struct M_EXPORT StoreWriter
     Store &store_; ///< the store to access
     Schema S; ///< the schema of the tuples to read/write
     mutable std::unique_ptr<m::StackMachine> writer_; ///< the writing `StackMachine`
-    mutable const m::Linearization *lin_ = nullptr; ///< the last seen `Linearization`; used to observe updates
+    mutable const storage::DataLayout *layout_ = nullptr; ///< the last seen `DataLayout`; used to observe updates
 
     public:
     StoreWriter(Store &store);

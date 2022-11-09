@@ -15,6 +15,7 @@ struct ErrorType;
 struct NoneType;
 struct PrimitiveType;
 struct Boolean;
+struct Bitmap;
 struct CharacterSequence;
 struct Date;
 struct DateTime;
@@ -54,6 +55,7 @@ struct M_EXPORT Type
     /** Returns `true` iff this `Type` is a `PrimitiveType`. */
     bool is_primitive() const { return is<const PrimitiveType>(this); }
     bool is_boolean() const { return is<const Boolean>(this); }
+    bool is_bitmap() const { return is<const Bitmap>(this); }
     bool is_character_sequence() const { return is<const CharacterSequence>(this); }
     bool is_date() const { return is<const Date>(this); }
     bool is_date_time() const { return is<const DateTime>(this); }
@@ -69,10 +71,10 @@ struct M_EXPORT Type
     bool is_double() const;
 
     /** Compute the size in bits of an instance of this type. */
-    virtual uint32_t size() const { throw std::logic_error("the size of this type is not defined"); }
+    virtual uint64_t size() const { throw std::logic_error("the size of this type is not defined"); }
 
     /** Compute the alignment requirement in bits of an instance of this type. */
-    virtual uint32_t alignment() const { throw std::logic_error("the size of this type is not defined"); }
+    virtual uint64_t alignment() const { throw std::logic_error("the size of this type is not defined"); }
 
     /** Compute the 64 bit hash of this `Type`. */
     virtual uint64_t hash() const = 0;
@@ -98,6 +100,8 @@ M_LCOV_EXCL_STOP
     static const NoneType * Get_None();
     /** Returns a `Boolean` type of the given `category`. */
     static const Boolean * Get_Boolean(category_t category);
+    /** Returns a `Bitmap` type of the given `category` and `length`. */
+    static const Bitmap * Get_Bitmap(category_t category, std::size_t length);
     /** Returns a `CharacterSequence` type of the given `category` and fixed `length`. */
     static const CharacterSequence * Get_Char(category_t category, std::size_t length);
     /** Returns a `CharacterSequence` type of the given `category` and varying `length`. */
@@ -203,6 +207,9 @@ struct M_EXPORT NoneType: Type
 
     bool operator==(const Type &other) const override;
 
+    uint64_t size() const override { return 0; }
+    uint64_t alignment() const override { return 1; }
+
     uint64_t hash() const override;
 
     void print(std::ostream &out) const override;
@@ -226,8 +233,39 @@ struct M_EXPORT Boolean : PrimitiveType
 
     bool operator==(const Type &other) const override;
 
-    uint32_t size() const override { return 1; }
-    uint32_t alignment() const override { return 1; }
+    uint64_t size() const override { return 1; }
+    uint64_t alignment() const override { return 1; }
+
+    uint64_t hash() const override;
+
+    void print(std::ostream &out) const override;
+    using Type::dump;
+    void dump(std::ostream &out) const override;
+
+    virtual const PrimitiveType *as_scalar() const override;
+    virtual const PrimitiveType *as_vectorial() const override;
+};
+
+/** The bitmap type. */
+struct M_EXPORT Bitmap : PrimitiveType
+{
+    friend struct Type;
+
+    uint64_t length; ///< the number of elements
+
+    private:
+    Bitmap(category_t category, uint64_t length) : PrimitiveType(category), length(length) { }
+
+    public:
+    Bitmap(Bitmap&&) = default;
+
+    void accept(TypeVisitor &v) override;
+    void accept(ConstTypeVisitor &v) const override;
+
+    bool operator==(const Type &other) const override;
+
+    uint64_t size() const override { return length; }
+    uint64_t alignment() const override { return 1; }
 
     uint64_t hash() const override;
 
@@ -265,14 +303,14 @@ struct M_EXPORT CharacterSequence : PrimitiveType
     /** Returns the number of bits required to store a sequence of `length` many characters.  For VARCHAR(N), a NUL byte
      * is appended.  For CHAR(N), all trailing places up to N-1 are filled with NUL bytes.  A CHAR(N) with a string of
      * length N has no terminating NUL byte.  */
-    uint32_t size() const override {
+    uint64_t size() const override {
         if (is_varying)
             return 8 * (length + 1);
         else
             return 8 * length;
     }
 
-    uint32_t alignment() const override { return 8; }
+    uint64_t alignment() const override { return 8; }
 
     uint64_t hash() const override;
 
@@ -300,8 +338,8 @@ struct M_EXPORT Date : PrimitiveType
 
     bool operator==(const Type &other) const override;
 
-    uint32_t size() const override { return 32; }
-    uint32_t alignment() const override { return 32; }
+    uint64_t size() const override { return 32; }
+    uint64_t alignment() const override { return 32; }
 
     uint64_t hash() const override;
 
@@ -329,8 +367,8 @@ struct M_EXPORT DateTime : PrimitiveType
 
     bool operator==(const Type &other) const override;
 
-    uint32_t size() const override { return 64; }
-    uint32_t alignment() const override { return 64; }
+    uint64_t size() const override { return 64; }
+    uint64_t alignment() const override { return 64; }
 
     uint64_t hash() const override;
 
@@ -384,7 +422,7 @@ private:
 
     bool operator==(const Type &other) const override;
 
-    uint32_t size() const override {
+    uint64_t size() const override {
         switch (kind) {
             case N_Int: return 8 * precision;
             case N_Float: return precision;
@@ -393,7 +431,7 @@ private:
         M_unreachable("illegal kind");
     }
 
-    uint32_t alignment() const override { return size(); }
+    uint64_t alignment() const override { return size(); }
 
     uint64_t hash() const override;
 
@@ -441,6 +479,7 @@ const Numeric * arithmetic_join(const Numeric *lhs, const Numeric *rhs);
     X(ErrorType) \
     X(NoneType) \
     X(Boolean) \
+    X(Bitmap) \
     X(CharacterSequence) \
     X(Date) \
     X(DateTime) \

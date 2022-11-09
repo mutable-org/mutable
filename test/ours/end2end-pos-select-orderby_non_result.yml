@@ -1,7 +1,7 @@
-description: orderby non result
+description: orderby non-result
 db: ours
 query: |
-    SELECT key FROM R ORDER BY fkey;
+    SELECT fkey FROM R ORDER BY key;
 required: YES
 
 stages:
@@ -9,12 +9,12 @@ stages:
     lexer:
         out: |
             -:1:1: SELECT TK_Select
-            -:1:8: key TK_IDENTIFIER
-            -:1:12: FROM TK_From
-            -:1:17: R TK_IDENTIFIER
-            -:1:19: ORDER TK_Order
-            -:1:25: BY TK_By
-            -:1:28: fkey TK_IDENTIFIER
+            -:1:8: fkey TK_IDENTIFIER
+            -:1:13: FROM TK_From
+            -:1:18: R TK_IDENTIFIER
+            -:1:20: ORDER TK_Order
+            -:1:26: BY TK_By
+            -:1:29: key TK_IDENTIFIER
             -:1:32: ; TK_SEMICOL
         err: NULL
         num_err: 0
@@ -22,9 +22,9 @@ stages:
 
     parser:
         out: |
-            SELECT key
+            SELECT fkey
             FROM R
-            ORDER BY fkey ASC;
+            ORDER BY key ASC;
         err: NULL
         num_err: 0
         returncode: 0
@@ -37,106 +37,106 @@ stages:
 
     end2end:
         out: |
-            6
-            61
-            68
-            20
-            4
-            43
-            77
-            90
-            75
-            76
-            11
-            41
-            31
-            8
-            35
-            12
-            94
-            50
-            59
-            38
-            63
-            96
-            57
-            85
-            84
-            27
-            72
-            80
-            36
             81
-            98
-            92
-            79
-            60
-            65
-            42
-            49
-            14
-            17
-            53
-            97
+            57
             48
-            44
-            46
-            93
             45
-            56
-            64
-            52
-            39
-            3
-            58
-            83
-            66
-            86
-            2
-            54
-            29
-            78
-            23
-            89
-            34
-            22
-            1
-            32
-            25
-            73
-            82
-            21
-            62
-            18
-            5
+            4
             74
-            55
-            99
-            40
-            30
-            87
-            0
-            7
-            16
-            67
-            9
+            1
+            81
             10
+            85
+            85
+            7
+            11
             91
-            70
-            24
-            33
-            28
-            26
-            71
-            47
-            13
-            51
+            30
+            96
+            83
+            32
             69
-            37
-            19
-            15
             95
+            4
+            68
+            55
+            51
+            86
+            60
+            89
+            20
             88
+            49
+            79
+            10
+            59
+            88
+            55
+            11
+            24
+            95
+            12
+            43
+            79
+            9
+            28
+            5
+            35
+            40
+            36
+            91
+            34
+            29
+            12
+            91
+            41
+            32
+            48
+            77
+            41
+            18
+            47
+            12
+            27
+            2
+            69
+            13
+            41
+            27
+            47
+            84
+            3
+            92
+            86
+            90
+            21
+            65
+            74
+            7
+            7
+            6
+            50
+            27
+            23
+            24
+            66
+            47
+            19
+            18
+            47
+            80
+            99
+            55
+            7
+            86
+            27
+            38
+            11
+            98
+            16
+            33
+            26
+            78
         err: NULL
         num_err: 0
         returncode: 0

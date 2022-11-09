@@ -59,7 +59,7 @@ set(
 )
 
 if(${WITH_V8})
-    list(APPEND UNITTEST_SOURCES backend/WasmTestInterpreter.cpp)
+    list(APPEND UNITTEST_SOURCES backend/WasmTestInterpreter.cpp backend/WasmTestV8.cpp)
 endif()
 
 if (CMAKE_BUILD_TYPE MATCHES Debug)

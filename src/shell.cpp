@@ -226,8 +226,10 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             if (Options::Get().dryrun and streq("WasmV8", C.default_backend_name())) {
                 Backend &backend = C.backend();
                 auto &platform = as<WasmBackend>(backend).platform();
-                WasmModule wasm = M_TIME_EXPR(platform.compile(*plan), "Compile to WebAssembly", timer);
-                wasm.dump(std::cout);
+                Module::Init(); // fresh module
+                M_TIME_EXPR(platform.compile(*plan), "Compile to WebAssembly", timer);
+                Module::Get().dump(std::cout);
+                Module::Dispose();
             }
 */
 
@@ -272,6 +274,7 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             auto &DB = C.get_database_in_use();
             auto &T = DB.get_table(S->table_name.text);
             T.store(C.create_store(T));
+            T.layout(C.data_layout());
         } else if (auto S = cast<DSVImportStmt>(stmt)) {
             auto &DB = C.get_database_in_use();
             auto &T = DB.get_table(S->table_name.text);
@@ -535,6 +538,14 @@ int main(int argc, const char **argv)
         nullptr, "--plandot",                               /* Short, Long      */
         "dot the chosen operator tree",                     /* Description      */
         [&](bool) { Options::Get().plandot = true; });      /* Callback         */
+    ADD(bool, Options::Get().physplan, false,               /* Type, Var, Init  */
+        nullptr, "--physplan",                              /* Short, Long      */
+        "emit the chosen physical execution covering",      /* Description      */
+        [&](bool) { Options::Get().physplan = true; });     /* Callback         */
+    ADD(bool, Options::Get().physplandot, false,            /* Type, Var, Init  */
+        nullptr, "--physplandot",                           /* Short, Long      */
+        "dot the chosen physical operator tree",            /* Description      */
+        [&](bool) { Options::Get().physplandot = true; });  /* Callback         */
     ADD(bool, Options::Get().dryrun, false,                 /* Type, Var, Init  */
         nullptr, "--dryrun",                                /* Short, Long      */
         "don't actually execute the query",                 /* Description      */

@@ -42,6 +42,8 @@ struct Options
     bool graph2sql;
     bool plan;
     bool plandot;
+    bool physplan;
+    bool physplandot;
 
     const char *pddl;
 

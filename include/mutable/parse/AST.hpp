@@ -248,6 +248,7 @@ struct M_EXPORT BinaryExpr : Expr
 {
     Expr *lhs;
     Expr *rhs;
+    const Type *common_operand_type = nullptr;
 
     BinaryExpr(Token op, Expr *lhs, Expr *rhs) : Expr(op), lhs(M_notnull(lhs)), rhs(M_notnull(rhs)) {}
     ~BinaryExpr() {

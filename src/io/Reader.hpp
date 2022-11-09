@@ -63,6 +63,7 @@ struct DSVReader : Reader, ConstTypeVisitor
     void operator()(Const<ErrorType> &ty) override;
     void operator()(Const<NoneType> &ty) override;
     void operator()(Const<Boolean> &ty) override;
+    void operator()(Const<Bitmap> &ty) override;
     void operator()(Const<CharacterSequence> &ty) override;
     void operator()(Const<Date> &ty) override;
     void operator()(Const<DateTime> &ty) override;

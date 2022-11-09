@@ -22,10 +22,7 @@ using namespace m;
 
 namespace {
 
-/** Generate `count` many distinct numbers of type `T` in the range of [`min`, `max`).
-*
-* @author Immanuel Haffner
-*/
+/** Generate `count` many distinct numbers of type `T` in the range of [`min`, `max`). */
 template<typename T>
 std::vector<T> generate_distinct_numbers(const T min, const T max, const std::size_t count)
 {
@@ -58,38 +55,32 @@ std::vector<T> generate_distinct_numbers(const T min, const T max, const std::si
     return values;
 }
 
-/** Generates data for an numeric column `attr` of type `T` and writes it directly to the `ColumnStore` `store`.  The
-* rows must have been allocated before calling this function.
-*
-* @author Immanuel Haffner
-*/
+/** Generates data for a numeric column at address `column_ptr` of type `T` and writes it directly to memory.  The
+* rows must have been allocated before calling this function. */
 template<typename T>
-void generate_numeric_column(ColumnStore &store, const Attribute &attr, const std::size_t num_distinct_values,
-                             const std::size_t begin, const std::size_t end)
+void generate_numeric_column(T *column_ptr, std::size_t num_distinct_values, std::size_t begin, std::size_t end)
 {
     static_assert(std::is_arithmetic_v<T>, "T must be an arithmetic type");
-    M_insist(begin < store.num_rows(), "begin out of bounds");
-    M_insist(end <= store.num_rows(), "end out of bounds");
-    M_insist(begin <= end);
+    M_insist(begin < end, "must set at least one row");
 
-    const std::size_t count = end - begin;
+    const auto count = end - begin;
 
     /* Generate distinct values. */
     std::vector<T> values;
     if (std::is_integral_v<T>)
-        values = datagen::generate_uniform_distinct_numbers<T>(std::numeric_limits<T>::lowest() + std::is_signed_v<T>,
-                                                               std::numeric_limits<T>::max(),
-                                                               num_distinct_values);
+        values = datagen::generate_uniform_distinct_numbers<T>(
+            /* min=   */ std::numeric_limits<T>::lowest() + std::is_signed_v<T>,
+            /* max=   */ std::numeric_limits<T>::max(),
+            /* count= */ num_distinct_values
+        );
     else
         values = datagen::generate_uniform_distinct_numbers<T>(T(0), T(1), num_distinct_values);
     M_insist(values.size() == num_distinct_values);
 
     /* Write distinct values repeatedly in arbitrary order to column. */
-    auto &mem = store.memory(attr.id);
-    auto ptr = mem.as<T*>() + begin;
-
+    auto ptr = column_ptr + begin;
     std::mt19937_64 g(0);
-    for (std::size_t i = 0; i != count;) {
+    for (std::size_t i = 0; i != count; ) {
         /* Shuffle the vector before writing its values to the column. */
         std::shuffle(values.begin(), values.end(), g);
         for (auto v : values) {
@@ -100,18 +91,13 @@ void generate_numeric_column(ColumnStore &store, const Attribute &attr, const st
         }
     }
 exit:
-    M_insist(ptr - mem.as<T*>() == long(end), "incorrect number of elements written");
+    M_insist(ptr - column_ptr == long(count), "incorrect number of elements written");
 }
 
 template<typename T>
-void generate_correlated_numeric_columns(ColumnStore &store_left,
-                                         ColumnStore &store_right,
-                                         const Attribute &attr,
-                                         const std::size_t num_distinct_values_left,
-                                         const std::size_t num_distinct_values_right,
-                                         const std::size_t count_left,
-                                         const std::size_t count_right,
-                                         const std::size_t num_distinct_values_matching)
+void generate_correlated_numeric_columns(T *left_ptr, T *right_ptr, std::size_t num_distinct_values_left,
+                                         std::size_t num_distinct_values_right, std::size_t count_left,
+                                         std::size_t count_right, std::size_t num_distinct_values_matching)
 {
     static_assert(std::is_arithmetic_v<T>, "T must be an arithmetic type");
     M_insist(num_distinct_values_left >= num_distinct_values_matching,
@@ -122,9 +108,9 @@ void generate_correlated_numeric_columns(ColumnStore &store_left,
     /* Generate a single set of distinct values to draw from to fill left and right side, with an overlap of exactly
      * `num_distinct_values_matching` values. */
     const std::vector<T> values = generate_distinct_numbers<T>(
-            /* min=   */ std::numeric_limits<T>::lowest(),
-            /* max=   */ std::numeric_limits<T>::max(),
-            /* count= */ num_distinct_values_left + num_distinct_values_right - num_distinct_values_matching
+        /* min=   */ std::numeric_limits<T>::lowest(),
+        /* max=   */ std::numeric_limits<T>::max(),
+        /* count= */ num_distinct_values_left + num_distinct_values_right - num_distinct_values_matching
     );
 
     std::mt19937_64 g(0);
@@ -135,10 +121,8 @@ void generate_correlated_numeric_columns(ColumnStore &store_left,
         std::vector<T> values_left(values.begin(), values.begin() + num_distinct_values_left);
 
         /* Write distinct values repeatedly in arbitrary order to column. */
-        auto &mem_left = store_left.memory(attr.id);
-        auto left = mem_left.as<T *>();
-
-        for (std::size_t i = 0; i != count_left;) {
+        auto left = left_ptr;
+        for (std::size_t i = 0; i != count_left; ) {
             /* Shuffle the vector before writing its values to the column. */
             std::shuffle(values_left.begin(), values_left.end(), g);
             for (auto v : values_left) {
@@ -148,8 +132,9 @@ void generate_correlated_numeric_columns(ColumnStore &store_left,
                     goto exit_left;
             }
         }
-        exit_left:
-        M_insist(left - mem_left.as<T *>() == long(count_left), "incorrect number of elements written to left store");
+exit_left:
+        M_insist(left - left_ptr == long(count_left),
+                 "incorrect number of elements written to left store");
     }
 
     /* Fill `store_right`. */
@@ -157,10 +142,9 @@ void generate_correlated_numeric_columns(ColumnStore &store_left,
         /* Draw last `num_distinct_values_right` values from `values`. */
         std::vector<T> values_right(values.rbegin(), values.rbegin() + num_distinct_values_right);
 
-        auto &mem_right = store_right.memory(attr.id);
-        auto right = mem_right.as<T *>();
-
-        for (std::size_t i = 0; i != count_right;) {
+        /* Write distinct values repeatedly in arbitrary order to column. */
+        auto right = right_ptr;
+        for (std::size_t i = 0; i != count_right; ) {
             /* Shuffle the vector before writing its values to the column. */
             std::shuffle(values_right.begin(), values_right.end(), g);
             for (auto v : values_right) {
@@ -170,111 +154,102 @@ void generate_correlated_numeric_columns(ColumnStore &store_left,
                     goto exit_right;
             }
         }
-        exit_right:
-        M_insist(right - mem_right.as<T *>() ==
-               long(count_right), "incorrect number of elements written to right store");
+exit_right:
+        M_insist(right - right_ptr == long(count_right),
+                "incorrect number of elements written to right store");
     }
 }
 
 }
 
-void m::set_null_bitmap(ColumnStore &store, const std::vector<uint8_t> &bytes,
-                        const std::size_t begin, const std::size_t end)
+void m::set_all_null(uint8_t *column_ptr, std::size_t num_attrs, std::size_t begin, std::size_t end)
 {
-    M_insist(end <= store.num_rows(), "end out of bounds");
-    M_insist(begin <= end, "begin out of bounds");
+    M_insist(begin < end, "must set at least one row");
 
-    const std::size_t num_attrs = store.table().size();
-    uint8_t *null_bitmap_col = store.memory(num_attrs).as<uint8_t*>();
+    auto begin_bytes = (num_attrs * begin) / 8U;
+    const auto begin_bits = (num_attrs * begin) % 8U;
+    const auto end_bytes = (num_attrs * end) / 8U;
+    const auto end_bits = (num_attrs * end) % 8U;
 
-    const std::size_t null_bitmap_size_in_bytes = (num_attrs + 7) / 8;
-    M_insist(bytes.size() == null_bitmap_size_in_bytes, "invalid number of bytes to set");
+    M_insist(begin_bytes != end_bytes, "the `begin`-th row and `end`-th row must be in different bytes");
 
-    const std::size_t num_rows_to_set = end - begin;
-    const std::size_t first_byte_to_set = null_bitmap_size_in_bytes * begin;
-    const std::size_t num_bytes_to_set = num_rows_to_set * null_bitmap_size_in_bytes;
-
-    for (uint8_t *ptr = null_bitmap_col + first_byte_to_set, *end = ptr + num_bytes_to_set;
-         ptr < end;
-         ptr += null_bitmap_size_in_bytes)
-    {
-        std::memcpy(ptr, bytes.data(), null_bitmap_size_in_bytes);
-    }
-}
-
-void m::set_all_null(ColumnStore &store, const std::size_t begin, const std::size_t end)
-{
-    const std::size_t num_attrs = store.table().size();
-    const std::size_t null_bitmap_size_in_bytes = (num_attrs + 7) / 8;
-
-    std::vector<uint8_t> bytes(null_bitmap_size_in_bytes, uint8_t(0U));
-    set_null_bitmap(store, bytes, begin, end);
-}
-
-void m::set_all_not_null(ColumnStore &store, const std::size_t begin, const std::size_t end)
-{
-    const std::size_t num_attrs = store.table().size();
-    const std::size_t null_bitmap_size_in_bytes = (num_attrs + 7) / 8;
-
-    std::vector<uint8_t> bytes;
-    bytes.reserve(null_bitmap_size_in_bytes);
-    std::size_t i;
-    for (i = num_attrs; i >= 8; i -= 8)
-        bytes.emplace_back(uint8_t(~0U));
-    if (i) {
-        M_insist(i < 8);
-        bytes.emplace_back(uint8_t((1U << i) - 1));
+    /* Set the `begin_bits` most significant bits to 1. */
+    if (begin_bits) {
+        *(column_ptr + begin_bytes) |= ~((1U << (8U - begin_bits)) - 1U); // set respective bits to 1
+        ++begin_bytes; // advance to first byte which can be written entirely
     }
 
-    set_null_bitmap(store, bytes, begin, end);
+    /* Set the `end_bits` least significant bits to 1. */
+    if (end_bits)
+        *(column_ptr + end_bytes) |= (1U << end_bits) - 1U; // set respective bits to 1
+
+    const auto num_bytes = end_bytes - begin_bytes;
+    std::memset(column_ptr + begin_bytes, uint8_t(~0), num_bytes);
+}
+
+void m::set_all_not_null(uint8_t *column_ptr, std::size_t num_attrs, std::size_t begin, std::size_t end)
+{
+    M_insist(begin < end, "must set at least one row");
+
+    auto begin_bytes = (num_attrs * begin) / 8U;
+    const auto begin_bits = (num_attrs * begin) % 8U;
+    const auto end_bytes = (num_attrs * end) / 8U;
+    const auto end_bits = (num_attrs * end) % 8U;
+
+    M_insist(begin_bytes != end_bytes, "the `begin`-th row and `end`-th row must be in different bytes");
+
+    /* Set the `begin_bits` most significant bits to 0. */
+    if (begin_bits) {
+        *(column_ptr + begin_bytes) &= (1U << begin_bits) - 1U; // set respective bits to 0
+        ++begin_bytes; // advance to first byte which can be written entirely
+    }
+
+    /* Set the `end_bits` least significant bits to 0. */
+    if (end_bits)
+        *(column_ptr + end_bytes) &= ~((1U << (8U - end_bits)) - 1U); // set respective bits to 0
+
+    const auto num_bytes = end_bytes - begin_bytes;
+    std::memset(column_ptr + begin_bytes, uint8_t(0), num_bytes);
 }
 
 
-void m::generate_primary_keys(ColumnStore &store, const Attribute &attr, const std::size_t begin, const std::size_t end)
+void m::generate_primary_keys(void *column_ptr, const Type &type, std::size_t begin, std::size_t end)
 {
-    M_insist(begin < store.num_rows(), "begin out of bounds");
-    M_insist(end <= store.num_rows(), "end out of bounds");
-    M_insist(begin <= end);
-    M_insist(attr.type->is_integral(), "primary key columns must be of integral type");
+    M_insist(begin < end, "must set at least one row");
+    M_insist(type.is_integral(), "primary key columns must be of integral type");
 
-    auto n = as<const Numeric>(attr.type);
-    switch (n->size()) {
+    auto &n = as<const Numeric>(type);
+    switch (n.size()) {
         default:
             M_unreachable("unsupported size of primary key");
 
         case 32: {
-            auto &mem = store.memory(attr.id);
-            auto ptr = mem.as<int32_t*>();
+            auto ptr = reinterpret_cast<int32_t*>(column_ptr);
             std::iota<int32_t*, int32_t>(ptr + begin, ptr + end, begin);
             break;
         }
 
         case 64: {
-            auto &mem = store.memory(attr.id);
-            auto ptr = mem.as<int64_t*>();
+            auto ptr = reinterpret_cast<int64_t*>(column_ptr);
             std::iota<int64_t*, int64_t>(ptr + begin, ptr + end, begin);
             break;
         }
     }
 }
 
-/** Generates data for the column `attr` and writes it directly to the `ColumnStore` `store`.  The rows must have been
- * allocated before calling this function.
- *
- * @author Immanuel Haffner
- */
-void m::generate_column_data(m::ColumnStore &store, const m::Attribute &attr, const std::size_t num_distinct_values,
-                             const std::size_t begin, const std::size_t end)
+void m::generate_column_data(void *column_ptr, const Attribute &attr, std::size_t num_distinct_values,
+                             std::size_t begin, std::size_t end)
 {
-    M_insist(end >= begin);
-    if (streq(attr.name, "id")) { // Generate primary key.
-        generate_primary_keys(store, attr, begin, end);
+    M_insist(begin < end, "must set at least one row");
+
+    if (streq(attr.name, "id")) { // generate primary key
+        generate_primary_keys(column_ptr, *attr.type, begin, end);
     } else if (auto n = cast<const Numeric>(attr.type)) {
         switch (n->kind) {
             case m::Numeric::N_Int:
                 switch (n->size()) {
 #define CASE(N) case N: \
-                ::generate_numeric_column<int##N##_t>(store, attr, num_distinct_values, begin, end); \
+                ::generate_numeric_column(reinterpret_cast<int##N##_t*>(column_ptr), num_distinct_values, begin, end); \
                 break
                     CASE(8);
                     CASE(16);
@@ -286,10 +261,10 @@ void m::generate_column_data(m::ColumnStore &store, const m::Attribute &attr, co
             case m::Numeric::N_Float:
                 switch (n->size()) {
                     case 32:
-                        ::generate_numeric_column<float>(store, attr, num_distinct_values, begin, end);
+                        ::generate_numeric_column(reinterpret_cast<float*>(column_ptr), num_distinct_values, begin, end);
                         break;
                     case 64:
-                        ::generate_numeric_column<double>(store, attr, num_distinct_values, begin, end);
+                        ::generate_numeric_column(reinterpret_cast<double*>(column_ptr), num_distinct_values, begin, end);
                         break;
                 }
                 break;
@@ -302,27 +277,21 @@ void m::generate_column_data(m::ColumnStore &store, const m::Attribute &attr, co
     }
 }
 
-/** Generates data for two columns `attr` correlated by `num_distinct_values_matching` and writes the data directly to
- * the `ColumnStore`s `store_left` and `store_right`. The rows must have been allocated before calling this function.
- */
-void m::generate_correlated_column_data(ColumnStore &store_left,
-                                        ColumnStore &store_right,
-                                        const Attribute &attr,
-                                        const std::size_t num_distinct_values_left,
-                                        const std::size_t num_distinct_values_right,
-                                        const std::size_t count_left,
-                                        const std::size_t count_right,
-                                        const std::size_t num_distinct_values_matching)
+void m::generate_correlated_column_data(void *left_ptr, void *right_ptr, const Attribute &attr,
+                                        std::size_t num_distinct_values_left, std::size_t num_distinct_values_right,
+                                        std::size_t count_left, std::size_t count_right,
+                                        std::size_t num_distinct_values_matching)
 {
-    if (streq(attr.name, "id")) { // primary keys cannot be correlated.
+    if (streq(attr.name, "id")) { // primary keys cannot be correlated
         M_unreachable("primary keys unsupported");
     } else if (auto n = cast<const Numeric>(attr.type)) {
         switch (n->size()) {
 #define CASE(N) case N: \
-                generate_correlated_numeric_columns<int##N##_t>(store_left, store_right, attr, \
-                                                                num_distinct_values_left, num_distinct_values_right, \
-                                                                count_left, count_right, \
-                                                                num_distinct_values_matching); \
+                generate_correlated_numeric_columns(reinterpret_cast<int##N##_t*>(left_ptr), \
+                                                    reinterpret_cast<int##N##_t*>(right_ptr), \
+                                                    num_distinct_values_left, num_distinct_values_right, \
+                                                    count_left, count_right, \
+                                                    num_distinct_values_matching); \
                 break
             CASE(8);
             CASE(16);

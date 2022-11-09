@@ -134,6 +134,12 @@ std::unique_ptr<FilterOperator> optimize_filter(std::unique_ptr<FilterOperator> 
 std::pair<std::unique_ptr<Producer>, PlanTableEntry>
 Optimizer::optimize(const QueryGraph &G) const
 {
+    return optimize_recursive(G);
+}
+
+std::pair<std::unique_ptr<Producer>, PlanTableEntry>
+Optimizer::optimize_recursive(const QueryGraph &G) const
+{
     switch (Options::Get().plan_table_type)
     {
         case Options::PT_auto: {
@@ -194,7 +200,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
         } else {
             /* Recursively solve nested queries. */
             auto Q = as<const Query>(ds);
-            auto [sub_plan, sub] = optimize(*Q->query_graph());
+            auto [sub_plan, sub] = optimize_recursive(*Q->query_graph());
 
             /* If an alias for the nested query is given, prefix every attribute with the alias. */
             if (Q->alias()) {

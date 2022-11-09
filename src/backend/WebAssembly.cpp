@@ -61,6 +61,26 @@ WasmPlatform::WasmContext::WasmContext(uint32_t id, config_t config, const Opera
     install_guard_page();
 }
 
+uint32_t WasmPlatform::WasmContext::map_table(const Table &table)
+{
+    const auto num_rows_per_instance = table.layout().child().num_tuples();
+    const auto instance_stride_in_bytes = table.layout().stride_in_bits() / 8U;
+    const std::size_t num_instances = (table.store().num_rows() + num_rows_per_instance - 1) / num_rows_per_instance;
+    const std::size_t bytes = instance_stride_in_bytes * num_instances;
+
+    /* Map entry into WebAssembly linear memory. */
+    const auto off = heap;
+    const auto aligned_bytes = Ceil_To_Next_Page(bytes);
+    const auto &mem = table.store().memory();
+    if (aligned_bytes) {
+        mem.map(aligned_bytes, 0, vm, off);
+        heap += aligned_bytes;
+        install_guard_page();
+    }
+
+    return off;
+}
+
 void WasmPlatform::WasmContext::install_guard_page()
 {
     M_insist(Is_Page_Aligned(heap));

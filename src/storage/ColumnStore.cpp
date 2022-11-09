@@ -2,7 +2,6 @@
 
 #include "backend/StackMachine.hpp"
 #include <mutable/catalog/Catalog.hpp>
-#include <mutable/storage/Linearization.hpp>
 #include <numeric>
 
 
@@ -12,54 +11,23 @@ using namespace m;
 ColumnStore::ColumnStore(const Table &table)
     : Store(table)
 {
-    uint32_t max_attr_size = 0;
+    uint64_t max_attr_size = 0;
 
-    /* Allocate columns for the attributes. */
-    columns_.reserve(table.size() + 1);
+    /* Allocate memory for the attributes columns and the null bitmap column. */
+    data_ = allocator_.allocate(ALLOCATION_SIZE * (table.num_attrs() + 1));
+
+    /* Compute the capacity depending on the column with the largest attribute size. */
     for (auto &attr : table) {
-        columns_.emplace_back(allocator_.allocate(ALLOCATION_SIZE));
         auto size = attr.type->size();
         row_size_ += size;
         max_attr_size = std::max(max_attr_size, size);
     }
+    uint32_t num_attrs = table.num_attrs();
+    row_size_ += num_attrs;
+    uint64_t null_bitmap_size = /* pad_null_bitmap= */ 1 ? ((num_attrs + 7) / 8) * 8 : num_attrs;
+    max_attr_size = std::max(max_attr_size, null_bitmap_size);
 
-    /* Allocate a column for the null bitmap. */
-    columns_.emplace_back(allocator_.allocate(ALLOCATION_SIZE));
-    uint32_t size = table.size();
-    row_size_ += size;
-    max_attr_size = std::max(max_attr_size, size);
-
-    M_insist(columns_.size() == table.size() + 1);
     capacity_ = (ALLOCATION_SIZE * 8) / max_attr_size;
-
-    /* Initialize linearization. */
-    auto lin = std::make_unique<Linearization>(Linearization::CreateInfinite(table.size() + 1));
-    for (auto &attr : table) {
-        if (attr.type->is_boolean()) {
-            /* Pack 8 booleans into a sequence of 1 byte. */
-            auto seq = std::make_unique<Linearization>(Linearization::CreateFinite(1, 8));
-            seq->add_sequence(0, 1, attr);
-            lin->add_sequence(uintptr_t(memory(attr.id).addr()), 1, std::move(seq));
-        } else {
-            auto seq = std::make_unique<Linearization>(Linearization::CreateFinite(1, 1));
-            seq->add_sequence(0, 0, attr);
-            lin->add_sequence(uintptr_t(memory(attr.id).addr()), attr.type->size() / 8, std::move(seq));
-        }
-    }
-#if 1
-    /* Pad null bitmap to next byte. */
-    auto seq = std::make_unique<Linearization>(Linearization::CreateFinite(1, 1));
-    seq->add_null_bitmap(0, 0);
-    lin->add_sequence(uintptr_t(memory(table.size()).addr()), (table.size() + 7 ) / 8, std::move(seq));
-#else
-    /* Pack null bitmaps consecutively to save space. */
-    const std::size_t bits_per_pack = std::lcm(table.size(), 8); // least common multiple
-    const std::size_t num_bitmaps_per_pack = bits_per_pack / table.size();
-    auto seq = std::make_unique<Linearization>(Linearization::CreateFinite(1, num_bitmaps_per_pack));
-    seq->add_null_bitmap(0, num_bitmaps_per_pack == 1 ? 0 : table.size());
-    lin->add_sequence(uintptr_t(memory(table.size()).addr()), bits_per_pack / 8, std::move(seq));
-#endif
-    linearization(std::move(lin));
 }
 
 ColumnStore::~ColumnStore() { }

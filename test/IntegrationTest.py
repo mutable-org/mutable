@@ -104,6 +104,7 @@ def run_stage(args, test_case, stage_name, command):
         out = out.decode('UTF-8')
         err = err.decode('UTF-8')
         num_err = err.count('error')
+        is_sorted = 'ORDER BY' in test_case.query
 
         if 'returncode' in stage:
             check_returncode(stage['returncode'], returncode)
@@ -112,7 +113,7 @@ def run_stage(args, test_case, stage_name, command):
         if 'err' in stage:
             check_stderr(stage['err'], err)
         if 'out' in stage:
-            check_stdout(stage['out'], out, args.verbose)
+            check_stdout(stage['out'], out, args.verbose, is_sorted)
     except TestException as ex:
         report_failure(str(ex), stage_name, test_case, args.debug, command)
         return False
@@ -142,10 +143,10 @@ def check_stderr(expected, actual):
     return
 
 
-def check_stdout(expected, actual, verbose):
+def check_stdout(expected, actual, verbose, is_sorted):
     if expected != None:
-        expected_sorted = sorted(expected.split('\n'))
-        actual_sorted = sorted(actual.split('\n'))
+        sort = lambda l: l if is_sorted else sorted(l)
+        expected_sorted, actual_sorted = sort(expected.split('\n')), sort(actual.split('\n'))
         if expected_sorted != actual_sorted:
             diff = ""
             if verbose:
@@ -167,7 +168,7 @@ def report(message, stage_name, test_case, symbol):
 
 def print_debug_command(test_case, stage_name, command):
     query = test_case.query.replace('\\', '\\\\').replace('"', '\\"').replace('\n', ' ').strip()
-    tqdm.write(f'     $ echo "{query}" | {" ".join(command)}')
+    tqdm.write(f'     $ echo "{query}" > debug.sql; {" ".join(command)} debug.sql')
 
 
 def report_failure(message, stage_name, test_case, debug, command=None):

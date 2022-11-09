@@ -5,7 +5,6 @@
 #include <fstream>
 #include <iomanip>
 #include <mutable/catalog/Catalog.hpp>
-#include <mutable/storage/Linearization.hpp>
 #include <numeric>
 
 
@@ -13,22 +12,13 @@ using namespace m;
 
 
 PaxStore::PaxStore(const Table &table, uint32_t block_size_in_bytes)
-        : Store(table)
-        , offsets_(new uint32_t[table.size() + 1]) // add one slot for the offset of the meta data
-        , block_size_(block_size_in_bytes)
+    : Store(table)
+    , offsets_(new uint32_t[table.num_attrs() + 1]) // add one slot for the offset of the meta data
+    , block_size_(block_size_in_bytes)
 {
     compute_block_offsets();
 
     data_ = allocator_.allocate(ALLOCATION_SIZE);
-
-    /* Initialize linearization. */
-    auto lin = std::make_unique<Linearization>(Linearization::CreateInfinite(1));
-    auto block = std::make_unique<Linearization>(Linearization::CreateFinite(table.size() + 1, num_rows_per_block_));
-    for (auto &attr : table)
-        block->add_sequence(offset(attr), attr.type->size(), attr);
-    block->add_null_bitmap(offset(table.size()), table.size());
-    lin->add_sequence(uintptr_t(memory().addr()), block_size_, std::move(block));
-    linearization(std::move(lin));
 }
 
 PaxStore::~PaxStore()
@@ -40,7 +30,7 @@ void PaxStore::compute_block_offsets()
 {
     using std::max;
 
-    const auto num_attrs = table().size();
+    const auto num_attrs = table().num_attrs();
     const Attribute **attrs = new const Attribute*[num_attrs];
 
     for (uint32_t pos = 0; pos != num_attrs; ++pos)
@@ -52,8 +42,8 @@ void PaxStore::compute_block_offsets()
     });
 
     /* Compute offsets (for a single row). */
-    uint32_t off = 0;
-    uint32_t alignment = 8;
+    uint64_t off = 0;
+    uint64_t alignment = 8;
     std::size_t num_not_byte_aligned = 0; // number of attribute columns which are not necessarily byte-aligned
     for (uint32_t pos = 0; pos != num_attrs; ++pos) {
         const Attribute &attr = *attrs[pos];
@@ -66,7 +56,7 @@ void PaxStore::compute_block_offsets()
     /* Add space for meta data. */
     offsets_[num_attrs] = off;
     off += num_attrs; // reserve space for the NULL bitmap
-    uint32_t row_size_ = off;
+    uint64_t row_size_ = off;
 
 #if 1
     /* Compute number of rows within a PAX block. Consider worst case padding of 7 bits (because each column within
@@ -82,15 +72,20 @@ void PaxStore::compute_block_offsets()
 
     /* Compute offsets (for all rows in a PAX block) by multiplying the offset for a single row by the number of rows
      * within a PAX block. Add padding to next byte if necessary. */
-    for (uint32_t pos = 0; pos != num_attrs + 1; ++pos) {
-        offsets_[pos] *= num_rows_per_block_;
-        if (auto bit_offset = offsets_[pos] % 8; bit_offset)
-            offsets_[pos] += 8 - bit_offset;
+    uint32_t running_bit_offset = 0;
+    for (uint32_t pos = 0; pos != num_attrs; ++pos) {
+        const Attribute &attr = *attrs[pos];
+        offsets_[attr.id] = offsets_[attr.id] * num_rows_per_block_ + running_bit_offset;
+        M_insist(offsets_[attr.id] % 8 == 0, "attribute column must be byte aligned");
+        if (auto bit_offset = (offsets_[attr.id] + attr.type->size() * num_rows_per_block_) % 8; bit_offset)
+            running_bit_offset += 8 - bit_offset;
     }
+    offsets_[num_attrs] = offsets_[num_attrs] * num_rows_per_block_ + running_bit_offset;
+    M_insist(offsets_[num_attrs] % 8 == 0, "NULL bitmap column must be byte aligned");
+    M_insist(offsets_[num_attrs] + num_attrs * num_rows_per_block_ <= block_size_ * 8);
 
     /* Compute capacity. */
-    capacity_ = (ALLOCATION_SIZE / block_size_) * num_rows_per_block_ // entire blocks
-                + ((ALLOCATION_SIZE % block_size_) * 8) / row_size_;  // last partial filled block
+    capacity_ = (ALLOCATION_SIZE / block_size_) * num_rows_per_block_;
 
     delete[] attrs;
 }
@@ -100,7 +95,7 @@ void PaxStore::dump(std::ostream &out) const
 {
     out << "PaxStore at " << data_.addr() << " for table \"" << table().name << "\": " << num_rows_ << '/' << capacity_
         << " rows, " << block_size_ << " bytes per block, " << num_rows_per_block_ << " rows per block, offsets in bits [";
-    for (uint32_t i = 0, end = table().size(); i != end; ++i) {
+    for (uint32_t i = 0, end = table().num_attrs(); i != end; ++i) {
         if (i != 0) out << ", ";
         out << offsets_[i];
     }

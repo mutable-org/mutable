@@ -1,1142 +1,517 @@
 #pragma once
 
-#include "backend/RuntimeStruct.hpp"
-#include "backend/WebAssembly.hpp"
-#include "storage/Store.hpp"
-#include <binaryen-c.h>
-#include <cstring>
-#include <iostream>
+#include "backend/PhysicalOperator.hpp"
+#include "backend/WasmDSL.hpp"
 #include <mutable/catalog/Schema.hpp>
-#include <mutable/catalog/Type.hpp>
-#include <mutable/IR/CNF.hpp>
-#include <mutable/IR/Operator.hpp>
-#include <sstream>
-#include <utility>
-#include <vector>
+#include <mutable/parse/AST.hpp>
+#include <optional>
+#include <variant>
 
-
-namespace {
-
-/** Create a unique name from `name` by appending a unique identifier.  If `name` is `nullptr`, use `fallback` instead.
- */
-inline const char * mkname(const char *name, const char *fallback) {
-    M_insist(fallback, "fallback name must not be nullptr");
-    static uint32_t id = 0;
-    std::ostringstream oss;
-    if (name) oss << name;
-    else      oss << fallback;
-    oss << '_' << id++;
-    return strdup(oss.str().c_str());
-}
-
-}
 
 namespace m {
 
-/*----- Common forward declarations ----------------------------------------------------------------------------------*/
-struct Type;
-struct FunctionBuilder;
-struct WasmStrcmp;
-struct WasmModuleCG;
+namespace wasm {
 
-/*----- WasmAlgo forward declarations --------------------------------------------------------------------------------*/
-struct WasmPartition;
-struct WasmQuickSort;
-struct WasmHash;
-struct WasmHashTable;
+// forward declarations
+struct Environment;
 
-/** Returns the `BinaryenType` that corresponds to mu*t*able's `Type` `ty`. */
-inline BinaryenType get_binaryen_type(const Type *ty)
+
+/*======================================================================================================================
+ * Declare valid SQL types
+ *====================================================================================================================*/
+
+template<typename>
+struct is_sql_type : std::false_type {};
+
+#define SQL_TYPES(X) \
+    X(_Bool) \
+    X(_I8) \
+    X(_I16) \
+    X(_I32) \
+    X(_I64) \
+    X(_Float) \
+    X(_Double) \
+    X(Ptr<Char>) \
+
+#define ADD_EXPR_SQL_TYPE(TYPE) template<> struct is_sql_type<TYPE> : std::true_type {};
+SQL_TYPES(ADD_EXPR_SQL_TYPE)
+#undef ADD_EXPR_SQL_TYPE
+
+template<typename T>
+static constexpr bool is_sql_type_v = is_sql_type<T>::value;
+
+using SQL_t = std::variant<
+    std::monostate
+#define ADD_TYPE(TYPE) , TYPE
+    SQL_TYPES(ADD_TYPE)
+#undef ADD_TYPE
+>;
+#undef SQL_TYPES
+
+
+/*======================================================================================================================
+ * ExprCompiler
+ *====================================================================================================================*/
+
+/** Compiles AST expressions `m::Expr` to Wasm ASTs `m::wasm::Expr<T>`.  Also supports compiling `m::cnf::CNF`s. */
+struct ExprCompiler : ConstASTExprVisitor
 {
-    return visit(overloaded {
-        [](const Boolean&) { return BinaryenTypeInt32(); },
-        [](const Numeric &n) {
-            switch (n.kind) {
-                case Numeric::N_Int:
-                case Numeric::N_Decimal:
-                    return n.size() <= 32 ? BinaryenTypeInt32() : BinaryenTypeInt64();
-
-                case Numeric::N_Float:
-                    return n.size() <= 32 ? BinaryenTypeFloat32() : BinaryenTypeFloat64();
-            }
-        },
-        [](const CharacterSequence&) { return BinaryenTypeInt32(); },
-        [](const Date&) { return BinaryenTypeInt32(); },
-        [](const DateTime&) { return BinaryenTypeInt64(); },
-        [](auto&&) -> BinaryenType { M_unreachable("unsupported type"); }
-    }, *ty);
-}
-
-/** Manages the lifetime of a `BinaryenExpressionRef`.  Ensures that the `BinaryenExpressionRef` has at most one user.
- * The semantics of this class are similar to that of `std::unique_ptr`.  */
-struct WasmTemporary
-{
-    friend void swap(WasmTemporary &first, WasmTemporary &second) {
-        std::swap(first.ref_, second.ref_);
-    }
-
     private:
-    BinaryenExpressionRef ref_ = nullptr;
+    ///> current intermediate results during AST traversal and compilation
+    SQL_t intermediate_result_;
+    ///> the environment to use for resolving designators to `Expr<T>`s
+    const Environment &env_;
 
     public:
-    WasmTemporary() { }
-    WasmTemporary(BinaryenExpressionRef ref) : ref_(M_notnull(ref)) { }
-    ~WasmTemporary() { /* nothing to be done */ }
+    ExprCompiler(const Environment &env) : env_(env) { }
 
-    WasmTemporary(WasmTemporary &&other) : WasmTemporary() { swap(*this, other); }
-
-    WasmTemporary & operator=(WasmTemporary other) {
-        M_insist(other.ref_, "cannot assign nullptr");
-        swap(*this, other);
-        return *this;
+    ///> Compiles a `m::Expr` \p e of statically unknown type to a `SQL_t`.
+    SQL_t compile(const m::Expr &e) {
+        (*this)(e);
+        return std::move(intermediate_result_);
     }
 
-    operator BinaryenExpressionRef() { M_insist(ref_); auto tmp = ref_; ref_ = nullptr; return tmp; }
-
-    /** Returns true iff there is a `BinaryenExpressionRef` attached to `this`. */
-    bool is() const { return ref_ != nullptr; }
-
-    /** Returns the type of the attached `BinaryenExpressionRef`. */
-    BinaryenType type() const { M_insist(ref_); return BinaryenExpressionGetType(ref_); }
-
-    /** Returns a fresh `WasmTemporary` with a *deep copy* of the attached `BinaryenExpressionRef`. */
-    WasmTemporary clone(WasmModuleCG &module) const;
-
-    void dump() const;
-};
-
-struct WasmVariable
-{
-    private:
-    BinaryenModuleRef module_;
-    BinaryenType ty_;
-    std::size_t var_idx_;
-
-    public:
-    WasmVariable(FunctionBuilder &fn, BinaryenType ty);
-
-    WasmVariable(BinaryenModuleRef module, BinaryenType ty, std::size_t idx)
-        : module_(module)
-        , ty_(ty)
-        , var_idx_(idx)
-    { }
-
-    WasmVariable(WasmVariable&&) = default;
-
-    WasmVariable & operator=(WasmVariable&&) = default;
-
-    WasmTemporary set(WasmTemporary expr) const {
-        return BinaryenLocalSet(
-            /* module= */ module_,
-            /* index=  */ var_idx_,
-            /* value=  */ expr
-        );
+    ///> Compile a `m::Expr` of statically known type to an `Expr<T>`.
+    template<typename T>
+    requires is_sql_type_v<T>
+    T compile(const m::Expr &e) {
+        (*this)(e);
+        M_insist(std::holds_alternative<T>(intermediate_result_));
+        return *std::get_if<T>(&intermediate_result_);
     }
 
-    WasmTemporary get() const { return BinaryenLocalGet(module_, var_idx_, ty_); }
-
-    operator WasmTemporary() const { return get(); }
-    operator BinaryenExpressionRef() const { return get(); }
-};
-
-inline WasmTemporary convert(BinaryenModuleRef module, WasmTemporary expr, const Type *original, const Type *target)
-{
-#define CONVERT(CONVERSION) BinaryenUnary(module, Binaryen##CONVERSION(), expr)
-    auto O = as<const Numeric>(original);
-    auto T = as<const Numeric>(target);
-    if (O->as_vectorial() == T->as_vectorial()) return expr; // no conversion required
-
-    if (T->is_double()) {
-        if (O->is_float())
-            return CONVERT(PromoteFloat32); // f32 to f64
-        if (O->is_integral()) {
-            if (O->size() == 64)
-                return CONVERT(ConvertSInt64ToFloat64); // i64 to f64
-            else
-                return CONVERT(ConvertSInt32ToFloat64); // i32 to f64
-        }
-        if (O->is_decimal()) {
-            WasmTemporary val = O->size() == 64 ? CONVERT(ConvertSInt64ToFloat64)  // i64 to f64
-                                                : CONVERT(ConvertSInt32ToFloat64); // i32 to f64
-            return BinaryenBinary(
-                /* module= */ module,
-                /* op=     */ BinaryenDivFloat64(),
-                /* left=   */ val,
-                /* right=  */ BinaryenConst(module, BinaryenLiteralFloat64(pow(10., O->scale)))
-            );
-        }
-    }
-
-    if (T->is_float()) {
-        if (O->is_integral()) {
-            if (O->size() == 64)
-                return CONVERT(ConvertSInt64ToFloat32); // i64 to f32
-            else
-                return CONVERT(ConvertSInt32ToFloat32); // i32 to f32
-        }
-        if (O->is_decimal()) {
-            M_unreachable("not implemented");
-        }
-    }
-
-    if (T->is_integral()) {
-        if (T->size() == 64) {
-            if (O->is_integral()) {
-                if (O->size() == 64)
-                    return expr; // i64 to i64; no conversion required
-                else
-                    return CONVERT(ExtendSInt32); // i32 to i64
-            }
-        }
-        if (T->size() == 32) {
-            if (O->is_integral()) {
-                if (O->size() == 64)
-                    return CONVERT(WrapInt64); // i64 to i32
-                else
-                    return expr; // i32 to i32; no conversion required
-            }
-        }
-    }
-
-    if (T->is_decimal()) {
-        if (O->is_decimal()) {
-            if (O->size() < T->size())
-                expr = CONVERT(ExtendSInt32);
-            if (T->scale > O->scale) {
-                const auto delta = T->scale - O->scale;
-                auto factor = BinaryenConst(module, T->size() == 64 ? BinaryenLiteralInt64(powi(10L, delta))
-                                                                    : BinaryenLiteralInt32(powi(10,  delta)));
-                return BinaryenBinary(
-                    /* module= */ module,
-                    /* op=     */ T->size() == 64 ? BinaryenMulInt64() : BinaryenMulInt32(),
-                    /* left=   */ expr,
-                    /* right=  */ factor
-                );
-            } else if (T->scale < O->scale) {
-                const auto delta =  O->scale - T->scale;
-                auto factor = BinaryenConst(module, T->size() == 64 ? BinaryenLiteralInt64(powi(10L, delta))
-                                                                    : BinaryenLiteralInt32(powi(10,  delta)));
-                return BinaryenBinary(
-                    /* module= */ module,
-                    /* op=     */ T->size() == 64 ? BinaryenDivSInt64() : BinaryenDivSInt32(),
-                    /* left=   */ expr,
-                    /* right=  */ factor
-                );
-            }
-
-            M_insist(T->scale == O->scale);
-            return expr;
-        }
-
-        if (O->is_integral()) {
-            if (O->size() < T->size())
-                expr = CONVERT(ExtendSInt32);
-            if (T->scale) {
-                auto factor = BinaryenConst(module, T->size() == 64 ? BinaryenLiteralInt64(powi(10L, T->scale))
-                                                                    : BinaryenLiteralInt32(powi(10,  T->scale)));
-                return BinaryenBinary(
-                    /* module= */ module,
-                    /* op=     */ T->size() == 64 ? BinaryenMulInt64() : BinaryenMulInt32(),
-                    /* left=   */ expr,
-                    /* right=  */ factor
-                );
-            }
-            return expr;
-        }
-
-        if (O->is_floating_point()) {
-            if (O->size() == 64) {
-                expr = BinaryenBinary(
-                    /* module= */ module,
-                    /* op=     */ BinaryenMulFloat64(),
-                    /* left=   */ expr,
-                    /* right=  */ BinaryenConst(module, BinaryenLiteralFloat64(pow(10., O->scale)))
-                );
-                return T->size() == 64 ? CONVERT(TruncSFloat64ToInt64) : CONVERT(TruncSFloat64ToInt32);
-            } else {
-                expr = BinaryenBinary(
-                    /* module= */ module,
-                    /* op=     */ BinaryenMulFloat32(),
-                    /* left=   */ expr,
-                    /* right=  */ BinaryenConst(module, BinaryenLiteralFloat32(powf(10.f, O->scale)))
-                );
-                return T->size() == 64 ? CONVERT(TruncSFloat32ToInt64) : CONVERT(TruncSFloat32ToInt32);
-            }
-        }
-    }
-
-    M_unreachable("unsupported conversion");
-#undef CONVERT
-};
-
-inline WasmTemporary reinterpret(BinaryenModuleRef module, WasmTemporary expr, const BinaryenType target)
-{
-#define CONVERT(CONVERSION, EXPR) BinaryenUnary(module, Binaryen##CONVERSION(), EXPR)
-    const BinaryenType original = expr.type();
-    if (original == target) return expr;
-
-    if (target == BinaryenTypeInt64()) {
-        if (original == BinaryenTypeInt32())
-            return CONVERT(ExtendUInt32, expr); // i32 to i64
-        if (original == BinaryenTypeFloat32())
-            return CONVERT(ExtendUInt32, CONVERT(ReinterpretFloat32, expr)); // f32 to i64
-        if (original == BinaryenTypeFloat64())
-            return CONVERT(ReinterpretFloat64, expr); // f64 to i64
-    }
-
-    M_unreachable("unsupported reinterpretation");
-#undef CONVERT
-}
-
-/** Helper class to construct WASM blocks. */
-struct BlockBuilder
-{
-    friend void swap(BlockBuilder &first, BlockBuilder &second) {
-        using std::swap;
-        swap(first.module_,      second.module_);
-        swap(first.name_,        second.name_);
-        swap(first.exprs_,       second.exprs_);
-        swap(first.return_type_, second.return_type_);
-    }
+    ///> Compile a `m::cnf::CNF` \p cnf to an `Expr<bool>`.
+    _Bool compile(const cnf::CNF &cnf);
 
     private:
-    WasmModuleCG *module_ = nullptr; ///< the WebAssembly module
-    const char *name_ = nullptr; ///< the block name
-    std::vector<BinaryenExpressionRef> exprs_; ///< list of expressions in the block
-    BinaryenType return_type_; ///< the result type of the block (i.e. the type of the last expression)
-
-    public:
-    BlockBuilder(WasmModuleCG &module, const char *name = nullptr)
-        : module_(&module)
-        , name_(mkname(name, "block"))
-        , return_type_(BinaryenTypeAuto())
-    { }
-
-    BlockBuilder(const BlockBuilder&) = delete;
-    BlockBuilder(BlockBuilder &&other) { swap(*this, other); }
-    ~BlockBuilder() { free((void*) name_); }
-
-    WasmModuleCG & module() const { return *module_; }
-
-    BlockBuilder & operator=(BlockBuilder other) { swap(*this, other); return *this; }
-
-    BlockBuilder & add(WasmTemporary expr) { exprs_.emplace_back(expr); return *this; }
-    BlockBuilder & operator+=(WasmTemporary expr) { return add(std::move(expr)); }
-    BlockBuilder & operator<<(WasmTemporary expr) { return add(std::move(expr)); }
-
-    /** Returns the block's name. */
-    const char * name() const { return name_; }
-
-    void set_return_type(BinaryenType ty) { return_type_ = ty; }
-
-    WasmTemporary finalize();
-
-    void dump(std::ostream &out) const;
-    void dump() const;
-};
-
-/** Helper class to construct WASM functions. */
-struct FunctionBuilder
-{
-    private:
-    WasmModuleCG *module_ = nullptr; ///< the WebAssembly module
-    const char *name_ = nullptr; ///< the name of this function
-    BinaryenType result_type_; ///< the result type
-    BinaryenType parameter_type_; ///< the compound type of all parameters
-    std::vector<BinaryenType> locals_; ///< the types of local variables
-    BlockBuilder block_; ///< the function body
-
-    public:
-    FunctionBuilder(WasmModuleCG &module, const char *name,
-                    BinaryenType result_type, std::vector<BinaryenType> parameter_types)
-        : module_(&module)
-        , name_(strdup(M_notnull(name)))
-        , result_type_(result_type)
-        , parameter_type_(BinaryenTypeCreate(&parameter_types[0], parameter_types.size()))
-        , block_(module, (std::string(name) + ".body").c_str())
-    { }
-
-    FunctionBuilder(const FunctionBuilder&) = delete;
-
-    ~FunctionBuilder() { free((void*) name_); }
-
-    /** Returns the module. */
-    WasmModuleCG & module() const { return *module_; }
-
-    /** Returns the function body. */
-    BlockBuilder & block() { return block_; }
-    /** Returns the function body. */
-    const BlockBuilder & block() const { return block_; }
-
-    const char * name() const { return name_; }
-
-    /** Adds a fresh local, unnamed variable to the function and returns its index. */
-    std::size_t add_local_anonymous(BinaryenType ty) {
-        std::size_t idx = BinaryenTypeArity(parameter_type_) + locals_.size();
-        locals_.push_back(ty);
-        return idx;
-    }
-
-    /** Adds a fresh local, named variable to the function. */
-    WasmVariable add_local(BinaryenType ty);
-
-    /** Create a `BinaryenFunctionRef` with the current block and locals. */
-    BinaryenFunctionRef finalize();
-
-    void dump(std::ostream &out) const;
-    void dump() const;
-};
-
-/** An abstract class to provide a codegen context for compilation of expressions. */
-struct WasmExprCompiler : ConstASTExprVisitor
-{
-    private:
-    mutable FunctionBuilder *fn_ = nullptr;
-    mutable BlockBuilder *block_ = nullptr;
-    mutable WasmTemporary value_;
-
-    protected:
-    /** Sets the current `FunctionBuilder`. */
-    void fn(FunctionBuilder &fn) const { fn_ = &fn; }
-    /** Returns the current `FunctionBuilder`. */
-    FunctionBuilder & fn() const { return *M_notnull(fn_); }
-    /** Sets the current `BlockBuilder`. */
-    void block(BlockBuilder &block) const { block_ = &block; }
-    /** Retunrs the target `BlockBuilder` for auxiliary code. */
-    BlockBuilder & block() const { return *M_notnull(block_); }
-    /** Returns the current `WasmModuleCG`. */
-    WasmModuleCG & module() const { return fn().module(); }
-
-    WasmTemporary get() const { M_insist(value_.is()); return std::move(value_); }
-    void set(WasmTemporary value) { value_ = std::move(value); }
-
     using ConstASTExprVisitor::operator();
-    void operator()(const ErrorExpr&) override { M_unreachable("no errors at this stage"); }
+    void operator()(const ErrorExpr&) override;
+    void operator()(const Designator &op) override;
     void operator()(const Constant &op) override;
     void operator()(const UnaryExpr &op) override;
     void operator()(const BinaryExpr &op) override;
+    void operator()(const FnApplicationExpr &op) override;
+    void operator()(const QueryExpr &op) override;
 
-    WasmTemporary compile(const Expr &e) const {
-        (*const_cast<WasmExprCompiler*>(this))(e);
-        return get();
+    SQL_t get() { return std::move(intermediate_result_); }
+
+    template<typename T>
+    requires is_sql_type_v<T>
+    T get() {
+        M_insist(std::holds_alternative<T>(intermediate_result_));
+        return *std::get_if<T>(&intermediate_result_);
+    }
+
+    void set(SQL_t &&value) {
+        intermediate_result_.~SQL_t(); // destroy old
+        new (&intermediate_result_) SQL_t(std::move(value)); // placement-new
     }
 };
 
-/** Provides a codegen context for compilation of expressions using locally bound identifiers. */
-struct WasmEnvironment : WasmExprCompiler
+
+/*======================================================================================================================
+ * Environment
+ *====================================================================================================================*/
+
+/** Binds `Schema::Identifier`s to `Expr<T>`s. */
+struct Environment
 {
-    friend void swap(WasmEnvironment &first, WasmEnvironment &second) {
+    friend void swap(Environment &first, Environment &second) {
         using std::swap;
-
-        swap(first.nulls_, second.nulls_);
-        swap(first.values_, second.values_);
+        swap(first.exprs_, second.exprs_);
     }
 
     private:
-    ///> Maps `Schema::Identifier`s to `WasmTemporary`s that evaluate to 0 if NULL and 1 otherwise
-    std::unordered_map<Schema::Identifier, WasmTemporary> nulls_;
-    ///> Maps `Schema::Identifier`s to `WasmTemporary`s that evaluate to the current value
-    std::unordered_map<Schema::Identifier, WasmTemporary> values_;
+    /** Discards the held expression of `expr`. */
+    static void discard(SQL_t &expr) {
+        std::visit(overloaded {
+            [](std::monostate) { },
+            [](auto &e) { e.discard(); },
+        }, expr);
+    }
+
+    private:
+    ///> maps `Schema::Identifier`s to `Expr<T>`s that evaluate to the current expression
+    std::unordered_map<Schema::Identifier, SQL_t> exprs_;
 
     public:
-    WasmEnvironment(FunctionBuilder &fn) { this->fn(fn); }
-    WasmEnvironment(const WasmEnvironment&) = delete;
-    WasmEnvironment(WasmEnvironment &&other) { swap(*this, other); }
+    Environment() = default;
+    Environment(const Environment&) = delete;
+    Environment(Environment &&other) : Environment() { swap(*this, other); }
 
-    WasmEnvironment & operator=(WasmEnvironment other) { swap(*this, other); return *this; }
+    ~Environment() {
+        for (auto &p : exprs_)
+            discard(p.second);
+    }
 
-    /** Returns `true` iff this `WasmEnvironment` contains `id`. */
-    bool has(Schema::Identifier id) const { return values_.find(id) != values_.end(); }
+    Environment & operator=(Environment &&other) { swap(*this, other); return *this; }
 
-    /** Adds a mapping from `id` to `val` to this `WasmEnvironment`. */
-    void add(Schema::Identifier id, WasmTemporary val) {
-        auto res = values_.emplace(id, std::move(val));
+    /*----- Access methods -------------------------------------------------------------------------------------------*/
+    /** Returns `true` iff this `Environment` contains `id`. */
+    bool has(Schema::Identifier id) const { return exprs_.find(id) != exprs_.end(); }
+    /** Returns `true` iff this `Environment` is empty. */
+    bool empty() const { return exprs_.empty(); }
+
+    ///> Adds a mapping from \p id to \p expr.
+    template<typename T>
+    requires is_sql_type_v<T>
+    void add(Schema::Identifier id, T &&expr) {
+        auto res = exprs_.emplace(id, std::forward<T>(expr));
+        M_insist(res.second, "duplicate ID");
+    }
+    ///> Adds a mapping from \p id to \p expr.
+    void add(Schema::Identifier id, SQL_t &&expr) {
+        auto res = exprs_.emplace(id, std::move(expr));
         M_insist(res.second, "duplicate ID");
     }
 
-    /** Returns a `WasmTemporary` that evaluates to `true` iff the value of `id` is `NULL`. */
-    WasmTemporary get_null(Schema::Identifier id) const;
-    /** Returns a `WasmTemporary` that evaluates to the value of `id`. */
-    WasmTemporary get_value(Schema::Identifier id) const;
-    /** Returns a `WasmTemporary` that evaluates to the value of `id`. */
-    WasmTemporary operator[](Schema::Identifier id) const { return get_value(id); }
-
-    /** Compiles the AST `Expr` `e` in this `WasmEnvironment` and returns a `WasmTemporary` evaluating to the value of
-     * `e`.  Auxiliary code is emitted into `block`. */
-    WasmTemporary compile(BlockBuilder &block, const Expr &e) const {
-        this->block(block);
-        return WasmExprCompiler::compile(e);
-    }
-
-    /** Compiles a `cnf::CNF` in this `WasmEnvironment` and returns a `WasmTemporary` evaluating to the value of `cnf`.
-     * (Compiles `cnf` without short-circuit evaluation!)  Auxiliary code is emitted into `block`. */
-    WasmTemporary compile(BlockBuilder &block, const cnf::CNF &cnf) const;
-
-    void dump(std::ostream &out) const;
-    void dump() const;
-
-    private:
-    using WasmExprCompiler::operator();
-    void operator()(const Designator &op) override;
-    void operator()(const FnApplicationExpr &op) override;
-    void operator()(const QueryExpr &op) override;
-};
-
-/** A helper class to generate accesses into a structure. */
-struct WasmStruct : RuntimeStruct
-{
-    public:
-    const Schema &schema; ///< the schema of the struct
-
-    WasmStruct(const Schema &schema, std::initializer_list<const Type*> additional_fields = {})
-        : RuntimeStruct(schema, additional_fields)
-        , schema(schema)
-    { }
-
-    WasmStruct(const WasmStruct&) = delete;
-
-    /** Creates a `WasmEnvironment` for the `WasmStruct` at address `ptr` and offset `struc_offset`. */
-    WasmEnvironment create_load_context(FunctionBuilder &fn, WasmTemporary ptr, std::size_t struc_offset = 0) const;
-
-    /** Loads the value of the `idx`-th field from the `WasmStruct` at address `ptr` and offset `struc_offset`.  If the
-     * field is a C-stype primitive type, the value is returned.  If the field is a character sequence, the address of
-     * the first character is returned. */
-    WasmTemporary load(FunctionBuilder &fn, WasmTemporary ptr, std::size_t idx, std::size_t struc_offset = 0) const;
-
-    /** Emits code into `block` that stores the value `val` to the `idx`-th field to the `WasmStruct` at address
-     * `ptr` and offset `struc_offset`.  */
-    void store(FunctionBuilder &fn, BlockBuilder &block, WasmTemporary ptr, std::size_t idx, WasmTemporary val,
-               std::size_t struc_offset = 0) const;
-
-    void dump(std::ostream &out) const;
-    void dump() const;
-};
-
-/** Provides a codegen context for compilation of expressions accessing fields of a `WasmStruct`. */
-struct WasmStructCGContext : WasmExprCompiler
-{
-    const WasmStruct &struc; ///< the `WasmStruct` to access
-    private:
-    ///> maps each `Schema::Identifier` to its index in the `WasmStruct`
-    std::unordered_map<Schema::Identifier, WasmStruct::index_type> indices_;
-    WasmStruct::offset_type struc_offset_; ///< the offset of the `WasmStruct` `struc`
-
-    mutable WasmTemporary base_ptr_;
-
-    public:
-    WasmStructCGContext(const WasmStruct &struc, WasmStruct::offset_type struc_offset = 0)
-        : struc(struc)
-        , struc_offset_(struc_offset)
-    { }
-    WasmStructCGContext(const WasmStructCGContext&) = delete;
-    WasmStructCGContext(WasmStructCGContext&&) = default;
-
-    /** Returns `true` iff the `WasmStruct` `struc` has a field for `id`. */
-    bool has(Schema::Identifier id) const { return indices_.find(id) != indices_.end(); }
-
-    /** Adds an entry for field `id` at `index` of the `WasmStruct` `struc`. */
-    void add(Schema::Identifier id, WasmStruct::index_type index) {
-        auto res = indices_.emplace(id, index);
-        M_insist(res.second, "duplicate ID");
-    }
-
-    WasmStruct::index_type index(Schema::Identifier id) const { return indices_.at(id); }
-
-    WasmTemporary get(WasmTemporary ptr, Schema::Identifier id) const {
-        return struc.load(fn(), std::move(ptr), index(id), struc_offset_);
-    }
-
-    WasmTemporary compile(FunctionBuilder &fn, BlockBuilder &block, WasmTemporary ptr, const Expr &e) const {
-        this->fn(fn);
-        this->block(block);
-        base_ptr_ = std::move(ptr);
-        return WasmExprCompiler::compile(e);
-    }
-
-    private:
-    using WasmExprCompiler::get;
-    using WasmExprCompiler::operator();
-    void operator()(const Designator &op) override;
-    void operator()(const FnApplicationExpr &op) override;
-    void operator()(const QueryExpr &op) override;
-};
-
-struct WasmLoop
-{
-    private:
-    const char *name_ = nullptr;
-    BlockBuilder body_;
-
-    public:
-    WasmLoop(WasmModuleCG &module, const char *name = nullptr)
-        : name_(mkname(name, "loop"))
-        , body_(module, (std::string(name_) + ".body").c_str())
-    { }
-
-    WasmLoop(WasmLoop&&) = default;
-
-    virtual ~WasmLoop() { free((void*) name_); }
-
-    BlockBuilder & body() { return body_; }
-    const BlockBuilder & body() const { return body_; }
-
-    /** Return the loop's name. */
-    const char * name() const { return name_; }
-
-    operator BlockBuilder&() { return body(); }
-
-    WasmLoop & add(WasmTemporary expr) { body().add(std::move(expr)); return *this; }
-    WasmLoop & operator+=(WasmTemporary expr) { return add(std::move(expr)); }
-    WasmLoop & operator<<(WasmTemporary expr) { return add(std::move(expr)); }
-
-    WasmTemporary continu(WasmTemporary condition = WasmTemporary());
-
-    virtual WasmTemporary finalize();
-};
-
-struct WasmDoWhile : WasmLoop
-{
-    private:
-    WasmTemporary condition_;
-
-    public:
-    WasmDoWhile(WasmModuleCG &module, const char *name, WasmTemporary condition)
-        : WasmLoop(module, name)
-        , condition_(std::move(condition))
-    { }
-
-    WasmDoWhile(WasmDoWhile&&) = default;
-
-    WasmTemporary condition() const;
-
-    virtual WasmTemporary finalize() override {
-        body() += continu(condition());
-        return WasmLoop::finalize();
-    }
-};
-
-struct WasmWhile : WasmDoWhile
-{
-    public:
-    WasmWhile(WasmModuleCG &module, const char *name, WasmTemporary condition)
-        : WasmDoWhile(module, name, std::move(condition))
-    { }
-
-    WasmWhile(WasmWhile&&) = default;
-
-    WasmTemporary finalize() override;
-};
-
-/** Compares primitive C-style types.  To compare two C-strings use `WasmStrcmp`. */
-struct WasmCompare
-{
-    friend WasmStrcmp;
-
-    using order_type = std::pair<const Expr*, bool>;
-
-    private:
-    /** The available comparison operations. */
-    enum cmp_op {
-        EQ, NE, LT, LE, GT, GE
-    };
-
-    FunctionBuilder &fn_; ///< the function in which to compare two structs
-    public:
-    const std::vector<order_type> &order; ///< the struct's attributes to compare by
-
-    WasmCompare(FunctionBuilder &fn, const std::vector<order_type> &order)
-        : fn_(fn)
-        , order(order)
-    { }
-
-    FunctionBuilder & fn() const { return fn_; }
-
-    /** Emit code to compare structs at positions `left` and `right`. */
-    WasmTemporary emit(BlockBuilder &block, const WasmStructCGContext &context,
-                       WasmTemporary left, WasmTemporary right);
-
-    static WasmTemporary Eq(FunctionBuilder &fn, const Type &ty, WasmTemporary left, WasmTemporary right) {
-        return Cmp(fn, ty, std::move(left), std::move(right), EQ);
-    }
-    static WasmTemporary Ne(FunctionBuilder &fn, const Type &ty, WasmTemporary left, WasmTemporary right) {
-        return Cmp(fn, ty, std::move(left), std::move(right), NE);
-    }
-    static WasmTemporary Lt(FunctionBuilder &fn, const Type &ty, WasmTemporary left, WasmTemporary right) {
-        return Cmp(fn, ty, std::move(left), std::move(right), LT);
-    }
-    static WasmTemporary Le(FunctionBuilder &fn, const Type &ty, WasmTemporary left, WasmTemporary right) {
-        return Cmp(fn, ty, std::move(left), std::move(right), LE);
-    }
-    static WasmTemporary Gt(FunctionBuilder &fn, const Type &ty, WasmTemporary left, WasmTemporary right) {
-        return Cmp(fn, ty, std::move(left), std::move(right), GT);
-    }
-    static WasmTemporary Ge(FunctionBuilder &fn, const Type &ty, WasmTemporary left, WasmTemporary right) {
-        return Cmp(fn, ty, std::move(left), std::move(right), GE);
-    }
-
-    private:
-    static WasmTemporary Cmp(FunctionBuilder &fn, const Type &ty, WasmTemporary left, WasmTemporary right, cmp_op op);
-};
-
-/** Compares two c-style strings (i.e. strings terminated by a NUL-byte). */
-struct WasmStrcmp
-{
-    static WasmTemporary Eq(FunctionBuilder &fn, BlockBuilder &block,
-                            const CharacterSequence &ty_left, const CharacterSequence &ty_right,
-                            WasmTemporary left, WasmTemporary right) {
-        return Cmp(fn, block, ty_left, ty_right, std::move(left), std::move(right), WasmCompare::EQ);
-    }
-    static WasmTemporary Ne(FunctionBuilder &fn, BlockBuilder &block,
-                            const CharacterSequence &ty_left, const CharacterSequence &ty_right,
-                            WasmTemporary left, WasmTemporary right) {
-        return Cmp(fn, block, ty_left, ty_right, std::move(left), std::move(right), WasmCompare::NE);
-    }
-    static WasmTemporary Lt(FunctionBuilder &fn, BlockBuilder &block,
-                            const CharacterSequence &ty_left, const CharacterSequence &ty_right,
-                            WasmTemporary left, WasmTemporary right) {
-        return Cmp(fn, block, ty_left, ty_right, std::move(left), std::move(right), WasmCompare::LT);
-    }
-    static WasmTemporary Gt(FunctionBuilder &fn, BlockBuilder &block,
-                            const CharacterSequence &ty_left, const CharacterSequence &ty_right,
-                            WasmTemporary left, WasmTemporary right) {
-        return Cmp(fn, block, ty_left, ty_right, std::move(left), std::move(right), WasmCompare::GT);
-    }
-    static WasmTemporary Le(FunctionBuilder &fn, BlockBuilder &block,
-                            const CharacterSequence &ty_left, const CharacterSequence &ty_right,
-                            WasmTemporary left, WasmTemporary right) {
-        return Cmp(fn, block, ty_left, ty_right, std::move(left), std::move(right), WasmCompare::LE);
-    }
-    static WasmTemporary Ge(FunctionBuilder &fn, BlockBuilder &block,
-                            const CharacterSequence &ty_left, const CharacterSequence &ty_right,
-                            WasmTemporary left, WasmTemporary right) {
-        return Cmp(fn, block, ty_left, ty_right, std::move(left), std::move(right), WasmCompare::GE);
-    }
-
-    /** Generate code similar to `strcmp`. */
-    static WasmTemporary Cmp(FunctionBuilder &fn, BlockBuilder &block,
-                             const CharacterSequence &ty_left, const CharacterSequence &ty_right,
-                             WasmTemporary left, WasmTemporary right);
-
-    private:
-    static WasmTemporary Cmp(FunctionBuilder &fn, BlockBuilder &block,
-                             const CharacterSequence &ty_left, const CharacterSequence &ty_right,
-                             WasmTemporary left, WasmTemporary right,
-                             WasmCompare::cmp_op op);
-};
-
-struct WasmStrncpy
-{
-    FunctionBuilder &fn;
-
-    WasmStrncpy(FunctionBuilder &fn) : fn(fn) { }
-
-    void emit(BlockBuilder &block, WasmTemporary dest, WasmTemporary src, std::size_t count);
-};
-
-struct WasmLike
-{
-    static WasmTemporary Like(FunctionBuilder &fn, BlockBuilder &block,
-                              const CharacterSequence &ty_str, const CharacterSequence &ty_pattern,
-                              WasmTemporary str, WasmTemporary pattern, const char escape_char = '\\');
-
-    private:
-    static WasmTemporary create_table(FunctionBuilder &fn, BlockBuilder &block, WasmTemporary addr, std::size_t num_entries);
-    static void clear_table(FunctionBuilder &fn, BlockBuilder &block, WasmTemporary begin, WasmTemporary end);
-};
-
-struct WasmSwap
-{
-    FunctionBuilder &fn;
-    std::unordered_map<BinaryenType, WasmVariable> swap_temp;
-
-    WasmSwap(FunctionBuilder &fn) : fn(fn) { }
-
-    void emit(BlockBuilder &block, const WasmStruct &struc, WasmTemporary first, WasmTemporary second);
-
-    void swap_string(BlockBuilder &block, const CharacterSequence &ty, WasmTemporary first, WasmTemporary second);
-};
-
-struct WasmLimits
-{
-    static BinaryenLiteral min(const Type &type);
-    static BinaryenLiteral lowest(const Type &type);
-    static BinaryenLiteral max(const Type &type);
-    static BinaryenLiteral NaN(const Type &type);
-    static BinaryenLiteral infinity(const Type &type);
-};
-
-template<typename T>
-BinaryenLiteral wasm_constant(const T &val, const Type &ty)
-{
-    BinaryenLiteral literal;
-    visit(overloaded {
-        [&val, &literal](const Boolean&) { literal = BinaryenLiteralInt32(bool(val)); },
-        [&val, &literal](const Numeric &n) {
-            switch (n.kind) {
-                case Numeric::N_Int:
-                    if (n.size() <= 32)
-                        literal = BinaryenLiteralInt32(int32_t(val));
-                    else
-                        literal = BinaryenLiteralInt64(int64_t(val));
-                    break;
-
-                case Numeric::N_Decimal:
-                    M_unreachable("not supported");
-
-                case Numeric::N_Float:
-                    if (n.size() == 32)
-                        literal = BinaryenLiteralFloat32(float(val));
-                    else
-                        literal = BinaryenLiteralFloat64(double(val));
-                    break;
-            }
-        },
-        [](auto&) { M_unreachable("unsupported type"); }
-    }, ty);
-    return literal;
-}
-
-struct WasmModuleCG
-{
-    private:
-    WasmModule &module_; ///< the WASM module to emit code to
-    FunctionBuilder main_; ///< the main function (or entry)
-    WasmVariable head_of_heap_; ///< variable to hold the current offset of the heap's head
-    WasmVariable num_tuples_; ///< variable to hold the number of result tuples produced
-    ///> Maps each literal to its offset from the initial head of heap.  Used to access string literals.
-    std::unordered_map<const char*, BinaryenIndex> literal_offsets_;
-    WasmVariable literals_; ///< address of literals
-
-    public:
-    WasmModuleCG(WasmModule &module, const char *main)
-        : module_(module)
-        , main_(*this, main, BinaryenTypeInt32(), { /* module ID */ BinaryenTypeInt32() })
-        , head_of_heap_(main_, BinaryenTypeInt32())
-        , num_tuples_(main_, BinaryenTypeInt32())
-        , literals_(main_, BinaryenTypeInt32())
-    { }
-
-    WasmModuleCG(const WasmModuleCG&) = delete;
-
-    operator BinaryenModuleRef() { return module_.ref(); }
-    operator const BinaryenModuleRef() const { return module_.ref(); }
-
-    /** Returns the `FunctionBuilder` of the main function. */
-    FunctionBuilder & main() { return main_; }
-    /** Returns the `FunctionBuilder` of the main function. */
-    const FunctionBuilder & main() const { return main_; }
-
-    /** Returns the local variable holding the number of result tuples produced. */
-    const WasmVariable & num_tuples() const { return num_tuples_; }
-
-    /** Returns the local variable holding the address to the head of the heap. */
-    const WasmVariable & head_of_heap() const { return head_of_heap_; }
-
-    const WasmVariable & literals() const { return literals_; }
-
-    void add_literal(const char *literal, BinaryenIndex offset) {
-        literal_offsets_.emplace(literal, offset);
-    }
-
-    BinaryenIndex get_literal_offset(const char *literal) {
-        auto it = literal_offsets_.find(literal);
-        M_insist(it != literal_offsets_.end(), "unknown literal");
-        return it->second;
-    }
-
-    /** Adds a global import to the module.  */
-    void import(std::string name, BinaryenType ty) {
-        if (not BinaryenGetGlobal(*this, name.c_str())) {
-            BinaryenAddGlobalImport(
-                /* module=             */ *this,
-                /* internalName=       */ name.c_str(),
-                /* externalModuleName= */ "env",
-                /* externalBaseName=   */ name.c_str(),
-                /* type=               */ ty,
-                /* mutable=            */ false
-            );
+    ///> **Copies** all entries of \p other into `this`.
+    void add(const Environment &other) {
+        for (auto &p : other.exprs_) {
+            std::visit(overloaded {
+                [](std::monostate) -> void { M_unreachable("invalid expression"); },
+                [this, &p](auto &e) -> void { this->add(p.first, e.clone()); },
+            }, p.second);
         }
     }
-
-    /** Returns the value of the global with the given `name`. */
-    WasmTemporary get_imported(const std::string &name, BinaryenType ty) const {
-        return BinaryenGlobalGet(module_.ref(), name.c_str(), ty);
+    ///> **Moves** all entries of \p other into `this`.
+    void add(Environment &&other) {
+        this->exprs_.merge(other.exprs_);
+        M_insist(other.exprs_.empty(), "duplicate ID not moved from other to this");
     }
 
-    WasmTemporary inc_num_tuples(int32_t n = 1) {
-        WasmTemporary inc = BinaryenBinary(
-            /* module= */ *this,
-            /* op=     */ BinaryenAddInt32(),
-            /* lhs=    */ num_tuples_,
-            /* rhs=    */ BinaryenConst(*this, BinaryenLiteralInt32(n))
-        );
-        return num_tuples_.set(std::move(inc));
+    ///> Returns the **moved** entry for identifier \p id.
+    SQL_t extract(Schema::Identifier id) {
+        auto it = exprs_.find(id);
+        M_insist(it != exprs_.end(), "identifier not found");
+        auto nh = exprs_.extract(it);
+        return std::move(nh.mapped());
+    }
+    ///> Returns the **moved** entry for identifier \p id.
+    template<typename T>
+    requires is_sql_type_v<T>
+    T extract(Schema::Identifier id) {
+        auto it = exprs_.find(id);
+        M_insist(it != exprs_.end(), "identifier not found");
+        auto nh = exprs_.extract(it);
+        M_insist(std::holds_alternative<T>(nh.mapped()));
+        return *std::get_if<T>(&nh.mapped());
     }
 
-    WasmTemporary align_head_of_heap() {
-        WasmTemporary head_inc = BinaryenBinary(
-            /* module= */ *this,
-            /* op=     */ BinaryenAddInt32(),
-            /* left=   */ head_of_heap(),
-            /* right=  */ BinaryenConst(*this, BinaryenLiteralInt32(WasmPlatform::WASM_ALIGNMENT - 1))
-        );
-        WasmTemporary head_aligned = BinaryenBinary(
-            /* module= */ *this,
-            /* op=     */ BinaryenAndInt32(),
-            /* left=   */ head_inc,
-            /* right=  */ BinaryenConst(*this, BinaryenLiteralInt32(~(int32_t(WasmPlatform::WASM_ALIGNMENT) - 1)))
-        );
-        return head_of_heap().set(std::move(head_aligned));
+    ///> Returns the **copied** entry for identifier \p id.
+    SQL_t get(Schema::Identifier id) const {
+        auto it = exprs_.find(id);
+        M_insist(it != exprs_.end(), "identifier not found");
+        return std::visit(overloaded {
+            [](std::monostate) -> SQL_t { M_unreachable("invalid expression"); },
+            [](auto &e) -> SQL_t { return e.clone(); },
+        }, it->second);
+    }
+    ///> Returns the **copied** entry for identifier \p id.
+    template<typename T>
+    requires is_sql_type_v<T>
+    T get(Schema::Identifier id) const {
+        auto it = exprs_.find(id);
+        M_insist(it != exprs_.end(), "identifier not found");
+        M_insist(std::holds_alternative<T>(it->second));
+        return std::get_if<T>(&it->second)->clone();
+    }
+    ///> Returns the **copied** entry for identifier \p id.
+    SQL_t operator[](Schema::Identifier id) const { return get(id); }
+
+
+    /*----- Expression compilation -----------------------------------------------------------------------------------*/
+    ///> Compile \p t by delegating compilation to an `ExprCompiler` for `this` `Environment`.
+    template<typename T>
+    requires requires (ExprCompiler C, T &&t) { C.compile(std::forward<T>(t)); }
+    auto compile(T &&t) {
+        ExprCompiler C(*this);
+        return C.compile(std::forward<T>(t));
+    }
+     ///> Compile \p t by delegating compilation to an `ExprCompiler` for `this` `Environment`.
+    template<typename T, typename U>
+    requires requires (ExprCompiler C, U &&u) { C.compile(std::forward<U>(u)); }
+    auto compile(U &&u) {
+        ExprCompiler C(*this);
+        return C.compile<T>(std::forward<U>(u));
     }
 
-    void compile(const Operator &plan);
-};
-
-/** Compiles a physical plan to WebAssembly. */
-struct WasmPlanCG : ConstOperatorVisitor
-{
-    private:
-    WasmModuleCG &module_;
-
-    public:
-    WasmPlanCG(WasmModuleCG &module) : module_(module) { }
-    WasmPlanCG(const WasmPlanCG&) = delete;
-
-    /** Returns the current WASM module. */
-    WasmModuleCG & module() const { return module_; }
-
-    void compile(const Operator &plan) { (*this)(plan); }
-
-    private:
-    /*----- OperatorVisitor ------------------------------------------------------------------------------------------*/
-    using ConstOperatorVisitor::operator();
-#define DECLARE(CLASS) void operator()(const CLASS &op) override;
-    M_OPERATOR_LIST(DECLARE)
-#undef DECLARE
-};
-
-/** Compiles a single pipeline.  Pipelines begin at producer nodes in the operator tree. */
-struct WasmPipelineCG : ConstOperatorVisitor
-{
-    friend struct WasmStoreCG;
-    friend struct WasmPlanCG;
-
-    private:
-    WasmPlanCG &plan_; ///< the current codegen context
-    WasmEnvironment context_; ///< wasm context for compilation of expressions
-    BlockBuilder block_; ///< used to construct the current block
-    const char *name_ = nullptr; ///< name of this pipeline
-
-    public:
-    WasmPipelineCG(WasmPlanCG &plan, const char *name = nullptr)
-        : plan_(plan)
-        , context_(plan.module().main())
-        , block_(module(), name)
-        , name_(name)
-    { }
-
-    ~WasmPipelineCG() { }
-
-    WasmPipelineCG(const WasmPipelineCG&) = delete;
-
-    WasmPlanCG & plan() { return plan_; }
-    const WasmPlanCG & plan() const { return plan_; }
-
-    WasmModuleCG & module() { return plan().module(); }
-    const WasmModuleCG & module() const { return plan().module(); }
-
-    /** Compiles the pipeline of the given producer to a WASM block. */
-    static WasmTemporary compile(const Producer &prod, WasmPlanCG &CG, const char *name) {
-        WasmPipelineCG P(CG, name);
-        P(prod);
-        return P.block_.finalize();
-    }
-
-    WasmEnvironment & context() { return context_; }
-    const WasmEnvironment & context() const { return context_; }
-
-    const char * name() const { return name_; }
-
-    private:
-    void emit_write_results(const Schema &schema);
-
-    /* Operators */
-    using ConstOperatorVisitor::operator();
-#define DECLARE(CLASS) void operator()(const CLASS &op) override;
-    M_OPERATOR_LIST(DECLARE)
-#undef DECLARE
-};
-
-struct WasmStoreCG
-{
-    /** Compiles the loading of a tuple of `Schema` `op.schema()` using a given `Linearization`.
-     *
-     * @param pipeline      the `WasmPipelineCG` for which the code is compiled
-     * @param op            the `Producer` which produces the tuple to load
-     * @param L             the `Linearization` of the `Store` we are loading from
-     * @param num_rows      the overall number of rows
-     * @param root_offsets  the alternative offsets used for the root node of `L`
-     * @param row_id        the ID of the *first* row to load from
-     */
-    static void compile_load(WasmPipelineCG &pipeline, const Producer &op, const Linearization &L,
-                             WasmTemporary num_rows, const std::vector<WasmTemporary> &root_offsets = std::vector<WasmTemporary>(),
-                             std::size_t row_id = 0);
-
-    /** Compiles the storing of a tuple of `Schema` `op.schema()` using a given `Linearization`.
-     *
-     * @param pipeline      the `WasmPipelineCG` for which the code is compiled
-     * @param op            the `Producer` which produces the tuple to store
-     * @param L             the `Linearization` of the `Store` we are storing to
-     * @param num_rows      the overall number of rows
-     * @param root_offsets  the alternative offsets used for the root node of `L`
-     * @param row_id        the ID of the *first* row to store to
-     */
-    static void compile_store(WasmPipelineCG &pipeline, const Producer &op, const Linearization &L,
-                              WasmTemporary num_rows, const std::vector<WasmTemporary> &root_offsets = std::vector<WasmTemporary>(),
-                              std::size_t row_id = 0);
-
-    private:
-    /** Compiles the loading or storing of a tuple of `Schema` `op.schema()` using a given `Linearization`.
-     *
-     * @param pipeline      the `WasmPipelineCG` for which the code is compiled
-     * @param op            the `Producer` which produces the tuple to load / store
-     * @param L             the `Linearization` of the `Store` we are loading from / storing to
-     * @param num_rows      the overall number of rows
-     * @param root_offsets  the alternative offsets used for the root node of `L`
-     * @param row_id        the ID of the *first* row to load / store
-     */
-    template<bool IsStore>
-    static void compile_linearization(WasmPipelineCG &pipeline, const Producer &op, const Linearization &L,
-                                      WasmTemporary num_rows, const std::vector<WasmTemporary> &root_offsets,
-                                      std::size_t row_id);
+    void dump(std::ostream &out) const;
+    void dump() const;
 };
 
 
 /*======================================================================================================================
- * delayed definitions because of cyclic dependences
+ * CodeGenContext
  *====================================================================================================================*/
 
-/*----- WasmTemporary ------------------------------------------------------------------------------------------------*/
-inline WasmTemporary WasmTemporary::clone(WasmModuleCG &module) const
+struct Scope
 {
-    M_insist(ref_);
-    return BinaryenExpressionCopy(ref_, module);
-}
+    private:
+    Environment outer_;
 
-/*----- WasmVariable -------------------------------------------------------------------------------------------------*/
-inline WasmVariable::WasmVariable(FunctionBuilder &fn, BinaryenType ty)
-    : module_(fn.module())
-    , ty_(ty)
-    , var_idx_(fn.add_local_anonymous(ty))
-{ }
+    public:
+    Scope(Environment inner);
+    ~Scope();
 
-/*----- WasmStruct ---------------------------------------------------------------------------------------------------*/
-inline WasmEnvironment
-WasmStruct::create_load_context(FunctionBuilder &fn, WasmTemporary ptr, std::size_t struc_offset) const
+    Scope(const Scope&) = delete;
+    Scope(Scope&&) = default;
+};
+
+/** The Wasm `CodeGenContext` provides context information necessary for code generation.
+ *
+ * The context contains:
+ * - an `Environment` of named values, e.g. SQL attribute values
+ * - an `ExprCompiler` to compile expressions within the current `Environment`
+ * - the number of tuples written to the result set
+ */
+struct CodeGenContext
 {
-    WasmEnvironment context(fn);
-    std::size_t idx = 0;
-    for (auto &attr : schema)
-        context.add(attr.id, load(fn, ptr.clone(fn.module()), idx++, struc_offset));
-    return context;
-}
+    friend struct Scope;
 
-inline WasmTemporary BlockBuilder::finalize()
-{
-    if (exprs_.size() != 0) {
-        WasmTemporary blk = BinaryenBlock(
-            /* module=      */ module(),
-            /* name=        */ name_,
-            /* children=    */ &exprs_[0],
-            /* numChildren= */ exprs_.size(),
-            /* type=        */ return_type_
-        );
-        exprs_.clear();
-        return blk;
-    } else {
-        return BinaryenBlock(
-            /* module=      */ module(),
-            /* name=        */ name_,
-            /* children=    */ nullptr,
-            /* numChildren= */ 0,
-            /* type=        */ return_type_
-        );
+    private:
+    Environment env_; ///< environment for locally bound identifiers
+    Global<U32> num_tuples_; ///< variable to hold the number of result tuples produced
+    std::unordered_map<const char*, Ptr<Char>> literals_; ///< maps each literal to its address at which it is stored
+
+    public:
+    CodeGenContext() = default;
+    CodeGenContext(const CodeGenContext&) = delete;
+
+    ~CodeGenContext() {
+        for (auto &p : literals_)
+            p.second.discard();
     }
+
+    /*----- Thread-local instance ------------------------------------------------------------------------------------*/
+    private:
+    static inline thread_local std::unique_ptr<CodeGenContext> the_context_;
+
+    public:
+    static void Init() {
+        M_insist(not the_context_, "must not have a context yet");
+        the_context_ = std::make_unique<CodeGenContext>();
+    }
+    static void Dispose() {
+        M_insist(bool(the_context_), "must have a context");
+        the_context_ = nullptr;
+    }
+    static CodeGenContext & Get() {
+        M_insist(bool(the_context_), "must have a context");
+        return *the_context_;
+    }
+
+    /** Creates a new, *scoped* `Environment`.  The new `Environment` is immediately used by the `CodeGenContext`.  When
+     * the `Scope` is destroyed (i.e. when it goes out of scope), the *old* `Environment` is used again by the
+     * `CodeGenContext`. */
+    Scope scoped_environment() { return Scope(Environment()); }
+
+    /*----- Access methods -------------------------------------------------------------------------------------------*/
+    /** Returns the current `Environment`. */
+    Environment & env() { return env_; }
+    /** Returns the current `Environment`. */
+    const Environment & env() const { return env_; }
+
+    /** Returns the number of result tuples produced. */
+    U32 num_tuples() const { return num_tuples_; }
+    /** Increments the number of result tuples produced by `n`. */
+    void inc_num_tuples(uint32_t n = 1) { num_tuples_ += n; }
+
+    /** Adds the string literal `literal` located at pointer offset `ptr`. */
+    void add_literal(const char *literal, uint32_t ptr) {
+        auto [_, inserted] = literals_.emplace(literal, Ptr<Char>(U32(ptr)));
+        M_insist(inserted);
+    }
+    /** Returns the address at which `literal` is stored. */
+    Ptr<Char> get_literal_address(const char *literal) {
+        auto it = literals_.find(literal);
+        M_insist(it != literals_.end(), "unknown literal");
+        return it->second.clone();
+    }
+};
+
+inline Scope::Scope(Environment inner)
+{
+    outer_ = std::exchange(CodeGenContext::Get().env_, std::move(inner));
 }
 
-/*----- FunctionBuilder ----------------------------------------------------------------------------------------------*/
-inline WasmVariable FunctionBuilder::add_local(BinaryenType ty)
-{
-    return WasmVariable(module(), ty, add_local_anonymous(ty));
-}
-
-inline BinaryenFunctionRef FunctionBuilder::finalize()
-{
-    return BinaryenAddFunction(
-        /* module=      */ module(),
-        /* name=        */ name_,
-        /* params=      */ parameter_type_,
-        /* results=     */ result_type_,
-        /* varTypes=    */ &locals_[0],
-        /* numVarTypes= */ locals_.size(),
-        /* body=        */ block_.finalize()
-    );
-}
-
-/*----- WasmLoop -----------------------------------------------------------------------------------------------------*/
-inline WasmTemporary WasmLoop::continu(WasmTemporary condition)
-{
-    return BinaryenBreak(
-        /* module=    */ body().module(),
-        /* name=      */ name(),
-        /* condition= */ condition.is() ? BinaryenExpressionRef(condition) : nullptr,
-        /* value=     */ nullptr
-    );
-}
-
-inline WasmTemporary WasmLoop::finalize()
-{
-    return BinaryenLoop(
-        /* module= */ body().module(),
-        /* name=   */ name(),
-        /* body=   */ body().finalize()
-    );
-}
-
-/*----- WasmEnvironment ----------------------------------------------------------------------------------------------*/
-inline WasmTemporary WasmEnvironment::get_null(Schema::Identifier id) const { return nulls_.at(id).clone(module()); }
-inline WasmTemporary WasmEnvironment::get_value(Schema::Identifier id) const { return values_.at(id).clone(module()); }
-
-/*----- WasmDoWhile --------------------------------------------------------------------------------------------------*/
-inline WasmTemporary WasmDoWhile::condition() const { return condition_.clone(body().module()); }
-
-/*----- WasmWhile ----------------------------------------------------------------------------------------------------*/
-inline WasmTemporary WasmWhile::finalize()
-{
-    auto loop = WasmDoWhile::finalize();
-    return BinaryenIf(
-        /* module=    */ body().module(),
-        /* condition= */ condition(),
-        /* ifTrue=    */ loop,
-        /* ifFalse=   */ nullptr
-    );
-}
-
-/*----- WasmModuleCG -------------------------------------------------------------------------------------------------*/
-inline void WasmModuleCG::compile(const Operator &plan)
-{
-    WasmPlanCG CG(*this);
-    CG.compile(plan);
+inline Scope::~Scope() {
+    CodeGenContext::Get().env_ = std::move(outer_);
 }
 
 
 /*======================================================================================================================
- * Codegen functions
+ * compile data layout
  *====================================================================================================================*/
 
-WasmTemporary wasm_emit_signum(FunctionBuilder &fn, BlockBuilder &block, WasmTemporary i32);
+/** Compiles the data layout \p layout containing tuples of schema \p layout_schema such that it sequentially stores
+ * tuples of schema \p tuple_schema starting at memory address \p base_address and tuple ID \p initial_tuple_id.
+ * The caller has to provide a variable \p tuple_id which must be initialized to \p initial_tuple_id and will be
+ * incremented automatically after storing each tuple (i.e. code for this will be emitted at the end of the block
+ * returned as second element).
+ *
+ * Does not emit any code but returns three `wasm::Block`s containing code: the first one initializes all needed
+ * variables, the second one stores one tuple, and the third one advances to the next tuple. */
+template<VariableKind Kind>
+std::tuple<Block, Block, Block>
+compile_store_sequential(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
+                         const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id,
+                         uint32_t initial_tuple_id = 0);
 
-WasmTemporary wasm_emit_strhash(FunctionBuilder &fn, BlockBuilder &block,
-                                WasmTemporary ptr, const CharacterSequence &ty);
+/** Compiles the data layout \p layout containing tuples of schema \p layout_schema such that it sequentially loads
+ * tuples of schema \p tuple_schema starting at memory address \p base_address and tuple ID \p initial_tuple_id.
+ * The caller has to provide a variable \p tuple_id which must be initialized to \p initial_tuple_id and will be
+ * incremented automatically after loading each tuple (i.e. code for this will be emitted at the end of the block
+ * returned as second element).
+ *
+ * Does not emit any code but returns three `wasm::Block`s containing code: the first one initializes all needed
+ * variables, the second one loads one tuple, and the third one advances to the next tuple. */
+template<VariableKind Kind>
+std::tuple<Block, Block, Block>
+compile_load_sequential(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
+                        const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id,
+                        uint32_t initial_tuple_id = 0);
+
+
+/*======================================================================================================================
+ * Buffer
+ *====================================================================================================================*/
+
+/** Buffers tuples by materializing them into memory. */
+template<bool IsGlobal>
+struct Buffer
+{
+    ///> variable type dependent on whether buffer should be globally usable
+    template<typename T>
+    using var_t = std::conditional_t<IsGlobal, Global<T>, Var<T>>;
+    ///> function type for resuming pipeline dependent on whether buffer should be globally usable
+    using fn_t = std::conditional_t<IsGlobal, void(void), void(void*, uint32_t)>;
+
+    private:
+    const Schema *schema_; ///< schema of buffer
+    storage::DataLayout layout_; ///< data layout of buffer
+    var_t<Ptr<void>> base_address_; ///< base address of buffer
+    std::optional<var_t<U32>> capacity_; ///< optional dynamic capacity of buffer, in number of tuples
+    var_t<U32> size_; ///< current size of buffer, default initialized to 0
+    MatchBase::callback_t Pipeline_; ///< remaining pipeline
+    ///> function to resume pipeline for entire buffer; for local buffer, expects its base address and size as parameters
+    std::optional<FunctionProxy<fn_t>> resume_pipeline_;
+
+    public:
+    /** Creates a buffer for \p num_tuples tuples (0 means infinite) of schema \p schema using the data layout
+     * created by \p factory to temporarily materialize tuples before resuming with the remaining pipeline
+     * \p Pipeline.  For finite buffers, emits code to allocate entire buffer into the **current** block. */
+    Buffer(const Schema &schema, const storage::DataLayoutFactory &factory, std::size_t num_tuples = 0,
+           MatchBase::callback_t Pipeline = MatchBase::callback_t());
+
+    Buffer(Buffer&&) = default;
+
+    Buffer & operator=(Buffer&&) = default;
+
+    /** Returns the schema of the buffer. */
+    const Schema & schema() const { return *schema_; }
+    /** Returns the layout of the buffer. */
+    const storage::DataLayout & layout() const { return layout_; }
+    /** Returns the base address of the buffer. */
+    Ptr<void> base_address() const { return base_address_; }
+    /** Returns the current size of the buffer. */
+    U32 size() const { return size_; }
+
+    /** Emits code into a separate function to resume the pipeline for each tuple in the buffer.  Used to explicitly
+     * resume pipeline for infinite or partially filled buffers. */
+    void resume_pipeline();
+    /** Emits code inline to resume the pipeline for each tuple in the buffer.  Due to inlining the current
+     * `Environment` must not be cleared and this method should be used for n-ary operators.  Used to explicitly resume
+     * pipeline for infinite or partially filled buffers. */
+    void resume_pipeline_inline();
+
+    /** Emits code to store the current tuple into the buffer.  The behaviour depends on whether the buffer is finite:
+     * - **finite:** If the buffer is full, resumes the pipeline for each tuple in the buffer and clears the buffer
+     *               afterwards.
+     * - **infinite:**  Potentially resizes the buffer but never resumes the pipeline (must be done explicitly by
+     *                  calling `resume_pipeline()`). */
+    void consume();
+};
+
+using LocalBuffer = Buffer<false>;
+using GlobalBuffer = Buffer<true>;
+
+
+/*======================================================================================================================
+ * bit operations
+ *====================================================================================================================*/
+
+/** Sets the \p n -th bit of the value pointed to by \p bytes to \p value. */
+template<typename T>
+requires integral<typename T::type>
+void setbit(Ptr<T> bytes, Bool value, uint8_t n)
+{
+    *bytes ^= (-value.to<typename T::type>() xor *bytes.clone()) bitand T(1 << n);
+}
+/** Sets the bit masked by \p mask of the value pointed to by \p bytes to \p value. */
+template<typename T>
+requires integral<typename T::type>
+void setbit(Ptr<T> bytes, Bool value, T mask)
+{
+    *bytes ^= (-value.to<typename T::type>() xor *bytes.clone()) bitand mask;
+}
+
+
+/*======================================================================================================================
+ * string comparison
+ *====================================================================================================================*/
+
+///> comparison operations, e.g. for string comparison
+enum cmp_op
+{
+    EQ, NE, LT, LE, GT, GE
+};
+
+/** Compares two strings \p left and \p right of type \p ty_left and \p ty_right, respectively.  Has similar semantics
+ * to `strncmp` of libc. */
+_I32 strncmp(const CharacterSequence &ty_left, const CharacterSequence &ty_right, Ptr<Char> left, Ptr<Char> right,
+             U32 len);
+/** Compares two strings \p left and \p right of type \p ty_left and \p ty_right, respectively.  Has similar semantics
+ * to `strcmp` of libc. */
+_I32 strcmp(const CharacterSequence &ty_left, const CharacterSequence &ty_right, Ptr<Char> left, Ptr<Char> right);
+/** Compares two strings \p left and \p right of type \p ty_left and \p ty_right, respectively.  Has similar semantics
+ * to `strncmp` of libc. */
+_Bool strncmp(const CharacterSequence &ty_left, const CharacterSequence &ty_right, Ptr<Char> left, Ptr<Char> right,
+              U32 len, cmp_op op);
+/** Compares two strings \p left and \p right of type \p ty_left and \p ty_right, respectively.  Has similar semantics
+ * to `strcmp` of libc. */
+_Bool strcmp(const CharacterSequence &ty_left, const CharacterSequence &ty_right, Ptr<Char> left, Ptr<Char> right,
+             cmp_op op);
+
+
+/*======================================================================================================================
+ * string copy
+ *====================================================================================================================*/
+
+/** Copies the contents of \p src to \p dst, but no more than \p count characters.  The function returns a `Ptr<Char>`
+ * to the *end* of the copied sequence in \p dst, i.e. to the copied NUL-byte or to the character *after* the lastly
+ * copied character.  If the first \p count characters of \p src are *not* NUL-terminated, \p dst will not be
+ * NUL-terminated, too. */
+Ptr<Char> strncpy(Ptr<Char> dst, Ptr<Char> src, U32 count);
+
+
+/*======================================================================================================================
+ * SQL LIKE
+ *====================================================================================================================*/
+
+/** Compares whether the string \p str of type \p ty_str matches the pattern \p pattern of type \p ty_pattern
+ * regarding SQL LIKE semantics using escape character \p escape_char. */
+_Bool like(const CharacterSequence &ty_str, const CharacterSequence &ty_pattern, Ptr<Char> str, Ptr<Char> pattern,
+           const char escape_char = '\\');
+
+
+/*======================================================================================================================
+ * explicit instantiation declarations
+ *====================================================================================================================*/
+
+extern template struct Buffer<false>;
+extern template struct Buffer<true>;
+
+}
 
 }

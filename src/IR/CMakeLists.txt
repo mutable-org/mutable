@@ -2,6 +2,7 @@ add_library(
     IR
     OBJECT
     CNF.cpp
+    Condition.cpp
     HeuristicSearchPlanEnumerator.cpp
     Operator.cpp
     Optimizer.cpp

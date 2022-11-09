@@ -22,7 +22,7 @@ namespace m {
 struct WasmModule
 {
     private:
-    wasm::Module *ref_; ///< the underlying [**Binaryen**] (https://github.com/WebAssembly/binaryen) WASM module
+    ::wasm::Module *ref_; ///< the underlying [**Binaryen**] (https://github.com/WebAssembly/binaryen) WASM module
 
     public:
     WasmModule();
@@ -31,9 +31,9 @@ struct WasmModule
     WasmModule(WasmModule&&) = default;
 
     /** Returns the underlying [**Binaryen**] (https://github.com/WebAssembly/binaryen) WASM module. */
-    wasm::Module * ref() { return ref_; }
+    ::wasm::Module * ref() { return ref_; }
     /** Returns the underlying [**Binaryen**] (https://github.com/WebAssembly/binaryen) WASM module. */
-    const wasm::Module * ref() const { return ref_; }
+    const ::wasm::Module * ref() const { return ref_; }
 
     /** Returns the binary representation of this module in a freshly allocated memory.  The caller must dispose of this
      * memory. */
@@ -76,6 +76,11 @@ struct WasmPlatform
         WasmContext(uint32_t id, config_t configuration, const Operator &plan, std::size_t size);
 
         bool config(config_t cfg) const { return bool(cfg & config_); }
+
+        /** Maps a table at the current start of `heap` and advances `heap` past the mapped region.  Returns the address
+         * (in linear memory) of the mapped table.  Installs guard pages after each mapping.  Acknowledges
+         * `TRAP_GUARD_PAGES`.  */
+        uint32_t map_table(const Table &table);
 
         /** Installs a guard page at the current `heap` and increments `heap` to the next page.  Acknowledges
          * `TRAP_GUARD_PAGES`. */
@@ -125,7 +130,7 @@ struct WasmPlatform
     WasmPlatform(WasmPlatform&&) = default;
 
     /** Compiles the given `plan` for this `WasmPlatform`. */
-    virtual WasmModule compile(const Operator &plan) const = 0;
+    virtual void compile(const Operator &plan) const = 0;
 
     /** Compiles the given `plan` to a `WasmModule` and executes it on this `WasmPlatform`. */
     virtual void execute(const Operator &plan) = 0;

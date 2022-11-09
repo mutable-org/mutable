@@ -27,7 +27,7 @@ TEST_CASE("Table c'tor", "[core][catalog][schema]")
     Table r("mytable");
 
     CHECK(streq(r.name, "mytable"));
-    CHECK(r.size() == 0);
+    CHECK(r.num_attrs() == 0);
 }
 
 TEST_CASE("Table empty access")
@@ -52,7 +52,7 @@ TEST_CASE("Table::push_back()", "[core][catalog][schema]")
     r.push_back("comment", vc);
     r.push_back("condition", b);
 
-    REQUIRE(r.size() == 3);
+    REQUIRE(r.num_attrs() == 3);
 
     auto &attr = r[1];
     REQUIRE(&attr == &r[attr.id]);
@@ -69,7 +69,7 @@ TEST_CASE("Table iterators", "[core][catalog][schema]")
     r.push_back("a", i4);
     r.push_back("b", i4);
     r.push_back("c", i4);
-    REQUIRE(r.size() == 3);
+    REQUIRE(r.num_attrs() == 3);
 
     auto it = r.cbegin();
     REQUIRE(streq(it->name, "a"));
@@ -89,7 +89,7 @@ TEST_CASE("Table get attribute by name", "[core][catalog][schema]")
     r.push_back("a", i4);
     r.push_back("b", i4);
     r.push_back("c", i4);
-    REQUIRE(r.size() == 3);
+    REQUIRE(r.num_attrs() == 3);
 
     {
         auto &attr = r["a"];

@@ -65,11 +65,24 @@ struct SmallBitset
         bool operator==(iterator other) const { return this->bits_ == other.bits_; }
         bool operator!=(iterator other) const { return not operator==(other); }
 
-        iterator & operator++() { bits_ = _blsr_u64(bits_); return *this; } // BMI1: reset lowest set bit
+        iterator & operator++() {
+#ifdef __BMI__
+            bits_ = _blsr_u64(bits_); // BMI1: reset lowest set bit
+#else
+            bits_ = bits_ & (bits_ - 1UL); // reset lowest set bit
+#endif
+            return *this;
+        }
         iterator operator++(int) { auto clone = *this; ++clone; return clone; }
 
         std::size_t operator*() const { M_insist(bits_ != 0); return __builtin_ctzl(bits_); }
-        SmallBitset as_set() const { return SmallBitset(_blsi_u64(bits_)); } // BMI1: extract lowest set isolated bit
+        SmallBitset as_set() const {
+#ifdef __BMI__
+            return SmallBitset(_blsi_u64(bits_)); // BMI1: extract lowest set isolated bit
+#else
+            return SmallBitset(bits_ & -bits_); // extract lowest set isolated bit
+#endif
+        }
     };
 
     struct reverse_iterator
@@ -165,7 +178,14 @@ struct SmallBitset
     bool is_subset(SmallBitset other) const { return this->bits_ == (other.bits_ & this->bits_); }
 
     /** Returns a mask up to and including the lowest set bit. */
-    SmallBitset mask_to_lo() const { M_insist(not empty()); return SmallBitset(_blsmsk_u64(bits_)); }
+    SmallBitset mask_to_lo() const {
+        M_insist(not empty());
+#ifdef __BMI__
+        return SmallBitset(_blsmsk_u64(bits_)); // BMI1: get mask up to lowest set bit
+#else
+        return SmallBitset(bits_ ^ (bits_ - 1UL)); // get mask up to lowest set bit
+#endif
+    }
 
     /** Converts a singleton set to a mask up to -- but not including -- the single, set bit. */
     SmallBitset singleton_to_lo_mask() const {

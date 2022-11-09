@@ -512,12 +512,12 @@ M_LCOV_EXCL_STOP
     }
 };
 
-void * list_allocator_proxy::allocate(size_type size, size_type alignment)
+inline void * list_allocator_proxy::allocate(size_type size, size_type alignment)
 {
     return alloc_->proxy_allocate(size, alignment);
 }
 
-void list_allocator_proxy::deallocate(void *ptr, size_type size)
+inline void list_allocator_proxy::deallocate(void *ptr, size_type size)
 {
     return alloc_->proxy_deallocate(ptr, size);
 }

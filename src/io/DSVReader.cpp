@@ -21,9 +21,9 @@ using namespace m::storage;
 
 
 DSVReader::DSVReader(const Table &table, Diagnostic &diag,
+                     std::size_t num_rows,
                      char delimiter, char escape, char quote,
-                     bool has_header, bool skip_header,
-                     std::size_t num_rows)
+                     bool has_header, bool skip_header)
     : Reader(table, diag)
     , num_rows_(num_rows)
     , delimiter_(delimiter)

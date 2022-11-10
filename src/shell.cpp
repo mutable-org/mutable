@@ -295,8 +295,16 @@ void process_stream(std::istream &in, const char *filename, Diagnostic diag)
             reader_config.skip_header = S->skip_header;
 
             try {
-                DSVReader R(T, diag, reader_config.delimiter, reader_config.escape, reader_config.quote,
-                            reader_config.has_header, reader_config.skip_header, reader_config.num_rows);
+                DSVReader R(
+                    T,
+                    diag,
+                    reader_config.num_rows,
+                    reader_config.delimiter,
+                    reader_config.escape,
+                    reader_config.quote,
+                    reader_config.has_header,
+                    reader_config.skip_header
+                );
 
                 std::string filename(S->path.text, 1, strlen(S->path.text) - 2);
                 errno = 0;

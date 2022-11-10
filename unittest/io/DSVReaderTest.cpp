@@ -98,7 +98,7 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
 
-        DSVReader R(table, diag, ',', '\\', '"', false);
+        DSVReader R(table, diag, 5, ',', '\\', '"', false);
 
         /* Construct istream. */
         tuple_list rows {
@@ -129,7 +129,7 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
 
-        DSVReader R(table, diag, ',', '\\', '"', true, false);
+        DSVReader R(table, diag, 5, ',', '\\', '"', true, false);
 
         /* Construct istream. */
         tuple_list rows {
@@ -161,7 +161,7 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
 
-        DSVReader R(table, diag, ',', '\\', '"', true, false);
+        DSVReader R(table, diag, 5, ',', '\\', '"', true, false);
 
         /* Construct istream. */
         tuple_list rows {
@@ -193,7 +193,7 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
 
-        DSVReader R(table, diag, ',', '\\', '"', true, false);
+        DSVReader R(table, diag, 5, ',', '\\', '"', true, false);
 
         /* Construct istream. */
         tuple_list rows {
@@ -237,7 +237,7 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
 
-        DSVReader R(table, diag, ',', '\\', '"', true, false);
+        DSVReader R(table, diag, 5, ',', '\\', '"', true, false);
 
         /* Construct istream. */
         tuple_list rows {
@@ -270,7 +270,7 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
 
-        DSVReader R(table, diag, ',', '\\', '"', true, true);
+        DSVReader R(table, diag, 5, ',', '\\', '"', true, true);
 
         /* Construct istream. */
         tuple_list rows {
@@ -303,7 +303,7 @@ TEST_CASE("DSVReader DELIMITER == QUOTE sanity test", "[core][io][unit]")
     std::ostringstream out, err;
     Diagnostic diag(false, out, err);
 
-    REQUIRE_THROWS_AS(DSVReader(table, diag, ',', '\\', ','), m::invalid_argument);
+    REQUIRE_THROWS_AS(DSVReader(table, diag, 5, ',', '\\', ','), m::invalid_argument);
 }
 
 TEST_CASE("DSVReader QUOTE == ESCAPE (csv standard)", "[core][io][unit]")
@@ -314,7 +314,7 @@ TEST_CASE("DSVReader QUOTE == ESCAPE (csv standard)", "[core][io][unit]")
     std::ostringstream out, err;
     Diagnostic diag(false, out, err);
 
-    DSVReader R(table, diag, ',', '"', '"');
+    DSVReader R(table, diag, 5, ',', '"', '"');
 
     /* Construct istream. */
     tuple_list rows {
@@ -346,7 +346,7 @@ TEST_CASE("DSVReader explicitly set all characters", "[core][io][unit]")
     std::ostringstream out, err;
     Diagnostic diag(false, out, err);
 
-    DSVReader R(table, diag, ';', '/', '\'');
+    DSVReader R(table, diag, 5, ';', '/', '\'');
 
     /* Construct istream. */
     tuple_list rows {

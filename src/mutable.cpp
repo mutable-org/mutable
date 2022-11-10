@@ -130,8 +130,16 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
         reader_config.skip_header = S->skip_header;
 
         try {
-            DSVReader R(T, diag, reader_config.delimiter, reader_config.escape, reader_config.quote,
-                        reader_config.has_header, reader_config.skip_header, reader_config.num_rows);
+            DSVReader R(
+                T,
+                diag,
+                reader_config.num_rows,
+                reader_config.delimiter,
+                reader_config.escape,
+                reader_config.quote,
+                reader_config.has_header,
+                reader_config.skip_header
+            );
 
             const auto filename = unquote(S->path.text);
             errno = 0;
@@ -191,7 +199,16 @@ void m::load_from_CSV(Diagnostic &diag, Table &table, const std::filesystem::pat
                       bool has_header, bool skip_header)
 {
     diag.clear();
-    DSVReader R(table, diag, num_rows, ',', '\\', '\"', has_header, skip_header);
+    DSVReader R(
+        /* table=       */ table,
+        /* diag=        */ diag,
+        /* num_rows=    */ num_rows,
+        /* delimiter=   */ ',',
+        /* escape=      */ '\\',
+        /* quote=       */ '\"',
+        /* has_header=  */ has_header,
+        /* skip_header= */ skip_header
+    );
 
     errno = 0;
     std::ifstream file(path);

@@ -42,12 +42,12 @@ struct DSVReader : Reader, ConstTypeVisitor
 
     public:
     DSVReader(const Table &table, Diagnostic &diag,
+              std::size_t num_rows = std::numeric_limits<decltype(num_rows)>::max(),
               char delimiter = ',',
               char escape = '\\',
               char quote = '\"',
               bool has_header = false,
-              bool skip_header = false,
-              std::size_t num_rows = std::numeric_limits<decltype(num_rows)>::max());
+              bool skip_header = false);
 
     void operator()(std::istream &in, const char *name) override;
 

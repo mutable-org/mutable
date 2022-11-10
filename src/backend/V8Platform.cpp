@@ -695,7 +695,7 @@ __attribute__((destructor(101)))
 static void destroy_V8Platform()
 {
     v8::V8::Dispose();
-    delete V8Platform::PLATFORM_;
+    v8::V8::DisposePlatform();
 }
 
 __attribute__((constructor(202)))

@@ -151,8 +151,8 @@ inline void register_data_layouts()
 {
     Catalog &C = Catalog::Get();
 #define REGISTER(NAME, DESCRIPTION) \
-    C.register_data_layout(#NAME, std::make_unique<NAME>(), DESCRIPTION)
-    REGISTER(PAXLayoutFactory, "stores attributes using PAX layout"); // register PAXLayout first to be default
-    REGISTER(RowLayoutFactory, "stores attributes in row-major order");
+    C.register_data_layout(#NAME, std::make_unique<NAME##Factory>(), DESCRIPTION)
+    REGISTER(PAXLayout, "stores attributes using PAX layout"); // register PAXLayout first to be default
+    REGISTER(RowLayout, "stores attributes in row-major order");
 #undef REGISTER
 }

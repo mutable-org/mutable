@@ -246,16 +246,16 @@ void m::execute_file(Diagnostic &diag, const std::filesystem::path &path)
     Sema sema(diag);
 
     while (parser.token()) {
-        auto command = parser.parse();
+        std::unique_ptr<Command> command(parser.parse());
         if (diag.num_errors()) return;
-        if (is<Instruction>(command)) {
-            auto instruction = cast<Instruction>(command);
-            execute_instruction(diag, *instruction);
+        if (is<Instruction>(*command)) {
+            auto &instruction = as<Instruction>(*command);
+            execute_instruction(diag, instruction);
         } else {
-            auto stmt = cast<Stmt>(command);
-            sema(*stmt);
+            auto &stmt = as<Stmt>(*command);
+            sema(stmt);
             if (diag.num_errors()) return;
-            execute_statement(diag, *stmt);
+            execute_statement(diag, stmt);
         }
     }
 }

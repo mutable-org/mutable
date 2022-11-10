@@ -862,5 +862,8 @@ Immanuel Haffner\
         }
     }
 
+    /* Explicitly destroy the `Catalog` to dispose of all held resources.  This is particularly important as the address
+     * sanitizer scans for leaked allocations *before* any `__attribute((destructor))__` annotated functions are run. */
+    Catalog::Destroy();
     std::exit(diag.num_errors() ? EXIT_FAILURE : EXIT_SUCCESS);
 }

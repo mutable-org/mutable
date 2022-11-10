@@ -55,12 +55,14 @@ struct invoke_v8<PrimitiveExpr<ReturnType>(PrimitiveExpr<ParamTypes>...)>
 
     private:
     v8::Isolate *isolate_ = nullptr;
+    v8::ArrayBuffer::Allocator *allocator_ = nullptr;
     std::unique_ptr<V8InspectorClientImpl> inspector_;
 
     public:
     ~invoke_v8() {
         isolate_->Exit();
         isolate_->Dispose();
+        delete allocator_;
         inspector_.reset();
     }
 
@@ -84,7 +86,7 @@ struct invoke_v8<PrimitiveExpr<ReturnType>(PrimitiveExpr<ParamTypes>...)>
         v8::V8::SetFlagsFromString("--stack_size 1000000 --no-liftoff --no-wasm-bounds-checks --no-wasm-stack-checks "
                                    "--experimental-wasm-simd");
         v8::Isolate::CreateParams create_params;
-        create_params.array_buffer_allocator = v8::ArrayBuffer::Allocator::NewDefaultAllocator();
+        create_params.array_buffer_allocator = allocator_ = v8::ArrayBuffer::Allocator::NewDefaultAllocator();
         isolate_ = v8::Isolate::New(create_params);
 
         v8::Locker locker(isolate_);

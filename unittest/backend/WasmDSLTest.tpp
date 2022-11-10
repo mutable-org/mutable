@@ -1697,7 +1697,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Memory", "[core][wasm]")
 
     /* allocate(bytes) */
     CHECK_RESULT_INLINE(0x78561234, uint32_t(void), {
-        Var<Ptr<void>> ptr(Module::Allocator().allocate(4U));
+        Var<Ptr<void>> ptr(Module::Allocator().allocate(4U, 4U)); // aligned alloc
         *ptr.to<uint16_t*>() = uint16_t(0x1234); // bytes 0 and 1
         *(ptr.to<uint8_t*>() + 2) = uint8_t(0x56); // byte 2
         *(ptr.to<uint8_t*>() + 3) = uint8_t(0x78); // byte 3

@@ -614,69 +614,71 @@ void V8Platform::execute(const Operator &plan)
     v8::Locker locker(isolate_);
     isolate_->Enter();
 
-    /* Create required V8 scopes. */
-    v8::Isolate::Scope isolate_scope(isolate_);
-    v8::HandleScope handle_scope(isolate_); // tracks and disposes of all object handles
+    {
+        /* Create required V8 scopes. */
+        v8::Isolate::Scope isolate_scope(isolate_);
+        v8::HandleScope handle_scope(isolate_); // tracks and disposes of all object handles
 
-    /* Create global template and context. */
-    v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate_);
-    global->Set(isolate_, "set_wasm_instance_raw_memory", v8::FunctionTemplate::New(isolate_, set_wasm_instance_raw_memory));
-    global->Set(isolate_, "read_result_set", v8::FunctionTemplate::New(isolate_, read_result_set));
-    v8::Local<v8::Context> context = v8::Context::New(isolate_, /* extensions= */ nullptr, global);
-    v8::Context::Scope context_scope(context);
+        /* Create global template and context. */
+        v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate_);
+        global->Set(isolate_, "set_wasm_instance_raw_memory", v8::FunctionTemplate::New(isolate_, set_wasm_instance_raw_memory));
+        global->Set(isolate_, "read_result_set", v8::FunctionTemplate::New(isolate_, read_result_set));
+        v8::Local<v8::Context> context = v8::Context::New(isolate_, /* extensions= */ nullptr, global);
+        v8::Context::Scope context_scope(context);
 
-    /* Create the import object for instantiating the WebAssembly module. */
-    WasmContext::config_t wasm_config{0};
-    if (options::cdt_port < 1024)
-        wasm_config |= WasmContext::TRAP_GUARD_PAGES;
-    auto &wasm_context = Create_Wasm_Context_For_ID(Module::ID(), wasm_config, plan);
+        /* Create the import object for instantiating the WebAssembly module. */
+        WasmContext::config_t wasm_config{0};
+        if (options::cdt_port < 1024)
+            wasm_config |= WasmContext::TRAP_GUARD_PAGES;
+        auto &wasm_context = Create_Wasm_Context_For_ID(Module::ID(), wasm_config, plan);
 
-    auto imports = v8::Object::New(isolate_);
-    auto env = create_env(*isolate_, plan);
-    M_DISCARD imports->Set(context, mkstr(*isolate_, "imports"), env);
+        auto imports = v8::Object::New(isolate_);
+        auto env = create_env(*isolate_, plan);
+        M_DISCARD imports->Set(context, mkstr(*isolate_, "imports"), env);
 
-    /* Map the remaining address space to the output buffer. */
-    const auto bytes_remaining = wasm_context.vm.size() - wasm_context.heap;
-    memory::Memory mem = Catalog::Get().allocator().allocate(bytes_remaining);
-    mem.map(bytes_remaining, 0, wasm_context.vm, wasm_context.heap);
+        /* Map the remaining address space to the output buffer. */
+        M_insist(Is_Page_Aligned(wasm_context.heap));
+        const auto bytes_remaining = wasm_context.vm.size() - wasm_context.heap;
+        memory::Memory mem = Catalog::Get().allocator().allocate(bytes_remaining);
+        mem.map(bytes_remaining, 0, wasm_context.vm, wasm_context.heap);
 
-    /* Compile the plan and thereby build the Wasm module. */
-    M_TIME_EXPR(compile(plan), "Compile to WebAssembly", C.timer());
+        /* Compile the plan and thereby build the Wasm module. */
+        M_TIME_EXPR(compile(plan), "Compile to WebAssembly", C.timer());
 
-    /* Create a WebAssembly instance object. */
-    auto instance = M_TIME_EXPR(instantiate(*isolate_, imports), "Compile Wasm to machine code", C.timer());
+        /* Create a WebAssembly instance object. */
+        auto instance = M_TIME_EXPR(instantiate(*isolate_, imports), "Compile Wasm to machine code", C.timer());
 
-    /* Set the underlying memory for the instance. */
-    v8::SetWasmInstanceRawMemory(instance, wasm_context.vm.as<uint8_t*>(), wasm_context.vm.size());
+        /* Set the underlying memory for the instance. */
+        v8::SetWasmInstanceRawMemory(instance, wasm_context.vm.as<uint8_t*>(), wasm_context.vm.size());
 
-    /* Get the exports of the created WebAssembly instance. */
-    auto exports = instance->Get(context, mkstr(*isolate_, "exports")).ToLocalChecked().As<v8::Object>();
-    auto main = exports->Get(context, mkstr(*isolate_, "main")).ToLocalChecked().As<v8::Function>();
+        /* Get the exports of the created WebAssembly instance. */
+        auto exports = instance->Get(context, mkstr(*isolate_, "exports")).ToLocalChecked().As<v8::Object>();
+        auto main = exports->Get(context, mkstr(*isolate_, "main")).ToLocalChecked().As<v8::Function>();
 
-    /* If a debugging port is specified, set up the inspector and start it. */
-    if (options::cdt_port >= 1024 and not inspector_)
-        inspector_ = std::make_unique<V8InspectorClientImpl>(options::cdt_port, isolate_);
-    if (bool(inspector_)) {
-        run_inspector(*inspector_, *isolate_, env);
-        return;
+        /* If a debugging port is specified, set up the inspector and start it. */
+        if (options::cdt_port >= 1024 and not inspector_)
+            inspector_ = std::make_unique<V8InspectorClientImpl>(options::cdt_port, isolate_);
+        if (bool(inspector_)) {
+            run_inspector(*inspector_, *isolate_, env);
+            return;
+        }
+
+        /* Invoke the exported function `main` of the module. */
+        args_t args { v8::Int32::New(isolate_, wasm_context.id), };
+        const uint32_t num_rows = main->Call(context, context->Global(), 1, args).ToLocalChecked().As<v8::Uint32>()->Value();
+
+        /* Print total number of result tuples. */
+        if (auto print_op = cast<const PrintOperator>(&plan)) {
+            if (not Options::Get().quiet)
+                print_op->out << num_rows << " rows\n";
+        } else if (auto noop_op = cast<const NoOpOperator>(&plan)) {
+            if (not Options::Get().quiet)
+                noop_op->out << num_rows << " rows\n";
+        }
+        Dispose_Wasm_Context(wasm_context);
     }
 
-    /* Invoke the exported function `main` of the module. */
-    args_t args { v8::Int32::New(isolate_, wasm_context.id), };
-    const auto num_rows = main->Call(context, context->Global(), 1, args).ToLocalChecked().As<v8::Uint32>()->Value();
-
-    /* Print total number of result tuples. */
-    if (auto print_op = cast<const PrintOperator>(&plan)) {
-        if (not Options::Get().quiet)
-            print_op->out << num_rows << " rows\n";
-    } else if (auto noop_op = cast<const NoOpOperator>(&plan)) {
-        if (not Options::Get().quiet)
-            noop_op->out << num_rows << " rows\n";
-    }
-
-    Dispose_Wasm_Context(wasm_context);
     isolate_->Exit();
-
     CodeGenContext::Dispose();
     Module::Dispose();
 }

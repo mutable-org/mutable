@@ -63,6 +63,8 @@ WasmPlatform::WasmContext::WasmContext(uint32_t id, config_t config, const Opera
 
 uint32_t WasmPlatform::WasmContext::map_table(const Table &table)
 {
+    M_insist(Is_Page_Aligned(heap));
+
     const auto num_rows_per_instance = table.layout().child().num_tuples();
     const auto instance_stride_in_bytes = table.layout().stride_in_bits() / 8U;
     const std::size_t num_instances = (table.store().num_rows() + num_rows_per_instance - 1) / num_rows_per_instance;
@@ -77,6 +79,7 @@ uint32_t WasmPlatform::WasmContext::map_table(const Table &table)
         heap += aligned_bytes;
         install_guard_page();
     }
+    M_insist(Is_Page_Aligned(heap));
 
     return off;
 }
@@ -89,6 +92,7 @@ void WasmPlatform::WasmContext::install_guard_page()
         M_DISCARD mmap(vm.as<uint8_t*>() + heap, get_pagesize(), PROT_READ, MAP_FIXED|MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
     }
     heap += get_pagesize(); // install guard page
+    M_insist(Is_Page_Aligned(heap));
 }
 
 

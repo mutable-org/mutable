@@ -65,40 +65,42 @@ struct MockInterface final : ::wasm::ModuleRunner::ExternalInterface
     void throwException(const ::wasm::WasmException&) override { M_unreachable("not supported"); }
 
     private:
-    template<typename T>
+    template<typename T = void>
     T load(::wasm::Address addr) {
         M_insist(addr.addr < size_, "invalid address");
+        M_insist(addr.addr % alignof(T) == 0, "misaligned address");
         return *reinterpret_cast<T*>(reinterpret_cast<uint8_t*>(memory_) + addr.addr);
     }
-    template<typename T>
+    template<typename T = void>
     void store(::wasm::Address addr, T value) {
         M_insist(addr.addr < size_, "invalid address");
+        M_insist(addr.addr % alignof(T) == 0, "misaligned address");
         *reinterpret_cast<T*>(reinterpret_cast<uint8_t*>(memory_) + addr.addr) = value;
     }
 
     public:
-#define DECLARE_LOAD(NAME) \
-    decltype(std::declval<base_type>().NAME(std::declval<::wasm::Address>())) NAME(::wasm::Address addr) override { \
-        return load<decltype(std::declval<base_type>().NAME(std::declval<::wasm::Address>()))>(addr); \
+#define DECLARE_LOAD(C_TYPE, BINARYEN_TYPE) \
+    C_TYPE load##BINARYEN_TYPE(::wasm::Address addr) override { \
+        return load<C_TYPE>(addr); \
     }
-DECLARE_LOAD(load8s)
-DECLARE_LOAD(load8u)
-DECLARE_LOAD(load16s)
-DECLARE_LOAD(load16u)
-DECLARE_LOAD(load32s)
-DECLARE_LOAD(load32u)
-DECLARE_LOAD(load64s)
-DECLARE_LOAD(load64u)
+    DECLARE_LOAD(int8_t, 8s)
+    DECLARE_LOAD(uint8_t, 8u)
+    DECLARE_LOAD(int16_t, 16s)
+    DECLARE_LOAD(uint16_t, 16u)
+    DECLARE_LOAD(int32_t, 32s)
+    DECLARE_LOAD(uint32_t, 32u)
+    DECLARE_LOAD(int64_t, 64s)
+    DECLARE_LOAD(uint64_t, 64u)
 #undef DECLARE_LOAD
 
 #define DECLARE_STORE(SIZE) \
-    void store ## SIZE(::wasm::Address addr, int ## SIZE ## _t value) override { \
-        return store<int ## SIZE ## _t>(addr, value); \
+    void store##SIZE(::wasm::Address addr, int##SIZE##_t value) override { \
+        return store<int##SIZE##_t>(addr, value); \
     }
-DECLARE_STORE(8)
-DECLARE_STORE(16)
-DECLARE_STORE(32)
-DECLARE_STORE(64)
+    DECLARE_STORE(8)
+    DECLARE_STORE(16)
+    DECLARE_STORE(32)
+    DECLARE_STORE(64)
 #undef DECLARE_STORE
 };
 
@@ -135,6 +137,7 @@ struct LinearAllocator : Allocator
         M_insist(not pre_allocations_performed_,
                  "must not request a pre-allocation after `perform_pre_allocations()` was already called");
         M_insist(alignment);
+        M_insist(is_pow_2(alignment), "alignment must be a power of 2");
         if (alignment != 1U)
             align_pre_memory(alignment);
         Ptr<void> ptr(U32(pre_alloc_addr_).template to<void*>());
@@ -143,6 +146,7 @@ struct LinearAllocator : Allocator
     }
     Var<Ptr<void>> allocate(U32 bytes, uint32_t alignment) override {
         M_insist(alignment);
+        M_insist(is_pow_2(alignment), "alignment must be a power of 2");
         if (alignment != 1U)
             align_memory(alignment);
         Var<Ptr<void>> ptr(alloc_addr_.template to<void*>());

@@ -792,6 +792,7 @@ v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const Op
     }
 
     /* Map all string literals into the Wasm module. */
+    M_insist(Is_Page_Aligned(context.heap));
     auto literals = CollectStringLiterals::Collect(plan);
     std::size_t bytes = 0;
     for (auto literal : literals)
@@ -809,6 +810,7 @@ v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const Op
         context.heap += aligned_bytes;
         context.install_guard_page();
     }
+    M_insist(Is_Page_Aligned(context.heap));
 
     /* Add functions to environment. */
     Module::Get().emit_function_import<void(void*,uint32_t)>("read_result_set");

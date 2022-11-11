@@ -1174,10 +1174,14 @@ struct PrimitiveExpr<T>
     PrimitiveExpr(const PrimitiveExpr&) = delete;
     /** Constructs a new `PrimitiveExpr<T>` by **moving** the underlying `expr_` and `referenced_bits_` of `other`
      * to `this`. */
-    PrimitiveExpr(PrimitiveExpr &other) : PrimitiveExpr(other.move()) { /* move, not copy */ }
+    PrimitiveExpr(PrimitiveExpr &other)
+        : PrimitiveExpr(std::exchange(other.expr_, nullptr), std::move(other.referenced_bits_))
+    { /* move, not copy */ }
     /** Constructs a new `PrimitiveExpr<T>` by **moving** the underlying `expr_` and `referenced_bits_` of `other`
      * to `this`. */
-    PrimitiveExpr(PrimitiveExpr &&other) : PrimitiveExpr(other.move()) { }
+    PrimitiveExpr(PrimitiveExpr &&other)
+        : PrimitiveExpr(std::exchange(other.expr_, nullptr), std::move(other.referenced_bits_))
+    { }
 
     PrimitiveExpr & operator=(PrimitiveExpr&&) = delete;
 
@@ -1185,7 +1189,10 @@ struct PrimitiveExpr<T>
 
     private:
     /** **Moves** the underlying Binaryen `::wasm::Expression` out of `this`. */
-    ::wasm::Expression * expr() { return std::exchange(expr_, nullptr); }
+    ::wasm::Expression * expr() {
+        M_insist(expr_, "cannot access an already moved or discarded expression of a `PrimitiveExpr`");
+        return std::exchange(expr_, nullptr);
+    }
     /** **Moves** the referenced bits out of `this`. */
     std::list<std::shared_ptr<LocalBit>> referenced_bits() { return std::move(referenced_bits_); }
     /** **Moves** the underlying Binaryen `::wasm::Expression` and the referenced bits out of `this`. */

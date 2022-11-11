@@ -2,7 +2,7 @@ description: where greater datetime
 db: ours
 query: |
     SELECT key FROM D WHERE rdatetime > d'1453-07-31 17:25:15' ORDER BY key;
-required: NO
+required: YES
 
 stages:
 

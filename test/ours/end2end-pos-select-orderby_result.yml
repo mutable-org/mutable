@@ -2,7 +2,7 @@ description: orderby result
 db: ours
 query: |
     SELECT key, key + 42 AS sum FROM R ORDER BY sum;
-required: NO
+required: YES
 
 stages:
 

@@ -2,7 +2,7 @@ description: limit
 db: ours
 query: |
     SELECT key FROM R ORDER BY key LIMIT 3;
-required: NO
+required: YES
 
 stages:
 

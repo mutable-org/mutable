@@ -2,7 +2,7 @@ description: where strcmp
 db: ours
 query: |
     SELECT key FROM R WHERE rstring < "m" ORDER BY key;
-required: NO
+required: YES
 
 stages:
 

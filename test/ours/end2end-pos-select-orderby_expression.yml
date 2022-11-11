@@ -2,7 +2,7 @@ description: orderby expression
 db: ours
 query: |
     SELECT key + fkey FROM R ORDER BY key + fkey;
-required: NO
+required: YES
 
 stages:
 

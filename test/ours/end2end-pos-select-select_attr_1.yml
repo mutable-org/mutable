@@ -2,7 +2,7 @@ description: select attr 1
 db: ours
 query: |
     SELECT key FROM R ORDER BY key;
-required: NO
+required: YES
 
 stages:
 

@@ -2,7 +2,7 @@ description: orderby compound result
 db: ours
 query: |
   SELECT key AS x FROM R ORDER BY x, fkey;
-required: NO
+required: YES
 
 stages:
 

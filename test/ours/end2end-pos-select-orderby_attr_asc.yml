@@ -2,7 +2,7 @@ description: orderby attr asc
 db: ours
 query: |
     SELECT key FROM R ORDER BY key ASC;
-required: NO
+required: YES
 
 stages:
 

@@ -2,7 +2,7 @@ description: select all
 db: ours
 query: |
     SELECT * FROM R ORDER BY key;
-required: NO
+required: YES
 
 stages:
 

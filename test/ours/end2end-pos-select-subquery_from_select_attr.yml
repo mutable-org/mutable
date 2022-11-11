@@ -2,7 +2,7 @@ description: subquery from select attr
 db: ours
 query: |
     SELECT fkey FROM (SELECT key, fkey FROM R) AS sub ORDER BY fkey;
-required: NO
+required: YES
 
 stages:
 

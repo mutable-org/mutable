@@ -2,7 +2,7 @@ description: select attr with prefix
 db: ours
 query: |
     SELECT R.key FROM R ORDER BY R.key;
-required: NO
+required: YES
 
 stages:
 

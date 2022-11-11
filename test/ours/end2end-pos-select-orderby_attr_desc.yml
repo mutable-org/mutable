@@ -2,7 +2,7 @@ description: orderby attr desc
 db: ours
 query: |
     SELECT key FROM R ORDER BY key DESC;
-required: NO
+required: YES
 
 stages:
 

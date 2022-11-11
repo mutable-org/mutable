@@ -2,7 +2,7 @@ description: where conjunction
 db: ours
 query: |
     SELECT key FROM R WHERE key > 15 AND key < 30 AND key < 17 ORDER BY key;
-required: NO
+required: YES
 
 stages:
 

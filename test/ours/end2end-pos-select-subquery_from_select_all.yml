@@ -2,7 +2,7 @@ description: subquery from select all
 db: ours
 query: |
     SELECT * FROM (SELECT * FROM R) AS sub ORDER BY key;
-required: NO
+required: YES
 
 stages:
 

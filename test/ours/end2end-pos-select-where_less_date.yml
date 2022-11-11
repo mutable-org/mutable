@@ -2,7 +2,7 @@ description: where less date
 db: ours
 query: |
     SELECT key FROM D WHERE rdate < d'4236-04-05' ORDER BY key;
-required: NO
+required: YES
 
 stages:
 

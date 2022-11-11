@@ -2,7 +2,7 @@ description: where true
 db: ours
 query: |
     SELECT key FROM R WHERE TRUE ORDER BY key;
-required: NO
+required: YES
 
 stages:
 

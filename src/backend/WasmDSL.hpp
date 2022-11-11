@@ -1911,15 +1911,13 @@ struct PrimitiveExpr<T>
     PrimitiveExpr<To> to()
     requires std::is_void_v<pointed_type>
     {
-        if constexpr (not std::is_void_v<pointed_type>) {
-            Wasm_insist((clone().template to<uint32_t>() % uint32_t(alignof(pointed_type))).eqz(),
-                        "cannot convert to type whose alignment requirement is not fulfilled");
-        }
+        Wasm_insist((clone().template to<uint32_t>() % uint32_t(alignof(std::remove_pointer_t<To>))).eqz(),
+                    "cannot convert to type whose alignment requirement is not fulfilled");
         return PrimitiveExpr<To>(addr_.move(), offset_);
     }
 
-    /** Explicit conversion of a `PrimitiveExpr<T*>` to a `PrimitiveExpr<uint32_t>`.  Adds possible offset to pointer.
-     */
+    /** Explicit conversion of a `PrimitiveExpr<T*>` to a `PrimitiveExpr<uint32_t>`.  Adds possible offset to
+     * the pointer. */
     template<typename To>
     requires std::same_as<To, uint32_t>
     PrimitiveExpr<uint32_t> to()

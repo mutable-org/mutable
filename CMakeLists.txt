@@ -10,6 +10,7 @@ include(GenerateExportHeader)
 enable_testing()
 
 OPTION(BUILD_SHARED_LIBS "Build mutable as a shared library" OFF)
+OPTION(BUILD_WITH_SANITIZERS "Build mutable with address and UB sanitizers" ON)
 
 # Backends
 set(WITH_V8 FALSE CACHE BOOL "Enable the V8 platform.")
@@ -105,9 +106,13 @@ endif()
 set(CMAKE_COMPILE_FLAGS             "${CMAKE_COMPILE_FLAGS} -W -Wall -pedantic -Wno-variadic-macros -Wno-gnu-zero-variadic-macro-arguments -Wno-gnu-label-as-value -Wno-vla-extension -Wno-gnu-conditional-omitted-operand -mavx2 -mbmi2 -mavx -msse4.2 -mbmi")
 set(CMAKE_C_FLAGS                   "${CMAKE_C_FLAGS} ${CMAKE_COMPILE_FLAGS}")
 set(CMAKE_CXX_FLAGS                 "-std=c++20 ${CMAKE_CXX_FLAGS} ${CMAKE_COMPILE_FLAGS}")
-set(CMAKE_CXX_FLAGS_DEBUG           "-fno-omit-frame-pointer -fno-optimize-sibling-calls -fsanitize=address -fsanitize=undefined -fno-sanitize=vptr")
+set(CMAKE_CXX_FLAGS_DEBUG           "-fno-omit-frame-pointer -fno-optimize-sibling-calls")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "-DNDEBUG -fno-omit-frame-pointer -fno-optimize-sibling-calls -O2")
 set(CMAKE_POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS})
+
+if(${BUILD_WITH_SANITIZERS})
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fsanitize=undefined -fno-sanitize=vptr")
+endif()
 
 # OS dependent debug annotations
 if(APPLE)

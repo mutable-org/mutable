@@ -484,28 +484,16 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/null_semantics", "[core][wasm]")
 
     /* special cases with logical `or` and `and` */
     CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); _Bool b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Bool a(_Bool::Null()); Bool b(true); _Bool c(a or b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); _Bool b(true); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Bool a(true); _Bool b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(true); _Bool b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Bool a(true); _Bool b(true); _Bool c(a or b); RETURN(c.is_null()); });
-
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); _Bool b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); _Bool b(false); _Bool c(a or b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(false); _Bool b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Bool a(false); _Bool b(false); _Bool c(a or b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); Bool b(false); _Bool c(a or b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); Bool b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { Bool a(false); _Bool b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { Bool a(true);  _Bool b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
 
     CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); _Bool b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Bool a(_Bool::Null()); _Bool b(false); _Bool c(a and b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); _Bool b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Bool a(false); _Bool b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(false); _Bool b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Bool a(false); _Bool b(false); _Bool c(a and b); RETURN(c.is_null()); });
-
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); _Bool b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); _Bool b(true); _Bool c(a and b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(true); _Bool b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Bool a(true); _Bool b(true); _Bool c(a and b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); Bool b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); Bool b(true);  _Bool c(a and b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { Bool a(false); _Bool b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { Bool a(true);  _Bool b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_null()); });
 
     /* with conversions */
     CHECK_RESULT_INLINE( true, bool(), { _I8 a(_I8::Null()); _I32 b(a); RETURN(b.is_null()); });
@@ -857,6 +845,55 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Variable/null_semantics", "[core][wasm]")
         /* a, b, and c must allocate their own NULL bit */
         RETURN(c.is_null());
     });
+
+    /* special cases with logical `or` and `and` */
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(false); _Bool c(a or b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(false); _Bool c(a or b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(false); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
+
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(false); _Bool c(a or b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(false); _Bool c(a or b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(false); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
+
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(false); _Bool c(a or b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(false); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
+
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(true);  _Bool c(a and b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(true);  _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(true);  _Bool c(a and b); RETURN(c.is_true_and_not_null()); });
+
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(_Bool::Null()); _Var<Bool> b(true);  _Bool c(a and b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(true);  _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(true);  _Bool c(a and b); RETURN(c.is_true_and_not_null()); });
+
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(false); _Var<Bool> b(true);  _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Var<Bool> a(true);  _Var<Bool> b(true);  _Bool c(a and b); RETURN(c.is_true_and_not_null()); });
 
     /* with NULL bit reuse */
     CHECK_RESULT_INLINE(false, bool(), {

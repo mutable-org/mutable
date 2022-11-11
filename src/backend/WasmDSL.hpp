@@ -2398,26 +2398,36 @@ UNARY_LIST(UNARY)
     Expr<bool> operator and(Expr<bool> other)
     requires boolean<T>
     {
-        PrimitiveExpr<bool> result = this->value_.clone().operator and(other.value_.clone());
         const unsigned idx = (bool(other.is_null_) << 1U) | bool(this->is_null_);
         switch (idx) {
             default: M_unreachable("invalid index");
 
-            case 0b00: /* neither `this` nor `other` can be `NULL` */
-                this->discard();
-                other.discard();
+            case 0b00: { /* neither `this` nor `other` can be `NULL` */
+                PrimitiveExpr<bool> result = this->value_ and other.value_;
                 return Expr<bool>(result);
-
+            }
             case 0b01: { /* `this` can be `NULL` */
-                PrimitiveExpr<bool> is_null = not this->is_false_and_not_null() and other.value_;
+                PrimitiveExpr<bool> result = this->value_ and other.value_.clone();
+                PrimitiveExpr<bool> is_null =
+                    this->is_null_ and  // `this` is NULL
+                    other.value_;       // `other` does not dominate, i.e. is true
                 return Expr<bool>(result, is_null);
             }
             case 0b10: { /* `other` can be `NULL` */
-                PrimitiveExpr<bool> is_null = not other.is_false_and_not_null() and this->value_;
+                PrimitiveExpr<bool> result = this->value_.clone() and other.value_;
+                PrimitiveExpr<bool> is_null =
+                    other.is_null_ and  // `other` is NULL
+                    this->value_;       // `this` does not dominate, i.e. is true
                 return Expr<bool>(result, is_null);
             }
             case 0b11: { /* both `this` and `other` can be `NULL` */
-                PrimitiveExpr<bool> is_null = not this->is_false_and_not_null() and not other.is_false_and_not_null();
+                auto this_is_null  = this->is_null_.clone();
+                auto other_is_null = other.is_null_.clone();
+                PrimitiveExpr<bool> result = this->value_.clone() and other.value_.clone();
+                PrimitiveExpr<bool> is_null =
+                    (this_is_null or other_is_null) and     // at least one is NULL
+                    (this->value_ or this->is_null_) and    // `this` does not dominate, i.e. is not real false
+                    (other.value_ or other.is_null_);       // `other` does not dominate, i.e. is not real false
                 return Expr<bool>(result, is_null);
             }
         }
@@ -2428,26 +2438,36 @@ UNARY_LIST(UNARY)
     Expr<bool> operator or(Expr<bool> other)
     requires boolean<T>
     {
-        PrimitiveExpr<bool> result = this->value_.clone().operator or(other.value_.clone());
         const unsigned idx = (bool(other.is_null_) << 1U) | bool(this->is_null_);
         switch (idx) {
             default: M_unreachable("invalid index");
 
-            case 0b00: /* neither `this` nor `other` can be `NULL` */
-                this->discard();
-                other.discard();
+            case 0b00: { /* neither `this` nor `other` can be `NULL` */
+                PrimitiveExpr<bool> result = this->value_ or other.value_;
                 return Expr<bool>(result);
-
+            }
             case 0b01: { /* `this` can be `NULL` */
-                PrimitiveExpr<bool> is_null = not this->is_true_and_not_null() and not other.value_;
+                PrimitiveExpr<bool> result = this->value_ or other.value_.clone();
+                PrimitiveExpr<bool> is_null =
+                    this->is_null_ and  // `this` is NULL
+                    not other.value_;   // `other` does not dominate, i.e. is false
                 return Expr<bool>(result, is_null);
             }
             case 0b10: { /* `other` can be `NULL` */
-                PrimitiveExpr<bool> is_null = not other.is_true_and_not_null() and not this->value_;
+                PrimitiveExpr<bool> result = this->value_.clone() or other.value_;
+                PrimitiveExpr<bool> is_null =
+                    other.is_null_ and  // `other` is NULL
+                    not this->value_;   // `this` does not dominate, i.e. is false
                 return Expr<bool>(result, is_null);
             }
             case 0b11: { /* both `this` and `other` can be `NULL` */
-                PrimitiveExpr<bool> is_null = not this->is_true_and_not_null() and not other.is_true_and_not_null();
+                auto this_is_null  = this->is_null_.clone();
+                auto other_is_null = other.is_null_.clone();
+                PrimitiveExpr<bool> result = this->value_.clone() or other.value_.clone();
+                PrimitiveExpr<bool> is_null =
+                    (this_is_null or other_is_null) and         // at least one is NULL
+                    (not this->value_ or this->is_null_) and    // `this` does not dominate, i.e. is not real true
+                    (not other.value_ or other.is_null_);       // `other` does not dominate, i.e. is not real true
                 return Expr<bool>(result, is_null);
             }
         }

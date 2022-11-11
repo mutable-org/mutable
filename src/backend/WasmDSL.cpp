@@ -250,15 +250,22 @@ std::pair<uint8_t*, std::size_t> Module::binary()
 
 void Module::emit_insist(PrimitiveExpr<bool> condition, const char *filename, unsigned line, const char *msg)
 {
+    if (not delegate_insist_) {
+        /*----- Create function to delegate to host (used for easier debugging since one can break in here). -----*/
+        FUNCTION(delegate_insist, void(uint64_t))
+        {
+            emit_call<void>("insist", PARAMETER(0).val());
+        }
+        delegate_insist_ = std::make_unique<FunctionProxy<void(uint64_t)>>(std::move(delegate_insist));
+    }
+
     uint64_t idx = messages_.size();
     messages_.emplace_back(filename, line, msg);
-    auto call = builder_.makeCall("insist", { builder_.makeConst(::wasm::Literal(idx)) }, wasm_type<void>());
-    active_block_->list.push_back(
-        builder_.makeIf(
-            /* condition= */ (not condition).expr(),
-            /* ifTrue=    */ call
-        )
-    );
+
+    /*----- Check condition and possibly delegate to host. --*/
+    IF (not condition) {
+        (*delegate_insist_)(idx);
+    };
 }
 
 void Module::emit_insist(Expr<bool> condition, const char *filename, unsigned line, const char *msg)

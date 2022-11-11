@@ -58,12 +58,13 @@ enum class VariableKind {
     Global,
 };
 
+struct Allocator; // for use in Module
 struct LocalBit; // for use in Module
 struct LocalBitmap; // for use in Module
-struct Allocator; // for use in Module
+template<typename> struct FunctionProxy; // for use in Module
 template<typename> struct invoke_v8; // for unittests only
-template<typename> struct Expr;
 template<typename> struct PrimitiveExpr;
+template<typename> struct Expr;
 template<typename, VariableKind, bool> struct Variable;
 template<typename> struct Parameter;
 
@@ -483,6 +484,8 @@ struct Module final
     std::unique_ptr<::wasm::ModuleRunner::ExternalInterface> interface_;
     ///> the per-function stacks of local bitmaps; used for local boolean variables and NULL bits
     std::vector<std::vector<LocalBitmap*>> local_bitmaps_stack_;
+    ///> the function to delegate insists to host
+    std::unique_ptr<FunctionProxy<void(uint64_t)>> delegate_insist_;
 
     /*----- Thread-local instance ------------------------------------------------------------------------------------*/
     private:
@@ -840,12 +843,6 @@ struct BlockUser
  * Function
  *====================================================================================================================*/
 
-/** A handle to create a `Function` and to create invocations of that function. Provides `operator()()` to emit a
- * function call by issuing a C-style call.  The class is template typed with the function signature, allowing us to
- * perform static type checking of arguments and the returned value at call sites. */
-template<typename>
-struct FunctionProxy;
-
 /** Represents a Wasm function.  It is templated with return type and parameter types.  This enables us to access
  * parameters with their proper types.  */
 template<typename>
@@ -1044,6 +1041,9 @@ struct Function<ReturnType(ParamTypes...)> : Function<PrimitiveExpr<ReturnType>(
  * FunctionProxy
  *====================================================================================================================*/
 
+/** A handle to create a `Function` and to create invocations of that function. Provides `operator()()` to emit a
+ * function call by issuing a C-style call.  The class is template typed with the function signature, allowing us to
+ * perform static type checking of arguments and the returned value at call sites. */
 template<typename ReturnType, typename... ParamTypes>
 struct FunctionProxy<PrimitiveExpr<ReturnType>(PrimitiveExpr<ParamTypes>...)>
 {

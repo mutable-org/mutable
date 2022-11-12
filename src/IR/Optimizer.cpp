@@ -514,3 +514,17 @@ Optimizer::projection_needed(const std::vector<projection_type> &projections,
 
     return { projection_needed, std::move(additional_projections) };
 }
+
+#define DEFINE(PLANTABLE) \
+template \
+std::pair<std::unique_ptr<Producer>, PLANTABLE> \
+Optimizer::optimize_with_plantable(const QueryGraph &G) const; \
+template \
+void \
+Optimizer::optimize_locally(const QueryGraph &G, PLANTABLE &plan_table) const; \
+template \
+std::unique_ptr<Producer> \
+Optimizer::construct_plan(const QueryGraph &G, const PLANTABLE &plan_table, Producer * const *source_plans) const
+DEFINE(PlanTableSmallOrDense);
+DEFINE(PlanTableLargeAndSparse);
+#undef DEFINE

@@ -594,3 +594,15 @@ std::unique_ptr<CostFunction> CostModelFactory::get_cost_function()
     return std::make_unique<TrainedCostFunction>(std::move(filter_model), std::move(join_model),
                                                  std::move(grouping_model));
 }
+
+#define DEFINE(TYPE) \
+template CostModel CostModelFactory::generate_filter_cost_model<TYPE>(unsigned degree, const char *csv_folder_path); \
+template CostModel CostModelFactory::generate_group_by_cost_model<TYPE>(const char *csv_folder_path); \
+template CostModel CostModelFactory::generate_join_cost_model<TYPE>(const char *csv_folder_path)
+DEFINE(int8_t);
+DEFINE(int16_t);
+DEFINE(int32_t);
+DEFINE(int64_t);
+DEFINE(float);
+DEFINE(double);
+#undef DEFINE

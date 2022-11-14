@@ -381,14 +381,14 @@ compile_load_sequential(const Schema &tuple_schema, Ptr<void> base_address, cons
 template<bool IsGlobal>
 struct Buffer
 {
+    private:
     ///> variable type dependent on whether buffer should be globally usable
     template<typename T>
     using var_t = std::conditional_t<IsGlobal, Global<T>, Var<T>>;
     ///> function type for resuming pipeline dependent on whether buffer should be globally usable
     using fn_t = std::conditional_t<IsGlobal, void(void), void(void*, uint32_t)>;
 
-    private:
-    const Schema *schema_; ///< schema of buffer
+    std::reference_wrapper<const Schema> schema_; ///< schema of buffer
     storage::DataLayout layout_; ///< data layout of buffer
     var_t<Ptr<void>> base_address_; ///< base address of buffer
     std::optional<var_t<U32>> capacity_; ///< optional dynamic capacity of buffer, in number of tuples
@@ -409,7 +409,7 @@ struct Buffer
     Buffer & operator=(Buffer&&) = default;
 
     /** Returns the schema of the buffer. */
-    const Schema & schema() const { return *schema_; }
+    const Schema & schema() const { return schema_; }
     /** Returns the layout of the buffer. */
     const storage::DataLayout & layout() const { return layout_; }
     /** Returns the base address of the buffer. */

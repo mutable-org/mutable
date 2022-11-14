@@ -190,10 +190,14 @@ void ExprCompiler::operator()(const BinaryExpr &e)
             [this, &binop, &rhs](auto &&expr_lhs) -> void {
                 std::visit(overloaded {
                     [](std::monostate&&) -> void { M_unreachable("illegal value"); },
-                    [this, expr_lhs, &binop](auto &&expr_rhs) mutable -> void requires requires { binop(expr_lhs, expr_rhs); } {
+                    [this, expr_lhs, &binop](auto &&expr_rhs) mutable -> void
+                    requires requires { binop(expr_lhs, expr_rhs); }
+                    {
                         set(binop(expr_lhs, expr_rhs));
                     },
-                    [](auto &&expr_rhs) -> void requires (not requires { binop(expr_lhs, expr_rhs); }) {
+                    [](auto &&expr_rhs) -> void
+                    requires (not requires { binop(expr_lhs, expr_rhs); })
+                    {
                         M_unreachable("illegal operation");
                     },
                 }, rhs);
@@ -362,7 +366,7 @@ _Bool ExprCompiler::compile(const cnf::CNF &cnf)
             /* Generate code for the literal of the predicate. */
             M_insist(pred.expr()->type()->is_boolean());
             _Bool compiled = compile<_Bool>(*pred.expr());
-            _Bool wasm_pred = pred.negative() ? compiled.operator not() : compiled;
+            _Bool wasm_pred = pred.negative() ? not compiled : compiled;
             /* Add the predicate to the clause with an `or`. */
             if (wasm_clause_empty) {
                 wasm_clause = wasm_pred;
@@ -688,7 +692,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                     BLOCK_OPEN(stores) {
                                         auto [value, is_null] = env.get<T>(tuple_entry.id).split(); // get value
                                         value.discard(); // handled at entry leaf
-                                        Ptr<U8> byte_ptr = (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
+                                        Ptr<U8> byte_ptr =
+                                            (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
                                         setbit<U8>(byte_ptr, is_null, bit_offset); // update bit
                                     }
                                 };
@@ -856,7 +861,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                 BLOCK_OPEN(stores) {
                                     auto [value, is_null] = env.get<_Bool>(tuple_it->id).split(); // get value
                                     is_null.discard(); // handled at NULL bitmap leaf
-                                    Ptr<U8> byte_ptr = (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
+                                    Ptr<U8> byte_ptr =
+                                        (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
                                     setbit<U8>(byte_ptr, value, bit_offset); // update bit
                                 }
                             } else {
@@ -981,7 +987,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                 /*----- Emit the stride jumps between each leaf to the beginning of the parent INode. -----*/
                 Block lowest_inode_jumps(false);
                 for (auto& [key, value] : loading_context) {
-                    M_insist(levels.back().stride_in_bits % 8 == 0, "stride of INodes must be multiples of a whole byte");
+                    M_insist(levels.back().stride_in_bits % 8 == 0,
+                             "stride of INodes must be multiples of a whole byte");
                     const auto stride_remaining_in_bits = levels.back().stride_in_bits -
                                                           levels.back().num_tuples * key.second;
                     const uint8_t remaining_bit_stride  = stride_remaining_in_bits % 8;
@@ -1005,7 +1012,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                 }
                 if (null_bitmap_ptr) {
                     M_insist(bool(null_bitmap_mask));
-                    M_insist(levels.back().stride_in_bits % 8 == 0, "stride of INodes must be multiples of a whole byte");
+                    M_insist(levels.back().stride_in_bits % 8 == 0,
+                             "stride of INodes must be multiples of a whole byte");
                     const auto stride_remaining_in_bits = levels.back().stride_in_bits -
                                                           levels.back().num_tuples * null_bitmap_stride_in_bits;
                     const uint8_t remaining_bit_stride  = stride_remaining_in_bits % 8;
@@ -1139,14 +1147,15 @@ m::wasm::compile_load_sequential(const Schema &tuple_schema, Ptr<void> base_addr
 template<bool IsGlobal>
 Buffer<IsGlobal>::Buffer(const Schema &schema, const DataLayoutFactory &factory, std::size_t num_tuples,
                          MatchBase::callback_t Pipeline)
-    : schema_(&schema)
+    : schema_(std::cref(schema))
     , layout_(factory.make(schema, num_tuples))
     , Pipeline_(std::move(Pipeline))
 {
     if (layout_.is_finite()) {
         /*----- Pre-allocate memory for entire buffer. Use maximal possible alignment requirement of 8 bytes. -----*/
         const auto child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
-        const auto num_children = (layout_.num_tuples() + layout_.child().num_tuples() - 1) / layout_.child().num_tuples();
+        const auto num_children =
+            (layout_.num_tuples() + layout_.child().num_tuples() - 1) / layout_.child().num_tuples();
         base_address_ = Module::Allocator().pre_allocate(num_children * child_size_in_bytes, /* alignment= */ 8);
     }
 }
@@ -1172,7 +1181,7 @@ void Buffer<IsGlobal>::resume_pipeline()
                 /*----- Compile data layout to generate sequential load from buffer. -----*/
                 Var<U32> load_tuple_id; // default initialized to 0
                 auto [load_inits, loads, load_jumps] =
-                    compile_load_sequential(*schema_, base_address, layout_, *schema_, load_tuple_id);
+                    compile_load_sequential(schema_, base_address, layout_, schema_, load_tuple_id);
 
                 /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
                 load_inits.attach_to_current();
@@ -1202,7 +1211,7 @@ void Buffer<IsGlobal>::resume_pipeline_inline()
         /*----- Compile data layout to generate sequential load from buffer. -----*/
         Var<U32> load_tuple_id(0); // explicitly (re-)set tuple ID to 0
         auto [load_inits, loads, load_jumps] =
-            compile_load_sequential(*schema_, base_address_, layout_, *schema_, load_tuple_id);
+            compile_load_sequential(schema_, base_address_, layout_, schema_, load_tuple_id);
 
         /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
         load_inits.attach_to_current();
@@ -1219,7 +1228,7 @@ void Buffer<IsGlobal>::consume()
 {
     /*----- Compile data layout to generate sequential store into the buffer. -----*/
     auto [_store_inits, stores, _store_jumps] =
-        compile_store_sequential(*schema_, base_address_, layout_, *schema_, size_);
+        compile_store_sequential(schema_, base_address_, layout_, schema_, size_);
     /* since structured bindings cannot be used in lambda capture */
     Block store_inits(std::move(_store_inits)), store_jumps(std::move(_store_jumps));
 
@@ -1228,7 +1237,7 @@ void Buffer<IsGlobal>::consume()
             /*----- Set initial capacity. -----*/
             capacity_ = layout_.child().num_tuples();
 
-            /*----- Allocate memory for one child instance. Use maximal possible alignment requirement of 8 bytes. -----*/
+            /*----- Allocate memory for one child instance. Use maximal possible alignment requirement of 8 bytes. ---*/
             const auto child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
             base_address_ = Module::Allocator().allocate(child_size_in_bytes, /* alignment= */ 8);
         }
@@ -1524,7 +1533,8 @@ _Bool m::wasm::like(const CharacterSequence &ty_str, const CharacterSequence &ty
                     };
                 };
 
-                /* Advance entry pointer to next entry, advance str to next byte, and load next byte from str if in bounds. */
+                /* Advance entry pointer to next entry, advance str to next byte, and load next byte from str if in
+                 * bounds. */
                 entry += 1;
                 str += 1;
                 byte_str = Select(str < end_str, *str, '\0');
@@ -1540,8 +1550,8 @@ _Bool m::wasm::like(const CharacterSequence &ty_str, const CharacterSequence &ty
         }
 
         /*----- Compute result. -----*/
-        /* Entry pointer points currently to the second column in the first row after the pattern has ended. Therefore, we
-         * have to go one row up and len_str - 1 columns to the right, i.e. the result is located at
+        /* Entry pointer points currently to the second column in the first row after the pattern has ended. Therefore,
+         * we have to go one row up and len_str - 1 columns to the right, i.e. the result is located at
          * entry - (`length_str` + 1) + len_str - 1 = entry + len_str - (`length_str` + 2). */
         result = *(entry + len_str - (str_length + 2));
 

@@ -50,7 +50,7 @@ struct DummyStore : m::Store
  * Test cases
  *====================================================================================================================*/
 
-TEST_CASE("Wasm/" BACKEND_NAME "/WasmScan", "[core][wasm]")
+TEST_CASE("Wasm/" BACKEND_NAME "/Scan", "[core][wasm]")
 {
     Module::Init(); // fresh module
     auto &wasm_context = m::WasmPlatform::Create_Wasm_Context_For_ID(Module::ID()); // create fresh wasm context
@@ -81,7 +81,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/WasmScan", "[core][wasm]")
     auto invoke = [&](){
         /* Create match for the scan operator for the table. */
         m::ScanOperator scan(table.store(), table.name);
-        m::Match<WasmScan> M(&scan, {});
+        m::Match<Scan> M(&scan, {});
 
         /* Map table into wasm memory and add the mapped address and the number of rows as global variables. */
         auto off = wasm_context.map_table(table); // without faulting guard pages
@@ -134,7 +134,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/WasmScan", "[core][wasm]")
             };
 
             /* Execute the scan operator. */
-            WasmScan::execute(M, Return);
+            Scan::execute(M, Return);
 
             CodeGenContext::Dispose(); // dispose codegen context
         }

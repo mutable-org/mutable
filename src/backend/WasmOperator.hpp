@@ -8,17 +8,17 @@
 namespace m {
 
 #define M_WASM_OPERATOR_LIST(X) \
-    X(WasmNoOp) \
-    X(WasmCallback) \
-    X(WasmPrint) \
-    X(WasmScan) \
-    X(WasmFilter) \
-    X(WasmProjection) \
-    X(WasmGrouping) \
-    X(WasmAggregation) \
-    X(WasmSorting) \
-    X(WasmNestedLoopsJoin) \
-    X(WasmLimit)
+    X(NoOp) \
+    X(Callback) \
+    X(Print) \
+    X(Scan) \
+    X(Filter) \
+    X(Projection) \
+    X(Grouping) \
+    X(Aggregation) \
+    X(Sorting) \
+    X(NestedLoopsJoin) \
+    X(Limit)
 
 #define DECLARE(OP) \
     namespace wasm { struct OP; } \
@@ -28,79 +28,79 @@ namespace m {
 
 namespace wasm {
 
-struct WasmNoOp : PhysicalOperator<WasmNoOp, NoOpOperator>
+struct NoOp : PhysicalOperator<NoOp, NoOpOperator>
 {
-    static void execute(const Match<WasmNoOp> &M, callback_t Pipeline);
-    static double cost(const Match<WasmNoOp>&) { return 1.0; }
+    static void execute(const Match<NoOp> &M, callback_t Pipeline);
+    static double cost(const Match<NoOp>&) { return 1.0; }
 };
 
-struct WasmCallback : PhysicalOperator<WasmCallback, CallbackOperator>
+struct Callback : PhysicalOperator<Callback, CallbackOperator>
 {
-    static void execute(const Match<WasmCallback> &M, callback_t Pipeline);
-    static double cost(const Match<WasmCallback>&) { return 1.0; }
+    static void execute(const Match<Callback> &M, callback_t Pipeline);
+    static double cost(const Match<Callback>&) { return 1.0; }
 };
 
-struct WasmPrint : PhysicalOperator<WasmPrint, PrintOperator>
+struct Print : PhysicalOperator<Print, PrintOperator>
 {
-    static void execute(const Match<WasmPrint> &M, callback_t Pipeline);
-    static double cost(const Match<WasmPrint>&) { return 1.0; }
+    static void execute(const Match<Print> &M, callback_t Pipeline);
+    static double cost(const Match<Print>&) { return 1.0; }
 };
 
-struct WasmScan : PhysicalOperator<WasmScan, ScanOperator>
+struct Scan : PhysicalOperator<Scan, ScanOperator>
 {
-    static void execute(const Match<WasmScan> &M, callback_t Pipeline);
-    static double cost(const Match<WasmScan>&) { return 1.0; }
+    static void execute(const Match<Scan> &M, callback_t Pipeline);
+    static double cost(const Match<Scan>&) { return 1.0; }
 };
 
-struct WasmFilter : PhysicalOperator<WasmFilter, FilterOperator>
+struct Filter : PhysicalOperator<Filter, FilterOperator>
 {
-    static void execute(const Match<WasmFilter> &M, callback_t Pipeline);
-    static double cost(const Match<WasmFilter>&) { return 1.0; }
+    static void execute(const Match<Filter> &M, callback_t Pipeline);
+    static double cost(const Match<Filter>&) { return 1.0; }
 };
 
-struct WasmProjection : PhysicalOperator<WasmProjection, ProjectionOperator>
+struct Projection : PhysicalOperator<Projection, ProjectionOperator>
 {
-    static void execute(const Match<WasmProjection> &M, callback_t Pipeline);
-    static double cost(const Match<WasmProjection>&) { return 1.0; }
-    static Condition adapt_post_condition(const Match<WasmProjection> &M, const Condition &post_cond_child);
+    static void execute(const Match<Projection> &M, callback_t Pipeline);
+    static double cost(const Match<Projection>&) { return 1.0; }
+    static Condition adapt_post_condition(const Match<Projection> &M, const Condition &post_cond_child);
 };
 
-struct WasmGrouping : PhysicalOperator<WasmGrouping, GroupingOperator>
+struct Grouping : PhysicalOperator<Grouping, GroupingOperator>
 {
-    static void execute(const Match<WasmGrouping>&, callback_t) { M_unreachable("not implemented"); }
-    static double cost(const Match<WasmGrouping>&) { return 1.0; }
+    static void execute(const Match<Grouping>&, callback_t) { M_unreachable("not implemented"); }
+    static double cost(const Match<Grouping>&) { return 1.0; }
 };
 
-struct WasmAggregation : PhysicalOperator<WasmAggregation, AggregationOperator>
+struct Aggregation : PhysicalOperator<Aggregation, AggregationOperator>
 {
-    static void execute(const Match<WasmAggregation>&, callback_t) { M_unreachable("not implemented"); }
-    static double cost(const Match<WasmAggregation>&) { return 1.0; }
+    static void execute(const Match<Aggregation>&, callback_t) { M_unreachable("not implemented"); }
+    static double cost(const Match<Aggregation>&) { return 1.0; }
 };
 
-struct WasmSorting : PhysicalOperator<WasmSorting, SortingOperator>
+struct Sorting : PhysicalOperator<Sorting, SortingOperator>
 {
-    static void execute(const Match<WasmSorting> &M, callback_t Pipeline);
-    static double cost(const Match<WasmSorting>&) { return 1.0; }
-    static Condition adapt_post_condition(const Match<WasmSorting> &M, const Condition &post_cond_child);
+    static void execute(const Match<Sorting> &M, callback_t Pipeline);
+    static double cost(const Match<Sorting>&) { return 1.0; }
+    static Condition adapt_post_condition(const Match<Sorting> &M, const Condition &post_cond_child);
 };
 
-struct WasmNestedLoopsJoin : PhysicalOperator<WasmNestedLoopsJoin, JoinOperator>
+struct NestedLoopsJoin : PhysicalOperator<NestedLoopsJoin, JoinOperator>
 {
-    static void execute(const Match<WasmNestedLoopsJoin> &M, callback_t Pipeline);
-    static double cost(const Match<WasmNestedLoopsJoin>&) { return 1.0; }
-    static Condition post_condition(const Match<WasmNestedLoopsJoin> &M);
+    static void execute(const Match<NestedLoopsJoin> &M, callback_t Pipeline);
+    static double cost(const Match<NestedLoopsJoin>&) { return 1.0; }
+    static Condition post_condition(const Match<NestedLoopsJoin> &M);
 };
 
-struct WasmLimit : PhysicalOperator<WasmLimit, LimitOperator>
+struct Limit : PhysicalOperator<Limit, LimitOperator>
 {
-    static void execute(const Match<WasmLimit> &M, callback_t Pipeline);
-    static double cost(const Match<WasmLimit>&) { return 1.0; }
+    static void execute(const Match<Limit> &M, callback_t Pipeline);
+    static double cost(const Match<Limit>&) { return 1.0; }
 };
 
 }
 
 template<>
-struct Match<wasm::WasmNoOp> : MatchBase
+struct Match<wasm::NoOp> : MatchBase
 {
     const MatchBase &child;
 
@@ -110,12 +110,12 @@ struct Match<wasm::WasmNoOp> : MatchBase
         M_insist(children.size() == 1);
     }
 
-    void execute(callback_t Pipeline) const override { wasm::WasmNoOp::execute(*this, std::move(Pipeline)); }
-    const char * name() const override { return "WasmNoOp"; }
+    void execute(callback_t Pipeline) const override { wasm::NoOp::execute(*this, std::move(Pipeline)); }
+    const char * name() const override { return "wasm::NoOp"; }
 };
 
 template<>
-struct Match<wasm::WasmCallback> : MatchBase
+struct Match<wasm::Callback> : MatchBase
 {
     const CallbackOperator &callback;
     const MatchBase &child;
@@ -130,12 +130,12 @@ struct Match<wasm::WasmCallback> : MatchBase
         M_insist(children.size() == 1);
     }
 
-    void execute(callback_t Pipeline) const override { wasm::WasmCallback::execute(*this, std::move(Pipeline)); }
-    const char * name() const override { return "WasmCallback"; }
+    void execute(callback_t Pipeline) const override { wasm::Callback::execute(*this, std::move(Pipeline)); }
+    const char * name() const override { return "wasm::Callback"; }
 };
 
 template<>
-struct Match<wasm::WasmPrint> : MatchBase
+struct Match<wasm::Print> : MatchBase
 {
     const PrintOperator &print;
     const MatchBase &child;
@@ -150,12 +150,12 @@ struct Match<wasm::WasmPrint> : MatchBase
         M_insist(children.size() == 1);
     }
 
-    void execute(callback_t Pipeline) const override { wasm::WasmPrint::execute(*this, std::move(Pipeline)); }
-    const char * name() const override { return "WasmPrint"; }
+    void execute(callback_t Pipeline) const override { wasm::Print::execute(*this, std::move(Pipeline)); }
+    const char * name() const override { return "wasm::Print"; }
 };
 
 template<>
-struct Match<wasm::WasmScan> : MatchBase
+struct Match<wasm::Scan> : MatchBase
 {
     private:
     std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
@@ -176,18 +176,18 @@ struct Match<wasm::WasmScan> : MatchBase
                      "schema of `ScanOperator` must not contain NULL or duplicates");
             M_insist(scan.schema().num_entries(), "schema of `ScanOperator` must not be empty");
             wasm::LocalBuffer buffer(scan.schema(), *buffer_factory_, *buffer_num_tuples_, std::move(Pipeline));
-            wasm::WasmScan::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
+            wasm::Scan::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
             buffer.resume_pipeline();
         } else {
-            wasm::WasmScan::execute(*this, std::move(Pipeline));
+            wasm::Scan::execute(*this, std::move(Pipeline));
         }
     }
 
-    const char * name() const override { return "WasmScan"; }
+    const char * name() const override { return "wasm::Scan"; }
 };
 
 template<>
-struct Match<wasm::WasmFilter> : MatchBase
+struct Match<wasm::Filter> : MatchBase
 {
     private:
     std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
@@ -209,21 +209,21 @@ struct Match<wasm::WasmFilter> : MatchBase
             auto buffer_schema = filter.schema().drop_none().deduplicate();
             if (buffer_schema.num_entries()) {
                 wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, *buffer_num_tuples_, std::move(Pipeline));
-                wasm::WasmFilter::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
+                wasm::Filter::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
                 buffer.resume_pipeline();
             } else {
-                wasm::WasmFilter::execute(*this, std::move(Pipeline));
+                wasm::Filter::execute(*this, std::move(Pipeline));
             }
         } else {
-            wasm::WasmFilter::execute(*this, std::move(Pipeline));
+            wasm::Filter::execute(*this, std::move(Pipeline));
         }
     }
 
-    const char * name() const override { return "WasmFilter"; }
+    const char * name() const override { return "wasm::Filter"; }
 };
 
 template<>
-struct Match<wasm::WasmProjection> : MatchBase
+struct Match<wasm::Projection> : MatchBase
 {
     const ProjectionOperator &projection;
     std::optional<std::reference_wrapper<const MatchBase>> child;
@@ -237,12 +237,12 @@ struct Match<wasm::WasmProjection> : MatchBase
         }
     }
 
-    void execute(callback_t Pipeline) const override { wasm::WasmProjection::execute(*this, std::move(Pipeline)); }
-    const char * name() const override { return "WasmProjection"; }
+    void execute(callback_t Pipeline) const override { wasm::Projection::execute(*this, std::move(Pipeline)); }
+    const char * name() const override { return "wasm::Projection"; }
 };
 
 template<>
-struct Match<wasm::WasmGrouping> : MatchBase
+struct Match<wasm::Grouping> : MatchBase
 {
     const GroupingOperator &grouping;
     const MatchBase &child;
@@ -254,12 +254,12 @@ struct Match<wasm::WasmGrouping> : MatchBase
         M_insist(children.size() == 1);
     }
 
-    void execute(callback_t Pipeline) const override { wasm::WasmGrouping::execute(*this, std::move(Pipeline)); }
-    const char * name() const override { return "WasmGrouping"; }
+    void execute(callback_t Pipeline) const override { wasm::Grouping::execute(*this, std::move(Pipeline)); }
+    const char * name() const override { return "wasm::Grouping"; }
 };
 
 template<>
-struct Match<wasm::WasmAggregation> : MatchBase
+struct Match<wasm::Aggregation> : MatchBase
 {
     const AggregationOperator &aggregation;
     const MatchBase &child;
@@ -271,12 +271,12 @@ struct Match<wasm::WasmAggregation> : MatchBase
         M_insist(children.size() == 1);
     }
 
-    void execute(callback_t Pipeline) const override { wasm::WasmAggregation::execute(*this, std::move(Pipeline)); }
-    const char * name() const override { return "WasmAggregation"; }
+    void execute(callback_t Pipeline) const override { wasm::Aggregation::execute(*this, std::move(Pipeline)); }
+    const char * name() const override { return "wasm::Aggregation"; }
 };
 
 template<>
-struct Match<wasm::WasmSorting> : MatchBase
+struct Match<wasm::Sorting> : MatchBase
 {
     const SortingOperator &sorting;
     const MatchBase &child;
@@ -290,12 +290,12 @@ struct Match<wasm::WasmSorting> : MatchBase
         M_insist(children.size() == 1);
     }
 
-    void execute(callback_t Pipeline) const override { wasm::WasmSorting::execute(*this, std::move(Pipeline)); }
-    const char * name() const override { return "WasmSorting"; }
+    void execute(callback_t Pipeline) const override { wasm::Sorting::execute(*this, std::move(Pipeline)); }
+    const char * name() const override { return "wasm::Sorting"; }
 };
 
 template<>
-struct Match<wasm::WasmNestedLoopsJoin> : MatchBase
+struct Match<wasm::NestedLoopsJoin> : MatchBase
 {
     private:
     std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
@@ -321,21 +321,21 @@ struct Match<wasm::WasmNestedLoopsJoin> : MatchBase
             auto buffer_schema = join.schema().drop_none().deduplicate();
             if (buffer_schema.num_entries()) {
                 wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, *buffer_num_tuples_, std::move(Pipeline));
-                wasm::WasmNestedLoopsJoin::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
+                wasm::NestedLoopsJoin::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
                 buffer.resume_pipeline();
             } else {
-                wasm::WasmNestedLoopsJoin::execute(*this, std::move(Pipeline));
+                wasm::NestedLoopsJoin::execute(*this, std::move(Pipeline));
             }
         } else {
-            wasm::WasmNestedLoopsJoin::execute(*this, std::move(Pipeline));
+            wasm::NestedLoopsJoin::execute(*this, std::move(Pipeline));
         }
     }
 
-    const char * name() const override { return "WasmNestedLoopsJoin"; }
+    const char * name() const override { return "wasm::NestedLoopsJoin"; }
 };
 
 template<>
-struct Match<wasm::WasmLimit> : MatchBase
+struct Match<wasm::Limit> : MatchBase
 {
     const LimitOperator &limit;
     const MatchBase &child;
@@ -347,8 +347,8 @@ struct Match<wasm::WasmLimit> : MatchBase
         M_insist(children.size() == 1);
     }
 
-    void execute(callback_t Pipeline) const override { wasm::WasmLimit::execute(*this, std::move(Pipeline)); }
-    const char * name() const override { return "WasmLimit"; }
+    void execute(callback_t Pipeline) const override { wasm::Limit::execute(*this, std::move(Pipeline)); }
+    const char * name() const override { return "wasm::Limit"; }
 };
 
 }

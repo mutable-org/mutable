@@ -21,7 +21,7 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
 
     if (schema.num_entries() == 0) { // result set contains only NULL constants
         if (window_size) {
-            /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `WasmLimit`). -*/
+            /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `Limit`). -----*/
             FUNCTION(child_pipeline, uint32_t(void))
             {
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
@@ -46,7 +46,7 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
             /*----- Extract all remaining results. -----*/
             Module::Get().emit_call<void>("read_result_set", Ptr<void>::Nullptr(), remaining_results);
         } else {
-            /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `WasmLimit`). -*/
+            /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `Limit`). -----*/
             FUNCTION(child_pipeline, void(void))
             {
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
@@ -62,7 +62,7 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
             /*----- Create finite global buffer (without `Pipeline`-callback) used as reusable result set. -----*/
             GlobalBuffer result_set(schema, factory, *window_size);
 
-            /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `WasmLimit`). -*/
+            /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `Limit`). -----*/
             FUNCTION(child_pipeline, uint32_t(void))
             {
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
@@ -93,7 +93,7 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
             /*----- Create infinite global buffer used as single result set. -----*/
             GlobalBuffer result_set(schema, factory);
 
-            /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `WasmLimit`). -*/
+            /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `Limit`). -----*/
             FUNCTION(child_pipeline, void(void))
             {
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
@@ -115,22 +115,22 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
 
 
 /*======================================================================================================================
- * WasmNoOp
+ * NoOp
  *====================================================================================================================*/
 
-void WasmNoOp::execute(const Match<WasmNoOp> &M, callback_t)
+void NoOp::execute(const Match<NoOp> &M, callback_t)
 {
     M.child.execute([&](){ CodeGenContext::Get().inc_num_tuples(); });
 }
 
 
 /*======================================================================================================================
- * WasmCallback
+ * Callback
  *====================================================================================================================*/
 
-void WasmCallback::execute(const Match<WasmCallback> &M, callback_t)
+void Callback::execute(const Match<Callback> &M, callback_t)
 {
-    M_insist(bool(M.result_set_factory), "`WasmCallback` must have a factory for the result set");
+    M_insist(bool(M.result_set_factory), "`wasm::Callback` must have a factory for the result set");
 
     auto result_set_schema = M.callback.schema().drop_none().deduplicate();
     write_result_set(result_set_schema, *M.result_set_factory, M.buffer_num_tuples_, M.child);
@@ -138,12 +138,12 @@ void WasmCallback::execute(const Match<WasmCallback> &M, callback_t)
 
 
 /*======================================================================================================================
- * WasmPrint
+ * Print
  *====================================================================================================================*/
 
-void WasmPrint::execute(const Match<WasmPrint> &M, callback_t)
+void Print::execute(const Match<Print> &M, callback_t)
 {
-    M_insist(bool(M.result_set_factory), "`WasmPrint` must have a factory for the result set");
+    M_insist(bool(M.result_set_factory), "`wasm::Print` must have a factory for the result set");
 
     auto result_set_schema = M.print.schema().drop_none().deduplicate();
     write_result_set(result_set_schema, *M.result_set_factory, M.buffer_num_tuples_, M.child);
@@ -151,16 +151,16 @@ void WasmPrint::execute(const Match<WasmPrint> &M, callback_t)
 
 
 /*======================================================================================================================
- * WasmScan
+ * Scan
  *====================================================================================================================*/
 
-void WasmScan::execute(const Match<WasmScan> &M, callback_t Pipeline)
+void Scan::execute(const Match<Scan> &M, callback_t Pipeline)
 {
     auto &schema = M.scan.schema();
     auto &table = M.scan.store().table();
 
     M_insist(schema == schema.drop_none().deduplicate(), "schema of `ScanOperator` must not contain NULL or duplicates");
-    M_insist(not table.layout().is_finite(), "layout for `WasmScan` must be infinite");
+    M_insist(not table.layout().is_finite(), "layout for `wasm::Scan` must be infinite");
 
     /*----- Import the number of rows of `table`. -----*/
     std::ostringstream oss;
@@ -187,10 +187,10 @@ void WasmScan::execute(const Match<WasmScan> &M, callback_t Pipeline)
 
 
 /*======================================================================================================================
- * WasmFilter
+ * Filter
  *====================================================================================================================*/
 
-void WasmFilter::execute(const Match<WasmFilter> &M, callback_t Pipeline)
+void Filter::execute(const Match<Filter> &M, callback_t Pipeline)
 {
     M.child.execute([Pipeline=std::move(Pipeline), &M](){
         IF (CodeGenContext::Get().env().compile(M.filter.filter())) {
@@ -201,10 +201,10 @@ void WasmFilter::execute(const Match<WasmFilter> &M, callback_t Pipeline)
 
 
 /*======================================================================================================================
- * WasmProjection
+ * Projection
  *====================================================================================================================*/
 
-Condition WasmProjection::adapt_post_condition(const Match<WasmProjection> &M, const Condition &post_cond_child)
+Condition Projection::adapt_post_condition(const Match<Projection> &M, const Condition &post_cond_child)
 {
     M_insist(M.projection.projections().size() == M.projection.schema().num_entries(),
              "projections must match the operator's schema");
@@ -245,7 +245,7 @@ Condition WasmProjection::adapt_post_condition(const Match<WasmProjection> &M, c
     return Condition(std::move(sorted_on), post_cond_child.simd_vec_size, Schema());
 }
 
-void WasmProjection::execute(const Match<WasmProjection> &M, callback_t Pipeline)
+void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
 {
     auto execute_projection = [Pipeline=std::move(Pipeline), &M](){
         auto &old_env = CodeGenContext::Get().env();
@@ -296,10 +296,10 @@ void WasmProjection::execute(const Match<WasmProjection> &M, callback_t Pipeline
 
 
 /*======================================================================================================================
- * WasmSorting
+ * Sorting
  *====================================================================================================================*/
 
-Condition WasmSorting::adapt_post_condition(const Match<WasmSorting> &M, const Condition &post_cond_child)
+Condition Sorting::adapt_post_condition(const Match<Sorting> &M, const Condition &post_cond_child)
 {
     Schema attrs;
     for (auto &o : M.sorting.order_by()) {
@@ -309,11 +309,11 @@ Condition WasmSorting::adapt_post_condition(const Match<WasmSorting> &M, const C
     return Condition(std::move(attrs), post_cond_child.simd_vec_size, post_cond_child.existing_hash_table);
 }
 
-void WasmSorting::execute(const Match<WasmSorting> &M, callback_t Pipeline)
+void Sorting::execute(const Match<Sorting> &M, callback_t Pipeline)
 {
     /*----- Create infinite buffer to materialize the current results but resume the pipeline later. -----*/
     M_insist(M.sorting.child(0)->schema() == M.sorting.schema());
-    M_insist(bool(M.materializing_factory), "`WasmSorting` must have a factory for the materialized child");
+    M_insist(bool(M.materializing_factory), "`wasm::Sorting` must have a factory for the materialized child");
     const auto schema = M.sorting.child(0)->schema().drop_none().deduplicate();
     GlobalBuffer buffer(schema, *M.materializing_factory, 0, std::move(Pipeline));
 
@@ -334,15 +334,15 @@ void WasmSorting::execute(const Match<WasmSorting> &M, callback_t Pipeline)
 
 
 /*======================================================================================================================
- * WasmNestedLoopsJoin
+ * NestedLoopsJoin
  *====================================================================================================================*/
 
-Condition WasmNestedLoopsJoin::post_condition(const Match<WasmNestedLoopsJoin> &M)
+Condition NestedLoopsJoin::post_condition(const Match<NestedLoopsJoin> &M)
 {
     return Condition(Schema(), 0, Schema());
 }
 
-void WasmNestedLoopsJoin::execute(const Match<WasmNestedLoopsJoin> &M, callback_t Pipeline)
+void NestedLoopsJoin::execute(const Match<NestedLoopsJoin> &M, callback_t Pipeline)
 {
     const auto num_left_children = M.children.size() - 1; // all children but right-most one
 
@@ -361,7 +361,7 @@ void WasmNestedLoopsJoin::execute(const Match<WasmNestedLoopsJoin> &M, callback_
             auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
             /*----- Create infinite buffer to materialize the current results. -----*/
             M_insist(bool(M.materializing_factories_[i]),
-                     "`WasmNestedLoopsJoin` must have a factory for each materialized child");
+                     "`wasm::NestedLoopsJoin` must have a factory for each materialized child");
             const auto &schema = schemas.emplace_back(M.join.child(i)->schema().drop_none().deduplicate());
             if (i == 0) {
                 /*----- Exactly one child (here left-most one) checks join predicate and resumes pipeline. -----*/
@@ -403,10 +403,10 @@ void WasmNestedLoopsJoin::execute(const Match<WasmNestedLoopsJoin> &M, callback_
 
 
 /*======================================================================================================================
- * WasmLimit
+ * Limit
  *====================================================================================================================*/
 
-void WasmLimit::execute(const Match<WasmLimit> &M, callback_t Pipeline)
+void Limit::execute(const Match<Limit> &M, callback_t Pipeline)
 {
     /* Create *global* counter since e.g. `Buffer::resume_pipeline()` may create new function in which the following
      * code is emitted. */

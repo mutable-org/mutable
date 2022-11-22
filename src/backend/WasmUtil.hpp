@@ -228,14 +228,14 @@ struct Environment
     ///> Compile \p t by delegating compilation to an `ExprCompiler` for `this` `Environment`.
     template<typename T>
     requires requires (ExprCompiler C, T &&t) { C.compile(std::forward<T>(t)); }
-    auto compile(T &&t) {
+    auto compile(T &&t) const {
         ExprCompiler C(*this);
         return C.compile(std::forward<T>(t));
     }
      ///> Compile \p t by delegating compilation to an `ExprCompiler` for `this` `Environment`.
     template<typename T, typename U>
     requires requires (ExprCompiler C, U &&u) { C.compile(std::forward<U>(u)); }
-    auto compile(U &&u) {
+    auto compile(U &&u) const {
         ExprCompiler C(*this);
         return C.compile<T>(std::forward<U>(u));
     }

@@ -12,7 +12,7 @@ namespace m {
     X(Callback) \
     X(Print) \
     X(Scan) \
-    X(Filter) \
+    X(BranchingFilter) \
     X(Projection) \
     X(Grouping) \
     X(Aggregation) \
@@ -52,10 +52,10 @@ struct Scan : PhysicalOperator<Scan, ScanOperator>
     static double cost(const Match<Scan>&) { return 1.0; }
 };
 
-struct Filter : PhysicalOperator<Filter, FilterOperator>
+struct BranchingFilter : PhysicalOperator<BranchingFilter, FilterOperator>
 {
-    static void execute(const Match<Filter> &M, callback_t Pipeline);
-    static double cost(const Match<Filter>&) { return 1.0; }
+    static void execute(const Match<BranchingFilter> &M, callback_t Pipeline);
+    static double cost(const Match<BranchingFilter>&) { return 1.0; }
 };
 
 struct Projection : PhysicalOperator<Projection, ProjectionOperator>
@@ -187,7 +187,7 @@ struct Match<wasm::Scan> : MatchBase
 };
 
 template<>
-struct Match<wasm::Filter> : MatchBase
+struct Match<wasm::BranchingFilter> : MatchBase
 {
     private:
     std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
@@ -209,17 +209,17 @@ struct Match<wasm::Filter> : MatchBase
             auto buffer_schema = filter.schema().drop_none().deduplicate();
             if (buffer_schema.num_entries()) {
                 wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, *buffer_num_tuples_, std::move(Pipeline));
-                wasm::Filter::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
+                wasm::BranchingFilter::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
                 buffer.resume_pipeline();
             } else {
-                wasm::Filter::execute(*this, std::move(Pipeline));
+                wasm::BranchingFilter::execute(*this, std::move(Pipeline));
             }
         } else {
-            wasm::Filter::execute(*this, std::move(Pipeline));
+            wasm::BranchingFilter::execute(*this, std::move(Pipeline));
         }
     }
 
-    const char * name() const override { return "wasm::Filter"; }
+    const char * name() const override { return "wasm::BranchingFilter"; }
 };
 
 template<>

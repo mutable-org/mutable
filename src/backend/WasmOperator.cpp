@@ -190,10 +190,10 @@ void Scan::execute(const Match<Scan> &M, callback_t Pipeline)
  * Filter
  *====================================================================================================================*/
 
-void Filter::execute(const Match<Filter> &M, callback_t Pipeline)
+void BranchingFilter::execute(const Match<BranchingFilter> &M, callback_t Pipeline)
 {
     M.child.execute([Pipeline=std::move(Pipeline), &M](){
-        IF (CodeGenContext::Get().env().compile(M.filter.filter())) {
+        IF (CodeGenContext::Get().env().compile(M.filter.filter()).is_true_and_not_null()) {
             Pipeline();
         };
     });

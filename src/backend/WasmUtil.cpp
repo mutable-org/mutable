@@ -680,7 +680,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                             it->second.ptr = base_address.clone() + inode_offset_in_bits / 8;
                         }
                     }
-                    auto &ptr = it->second.ptr;
+                    const auto &ptr = it->second.ptr;
 
                     /*----- For each tuple entry that can be NULL, create a store/load with static offset and mask. --*/
                     for (std::size_t tuple_idx = 0; tuple_idx != tuple_schema.num_entries(); ++tuple_idx) {
@@ -807,19 +807,19 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                         it->second.ptr = base_address.clone() + inode_offset_in_bits / 8;
                     }
                 }
-                auto &ptr = it->second.ptr;
+                const auto &ptr = it->second.ptr;
 
                 if (bit_stride) { // entry with bit stride requires dynamic masking
                     M_insist(tuple_it->type->is_boolean(),
                              "leaf bit stride currently only for `Boolean` supported");
 
-                    M_insist(inserted == not it->second.mask.has_value());
+                    M_insist(inserted == not it->second.mask);
                     if (inserted) {
                         BLOCK_OPEN(inits) {
                             it->second.mask = 1U << bit_offset; // init mask
                         }
                     }
-                    Var<U32> &mask = *it->second.mask;
+                    const Var<U32> &mask = *it->second.mask;
 
                     if constexpr (IsStore) {
                         /*----- Store value. -----*/
@@ -978,8 +978,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                 const uint8_t bit_stride  = key.second % 8;
                 const int32_t byte_stride = key.second / 8;
                 if (bit_stride) {
-                    M_insist(value.mask.has_value());
                     *value.mask <<= bit_stride; // advance mask by `bit_stride`
+                    M_insist(bool(value.mask));
                     /* If the mask surpasses the first byte, advance pointer to the next byte... */
                     value.ptr += (*value.mask bitand 0xffU).eqz().template to<int32_t>();
                     /* ... and remove the lowest byte from the mask. */
@@ -1001,7 +1001,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                     const uint8_t remaining_bit_stride  = stride_remaining_in_bits % 8;
                     const int32_t remaining_byte_stride = stride_remaining_in_bits / 8;
                     if (remaining_bit_stride) [[likely]] {
-                        M_insist(value.mask.has_value());
+                        M_insist(bool(value.mask));
                         BLOCK_OPEN(lowest_inode_jumps) {
                             const uint8_t end_bit_offset = (key.first + levels.back().num_tuples * key.second) % 8;
                             M_insist(end_bit_offset != key.first);
@@ -1536,7 +1536,7 @@ void Buffer<IsGlobal>::resume_pipeline()
     }
 
     /*----- Call created function. -----*/
-    M_insist(resume_pipeline_.has_value());
+    M_insist(bool(resume_pipeline_));
     if constexpr (IsGlobal)
         (*resume_pipeline_)(); // no argument since base address and size are globals
     else
@@ -1546,7 +1546,6 @@ void Buffer<IsGlobal>::resume_pipeline()
 template<bool IsGlobal>
 void Buffer<IsGlobal>::resume_pipeline_inline()
 {
-    M_insist(not resume_pipeline_);
     if (Pipeline_) { // Pipeline callback not empty, i.e. performs some work
         /*----- Compile data layout to generate sequential load from buffer. -----*/
         Var<U32> load_tuple_id(0); // explicitly (re-)set tuple ID to 0

@@ -1536,6 +1536,7 @@ void Buffer<IsGlobal>::resume_pipeline()
     }
 
     /*----- Call created function. -----*/
+    M_insist(resume_pipeline_.has_value());
     if constexpr (IsGlobal)
         (*resume_pipeline_)(); // no argument since base address and size are globals
     else

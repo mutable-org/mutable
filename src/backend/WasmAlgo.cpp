@@ -30,7 +30,7 @@ void m::wasm::quicksort(const Buffer<IsGlobal> &buffer, const std::vector<Sortin
 
         auto begin = PARAMETER(0); // first ID to partition
         auto end = PARAMETER(1); // past-the-end ID to partition
-        const auto &pivot = PARAMETER(2); // pivot element
+        const auto pivot = PARAMETER(2); // pivot element
         Wasm_insist(begin == pivot + 1U);
         Wasm_insist(begin < end);
 
@@ -58,7 +58,7 @@ void m::wasm::quicksort(const Buffer<IsGlobal> &buffer, const std::vector<Sortin
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment
 
-        const auto &begin = PARAMETER(0); // first ID to sort
+        const auto begin = PARAMETER(0); // first ID to sort
         auto end = PARAMETER(1); // past-the-end ID to sort
         Wasm_insist(begin <= end);
 

@@ -1689,6 +1689,18 @@ template struct m::wasm::buffer_swap_proxy_t<true>;
 _I32 m::wasm::strncmp(const CharacterSequence &ty_left, const CharacterSequence &ty_right,
                       Ptr<Char> _left, Ptr<Char> _right, U32 len)
 {
+    static thread_local struct {} _; // unique caller handle
+    struct data_t : GarbageCollectedData
+    {
+        public:
+        using fn_t = int32_t(uint32_t, uint32_t, char*, char*, uint32_t);
+        std::optional<FunctionProxy<fn_t>> strncmp_varying;
+        std::optional<FunctionProxy<fn_t>> strncmp_non_varying;
+
+        data_t(GarbageCollectedData &&d) : GarbageCollectedData(std::move(d)) { }
+    };
+    auto &d = Module::Get().add_garbage_collected_data<data_t>(&_); // garbage collect the `data_t` instance
+
     Wasm_insist(len.clone() != 0U, "length to compare must not be 0");
 
     Var<Ptr<Char>> left (_left);
@@ -1703,49 +1715,101 @@ _I32 m::wasm::strncmp(const CharacterSequence &ty_left, const CharacterSequence 
             /*----- Special handling of single char strings. -----*/
             result = (*left > *right).to<int32_t>() - (*left < *right).to<int32_t>();
         } else {
-            /*----- Compare character-wise. -----*/
-            auto _len = len.clone();
-            I32 len_left  = Select(len.clone() < ty_left.length,  len.clone().make_signed(), int32_t(ty_left.length));
-            I32 len_right = Select(_len        < ty_right.length, len.make_signed(),         int32_t(ty_right.length));
-            Var<Ptr<Char>> end_left (left  + len_left);
-            Var<Ptr<Char>> end_right(right + len_right);
+            if (ty_left.is_varying and ty_right.is_varying) { // both strings end with NUL byte
+                if (not d.strncmp_varying) {
+                    /*----- Create function to compute the result for non-nullptr arguments character-wise. -----*/
+                    FUNCTION(strncmp_varying, data_t::fn_t)
+                    {
+                        const auto len_ty_left  = PARAMETER(0);
+                        const auto len_ty_right = PARAMETER(1);
+                        auto left  = PARAMETER(2);
+                        auto right = PARAMETER(3);
+                        const auto len = PARAMETER(4);
 
-            LOOP() {
-                if (ty_left.is_varying and ty_right.is_varying) { // both strings end with NUL byte
-                    /* Check whether one side is shorter than the other. */
-                    result = (left != end_left).to<int32_t>() - (right != end_right).to<int32_t>();
-                    BREAK(result != 0 or left == end_left); // at the end of either or both strings
+                        Var<I32> result; // always set here
 
-                    /* Compare by current character. Loading is valid since we have not seen the terminating NUL byte
-                     * yet. */
-                    result = (*left > *right).to<int32_t>() - (*left < *right).to<int32_t>();
-                    BREAK(result != 0); // found first position where strings differ
-                    BREAK(*left == 0); // reached end of identical strings
-                } else { // at least one string may not end with NUL byte
-                    /* Check whether one side is shorter than the other. Load next character with in-bounds checks
-                     * since the strings may not be NUL byte terminated. */
-                    Var<Char> val_left, val_right;
-                    IF (left != end_left) {
-                        val_left = *left;
-                    } ELSE {
-                        val_left = '\0';
-                    };
-                    IF (right != end_right) {
-                        val_right = *right;
-                    } ELSE {
-                        val_right = '\0';
-                    };
+                        I32 len_left  = Select(len < len_ty_left,  len, len_ty_left) .make_signed();
+                        I32 len_right = Select(len < len_ty_right, len, len_ty_right).make_signed();
+                        Var<Ptr<Char>> end_left (left  + len_left);
+                        Var<Ptr<Char>> end_right(right + len_right);
 
-                    /* Compare by current character. */
-                    result = (val_left > val_right).to<int32_t>() - (val_left < val_right).to<int32_t>();
-                    BREAK(result != 0); // found first position where strings differ
-                    BREAK(val_left == 0); // reached end of identical strings
+                        LOOP() {
+                            /* Check whether one side is shorter than the other. */
+                            result = (left != end_left).to<int32_t>() - (right != end_right).to<int32_t>();
+                            BREAK(result != 0 or left == end_left); // at the end of either or both strings
+
+                            /* Compare by current character. Loading is valid since we have not seen the terminating
+                             * NUL byte yet. */
+                            result = (*left > *right).to<int32_t>() - (*left < *right).to<int32_t>();
+                            BREAK(result != 0); // found first position where strings differ
+                            BREAK(*left == 0); // reached end of identical strings
+
+                            /* Advance to next character. */
+                            left += 1;
+                            right += 1;
+                            CONTINUE();
+                        }
+
+                        RETURN(result);
+                    }
+                    d.strncmp_varying = std::move(strncmp_varying);
                 }
 
-                /* Advance to next character. */
-                left += 1;
-                right += 1;
-                CONTINUE();
+                /*----- Call strncmp_varying function. ------*/
+                M_insist(bool(d.strncmp_varying));
+                result = (*d.strncmp_varying)(ty_left.length, ty_right.length, left, right, len);
+            } else {
+                if (not d.strncmp_non_varying) {
+                    /*----- Create function to compute the result for non-nullptr arguments character-wise. -----*/
+                    FUNCTION(strncmp_non_varying, data_t::fn_t)
+                    {
+                        const auto len_ty_left  = PARAMETER(0);
+                        const auto len_ty_right = PARAMETER(1);
+                        auto left  = PARAMETER(2);
+                        auto right = PARAMETER(3);
+                        const auto len = PARAMETER(4);
+
+                        Var<I32> result; // always set here
+
+                        I32 len_left  = Select(len < len_ty_left,  len, len_ty_left) .make_signed();
+                        I32 len_right = Select(len < len_ty_right, len, len_ty_right).make_signed();
+                        Var<Ptr<Char>> end_left (left  + len_left);
+                        Var<Ptr<Char>> end_right(right + len_right);
+
+                        LOOP() {
+                            /* Check whether one side is shorter than the other. Load next character with in-bounds
+                             * checks since the strings may not be NUL byte terminated. */
+                            Var<Char> val_left, val_right;
+                            IF (left != end_left) {
+                                val_left = *left;
+                            } ELSE {
+                                val_left = '\0';
+                            };
+                            IF (right != end_right) {
+                                val_right = *right;
+                            } ELSE {
+                                val_right = '\0';
+                            };
+
+                            /* Compare by current character. */
+                            result = (val_left > val_right).to<int32_t>() - (val_left < val_right).to<int32_t>();
+                            BREAK(result != 0); // found first position where strings differ
+                            BREAK(val_left == 0); // reached end of identical strings
+
+                            /* Advance to next character. */
+                            left += 1;
+                            right += 1;
+                            CONTINUE();
+                        }
+
+                        RETURN(result);
+                    }
+                    d.strncmp_non_varying = std::move(strncmp_non_varying);
+                }
+
+                /*----- Call strncmp_non_varying function. ------*/
+                M_insist(bool(d.strncmp_non_varying));
+                result = (*d.strncmp_non_varying)(ty_left.length, ty_right.length, left, right, len);
             }
         }
     };
@@ -1797,23 +1861,45 @@ _Bool m::wasm::strcmp(const CharacterSequence &ty_left, const CharacterSequence 
  * string copy
  *====================================================================================================================*/
 
-Ptr<Char> m::wasm::strncpy(Ptr<Char> _dst, Ptr<Char> _src, U32 count)
+Ptr<Char> m::wasm::strncpy(Ptr<Char> dst, Ptr<Char> src, U32 count)
 {
-    Var<Ptr<Char>> src(_src);
-    Var<Ptr<Char>> dst(_dst);
+    static thread_local struct {} _; // unique caller handle
+    struct data_t : GarbageCollectedData
+    {
+        public:
+        std::optional<FunctionProxy<char*(char*, char*, uint32_t)>> strncpy;
 
-    Wasm_insist(not src.is_nullptr(), "source must not be nullptr");
-    Wasm_insist(not dst.is_nullptr(), "destination must not be nullptr");
+        data_t(GarbageCollectedData &&d) : GarbageCollectedData(std::move(d)) { }
+    };
+    auto &d = Module::Get().add_garbage_collected_data<data_t>(&_); // garbage collect the `data_t` instance
 
-    Var<Ptr<Char>> src_end(src + count.make_signed());
-    WHILE (src != src_end) {
-        *dst = *src;
-        BREAK(*src == '\0'); // break on terminating NUL byte
-        src += 1;
-        dst += 1;
+    if (not d.strncpy) {
+        /*----- Create function to compute the result. -----*/
+        FUNCTION(strncpy, char*(char*, char*, uint32_t))
+        {
+            auto dst = PARAMETER(0);
+            auto src = PARAMETER(1);
+            const auto count = PARAMETER(2);
+
+            Wasm_insist(not src.is_nullptr(), "source must not be nullptr");
+            Wasm_insist(not dst.is_nullptr(), "destination must not be nullptr");
+
+            Var<Ptr<Char>> src_end(src + count.make_signed());
+            WHILE (src != src_end) {
+                *dst = *src;
+                BREAK(*src == '\0'); // break on terminating NUL byte
+                src += 1;
+                dst += 1;
+            }
+
+            RETURN(dst);
+        }
+        d.strncpy = std::move(strncpy);
     }
 
-    return dst;
+    /*----- Call strncpy function. ------*/
+    M_insist(bool(d.strncpy));
+    return (*d.strncpy)(dst, src, count);
 }
 
 
@@ -1824,11 +1910,19 @@ Ptr<Char> m::wasm::strncpy(Ptr<Char> _dst, Ptr<Char> _src, U32 count)
 _Bool m::wasm::like(const CharacterSequence &ty_str, const CharacterSequence &ty_pattern,
                     Ptr<Char> _str, Ptr<Char> _pattern, const char escape_char)
 {
+    static thread_local struct {} _; // unique caller handle
+    struct data_t : GarbageCollectedData
+    {
+        public:
+        std::optional<FunctionProxy<bool(int32_t, int32_t, char*, char*, char)>> like;
+
+        data_t(GarbageCollectedData &&d) : GarbageCollectedData(std::move(d)) { }
+    };
+    auto &d = Module::Get().add_garbage_collected_data<data_t>(&_); // garbage collect the `data_t` instance
+
     M_insist('_' != escape_char and '%' != escape_char, "illegal escape character");
 
-    int32_t str_length = ty_str.length, pattern_length = ty_pattern.length;
-
-    if (str_length == 0 and pattern_length == 0) {
+    if (ty_str.length == 0 and ty_pattern.length == 0) {
         _str.discard();
         _pattern.discard();
         return _Bool(true);
@@ -1844,121 +1938,143 @@ _Bool m::wasm::like(const CharacterSequence &ty_str, const CharacterSequence &ty
         /*----- If either side is `NULL`, then the result is `NULL`. -----*/
         result = _Bool::Null();
     } ELSE {
-        /*----- Allocate memory for the dynamic programming table. -----*/
-        /* Invariant: dp[i][j] == true iff val_pattern[:i] contains val_str[:j]. Row i and column j is located at
-         * dp + (i - 1) * (`length_str` + 1) + (j - 1). */
-        auto num_entries = (str_length + 1) * (pattern_length + 1);
-        const Var<Ptr<Bool>> dp = Module::Allocator().malloc<bool>(num_entries);
+        if (not d.like) {
+            /*----- Create function to compute the result. -----*/
+            FUNCTION(like, bool(int32_t, int32_t, char*, char*, char))
+            {
+                const auto len_ty_str = PARAMETER(0);
+                const auto len_ty_pattern = PARAMETER(1);
+                const auto val_str = PARAMETER(2);
+                const auto val_pattern = PARAMETER(3);
+                const auto escape_char = PARAMETER(4);
 
-        /*----- Initialize table with all entries set to false. -----*/
-        Var<Ptr<Bool>> entry(dp.val());
-        WHILE (entry < dp + num_entries) {
-            *entry = false;
-            entry += 1;
-        }
+                /*----- Allocate memory for the dynamic programming table. -----*/
+                /* Invariant: dp[i][j] == true iff val_pattern[:i] contains val_str[:j]. Row i and column j is located
+                 * at dp + (i - 1) * (`length_str` + 1) + (j - 1). */
+                I32 num_entries = (len_ty_str + 1) * (len_ty_pattern + 1);
+                const Var<Ptr<Bool>> dp = Module::Allocator().malloc<bool>(num_entries.clone().make_unsigned());
 
-        /*----- Reset entry pointer to first entry. -----*/
-        entry = dp.val();
+                /*----- Initialize table with all entries set to false. -----*/
+                Var<Ptr<Bool>> entry(dp.val());
+                WHILE (entry < dp + num_entries.clone()) {
+                    *entry = false;
+                    entry += 1;
+                }
 
-        /*----- Create pointers to track locations of current characters of `_str` and `_pattern`. -----*/
-        Var<Ptr<Char>> str(val_str.clone());
-        Var<Ptr<Char>> pattern(val_pattern.clone());
+                /*----- Reset entry pointer to first entry. -----*/
+                entry = dp.val();
 
-        /*----- Compute ends of str and pattern. -----*/
-        /* Create constant local variables to ensure correct pointers since `src` and `pattern` will change. */
-        const Var<Ptr<Char>> end_str(str + str_length);
-        const Var<Ptr<Char>> end_pattern(pattern + pattern_length);
+                /*----- Create pointers to track locations of current characters of `val_str` and `val_pattern`. -----*/
+                Var<Ptr<Char>> str(val_str);
+                Var<Ptr<Char>> pattern(val_pattern);
 
-        /*----- Create variables for the current byte of str and pattern. -----*/
-        Var<Char> byte_str, byte_pattern; // always loaded before first access
+                /*----- Compute ends of str and pattern. -----*/
+                /* Create constant local variables to ensure correct pointers since `src` and `pattern` will change. */
+                const Var<Ptr<Char>> end_str(str + len_ty_str);
+                const Var<Ptr<Char>> end_pattern(pattern + len_ty_pattern);
 
-        /*----- Initialize first column. -----*/
-        /* Iterate until current byte of pattern is not a `%`-wildcard and set the respective entries to true. */
-        DO_WHILE (byte_pattern == '%') {
-            byte_pattern = Select(pattern < end_pattern, *pattern, '\0');
-            *entry = true;
-            entry += str_length + 1;
-            pattern += 1;
-        }
+                /*----- Create variables for the current byte of str and pattern. -----*/
+                Var<Char> byte_str, byte_pattern; // always loaded before first access
 
-        /*----- Compute entire table. -----*/
-        /* Create variable for the actual length of str. */
-        Var<I32> len_str(0);
+                /*----- Initialize first column. -----*/
+                /* Iterate until current byte of pattern is not a `%`-wildcard and set the respective entries to true. */
+                DO_WHILE (byte_pattern == '%') {
+                    byte_pattern = Select(pattern < end_pattern, *pattern, '\0');
+                    *entry = true;
+                    entry += len_ty_str + 1;
+                    pattern += 1;
+                }
 
-        /* Create flag whether the current byte of pattern is not escaped. */
-        Var<Bool> is_not_escaped(true);
+                /*----- Compute entire table. -----*/
+                /* Create variable for the actual length of str. */
+                Var<I32> len_str(0);
 
-        /* Reset entry pointer to second row and second column. */
-        entry = dp + (str_length + 2);
+                /* Create flag whether the current byte of pattern is not escaped. */
+                Var<Bool> is_not_escaped(true);
 
-        /* Reset pattern to first character. */
-        pattern = val_pattern;
+                /* Reset entry pointer to second row and second column. */
+                entry = dp + len_ty_str + 2;
 
-        /* Load first byte from pattern if in bounds. */
-        byte_pattern = Select(pattern < end_pattern, *pattern, '\0');
+                /* Reset pattern to first character. */
+                pattern = val_pattern;
 
-        /* Create loop iterating as long as the current byte of pattern is not NUL. */
-        WHILE (byte_pattern != '\0') {
-            /* If current byte of pattern is not escaped and equals `escape_char`, advance pattern to next byte and load
-             * it. Additionally, mark this byte as escaped and check for invalid escape sequences. */
-            IF (is_not_escaped and byte_pattern == escape_char) {
-                pattern += 1;
+                /* Load first byte from pattern if in bounds. */
                 byte_pattern = Select(pattern < end_pattern, *pattern, '\0');
 
-                /* Check whether current byte of pattern is a validly escaped character, i.e. `_`, `%` or `escape_char`.
-                 * If not, throw an exception. */
-                IF (byte_pattern != '_' and byte_pattern != '%' and byte_pattern != escape_char) {
-                    Throw(exception::invalid_escape_sequence);
-                };
+                /* Create loop iterating as long as the current byte of pattern is not NUL. */
+                WHILE (byte_pattern != '\0') {
+                    /* If current byte of pattern is not escaped and equals `escape_char`, advance pattern to next
+                     * byte and load it. Additionally, mark this byte as escaped and check for invalid escape
+                     * sequences. */
+                    IF (is_not_escaped and byte_pattern == escape_char) {
+                        pattern += 1;
+                        byte_pattern = Select(pattern < end_pattern, *pattern, '\0');
 
-                is_not_escaped = false;
-            };
+                        /* Check whether current byte of pattern is a validly escaped character, i.e. `_`, `%` or
+                         * `escape_char`. If not, throw an exception. */
+                        IF (byte_pattern != '_' and byte_pattern != '%' and byte_pattern != escape_char) {
+                            Throw(exception::invalid_escape_sequence);
+                        };
 
-            /* Reset actual length of str. */
-            len_str = 0;
-
-            /* Load first byte from str if in bounds. */
-            byte_str = Select(str < end_str, *str, '\0');
-
-            /* Create loop iterating as long as the current byte of str is not NUL. */
-            WHILE (byte_str != '\0') {
-                /* Increment actual length of str. */
-                len_str += 1;
-
-                IF (is_not_escaped and byte_pattern == '%') {
-                    /* Store disjunction of above and left entry. */
-                    *entry = *(entry - (str_length + 1)) or *(entry - 1);
-                } ELSE {
-                    IF ((is_not_escaped and byte_pattern == '_') or byte_pattern == byte_str) {
-                        /* Store above left entry. */
-                        *entry = *(entry - (str_length + 2));
+                        is_not_escaped = false;
                     };
-                };
 
-                /* Advance entry pointer to next entry, advance str to next byte, and load next byte from str if in
-                 * bounds. */
-                entry += 1;
-                str += 1;
-                byte_str = Select(str < end_str, *str, '\0');
+                    /* Reset actual length of str. */
+                    len_str = 0;
+
+                    /* Load first byte from str if in bounds. */
+                    byte_str = Select(str < end_str, *str, '\0');
+
+                    /* Create loop iterating as long as the current byte of str is not NUL. */
+                    WHILE (byte_str != '\0') {
+                        /* Increment actual length of str. */
+                        len_str += 1;
+
+                        IF (is_not_escaped and byte_pattern == '%') {
+                            /* Store disjunction of above and left entry. */
+                            *entry = *(entry - (len_ty_str + 1)) or *(entry - 1);
+                        } ELSE {
+                            IF ((is_not_escaped and byte_pattern == '_') or byte_pattern == byte_str) {
+                                /* Store above left entry. */
+                                *entry = *(entry - (len_ty_str + 2));
+                            };
+                        };
+
+                        /* Advance entry pointer to next entry, advance str to next byte, and load next byte from str
+                         * if in bounds. */
+                        entry += 1;
+                        str += 1;
+                        byte_str = Select(str < end_str, *str, '\0');
+                    }
+
+                    /* Advance entry pointer to second column in the next row, reset str to first character, advance
+                     * pattern to next byte, load next byte from pattern if in bounds, and reset is_not_escaped to
+                     * true. */
+                    entry += len_ty_str + 1 - len_str;
+                    str = val_str;
+                    pattern += 1;
+                    byte_pattern = Select(pattern < end_pattern, *pattern, '\0');
+                    is_not_escaped = true;
+                }
+
+                /*----- Compute result. -----*/
+                /* Entry pointer points currently to the second column in the first row after the pattern has ended.
+                 * Therefore, we have to go one row up and len_str - 1 columns to the right, i.e. the result is
+                 * located at entry - (`length_str` + 1) + len_str - 1 = entry + len_str - (`length_str` + 2). */
+                const Var<Bool> result(*(entry + len_str - (len_ty_str + 2)));
+
+                /*----- Free allocated space. -----*/
+                Module::Allocator().free(dp, num_entries.make_unsigned());
+
+                RETURN(result);
             }
 
-            /* Advance entry pointer to second column in the next row, reset str to first character, advance pattern to
-             * next byte, load next byte from pattern if in bounds, and reset is_not_escaped to true. */
-            entry += (str_length + 1) - len_str;
-            str = val_str;
-            pattern += 1;
-            byte_pattern = Select(pattern < end_pattern, *pattern, '\0');
-            is_not_escaped = true;
+            d.like = std::move(like);
         }
 
-        /*----- Compute result. -----*/
-        /* Entry pointer points currently to the second column in the first row after the pattern has ended. Therefore,
-         * we have to go one row up and len_str - 1 columns to the right, i.e. the result is located at
-         * entry - (`length_str` + 1) + len_str - 1 = entry + len_str - (`length_str` + 2). */
-        result = *(entry + len_str - (str_length + 2));
-
-        /*----- Free allocated space. -----*/
-        Module::Allocator().free(dp, num_entries);
+        /*----- Call like function. ------*/
+        M_insist(bool(d.like));
+        result = (*d.like)(ty_str.length, ty_pattern.length, val_str, val_pattern, escape_char);
     };
 
     return result;

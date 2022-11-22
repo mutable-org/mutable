@@ -259,21 +259,32 @@ std::pair<uint8_t*, std::size_t> Module::binary()
 
 void Module::emit_insist(PrimitiveExpr<bool> cond, const char *filename, unsigned line, const char *msg)
 {
-    if (not delegate_insist_) {
+    static thread_local struct {} _; // unique caller handle
+    struct data_t : GarbageCollectedData
+    {
+        public:
+        std::optional<FunctionProxy<void(uint64_t)>> delegate_insist;
+
+        data_t(GarbageCollectedData &&d) : GarbageCollectedData(std::move(d)) { }
+    };
+    auto &d = add_garbage_collected_data<data_t>(&_); // garbage collect the `data_t` instance
+
+    if (not d.delegate_insist) {
         /*----- Create function to delegate to host (used for easier debugging since one can break in here). -----*/
         FUNCTION(delegate_insist, void(uint64_t))
         {
             emit_call<void>("insist", PARAMETER(0).val());
         }
-        delegate_insist_ = std::make_unique<FunctionProxy<void(uint64_t)>>(std::move(delegate_insist));
+        d.delegate_insist = std::move(delegate_insist);
     }
 
     uint64_t idx = messages_.size();
     messages_.emplace_back(filename, line, msg);
 
     /*----- Check condition and possibly delegate to host. --*/
+    M_insist(bool(d.delegate_insist));
     IF (not cond) {
-        (*delegate_insist_)(idx);
+        (*d.delegate_insist)(idx);
     };
 }
 

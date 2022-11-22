@@ -435,6 +435,27 @@ const std::map<::wasm::Name, std::function<::wasm::Literals(::wasm::Literals&)>>
 
 
 /*======================================================================================================================
+ * GarbageCollectedData
+ *====================================================================================================================*/
+
+/** Helper struct for garbage collection done by the `Module`.  Inherit from this struct, provide a c`tor expecting
+ * a `GarbageCollectedData&&` instance, and register the created struct in the module to garbage collect it
+ * automatically when the module is destroyed. */
+struct GarbageCollectedData
+{
+    friend struct Module;
+
+    private:
+    GarbageCollectedData() = default;
+
+    public:
+    GarbageCollectedData(GarbageCollectedData&&) = default;
+
+    virtual ~GarbageCollectedData() { }
+};
+
+
+/*======================================================================================================================
  * Module
  *====================================================================================================================*/
 
@@ -486,8 +507,8 @@ struct Module final
     std::unique_ptr<::wasm::ModuleRunner::ExternalInterface> interface_;
     ///> the per-function stacks of local bitmaps; used for local boolean variables and NULL bits
     std::vector<std::vector<LocalBitmap*>> local_bitmaps_stack_;
-    ///> the function to delegate insists to host
-    std::unique_ptr<FunctionProxy<void(uint64_t)>> delegate_insist_;
+    ///> mapping from handles to garbage collected data
+    std::unordered_map<void*, std::unique_ptr<GarbageCollectedData>> garbage_collected_data_;
 
     /*----- Thread-local instance ------------------------------------------------------------------------------------*/
     private:
@@ -638,6 +659,19 @@ struct Module final
 
     const std::tuple<const char*, unsigned, const char*> & get_message(std::size_t idx) const {
         return messages_.at(idx);
+    }
+
+    /*----- Garbage collected data -----------------------------------------------------------------------------------*/
+    /** Adds and returns an instance of \tparam C, which will be created by calling its c`tor with an
+     * `GarbageCollectedData&&` instance and the forwarded \p args, to `this` `Module`s garbage collection using the
+     * unique caller handle \p handle. */
+    template<class C, typename... Args>
+    C & add_garbage_collected_data(void *handle, Args... args) {
+        auto it = garbage_collected_data_.template try_emplace(
+            /* key=   */ handle,
+            /* value= */ std::make_unique<C>(GarbageCollectedData(), std::forward<Args>(args)...)
+        ).first;
+        return as<C>(*it->second);
     }
 
     /*----- Interpretation & Debugging -------------------------------------------------------------------------------*/

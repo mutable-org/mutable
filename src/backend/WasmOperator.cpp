@@ -370,18 +370,19 @@ void NestedLoopsJoin::execute(const Match<NestedLoopsJoin> &M, callback_t Pipeli
                     /* factory=    */ *M.materializing_factories_[i],
                     /* num_tuples= */ 0, // i.e. infinite
                     /* Pipeline=   */ [&, Pipeline=std::move(Pipeline)](){
-                        IF (CodeGenContext::Get().env().compile(M.join.predicate())) {
+                        IF (CodeGenContext::Get().env().compile(M.join.predicate()).is_true_and_not_null()) {
                             Pipeline();
                         };
                 });
             } else {
                 /*----- All but exactly one child (here left-most one) load lastly inserted buffer again. -----*/
                 /* All buffers are "connected" with each other by setting the pipeline callback as calling the
-                 * `resume_pipeline()` method of the lastly inserted buffer. Therefore, calling `resume_pipeline()` on
-                 * the lastly inserted buffer will load one tuple from it, recursively call `resume_pipeline()` on the
-                 * buffer created before that which again loads one tuple from it, and so on until the buffer inserted
-                 * first (here the one of the left-most child) will load one of its tuples and check the join predicate for
-                 * this one cartesian-product-combination of result tuples. */
+                 * `resume_pipeline_inline()` method of the lastly inserted buffer. Therefore, calling
+                 * `resume_pipeline_inline()` on the lastly inserted buffer will load one tuple from it, recursively
+                 * call `resume_pipeline_inline()` on the buffer created before that which again loads one tuple from
+                 * it, and so on until the buffer inserted first (here the one of the left-most child) will load one
+                 * of its tuples and check the join predicate for this one cartesian-product-combination of result
+                 * tuples. */
                 buffers.emplace_back(
                     /* schema=     */ schema,
                     /* factory=    */ *M.materializing_factories_[i],

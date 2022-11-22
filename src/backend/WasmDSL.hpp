@@ -563,18 +563,13 @@ struct Module final
     void emit_return(Expr<T> expr);
 
     void emit_break(std::size_t level = 1);
-    void emit_break(PrimitiveExpr<bool> condition, std::size_t level = 1);
-    void emit_break(Expr<bool> condition, std::size_t level = 1);
+    void emit_break(PrimitiveExpr<bool> cond, std::size_t level = 1);
 
     void emit_continue(std::size_t level = 1);
     void emit_continue(PrimitiveExpr<bool> cond, std::size_t level = 1);
-    void emit_continue(Expr<bool> cond, std::size_t level = 1);
 
     template<typename T>
     PrimitiveExpr<T> emit_select(PrimitiveExpr<bool> cond, PrimitiveExpr<T> tru, PrimitiveExpr<T> fals);
-
-    template<typename T>
-    Expr<T> emit_select(Expr<bool> cond, Expr<T> tru, Expr<T> fals);
 
     /*----- Globals. -------------------------------------------------------------------------------------------------*/
     template<dsl_primitive T, dsl_primitive U>
@@ -637,8 +632,7 @@ struct Module final
     PrimitiveExpr<ReturnType> emit_call(const char *fn, PrimitiveExpr<ParamTypes>... args);
 
     /*----- Runtime checks and throwing exceptions -------------------------------------------------------------------*/
-    void emit_insist(PrimitiveExpr<bool> condition, const char *filename, unsigned line, const char *msg);
-    void emit_insist(Expr<bool> condition, const char *filename, unsigned line, const char *msg);
+    void emit_insist(PrimitiveExpr<bool> cond, const char *filename, unsigned line, const char *msg);
 
     void emit_throw(exception::exception_t type, const char *filename, unsigned line, const char *msg);
 
@@ -669,7 +663,7 @@ struct Module final
         branch_target_stack_.emplace_back(brk, continu, nullptr);
     }
 
-    void push_branch_targets(::wasm::Name brk, ::wasm::Name continu, Expr<bool> condition);
+    void push_branch_targets(::wasm::Name brk, ::wasm::Name continu, PrimitiveExpr<bool> condition);
 
     branch_target_t pop_branch_targets() {
         auto top = branch_target_stack_.back();
@@ -3118,40 +3112,35 @@ inline void RETURN_UNSAFE(T &&t) { Module::Get().emit_return(expr_t<T>(std::forw
 /*----- BREAK --------------------------------------------------------------------------------------------------------*/
 
 inline void BREAK(std::size_t level = 1) { Module::Get().emit_break(level); }
-inline void BREAK(PrimitiveExpr<bool> cond, std::size_t level = 1) { Module::Get().emit_break(cond, level); }
-inline void BREAK(Expr<bool> cond, std::size_t level = 1) { Module::Get().emit_break(cond, level); }
+template<primitive_convertible C>
+requires requires (C &&c) { PrimitiveExpr<bool>(std::forward<C>(c)); }
+inline void BREAK(C &&_cond, std::size_t level = 1)
+{
+    PrimitiveExpr<bool> cond(std::forward<C>(_cond));
+    Module::Get().emit_break(cond, level);
+}
 
 /*----- CONTINUE -----------------------------------------------------------------------------------------------------*/
 
 inline void CONTINUE(std::size_t level = 1) { Module::Get().emit_continue(level); }
-inline void CONTINUE(PrimitiveExpr<bool> cond, std::size_t level = 1) { Module::Get().emit_continue(cond, level); }
-inline void CONTINUE(Expr<bool> cond, std::size_t level = 1) { Module::Get().emit_continue(cond, level); }
+template<primitive_convertible C>
+requires requires (C &&c) { PrimitiveExpr<bool>(std::forward<C>(c)); }
+inline void CONTINUE(C &&_cond, std::size_t level = 1)
+{
+    PrimitiveExpr<bool> cond(std::forward<C>(_cond));
+    Module::Get().emit_continue(cond, level);
+}
 
 /*----- Select -------------------------------------------------------------------------------------------------------*/
 
 template<primitive_convertible C, primitive_convertible T, primitive_convertible U>
 requires have_common_type<typename primitive_expr_t<T>::type, typename primitive_expr_t<U>::type> and
 requires (C &&c) { PrimitiveExpr<bool>(std::forward<C>(c)); }
-inline auto Select(C &&_condition, T &&_tru, U &&_fals)
+inline auto Select(C &&_cond, T &&_tru, U &&_fals)
 {
-    PrimitiveExpr<bool> cond(std::forward<C>(_condition));
+    PrimitiveExpr<bool> cond(std::forward<C>(_cond));
     primitive_expr_t<T> tru(std::forward<T>(_tru));
     primitive_expr_t<U> fals(std::forward<U>(_fals));
-
-    using To = common_type_t<typename decltype(tru)::type, typename decltype(fals)::type>;
-
-    return Module::Get().emit_select<To>(cond, tru.template to<To>(), fals.template to<To>());
-}
-
-template<expr_convertible C, expr_convertible T, expr_convertible U>
-requires have_common_type<T, U> and
-         (not primitive_convertible<C> or not primitive_convertible<T> or not primitive_convertible<U>) and
-         requires (C &&c) { Expr<bool>(std::forward<C>(c)); }
-inline auto Select(C &&_condition, T &&_tru, U &&_fals)
-{
-    Expr<bool> cond(std::forward<C>(_condition));
-    expr_t<T> tru(std::forward<T>(_tru));
-    expr_t<U> fals(std::forward<T>(_fals));
 
     using To = common_type_t<typename decltype(tru)::type, typename decltype(fals)::type>;
 
@@ -3172,14 +3161,12 @@ struct If
     public:
     continuation_t Then, Else;
 
-    explicit If(PrimitiveExpr<bool> cond)
-        : cond_(cond)
+    template<primitive_convertible C>
+    requires requires (C &&c) { PrimitiveExpr<bool>(std::forward<C>(c)); }
+    explicit If(C &&cond)
+        : cond_(std::forward<C>(cond))
         , name_(Module::Unique_If_Name())
     { }
-
-    template<typename T>
-    requires requires (T &&t) { Expr<bool>(std::forward<T>(t)); }
-    explicit If(T &&cond) : cond_(Expr<bool>(std::forward<T>(cond)).is_true_and_not_null()) { }
 
     If(const If&) = delete;
     If(If&&) = delete;
@@ -3239,16 +3226,21 @@ struct Loop
 
 struct DoWhile : Loop
 {
-    public:
-    DoWhile(std::string name, Expr<bool> condition)
+    template<primitive_convertible C>
+    requires requires (C &&c) { PrimitiveExpr<bool>(std::forward<C>(c)); }
+    DoWhile(std::string name, C &&_cond)
         : Loop(name)
     {
+        PrimitiveExpr<bool> cond(std::forward<C>(_cond));
+
         /*----- Update condition in branch targets. -----*/
         auto branch_targets = Module::Get().pop_branch_targets();
-        Module::Get().push_branch_targets(branch_targets.brk, branch_targets.continu, condition);
+        Module::Get().push_branch_targets(branch_targets.brk, branch_targets.continu, cond);
     }
 
-    DoWhile(const char *name, Expr<bool> condition) : DoWhile(std::string(name), condition) { }
+    template<primitive_convertible C>
+    requires requires (C &&c) { PrimitiveExpr<bool>(std::forward<C>(c)); }
+    DoWhile(const char *name, C &&cond) : DoWhile(std::string(name), cond) { }
 
     DoWhile(const DoWhile&) = delete;
     DoWhile(DoWhile&&) = default;
@@ -3259,18 +3251,25 @@ struct DoWhile : Loop
 struct While
 {
     private:
-    Expr<bool> condition_;
+    PrimitiveExpr<bool> cond_;
     std::unique_ptr<DoWhile> do_while_;
 
     public:
-    While(std::string name, Expr<bool> condition)
-        : condition_(condition.clone())
-        , do_while_(std::make_unique<DoWhile>(name + ".do-while", condition))
+    While(std::string name, PrimitiveExpr<bool> cond)
+        : cond_(cond.clone())
+        , do_while_(std::make_unique<DoWhile>(name + ".do-while", cond))
     { }
 
-    While(const char *name, Expr<bool> condition) : While(std::string(name), condition) { }
+    template<primitive_convertible C>
+    requires requires (C &&c) { PrimitiveExpr<bool>(std::forward<C>(c)); }
+    While(std::string name, C &&cond) : While(name, PrimitiveExpr<bool>(std::forward<C>(cond))) { }
+
+    template<primitive_convertible C>
+    requires requires (C &&c) { PrimitiveExpr<bool>(std::forward<C>(c)); }
+    While(const char *name, C &&cond) : While(std::string(name), cond) { }
 
     While(const While&) = delete;
+    While(While&&) = default;
 
     ~While();
 
@@ -3457,38 +3456,15 @@ inline void Module::emit_break(PrimitiveExpr<bool> cond, std::size_t level)
     active_block_->list.push_back(builder_.makeBreak(branch_targets.brk, nullptr, cond.expr()));
 }
 
-/** Emit a conditional break, breaking if \p cond is `true` and breaking \p level levels. */
-inline void Module::emit_break(Expr<bool> cond, std::size_t level)
-{
-    emit_break(cond.is_true_and_not_null(), level);
-}
-
-/** Emit an *conditional* continue, continuing \p level levels above if \p cond evaluates to `true` *and* the original
- * continue condition evaluates to `true`. */
-inline void Module::emit_continue(Expr<bool> cond, std::size_t level)
-{
-    emit_continue(cond.is_true_and_not_null(), level);
-}
-
 template<typename T>
 PrimitiveExpr<T> Module::emit_select(PrimitiveExpr<bool> cond, PrimitiveExpr<T> tru, PrimitiveExpr<T> fals)
 {
     return PrimitiveExpr<T>(builder_.makeSelect(cond.expr(), tru.expr(), fals.expr()));
 }
 
-template<typename T>
-Expr<T> Module::emit_select(Expr<bool>, Expr<T>, Expr<T>)
+inline void Module::push_branch_targets(::wasm::Name brk, ::wasm::Name continu, PrimitiveExpr<bool> condition)
 {
-    // TODO implement with 3VL:
-    // - if cond is NULL, result should be NULL (or, if tru and fals are equal, return tru)
-    // - handle tru and fals potentially having no NULL information, i.e. they cannot be NULL
-
-    M_unreachable("not implemented");
-}
-
-inline void Module::push_branch_targets(::wasm::Name brk, ::wasm::Name continu, Expr<bool> condition)
-{
-    branch_target_stack_.emplace_back(brk, continu, condition.is_true_and_not_null().expr());
+    branch_target_stack_.emplace_back(brk, continu, condition.expr());
 }
 
 

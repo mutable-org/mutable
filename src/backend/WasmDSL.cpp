@@ -257,7 +257,7 @@ std::pair<uint8_t*, std::size_t> Module::binary()
     return std::make_pair(reinterpret_cast<uint8_t*>(binary), buffer.size());
 }
 
-void Module::emit_insist(PrimitiveExpr<bool> condition, const char *filename, unsigned line, const char *msg)
+void Module::emit_insist(PrimitiveExpr<bool> cond, const char *filename, unsigned line, const char *msg)
 {
     if (not delegate_insist_) {
         /*----- Create function to delegate to host (used for easier debugging since one can break in here). -----*/
@@ -272,15 +272,9 @@ void Module::emit_insist(PrimitiveExpr<bool> condition, const char *filename, un
     messages_.emplace_back(filename, line, msg);
 
     /*----- Check condition and possibly delegate to host. --*/
-    IF (not condition) {
+    IF (not cond) {
         (*delegate_insist_)(idx);
     };
-}
-
-void Module::emit_insist(Expr<bool> condition, const char *filename, unsigned line, const char *msg)
-{
-    // TODO propagate info whether \p condition is NULL to host's `insist()`
-    emit_insist(condition.is_true_and_not_null(), filename, line, msg);
 }
 
 void Module::emit_throw(exception::exception_t type, const char *filename, unsigned line, const char *msg)
@@ -419,7 +413,7 @@ DoWhile::~DoWhile() {
 /*----- While --------------------------------------------------------------------------------------------------------*/
 
 While::~While() {
-    IF (condition_) {
+    IF (cond_) {
         do_while_.reset(); // emit do-while code within IF
     };
 }

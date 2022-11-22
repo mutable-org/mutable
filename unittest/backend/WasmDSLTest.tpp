@@ -499,50 +499,6 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/null_semantics", "[core][wasm]")
     CHECK_RESULT_INLINE( true, bool(), { _I8 a(_I8::Null()); _I32 b(a); RETURN(b.is_null()); });
     CHECK_RESULT_INLINE( true, bool(), { _I32 a(_I32::Null()); _I8 b(a.to<int8_t>()); RETURN(b.is_null()); });
 
-    // CHECK_RESULT_INLINE(1, int(), { _Bool a(_Bool::Null()); RETURN(Select(a, 0, 1)); });
-    // CHECK_RESULT_INLINE(1, int(), { _Bool a(_Bool::Null()); RETURN(Select(a or false, 0, 1)); });
-    // CHECK_RESULT_INLINE(0, int(), { _Bool a(_Bool::Null()); RETURN(Select(a or true, 0, 1)); });
-
-    /* with control flow */
-    CHECK_RESULT_INLINE(1, int(), { _Bool a(_Bool::Null()); IF (a) { RETURN(0); } ELSE { RETURN(1); }; });
-    CHECK_RESULT_INLINE(1, int(), { _Bool a(_Bool::Null()); IF (a or false) { RETURN(0); } ELSE { RETURN(1); }; });
-    CHECK_RESULT_INLINE(0, int(), { _Bool a(_Bool::Null()); IF (a or true) { RETURN(0); } ELSE { RETURN(1); }; });
-
-    CHECK_RESULT_INLINE(1, int(), {
-        Var<I32> res(0);
-        LOOP() {
-            BREAK(res < _I32::Null());
-            res += 1;
-        }
-        RETURN(res);
-    });
-    CHECK_RESULT_INLINE(1, int(), {
-        Var<I32> res(0);
-        LOOP() {
-            res += 1;
-            CONTINUE(res < _I32::Null());
-        }
-        RETURN(res);
-    });
-
-    CHECK_RESULT_INLINE(1, int(), {
-        Var<I32> res(0);
-        _I32 i(_I32::Null());
-        DO_WHILE (i < 10) {
-            res += 1;
-        }
-        RETURN(res);
-    });
-
-    CHECK_RESULT_INLINE(0, int(), {
-        Var<I32> res(0);
-        _I32 i(_I32::Null());
-        WHILE (i < 10) {
-            res += 1;
-        }
-        RETURN(res);
-    });
-
     Module::Dispose();
 }
 
@@ -911,96 +867,6 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Variable/null_semantics", "[core][wasm]")
     CHECK_RESULT_INLINE( true, bool(), { _Var<I32> a(_I32::Null()); _Var<I8> b(a.to<int8_t>()); RETURN(b.is_null());
     });
 
-    // CHECK_RESULT_INLINE(1, int(), { _Var<Bool> a(_Bool::Null()); RETURN(Select(a, 0, 1)); });
-    // CHECK_RESULT_INLINE(0, int(), { _Var<Bool> a(_Bool::Null()); a = true; RETURN(Select(a, 0, 1)); });
-    // CHECK_RESULT_INLINE(1, int(), { _Var<Bool> a(_Bool::Null()); a = false; RETURN(Select(a, 0, 1)); });
-    // CHECK_RESULT_INLINE(1, int(), { _Var<Bool> a(_Bool::Null()); RETURN(Select(a or false, 0, 1)); });
-    // CHECK_RESULT_INLINE(0, int(), { _Var<Bool> a(_Bool::Null()); RETURN(Select(a or true, 0, 1)); });
-
-    /*----- with control flow -----*/
-    CHECK_RESULT_INLINE(1, int(), {
-        _Var<Bool> a(_Bool::Null()); IF (a) { RETURN(0); } ELSE { RETURN(1); };
-    });
-    CHECK_RESULT_INLINE(0, int(), {
-        _Var<Bool> a(_Bool::Null()); a = true; IF (a) { RETURN(0); } ELSE { RETURN(1); };
-    });
-    CHECK_RESULT_INLINE(1, int(), {
-        _Var<Bool> a(_Bool::Null()); a = false; IF (a) { RETURN(0); } ELSE { RETURN(1); };
-    });
-    CHECK_RESULT_INLINE(1, int(), {
-        _Var<Bool> a(_Bool::Null()); IF (a or false) { RETURN(0); } ELSE { RETURN(1); };
-    });
-    CHECK_RESULT_INLINE(0, int(), {
-        _Var<Bool> a(_Bool::Null()); IF (a or true) { RETURN(0); } ELSE { RETURN(1); };
-    });
-
-    CHECK_RESULT_INLINE(10, int(), {
-        Var<I32> res(0);
-        _Var<I32> i(0);
-        LOOP() {
-            BREAK(not (i < 5));
-            res += 1;
-            i += 1;
-            IF (i == 2) { i = _I32::Null(); };
-            IF (res == 10) { i = 10; };
-            CONTINUE();
-        }
-        RETURN(res);
-    });
-    CHECK_RESULT_INLINE(2, int(), {
-        Var<I32> res(0);
-        _Var<I32> i(0);
-        LOOP() {
-            res += 1;
-            i += 1;
-            IF (i == 2) { i = _I32::Null(); };
-            CONTINUE(i < 5);
-        }
-        RETURN(res);
-    });
-
-    CHECK_RESULT_INLINE(1, int(), {
-        Var<I32> res(0);
-        _Var<I32> i(_I32::Null());
-        DO_WHILE (i < 10) {
-            res += 1;
-            i += 1;
-            IF (i == 5) { i = _I32::Null(); };
-        }
-        RETURN(res);
-    });
-    CHECK_RESULT_INLINE(5, int(), {
-        Var<I32> res(0);
-        _Var<I32> i(0);
-        DO_WHILE (i < 10) {
-            res += 1;
-            i += 1;
-            IF (i == 5) { i = _I32::Null(); };
-        }
-        RETURN(res);
-    });
-
-    CHECK_RESULT_INLINE(0, int(), {
-        Var<I32> res(0);
-        _Var<I32> i(_I32::Null());
-        WHILE (i < 10) {
-            res += 1;
-            i += 1;
-            IF (i == 5) { i = _I32::Null(); };
-        }
-        RETURN(res);
-    });
-    CHECK_RESULT_INLINE(5, int(), {
-        Var<I32> res(0);
-        _Var<I32> i(0);
-        WHILE (i < 10) {
-            res += 1;
-            i += 1;
-            IF (i == 5) { i = _I32::Null(); };
-        }
-        RETURN(res);
-    });
-
     Module::Dispose();
 }
 
@@ -1022,7 +888,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Select", "[core][wasm]")
     CHECK_RESULT_INLINE(1, int(), { Bool cond(false); Var<I32> b(1); RETURN(Select(cond, 0, b)); });
     CHECK_RESULT_INLINE(0, int(), { Bool cond(true);  I32 a(0); RETURN(Select(cond, a, 1)); });
     CHECK_RESULT_INLINE(1, int(), { Bool cond(false); I32 a(0); RETURN(Select(cond, a, 1)); });
-    CHECK_RESULT_INLINE(0, int(), { Bool cond(true); I32 b(1); RETURN(Select(cond, 0, b)); });
+    CHECK_RESULT_INLINE(0, int(), { Bool cond(true);  I32 b(1); RETURN(Select(cond, 0, b)); });
     CHECK_RESULT_INLINE(1, int(), { Bool cond(false); I32 b(1); RETURN(Select(cond, 0, b)); });
 
     Module::Dispose();

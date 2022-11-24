@@ -59,12 +59,14 @@ std::ostream & m::operator<<(std::ostream &out, const Operator &op) {
             out << "GroupingOperator [";
             for (auto begin = op.group_by().begin(), it = begin, end = op.group_by().end(); it != end; ++it) {
                 if (it != begin) out << ", ";
-                out << **it;
+                out << it->first.get();
+                if (it->second)
+                    out << it->second;
             }
             out << "] [";
             for (auto begin = op.aggregates().begin(), it = begin, end = op.aggregates().end(); it != end; ++it) {
                 if (it != begin) out << ", ";
-                out << **it;
+                out << it->get();
             }
             out << ']';
         },
@@ -73,7 +75,7 @@ std::ostream & m::operator<<(std::ostream &out, const Operator &op) {
             out << "AggregationOperator [";
             for (auto begin = op.aggregates().begin(), it = begin, end = op.aggregates().end(); it != end; ++it) {
                 if (it != begin) out << ", ";
-                out << **it;
+                out << it->get();
             }
             out << ']';
         },
@@ -82,7 +84,7 @@ std::ostream & m::operator<<(std::ostream &out, const Operator &op) {
             out << "SortingOperator [";
             for (auto begin = op.order_by().begin(), it = begin, end = op.order_by().end(); it != end; ++it) {
                 if (it != begin) out << ", ";
-                out << *it->first << ' ' << (it->second ? "ASC" : "DESC");
+                out << it->first.get() << ' ' << (it->second ? "ASC" : "DESC");
             }
             out << ']';
         },
@@ -130,7 +132,7 @@ void Operator::dot(std::ostream &out) const
             const auto &P = op.projections();
             for (auto it = P.begin(); it != P.end(); ++it) {
                 if (it != P.begin()) out << ", ";
-                out << *it->first;
+                out << it->first;
                 if (it->second)
                     out << " AS " << it->second;
             }
@@ -154,14 +156,18 @@ void Operator::dot(std::ostream &out) const
 
             for (auto it = G.begin(); it != G.end(); ++it) {
                 if (it != G.begin()) out << ", ";
-                out << **it;
+                std::ostringstream oss;
+                oss << it->first.get();
+                out << html_escape(oss.str());
+                if (it->second)
+                    out << html_escape(it->second);
             }
 
             if (G.size() and A.size()) out << ", ";
 
             for (auto it = A.begin(); it != A.end(); ++it) {
                 if (it != A.begin()) out << ", ";
-                out << **it;
+                out << it->get();
             }
 
             out << "</FONT></SUB>>];\n"
@@ -172,7 +178,7 @@ void Operator::dot(std::ostream &out) const
             const auto &A = op.aggregates();
             for (auto it = A.begin(); it != A.end(); ++it) {
                 if (it != A.begin()) out << ", ";
-                out << **it;
+                out << it->get();
             }
 
             out << "</FONT></SUB>>];\n"
@@ -184,7 +190,7 @@ void Operator::dot(std::ostream &out) const
             const auto &O = op.order_by();
             for (auto it = O.begin(); it != O.end(); ++it) {
                 if (it != O.begin()) out << ", ";
-                out << *it->first << ' ' << (it->second ? "ASC" : "DESC");
+                out << it->first.get() << ' ' << (it->second ? "ASC" : "DESC");
             }
 
             out << "</FONT></SUB>>];\n"
@@ -209,20 +215,20 @@ ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
     uint64_t const_counter = 0;
     auto &S = schema();
     for (auto &P : projections) {
-        auto ty = P.first->type();
+        auto ty = P.first.get().type();
         auto alias = P.second;
         if (alias) { // alias was given
             Schema::Identifier id(P.second);
             S.add(id, ty);
-        } else if (auto D = cast<const Designator>(P.first)) { // no alias, but designator -> keep name
+        } else if (auto D = cast<const ast::Designator>(&P.first.get())) { // no alias, but designator -> keep name
             Schema::Identifier id(D->table_name.text, D->attr_name.text);
             S.add(id, ty);
         } else { // no designator, no alias -> derive name
             std::ostringstream oss;
-            if (P.first->is_constant())
+            if (P.first.get().is_constant())
                 oss << "$const" << const_counter++;
             else
-                oss << *P.first;
+                oss << P.first;
             auto &C = Catalog::Get();
             auto alias = C.pool(oss.str().c_str());
             Schema::Identifier id(alias);
@@ -231,8 +237,8 @@ ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
     }
 }
 
-GroupingOperator::GroupingOperator(std::vector<const Expr*> group_by,
-                                   std::vector<const Expr*> aggregates,
+GroupingOperator::GroupingOperator(std::vector<group_type> group_by,
+                                   std::vector<std::reference_wrapper<const ast::FnApplicationExpr>> aggregates,
                                    algorithm algo)
     : group_by_(group_by)
     , aggregates_(aggregates)
@@ -240,37 +246,39 @@ GroupingOperator::GroupingOperator(std::vector<const Expr*> group_by,
 {
     auto &C = Catalog::Get();
     auto &S = schema();
-    for (auto e : group_by) {
-        auto pt = as<const PrimitiveType>(e->type());
-        if (auto D = cast<const Designator>(e)) { // designator -> keep name
-            Schema::Identifier id(D->table_name.text, D->attr_name.text);
+    for (auto [grp, alias] : group_by) {
+        auto pt = as<const PrimitiveType>(grp.get().type());
+        if (alias) {
+            S.add(alias, pt->as_scalar());
+        } else if (auto D = cast<const ast::Designator>(&grp.get())) { // designator -> keep name
+            Schema::Identifier id(nullptr, D->attr_name.text); // w/o table name
             S.add(id, pt->as_scalar());
         } else {
             std::ostringstream oss;
-            oss << *e;
+            oss << grp.get();
             auto alias = C.pool(oss.str().c_str());
             S.add(alias, pt->as_scalar());
         }
     }
 
     for (auto e : aggregates) {
-        auto ty = e->type();
+        auto ty = e.get().type();
         std::ostringstream oss;
-        oss << *e;
+        oss << e.get();
         auto alias = C.pool(oss.str().c_str());
         S.add(alias, ty);
     }
 }
 
-AggregationOperator::AggregationOperator(std::vector<const Expr*> aggregates)
+AggregationOperator::AggregationOperator(std::vector<std::reference_wrapper<const ast::FnApplicationExpr>> aggregates)
     : aggregates_(aggregates)
 {
     auto &C = Catalog::Get();
     auto &S = schema();
     for (auto e : aggregates) {
-        auto ty = e->type();
+        auto ty = e.get().type();
         std::ostringstream oss;
-        oss << *e;
+        oss << e.get();
         auto alias = C.pool(oss.str().c_str());
         S.add(alias, ty);
     }
@@ -351,7 +359,7 @@ void SchemaMinimizer::operator()(Const<ProjectionOperator> &op)
     // FIXME simply adding all projections is not correct for *nested* projection operators
     required = Schema();
     for (auto &p : op.projections())
-        required |= p.first->get_required();
+        required |= p.first.get().get_required();
     if (not const_cast<const ProjectionOperator&>(op).children().empty())
         (*this)(*op.child(0));
 }
@@ -365,10 +373,10 @@ void SchemaMinimizer::operator()(Const<LimitOperator> &op)
 void SchemaMinimizer::operator()(Const<GroupingOperator> &op)
 {
     required = Schema(); // the GroupingOperator doesn't care what later operators require
-    for (auto &Grp : op.group_by())
-        required |= Grp->get_required();
+    for (auto &[grp, _] : op.group_by())
+        required |= grp.get().get_required();
     for (auto &Agg : op.aggregates()) // TODO drop aggregates not required
-        required |= Agg->get_required();
+        required |= Agg.get().get_required();
     (*this)(*op.child(0));
     /* Schema of grouping operator does not change. */
 }
@@ -377,7 +385,7 @@ void SchemaMinimizer::operator()(Const<AggregationOperator> &op)
 {
     required = Schema(); // the AggregationOperator doesn't care what later operators require
     for (auto &agg : op.aggregates())
-        required |= agg->get_required();
+        required |= agg.get().get_required();
     (*this)(*op.child(0));
     /* Schema of AggregationOperator does not change. */
 }
@@ -385,7 +393,7 @@ void SchemaMinimizer::operator()(Const<AggregationOperator> &op)
 void SchemaMinimizer::operator()(Const<SortingOperator> &op)
 {
     for (auto &Ord : op.order_by())
-        required |= Ord.first->get_required();
+        required |= Ord.first.get().get_required();
     (*this)(*op.child(0));
     op.schema() = op.child(0)->schema();
 }

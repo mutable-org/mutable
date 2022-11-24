@@ -404,7 +404,7 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
 
 namespace {
 
-struct CollectStringLiterals : ConstOperatorVisitor, ConstASTExprVisitor
+struct CollectStringLiterals : ConstOperatorVisitor, ast::ConstASTExprVisitor
 {
     private:
     std::unordered_set<const char*> literals_; ///< the collected literals
@@ -428,54 +428,73 @@ struct CollectStringLiterals : ConstOperatorVisitor, ConstASTExprVisitor
     }
 
     /*----- Operator -------------------------------------------------------------------------------------------------*/
-    void operator()(const ScanOperator&) override { /* nothing to be done */ }
-    void operator()(const CallbackOperator &op) override { recurse(op); }
-    void operator()(const PrintOperator &op) override { recurse(op); }
-    void operator()(const NoOpOperator &op) override { recurse(op); }
-    void operator()(const FilterOperator &op) override {
+    void operator()(const ScanOperator &) override { /* nothing to be done */ }
+
+    void operator()(const CallbackOperator & op) override { recurse(op); }
+
+    void operator()(const PrintOperator & op) override { recurse(op); }
+
+    void operator()(const NoOpOperator & op) override { recurse(op); }
+
+    void operator()(const FilterOperator & op) override
+    {
         for (auto &c: op.filter()) {
             for (auto &p: c)
-                (*this)(*p.expr());
+                (*this)(*p);
         }
         recurse(op);
     }
-    void operator()(const JoinOperator &op) override {
-        for (auto &c: op.predicate()) {
+
+    void operator()(const JoinOperator & op) override
+    {
+        for (auto &c : op.predicate()) {
             for (auto &p: c)
-                (*this)(*p.expr());
+                (*this)(*p);
         }
         recurse(op);
     }
-    void operator()(const ProjectionOperator &op) override {
-        for (auto &p: op.projections())
-            (*this)(*p.first);
+
+    void operator()(const ProjectionOperator & op) override
+    {
+        for (auto p : op.projections())
+            (*this)(p.first.get());
         recurse(op);
     }
-    void operator()(const LimitOperator &op) override { recurse(op); }
-    void operator()(const GroupingOperator &op) override {
-        for (auto &g: op.group_by())
-            (*this)(*g);
+
+    void operator()(const LimitOperator & op) override { recurse(op); }
+
+    void operator()(const GroupingOperator & op) override
+    {
+        for (auto [grp, alias] : op.group_by())
+            (*this)(grp.get());
         recurse(op);
     }
     void operator()(const AggregationOperator &op) override { recurse(op); }
     void operator()(const SortingOperator &op) override { recurse(op); }
 
     /*----- Expr -----------------------------------------------------------------------------------------------------*/
-    void operator()(const ErrorExpr&) override { M_unreachable("no errors at this stage"); }
-    void operator()(const Designator&) override { /* nothing to be done */ }
-    void operator()(const Constant &e) override {
+    void operator()(const ast::ErrorExpr &) override { M_unreachable("no errors at this stage"); }
+
+    void operator()(const ast::Designator &) override { /* nothing to be done */ }
+
+    void operator()(const ast::Constant & e) override
+    {
         if (e.is_string()) {
             auto s = Interpreter::eval(e);
             literals_.emplace(s.as<const char*>());
         }
     }
-    void operator()(const FnApplicationExpr&) override { /* nothing to be done */ } // XXX can string literals be arguments?
-    void operator()(const UnaryExpr &e) override { (*this)(*e.expr); }
-    void operator()(const BinaryExpr &e) override {
+
+    void operator()(const ast::FnApplicationExpr&) override { /* nothing to be done */ } // XXX can string literals be arguments?
+    void operator()(const ast::UnaryExpr &e) override { (*this)(*e.expr); }
+
+    void operator()(const ast::BinaryExpr &e) override
+    {
         (*this)(*e.lhs);
         (*this)(*e.rhs);
     }
-    void operator()(const QueryExpr&) override { /* nothing to be done */ }
+
+    void operator()(const ast::QueryExpr&) override { /* nothing to be done */ }
 };
 
 

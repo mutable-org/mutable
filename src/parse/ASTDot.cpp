@@ -9,6 +9,7 @@
 
 
 using namespace m;
+using namespace m::ast;
 
 
 ASTDot::ASTDot(std::ostream &out, int i)
@@ -113,7 +114,7 @@ void ASTDot::operator()(Const<FnApplicationExpr> &e)
     out << ">];";
     indent() << id(e) << EDGE << id(*e.fn) << ';';
 
-    for (auto arg : e.args) {
+    for (auto &arg : e.args) {
         (*this)(*arg);
         indent() << id(e) << EDGE << id(*arg) << ';';
     }
@@ -233,10 +234,10 @@ void ASTDot::operator()(Const<WhereClause> &c)
 
 void ASTDot::operator()(Const<GroupByClause> &c)
 {
-    for (auto &g : c.group_by) {
+    for (auto &[grp, alias] : c.group_by) {
         out << '\n';
-        (*this)(*g);
-        indent() << id(c) << EDGE << id(*g) << ';';
+        (*this)(*grp);
+        indent() << id(c) << EDGE << id(*grp) << ';';
     }
 }
 
@@ -343,7 +344,7 @@ void ASTDot::operator()(Const<SelectStmt> &s)
         indent() << "subgraph sources";
         indent() << '{';
         ++indent_;
-        if (auto f = cast<FromClause>(s.from)) {
+        if (auto f = cast<FromClause>(s.from.get())) {
             for (auto &t : f->from) {
                 if (t.has_table()) {
                     auto &R = t.table();

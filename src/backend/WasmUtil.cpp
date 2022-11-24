@@ -75,9 +75,9 @@ void convert_to(SQL_t &operand, const Type *to_type)
  * ExprCompiler
  *====================================================================================================================*/
 
-void ExprCompiler::operator()(const ErrorExpr&) { M_unreachable("no errors at this stage"); }
+void ExprCompiler::operator()(const ast::ErrorExpr&) { M_unreachable("no errors at this stage"); }
 
-void ExprCompiler::operator()(const Designator &e)
+void ExprCompiler::operator()(const ast::Designator &e)
 {
     if (e.type()->is_none()) {
         set(_I32::Null()); // create NULL
@@ -89,7 +89,7 @@ void ExprCompiler::operator()(const Designator &e)
     set(env_.get(id));
 }
 
-void ExprCompiler::operator()(const Constant &e)
+void ExprCompiler::operator()(const ast::Constant &e)
 {
     if (e.type()->is_none()) {
         set(_I32::Null()); // create NULL
@@ -139,7 +139,7 @@ void ExprCompiler::operator()(const Constant &e)
     }, *e.type());
 }
 
-void ExprCompiler::operator()(const UnaryExpr &e)
+void ExprCompiler::operator()(const ast::UnaryExpr &e)
 {
     /* This is a helper to apply unary operations to `Expr<T>`s.  It uses SFINAE within `overloaded` to only apply the
      * operation if it is well typed, e.g. `+42` is ok whereas `+true` is not. */
@@ -169,7 +169,7 @@ void ExprCompiler::operator()(const UnaryExpr &e)
 #undef UNOP
 }
 
-void ExprCompiler::operator()(const BinaryExpr &e)
+void ExprCompiler::operator()(const ast::BinaryExpr &e)
 {
     /* This is a helper to apply binary operations to `Expr<T>`s.  It uses SFINAE within `overloaded` to only apply the
      * operation if it is well typed, e.g. `42 + 13` is ok whereas `true + 42` is not. */
@@ -301,7 +301,7 @@ void ExprCompiler::operator()(const BinaryExpr &e)
 #undef BINOP
 }
 
-void ExprCompiler::operator()(const FnApplicationExpr &e)
+void ExprCompiler::operator()(const ast::FnApplicationExpr &e)
 {
     switch (e.get_function().fnid) {
         default:
@@ -347,7 +347,7 @@ void ExprCompiler::operator()(const FnApplicationExpr &e)
     }
 }
 
-void ExprCompiler::operator()(const QueryExpr &e)
+void ExprCompiler::operator()(const ast::QueryExpr &e)
 {
     /* Search with fully qualified name. */
     Schema::Identifier id(e.alias(), Catalog::Get().pool("$res"));
@@ -364,8 +364,8 @@ _Bool ExprCompiler::compile(const cnf::CNF &cnf)
         bool wasm_clause_empty = true;
         for (auto &pred : clause) {
             /* Generate code for the literal of the predicate. */
-            M_insist(pred.expr()->type()->is_boolean());
-            _Bool compiled = compile<_Bool>(*pred.expr());
+            M_insist(pred.expr().type()->is_boolean());
+            _Bool compiled = compile<_Bool>(pred.expr());
             _Bool wasm_pred = pred.negative() ? not compiled : compiled;
             /* Add the predicate to the clause with an `or`. */
             if (wasm_clause_empty) {
@@ -1964,7 +1964,7 @@ _Bool m::wasm::like(const CharacterSequence &ty_str, const CharacterSequence &ty
 
 template<bool IsGlobal>
 I32 m::wasm::compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
-                     const std::vector<std::pair<const m::Expr*, bool>> &order)
+                     const std::vector<SortingOperator::order_type> &order)
 {
     using std::swap;
 
@@ -1985,11 +1985,11 @@ I32 m::wasm::compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
 
     /*----- Compile ordering. -----*/
     for (auto &o : order) {
-        SQL_t _val_left = env_left.compile(*o.first); // compile order expression for left tuple
+        SQL_t _val_left = env_left.compile(o.first); // compile order expression for left tuple
 
         std::visit(overloaded {
             [&]<typename T>(Expr<T> val_left) -> void {
-                Expr<T> val_right = env_right.compile<Expr<T>>(*o.first); // compile order expression for right tuple
+                Expr<T> val_right = env_right.compile<Expr<T>>(o.first); // compile order expression for right tuple
 
 #if 0
                 /* XXX: default c'tor not (yet) viable because its constraint is checked before variable_storage
@@ -2020,7 +2020,7 @@ I32 m::wasm::compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
                 result += cmp; // add current comparison to result
             },
             [&](_Bool val_left) -> void {
-                _Bool val_right = env_right.compile<_Bool>(*o.first); // compile order expression for right tuple
+                _Bool val_right = env_right.compile<_Bool>(o.first); // compile order expression for right tuple
 
                 _Var<I32> left(val_left.template to<int32_t>()), right(val_right.template to<int32_t>());
 
@@ -2036,9 +2036,9 @@ I32 m::wasm::compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
                 result += cmp; // add current comparison to result
             },
             [&](Ptr<Char> val_left) -> void {
-                auto &cs = as<const CharacterSequence>(*o.first->type());
+                auto &cs = as<const CharacterSequence>(*o.first.get().type());
 
-                Ptr<Char> val_right = env_right.compile<Ptr<Char>>(*o.first); // compile order expression for right tuple
+                Ptr<Char> val_right = env_right.compile<Ptr<Char>>(o.first); // compile order expression for right tuple
 
                 Var<Ptr<Char>> left(val_left), right(val_right);
 
@@ -2060,6 +2060,6 @@ I32 m::wasm::compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
 
 // explicit instantiations to prevent linker errors
 template I32 m::wasm::compare(buffer_load_proxy_t<false> &load, U32 left, U32 right,
-                              const std::vector<std::pair<const m::Expr*, bool>> &order);
+                              const std::vector<SortingOperator::order_type> &order);
 template I32 m::wasm::compare(buffer_load_proxy_t<true> &load, U32 left, U32 right,
-                              const std::vector<std::pair<const m::Expr*, bool>> &order);
+                              const std::vector<SortingOperator::order_type> &order);

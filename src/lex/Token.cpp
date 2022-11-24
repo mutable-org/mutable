@@ -2,6 +2,8 @@
 
 
 using namespace m;
+using namespace m::ast;
+
 
 M_LCOV_EXCL_START
 void Token::dump() const { dump(std::cerr); }

@@ -7,10 +7,18 @@
 
 namespace m {
 
-namespace cnf {
-    struct CNF;
-}
+namespace ast {
+
 struct Expr;
+
+}
+
+namespace cnf {
+
+    struct CNF;
+
+}
+
 struct StackMachineBuilder;
 
 /** A stack machine that evaluates an expression. */
@@ -72,7 +80,7 @@ struct StackMachine
     /** Create a `StackMachine` with the given input `Schema` `in_schema`, compile the `Expr` `expr`, and emit the
      * result to the output `Tuple` at index `0`.  This is a *convenience* c'tor to construct a `StackMachine` that
      * evaluates exactly one expression. */
-    StackMachine(Schema in_schema, const Expr &expr);
+    StackMachine(Schema in_schema, const ast::Expr &expr);
 
     /** Create a `StackMachine` with the given input `Schema` `in_schema`, compile the `cnf::CNF` `cnf`, and emit the
      * result to the output `Tuple` at index `0`.  This is a *convenience* c'tor to construct a `StackMachine` that
@@ -99,7 +107,7 @@ struct StackMachine
     std::size_t required_stack_size() const { return required_stack_size_; }
 
     /** Emit operations evaluating the `Expr` `expr`. */
-    void emit(const Expr &expr, std::size_t tuple_id = 0);
+    void emit(const ast::Expr &expr, std::size_t tuple_id = 0);
 
     /** Emit operations evaluating the `CNF` formula `cnf`. */
     void emit(const cnf::CNF &cnf, std::size_t tuple_id = 0);

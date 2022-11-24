@@ -216,10 +216,10 @@ Condition WasmProjection::adapt_post_condition(const Match<WasmProjection> &M, c
                 break;
             } else {
                 M_insist(p != M.projection.projections().end());
-                if (auto d = cast<const Designator>(p->first)) {
+                if (auto d = cast<const ast::Designator>(p->first)) {
                     auto t = d->target(); // consider target of renamed identifier
-                    if (auto expr = std::get_if<const m::Expr *>(&t)) {
-                        if (auto des = cast<const Designator>(*expr);
+                    if (auto expr = std::get_if<const m::ast::Expr*>(&t)) {
+                        if (auto des = cast<const ast::Designator>(*expr);
                             des and e_sorted.id == Schema::Identifier(des->table_name.text, des->attr_name.text))
                         {
                             sorted_on.add(e_proj.id, e_proj.type);
@@ -261,9 +261,9 @@ void WasmProjection::execute(const Match<WasmProjection> &M, callback_t Pipeline
                     ids_to_add.emplace_back(e.id, e.id); // to retain `e.id` for later compilation of expressions
                 } else {
                     M_insist(p != M.projection.projections().end());
-                    if (auto d = cast<const Designator>(p->first)) {
+                    if (auto d = cast<const ast::Designator>(p->first)) {
                         auto t = d->target(); // consider target of renamed identifier
-                        if (auto expr = std::get_if<const m::Expr*>(&t)) {
+                        if (auto expr = std::get_if<const m::ast::Expr*>(&t)) {
                             /*----- Compile targeted expression. -----*/
                             new_env.add(e.id, old_env.compile(**expr));
                         } else {
@@ -274,7 +274,7 @@ void WasmProjection::execute(const Match<WasmProjection> &M, callback_t Pipeline
                         }
                     } else {
                         /*----- Compile expression. -----*/
-                        new_env.add(e.id, old_env.compile(*p->first));
+                        new_env.add(e.id, old_env.compile(p->first));
                     }
                 }
             }
@@ -302,7 +302,7 @@ Condition WasmSorting::adapt_post_condition(const Match<WasmSorting> &M, const C
 {
     Schema attrs;
     for (auto &o : M.sorting.order_by()) {
-        if (auto des = cast<const Designator>(o.first))
+        if (auto des = cast<const ast::Designator>(o.first))
             attrs.add(Schema::Identifier(des->table_name.text, des->attr_name.text), des->type());
     }
     return Condition(std::move(attrs), post_cond_child.simd_vec_size, post_cond_child.existing_hash_table);

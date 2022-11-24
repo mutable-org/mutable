@@ -6,9 +6,14 @@
 
 namespace m {
 
+namespace ast {
+
+struct Expr;
+
+}
+
 namespace cnf { struct CNF; }
 struct CardinalityEstimator;
-struct Expr;
 struct FilterOperator;
 struct GroupingOperator;
 struct JoinOperator;
@@ -27,7 +32,7 @@ struct calculate_join_cost_tag : const_virtual_crtp_helper<calculate_join_cost_t
 struct calculate_grouping_cost_tag : const_virtual_crtp_helper<calculate_grouping_cost_tag>::
     returns<double>::
     crtp_args<const PlanTableSmallOrDense&, const PlanTableLargeAndSparse&>::
-    args<const QueryGraph&, const CardinalityEstimator&, SmallBitset, const std::vector<const Expr*>&> { };
+    args<const QueryGraph&, const CardinalityEstimator&, SmallBitset, const std::vector<const ast::Expr*>&> { };
 
 struct CostFunction : calculate_filter_cost_tag::base_type
                     , calculate_join_cost_tag::base_type
@@ -63,7 +68,7 @@ struct CostFunction : calculate_filter_cost_tag::base_type
     /** Returns the total cost of performing a Grouping operation. */
     template<typename PlanTable>
     double calculate_grouping_cost(const QueryGraph &G, const PlanTable &PT, const CardinalityEstimator &CE,
-                                   Subproblem sub, const std::vector<const Expr*> &group_by) const
+                                   Subproblem sub, const std::vector<const ast::Expr*> &group_by) const
     {
         return operator()(calculate_grouping_cost_tag{}, PT, G, CE, sub, group_by);
     }

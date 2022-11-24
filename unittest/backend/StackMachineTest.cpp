@@ -16,6 +16,7 @@
 
 
 using namespace m;
+using namespace m::ast;
 
 
 /*======================================================================================================================
@@ -87,8 +88,8 @@ TEST_CASE("StackMachine/Expressions", "[core][backend]")
             Diagnostic diag(true, std::cout, std::cerr);
             auto stmt = statement_from_string(diag, oss.str());
             M_insist(diag.num_errors() == 0);
-            auto select = as<SelectStmt>(*stmt).select;
-            auto expr = as<SelectClause>(select)->select[0].first;
+            auto select = as<SelectStmt>(*stmt).select.get();
+            auto expr = as<SelectClause>(select)->select[0].first.get();
             StackMachine eval(schema);
             eval.emit(*expr, 1);
             eval.emit_St_Tup(0, 0, expr->type());
@@ -315,8 +316,8 @@ TEST_CASE("StackMachine/emit/CNF", "[core][backend]")
             Diagnostic diag(true, std::cout, std::cerr);
             auto stmt = statement_from_string(diag, oss.str());
             M_insist(diag.num_errors() == 0);
-            auto select = as<SelectStmt>(*stmt).select;
-            auto expr = as<SelectClause>(select)->select[0].first;
+            auto select = as<SelectStmt>(*stmt).select.get();
+            auto expr = as<SelectClause>(select)->select[0].first.get();
             auto cnf = cnf::to_CNF(*expr);
 
             SM.emit(cnf);

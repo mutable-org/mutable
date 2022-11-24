@@ -7,6 +7,8 @@
 
 namespace m {
 
+namespace ast {
+
 struct Token
 {
     Position pos;
@@ -39,5 +41,7 @@ M_LCOV_EXCL_START
     void dump() const;
 M_LCOV_EXCL_STOP
 };
+
+}
 
 }

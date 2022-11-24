@@ -99,13 +99,13 @@ int main(int argc, const char **argv)
     }();
 
     /*----- Parse input. ---------------------------------------------------------------------------------------------*/
-    const std::unique_ptr<m::SelectStmt> select = [&diag, &input]() -> std::unique_ptr<m::SelectStmt> {
+    const std::unique_ptr<m::ast::SelectStmt> select = [&diag, &input]() -> std::unique_ptr<m::ast::SelectStmt> {
         auto stmt = m::statement_from_string(diag, input);
-        if (not is<m::SelectStmt>(stmt.get())) {
+        if (not m::is<m::ast::SelectStmt>(stmt.get())) {
             std::cerr << "Expected a SELECT statement.\n";
             std::exit(EXIT_FAILURE);
         }
-        return std::unique_ptr<m::SelectStmt>(as<m::SelectStmt>(stmt.release()));
+        return std::unique_ptr<m::ast::SelectStmt>(m::as<m::ast::SelectStmt>(stmt.release()));
     }();
 
     auto G = m::QueryGraph::Build(*select);
@@ -126,7 +126,7 @@ void emit_query_slice(std::ostream &out, const m::QueryGraph &G, m::Subproblem s
     out << "FROM ";
     for (auto start = slice.begin(), it = start; it != slice.end(); ++it) {
         if (it != start) out << ", ";
-        const auto source = G.sources()[*it];
+        const auto source = G.sources()[*it].get();
         if (const m::BaseTable *T = cast<const m::BaseTable>(source)) {
             out << T->table().name;
             if (T->alias())
@@ -144,7 +144,7 @@ void emit_query_slice(std::ostream &out, const m::QueryGraph &G, m::Subproblem s
     for (auto &J : G.joins()) {
         auto &sources = J->sources();
         for (auto source : sources) {
-            if (not slice[source->id()]) // slice does not contain this source of the join
+            if (not slice[source.get().id()]) // slice does not contain this source of the join
                 goto skip_join;
         }
         if (is_first_in_where) {
@@ -160,8 +160,8 @@ skip_join:;
     /* Conditions */
     {
         for (auto idx : slice) {
-            const auto source = G.sources()[idx];
-            const auto &selection = source->filter();
+            const auto &source = *G.sources()[idx];
+            const auto &selection = source.filter();
             if (not selection.empty()) {
                 if (is_first_in_where) {
                     out << "\nWHERE ";

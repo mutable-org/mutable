@@ -4,6 +4,7 @@
 
 
 using namespace m;
+using namespace m::ast;
 
 
 TEST_CASE("Token c'tor", "[core][lex][unit]")

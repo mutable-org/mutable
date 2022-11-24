@@ -11,6 +11,8 @@
 
 namespace m {
 
+namespace ast {
+
 struct Parser
 {
     using follow_set_t = std::array<bool, unsigned(TokenType::TokenType_MAX) + 1U>;
@@ -67,36 +69,38 @@ struct Parser
 
     void recover(const follow_set_t &FS) { while (not FS[token().type]) consume(); }
 
-    Command * parse();
-    Instruction * parse_Instruction();
-    Stmt * parse_Stmt();
+    std::unique_ptr<Command> parse();
+    std::unique_ptr<Instruction> parse_Instruction();
+    std::unique_ptr<Stmt> parse_Stmt();
 
     /* Statements */
-    Stmt * parse_CreateDatabaseStmt();
-    Stmt * parse_UseDatabaseStmt();
-    Stmt * parse_CreateTableStmt();
-    Stmt * parse_SelectStmt();
-    Stmt * parse_InsertStmt();
-    Stmt * parse_UpdateStmt();
-    Stmt * parse_DeleteStmt();
-    Stmt * parse_ImportStmt();
+    std::unique_ptr<Stmt> parse_CreateDatabaseStmt();
+    std::unique_ptr<Stmt> parse_UseDatabaseStmt();
+    std::unique_ptr<Stmt> parse_CreateTableStmt();
+    std::unique_ptr<Stmt> parse_SelectStmt();
+    std::unique_ptr<Stmt> parse_InsertStmt();
+    std::unique_ptr<Stmt> parse_UpdateStmt();
+    std::unique_ptr<Stmt> parse_DeleteStmt();
+    std::unique_ptr<Stmt> parse_ImportStmt();
 
     /* Clauses */
-    Clause * parse_SelectClause();
-    Clause * parse_FromClause();
-    Clause * parse_WhereClause();
-    Clause * parse_GroupByClause();
-    Clause * parse_HavingClause();
-    Clause * parse_OrderByClause();
-    Clause * parse_LimitClause();
+    std::unique_ptr<Clause> parse_SelectClause();
+    std::unique_ptr<Clause> parse_FromClause();
+    std::unique_ptr<Clause> parse_WhereClause();
+    std::unique_ptr<Clause> parse_GroupByClause();
+    std::unique_ptr<Clause> parse_HavingClause();
+    std::unique_ptr<Clause> parse_OrderByClause();
+    std::unique_ptr<Clause> parse_LimitClause();
 
     /* Expressions */
-    Expr * parse_Expr(int precedence_lhs = 0, Expr *lhs = nullptr);
-    Expr * parse_designator();
-    Expr * expect_integer();
+    std::unique_ptr<Expr> parse_Expr(int precedence_lhs = 0, std::unique_ptr<Expr> lhs = nullptr);
+    std::unique_ptr<Expr> parse_designator();
+    std::unique_ptr<Expr> expect_integer();
 
     /* Types */
     const Type * parse_data_type();
 };
+
+}
 
 }

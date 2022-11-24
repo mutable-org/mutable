@@ -29,9 +29,9 @@ void init_PT_base_case(const QueryGraph &G, PlanTable &PT)
 {
     auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
     using Subproblem = SmallBitset;
-    for (auto ds : G.sources()) {
+    for (auto &ds : G.sources()) {
         Subproblem s(1UL << ds->id());
-        auto bt = cast<const BaseTable>(ds);
+        auto bt = as<const BaseTable>(*ds);
         PT[s].cost = 0;
         PT[s].model = CE.estimate_scan(G, s);
     }

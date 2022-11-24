@@ -4,6 +4,7 @@
 
 
 using namespace m;
+using namespace m::ast;
 
 
 /*===== Expr =========================================================================================================*/
@@ -15,8 +16,8 @@ void ASTPrinter::operator()(Const<ErrorExpr>&)
 
 void ASTPrinter::operator()(Const<Designator> &e)
 {
-    if (e.table_name)
-        out << e.table_name.text << '.';
+    if (e.has_explicit_table_name())
+        out << e.get_table_name() << '.';
     out << e.attr_name.text;
 }
 
@@ -60,7 +61,7 @@ void ASTPrinter::operator()(Const<QueryExpr> &e)
         (*this)(*e.query);
         out << ')';
     } else {
-        out << e.alias() << ".$res";
+        out << e.alias() << '.' << e.alias(); // name of artificial source followed by name of single result
     }
 }
 
@@ -110,7 +111,10 @@ void ASTPrinter::operator()(Const<GroupByClause> &c)
     out << "GROUP BY ";
     for (auto it = c.group_by.cbegin(), end = c.group_by.cend(); it != end; ++it) {
         if (it != c.group_by.cbegin()) out << ", ";
-        (*this)(**it);
+        auto &[grp, alias] = *it;
+        (*this)(*grp);
+        if (it->second)
+            out << " AS " << alias.text;
     }
 }
 
@@ -190,10 +194,10 @@ void ASTPrinter::operator()(Const<CreateTableStmt> &s)
 {
     out << "CREATE TABLE " << s.table_name.text << "\n(";
     for (auto it = s.attributes.cbegin(), end = s.attributes.cend(); it != end; ++it) {
-        auto attr = *it;
+        auto &attr = *it;
         if (it != s.attributes.cbegin()) out << ',';
         out << "\n    " << attr->name.text << ' ' << *attr->type;
-        for (auto c : attr->constraints) {
+        for (auto &c : attr->constraints) {
             out << ' ';
             (*this)(*c);
         }

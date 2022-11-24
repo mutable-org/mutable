@@ -176,13 +176,13 @@ int main(int argc, const char **argv)
     }();
 
     /*----- Parse input. ---------------------------------------------------------------------------------------------*/
-    const std::unique_ptr<m::SelectStmt> select = [&diag, &input]() -> std::unique_ptr<m::SelectStmt> {
+    const std::unique_ptr<m::ast::SelectStmt> select = [&diag, &input]() -> std::unique_ptr<m::ast::SelectStmt> {
         auto stmt = m::statement_from_string(diag, input);
-        if (not is<m::SelectStmt>(stmt.get())) {
+        if (not m::is<m::ast::SelectStmt>(stmt)) {
             std::cerr << "Expected a SELECT statement.\n";
             std::exit(EXIT_FAILURE);
         }
-        return std::unique_ptr<m::SelectStmt>(as<m::SelectStmt>(stmt.release()));
+        return m::as<m::ast::SelectStmt>(std::move(stmt));
     }();
 
     /*----- Prepare graph, table, and generator. ---------------------------------------------------------------------*/
@@ -286,13 +286,13 @@ void generate_uncorrelated_cardinalities(table_type &table, const m::QueryGraph 
         /*----- Create a fresh PRNG from the sources that are being joined. -----*/
         std::size_t seed = 0;
         for (auto s : J)
-            seed = (seed * 526122883134911UL) ^ m::StrHash{}(s->name());
+            seed = (seed * 526122883134911UL) ^ m::StrHash{}(s.get().name());
         std::mt19937_64 local_g(seed);
 
         /*----- Compute the selectivity of this join. -----*/
         double cartesian = 1;
         for (auto s : J)
-            cartesian *= table[Subproblem(1UL << s->id())];
+            cartesian *= table[Subproblem(1UL << s.get().id())];
         const double min_selectivity = std::max(args.min_cardinality / cartesian, remaining_selectivity);
         if (min_selectivity < avg_selectivity) {
             /*----- Draw selectivity between min and average. -----*/
@@ -317,8 +317,8 @@ void generate_uncorrelated_cardinalities(table_type &table, const m::QueryGraph 
             if (sources.size() != 2)
                 throw std::invalid_argument("unsupported join");
             /* Check whether this join connects `left` and `right`. */
-            if ((left[sources[0]->id()] and right[sources[1]->id()]) or
-                (left[sources[1]->id()] and right[sources[0]->id()]))
+            if ((left[sources[0].get().id()] and right[sources[1].get().id()]) or
+                (left[sources[1].get().id()] and right[sources[0].get().id()]))
             {
                 /* This join connects `left` and `right`. */
                 total_selectivity *= selectivities[j];
@@ -367,7 +367,7 @@ void emit_cardinalities(std::ostream &out, const m::QueryGraph &G, const table_t
         out << "        { \"relations\": [";
         for (auto it = S.begin(); it != S.end(); ++it) {
             if (it != S.begin()) out << ", ";
-            auto DS = G.sources()[*it];
+            auto &DS = G.sources()[*it];
             out << '"' << DS->name() << '"';
         }
         /*----- Emit size. -----*/

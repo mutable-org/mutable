@@ -58,7 +58,7 @@ using SQL_t = std::variant<
  *====================================================================================================================*/
 
 /** Compiles AST expressions `m::Expr` to Wasm ASTs `m::wasm::Expr<T>`.  Also supports compiling `m::cnf::CNF`s. */
-struct ExprCompiler : ConstASTExprVisitor
+struct ExprCompiler : ast::ConstASTExprVisitor
 {
     private:
     ///> current intermediate results during AST traversal and compilation
@@ -70,7 +70,7 @@ struct ExprCompiler : ConstASTExprVisitor
     ExprCompiler(const Environment &env) : env_(env) { }
 
     ///> Compiles a `m::Expr` \p e of statically unknown type to a `SQL_t`.
-    SQL_t compile(const m::Expr &e) {
+    SQL_t compile(const m::ast::Expr &e) {
         (*this)(e);
         return std::move(intermediate_result_);
     }
@@ -78,7 +78,7 @@ struct ExprCompiler : ConstASTExprVisitor
     ///> Compile a `m::Expr` of statically known type to an `Expr<T>`.
     template<typename T>
     requires is_sql_type_v<T>
-    T compile(const m::Expr &e) {
+    T compile(const m::ast::Expr &e) {
         (*this)(e);
         M_insist(std::holds_alternative<T>(intermediate_result_));
         return *std::get_if<T>(&intermediate_result_);
@@ -89,13 +89,13 @@ struct ExprCompiler : ConstASTExprVisitor
 
     private:
     using ConstASTExprVisitor::operator();
-    void operator()(const ErrorExpr&) override;
-    void operator()(const Designator &op) override;
-    void operator()(const Constant &op) override;
-    void operator()(const UnaryExpr &op) override;
-    void operator()(const BinaryExpr &op) override;
-    void operator()(const FnApplicationExpr &op) override;
-    void operator()(const QueryExpr &op) override;
+    void operator()(const ast::ErrorExpr&) override;
+    void operator()(const ast::Designator &op) override;
+    void operator()(const ast::Constant &op) override;
+    void operator()(const ast::UnaryExpr &op) override;
+    void operator()(const ast::BinaryExpr &op) override;
+    void operator()(const ast::FnApplicationExpr &op) override;
+    void operator()(const ast::QueryExpr &op) override;
 
     SQL_t get() { return std::move(intermediate_result_); }
 
@@ -649,7 +649,7 @@ T signum(T value)
  * \p left is greater than \p right, according to the ordering. */
 template<bool IsGlobal>
 I32 compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
-            const std::vector<std::pair<const m::Expr*, bool>> &order);
+            const std::vector<SortingOperator::order_type> &order);
 
 
 /*======================================================================================================================
@@ -661,9 +661,9 @@ extern template struct Buffer<true>;
 extern template struct buffer_swap_proxy_t<false>;
 extern template struct buffer_swap_proxy_t<true>;
 extern template I32 compare(buffer_load_proxy_t<false> &load, U32 left, U32 right,
-                            const std::vector<std::pair<const m::Expr*, bool>> &order);
+                            const std::vector<SortingOperator::order_type> &order);
 extern template I32 compare(buffer_load_proxy_t<true> &load, U32 left, U32 right,
-                            const std::vector<std::pair<const m::Expr*, bool>> &order);
+                            const std::vector<SortingOperator::order_type> &order);
 
 }
 

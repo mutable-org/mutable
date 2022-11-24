@@ -32,7 +32,7 @@ struct CostFunctionCout : CostFunctionCRTP<CostFunctionCout>
     template<typename PlanTable>
     double operator()(calculate_grouping_cost_tag, const PlanTable &PT, const QueryGraph &G,
                       const CardinalityEstimator &CE, Subproblem sub,
-                      const std::vector<const Expr*> &group_by) const
+                      const std::vector<const ast::Expr*> &group_by) const
     {
         return double(CE.predict_cardinality(*PT[sub].model)) + PT[sub].cost;
     }

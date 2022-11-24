@@ -1,30 +1,28 @@
 description: GROUP BY and ORDER BY with aggregate function testing
 db: tpc-h
 query: |
-    SELECT l_orderkey, AVG(l_tax) FROM LINEITEM GROUP BY l_orderkey ORDER BY LINEITEM.l_orderkey;
+    SELECT l_orderkey, AVG(l_tax) FROM LINEITEM GROUP BY l_orderkey ORDER BY l_orderkey;
 required: YES
 
 stages:
     lexer:
         out: |
-            -:1:1: SELECT TK_Select
-            -:1:8: l_orderkey TK_IDENTIFIER
-            -:1:18: , TK_COMMA
-            -:1:20: AVG TK_IDENTIFIER
-            -:1:23: ( TK_LPAR
-            -:1:24: l_tax TK_IDENTIFIER
-            -:1:29: ) TK_RPAR
-            -:1:31: FROM TK_From
-            -:1:36: LINEITEM TK_IDENTIFIER
-            -:1:45: GROUP TK_Group
-            -:1:51: BY TK_By
-            -:1:54: l_orderkey TK_IDENTIFIER
-            -:1:65: ORDER TK_Order
-            -:1:71: BY TK_By
-            -:1:74: LINEITEM TK_IDENTIFIER
-            -:1:82: . TK_DOT
-            -:1:83: l_orderkey TK_IDENTIFIER
-            -:1:93: ; TK_SEMICOL
+          -:1:1: SELECT TK_Select
+          -:1:8: l_orderkey TK_IDENTIFIER
+          -:1:18: , TK_COMMA
+          -:1:20: AVG TK_IDENTIFIER
+          -:1:23: ( TK_LPAR
+          -:1:24: l_tax TK_IDENTIFIER
+          -:1:29: ) TK_RPAR
+          -:1:31: FROM TK_From
+          -:1:36: LINEITEM TK_IDENTIFIER
+          -:1:45: GROUP TK_Group
+          -:1:51: BY TK_By
+          -:1:54: l_orderkey TK_IDENTIFIER
+          -:1:65: ORDER TK_Order
+          -:1:71: BY TK_By
+          -:1:74: l_orderkey TK_IDENTIFIER
+          -:1:84: ; TK_SEMICOL
         err: NULL
         num_err: 0
         returncode: 0
@@ -34,7 +32,7 @@ stages:
             SELECT l_orderkey, AVG(l_tax)
             FROM LINEITEM
             GROUP BY l_orderkey
-            ORDER BY LINEITEM.l_orderkey ASC;
+            ORDER BY l_orderkey ASC;
         err: NULL
         num_err: 0
         returncode: 0

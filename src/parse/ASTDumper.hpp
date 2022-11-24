@@ -5,6 +5,8 @@
 
 namespace m {
 
+namespace ast {
+
 /** Dumps a textual representation of the AST to an output stream. */
 struct ASTDumper : ConstASTVisitor
 {
@@ -29,5 +31,7 @@ struct ASTDumper : ConstASTVisitor
         return out;
     }
 };
+
+}
 
 }

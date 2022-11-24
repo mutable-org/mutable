@@ -39,7 +39,7 @@ const char * tystr(const PrimitiveType *ty) {
  * StackMachineBuilder
  *====================================================================================================================*/
 
-struct m::StackMachineBuilder : ConstASTExprVisitor
+struct m::StackMachineBuilder : ast::ConstASTExprVisitor
 {
     private:
     StackMachine &stack_machine_;
@@ -47,7 +47,7 @@ struct m::StackMachineBuilder : ConstASTExprVisitor
     const std::size_t tuple_id;
 
     public:
-    StackMachineBuilder(StackMachine &stack_machine, const Schema &in_schema, const Expr &expr, std::size_t tuple_id)
+    StackMachineBuilder(StackMachine &stack_machine, const Schema &in_schema, const ast::Expr &expr, std::size_t tuple_id)
         : stack_machine_(stack_machine)
         , schema_(in_schema)
         , tuple_id(tuple_id)
@@ -59,18 +59,18 @@ struct m::StackMachineBuilder : ConstASTExprVisitor
     static std::unordered_map<std::string, std::regex> regexes_; ///< regexes built from patterns in LIKE expressions
 
     using ConstASTExprVisitor::operator();
-    void operator()(Const<ErrorExpr>&) override { M_unreachable("invalid expression"); }
-    void operator()(Const<Designator> &e) override;
-    void operator()(Const<Constant> &e) override;
-    void operator()(Const<FnApplicationExpr> &e) override;
-    void operator()(Const<UnaryExpr> &e) override;
-    void operator()(Const<BinaryExpr> &e) override;
-    void operator()(Const<QueryExpr> &e) override;
+    void operator()(Const<ast::ErrorExpr>&) override { M_unreachable("invalid expression"); }
+    void operator()(Const<ast::Designator> &e) override;
+    void operator()(Const<ast::Constant> &e) override;
+    void operator()(Const<ast::FnApplicationExpr> &e) override;
+    void operator()(Const<ast::UnaryExpr> &e) override;
+    void operator()(Const<ast::BinaryExpr> &e) override;
+    void operator()(Const<ast::QueryExpr> &e) override;
 };
 
 std::unordered_map<std::string, std::regex> StackMachineBuilder::regexes_;
 
-void StackMachineBuilder::operator()(Const<Designator> &e)
+void StackMachineBuilder::operator()(Const<ast::Designator> &e)
 {
     /* Given the designator, identify the position of its value in the tuple.  */
     auto idx = schema_[{e.table_name.text, e.attr_name.text}].first;
@@ -78,14 +78,14 @@ void StackMachineBuilder::operator()(Const<Designator> &e)
     stack_machine_.emit_Ld_Tup(tuple_id, idx);
 }
 
-void StackMachineBuilder::operator()(Const<Constant> &e) {
+void StackMachineBuilder::operator()(Const<ast::Constant> &e) {
     if (e.tok == TK_Null)
         stack_machine_.emit_Push_Null();
     else
         stack_machine_.add_and_emit_load(Interpreter::eval(e));
 }
 
-void StackMachineBuilder::operator()(Const<FnApplicationExpr> &e)
+void StackMachineBuilder::operator()(Const<ast::FnApplicationExpr> &e)
 {
     auto &C = Catalog::Get();
     auto &fn = e.get_function();
@@ -140,7 +140,7 @@ void StackMachineBuilder::operator()(Const<FnApplicationExpr> &e)
     }
 }
 
-void StackMachineBuilder::operator()(Const<UnaryExpr> &e)
+void StackMachineBuilder::operator()(Const<ast::UnaryExpr> &e)
 {
     (*this)(*e.expr);
     auto ty = e.expr->type();
@@ -186,7 +186,7 @@ void StackMachineBuilder::operator()(Const<UnaryExpr> &e)
     }
 }
 
-void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
+void StackMachineBuilder::operator()(Const<ast::BinaryExpr> &e)
 {
     auto ty = as<const PrimitiveType>(e.type());
     auto ty_lhs = as<const PrimitiveType>(e.lhs->type());
@@ -470,7 +470,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
             break;
 
         case TK_Like: {
-            if (auto rhs = cast<const Constant>(e.rhs)) {
+            if (auto rhs = cast<const ast::Constant>(e.rhs.get())) {
                 (*this)(*e.lhs);
                 auto pattern = interpret(rhs->tok.text);
                 auto it = regexes_.find(pattern);
@@ -501,7 +501,7 @@ void StackMachineBuilder::operator()(Const<BinaryExpr> &e)
     }
 }
 
-void StackMachineBuilder::operator()(Const<QueryExpr> &e) {
+void StackMachineBuilder::operator()(Const<ast::QueryExpr> &e) {
     /* Given the query expression, identify the position of its value in the tuple.  */
     Catalog &C = Catalog::Get();
     std::size_t idx(schema_[{e.alias(), C.pool("$res")}].first);
@@ -520,7 +520,7 @@ const std::unordered_map<std::string, StackMachine::Opcode> StackMachine::STR_TO
 #undef M_OPCODE
 };
 
-StackMachine::StackMachine(Schema in_schema, const Expr &expr)
+StackMachine::StackMachine(Schema in_schema, const ast::Expr &expr)
     : in_schema(in_schema)
 {
     emit(expr, 1);
@@ -534,7 +534,7 @@ StackMachine::StackMachine(Schema in_schema, const cnf::CNF &cnf)
     // TODO emit St
 }
 
-void StackMachine::emit(const Expr &expr, std::size_t tuple_id)
+void StackMachine::emit(const ast::Expr &expr, std::size_t tuple_id)
 {
     StackMachineBuilder Builder(*this, in_schema, expr, tuple_id); // compute the command sequence for this stack machine
 }
@@ -546,7 +546,7 @@ void StackMachine::emit(const cnf::CNF &cnf, std::size_t tuple_id)
         auto &C = *clause_it;
         for (auto pred_it = C.cbegin(); pred_it != C.cend(); ++pred_it) {
             auto &P = *pred_it;
-            emit(*P.expr(), tuple_id); // emit code for predicate
+            emit(*P, tuple_id); // emit code for predicate
             if (P.negative())
                 ops.push_back(StackMachine::Opcode::Not_b); // negate if negative
             if (pred_it != C.cbegin())

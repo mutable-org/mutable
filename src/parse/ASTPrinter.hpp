@@ -3,6 +3,8 @@
 
 namespace m {
 
+namespace ast {
+
 /** Pretty-prints the AST in SQL. */
 struct ASTPrinter : ConstASTVisitor
 {
@@ -24,5 +26,7 @@ struct ASTPrinter : ConstASTVisitor
     M_AST_LIST(DECLARE)
 #undef DECLARE
 };
+
+}
 
 }

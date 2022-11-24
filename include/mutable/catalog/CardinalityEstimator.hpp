@@ -12,10 +12,14 @@
 
 namespace m {
 
-/* Forward declarations */
+namespace ast {
+
+struct Expr;
+
+}
+
 namespace cnf { struct CNF; }
 struct Diagnostic;
-struct Expr;
 struct GroupingOperator;
 struct LimitOperator;
 struct Operator;
@@ -48,6 +52,7 @@ struct M_EXPORT estimate_join_all_tag : const_virtual_crtp_helper<estimate_join_
 struct M_EXPORT CardinalityEstimator : estimate_join_all_tag::base_type
 {
     using estimate_join_all_tag::base_type::operator();
+    using group_type = std::pair<std::reference_wrapper<const ast::Expr>, const char*>;
 
     /** `data_model_exception` is thrown if a `DataModel` implementation does not contain the requested information. */
     struct data_model_exception : m::exception
@@ -100,7 +105,7 @@ struct M_EXPORT CardinalityEstimator : estimate_join_all_tag::base_type
      * @return          the `DataModel` describing the grouped data
      */
     virtual std::unique_ptr<DataModel>
-    estimate_grouping(const QueryGraph &G, const DataModel &data, const std::vector<const Expr*> &groups) const = 0;
+    estimate_grouping(const QueryGraph &G, const DataModel &data, const std::vector<group_type> &groups) const = 0;
 
     /** Form a new `DataModel` by joining two `DataModel`s.
      *
@@ -186,8 +191,7 @@ struct M_EXPORT CartesianProductEstimator : CardinalityEstimatorCRTP<CartesianPr
     std::unique_ptr<DataModel>
     estimate_limit(const QueryGraph &G, const DataModel &data, std::size_t limit, std::size_t offset) const override;
     std::unique_ptr<DataModel>
-    estimate_grouping(const QueryGraph &G, const DataModel &data,
-                      const std::vector<const Expr*> &groups) const override;
+    estimate_grouping(const QueryGraph &G, const DataModel &data, const std::vector<group_type> &groups) const override;
     std::unique_ptr<DataModel>
     estimate_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
                   const cnf::CNF &condition) const override;
@@ -277,8 +281,7 @@ struct M_EXPORT InjectionCardinalityEstimator : CardinalityEstimatorCRTP<Injecti
     std::unique_ptr<DataModel>
     estimate_limit(const QueryGraph &G, const DataModel &data, std::size_t limit, std::size_t offset) const override;
     std::unique_ptr<DataModel>
-    estimate_grouping(const QueryGraph &G, const DataModel &data,
-                      const std::vector<const Expr*> &groups) const override;
+    estimate_grouping(const QueryGraph &G, const DataModel &data, const std::vector<group_type> &groups) const override;
     std::unique_ptr<DataModel>
     estimate_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
                   const cnf::CNF &condition) const override;
@@ -386,8 +389,7 @@ struct M_EXPORT SpnEstimator : CardinalityEstimatorCRTP<SpnEstimator>
     std::unique_ptr<DataModel>
     estimate_limit(const QueryGraph &G, const DataModel &data, std::size_t limit, std::size_t offset) const override;
     std::unique_ptr<DataModel>
-    estimate_grouping(const QueryGraph &G, const DataModel &data,
-                      const std::vector<const Expr*> &groups) const override;
+    estimate_grouping(const QueryGraph &G, const DataModel &data, const std::vector<group_type> &groups) const override;
     std::unique_ptr<DataModel>
     estimate_join(const QueryGraph &G, const DataModel &left, const DataModel &right,
                   const cnf::CNF &condition) const override;

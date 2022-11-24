@@ -106,7 +106,7 @@ endif()
 set(CMAKE_COMPILE_FLAGS             "${CMAKE_COMPILE_FLAGS} -W -Wall -pedantic -Wno-variadic-macros -Wno-gnu-zero-variadic-macro-arguments -Wno-gnu-label-as-value -Wno-vla-extension -Wno-gnu-conditional-omitted-operand -mavx2 -mbmi2 -mavx -msse4.2 -mbmi")
 set(CMAKE_C_FLAGS                   "${CMAKE_C_FLAGS} ${CMAKE_COMPILE_FLAGS}")
 set(CMAKE_CXX_FLAGS                 "-std=c++20 ${CMAKE_CXX_FLAGS} ${CMAKE_COMPILE_FLAGS}")
-set(CMAKE_CXX_FLAGS_DEBUG           "-fno-omit-frame-pointer -fno-optimize-sibling-calls")
+set(CMAKE_CXX_FLAGS_DEBUG           "-g3 -fno-omit-frame-pointer -fno-optimize-sibling-calls") # use -g3 to expand macros
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "-DNDEBUG -fno-omit-frame-pointer -fno-optimize-sibling-calls -O2")
 set(CMAKE_POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS})
 
@@ -339,23 +339,38 @@ generate_export_header(
     EXPORT_FILE_NAME "${CMAKE_CURRENT_SOURCE_DIR}/include/mutable/mutable-config.hpp"
 )
 
-# Tests
+#===== Tests ===========================================================================================================
 if(APPLE)
     set(ENV env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0)
 else()
     set(ENV env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1)
 endif()
+
 add_custom_target(
-    check
+    check-unit
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    DEPENDS lex-bin parse-bin check-bin shell unittest
+    DEPENDS unittest
     VERBATIM USES_TERMINAL
     COMMAND echo "##################"
     COMMAND echo "### Unit Tests ###"
     COMMAND echo "##################"
     COMMAND ${ENV} ${EXECUTABLE_OUTPUT_PATH}/unittest "[core]"
+)
+
+add_custom_target(
+    check-integration
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    DEPENDS lex-bin parse-bin check-bin shell
+    VERBATIM USES_TERMINAL
     COMMAND echo "#########################"
     COMMAND echo "### Integration Tests ###"
     COMMAND echo "#########################"
     COMMAND ${ENV} "${CMAKE_CURRENT_SOURCE_DIR}/test/IntegrationTest.py" -r "${PROJECT_BINARY_DIR}"
+)
+
+add_custom_target(
+    check
+    VERBATIM USES_TERMINAL
+    COMMAND ${CMAKE_BUILD_TOOL} check-unit
+    COMMAND ${CMAKE_BUILD_TOOL} check-integration
 )

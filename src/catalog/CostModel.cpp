@@ -67,7 +67,7 @@ Timer::duration time_select_query_execution(Database &DB, const std::string &inp
     C.set_database_in_use(DB);
 
     auto stmt = statement_from_string(diag, input);
-    auto query = std::unique_ptr<SelectStmt>(as<SelectStmt>(stmt.release()));
+    auto query = as<ast::SelectStmt>(stmt.release());
 
     using duration_t = std::remove_reference_t<decltype(C.timer())>::duration;
     std::vector<duration_t> execution_times;

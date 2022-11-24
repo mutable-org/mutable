@@ -3,17 +3,24 @@
 #include <mutable/catalog/Catalog.hpp>
 #include <mutable/parse/AST.hpp>
 #include <mutable/util/Diagnostic.hpp>
+#include <sstream>
 #include <unordered_map>
 #include <vector>
 
 
 namespace m {
 
+namespace ast {
+
 struct Sema : ASTExprVisitor, ASTClauseVisitor, ASTStmtVisitor
 {
     /** Holds context information used by semantic analysis of a single statement. */
     struct SemaContext
     {
+        ///> if the statement that is being analyzed is a nested query, this is its alias in the outer statement
+        const char *alias = nullptr;
+
+        ///> the statement that is currently being analyzed and for which this `SemaContext` is used
         Stmt &stmt;
         enum stage_t {
             S_From,
@@ -25,15 +32,35 @@ struct Sema : ASTExprVisitor, ASTClauseVisitor, ASTStmtVisitor
             S_Limit,
         } stage = S_From; ///< current stage
 
-        ///> list of all computed expressions along with their order
-        using named_expr_table = std::unordered_multimap<const char*, std::pair<Expr*, unsigned>>;
-        using source_type = std::variant<const Table*, named_expr_table>;
-        using source_table = std::unordered_map<const char*, std::pair<source_type, unsigned>>;
-        source_table sources; ///< list of all sources along with their order
-        ///> list of all results computed by this statement along with their order
-        std::unordered_multimap<const char*, std::pair<Expr*, unsigned>> results;
+        bool needs_grouping = false;
 
-        std::vector<Expr*> group_keys; ///< list of group keys
+        struct result_t
+        {
+            std::reference_wrapper<Expr> expr_;
+            ///> the order of this result column in the result set
+            unsigned order;
+            ///> alias of the expression; may be `nullptr`
+            const char *alias = nullptr;
+
+            result_t(Expr &expr, unsigned order) : expr_(expr), order(order) { }
+            result_t(Expr &expr, unsigned order, const char *alias) : expr_(expr), order(order), alias(alias) { }
+
+            Expr & expr() { return expr_.get(); }
+            const Expr & expr() const { return expr_.get(); }
+        };
+
+        ///> list of all computed expressions along with their order
+        using named_expr_table = std::unordered_multimap<const char*, std::pair<std::reference_wrapper<Expr>, unsigned>>;
+        ///> the type of a source of data: either a database table or a nested query with named results
+        using source_type = std::variant<const Table*, named_expr_table>;
+        ///> associative container mapping source name to data source and its order
+        using source_table = std::unordered_map<const char*, std::pair<source_type, unsigned>>;
+        ///> list of all sources along with their order
+        source_table sources;
+        ///> list of all results computed by this statement along with their order
+        std::unordered_multimap<const char*, result_t> results;
+        ///> list of grouping keys
+        std::unordered_multimap<const char*, std::reference_wrapper<Expr>> grouping_keys;
 
         SemaContext(Stmt &stmt) : stmt(stmt) { }
 
@@ -73,7 +100,11 @@ struct Sema : ASTExprVisitor, ASTClauseVisitor, ASTStmtVisitor
     public:
     Diagnostic &diag;
     private:
-    std::vector<SemaContext*> contexts_; ///> a stack of sema contexts; one per statement; grows by nesting statements
+    ///> a stack of sema contexts; one per statement; grows by nesting statements
+    using context_stack_t = std::vector<SemaContext*>;
+    context_stack_t contexts_;
+    ///> used to create textual representation of complex AST objects, e.g. expressions
+    std::ostringstream oss;
 
     public:
     Sema(Diagnostic &diag) : diag(diag) { }
@@ -89,9 +120,10 @@ struct Sema : ASTExprVisitor, ASTClauseVisitor, ASTStmtVisitor
 #undef DECLARE
 
     private:
-    SemaContext & push_context(Stmt &stmt) {
-        contexts_.emplace_back(new SemaContext(stmt));
-        return *contexts_.back();
+    SemaContext & push_context(Stmt &stmt, const char *alias = nullptr) {
+        auto &ref = contexts_.emplace_back(new SemaContext(stmt));
+        ref->alias = alias;
+        return *ref;
     }
     SemaContext pop_context() {
         auto ctx = *contexts_.back();
@@ -108,36 +140,46 @@ struct Sema : ASTExprVisitor, ASTClauseVisitor, ASTStmtVisitor
         return *contexts_.back();
     }
 
-    /** Creates a new designator that has the same textual representation as `from` and has `to` as target. */
-    Designator * make_designator(const Expr *from, const Expr *to) {
-        auto &C = Catalog::Get();
-        Designator *d;
-        if (auto des = cast<const Designator>(to)) {
-            M_insist(is<const Designator>(from));
-            d = new Designator(des->tok, des->table_name, des->attr_name);
-        } else {
-            std::ostringstream oss;
-            oss << *from;
-            Token tok(from->tok.pos, C.pool(oss.str().c_str()), TK_IDENTIFIER);
-            d = new Designator(tok);
-        }
-        d->type_ = to->type();
-        d->target_ = to;
-        return d;
-    }
+    /** Creates a fresh `Designator` with the given \p name at location \p tok and with target \p target. */
+    std::unique_ptr<Designator> create_designator(const char *name, Token tok, const Expr &target);
 
-    Designator * make_designator(Position pos, const char *table_name, const char *attr_name,
-                                 typename Designator::target_type target, const Type *type)
+    /** Creates a fresh `Designator` with the same syntactical representation as \p name and with target \p target. */
+    std::unique_ptr<Designator> create_designator(const Expr &name, const Expr &target);
+
+    /** Creates a fresh `Designator` that has the same syntactical representation as \p target and targets \target. */
+    std::unique_ptr<Designator> create_designator_to(const Expr &target);
+
+    /** Replaces \p to_replace by a fresh `Designator`, that has the same syntactical representation as \p to_replace
+     * and targets \p target. */
+    void replace_by_fresh_designator_to(std::unique_ptr<Expr> &to_replace, const Expr &target);
+
+    /** Computes whether the bound parts of \p expr are composable of elements in \p components. */
+    bool is_composable_of(const ast::Expr &expr, const std::vector<std::reference_wrapper<ast::Expr>> components);
+
+    /** Recursively analyzes the `ast::Expr` referenced by \p ptr and replaces subexpressions that can be composed of
+     * the elements in \p components. */
+    void compose_of(std::unique_ptr<ast::Expr> &ptr, const std::vector<std::reference_wrapper<ast::Expr>> components);
+
+    /** Creates an entirely new `Designator`.  This method is used to introduce artificial `Designator`s to *expand* an
+     * anti-projection (`SELECT` with asterisk `*`). */
+    std::unique_ptr<Designator> create_designator(Position pos, const char *table_name, const char *attr_name,
+                                                typename Designator::target_type target, const Type *type)
     {
         auto &C = Catalog::Get();
         Token dot(pos, C.pool("."), TK_DOT);
         Token table(pos, table_name, TK_IDENTIFIER);
         Token attr(pos, attr_name, TK_IDENTIFIER);
-        auto d = new Designator(dot, table, attr);
+        auto d = std::make_unique<Designator>(dot, table, attr);
         d->type_ = type;
         d->target_ = target;
         return d;
     }
+
+    /** Creates a unique ID from a sequence of `SemaContext`s by concatenating their aliases. */
+    const char * make_unique_id_from_binding_path(context_stack_t::reverse_iterator current_ctx,
+                                                  context_stack_t::reverse_iterator binding_ctx);
 };
+
+}
 
 }

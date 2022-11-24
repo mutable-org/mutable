@@ -151,8 +151,8 @@ TEST_CASE("AdjacencyMatrix/QueryGraph Matrix", "[core][util][unit]")
 
     /* Mapping of relation name to SmallBitset of data source ID. */
     std::unordered_map<const char *, SmallBitset> map;
-    for (auto ds : query_graph->sources()) {
-        auto tbl = cast<const BaseTable>(ds);
+    for (auto &ds : query_graph->sources()) {
+        auto tbl = cast<const BaseTable>(ds.get());
         REQUIRE(tbl != nullptr);
         const char *str_name = tbl->table().name;
         map[str_name] = SmallBitset(1 << ds->id());

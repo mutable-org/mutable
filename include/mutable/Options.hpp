@@ -45,8 +45,6 @@ struct Options
     bool physplan;
     bool physplandot;
 
-    const char *pddl;
-
     /** If `true`, do not pass the query to the backend for execution. */
     bool dryrun;
 

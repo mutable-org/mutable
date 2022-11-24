@@ -1,33 +1,33 @@
 description: GROUP BY statement testing
 db: tpc-h
 query: |
-    SELECT l_orderkey + l_partkey FROM LINEITEM GROUP BY l_orderkey + l_partkey;
+    SELECT x FROM LINEITEM GROUP BY l_orderkey + l_partkey AS x;
 required: YES
 
 stages:
     lexer:
         out: |
-            -:1:1: SELECT TK_Select
-            -:1:8: l_orderkey TK_IDENTIFIER
-            -:1:19: + TK_PLUS
-            -:1:21: l_partkey TK_IDENTIFIER
-            -:1:31: FROM TK_From
-            -:1:36: LINEITEM TK_IDENTIFIER
-            -:1:45: GROUP TK_Group
-            -:1:51: BY TK_By
-            -:1:54: l_orderkey TK_IDENTIFIER
-            -:1:65: + TK_PLUS
-            -:1:67: l_partkey TK_IDENTIFIER
-            -:1:76: ; TK_SEMICOL
+          -:1:1: SELECT TK_Select
+          -:1:8: x TK_IDENTIFIER
+          -:1:10: FROM TK_From
+          -:1:15: LINEITEM TK_IDENTIFIER
+          -:1:24: GROUP TK_Group
+          -:1:30: BY TK_By
+          -:1:33: l_orderkey TK_IDENTIFIER
+          -:1:44: + TK_PLUS
+          -:1:46: l_partkey TK_IDENTIFIER
+          -:1:56: AS TK_As
+          -:1:59: x TK_IDENTIFIER
+          -:1:60: ; TK_SEMICOL
         err: NULL
         num_err: 0
         returncode: 0
 
     parser:
         out: |
-            SELECT (l_orderkey + l_partkey)
+            SELECT x
             FROM LINEITEM
-            GROUP BY (l_orderkey + l_partkey);
+            GROUP BY (l_orderkey + l_partkey) AS x;
         err: NULL
         num_err: 0
         returncode: 0

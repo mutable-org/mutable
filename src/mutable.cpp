@@ -15,6 +15,7 @@
 
 
 using namespace m;
+using namespace m::ast;
 
 
 bool init() { return streq(m::version::GIT_REV, m::version::get().GIT_REV); }
@@ -248,14 +249,13 @@ void m::execute_file(Diagnostic &diag, const std::filesystem::path &path)
     while (parser.token()) {
         std::unique_ptr<Command> command(parser.parse());
         if (diag.num_errors()) return;
-        if (is<Instruction>(*command)) {
-            auto &instruction = as<Instruction>(*command);
-            execute_instruction(diag, instruction);
+        if (auto inst = cast<Instruction>(command)) {
+            execute_instruction(diag, *inst);
         } else {
-            auto &stmt = as<Stmt>(*command);
-            sema(stmt);
+            auto stmt = as<Stmt>(std::move(command));
+            sema(*stmt);
             if (diag.num_errors()) return;
-            execute_statement(diag, stmt);
+            execute_statement(diag, *stmt);
         }
     }
 }

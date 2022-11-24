@@ -8,7 +8,117 @@
 
 
 using namespace m;
+using namespace m::ast;
 
+
+std::unique_ptr<Designator> Sema::create_designator(const char *name, Token tok, const Expr &target)
+{
+    auto new_designator = std::make_unique<Designator>(tok, Token(), Token(tok.pos, name, TK_IDENTIFIER));
+    new_designator->type_ = target.type();
+    new_designator->target_ = &target;
+    return new_designator;
+}
+
+std::unique_ptr<Designator> Sema::create_designator(const Expr &name, const Expr &target)
+{
+    auto &C = Catalog::Get();
+
+    std::unique_ptr<Designator> new_designator;
+    if (auto d = cast<const Designator>(&name)) {
+        new_designator = std::make_unique<Designator>(d->tok, d->table_name, d->attr_name); // exact copy of `name`
+    } else {
+        oss.str("");
+        oss << name; // stringify `name`
+        Token tok(target.tok.pos, C.pool(oss.str().c_str()), TK_DEC_INT); // fresh identifier
+        new_designator = std::make_unique<Designator>(tok);
+    }
+
+    new_designator->type_ = target.type();
+    new_designator->target_ = &target;
+    return new_designator;
+}
+
+std::unique_ptr<Designator> Sema::create_designator_to(const Expr &target)
+{
+    return create_designator(/* name= */ target, /* target= */ target);
+}
+
+void Sema::replace_by_fresh_designator_to(std::unique_ptr<Expr> &to_replace, const Expr &target)
+{
+    auto new_designator = create_designator(*to_replace, target);
+    to_replace = std::move(new_designator);
+}
+
+const char * Sema::make_unique_id_from_binding_path(context_stack_t::reverse_iterator current_ctx,
+                                                    context_stack_t::reverse_iterator binding_ctx)
+{
+    if (current_ctx == binding_ctx) return nullptr;
+
+    oss.str("");
+    for (auto it = current_ctx; it != binding_ctx; ++it) {
+        if (it != current_ctx) oss << '.';
+        M_insist((*it)->alias, "nested queries must have an alias");
+        oss << (*it)->alias;
+    }
+
+    auto &C = Catalog::Get();
+    return C.pool(oss.str().c_str());
+}
+
+bool Sema::is_composable_of(const ast::Expr &expr,
+                            const std::vector<std::reference_wrapper<ast::Expr>> components)
+{
+    auto recurse = overloaded {
+        [&](const ast::Designator &d) -> bool {
+            return d.contains_free_variables() or d.is_identifier(); // identifiers are implicitly composable, as they never refer into a table XXX do we have to check the target?
+        },
+        [&](const ast::FnApplicationExpr &e) -> bool {
+            if (not is_composable_of(*e.fn, components)) return false;
+            for (auto &arg : e.args) {
+                if (not is_composable_of(*arg, components))
+                    return false;
+            }
+            return true;
+        },
+        [&](const ast::UnaryExpr &e) -> bool { return is_composable_of(*e.expr, components); },
+        [&](const ast::BinaryExpr &e) -> bool {
+            return is_composable_of(*e.lhs, components) and is_composable_of(*e.rhs, components);
+        },
+        [](auto&) -> bool { return true; },
+    };
+
+    for (auto c : components)
+        if (expr == c.get()) return true; // syntactically equivalent to a component
+    return visit(recurse, expr, m::tag<m::ast::ConstASTExprVisitor>()); // attempt to recursively compose expr
+}
+
+void Sema::compose_of(std::unique_ptr<ast::Expr> &ptr, const std::vector<std::reference_wrapper<ast::Expr>> components)
+{
+    auto recurse = overloaded {
+        [&](const ast::Designator &d) -> bool {
+            return d.contains_free_variables() or d.is_identifier(); // identifiers are implicitly composable, as they never refer into a table XXX do we have to check the target?
+        },
+        [&](const ast::FnApplicationExpr &e) -> bool {
+            if (not is_composable_of(*e.fn, components)) return false;
+            for (auto &arg : e.args) {
+                if (not is_composable_of(*arg, components))
+                    return false;
+            }
+            return true;
+        },
+        [&](const ast::UnaryExpr &e) -> bool { return is_composable_of(*e.expr, components); },
+        [&](const ast::BinaryExpr &e) -> bool {
+            return is_composable_of(*e.lhs, components) and is_composable_of(*e.rhs, components);
+        },
+        [](auto&) -> bool { return true; },
+    };
+
+    for (auto c : components) {
+        if (*ptr == c.get())
+            replace_by_fresh_designator_to(/* to_replace= */ ptr, /* target= */ c.get());
+    }
+    visit(recurse, *ptr, m::tag<m::ast::ConstASTExprVisitor>()); // attempt to recursively compose expr
+}
 
 /*===== Expr =========================================================================================================*/
 
@@ -21,6 +131,48 @@ void Sema::operator()(Const<Designator> &e)
 {
     Catalog &C = Catalog::Get();
     SemaContext *current_ctx = &get_context();
+
+    oss.str("");
+    oss << e;
+    auto pooled_name = C.pool(oss.str().c_str());
+
+    /*----- In a stage after SELECT, check whether the `Designator` refers to a value produced by SELECT. -----*/
+    if (current_ctx->stage > SemaContext::S_Select) {
+        auto [begin, end] = current_ctx->results.equal_range(pooled_name);
+        if (std::distance(begin, end) > 1) {
+            diag.e(e.tok.pos) << "Designator " << e << " is ambiguous, multiple occurrences in SELECT clause.\n";
+            e.type_ = Type::Get_Error();
+            return;
+        } else if (std::distance(begin, end) == 1) {
+            SemaContext::result_t &result = begin->second;
+            if (auto d = cast<Designator>(&result.expr()); d and not result.alias) // target is a designator w/o
+                e.table_name.text = d->table_name.text;                            // explicit alias
+            e.type_ = result.expr().type();
+            e.target_ = &result.expr();
+            return;
+        }
+    }
+
+    /*----- In a stage after GROUP BY, check whether the entire expression refers to a grouping key. -----*/
+    if (current_ctx->stage > SemaContext::S_GroupBy and not current_ctx->grouping_keys.empty()) {
+        auto [begin, end] = current_ctx->grouping_keys.equal_range(pooled_name);
+        if (std::distance(begin, end) > 1) {
+            diag.e(e.tok.pos) << "Designator " << e << " is ambiguous, multiple occurrences in GROUP BY clause.\n";
+            e.type_ = Type::Get_Error();
+            return;
+        } else if (std::distance(begin, end) == 1) {
+            auto &referenced_expr = begin->second.get();
+            e.type_ = referenced_expr.type();
+            if (auto pt = cast<const PrimitiveType>(e.type()))
+                e.type_ = pt->as_scalar();
+            else
+                M_insist(e.type()->is_error(), "grouping expression must be of primitive type");
+            e.target_ = &referenced_expr;
+            return;
+        }
+    }
+
+    /*----- Designator was neither a reference to a SELECT or GROUP BY expression. -----*/
     decltype(contexts_)::reverse_iterator found_ctx; // the context where the designator is found
     bool is_result = false;
 
@@ -28,7 +180,6 @@ void Sema::operator()(Const<Designator> &e)
     if (e.table_name) {
         /* Find the source table first and then locate the target inside this table. */
         SemaContext::source_type src;
-        bool is_correlated = false;
 
         /* Search all contexts, starting with the innermost and advancing outwards. */
         auto it = contexts_.rbegin();
@@ -47,7 +198,6 @@ void Sema::operator()(Const<Designator> &e)
             e.type_ = Type::Get_Error();
             return;
         }
-        is_correlated = it != contexts_.rbegin();
         found_ctx = it;
 
         /* Find the target inside the source table. */
@@ -78,13 +228,14 @@ void Sema::operator()(Const<Designator> &e)
                 e.type_ = Type::Get_Error();
                 return;
             } else {
-                target = begin->second.first;
+                target = &begin->second.first.get();
             }
         } else {
             M_unreachable("invalid variant");
         }
         e.target_ = target;
-        e.is_correlated_ = is_correlated;
+        e.set_binding_depth(std::distance(contexts_.rbegin(), found_ctx));
+        e.unique_id_ = make_unique_id_from_binding_path(contexts_.rbegin(), found_ctx);
     } else {
         /* No table name was specified.  The designator references either a result or a named expression.  Search the
          * named expressions first, because they overrule attribute names. */
@@ -98,10 +249,11 @@ void Sema::operator()(Const<Designator> &e)
                 return;
             } else {
                 M_insist(std::distance(begin, end) == 1);
-                e.target_ = begin->second.first;
-                if (auto d = cast<Designator>(begin->second.first); d and d->attr_name.text == e.attr_name.text)
+                SemaContext::result_t &result = begin->second;
+                e.target_ = &result.expr();
+                if (auto d = cast<Designator>(&result.expr()); d and d->attr_name.text == e.attr_name.text)
                     e.table_name.text = d->table_name.text;
-                e.is_correlated_ = false;
+                e.set_binding_depth(0); // bound by the current (innermost) context ⇒ bound variable
                 is_result = true;
                 found_ctx = contexts_.rbegin(); // iterator to the current context
             }
@@ -111,7 +263,6 @@ void Sema::operator()(Const<Designator> &e)
             const char *alias = nullptr;
 
             /* Search all contexts, starting with the innermost and advancing outwards. */
-            bool is_correlated = false;
             for (auto it = contexts_.rbegin(), end = contexts_.rend(); it != end; ++it) {
                 for (auto &src : (*it)->sources) {
                     if (auto T = std::get_if<const Table*>(&src.second.first)) {
@@ -128,7 +279,6 @@ void Sema::operator()(Const<Designator> &e)
                             } else {
                                 target = &A; // we found an attribute of that name in the source tables
                                 alias = src.first;
-                                is_correlated = it != contexts_.rbegin();
                                 found_ctx = it;
                             }
                         } catch (std::out_of_range) {
@@ -153,9 +303,8 @@ void Sema::operator()(Const<Designator> &e)
                                 e.type_ = Type::Get_Error();
                                 return;
                             } else {
-                                target = begin->second.first; // we found an attribute of that name in the source tables
+                                target = &begin->second.first.get(); // we found an attribute of that name in the source tables
                                 alias = src.first;
-                                is_correlated = it != contexts_.rbegin();
                                 found_ctx = it;
                             }
                         }
@@ -177,7 +326,8 @@ void Sema::operator()(Const<Designator> &e)
 
             e.target_ = target;
             e.table_name.text = alias; // set the deduced table name of this designator
-            e.is_correlated_ = is_correlated;
+            e.set_binding_depth(std::distance(contexts_.rbegin(), found_ctx));
+            e.unique_id_ = make_unique_id_from_binding_path(contexts_.rbegin(), found_ctx);
         }
     }
 
@@ -216,28 +366,10 @@ void Sema::operator()(Const<Designator> &e)
 
         case SemaContext::S_Where:
         case SemaContext::S_GroupBy:
-            /* The type of the attribute remains unchanged.  Nothing to be done. */
-            break;
-
         case SemaContext::S_Having:
         case SemaContext::S_Select:
         case SemaContext::S_OrderBy:
-            /* Detect whether we grouped by this designator.  In that case, convert the type to scalar and redirect the
-             * target to the grouping key. */
-            for (auto grp : (*found_ctx)->group_keys) {
-                Designator *d = cast<Designator>(grp);
-                if (d and d->target() == e.target()) {
-                    /* The grouping key and this designator reference the same attribute. */
-                    e.type_ = pt->as_scalar();
-                    e.target_ = d;
-                    std::ostringstream oss;
-                    oss << *d;
-                    e.table_name.text = nullptr;
-                    e.table_name.type = TokenType::TK_EOF;
-                    e.attr_name.text = C.pool(oss.str().c_str());
-                    break;
-                }
-            }
+            /* The type of the attribute remains unchanged.  Nothing to be done. */
             break;
     }
 }
@@ -354,36 +486,40 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
 {
     SemaContext &Ctx = get_context();
     Catalog &C = Catalog::Get();
-    const auto &DB = C.get_database_in_use(); // XXX can we assume a DB is selected?
 
     /* Analyze function name. */
-    Designator *d = cast<Designator>(e.fn);
+    auto d = cast<Designator>(e.fn.get());
     if (not d or not d->is_identifier()) {
         diag.e(d->attr_name.pos) << *d << " is not a valid function.\n";
         d->type_ = e.type_ = Type::Get_Error();
         return;
     }
-    M_insist(d);
+    M_insist(bool(d));
     M_insist(not d->type_, "This identifier has already been analyzed.");
 
     /* Analyze arguments. */
-    for (auto arg : e.args) {
+    for (auto &arg : e.args)
         (*this)(*arg);
-        if (arg->is_correlated()) {
-            diag.e(arg->tok.pos) << "Argument " << *arg << " is correlated (not yet supported).\n";
+
+    /* Lookup the function. */
+    if (C.has_database_in_use()) {
+        const auto &DB = C.get_database_in_use();
+        try {
+            e.func_ = DB.get_function(d->attr_name.text);
+        } catch (std::out_of_range) {
+            diag.e(d->attr_name.pos) << "Function " << d->attr_name.text << " is not defined in database " << DB.name
+                << ".\n";
             e.type_ = Type::Get_Error();
             return;
         }
-    }
-
-    /* Lookup the function. */
-    try {
-        e.func_ = DB.get_function(d->attr_name.text);
-    } catch (std::out_of_range) {
-        diag.e(d->attr_name.pos) << "Function " << d->attr_name.text << " is not defined in database " << DB.name
-            << ".\n";
-        e.type_ = Type::Get_Error();
-        return;
+    } else {
+        try {
+            e.func_ = C.get_function(d->attr_name.text);
+        } catch (std::out_of_range) {
+            diag.e(d->attr_name.pos) << "Function " << d->attr_name.text << " is not defined.\n";
+            e.type_ = Type::Get_Error();
+            return;
+        }
     }
     M_insist(e.func_);
 
@@ -403,30 +539,30 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
         case Function::FN_SUM:
         case Function::FN_AVG: {
             if (e.args.size() == 0) {
-                diag.e(d->attr_name.pos) << "Missing argument for aggregate " << d << ".\n";
+                diag.e(d->attr_name.pos) << "Missing argument for aggregate " << *d << ".\n";
                 d->type_ = e.type_ = Type::Get_Error();
                 return;
             }
             if (e.args.size() > 1) {
-                diag.e(d->attr_name.pos) << "Too many arguments for aggregate " << d << ".\n";
+                diag.e(d->attr_name.pos) << "Too many arguments for aggregate " << *d << ".\n";
                 d->type_ = e.type_ = Type::Get_Error();
                 return;
             }
             M_insist(e.args.size() == 1);
-            const Expr *arg = e.args[0];
-            if (arg->type()->is_error()) {
+            auto &arg = *e.args[0];
+            if (arg.type()->is_error()) {
                 /* skip argument of error type */
                 d->type_ = e.type_ = Type::Get_Error();
                 return;
             }
-            if (not arg->type()->is_numeric()) {
+            if (not arg.type()->is_numeric()) {
                 /* invalid argument type */
                 diag.e(d->attr_name.pos) << "Argument of aggregate function must be of numeric type.\n";
                 d->type_ = e.type_ = Type::Get_Error();
                 return;
             }
-            M_insist(arg->type()->is_numeric());
-            const Numeric *arg_type = cast<const Numeric>(arg->type());
+            M_insist(arg.type()->is_numeric());
+            const Numeric *arg_type = cast<const Numeric>(arg.type());
             if (not arg_type->is_vectorial()) {
                 diag.w(d->attr_name.pos) << "Argument of aggregate is not of vectorial type.  "
                                             "(Aggregates over scalars are discouraged.)\n";
@@ -440,14 +576,14 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
                 case Function::FN_MAX: {
                     /* MIN/MAX maintain type */
                     e.type_ = arg_type->as_scalar();
-                    d->type_ = Type::Get_Function(e.type_, { arg->type() });
+                    d->type_ = Type::Get_Function(e.type_, { arg.type() });
                     break;
                 }
 
                 case Function::FN_AVG: {
                     /* AVG always uses double precision floating-point */
                     e.type_ = Type::Get_Double(Type::TY_Scalar);
-                    d->type_ = Type::Get_Function(e.type_, { arg->type() });
+                    d->type_ = Type::Get_Function(e.type_, { arg.type() });
                     break;
                 }
 
@@ -476,7 +612,7 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
 
         case Function::FN_COUNT: {
             if (e.args.size() > 1) {
-                diag.e(d->attr_name.pos) << "Too many arguments for aggregate " << d << ".\n";
+                diag.e(d->attr_name.pos) << "Too many arguments for aggregate " << *d << ".\n";
                 e.type_ = Type::Get_Error();
                 return;
             }
@@ -490,30 +626,30 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
 
         case Function::FN_ISNULL: {
             if (e.args.size() == 0) {
-                diag.e(d->attr_name.pos) << "Missing argument for aggregate " << d << ".\n";
+                diag.e(d->attr_name.pos) << "Missing argument for aggregate " << *d << ".\n";
                 e.type_ = Type::Get_Error();
                 return;
             }
             if (e.args.size() > 1) {
-                diag.e(d->attr_name.pos) << "Too many arguments for aggregate " << d << ".\n";
+                diag.e(d->attr_name.pos) << "Too many arguments for aggregate " << *d << ".\n";
                 e.type_ = Type::Get_Error();
                 return;
             }
             M_insist(e.args.size() == 1);
-            const Expr *arg = e.args[0];
+            auto &arg = *e.args[0];
 
-            if (arg->type()->is_error()) {
+            if (arg.type()->is_error()) {
                 e.type_ = Type::Get_Error();
                 return;
             }
-            const PrimitiveType *arg_type = cast<const PrimitiveType>(arg->type());
+            const PrimitiveType *arg_type = cast<const PrimitiveType>(arg.type());
             if (not arg_type) {
                 diag.e(d->attr_name.pos) << "Function ISNULL can only be applied to expressions of primitive type.\n";
                 e.type_ = Type::Get_Error();
                 return;
             }
 
-            d->type_ = Type::Get_Function(Type::Get_Boolean(arg_type->category), { arg->type() });
+            d->type_ = Type::Get_Function(Type::Get_Boolean(arg_type->category), { arg.type() });
             e.type_= Type::Get_Boolean(arg_type->category);
             break;
         }
@@ -802,7 +938,7 @@ void Sema::operator()(Const<QueryExpr> &e)
     SemaContext &Ctx = get_context();
 
     /* Evaluate the nested statement in a fresh sema context. */
-    push_context(*e.query);
+    push_context(*e.query, e.alias());
     (*this)(*e.query);
     M_insist(not contexts_.empty());
     SemaContext inner_ctx = pop_context();
@@ -814,14 +950,14 @@ void Sema::operator()(Const<QueryExpr> &e)
         return;
     }
     M_insist(1 == inner_ctx.results.size());
-    auto res = inner_ctx.results.begin()->second.first;
+    Expr &res = inner_ctx.results.begin()->second.expr();
 
-    if (not res->type()->is_primitive()) {
+    if (not res.type()->is_primitive()) {
         diag.e(e.tok.pos) << "Invalid expression:\n" << e << ",\nnested statement must return a primitive value.\n";
         e.type_ = Type::Get_Error();
         return;
     }
-    auto *pt = as<const PrimitiveType>(res->type_);
+    auto *pt = as<const PrimitiveType>(res.type_);
     e.type_ = pt;
 
     switch (Ctx.stage) {
@@ -845,11 +981,11 @@ void Sema::operator()(Const<QueryExpr> &e)
             }
 
             auto is_fn = is<FnApplicationExpr>(res);
-            auto is_const = res->is_constant();
-            auto *q = as<const SelectStmt>(e.query);
+            auto is_const = res.is_constant();
+            auto &q = as<const SelectStmt>(*e.query);
             /* The result is a single value iff it is a constant and there is no from clause or
              * iff it is an aggregate and there is no group_by clause. */
-            if (not(is_const and not q->from) and not(is_fn and not q->group_by)) {
+            if (not(is_const and not q.from) and not(is_fn and not q.group_by)) {
                 diag.e(e.tok.pos) << "Invalid expression:\n" << e
                                    << ",\nnested statement must return a single value.\n";
                 e.type_ = Type::Get_Error();
@@ -873,7 +1009,7 @@ void Sema::operator()(Const<SelectClause> &c)
     Ctx.stage = SemaContext::S_Select;
     Catalog &C = Catalog::Get();
 
-    bool has_vector = false;
+    bool has_vectorial = false;
     bool has_scalar = false;
     uint64_t const_counter = 0;
     M_insist(Ctx.results.empty());
@@ -884,98 +1020,127 @@ void Sema::operator()(Const<SelectClause> &c)
         auto &stmt = as<const SelectStmt>(Ctx.stmt);
 
         if (stmt.group_by) {
-            auto group_by = as<const GroupByClause>(stmt.group_by);
-            for (auto expr : group_by->group_by) {
-                auto d = make_designator(expr, expr);
-                M_insist(d->type()->is_error() or d->type()->is_primitive());
+            /* If the statement contains a GROUP BY clause, we must include all grouping keys in the result. */
+            auto &group_by = as<const GroupByClause>(*stmt.group_by);
+            has_scalar = has_scalar or not group_by.group_by.empty();
+            for (auto &[expr, alias] : group_by.group_by) {
+                std::unique_ptr<Designator> d = alias ? create_designator(alias.text, expr->tok, *expr)
+                                                      : create_designator_to(*expr);
                 if (auto ty = cast<const PrimitiveType>(d->type()))
                     d->type_ = ty->as_scalar();
-                c.expansion.push_back(d);
-                Ctx.results.emplace(d->attr_name.text, std::make_pair(d, result_counter++));
+                else
+                    M_insist(d->type()->is_error(), "grouping key must be of primitive type");
+                const char *attr_name = d->attr_name.text;
+                auto &ref = c.expanded_select_all.emplace_back(std::move(d));
+                Ctx.results.emplace(attr_name, SemaContext::result_t(*ref, result_counter++, alias.text));
             }
         } else if (stmt.having) {
+            /* A statement with a HAVING clause but without a GROUP BY clause may only have literals in its SELECT
+             * clause.  Therefore, '*' has no meaning and we should emit a warning. */
             diag.w(c.select_all.pos) << "The '*' has no meaning in this query.  Did you forget the GROUP BY clause?.\n";
         } else {
-            for (auto &src : Ctx.sorted_sources()) {
-                if (auto ptr = std::get_if<const Table*>(&src.second)) {
+            /* The '*' in the SELECT clause selects all attributes of all sources. */
+            for (auto &[src_name, src] : Ctx.sorted_sources()) {
+                if (auto ptr = std::get_if<const Table*>(&src)) {
+                    /* The source is a database table. */
                     auto &tbl = **ptr;
                     for (auto &attr : tbl) {
-                        auto d = make_designator(c.select_all.pos, src.first, attr.name, &attr, attr.type);
-                        c.expansion.push_back(d);
-                        (*this)(*d);
-                        Ctx.results.emplace(attr.name, std::make_pair(d, result_counter++));
+                        auto d = create_designator(
+                            /* pos=        */ c.select_all.pos,
+                            /* table_name= */ src_name,
+                            /* attr_name=  */ attr.name,
+                            /* target=     */ &attr,
+                            /* type=       */ attr.type
+                        );
+                        auto ref = c.expanded_select_all.emplace_back(std::move(d)).get();
+                        (*this)(*ref);
+                        Ctx.results.emplace(attr.name, SemaContext::result_t(*ref, result_counter++));
                     }
+                    has_vectorial = true;
                 } else {
-                    auto &exprs = std::get<SemaContext::named_expr_table>(src.second);
-                    std::vector<Expr*> expansion(exprs.size());
-                    for (auto &named_expr : exprs) {
-                        auto d = make_designator(c.select_all.pos, src.first, named_expr.first, named_expr.second.first,
-                                                 named_expr.second.first->type());
-                        expansion[named_expr.second.second] = d;
-                        (*this)(*d);
-                        Ctx.results.emplace(named_expr.first,
-                                            std::make_pair(d, result_counter + named_expr.second.second));
+                    /* The source is a nested query. */
+                    auto &named_exprs = std::get<SemaContext::named_expr_table>(src);
+                    std::vector<std::unique_ptr<Expr>> expanded_select_all(named_exprs.size());
+                    for (auto &[name, expr_w_pos] : named_exprs) {
+                        auto &[expr, pos] = expr_w_pos;
+                        auto d = create_designator(
+                            /* pos=        */ c.select_all.pos,
+                            /* table_name= */ src_name,
+                            /* attr_name=  */ name,
+                            /* target=     */ &expr.get(),
+                            /* type=       */ expr.get().type()
+                        );
+                        auto ref = (expanded_select_all[pos] = std::move(d)).get();
+                        (*this)(*ref);
+                        if (auto pt = cast<const PrimitiveType>(ref->type())) {
+                            has_scalar = has_scalar or pt->is_scalar();
+                            has_vectorial = has_vectorial or pt->is_vectorial();
+                        } else {
+                            M_insist(ref->type()->is_error(), "result of nested query must be of primitive type");
+                        }
+                        Ctx.results.emplace(name, SemaContext::result_t(*ref, result_counter + pos));
                     }
-                    result_counter += exprs.size();
-                    c.expansion.insert(c.expansion.end(), expansion.begin(), expansion.end());
+                    result_counter += named_exprs.size();
+                    for (auto &e : expanded_select_all) c.expanded_select_all.emplace_back(std::move(e));
                 }
             }
         }
     }
 
-    for (auto it = c.select.begin(); it != c.select.end(); ++it) {
-        auto &s = *it;
-        auto it_group_keys = std::find_if(Ctx.group_keys.begin(), Ctx.group_keys.end(),
-                                          [=](const Expr *expr) { return *expr == *s.first; });
-        if (it_group_keys != Ctx.group_keys.end()) { // check if `s.first` is a grouping key
-            /* Replace expression by a designator pointing to the grouping key. */
-            auto d = make_designator(s.first, *it_group_keys);
-            d->type_ = as<const PrimitiveType>(d->type())->as_scalar();
-            delete s.first;
-            s.first = d;
-        } else {
-            (*this)(*s.first);
-            if (s.first->is_correlated() and not is<QueryExpr>(s.first))
-                diag.e(s.first->tok.pos) << *s.first << " is correlated (not yet supported).\n";
+    for (auto it = c.select.begin(), end = c.select.end(); it != end; ++it) {
+        auto &select_expr = *it->first;
+        auto alias = it->second;
+
+        (*this)(select_expr); // recursively analyze select expression
+        if (select_expr.contains_free_variables() and not is<QueryExpr>(select_expr))
+            diag.e(select_expr.tok.pos) << select_expr << " contains free variables (not yet supported).\n";
+
+        if (select_expr.type()->is_error()) continue;
+
+        /* Expressions *must* be scalar when we have grouping. */
+        if (auto pt = cast<const PrimitiveType>(select_expr.type()); Ctx.needs_grouping and pt and pt->is_vectorial()) {
+            diag.e(select_expr.tok.pos) << select_expr << " is not scalar.\n";
+            continue;
         }
 
-        auto &e = *s.first;
-        if (e.type()->is_error()) continue;
-        /* Constants and scalar values of nested queries can be broadcast from scalar to vectorial. */
-        if (not e.is_constant() and not is<QueryExpr>(e)) {
-            auto pt = as<const PrimitiveType>(e.type());
-            has_vector = has_vector or pt->is_vectorial();
+        /* Constants and scalar values of nested queries can be broadcast from scalar to vectorial.  We collect the
+         * scalar/vector-ness information of each expression in the SELECT clause. */
+        if (not select_expr.is_constant() and not is<QueryExpr>(select_expr)) {
+            auto pt = as<const PrimitiveType>(select_expr.type());
+            has_vectorial = has_vectorial or pt->is_vectorial();
             has_scalar = has_scalar or pt->is_scalar();
         }
 
-        if (s.second) {
+        if (alias) { // SELECT expression has alias?
             /* Expression with alias. */
-            Ctx.results.emplace(s.second.text, std::make_pair(s.first, result_counter++));
-            auto pred = [&s](const std::pair<Expr*, Token> &sel) { return sel.second.text == s.second.text; };
+            Ctx.results.emplace(alias.text, SemaContext::result_t(select_expr, result_counter++, alias.text));
+            auto pred = [&](const std::pair<std::unique_ptr<Expr>, Token> &sel) {
+                return sel.second.text == alias.text;
+            };
             if (auto num = std::count_if(c.select.begin(), it, pred)) {
                 /* Found ambiguous alias which is only allowed without accessing it. This is checked via the `Ctx`
                  * in which the ambiguous alias is contained. However, make alias unique for later accessing steps. */
-                std::ostringstream oss;
-                oss << s.second.text << "$" << num;
-                s.second.text = C.pool(oss.str().c_str());
+                oss.str("");
+                oss << alias.text << "$" << num;
+                alias.text = C.pool(oss.str().c_str());
             }
-        } else if (auto d = cast<const Designator>(s.first)) {
+        } else if (auto d = cast<Designator>(&select_expr)) {
             /* Expression is a designator.  Simply reuse the name without table prefix. */
-            Ctx.results.emplace(d->attr_name.text, std::make_pair(s.first, result_counter++));
+            Ctx.results.emplace(d->attr_name.text, SemaContext::result_t(*d, result_counter++));
         } else {
-            M_insist(not is<const Designator>(s.first));
+            M_insist(not is<Designator>(select_expr));
             /* Expression without alias.  Print expression as string to get a name.  Use '$const' as prefix for
              * constants. */
-            std::ostringstream oss;
-            if (e.is_constant())
+            oss.str("");
+            if (select_expr.is_constant())
                 oss << "$const" << const_counter++;
             else
-                oss << *s.first;
-            Ctx.results.emplace(C.pool(oss.str().c_str()), std::make_pair(s.first, result_counter++));
+                oss << select_expr;
+            Ctx.results.emplace(C.pool(oss.str().c_str()), SemaContext::result_t(select_expr, result_counter++));
         }
     }
 
-    if (has_vector and has_scalar)
+    if (has_vectorial and has_scalar)
         diag.e(c.tok.pos) << "SELECT clause with mixed scalar and vectorial values is forbidden.\n";
 }
 
@@ -992,11 +1157,11 @@ void Sema::operator()(Const<FromClause> &c)
 
     /* Check whether the source tables in the FROM clause exist in the database.  Add the source tables to the current
      * context, using their alias if provided (e.g. FROM src AS alias). */
-    for (auto &table: c.from) {
-        if (auto name = std::get_if<Token>(&table.source)) {
+    for (auto &src: c.from) {
+        if (auto name = std::get_if<Token>(&src.source)) {
             try {
                 const Table &T = DB.get_table(name->text);
-                Token table_name = table.alias ? table.alias : *name; // FROM name AS alias ?
+                Token table_name = src.alias ? src.alias : *name; // FROM name AS alias ?
                 auto res = Ctx.sources.emplace(table_name.text, std::make_pair(&T, source_counter++));
                 /* Check if the table name is already in use in other contexts. */
                 bool unique = true;
@@ -1009,38 +1174,40 @@ void Sema::operator()(Const<FromClause> &c)
                 }
                 if (not res.second or not unique)
                     diag.e(table_name.pos) << "Table name " << table_name.text << " already in use.\n";
-                table.table_ = &T;
+                src.table_ = &T;
             } catch (std::out_of_range) {
                 diag.e(name->pos) << "No table " << name->text << " in database " << DB.name << ".\n";
                 return;
             }
-        } else if (auto stmt = std::get_if<Stmt*>(&table.source)) {
+        } else if (auto stmt = std::get_if<Stmt*>(&src.source)) {
             M_insist(is<SelectStmt>(*stmt), "nested statements are always select statements");
 
             /* Evaluate the nested statement in a fresh sema context. */
-            push_context(**stmt);
+            push_context(**stmt, src.alias.text);
             (*this)(**stmt);
             M_insist(not contexts_.empty());
             SemaContext inner_ctx = pop_context();
 
+            SemaContext::named_expr_table results;
+            for (auto &[name, res] : inner_ctx.results)
+                results.emplace(name, std::make_pair(std::ref(res.expr()), res.order));
+
             /* Add the results of the nested statement to the list of sources. */
-            auto res = Ctx.sources.emplace(table.alias.text, std::make_pair(inner_ctx.results, source_counter++));
+            auto res = Ctx.sources.emplace(src.alias.text, std::make_pair(std::move(results), source_counter++));
             /* Convert scalar results to vectorials. */
-            for (auto &r : inner_ctx.results) {
-                auto e = r.second.first;
-                e->type_ = as<const PrimitiveType>(e->type())->as_vectorial();
-            }
+            for (auto &[_, result] : inner_ctx.results)
+                result.expr().type_ = as<const PrimitiveType>(result.expr().type())->as_vectorial();
             /* Check if the table name is already in use in other contexts. */
             bool unique = true;
             for (std::size_t i = 0; i < contexts_.size() - 1; ++i) {
                 if (contexts_[i]->stage == SemaContext::S_From) continue;
-                if (contexts_[i]->sources.find(table.alias.text) != contexts_[i]->sources.end()) {
+                if (contexts_[i]->sources.find(src.alias.text) != contexts_[i]->sources.end()) {
                     unique = false;
                     break;
                 }
             }
             if (not res.second or not unique) {
-                diag.e(table.alias.pos) << "Table name " << table.alias.text << " already in use.\n";
+                diag.e(src.alias.pos) << "Table name " << src.alias.text << " already in use.\n";
                 return;
             }
         } else {
@@ -1071,18 +1238,20 @@ void Sema::operator()(Const<WhereClause> &c)
 
 void Sema::operator()(Const<GroupByClause> &c)
 {
+    Catalog &C = Catalog::Get();
     SemaContext &Ctx = get_context();
     Ctx.stage = SemaContext::S_GroupBy;
 
-    for (auto expr : c.group_by) {
+    Ctx.needs_grouping = true;
+    for (auto &[expr, alias] : c.group_by) {
         (*this)(*expr);
-
-        if (expr->is_correlated())
-            diag.e(expr->tok.pos) << *expr << " is correlated (not yet supported).\n";
 
         /* Skip errors. */
         if (expr->type()->is_error())
             continue;
+
+        if (expr->contains_free_variables())
+            diag.e(expr->tok.pos) << *expr << " contains free variable(s) (not yet supported).\n";
 
         const PrimitiveType *pt = cast<const PrimitiveType>(expr->type());
 
@@ -1100,7 +1269,15 @@ void Sema::operator()(Const<GroupByClause> &c)
         }
 
         /* Add expression to list of grouping keys. */
-        Ctx.group_keys.push_back(expr);
+        if (alias) {
+            Ctx.grouping_keys.emplace(alias.text, *expr);
+        } else if (auto d = cast<Designator>(expr.get())) {
+            Ctx.grouping_keys.emplace(d->attr_name.text, *expr);
+        } else {
+            oss.str("");
+            oss << *expr;
+            Ctx.grouping_keys.emplace(C.pool(oss.str().c_str()), *expr);
+        }
     }
 }
 
@@ -1108,6 +1285,7 @@ void Sema::operator()(Const<HavingClause> &c)
 {
     SemaContext &Ctx = get_context();
     Ctx.stage = SemaContext::S_Having;
+    Ctx.needs_grouping = true;
 
     (*this)(*c.having);
 
@@ -1138,39 +1316,23 @@ void Sema::operator()(Const<OrderByClause> &c)
 
     /* Analyze all ordering expressions. */
     for (auto &o : c.order_by) {
-        Expr *e = o.first;
+        auto &e = o.first;
         (*this)(*e);
 
-        if (e->is_correlated())
-            diag.e(e->tok.pos) << *e << " is correlated (not yet supported).\n";
-
         if (e->type()->is_error()) continue;
+        if (e->contains_free_variables())
+            diag.e(e->tok.pos) << *e << " contains free variable(s) (not yet supported).\n";
+
         auto pt = as<const PrimitiveType>(e->type());
 
-        if (Ctx.group_keys.empty()) {
+        if (Ctx.needs_grouping) { // w/ grouping
+            /* If we grouped, the grouping keys now have scalar type. */
+            if (pt->is_vectorial())
+                diag.e(c.tok.pos) << "Cannot order by " << *e << ", expression must be scalar.\n";
+        } else { // w/o grouping
             /* If we did not group, the ordering expressions must be vectorial. */
-            if (not pt->is_vectorial())
+            if (pt->is_scalar())
                 diag.e(c.tok.pos) << "Cannot order by " << *e << ", expression must be vectorial.\n";
-        } else {
-            /* If we grouped, the grouping keys now have scalar type.  First check that the ordering expressions is of
-             * scalar type. */
-            if (pt->is_scalar()) continue;
-
-            /* If the expression is not of scalar type, check whether it is a grouping expression. */
-            for (auto grp : Ctx.group_keys) {
-                if (*grp == *e) { // the expression is a grouping key
-                    /* Replace expression by a designator pointing to the grouping key. */
-                    auto d = make_designator(o.first, grp);
-                    d->type_ = as<const PrimitiveType>(d->type())->as_scalar();
-                    delete o.first;
-                    o.first = d;
-                    goto ok;
-                }
-            }
-
-            /* The expression is neither scalar nor a grouping expression. */
-            diag.e(c.tok.pos) << "Cannot order by " << *e << ", expression must be scalar.\n";
-ok:;
         }
     }
 }
@@ -1265,7 +1427,7 @@ void Sema::operator()(Const<CreateTableStmt> &s)
     /* Analyze attributes and add them to the new table. */
     bool error = false;
     bool has_primary_key = false;
-    for (auto attr : s.attributes) {
+    for (auto &attr : s.attributes) {
         const PrimitiveType *ty = cast<const PrimitiveType>(attr->type);
         if (not ty) {
             diag.e(attr->name.pos) << "Attribute " << attr->name.text << " cannot be defined with type " << *attr->type
@@ -1289,7 +1451,7 @@ void Sema::operator()(Const<CreateTableStmt> &s)
         bool has_reference = false; ///< at most one reference allowed per attribute
         bool is_unique = false, is_not_null = false;
         get_context().stage = SemaContext::S_Where;
-        for (auto c : attr->constraints) {
+        for (auto &c : attr->constraints) {
             if (is<PrimaryKeyConstraint>(c)) {
                 if (has_primary_key) {
                     diag.e(attr->name.pos) << "Duplicate definition of primary key as attribute " << attr->name.text
@@ -1320,14 +1482,14 @@ void Sema::operator()(Const<CreateTableStmt> &s)
                 (*this)(*check->cond);
                 auto ty = check->cond->type();
                 if (not ty->is_boolean()) {
-                    diag.e(c->tok.pos) << "Condition " << *check->cond << " is an invalid CHECK constraint.\n";
+                    diag.e(check->tok.pos) << "Condition " << *check->cond << " is an invalid CHECK constraint.\n";
                     error = true;
                 }
             }
 
             if (auto ref = cast<ReferenceConstraint>(c)) {
                 if (has_reference) {
-                    diag.e(c->tok.pos) << "Attribute " << attr->name.text << " must not have multiple references.\n";
+                    diag.e(ref->tok.pos) << "Attribute " << attr->name.text << " must not have multiple references.\n";
                     error = true;
                 }
                 has_reference = true;

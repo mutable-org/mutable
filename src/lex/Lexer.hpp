@@ -11,6 +11,8 @@
 
 namespace m {
 
+namespace ast {
+
 struct Lexer
 {
     public:
@@ -110,5 +112,7 @@ struct Lexer
     Token read_date_or_datetime();
     Token read_instruction();
 };
+
+}
 
 }

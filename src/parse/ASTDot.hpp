@@ -6,6 +6,8 @@
 
 namespace m {
 
+namespace ast {
+
 /** Implements printing the AST in dot language. */
 struct ASTDot : ConstASTVisitor
 {
@@ -48,5 +50,7 @@ struct ASTDot : ConstASTVisitor
      */
     void cluster(Const<Clause> &c, const char *name, const char *label, const char *color);
 };
+
+}
 
 }

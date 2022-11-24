@@ -7,6 +7,7 @@
 
 
 using namespace m;
+using namespace m::ast;
 
 
 void Lexer::initialize_keywords()

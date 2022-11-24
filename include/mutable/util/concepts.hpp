@@ -1,6 +1,8 @@
 #pragma once
 
 #include <concepts>
+#include <functional>
+#include <memory>
 #include <type_traits>
 
 
@@ -101,5 +103,11 @@ using common_type_t = typename common_type<T, U>::type;
 
 template<typename T, typename U>
 concept have_common_type = requires { typename common_type_t<T, U>; };
+
+template<typename T>
+concept is_unique_ptr = std::same_as<std::decay_t<T>, std::unique_ptr<typename T::element_type>>;
+
+template<typename T>
+concept is_reference_wrapper = std::same_as<std::decay_t<T>, std::reference_wrapper<typename T::type>>;
 
 }

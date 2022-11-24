@@ -216,7 +216,7 @@ struct Interpreter : Backend, ConstOperatorVisitor
     M_OPERATOR_LIST(DECLARE)
 #undef DECLARE
 
-    static Value eval(const Constant &c)
+    static Value eval(const ast::Constant &c)
     {
         errno = 0;
         switch (c.tok.type) {

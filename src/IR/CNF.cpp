@@ -6,15 +6,16 @@
 #include <mutable/util/macro.hpp>
 
 
-namespace m {
+using namespace m;
+using namespace m::ast;
+using namespace m::cnf;
 
-namespace cnf {
 
 /*======================================================================================================================
  * CNF Operations
  *====================================================================================================================*/
 
-bool Clause::operator<=(const Clause &other) const
+bool cnf::Clause::operator<=(const Clause &other) const
 {
     for (auto pred : *this) {
         if (not contains(other, pred))
@@ -32,16 +33,16 @@ bool CNF::operator<=(const CNF &other) const
     return true;
 }
 
-Clause operator||(const Clause &lhs, const Clause &rhs)
+cnf::Clause cnf::operator||(const cnf::Clause &lhs, const cnf::Clause &rhs)
 {
-    Clause res;
+    cnf::Clause res;
     res.reserve(lhs.size() + rhs.size());
     res.insert(res.end(), lhs.begin(), lhs.end());
     res.insert(res.end(), rhs.begin(), rhs.end());
     return res;
 }
 
-CNF operator&&(const Clause &lhs, const Clause &rhs)
+CNF cnf::operator&&(const cnf::Clause &lhs, const cnf::Clause &rhs)
 {
     CNF res;
     res.push_back(lhs);
@@ -49,7 +50,7 @@ CNF operator&&(const Clause &lhs, const Clause &rhs)
     return res;
 }
 
-CNF operator&&(const CNF &lhs, const CNF &rhs)
+CNF cnf::operator&&(const CNF &lhs, const CNF &rhs)
 {
     CNF res;
     res.reserve(lhs.size() + rhs.size());
@@ -58,7 +59,7 @@ CNF operator&&(const CNF &lhs, const CNF &rhs)
     return res;
 }
 
-CNF operator||(const CNF &lhs, const CNF &rhs)
+CNF cnf::operator||(const CNF &lhs, const CNF &rhs)
 {
     CNF res;
     if (lhs.size() == 0)
@@ -74,7 +75,7 @@ CNF operator||(const CNF &lhs, const CNF &rhs)
     return res;
 }
 
-CNF operator!(const Clause &clause)
+CNF cnf::operator!(const cnf::Clause &clause)
 {
     CNF res;
     for (auto &p : clause)
@@ -82,7 +83,7 @@ CNF operator!(const Clause &clause)
     return res;
 }
 
-CNF operator!(const CNF &cnf)
+CNF cnf::operator!(const CNF &cnf)
 {
     CNF res;
     for (auto &clause : cnf)
@@ -98,12 +99,12 @@ CNF operator!(const CNF &cnf)
 void Predicate::to_sql(std::ostream &out) const
 {
     if (negative())
-        out << "NOT (" << *expr() << ')';
+        out << "NOT (" << expr() << ')';
     else
-        out << *expr();
+        out << expr();
 }
 
-void Clause::to_sql(std::ostream &out) const
+void cnf::Clause::to_sql(std::ostream &out) const
 {
     switch (size()) {
         case 0:
@@ -144,17 +145,17 @@ void CNF::to_sql(std::ostream &out) const
 }
 
 M_LCOV_EXCL_START
-std::ostream & operator<<(std::ostream &out, const Predicate &pred)
+std::ostream & cnf::operator<<(std::ostream &out, const Predicate &pred)
 {
     if (pred.negative())
         out << '-';
-    ASTPrinter print(out);
+    ast::ASTPrinter print(out);
     print.expand_nested_queries(false);
-    print(*pred.expr());
+    print(*pred);
     return out;
 }
 
-std::ostream & operator<<(std::ostream &out, const Clause &clause)
+std::ostream & cnf::operator<<(std::ostream &out, const cnf::Clause &clause)
 {
     for (auto it = clause.begin(); it != clause.end(); ++it) {
         if (it != clause.begin()) out << " v ";
@@ -163,7 +164,7 @@ std::ostream & operator<<(std::ostream &out, const Clause &clause)
     return out;
 }
 
-std::ostream & operator<<(std::ostream &out, const CNF &cnf)
+std::ostream & cnf::operator<<(std::ostream &out, const CNF &cnf)
 {
     if (cnf.empty())
         out << "TRUE";
@@ -184,11 +185,11 @@ void Predicate::dump(std::ostream &out) const
 }
 void Predicate::dump() const { dump(std::cerr); }
 
-void Clause::dump(std::ostream &out) const
+void cnf::Clause::dump(std::ostream &out) const
 {
     out << *this << std::endl;
 }
-void Clause::dump() const { dump(std::cerr); }
+void cnf::Clause::dump() const { dump(std::cerr); }
 
 void CNF::dump(std::ostream &out) const
 {
@@ -226,22 +227,22 @@ struct CNFGenerator : ConstASTExprVisitor
 
 void CNFGenerator::operator()(Const<ErrorExpr> &e)
 {
-    result_ = CNF({Clause({Predicate::Create(&e, is_negative_)})});
+    result_ = CNF({cnf::Clause({Predicate::Create(&e, is_negative_)})});
 }
 
 void CNFGenerator::operator()(Const<Designator> &e)
 {
-    result_ = CNF({Clause({Predicate::Create(&e, is_negative_)})});
+    result_ = CNF({cnf::Clause({Predicate::Create(&e, is_negative_)})});
 }
 
 void CNFGenerator::operator()(Const<Constant> &e)
 {
-    result_ = CNF({Clause({Predicate::Create(&e, is_negative_)})});
+    result_ = CNF({cnf::Clause({Predicate::Create(&e, is_negative_)})});
 }
 
 void CNFGenerator::operator()(Const<FnApplicationExpr> &e)
 {
-    result_ = CNF({Clause({Predicate::Create(&e, is_negative_)})});
+    result_ = CNF({cnf::Clause({Predicate::Create(&e, is_negative_)})});
 }
 
 void CNFGenerator::operator()(Const<UnaryExpr> &e)
@@ -254,7 +255,7 @@ void CNFGenerator::operator()(Const<UnaryExpr> &e)
             break;
 
         default:
-            result_ = CNF({Clause({Predicate::Create(&e, is_negative_)})});
+            result_ = CNF({cnf::Clause({Predicate::Create(&e, is_negative_)})});
             break;
 
     }
@@ -285,22 +286,18 @@ void CNFGenerator::operator()(Const<BinaryExpr> &e)
         }
     } else {
         /* This expression is a literal. */
-        result_ = CNF({Clause({Predicate::Create(&e, is_negative_)})});
+        result_ = CNF({cnf::Clause({Predicate::Create(&e, is_negative_)})});
     }
 }
 
 void CNFGenerator::operator()(Const<QueryExpr> &e)
 {
-    result_ = CNF({Clause({Predicate::Create(&e, is_negative_)})});
+    result_ = CNF({cnf::Clause({Predicate::Create(&e, is_negative_)})});
 }
 
-CNF to_CNF(const Expr &e)
+CNF cnf::to_CNF(const Expr &e)
 {
     CNFGenerator G;
     G(e);
     return G.get();
-}
-
-}
-
 }

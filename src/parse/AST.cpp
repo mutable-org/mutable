@@ -3,47 +3,26 @@
 #include "parse/ASTDot.hpp"
 #include "parse/ASTDumper.hpp"
 #include "parse/ASTPrinter.hpp"
+#include <bit>
 #include <mutable/catalog/Catalog.hpp>
 
 
 using namespace m;
+using namespace m::ast;
 
-
-/*======================================================================================================================
- * Destructor
- *====================================================================================================================*/
-
-/*===== Expr =========================================================================================================*/
-
-FnApplicationExpr::~FnApplicationExpr()
-{
-    delete fn;
-    for (auto arg : args)
-        delete arg;
-}
-
-QueryExpr::~QueryExpr()
-{
-    delete query;
-}
 
 const char * QueryExpr::make_unique_alias() {
     static uint64_t id(0);
     std::ostringstream oss;
-    oss << "q_" << id++;
+    oss << "$q_" << id++;
     Catalog &C = Catalog::Get();
     return C.pool(oss.str().c_str());
 }
 
-/*===== Clause =======================================================================================================*/
 
-SelectClause::~SelectClause()
-{
-    for (auto s : select)
-        delete s.first;
-    for (auto e : expansion)
-        delete e;
-}
+/*======================================================================================================================
+ * Destructors
+ *====================================================================================================================*/
 
 FromClause::~FromClause()
 {
@@ -53,59 +32,47 @@ FromClause::~FromClause()
     }
 }
 
-WhereClause::~WhereClause()
+
+/*======================================================================================================================
+ * hash()
+ *====================================================================================================================*/
+
+uint64_t Designator::hash() const
 {
-    delete where;
+    std::hash<const char*> h;
+    return std::rotl(h(get_table_name()), 17) xor h(attr_name.text);
 }
 
-GroupByClause::~GroupByClause()
+uint64_t Constant::hash() const
 {
-    for (auto e : group_by)
-        delete e;
+    std::hash<const char*> h;
+    return h(tok.text);
 }
 
-HavingClause::~HavingClause()
+uint64_t FnApplicationExpr::hash() const
 {
-    delete having;
+    uint64_t hash = fn->hash();
+    for (auto &arg : args)
+        hash ^= std::rotl(hash, 32) ^ arg->hash();
+    return hash;
 }
 
-OrderByClause::~OrderByClause()
+uint64_t UnaryExpr::hash() const
 {
-    for (auto o : order_by)
-        delete o.first;
+    return expr->hash() ^ 73UL << uint64_t(op().type);
 }
 
-/*===== Stmt =========================================================================================================*/
-
-SelectStmt::~SelectStmt()
+uint64_t BinaryExpr::hash() const
 {
-    delete select;
-    delete from;
-    delete where;
-    delete group_by;
-    delete having;
-    delete order_by;
-    delete limit;
+    const auto hl = lhs->hash();
+    const auto hr = rhs->hash();
+    return std::rotl(hl, 41) ^ std::rotl(hr, 17) ^ uint64_t(op().type);
 }
 
-InsertStmt::~InsertStmt()
+uint64_t QueryExpr::hash() const
 {
-    for (tuple_t &v : tuples) {
-        for (element_type &e : v)
-            delete e.second;
-    }
-}
-
-UpdateStmt::~UpdateStmt()
-{
-    for (auto &s : set)
-        delete s.second;
-    delete where;
-}
-
-DeleteStmt::~DeleteStmt()
-{
-    delete where;
+    std::hash<void*> h;
+    return h(query.get());
 }
 
 
@@ -118,10 +85,8 @@ bool ErrorExpr::operator==(const Expr &o) const { return cast<const ErrorExpr>(&
 bool Designator::operator==(const Expr &o) const
 {
     if (auto other = cast<const Designator>(&o)) {
-        if (this->has_explicit_table_name() or other->has_explicit_table_name())
-            return this->table_name.text == other->table_name.text and this->attr_name.text == other->attr_name.text;
-        else
-            return this->attr_name.text == other->attr_name.text;
+        if (this->has_table_name() != other->has_table_name()) return false;
+        return this->table_name.text == other->table_name.text and this->attr_name.text == other->attr_name.text;
     }
     return false;
 }
@@ -161,55 +126,31 @@ bool BinaryExpr::operator==(const Expr &o) const
     return false;
 }
 
-bool QueryExpr::operator==(const Expr&) const { M_unreachable("not implemented"); }
+bool QueryExpr::operator==(const Expr &e) const
+{
+    if (auto other = cast<const QueryExpr>(&e))
+        return this->query.get() == other->query.get();
+    return false;
+}
 
 
 /*======================================================================================================================
  * get_required()
  *====================================================================================================================*/
 
-struct GetRequired : ConstASTExprVisitor
-{
-    private:
-    Schema schema;
-
-    public:
-    GetRequired() { }
-
-    auto & get() { return schema; }
-
-    /* Expr */
-    void operator()(Const<Expr> &e) { e.accept(*this); }
-    void operator()(Const<ErrorExpr>&) { M_unreachable("graph must not contain errors"); }
-
-    void operator()(Const<Designator> &e) {
-        Schema::Identifier id(e.table_name.text, e.attr_name.text);
-        if (not schema.has(id)) // avoid duplicates
-            schema.add(id, e.type());
-    }
-
-    using ConstASTExprVisitor::operator();
-
-    void operator()(Const<Constant>&) { /* nothing to be done */ }
-
-    void operator()(Const<FnApplicationExpr> &e) {
-        //(*this)(*e.fn);
-        for (auto arg : e.args)
-            (*this)(*arg);
-    }
-
-    void operator()(Const<UnaryExpr> &e) { (*this)(*e.expr); }
-
-    void operator()(Const<BinaryExpr> &e) { (*this)(*e.lhs); (*this)(*e.rhs); }
-
-    void operator()(Const<QueryExpr>&) { /* TODO: implement */ }
-};
-
 Schema Expr::get_required() const
 {
-    GetRequired R;
-    R(*this);
-    return R.get();
+    Schema schema;
+    auto visitor = overloaded {
+        [](auto&) { },
+        [&schema](const Designator &d) {
+            Schema::Identifier id(d.table_name.text, d.attr_name.text);
+            if (not schema.has(id)) // avoid duplicates
+                schema.add(id, d.type());
+        },
+    };
+    visit(visitor, *this, m::tag<ConstPreOrderExprVisitor>());
+    return schema;
 }
 
 
@@ -217,21 +158,21 @@ Schema Expr::get_required() const
  * operator<<()
  *====================================================================================================================*/
 
-std::ostream & m::operator<<(std::ostream &out, const Expr &e) {
+std::ostream & m::ast::operator<<(std::ostream &out, const Expr &e) {
     ASTPrinter p(out);
     p.expand_nested_queries(false);
     p(e);
     return out;
 }
 
-std::ostream & m::operator<<(std::ostream &out, const Clause &c) {
+std::ostream & m::ast::operator<<(std::ostream &out, const Clause &c) {
     ASTPrinter p(out);
     p.expand_nested_queries(false);
     p(c);
     return out;
 }
 
-std::ostream & m::operator<<(std::ostream &out, const Stmt &s) {
+std::ostream & m::ast::operator<<(std::ostream &out, const Stmt &s) {
     ASTPrinter p(out);
     p.expand_nested_queries(false);
     p(s);
@@ -299,29 +240,14 @@ M_LCOV_EXCL_STOP
 
 bool QueryExpr::is_constant() const
 {
-    auto stmt = as<const SelectStmt>(query);
-    if (stmt->from) return false;
-    auto select = as<const SelectClause>(stmt->select);
-    for (const auto &s : select->select) {
+    auto &stmt = as<const SelectStmt>(*query);
+    if (stmt.from) return false;
+    auto &select = as<const SelectClause>(*stmt.select);
+    for (const auto &s : select.select) {
         if (not s.first->is_constant())
             return false;
     }
     return true;
-}
-
-bool QueryExpr::is_correlated() const
-{
-    /* Correlation is only valid in a WHERE- or HAVING-clause */
-    auto stmt = as<const SelectStmt>(query);
-    if (stmt->where) {
-        auto where = as<const WhereClause>(stmt->where);
-        if (where->where->is_correlated()) return true;
-    }
-    if (stmt->having) {
-        auto having = as<const HavingClause>(stmt->having);
-        if (having->having->is_correlated()) return true;
-    }
-    return false;
 }
 
 
@@ -336,6 +262,72 @@ bool QueryExpr::is_correlated() const
     void CLASS::accept(ConstASTExprVisitor &v) const { v(*this); }
 M_AST_EXPR_LIST(ACCEPT)
 #undef ACCEPT
+
+
+/*----- Explicit instantiations -----*/
+template struct m::ast::TheRecursiveExprVisitorBase<false>;
+template struct m::ast::TheRecursiveExprVisitorBase<true>;
+
+namespace {
+
+template<bool C, bool PreOrder>
+struct recursive_expr_visitor : TheRecursiveExprVisitorBase<C>
+{
+    using super = TheRecursiveExprVisitorBase<C>;
+    template<typename T> using Const = typename super::template Const<T>;
+    using callback_t = std::conditional_t<C, ConstASTExprVisitor, ASTExprVisitor>;
+
+    private:
+    callback_t &callback_;
+
+    public:
+    recursive_expr_visitor(callback_t &callback) : callback_(callback) { }
+
+    using super::operator();
+    void operator()(Const<ErrorExpr> &e) override { callback_(e); }
+    void operator()(Const<Designator> &e) override { callback_(e); }
+    void operator()(Const<Constant> &e) override { callback_(e); }
+    void operator()(Const<QueryExpr> &e) override { callback_(e); }
+
+    void operator()(Const<FnApplicationExpr> &e) override {
+        if constexpr (PreOrder) callback_(e);
+        super::operator()(e);
+        if constexpr (not PreOrder) callback_(e);
+    }
+
+    void operator()(Const<UnaryExpr> &e) override {
+        if constexpr (PreOrder) callback_(e);
+        super::operator()(e);
+        if constexpr (not PreOrder) callback_(e);
+    }
+
+    void operator()(Const<BinaryExpr> &e) override {
+        if constexpr (PreOrder) callback_(e);
+        super::operator()(e);
+        if constexpr (not PreOrder) callback_(e);
+    }
+};
+
+}
+
+template<bool C>
+void ThePreOrderExprVisitor<C>::operator()(Const<Expr> &e)
+{
+    recursive_expr_visitor<C, /* PreOrder= */ true>{*this}(e);
+}
+
+template<bool C>
+void ThePostOrderExprVisitor<C>::operator()(Const<Expr> &e)
+{
+    recursive_expr_visitor<C, /* PreOrder= */ false>{*this}(e);
+}
+
+/*----- Explicit instantiations -----*/
+template struct m::ast::ThePreOrderExprVisitor<false>;
+template struct m::ast::ThePreOrderExprVisitor<true>;
+template struct m::ast::ThePostOrderExprVisitor<false>;
+template struct m::ast::ThePostOrderExprVisitor<true>;
+
 
 /*===== Clauses ======================================================================================================*/
 

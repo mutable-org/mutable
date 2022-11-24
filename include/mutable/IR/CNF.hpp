@@ -17,36 +17,36 @@ struct M_EXPORT Predicate
     private:
     uintptr_t literal_; ///< pointer to Expr; LSB is 1 iff literal is negated
 
-    Predicate(uintptr_t l) : literal_(l) { }
+    explicit Predicate(uintptr_t l) : literal_(l) { }
 
     public:
     /** Creates a *positive* `Predicate` from `e`. */
-    static Predicate Positive(const Expr *e) { return Predicate(reinterpret_cast<uintptr_t>(e) | 0x0UL); }
+    static Predicate Positive(const ast::Expr *e) { return Predicate(reinterpret_cast<uintptr_t>(e) | 0x0UL); }
     /** Creates a *negative* `Predicate` from `e`. */
-    static Predicate Negative(const Expr *e) { return Predicate(reinterpret_cast<uintptr_t>(e) | 0x1UL); }
+    static Predicate Negative(const ast::Expr *e) { return Predicate(reinterpret_cast<uintptr_t>(e) | 0x1UL); }
     /** Creates a `Predicate` from `e`.  The `Predicate` is *negative* iff `is_negative`. */
-    static Predicate Create(const Expr *e, bool is_negative) { return is_negative ? Negative(e) : Positive(e); }
+    static Predicate Create(const ast::Expr *e, bool is_negative) { return is_negative ? Negative(e) : Positive(e); }
 
     /** Returns `true` iff this `Predicate` is *negative*. */
     bool negative() const { return literal_ & 0x1UL; }
 
     /** Returns the `Expr` within this `Predicate`. */
-    Expr * expr() { return reinterpret_cast<Expr*>(literal_ & ~0b11UL); }
+    ast::Expr & expr() { return *reinterpret_cast<ast::Expr*>(literal_ & ~0b11UL); }
     /** Returns the `Expr` within this `Predicate`. */
-    const Expr * expr() const { return reinterpret_cast<const Expr*>(literal_ & ~0b11UL); }
+    const ast::Expr & expr() const { return *reinterpret_cast<const ast::Expr*>(literal_ & ~0b11UL); }
     /** Returns the `Expr` within this `Predicate`. */
-    const Expr * operator*() const { return expr(); }
+    const ast::Expr & operator*() const { return expr(); }
     /** Returns the `Expr` within this `Predicate`. */
-    const Expr * operator->() const { return expr(); }
+    const ast::Expr * operator->() const { return &expr(); }
 
     /** Returns a negated version of this `Predicate`, i.e.\ if this `Predicate` is *positive*, the returned `Predicate`
      * is *negative*. */
     Predicate operator!() const { return Predicate(literal_ ^ 0x1UL); }
 
-    /** Returns `true` iff `other` is equal to `this`.  Two `Predicate`s are equal, iff they have the same `Expr`
-     * and the same *sign*. */
+    /** Returns `true` iff `other` is equal to `this`.  Two `Predicate`s are equal, iff they have equal `Expr` and the
+     * same *sign*. */
     bool operator==(Predicate other) const {
-        return this->negative() == other.negative() and *this->expr() == *other.expr();
+        return this->negative() == other.negative() and this->expr() == other.expr();
     }
     /** Returns `true` iff `other` is not equal to `this`.  Two `Predicate`s are equal, iff they have the same
      * `Expr` and the same *sign*. */
@@ -80,7 +80,7 @@ struct M_EXPORT Clause : public std::vector<Predicate>
     Schema get_required() const {
         Schema required;
         for (auto &P : *this)
-            required |= P.expr()->get_required();
+            required |= P->get_required();
         return required;
     }
 
@@ -151,10 +151,22 @@ CNF M_EXPORT operator!(const Clause &clause);
 CNF M_EXPORT operator!(const CNF &cnf);
 
 /** Converts the `Boolean` `Expr` `e` to a `CNF`. */
-CNF M_EXPORT to_CNF(const Expr &e);
+CNF M_EXPORT to_CNF(const ast::Expr &e);
 /** Converts the `Boolean` `Expr` of `c` to a `CNF`. */
-CNF M_EXPORT get_CNF(const m::Clause &c);
+CNF M_EXPORT get_CNF(const ast::Clause &c);
 
 }
+
+}
+
+namespace std {
+
+template<>
+struct hash<m::cnf::Predicate>
+{
+    std::size_t operator()(m::cnf::Predicate P) const {
+        return P.expr().hash() ^ (-P.negative());
+    }
+};
 
 }

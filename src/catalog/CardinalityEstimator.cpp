@@ -22,11 +22,13 @@ using namespace m;
 
 
 namespace {
+
 namespace options {
 
 std::filesystem::path injected_cardinalities_file;
 
 }
+
 }
 
 /*======================================================================================================================
@@ -68,16 +70,10 @@ std::unique_ptr<DataModel> CartesianProductEstimator::estimate_scan(const QueryG
 {
     M_insist(P.size() == 1, "Subproblem must identify exactly one DataSource");
     auto idx = *P.begin();
-    auto DS = G.sources()[idx];
-
-    if (auto BT = cast<const BaseTable>(DS)) {
-        auto model = std::make_unique<CartesianProductDataModel>();
-        model->size = BT->table().store().num_rows();
-        return model;
-    } else {
-        M_unreachable("nested queries should be estimated when they are planned and their model must be passed to the "
-                    "planning process of the outer query");
-    }
+    auto &BT = as<const BaseTable>(*G.sources()[idx]);
+    auto model = std::make_unique<CartesianProductDataModel>();
+    model->size = BT.table().store().num_rows();
+    return model;
 }
 
 std::unique_ptr<DataModel>
@@ -101,7 +97,7 @@ CartesianProductEstimator::estimate_limit(const QueryGraph&, const DataModel &_d
 
 std::unique_ptr<DataModel>
 CartesianProductEstimator::estimate_grouping(const QueryGraph&, const DataModel &_data,
-                                             const std::vector<const Expr*>& test) const
+                                             const std::vector<group_type>&) const
 {
     auto &data = as<const CartesianProductDataModel>(_data);
     auto model = std::make_unique<CartesianProductDataModel>();
@@ -254,9 +250,9 @@ std::unique_ptr<DataModel> InjectionCardinalityEstimator::estimate_scan(const Qu
 {
     M_insist(P.size() == 1);
     const auto idx = *P.begin();
-    auto DS = G.sources()[idx];
+    auto &DS = *G.sources()[idx];
 
-    if (auto it = cardinality_table_.find(DS->name()); it != cardinality_table_.end()) {
+    if (auto it = cardinality_table_.find(DS.name()); it != cardinality_table_.end()) {
         return std::make_unique<InjectionCardinalityDataModel>(P, it->second);
     } else {
         /* no match, fall back */
@@ -284,7 +280,7 @@ InjectionCardinalityEstimator::estimate_limit(const QueryGraph&, const DataModel
 
 std::unique_ptr<DataModel>
 InjectionCardinalityEstimator::estimate_grouping(const QueryGraph&, const DataModel &_data,
-                                                 const std::vector<const Expr*> &exprs) const
+                                                 const std::vector<group_type> &exprs) const
 {
     auto &data = as<const InjectionCardinalityDataModel>(_data);
 
@@ -294,8 +290,13 @@ InjectionCardinalityEstimator::estimate_grouping(const QueryGraph&, const DataMo
     /* Combine grouping keys into an identifier. */
     oss_.str("");
     oss_ << "g";
-    for (auto e : exprs)
-        oss_ << '#' << *e;
+    for (auto [grp, alias] : exprs) {
+        oss_ << '#';
+        if (alias)
+            oss_ << alias;
+        else
+            oss_ << grp.get();
+    }
 
     if (auto it = cardinality_table_.find(oss_.str().c_str()); it != cardinality_table_.end()) {
         return std::make_unique<InjectionCardinalityDataModel>(data.subproblem_, it->second);
@@ -408,7 +409,7 @@ const char * InjectionCardinalityEstimator::make_identifier(const QueryGraph &G,
 namespace {
 
 /** Visitor to translate a CNF to an Spn filter. Only consider sargable expressions. */
-struct FilterTranslator : ConstASTExprVisitor {
+struct FilterTranslator : ast::ConstASTExprVisitor {
 
     const char* attribute;
     float value;
@@ -418,9 +419,9 @@ struct FilterTranslator : ConstASTExprVisitor {
 
     using ConstASTExprVisitor::operator();
 
-    void operator()(const Designator &designator) { attribute = designator.attr_name.text; }
+    void operator()(const ast::Designator &designator) { attribute = designator.attr_name.text; }
 
-    void operator()(const Constant &constant) {
+    void operator()(const ast::Constant &constant) {
         auto val = Interpreter::eval(constant);
 
         visit(overloaded {
@@ -437,12 +438,12 @@ struct FilterTranslator : ConstASTExprVisitor {
                             break;
                     }
                 },
-                [this](const NoneType &none_type) { op = Spn::IS_NULL; },
+                [this](const NoneType&) { op = Spn::IS_NULL; },
                 [](auto&&) { M_unreachable("Unsupported type."); },
         }, *constant.type());
     }
 
-    void operator()(const BinaryExpr &binary_expr) {
+    void operator()(const ast::BinaryExpr &binary_expr) {
         switch (binary_expr.op().type) {
             case TK_EQUAL:
                 op = Spn::EQUAL;
@@ -467,24 +468,24 @@ struct FilterTranslator : ConstASTExprVisitor {
         (*this)(*binary_expr.rhs);
     }
 
-    void operator()(const ErrorExpr&) { /* nothing to be done */ }
-    void operator()(const FnApplicationExpr &) { /* nothing to be done */ }
-    void operator()(const UnaryExpr &) { /* nothing to be done */ }
-    void operator()(const QueryExpr &) { /* nothing to be done */ }
+    void operator()(const ast::ErrorExpr&) { /* nothing to be done */ }
+    void operator()(const ast::FnApplicationExpr &) { /* nothing to be done */ }
+    void operator()(const ast::UnaryExpr &) { /* nothing to be done */ }
+    void operator()(const ast::QueryExpr &) { /* nothing to be done */ }
 };
 
 /** Visitor to translate a CNF join condition (get the two identifiers of an equi Join). */
-struct JoinTranslator : ConstASTExprVisitor {
+struct JoinTranslator : ast::ConstASTExprVisitor {
 
     std::vector<std::pair<const char*, const char*>> join_designator;
 
     using ConstASTExprVisitor::operator();
 
-    void operator()(const Designator &designator) {
+    void operator()(const ast::Designator &designator) {
         join_designator.emplace_back(designator.table_name.text, designator.attr_name.text);
     }
 
-    void operator()(const BinaryExpr &binary_expr) {
+    void operator()(const ast::BinaryExpr &binary_expr) {
 
         if (binary_expr.op().type != m::TK_EQUAL) { M_unreachable("Operator can't be handled"); }
 
@@ -492,11 +493,11 @@ struct JoinTranslator : ConstASTExprVisitor {
         (*this)(*binary_expr.rhs);
     }
 
-    void operator()(const Constant &) { /* nothing to be done */ }
-    void operator()(const ErrorExpr&) { /* nothing to be done */ }
-    void operator()(const FnApplicationExpr &) { /* nothing to be done */ }
-    void operator()(const UnaryExpr &) { /* nothing to be done */ }
-    void operator()(const QueryExpr &) { /* nothing to be done */ }
+    void operator()(const ast::Constant &) { /* nothing to be done */ }
+    void operator()(const ast::ErrorExpr&) { /* nothing to be done */ }
+    void operator()(const ast::FnApplicationExpr &) { /* nothing to be done */ }
+    void operator()(const ast::UnaryExpr &) { /* nothing to be done */ }
+    void operator()(const ast::QueryExpr &) { /* nothing to be done */ }
 };
 
 }
@@ -567,22 +568,15 @@ std::unique_ptr<DataModel> SpnEstimator::estimate_scan(const QueryGraph &G, Subp
 {
     M_insist(P.size() == 1);
     const auto idx = *P.begin();
-    auto DS = G.sources()[idx];
-
-
-    if (auto BT = cast<const BaseTable>(DS)) {
-        /* get the Spn corresponding for the table to scan */
-        if (auto it = table_to_spn_.find(BT->name()); it != table_to_spn_.end()) {
-            table_spn_map spns;
-            const SpnWrapper &spn = *it->second;
-            spns.emplace(BT->name(), spn);
-            return std::make_unique<SpnDataModel>(std::move(spns), spn.num_rows());
-        } else {
-            throw data_model_exception("Table does not exist.");
-        }
+    auto &BT = as<const BaseTable>(*G.sources()[idx]);
+    /* get the Spn corresponding for the table to scan */
+    if (auto it = table_to_spn_.find(BT.name()); it != table_to_spn_.end()) {
+        table_spn_map spns;
+        const SpnWrapper &spn = *it->second;
+        spns.emplace(BT.name(), spn);
+        return std::make_unique<SpnDataModel>(std::move(spns), spn.num_rows());
     } else {
-       throw data_model_exception("nested queries should be estimated when they are planned and their model must be "
-                                  "passed to the planning process of the outer query");
+        throw data_model_exception("Table does not exist.");
     }
 }
 
@@ -601,7 +595,7 @@ SpnEstimator::estimate_filter(const QueryGraph&, const DataModel &_data, const c
     /* only consider clauses with one element, since Spns cannot estimate disjunctions */
     for (auto &clause : filter) {
         M_insist(clause.size() == 1);
-        ft(*clause[0].expr());
+        ft(*clause[0]);
         unsigned spn_id;
 
         if (auto it = attribute_to_id.find(ft.attribute); it != attribute_to_id.end()) {
@@ -627,22 +621,24 @@ SpnEstimator::estimate_limit(const QueryGraph&, const DataModel &data, std::size
 }
 
 std::unique_ptr<DataModel> SpnEstimator::estimate_grouping(const QueryGraph&, const DataModel &data,
-                                                           const std::vector<const Expr*> &groups) const
+                                                           const std::vector<group_type> &groups) const
 {
     auto model = std::make_unique<SpnDataModel>(as<const SpnDataModel>(data));
     std::size_t num_rows = 1;
-    for (auto group : groups) {
-        auto designator = as<const Designator>(group);
-        if (auto spn_it = model->spns_.find(designator->table_name.text); spn_it != model->spns_.end()) {
-            auto &spn = spn_it->second.get();
-            auto &attr_to_id = spn.get_attribute_to_id();
-            if (auto attr_it = attr_to_id.find(designator->attr_name.text); attr_it != attr_to_id.end()) {
-                num_rows *= spn.estimate_number_distinct_values(attr_it->second);
-            } else {
-                num_rows *= spn.num_rows(); // if attribute is primary key, distinct values = num rows
-            }
-        } else {
+    for (auto [grp, alias] : groups) {
+        auto designator = cast<const ast::Designator>(&grp.get());
+        if (not designator)
+            throw data_model_exception("SpnEstimator only supports Designators and no composed expressions");
+        auto spn_it = model->spns_.find(designator->table_name.text);
+        if (spn_it == model->spns_.end())
             throw data_model_exception("Could not find table for grouping.");
+
+        auto &spn = spn_it->second.get();
+        auto &attr_to_id = spn.get_attribute_to_id();
+        if (auto attr_it = attr_to_id.find(designator->attr_name.text); attr_it != attr_to_id.end()) {
+            num_rows *= spn.estimate_number_distinct_values(attr_it->second);
+        } else {
+            num_rows *= spn.num_rows(); // if attribute is primary key, distinct values = num rows
         }
     }
     model->num_rows_ = num_rows;
@@ -664,7 +660,7 @@ SpnEstimator::estimate_join(const QueryGraph&, const DataModel &_left, const Dat
 
     if (not condition.empty()) {
         /* only consider single equi join */
-        jt(*condition[0][0].expr());
+        jt(*condition[0][0]);
         auto first_identifier = std::make_pair(jt.join_designator[0].first, jt.join_designator[0].second);
         auto second_identifier = std::make_pair(jt.join_designator[1].first, jt.join_designator[1].second);
         join = std::make_pair(first_identifier, second_identifier);
@@ -723,7 +719,7 @@ SpnEstimator::operator()(estimate_join_all_tag, PlanTable &&PT, const QueryGraph
     JoinTranslator jt;
     std::unordered_map<const char*, const char*> table_to_attribute;
     for (auto clause : condition) {
-        jt(*clause[0].expr());
+        jt(*clause[0]);
         table_to_attribute.emplace(jt.join_designator[0].first, jt.join_designator[0].second);
         table_to_attribute.emplace(jt.join_designator[1].first, jt.join_designator[1].second);
     }
@@ -777,10 +773,7 @@ std::size_t SpnEstimator::predict_cardinality(const DataModel &_data) const
     return data.num_rows_;
 }
 
-void SpnEstimator::print(std::ostream &out) const
-{
-
-}
+void SpnEstimator::print(std::ostream&) const { }
 
 __attribute__((constructor(202)))
 static void register_cardinality_estimators()

@@ -4,6 +4,7 @@
 
 
 using namespace m;
+using namespace m::ast;
 
 
 /*===== Expr =========================================================================================================*/
@@ -46,7 +47,7 @@ void ASTDumper::operator()(Const<FnApplicationExpr> &e)
     (*this)(*e.fn);
     indent() << "args";
     ++indent_;
-    for (auto expr : e.args)
+    for (auto &expr : e.args)
         (*this)(*expr);
     --indent_;
     --indent_;
@@ -96,7 +97,7 @@ void ASTDumper::operator()(Const<SelectClause> &c)
     ++indent_;
     if (c.select_all)
         indent() << "* (" << c.select_all.pos << ')';
-    for (auto s : c.select) {
+    for (auto &s : c.select) {
         if (s.second) {
             indent() << "AS '" << s.second.text << "' (" << s.second.pos << ')';
             ++indent_;
@@ -147,8 +148,13 @@ void ASTDumper::operator()(Const<GroupByClause> &c)
 {
     indent() << "GroupByClause (" << c.tok.pos << ')';
     ++indent_;
-    for (auto g : c.group_by)
-        (*this)(*g);
+    for (auto &[expr, alias] : c.group_by) {
+        if (alias)
+            indent() << "AS '" << alias.text << "' (" << alias.pos << ')';
+        ++indent_;
+        (*this)(*expr);
+        --indent_;
+    }
     --indent_;
 }
 
@@ -164,7 +170,7 @@ void ASTDumper::operator()(Const<OrderByClause> &c)
 {
     indent() << "OrderByClause (" << c.tok.pos << ')';
     ++indent_;
-    for (auto o : c.order_by) {
+    for (auto &o : c.order_by) {
         indent() << (o.second ? "ASC" : "DESC");
         ++indent_;
         (*this)(*o.first);
@@ -249,22 +255,22 @@ void ASTDumper::operator()(Const<CreateTableStmt> &s)
     ++indent_;
     indent() << "attributes";
     ++indent_;
-    for (auto attr : s.attributes) {
+    for (auto &attr : s.attributes) {
         indent() << attr->name.text << " : " << *attr->type << " (" << attr->name.pos << ')';
         ++indent_;
-        for (auto c : attr->constraints) {
+        for (auto &c : attr->constraints) {
             if (is<PrimaryKeyConstraint>(c)) {
                 indent() << "PRIMARY KEY (" << c->tok.pos << ')';
             } else if (is<UniqueConstraint>(c)) {
                 indent() << "UNIQUE (" << c->tok.pos << ')';
             } else if (is<NotNullConstraint>(c)) {
                 indent() << "NOT NULL (" << c->tok.pos << ')';
-            } else if (auto check = cast<CheckConditionConstraint>(c)) {
+            } else if (auto check = cast<CheckConditionConstraint>(c.get())) {
                 indent() << "CHECK (" << c->tok.pos << ')';
                 ++indent_;
                 (*this)(*check->cond);
                 --indent_;
-            } else if (auto ref = cast<ReferenceConstraint>(c)) {
+            } else if (auto ref = cast<ReferenceConstraint>(c.get())) {
                 indent() << "REFERENCES " << ref->table_name.text << '(' << ref->attr_name.text << ") (" << c->tok.pos
                          << ')';
             } else {
@@ -331,7 +337,7 @@ void ASTDumper::operator()(Const<UpdateStmt> &s)
     ++indent_;
     indent() << "set";
     ++indent_;
-    for (auto s : s.set) {
+    for (auto &s : s.set) {
         indent() << s.first.text << " (" << s.first.pos << ')';
         ++indent_;
         (*this)(*s.second);

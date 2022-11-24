@@ -14,6 +14,7 @@
 
 
 using namespace m;
+using namespace m::ast;
 
 
 void usage(std::ostream &out, const char *name)
@@ -95,14 +96,12 @@ int main(int argc, const char **argv)
             auto stmt = parser.parse_Stmt();
             if (diag.num_errors()) {
                 diag.clear();
-                delete stmt;
                 continue;
             }
             sema(*stmt);
             if (Options::Get().ast) stmt->dump(std::cout);
             sema_error = sema_error or diag.num_errors();
             diag.clear(); // clear sema errors
-            delete stmt;
         }
 
         if (in != &std::cin)

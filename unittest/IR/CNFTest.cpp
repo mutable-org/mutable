@@ -19,10 +19,10 @@ using namespace m::cnf;
 TEST_CASE("CNF/Clause operators", "[core][ir][cnf]")
 {
     Position pos("test");
-    Designator A(Token(pos, "A", TK_IDENTIFIER));
-    Designator B(Token(pos, "B", TK_IDENTIFIER));
-    Designator C(Token(pos, "C", TK_IDENTIFIER));
-    Designator D(Token(pos, "D", TK_IDENTIFIER));
+    ast::Designator A(ast::Token(pos, "A", TK_IDENTIFIER));
+    ast::Designator B(ast::Token(pos, "B", TK_IDENTIFIER));
+    ast::Designator C(ast::Token(pos, "C", TK_IDENTIFIER));
+    ast::Designator D(ast::Token(pos, "D", TK_IDENTIFIER));
 
     Predicate PA = cnf::Predicate::Positive(&A);
     Predicate PB = cnf::Predicate::Positive(&B);
@@ -82,10 +82,10 @@ TEST_CASE("CNF/Clause operators", "[core][ir][cnf]")
 TEST_CASE("CNF/CNF operators", "[core][ir][cnf]")
 {
     Position pos("test");
-    Designator A(Token(pos, "A", TK_IDENTIFIER));
-    Designator B(Token(pos, "B", TK_IDENTIFIER));
-    Designator C(Token(pos, "C", TK_IDENTIFIER));
-    Designator D(Token(pos, "D", TK_IDENTIFIER));
+    ast::Designator A(ast::Token(pos, "A", TK_IDENTIFIER));
+    ast::Designator B(ast::Token(pos, "B", TK_IDENTIFIER));
+    ast::Designator C(ast::Token(pos, "C", TK_IDENTIFIER));
+    ast::Designator D(ast::Token(pos, "D", TK_IDENTIFIER));
 
     Predicate PA = cnf::Predicate::Positive(&A);
     Predicate PB = cnf::Predicate::Positive(&B);
@@ -167,8 +167,8 @@ TEST_CASE("CNF/CNFGenerator", "[core][ir][cnf]")
     SECTION("literal single value")
     {
         LEXER("TRUE");
-        Parser parser(lexer);
-        Sema sema(diag);
+        ast::Parser parser(lexer);
+        ast::Sema sema(diag);
 
         auto expr = parser.parse_Expr();
         sema(*expr);
@@ -179,18 +179,17 @@ TEST_CASE("CNF/CNFGenerator", "[core][ir][cnf]")
         REQUIRE(clause.size() == 1);
         auto &pred = clause[0];
         REQUIRE(not pred.negative());
-        auto c = cast<const Constant>(pred.expr());
+        auto c = cast<const ast::Constant>(&pred.expr());
         REQUIRE(c);
         REQUIRE(c->tok.type == TK_True);
 
-        delete expr;
     }
 
     SECTION("literal binary expression")
     {
         LEXER("13 < 42");
-        Parser parser(lexer);
-        Sema sema(diag);
+        ast::Parser parser(lexer);
+        ast::Sema sema(diag);
 
         auto expr = parser.parse_Expr();
         sema(*expr);
@@ -201,18 +200,17 @@ TEST_CASE("CNF/CNFGenerator", "[core][ir][cnf]")
         REQUIRE(clause.size() == 1);
         auto &pred = clause[0];
         REQUIRE(not pred.negative());
-        auto b = cast<const BinaryExpr>(pred.expr());
+        auto b = cast<const ast::BinaryExpr>(&pred.expr());
         REQUIRE(b);
         REQUIRE(b->op().type == TK_LESS);
 
-        delete expr;
     }
 
     SECTION("logical or")
     {
         LEXER("TRUE OR FALSE");
-        Parser parser(lexer);
-        Sema sema(diag);
+        ast::Parser parser(lexer);
+        ast::Sema sema(diag);
 
         auto expr = parser.parse_Expr();
         sema(*expr);
@@ -225,23 +223,22 @@ TEST_CASE("CNF/CNFGenerator", "[core][ir][cnf]")
         auto &False = clause[1];
 
         REQUIRE(not True.negative());
-        auto t = cast<const Constant>(True.expr());
+        auto t = cast<const ast::Constant>(&True.expr());
         REQUIRE(t);
         REQUIRE(t->tok.type == TK_True);
 
-        auto f = cast<const Constant>(False.expr());
+        auto f = cast<const ast::Constant>(&False.expr());
         REQUIRE(not False.negative());
         REQUIRE(f);
         REQUIRE(f->tok.type == TK_False);
 
-        delete expr;
     }
 
     SECTION("logical and")
     {
         LEXER("TRUE AND FALSE");
-        Parser parser(lexer);
-        Sema sema(diag);
+        ast::Parser parser(lexer);
+        ast::Sema sema(diag);
 
         auto expr = parser.parse_Expr();
         sema(*expr);
@@ -256,15 +253,14 @@ TEST_CASE("CNF/CNFGenerator", "[core][ir][cnf]")
         auto &False = clause1[0];
 
         REQUIRE(not True.negative());
-        auto t = cast<const Constant>(True.expr());
+        auto t = cast<const ast::Constant>(&True.expr());
         REQUIRE(t);
         REQUIRE(t->tok.type == TK_True);
 
-        auto f = cast<const Constant>(False.expr());
+        auto f = cast<const ast::Constant>(&False.expr());
         REQUIRE(not False.negative());
         REQUIRE(f);
         REQUIRE(f->tok.type == TK_False);
 
-        delete expr;
     }
 }

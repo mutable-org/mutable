@@ -9,6 +9,7 @@
 
 
 using namespace m;
+using namespace m::ast;
 
 
 namespace {
@@ -49,6 +50,7 @@ int get_precedence(const TokenType tt)
     return p;
 }
 
+/** Returns `true` if \p tt is an integral `TokenType`. */
 bool is_integer(TokenType tt)
 {
     switch (tt) {
@@ -62,10 +64,14 @@ bool is_integer(TokenType tt)
     }
 }
 
+}
+
 
 /*======================================================================================================================
  * Follow sets
  *====================================================================================================================*/
+
+namespace {
 
 constexpr Parser::follow_set_t make_follow_set(std::initializer_list<TokenType> tokens)
 {
@@ -82,7 +88,12 @@ const Parser::follow_set_t follow_set_##NAME = make_follow_set SET ;
 
 }
 
-Command * Parser::parse()
+
+/*======================================================================================================================
+ * Parser
+ *====================================================================================================================*/
+
+std::unique_ptr<Command> Parser::parse()
 {
     if (token().type == TK_INSTRUCTION)
         return parse_Instruction();
@@ -90,7 +101,7 @@ Command * Parser::parse()
         return parse_Stmt();
 }
 
-Instruction * Parser::parse_Instruction()
+std::unique_ptr<Instruction> Parser::parse_Instruction()
 {
     auto &C = Catalog::Get();
     Token tok = token();
@@ -118,26 +129,26 @@ Instruction * Parser::parse_Instruction()
     }
 
     if (not expect(TK_SEMICOL)) { recover(follow_set_COMMAND); };
-    return new Instruction(tok, instruction_name, std::move(args));
+    return std::make_unique<Instruction>(tok, instruction_name, std::move(args));
 }
 
-Stmt * Parser::parse_Stmt()
+std::unique_ptr<Stmt> Parser::parse_Stmt()
 {
-    Stmt *stmt = nullptr;
+    std::unique_ptr<Stmt> stmt = nullptr;
     switch (token().type) {
         default:
-            stmt = new ErrorStmt(token());
+            stmt = std::make_unique<ErrorStmt>(token());
             diag.e(token().pos) << "expected a statement, got " << token().text << '\n';
             consume();
             break;
 
-        case TK_SEMICOL: return new EmptyStmt(consume());
+        case TK_SEMICOL: return std::make_unique<EmptyStmt>(consume());
 
         case TK_Create: {
             consume();
             switch (token().type) {
                 default:
-                    stmt = new ErrorStmt(token());
+                    stmt = std::make_unique<ErrorStmt>(token());
                     diag.e(token().pos) << "expected a create database statement or a create table statement, got "
                                         << token().text << '\n';
                     recover(follow_set_CREATE_DATABASE_STATEMENT);
@@ -164,7 +175,7 @@ Stmt * Parser::parse_Stmt()
  * statements
  *====================================================================================================================*/
 
-Stmt * Parser::parse_CreateDatabaseStmt()
+std::unique_ptr<Stmt> Parser::parse_CreateDatabaseStmt()
 {
     bool ok = true;
     Token start = token();
@@ -176,13 +187,13 @@ Stmt * Parser::parse_CreateDatabaseStmt()
 
     if (not ok) {
         recover(follow_set_CREATE_DATABASE_STATEMENT);
-        return new ErrorStmt(start);
+        return std::make_unique<ErrorStmt>(start);
     }
 
-    return new CreateDatabaseStmt(database_name);
+    return std::make_unique<CreateDatabaseStmt>(database_name);
 }
 
-Stmt * Parser::parse_UseDatabaseStmt()
+std::unique_ptr<Stmt> Parser::parse_UseDatabaseStmt()
 {
     bool ok = true;
     Token start = token();
@@ -194,17 +205,17 @@ Stmt * Parser::parse_UseDatabaseStmt()
 
     if (not ok) {
         recover(follow_set_USE_DATABASE_STATEMENT);
-        return new ErrorStmt(start);
+        return std::make_unique<ErrorStmt>(start);
     }
 
-    return new UseDatabaseStmt(database_name);
+    return std::make_unique<UseDatabaseStmt>(database_name);
 }
 
-Stmt * Parser::parse_CreateTableStmt()
+std::unique_ptr<Stmt> Parser::parse_CreateTableStmt()
 {
     bool ok = true;
     Token start = token();
-    std::vector<CreateTableStmt::attribute_definition*> attrs;
+    std::vector<std::unique_ptr<CreateTableStmt::attribute_definition>> attrs;
 
     /* 'TABLE' identifier '(' */
     ok = ok and expect(TK_Table);
@@ -217,18 +228,17 @@ Stmt * Parser::parse_CreateTableStmt()
     do {
         Token id = token();
         if (not expect(TK_IDENTIFIER)) goto error_recovery;
-        const Type *type = parse_data_type();
-        M_insist(type, "Must never be NULL");
+        const Type *type = M_notnull(parse_data_type());
 
         /* Parse the list of constraints. */
-        std::vector<Constraint*> constraints;
+        std::vector<std::unique_ptr<Constraint>> constraints;
         for (;;) {
             switch (token().type) {
                 /* 'PRIMARY' 'KEY' */
                 case TK_Primary: {
                     Token tok = consume();
                     if (not expect(TK_Key)) goto constraint_error_recovery;
-                    constraints.push_back(new PrimaryKeyConstraint(tok));
+                    constraints.push_back(std::make_unique<PrimaryKeyConstraint>(tok));
                     break;
                 }
 
@@ -236,14 +246,14 @@ Stmt * Parser::parse_CreateTableStmt()
                 case TK_Not: {
                     Token tok = consume();
                     if (not expect(TK_Null)) goto constraint_error_recovery;
-                    constraints.push_back(new NotNullConstraint(tok));
+                    constraints.push_back(std::make_unique<NotNullConstraint>(tok));
                     break;
                 }
 
                 /* 'UNIQUE' */
                 case TK_Unique: {
                     Token tok = consume();
-                    constraints.push_back(new UniqueConstraint(tok));
+                    constraints.push_back(std::make_unique<UniqueConstraint>(tok));
                     break;
                 }
 
@@ -251,25 +261,27 @@ Stmt * Parser::parse_CreateTableStmt()
                 case TK_Check: {
                     Token tok = consume();
                     if (not expect(TK_LPAR)) goto constraint_error_recovery;
-                    Expr *cond = parse_Expr();
+                    std::unique_ptr<Expr> cond = parse_Expr();
                     if (not expect(TK_RPAR)) goto constraint_error_recovery;
-                    constraints.push_back(new CheckConditionConstraint(tok, cond));
+                    constraints.push_back(std::make_unique<CheckConditionConstraint>(tok, std::move(cond)));
                     break;
                 }
 
                 /* 'REFERENCES' identifier '(' identifier ')' */
                 case TK_References: {
                     Token tok = consume();
-                    Token table_name = token();
+                    Token ref_table_name = token();
                     if (not expect(TK_IDENTIFIER)) goto constraint_error_recovery;
                     if (not expect(TK_LPAR)) goto constraint_error_recovery;
                     Token attr_name = token();
                     if (not expect(TK_IDENTIFIER)) goto constraint_error_recovery;
                     if (not expect(TK_RPAR)) goto constraint_error_recovery;
-                    constraints.push_back(new ReferenceConstraint(tok,
-                                                                  table_name,
-                                                                  attr_name,
-                                                                  ReferenceConstraint::ON_DELETE_RESTRICT));
+                    constraints.push_back(std::make_unique<ReferenceConstraint>(
+                        tok,
+                        ref_table_name,
+                        attr_name,
+                        ReferenceConstraint::ON_DELETE_RESTRICT)
+                    );
                     break;
                 }
 
@@ -281,30 +293,30 @@ Stmt * Parser::parse_CreateTableStmt()
 constraint_error_recovery:
         recover(follow_set_CONSTRAINT);
 exit_constraints:
-        attrs.push_back(new CreateTableStmt::attribute_definition(id, type, constraints));
+        attrs.push_back(std::make_unique<CreateTableStmt::attribute_definition>(id,
+                                                                                std::move(type),
+                                                                                std::move(constraints)));
     } while (accept(TK_COMMA));
 
     /* ')' */
     if (not expect(TK_RPAR)) goto error_recovery;
 
-    return new CreateTableStmt(table_name, std::move(attrs));
+    return std::make_unique<CreateTableStmt>(table_name, std::move(attrs));
 
 error_recovery:
     recover(follow_set_CREATE_TABLE_STATEMENT);
-    for (auto attr : attrs)
-        delete attr;
-    return new ErrorStmt(start);
+    return std::make_unique<ErrorStmt>(start);
 }
 
-Stmt * Parser::parse_SelectStmt()
+std::unique_ptr<Stmt> Parser::parse_SelectStmt()
 {
-    Clause *select = parse_SelectClause();
-    Clause *from = nullptr;
-    Clause *where = nullptr;
-    Clause *group_by = nullptr;
-    Clause *having = nullptr;
-    Clause *order_by = nullptr;
-    Clause *limit = nullptr;
+    std::unique_ptr<Clause> select = parse_SelectClause();
+    std::unique_ptr<Clause> from = nullptr;
+    std::unique_ptr<Clause> where = nullptr;
+    std::unique_ptr<Clause> group_by = nullptr;
+    std::unique_ptr<Clause> having = nullptr;
+    std::unique_ptr<Clause> order_by = nullptr;
+    std::unique_ptr<Clause> limit = nullptr;
 
     if (token() == TK_From)
         from = parse_FromClause();
@@ -319,10 +331,16 @@ Stmt * Parser::parse_SelectStmt()
     if (token() == TK_Limit)
         limit = parse_LimitClause();
 
-    return new SelectStmt(select, from, where, group_by, having, order_by, limit);
+    return std::make_unique<SelectStmt>(std::move(select),
+                                        std::move(from),
+                                        std::move(where),
+                                        std::move(group_by),
+                                        std::move(having),
+                                        std::move(order_by),
+                                        std::move(limit));
 }
 
-Stmt * Parser::parse_InsertStmt()
+std::unique_ptr<Stmt> Parser::parse_InsertStmt()
 {
     bool ok = true;
     Token start = token();
@@ -356,37 +374,31 @@ Stmt * Parser::parse_InsertStmt()
 
                 default: {
                     auto e = parse_Expr();
-                    tuple.emplace_back(InsertStmt::I_Expr, e);
+                    tuple.emplace_back(InsertStmt::I_Expr, std::move(e));
                     break;
                 }
             }
         } while (accept(TK_COMMA));
         if (not expect(TK_RPAR)) goto tuple_error_recovery;
-        tuples.emplace_back(tuple);
+        tuples.emplace_back(std::move(tuple));
         continue;
 tuple_error_recovery:
-        for (InsertStmt::element_type &e : tuple)
-            delete e.second;
         recover(follow_set_TUPLE);
     } while (accept(TK_COMMA));
 
-    return new InsertStmt(table_name, tuples);
+    return std::make_unique<InsertStmt>(table_name, std::move(tuples));
 
 error_recovery:
     recover(follow_set_INSERT_STATEMENT);
-    for (InsertStmt::tuple_t &v : tuples) {
-        for (InsertStmt::element_type &e : v)
-            delete e.second;
-    }
-    return new ErrorStmt(start);
+    return std::make_unique<ErrorStmt>(start);
 }
 
-Stmt * Parser::parse_UpdateStmt()
+std::unique_ptr<Stmt> Parser::parse_UpdateStmt()
 {
     bool ok = true;
     Token start = token();
     std::vector<UpdateStmt::set_type> set;
-    Clause *where = nullptr;
+    std::unique_ptr<Clause> where = nullptr;
 
     /* update-clause ::= 'UPDATE' identifier 'SET' identifier '=' expression { ',' identifier '=' expression } ; */
     ok = ok and expect(TK_Update);
@@ -400,27 +412,24 @@ Stmt * Parser::parse_UpdateStmt()
         if (not expect(TK_IDENTIFIER)) goto error_recovery;
         if (not expect(TK_EQUAL)) goto error_recovery;
         auto e = parse_Expr();
-        set.emplace_back(id, e);
+        set.emplace_back(id, std::move(e));
     } while (accept(TK_COMMA));
 
     if (token() == TK_Where)
         where = parse_WhereClause();
 
-    return new UpdateStmt(table_name, set, where);
+    return std::make_unique<UpdateStmt>(table_name, std::move(set), std::move(where));
 
 error_recovery:
     recover(follow_set_UPDATE_STATEMENT);
-    for (auto &s : set)
-        delete s.second;
-    delete where;
-    return new ErrorStmt(start);
+    return std::make_unique<ErrorStmt>(start);
 }
 
-Stmt * Parser::parse_DeleteStmt()
+std::unique_ptr<Stmt> Parser::parse_DeleteStmt()
 {
     bool ok = true;
     Token start = token();
-    Clause *where = nullptr;
+    std::unique_ptr<Clause> where = nullptr;
 
     /* delete-statement ::= 'DELETE' 'FROM' identifier [ where-clause ] ; */
     ok = ok and expect(TK_Delete);
@@ -433,15 +442,14 @@ Stmt * Parser::parse_DeleteStmt()
     if (token() == TK_Where)
         where = parse_WhereClause();
 
-    return new DeleteStmt(table_name, where);
+    return std::make_unique<DeleteStmt>(table_name, std::move(where));
 
 error_recovery:
     recover(follow_set_DELETE_STATEMENT);
-    delete where;
-    return new ErrorStmt(start);
+    return std::make_unique<ErrorStmt>(start);
 }
 
-Stmt * Parser::parse_ImportStmt()
+std::unique_ptr<Stmt> Parser::parse_ImportStmt()
 {
     bool ok = true;
     Token start = token();
@@ -496,7 +504,7 @@ Stmt * Parser::parse_ImportStmt()
                 stmt.skip_header = true;
             }
 
-            return new DSVImportStmt(stmt);
+            return std::make_unique<DSVImportStmt>(stmt);
         }
 
         default:
@@ -506,14 +514,14 @@ Stmt * Parser::parse_ImportStmt()
 
 error_recovery:
     recover(follow_set_IMPORT_STATEMENT);
-    return new ErrorStmt(start);
+    return std::make_unique<ErrorStmt>(start);
 }
 
 /*======================================================================================================================
  * Clauses
  *====================================================================================================================*/
 
-Clause * Parser::parse_SelectClause()
+std::unique_ptr<Clause> Parser::parse_SelectClause()
 {
     Token start = token();
     Token select_all;
@@ -532,14 +540,13 @@ Clause * Parser::parse_SelectClause()
         if (accept(TK_As)) {
             tok = token();
             if (not expect(TK_IDENTIFIER)) {
-                delete e;
                 goto error_recovery;
             }
         } else if (token().type == TK_IDENTIFIER) {
             tok = token();
             consume();
         }
-        select.push_back(std::make_pair(e, tok));
+        select.emplace_back(std::move(e), tok);
     }
 
     /* { ',' expression [ [ 'AS' ] identifier ] } */
@@ -549,26 +556,23 @@ Clause * Parser::parse_SelectClause()
         if (accept(TK_As)) {
             tok = token();
             if (not expect(TK_IDENTIFIER)) {
-                delete e;
                 goto error_recovery;
             }
         } else if (token().type == TK_IDENTIFIER) {
             tok = token();
             consume();
         }
-        select.push_back(std::make_pair(e, tok));
+        select.emplace_back(std::move(e), tok);
     }
 
-    return new SelectClause(start, select, select_all);
+    return std::make_unique<SelectClause>(start, std::move(select), select_all);
 
 error_recovery:
     recover(follow_set_SELECT_CLAUSE);
-    for (auto s : select)
-        delete s.first;
-    return new ErrorClause(start);
+    return std::make_unique<ErrorClause>(start);
 }
 
-Clause * Parser::parse_FromClause()
+std::unique_ptr<Clause> Parser::parse_FromClause()
 {
     Token start = token();
     std::vector<FromClause::from_type> from;
@@ -578,18 +582,16 @@ Clause * Parser::parse_FromClause()
     do {
         Token alias;
         if (accept(TK_LPAR)) {
-            Stmt *S = parse_SelectStmt();
+            std::unique_ptr<Stmt> S = parse_SelectStmt();
             if (not expect(TK_RPAR)) {
-                delete S;
                 goto error_recovery;
             }
             accept(TK_As);
             alias = token();
             if (not expect(TK_IDENTIFIER)) {
-                delete S;
                 goto error_recovery;
             }
-            from.emplace_back(S, alias);
+            from.emplace_back(std::move(S), alias);
         } else {
             Token table = token();
             if (not expect(TK_IDENTIFIER)) goto error_recovery;
@@ -604,64 +606,71 @@ Clause * Parser::parse_FromClause()
         }
     } while (accept(TK_COMMA));
 
-    return new FromClause(start, from);
+    return std::make_unique<FromClause>(start, std::move(from));
 
 error_recovery:
     recover(follow_set_FROM_CLAUSE);
-    for (auto &f : from) {
-        if (Stmt **stmt = std::get_if<Stmt*>(&f.source))
-            delete (*stmt);
-    }
-    return new ErrorClause(start);
+    return std::make_unique<ErrorClause>(start);
 }
 
-Clause * Parser::parse_WhereClause()
+std::unique_ptr<Clause> Parser::parse_WhereClause()
 {
     Token start = token();
 
     /* 'WHERE' expression */
     if (not expect(TK_Where)) {
         recover(follow_set_WHERE_CLAUSE);
-        return new ErrorClause(start);
+        return std::make_unique<ErrorClause>(start);
     }
-    Expr *where = parse_Expr();
+    std::unique_ptr<Expr> where = parse_Expr();
 
-    return new WhereClause(start, where);
+    return std::make_unique<WhereClause>(start, std::move(where));
 }
 
-Clause * Parser::parse_GroupByClause()
+std::unique_ptr<Clause> Parser::parse_GroupByClause()
 {
     Token start = token();
-    std::vector<Expr*> group_by;
+    std::vector<GroupByClause::group_type> group_by;
 
-    /* 'GROUP' 'BY' designator { ',' designator } */
+    /* 'GROUP' 'BY' expr [ 'AS' identifier ] { ',' expr [ 'AS' identifier ] } */
     if (not expect(TK_Group)) goto error_recovery;
     if (not expect(TK_By)) goto error_recovery;
-    do
-        group_by.push_back(parse_Expr());
-    while (accept(TK_COMMA));
-    return new GroupByClause(start, group_by);
+    do {
+        auto e = parse_Expr();
+        Token tok;
+        if (accept(TK_As)) {
+            tok = token();
+            if (not expect(TK_IDENTIFIER)) {
+                goto error_recovery;
+            }
+        } else if (token().type == TK_IDENTIFIER) {
+            tok = token();
+            consume();
+        }
+        group_by.emplace_back(std::move(e), tok);
+    } while (accept(TK_COMMA));
+    return std::make_unique<GroupByClause>(start, std::move(group_by));
 
 error_recovery:
     recover(follow_set_GROUP_BY_CLAUSE);
-    return new ErrorClause(start);
+    return std::make_unique<ErrorClause>(start);
 }
 
-Clause * Parser::parse_HavingClause()
+std::unique_ptr<Clause> Parser::parse_HavingClause()
 {
     Token start = token();
 
     /* 'HAVING' expression */
     if (not expect(TK_Having)) {
         recover(follow_set_HAVING_CLAUSE);
-        return new ErrorClause(start);
+        return std::make_unique<ErrorClause>(start);
     }
-    Expr *having = parse_Expr();
+    std::unique_ptr<Expr> having = parse_Expr();
 
-    return new HavingClause(start, having);
+    return std::make_unique<HavingClause>(start, std::move(having));
 }
 
-Clause * Parser::parse_OrderByClause()
+std::unique_ptr<Clause> Parser::parse_OrderByClause()
 {
     Token start = token();
     std::vector<OrderByClause::order_type> order_by;
@@ -673,21 +682,21 @@ Clause * Parser::parse_OrderByClause()
     do {
         auto e = parse_Expr();
         if (accept(TK_Descending)) {
-            order_by.push_back(std::make_pair(e, false));
+            order_by.emplace_back(std::move(e), false);
         } else {
             accept(TK_Ascending);
-            order_by.push_back(std::make_pair(e, true));
+            order_by.emplace_back(std::move(e), true);
         }
     } while (accept(TK_COMMA));
 
-    return new OrderByClause(start, order_by);
+    return std::make_unique<OrderByClause>(start, std::move(order_by));
 
 error_recovery:
     recover(follow_set_ORDER_BY_CLAUSE);
-    return new ErrorClause(start);
+    return std::make_unique<ErrorClause>(start);
 }
 
-Clause * Parser::parse_LimitClause()
+std::unique_ptr<Clause> Parser::parse_LimitClause()
 {
     Token start = token();
     bool ok = true;
@@ -715,18 +724,18 @@ Clause * Parser::parse_LimitClause()
         }
     }
 
-    return new LimitClause(start, limit, offset);
+    return std::make_unique<LimitClause>(start, limit, offset);
 
 error_recovery:
     recover(follow_set_LIMIT_CLAUSE);
-    return new ErrorClause(start);
+    return std::make_unique<ErrorClause>(start);
 }
 
 /*======================================================================================================================
  * Expressions
  *====================================================================================================================*/
 
-Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
+std::unique_ptr<Expr> Parser::parse_Expr(const int precedence_lhs, std::unique_ptr<Expr> lhs)
 {
     /*
      * primary-expression ::= designator | constant | '(' expression ')' | '(' select-statement ')' ;
@@ -749,12 +758,12 @@ Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
         case TK_HEX_INT:
         case TK_DEC_FLOAT:
         case TK_HEX_FLOAT:
-            lhs = new Constant(consume());
+            lhs = std::make_unique<Constant>(consume());
             break;
         case TK_LPAR:
             consume();
             if (token().type == TK_Select)
-                lhs = new QueryExpr(token(), parse_SelectStmt());
+                lhs = std::make_unique<QueryExpr>(token(), parse_SelectStmt());
             else
                 lhs = parse_Expr();
             if (not expect(TK_RPAR)) {
@@ -768,7 +777,7 @@ Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
         case TK_TILDE: {
             auto tok = consume();
             int p = get_precedence(TK_TILDE); // the precedence of TK_TILDE equals that of unary plus and minus
-            lhs = new UnaryExpr(tok, parse_Expr(p));
+            lhs = std::make_unique<UnaryExpr>(tok, parse_Expr(p));
             break;
         }
 
@@ -776,20 +785,20 @@ Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
         case TK_Not: {
             auto tok = consume();
             int p = get_precedence(tok.type);
-            lhs = new UnaryExpr(tok, parse_Expr(p));
+            lhs = std::make_unique<UnaryExpr>(tok, parse_Expr(p));
             break;
         }
 
         default:
             diag.e(token().pos) << "expected expression, got " << token().text << '\n';
             recover(follow_set_EXPRESSION);
-            return new ErrorExpr(token());
+            return std::make_unique<ErrorExpr>(token());
     }
 
     /* postfix-expression ::= postfix-expression '(' [ expression { ',' expression } ] ')' | primary-expression */
     while (token() == TK_LPAR) {
         Token lpar = consume();
-        std::vector<Expr*> args;
+        std::vector<std::unique_ptr<Expr>> args;
         if (token().type == TK_ASTERISK) {
             consume();
         } else if (token().type != TK_RPAR) {
@@ -799,13 +808,10 @@ Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
         }
         if (not expect(TK_RPAR)) {
             recover(follow_set_POSTFIX_EXPRESSION);
-            for (Expr* e : args)
-                delete e;
-            delete lhs;
-            lhs = new ErrorExpr(token());
+            lhs = std::make_unique<ErrorExpr>(token());
             continue;
         }
-        lhs = new FnApplicationExpr(lpar, lhs, args);
+        lhs = std::make_unique<FnApplicationExpr>(lpar, std::move(lhs), std::move(args));
     }
 
     for (;;) {
@@ -814,37 +820,37 @@ Expr * Parser::parse_Expr(const int precedence_lhs, Expr *lhs)
         if (precedence_lhs > p) return lhs; // left operator has higher precedence_lhs
         consume();
 
-        Expr *rhs = parse_Expr(p + 1);
-        lhs = new BinaryExpr(op, lhs, rhs);
+        auto rhs = parse_Expr(p + 1);
+        lhs = std::make_unique<BinaryExpr>(op, std::move(lhs), std::move(rhs));
     }
 }
 
-Expr * Parser::parse_designator()
+std::unique_ptr<Expr> Parser::parse_designator()
 {
     Token lhs = token();
     if (not expect(TK_IDENTIFIER)) {
         recover(follow_set_DESIGNATOR);
-        return new ErrorExpr(lhs);
+        return std::make_unique<ErrorExpr>(lhs);
     }
     if (token() == TK_DOT) {
         Token dot = consume();
         Token rhs = token();
         if (not expect(TK_IDENTIFIER)) {
             recover(follow_set_DESIGNATOR);
-            return new ErrorExpr(rhs);
+            return std::make_unique<ErrorExpr>(rhs);
         }
-        return new Designator(dot, lhs, rhs); // tbl.attr
+        return std::make_unique<Designator>(dot, lhs, rhs); // tbl.attr
     }
-    return new Designator(lhs); // attr
+    return std::make_unique<Designator>(lhs); // attr
 }
 
-Expr * Parser::expect_integer()
+std::unique_ptr<Expr> Parser::expect_integer()
 {
     if (is_integer(token().type)) {
-        return new Constant(consume());
+        return std::make_unique<Constant>(consume());
     } else {
         diag.e(token().pos) << "expected integer constant, got " << token().text << '\n';
-        return new ErrorExpr(token());
+        return std::make_unique<ErrorExpr>(token());
     }
 }
 

@@ -227,7 +227,7 @@ void DSVReader::operator()(Const<Date>&)
     buf.push_back('\'');
     buf.push_back(0);
 
-    tup.set(col_idx, Interpreter::eval(Constant(Token(pos, &buf[0], TK_DATE))));
+    tup.set(col_idx, Interpreter::eval(ast::Constant(ast::Token(pos, &buf[0], TK_DATE))));
     return;
 
 invalid:
@@ -261,7 +261,7 @@ void DSVReader::operator()(Const<DateTime>&)
 
     buf.push_back('\'');
     buf.push_back(0);
-    tup.set(col_idx, Interpreter::eval(Constant(Token(pos, &buf[0], TK_DATE_TIME))));
+    tup.set(col_idx, Interpreter::eval(ast::Constant(ast::Token(pos, &buf[0], TK_DATE_TIME))));
     return;
 
 invalid:

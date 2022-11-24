@@ -8,6 +8,7 @@
 
 
 using namespace m;
+using namespace m::ast;
 
 
 /*======================================================================================================================
@@ -19,13 +20,13 @@ using test_triple_t = std::tuple<const char*, const char*, TokenType>;
 /** Given a test triple of input, expected output, and the next token after parsing, and a callback function to invoke
  * the respective parser method, check that parsing succeeds. */
 template<typename Expected, typename Base>
-void test_parse_positive(test_triple_t triple, std::function<Base*(Parser&)> parse)
+void test_parse_positive(test_triple_t triple, std::function<std::unique_ptr<Base>(ast::Parser&)> parse)
 {
     auto [input, expected, tok_next] = triple;
 
     LEXER(input);
-    Parser parser(lexer);
-    auto ast = std::unique_ptr<Base>(parse(parser)); // wrap the pointer in a std::unique_ptr for automatic destruction
+    ast::Parser parser(lexer);
+    auto ast = parse(parser);
 
     CHECK(diag.num_errors() == 0);
     CHECK(err.str().empty());
@@ -41,7 +42,7 @@ void test_parse_positive(test_triple_t triple, std::function<Base*(Parser&)> par
     }
 
     std::ostringstream actual;
-    ASTPrinter p(actual);
+    ast::ASTPrinter p(actual);
     p(*ast);
 
     CHECK(expected == actual.str());
@@ -62,7 +63,7 @@ void test_parse_positive(test_triple_t triple, std::function<Base*(Parser&)> par
 TEST_CASE("Parser c'tor", "[core][parse][unit]")
 {
     LEXER("SELECT * FROM Tbl WHERE x=42;");
-    Parser parser(lexer);
+    ast::Parser parser(lexer);
 
     /* Check no errors occured so far. */
     REQUIRE(diag.num_errors() == 0);
@@ -79,7 +80,7 @@ TEST_CASE("Parser c'tor", "[core][parse][unit]")
 TEST_CASE("Parser::is()", "[core][parse][unit]")
 {
     LEXER("SELECT * FROM Tbl WHERE x=42;");
-    Parser parser(lexer);
+    ast::Parser parser(lexer);
     REQUIRE(not parser.is(TK_And));
     REQUIRE(parser.is(TK_Select));
 }
@@ -87,7 +88,7 @@ TEST_CASE("Parser::is()", "[core][parse][unit]")
 TEST_CASE("Parser::no()", "[core][parse][unit]")
 {
     LEXER("SELECT * FROM Tbl WHERE x=42;");
-    Parser parser(lexer);
+    ast::Parser parser(lexer);
     REQUIRE(parser.no(TK_And));
     REQUIRE(not parser.no(TK_Select));
 }
@@ -95,7 +96,7 @@ TEST_CASE("Parser::no()", "[core][parse][unit]")
 TEST_CASE("Parser::consume()", "[core][parse][unit]")
 {
     LEXER("SELECT * FROM Tbl WHERE x=42;");
-    Parser parser(lexer);
+    ast::Parser parser(lexer);
     REQUIRE(parser.token() == TK_Select);
     parser.consume();
     REQUIRE(parser.token() == TK_ASTERISK);
@@ -105,7 +106,7 @@ TEST_CASE("Parser::accept()", "[core][parse][unit]")
 {
     {
         LEXER("SELECT * FROM Tbl WHERE x=42;");
-        Parser parser(lexer);
+        ast::Parser parser(lexer);
         REQUIRE(not parser.accept(TK_And));
         REQUIRE(parser.accept(TK_Select));
         REQUIRE(parser.token() == TK_ASTERISK);
@@ -113,7 +114,7 @@ TEST_CASE("Parser::accept()", "[core][parse][unit]")
 
     {
         LEXER(":");
-        Parser parser(lexer);
+        ast::Parser parser(lexer);
         REQUIRE(parser.accept(TK_Select));
         REQUIRE(parser.token() == TK_EOF);
     }
@@ -122,7 +123,7 @@ TEST_CASE("Parser::accept()", "[core][parse][unit]")
 TEST_CASE("Parser::expect()", "[core][parse][unit]")
 {
     LEXER("SELECT * FROM Tbl WHERE x=42;");
-    Parser parser(lexer);
+    ast::Parser parser(lexer);
 
     /* Trigger an error by expecting the wrong token. */
     parser.expect(TK_And);
@@ -155,9 +156,9 @@ TEST_CASE("Parser::parse_designator()", "[core][parse][unit]")
         { "a.42", "a", TK_DEC_FLOAT },
     };
 
-    auto parse = [](Parser &p) { return p.parse_designator(); };
+    auto parse = [](ast::Parser &p) { return p.parse_designator(); };
     for (auto triple : triples)
-        test_parse_positive<Designator, Expr>(triple, parse);
+        test_parse_positive<ast::Designator, ast::Expr>(triple, parse);
 }
 
 TEST_CASE("Parser::parse_designator() sanity tests", "[core][parse][unit]")
@@ -166,44 +167,43 @@ TEST_CASE("Parser::parse_designator() sanity tests", "[core][parse][unit]")
 
     for (auto d : designators) {
         LEXER(d);
-        Parser parser(lexer);
+        ast::Parser parser(lexer);
         auto ast = parser.parse_designator();
         if (not diag.num_errors())
             std::cerr << "UNEXPECTED PASS for input \"" << d << '"' << std::endl;
         CHECK(diag.num_errors() > 0);
         CHECK(not err.str().empty());
-        if (not is<ErrorExpr>(ast))
+        if (not is<ast::ErrorExpr>(ast))
             std::cerr << "Input \"" << d << "\" is not parsed as ErrorExpr" << std::endl;
-        CHECK(is<ErrorExpr>(ast));
-        delete ast;
+        CHECK(is<ast::ErrorExpr>(ast));
     }
 }
 
 TEST_CASE("Parser::expect_integer()", "[core][parse][unit]")
 {
     LEXER("07 19 0xC0d3 abc");
-    Parser parser(lexer);
+    ast::Parser parser(lexer);
 
     /* 07 TK_OCT_INT */
-    delete parser.expect_integer();
+    parser.expect_integer();
     REQUIRE(diag.num_errors() == 0);
     REQUIRE(err.str().empty());
     REQUIRE(parser.token() != TK_EOF);
 
     /* 19 TK_DEC_INT */
-    delete parser.expect_integer();
+    parser.expect_integer();
     REQUIRE(diag.num_errors() == 0);
     REQUIRE(err.str().empty());
     REQUIRE(parser.token() != TK_EOF);
 
     /* 0xC0d3 TK_HEX_INT */
-    delete parser.expect_integer();
+    parser.expect_integer();
     REQUIRE(diag.num_errors() == 0);
     REQUIRE(err.str().empty());
     REQUIRE(parser.token() != TK_EOF);
 
     /* abc - unexpected token */
-    delete parser.expect_integer();
+    parser.expect_integer();
     REQUIRE(diag.num_errors() > 0);
     REQUIRE(not err.str().empty());
     REQUIRE(parser.token() == TK_IDENTIFIER);
@@ -211,7 +211,7 @@ TEST_CASE("Parser::expect_integer()", "[core][parse][unit]")
 
 TEST_CASE("Parser::parse_Expr()", "[core][parse][unit]")
 {
-    auto parse = [](Parser &p) { return p.parse_Expr(); };
+    auto parse = [](ast::Parser &p) { return p.parse_Expr(); };
 
     SECTION("Designator")
     {
@@ -224,7 +224,7 @@ TEST_CASE("Parser::parse_Expr()", "[core][parse][unit]")
         };
 
         for (auto triple : triples)
-            test_parse_positive<Designator, Expr>(triple, parse);
+            test_parse_positive<ast::Designator, ast::Expr>(triple, parse);
     }
 
     SECTION("Constant")
@@ -246,7 +246,7 @@ TEST_CASE("Parser::parse_Expr()", "[core][parse][unit]")
         };
 
         for (auto triple : triples)
-            test_parse_positive<Constant, Expr>(triple, parse);
+            test_parse_positive<ast::Constant, ast::Expr>(triple, parse);
     }
 
     SECTION("FnApllicationExpr")
@@ -263,7 +263,7 @@ TEST_CASE("Parser::parse_Expr()", "[core][parse][unit]")
         };
 
         for (auto triple : triples)
-            test_parse_positive<FnApplicationExpr, Expr>(triple, parse);
+            test_parse_positive<ast::FnApplicationExpr, ast::Expr>(triple, parse);
     }
 
     SECTION("UnaryExpr")
@@ -285,7 +285,7 @@ TEST_CASE("Parser::parse_Expr()", "[core][parse][unit]")
         };
 
         for (auto triple : triples)
-            test_parse_positive<UnaryExpr, Expr>(triple, parse);
+            test_parse_positive<ast::UnaryExpr, Expr>(triple, parse);
     }
 
     SECTION("BinaryExpr")
@@ -329,7 +329,7 @@ TEST_CASE("Parser::parse_Expr()", "[core][parse][unit]")
         };
 
         for (auto triple : triples)
-            test_parse_positive<BinaryExpr, Expr>(triple, parse);
+            test_parse_positive<ast::BinaryExpr, ast::Expr>(triple, parse);
     }
 }
 
@@ -358,13 +358,12 @@ TEST_CASE("Parser::parse_Expr() sanity tests", "[core][parse][unit]")
 
     for (auto e : exprs) {
         LEXER(e);
-        Parser parser(lexer);
+        ast::Parser parser(lexer);
         auto ast = parser.parse_Expr();
         if (not diag.num_errors())
             std::cerr << "UNEXPECTED PASS for input \"" << e << '"' << std::endl;
         CHECK(diag.num_errors() > 0);
         CHECK_FALSE(err.str().empty());
-        delete ast;
     }
 }
 
@@ -377,7 +376,7 @@ TEST_CASE("Parser::parse_data_type()", "[core][parse][unit]")
     SECTION("Boolean")
     {
         LEXER("BOOL");
-        Parser parser(lexer);
+        ast::Parser parser(lexer);
         const Type *type = parser.parse_data_type();
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
@@ -387,7 +386,7 @@ TEST_CASE("Parser::parse_data_type()", "[core][parse][unit]")
     SECTION("Char(N)")
     {
         LEXER("CHAR(42)");
-        Parser parser(lexer);
+        ast::Parser parser(lexer);
         const Type *type = parser.parse_data_type();
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
@@ -397,7 +396,7 @@ TEST_CASE("Parser::parse_data_type()", "[core][parse][unit]")
     SECTION("Varchar(N)")
     {
         LEXER("VARCHAR(42)");
-        Parser parser(lexer);
+        ast::Parser parser(lexer);
         const Type *type = parser.parse_data_type();
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
@@ -407,7 +406,7 @@ TEST_CASE("Parser::parse_data_type()", "[core][parse][unit]")
     SECTION("Date")
     {
         LEXER("DATE");
-        Parser parser(lexer);
+        ast::Parser parser(lexer);
         const Type *type = parser.parse_data_type();
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
@@ -417,7 +416,7 @@ TEST_CASE("Parser::parse_data_type()", "[core][parse][unit]")
     SECTION("Datetime")
     {
         LEXER("DATETIME");
-        Parser parser(lexer);
+        ast::Parser parser(lexer);
         const Type *type = parser.parse_data_type();
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
@@ -427,7 +426,7 @@ TEST_CASE("Parser::parse_data_type()", "[core][parse][unit]")
     SECTION("Int(N)")
     {
         LEXER("INT(4)");
-        Parser parser(lexer);
+        ast::Parser parser(lexer);
         const Type *type = parser.parse_data_type();
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
@@ -437,7 +436,7 @@ TEST_CASE("Parser::parse_data_type()", "[core][parse][unit]")
     SECTION("Float")
     {
         LEXER("FLOAT");
-        Parser parser(lexer);
+        ast::Parser parser(lexer);
         const Type *type = parser.parse_data_type();
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
@@ -447,7 +446,7 @@ TEST_CASE("Parser::parse_data_type()", "[core][parse][unit]")
     SECTION("Double")
     {
         LEXER("DOUBLE");
-        Parser parser(lexer);
+        ast::Parser parser(lexer);
         const Type *type = parser.parse_data_type();
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
@@ -457,7 +456,7 @@ TEST_CASE("Parser::parse_data_type()", "[core][parse][unit]")
     SECTION("DECIMAL(p,s)")
     {
         LEXER("DECIMAL(10, 2)");
-        Parser parser(lexer);
+        ast::Parser parser(lexer);
         const Type *type = parser.parse_data_type();
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
@@ -467,7 +466,7 @@ TEST_CASE("Parser::parse_data_type()", "[core][parse][unit]")
     SECTION("DECIMAL(p)")
     {
         LEXER("DECIMAL(10)");
-        Parser parser(lexer);
+        ast::Parser parser(lexer);
         const Type *type = parser.parse_data_type();
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(err.str().empty());
@@ -487,7 +486,7 @@ TEST_CASE("Parser::parse_data_type() sanity tests", "[core][parse][unit]")
 
         for (auto t : types) {
             LEXER(t);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             parser.parse_data_type();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << t << '"' << std::endl;
@@ -510,7 +509,7 @@ TEST_CASE("Parser::parse_data_type() sanity tests", "[core][parse][unit]")
 
         for (auto t : types) {
             LEXER(t);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             const Type *type = parser.parse_data_type();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << t << '"' << std::endl;
@@ -557,9 +556,9 @@ TEST_CASE("Parser::parse_SelectClause()", "[core][parse][unit]")
         { "SELECT T.42", "SELECT T", TK_DEC_FLOAT },
     };
 
-    auto parse = [](Parser &p) { return p.parse_SelectClause(); };
+    auto parse = [](ast::Parser &p) { return p.parse_SelectClause(); };
     for (auto triple : triples)
-        test_parse_positive<SelectClause, Clause>(triple, parse);
+        test_parse_positive<ast::SelectClause, ast::Clause>(triple, parse);
 }
 
 TEST_CASE("Parser::parse_SelectClause() sanity tests", "[core][parse][unit]")
@@ -576,13 +575,12 @@ TEST_CASE("Parser::parse_SelectClause() sanity tests", "[core][parse][unit]")
 
         for (auto c : clauses) {
             LEXER(c);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             auto ast = parser.parse_SelectClause();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << c << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            delete ast;
         }
     }
 
@@ -595,16 +593,15 @@ TEST_CASE("Parser::parse_SelectClause() sanity tests", "[core][parse][unit]")
 
         for (auto c : clauses) {
             LEXER(c);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             auto ast = parser.parse_SelectClause();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << c << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            if (not is<ErrorClause>(ast))
+            if (not is<ast::ErrorClause>(ast))
                 std::cerr << "Input \"" << c << "\" is not parsed as ErrorClause" << std::endl;
-            CHECK(is<ErrorClause>(ast));
-            delete ast;
+            CHECK(is<ast::ErrorClause>(ast));
         }
     }
 }
@@ -635,9 +632,9 @@ TEST_CASE("Parser::parse_FromClause()", "[core][parse][unit]")
         { "FROM (SELECT * FROM A) as sq", "FROM (SELECT *\nFROM A;) AS as", TK_IDENTIFIER }
     };
 
-    auto parse = [](Parser &p) { return p.parse_FromClause(); };
+    auto parse = [](ast::Parser &p) { return p.parse_FromClause(); };
     for (auto triple : triples)
-        test_parse_positive<FromClause, Clause>(triple, parse);
+        test_parse_positive<ast::FromClause, ast::Clause>(triple, parse);
 }
 
 TEST_CASE("Parser::parse_FromClause() sanity tests", "[core][parse][unit]")
@@ -653,13 +650,12 @@ TEST_CASE("Parser::parse_FromClause() sanity tests", "[core][parse][unit]")
 
         for (auto c : clauses) {
             LEXER(c);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             auto ast = parser.parse_FromClause();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << c << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            delete ast;
         }
     }
 
@@ -674,16 +670,15 @@ TEST_CASE("Parser::parse_FromClause() sanity tests", "[core][parse][unit]")
 
         for (auto c : clauses) {
             LEXER(c);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             auto ast = parser.parse_FromClause();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << c << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            if (not is<ErrorClause>(ast))
+            if (not is<ast::ErrorClause>(ast))
                 std::cerr << "Input \"" << c << "\" is not parsed as ErrorClause" << std::endl;
-            CHECK(is<ErrorClause>(ast));
-            delete ast;
+            CHECK(is<ast::ErrorClause>(ast));
         }
     }
 }
@@ -698,9 +693,9 @@ TEST_CASE("Parser::parse_WhereClause()", "[core][parse][unit]")
             { "WHERE A.val >= B.val AND FALSE != 10 * 5", "WHERE ((A.val >= B.val) AND (FALSE != (10 * 5)))", TK_EOF }
     };
 
-    auto parse = [](Parser &p) { return p.parse_WhereClause(); };
+    auto parse = [](ast::Parser &p) { return p.parse_WhereClause(); };
     for (auto triple : triples)
-        test_parse_positive<WhereClause, Clause>(triple, parse);
+        test_parse_positive<ast::WhereClause, ast::Clause>(triple, parse);
 }
 
 TEST_CASE("Parser::parse_WhereClause() sanity tests", "[core][parse][unit]")
@@ -716,13 +711,12 @@ TEST_CASE("Parser::parse_WhereClause() sanity tests", "[core][parse][unit]")
 
         for (auto c : clauses) {
             LEXER(c);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             auto ast = parser.parse_WhereClause();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << c << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            delete ast;
         }
     }
 }
@@ -737,12 +731,23 @@ TEST_CASE("Parser::parse_GroupByClause()", "[core][parse][unit]")
             { "GROUP BY A.val >= B.val AND FALSE != 10 * 5", "GROUP BY ((A.val >= B.val) AND (FALSE != (10 * 5)))",
               TK_EOF },
             { "GROUP BY key, B.val", "GROUP BY key, B.val", TK_EOF },
-            { "GROUP BY key val", "GROUP BY key", TK_IDENTIFIER }
+            { "GROUP BY key alias", "GROUP BY key AS alias", TK_EOF },
+            { "GROUP BY key AS alias", "GROUP BY key AS alias", TK_EOF },
+            { "GROUP BY a + b", "GROUP BY (a + b)", TK_EOF },
+            { "GROUP BY a + b alias", "GROUP BY (a + b) AS alias", TK_EOF },
+            { "GROUP BY a + b AS alias", "GROUP BY (a + b) AS alias", TK_EOF },
+            { "GROUP BY a + b, c + d", "GROUP BY (a + b), (c + d)", TK_EOF },
+            { "GROUP BY a + b x, c + d", "GROUP BY (a + b) AS x, (c + d)", TK_EOF },
+
+            /*----- not fully parsed -----*/
+            { "GROUP BY a + b c + d", "GROUP BY (a + b) AS c", TK_PLUS },
+            { "GROUP BY a + b HAVING", "GROUP BY (a + b)", TK_Having },
+            { "GROUP BY a + b x HAVING", "GROUP BY (a + b) AS x", TK_Having },
     };
 
-    auto parse = [](Parser &p) { return p.parse_GroupByClause(); };
+    auto parse = [](ast::Parser &p) { return p.parse_GroupByClause(); };
     for (auto triple : triples)
-        test_parse_positive<GroupByClause, Clause>(triple, parse);
+        test_parse_positive<ast::GroupByClause, ast::Clause>(triple, parse);
 }
 
 TEST_CASE("Parser::parse_GroupByClause() sanity tests", "[core][parse][unit]")
@@ -756,18 +761,18 @@ TEST_CASE("Parser::parse_GroupByClause() sanity tests", "[core][parse][unit]")
             "GROUPBY id",
             "GROUP BY id,",
             "GROUP BY FROM",
-            "GROUP BY 10 : 5 = 2"
+            "GROUP BY 10 : 5 = 2",
+            "GROUP BY a + b AS",
         };
 
         for (auto c : clauses) {
             LEXER(c);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             auto ast = parser.parse_GroupByClause();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << c << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            delete ast;
         }
     }
 }
@@ -782,9 +787,9 @@ TEST_CASE("Parser::parse_HavingClause()", "[core][parse][unit]")
         { "HAVING A.val >= B.val AND TRUE != 10 * 5", "HAVING ((A.val >= B.val) AND (TRUE != (10 * 5)))", TK_EOF }
     };
 
-    auto parse = [](Parser &p) { return p.parse_HavingClause(); };
+    auto parse = [](ast::Parser &p) { return p.parse_HavingClause(); };
     for (auto triple : triples)
-        test_parse_positive<HavingClause, Clause>(triple, parse);
+        test_parse_positive<ast::HavingClause, ast::Clause>(triple, parse);
 }
 
 TEST_CASE("Parser::parse_HavingClause() sanity tests", "[core][parse][unit]")
@@ -800,13 +805,12 @@ TEST_CASE("Parser::parse_HavingClause() sanity tests", "[core][parse][unit]")
 
         for (auto c : clauses) {
             LEXER(c);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             auto ast = parser.parse_HavingClause();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << c << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            delete ast;
         }
     }
 }
@@ -826,9 +830,9 @@ TEST_CASE("Parser::parse_OrderByClause()", "[core][parse][unit]")
         { "ORDER BY A.val B.val", "ORDER BY A.val ASC", TK_IDENTIFIER }
     };
 
-    auto parse = [](Parser &p) { return p.parse_OrderByClause(); };
+    auto parse = [](ast::Parser &p) { return p.parse_OrderByClause(); };
     for (auto triple : triples)
-        test_parse_positive<OrderByClause, Clause>(triple, parse);
+        test_parse_positive<ast::OrderByClause, ast::Clause>(triple, parse);
 }
 
 TEST_CASE("Parser::parse_OrderByClause() sanity tests", "[core][parse][unit]")
@@ -847,13 +851,12 @@ TEST_CASE("Parser::parse_OrderByClause() sanity tests", "[core][parse][unit]")
 
         for (auto c : clauses) {
             LEXER(c);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             auto ast = parser.parse_OrderByClause();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << c << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            delete ast;
         }
     }
 }
@@ -872,9 +875,9 @@ TEST_CASE("Parser::parse_LimitClause()", "[core][parse][unit]")
         { "LIMIT 1, OFFSET 2", "LIMIT 1", TK_COMMA }
     };
 
-    auto parse = [](Parser &p) { return p.parse_LimitClause(); };
+    auto parse = [](ast::Parser &p) { return p.parse_LimitClause(); };
     for (auto triple : triples)
-        test_parse_positive<LimitClause, Clause>(triple, parse);
+        test_parse_positive<ast::LimitClause, ast::Clause>(triple, parse);
 }
 
 TEST_CASE("Parser::parse_LimitClause() sanity tests", "[core][parse][unit]")
@@ -890,13 +893,12 @@ TEST_CASE("Parser::parse_LimitClause() sanity tests", "[core][parse][unit]")
 
         for (auto c : clauses) {
             LEXER(c);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             auto ast = parser.parse_LimitClause();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << c << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            delete ast;
         }
     }
 
@@ -913,16 +915,15 @@ TEST_CASE("Parser::parse_LimitClause() sanity tests", "[core][parse][unit]")
 
         for (auto c : clauses) {
             LEXER(c);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             auto ast = parser.parse_LimitClause();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << c << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            if (not is<ErrorClause>(ast))
+            if (not is<ast::ErrorClause>(ast))
                 std::cerr << "Input \"" << c << "\" is not parsed as ErrorClause" << std::endl;
-            CHECK(is<ErrorClause>(ast));
-            delete ast;
+            CHECK(is<ast::ErrorClause>(ast));
         }
     }
 }
@@ -949,9 +950,9 @@ TEST_CASE("Parser::parse_SelectStmt()", "[core][parse][unit]")
         { "SELECT * WHERE TRUE, GROUP BY a", "SELECT *\nWHERE TRUE;", TK_COMMA },
     };
 
-    auto parse = [](Parser &p) { return p.parse_SelectStmt(); };
+    auto parse = [](ast::Parser &p) { return p.parse_SelectStmt(); };
     for (auto triple : triples)
-        test_parse_positive<SelectStmt, Stmt>(triple, parse);
+        test_parse_positive<ast::SelectStmt, ast::Stmt>(triple, parse);
 }
 
 TEST_CASE("Parser::parse_SelectStmt() sanity tests", "[core][parse][unit]")
@@ -973,13 +974,12 @@ TEST_CASE("Parser::parse_SelectStmt() sanity tests", "[core][parse][unit]")
 
         for (auto s : statements) {
             LEXER(s);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             auto ast = parser.parse_SelectStmt();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            delete ast;
         }
     }
 }
@@ -993,9 +993,9 @@ TEST_CASE("Parser::parse_CreateDatabaseStmt()", "[core][parse][unit]")
         { "DATABASE d, second", "CREATE DATABASE d;", TK_COMMA }
     };
 
-    auto parse = [](Parser &p) { return p.parse_CreateDatabaseStmt(); };
+    auto parse = [](ast::Parser &p) { return p.parse_CreateDatabaseStmt(); };
     for (auto triple : triples)
-        test_parse_positive<CreateDatabaseStmt, Stmt>(triple, parse);
+        test_parse_positive<ast::CreateDatabaseStmt, ast::Stmt>(triple, parse);
 }
 
 TEST_CASE("Parser::parse_CreateDatabaseStmt() sanity tests", "[core][parse][unit]")
@@ -1010,13 +1010,12 @@ TEST_CASE("Parser::parse_CreateDatabaseStmt() sanity tests", "[core][parse][unit
 
         for (auto s : statements) {
             LEXER(s);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             auto ast = parser.parse_CreateDatabaseStmt();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            delete ast;
         }
     }
 
@@ -1030,16 +1029,15 @@ TEST_CASE("Parser::parse_CreateDatabaseStmt() sanity tests", "[core][parse][unit
 
         for (auto s : statements) {
             LEXER(s);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             auto ast = parser.parse_CreateDatabaseStmt();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            if (not is<ErrorStmt>(ast))
+            if (not is<ast::ErrorStmt>(ast))
                 std::cerr << "Input \"" << s << "\" is not parsed as ErrorStmt" << std::endl;
-            CHECK(is<ErrorStmt>(ast));
-            delete ast;
+            CHECK(is<ast::ErrorStmt>(ast));
         }
     }
 }
@@ -1053,9 +1051,9 @@ TEST_CASE("Parser::parse_UseDatabaseStmt()", "[core][parse][unit]")
         { "USE d, second", "USE d;", TK_COMMA }
     };
 
-    auto parse = [](Parser &p) { return p.parse_UseDatabaseStmt(); };
+    auto parse = [](ast::Parser &p) { return p.parse_UseDatabaseStmt(); };
     for (auto triple : triples)
-        test_parse_positive<UseDatabaseStmt, Stmt>(triple, parse);
+        test_parse_positive<ast::UseDatabaseStmt, ast::Stmt>(triple, parse);
 }
 
 TEST_CASE("Parser::parse_UseDatabaseStmt() sanity tests", "[core][parse][unit]")
@@ -1069,13 +1067,12 @@ TEST_CASE("Parser::parse_UseDatabaseStmt() sanity tests", "[core][parse][unit]")
 
         for (auto s : statements) {
             LEXER(s);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             auto ast = parser.parse_UseDatabaseStmt();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            delete ast;
         }
     }
 
@@ -1089,16 +1086,15 @@ TEST_CASE("Parser::parse_UseDatabaseStmt() sanity tests", "[core][parse][unit]")
 
         for (auto s : statements) {
             LEXER(s);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             auto ast = parser.parse_UseDatabaseStmt();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            if (not is<ErrorStmt>(ast))
+            if (not is<ast::ErrorStmt>(ast))
                 std::cerr << "Input \"" << s << "\" is not parsed as ErrorStmt" << std::endl;
-            CHECK(is<ErrorStmt>(ast));
-            delete ast;
+            CHECK(is<ast::ErrorStmt>(ast));
         }
     }
 }
@@ -1119,9 +1115,9 @@ TEST_CASE("Parser::parse_CreateTableStmt()", "[core][parse][unit]")
         { "TABLE t ( a BOOL, b DOUBLE )", "CREATE TABLE t\n(\n    a BOOL,\n    b DOUBLE\n);", TK_EOF },
     };
 
-    auto parse = [](Parser &p) { return p.parse_CreateTableStmt(); };
+    auto parse = [](ast::Parser &p) { return p.parse_CreateTableStmt(); };
     for (auto triple : triples)
-        test_parse_positive<CreateTableStmt, Stmt>(triple, parse);
+        test_parse_positive<ast::CreateTableStmt, ast::Stmt>(triple, parse);
 }
 
 TEST_CASE("Parser::parse_CreateTableStmt() sanity tests", "[core][parse][unit]")
@@ -1150,13 +1146,12 @@ TEST_CASE("Parser::parse_CreateTableStmt() sanity tests", "[core][parse][unit]")
 
         for (auto s : statements) {
             LEXER(s);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             auto ast = parser.parse_CreateTableStmt();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            delete ast;
         }
     }
 
@@ -1173,16 +1168,15 @@ TEST_CASE("Parser::parse_CreateTableStmt() sanity tests", "[core][parse][unit]")
 
         for (auto s : statements) {
             LEXER(s);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             auto ast = parser.parse_CreateTableStmt();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            if (not is<ErrorStmt>(ast))
+            if (not is<ast::ErrorStmt>(ast))
                 std::cerr << "Input \"" << s << "\" is not parsed as ErrorStmt" << std::endl;
-            CHECK(is<ErrorStmt>(ast));
-            delete ast;
+            CHECK(is<ast::ErrorStmt>(ast));
         }
     }
 }
@@ -1201,9 +1195,9 @@ TEST_CASE("Parser::parse_InsertStmt()", "[core][parse][unit]")
         { "INSERT INTO a VALUES (42) (17)", "INSERT INTO a\nVALUES\n    (42);", TK_LPAR }
     };
 
-    auto parse = [](Parser &p) { return p.parse_InsertStmt(); };
+    auto parse = [](ast::Parser &p) { return p.parse_InsertStmt(); };
     for (auto triple : triples)
-        test_parse_positive<InsertStmt, Stmt>(triple, parse);
+        test_parse_positive<ast::InsertStmt, ast::Stmt>(triple, parse);
 }
 
 TEST_CASE("Parser::parse_InsertStmt() sanity tests", "[core][parse][unit]")
@@ -1225,13 +1219,12 @@ TEST_CASE("Parser::parse_InsertStmt() sanity tests", "[core][parse][unit]")
 
         for (auto s : statements) {
             LEXER(s);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             auto ast = parser.parse_InsertStmt();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            delete ast;
         }
     }
 
@@ -1244,7 +1237,7 @@ TEST_CASE("Parser::parse_InsertStmt() sanity tests", "[core][parse][unit]")
 
         for (auto s : statements) {
             LEXER(s);
-            Parser parser(lexer);
+            ast::Parser parser(lexer);
             auto ast = parser.parse_InsertStmt();
             if (diag.num_errors() == 0)
                 std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
@@ -1253,7 +1246,6 @@ TEST_CASE("Parser::parse_InsertStmt() sanity tests", "[core][parse][unit]")
             if (not is<ErrorStmt>(ast))
                 std::cerr << "Input \"" << s << "\" is not parsed as ErrorStmt" << std::endl;
             CHECK(is<ErrorStmt>(ast));
-            delete ast;
         }
     }
 }
@@ -1295,7 +1287,6 @@ TEST_CASE("Parser::parse_UpdateStmt() sanity tests", "[core][parse][unit]")
                 std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            delete ast;
         }
     }
 
@@ -1317,7 +1308,6 @@ TEST_CASE("Parser::parse_UpdateStmt() sanity tests", "[core][parse][unit]")
             if (not is<ErrorStmt>(ast))
                 std::cerr << "Input \"" << s << "\" is not parsed as ErrorStmt" << std::endl;
             CHECK(is<ErrorStmt>(ast));
-            delete ast;
         }
     }
 }
@@ -1357,7 +1347,6 @@ TEST_CASE("Parser::parse_DeleteStmt() sanity tests", "[core][parse][unit]")
                 std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            delete ast;
         }
     }
 
@@ -1381,7 +1370,6 @@ TEST_CASE("Parser::parse_DeleteStmt() sanity tests", "[core][parse][unit]")
             if (not is<ErrorStmt>(ast))
                 std::cerr << "Input \"" << s << "\" is not parsed as ErrorStmt" << std::endl;
             CHECK(is<ErrorStmt>(ast));
-            delete ast;
         }
     }
 }
@@ -1435,7 +1423,6 @@ TEST_CASE("Parser::parse_ImportStmt() sanity tests", "[core][parse][unit]")
                 std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            delete ast;
         }
     }
 
@@ -1468,7 +1455,6 @@ TEST_CASE("Parser::parse_ImportStmt() sanity tests", "[core][parse][unit]")
             if (not is<ErrorStmt>(ast))
                 std::cerr << "Input \"" << s << "\" is not parsed as ErrorStmt" << std::endl;
             CHECK(is<ErrorStmt>(ast));
-            delete ast;
         }
     }
 }
@@ -1550,7 +1536,6 @@ TEST_CASE("Parser::parse_Stmt() sanity tests", "[core][parse][unit]")
                 std::cerr << "UNEXPECTED PASS for input \"" << s << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            delete ast;
         }
     }
 
@@ -1573,7 +1558,6 @@ TEST_CASE("Parser::parse_Stmt() sanity tests", "[core][parse][unit]")
             if (not is<ErrorStmt>(ast))
                 std::cerr << "Input \"" << s << "\" is not parsed as ErrorStmt" << std::endl;
             CHECK(is<ErrorStmt>(ast));
-            delete ast;
         }
     }
 }
@@ -1609,7 +1593,6 @@ TEST_CASE("Parser::parse_Instruction()", "[core][parse][unit]")
         for (std::size_t i = 0; i < instruction->args.size(); ++i) {
             CHECK(instruction->args[i] == C.pool(test_pair.second.args[i]));
         }
-        delete instruction;
 
         CHECK(diag.num_errors() == 0);
         CHECK(err.str().empty());
@@ -1650,7 +1633,6 @@ TEST_CASE("Parser::parse_Instruction() sanity tests", "[core][parse][unit]")
                 std::cerr << "UNEXPECTED PASS for input \"" << instruction_text << '"' << std::endl;
             CHECK(diag.num_errors() > 0);
             CHECK_FALSE(err.str().empty());
-            delete instruction;
         }
     }
 }
@@ -1676,7 +1658,6 @@ TEST_CASE("Parser::parse()", "[core][parse][unit]")
             CHECK(diag.num_errors() == 0);
             CHECK(err.str().empty());
             CHECK(is<Instruction>(command));
-            delete command;
         }
     }
 
@@ -1695,7 +1676,6 @@ TEST_CASE("Parser::parse()", "[core][parse][unit]")
             CHECK(diag.num_errors() == 0);
             CHECK(err.str().empty());
             CHECK(is<Stmt>(command));
-            delete command;
         }
     }
 }

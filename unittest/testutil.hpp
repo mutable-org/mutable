@@ -12,4 +12,4 @@
     std::ostringstream out, err; \
     Diagnostic diag(false, out, err); \
     std::istringstream in((STR)); \
-    Lexer lexer(diag, C.get_pool(), "-", in)
+    ast::Lexer lexer(diag, C.get_pool(), "-", in)

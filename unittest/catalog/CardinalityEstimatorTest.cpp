@@ -11,6 +11,7 @@
 
 
 using namespace m;
+using namespace m::ast;
 
 
 TEST_CASE("Injection estimator estimates", "[core][catalog][cardinality]")
@@ -119,7 +120,7 @@ TEST_CASE("Injection estimator estimates", "[core][catalog][cardinality]")
     {
         auto existing_entry_model = ICE.estimate_scan(*G, Subproblem(1UL));
         auto non_existing_entry_model = ICE.estimate_scan(*G, Subproblem(1UL << 1));
-        std::vector<const Expr*> group_by;
+        std::vector<QueryGraph::group_type> group_by;
         auto grouping_existing_entry_model = ICE.estimate_grouping(*G, *existing_entry_model, group_by);
         auto grouping_non_existing_entry_model = ICE.estimate_grouping(*G, *non_existing_entry_model, group_by);
         CHECK(ICE.predict_cardinality(*grouping_existing_entry_model) == 1);
@@ -252,7 +253,7 @@ TEST_CASE("Cartesian estimator estimates", "[core][catalog][cardinality]")
     SECTION("estimate_grouping")
     {
         auto scan_model = CE.estimate_scan(*G, Subproblem(1UL));
-        std::vector<const Expr *> group_by;
+        std::vector<QueryGraph::group_type> group_by;
         auto grouping_model = CE.estimate_grouping(*G, *scan_model, group_by);
         CHECK(CE.predict_cardinality(*grouping_model) == 5);
     }

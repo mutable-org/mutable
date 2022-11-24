@@ -582,8 +582,8 @@ struct ProjectionData : OperatorData
     {
         std::size_t out_idx = 0;
         for (auto &p : op.projections()) {
-            projections.emit(*p.first, 1);
-            projections.emit_St_Tup(0, out_idx++, p.first->type());
+            projections.emit(p.first.get(), 1);
+            projections.emit_St_Tup(0, out_idx++, p.first.get().type());
         }
     }
 };
@@ -639,11 +639,11 @@ struct SimpleHashJoinData : JoinData
         M_insist(clause.size() == 1, "invalid predicate for simple hash join");
         auto &literal = clause[0];
         M_insist(not literal.negative(), "invalid predicate for simple hash join");
-        auto expr = literal.expr();
-        auto binary = as<const BinaryExpr>(expr);
+        auto &expr = literal.expr();
+        auto binary = as<const ast::BinaryExpr>(&expr);
         M_insist(binary->tok == TK_EQUAL);
-        auto first = binary->lhs;
-        auto second = binary->rhs;
+        auto first = binary->lhs.get();
+        auto second = binary->rhs.get();
         M_insist(is_comparable(first->type(), second->type()), "the two sides of a comparison should be comparable");
 
         key_schema.add("key", first->type());
@@ -698,22 +698,22 @@ struct GroupingData : OperatorData
         /* Compile the stack machine to compute the key and compute the key schema. */
         {
             std::size_t key_idx = 0;
-            for (auto k : op.group_by()) {
-                compute_key.emit(*k, 1);
-                compute_key.emit_St_Tup(0, key_idx++, k->type());
+            for (auto [grp, alias] : op.group_by()) {
+                compute_key.emit(grp.get(), 1);
+                compute_key.emit_St_Tup(0, key_idx++, grp.get().type());
             }
         }
 
         /* Compile a StackMachine to compute the arguments of each aggregation function.  For example, for the
          * aggregation `AVG(price * tax)`, the compiled StackMachine computes `price * tax`. */
         for (auto agg : op.aggregates()) {
-            auto fe = as<const FnApplicationExpr>(agg);
+            auto &fe = as<const ast::FnApplicationExpr>(agg.get());
             std::size_t arg_idx = 0;
             StackMachine sm(op.child(0)->schema());
             std::vector<const Type*> arg_types;
-            for (auto arg : fe->args) {
+            for (auto &arg : fe.args) {
                 sm.emit(*arg, 1);
-                sm.emit_Cast(agg->type(), arg->type()); // cast argument type to aggregate type, e.g. f32 to f64 for SUM
+                sm.emit_Cast(agg.get().type(), arg->type()); // cast argument type to aggregate type, e.g. f32 to f64 for SUM
                 sm.emit_St_Tup(0, arg_idx++, arg->type());
                 arg_types.push_back(arg->type());
             }
@@ -741,15 +741,15 @@ struct AggregationData : OperatorData
         aggregates.set(op.schema().num_entries(), 0L); // initialize running count
 
         for (auto agg : op.aggregates()) {
-            auto fe = as<const FnApplicationExpr>(agg);
+            auto &fe = as<const ast::FnApplicationExpr>(agg.get());
             std::size_t arg_idx = 0;
             StackMachine sm(op.child(0)->schema());
             std::vector<const Type*> arg_types;
-            for (auto arg : fe->args) {
+            for (auto &arg : fe.args) {
                 sm.emit(*arg, 1);
-                sm.emit_Cast(agg->type(), arg->type()); // cast argument type to aggregate type, e.g. f32 to f64 for SUM
-                sm.emit_St_Tup(0, arg_idx++, agg->type()); // store casted argument of aggregate type to tuple
-                arg_types.push_back(agg->type());
+                sm.emit_Cast(agg.get().type(), arg->type()); // cast argument type to aggregate type, e.g. f32 to f64 for SUM
+                sm.emit_St_Tup(0, arg_idx++, agg.get().type()); // store casted argument of aggregate type to tuple
+                arg_types.push_back(agg.get().type());
             }
             args.emplace_back(Tuple(arg_types));
             compute_aggregate_arguments.emplace_back(std::move(sm));
@@ -1073,9 +1073,9 @@ void Pipeline::operator()(const GroupingOperator &op)
             bool is_null = group.is_null(key_size + i);
             auto &val = group[key_size + i];
 
-            auto fe = as<const FnApplicationExpr>(op.aggregates()[i]);
-            auto ty = fe->type();
-            auto &fn = fe->get_function();
+            auto &fe = as<const ast::FnApplicationExpr>(op.aggregates()[i].get());
+            auto ty = fe.type();
+            auto &fn = fe.get_function();
 
             switch (fn.fnid) {
                 default:
@@ -1087,7 +1087,7 @@ void Pipeline::operator()(const GroupingOperator &op)
                 case Function::FN_COUNT:
                     if (is_null)
                         group.set(key_size + i, 0); // initialize
-                    if (fe->args.size() == 0) { // COUNT(*)
+                    if (fe.args.size() == 0) { // COUNT(*)
                         val.as_i() += 1;
                     } else { // COUNT(x) aka. count not NULL
                         val.as_i() += not aggregate_arguments.is_null(0);
@@ -1203,9 +1203,9 @@ void Pipeline::operator()(const AggregationOperator &op)
             Tuple *args[] = { &aggregate_arguments, &tuple };
             data->compute_aggregate_arguments[i](args);
 
-            auto fe = as<const FnApplicationExpr>(op.aggregates()[i]);
-            auto ty = fe->type();
-            auto &fn = fe->get_function();
+            auto &fe = as<const ast::FnApplicationExpr>(op.aggregates()[i].get());
+            auto ty = fe.type();
+            auto &fn = fe.get_function();
 
             bool agg_is_null = data->aggregates.is_null(i);
             auto &val = data->aggregates[i];
@@ -1218,7 +1218,7 @@ void Pipeline::operator()(const AggregationOperator &op)
                     M_unreachable("UDFs not yet supported");
 
                 case Function::FN_COUNT:
-                    if (fe->args.size() == 0) { // COUNT(*)
+                    if (fe.args.size() == 0) { // COUNT(*)
                         val.as_i() += 1;
                     } else { // COUNT(x) aka. count not NULL
                         val.as_i() += not aggregate_arguments.is_null(0);
@@ -1432,9 +1432,9 @@ void Interpreter::operator()(const AggregationOperator &op)
 
     /* Initialize aggregates. */
     for (std::size_t i = 0, end = op.aggregates().size(); i != end; ++i) {
-        auto fe = as<const FnApplicationExpr>(op.aggregates()[i]);
-        auto ty = fe->type();
-        auto &fn = fe->get_function();
+        auto &fe = as<const ast::FnApplicationExpr>(op.aggregates()[i].get());
+        auto ty = fe.type();
+        auto &fn = fe.get_function();
 
         switch (fn.fnid) {
             default:
@@ -1491,11 +1491,11 @@ void Interpreter::operator()(const SortingOperator &op)
 
     StackMachine comparator(S);
     for (auto o : orderings) {
-        comparator.emit(*o.first, 1); // LHS
-        comparator.emit(*o.first, 2); // RHS
+        comparator.emit(o.first.get(), 1); // LHS
+        comparator.emit(o.first.get(), 2); // RHS
 
         /* Emit comparison. */
-        auto ty = o.first->type();
+        auto ty = o.first.get().type();
         visit(overloaded {
             [&comparator](const Boolean&) { comparator.emit_Cmp_b(); },
             [&comparator](const CharacterSequence&) { comparator.emit_Cmp_s(); },

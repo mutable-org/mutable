@@ -13,6 +13,7 @@
 #include <limits>
 #include <memory>
 #include <mutable/mutable-config.hpp>
+#include <mutable/util/concepts.hpp>
 #include <mutable/util/exception.hpp>
 #include <mutable/util/macro.hpp>
 #include <regex>
@@ -180,24 +181,54 @@ log2_ceil(T n)
     return n <= 1 ? 0 : log2_floor(n - T(1)) + T(1);
 }
 
-/** Short version of dynamic_cast that works for pointers. */
-template<typename T, typename U>
-T * M_EXPORT cast(U *u) { return dynamic_cast<T*>(u); }
+/** Short version of dynamic_cast that works for pointers and references. */
+template<typename To, typename From>
+requires (not is_unique_ptr<From>) and (not is_reference_wrapper<From>)
+To * M_EXPORT cast(From *v) { return dynamic_cast<To*>(v); }
+
+template<typename To, typename From>
+To * M_EXPORT cast(std::reference_wrapper<From> v) { return dynamic_cast<To*>(&v.get()); }
+
+template<typename To, typename From>
+std::unique_ptr<To> M_EXPORT cast(std::unique_ptr<From> &v) {
+    if (auto ptr = dynamic_cast<To*>(v.get())) {
+        v.release(); // still referenced by ptr
+        return std::unique_ptr<To>(ptr);
+    } else {
+        return std::unique_ptr<To>(nullptr);
+    }
+}
 
 /** Short version of static_cast that works for pointers and references.  In debug build, check that the cast is legit.
  */
 template<typename To, typename From>
+requires (not is_unique_ptr<From>) and (not is_reference_wrapper<From>)
 To * M_EXPORT as(From *v) { M_insist(cast<To>(v)); return static_cast<To*>(v); }
+
 template<typename To, typename From>
+requires (not is_unique_ptr<From>) and (not is_reference_wrapper<From>)
 To & M_EXPORT as(From &v) { return *as<To>(&v); }
+
+template<typename To, typename From>
+To & M_EXPORT as(std::reference_wrapper<From> v) { return as<To>(v.get()); }
+
 template<typename To, typename From>
 std::unique_ptr<To> M_EXPORT as(std::unique_ptr<From> v) { return std::unique_ptr<To>(as<To>(v.release())); }
 
 /** Simple test whether expression v is of type To.  Works with pointers and references. */
 template<typename To, typename From>
+requires (not is_unique_ptr<From>) and (not is_reference_wrapper<From>)
 bool M_EXPORT is(From *v) { return cast<To>(v) != nullptr; }
+
 template<typename To, typename From>
+requires (not is_unique_ptr<From>) and (not is_reference_wrapper<From>)
 bool M_EXPORT is(From &v) { return is<To>(&v); }
+
+template<typename To, typename From>
+bool M_EXPORT is(std::reference_wrapper<From> &v) { return is<To>(v.get()); }
+
+template<typename To, typename From>
+bool M_EXPORT is(const std::unique_ptr<From> &v) { return is<To>(v.get()); }
 
 inline std::string escape(char c)
 {

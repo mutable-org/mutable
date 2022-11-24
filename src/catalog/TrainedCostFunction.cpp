@@ -5,6 +5,7 @@
 
 
 using namespace m;
+using namespace m::ast;
 
 
 template<typename PlanTable>

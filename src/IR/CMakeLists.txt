@@ -7,7 +7,6 @@ add_library(
     Operator.cpp
     Optimizer.cpp
     PartialPlanGenerator.cpp
-    PDDL.cpp
     PlanEnumerator.cpp
     PlanTable.cpp
     QueryGraph.cpp

@@ -11,7 +11,7 @@ using namespace m::wasm;
  *====================================================================================================================*/
 
 template<bool IsGlobal>
-void m::wasm::quicksort(const Buffer<IsGlobal> &buffer, const std::vector<std::pair<const m::Expr*, bool>> &order)
+void m::wasm::quicksort(const Buffer<IsGlobal> &buffer, const std::vector<SortingOperator::order_type> &order)
 {
     static_assert(IsGlobal, "quicksort on local buffers is not yet supported");
 
@@ -106,4 +106,4 @@ void m::wasm::quicksort(const Buffer<IsGlobal> &buffer, const std::vector<std::p
 }
 
 // explicit instantiations to prevent linker errors
-template void m::wasm::quicksort(const GlobalBuffer&, const std::vector<std::pair<const m::Expr*, bool>>&);
+template void m::wasm::quicksort(const GlobalBuffer&, const std::vector<SortingOperator::order_type>&);

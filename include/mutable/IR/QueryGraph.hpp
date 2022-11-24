@@ -16,11 +16,15 @@
 
 namespace m {
 
+namespace ast {
+
+struct Stmt;
+
+}
+
 struct DataSource;
 struct Join;
 struct QueryGraph;
-struct Stmt;
-struct GetCorrelationInfo;
 
 /** A `DataSource` in a `QueryGraph`.  Represents something that can be evaluated to a sequence of tuples, optionally
  * filtered by a filter condition.  A `DataSource` can be joined with one or more other `DataSource`s by a `Join`. */
@@ -32,7 +36,7 @@ struct M_EXPORT DataSource
 
     private:
     cnf::CNF filter_; ///< filter condition on this data source
-    std::vector<Join*> joins_; ///< joins with this data source
+    std::vector<std::reference_wrapper<Join>> joins_; ///< joins with this data source
     const char *alias_; ///< the alias of this data source, `nullptr` if this data source has no alias
     std::size_t id_; ///< unique identifier of this data source within its query graph
 
@@ -59,7 +63,7 @@ struct M_EXPORT DataSource
     /** Adds `filter` to the current filter of this `DataSource` by logical conjunction. */
     void update_filter(cnf::CNF filter) { filter_ = filter_ and filter; }
     /** Adds `join` to the set of `Join`s of this `DataSource`. */
-    void add_join(Join *join) { joins_.emplace_back(join); }
+    void add_join(Join &join) { joins_.emplace_back(join); }
     /** Returns a reference to the `Join`s using this `DataSource`. */
     const auto & joins() const { return joins_; }
 
@@ -67,8 +71,8 @@ struct M_EXPORT DataSource
     virtual bool is_correlated() const = 0;
 
     private:
-    void remove_join(Join *join) {
-        auto it = std::find(joins_.begin(), joins_.end(), join);
+    void remove_join(Join &join) {
+        auto it = std::find_if(joins_.begin(), joins_.end(), [&join](auto j) { return &j.get() == &join; });
         if (it == joins_.end())
             throw invalid_argument("given join not found");
         joins_.erase(it);
@@ -88,18 +92,18 @@ struct M_EXPORT BaseTable : DataSource
     private:
     const Table &table_; ///< the table providing the tuples
     ///> list of designators expanded from `GetPrimaryKey::compute()` or `GetAttributes::compute()`
-    std::vector<const Designator*> expansion_;
+    // std::vector<const ast::Designator*> expansion_;
 
     private:
     BaseTable(std::size_t id, const char *alias, const Table &table) : DataSource(id, alias), table_(table) { }
-    public:
-    ~BaseTable();
 
+    public:
     /** Returns a reference to the `Table` providing the tuples. */
     const Table & table() const { return table_; }
 
     const char * name() const override { return alias() ? alias() : table_.name; }
 
+    /** `BaseTable` is never correlated.  Always returns `false`. */
     bool is_correlated() const override { return false; };
 };
 
@@ -110,17 +114,16 @@ struct M_EXPORT Query : DataSource
     friend struct QueryGraph;
 
     private:
-    QueryGraph *query_graph_; ///< query graph of the sub-query
+    std::unique_ptr<QueryGraph> query_graph_; ///< query graph of the sub-query
 
     private:
-    Query(std::size_t id, const char *alias, QueryGraph *query_graph)
-        : DataSource(id, alias), query_graph_(query_graph)
+    Query(std::size_t id, const char *alias, std::unique_ptr<QueryGraph> query_graph)
+        : DataSource(id, alias), query_graph_(std::move(query_graph))
     { }
-    public:
-    ~Query();
 
+    public:
     /** Returns a reference to the internal `QueryGraph`. */
-    QueryGraph * query_graph() const { return query_graph_; }
+    QueryGraph & query_graph() const { return *query_graph_; }
 
     const char * name() const override { return alias(); }
 
@@ -130,7 +133,7 @@ struct M_EXPORT Query : DataSource
 /** A `Join` in a `QueryGraph` combines `DataSource`s by a join condition. */
 struct M_EXPORT Join
 {
-    using sources_t = std::vector<DataSource*>;
+    using sources_t = std::vector<std::reference_wrapper<DataSource>>;
 
     private:
     cnf::CNF condition_; ///< join condition
@@ -147,7 +150,15 @@ struct M_EXPORT Join
     const sources_t & sources() const { return sources_; }
 
     bool operator==(const Join &other) const {
-        return this->condition_ == other.condition_ and equal(this->sources_, other.sources_);
+        if (this->condition_ != other.condition_) return false;
+        if (this->sources().size() != other.sources().size()) return false;
+        for (auto &this_src : sources_) {
+            auto it = std::find_if(other.sources().begin(), other.sources().end(), [this_src](auto other_src) {
+                return &this_src.get() == &other_src.get();
+            });
+            if (it == other.sources().end()) return false;
+        }
+        return true;
     }
     bool operator!=(const Join &other) const { return not operator==(other); }
 };
@@ -161,31 +172,31 @@ struct M_EXPORT QueryGraph
     friend struct GetPrimaryKey;
 
     using Subproblem = SmallBitset; ///< encode `QueryGraph::Subproblem`s as `SmallBitset`s
-    using projection_type = std::pair<const Expr*, const char*>;
-    using order_type = std::pair<const Expr*, bool>; ///< true means ascending, false means descending
+    using projection_type = std::pair<std::reference_wrapper<const ast::Expr>, const char*>;
+    using order_type = std::pair<std::reference_wrapper<const ast::Expr>, bool>; ///< true means ascending, false means descending
+    using group_type = std::pair<std::reference_wrapper<const ast::Expr>, const char*>;
 
     private:
-    std::vector<DataSource*> sources_; ///< collection of all data sources in this query graph
-    std::vector<Join*> joins_; ///< collection of all joins in this query graph
+    std::vector<std::unique_ptr<DataSource>> sources_; ///< collection of all data sources in this query graph
+    std::vector<std::unique_ptr<Join>> joins_; ///< collection of all joins in this query graph
 
-    std::vector<const Expr*> group_by_; ///< the grouping keys
-    std::vector<const Expr*> aggregates_; ///< the aggregates to compute
+    std::vector<group_type> group_by_; ///< the grouping keys
+    std::vector<std::reference_wrapper<const ast::FnApplicationExpr>> aggregates_; ///< the aggregates to compute
     std::vector<projection_type> projections_; ///< the data to compute
     std::vector<order_type> order_by_; ///< the order
     struct { uint64_t limit = 0, offset = 0; } limit_; ///< limit: limit and offset
 
     mutable std::unique_ptr<AdjacencyMatrix> adjacency_matrix_;
-    GetCorrelationInfo *info_ = nullptr; ///< the correlation information about all sources in this graph
 
     public:
     friend void swap(QueryGraph &first, QueryGraph &second) {
         using std::swap;
-        swap(first.sources_,    second.sources_);
-        swap(first.joins_,      second.joins_);
-        swap(first.group_by_,   second.group_by_);
-        swap(first.projections_,   second.projections_);
-        swap(first.order_by_,   second.order_by_);
-        swap(first.limit_,   second.limit_);
+        swap(first.sources_,        second.sources_);
+        swap(first.joins_,          second.joins_);
+        swap(first.group_by_,       second.group_by_);
+        swap(first.projections_,    second.projections_);
+        swap(first.order_by_,       second.order_by_);
+        swap(first.limit_,          second.limit_);
     }
 
     QueryGraph();
@@ -196,7 +207,7 @@ struct M_EXPORT QueryGraph
 
     QueryGraph & operator=(QueryGraph &&other) { swap(*this, other); return *this; }
 
-    static std::unique_ptr<QueryGraph> Build(const Stmt &stmt);
+    static std::unique_ptr<QueryGraph> Build(const ast::Stmt &stmt);
 
     /** Returns the number of `DataSource`s in this graph. */
     std::size_t num_sources() const { return sources_.size(); }
@@ -209,22 +220,22 @@ struct M_EXPORT QueryGraph
         sources_.emplace_back(source.release());
     }
     BaseTable & add_source(const char *alias, const Table &table) {
-        auto base = new BaseTable(sources_.size(), alias, table);
-        sources_.emplace_back(base);
-        return *base;
+        std::unique_ptr<BaseTable> base(new BaseTable(sources_.size(), alias, table));
+        auto &ref = sources_.emplace_back(std::move(base));
+        return as<BaseTable>(*ref);
     }
-    Query & add_source(const char *alias, QueryGraph *query_graph) {
-        auto q = new Query(sources_.size(), alias, query_graph);
-        sources_.emplace_back(q);
-        return *q;
+    Query & add_source(const char *alias, std::unique_ptr<QueryGraph> query_graph) {
+        std::unique_ptr<Query> Q(new Query(sources_.size(), alias, std::move(query_graph)));
+        auto &ref = sources_.emplace_back(std::move(Q));
+        return as<Query>(*ref);
     }
 
     std::unique_ptr<DataSource> remove_source(std::size_t id) {
         auto it = std::next(sources_.begin(), id);
-        auto ds = std::unique_ptr<DataSource>(*it);
+        auto ds = std::move(*it);
         M_insist(ds->id() == id, "IDs of sources must be sequential");
         sources_.erase(it);
-        /* Increment IDs of all sources after the deleted one to provide sequential IDs. */
+        /* Decrement IDs of all sources after the deleted one to provide sequential IDs. */
         while (it != sources_.end()) {
             --(*it)->id_;
             ++it;
@@ -241,10 +252,10 @@ struct M_EXPORT QueryGraph
     auto limit() const { return limit_; }
 
     /** Returns a data souce given its id. */
-    const DataSource * operator[](uint64_t id) const {
-        auto ds = sources_[id];
+    const DataSource & operator[](uint64_t id) const {
+        auto &ds = sources_[id];
         M_insist(ds->id() == id, "given id and data source id must match");
-        return ds;
+        return *ds;
     }
 
     /** Returns `true` iff the graph contains a grouping. */
@@ -277,8 +288,8 @@ struct M_EXPORT QueryGraph
     void compute_adjacency_matrix() const;
     void dot_recursive(std::ostream &out) const;
 
-    void remove_join(Join *join) {
-        auto it = std::find(joins_.begin(), joins_.end(), join);
+    void remove_join(Join &join) {
+        auto it = std::find_if(joins_.begin(), joins_.end(), [&join](auto &j) { return j.get() == &join; });
         if (it == joins_.end())
             throw invalid_argument("given join not found");
         joins_.erase(it);

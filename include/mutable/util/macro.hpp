@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <initializer_list>
 #include <iostream>
+#include <memory>
 
 namespace m {
 
@@ -141,6 +142,17 @@ T * _notnull(T *arg, const char *filename, const unsigned line, const char *args
         abort();
     }
     return arg;
+}
+
+template<typename T>
+std::unique_ptr<T> _notnull(std::unique_ptr<T> arg, const char *filename, const unsigned line, const char *argstr)
+{
+    if (not bool(arg)) {
+        std::cout.flush();
+        std::cerr << filename << ':' << line << ": " << argstr << " was NULL" << std::endl;
+        abort();
+    }
+    return std::move(arg);
 }
 #define M_notnull(ARG) m::_notnull((ARG), __FILE__, __LINE__, #ARG)
 

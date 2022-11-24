@@ -39,7 +39,7 @@ SpnWrapper SpnWrapper::learn_spn_table(const char *name_of_database, const char 
 
     const std::string table_name = table.name;
     auto stmt = statement_from_string(diag, "SELECT * FROM " + table_name + ";");
-    std::unique_ptr<SelectStmt> select_stmt(dynamic_cast<SelectStmt*>(stmt.release()));
+    std::unique_ptr<ast::SelectStmt> select_stmt(dynamic_cast<ast::SelectStmt*>(stmt.release()));
 
     /* fill the data matrix with the given table */
     for (std::size_t current_column = 0; current_column < num_columns; current_column++) {

@@ -860,10 +860,10 @@ struct EdgesBottomUp : Base<EdgesBottomUp>
 
         /*----- Update index with joins performed so far. -----*/
         for (unsigned join_idx : *this) {
-            const Join *join = G.joins()[join_idx];
-            const auto &sources = join->sources();
-            const unsigned left_idx  = datasource_to_subproblem[sources[0]->id()];
-            const unsigned right_idx = datasource_to_subproblem[sources[1]->id()];
+            const Join &join = *G.joins()[join_idx];
+            const auto &sources = join.sources();
+            const unsigned left_idx  = datasource_to_subproblem[sources[0].get().id()];
+            const unsigned right_idx = datasource_to_subproblem[sources[1].get().id()];
             subproblems[left_idx] |= subproblems[right_idx];
             for (auto id : subproblems[right_idx])
                 datasource_to_subproblem[id] = left_idx;
@@ -1153,10 +1153,10 @@ struct EdgePtrBottomUp : Base<EdgePtrBottomUp>
         /*----- Update index with joins performed so far. -----*/
         const EdgePtrBottomUp *runner = this;
         while (runner->parent()) {
-            const Join *join = G.joins()[runner->join_id()];
-            const auto &sources = join->sources();
-            const unsigned left_idx  = datasource_to_subproblem[sources[0]->id()];
-            const unsigned right_idx = datasource_to_subproblem[sources[1]->id()];
+            const Join &join = *G.joins()[runner->join_id()];
+            const auto &sources = join.sources();
+            const unsigned left_idx  = datasource_to_subproblem[sources[0].get().id()];
+            const unsigned right_idx = datasource_to_subproblem[sources[1].get().id()];
             subproblems[left_idx] |= subproblems[right_idx];
             for (auto id : subproblems[right_idx])
                 datasource_to_subproblem[id] = left_idx;
@@ -1450,12 +1450,12 @@ struct BottomUpComplete : BottomUp
             M_insist(j <= state.num_joins(), "j out of bounds");
             M_insist(j == state.num_joins() or joins[j] < joins[j+1], "invalid position of j");
 
-            const Join *join = G.joins()[joins[j]];
-            const auto &sources = join->sources();
+            const Join &join = *G.joins()[joins[j]];
+            const auto &sources = join.sources();
 
             /*----- Check whether the join is subsumed by joins in `state`. -----*/
-            const unsigned left  = datasource_to_subproblem[sources[0]->id()];
-            const unsigned right = datasource_to_subproblem[sources[1]->id()];
+            const unsigned left  = datasource_to_subproblem[sources[0].get().id()];
+            const unsigned right = datasource_to_subproblem[sources[1].get().id()];
             if (left == right) goto next; // the data sources joined already belong to the same subproblem
 
             /*----- Check whether the join is subsumed by a previously considered join. -----*/
@@ -1540,12 +1540,12 @@ next:
                 continue;
             }
 
-            const Join *join = G.joins()[j];
-            const auto &sources = join->sources();
+            const Join &join = *G.joins()[j];
+            const auto &sources = join.sources();
 
             /*----- Check whether the join is subsumed by joins in `state`. -----*/
-            const unsigned left  = datasource_to_subproblem[sources[0]->id()];
-            const unsigned right = datasource_to_subproblem[sources[1]->id()];
+            const unsigned left  = datasource_to_subproblem[sources[0].get().id()];
+            const unsigned right = datasource_to_subproblem[sources[1].get().id()];
             if (left == right) continue; // the data sources joined already belong to the same subproblem
 
             /*----- Check whether the join is subsumed by a previously considered join. -----*/

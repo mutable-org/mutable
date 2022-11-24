@@ -72,7 +72,7 @@ int main(int argc, const char **argv)
 
     Diagnostic diag(color, std::cout, std::cerr);
     StringPool pool;
-    Lexer lexer(diag, pool, filename, *in);
+    ast::Lexer lexer(diag, pool, filename, *in);
 
     while (auto tok = lexer.next())
         diag(tok.pos) << tok.text << ' ' << tok.type << std::endl;

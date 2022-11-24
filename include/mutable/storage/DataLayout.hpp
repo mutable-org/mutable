@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutable/mutable-config.hpp>
 #include <mutable/util/exception.hpp>
 #include <mutable/util/macro.hpp>
 #include <mutable/util/Visitor.hpp>
@@ -233,12 +234,11 @@ M_LCOV_EXCL_START
 M_LCOV_EXCL_STOP
 };
 
-#define DATA_LAYOUT_CLASSES(X) \
+#define M_DATA_LAYOUT_CLASSES(X) \
     X(DataLayout::INode) \
     X(DataLayout::Leaf) \
     X(DataLayout)
-
-M_DECLARE_VISITOR(ConstDataLayoutVisitor, const DataLayout::Node, DATA_LAYOUT_CLASSES)
+M_DECLARE_VISITOR(ConstDataLayoutVisitor, const DataLayout::Node, M_DATA_LAYOUT_CLASSES)
 
 }
 

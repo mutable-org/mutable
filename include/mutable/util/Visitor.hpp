@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutable/mutable-config.hpp>
 #include <mutable/util/macro.hpp>
 #include <mutable/util/some.hpp>
 #include <mutable/util/tag.hpp>
@@ -34,13 +35,13 @@ struct Visitor
 
 /*----- Generate a function similar to `std::visit` to easily implement a visitor for the given base class. ----------*/
 #define M_GET_INVOKE_RESULT(CLASS) std::invoke_result_t<Vis, Const<CLASS>&>,
-#define M_MAKE_STL_VISIT_METHOD(CLASS) void operator()(Const<CLASS> &obj) { \
+#define M_MAKE_STL_VISIT_METHOD(CLASS) void operator()(Const<CLASS> &obj) override { \
     if constexpr (std::is_same_v<void, result_type>) { vis(obj); } \
     else { result = m::some<result_type>(vis(obj)); } \
 }
 #define M_MAKE_STL_VISITABLE(VISITOR, BASE_CLASS, CLASS_LIST) \
     template<typename Vis> \
-    auto visit(Vis &&vis, BASE_CLASS &obj, m::tag<VISITOR>&& = m::tag<VISITOR>()) { \
+    auto M_EXPORT visit(Vis &&vis, BASE_CLASS &obj, m::tag<VISITOR>&& = m::tag<VISITOR>()) { \
         struct V : VISITOR { \
             using result_type = std::common_type_t< CLASS_LIST(M_GET_INVOKE_RESULT) std::invoke_result_t<Vis, Const<M_EVAL(M_DEFER1(M_HEAD)(CLASS_LIST(M_COMMA)))>&> >; \
             Vis &&vis; \
@@ -63,7 +64,7 @@ struct Visitor
 /*----- Declare a visitor to visit the class hierarchy with the given base class and list of subclasses. -------------*/
 #define M_DECLARE_VISIT_METHOD(CLASS) virtual void operator()(Const<CLASS>&) = 0;
 #define M_DECLARE_VISITOR(NAME, BASE_CLASS, CLASS_LIST) \
-    struct NAME : m::Visitor<NAME, BASE_CLASS> \
+    struct M_EXPORT NAME : m::Visitor<NAME, BASE_CLASS> \
     { \
         using super = m::Visitor<NAME, BASE_CLASS>; \
         template<typename T> using Const = typename super::Const<T>; \

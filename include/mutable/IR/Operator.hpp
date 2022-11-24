@@ -293,7 +293,7 @@ struct M_EXPORT JoinOperator : Producer, Consumer
 
 struct M_EXPORT ProjectionOperator : Producer, Consumer
 {
-    using projection_type = std::pair<const Expr*, const char*>; // a named expression
+    using projection_type = std::pair<std::reference_wrapper<const ast::Expr>, const char*>; // a named expression
 
     private:
     std::vector<projection_type> projections_;
@@ -349,13 +349,17 @@ struct M_EXPORT GroupingOperator : Producer, Consumer
 
     M_DECLARE_ENUM(algorithm);
 
+    using group_type = QueryGraph::group_type;
+
     private:
-    std::vector<const Expr*> group_by_; ///< the compound grouping key
-    std::vector<const Expr*> aggregates_; ///< the aggregates to compute
+    std::vector<group_type> group_by_; ///< the compound grouping key
+    std::vector<std::reference_wrapper<const ast::FnApplicationExpr>> aggregates_; ///< the aggregates to compute
     algorithm algo_;
 
     public:
-    GroupingOperator(std::vector<const Expr*> group_by, std::vector<const Expr*> aggregates, algorithm algo);
+    GroupingOperator(std::vector<group_type> group_by,
+                     std::vector<std::reference_wrapper<const ast::FnApplicationExpr>> aggregates,
+                     algorithm algo);
 
     /*----- Override child setters to *NOT* modify the computed schema! ----------------------------------------------*/
     virtual void add_child(Producer *child) override {
@@ -391,10 +395,10 @@ struct M_EXPORT GroupingOperator : Producer, Consumer
 struct M_EXPORT AggregationOperator : Producer, Consumer
 {
     private:
-    std::vector<const Expr*> aggregates_; ///< the aggregates to compute
+    std::vector<std::reference_wrapper<const ast::FnApplicationExpr>> aggregates_; ///< the aggregates to compute
 
     public:
-    AggregationOperator(std::vector<const Expr*> aggregates);
+    AggregationOperator(std::vector<std::reference_wrapper<const ast::FnApplicationExpr>> aggregates);
 
     /*----- Override child setters to *NOT* modify the computed schema! ----------------------------------------------*/
     virtual void add_child(Producer *child) override {
@@ -423,7 +427,7 @@ struct M_EXPORT AggregationOperator : Producer, Consumer
 struct M_EXPORT SortingOperator : Producer, Consumer
 {
     /** A list of expressions to sort by.  True means ascending, false means descending. */
-    using order_type = std::pair<const Expr*, bool>;
+    using order_type = std::pair<std::reference_wrapper<const ast::Expr>, bool>;
 
     private:
     std::vector<order_type> order_by_; ///< the order to sort by

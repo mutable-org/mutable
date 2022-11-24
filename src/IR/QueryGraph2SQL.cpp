@@ -6,37 +6,13 @@
 
 using namespace m;
 
-void QueryGraph2SQL::translate(const QueryGraph *graph)
+void QueryGraph2SQL::translate(const QueryGraph &graph)
 {
-    graph_ = graph;
+    graph_ = &graph;
     after_grouping_ = true;
     out_ << "SELECT ";
     if (graph_->projections().empty()) {
-        if (graph_->grouping()) {
-            /* Rename grouping keys and aggregates similar to mu*t*able, i.e. their textual representation is used as
-             * new attribute name and no table name is specified. */
-            bool first = true; // indicates whether the current element is the first one fulfilling the `std::find_if` condition
-            for (auto e : graph_->group_by()) {
-                auto pred = [=](const std::pair<const Expr*, const char*> &p) { return *p.first == *e; };
-                if (std::find_if(graph_->projections().begin(), graph_->projections().end(), pred) == graph_->projections().end()) {
-                    if (not first)
-                        out_ << ", ";
-                    insert_projection(e);
-                    first = false;
-                }
-            }
-            for (auto e : graph_->aggregates()) {
-                auto pred = [=](const std::pair<const Expr*, const char*> &p) { return *p.first == *e; };
-                if (std::find_if(graph_->projections().begin(), graph_->projections().end(), pred) == graph_->projections().end()) {
-                    if (not first)
-                        out_ << ", ";
-                    insert_projection(e);
-                    first = false;
-                }
-            }
-        } else {
-            out_ << '*';
-        }
+        out_ << '*';
     } else {
         for (auto it = graph_->projections().begin(); it != graph_->projections().end(); ++it) {
             if (it != graph_->projections().begin())
@@ -51,15 +27,15 @@ void QueryGraph2SQL::translate(const QueryGraph *graph)
         for (auto it = graph_->sources().begin(); it != graph_->sources().end(); ++it) {
             if (it != graph_->sources().begin())
                 out_ << ", ";
-            auto ds = *it;
-            if (auto base = cast<BaseTable>(ds)) {
+            auto &ds = *it;
+            if (auto base = cast<BaseTable>(ds.get())) {
                 auto name = base->table().name;
                 out_ << name;
                 if (name != ds->alias()) {
                     M_insist(ds->alias());
                     out_ << " AS " << ds->alias();
                 }
-            } else if (auto query = cast<Query>(ds)) {
+            } else if (auto query = cast<Query>(ds.get())) {
                 out_ << '(';
                 QueryGraph2SQL trans(out_);
                 trans.translate(query->query_graph());
@@ -75,9 +51,9 @@ void QueryGraph2SQL::translate(const QueryGraph *graph)
     }
 
     cnf::CNF where;
-    for (auto ds : graph_->sources())
+    for (auto &ds : graph_->sources())
         where = where and ds->filter();
-    for (auto j : graph_->joins())
+    for (auto &j : graph_->joins())
         where = where and j->condition();
     if (not where.empty()) {
         out_ << " WHERE ";
@@ -89,7 +65,9 @@ void QueryGraph2SQL::translate(const QueryGraph *graph)
         for (auto it = graph_->group_by().begin(); it != graph_->group_by().end(); ++it) {
             if (it != graph_->group_by().begin())
                 out_ << ", ";
-            (*this)(**it);
+            (*this)(it->first);
+            if (it->second)
+                out_ << " AS " << it->second;
         }
     }
 
@@ -99,7 +77,7 @@ void QueryGraph2SQL::translate(const QueryGraph *graph)
         for (auto it = graph_->order_by().begin(); it != graph_->order_by().end(); ++it) {
             if (it != graph_->order_by().begin())
                 out_ << ", ";
-            (*this)(*it->first);
+            (*this)(it->first);
             if (it->second)
                 out_ << " ASC";
             else
@@ -114,7 +92,7 @@ void QueryGraph2SQL::translate(const QueryGraph *graph)
     }
 }
 
-void QueryGraph2SQL::insert_projection(const m::Expr *e)
+void QueryGraph2SQL::insert_projection(const ast::Expr *e)
 {
     /* Translate the given `Expr` recursively. Set `after_grouping` because we want to insert a projection for the
      * output of the grouping operator. */
@@ -136,27 +114,19 @@ void QueryGraph2SQL::insert_projection(const m::Expr *e)
         out_ << expr.str() << " AS " << alias;
 }
 
-void QueryGraph2SQL::translate_projection(const std::pair<const Expr*, const char*> &p)
+void QueryGraph2SQL::translate_projection(const std::pair<std::reference_wrapper<const ast::Expr>, const char*> p)
 {
     if (p.second) {
         /* With alias. Translate recursively and add the alias. */
-        (*this)(*p.first);
+        (*this)(p.first.get());
         out_ << " AS ";
         std::string alias(p.second);
         alias = replace_all(alias, "$", "_"); // for `$res` in decorrelated queries
         out_ << alias;
     } else {
         /* Without alias. Insert the given `Expr` and add an alias iff needed. */
-        insert_projection(p.first);
+        insert_projection(&p.first.get());
     }
-}
-
-bool QueryGraph2SQL::references_group_by(Designator::target_type t)
-{
-    if (std::holds_alternative<const Expr*>(t))
-        return contains(graph_->group_by(), std::get<const Expr*>(t));
-    else
-        return false;
 }
 
 const char * QueryGraph2SQL::make_unique_alias()
@@ -168,38 +138,24 @@ const char * QueryGraph2SQL::make_unique_alias()
     return C.pool(oss.str().c_str());
 }
 
-void QueryGraph2SQL::operator()(Const<ErrorExpr>&)
+void QueryGraph2SQL::operator()(Const<ast::ErrorExpr>&)
 {
     M_unreachable("graph must not contain errors");
 }
 
-void QueryGraph2SQL::operator()(Const<Designator> &e)
+void QueryGraph2SQL::operator()(Const<ast::Designator> &e)
 {
-    if (after_grouping_ and references_group_by(e.target())) {
-        M_insist(not e.has_table_name());
-        std::ostringstream expr;
-        QueryGraph2SQL expr_trans(expr, graph_, false);
-        expr_trans(*std::get<const Expr*>(e.target()));
-        out_ << expr.str();
-    } else {
-        if (e.table_name)
-            out_ << e.table_name.text << '.';
-        std::string attr(e.attr_name.text);
-        attr = replace_all(attr, ".", "_");
-        attr = replace_all(attr, ",", "_");
-        attr = replace_all(attr, " ", "");
-        attr = replace_all(attr, "(", "_");
-        attr = replace_all(attr, ")", "_");
-        out_ << attr;
-    }
+    if (e.table_name)
+        out_ << e.table_name.text << '.';
+    out_ << e.attr_name.text;
 }
 
-void QueryGraph2SQL::operator()(Const<Constant> &e)
+void QueryGraph2SQL::operator()(Const<ast::Constant> &e)
 {
     out_ << e.tok.text;
 }
 
-void QueryGraph2SQL::operator()(Const<FnApplicationExpr> &e)
+void QueryGraph2SQL::operator()(Const<ast::FnApplicationExpr> &e)
 {
     if (after_grouping_) {
         (*this)(*e.fn);
@@ -221,7 +177,7 @@ void QueryGraph2SQL::operator()(Const<FnApplicationExpr> &e)
     }
 }
 
-void QueryGraph2SQL::operator()(Const<UnaryExpr> &e)
+void QueryGraph2SQL::operator()(Const<ast::UnaryExpr> &e)
 {
     out_ << '(' << e.op().text;
     if (e.op() == TK_Not) out_ << ' ';
@@ -229,7 +185,7 @@ void QueryGraph2SQL::operator()(Const<UnaryExpr> &e)
     out_ << ')';
 }
 
-void QueryGraph2SQL::operator()(Const<BinaryExpr> &e)
+void QueryGraph2SQL::operator()(Const<ast::BinaryExpr> &e)
 {
     out_ << '(';
     (*this)(*e.lhs);
@@ -238,7 +194,7 @@ void QueryGraph2SQL::operator()(Const<BinaryExpr> &e)
     out_ << ')';
 }
 
-void QueryGraph2SQL::operator()(Const<QueryExpr> &e)
+void QueryGraph2SQL::operator()(Const<ast::QueryExpr> &e)
 {
     out_ << e.alias() << "._res";
 }
@@ -247,7 +203,7 @@ void QueryGraph2SQL::operator()(const cnf::Predicate &pred)
 {
     if (pred.negative())
         out_ << "NOT ";
-    (*this)(*pred.expr());
+    (*this)(*pred);
 }
 
 void QueryGraph2SQL::operator()(const cnf::Clause &clause)

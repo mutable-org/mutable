@@ -332,7 +332,7 @@ struct CodeGenContext
         M_insist(inserted);
     }
     /** Returns the address at which `literal` is stored. */
-    Ptr<Char> get_literal_address(const char *literal) {
+    Ptr<Char> get_literal_address(const char *literal) const {
         auto it = literals_.find(literal);
         M_insist(it != literals_.end(), "unknown literal");
         return it->second.clone();

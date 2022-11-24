@@ -3336,6 +3336,7 @@ struct Allocator
     virtual void perform_pre_allocations() = 0;
 
     Var<Ptr<void>> allocate(uint32_t bytes, uint32_t align = 1) { return allocate(U32(bytes), align); }
+    void deallocate(Ptr<void> ptr, uint32_t bytes) { return deallocate(ptr, U32(bytes)); }
 
     /** Pre-allocates memory for exactly one value of type \tparam T and returns a pointer to this memory. */
     template<dsl_primitive T>
@@ -3381,9 +3382,6 @@ struct Allocator
             U32(uint32_t(sizeof(pointed_type)) * std::forward<U>(count))
         );
     }
-
-    protected:
-    // ::wasm::Memory & get_module_memory() const { return Module::Get().module_.memory; }
 };
 
 

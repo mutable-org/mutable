@@ -249,7 +249,9 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
 {
     auto execute_projection = [Pipeline=std::move(Pipeline), &M](){
         auto &old_env = CodeGenContext::Get().env();
-        Environment new_env;
+        Environment new_env; // fresh environment for projected values
+
+        /*----- Compute projected values. -----*/
         std::vector<std::pair<Schema::Identifier, Schema::Identifier>> ids_to_add;
         M_insist(M.projection.projections().size() == M.projection.schema().num_entries(),
                  "projections must match the operator's schema");
@@ -283,9 +285,12 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
         }
         for (auto &p : ids_to_add)
             new_env.add(p.first, old_env.extract(p.second)); // extract retained identifiers
-        std::swap(old_env, new_env);  // set new environment
-        Pipeline(); // resume pipeline
-        std::swap(old_env, new_env);  // reset to old environment
+
+        /*----- Resume pipeline with newly created environment. -----*/
+        {
+            auto S = CodeGenContext::Get().scoped_environment(std::move(new_env));
+            Pipeline();
+        }
     };
 
     if (M.child)
@@ -354,8 +359,6 @@ void NestedLoopsJoin::execute(const Match<NestedLoopsJoin> &M, callback_t Pipeli
     /*----- Process all but right-most child. -----*/
     for (std::size_t i = 0; i < num_left_children; ++i) {
         /*----- Create function for each child. -----*/
-        Environment new_env;
-        std::swap(CodeGenContext::Get().env(), new_env); // create and set fresh environment
         FUNCTION(nested_loop_join_child_pipeline, void(void))
         {
             auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
@@ -395,7 +398,6 @@ void NestedLoopsJoin::execute(const Match<NestedLoopsJoin> &M, callback_t Pipeli
             M.children[i].get().execute([&](){ buffers.back().consume(); });
         }
         nested_loop_join_child_pipeline(); // call child function
-        std::swap(CodeGenContext::Get().env(), new_env); // reset to old environment
     }
 
     /*----- Process right-most child. -----*/

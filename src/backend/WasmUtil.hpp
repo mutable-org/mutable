@@ -120,11 +120,6 @@ struct ExprCompiler : ast::ConstASTExprVisitor
 /** Binds `Schema::Identifier`s to `Expr<T>`s. */
 struct Environment
 {
-    friend void swap(Environment &first, Environment &second) {
-        using std::swap;
-        swap(first.exprs_, second.exprs_);
-    }
-
     private:
     /** Discards the held expression of `expr`. */
     static void discard(SQL_t &expr) {
@@ -141,14 +136,12 @@ struct Environment
     public:
     Environment() = default;
     Environment(const Environment&) = delete;
-    Environment(Environment &&other) : Environment() { swap(*this, other); }
+    Environment(Environment&&) = default;
 
     ~Environment() {
         for (auto &p : exprs_)
             discard(p.second);
     }
-
-    Environment & operator=(Environment &&other) { swap(*this, other); return *this; }
 
     /*----- Access methods -------------------------------------------------------------------------------------------*/
     /** Returns `true` iff this `Environment` contains `id`. */
@@ -251,15 +244,23 @@ struct Environment
 
 struct Scope
 {
-    private:
-    Environment outer_;
+    friend struct CodeGenContext;
 
-    public:
+    private:
+    Environment inner_; ///< environment active during `this` `Scope`s lifetime
+    Environment *outer_; ///< environment active before and after `this` `Scope`s lifetime
+
+    Scope() = delete;
     Scope(Environment inner);
-    ~Scope();
 
     Scope(const Scope&) = delete;
     Scope(Scope&&) = default;
+
+    public:
+    ~Scope();
+
+    /** Ends `this` `Scope` by returning the currently active environment and setting the former one active again. */
+    Environment extract();
 };
 
 /** The Wasm `CodeGenContext` provides context information necessary for code generation.
@@ -274,7 +275,7 @@ struct CodeGenContext
     friend struct Scope;
 
     private:
-    Environment env_; ///< environment for locally bound identifiers
+    Environment *env_ = nullptr; ///< environment for locally bound identifiers
     Global<U32> num_tuples_; ///< variable to hold the number of result tuples produced
     std::unordered_map<const char*, Ptr<Char>> literals_; ///< maps each literal to its address at which it is stored
 
@@ -306,15 +307,19 @@ struct CodeGenContext
     }
 
     /** Creates a new, *scoped* `Environment`.  The new `Environment` is immediately used by the `CodeGenContext`.  When
-     * the `Scope` is destroyed (i.e. when it goes out of scope), the *old* `Environment` is used again by the
-     * `CodeGenContext`. */
+     * the `Scope` is destroyed (i.e. when it goes out of scope or its methods `extract()` is called), the *old*
+     * `Environment` is used again by the `CodeGenContext`. */
     Scope scoped_environment() { return Scope(Environment()); }
+    /** Creates a new `Scope` using the `Environment` `env` which is immediately used by the `CodeGenContext`.  When
+     * the `Scope` is destroyed (i.e. when it goes out of scope or its methods `extract()` is called), the *old*
+     * `Environment` is used again by the `CodeGenContext`. */
+    Scope scoped_environment(Environment env) { return Scope(std::move(env)); }
 
     /*----- Access methods -------------------------------------------------------------------------------------------*/
     /** Returns the current `Environment`. */
-    Environment & env() { return env_; }
+    Environment & env() { M_insist(bool(env_)); return *env_; }
     /** Returns the current `Environment`. */
-    const Environment & env() const { return env_; }
+    const Environment & env() const { M_insist(bool(env_)); return *env_; }
 
     /** Returns the number of result tuples produced. */
     U32 num_tuples() const { return num_tuples_; }
@@ -335,12 +340,20 @@ struct CodeGenContext
 };
 
 inline Scope::Scope(Environment inner)
+    : inner_(std::move(inner))
 {
-    outer_ = std::exchange(CodeGenContext::Get().env_, std::move(inner));
+    outer_ = std::exchange(CodeGenContext::Get().env_, &inner_);
 }
 
-inline Scope::~Scope() {
-    CodeGenContext::Get().env_ = std::move(outer_);
+inline Scope::~Scope()
+{
+    CodeGenContext::Get().env_ = outer_;
+}
+
+inline Environment Scope::extract()
+{
+    CodeGenContext::Get().env_ = outer_;
+    return std::move(inner_);
 }
 
 

@@ -1647,11 +1647,6 @@ template struct m::wasm::Buffer<true>;
 template<bool IsGlobal>
 void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second)
 {
-    using std::swap;
-
-    auto &old_env = CodeGenContext::Get().env();
-    Environment env;
-
     /*---- Swap each entry individually to reduce number of variables needed at once. -----*/
     for (auto &e : schema_.get()) {
         /*----- Create schema for single entry and load and store proxies for it. -----*/
@@ -1661,9 +1656,11 @@ void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second)
         auto store = buffer_.get().create_store_proxy(entry_schema);
 
         /*----- Load entry of first tuple into fresh environment. -----*/
-        swap(old_env, env);
-        load(first.clone());
-        swap(old_env, env);
+        auto env = [&](){
+            auto S = CodeGenContext::Get().scoped_environment();
+            load(first.clone());
+            return S.extract();
+        }();
 
         /*----- Temporarily save entry of first tuple by creating variable or separate string buffer. -----*/
         std::visit(overloaded {
@@ -1689,9 +1686,10 @@ void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second)
         }
 
         /*----- Store temporarily saved entry of first tuple at second tuples address. ----*/
-        swap(old_env, env);
-        store(second.clone());
-        swap(old_env, env);
+        {
+            auto S = CodeGenContext::Get().scoped_environment(std::move(env));
+            store(second.clone());
+        }
     }
 
     first.discard(); // since it was always cloned
@@ -2110,30 +2108,31 @@ template<bool IsGlobal>
 I32 m::wasm::compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
                      const std::vector<SortingOperator::order_type> &order)
 {
-    using std::swap;
-
     Var<I32> result(0); // explicitly (re-)set result to 0
 
-    auto &old_env = CodeGenContext::Get().env();
-    Environment env_left, env_right;
-
     /*----- Load left tuple. -----*/
-    swap(old_env, env_left);
-    load(left);
-    swap(old_env, env_left);
+    auto env_left = [&](){
+        auto S = CodeGenContext::Get().scoped_environment();
+        load(left);
+        return S.extract();
+    }();
 
     /*----- Load right tuple. -----*/
-    swap(old_env, env_right);
-    load(right);
-    swap(old_env, env_right);
+    auto env_right = [&](){
+        auto S = CodeGenContext::Get().scoped_environment();
+        load(right);
+        return S.extract();
+    }();
 
     /*----- Compile ordering. -----*/
     for (auto &o : order) {
-        SQL_t _val_left = env_left.compile(o.first); // compile order expression for left tuple
+        /*----- Compile order expression for left tuple. -----*/
+        SQL_t _val_left = env_left.template compile(o.first);
 
         std::visit(overloaded {
             [&]<typename T>(Expr<T> val_left) -> void {
-                Expr<T> val_right = env_right.compile<Expr<T>>(o.first); // compile order expression for right tuple
+                /*----- Compile order expression for right tuple. -----*/
+                Expr<T> val_right = env_right.template compile<Expr<T>>(o.first);
 
 #if 0
                 /* XXX: default c'tor not (yet) viable because its constraint is checked before variable_storage
@@ -2164,7 +2163,8 @@ I32 m::wasm::compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
                 result += cmp; // add current comparison to result
             },
             [&](_Bool val_left) -> void {
-                _Bool val_right = env_right.compile<_Bool>(o.first); // compile order expression for right tuple
+                /*----- Compile order expression for right tuple. -----*/
+                _Bool val_right = env_right.template compile<_Bool>(o.first);
 
                 _Var<I32> left(val_left.template to<int32_t>()), right(val_right.template to<int32_t>());
 
@@ -2182,7 +2182,8 @@ I32 m::wasm::compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
             [&](Ptr<Char> val_left) -> void {
                 auto &cs = as<const CharacterSequence>(*o.first.get().type());
 
-                Ptr<Char> val_right = env_right.compile<Ptr<Char>>(o.first); // compile order expression for right tuple
+                /*----- Compile order expression for right tuple. -----*/
+                Ptr<Char> val_right = env_right.template compile<Ptr<Char>>(o.first);
 
                 Var<Ptr<Char>> left(val_left), right(val_right);
 

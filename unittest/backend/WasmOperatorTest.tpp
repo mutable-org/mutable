@@ -92,8 +92,9 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Scan", "[core][wasm]")
         oss << table.name << "_num_rows";
         Module::Get().emit_global<uint32_t>(oss.str(), table.store().num_rows(), false);
 
+        CodeGenContext::Init(); // create fresh codegen context
         FUNCTION(scan_code, void(void)) {
-            CodeGenContext::Init(); // create fresh codegen context
+            auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for function
 
             /* Create return lambda which checks all the scanned data and throws an exception is a mismatch is found. */
             auto schema = table.schema();
@@ -136,8 +137,8 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Scan", "[core][wasm]")
             /* Execute the scan operator. */
             Scan::execute(M, Return);
 
-            CodeGenContext::Dispose(); // dispose codegen context
         }
+        CodeGenContext::Dispose(); // dispose codegen context
 
         INVOKE(scan_code);
     };

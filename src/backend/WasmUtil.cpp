@@ -947,13 +947,24 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
 
                 /*----- If there is a remaining stride for this level, emit conditional stride jump. -----*/
                 if (const int32_t remaining_stride_in_bytes = stride_remaining_in_bits / 8) [[likely]] {
-                    Bool cond_mod = (tuple_id % uint32_t(curr->num_tuples)).eqz();
-                    Bool cond_and = (tuple_id bitand uint32_t(curr->num_tuples - 1U)).eqz();
-                    Bool cond = is_pow_2(curr->num_tuples) ? cond_and : cond_mod; // select implementation to use...
-                    (is_pow_2(curr->num_tuples) ? cond_mod : cond_and).discard(); // ... and discard the other
+                    M_insist(curr->num_tuples > 0);
+                    if (curr->num_tuples != 1U) {
+                        Bool cond_mod = (tuple_id % uint32_t(curr->num_tuples)).eqz();
+                        Bool cond_and = (tuple_id bitand uint32_t(curr->num_tuples - 1U)).eqz();
+                        Bool cond = is_pow_2(curr->num_tuples) ? cond_and : cond_mod; // select implementation to use...
+                        (is_pow_2(curr->num_tuples) ? cond_mod : cond_and).discard(); // ... and discard the other
 
-                    /*----- Emit conditional stride jumps. -----*/
-                    IF (cond) {
+                        /*----- Emit conditional stride jumps. -----*/
+                        IF (cond) {
+                            for (auto& [_, value] : loading_context)
+                                value.ptr += remaining_stride_in_bytes; // emit stride jump
+                            if (null_bitmap_ptr)
+                                *null_bitmap_ptr += remaining_stride_in_bytes; // emit stride jump
+
+                            /*----- Recurse within IF. -----*/
+                            rec(std::next(curr), end, rec);
+                        };
+                    } else {
                         for (auto& [_, value] : loading_context)
                             value.ptr += remaining_stride_in_bytes; // emit stride jump
                         if (null_bitmap_ptr)
@@ -961,7 +972,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
 
                         /*----- Recurse within IF. -----*/
                         rec(std::next(curr), end, rec);
-                    };
+                    }
                 } else {
                     /*----- Recurse without IF. -----*/
                     rec(std::next(curr), end, rec);
@@ -1045,18 +1056,28 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
 
                 /*----- Emit the stride jumps between all INodes starting at the parent of leaves to the root. -----*/
                 if (not lowest_inode_jumps.empty()) [[likely]] {
-                    Bool cond_mod = (tuple_id % uint32_t(levels.back().num_tuples)).eqz();
-                    Bool cond_and = (tuple_id bitand uint32_t(levels.back().num_tuples - 1U)).eqz();
-                    Bool cond = is_pow_2(levels.back().num_tuples) ? cond_and : cond_mod; // select implementation to use...
-                    (is_pow_2(levels.back().num_tuples) ? cond_mod : cond_and).discard(); // ... and discard the other
+                    M_insist(levels.back().num_tuples > 0);
+                    if (levels.back().num_tuples != 1U) {
+                        Bool cond_mod = (tuple_id % uint32_t(levels.back().num_tuples)).eqz();
+                        Bool cond_and = (tuple_id bitand uint32_t(levels.back().num_tuples - 1U)).eqz();
+                        /* Select implementation to use... */
+                        Bool cond = is_pow_2(levels.back().num_tuples) ? cond_and : cond_mod;
+                        /* ... and discard the other. */
+                        (is_pow_2(levels.back().num_tuples) ? cond_mod : cond_and).discard();
 
-                    /*----- Emit conditional stride jumps from outermost Block. -----*/
-                    IF (cond) {
+                        /*----- Emit conditional stride jumps from outermost Block. -----*/
+                        IF (cond) {
+                            lowest_inode_jumps.attach_to_current();
+
+                            /*----- Recurse within IF. -----*/
+                            emit_stride_jumps(std::next(levels.crbegin()), levels.crend());
+                        };
+                    } else {
                         lowest_inode_jumps.attach_to_current();
 
                         /*----- Recurse within IF. -----*/
                         emit_stride_jumps(std::next(levels.crbegin()), levels.crend());
-                    };
+                    }
                 } else {
                     /*----- Recurse without outermost IF block. -----*/
                     emit_stride_jumps(std::next(levels.crbegin()), levels.crend());

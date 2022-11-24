@@ -1506,6 +1506,16 @@ Buffer<IsGlobal>::Buffer(const Schema &schema, const DataLayoutFactory &factory,
 }
 
 template<bool IsGlobal>
+Buffer<IsGlobal>::~Buffer()
+{
+    if (not layout_.is_finite()) {
+        /*----- Deallocate memory for buffer. -----*/
+        const auto child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
+        Module::Allocator().deallocate(base_address_, child_size_in_bytes);
+    }
+}
+
+template<bool IsGlobal>
 buffer_load_proxy_t<IsGlobal> Buffer<IsGlobal>::create_load_proxy(proxy_param_t tuple_schema) const
 {
     return tuple_schema ? buffer_load_proxy_t(*this, tuple_schema->get()) : buffer_load_proxy_t(*this, schema_);
@@ -1526,13 +1536,14 @@ buffer_swap_proxy_t<IsGlobal> Buffer<IsGlobal>::create_swap_proxy(proxy_param_t 
 template<bool IsGlobal>
 void Buffer<IsGlobal>::resume_pipeline()
 {
-    /*----- Create function on-demand to assert that all needed identifiers are already created. -----*/
-    if (not resume_pipeline_) {
-        /*----- Create function to resume the pipeline for each tuple contained in the buffer. -----*/
-        FUNCTION(resume_pipeline, fn_t)
-        {
-            auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
-            if (Pipeline_) { // Pipeline callback not empty, i.e. performs some work
+    if (Pipeline_) { // Pipeline callback not empty, i.e. performs some work
+        /*----- Create function on-demand to assert that all needed identifiers are already created. -----*/
+        if (not resume_pipeline_) {
+            /*----- Create function to resume the pipeline for each tuple contained in the buffer. -----*/
+            FUNCTION(resume_pipeline, fn_t)
+            {
+                auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+
                 /*----- Access base address and size depending on whether they are globals or parameters. -----*/
                 Ptr<void> base_address = [&](){
                     if constexpr (IsGlobal) return base_address_.val(); else return PARAMETER(0);
@@ -1552,16 +1563,16 @@ void Buffer<IsGlobal>::resume_pipeline()
                     load_jumps.attach_to_current();
                 }
             }
+            resume_pipeline_ = std::move(resume_pipeline);
         }
-        resume_pipeline_ = std::move(resume_pipeline);
-    }
 
-    /*----- Call created function. -----*/
-    M_insist(bool(resume_pipeline_));
-    if constexpr (IsGlobal)
-        (*resume_pipeline_)(); // no argument since base address and size are globals
-    else
-        (*resume_pipeline_)(base_address_, size_); // base address and size as arguments since they are locals
+        /*----- Call created function. -----*/
+        M_insist(bool(resume_pipeline_));
+        if constexpr (IsGlobal)
+            (*resume_pipeline_)(); // no argument since base address and size are globals
+        else
+            (*resume_pipeline_)(base_address_, size_); // base address and size as arguments since they are locals
+    }
 }
 
 template<bool IsGlobal>
@@ -1611,7 +1622,7 @@ void Buffer<IsGlobal>::consume()
 
     if (layout_.is_finite()) {
         IF (size_ == uint32_t(layout_.num_tuples())) { // buffer full
-            /*----- Resume pipeline for each tuple in buffer and size of buffer to 0. -----*/
+            /*----- Resume pipeline for each tuple in buffer and reset size of buffer to 0. -----*/
             resume_pipeline();
             size_ = 0U;
         } ELSE { // buffer not full

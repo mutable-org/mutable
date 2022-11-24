@@ -440,6 +440,8 @@ struct Buffer
     Buffer(const Buffer&) = delete;
     Buffer(Buffer&&) = default;
 
+    ~Buffer();
+
     Buffer & operator=(Buffer&&) = default;
 
     /** Returns the schema of the buffer. */

@@ -217,6 +217,14 @@ void BranchingFilter::execute(const Match<BranchingFilter> &M, callback_t Pipeli
     });
 }
 
+void PredicatedFilter::execute(const Match<PredicatedFilter> &M, callback_t Pipeline)
+{
+    M.child.execute([Pipeline=std::move(Pipeline), &M](){
+        CodeGenContext::Get().env().add_predicate(M.filter.filter());
+        Pipeline();
+    });
+}
+
 
 /*======================================================================================================================
  * Projection

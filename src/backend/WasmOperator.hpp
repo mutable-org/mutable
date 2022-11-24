@@ -13,6 +13,7 @@ namespace m {
     X(Print) \
     X(Scan) \
     X(BranchingFilter) \
+    X(PredicatedFilter) \
     X(Projection) \
     X(Grouping) \
     X(Aggregation) \
@@ -56,6 +57,12 @@ struct BranchingFilter : PhysicalOperator<BranchingFilter, FilterOperator>
 {
     static void execute(const Match<BranchingFilter> &M, callback_t Pipeline);
     static double cost(const Match<BranchingFilter>&) { return 1.0; }
+};
+
+struct PredicatedFilter : PhysicalOperator<PredicatedFilter, FilterOperator>
+{
+    static void execute(const Match<PredicatedFilter> &M, callback_t Pipeline);
+    static double cost(const Match<PredicatedFilter>&) { return 0.5; }
 };
 
 struct Projection : PhysicalOperator<Projection, ProjectionOperator>
@@ -220,6 +227,42 @@ struct Match<wasm::BranchingFilter> : MatchBase
     }
 
     const char * name() const override { return "wasm::BranchingFilter"; }
+};
+
+template<>
+struct Match<wasm::PredicatedFilter> : MatchBase
+{
+    private:
+    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
+    std::optional<std::size_t> buffer_num_tuples_;
+    public:
+    const FilterOperator &filter;
+    const MatchBase &child;
+
+    Match(const FilterOperator *filter, std::vector<std::reference_wrapper<const MatchBase>> &&children)
+        : filter(*filter)
+        , child(children[0])
+    {
+        M_insist(children.size() == 1);
+    }
+
+    void execute(callback_t Pipeline) const override {
+        if (buffer_factory_) {
+            M_insist(bool(buffer_num_tuples_));
+            auto buffer_schema = filter.schema().drop_none().deduplicate();
+            if (buffer_schema.num_entries()) {
+                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, *buffer_num_tuples_, std::move(Pipeline));
+                wasm::PredicatedFilter::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
+                buffer.resume_pipeline();
+            } else {
+                wasm::PredicatedFilter::execute(*this, std::move(Pipeline));
+            }
+        } else {
+            wasm::PredicatedFilter::execute(*this, std::move(Pipeline));
+        }
+    }
+
+    const char * name() const override { return "wasm::PredicatedFilter"; }
 };
 
 template<>

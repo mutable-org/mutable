@@ -1249,6 +1249,13 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
     }
     base_address.discard(); // discard base address (as it was always cloned)
 
+#ifndef NDEBUG
+    if constexpr (IsStore)
+        M_insist(loads.empty());
+    else
+        M_insist(stores.empty());
+#endif
+
     return { std::move(inits), IsStore ? std::move(stores) : std::move(loads), std::move(jumps) };
 }
 

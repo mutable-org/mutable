@@ -324,7 +324,7 @@ struct CodeGenContext
     /** Returns the number of result tuples produced. */
     U32 num_tuples() const { return num_tuples_; }
     /** Increments the number of result tuples produced by `n`. */
-    void inc_num_tuples(uint32_t n = 1) { num_tuples_ += n; }
+    void inc_num_tuples(U32 n = U32(1)) { num_tuples_ += n; }
 
     /** Adds the string literal `literal` located at pointer offset `ptr`. */
     void add_literal(const char *literal, uint32_t ptr) {

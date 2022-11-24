@@ -132,6 +132,8 @@ struct Environment
     private:
     ///> maps `Schema::Identifier`s to `Expr<T>`s that evaluate to the current expression
     std::unordered_map<Schema::Identifier, SQL_t> exprs_;
+    ///> optional predicate if predication is used
+    std::optional<_Bool> predicate_;
 
     public:
     Environment() = default;
@@ -231,6 +233,31 @@ struct Environment
     auto compile(U &&u) const {
         ExprCompiler C(*this);
         return C.compile<T>(std::forward<U>(u));
+    }
+
+    /*----- Predication ----------------------------------------------------------------------------------------------*/
+    ///> Returns `true` iff `this` `Environment` uses predication.
+    bool predicated() const { return predicate_.has_value(); }
+    ///> Adds the predicate \p pred to the predication predicate.
+    void add_predicate(_Bool pred) {
+        if (predicate_)
+            predicate_.emplace(*predicate_ and pred);
+        else
+            predicate_.emplace(pred);
+    }
+    ///> Adds the predicate compiled from the `cnf::CNF` \p cnf to the predication predicate.
+    void add_predicate(const cnf::CNF &cnf) { add_predicate(compile(cnf)); }
+    ///> Returns the **moved** current predication predicate.
+    _Bool extract_predicate() {
+        M_insist(predicate_.has_value(), "cannot access an undefined or already extracted predicate");
+        auto tmp = *predicate_;
+        predicate_.reset();
+        return tmp;
+    }
+    ///> Returns the **copied** current predication predicate.
+    _Bool get_predicate() const {
+        M_insist(predicate_.has_value(), "cannot access an undefined or already extracted predicate");
+        return predicate_->clone();
     }
 
     void dump(std::ostream &out) const;
@@ -365,7 +392,7 @@ inline Environment Scope::extract()
  * tuples of schema \p tuple_schema starting at memory address \p base_address and tuple ID \p initial_tuple_id.
  * The caller has to provide a variable \p tuple_id which must be initialized to \p initial_tuple_id and will be
  * incremented automatically after storing each tuple (i.e. code for this will be emitted at the end of the block
- * returned as second element).
+ * returned as second element).  Predication is supported and emitted respectively.
  *
  * Does not emit any code but returns three `wasm::Block`s containing code: the first one initializes all needed
  * variables, the second one stores one tuple, and the third one advances to the next tuple. */

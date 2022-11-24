@@ -427,7 +427,8 @@ namespace wasm {
  * stores/loads tuples of schema \p tuple_schema starting at memory address \p base_address and tuple ID \p
  * initial_tuple_id.  The caller has to provide a variable \p tuple_id which must be initialized to \p
  * initial_tuple_id and will be incremented automatically after storing/loading each tuple (i.e. code for this will
- * be emitted at the end of the block returned as second element).
+ * be emitted at the end of the block returned as second element).  Predication is supported and emitted
+ * respectively for storing tuples.
  *
  * Does not emit any code but returns three `wasm::Block`s containing code: the first one initializes all needed
  * variables, the second one stores/loads one tuple, and the third one advances to the next tuple. */
@@ -472,6 +473,16 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
         return false; // no attribute in `schema` can be NULL
     }();
     bool has_null_bitmap = false; // indicates whether the data layout specifies a NULL bitmap
+
+    /*----- If predication is used, introduce predication variable and update it before storing a tuple. -----*/
+    const bool is_predicated = env.predicated();
+    M_insist(not is_predicated or IsStore, "predication only supported for storing tuples");
+    std::optional<Var<Bool>> pred;
+    if (is_predicated) {
+        BLOCK_OPEN(stores) {
+            pred = env.extract_predicate().is_true_and_not_null();
+        }
+    }
 
     /*----- Visit the data layout. -----*/
     layout.for_sibling_leaves([&](const std::vector<DataLayout::leaf_info_t> &leaves,
@@ -537,15 +548,28 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
 
                             auto advance_to_next_bit = [&]() {
                                 if (bit_delta) {
-                                    *null_bitmap_mask <<= bit_delta; // advance mask by `bit_delta`
+                                    if (is_predicated) {
+                                        M_insist(bool(pred));
+                                        *null_bitmap_mask <<=
+                                            Select(*pred, bit_delta, uint8_t(0)); // possibly advance mask
+                                    } else {
+                                        *null_bitmap_mask <<= bit_delta; // advance mask
+                                    }
                                     /* If the mask surpasses the first byte, advance pointer to the next byte... */
                                     *null_bitmap_ptr += (*null_bitmap_mask bitand 0xffU).eqz().to<int32_t>();
                                     /* ... and remove lowest byte from the mask. */
                                     *null_bitmap_mask = Select((*null_bitmap_mask bitand 0xffU).eqz(),
                                                                *null_bitmap_mask >> 8U, *null_bitmap_mask);
                                 }
-                                if (byte_delta)
-                                    *null_bitmap_ptr += byte_delta; // advance pointer by `byte_delta`
+                                if (byte_delta) {
+                                    if (is_predicated) {
+                                        M_insist(bool(pred));
+                                        *null_bitmap_ptr +=
+                                            Select(*pred, byte_delta, 0); // possibly advance pointer
+                                    } else {
+                                        *null_bitmap_ptr += byte_delta; // advance pointer
+                                    }
+                                }
                             };
 
                             if constexpr (IsStore) {
@@ -660,7 +684,12 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                     const int32_t byte_delta = delta / 8;
                     if (bit_delta) {
                         BLOCK_OPEN(jumps) {
-                            *null_bitmap_mask <<= bit_delta; // advance mask by `bit_delta`
+                            if (is_predicated) {
+                                M_insist(bool(pred));
+                                *null_bitmap_mask <<= Select(*pred, bit_delta, uint8_t(0)); // possibly advance mask
+                            } else {
+                                *null_bitmap_mask <<= bit_delta; // advance mask
+                            }
                             /* If the mask surpasses the first byte, advance pointer to the next byte... */
                             *null_bitmap_ptr += (*null_bitmap_mask bitand 0xffU).eqz().to<int32_t>();
                             /* ... and remove the lowest byte from the mask. */
@@ -670,7 +699,12 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                     }
                     if (byte_delta) {
                         BLOCK_OPEN(jumps) {
-                            *null_bitmap_ptr += byte_delta; // advance pointer
+                            if (is_predicated) {
+                                M_insist(bool(pred));
+                                *null_bitmap_ptr += Select(*pred, byte_delta, 0); // possibly advance pointer
+                            } else {
+                                *null_bitmap_ptr += byte_delta; // advance pointer
+                            }
                         }
                     }
                 } else { // NULL bitmap without bit stride can benefit from static masking of NULL bits
@@ -956,19 +990,45 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
 
                         /*----- Emit conditional stride jumps. -----*/
                         IF (cond) {
-                            for (auto& [_, value] : loading_context)
-                                value.ptr += remaining_stride_in_bytes; // emit stride jump
-                            if (null_bitmap_ptr)
-                                *null_bitmap_ptr += remaining_stride_in_bytes; // emit stride jump
+                            for (auto& [_, value] : loading_context) {
+                                if (is_predicated) {
+                                    M_insist(bool(pred));
+                                    value.ptr += Select(*pred, remaining_stride_in_bytes, 0); // possibly emit stride jump
+                                } else {
+                                    value.ptr += remaining_stride_in_bytes; // emit stride jump
+                                }
+                            }
+                            if (null_bitmap_ptr) {
+                                if (is_predicated) {
+                                    M_insist(bool(pred));
+                                    *null_bitmap_ptr +=
+                                        Select(*pred, remaining_stride_in_bytes, 0); // possibly emit stride jump
+                                } else {
+                                    *null_bitmap_ptr += remaining_stride_in_bytes; // emit stride jump
+                                }
+                            }
 
                             /*----- Recurse within IF. -----*/
                             rec(std::next(curr), end, rec);
                         };
                     } else {
-                        for (auto& [_, value] : loading_context)
-                            value.ptr += remaining_stride_in_bytes; // emit stride jump
-                        if (null_bitmap_ptr)
-                            *null_bitmap_ptr += remaining_stride_in_bytes; // emit stride jump
+                        for (auto& [_, value] : loading_context) {
+                            if (is_predicated) {
+                                M_insist(bool(pred));
+                                value.ptr += Select(*pred, remaining_stride_in_bytes, 0); // possibly emit stride jump
+                            } else {
+                                value.ptr += remaining_stride_in_bytes; // emit stride jump
+                            }
+                        }
+                        if (null_bitmap_ptr) {
+                            if (is_predicated) {
+                                M_insist(bool(pred));
+                                *null_bitmap_ptr +=
+                                    Select(*pred, remaining_stride_in_bytes, 0); // possibly emit stride jump
+                            } else {
+                                *null_bitmap_ptr += remaining_stride_in_bytes; // emit stride jump
+                            }
+                        }
 
                         /*----- Recurse within IF. -----*/
                         rec(std::next(curr), end, rec);
@@ -989,15 +1049,26 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                 const uint8_t bit_stride  = key.second % 8;
                 const int32_t byte_stride = key.second / 8;
                 if (bit_stride) {
-                    *value.mask <<= bit_stride; // advance mask by `bit_stride`
                     M_insist(bool(value.mask));
+                    if (is_predicated) {
+                        M_insist(bool(pred));
+                        *value.mask <<= Select(*pred, bit_stride, uint8_t(0)); // possibly advance mask
+                    } else {
+                        *value.mask <<= bit_stride; // advance mask
+                    }
                     /* If the mask surpasses the first byte, advance pointer to the next byte... */
                     value.ptr += (*value.mask bitand 0xffU).eqz().template to<int32_t>();
                     /* ... and remove the lowest byte from the mask. */
                     *value.mask = Select((*value.mask bitand 0xffU).eqz(), *value.mask >> 8U, *value.mask);
                 }
-                if (byte_stride)
-                    value.ptr += byte_stride; // advance pointer
+                if (byte_stride) {
+                    if (is_predicated) {
+                        M_insist(bool(pred));
+                        value.ptr += Select(*pred, byte_stride, 0); // possibly advance pointer
+                    } else {
+                        value.ptr += byte_stride; // advance pointer
+                    }
+                }
             }
             /* Omit the leaf stride jump for the NULL bitmap as it is already done together with the loading. */
 
@@ -1017,14 +1088,30 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                             const uint8_t end_bit_offset = (key.first + levels.back().num_tuples * key.second) % 8;
                             M_insist(end_bit_offset != key.first);
                             /* Reset the mask to initial bit offset... */
+                            if (is_predicated) {
+                                M_insist(bool(pred));
+                                Wasm_insist(*pred or *value.mask == 1U << key.first,
+                                            "if the predicate is not fulfilled, the mask should not be advanced");
+                            }
                             *value.mask = 1U << key.first;
                             /* ... and advance pointer to next byte if resetting of the mask surpasses the current byte. */
-                            value.ptr += int32_t(end_bit_offset > key.first);
+                            if (is_predicated) {
+                                M_insist(bool(pred));
+                                value.ptr += Select(*pred, int32_t(end_bit_offset > key.first), 0);
+                            } else {
+                                value.ptr += int32_t(end_bit_offset > key.first);
+                            }
                         }
                     }
                     if (remaining_byte_stride) [[likely]] {
                         BLOCK_OPEN(lowest_inode_jumps) {
-                            value.ptr += remaining_byte_stride; // advance pointer
+                            if (is_predicated) {
+                                M_insist(bool(pred));
+                                value.ptr +=
+                                    Select(*pred, remaining_byte_stride, 0); // possibly advance pointer
+                            } else {
+                                value.ptr += remaining_byte_stride; // advance pointer
+                            }
                         }
                     }
                 }
@@ -1042,14 +1129,31 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                 (null_bitmap_bit_offset + levels.back().num_tuples * null_bitmap_stride_in_bits) % 8;
                             M_insist(end_bit_offset != null_bitmap_bit_offset);
                             /* Reset the mask to initial bit offset... */
+                            if (is_predicated) {
+                                M_insist(bool(pred));
+                                Wasm_insist(*pred or *null_bitmap_mask == 1U << null_bitmap_bit_offset,
+                                            "if the predicate is not fulfilled, the mask should not be advanced");
+                            }
                             *null_bitmap_mask = 1U << null_bitmap_bit_offset;
                             /* ... and advance pointer to next byte if resetting of the mask surpasses the current byte. */
-                            *null_bitmap_ptr += int32_t(end_bit_offset > null_bitmap_bit_offset);
+                            if (is_predicated) {
+                                M_insist(bool(pred));
+                                *null_bitmap_ptr +=
+                                    Select(*pred, int32_t(end_bit_offset > null_bitmap_bit_offset), 0);
+                            } else {
+                                *null_bitmap_ptr += int32_t(end_bit_offset > null_bitmap_bit_offset);
+                            }
                         }
                     }
                     if (remaining_byte_stride) [[likely]] {
                         BLOCK_OPEN(lowest_inode_jumps) {
-                            *null_bitmap_ptr += remaining_byte_stride; // advance pointer
+                            if (is_predicated) {
+                                M_insist(bool(pred));
+                                *null_bitmap_ptr +=
+                                    Select(*pred, remaining_byte_stride, 0); // possibly advance pointer
+                            } else {
+                                *null_bitmap_ptr += remaining_byte_stride; // advance pointer
+                            }
                         }
                     }
                 }
@@ -1122,7 +1226,12 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
     /*----- Increment tuple ID after storing/loading one tuple. -----*/
     if constexpr (IsStore) {
         BLOCK_OPEN(stores) {
-            tuple_id += 1U;
+            if (is_predicated) {
+                M_insist(bool(pred));
+                tuple_id += pred->to<uint32_t>();
+            } else {
+                tuple_id += 1U;
+            }
         }
     } else {
         BLOCK_OPEN(loads) {

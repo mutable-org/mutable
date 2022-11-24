@@ -15,7 +15,7 @@ using namespace m::wasm;
  *====================================================================================================================*/
 
 void write_result_set(const Schema &schema, const storage::DataLayoutFactory &factory,
-                      std::optional<uint32_t> window_size, const MatchBase &child)
+                      const std::optional<uint32_t> &window_size, const MatchBase &child)
 {
     M_insist(CodeGenContext::Get().env().empty());
 
@@ -27,30 +27,44 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
                 Var<U32> tuple_id; // default initialized to 0
                 child.execute([&](){
-                    /*----- Increment tuple ID and, if buffer is full, extract current results and reset tuple ID. */
-                    tuple_id += 1U;
+                    /*----- Increment tuple ID. -----*/
+                    if (auto &env = CodeGenContext::Get().env(); env.predicated())
+                        tuple_id += env.extract_predicate().is_true_and_not_null().to<uint32_t>();
+                    else
+                        tuple_id += 1U;
+
+                    /*----- If window size is reached, update result size, extract current results, and reset tuple ID. */
                     IF (tuple_id == *window_size) {
+                        CodeGenContext::Get().inc_num_tuples(U32(*window_size));
                         Module::Get().emit_call<void>("read_result_set", Ptr<void>::Nullptr(), U32(*window_size));
                         tuple_id = 0U;
                     };
-
-                    /*----- Update number of result tuples. -----*/
-                    CodeGenContext::Get().inc_num_tuples();
                 });
 
                 /* Return number of remaining results. */
                 RETURN(tuple_id);
             }
-            U32 remaining_results = child_pipeline(); // call child function
+            const Var<U32> remaining_results(child_pipeline()); // call child function
 
-            /*----- Extract all remaining results. -----*/
-            Module::Get().emit_call<void>("read_result_set", Ptr<void>::Nullptr(), remaining_results);
+            /*----- Update number of result tuples. -----*/
+            CodeGenContext::Get().inc_num_tuples(remaining_results);
+
+            /*----- Extract remaining results. -----*/
+            Module::Get().emit_call<void>("read_result_set", Ptr<void>::Nullptr(), remaining_results.val());
         } else {
             /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `Limit`). -----*/
             FUNCTION(child_pipeline, void(void))
             {
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
-                child.execute([&](){ CodeGenContext::Get().inc_num_tuples(); });
+                child.execute([&](){
+                    /*----- Update number of result tuples. -----*/
+                    if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
+                        U32 n = env.extract_predicate().is_true_and_not_null().to<uint32_t>();
+                        CodeGenContext::Get().inc_num_tuples(n);
+                    } else {
+                        CodeGenContext::Get().inc_num_tuples();
+                    }
+                });
             }
             child_pipeline(); // call child function
 
@@ -59,56 +73,53 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
         }
     } else { // result set contains contains actual values
         if (window_size) {
+            M_insist(*window_size > 1U);
+
             /*----- Create finite global buffer (without `Pipeline`-callback) used as reusable result set. -----*/
-            GlobalBuffer result_set(schema, factory, *window_size);
-
-            /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `Limit`). -----*/
-            FUNCTION(child_pipeline, uint32_t(void))
-            {
-                auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
-                Var<U32> tuple_id; // default initialized to 0
-                child.execute([&](){
-                    /*----- Write the result. -----*/
-                    result_set.consume();
-
-                    /*----- Increment tuple ID and, if buffer is full, extract current results and reset tuple ID. */
-                    tuple_id += 1U;
-                    IF (tuple_id == uint32_t(*window_size)) {
-                        Module::Get().emit_call<void>("read_result_set", result_set.base_address(), U32(*window_size));
-                        tuple_id = 0U;
-                    };
-
-                    /*----- Update number of result tuples. -----*/
-                    CodeGenContext::Get().inc_num_tuples();
-                });
-
-                /* Return number of remaining results. */
-                RETURN(tuple_id);
-            }
-            U32 remaining_results = child_pipeline(); // call child function
-
-            /*----- Extract all remaining results. -----*/
-            Module::Get().emit_call<void>("read_result_set", result_set.base_address(), remaining_results);
-        } else {
-            /*----- Create infinite global buffer used as single result set. -----*/
-            GlobalBuffer result_set(schema, factory);
+            GlobalBuffer result_set(schema, factory, *window_size); // no callback to extract results all at once
 
             /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `Limit`). -----*/
             FUNCTION(child_pipeline, void(void))
             {
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
                 child.execute([&](){
-                    /*----- Write the result. -----*/
-                    result_set.consume();
+                    /*----- Store whether only a single buffer slot is free to not extract result for empty buffer. --*/
+                    Var<Bool> single_slot_free(result_set.size() == *window_size - 1U);
 
-                    /*----- Update number of result tuples. -----*/
-                    CodeGenContext::Get().inc_num_tuples();
+                    /*----- Write the result. -----*/
+                    result_set.consume(); // also resets size to 0 in case buffer has reached window size
+
+                    /*----- If the last buffer slot was filled, update result size and extract current results. */
+                    IF (single_slot_free and result_set.size() == 0U) {
+                        CodeGenContext::Get().inc_num_tuples(U32(*window_size));
+                        Module::Get().emit_call<void>("read_result_set", result_set.base_address(), U32(*window_size));
+                    };
                 });
             }
             child_pipeline(); // call child function
 
+            /*----- Update number of result tuples. -----*/
+            CodeGenContext::Get().inc_num_tuples(result_set.size());
+
+            /*----- Extract remaining results. -----*/
+            Module::Get().emit_call<void>("read_result_set", result_set.base_address(), result_set.size());
+        } else {
+            /*----- Create infinite global buffer (without `Pipeline`-callback) used as single result set. -----*/
+            GlobalBuffer result_set(schema, factory); // no callback to extract results all at once
+
+            /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `Limit`). -----*/
+            FUNCTION(child_pipeline, void(void))
+            {
+                auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+                child.execute([&](){ result_set.consume(); });
+            }
+            child_pipeline(); // call child function
+
+            /*----- Set number of result tuples. -----*/
+            CodeGenContext::Get().inc_num_tuples(result_set.size()); // not inside child function due to predication
+
             /*----- Extract all results at once. -----*/
-            Module::Get().emit_call<void>("read_result_set", result_set.base_address(), CodeGenContext::Get().num_tuples());
+            Module::Get().emit_call<void>("read_result_set", result_set.base_address(), result_set.size());
         }
     }
 }
@@ -120,7 +131,14 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
 
 void NoOp::execute(const Match<NoOp> &M, callback_t)
 {
-    M.child.execute([&](){ CodeGenContext::Get().inc_num_tuples(); });
+    M.child.execute([&](){
+        if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
+            U32 n = env.extract_predicate().is_true_and_not_null().to<uint32_t>();
+            CodeGenContext::Get().inc_num_tuples(n);
+        } else {
+            CodeGenContext::Get().inc_num_tuples();
+        }
+    });
 }
 
 
@@ -249,9 +267,13 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
 {
     auto execute_projection = [Pipeline=std::move(Pipeline), &M](){
         auto &old_env = CodeGenContext::Get().env();
-        Environment new_env; // fresh environment for projected values
+        Environment new_env; // fresh environment
 
-        /*----- Compute projected values. -----*/
+        /*----- If predication is used, move predicate to newly created environment. -----*/
+        if (old_env.predicated())
+            new_env.add_predicate(old_env.extract_predicate());
+
+        /*----- Add projections to newly created environment. -----*/
         std::vector<std::pair<Schema::Identifier, Schema::Identifier>> ids_to_add;
         M_insist(M.projection.projections().size() == M.projection.schema().num_entries(),
                  "projections must match the operator's schema");

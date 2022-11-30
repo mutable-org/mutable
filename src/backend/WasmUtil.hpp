@@ -121,8 +121,8 @@ struct Environment
     /** Discards the held expression of `expr`. */
     static void discard(SQL_t &expr) {
         std::visit(overloaded {
-            [](std::monostate) { },
             [](auto &e) { e.discard(); },
+            [](std::monostate) { M_unreachable("invalid variant"); },
         }, expr);
     }
 

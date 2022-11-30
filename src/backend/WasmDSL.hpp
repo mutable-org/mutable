@@ -1509,6 +1509,13 @@ struct PrimitiveExpr<T>
 
     PrimitiveExpr<bool> operator not() requires std::same_as<T, bool> { return unary<bool>(UNIOP_(EqZ,)); }
 
+    /*----- Hashing operations ---------------------------------------------------------------------------------------*/
+
+    PrimitiveExpr<uint64_t> hash() requires unsigned_integral<T> { return *this; }
+    PrimitiveExpr<uint64_t> hash() requires signed_integral<T> { return make_unsigned(); }
+    PrimitiveExpr<uint64_t> hash() requires std::floating_point<T> { return to<int64_t>().make_unsigned(); }
+    PrimitiveExpr<uint64_t> hash() requires std::same_as<T, bool> { return to<uint64_t>(); }
+
 #undef UNFOP_
 #undef UNIOP_
 #undef UNOP_
@@ -1965,6 +1972,13 @@ struct PrimitiveExpr<T>
 
 
     /*------------------------------------------------------------------------------------------------------------------
+     * Hashing operations
+     *----------------------------------------------------------------------------------------------------------------*/
+
+    PrimitiveExpr<uint64_t> hash() { return to<uint32_t>().hash(); }
+
+
+    /*------------------------------------------------------------------------------------------------------------------
      * Pointer operations
      *----------------------------------------------------------------------------------------------------------------*/
 
@@ -2371,6 +2385,10 @@ struct Expr<T>
     }
 UNARY_LIST(UNARY)
 #undef UNARY
+
+    /*----- Hashing operations with special three-valued logic -------------------------------------------------------*/
+
+    PrimitiveExpr<uint64_t> hash() { return Select(is_null_, PrimitiveExpr<uint64_t>(1UL << 63), value_.hash()); }
 
 
     /*------------------------------------------------------------------------------------------------------------------
@@ -2875,6 +2893,7 @@ struct Variable<T, Kind, CanBeNull>
     { return dependent_expr_type(*this).OP(); }
 
     UNARY_LIST(UNARY)
+    UNARY(hash)                     // from PrimitiveExpr and Expr
     UNARY(is_nullptr)               // from PrimitiveExpr for pointers
     UNARY(is_null)                  // from Expr
     UNARY(not_null)                 // from Expr

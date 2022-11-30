@@ -25,7 +25,7 @@ template<bool IsGlobal> struct buffer_swap_proxy_t;
  *====================================================================================================================*/
 
 template<typename>
-struct is_sql_type : std::false_type {};
+struct is_sql_type;
 
 #define SQL_TYPES(X) \
     X(_Bool) \
@@ -35,14 +35,14 @@ struct is_sql_type : std::false_type {};
     X(_I64) \
     X(_Float) \
     X(_Double) \
-    X(Ptr<Char>) \
+    X(Ptr<Char>)
 
-#define ADD_EXPR_SQL_TYPE(TYPE) template<> struct is_sql_type<TYPE> : std::true_type {};
+#define ADD_EXPR_SQL_TYPE(TYPE) template<> struct is_sql_type<TYPE>{};
 SQL_TYPES(ADD_EXPR_SQL_TYPE)
 #undef ADD_EXPR_SQL_TYPE
 
 template<typename T>
-static constexpr bool is_sql_type_v = is_sql_type<T>::value;
+concept sql_type = requires { is_sql_type<T>{}; };
 
 using SQL_t = std::variant<
     std::monostate
@@ -50,7 +50,6 @@ using SQL_t = std::variant<
     SQL_TYPES(ADD_TYPE)
 #undef ADD_TYPE
 >;
-#undef SQL_TYPES
 
 
 /*======================================================================================================================
@@ -76,8 +75,7 @@ struct ExprCompiler : ast::ConstASTExprVisitor
     }
 
     ///> Compile a `m::Expr` of statically known type to an `Expr<T>`.
-    template<typename T>
-    requires is_sql_type_v<T>
+    template<sql_type T>
     T compile(const m::ast::Expr &e) {
         (*this)(e);
         M_insist(std::holds_alternative<T>(intermediate_result_));
@@ -99,8 +97,7 @@ struct ExprCompiler : ast::ConstASTExprVisitor
 
     SQL_t get() { return std::move(intermediate_result_); }
 
-    template<typename T>
-    requires is_sql_type_v<T>
+    template<sql_type T>
     T get() {
         M_insist(std::holds_alternative<T>(intermediate_result_));
         return *std::get_if<T>(&intermediate_result_);
@@ -152,8 +149,7 @@ struct Environment
     bool empty() const { return exprs_.empty(); }
 
     ///> Adds a mapping from \p id to \p expr.
-    template<typename T>
-    requires is_sql_type_v<T>
+    template<sql_type T>
     void add(Schema::Identifier id, T &&expr) {
         auto res = exprs_.emplace(id, std::forward<T>(expr));
         M_insist(res.second, "duplicate ID");
@@ -187,8 +183,7 @@ struct Environment
         return std::move(nh.mapped());
     }
     ///> Returns the **moved** entry for identifier \p id.
-    template<typename T>
-    requires is_sql_type_v<T>
+    template<sql_type T>
     T extract(Schema::Identifier id) {
         auto it = exprs_.find(id);
         M_insist(it != exprs_.end(), "identifier not found");
@@ -207,8 +202,7 @@ struct Environment
         }, it->second);
     }
     ///> Returns the **copied** entry for identifier \p id.
-    template<typename T>
-    requires is_sql_type_v<T>
+    template<sql_type T>
     T get(Schema::Identifier id) const {
         auto it = exprs_.find(id);
         M_insist(it != exprs_.end(), "identifier not found");

@@ -1,6 +1,7 @@
 #include "backend/WasmAlgo.hpp"
 
-#include "backend/WasmMacro.hpp"
+#include <numeric>
+
 
 using namespace m;
 using namespace m::wasm;
@@ -279,4 +280,825 @@ U64 m::wasm::murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> values)
     m.discard(); // since it was always cloned
 
     return murmur3_bit_mix(h);
+}
+
+
+/*----- hash tables --------------------------------------------------------------------------------------------------*/
+
+std::pair<HashTable::size_t, HashTable::size_t>
+HashTable::set_byte_offsets(std::vector<HashTable::offset_t> &offsets_in_bytes, const std::vector<const Type*> &types,
+                            HashTable::offset_t initial_offset_in_bytes,
+                            HashTable::offset_t initial_max_alignment_in_bytes)
+{
+    /*----- Collect all indices. -----*/
+    std::size_t indices[types.size()];
+    std::iota(indices, indices + types.size(), 0);
+
+    /*----- Sort indices by alignment. -----*/
+    std::stable_sort(indices, indices + types.size(), [&](std::size_t left, std::size_t right) {
+        return types[left]->alignment() > types[right]->alignment();
+    });
+
+    /*----- Compute offsets. -----*/
+    offsets_in_bytes.resize(types.size());
+    HashTable::offset_t current_offset_in_bytes = initial_offset_in_bytes;
+    HashTable::offset_t max_alignment_in_bytes = initial_max_alignment_in_bytes;
+    for (std::size_t idx = 0; idx != types.size(); ++idx) {
+        const auto sorted_idx = indices[idx];
+        offsets_in_bytes[sorted_idx] = current_offset_in_bytes;
+        current_offset_in_bytes += (types[sorted_idx]->size() + 7) / 8;
+        max_alignment_in_bytes =
+            std::max<HashTable::offset_t>(max_alignment_in_bytes, (types[sorted_idx]->alignment() + 7) / 8);
+    }
+
+    /*----- Compute entry size with padding. -----*/
+    if (const auto rem = current_offset_in_bytes % max_alignment_in_bytes; rem)
+        current_offset_in_bytes += max_alignment_in_bytes - rem;
+    return { current_offset_in_bytes, max_alignment_in_bytes };
+}
+
+
+/*----- open addressing hash tables ----------------------------------------------------------------------------------*/
+
+void OpenAddressingHashTableBase::clear()
+{
+    Var<Ptr<void>> it(begin());
+    WHILE (it != end()) {
+        Wasm_insist(begin() <= it and it < end(), "entry out-of-bounds");
+        reference_count(it) = ref_t(0);
+        it += int32_t(entry_size_in_bytes_);
+    }
+}
+
+Ptr<void> OpenAddressingHashTableBase::hash_to_bucket(std::vector<SQL_t> key) const
+{
+    M_insist(key.size() == key_indices_.size(),
+             "provided number of key elements does not match hash table's number of key indices");
+
+    /*----- Collect types of key together with the respective value. -----*/
+    std::vector<std::pair<const Type*, SQL_t>> values;
+    values.reserve(key_indices_.size());
+    auto key_it = key.begin();
+    for (auto k : key_indices_)
+        values.emplace_back(schema_.get()[k].type, std::move(*key_it++));
+
+    /*----- Compute hash of key using Murmur3_64a. -----*/
+    U64 hash = murmur3_64a_hash(std::move(values));
+
+    /*----- Compute bucket address. -----*/
+    U32 bucket_idx = hash.to<uint32_t>() bitand (capacity() - 1U); // modulo capacity_
+    return begin() + (bucket_idx * entry_size_in_bytes_).make_signed();
+}
+
+template<bool IsGlobal, bool ValueInPlace>
+OpenAddressingHashTable<IsGlobal, ValueInPlace>::OpenAddressingHashTable(const Schema &schema,
+                                                                         std::vector<HashTable::index_t> key_indices,
+                                                                         uint32_t initial_capacity)
+    : OpenAddressingHashTableBase(schema, std::move(key_indices))
+    , capacity_(ceil_to_pow_2(initial_capacity))
+    , high_watermark_absolute_(ceil_to_pow_2(initial_capacity) - 1U) // at least one entry must always be unoccupied
+{
+    std::vector<const Type*> types;
+    bool has_nullable = false;
+
+    /*----- Add reference counter. -----*/
+    types.push_back(Type::Get_Integer(Type::TY_Vector, sizeof(ref_t)));
+
+    /*----- Add key types. -----*/
+    for (auto k : key_indices_) {
+        types.push_back(schema[k].type);
+        has_nullable |= schema[k].nullable();
+    }
+
+    if constexpr (ValueInPlace) {
+        /*----- Add value types. -----*/
+        for (auto v : value_indices_) {
+            types.push_back(schema[v].type);
+            has_nullable |= schema[v].nullable();
+        }
+
+        if (has_nullable) {
+            /*----- Add type for NULL bitmap. Reference counter cannot be NULL. -----*/
+            types.push_back(Type::Get_Bitmap(Type::TY_Vector, types.size() - 1));
+        }
+
+        /*----- Compute entry offsets and set entry size and alignment requirement. -----*/
+        std::vector<HashTable::offset_t> offsets;
+        std::tie(entry_size_in_bytes_, entry_max_alignment_in_bytes_) = set_byte_offsets(offsets, types);
+
+        /*----- Set offset for reference counter. -----*/
+        refs_offset_in_bytes_ = offsets.front();
+
+        if (has_nullable) {
+            /*----- Set offset for NULL bitmap and remove it from `offsets`. -----*/
+            storage_.null_bitmap_offset_in_bytes_ = offsets.back();
+            offsets.pop_back();
+        }
+
+        /*----- Set entry offset. Exclude offset for reference counter. -----*/
+        storage_.entry_offsets_in_bytes_ = std::vector<HashTable::offset_t>(std::next(offsets.begin()), offsets.end());
+    } else {
+        /*----- Add type for pointer to out-of-place values. -----*/
+        types.push_back(Type::Get_Integer(Type::TY_Vector, 4));
+
+        if (has_nullable) {
+            /*----- Add type for keys NULL bitmap. Reference counter and pointer to values cannot be NULL. -----*/
+            types.push_back(Type::Get_Bitmap(Type::TY_Vector, types.size() - 2));
+        }
+
+        /*----- Compute entry offsets and set entry size and alignment requirement. -----*/
+        std::vector<HashTable::offset_t> offsets;
+        std::tie(entry_size_in_bytes_, entry_max_alignment_in_bytes_) = set_byte_offsets(offsets, types);
+
+        /*----- Set offset for reference counter. -----*/
+        refs_offset_in_bytes_ = offsets.front();
+
+        if (has_nullable) {
+            /*----- Set offset for keys NULL bitmap and remove it from `offsets`. -----*/
+            storage_.keys_null_bitmap_offset_in_bytes_ = offsets.back();
+            offsets.pop_back();
+        }
+
+        /*----- Set offset for pointer to out-of-place values and key offsets. Exclude offset for reference counter. -*/
+        storage_.ptr_offset_in_bytes_ = offsets.back();
+        storage_.key_offsets_in_bytes_ =
+            std::vector<HashTable::offset_t>(std::next(offsets.begin()), std::prev(offsets.end()));
+
+        /*----- Add value types. -----*/
+        types.clear();
+        has_nullable = false;
+        for (auto v : value_indices_) {
+            types.push_back(schema[v].type);
+            has_nullable |= schema[v].nullable();
+        }
+
+        if (has_nullable) {
+            /*----- Add type for values NULL bitmap. -----*/
+            types.push_back(Type::Get_Bitmap(Type::TY_Vector, types.size()));
+
+            /*----- Compute out-of-place entry offsets and set entry size and alignment requirement. -----*/
+            offsets.clear();
+            std::tie(storage_.values_size_in_bytes_, storage_.values_max_alignment_in_bytes_) =
+                set_byte_offsets(offsets, types);
+
+            /*----- Set offset for values NULL bitmap and value offsets. -----*/
+            storage_.values_null_bitmap_offset_in_bytes_ = offsets.back();
+            storage_.value_offsets_in_bytes_ =
+                std::vector<HashTable::offset_t>(offsets.begin(), std::prev(offsets.end()));
+        } else {
+            /*----- Set value offsets, size, and alignment requirement. -----*/
+            std::tie(storage_.values_size_in_bytes_, storage_.values_max_alignment_in_bytes_) =
+                set_byte_offsets(storage_.value_offsets_in_bytes_, types);
+        }
+    }
+
+    /*----- Allocate memory for initial capacity. -----*/
+    address_ = Module::Allocator().allocate(size_in_bytes(), entry_max_alignment_in_bytes_);
+
+    /*----- Clear initial hash table. -----*/
+    clear();
+}
+
+template<bool IsGlobal, bool ValueInPlace>
+OpenAddressingHashTable<IsGlobal, ValueInPlace>::~OpenAddressingHashTable()
+{
+    if constexpr (not ValueInPlace) {
+        /*----- Free out-of-place values. -----*/
+        Var<Ptr<void>> it(begin());
+        WHILE (it != end()) {
+            Wasm_insist(begin() <= it and it < end(), "entry out-of-bounds");
+            IF (reference_count(it) != ref_t(0)) { // occupied
+                Module::Allocator().deallocate(Ptr<void>(*(it + storage_.ptr_offset_in_bytes_).template to<uint32_t*>()),
+                                               storage_.values_size_in_bytes_);
+            };
+            it += int32_t(entry_size_in_bytes_);
+        }
+    }
+
+    /*----- Free all entries. -----*/
+    Module::Allocator().deallocate(address_, size_in_bytes());
+
+    /*----- Free dummy entries. -----*/
+    for (auto it = dummy_allocations_.rbegin(); it != dummy_allocations_.rend(); ++it)
+        Module::Allocator().deallocate(it->first, it->second);
+}
+
+template<bool IsGlobal, bool ValueInPlace>
+HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace(std::vector<SQL_t> key)
+{
+    /*----- If high watermark is reached, perform rehashing and update high watermark. -----*/
+    IF (num_entries_ == high_watermark_absolute_) {
+        rehash();
+        update_high_watermark();
+    };
+
+    return emplace_without_rehashing(std::move(key));
+}
+
+template<bool IsGlobal, bool ValueInPlace>
+HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace_without_rehashing(std::vector<SQL_t> key)
+{
+    Wasm_insist(num_entries_ < high_watermark_absolute_);
+
+    /*----- Compute bucket address by hashing the key. Create constant variable to do not recompute the hash. -----*/
+    const Var<Ptr<void>> bucket(hash_to_bucket(clone(key))); // clone key since we need it again for insertion
+
+    /*----- Get reference count, i.e. occupied slots, of this bucket. -----*/
+    Var<PrimitiveExpr<ref_t>> refs(reference_count(bucket));
+
+    /*----- Skip slots which are occupied anyway. -----*/
+    Ptr<void> _slot = probing_strategy().skip_slots(bucket, refs);
+    Wasm_insist(begin() <= _slot.clone() and _slot.clone() < end(), "slot out-of-bounds");
+    Var<Ptr<void>> slot(_slot);
+
+    /*----- Search first unoccupied slot. -----*/
+    WHILE (reference_count(slot) != ref_t(0)) {
+        slot = probing_strategy().advance_to_next_slot(slot, refs);
+        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
+        refs += ref_t(1);
+        Wasm_insist(refs <= num_entries_, "probing strategy has to find unoccupied slot if there is one");
+    }
+
+    /*----- Update reference count of this bucket. -----*/
+    reference_count(bucket) = refs + ref_t(1);
+
+    /*----- Set slot as occupied. -----*/
+    reference_count(slot) = ref_t(1);
+
+    /*----- Update number of entries. -----*/
+    num_entries_ += 1U;
+    Wasm_insist(num_entries_ < capacity_, "at least one entry must always be unoccupied for lookups");
+
+    /*----- Insert key. -----*/
+    insert_key(slot, std::move(key));
+
+    if constexpr (ValueInPlace) {
+        /*----- Return entry handle containing all values. -----*/
+        return value_entry(slot);
+    } else {
+        /*----- Allocate memory for out-of-place values and set pointer to it. -----*/
+        Ptr<void> ptr =
+            Module::Allocator().allocate(storage_.values_size_in_bytes_, storage_.values_max_alignment_in_bytes_);
+        *(slot + storage_.ptr_offset_in_bytes_).template to<uint32_t*>() = ptr.clone().to<uint32_t>();
+
+        /*----- Return entry handle containing all values. -----*/
+        return value_entry(ptr);
+    }
+}
+
+template<bool IsGlobal, bool ValueInPlace>
+std::pair<HashTable::entry_t, Bool>
+OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> key)
+{
+    /*----- If high watermark is reached, perform rehashing and update high watermark. -----*/
+    IF (num_entries_ == high_watermark_absolute_) {
+        rehash();
+        update_high_watermark();
+    };
+    Wasm_insist(num_entries_ < high_watermark_absolute_);
+
+    /*----- Compute bucket address by hashing the key. Create constant variable to do not recompute the hash. -----*/
+    const Var<Ptr<void>> bucket(hash_to_bucket(clone(key))); // clone key since we need it again for insertion
+
+    /*----- Set reference count, i.e. occupied slots, of this bucket to its initial value. -----*/
+    Var<PrimitiveExpr<ref_t>> refs(0);
+
+    /*----- Search first unoccupied slot but abort if key already exists. -----*/
+    Var<Ptr<void>> slot(bucket.val());
+    WHILE (reference_count(slot) != ref_t(0)) {
+        BREAK(equal_key(slot, clone(key))); // clone key (see above)
+        slot = probing_strategy().advance_to_next_slot(slot, refs);
+        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
+        refs += ref_t(1);
+        Wasm_insist(refs <= num_entries_, "probing strategy has to find unoccupied slot if there is one");
+    }
+
+    /*----- If unoccupied slot is found, i.e. key does not already exist, insert entry for it. -----*/
+    const Var<Bool> slot_unoccupied(reference_count(slot) == ref_t(0)); // create constant variable since `slot` may change
+    IF (slot_unoccupied) {
+        /*----- Update reference count of this bucket. -----*/
+        Wasm_insist(reference_count(bucket) <= refs, "reference count must increase if unoccupied slot is found");
+        reference_count(bucket) = refs + ref_t(1);
+
+        /*----- Set slot as occupied. -----*/
+        reference_count(slot) = ref_t(1);
+
+        /*----- Update number of entries. -----*/
+        num_entries_ += 1U;
+        Wasm_insist(num_entries_ < capacity_, "at least one entry must always be unoccupied for lookups");
+
+        /*----- Insert key. -----*/
+        insert_key(slot, std::move(key));
+
+        if constexpr (not ValueInPlace) {
+            /*----- Allocate memory for out-of-place values and set pointer to it. -----*/
+            Ptr<void> ptr =
+                Module::Allocator().allocate(storage_.values_size_in_bytes_, storage_.values_max_alignment_in_bytes_);
+            *(slot + storage_.ptr_offset_in_bytes_).template to<uint32_t*>() = ptr.to<uint32_t>();
+        }
+    };
+
+    if constexpr (not ValueInPlace) {
+        /*----- Set slot pointer to out-of-place values. -----*/
+        slot = *(slot + storage_.ptr_offset_in_bytes_).template to<uint32_t*>();
+    }
+
+    /*----- Return entry handle containing all values and the flag whether an insertion was performed. -----*/
+    return { value_entry(slot), slot_unoccupied };
+}
+
+template<bool IsGlobal, bool ValueInPlace>
+std::pair<HashTable::const_entry_t, Bool>
+OpenAddressingHashTable<IsGlobal, ValueInPlace>::find(std::vector<SQL_t> key) const
+{
+    /*----- Compute bucket address by hashing the key. -----*/
+    Ptr<void> bucket = hash_to_bucket(clone(key)); // clone key since we need it again for comparison
+
+    /*----- Search first slot with the given key but abort if an unoccupied slot is found. -----*/
+    Var<Ptr<void>> slot(bucket);
+    Var<PrimitiveExpr<ref_t>> steps(0);
+    WHILE (reference_count(slot) != ref_t(0)) {
+        BREAK(equal_key(slot, std::move(key)));
+        slot = probing_strategy().advance_to_next_slot(slot, steps);
+        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
+        steps += ref_t(1);
+        Wasm_insist(steps <= num_entries_, "probing strategy has to find unoccupied slot if there is one");
+    }
+
+    /*----- Key is found iff current slot is occupied. -----*/
+    Bool key_found = reference_count(slot) != ref_t(0);
+
+    /*----- Return entry handle containing both keys and values and the flag whether key was found. -----*/
+    return { entry(slot), key_found };
+}
+
+template<bool IsGlobal, bool ValueInPlace>
+void OpenAddressingHashTable<IsGlobal, ValueInPlace>::for_each(callback_t Pipeline) const
+{
+    /*----- Iterate over all entries and call pipeline (with entry handle argument) on occupied ones. -----*/
+    Var<Ptr<void>> it(begin());
+    WHILE (it != end()) {
+        Wasm_insist(begin() <= it and it < end(), "entry out-of-bounds");
+        IF (reference_count(it) != ref_t(0)) { // occupied
+            Pipeline(entry(it));
+        };
+        it += int32_t(entry_size_in_bytes_);
+    }
+}
+
+template<bool IsGlobal, bool ValueInPlace>
+void OpenAddressingHashTable<IsGlobal, ValueInPlace>::for_each_in_equal_range(std::vector<SQL_t> key,
+                                                                              callback_t Pipeline) const
+{
+    /*----- Compute bucket address by hashing the key. -----*/
+    Ptr<void> bucket = hash_to_bucket(clone(key)); // clone key since we need it again for comparison
+
+    /*----- Iterate over slots and call pipeline (with entry handle argument) on matches with the given key. -----*/
+    Var<Ptr<void>> slot(bucket);
+    Var<PrimitiveExpr<ref_t>> steps(0);
+    WHILE (reference_count(slot) != ref_t(0)) {
+        IF (equal_key(slot, std::move(key))) { // match found
+            Pipeline(entry(slot));
+        };
+        slot = probing_strategy().advance_to_next_slot(slot, steps);
+        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
+        steps += ref_t(1);
+        Wasm_insist(steps <= num_entries_, "probing strategy has to find unoccupied slot if there is one");
+    }
+}
+
+template<bool IsGlobal, bool ValueInPlace>
+HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::dummy_entry()
+{
+    if constexpr (ValueInPlace) {
+        /*----- Allocate memory for a dummy slot. -----*/
+        var_t<Ptr<void>> slot; // create global variable iff `IsGlobal` to be able to access it later for deallocation
+        slot = Module::Allocator().allocate(entry_size_in_bytes_, entry_max_alignment_in_bytes_);
+
+        /*----- Store address and size of dummy slot to free them later. -----*/
+        dummy_allocations_.emplace_back(slot, entry_size_in_bytes_);
+
+        /*----- Return entry handle containing all values. -----*/
+        return value_entry(slot);
+    } else {
+        /*----- Allocate memory for out-of-place dummy values. -----*/
+        var_t<Ptr<void>> ptr; // create global variable iff `IsGlobal` to be able to access it later for deallocation
+        ptr = Module::Allocator().allocate(storage_.values_size_in_bytes_, storage_.values_max_alignment_in_bytes_);
+
+        /*----- Store address and size of dummy values to free them later. -----*/
+        dummy_allocations_.emplace_back(ptr, storage_.values_size_in_bytes_);
+
+        /*----- Return entry handle containing all values. -----*/
+        return value_entry(ptr);
+    }
+}
+
+template<bool IsGlobal, bool ValueInPlace>
+Bool OpenAddressingHashTable<IsGlobal, ValueInPlace>::equal_key(Ptr<void> slot, std::vector<SQL_t> key) const
+{
+    Var<Bool> res(true);
+
+    const auto off_null_bitmap = M_CONSTEXPR_COND(ValueInPlace, storage_.null_bitmap_offset_in_bytes_,
+                                                                storage_.keys_null_bitmap_offset_in_bytes_);
+    for (std::size_t i = 0; i < key_indices_.size(); ++i) {
+        auto &e = schema_.get()[key_indices_[i]];
+        const auto off = M_CONSTEXPR_COND(ValueInPlace, storage_.entry_offsets_in_bytes_[i],
+                                                        storage_.key_offsets_in_bytes_[i]);
+        auto compare_equal = [&]<typename T>() {
+            using type = typename T::type;
+            M_insist(std::holds_alternative<T>(key[i]));
+            if (e.nullable()) { // entry may be NULL
+                const_reference_t<T> ref((slot.clone() + off).template to<type*>(), slot.clone() + off_null_bitmap, i);
+                res = res and ref == *std::get_if<T>(&key[i]);
+            } else { // entry must not be NULL
+                const_reference_t<T> ref((slot.clone() + off).template to<type*>());
+                res = res and ref == *std::get_if<T>(&key[i]);
+            }
+        };
+        visit(overloaded {
+            [&](const Boolean&) { compare_equal.template operator()<_Bool>(); },
+            [&](const Numeric &n) {
+                switch (n.kind) {
+                    case Numeric::N_Int:
+                    case Numeric::N_Decimal:
+                        switch (n.size()) {
+                            default: M_unreachable("invalid size");
+                            case  8: compare_equal.template operator()<_I8 >(); break;
+                            case 16: compare_equal.template operator()<_I16>(); break;
+                            case 32: compare_equal.template operator()<_I32>(); break;
+                            case 64: compare_equal.template operator()<_I64>(); break;
+                        }
+                        break;
+                    case Numeric::N_Float:
+                        if (n.size() <= 32)
+                            compare_equal.template operator()<_Float>();
+                        else
+                            compare_equal.template operator()<_Double>();
+                }
+            },
+            [&](const CharacterSequence &cs) {
+                M_insist(std::holds_alternative<Ptr<Char>>(key[i]));
+                if (e.nullable()) { // entry may be NULL
+                    const_reference_t<Ptr<Char>> ref((slot.clone() + off).template to<char*>(), cs.size() / 8,
+                                                     slot.clone() + off_null_bitmap, i);
+                    res = res and ref == *std::get_if<Ptr<Char>>(&key[i]);
+                } else { // entry must not be NULL
+                    const_reference_t<Ptr<Char>> ref((slot.clone() + off).template to<char*>(), cs.size() / 8);
+                    res = res and ref == *std::get_if<Ptr<Char>>(&key[i]);
+                }
+            },
+            [&](const Date&) { compare_equal.template operator()<_I32>(); },
+            [&](const DateTime&) { compare_equal.template operator()<_I64>(); },
+            [](auto&&) { M_unreachable("invalid type"); },
+        }, *e.type);
+    }
+
+    slot.discard(); // since it was always cloned
+
+    return res;
+}
+
+template<bool IsGlobal, bool ValueInPlace>
+void OpenAddressingHashTable<IsGlobal, ValueInPlace>::insert_key(Ptr<void> slot, std::vector<SQL_t> key)
+{
+    const auto off_null_bitmap = M_CONSTEXPR_COND(ValueInPlace, storage_.null_bitmap_offset_in_bytes_,
+                                                                storage_.keys_null_bitmap_offset_in_bytes_);
+    for (std::size_t i = 0; i < key_indices_.size(); ++i) {
+        auto &e = schema_.get()[key_indices_[i]];
+        const auto off = M_CONSTEXPR_COND(ValueInPlace, storage_.entry_offsets_in_bytes_[i],
+                                                        storage_.key_offsets_in_bytes_[i]);
+        auto insert = [&]<typename T>() {
+            using type = typename T::type;
+            M_insist(std::holds_alternative<T>(key[i]));
+            if (e.nullable()) { // entry may be NULL
+                reference_t<T> ref((slot.clone() + off).template to<type*>(), slot.clone() + off_null_bitmap, i);
+                ref = *std::get_if<T>(&key[i]);
+            } else { // entry must not be NULL
+                reference_t<T> ref((slot.clone() + off).template to<type*>());
+                ref = *std::get_if<T>(&key[i]);
+            }
+        };
+        visit(overloaded {
+            [&](const Boolean&) { insert.template operator()<_Bool>(); },
+            [&](const Numeric &n) {
+                switch (n.kind) {
+                    case Numeric::N_Int:
+                    case Numeric::N_Decimal:
+                        switch (n.size()) {
+                            default: M_unreachable("invalid size");
+                            case  8: insert.template operator()<_I8 >(); break;
+                            case 16: insert.template operator()<_I16>(); break;
+                            case 32: insert.template operator()<_I32>(); break;
+                            case 64: insert.template operator()<_I64>(); break;
+                        }
+                        break;
+                    case Numeric::N_Float:
+                        if (n.size() <= 32)
+                            insert.template operator()<_Float>();
+                        else
+                            insert.template operator()<_Double>();
+                }
+            },
+            [&](const CharacterSequence &cs) {
+                M_insist(std::holds_alternative<Ptr<Char>>(key[i]));
+                if (e.nullable()) { // entry may be NULL
+                    reference_t<Ptr<Char>> ref((slot.clone() + off).template to<char*>(), cs.size() / 8,
+                                               slot.clone() + off_null_bitmap, i);
+                    ref = *std::get_if<Ptr<Char>>(&key[i]);
+                } else { // entry must not be NULL
+                    reference_t<Ptr<Char>> ref((slot.clone() + off).template to<char*>(), cs.size() / 8);
+                    ref = *std::get_if<Ptr<Char>>(&key[i]);
+                }
+            },
+            [&](const Date&) { insert.template operator()<_I32>(); },
+            [&](const DateTime&) { insert.template operator()<_I64>(); },
+            [](auto&&) { M_unreachable("invalid type"); },
+        }, *e.type);
+    }
+
+    slot.discard(); // since it was always cloned
+}
+
+template<bool IsGlobal, bool ValueInPlace>
+HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::value_entry(Ptr<void> ptr) const
+{
+    entry_t value_entry;
+
+    const auto off_null_bitmap = M_CONSTEXPR_COND(ValueInPlace, storage_.null_bitmap_offset_in_bytes_,
+                                                                storage_.values_null_bitmap_offset_in_bytes_);
+    for (std::size_t i = 0; i < value_indices_.size(); ++i) {
+        auto &e = schema_.get()[value_indices_[i]];
+        const auto off = M_CONSTEXPR_COND(ValueInPlace, storage_.entry_offsets_in_bytes_[i + key_indices_.size()],
+                                                        storage_.value_offsets_in_bytes_[i]);
+        auto add = [&]<typename T>() {
+            using type = typename T::type;
+            if (e.nullable()) { // entry may be NULL
+                const auto off_null_bit = M_CONSTEXPR_COND(ValueInPlace, i + key_indices_.size(), i);
+                reference_t<T> ref((ptr.clone() + off).template to<type*>(), ptr.clone() + off_null_bitmap, off_null_bit);
+                value_entry.add(e.id, std::move(ref));
+            } else { // entry must not be NULL
+                reference_t<T> ref((ptr.clone() + off).template to<type*>());
+                value_entry.add(e.id, std::move(ref));
+            }
+        };
+        visit(overloaded {
+            [&](const Boolean&) { add.template operator()<_Bool>(); },
+            [&](const Numeric &n) {
+                switch (n.kind) {
+                    case Numeric::N_Int:
+                    case Numeric::N_Decimal:
+                        switch (n.size()) {
+                            default: M_unreachable("invalid size");
+                            case  8: add.template operator()<_I8 >(); break;
+                            case 16: add.template operator()<_I16>(); break;
+                            case 32: add.template operator()<_I32>(); break;
+                            case 64: add.template operator()<_I64>(); break;
+                        }
+                        break;
+                    case Numeric::N_Float:
+                        if (n.size() <= 32)
+                            add.template operator()<_Float>();
+                        else
+                            add.template operator()<_Double>();
+                }
+            },
+            [&](const CharacterSequence &cs) {
+                if (e.nullable()) { // entry may be NULL
+                    const auto off_null_bit = M_CONSTEXPR_COND(ValueInPlace, i + key_indices_.size(), i);
+                    reference_t<Ptr<Char>> ref((ptr.clone() + off).template to<char*>(), cs.size() / 8,
+                                               ptr.clone() + off_null_bitmap, off_null_bit);
+                    value_entry.add(e.id, std::move(ref));
+                } else { // entry must not be NULL
+                    reference_t<Ptr<Char>> ref((ptr.clone() + off).template to<char*>(), cs.size() / 8);
+                    value_entry.add(e.id, std::move(ref));
+                }
+            },
+            [&](const Date&) { add.template operator()<_I32>(); },
+            [&](const DateTime&) { add.template operator()<_I64>(); },
+            [](auto&&) { M_unreachable("invalid type"); },
+        }, *e.type);
+    }
+
+    ptr.discard(); // since it was always cloned
+
+    return value_entry;
+}
+
+template<bool IsGlobal, bool ValueInPlace>
+HashTable::const_entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::entry(Ptr<void> slot) const
+{
+    const_entry_t entry;
+
+    std::unique_ptr<Ptr<void>> value; ///< pointer to out-of-place values
+    if constexpr (not ValueInPlace) {
+        const Var<Ptr<void>> value_(*(slot.clone() + storage_.ptr_offset_in_bytes_).template to<uint32_t*>());
+        value = std::make_unique<Ptr<void>>(value_);
+    }
+
+    auto ptr = &slot;
+    auto off_null_bitmap = M_CONSTEXPR_COND(ValueInPlace, storage_.null_bitmap_offset_in_bytes_,
+                                                          storage_.keys_null_bitmap_offset_in_bytes_);
+    for (std::size_t i = 0; i < schema_.get().num_entries(); ++i) {
+        if constexpr (not ValueInPlace) {
+            if (i == key_indices_.size()) {
+                /* If end of key is reached, switch variables to out-of-place value entries. */
+                M_insist(bool(value));
+                ptr = &*value;
+                off_null_bitmap = storage_.values_null_bitmap_offset_in_bytes_;
+            }
+        }
+
+        auto &e = schema_.get()[i < key_indices_.size() ? key_indices_[i] : value_indices_[i - key_indices_.size()]];
+        const auto off =
+            M_CONSTEXPR_COND(ValueInPlace,
+                             storage_.entry_offsets_in_bytes_[i],
+                             i < key_indices_.size() ? storage_.key_offsets_in_bytes_[i]
+                                                     : storage_.value_offsets_in_bytes_[i - key_indices_.size()]);
+        auto add = [&]<typename T>() {
+            using type = typename T::type;
+            if (e.nullable()) { // entry may be NULL
+                const auto off_null_bit =
+                    M_CONSTEXPR_COND(ValueInPlace, i, i < key_indices_.size() ? i : i - key_indices_.size());
+                const_reference_t<T> ref((ptr->clone() + off).template to<type*>(), ptr->clone() + off_null_bitmap,
+                                         off_null_bit);
+                entry.add(e.id, std::move(ref));
+            } else { // entry must not be NULL
+                const_reference_t<T> ref((ptr->clone() + off).template to<type*>());
+                entry.add(e.id, std::move(ref));
+            }
+        };
+        visit(overloaded {
+            [&](const Boolean&) { add.template operator()<_Bool>(); },
+            [&](const Numeric &n) {
+                switch (n.kind) {
+                    case Numeric::N_Int:
+                    case Numeric::N_Decimal:
+                        switch (n.size()) {
+                            default: M_unreachable("invalid size");
+                            case  8: add.template operator()<_I8 >(); break;
+                            case 16: add.template operator()<_I16>(); break;
+                            case 32: add.template operator()<_I32>(); break;
+                            case 64: add.template operator()<_I64>(); break;
+                        }
+                        break;
+                    case Numeric::N_Float:
+                        if (n.size() <= 32)
+                            add.template operator()<_Float>();
+                        else
+                            add.template operator()<_Double>();
+                }
+            },
+            [&](const CharacterSequence &cs) {
+                if (e.nullable()) { // entry may be NULL
+                    auto off_null_bit =
+                        M_CONSTEXPR_COND(ValueInPlace, i, i < key_indices_.size() ? i : i - key_indices_.size());
+                    const_reference_t<Ptr<Char>> ref((ptr->clone() + off).template to<char*>(), cs.size() / 8,
+                                                     ptr->clone() + off_null_bitmap, off_null_bit);
+                    entry.add(e.id, std::move(ref));
+                } else { // entry must not be NULL
+                    const_reference_t<Ptr<Char>> ref((ptr->clone() + off).template to<char*>(), cs.size() / 8);
+                    entry.add(e.id, std::move(ref));
+                }
+            },
+            [&](const Date&) { add.template operator()<_I32>(); },
+            [&](const DateTime&) { add.template operator()<_I64>(); },
+            [](auto&&) { M_unreachable("invalid type"); },
+        }, *e.type);
+    }
+
+    slot.discard(); // since it was always cloned
+    if (value) value->discard(); // since it was always cloned
+
+    return entry;
+}
+
+template<bool IsGlobal, bool ValueInPlace>
+void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
+{
+    auto emit_rehash = [this](){
+        /*----- Store old begin and end (since they will be overwritten). -----*/
+        const Var<Ptr<void>> begin_old(begin());
+        const Var<Ptr<void>> end_old(end());
+
+        /*----- Double capacity. -----*/
+        capacity_ <<= 1U;
+
+        /*----- Allocate memory for new hash table with updated capacity. -----*/
+        address_ = Module::Allocator().allocate(size_in_bytes(), entry_max_alignment_in_bytes_);
+
+        /*----- Clear newly created hash table. -----*/
+        clear();
+
+#ifndef NDEBUG
+        /*----- Store old number of entries. -----*/
+        const Var<U32> num_entries_old(num_entries_);
+#endif
+
+        /*----- Reset number of entries (since they will be incremented at each insertion into the new hash table). --*/
+        num_entries_ = 0U;
+
+        /*----- Insert each element from old hash table into new one. -----*/
+        Var<Ptr<void>> it(begin_old.val());
+        WHILE (it != end_old) {
+            Wasm_insist(begin_old <= it and it < end_old, "entry out-of-bounds");
+            IF (reference_count(it) != ref_t(0)) { // entry in old hash table is occupied
+                auto e_old = entry(it);
+
+                /*----- Access key from old entry. -----*/
+                std::vector<SQL_t> key;
+                for (auto k : key_indices_) {
+                    std::visit(overloaded {
+                        [&](auto &&r) -> void { key.emplace_back(r); },
+                        [](std::monostate) -> void { M_unreachable("invalid reference"); },
+                    }, e_old.extract(schema_.get()[k].id));
+                }
+
+                /*----- Insert key into new hash table. No rehashing needed since the new hash table is large enough. */
+                auto e_new = emplace_without_rehashing(std::move(key));
+
+                /*----- Insert values from old entry into new one. -----*/
+                for (auto v : value_indices_) {
+                    auto id = schema_.get()[v].id;
+                    std::visit(overloaded {
+                        [&]<sql_type T>(reference_t<T> &&r) -> void { r = e_old.template extract<T>(id); },
+                        [](std::monostate) -> void { M_unreachable("invalid reference"); },
+                    }, e_new.extract(id));
+                }
+                M_insist(e_old.empty());
+                M_insist(e_new.empty());
+            };
+
+            /*----- Advance to next entry in old hash table. -----*/
+            it += int32_t(entry_size_in_bytes_);
+        }
+
+#ifndef NDEBUG
+        Wasm_insist(num_entries_ == num_entries_old, "number of entries of old and new hash table do not match");
+#endif
+
+        /*----- Free old hash table. -----*/
+        U32 size = (end_old - begin_old).make_unsigned();
+        Module::Allocator().deallocate(begin_old, size);
+    };
+
+    if constexpr (IsGlobal) {
+        if (not rehash_) {
+            /*----- Create function for rehashing. -----*/
+            FUNCTION(rehash, void(void))
+            {
+                emit_rehash();
+            }
+            rehash_ = std::move(rehash);
+        }
+
+        /*----- Call rehashing function. ------*/
+        M_insist(bool(rehash_));
+        (*rehash_)();
+    } else {
+        /*----- Emit rehashing code. ------*/
+        emit_rehash();
+    }
+}
+
+// explicit instantiations to prevent linker errors
+template struct m::wasm::OpenAddressingHashTable<false, false>;
+template struct m::wasm::OpenAddressingHashTable<false, true>;
+template struct m::wasm::OpenAddressingHashTable<true, false>;
+template struct m::wasm::OpenAddressingHashTable<true, true>;
+
+
+/*----- probing strategies for open addressing hash tables -----------------------------------------------------------*/
+
+Ptr<void> LinearProbing::skip_slots(Ptr<void> bucket, U32 skips) const
+{
+    U32 skips_floored = skips bitand (ht_.capacity() - 1U); // modulo capacity
+    const Var<Ptr<void>> slot(bucket + (skips_floored * ht_.entry_size_in_bytes()).make_signed());
+    Wasm_insist(slot < ht_.end() + ht_.size_in_bytes().make_signed());
+    return Select(slot < ht_.end(), slot, slot - ht_.size_in_bytes().make_signed());
+}
+
+Ptr<void> LinearProbing::advance_to_next_slot(Ptr<void> slot, U32 current_step) const
+{
+    current_step.discard(); // not needed for linear probing
+
+    const Var<Ptr<void>> next(slot + ht_.entry_size_in_bytes());
+    Wasm_insist(next <= ht_.end());
+    return Select(next < ht_.end(), next, ht_.begin());
+}
+
+Ptr<void> QuadraticProbing::skip_slots(Ptr<void> bucket, U32 skips) const
+{
+    auto skips_cloned = skips.clone();
+    U32 slots_skipped = (skips_cloned * (skips + 1U)) >> 1U; // compute gaussian sum
+    U32 slots_skipped_floored = slots_skipped bitand (ht_.capacity() - 1U); // modulo capacity
+    const Var<Ptr<void>> slot(bucket + (slots_skipped_floored * ht_.entry_size_in_bytes()).make_signed());
+    Wasm_insist(slot < ht_.end() + ht_.size_in_bytes().make_signed());
+    return Select(slot < ht_.end(), slot, slot - ht_.size_in_bytes().make_signed());
+}
+
+Ptr<void> QuadraticProbing::advance_to_next_slot(Ptr<void> slot, U32 current_step) const
+{
+    const Var<Ptr<void>> next(slot + ((current_step + 1U) * ht_.entry_size_in_bytes()).make_signed());
+    Wasm_insist(next < ht_.end() + ht_.size_in_bytes().make_signed());
+    return Select(next < ht_.end(), next, next - ht_.size_in_bytes().make_signed());
 }

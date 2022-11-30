@@ -3029,7 +3029,9 @@ struct the_reference
     private:
     explicit the_reference(PrimitiveExpr<T*> ptr)
         : ptr_(ptr)
-    { M_insist(bool(ptr_), "must not be moved or discarded"); }
+    {
+        M_insist(bool(ptr_), "must not be moved or discarded");
+    }
 
     public:
     template<typename U>

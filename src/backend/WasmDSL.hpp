@@ -1422,14 +1422,14 @@ struct PrimitiveExpr<T>
 
     /** Explicit conversion of a `PrimitiveExpr<T>` to a `PrimitiveExpr<To>`.  Only applicable if
      *
-     * - `T` and `To` have same signedness or `T` is `bool` or `To` is `bool`
+     * - `T` and `To` have same signedness or `T` is `bool` or `char` or `To` is `bool` or `char`
      * - `T` can be converted to `To` (e.g. `int` to `long`, `long` to `int`, `float` to `int`)
      */
     template<dsl_primitive To>
-    requires (same_signedness<T, To> or     // T and To have same signedness
-              boolean<T> or                 //  or T is bool
-              boolean<To>) and              //  or To is bool
-             std::is_convertible_v<T, To>   // and T can be converted to To (e.g. float -> int)
+    requires (same_signedness<T, To> or                     // T and To have same signedness
+              boolean<T> or std::same_as<T, char> or        //  or T is bool
+              boolean<To> or std::same_as<To, char>) and    //  or To is bool
+             std::is_convertible_v<T, To>                   // and T can be converted to To (e.g. float -> int)
     PrimitiveExpr<To> to() { return convert<To>(); }
 
     /** Explicit conversion of a `PrimitiveExpr<uint32_t>` to a `PrimitiveExpr<T*>`

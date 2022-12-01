@@ -1250,7 +1250,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
         M_insist(stores.empty());
 #endif
 
-    return { std::move(inits), IsStore ? std::move(stores) : std::move(loads), std::move(jumps) };
+    return { std::move(inits), M_CONSTEXPR_COND(IsStore, std::move(stores), std::move(loads)), std::move(jumps) };
 }
 
 }
@@ -1655,10 +1655,8 @@ void Buffer<IsGlobal>::resume_pipeline()
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
                 /*----- Access base address and size depending on whether they are globals or parameters. -----*/
-                Ptr<void> base_address = [&](){
-                    if constexpr (IsGlobal) return base_address_.val(); else return PARAMETER(0);
-                }();
-                U32 size = [&](){ if constexpr (IsGlobal) return size_.val(); else return PARAMETER(1); }();
+                Ptr<void> base_address = M_CONSTEXPR_COND(IsGlobal, base_address_.val(), PARAMETER(0));
+                U32 size = M_CONSTEXPR_COND(IsGlobal, size_.val(), PARAMETER(1));
 
                 /*----- Compile data layout to generate sequential load from buffer. -----*/
                 Var<U32> load_tuple_id; // default initialized to 0

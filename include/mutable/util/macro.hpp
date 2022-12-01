@@ -44,6 +44,11 @@ namespace m {
 /*===== Count elements in a list macro ===============================================================================*/
 #define M_COUNT(LIST) (std::initializer_list<const char*>{ LIST(M_STRCOMMA) }.size())
 
+/*===== constexpr conditional-operator ===============================================================================*/
+#define M_CONSTEXPR_COND(COND, IF_TRUE, IF_FALSE) [&](){ \
+    if constexpr (COND) { return (IF_TRUE); } else { return (IF_FALSE); } \
+}()
+
 /*===== Define enum ==================================================================================================*/
 #define M_DECLARE_ENUM(LIST) \
     enum LIST { \

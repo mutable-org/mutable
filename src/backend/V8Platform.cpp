@@ -27,7 +27,7 @@
 #include <string_view>
 #include <unordered_set>
 
-// must be included after Binaryen due to conflict with `::wasm::Throw`
+// must be included after Binaryen due to conflicts, e.g. with `::wasm::Throw`
 #include "backend/WasmMacro.hpp"
 
 

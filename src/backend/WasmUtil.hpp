@@ -197,8 +197,8 @@ struct Environment
         auto it = exprs_.find(id);
         M_insist(it != exprs_.end(), "identifier not found");
         return std::visit(overloaded {
-            [](std::monostate) -> SQL_t { M_unreachable("invalid expression"); },
             [](auto &e) -> SQL_t { return e.clone(); },
+            [](std::monostate) -> SQL_t { M_unreachable("invalid expression"); },
         }, it->second);
     }
     ///> Returns the **copied** entry for identifier \p id.

@@ -173,7 +173,6 @@ struct DataLayout
 
         void accept(ConstDataLayoutVisitor &v) const override;
 
-        private:
         void for_sibling_leaves(level_info_stack_t &level_info_stack, uint64_t inode_offset_in_bits,
                                 const callback_leaves_t &callback) const;
 

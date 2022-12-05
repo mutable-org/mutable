@@ -151,7 +151,7 @@ void Callback::execute(const Match<Callback> &M, callback_t)
     M_insist(bool(M.result_set_factory), "`wasm::Callback` must have a factory for the result set");
 
     auto result_set_schema = M.callback.schema().drop_none().deduplicate();
-    write_result_set(result_set_schema, *M.result_set_factory, M.buffer_num_tuples_, M.child);
+    write_result_set(result_set_schema, *M.result_set_factory, M.result_set_num_tuples_, M.child);
 }
 
 
@@ -164,7 +164,7 @@ void Print::execute(const Match<Print> &M, callback_t)
     M_insist(bool(M.result_set_factory), "`wasm::Print` must have a factory for the result set");
 
     auto result_set_schema = M.print.schema().drop_none().deduplicate();
-    write_result_set(result_set_schema, *M.result_set_factory, M.buffer_num_tuples_, M.child);
+    write_result_set(result_set_schema, *M.result_set_factory, M.result_set_num_tuples_, M.child);
 }
 
 

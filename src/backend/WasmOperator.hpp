@@ -127,7 +127,7 @@ struct Match<wasm::Callback> : MatchBase
     const CallbackOperator &callback;
     const MatchBase &child;
     std::unique_ptr<const storage::DataLayoutFactory> result_set_factory;
-    std::optional<std::size_t> buffer_num_tuples_;
+    std::optional<std::size_t> result_set_num_tuples_;
 
     Match(const CallbackOperator *Callback, std::vector<std::reference_wrapper<const MatchBase>> &&children)
         : callback(*Callback)
@@ -147,7 +147,7 @@ struct Match<wasm::Print> : MatchBase
     const PrintOperator &print;
     const MatchBase &child;
     std::unique_ptr<const storage::DataLayoutFactory> result_set_factory;
-    std::optional<std::size_t> buffer_num_tuples_;
+    std::optional<std::size_t> result_set_num_tuples_;
 
     Match(const PrintOperator *print, std::vector<std::reference_wrapper<const MatchBase>> &&children)
         : print(*print)
@@ -166,7 +166,7 @@ struct Match<wasm::Scan> : MatchBase
 {
     private:
     std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
-    std::optional<std::size_t> buffer_num_tuples_;
+    std::size_t buffer_num_tuples_;
     public:
     const ScanOperator &scan;
 
@@ -178,11 +178,10 @@ struct Match<wasm::Scan> : MatchBase
 
     void execute(callback_t Pipeline) const override {
         if (buffer_factory_) {
-            M_insist(bool(buffer_num_tuples_));
             M_insist(scan.schema() == scan.schema().drop_none().deduplicate(),
                      "schema of `ScanOperator` must not contain NULL or duplicates");
             M_insist(scan.schema().num_entries(), "schema of `ScanOperator` must not be empty");
-            wasm::LocalBuffer buffer(scan.schema(), *buffer_factory_, *buffer_num_tuples_, std::move(Pipeline));
+            wasm::LocalBuffer buffer(scan.schema(), *buffer_factory_, buffer_num_tuples_, std::move(Pipeline));
             wasm::Scan::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
             buffer.resume_pipeline();
         } else {
@@ -198,7 +197,7 @@ struct Match<wasm::BranchingFilter> : MatchBase
 {
     private:
     std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
-    std::optional<std::size_t> buffer_num_tuples_;
+    std::size_t buffer_num_tuples_;
     public:
     const FilterOperator &filter;
     const MatchBase &child;
@@ -212,10 +211,9 @@ struct Match<wasm::BranchingFilter> : MatchBase
 
     void execute(callback_t Pipeline) const override {
         if (buffer_factory_) {
-            M_insist(bool(buffer_num_tuples_));
             auto buffer_schema = filter.schema().drop_none().deduplicate();
             if (buffer_schema.num_entries()) {
-                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, *buffer_num_tuples_, std::move(Pipeline));
+                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_, std::move(Pipeline));
                 wasm::BranchingFilter::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
                 buffer.resume_pipeline();
             } else {
@@ -234,7 +232,7 @@ struct Match<wasm::PredicatedFilter> : MatchBase
 {
     private:
     std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
-    std::optional<std::size_t> buffer_num_tuples_;
+    std::size_t buffer_num_tuples_;
     public:
     const FilterOperator &filter;
     const MatchBase &child;
@@ -248,10 +246,9 @@ struct Match<wasm::PredicatedFilter> : MatchBase
 
     void execute(callback_t Pipeline) const override {
         if (buffer_factory_) {
-            M_insist(bool(buffer_num_tuples_));
             auto buffer_schema = filter.schema().drop_none().deduplicate();
             if (buffer_schema.num_entries()) {
-                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, *buffer_num_tuples_, std::move(Pipeline));
+                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_, std::move(Pipeline));
                 wasm::PredicatedFilter::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
                 buffer.resume_pipeline();
             } else {
@@ -342,7 +339,7 @@ struct Match<wasm::NestedLoopsJoin> : MatchBase
 {
     private:
     std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
-    std::optional<std::size_t> buffer_num_tuples_;
+    std::size_t buffer_num_tuples_;
     public:
     const JoinOperator &join;
     std::vector<std::reference_wrapper<const MatchBase>> children;
@@ -354,16 +351,15 @@ struct Match<wasm::NestedLoopsJoin> : MatchBase
     {
         M_insist(this->children.size() >= 2);
 
-        for (std::size_t i = 0; i < this->children.size(); ++i)
+        for (std::size_t i = 0; i < this->children.size() - 1; ++i)
             materializing_factories_.emplace_back(std::make_unique<storage::RowLayoutFactory>()); // TODO: let optimizer decide this
     }
 
     void execute(callback_t Pipeline) const override {
         if (buffer_factory_) {
-            M_insist(bool(buffer_num_tuples_));
             auto buffer_schema = join.schema().drop_none().deduplicate();
             if (buffer_schema.num_entries()) {
-                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, *buffer_num_tuples_, std::move(Pipeline));
+                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_, std::move(Pipeline));
                 wasm::NestedLoopsJoin::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
                 buffer.resume_pipeline();
             } else {

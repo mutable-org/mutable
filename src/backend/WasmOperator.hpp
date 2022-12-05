@@ -19,6 +19,7 @@ namespace m {
     X(Aggregation) \
     X(Sorting) \
     X(NestedLoopsJoin) \
+    X(SimpleHashJoin) \
     X(Limit)
 
 #define DECLARE(OP) \
@@ -94,8 +95,15 @@ struct Sorting : PhysicalOperator<Sorting, SortingOperator>
 struct NestedLoopsJoin : PhysicalOperator<NestedLoopsJoin, JoinOperator>
 {
     static void execute(const Match<NestedLoopsJoin> &M, callback_t Pipeline);
-    static double cost(const Match<NestedLoopsJoin>&) { return 1.0; }
+    static double cost(const Match<NestedLoopsJoin>&) { return 2.0; }
     static Condition post_condition(const Match<NestedLoopsJoin> &M);
+};
+
+struct SimpleHashJoin : PhysicalOperator<SimpleHashJoin, JoinOperator>
+{
+    static void execute(const Match<SimpleHashJoin> &M, callback_t Pipeline);
+    static double cost(const Match<SimpleHashJoin> &M);
+    static Condition post_condition(const Match<SimpleHashJoin> &M);
 };
 
 struct Limit : PhysicalOperator<Limit, LimitOperator>
@@ -371,6 +379,41 @@ struct Match<wasm::NestedLoopsJoin> : MatchBase
     }
 
     const char * name() const override { return "wasm::NestedLoopsJoin"; }
+};
+
+template<>
+struct Match<wasm::SimpleHashJoin> : MatchBase
+{
+    private:
+    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
+    std::size_t buffer_num_tuples_;
+    public:
+    const JoinOperator &join;
+    std::vector<std::reference_wrapper<const MatchBase>> children;
+
+    Match(const JoinOperator *join, std::vector<std::reference_wrapper<const MatchBase>> &&children)
+        : join(*join)
+        , children(std::move(children))
+    {
+        M_insist(this->children.size() == 2);
+    }
+
+    void execute(callback_t Pipeline) const override {
+        if (buffer_factory_) {
+            auto buffer_schema = join.schema().drop_none().deduplicate();
+            if (buffer_schema.num_entries()) {
+                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_, std::move(Pipeline));
+                wasm::SimpleHashJoin::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
+                buffer.resume_pipeline();
+            } else {
+                wasm::SimpleHashJoin::execute(*this, std::move(Pipeline));
+            }
+        } else {
+            wasm::SimpleHashJoin::execute(*this, std::move(Pipeline));
+        }
+    }
+
+    const char * name() const override { return "wasm::SimpleHashJoin"; }
 };
 
 template<>

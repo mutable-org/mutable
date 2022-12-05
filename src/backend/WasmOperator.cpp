@@ -458,6 +458,132 @@ void NestedLoopsJoin::execute(const Match<NestedLoopsJoin> &M, callback_t Pipeli
 
 
 /*======================================================================================================================
+ * SimpleHashJoin
+ *====================================================================================================================*/
+
+double SimpleHashJoin::cost(const Match<SimpleHashJoin> &M)
+{
+    if (M.join.algo() == JoinOperator::J_SimpleHashJoin) // TODO: remove enum from logical operator and decide here
+        return 1.0;
+    else
+        return std::numeric_limits<double>::infinity();
+}
+
+Condition SimpleHashJoin::post_condition(const Match<SimpleHashJoin>&)
+{
+    return Condition(Schema(), 0, Schema());
+}
+
+void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline)
+{
+    using PROBING_STRATEGY = QuadraticProbing; // TODO: determine probing strategy
+    constexpr uint64_t PAYLOAD_SIZE_THRESHOLD_IN_BITS = 64; // TODO: determine threshold
+    constexpr double HIGH_WATERMARK = 0.8; // TODO: determine high watermark
+
+    const auto &build = *M.join.child(0);
+    const auto &probe = *M.join.child(1);
+    const auto ht_schema = build.schema().drop_none().deduplicate();
+
+    /*----- Decompose the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
+    auto &pred = M.join.predicate();
+    M_insist(pred.size() == 1, "invalid predicate for simple hash join");
+    auto &clause = pred[0];
+    M_insist(clause.size() == 1, "invalid predicate for simple hash join");
+    auto &literal = clause[0];
+    M_insist(not literal.negative(), "invalid predicate for simple hash join");
+    auto binary = as<const BinaryExpr>(literal.expr());
+    M_insist(binary->tok == TK_EQUAL, "invalid predicate for simple hash join");
+    M_insist(is<const Designator>(binary->lhs), "invalid predicate for sort merge join");
+    M_insist(is<const Designator>(binary->rhs), "invalid predicate for sort merge join");
+    Schema::Identifier id_first(binary->lhs), id_second(binary->rhs);
+    auto [_build_key, _probe_key] = ht_schema.has(id_first) ? std::make_pair(id_first, id_second)
+                                                            : std::make_pair(id_second, id_first);
+    Schema::Identifier build_key(_build_key), probe_key(_probe_key); // to avoid structured binding in lambda closure
+
+    /*----- Compute payload IDs and its total size in bits (ignoring padding). -----*/
+    std::vector<Schema::Identifier> payload_ids;
+    uint64_t payload_size_in_bits = 0;
+    for (auto &e : ht_schema) {
+        if (e.id != build_key) {
+            payload_ids.push_back(e.id);
+            payload_size_in_bits += e.type->size();
+        }
+    }
+
+    /*----- Compute initial capacity of hash table. -----*/
+    uint32_t initial_capacity;
+    if (build.has_info())
+        initial_capacity = build.info().estimated_cardinality / HIGH_WATERMARK;
+    else if (auto scan = cast<const ScanOperator>(&build))
+        initial_capacity = scan->store().num_rows() / HIGH_WATERMARK;
+    else
+        initial_capacity = 1024; // fallback
+
+    /*----- Create hash table for build child. -----*/
+    std::unique_ptr<OpenAddressingHashTableBase> ht;
+    std::vector<HashTable::index_t> build_key_idx = { ht_schema[build_key].first };
+    if (payload_size_in_bits <= PAYLOAD_SIZE_THRESHOLD_IN_BITS)
+        ht = std::make_unique<GlobalOpenAddressingInPlaceHashTable>(ht_schema, std::move(build_key_idx),
+                                                                    initial_capacity);
+    else
+        ht = std::make_unique<GlobalOpenAddressingOutOfPlaceHashTable>(ht_schema, std::move(build_key_idx),
+                                                                       initial_capacity);
+    ht->set_probing_strategy<PROBING_STRATEGY>();
+    ht->set_high_watermark(HIGH_WATERMARK);
+
+    /*----- Create function for build child. -----*/
+    FUNCTION(simple_hash_join_child_pipeline, void(void)) // create function for pipeline
+    {
+        auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+        auto &env = CodeGenContext::Get().env();
+        M.children[0].get().execute([&](){
+            IF (not is_null(env.get(build_key))) { // TODO: predicated version
+                /*----- Insert key. -----*/
+                std::vector<SQL_t> key;
+                key.emplace_back(env.extract(build_key));
+                auto entry = ht->emplace(std::move(key));
+
+                /*----- Insert payload. -----*/
+                for (auto &id : payload_ids) {
+                    std::visit(overloaded {
+                        [&]<sql_type T>(HashTable::reference_t<T> &&r) -> void {
+                            r = env.extract<T>(id);
+                        },
+                        [](std::monostate) -> void { M_unreachable("invalid reference"); },
+                    }, entry.extract(id));
+                }
+            };
+        });
+    }
+    simple_hash_join_child_pipeline(); // call child function
+
+    M.children[1].get().execute([&](){
+        auto &env = CodeGenContext::Get().env();
+
+        /* TODO: may check for NULL on probe key as well, branching + predicated version */
+        /*----- Probe with probe key. FIXME: add predication -----*/
+        std::vector<SQL_t> key;
+        key.emplace_back(env.get(probe_key));
+        ht->for_each_in_equal_range(std::move(key), [&, Pipeline=std::move(Pipeline)](HashTable::const_entry_t entry){
+            /*----- Add both found key and payload from hash table, i.e. from build child, to current environment. -----*/
+            for (auto &e : ht_schema) {
+                std::visit(overloaded {
+                    [&]<sql_type T>(HashTable::const_reference_t<T> &&r) -> void {
+                        Var<T> var((T(r))); // introduce variable s.t. uses only load from it
+                        env.add(e.id, var);
+                    },
+                    [](std::monostate) -> void { M_unreachable("invalid reference"); },
+                }, entry.extract(e.id));
+            }
+
+            /*----- Resume pipeline. -----*/
+            Pipeline();
+        });
+    });
+}
+
+
+/*======================================================================================================================
  * Limit
  *====================================================================================================================*/
 

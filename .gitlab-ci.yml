@@ -93,7 +93,15 @@ build:debug:linux-amd64:
     script:
         - mkdir -p build/${BUILD_TYPE}
         - cd build/${BUILD_TYPE}
-        - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=On -DWITH_V8=1 ../..
+        - cmake -G Ninja
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_BUILD_TYPE=Debug
+          -DBUILD_SHARED_LIBS=On
+          -DWITH_V8=On
+          -DENABLE_SANITIZERS=On
+          -DENABLE_SANITY_FIELDS=On
+          ../..
         - ninja gitversion
         - ninja all unittest
         - find third-party -name '*.so' -exec cp {} lib \;     # collect shared libraries
@@ -115,7 +123,15 @@ build:debug:macos-amd64:
     script:
         - mkdir -p build/${BUILD_TYPE}
         - cd build/${BUILD_TYPE}
-        - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_SHARED_LIBS=On -DWITH_V8=1 ../..
+        - cmake -G Ninja
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_BUILD_TYPE=Debug
+          -DBUILD_SHARED_LIBS=On
+          -DWITH_V8=On
+          -DENABLE_SANITIZERS=On
+          -DENABLE_SANITY_FIELDS=On
+          ../..
         - ninja gitversion
         - ninja all unittest
         - find third-party -name '*.dylib' -exec cp {} lib \;  # collect shared libraries
@@ -203,7 +219,15 @@ build:release:linux-amd64:
     script:
         - mkdir -p build/${BUILD_TYPE}
         - cd build/${BUILD_TYPE}
-        - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DWITH_V8=1 ../..
+        - cmake -G Ninja
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_SHARED_LIBS=Off
+          -DWITH_V8=On
+          -DENABLE_SANITIZERS=Off
+          -DENABLE_SANITY_FIELDS=Off
+          ../..
         - ninja gitversion
         - ninja
         - cd ../..
@@ -241,7 +265,15 @@ build:release:macos-amd64:
     script:
         - mkdir -p build/${BUILD_TYPE}
         - cd build/${BUILD_TYPE}
-        - CC=clang CXX=clang++ cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DWITH_V8=1 ../..
+        - cmake -G Ninja
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_SHARED_LIBS=Off
+          -DWITH_V8=On
+          -DENABLE_SANITIZERS=Off
+          -DENABLE_SANITY_FIELDS=Off
+          ../..
         - ninja gitversion
         - ninja
         - cd ../..

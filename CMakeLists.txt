@@ -57,17 +57,6 @@ find_package(Git REQUIRED)
 set(EXECUTABLE_OUTPUT_PATH      "${PROJECT_BINARY_DIR}/bin")
 set(LIBRARY_OUTPUT_PATH         "${PROJECT_BINARY_DIR}/lib")
 
-# Compile flags
-if(APPLE)
-    execute_process(COMMAND sysctl -n hw.cachelinesize
-        OUTPUT_VARIABLE LEVEL1_DCACHE_LINESIZE
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
-else()
-    execute_process(COMMAND getconf LEVEL1_DCACHE_LINESIZE
-        OUTPUT_VARIABLE LEVEL1_DCACHE_LINESIZE
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
-endif()
-
 # Fix macOS system includes
 if(APPLE)
     include_directories(SYSTEM "/usr/local/include")
@@ -92,14 +81,6 @@ else()
     set(BUILD_STATIC_LIBS ON)
     set(LIB_SUFFIX a)
     set(LIB_TYPE STATIC)
-endif()
-
-
-# Deviant binaries
-if(APPLE)
-    set(AUTOCONF_BINARY autoconf213)
-else()
-    set(AUTOCONF_BINARY autoconf-2.13)
 endif()
 
 # Run debug build with sanitizers, but exclude the vptr sanitizer.  See

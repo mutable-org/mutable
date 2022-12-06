@@ -883,7 +883,7 @@ Upd_Ctx: {
     M_insist(top_ >= 1);
     std::size_t idx = static_cast<std::size_t>(*op_++);
     M_insist(idx < context_.size(), "index out of bounds");
-#ifndef NDEBUG
+#ifdef M_ENABLE_SANITY_FIELDS
     M_insist(context_[idx].type == TOP.type, "update must not change the type of a context entry");
 #endif
     const_cast<StackMachine*>(this)->context_[idx] = TOP;

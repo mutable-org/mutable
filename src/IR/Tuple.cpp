@@ -75,7 +75,7 @@ M_LCOV_EXCL_STOP
  *====================================================================================================================*/
 
 Tuple::Tuple(const Schema &S)
-#ifndef NDEBUG
+#ifdef M_ENABLE_SANITY_FIELDS
     : num_values_(S.num_entries())
 #endif
 {
@@ -99,7 +99,7 @@ Tuple::Tuple(const Schema &S)
 }
 
 Tuple::Tuple(std::vector<const Type*> types)
-#ifndef NDEBUG
+#ifdef M_ENABLE_SANITY_FIELDS
     : num_values_(types.size())
 #endif
 {

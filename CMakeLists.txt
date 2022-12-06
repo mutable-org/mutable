@@ -11,6 +11,7 @@ enable_testing()
 
 OPTION(BUILD_SHARED_LIBS "Build mutable as a shared library" OFF)
 OPTION(BUILD_WITH_SANITIZERS "Build mutable with address and UB sanitizers" ON)
+OPTION(ENABLE_SANITY_FIELDS     "Build mutable with sanity fields enabled" ON)
 
 # Backends
 set(WITH_V8 FALSE CACHE BOOL "Enable the V8 platform.")
@@ -112,6 +113,10 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS})
 
 if(${BUILD_WITH_SANITIZERS})
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fsanitize=undefined -fno-sanitize=vptr")
+endif()
+
+if(${ENABLE_SANITY_FIELDS})
+    add_definitions("-DM_ENABLE_SANITY_FIELDS")
 endif()
 
 # OS dependent debug annotations

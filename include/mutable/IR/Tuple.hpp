@@ -26,7 +26,7 @@ struct M_EXPORT Value
         void   *p;
     };
 
-#ifndef NDEBUG
+#ifdef M_ENABLE_SANITY_FIELDS
     /** The `value_type` is only used in the debug build to check that the `Value` is used with the correct type.  */
     enum value_type {
         VNone,
@@ -44,7 +44,7 @@ struct M_EXPORT Value
     public:
     Value() {
         memset(&val_, 0, sizeof(val_)); // initialize with 0 bytes
-#ifndef NDEBUG
+#ifdef M_ENABLE_SANITY_FIELDS
         type = VNone;
 #endif
     }
@@ -53,7 +53,7 @@ struct M_EXPORT Value
     Value(T val) : Value() {
         static_assert(std::is_fundamental_v<T> or std::is_pointer_v<T>,
                       "type T must be a fundamental or pointer type");
-#ifndef NDEBUG
+#ifdef M_ENABLE_SANITY_FIELDS
 #define SET_TYPE(TY) this->type = V##TY
 #else
 #define SET_TYPE(TY)
@@ -73,7 +73,7 @@ struct M_EXPORT Value
     /** Returns a reference to the value interpreted as of type `T`. */
     template<typename T>
     std::conditional_t<std::is_pointer_v<T>, T, T&> as() {
-#ifndef NDEBUG
+#ifdef M_ENABLE_SANITY_FIELDS
 #define VALIDATE_TYPE(TY) M_insist(this->type == V##TY)
 #else
 #define VALIDATE_TYPE(TY)
@@ -128,7 +128,7 @@ struct M_EXPORT Value
 M_LCOV_EXCL_START
     /** Print a hexdump of `val` to `out`. */
     friend std::ostream & operator<<(std::ostream &out, Value val) {
-#ifndef NDEBUG
+#ifdef M_ENABLE_SANITY_FIELDS
         switch (val.type) {
             case VNone: return out << "<none>";
             case Vb:    return out << (val.as_b() ? "TRUE" : "FALSE");
@@ -154,7 +154,7 @@ M_LCOV_EXCL_STOP
     /** Checks whether `this` `Value` is equal to `other`.  This operation is only sane if both `Value`s are of the same
      * type. */
     bool operator==(Value other) const {
-#ifndef NDEBUG
+#ifdef M_ENABLE_SANITY_FIELDS
         M_insist(this->type == other.type, "comparing values of different type");
 #endif
         return memcmp(&this->val_, &other.val_, sizeof(this->val_)) == 0;
@@ -181,7 +181,7 @@ struct M_EXPORT Tuple
         using std::swap;
         swap(first.values_,     second.values_);
         swap(first.null_mask_,  second.null_mask_);
-#ifndef NDEBUG
+#ifdef M_ENABLE_SANITY_FIELDS
         swap(first.num_values_, second.num_values_);
 #endif
     }
@@ -189,7 +189,7 @@ struct M_EXPORT Tuple
     private:
     Value *values_ = nullptr; ///< the `Value`s in this `Tuple`
     SmallBitset null_mask_ = SmallBitset(-1UL); ///< a bit mask for the `NULL` values; `1` represents `NULL`
-#ifndef NDEBUG
+#ifdef M_ENABLE_SANITY_FIELDS
     std::size_t num_values_ = 0; ///< the number of `Value`s in this `Tuple`
 #define INBOUNDS(VAR) M_insist((VAR) < num_values_, "index out of bounds")
 #else
@@ -277,7 +277,7 @@ struct M_EXPORT Tuple
 
 M_LCOV_EXCL_START
     friend std::ostream & operator<<(std::ostream &out, const Tuple &tup) {
-#ifndef NDEBUG
+#ifdef M_ENABLE_SANITY_FIELDS
         out << "(";
         for (std::size_t i = 0; i != tup.num_values_; ++i) {
             if (i != 0) out << ", ";

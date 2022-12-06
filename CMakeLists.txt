@@ -88,7 +88,7 @@ endif()
 set(CMAKE_COMPILE_FLAGS             "${CMAKE_COMPILE_FLAGS} -W -Wall -pedantic -Wno-variadic-macros -Wno-gnu-zero-variadic-macro-arguments -Wno-gnu-label-as-value -Wno-vla-extension -Wno-gnu-conditional-omitted-operand -mavx2 -mbmi2 -mavx -msse4.2 -mbmi")
 set(CMAKE_C_FLAGS                   "${CMAKE_C_FLAGS} ${CMAKE_COMPILE_FLAGS}")
 set(CMAKE_CXX_FLAGS                 "-std=c++20 ${CMAKE_CXX_FLAGS} ${CMAKE_COMPILE_FLAGS}")
-set(CMAKE_CXX_FLAGS_DEBUG           "-g3 -fno-omit-frame-pointer -fno-optimize-sibling-calls") # use -g3 to expand macros
+set(CMAKE_CXX_FLAGS_DEBUG           "-fno-omit-frame-pointer -fno-optimize-sibling-calls")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "-DNDEBUG -fno-omit-frame-pointer -fno-optimize-sibling-calls -O2")
 set(CMAKE_POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS})
 
@@ -105,8 +105,8 @@ if(APPLE)
     set(CMAKE_CXX_FLAGS_DEBUG           "${CMAKE_CXX_FLAGS_DEBUG} -glldb")
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -glldb")
 else()
-    set(CMAKE_CXX_FLAGS_DEBUG           "${CMAKE_CXX_FLAGS_DEBUG} -ggdb3")
-    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -ggdb3")
+    set(CMAKE_CXX_FLAGS_DEBUG           "${CMAKE_CXX_FLAGS_DEBUG} -ggdb3") # expand macros
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -ggdb3") # expand macros
 endif()
 
 

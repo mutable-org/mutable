@@ -169,7 +169,7 @@ M_LCOV_EXCL_STOP
 
 static_assert(std::is_move_constructible_v<Value>, "Value must be move constructible");
 static_assert(std::is_trivially_destructible_v<Value>, "Value must be trivially destructible");
-#ifdef NDEBUG
+#ifndef M_ENABLE_SANITY_FIELDS
 static_assert(sizeof(Value) == 8, "Value exceeds expected size");
 #endif
 

@@ -9,8 +9,8 @@ include(FetchContent)
 include(GenerateExportHeader)
 enable_testing()
 
-OPTION(BUILD_SHARED_LIBS "Build mutable as a shared library" OFF)
-OPTION(BUILD_WITH_SANITIZERS "Build mutable with address and UB sanitizers" ON)
+OPTION(BUILD_SHARED_LIBS        "Build mutable as a shared library" OFF)
+OPTION(ENABLE_SANITIZERS        "Build mutable with address and UB sanitizers" ON)
 OPTION(ENABLE_SANITY_FIELDS     "Build mutable with sanity fields enabled" ON)
 
 # Backends
@@ -111,7 +111,7 @@ set(CMAKE_CXX_FLAGS_DEBUG           "-g3 -fno-omit-frame-pointer -fno-optimize-s
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "-DNDEBUG -fno-omit-frame-pointer -fno-optimize-sibling-calls -O2")
 set(CMAKE_POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS})
 
-if(${BUILD_WITH_SANITIZERS})
+if(${ENABLE_SANITIZERS})
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fsanitize=undefined -fno-sanitize=vptr")
 endif()
 

@@ -591,6 +591,8 @@ struct Module final
 
     template<typename T>
     PrimitiveExpr<T> emit_select(PrimitiveExpr<bool> cond, PrimitiveExpr<T> tru, PrimitiveExpr<T> fals);
+    template<typename T>
+    Expr<T> emit_select(PrimitiveExpr<bool> cond, Expr<T> tru, Expr<T> fals);
 
     /*----- Globals. -------------------------------------------------------------------------------------------------*/
     template<dsl_primitive T, dsl_primitive U>
@@ -3202,6 +3204,21 @@ inline auto Select(C &&_cond, T &&_tru, U &&_fals)
     return Module::Get().emit_select<To>(cond, tru.template to<To>(), fals.template to<To>());
 }
 
+template<primitive_convertible C, expr_convertible T, expr_convertible U>
+requires (not primitive_convertible<T> or not primitive_convertible<U>) and
+         have_common_type<typename expr_t<T>::type, typename expr_t<U>::type> and
+requires (C &&c) { PrimitiveExpr<bool>(std::forward<C>(c)); }
+inline auto Select(C &&_cond, T &&_tru, U &&_fals)
+{
+    PrimitiveExpr<bool> cond(std::forward<C>(_cond));
+    expr_t<T> tru(std::forward<T>(_tru));
+    expr_t<U> fals(std::forward<U>(_fals));
+
+    using To = common_type_t<typename decltype(tru)::type, typename decltype(fals)::type>;
+
+    return Module::Get().emit_select<To>(cond, tru.template to<To>(), fals.template to<To>());
+}
+
 
 /*----- If -----------------------------------------------------------------------------------------------------------*/
 
@@ -3513,6 +3530,18 @@ template<typename T>
 PrimitiveExpr<T> Module::emit_select(PrimitiveExpr<bool> cond, PrimitiveExpr<T> tru, PrimitiveExpr<T> fals)
 {
     return PrimitiveExpr<T>(builder_.makeSelect(cond.expr(), tru.expr(), fals.expr()));
+}
+
+template<typename T>
+Expr<T> Module::emit_select(PrimitiveExpr<bool> cond, Expr<T> tru, Expr<T> fals)
+{
+    auto [tru_val, tru_is_null] = tru.split();
+    auto [fals_val, fals_is_null] = fals.split();
+    auto cond_cloned = cond.clone();
+    return Expr<T>(
+        /* value=   */ PrimitiveExpr<T>(builder_.makeSelect(cond_cloned.expr(), tru_val.expr(), fals_val.expr())),
+        /* is_null= */ PrimitiveExpr<bool>(builder_.makeSelect(cond.expr(), tru_is_null.expr(), fals_is_null.expr()))
+    );
 }
 
 inline void Module::push_branch_targets(::wasm::Name brk, ::wasm::Name continu, PrimitiveExpr<bool> condition)

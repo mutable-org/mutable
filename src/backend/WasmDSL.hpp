@@ -2286,7 +2286,7 @@ struct Expr<T>
     PrimitiveExpr<bool> is_null() {
         value_.discard();
         if (can_be_null())
-            return PrimitiveExpr<bool>(is_null_);
+            return is_null_;
         else
             return PrimitiveExpr<bool>(false);
     }
@@ -2295,7 +2295,7 @@ struct Expr<T>
     PrimitiveExpr<bool> not_null() {
         value_.discard();
         if (can_be_null())
-            return PrimitiveExpr<bool>(not is_null_);
+            return not is_null_;
         else
             return PrimitiveExpr<bool>(true);
     }

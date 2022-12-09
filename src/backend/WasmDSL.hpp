@@ -2855,8 +2855,16 @@ struct Variable<T, Kind, CanBeNull>
     { }
 
     public:
-    /** Check whether this `Variable` can be `NULL`.  This is a compile-time information. */
-    constexpr bool can_be_null() const { return CanBeNull; }
+    /** Check whether this `Variable` can be assigned to `NULL`, i.e. it has a NULL bit to store this information.
+     * This is a compile-time information. */
+    constexpr bool has_null_bit() const { return CanBeNull; }
+    /** Check whether the value of this `Variable` can be `NULL`.  This is a runtime-time information. */
+    bool can_be_null() const {
+        if constexpr (CanBeNull)
+            return dependent_expr_type(*this).can_be_null();
+        else
+            return false;
+    }
 
     /** Obtain a `Variable<T>`s value as a `PrimitiveExpr<T>` or `Expr<T>`, depending on `CanBeNull`.  Although a
      * `Variable`'s value can also be obtained through implicit conversion (see below), some C/C++ constructs fail to do

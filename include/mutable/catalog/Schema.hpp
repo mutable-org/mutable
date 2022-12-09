@@ -37,6 +37,7 @@ struct M_EXPORT Schema
         const char *prefix; ///< prefix of this `Identifier`, may be `nullptr`
         const char *name; ///< the name of this `Identifier`
 
+        Identifier() = default; // XXX: ok?
         Identifier(const char *name) : prefix(nullptr), name(name) { }
         Identifier(const char *prefix, const char *name)
             : prefix(prefix) , name(name)

@@ -2,6 +2,9 @@
 
 #include "backend/WasmAlgo.hpp"
 #include "backend/WasmMacro.hpp"
+#include <mutable/catalog/Catalog.hpp>
+#include <mutable/util/enum_ops.hpp>
+#include <numeric>
 
 
 using namespace m;
@@ -349,6 +352,483 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
         M.child->get().execute(std::move(execute_projection));
     else
         execute_projection();
+}
+
+
+/*======================================================================================================================
+ * Grouping
+ *====================================================================================================================*/
+
+void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pipeline)
+{
+    using PROBING_STRATEGY = LinearProbing; // TODO: determine probing strategy
+    constexpr uint64_t AGGREGATES_SIZE_THRESHOLD_IN_BITS = 64; // TODO: determine threshold
+    constexpr double HIGH_WATERMARK = 0.8; // TODO: determine high watermark
+
+    const auto num_keys = M.grouping.group_by().size();
+
+    ///> helper struct for aggregates
+    struct aggregate_info_t
+    {
+        Schema::Identifier id; ///< aggregate identifier
+        m::Function::fnid_t fnid; ///< aggregate function
+        const std::vector<m::Expr*> &args; ///< aggregate arguments
+    };
+
+    ///> helper struct for AVG aggregates
+    struct avg_aggregate_info_t
+    {
+        Schema::Identifier running_count; ///< identifier of running count
+        Schema::Identifier sum; ///< potential identifier for sum (only set if AVG is computed once at the end)
+        bool compute_running_avg; ///< flag whether running AVG must be computed instead of one computation at the end
+    };
+
+    /*----- Compute hash table schema and information about aggregates, especially AVG aggregates. -----*/
+    Schema ht_schema;
+    std::vector<aggregate_info_t> aggregates;
+    std::unordered_map<Schema::Identifier, avg_aggregate_info_t> avg_aggregates;
+    uint64_t aggregates_size_in_bits = 0;
+    for (std::size_t i = 0; i < num_keys; ++i) {
+        auto &e = M.grouping.schema()[i];
+        if (not ht_schema.has(e.id))
+            ht_schema.add(e.id, e.type);
+    }
+    for (std::size_t i = num_keys; i < M.grouping.schema().num_entries(); ++i) {
+        auto &e = M.grouping.schema()[i];
+
+        if (ht_schema.has(e.id))
+            continue; // duplicated aggregate
+
+        auto &fn_expr = as<const FnApplicationExpr>(*M.grouping.aggregates()[i - num_keys]);
+        auto &fn = fn_expr.get_function();
+        M_insist(fn.kind == m::Function::FN_Aggregate, "not an aggregation function");
+
+        if (fn.fnid == m::Function::FN_AVG) {
+            M_insist(fn_expr.args.size() == 1, "AVG aggregate function expects exactly one argument");
+
+            /*----- Insert a suitable running count, i.e. COUNT over the argument of the AVG aggregate. -----*/
+            auto pred = [&fn_expr](auto _expr){
+                auto &expr = as<const FnApplicationExpr>(*_expr);
+                M_insist(expr.get_function().fnid != m::Function::FN_COUNT or expr.args.size() <= 1,
+                         "COUNT aggregate function expects exactly one argument");
+                return expr.get_function().fnid == m::Function::FN_COUNT and
+                       not expr.args.empty() and *expr.args[0] == *fn_expr.args[0];
+            };
+            Schema::Identifier running_count;
+            if (auto it = std::find_if(M.grouping.aggregates().begin(), M.grouping.aggregates().end(), pred);
+                it != M.grouping.aggregates().end())
+            { // reuse found running count
+                const auto idx_agg = std::distance(M.grouping.aggregates().begin(), it);
+                running_count = M.grouping.schema()[num_keys + idx_agg].id;
+            } else { // insert additional running count
+                std::ostringstream oss;
+                oss << "$running_count_" << fn_expr;
+                running_count = Schema::Identifier(Catalog::Get().pool(oss.str().c_str()));
+                Schema::entry_type::constraints_t constraints{0}; // i.e. not nullable
+                ht_schema.add(running_count, Type::Get_Integer(Type::TY_Scalar, 8), constraints);
+                aggregates.emplace_back(aggregate_info_t{
+                    .id = running_count,
+                    .fnid = m::Function::FN_COUNT,
+                    .args = fn_expr.args
+                });
+                aggregates_size_in_bits += 64;
+            }
+
+            /*----- Decide how to compute the average aggregate and update the hash table's schema accordingly. -----*/
+            Schema::Identifier sum;
+            bool compute_running_avg;
+            if (e.type->size() <= 32) {
+                /* Compute average by summing up all values in a 64-bit field (thus no overflows should occur) and
+                 * dividing by the running count once at the end. */
+                compute_running_avg = false;
+                auto pred = [&fn_expr](auto _expr){
+                    auto &expr = as<const FnApplicationExpr>(*_expr);
+                    M_insist(expr.get_function().fnid != m::Function::FN_SUM or expr.args.size() == 1,
+                             "SUM aggregate function expects exactly one argument");
+                    return expr.get_function().fnid == m::Function::FN_SUM and *expr.args[0] == *fn_expr.args[0];
+                };
+                if (auto it = std::find_if(M.grouping.aggregates().begin(), M.grouping.aggregates().end(), pred);
+                    it != M.grouping.aggregates().end())
+                { // reuse found SUM aggregate
+                    const auto idx_agg = std::distance(M.grouping.aggregates().begin(), it);
+                    sum = M.grouping.schema()[num_keys + idx_agg].id;
+                } else { // insert additional SUM aggregate
+                    std::ostringstream oss;
+                    oss << "$sum_" << fn_expr;
+                    sum = Schema::Identifier(Catalog::Get().pool(oss.str().c_str()));
+                    switch (as<const Numeric>(*fn_expr.args[0]->type()).kind) {
+                        case Numeric::N_Int:
+                        case Numeric::N_Decimal:
+                            ht_schema.add(sum, Type::Get_Integer(Type::TY_Scalar, 8));
+                            break;
+                        case Numeric::N_Float:
+                            ht_schema.add(sum, Type::Get_Double(Type::TY_Scalar));
+                    }
+                    aggregates.emplace_back(aggregate_info_t{
+                        .id = sum,
+                        .fnid = m::Function::FN_SUM,
+                        .args = fn_expr.args
+                    });
+                    aggregates_size_in_bits += 64;
+                }
+            } else {
+                /* Compute average by computing a running average for each inserted value in a `_Double` field (since
+                 * the sum may overflow). */
+                compute_running_avg = true;
+                M_insist(e.type->is_double());
+                ht_schema.add(e.id, e.type);
+                aggregates.emplace_back(aggregate_info_t{
+                    .id = e.id,
+                    .fnid = m::Function::FN_AVG,
+                    .args = fn_expr.args
+                });
+                aggregates_size_in_bits += e.type->size();
+            }
+
+            /*----- Add info for this AVG aggregate. -----*/
+            avg_aggregates.try_emplace(e.id, avg_aggregate_info_t{
+                .running_count = running_count,
+                .sum = sum,
+                .compute_running_avg = compute_running_avg
+            });
+        } else {
+#if 1 // TODO: use the else-case once the grouping operator's c'tor does compute the schema with nullability information
+            Schema::entry_type::constraints_t constraints = e.constraints;
+            if (fn.fnid == m::Function::FN_COUNT)
+                constraints -= Schema::entry_type::NULLABLE; // COUNT aggregate cannot be NULL
+            else
+                constraints |= Schema::entry_type::NULLABLE; // all aggregates except COUNT may be NULL
+            ht_schema.add(e.id, e.type, constraints);
+#else
+            M_insist((fn.fnid != m::Function::FN_COUNT) == e.nullable(), "only COUNT aggregates cannot be NULL");
+            ht_schema.add(e.id, e.type, e.constraints);
+#endif
+            aggregates.emplace_back(aggregate_info_t{
+                .id = e.id,
+                .fnid = fn.fnid,
+                .args = fn_expr.args
+            });
+            aggregates_size_in_bits += e.type->size();
+        }
+    }
+
+    /*----- Compute initial capacity of hash table. -----*/
+    uint32_t initial_capacity;
+    if (M.grouping.child(0)->has_info())
+        initial_capacity = M.grouping.child(0)->info().estimated_cardinality / HIGH_WATERMARK;
+    else if (auto scan = cast<const ScanOperator>(M.grouping.child(0)))
+        initial_capacity = scan->store().num_rows() / HIGH_WATERMARK;
+    else
+        initial_capacity = 1024; // fallback
+
+    /*----- Create hash table. -----*/
+    std::unique_ptr<OpenAddressingHashTableBase> ht;
+    std::vector<HashTable::index_t> key_indices(num_keys);
+    std::iota(key_indices.begin(), key_indices.end(), 0);
+    if (aggregates_size_in_bits <= AGGREGATES_SIZE_THRESHOLD_IN_BITS)
+        ht = std::make_unique<GlobalOpenAddressingInPlaceHashTable>(ht_schema, std::move(key_indices),
+                                                                    initial_capacity);
+    else
+        ht = std::make_unique<GlobalOpenAddressingOutOfPlaceHashTable>(ht_schema, std::move(key_indices),
+                                                                       initial_capacity);
+    ht->set_probing_strategy<PROBING_STRATEGY>();
+    ht->set_high_watermark(HIGH_WATERMARK);
+
+    /*----- Create child function. -----*/
+    FUNCTION(hash_based_grouping_child_pipeline, void(void)) // create function for pipeline
+    {
+        auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+        const auto &env = CodeGenContext::Get().env();
+
+        /*----- Create dummy slot to ignore NULL values in aggregate computations. -----*/
+        auto dummy = ht->dummy_entry();
+
+        M.child.execute([&](){
+            /*----- Insert key if not yet done. FIXME: add predication -----*/
+            std::vector<SQL_t> key;
+            for (auto &p : M.grouping.group_by())
+                key.emplace_back(env.compile(p.first.get()));
+            auto [entry, inserted] = ht->try_emplace(std::move(key));
+
+            /*----- Compute aggregates. -----*/
+            Block init_aggs("hash_based_grouping.init_aggs", false),
+                  update_aggs("hash_based_grouping.update_aggs", false),
+                  update_avg_aggs("hash_based_grouping.update_avg_aggs", false);
+            for (auto &info : aggregates) {
+                bool is_min = false; ///< flag to indicate whether aggregate function is MIN
+                switch (info.fnid) {
+                    default:
+                        M_unreachable("unsupported aggregate function");
+                    case m::Function::FN_MIN:
+                        is_min = true; // set flag and delegate to MAX case
+                    case m::Function::FN_MAX: {
+                        M_insist(info.args.size() == 1, "MIN and MAX aggregate functions expect exactly one argument");
+                        const auto &arg = *info.args[0];
+                        std::visit(overloaded {
+                            [&]<sql_type _T>(HashTable::reference_t<_T> &&r) -> void
+                            requires (not (std::same_as<_T, _Bool> or std::same_as<_T, Ptr<Char>>)) {
+                                using type = typename _T::type;
+                                using T = PrimitiveExpr<type>;
+
+                                BLOCK_OPEN(init_aggs) {
+                                    auto [val_, is_null] = convert<_T>(env.compile(arg)).split();
+                                    T val(val_); // due to structured binding and lambda closure
+                                    IF (is_null) {
+                                        auto neutral = is_min ? T(std::numeric_limits<type>::max())
+                                                              : T(std::numeric_limits<type>::lowest());
+                                        r.clone().set_value(neutral); // initialize with neutral element +inf or -inf
+                                        r.clone().set_null_bit(Bool(true)); // first value is NULL
+                                    } ELSE {
+                                        r.clone().set_value(val); // initialize with first value
+                                        r.clone().set_null_bit(Bool(false)); // first value is not NULL
+                                    };
+                                }
+                                BLOCK_OPEN(update_aggs) {
+                                    _T _new_val = convert<_T>(env.compile(arg));
+                                    if (_new_val.can_be_null()) {
+                                        auto [new_val_, new_val_is_null_] = _new_val.split();
+                                        auto [old_min_max_, old_min_max_is_null] = _T(r.clone()).split();
+                                        const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
+
+                                        auto chosen_r = Select(new_val_is_null, dummy.extract<_T>(info.id), r.clone());
+                                        if constexpr (std::floating_point<type>) {
+                                            chosen_r.set_value(
+                                                is_min ? min(old_min_max_, new_val_) // update old min with new value
+                                                       : max(old_min_max_, new_val_) // update old max with new value
+                                            ); // if new value is NULL, only dummy is written
+                                        } else {
+                                            const Var<T> new_val(new_val_),
+                                                         old_min_max(old_min_max_); // due to multiple uses
+                                            auto cmp = is_min ? new_val < old_min_max : new_val > old_min_max;
+                                            chosen_r.set_value(
+                                                Select(cmp,
+                                                       new_val, // update to new value
+                                                       old_min_max) // do not update
+                                            ); // if new value is NULL, only dummy is written
+                                        }
+                                        r.set_null_bit(
+                                            old_min_max_is_null and new_val_is_null // MIN/MAX is NULL iff all values are NULL
+                                        );
+                                    } else {
+                                        auto new_val_ = _new_val.insist_not_null();
+                                        auto old_min_max_ = _T(r.clone()).insist_not_null();
+                                        if constexpr (std::floating_point<type>) {
+                                            r.set_value(
+                                                is_min ? min(old_min_max_, new_val_) // update old min with new value
+                                                       : max(old_min_max_, new_val_) // update old max with new value
+                                            );
+                                        } else {
+                                            const Var<T> new_val(new_val_),
+                                                         old_min_max(old_min_max_); // due to multiple uses
+                                            auto cmp = is_min ? new_val < old_min_max : new_val > old_min_max;
+                                            r.set_value(
+                                                Select(cmp,
+                                                       new_val, // update to new value
+                                                       old_min_max) // do not update
+                                            );
+                                        }
+                                        /* do not update NULL bit since it is already set to `false` */
+                                    }
+                                }
+                            },
+                            []<sql_type _T>(HashTable::reference_t<_T>&&) -> void
+                            requires std::same_as<_T,_Bool> or std::same_as<_T, Ptr<Char>> {
+                                M_unreachable("invalid type");
+                            },
+                            [](std::monostate) -> void { M_unreachable("invalid reference"); },
+                        }, entry.extract(info.id));
+                        break;
+                    }
+                    case m::Function::FN_AVG: {
+                        auto it = avg_aggregates.find(info.id);
+                        M_insist(it != avg_aggregates.end());
+                        const auto &avg_info = it->second;
+                        M_insist(avg_info.compute_running_avg,
+                                 "AVG aggregate may only occur for running average computations");
+                        M_insist(info.args.size() == 1, "AVG aggregate function expects exactly one argument");
+                        const auto &arg = *info.args[0];
+
+                        auto r = entry.extract<_Double>(info.id);
+                        BLOCK_OPEN(init_aggs) {
+                            auto [val_, is_null] = convert<_Double>(env.compile(arg)).split();
+                            Double val(val_); // due to structured binding and lambda closure
+                            IF (is_null) {
+                                r.clone().set_value(Double(0.0)); // initialize with neutral element 0
+                                r.clone().set_null_bit(Bool(true)); // first value is NULL
+                            } ELSE {
+                                r.clone().set_value(val); // initialize with first value
+                                r.clone().set_null_bit(Bool(false)); // first value is not NULL
+                            };
+                        }
+                        BLOCK_OPEN(update_avg_aggs) {
+                            /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming
+                             * Vol 2, section 4.2.2. */
+                            _Double _new_val = convert<_Double>(env.compile(arg));
+                            if (_new_val.can_be_null()) {
+                                auto [new_val, new_val_is_null_] = _new_val.split();
+                                auto [old_avg_, old_avg_is_null] = _Double(r.clone()).split();
+                                const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
+                                const Var<Double> old_avg(old_avg_); // due to multiple uses
+
+                                auto delta_absolute = new_val - old_avg;
+                                auto running_count = _I64(entry.get<_I64>(avg_info.running_count)).insist_not_null();
+                                auto delta_relative = delta_absolute / running_count.to<double>();
+
+                                auto chosen_r = Select(new_val_is_null, dummy.extract<_Double>(info.id), r.clone());
+                                chosen_r.set_value(
+                                    old_avg + delta_relative // update old average with new value
+                                ); // if new value is NULL, only dummy is written
+                                r.set_null_bit(
+                                    old_avg_is_null and new_val_is_null // AVG is NULL iff all values are NULL
+                                );
+                            } else {
+                                auto new_val = _new_val.insist_not_null();
+                                auto old_avg_ = _Double(r.clone()).insist_not_null();
+                                const Var<Double> old_avg(old_avg_); // due to multiple uses
+
+                                auto delta_absolute = new_val - old_avg;
+                                auto running_count = _I64(entry.get<_I64>(avg_info.running_count)).insist_not_null();
+                                auto delta_relative = delta_absolute / running_count.to<double>();
+                                r.set_value(
+                                    old_avg + delta_relative // update old average with new value
+                                );
+                                /* do not update NULL bit since it is already set to `false` */
+                            }
+                        }
+                        break;
+                    }
+                    case m::Function::FN_SUM: {
+                        M_insist(info.args.size() == 1, "SUM aggregate function expects exactly one argument");
+                        const auto &arg = *info.args[0];
+                        std::visit(overloaded {
+                            [&]<sql_type _T>(HashTable::reference_t<_T> &&r) -> void
+                            requires (not (std::same_as<_T, _Bool> or std::same_as<_T, Ptr<Char>>)) {
+                                using type = typename _T::type;
+                                using T = PrimitiveExpr<type>;
+
+                                BLOCK_OPEN(init_aggs) {
+                                    auto [val_, is_null] = convert<_T>(env.compile(arg)).split();
+                                    T val(val_); // due to structured binding and lambda closure
+                                    IF (is_null) {
+                                        r.clone().set_value(T(type(0))); // initialize with neutral element 0
+                                        r.clone().set_null_bit(Bool(true)); // first value is NULL
+                                    } ELSE {
+                                        r.clone().set_value(val); // initialize with first value
+                                        r.clone().set_null_bit(Bool(false)); // first value is not NULL
+                                    };
+                                }
+                                BLOCK_OPEN(update_aggs) {
+                                    _T _new_val = convert<_T>(env.compile(arg));
+                                    if (_new_val.can_be_null()) {
+                                        auto [new_val, new_val_is_null_] = _new_val.split();
+                                        auto [old_sum, old_sum_is_null] = _T(r.clone()).split();
+                                        const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
+
+                                        auto chosen_r = Select(new_val_is_null, dummy.extract<_T>(info.id), r.clone());
+                                        chosen_r.set_value(
+                                            old_sum + new_val // add new value to old sum
+                                        ); // if new value is NULL, only dummy is written
+                                        r.set_null_bit(
+                                            old_sum_is_null and new_val_is_null // SUM is NULL iff all values are NULL
+                                        );
+                                    } else {
+                                        auto new_val = _new_val.insist_not_null();
+                                        auto old_sum = _T(r.clone()).insist_not_null();
+                                        r.set_value(
+                                            old_sum + new_val // add new value to old sum
+                                        );
+                                        /* do not update NULL bit since it is already set to `false` */
+                                    }
+                                }
+                            },
+                            []<sql_type _T>(HashTable::reference_t<_T>&&) -> void
+                            requires std::same_as<_T,_Bool> or std::same_as<_T, Ptr<Char>> {
+                                M_unreachable("invalid type");
+                            },
+                            [](std::monostate) -> void { M_unreachable("invalid reference"); },
+                        }, entry.extract(info.id));
+                        break;
+                    }
+                    case m::Function::FN_COUNT: {
+                        M_insist(info.args.size() <= 1, "COUNT aggregate function expects at most one argument");
+
+                        auto r = entry.get<_I64>(info.id); // do not extract to be able to access for AVG case
+                        if (info.args.empty()) {
+                            BLOCK_OPEN(init_aggs) {
+                                r.clone() = _I64(1); // initialize with 1 (for first value)
+                            }
+                            BLOCK_OPEN(update_aggs) {
+                                auto old_count = _I64(r.clone()).insist_not_null();
+                                r.set_value(
+                                    old_count + int64_t(1) // increment old count by 1
+                                );
+                                /* do not update NULL bit since it is already set to `false` */
+                            }
+                        } else {
+                            const auto &arg = *info.args[0];
+                            BLOCK_OPEN(init_aggs) {
+                                I64 not_null = (not is_null(env.compile(arg))).to<int64_t>();
+                                r.clone() = _I64(not_null); // initialize with 1 iff first value is present
+                            }
+                            BLOCK_OPEN(update_aggs) {
+                                I64 new_not_null = (not is_null(env.compile(arg))).to<int64_t>();
+                                auto old_count = _I64(r.clone()).insist_not_null();
+                                r.set_value(
+                                    old_count + new_not_null // increment old count by 1 iff new value is present
+                                );
+                                /* do not update NULL bit since it is already set to `false` */
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+
+            /*----- If group has been inserted, initialize aggregates. Otherwise, update them. -----*/
+            IF (inserted) {
+                init_aggs.attach_to_current();
+            } ELSE {
+                update_aggs.attach_to_current();
+                update_avg_aggs.attach_to_current(); // after others to ensure that running count is incremented before
+            };
+        });
+    }
+    hash_based_grouping_child_pipeline(); // call child function
+
+    /*----- Process each computed group. -----*/
+    auto &env = CodeGenContext::Get().env();
+    ht->for_each([&, Pipeline=std::move(Pipeline)](HashTable::const_entry_t entry){
+        /*----- Add computed group tuples to current environment. ----*/
+        for (auto &e : M.grouping.schema().deduplicate()) {
+            if (auto it = avg_aggregates.find(e.id);
+                it != avg_aggregates.end() and not it->second.compute_running_avg)
+            { // AVG aggregates which is not yet computed, divide computed sum with computed count
+                auto &avg_info = it->second;
+                auto sum = std::visit(overloaded {
+                    [&]<sql_type T>(HashTable::const_reference_t<T> &&r) -> _Double
+                    requires (std::same_as<T, _I64> or std::same_as<T, _Double>) {
+                        return T(r).template to<double>();
+                    },
+                    [](auto &&actual) -> _Double { M_unreachable("invalid type"); },
+                    [](std::monostate) -> _Double { M_unreachable("invalid reference"); },
+                }, entry.get(avg_info.sum));
+                auto count = _I64(entry.get<_I64>(avg_info.running_count)).insist_not_null().to<double>();
+                _Var<Double> avg(sum / count); // introduce variable s.t. uses only load from it
+                env.add(e.id, avg);
+            } else { // part of key or already computed aggregate
+                std::visit(overloaded {
+                    [&]<sql_type T>(HashTable::const_reference_t<T> &&r) -> void {
+                        Var<T> var((T(r))); // introduce variable s.t. uses only load from it
+                        env.add(e.id, var);
+                    },
+                    [](std::monostate) -> void { M_unreachable("invalid reference"); },
+                }, entry.get(e.id)); // do not extract to be able to access for not-yet-computed AVG aggregates
+            }
+        }
+
+        /*----- Resume pipeline. -----*/
+        Pipeline();
+    });
 }
 
 

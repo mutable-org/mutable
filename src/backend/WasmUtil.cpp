@@ -329,11 +329,8 @@ void ExprCompiler::operator()(const ast::FnApplicationExpr &e)
         case m::Function::FN_MIN:
         case m::Function::FN_MAX:
         case m::Function::FN_SUM:
-        case m::Function::FN_AVG: {
-            /* Evaluate the argument for the function call. */
-            (*this)(*e.args[0]);
-            break;
-        }
+        case m::Function::FN_AVG:
+            M_unreachable("aggregate functions must not occur here");
     }
 }
 

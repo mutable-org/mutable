@@ -15,7 +15,7 @@ namespace m {
     X(BranchingFilter) \
     X(PredicatedFilter) \
     X(Projection) \
-    X(Grouping) \
+    X(HashBasedGrouping) \
     X(Aggregation) \
     X(Sorting) \
     X(NestedLoopsJoin) \
@@ -63,7 +63,7 @@ struct BranchingFilter : PhysicalOperator<BranchingFilter, FilterOperator>
 struct PredicatedFilter : PhysicalOperator<PredicatedFilter, FilterOperator>
 {
     static void execute(const Match<PredicatedFilter> &M, callback_t Pipeline);
-    static double cost(const Match<PredicatedFilter>&) { return 0.5; }
+    static double cost(const Match<PredicatedFilter>&) { return 2.0; }
 };
 
 struct Projection : PhysicalOperator<Projection, ProjectionOperator>
@@ -73,10 +73,10 @@ struct Projection : PhysicalOperator<Projection, ProjectionOperator>
     static Condition adapt_post_condition(const Match<Projection> &M, const Condition &post_cond_child);
 };
 
-struct Grouping : PhysicalOperator<Grouping, GroupingOperator>
+struct HashBasedGrouping : PhysicalOperator<HashBasedGrouping, GroupingOperator>
 {
-    static void execute(const Match<Grouping>&, callback_t) { M_unreachable("not implemented"); }
-    static double cost(const Match<Grouping>&) { return 1.0; }
+    static void execute(const Match<HashBasedGrouping>&, callback_t);
+    static double cost(const Match<HashBasedGrouping>&) { return 1.0; }
 };
 
 struct Aggregation : PhysicalOperator<Aggregation, AggregationOperator>
@@ -290,7 +290,7 @@ struct Match<wasm::Projection> : MatchBase
 };
 
 template<>
-struct Match<wasm::Grouping> : MatchBase
+struct Match<wasm::HashBasedGrouping> : MatchBase
 {
     const GroupingOperator &grouping;
     const MatchBase &child;
@@ -302,8 +302,8 @@ struct Match<wasm::Grouping> : MatchBase
         M_insist(children.size() == 1);
     }
 
-    void execute(callback_t Pipeline) const override { wasm::Grouping::execute(*this, std::move(Pipeline)); }
-    const char * name() const override { return "wasm::Grouping"; }
+    void execute(callback_t Pipeline) const override { wasm::HashBasedGrouping::execute(*this, std::move(Pipeline)); }
+    const char * name() const override { return "wasm::HashBasedGrouping"; }
 };
 
 template<>

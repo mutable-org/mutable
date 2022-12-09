@@ -61,12 +61,23 @@ M_LCOV_EXCL_STOP
 
     struct entry_type
     {
+        enum constraints_t : uint64_t
+        {
+            NULLABLE = 0b1, ///< entry may be NULL
+        };
+
         Identifier id;
         const Type *type;
+        constraints_t constraints;
 
-        entry_type(Identifier id, const Type *type) : id(id), type(M_notnull(type)) { }
+        public:
+        entry_type(Identifier id, const Type *type, constraints_t constraints = NULLABLE)
+            : id(id)
+            , type(M_notnull(type))
+            , constraints(constraints) /* TODO: compute from table constraint */
+        { }
 
-        bool nullable() const { return true; /* TODO: compute from table constraint */ }
+        bool nullable() const { return bool(NULLABLE & constraints); }
     };
 
     private:
@@ -131,6 +142,10 @@ M_LCOV_EXCL_STOP
 
     /** Adds a new entry `id` of type `type` to this `Schema`. */
     void add(Identifier id, const Type *type) { entries_.emplace_back(id, type); }
+    /** Adds a new entry `id` of type `type` with constraints `constraints` to this `Schema`. */
+    void add(Identifier id, const Type *type, entry_type::constraints_t constraints) {
+        entries_.emplace_back(id, type, constraints);
+    }
 
     /** Returns a deduplicated version of `this` `Schema`, i.e. duplicate entries are only contained once.  */
     Schema deduplicate() const {

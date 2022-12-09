@@ -313,24 +313,14 @@ void ExprCompiler::operator()(const ast::FnApplicationExpr &e)
         /*----- NULL check -------------------------------------------------------------------------------------------*/
         case m::Function::FN_ISNULL: {
             (*this)(*e.args[0]);
-            std::visit(overloaded {
-                [](std::monostate&&) -> void { M_unreachable("invalid expression"); },
-                [this](PrimitiveExpr<char*> expr) -> void { set(_Bool(expr.is_nullptr())); },
-                [this](auto &&expr) -> void { set(_Bool(expr.is_null())); },
-            }, get());
+            set(_Bool(is_null(get())));
             break;
         }
 
         /*----- Type cast --------------------------------------------------------------------------------------------*/
         case m::Function::FN_INT: {
             (*this)(*e.args[0]);
-            std::visit(overloaded {
-                [](std::monostate&&) -> void { M_unreachable("invalid expression"); },
-                [this](auto &&expr) -> void requires requires { expr.template to<int32_t>(); } {
-                    set(expr.template to<int32_t>());
-                },
-                [](auto&&) -> void { M_unreachable("illegal operation"); },
-            }, get());
+            set(convert<_I32>(get()));
             break;
         }
 

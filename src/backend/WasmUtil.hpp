@@ -53,6 +53,34 @@ using SQL_t = std::variant<
 
 
 /*======================================================================================================================
+ * Helper functions for SQL types
+ *====================================================================================================================*/
+
+template<sql_type To>
+inline To convert(SQL_t &&variant)
+{
+    using type = typename To::type;
+
+    return std::visit(overloaded {
+        [](auto &&actual) -> To requires requires { actual.template to<type>(); } { return actual.template to<type>(); },
+        [](auto &&actual) -> To requires (not requires { actual.template to<type>(); }) {
+            M_unreachable("illegal conversion");
+        },
+        [](std::monostate&&) -> To { M_unreachable("invalid variant"); },
+    }, variant);
+}
+
+inline Bool is_null(SQL_t &&variant)
+{
+    return std::visit(overloaded {
+        []<typename T>(Expr<T> value) -> Bool { return value.is_null(); },
+        [](Ptr<Char> value) -> Bool { return value.is_nullptr(); },
+        [](std::monostate) -> Bool { M_unreachable("invalid variant"); },
+    }, variant);
+}
+
+
+/*======================================================================================================================
  * ExprCompiler
  *====================================================================================================================*/
 

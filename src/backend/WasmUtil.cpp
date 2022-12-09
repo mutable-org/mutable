@@ -11,11 +11,11 @@ using namespace m::wasm;
 
 
 /*======================================================================================================================
- * Helper function
+ * Helper functions
  *====================================================================================================================*/
 
 template<typename T>
-void convert_to(SQL_t &operand)
+void convert_in_place(SQL_t &operand)
 {
     std::visit(overloaded {
         [&operand](auto &&actual) -> void requires requires { actual.template to<T>(); } {
@@ -23,17 +23,17 @@ void convert_to(SQL_t &operand)
             operand.~SQL_t();
             new (&operand) SQL_t(v);
         },
-
         [](auto &actual) -> void requires (not requires { actual.template to<T>(); }) {
             M_unreachable("illegal conversion");
-        }
+        },
+        [](std::monostate) -> void { M_unreachable("invalid variant"); },
     }, operand);
 }
 
-void convert_to(SQL_t &operand, const Type *to_type)
+void convert_in_place(SQL_t &operand, const Type *to_type)
 {
     visit(overloaded {
-        [&operand](const Boolean&) -> void { convert_to<bool>(operand); },
+        [&operand](const Boolean&) -> void { convert_in_place<bool>(operand); },
         [&operand](const Numeric &n) -> void {
             switch (n.kind) {
                 case Numeric::N_Int:
@@ -42,30 +42,30 @@ void convert_to(SQL_t &operand, const Type *to_type)
                         default:
                             M_unreachable("invalid integer size");
                         case 8:
-                            convert_to<int8_t>(operand);
+                            convert_in_place<int8_t>(operand);
                             return;
                         case 16:
-                            convert_to<int16_t>(operand);
+                            convert_in_place<int16_t>(operand);
                             return;
                         case 32:
-                            convert_to<int32_t>(operand);
+                            convert_in_place<int32_t>(operand);
                             return;
                         case 64:
-                            convert_to<int64_t>(operand);
+                            convert_in_place<int64_t>(operand);
                             return;
                     }
                     break;
                 case Numeric::N_Float:
                     if (n.size() <= 32)
-                        convert_to<float>(operand);
+                        convert_in_place<float>(operand);
                     else
-                        convert_to<double>(operand);
+                        convert_in_place<double>(operand);
                     break;
             }
         },
-        [&operand](const CharacterSequence&) -> void { convert_to<char*>(operand); },
-        [&operand](const Date&) -> void { convert_to<int32_t>(operand); },
-        [&operand](const DateTime&) -> void { convert_to<int64_t>(operand); },
+        [&operand](const CharacterSequence&) -> void { convert_in_place<char*>(operand); },
+        [&operand](const Date&) -> void { convert_in_place<int32_t>(operand); },
+        [&operand](const DateTime&) -> void { convert_in_place<int64_t>(operand); },
         [](auto&&) -> void { M_unreachable("illegal conversion"); },
     }, *to_type);
 }
@@ -181,8 +181,8 @@ void ExprCompiler::operator()(const ast::BinaryExpr &e)
         SQL_t rhs = get();
 
         if (e.common_operand_type) {
-            convert_to(lhs, e.common_operand_type); // convert in-place
-            convert_to(rhs, e.common_operand_type); // convert in-place
+            convert_in_place(lhs, e.common_operand_type); // convert in-place
+            convert_in_place(rhs, e.common_operand_type); // convert in-place
         }
 
         std::visit(overloaded {

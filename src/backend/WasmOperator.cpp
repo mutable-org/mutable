@@ -298,7 +298,13 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
                         auto t = d->target(); // consider target of renamed identifier
                         if (auto expr = std::get_if<const m::ast::Expr*>(&t)) {
                             /*----- Compile targeted expression. -----*/
-                            new_env.add(e.id, old_env.compile(**expr));
+                            std::visit(overloaded {
+                                [&]<sql_type T>(T value) -> void {
+                                    Var<T> var(value); // introduce variable s.t. uses only load from it
+                                    new_env.add(e.id, var);
+                                },
+                                [](std::monostate) -> void { M_unreachable("invalid reference"); },
+                            }, old_env.compile(**expr));
                         } else {
                             /*----- Access renamed attribute. -----*/
                             auto attr = std::get<const Attribute*>(t);
@@ -307,7 +313,13 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
                         }
                     } else {
                         /*----- Compile expression. -----*/
-                        new_env.add(e.id, old_env.compile(p->first));
+                        std::visit(overloaded {
+                            [&]<sql_type T>(T value) -> void {
+                                Var<T> var(value); // introduce variable s.t. uses only load from it
+                                new_env.add(e.id, var);
+                            },
+                            [](std::monostate) -> void { M_unreachable("invalid reference"); },
+                        }, old_env.compile(p->first));
                     }
                 }
             }

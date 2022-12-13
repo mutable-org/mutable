@@ -596,6 +596,7 @@ struct Module final
 
     /*----- Globals. -------------------------------------------------------------------------------------------------*/
     template<dsl_primitive T, dsl_primitive U>
+    requires requires (U u) { make_literal<T>(u); }
     void emit_global(::wasm::Name name, U init = U(), bool is_mutable = true) {
         ::wasm::Builder::Mutability mut = is_mutable ? ::wasm::Builder::Mutability::Mutable
                                                      : ::wasm::Builder::Mutability::Immutable;
@@ -2631,12 +2632,12 @@ class variable_storage<T, Kind, /* CanBeNull= */ false>
     }
 
     /** Construct from value. */
-    variable_storage(T value) : variable_storage() { operator=(PrimitiveExpr<T>(value)); }
+    explicit variable_storage(T value) : variable_storage() { operator=(PrimitiveExpr<T>(value)); }
 
     /** Construct from value. */
     template<primitive_convertible U>
     requires requires (U &&u) { PrimitiveExpr<T>(primitive_expr_t<U>(std::forward<U>(u))); }
-    variable_storage(U &&value) : variable_storage() { operator=(std::forward<U>(value)); }
+    explicit variable_storage(U &&value) : variable_storage() { operator=(std::forward<U>(value)); }
 
     /** Assign value. */
     template<primitive_convertible U>
@@ -2670,12 +2671,12 @@ class variable_storage<bool, VariableKind::Local, /* CanBeNull= */ false>
     variable_storage & operator=(variable_storage&&) = default;
 
     /** Construct from value. */
-    variable_storage(bool value) : variable_storage() { operator=(PrimitiveExpr<bool>(value)); }
+    explicit variable_storage(bool value) : variable_storage() { operator=(PrimitiveExpr<bool>(value)); }
 
     /** Construct from value. */
     template<primitive_convertible U>
     requires requires (U &&u) { PrimitiveExpr<bool>(primitive_expr_t<U>(std::forward<U>(u))); }
-    variable_storage(U &&value) : variable_storage() { operator=(std::forward<U>(value)); }
+    explicit variable_storage(U &&value) : variable_storage() { operator=(std::forward<U>(value)); }
 
     /** Assign value. */
     template<primitive_convertible U>
@@ -2701,12 +2702,12 @@ class variable_storage<T, VariableKind::Local, /* CanBeNull= */ true>
     variable_storage() = default;
 
     /** Construct from value. */
-    variable_storage(T value) : variable_storage() { operator=(Expr<T>(value)); }
+    explicit variable_storage(T value) : variable_storage() { operator=(Expr<T>(value)); }
 
     /** Construct from value. */
     template<expr_convertible U>
     requires requires (U &&u) { Expr<T>(expr_t<U>(std::forward<U>(u))); }
-    variable_storage(U &&value) : variable_storage() { operator=(std::forward<U>(value)); }
+    explicit variable_storage(U &&value) : variable_storage() { operator=(std::forward<U>(value)); }
 
     /** Assign value. */
     template<expr_convertible U>
@@ -2739,12 +2740,12 @@ class variable_storage<T, Kind, /* CanBeNull= */ false>
     variable_storage() = default;
 
     /** Construct from `::wasm::Index` of already allocated local. */
-    variable_storage(::wasm::Index idx, tag<int> tag) : addr_(idx, tag) { }
+    explicit variable_storage(::wasm::Index idx, tag<int> tag) : addr_(idx, tag) { }
 
     /** Construct from pointer. */
     template<typename U>
     requires requires (U &&u) { PrimitiveExpr<T>(primitive_expr_t<U>(std::forward<U>(u))); }
-    variable_storage(U &&u) : variable_storage() { operator=(std::forward<U>(u)); }
+    explicit variable_storage(U &&u) : variable_storage() { operator=(std::forward<U>(u)); }
 
     /** Assign pointer. */
     template<typename U>
@@ -2780,7 +2781,8 @@ class variable_storage<T, VariableKind::Global, /* CanBeNull= */ false>
 
     /** Construct with optional initial value. */
     template<dsl_primitive U>
-    variable_storage(U init = U())
+    requires requires (U u) { Module::Get().emit_global<T>(name_, u); }
+    explicit variable_storage(U init = U())
     requires dsl_primitive<T>
         : name_(Module::Unique_Global_Name())
         , type_(wasm_type<T>())
@@ -2788,7 +2790,7 @@ class variable_storage<T, VariableKind::Global, /* CanBeNull= */ false>
         Module::Get().emit_global<T>(name_, init);
     }
     /** Construct with optional initial value. */
-    variable_storage(uint32_t init = 0)
+    explicit variable_storage(uint32_t init = 0)
     requires dsl_pointer_to_primitive<T>
         : name_(Module::Unique_Global_Name())
         , type_(wasm_type<T>())
@@ -2798,11 +2800,14 @@ class variable_storage<T, VariableKind::Global, /* CanBeNull= */ false>
 
     /** Sets the initial value. */
     template<dsl_primitive U>
-    void init(U init) requires dsl_primitive<T> {
+    requires requires (U u) { make_literal<T>(u); }
+    void init(U init)
+    requires dsl_primitive<T> {
         Module::Get().module_.getGlobal(name_)->init = Module::Builder().makeConst(make_literal<T>(init));
     }
     /** Sets the initial value. */
-    void init(uint32_t init) requires dsl_pointer_to_primitive<T> {
+    void init(uint32_t init)
+    requires dsl_pointer_to_primitive<T> {
         Module::Get().module_.getGlobal(name_)->init = Module::Builder().makeConst(::wasm::Literal(init));
     }
 

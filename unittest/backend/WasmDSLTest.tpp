@@ -952,26 +952,26 @@ TEST_CASE("Wasm/" BACKEND_NAME "/If", "[core][wasm]")
     CHECK_RESULT_INLINE(1, int(), {
         Var<I32> res(0);
         Var<U32> test(2);
-        IF ((test = 1).to<bool>()) { res = 1; } ELSE { res = 2; };
+        IF ((test = 1U).to<bool>()) { res = 1; } ELSE { res = 2; };
         RETURN(res);
     });
     CHECK_RESULT_INLINE(1, unsigned(), {
         Var<I32> res(0);
         Var<U32> test(2);
-        IF ((test = 1).to<bool>()) { res = 1; } ELSE { res = 2; };
+        IF ((test = 1U).to<bool>()) { res = 1; } ELSE { res = 2; };
         RETURN(test);
     });
 
     CHECK_RESULT_INLINE(2, int(), {
         Var<I32> res(0);
         Var<U32> test(2);
-        IF ((test = 0).to<bool>()) { res = 1; } ELSE { res = 2; };
+        IF ((test = 0U).to<bool>()) { res = 1; } ELSE { res = 2; };
         RETURN(res);
     });
     CHECK_RESULT_INLINE(0, unsigned(), {
         Var<I32> res(0);
         Var<U32> test(2);
-        IF ((test = 0).to<bool>()) { res = 1; } ELSE { res = 2; };
+        IF ((test = 0U).to<bool>()) { res = 1; } ELSE { res = 2; };
         RETURN(test);
     });
 

@@ -1704,7 +1704,7 @@ void Buffer<IsGlobal>::consume()
     IF (size_ == 0U) { // buffer empty
         if (not layout_.is_finite()) {
             /*----- Set initial capacity. -----*/
-            capacity_ = layout_.child().num_tuples();
+            capacity_ = uint32_t(layout_.child().num_tuples());
 
             /*----- Allocate memory for one child instance. Use maximal possible alignment requirement of 8 bytes. ---*/
             const auto child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;

@@ -356,7 +356,7 @@ Allocator & Module::Allocator()
 
     std::cout.flush();
     std::cerr << filename << ':' << line << ": Wasm_insist failed.";
-    if (*msg)
+    if (msg)
         std::cerr << "  " << msg << '.';
     std::cerr << std::endl;
 

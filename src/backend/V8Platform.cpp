@@ -232,7 +232,7 @@ void m::wasm::detail::insist(const v8::FunctionCallbackInfo<v8::Value> &info)
 
     std::cout.flush();
     std::cerr << filename << ':' << line << ": Wasm_insist failed.";
-    if (*msg)
+    if (msg)
         std::cerr << "  " << msg << '.';
     std::cerr << std::endl;
 

@@ -3,12 +3,15 @@
 [![Discord](https://img.shields.io/discord/692292755422052372?label=Discord&logo=Discord&style=flat)](https://discord.gg/JHwTZ24)
 
 # mu*t*able
-## A Database System for Research
+**A Database System for Research**
 
 © Saarland University, 2022
 
+## What is mu*t*able?
+
+mu*t*able is a relational main-memory database system.
 With mu*t*able, our goal is to develop a database system that allows for efficient prototyping of research ideas while
-striving for competitive performance with state-of-the-art systems.
+striving for performance that is competitive to state-of-the-art systems.
 
 ## Contributors
 

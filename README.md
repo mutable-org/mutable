@@ -23,6 +23,12 @@ Our software "mutable" is licensed under [AGPL v3](https://www.gnu.org/licenses/
 A [copy of the license file](LICENSE) can be found within this project.
 If not explicitly stated otherwise, this license applies to all files in this project.
 
+## Getting started
+
+- Make sure you have all the required [preliminaries](doc/preliminaries.md).
+- Read how to [set up mu*t*able](doc/setup.md).
+- Please read our [contribution guideline](doc/contribution-guideline.md).
+
 ## Important Links
 
 - [Wiki](https://gitlab.cs.uni-saarland.de/bigdata/mutable/mutable/-/wikis/home)

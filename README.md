@@ -5,6 +5,8 @@
 # mu*t*able
 ## A Database System for Research
 
+© Saarland University, 2022
+
 With mu*t*able, our goal is to develop a database system that allows for efficient prototyping of research ideas while
 striving for competitive performance with state-of-the-art systems.
 
@@ -24,7 +26,9 @@ striving for competitive performance with state-of-the-art systems.
 
 ## License
 
-See [the license file](LICENSE) contained in this project.
+Our software "mutable" is licensed under [AGPL v3](https://www.gnu.org/licenses/agpl-3.0.en.html).
+A [copy of the license file](LICENSE) can be found within this project.
+If not explicitly stated otherwise, this license applies to all files in this project.
 
 ## Important Links
 

@@ -575,7 +575,7 @@ void V8Platform::compile(const Operator &plan) const
         /*----- Compile plan. ----------------------------------------------------------------------------------------*/
         phys_opt_.execute(plan); // emit code
 
-        /*----- Store size of result set. ----------------------------------------------------------------------------*/
+        /*----- Return size of result set. ---------------------------------------------------------------------------*/
         main.emit_return(CodeGenContext::Get().num_tuples());
     }
 

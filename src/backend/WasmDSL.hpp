@@ -1355,18 +1355,18 @@ struct PrimitiveExpr<T>
             }
             if constexpr (std::is_floating_point_v<To>) {                                               //  to floating point
                 if constexpr (std::is_signed_v<From>) {                                                 //   signed
-                    if constexpr (sizeof(From) == 4 and sizeof(To) == 4)                                //    i32 -> f32
+                    if constexpr (sizeof(From) <= 4 and sizeof(To) == 4)                                //    i32 -> f32
                         return unary<To>(::wasm::ConvertSInt32ToFloat32);
-                    if constexpr (sizeof(From) == 4 and sizeof(To) == 8)                                //    i32 -> f64
+                    if constexpr (sizeof(From) <= 4 and sizeof(To) == 8)                                //    i32 -> f64
                         return unary<To>(::wasm::ConvertSInt32ToFloat64);
                     if constexpr (sizeof(From) == 8 and sizeof(To) == 4)                                //    i64 -> f32
                         return unary<To>(::wasm::ConvertSInt64ToFloat32);
                     if constexpr (sizeof(From) == 8 and sizeof(To) == 8)                                //    i64 -> f64
                         return unary<To>(::wasm::ConvertSInt64ToFloat64);
                 } else {                                                                                //   unsigned
-                    if constexpr (sizeof(From) == 4 and sizeof(To) == 4)                                //    u32 -> f32
+                    if constexpr (sizeof(From) <= 4 and sizeof(To) == 4)                                //    u32 -> f32
                         return unary<To>(::wasm::ConvertUInt32ToFloat32);
-                    if constexpr (sizeof(From) == 4 and sizeof(To) == 8)                                //    u32 -> f64
+                    if constexpr (sizeof(From) <= 4 and sizeof(To) == 8)                                //    u32 -> f64
                         return unary<To>(::wasm::ConvertUInt32ToFloat64);
                     if constexpr (sizeof(From) == 8 and sizeof(To) == 4)                                //    u64 -> f32
                         return unary<To>(::wasm::ConvertUInt64ToFloat32);
@@ -1379,20 +1379,20 @@ struct PrimitiveExpr<T>
         if constexpr (std::is_floating_point_v<From>) {                                                 // from floating point
             if constexpr (std::is_integral_v<To>) {                                                     //  to integer
                 if constexpr (std::is_signed_v<To>) {                                                   //   signed
-                    if constexpr (sizeof(From) == 4 and sizeof(To) == 4)                                //    f32 -> i32
+                    if constexpr (sizeof(From) == 4 and sizeof(To) <= 4)                                //    f32 -> i32
                         return unary<int32_t>(::wasm::TruncSFloat32ToInt32).template to<To>();
                     if constexpr (sizeof(From) == 4 and sizeof(To) == 8)                                //    f32 -> i64
                         return unary<To>(::wasm::TruncSFloat32ToInt64);
-                    if constexpr (sizeof(From) == 8 and sizeof(To) == 4)                                //    f64 -> i32
+                    if constexpr (sizeof(From) == 8 and sizeof(To) <= 4)                                //    f64 -> i32
                         return unary<int32_t>(::wasm::TruncSFloat64ToInt32).template to<To>();
                     if constexpr (sizeof(From) == 8 and sizeof(To) == 8)                                //    f64 -> i64
                         return unary<To>(::wasm::TruncSFloat64ToInt64);
                 } else {                                                                                //   unsigned
-                    if constexpr (sizeof(From) == 4 and sizeof(To) == 4)                                //    f32 -> u32
+                    if constexpr (sizeof(From) == 4 and sizeof(To) <= 4)                                //    f32 -> u32
                         return unary<int32_t>(::wasm::TruncUFloat32ToInt32).template to<To>();
                     if constexpr (sizeof(From) == 4 and sizeof(To) == 8)                                //    f32 -> u64
                         return unary<To>(::wasm::TruncUFloat32ToInt64);
-                    if constexpr (sizeof(From) == 8 and sizeof(To) == 4)                                //    f64 -> u32
+                    if constexpr (sizeof(From) == 8 and sizeof(To) <= 4)                                //    f64 -> u32
                         return unary<int32_t>(::wasm::TruncUFloat64ToInt32).template to<To>();
                     if constexpr (sizeof(From) == 8 and sizeof(To) == 8)                                //    f64 -> u64
                         return unary<To>(::wasm::TruncUFloat64ToInt64);

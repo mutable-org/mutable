@@ -81,7 +81,7 @@ struct HashBasedGrouping : PhysicalOperator<HashBasedGrouping, GroupingOperator>
 
 struct Aggregation : PhysicalOperator<Aggregation, AggregationOperator>
 {
-    static void execute(const Match<Aggregation>&, callback_t) { M_unreachable("not implemented"); }
+    static void execute(const Match<Aggregation>&, callback_t);
     static double cost(const Match<Aggregation>&) { return 1.0; }
 };
 

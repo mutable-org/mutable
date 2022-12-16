@@ -833,6 +833,360 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pi
 
 
 /*======================================================================================================================
+ * Aggregation
+ *====================================================================================================================*/
+
+void Aggregation::execute(const Match<Aggregation> &M, callback_t Pipeline)
+{
+    ///> helper struct for aggregates
+    struct aggregate_info_t
+    {
+        Schema::Identifier id; ///< aggregate identifier
+        const Type *type; ///< aggregate type
+        m::Function::fnid_t fnid; ///< aggregate function
+        const std::vector<m::Expr*> &args; ///< aggregate arguments
+    };
+
+    ///> helper struct for AVG aggregates
+    struct avg_aggregate_info_t
+    {
+        Schema::Identifier running_count; ///< identifier of running count
+        Schema::Identifier sum; ///< potential identifier for sum (only set if AVG is computed once at the end)
+        bool compute_running_avg; ///< flag whether running AVG must be computed instead of one computation at the end
+    };
+
+    /*----- Compute information about aggregates, especially about AVG aggregates. -----*/
+    std::vector<aggregate_info_t> aggregates;
+    std::unordered_map<Schema::Identifier, avg_aggregate_info_t> avg_aggregates;
+    for (std::size_t i = 0; i < M.aggregation.schema().num_entries(); ++i) {
+        auto &e = M.aggregation.schema()[i];
+
+        auto pred = [&e](const auto &info){ return info.id == e.id; };
+        if (auto it = std::find_if(aggregates.begin(), aggregates.end(), pred); it != aggregates.end())
+            continue; // duplicated aggregate
+
+        auto &fn_expr = as<const FnApplicationExpr>(*M.aggregation.aggregates()[i]);
+        auto &fn = fn_expr.get_function();
+        M_insist(fn.kind == m::Function::FN_Aggregate, "not an aggregation function");
+
+        if (fn.fnid == m::Function::FN_AVG) {
+            M_insist(fn_expr.args.size() == 1, "AVG aggregate function expects exactly one argument");
+
+            /*----- Insert a suitable running count, i.e. COUNT over the argument of the AVG aggregate. -----*/
+            auto pred = [&fn_expr](auto _expr){
+                auto &expr = as<const FnApplicationExpr>(*_expr);
+                M_insist(expr.get_function().fnid != m::Function::FN_COUNT or expr.args.size() <= 1,
+                         "COUNT aggregate function expects exactly one argument");
+                return expr.get_function().fnid == m::Function::FN_COUNT and
+                       not expr.args.empty() and *expr.args[0] == *fn_expr.args[0];
+            };
+            Schema::Identifier running_count;
+            if (auto it = std::find_if(M.aggregation.aggregates().begin(), M.aggregation.aggregates().end(), pred);
+                it != M.aggregation.aggregates().end())
+            { // reuse found running count
+                const auto idx_agg = std::distance(M.aggregation.aggregates().begin(), it);
+                running_count = M.aggregation.schema()[idx_agg].id;
+            } else { // insert additional running count
+                std::ostringstream oss;
+                oss << "$running_count_" << fn_expr;
+                running_count = Schema::Identifier(Catalog::Get().pool(oss.str().c_str()));
+                aggregates.emplace_back(aggregate_info_t{
+                    .id = running_count,
+                    .type = Type::Get_Integer(Type::TY_Scalar, 8),
+                    .fnid = m::Function::FN_COUNT,
+                    .args = fn_expr.args
+                });
+            }
+
+            /*----- Decide how to compute the average aggregate and insert sum aggregate accordingly. -----*/
+            Schema::Identifier sum;
+            bool compute_running_avg;
+            if (e.type->size() <= 32) {
+                /* Compute average by summing up all values in a 64-bit field (thus no overflows should occur) and
+                 * dividing by the running count once at the end. */
+                compute_running_avg = false;
+                auto pred = [&fn_expr](auto _expr){
+                    auto &expr = as<const FnApplicationExpr>(*_expr);
+                    M_insist(expr.get_function().fnid != m::Function::FN_SUM or expr.args.size() == 1,
+                             "SUM aggregate function expects exactly one argument");
+                    return expr.get_function().fnid == m::Function::FN_SUM and *expr.args[0] == *fn_expr.args[0];
+                };
+                if (auto it = std::find_if(M.aggregation.aggregates().begin(), M.aggregation.aggregates().end(), pred);
+                    it != M.aggregation.aggregates().end())
+                { // reuse found SUM aggregate
+                    const auto idx_agg = std::distance(M.aggregation.aggregates().begin(), it);
+                    sum = M.aggregation.schema()[idx_agg].id;
+                } else { // insert additional SUM aggregate
+                    std::ostringstream oss;
+                    oss << "$sum_" << fn_expr;
+                    sum = Schema::Identifier(Catalog::Get().pool(oss.str().c_str()));
+                    const Type *type;
+                    switch (as<const Numeric>(*fn_expr.args[0]->type()).kind) {
+                        case Numeric::N_Int:
+                        case Numeric::N_Decimal:
+                            type = Type::Get_Integer(Type::TY_Scalar, 8);
+                            break;
+                        case Numeric::N_Float:
+                            type = Type::Get_Double(Type::TY_Scalar);
+                    }
+                    aggregates.emplace_back(aggregate_info_t{
+                        .id = sum,
+                        .type = type,
+                        .fnid = m::Function::FN_SUM,
+                        .args = fn_expr.args
+                    });
+                }
+            } else {
+                /* Compute average by computing a running average for each inserted value in a `_Double` field (since
+                 * the sum may overflow). */
+                compute_running_avg = true;
+                M_insist(e.type->is_double());
+                aggregates.emplace_back(aggregate_info_t{
+                    .id = e.id,
+                    .type = e.type,
+                    .fnid = m::Function::FN_AVG,
+                    .args = fn_expr.args
+                });
+            }
+
+            /*----- Add info for this AVG aggregate. -----*/
+            avg_aggregates.try_emplace(e.id, avg_aggregate_info_t{
+                .running_count = running_count,
+                .sum = sum,
+                .compute_running_avg = compute_running_avg
+            });
+        } else {
+            aggregates.emplace_back(aggregate_info_t{
+                .id = e.id,
+                .type = e.type,
+                .fnid = fn.fnid,
+                .args = fn_expr.args
+            });
+        }
+    }
+
+    /*----- Create child function. -----*/
+    Environment results;
+    FUNCTION(aggregation_child_pipeline, void(void)) // create function for pipeline
+    {
+        auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+        const auto &env = CodeGenContext::Get().env();
+
+        M.child.execute([&](){
+            /*----- Compute aggregates (except AVG). -----*/
+            for (auto &info : aggregates) {
+                bool is_min = false; ///< flag to indicate whether aggregate function is MIN
+                switch (info.fnid) {
+                    default:
+                        M_unreachable("unsupported aggregate function");
+                    case m::Function::FN_MIN:
+                        is_min = true; // set flag and delegate to MAX case
+                    case m::Function::FN_MAX: {
+                        M_insist(info.args.size() == 1, "MIN and MAX aggregate functions expect exactly one argument");
+                        const auto &arg = *info.args[0];
+                        auto min_max = [&]<typename T>() {
+                            auto neutral = is_min ? std::numeric_limits<T>::max() : std::numeric_limits<T>::lowest();
+                            Global<PrimitiveExpr<T>> min_max(neutral); // initialize with neutral element +inf or -inf
+                            Global<Bool> is_null(true); // MIN/MAX is initially NULL
+
+                            Expr<T> _new_val = convert<Expr<T>>(env.compile(arg));
+                            if (_new_val.can_be_null()) {
+                                auto [new_val_, new_val_is_null_] = _new_val.split();
+                                const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
+
+                                if constexpr (std::floating_point<T>) {
+                                    min_max = Select(new_val_is_null,
+                                                     min_max, // ignore NULL
+                                                     is_min ? min(min_max, new_val_) // update old min with new value
+                                                            : max(min_max, new_val_)); // update old max with new value
+                                } else {
+                                    const Var<PrimitiveExpr<T>> new_val(new_val_); // due to multiple uses
+                                    auto cmp = is_min ? new_val < min_max : new_val > min_max;
+                                    min_max = Select(new_val_is_null,
+                                                     min_max, // ignore NULL
+                                                     Select(cmp,
+                                                            new_val, // update to new value
+                                                            min_max)); // do not update
+                                }
+                                is_null = is_null and new_val_is_null; // MIN/MAX is NULL iff all values are NULL
+                            } else {
+                                auto new_val_ = _new_val.insist_not_null();
+                                if constexpr (std::floating_point<T>) {
+                                    min_max = is_min ? min(min_max, new_val_) // update old min with new value
+                                                     : max(min_max, new_val_); // update old max with new value
+                                } else {
+                                    const Var<PrimitiveExpr<T>> new_val(new_val_); // due to multiple uses
+                                    auto cmp = is_min ? new_val < min_max : new_val > min_max;
+                                    min_max = Select(cmp,
+                                                     new_val, // update to new value
+                                                     min_max); // do not update
+                                }
+                                is_null = false; // at least one non-NULL value is consumed
+                            }
+
+                            results.add(info.id, Select(is_null, Expr<T>::Null(), min_max));
+                        };
+                        auto &n = as<const Numeric>(*info.type);
+                        switch (n.kind) {
+                            case Numeric::N_Int:
+                            case Numeric::N_Decimal:
+                                switch (n.size()) {
+                                    default: M_unreachable("invalid size");
+                                    case  8: min_max.template operator()<int8_t >(); break;
+                                    case 16: min_max.template operator()<int16_t>(); break;
+                                    case 32: min_max.template operator()<int32_t>(); break;
+                                    case 64: min_max.template operator()<int64_t>(); break;
+                                }
+                                break;
+                            case Numeric::N_Float:
+                                if (n.size() <= 32)
+                                    min_max.template operator()<float>();
+                                else
+                                    min_max.template operator()<double>();
+                        }
+                        break;
+                    }
+                    case m::Function::FN_AVG:
+                        break; // skip here and handle later
+                    case m::Function::FN_SUM: {
+                        M_insist(info.args.size() == 1, "SUM aggregate function expects exactly one argument");
+                        const auto &arg = *info.args[0];
+
+                        auto sum = [&]<typename T>() {
+                            Global<PrimitiveExpr<T>> sum(T(0)); // initialize with neutral element 0
+                            Global<Bool> is_null(true); // SUM is initially NULL
+
+                            Expr<T> _new_val = convert<Expr<T>>(env.compile(arg));
+                            if (_new_val.can_be_null()) {
+                                auto [new_val, new_val_is_null_] = _new_val.split();
+                                const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
+
+                                sum += Select(new_val_is_null,
+                                              T(0), // ignore NULL
+                                              new_val); // add new value to old sum
+                                is_null = is_null and new_val_is_null; // SUM is NULL iff all values are NULL
+                            } else {
+                                sum += _new_val.insist_not_null(); // add new value to old sum
+                                is_null = false; // at least one non-NULL value is consumed
+                            }
+
+                            results.add(info.id, Select(is_null, Expr<T>::Null(), sum));
+                        };
+                        auto &n = as<const Numeric>(*info.type);
+                        switch (n.kind) {
+                            case Numeric::N_Int:
+                            case Numeric::N_Decimal:
+                                switch (n.size()) {
+                                    default: M_unreachable("invalid size");
+                                    case  8: sum.template operator()<int8_t >(); break;
+                                    case 16: sum.template operator()<int16_t>(); break;
+                                    case 32: sum.template operator()<int32_t>(); break;
+                                    case 64: sum.template operator()<int64_t>(); break;
+                                }
+                                break;
+                            case Numeric::N_Float:
+                                if (n.size() <= 32)
+                                    sum.template operator()<float>();
+                                else
+                                    sum.template operator()<double>();
+                        }
+                        break;
+                    }
+                    case m::Function::FN_COUNT: {
+                        M_insist(info.args.size() <= 1, "COUNT aggregate function expects at most one argument");
+                        M_insist(info.type->is_integral() and info.type->size() == 64);
+
+                        Global<I64> count(0); // initialize with neutral element 0
+                        /* no `is_null` variable needed since COUNT will not be NULL */
+
+                        if (info.args.empty()) {
+                            count += int64_t(1); // increment old count by 1
+                        } else {
+                            I64 not_null = (not is_null(env.compile(*info.args[0]))).to<int64_t>();
+                            count += not_null; // increment old count by 1 iff new value is present
+                        }
+
+                        results.add(info.id, count.val());
+                        break;
+                    }
+                }
+            }
+
+            /*----- Compute AVG aggregates after others to ensure that running count is incremented before. -----*/
+            for (auto &info : aggregates) {
+                if (info.fnid == m::Function::FN_AVG) {
+                    M_insist(info.args.size() == 1, "AVG aggregate function expects exactly one argument");
+                    const auto &arg = *info.args[0];
+                    M_insist(info.type->is_double());
+
+                    auto it = avg_aggregates.find(info.id);
+                    M_insist(it != avg_aggregates.end());
+                    const auto &avg_info = it->second;
+                    M_insist(avg_info.compute_running_avg,
+                             "AVG aggregate may only occur for running average computations");
+
+                    Global<Double> avg(0.0); // initialize with neutral element 0
+                    Global<Bool> is_null(true); // AVG is initially NULL
+
+                    /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming
+                     * Vol 2, section 4.2.2. */
+                    _Double _new_val = convert<_Double>(env.compile(arg));
+                    if (_new_val.can_be_null()) {
+                        auto [new_val, new_val_is_null_] = _new_val.split();
+                        const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
+
+                        auto delta_absolute = new_val - avg;
+                        auto running_count = results.get<_I64>(avg_info.running_count).insist_not_null();
+                        auto delta_relative = delta_absolute / running_count.to<double>();
+
+                        avg += Select(new_val_is_null,
+                                  0.0, // ignore NULL
+                                  delta_relative); // update old average with new value
+                        is_null = is_null and new_val_is_null; // AVG is NULL iff all values are NULL
+                    } else {
+                        auto delta_absolute = _new_val.insist_not_null() - avg;
+                        auto running_count = results.get<_I64>(avg_info.running_count).insist_not_null();
+                        auto delta_relative = delta_absolute / running_count.to<double>();
+
+                        avg += delta_relative; // update old average with new value
+                        is_null = false; // at least one non-NULL value is consumed
+                    }
+
+                    results.add(info.id, Select(is_null, _Double::Null(), avg));
+                }
+            }
+        });
+    }
+    aggregation_child_pipeline(); // call child function
+
+    /*----- Add computed aggregates tuple to current environment. ----*/
+    auto &env = CodeGenContext::Get().env();
+    for (auto &e : M.aggregation.schema().deduplicate()) {
+        if (auto it = avg_aggregates.find(e.id);
+            it != avg_aggregates.end() and not it->second.compute_running_avg)
+        { // AVG aggregates which is not yet computed, divide computed sum with computed count
+            auto &avg_info = it->second;
+            auto sum = convert<_Double>(results.get(avg_info.sum));
+            auto count = results.get<_I64>(avg_info.running_count).insist_not_null().to<double>();
+            _Var<Double> avg(sum / count); // introduce variable s.t. uses only load from it
+            env.add(e.id, avg);
+        } else { // part of key or already computed aggregate
+            std::visit(overloaded {
+                [&]<sql_type T>(T value) -> void {
+                    Var<T> var(value); // introduce variable s.t. uses only load from it
+                    env.add(e.id, var);
+                },
+                [](std::monostate) -> void { M_unreachable("invalid reference"); },
+            }, results.get(e.id)); // do not extract to be able to access for not-yet-computed AVG aggregates
+        }
+    }
+
+    /*----- Resume pipeline. -----*/
+    Pipeline();
+}
+
+
+/*======================================================================================================================
  * Sorting
  *====================================================================================================================*/
 

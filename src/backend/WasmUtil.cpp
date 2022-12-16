@@ -329,8 +329,12 @@ void ExprCompiler::operator()(const ast::FnApplicationExpr &e)
         case m::Function::FN_MIN:
         case m::Function::FN_MAX:
         case m::Function::FN_SUM:
-        case m::Function::FN_AVG:
-            M_unreachable("aggregate functions must not occur here");
+        case m::Function::FN_AVG: {
+            std::ostringstream oss;
+            oss << e;
+            Schema::Identifier id(Catalog::Get().pool(oss.str().c_str()));
+            set(env_.get(id));
+        }
     }
 }
 

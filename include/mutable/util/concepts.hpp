@@ -58,7 +58,7 @@ concept same_signedness = (arithmetic<T> and arithmetic<U> and std::is_signed_v<
 /** Check whether types \tparam T and \tparam U have same floating point-ness, i.e. both floating or both integral. */
 template<typename T, typename U>
 concept equally_floating = arithmetic<T> and arithmetic<U> and
-                           std::is_floating_point_v<T> == std::is_floating_point_v<U>;
+                           std::floating_point<T> == std::floating_point<U>;
 
 
 /** Computes the *common type* of \tparam T and \tparam U.

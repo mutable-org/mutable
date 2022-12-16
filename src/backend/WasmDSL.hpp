@@ -1302,21 +1302,20 @@ struct PrimitiveExpr<T>
         using From = T;
         using To = U;
 
-        if constexpr (std::is_same_v<From, To>)
+        if constexpr (std::same_as<From, To>)
             return *this;
-        if constexpr (std::is_integral_v<From> and std::is_integral_v<To> and
-                      not std::is_same_v<From, bool> and not std::is_same_v<To, bool> and
-                      std::is_signed_v<From> == std::is_signed_v<To> and sizeof(From) == sizeof(To))
+        if constexpr (integral<From> and integral<To> and std::is_signed_v<From> == std::is_signed_v<To> and
+                      sizeof(From) == sizeof(To))
             return PrimitiveExpr<To>(move());
 
-        if constexpr (std::is_same_v<From, bool>) {                                                     // from boolean
-            if constexpr (std::is_integral_v<To>) {                                                     //  to integer
+        if constexpr (boolean<From>) {                                                                  // from boolean
+            if constexpr (integral<To>) {                                                               //  to integer
                 if constexpr (sizeof(To) <= 4)                                                          //   bool -> i32
                     return PrimitiveExpr<To>(move());
                 if constexpr (sizeof(To) == 8)                                                          //   bool -> i64
                     return unary<To>(::wasm::ExtendUInt32);
             }
-            if constexpr (std::is_floating_point_v<To>) {                                               //  to floating point
+            if constexpr (std::floating_point<To>) {                                                    //  to floating point
                 if constexpr (sizeof(To) <= 4)                                                          //   bool -> f32
                     return unary<To>(::wasm::ConvertUInt32ToFloat32);
                 if constexpr (sizeof(To) == 8)                                                          //   bool -> f64
@@ -1324,11 +1323,11 @@ struct PrimitiveExpr<T>
             }
         }
 
-        if constexpr (std::is_same_v<To, bool>)                                                         // to boolean
+        if constexpr (boolean<To>)                                                                      // to boolean
             return *this != PrimitiveExpr(static_cast<From>(0));
 
-        if constexpr (std::is_integral_v<From>) {                                                       // from integer
-            if constexpr (std::is_integral_v<To>) {                                                     //  to integer
+        if constexpr (integral<From>) {                                                                 // from integer
+            if constexpr (integral<To>) {                                                               //  to integer
                 if constexpr (std::is_signed_v<From>) {                                                 //   signed
                     if constexpr (sizeof(From) <= 4 and sizeof(To) == 8)                                //    i32 -> i64
                         return unary<To>(::wasm::ExtendSInt32);
@@ -1358,7 +1357,7 @@ struct PrimitiveExpr<T>
                     }
                 }
             }
-            if constexpr (std::is_floating_point_v<To>) {                                               //  to floating point
+            if constexpr (std::floating_point<To>) {                                                    //  to floating point
                 if constexpr (std::is_signed_v<From>) {                                                 //   signed
                     if constexpr (sizeof(From) <= 4 and sizeof(To) == 4)                                //    i32 -> f32
                         return unary<To>(::wasm::ConvertSInt32ToFloat32);
@@ -1381,8 +1380,8 @@ struct PrimitiveExpr<T>
             }
         }
 
-        if constexpr (std::is_floating_point_v<From>) {                                                 // from floating point
-            if constexpr (std::is_integral_v<To>) {                                                     //  to integer
+        if constexpr (std::floating_point<From>) {                                                      // from floating point
+            if constexpr (integral<To>) {                                                               //  to integer
                 if constexpr (std::is_signed_v<To>) {                                                   //   signed
                     if constexpr (sizeof(From) == 4 and sizeof(To) <= 4)                                //    f32 -> i32
                         return unary<int32_t>(::wasm::TruncSFloat32ToInt32).template to<To>();
@@ -1403,7 +1402,7 @@ struct PrimitiveExpr<T>
                         return unary<To>(::wasm::TruncUFloat64ToInt64);
                 }
             }
-            if constexpr (std::is_floating_point_v<To>) {                                               //  to floating point
+            if constexpr (std::floating_point<To>) {                                                    //  to floating point
                 if constexpr (sizeof(From) == 4 and sizeof(To) == 8)                                    //    f32 -> f64
                     return unary<To>(::wasm::PromoteFloat32);
                 if constexpr (sizeof(From) == 8 and sizeof(To) == 4)                                    //    f64 -> f32

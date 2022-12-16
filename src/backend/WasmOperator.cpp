@@ -180,10 +180,21 @@ void Scan::execute(const Match<Scan> &M, callback_t Pipeline)
     M_insist(schema == schema.drop_none().deduplicate(), "schema of `ScanOperator` must not contain NULL or duplicates");
     M_insist(not table.layout().is_finite(), "layout for `wasm::Scan` must be infinite");
 
+    Var<U32> tuple_id; // default initialized to 0
+
     /*----- Import the number of rows of `table`. -----*/
     std::ostringstream oss;
     oss << table.name << "_num_rows";
     U32 num_rows = Module::Get().get_global<uint32_t>(oss.str().c_str());
+
+    /*----- If no attributes must be loaded, generate a loop just executing the pipeline `num_rows`-times. -----*/
+    if (schema.num_entries() == 0) {
+        WHILE (tuple_id < num_rows) {
+            tuple_id += 1U;
+            Pipeline();
+        }
+        return;
+    }
 
     /*----- Import the base address of the mapped memory. -----*/
     oss.str("");
@@ -191,7 +202,6 @@ void Scan::execute(const Match<Scan> &M, callback_t Pipeline)
     Ptr<void> base_address = Module::Get().get_global<void*>(oss.str().c_str());
 
     /*----- Compile data layout to generate sequential load from table. -----*/
-    Var<U32> tuple_id; // default initialized to 0
     auto [inits, loads, jumps] = compile_load_sequential(schema, base_address, table.layout(), table.schema(), tuple_id);
 
     /*----- Generate the loop for the actual scan, with the pipeline emitted into the loop body. -----*/

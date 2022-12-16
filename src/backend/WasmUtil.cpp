@@ -428,6 +428,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id,
                                uint32_t initial_tuple_id = 0)
 {
+    M_insist(tuple_schema.num_entries() != 0, "sequential access must access at least one tuple schema entry");
+
     /** code blocks for pointer/mask initialization, stores/loads of values, and stride jumps for pointers / updates
      * of masks */
     Block inits("inits", false), stores("stores", false), loads("loads", false), jumps("jumps", false);
@@ -1280,6 +1282,8 @@ template<bool IsStore>
 void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base_address,
                                       const storage::DataLayout &layout, const Schema &layout_schema, U32 tuple_id)
 {
+    M_insist(tuple_schema.num_entries() != 0, "point access must access at least one tuple schema entry");
+
     ///> the values loaded for the entries in `tuple_schema`
     SQL_t values[tuple_schema.num_entries()];
     ///> the NULL information loaded for the entries in `tuple_schema`
@@ -1596,6 +1600,8 @@ Buffer<IsGlobal>::Buffer(const Schema &schema, const DataLayoutFactory &factory,
     , layout_(factory.make(schema, num_tuples))
     , Pipeline_(std::move(Pipeline))
 {
+    M_insist(schema.num_entries() != 0, "buffer schema must not be empty");
+
     if (layout_.is_finite()) {
         /*----- Pre-allocate memory for entire buffer. Use maximal possible alignment requirement of 8 bytes. -----*/
         const auto child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;

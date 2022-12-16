@@ -84,7 +84,7 @@ def run_command(command, query):
     try:
         process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    cwd=os.getcwd())
-        out, err = process.communicate(query.encode('latin-1'), timeout=8)
+        out, err = process.communicate(query.encode('latin-1'), timeout=15)
         return process.returncode, out, err
     except subprocess.TimeoutExpired as ex:
         raise TestException(f'Timeout expired')

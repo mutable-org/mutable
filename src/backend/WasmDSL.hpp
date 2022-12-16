@@ -1301,8 +1301,13 @@ struct PrimitiveExpr<T>
     PrimitiveExpr<U> convert() {
         using From = T;
         using To = U;
+
         if constexpr (std::is_same_v<From, To>)
             return *this;
+        if constexpr (std::is_integral_v<From> and std::is_integral_v<To> and
+                      not std::is_same_v<From, bool> and not std::is_same_v<To, bool> and
+                      std::is_signed_v<From> == std::is_signed_v<To> and sizeof(From) == sizeof(To))
+            return PrimitiveExpr<To>(move());
 
         if constexpr (std::is_same_v<From, bool>) {                                                     // from boolean
             if constexpr (std::is_integral_v<To>) {                                                     //  to integer
@@ -1335,7 +1340,7 @@ struct PrimitiveExpr<T>
                     if constexpr (sizeof(From) == 8 and sizeof(To) == 4)                                //    u64 -> u32
                         return unary<To>(::wasm::WrapInt64);
                 }
-                if constexpr (sizeof(To) <= 4 and sizeof(From) <= sizeof(To))                           //   From less precise than To
+                if constexpr (sizeof(To) <= 4 and sizeof(From) < sizeof(To))                            //   From less precise than To
                     return PrimitiveExpr<To>(move());                                                   //    extend integer
                 if constexpr (sizeof(From) <= 4 and sizeof(To) < sizeof(From)) {                        //   To less precise than From
                     constexpr From MASK = (uint64_t(1) << (8 * sizeof(To))) - uint64_t(1);

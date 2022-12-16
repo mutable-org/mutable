@@ -4,8 +4,8 @@
 
 Install the following dependencies:
 
-* [Google `depot_tools`](doc/setup-depot_tools.md)
-* [Google `gn`](doc/setup-gn.md)
+* [Google `depot_tools`](setup-depot_tools.md)
+* [Google `gn`](setup-gn.md)
 
 ## Configuration
 

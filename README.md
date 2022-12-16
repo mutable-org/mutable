@@ -15,7 +15,7 @@ striving for performance that is competitive to state-of-the-art systems.
 
 ## Contributors
 
-See [CONTRIBUTORS.md](CONTRIBUTORS.md).
+See [`CONTRIBUTORS.md`](CONTRIBUTORS.md).
 
 ## License
 

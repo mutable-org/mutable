@@ -1,6 +1,6 @@
 # Preliminaries
 
-Make sure you satisfy all the [preliminaries](doc/preliminaries.md).
+Make sure you satisfy all the [preliminaries](preliminaries.md).
 
 # Get the Code
 
@@ -119,7 +119,7 @@ Otherwise, there will be runtime errors: the client will see a data structure w/
 
 
 ### `-DWITH_V8`: Enable WebAssembly execution backend with V8 engine.
-Requirements: see [Building with V8](doc/setup-building-with-V8.md)
+Requirements: see [Building with V8](setup-building-with-V8.md)
 
 - `-DBUILD_WITH_V8=On` -- Build mu*t*able with the WebAssembly-based execution backend.
 

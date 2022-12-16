@@ -12,8 +12,8 @@ Install the following tools:
 * Perl (for our git-hooks)
 
 Further, if you wish to build mu*t*able with its WebAssembly-based backend (which is the default), you need to install the following Google tools as well:
-* [`depot_tools`](../Setup/Install-Google-`depot_tools`)
-* [`gn`](../Setup/Install-Standalone-Google-`gn`-Build-Configuration-Tool)
+* [`depot_tools`](setup-depot_tools.md)
+* [`gn`](setup-gn.md)
 
 ## Dependencies
 
@@ -68,7 +68,7 @@ $ pip install --user --upgrade \
 
 #### Building with the WebAssembly-based Execution Backend
 
-See [Building with V8](doc/setup-building-with-V8.md).
+See [Building with V8](setup-building-with-V8.md).
 
 
 

@@ -2,7 +2,7 @@ description: groupby attr
 db: ours
 query: |
     SELECT fkey FROM R GROUP BY fkey ORDER BY fkey;
-required: NO
+required: YES
 
 stages:
 

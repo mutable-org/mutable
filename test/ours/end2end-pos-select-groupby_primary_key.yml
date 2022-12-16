@@ -2,7 +2,7 @@ description: groupby primary key
 db: ours
 query: |
     SELECT key FROM R GROUP BY key ORDER BY key;
-required: NO
+required: YES
 
 stages:
 

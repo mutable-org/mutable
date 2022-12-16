@@ -2,7 +2,7 @@ description: subquery from groupby
 db: ours
 query: |
     SELECT fkey, cnt FROM (SELECT fkey, COUNT(key) AS cnt FROM R GROUP BY fkey) AS sub ORDER BY fkey;
-required: NO
+required: YES
 
 stages:
 

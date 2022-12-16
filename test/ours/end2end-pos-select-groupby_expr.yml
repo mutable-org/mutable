@@ -2,7 +2,7 @@ description: groupby expr
 db: ours
 query: |
     SELECT sum FROM R GROUP BY key + fkey AS sum ORDER BY sum;
-required: NO
+required: YES
 
 stages:
 

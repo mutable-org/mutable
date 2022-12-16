@@ -2,7 +2,7 @@ description: having without groupby
 db: ours
 query: |
     SELECT 42 FROM R HAVING SUM(key) > 100; SELECT 13 FROM R HAVING SUM(key) < 100;
-required: NO
+required: YES
 
 stages:
 

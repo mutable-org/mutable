@@ -2,7 +2,7 @@ description: groupby compound key
 db: ours
 query: |
     SELECT key, fkey FROM R GROUP BY key, fkey ORDER BY key;
-required: NO
+required: YES
 
 stages:
 

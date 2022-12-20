@@ -22,9 +22,12 @@ enable_testing()
 ### Required / Desired Executables
 ########################################################################################################################
 
+# Check whether we have access to `lld`, LLVM's linker
 find_program(LLD lld NO_CACHE)
 if(${LLD})
     set(HAS_LLD TRUE)
+else()
+    set(HAS_LLD FALSE)
 endif()
 
 
@@ -97,6 +100,9 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 else()
     set(is_release_build TRUE)
 endif()
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 20)
 
 # Run debug build with sanitizers, but exclude the vptr sanitizer.  We must do this because V8 is built without RTTI,
 # see https://groups.google.com/g/v8-users/c/MJztlKiWFUc/m/z3_V-SMvAwAJ.
@@ -280,26 +286,34 @@ include_directories(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/third-party/eigen")
 
 # V8 - Google's JavaScript and WebAssembly Engine (used in Chrome, Node.js)
 if(${WITH_V8})
-    set(V8_VERSION "10.3.174.10")
-    set(V8_BUILD_ARGS "is_clang=true v8_enable_pointer_compression=true treat_warnings_as_errors=false v8_use_external_startup_data=false use_sysroot=false use_custom_libcxx=false clang_use_chrome_plugins=false target_cpu=\"x64\"")
-    add_definitions("-DV8_COMPRESS_POINTERS")
+    set(V8_VERSION "11.1.276")
+    set(V8_BUILD_ARGS "is_clang=true v8_enable_sandbox=false v8_enable_pointer_compression=false v8_enable_webassembly=true treat_warnings_as_errors=false use_sysroot=false use_glib=false use_custom_libcxx=false v8_use_external_startup_data=false use_locally_built_instrumented_libraries=false clang_use_chrome_plugins=false target_cpu=\"x64\"")
+    if(APPLE)
+        # Compute Clang's base path, so we can propagate it to V8
+        find_program(CLANG_PATH ${CMAKE_CXX_COMPILER})
+        get_filename_component(CLANG_DIR ${CLANG_PATH} DIRECTORY)
+        get_filename_component(CLANG_BASE_PATH "${CLANG_DIR}/.." ABSOLUTE)
+        message("[V8] Setting Clang base path to ${CLANG_BASE_PATH}")
+        set(V8_BUILD_ARGS "${V8_BUILD_ARGS} clang_base_path=\"${CLANG_BASE_PATH}\"")
+    endif()
     if(${BUILD_SHARED_LIBS})
         set(V8_BUILD_ARGS "${V8_BUILD_ARGS} v8_monolithic=false is_component_build=true")
-        set(V8_LIBRARY_PATH "${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/libv8.${LIB_SUFFIX}")
-        set(V8_PLATFORM_PATH "${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/libv8_libplatform.${LIB_SUFFIX}")
         set(V8_BUILD_TARGETS v8 v8_libplatform)
     else()
         set(V8_BUILD_ARGS "${V8_BUILD_ARGS} v8_monolithic=true is_component_build=false")
-        set(V8_LIBRARY_PATH "${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/obj/libv8_monolith.a")
-        set(V8_PLATFORM_PATH)
         set(V8_BUILD_TARGETS v8_monolith)
     endif()
     if(${USE_LLD})
         set(V8_BUILD_ARGS "${V8_BUILD_ARGS} use_lld=true")
+    else()
+        set(V8_BUILD_ARGS "${V8_BUILD_ARGS} use_lld=false")
     endif()
     if(${is_release_build})
         message(STATUS "Building V8 in release mode")
         set(V8_BUILD_ARGS "${V8_BUILD_ARGS} is_debug=false symbol_level=0 v8_enable_disassembler=true")
+    else()
+        message(STATUS "Building V8 in debug mode")
+        set(V8_BUILD_ARGS "${V8_BUILD_ARGS} is_debug=true use_debug_fission=true symbol_level=2")
     endif()
     ExternalProject_Add(
         V8
@@ -307,29 +321,18 @@ if(${WITH_V8})
         DOWNLOAD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8"
         SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8"
         DOWNLOAD_COMMAND fetch --force v8 || true
-        COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/"
-        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/third_party/depot_tools/gclient sync
-        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/third_party/depot_tools/gclient sync -D
-        COMMAND git remote | grep ^mutable$ || git remote add mutable git@gitlab.cs.uni-saarland.de:bigdata/mutable/v8.git
-        COMMAND git fetch mutable
-        COMMAND git checkout 92a5396706753c802ab76e5c5be0982d5a49f011
-        UPDATE_COMMAND ""
+        COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/" && git remote add mutable git@gitlab.cs.uni-saarland.de:bigdata/mutable/v8.git || true
+        COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/" && git fetch mutable
+        COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/" && git checkout 81816f8931549d8b2f3602623fc403366e946181
+        UPDATE_COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/" && gclient sync
+        COMMAND        cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/" && gclient sync -D -f
         CONFIGURE_COMMAND gn gen out --root=${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8 --args=${V8_BUILD_ARGS}
         CONFIGURE_HANDLED_BY_BUILD true
         BUILD_COMMAND ninja -C out ${V8_BUILD_TARGETS}
-        BUILD_BYPRODUCTS ${V8_LIBRARY_PATH} ${V8_PLATFORM_PATH}
         INSTALL_COMMAND ""
     )
-    # add_definitions(-DM_WITH_V8)
     include_directories(SYSTEM third-party/v8/v8/include)
-    add_library(v8 ${LIB_TYPE} IMPORTED)
-    set_target_properties(v8 PROPERTIES IMPORTED_LOCATION ${V8_LIBRARY_PATH})
-    add_dependencies(v8 V8)
-    if(${BUILD_SHARED_LIBS})
-        add_library(v8_platform ${LIB_TYPE} IMPORTED)
-        set_target_properties(v8_platform PROPERTIES IMPORTED_LOCATION ${V8_PLATFORM_PATH})
-        add_dependencies(v8_platform V8)
-    endif()
+    link_directories(${PROJECT_BINARY_DIR}/third-party/src/V8-build/out)
 endif()
 
 

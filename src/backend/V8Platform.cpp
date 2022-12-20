@@ -163,7 +163,9 @@ V8InspectorClientImpl::V8InspectorClientImpl(int16_t port, v8::Isolate *isolate)
     session_ = inspector_->connect(
         /* contextGroupId= */ 1,
         /* channel=        */ channel_.get(),
-        /* state=          */ make_string_view(state)
+        /* state=          */ make_string_view(state),
+        /* trustLevel=     */ v8_inspector::V8Inspector::kFullyTrusted,
+        /* pauseState=     */ v8_inspector::V8Inspector::kWaitingForDebugger
     );
 }
 
@@ -548,7 +550,7 @@ void V8Platform::initialize()
     } else {
         flags << "--no-wasm-bounds-checks "
               << "--no-wasm-stack-checks "
-              << "--experimental-wasm-simd ";
+              << "--wasm-simd-ssse3-codegen ";
     }
     v8::V8::SetFlagsFromString(flags.str().c_str());
 
@@ -707,6 +709,7 @@ static void create_V8Platform()
 {
     V8Platform::PLATFORM_ = v8::platform::NewDefaultPlatform().release();
     v8::V8::InitializePlatform(V8Platform::PLATFORM_);
+    v8::V8::SetFlagsFromString("--no-freeze-flags-after-init"); // allow changing flags after initialization
     v8::V8::Initialize();
 }
 

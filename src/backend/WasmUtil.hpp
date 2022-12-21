@@ -518,7 +518,8 @@ struct Buffer
     void resume_pipeline();
     /** Emits code inline to resume the pipeline for each tuple in the buffer.  Due to inlining the current
      * `Environment` must not be cleared and this method should be used for n-ary operators.  Used to explicitly resume
-     * pipeline for infinite or partially filled buffers. */
+     * pipeline for infinite or partially filled buffers.  Predication is supported, i.e. if the predication
+     * predicate is not fulfilled, no tuples will be loaded and thus the pipeline will not be resumed. */
     void resume_pipeline_inline();
 
     /** Emits code to store the current tuple into the buffer.  The behaviour depends on whether the buffer is finite:

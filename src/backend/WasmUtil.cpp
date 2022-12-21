@@ -1684,6 +1684,12 @@ template<bool IsGlobal>
 void Buffer<IsGlobal>::resume_pipeline_inline()
 {
     if (Pipeline_) { // Pipeline callback not empty, i.e. performs some work
+        /*----- If predication is used, compute number of tuples to load from buffer depending on predicate. -----*/
+        std::optional<Var<Bool>> pred; // use variable since WHILE loop will clone it (for IF and DO_WHILE)
+        if (auto &env = CodeGenContext::Get().env(); env.predicated())
+            pred = env.extract_predicate().is_true_and_not_null();
+        U32 num_tuples = pred ? Select(*pred, size_, 0U) : size_;
+
         /*----- Compile data layout to generate sequential load from buffer. -----*/
         Var<U32> load_tuple_id(0); // explicitly (re-)set tuple ID to 0
         auto [load_inits, loads, load_jumps] =
@@ -1691,7 +1697,7 @@ void Buffer<IsGlobal>::resume_pipeline_inline()
 
         /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
         load_inits.attach_to_current();
-        WHILE (load_tuple_id < size_) {
+        WHILE (load_tuple_id < num_tuples) {
             loads.attach_to_current();
             Pipeline_();
             load_jumps.attach_to_current();

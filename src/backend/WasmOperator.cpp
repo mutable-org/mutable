@@ -1273,7 +1273,7 @@ void NestedLoopsJoin::execute(const Match<NestedLoopsJoin> &M, callback_t Pipeli
                     /* Pipeline=   */ [&, Pipeline=std::move(Pipeline)](){
                         IF (CodeGenContext::Get().env().compile(M.join.predicate()).is_true_and_not_null()) {
                             Pipeline();
-                        };
+                        }; // TODO: predicated version
                 });
             } else {
                 /*----- All but exactly one child (here left-most one) load lastly inserted buffer again. -----*/

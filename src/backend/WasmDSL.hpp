@@ -3552,13 +3552,21 @@ PrimitiveExpr<T> Module::emit_select(PrimitiveExpr<bool> cond, PrimitiveExpr<T> 
 template<typename T>
 Expr<T> Module::emit_select(PrimitiveExpr<bool> cond, Expr<T> tru, Expr<T> fals)
 {
-    auto [tru_val, tru_is_null] = tru.split();
-    auto [fals_val, fals_is_null] = fals.split();
-    auto cond_cloned = cond.clone();
-    return Expr<T>(
-        /* value=   */ PrimitiveExpr<T>(builder_.makeSelect(cond_cloned.expr(), tru_val.expr(), fals_val.expr())),
-        /* is_null= */ PrimitiveExpr<bool>(builder_.makeSelect(cond.expr(), tru_is_null.expr(), fals_is_null.expr()))
-    );
+    if (tru.can_be_null() or fals.can_be_null()) {
+        auto [tru_val, tru_is_null] = tru.split();
+        auto [fals_val, fals_is_null] = fals.split();
+        auto cond_cloned = cond.clone();
+        return Expr<T>(
+            /* value=   */ PrimitiveExpr<T>(builder_.makeSelect(cond_cloned.expr(), tru_val.expr(), fals_val.expr())),
+            /* is_null= */ PrimitiveExpr<bool>(builder_.makeSelect(cond.expr(), tru_is_null.expr(),
+                                                                                fals_is_null.expr()))
+        );
+    } else {
+        return Expr<T>(
+            /* value=   */ PrimitiveExpr<T>(builder_.makeSelect(cond.expr(), tru.insist_not_null().expr(),
+                                                                             fals.insist_not_null().expr()))
+        );
+    }
 }
 
 inline void Module::push_branch_targets(::wasm::Name brk, ::wasm::Name continu, PrimitiveExpr<bool> condition)

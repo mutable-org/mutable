@@ -515,7 +515,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pi
     /*----- Compute initial capacity of hash table. -----*/
     uint32_t initial_capacity;
     if (M.grouping.child(0)->has_info())
-        initial_capacity = M.grouping.child(0)->info().estimated_cardinality / HIGH_WATERMARK;
+        initial_capacity = M.grouping.child(0)->info().estimated_cardinality / HIGH_WATERMARK; // TODO: estimation depends on whether predication is enabled
     else if (auto scan = cast<const ScanOperator>(M.grouping.child(0)))
         initial_capacity = scan->store().num_rows() / HIGH_WATERMARK;
     else
@@ -544,7 +544,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pi
         auto dummy = ht->dummy_entry();
 
         M.child.execute([&](){
-            /*----- Insert key if not yet done. FIXME: add predication -----*/
+            /*----- Insert key if not yet done. -----*/
             std::vector<SQL_t> key;
             for (auto &p : M.grouping.group_by())
                 key.emplace_back(env.compile(p.first.get()));

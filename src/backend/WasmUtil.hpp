@@ -524,7 +524,9 @@ struct Buffer
      * - **finite:** If the buffer is full, resumes the pipeline for each tuple in the buffer and clears the buffer
      *               afterwards.
      * - **infinite:**  Potentially resizes the buffer but never resumes the pipeline (must be done explicitly by
-     *                  calling `resume_pipeline()`). */
+     *                  calling `resume_pipeline()`).
+     * Predication is supported, i.e. the current tuple is always written in the buffer but can only loaded from it
+     * later iff the predication predicate is fulfilled. */
     void consume();
 };
 

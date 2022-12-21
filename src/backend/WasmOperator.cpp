@@ -973,6 +973,11 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Pipeline)
         const auto &env = CodeGenContext::Get().env();
 
         M.child.execute([&](){
+            /*----- If predication is used, introduce predication variable and update it before computing aggregates. */
+            std::optional<Var<Bool>> pred;
+            if (auto &env = CodeGenContext::Get().env(); env.predicated())
+                pred = env.extract_predicate().is_true_and_not_null();
+
             /*----- Compute aggregates (except AVG). -----*/
             for (auto &info : aggregates) {
                 bool is_min = false; ///< flag to indicate whether aggregate function is MIN
@@ -991,7 +996,8 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Pipeline)
 
                             Expr<T> _new_val = convert<Expr<T>>(env.compile(arg));
                             if (_new_val.can_be_null()) {
-                                auto [new_val_, new_val_is_null_] = _new_val.split();
+                                auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
+                                auto [new_val_, new_val_is_null_] = _new_val_pred.split();
                                 const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
 
                                 if constexpr (std::floating_point<T>) {
@@ -1010,7 +1016,8 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Pipeline)
                                 }
                                 is_null = is_null and new_val_is_null; // MIN/MAX is NULL iff all values are NULL
                             } else {
-                                auto new_val_ = _new_val.insist_not_null();
+                                auto _new_val_pred = pred ? Select(*pred, _new_val, neutral) : _new_val;
+                                auto new_val_ = _new_val_pred.insist_not_null();
                                 if constexpr (std::floating_point<T>) {
                                     min_max = is_min ? min(min_max, new_val_) // update old min with new value
                                                      : max(min_max, new_val_); // update old max with new value
@@ -1058,7 +1065,8 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Pipeline)
 
                             Expr<T> _new_val = convert<Expr<T>>(env.compile(arg));
                             if (_new_val.can_be_null()) {
-                                auto [new_val, new_val_is_null_] = _new_val.split();
+                                auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
+                                auto [new_val, new_val_is_null_] = _new_val_pred.split();
                                 const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
 
                                 sum += Select(new_val_is_null,
@@ -1066,7 +1074,8 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Pipeline)
                                               new_val); // add new value to old sum
                                 is_null = is_null and new_val_is_null; // SUM is NULL iff all values are NULL
                             } else {
-                                sum += _new_val.insist_not_null(); // add new value to old sum
+                                auto _new_val_pred = pred ? Select(*pred, _new_val, T(0)) : _new_val;
+                                sum += _new_val_pred.insist_not_null(); // add new value to old sum
                                 is_null = false; // at least one non-NULL value is consumed
                             }
 
@@ -1100,10 +1109,11 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Pipeline)
                         /* no `is_null` variable needed since COUNT will not be NULL */
 
                         if (info.args.empty()) {
-                            count += int64_t(1); // increment old count by 1
+                            count += pred ? pred->to<int64_t>() : I64(1); // increment old count by 1 iff `pred` is true
                         } else {
-                            I64 not_null = (not is_null(env.compile(*info.args[0]))).to<int64_t>();
-                            count += not_null; // increment old count by 1 iff new value is present
+                            Bool not_null = not is_null(env.compile(*info.args[0]));
+                            I64 inc = pred ? (not_null and *pred).to<int64_t>() : not_null.to<int64_t>();
+                            count += inc; // increment old count by 1 iff new value is present and `pred` is true
                         }
 
                         results.add(info.id, count.val());
@@ -1132,7 +1142,8 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Pipeline)
                      * Vol 2, section 4.2.2. */
                     _Double _new_val = convert<_Double>(env.compile(arg));
                     if (_new_val.can_be_null()) {
-                        auto [new_val, new_val_is_null_] = _new_val.split();
+                        auto _new_val_pred = pred ? Select(*pred, _new_val, _Double::Null()) : _new_val;
+                        auto [new_val, new_val_is_null_] = _new_val_pred.split();
                         const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
 
                         auto delta_absolute = new_val - avg;
@@ -1140,11 +1151,12 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Pipeline)
                         auto delta_relative = delta_absolute / running_count.to<double>();
 
                         avg += Select(new_val_is_null,
-                                  0.0, // ignore NULL
-                                  delta_relative); // update old average with new value
+                                      0.0, // ignore NULL
+                                      delta_relative); // update old average with new value
                         is_null = is_null and new_val_is_null; // AVG is NULL iff all values are NULL
                     } else {
-                        auto delta_absolute = _new_val.insist_not_null() - avg;
+                        auto _new_val_pred = pred ? Select(*pred, _new_val, avg) : _new_val;
+                        auto delta_absolute = _new_val_pred.insist_not_null() - avg;
                         auto running_count = results.get<_I64>(avg_info.running_count).insist_not_null();
                         auto delta_relative = delta_absolute / running_count.to<double>();
 

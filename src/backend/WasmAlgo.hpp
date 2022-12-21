@@ -435,30 +435,39 @@ struct HashTable
 
     virtual ~HashTable() { }
 
+    /** Sets the high watermark, i.e. the fraction of occupied entries before growing the hash table is required, to
+     * \p percentage. */
+    virtual void set_high_watermark(double percentage) = 0;
+
     /** Clears the hash table. */
     virtual void clear() = 0;
 
     /** Inserts an entry into the hash table with key \p key regardless whether it already exists, i.e. duplicates
      * are allowed.  Returns a handle to the newly inserted entry which may be used to write the values for this
-     * entry.  Rehashing of the hash table may be performed. */
+     * entry.  Rehashing of the hash table may be performed.  Predication is supported, i.e. an entry is always
+     * inserted but can only be found later iff the predication predicate is fulfilled. */
     virtual entry_t emplace(std::vector<SQL_t> key) = 0;
     /** If no entry with key \p key already exists, inserts one into the hash table, i.e. no duplicates are inserted.
      * Returns a pair of a handle to the entry with the given key which may be used to write the values for this
      * entry and a boolean flag to indicate whether an insertion was performed.  Rehashing of the hash table may be
-     * performed. */
+     * performed.  Predication is supported, i.e. an entry is always inserted but can only be found later iff the
+     * predication predicate is fulfilled. */
     virtual std::pair<entry_t, Bool> try_emplace(std::vector<SQL_t> key) = 0;
 
     /** Tries to find an entry with key \p key in the hash table.  Returns a pair of a handle to the found entry which
      * may be used to read both the keys and the values of this entry (if none is found this handle points to an
      * arbitrary entry and should be ignored) and a boolean flag to indicate whether an element with the specified
-     * key was found. */
+     * key was found.  Predication is supported, i.e. if the predication predicate is not fulfilled, no entry will be
+     * found. */
     virtual std::pair<const_entry_t, Bool> find(std::vector<SQL_t> key) const = 0;
 
     /** Calls \p Pipeline for each entry contained in the hash table.  At each call the argument is a handle to the
      * respective entry which may be used to read both the keys and the values of this entry. */
     virtual void for_each(callback_t Pipeline) const = 0;
     /** Calls \p Pipeline for each entry with key \key in the hash table.  At each call the argument is a handle to
-     * the respective entry which may be used to read both the keys and the values of this entry. */
+     * the respective entry which may be used to read both the keys and the values of this entry.  Predication is
+     * supported, i.e. if the predication predicate is not fulfilled, the range of entries with an equal key will be
+     * empty. */
     virtual void for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline) const = 0;
 
     /** Returns a handle to a newly created dummy entry which may be used to write the values for this entry. */
@@ -567,7 +576,7 @@ struct OpenAddressingHashTableBase : HashTable
     public:
     /** Sets the high watermark, i.e. the fraction of occupied entries before growing the hash table is required, to
      * \p percentage. */
-    void set_high_watermark(double percentage) {
+    void set_high_watermark(double percentage) override {
         M_insist(percentage > 0.0 and percentage <= 1.0, "using open addressing the load factor must be in ]0,1]");
         high_watermark_percentage_ = percentage;
         update_high_watermark();
@@ -600,6 +609,7 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
     ///> function to perform rehashing; only possible for global hash tables since variables have to be updated
     std::optional<FunctionProxy<void(void)>> rehash_;
     std::vector<std::pair<Ptr<void>, U32>> dummy_allocations_; ///< address-size pairs of dummy entry allocations
+    std::optional<var_t<Ptr<void>>> predication_dummy_; ///< dummy entry used for predication
 
     public:
     /** Creates an open addressing hash table with schema \p schema, keys at \p key_indices, and an initial capacity
@@ -616,6 +626,26 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
     Ptr<void> end() const override { return address_ + (capacity_ * entry_size_in_bytes_).make_signed(); }
     U32 capacity() const override { return capacity_; }
 
+    private:
+    void update_high_watermark() override {
+        auto high_watermark_absolute_new = high_watermark_percentage_ * capacity_.make_signed().template to<double>();
+        auto high_watermark_absolute_floored = high_watermark_absolute_new.template to<int32_t>().make_unsigned();
+        Wasm_insist(high_watermark_absolute_floored.clone() > 1U,
+                    "at least one entry must be allowed to insert before growing the table");
+        high_watermark_absolute_ = high_watermark_absolute_floored - 1U;
+        Wasm_insist(high_watermark_absolute_ < capacity_, "at least one entry must always be unoccupied for lookups");
+    }
+
+    /** Creates dummy entry for predication. */
+    void create_predication_dummy() {
+        M_insist(not predication_dummy_);
+        predication_dummy_.emplace(); // since globals cannot be constructed with runtime values
+        *predication_dummy_ = Module::Allocator().allocate(entry_size_in_bytes_, entry_max_alignment_in_bytes_);
+        dummy_allocations_.emplace_back(*predication_dummy_, entry_size_in_bytes_);
+        reference_count(*predication_dummy_) = ref_t(0); // set unoccupied
+    }
+
+    public:
     entry_t emplace(std::vector<SQL_t> key) override;
     std::pair<entry_t, Bool> try_emplace(std::vector<SQL_t> key) override;
 
@@ -647,14 +677,6 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
      * the corresponding entry. */
     const_entry_t entry(Ptr<void> slot) const;
 
-    void update_high_watermark() override {
-        auto high_watermark_absolute_new = high_watermark_percentage_ * capacity_.make_signed().template to<double>();
-        auto high_watermark_absolute_floored = high_watermark_absolute_new.template to<int32_t>().make_unsigned();
-        Wasm_insist(high_watermark_absolute_floored.clone() > 1U,
-                    "at least one entry must be allowed to insert before growing the table");
-        high_watermark_absolute_ = high_watermark_absolute_floored - 1U;
-        Wasm_insist(high_watermark_absolute_ < capacity_, "at least one entry must always be unoccupied for lookups");
-    }
     /** Performs rehashing, i.e. resizes the hash table to the double of its capacity (by internally creating a new
      * one) while asserting that all entries are still correctly contained in the resized hash table (by rehashing
      * and reinserting them into the newly created hash table). */

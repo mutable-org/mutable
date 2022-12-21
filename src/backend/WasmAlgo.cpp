@@ -487,7 +487,7 @@ template<bool IsGlobal, bool ValueInPlace>
 HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace(std::vector<SQL_t> key)
 {
     /*----- If high watermark is reached, perform rehashing and update high watermark. -----*/
-    IF (num_entries_ == high_watermark_absolute_) {
+    IF (num_entries_ == high_watermark_absolute_) { // XXX: num_entries_ - 1U iff predication predicate is not fulfilled
         rehash();
         update_high_watermark();
     };
@@ -500,8 +500,20 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace_with
 {
     Wasm_insist(num_entries_ < high_watermark_absolute_);
 
+    /*----- If predication is used, introduce predication variable and update it before inserting a key. -----*/
+    std::optional<Var<Bool>> pred;
+    if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
+        pred = env.extract_predicate().is_true_and_not_null();
+        if (not predication_dummy_)
+            create_predication_dummy();
+    }
+    M_insist(not pred or predication_dummy_);
+
     /*----- Compute bucket address by hashing the key. Create constant variable to do not recompute the hash. -----*/
-    const Var<Ptr<void>> bucket(hash_to_bucket(clone(key))); // clone key since we need it again for insertion
+    const Var<Ptr<void>> bucket(
+        pred ? Select(*pred, hash_to_bucket(clone(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
+             : hash_to_bucket(clone(key))
+    ); // clone key since we need it again for insertion
 
     /*----- Get reference count, i.e. occupied slots, of this bucket. -----*/
     Var<PrimitiveExpr<ref_t>> refs(reference_count(bucket));
@@ -520,13 +532,13 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace_with
     }
 
     /*----- Update reference count of this bucket. -----*/
-    reference_count(bucket) = refs + ref_t(1);
+    reference_count(bucket) = refs + ref_t(1); // no predication special case since bucket equals slot if dummy is used
 
-    /*----- Set slot as occupied. -----*/
-    reference_count(slot) = ref_t(1);
+    /*----- Iff no predication is used or predicate is fulfilled, set slot as occupied. -----*/
+    reference_count(slot) = pred ? pred->to<ref_t>() : PrimitiveExpr<ref_t>(1);
 
     /*----- Update number of entries. -----*/
-    num_entries_ += 1U;
+    num_entries_ += pred ? pred->to<uint32_t>() : U32(1);
     Wasm_insist(num_entries_ < capacity_, "at least one entry must always be unoccupied for lookups");
 
     /*----- Insert key. -----*/
@@ -541,6 +553,13 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace_with
             Module::Allocator().allocate(storage_.values_size_in_bytes_, storage_.values_max_alignment_in_bytes_);
         *(slot + storage_.ptr_offset_in_bytes_).template to<uint32_t*>() = ptr.clone().to<uint32_t>();
 
+        if (pred) {
+            /*----- Store address and size of dummy predication entry to free them later. -----*/
+            var_t<Ptr<void>> ptr_; // create global variable iff `IsGlobal` to be able to access it later for deallocation
+            ptr_ = ptr.clone();
+            dummy_allocations_.emplace_back(ptr_, storage_.values_size_in_bytes_);
+        }
+
         /*----- Return entry handle containing all values. -----*/
         return value_entry(ptr);
     }
@@ -551,14 +570,26 @@ std::pair<HashTable::entry_t, Bool>
 OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> key)
 {
     /*----- If high watermark is reached, perform rehashing and update high watermark. -----*/
-    IF (num_entries_ == high_watermark_absolute_) {
+    IF (num_entries_ == high_watermark_absolute_) { // XXX: num_entries_ - 1U iff predication predicate is not fulfilled
         rehash();
         update_high_watermark();
     };
     Wasm_insist(num_entries_ < high_watermark_absolute_);
 
+    /*----- If predication is used, introduce predication variable and update it before inserting a key. -----*/
+    std::optional<Var<Bool>> pred;
+    if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
+        pred = env.extract_predicate().is_true_and_not_null();
+        if (not predication_dummy_)
+            create_predication_dummy();
+    }
+    M_insist(not pred or predication_dummy_);
+
     /*----- Compute bucket address by hashing the key. Create constant variable to do not recompute the hash. -----*/
-    const Var<Ptr<void>> bucket(hash_to_bucket(clone(key))); // clone key since we need it again for insertion
+    const Var<Ptr<void>> bucket(
+        pred ? Select(*pred, hash_to_bucket(clone(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
+             : hash_to_bucket(clone(key))
+    ); // clone key since we need it again for insertion
 
     /*----- Set reference count, i.e. occupied slots, of this bucket to its initial value. -----*/
     Var<PrimitiveExpr<ref_t>> refs(0);
@@ -575,16 +606,18 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
 
     /*----- If unoccupied slot is found, i.e. key does not already exist, insert entry for it. -----*/
     const Var<Bool> slot_unoccupied(reference_count(slot) == ref_t(0)); // create constant variable since `slot` may change
+    if (pred)
+        Wasm_insist(*pred or (slot_unoccupied and refs == ref_t(0)), "predication dummy must always be unoccupied");
     IF (slot_unoccupied) {
         /*----- Update reference count of this bucket. -----*/
         Wasm_insist(reference_count(bucket) <= refs, "reference count must increase if unoccupied slot is found");
-        reference_count(bucket) = refs + ref_t(1);
+        reference_count(bucket) = refs + ref_t(1); // no predication special case since bucket equals slot if dummy is used
 
-        /*----- Set slot as occupied. -----*/
-        reference_count(slot) = ref_t(1);
+        /*----- Iff no predication is used or predicate is fulfilled, set slot as occupied. -----*/
+        reference_count(slot) = pred ? pred->to<ref_t>() : PrimitiveExpr<ref_t>(1);
 
         /*----- Update number of entries. -----*/
-        num_entries_ += 1U;
+        num_entries_ += pred ? pred->to<uint32_t>() : U32(1);
         Wasm_insist(num_entries_ < capacity_, "at least one entry must always be unoccupied for lookups");
 
         /*----- Insert key. -----*/
@@ -594,7 +627,16 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
             /*----- Allocate memory for out-of-place values and set pointer to it. -----*/
             Ptr<void> ptr =
                 Module::Allocator().allocate(storage_.values_size_in_bytes_, storage_.values_max_alignment_in_bytes_);
-            *(slot + storage_.ptr_offset_in_bytes_).template to<uint32_t*>() = ptr.to<uint32_t>();
+            *(slot + storage_.ptr_offset_in_bytes_).template to<uint32_t*>() = ptr.clone().to<uint32_t>();
+
+            if (pred) {
+                /*----- Store address and size of dummy predication entry to free them later. -----*/
+                var_t<Ptr<void>> ptr_; // create global variable iff `IsGlobal` to be able to access it later for deallocation
+                ptr_ = ptr.clone();
+                dummy_allocations_.emplace_back(ptr_, storage_.values_size_in_bytes_);
+            }
+
+            ptr.discard(); // since it was always cloned
         }
     };
 
@@ -611,8 +653,19 @@ template<bool IsGlobal, bool ValueInPlace>
 std::pair<HashTable::const_entry_t, Bool>
 OpenAddressingHashTable<IsGlobal, ValueInPlace>::find(std::vector<SQL_t> key) const
 {
+    /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
+    std::optional<Bool> pred;
+    if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
+        pred.emplace(env.extract_predicate().is_true_and_not_null());
+        if (not predication_dummy_)
+            const_cast<OpenAddressingHashTable<IsGlobal, ValueInPlace>*>(this)->create_predication_dummy();
+    }
+    M_insist(not pred or predication_dummy_);
+
     /*----- Compute bucket address by hashing the key. -----*/
-    Ptr<void> bucket = hash_to_bucket(clone(key)); // clone key since we need it again for comparison
+    Ptr<void> bucket =
+        pred ? Select(*pred, hash_to_bucket(clone(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
+             : hash_to_bucket(clone(key)); // clone key since we need it again for comparison
 
     /*----- Search first slot with the given key but abort if an unoccupied slot is found. -----*/
     Var<Ptr<void>> slot(bucket);
@@ -650,8 +703,19 @@ template<bool IsGlobal, bool ValueInPlace>
 void OpenAddressingHashTable<IsGlobal, ValueInPlace>::for_each_in_equal_range(std::vector<SQL_t> key,
                                                                               callback_t Pipeline) const
 {
+    /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
+    std::optional<Bool> pred;
+    if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
+        pred.emplace(env.extract_predicate().is_true_and_not_null());
+        if (not predication_dummy_)
+            const_cast<OpenAddressingHashTable<IsGlobal, ValueInPlace>*>(this)->create_predication_dummy();
+    }
+    M_insist(not pred or predication_dummy_);
+
     /*----- Compute bucket address by hashing the key. -----*/
-    Ptr<void> bucket = hash_to_bucket(clone(key)); // clone key since we need it again for comparison
+    Ptr<void> bucket =
+        pred ? Select(*pred, hash_to_bucket(clone(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
+             : hash_to_bucket(clone(key)); // clone key since we need it again for comparison
 
     /*----- Iterate over slots and call pipeline (with entry handle argument) on matches with the given key. -----*/
     Var<Ptr<void>> slot(bucket);
@@ -976,6 +1040,8 @@ template<bool IsGlobal, bool ValueInPlace>
 void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
 {
     auto emit_rehash = [this](){
+        auto S = CodeGenContext::Get().scoped_environment(); // fresh environment to remove predication while rehashing
+
         /*----- Store old begin and end (since they will be overwritten). -----*/
         const Var<Ptr<void>> begin_old(begin());
         const Var<Ptr<void>> end_old(end());

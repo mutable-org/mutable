@@ -1359,7 +1359,7 @@ void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline
     /*----- Compute initial capacity of hash table. -----*/
     uint32_t initial_capacity;
     if (build.has_info())
-        initial_capacity = build.info().estimated_cardinality / HIGH_WATERMARK;
+        initial_capacity = build.info().estimated_cardinality / HIGH_WATERMARK; // TODO: estimation depends on whether predication is enabled
     else if (auto scan = cast<const ScanOperator>(&build))
         initial_capacity = scan->store().num_rows() / HIGH_WATERMARK;
     else
@@ -1407,7 +1407,7 @@ void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline
         auto &env = CodeGenContext::Get().env();
 
         /* TODO: may check for NULL on probe key as well, branching + predicated version */
-        /*----- Probe with probe key. FIXME: add predication -----*/
+        /*----- Probe with probe key. -----*/
         std::vector<SQL_t> key;
         key.emplace_back(env.get(probe_key));
         ht->for_each_in_equal_range(std::move(key), [&, Pipeline=std::move(Pipeline)](HashTable::const_entry_t entry){

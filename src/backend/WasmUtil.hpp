@@ -168,6 +168,7 @@ struct Environment
     ~Environment() {
         for (auto &p : exprs_)
             discard(p.second);
+        /* do not discard `predicate_` to make sure predication predicate is used if it was set */
     }
 
     /*----- Access methods -------------------------------------------------------------------------------------------*/

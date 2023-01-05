@@ -1329,9 +1329,11 @@ Condition SimpleHashJoin::post_condition(const Match<SimpleHashJoin>&)
 
 void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline)
 {
-    using PROBING_STRATEGY = QuadraticProbing; // TODO: determine probing strategy
-    constexpr uint64_t PAYLOAD_SIZE_THRESHOLD_IN_BITS = 64; // TODO: determine threshold
-    constexpr double HIGH_WATERMARK = 0.8; // TODO: determine high watermark
+    // TODO: determine setup
+    using PROBING_STRATEGY = QuadraticProbing;
+    constexpr bool USE_CHAINED_HASHING = true;
+    constexpr uint64_t PAYLOAD_SIZE_THRESHOLD_IN_BITS = 64;
+    constexpr double HIGH_WATERMARK = 1.5;
 
     const auto &build = *M.join.child(0);
     const auto &probe = *M.join.child(1);
@@ -1373,15 +1375,20 @@ void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline
         initial_capacity = 1024; // fallback
 
     /*----- Create hash table for build child. -----*/
-    std::unique_ptr<OpenAddressingHashTableBase> ht;
+    std::unique_ptr<HashTable> ht;
     std::vector<HashTable::index_t> build_key_idx = { ht_schema[build_key].first };
-    if (payload_size_in_bits <= PAYLOAD_SIZE_THRESHOLD_IN_BITS)
-        ht = std::make_unique<GlobalOpenAddressingInPlaceHashTable>(ht_schema, std::move(build_key_idx),
-                                                                    initial_capacity);
-    else
-        ht = std::make_unique<GlobalOpenAddressingOutOfPlaceHashTable>(ht_schema, std::move(build_key_idx),
-                                                                       initial_capacity);
-    ht->set_probing_strategy<PROBING_STRATEGY>();
+    if (USE_CHAINED_HASHING) {
+        ht = std::make_unique<GlobalChainedHashTable>(ht_schema, std::move(build_key_idx), initial_capacity);
+    } else {
+        ++initial_capacity; // since at least one entry must always be unoccupied for lookups
+        if (payload_size_in_bits <= PAYLOAD_SIZE_THRESHOLD_IN_BITS)
+            ht = std::make_unique<GlobalOpenAddressingInPlaceHashTable>(ht_schema, std::move(build_key_idx),
+                                                                        initial_capacity);
+        else
+            ht = std::make_unique<GlobalOpenAddressingOutOfPlaceHashTable>(ht_schema, std::move(build_key_idx),
+                                                                           initial_capacity);
+        as<OpenAddressingHashTableBase>(*ht).set_probing_strategy<PROBING_STRATEGY>();
+    }
     ht->set_high_watermark(HIGH_WATERMARK);
 
     /*----- Create function for build child. -----*/

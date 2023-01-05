@@ -2008,11 +2008,10 @@ struct PrimitiveExpr<T>
         return ConstReference<pointed_type>(*this);
     }
 
-    /** Dereferencing a pointer `PrimitiveExpr<T*>` yields a `Reference<T>`. */
-    PrimitiveExpr<pointed_type>
-    operator->()
-    requires dsl_primitive<pointed_type>
-    { return operator*(); } // implicitly convert from Reference<pointed_type>
+    /** Dereferencing and loading a `const` pointer `PrimitiveExpr<T*>` yields a `PrimitiveExpr<T>`. */
+    PrimitiveExpr<pointed_type> operator->() const requires dsl_primitive<pointed_type> {
+        return operator*(); // implicitly convert from ConstReference<pointed_type>
+    }
 
 
     /*------------------------------------------------------------------------------------------------------------------
@@ -2913,6 +2912,8 @@ struct Variable<T, Kind, CanBeNull>
 
     UNARY_LIST(UNARY)
     UNARY(hash)                     // from PrimitiveExpr and Expr
+    UNARY(operator *)               // from PrimitiveExpr for pointers
+    UNARY(operator ->)              // from PrimitiveExpr for pointers
     UNARY(is_nullptr)               // from PrimitiveExpr for pointers
     UNARY(is_null)                  // from Expr
     UNARY(not_null)                 // from Expr
@@ -2948,17 +2949,6 @@ struct Variable<T, Kind, CanBeNull>
     }
 ASSIGNOP_LIST(ASSIGNOP)
 #undef ASSIGNOP
-
-
-    /*------------------------------------------------------------------------------------------------------------------
-     * Special operations for pointers
-     *----------------------------------------------------------------------------------------------------------------*/
-
-    auto operator*()
-    requires dsl_pointer_to_primitive<T> { return Reference<std::remove_pointer_t<T>>(PrimitiveExpr<T>(*this)); }
-
-    auto operator*() const
-    requires dsl_pointer_to_primitive<T> { return ConstReference<std::remove_pointer_t<T>>(PrimitiveExpr<T>(*this)); }
 };
 
 namespace detail {

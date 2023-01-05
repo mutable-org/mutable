@@ -361,9 +361,11 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
 
 void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pipeline)
 {
-    using PROBING_STRATEGY = LinearProbing; // TODO: determine probing strategy
-    constexpr uint64_t AGGREGATES_SIZE_THRESHOLD_IN_BITS = 64; // TODO: determine threshold
-    constexpr double HIGH_WATERMARK = 0.8; // TODO: determine high watermark
+    // TODO: determine setup
+    using PROBING_STRATEGY = LinearProbing;
+    constexpr bool USE_CHAINED_HASHING = false;
+    constexpr uint64_t AGGREGATES_SIZE_THRESHOLD_IN_BITS = 64;
+    constexpr double HIGH_WATERMARK = 0.8;
 
     const auto num_keys = M.grouping.group_by().size();
 
@@ -522,16 +524,21 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pi
         initial_capacity = 1024; // fallback
 
     /*----- Create hash table. -----*/
-    std::unique_ptr<OpenAddressingHashTableBase> ht;
+    std::unique_ptr<HashTable> ht;
     std::vector<HashTable::index_t> key_indices(num_keys);
     std::iota(key_indices.begin(), key_indices.end(), 0);
-    if (aggregates_size_in_bits <= AGGREGATES_SIZE_THRESHOLD_IN_BITS)
-        ht = std::make_unique<GlobalOpenAddressingInPlaceHashTable>(ht_schema, std::move(key_indices),
-                                                                    initial_capacity);
-    else
-        ht = std::make_unique<GlobalOpenAddressingOutOfPlaceHashTable>(ht_schema, std::move(key_indices),
-                                                                       initial_capacity);
-    ht->set_probing_strategy<PROBING_STRATEGY>();
+    if (USE_CHAINED_HASHING) {
+        ht = std::make_unique<GlobalChainedHashTable>(ht_schema, std::move(key_indices), initial_capacity);
+    } else {
+        ++initial_capacity; // since at least one entry must always be unoccupied for lookups
+        if (aggregates_size_in_bits <= AGGREGATES_SIZE_THRESHOLD_IN_BITS)
+            ht = std::make_unique<GlobalOpenAddressingInPlaceHashTable>(ht_schema, std::move(key_indices),
+                                                                        initial_capacity);
+        else
+            ht = std::make_unique<GlobalOpenAddressingOutOfPlaceHashTable>(ht_schema, std::move(key_indices),
+                                                                           initial_capacity);
+        as<OpenAddressingHashTableBase>(*ht).set_probing_strategy<PROBING_STRATEGY>();
+    }
     ht->set_high_watermark(HIGH_WATERMARK);
 
     /*----- Create child function. -----*/

@@ -318,6 +318,660 @@ HashTable::set_byte_offsets(std::vector<HashTable::offset_t> &offsets_in_bytes, 
 }
 
 
+/*----- chained hash tables ------------------------------------------------------------------------------------------*/
+
+template<bool IsGlobal>
+ChainedHashTable<IsGlobal>::ChainedHashTable(const Schema &schema, std::vector<HashTable::index_t> key_indices,
+                                             uint32_t initial_capacity)
+    : HashTable(schema, std::move(key_indices))
+    , capacity_(ceil_to_pow_2(initial_capacity))
+    , high_watermark_absolute_(ceil_to_pow_2(initial_capacity))
+{
+    std::vector<const Type*> types;
+    bool has_nullable = false;
+
+    /*----- Add pointer to next entry in linked collision list. -----*/
+    types.push_back(Type::Get_Integer(Type::TY_Vector, sizeof(uint32_t)));
+
+    /*----- Add key types. -----*/
+    for (auto k : key_indices_) {
+        types.push_back(schema[k].type);
+        has_nullable |= schema[k].nullable();
+    }
+
+    /*----- Add value types. -----*/
+    for (auto v : value_indices_) {
+        types.push_back(schema[v].type);
+        has_nullable |= schema[v].nullable();
+    }
+
+    if (has_nullable) {
+        /*----- Add type for NULL bitmap. Pointer to next entry in collision list cannot be NULL. -----*/
+        types.push_back(Type::Get_Bitmap(Type::TY_Vector, types.size() - 1));
+    }
+
+    /*----- Compute entry offsets and set entry size and alignment requirement. -----*/
+    std::vector<HashTable::offset_t> offsets;
+    std::tie(entry_size_in_bytes_, entry_max_alignment_in_bytes_) = set_byte_offsets(offsets, types);
+
+    /*----- Set offset for pointer to next entry in collision list. -----*/
+    ptr_offset_in_bytes_ = offsets.front();
+
+    if (has_nullable) {
+        /*----- Set offset for NULL bitmap and remove it from `offsets`. -----*/
+        null_bitmap_offset_in_bytes_ = offsets.back();
+        offsets.pop_back();
+    }
+
+    /*----- Set entry offset. Exclude offset for pointer to next entry in collision list. -----*/
+    entry_offsets_in_bytes_ = std::vector<HashTable::offset_t>(std::next(offsets.begin()), offsets.end());
+
+    /*----- Allocate memory for initial capacity. -----*/
+    address_ = Module::Allocator().allocate(size_in_bytes(), sizeof(uint32_t));
+
+    /*----- Clear initial hash table. -----*/
+    clear();
+}
+
+template<bool IsGlobal>
+ChainedHashTable<IsGlobal>::~ChainedHashTable()
+{
+    /*----- Free collision list entries. -----*/
+    Var<Ptr<void>> it(begin());
+    WHILE (it != end()) {
+        Wasm_insist(begin() <= it and it < end(), "bucket out-of-bounds");
+        Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint32_t*>()));
+        WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
+            const Var<Ptr<void>> tmp(bucket_it);
+            bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
+            Module::Allocator().deallocate(tmp, entry_size_in_bytes_);
+        }
+        it += int32_t(sizeof(uint32_t));
+    }
+
+    /*----- Free all buckets. -----*/
+    Module::Allocator().deallocate(address_, size_in_bytes());
+
+    /*----- Free dummy entries. -----*/
+    for (auto it = dummy_allocations_.rbegin(); it != dummy_allocations_.rend(); ++it)
+        Module::Allocator().deallocate(it->first, it->second);
+    if (predication_dummy_) {
+#if 1
+        Wasm_insist(Ptr<void>(*predication_dummy_->template to<uint32_t*>()).is_nullptr(),
+                    "predication dummy must always contain an empty collision list");
+#else
+        Var<Ptr<void>> bucket_it(Ptr<void>(*predication_dummy_->template to<uint32_t*>()));
+        WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
+            const Var<Ptr<void>> tmp(bucket_it);
+            bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
+            Module::Allocator().deallocate(tmp, entry_size_in_bytes_);
+        }
+#endif
+        Module::Allocator().deallocate(*predication_dummy_, sizeof(uint32_t));
+    }
+}
+
+template<bool IsGlobal>
+void ChainedHashTable<IsGlobal>::clear()
+{
+    Var<Ptr<void>> it(begin());
+    WHILE (it != end()) {
+        Wasm_insist(begin() <= it and it < end(), "entry out-of-bounds");
+#if 0
+        Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint32_t*>())); // XXX: may be random address
+        WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
+            const Var<Ptr<void>> tmp(bucket_it);
+            bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
+            Module::Allocator().deallocate(tmp, entry_size_in_bytes_); // free collision list entry
+        }
+#endif
+        *(it + ptr_offset_in_bytes_).to<uint32_t*>() = 0U; // set to nullptr
+        it += int32_t(sizeof(uint32_t));
+    }
+}
+
+template<bool IsGlobal>
+Ptr<void> ChainedHashTable<IsGlobal>::hash_to_bucket(std::vector<SQL_t> key) const
+{
+    M_insist(key.size() == key_indices_.size(),
+             "provided number of key elements does not match hash table's number of key indices");
+
+    /*----- Collect types of key together with the respective value. -----*/
+    std::vector<std::pair<const Type*, SQL_t>> values;
+    values.reserve(key_indices_.size());
+    auto key_it = key.begin();
+    for (auto k : key_indices_)
+        values.emplace_back(schema_.get()[k].type, std::move(*key_it++));
+
+    /*----- Compute hash of key using Murmur3_64a. -----*/
+    U64 hash = murmur3_64a_hash(std::move(values));
+
+    /*----- Compute bucket address. -----*/
+    U32 bucket_idx = hash.to<uint32_t>() bitand (capacity_ - 1U); // modulo capacity_
+    return begin() + (bucket_idx * uint32_t(sizeof(uint32_t))).make_signed();
+}
+
+template<bool IsGlobal>
+HashTable::entry_t ChainedHashTable<IsGlobal>::emplace(std::vector<SQL_t> key)
+{
+    /*----- If high watermark is reached, perform rehashing and update high watermark. -----*/
+    IF (num_entries_ == high_watermark_absolute_) { // XXX: num_entries_ - 1U iff predication predicate is not fulfilled
+        rehash();
+        update_high_watermark();
+    };
+
+    return emplace_without_rehashing(std::move(key));
+}
+
+template<bool IsGlobal>
+HashTable::entry_t ChainedHashTable<IsGlobal>::emplace_without_rehashing(std::vector<SQL_t> key)
+{
+    Wasm_insist(num_entries_ < high_watermark_absolute_);
+
+    /*----- If predication is used, introduce predication variable and update it before inserting a key. -----*/
+    std::optional<Var<Bool>> pred;
+    if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
+        pred = env.extract_predicate().is_true_and_not_null();
+        if (not predication_dummy_)
+            create_predication_dummy();
+    }
+    M_insist(not pred or predication_dummy_);
+
+    /*----- Compute bucket address by hashing the key. Create constant variable to do not recompute the hash. -----*/
+    const Var<Ptr<void>> bucket(
+        pred ? Select(*pred, hash_to_bucket(clone(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
+             : hash_to_bucket(clone(key))
+    ); // clone key since we need it again for insertion
+
+    /*----- Allocate memory for entry. -----*/
+    Ptr<void> entry = Module::Allocator().allocate(entry_size_in_bytes_, entry_max_alignment_in_bytes_);
+
+    /*----- Iff no predication is used or predicate is fulfilled, insert entry at collision list's front. ---*/
+    *(entry.clone() + ptr_offset_in_bytes_).to<uint32_t*>() = *bucket.to<uint32_t*>();
+    *bucket.to<uint32_t*>() = pred ? Select(*pred, entry.clone().to<uint32_t>(), 0U) : entry.clone().to<uint32_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
+
+    /*----- Update number of entries. -----*/
+    num_entries_ += pred ? pred->to<uint32_t>() : U32(1);
+
+    /*----- Insert key. -----*/
+    insert_key(entry.clone(), std::move(key));
+
+    /*----- Return entry handle containing all values. -----*/
+    return value_entry(entry);
+}
+
+template<bool IsGlobal>
+std::pair<HashTable::entry_t, Bool> ChainedHashTable<IsGlobal>::try_emplace(std::vector<SQL_t> key)
+{
+    /*----- If high watermark is reached, perform rehashing and update high watermark. -----*/
+    IF (num_entries_ == high_watermark_absolute_) { // XXX: num_entries_ - 1U iff predication predicate is not fulfilled
+        rehash();
+        update_high_watermark();
+    };
+    Wasm_insist(num_entries_ < high_watermark_absolute_);
+
+    /*----- If predication is used, introduce predication variable and update it before inserting a key. -----*/
+    std::optional<Var<Bool>> pred;
+    if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
+        pred = env.extract_predicate().is_true_and_not_null();
+        if (not predication_dummy_)
+            create_predication_dummy();
+    }
+    M_insist(not pred or predication_dummy_);
+
+    /*----- Compute bucket address by hashing the key. Create constant variable to do not recompute the hash. -----*/
+    const Var<Ptr<void>> bucket(
+        pred ? Select(*pred, hash_to_bucket(clone(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
+             : hash_to_bucket(clone(key))
+    ); // clone key since we need it again for insertion
+
+    /*----- Iterate until the end of the collision list but abort if key already exists. -----*/
+    Var<Ptr<void>> bucket_it(Ptr<void>(*bucket.to<uint32_t*>()));
+    WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
+        BREAK(equal_key(bucket_it, clone(key))); // clone key (see above)
+        bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
+    }
+
+    /*----- If end is reached, i.e. key does not already exist, insert entry for it. -----*/
+    Bool end_reached = bucket_it.is_nullptr();
+    if (pred)
+        Wasm_insist(*pred or (end_reached.clone() and bucket_it == Ptr<void>(*bucket.to<uint32_t*>())),
+                    "predication dummy must always contain an empty collision list");
+    IF (end_reached.clone()) {
+        /*----- Allocate memory for entry. -----*/
+        Ptr<void> entry = Module::Allocator().allocate(entry_size_in_bytes_, entry_max_alignment_in_bytes_);
+        bucket_it = entry.clone();
+
+        /*----- Iff no predication is used or predicate is fulfilled, insert entry at the collision list's front. ---.*/
+        *(entry.clone() + ptr_offset_in_bytes_).to<uint32_t*>() = *bucket.to<uint32_t*>();
+        *bucket.to<uint32_t*>() = pred ? Select(*pred, entry.clone().to<uint32_t>(), 0U) : entry.clone().to<uint32_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
+
+        /*----- Update number of entries. -----*/
+        num_entries_ += pred ? pred->to<uint32_t>() : U32(1);
+
+        /*----- Insert key. -----*/
+        insert_key(entry, std::move(key));
+    };
+
+    /*----- Return entry handle containing all values and the flag whether an insertion was performed. -----*/
+    return { value_entry(bucket_it), end_reached };
+}
+
+template<bool IsGlobal>
+std::pair<HashTable::const_entry_t, Bool> ChainedHashTable<IsGlobal>::find(std::vector<SQL_t> key) const
+{
+    /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
+    std::optional<Bool> pred;
+    if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
+        pred.emplace(env.extract_predicate().is_true_and_not_null());
+        if (not predication_dummy_)
+            const_cast<ChainedHashTable<IsGlobal>*>(this)->create_predication_dummy();
+    }
+    M_insist(not pred or predication_dummy_);
+
+    /*----- Compute bucket address by hashing the key. -----*/
+    Ptr<void> bucket =
+        pred ? Select(*pred, hash_to_bucket(clone(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
+             : hash_to_bucket(clone(key)); // clone key since we need it again for comparison
+
+    /*----- Iterate until the end of the collision list but abort if key is found. -----*/
+    Var<Ptr<void>> bucket_it(Ptr<void>(*bucket.to<uint32_t*>()));
+    WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
+        BREAK(equal_key(bucket_it, std::move(key)));
+        bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
+    }
+
+    /*----- Key is found iff end of collision list is not yet reached. -----*/
+    Bool key_found = not bucket_it.is_nullptr();
+
+    /*----- Return entry handle containing both keys and values and the flag whether key was found. -----*/
+    return { entry(bucket_it), key_found };
+}
+
+template<bool IsGlobal>
+void ChainedHashTable<IsGlobal>::for_each(callback_t Pipeline) const
+{
+    /*----- Iterate over all collision list entries and call pipeline (with entry handle argument). -----*/
+    Var<Ptr<void>> it(begin());
+    WHILE (it != end()) {
+        Wasm_insist(begin() <= it and it < end(), "bucket out-of-bounds");
+        Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint32_t*>()));
+        WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
+            Pipeline(entry(bucket_it));
+            bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
+        }
+        it += int32_t(sizeof(uint32_t));
+    }
+}
+
+template<bool IsGlobal>
+void ChainedHashTable<IsGlobal>::for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline) const
+{
+    /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
+    std::optional<Bool> pred;
+    if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
+        pred.emplace(env.extract_predicate().is_true_and_not_null());
+        if (not predication_dummy_)
+            const_cast<ChainedHashTable<IsGlobal>*>(this)->create_predication_dummy();
+    }
+    M_insist(not pred or predication_dummy_);
+
+    /*----- Compute bucket address by hashing the key. -----*/
+    Ptr<void> bucket =
+        pred ? Select(*pred, hash_to_bucket(clone(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
+             : hash_to_bucket(clone(key)); // clone key since we need it again for comparison
+
+    /*----- Iterate over collision list entries and call pipeline (with entry handle argument) on matches. -----*/
+    Var<Ptr<void>> bucket_it(Ptr<void>(*bucket.to<uint32_t*>()));
+    WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
+        IF (equal_key(bucket_it, std::move(key))) { // match found
+            Pipeline(entry(bucket_it));
+        };
+        bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
+    }
+}
+
+template<bool IsGlobal>
+HashTable::entry_t ChainedHashTable<IsGlobal>::dummy_entry()
+{
+    /*----- Allocate memory for a dummy entry. -----*/
+    var_t<Ptr<void>> entry; // create global variable iff `IsGlobal` to be able to access it later for deallocation
+    entry = Module::Allocator().allocate(entry_size_in_bytes_, entry_max_alignment_in_bytes_);
+
+    /*----- Store address and size of dummy entry to free them later. -----*/
+    dummy_allocations_.emplace_back(entry, entry_size_in_bytes_);
+
+    /*----- Return entry handle containing all values. -----*/
+    return value_entry(entry);
+}
+
+template<bool IsGlobal>
+Bool ChainedHashTable<IsGlobal>::equal_key(Ptr<void> entry, std::vector<SQL_t> key) const
+{
+    Var<Bool> res(true);
+
+    for (std::size_t i = 0; i < key_indices_.size(); ++i) {
+        auto &e = schema_.get()[key_indices_[i]];
+        const auto off = entry_offsets_in_bytes_[i];
+        auto compare_equal = [&]<typename T>() {
+            using type = typename T::type;
+            M_insist(std::holds_alternative<T>(key[i]));
+            if (e.nullable()) { // entry may be NULL
+                const_reference_t<T> ref((entry.clone() + off).template to<type*>(),
+                                         entry.clone() + null_bitmap_offset_in_bytes_, i);
+                res = res and ref == *std::get_if<T>(&key[i]);
+            } else { // entry must not be NULL
+                const_reference_t<T> ref((entry.clone() + off).template to<type*>());
+                res = res and ref == *std::get_if<T>(&key[i]);
+            }
+        };
+        visit(overloaded {
+            [&](const Boolean&) { compare_equal.template operator()<_Bool>(); },
+            [&](const Numeric &n) {
+                switch (n.kind) {
+                    case Numeric::N_Int:
+                    case Numeric::N_Decimal:
+                        switch (n.size()) {
+                            default: M_unreachable("invalid size");
+                            case  8: compare_equal.template operator()<_I8 >(); break;
+                            case 16: compare_equal.template operator()<_I16>(); break;
+                            case 32: compare_equal.template operator()<_I32>(); break;
+                            case 64: compare_equal.template operator()<_I64>(); break;
+                        }
+                        break;
+                    case Numeric::N_Float:
+                        if (n.size() <= 32)
+                            compare_equal.template operator()<_Float>();
+                        else
+                            compare_equal.template operator()<_Double>();
+                }
+            },
+            [&](const CharacterSequence &cs) {
+                M_insist(std::holds_alternative<Ptr<Char>>(key[i]));
+                if (e.nullable()) { // entry may be NULL
+                    const_reference_t<Ptr<Char>> ref((entry.clone() + off).template to<char*>(), cs.size() / 8,
+                                                     entry.clone() + null_bitmap_offset_in_bytes_, i);
+                    res = res and ref == *std::get_if<Ptr<Char>>(&key[i]);
+                } else { // entry must not be NULL
+                    const_reference_t<Ptr<Char>> ref((entry.clone() + off).template to<char*>(), cs.size() / 8);
+                    res = res and ref == *std::get_if<Ptr<Char>>(&key[i]);
+                }
+            },
+            [&](const Date&) { compare_equal.template operator()<_I32>(); },
+            [&](const DateTime&) { compare_equal.template operator()<_I64>(); },
+            [](auto&&) { M_unreachable("invalid type"); },
+        }, *e.type);
+    }
+
+    entry.discard(); // since it was always cloned
+
+    return res;
+}
+
+template<bool IsGlobal>
+void ChainedHashTable<IsGlobal>::insert_key(Ptr<void> entry, std::vector<SQL_t> key)
+{
+    for (std::size_t i = 0; i < key_indices_.size(); ++i) {
+        auto &e = schema_.get()[key_indices_[i]];
+        const auto off = entry_offsets_in_bytes_[i];
+        auto insert = [&]<typename T>() {
+            using type = typename T::type;
+            M_insist(std::holds_alternative<T>(key[i]));
+            if (e.nullable()) { // entry may be NULL
+                reference_t<T> ref((entry.clone() + off).template to<type*>(),
+                                   entry.clone() + null_bitmap_offset_in_bytes_, i);
+                ref = *std::get_if<T>(&key[i]);
+            } else { // entry must not be NULL
+                reference_t<T> ref((entry.clone() + off).template to<type*>());
+                ref = *std::get_if<T>(&key[i]);
+            }
+        };
+        visit(overloaded {
+            [&](const Boolean&) { insert.template operator()<_Bool>(); },
+            [&](const Numeric &n) {
+                switch (n.kind) {
+                    case Numeric::N_Int:
+                    case Numeric::N_Decimal:
+                        switch (n.size()) {
+                            default: M_unreachable("invalid size");
+                            case  8: insert.template operator()<_I8 >(); break;
+                            case 16: insert.template operator()<_I16>(); break;
+                            case 32: insert.template operator()<_I32>(); break;
+                            case 64: insert.template operator()<_I64>(); break;
+                        }
+                        break;
+                    case Numeric::N_Float:
+                        if (n.size() <= 32)
+                            insert.template operator()<_Float>();
+                        else
+                            insert.template operator()<_Double>();
+                }
+            },
+            [&](const CharacterSequence &cs) {
+                M_insist(std::holds_alternative<Ptr<Char>>(key[i]));
+                if (e.nullable()) { // entry may be NULL
+                    reference_t<Ptr<Char>> ref((entry.clone() + off).template to<char*>(), cs.size() / 8,
+                                               entry.clone() + null_bitmap_offset_in_bytes_, i);
+                    ref = *std::get_if<Ptr<Char>>(&key[i]);
+                } else { // entry must not be NULL
+                    reference_t<Ptr<Char>> ref((entry.clone() + off).template to<char*>(), cs.size() / 8);
+                    ref = *std::get_if<Ptr<Char>>(&key[i]);
+                }
+            },
+            [&](const Date&) { insert.template operator()<_I32>(); },
+            [&](const DateTime&) { insert.template operator()<_I64>(); },
+            [](auto&&) { M_unreachable("invalid type"); },
+        }, *e.type);
+    }
+
+    entry.discard(); // since it was always cloned
+}
+
+template<bool IsGlobal>
+HashTable::entry_t ChainedHashTable<IsGlobal>::value_entry(Ptr<void> entry) const
+{
+    entry_t value_entry;
+
+    for (std::size_t i = 0; i < value_indices_.size(); ++i) {
+        auto &e = schema_.get()[value_indices_[i]];
+        const auto off = entry_offsets_in_bytes_[i + key_indices_.size()];
+        auto add = [&]<typename T>() {
+            using type = typename T::type;
+            if (e.nullable()) { // entry may be NULL
+                reference_t<T> ref((entry.clone() + off).template to<type*>(),
+                                   entry.clone() + null_bitmap_offset_in_bytes_, i + key_indices_.size());
+                value_entry.add(e.id, std::move(ref));
+            } else { // entry must not be NULL
+                reference_t<T> ref((entry.clone() + off).template to<type*>());
+                value_entry.add(e.id, std::move(ref));
+            }
+        };
+        visit(overloaded {
+            [&](const Boolean&) { add.template operator()<_Bool>(); },
+            [&](const Numeric &n) {
+                switch (n.kind) {
+                    case Numeric::N_Int:
+                    case Numeric::N_Decimal:
+                        switch (n.size()) {
+                            default: M_unreachable("invalid size");
+                            case  8: add.template operator()<_I8 >(); break;
+                            case 16: add.template operator()<_I16>(); break;
+                            case 32: add.template operator()<_I32>(); break;
+                            case 64: add.template operator()<_I64>(); break;
+                        }
+                        break;
+                    case Numeric::N_Float:
+                        if (n.size() <= 32)
+                            add.template operator()<_Float>();
+                        else
+                            add.template operator()<_Double>();
+                }
+            },
+            [&](const CharacterSequence &cs) {
+                if (e.nullable()) { // entry may be NULL
+                    reference_t<Ptr<Char>> ref((entry.clone() + off).template to<char*>(), cs.size() / 8,
+                                               entry.clone() + null_bitmap_offset_in_bytes_, i + key_indices_.size());
+                    value_entry.add(e.id, std::move(ref));
+                } else { // entry must not be NULL
+                    reference_t<Ptr<Char>> ref((entry.clone() + off).template to<char*>(), cs.size() / 8);
+                    value_entry.add(e.id, std::move(ref));
+                }
+            },
+            [&](const Date&) { add.template operator()<_I32>(); },
+            [&](const DateTime&) { add.template operator()<_I64>(); },
+            [](auto&&) { M_unreachable("invalid type"); },
+        }, *e.type);
+    }
+
+    entry.discard(); // since it was always cloned
+
+    return value_entry;
+}
+
+template<bool IsGlobal>
+HashTable::const_entry_t ChainedHashTable<IsGlobal>::entry(Ptr<void> entry) const
+{
+    const_entry_t _entry;
+
+    for (std::size_t i = 0; i < schema_.get().num_entries(); ++i) {
+        auto &e = schema_.get()[i < key_indices_.size() ? key_indices_[i] : value_indices_[i - key_indices_.size()]];
+        const auto off = entry_offsets_in_bytes_[i];
+        auto add = [&]<typename T>() {
+            using type = typename T::type;
+            if (e.nullable()) { // entry may be NULL
+                const_reference_t<T> ref((entry.clone() + off).template to<type*>(),
+                                         entry.clone() + null_bitmap_offset_in_bytes_, i);
+                _entry.add(e.id, std::move(ref));
+            } else { // entry must not be NULL
+                const_reference_t<T> ref((entry.clone() + off).template to<type*>());
+                _entry.add(e.id, std::move(ref));
+            }
+        };
+        visit(overloaded {
+            [&](const Boolean&) { add.template operator()<_Bool>(); },
+            [&](const Numeric &n) {
+                switch (n.kind) {
+                    case Numeric::N_Int:
+                    case Numeric::N_Decimal:
+                        switch (n.size()) {
+                            default: M_unreachable("invalid size");
+                            case  8: add.template operator()<_I8 >(); break;
+                            case 16: add.template operator()<_I16>(); break;
+                            case 32: add.template operator()<_I32>(); break;
+                            case 64: add.template operator()<_I64>(); break;
+                        }
+                        break;
+                    case Numeric::N_Float:
+                        if (n.size() <= 32)
+                            add.template operator()<_Float>();
+                        else
+                            add.template operator()<_Double>();
+                }
+            },
+            [&](const CharacterSequence &cs) {
+                if (e.nullable()) { // entry may be NULL
+                    const_reference_t<Ptr<Char>> ref((entry.clone() + off).template to<char*>(), cs.size() / 8,
+                                                     entry.clone() + null_bitmap_offset_in_bytes_, i);
+                    _entry.add(e.id, std::move(ref));
+                } else { // entry must not be NULL
+                    const_reference_t<Ptr<Char>> ref((entry.clone() + off).template to<char*>(), cs.size() / 8);
+                    _entry.add(e.id, std::move(ref));
+                }
+            },
+            [&](const Date&) { add.template operator()<_I32>(); },
+            [&](const DateTime&) { add.template operator()<_I64>(); },
+            [](auto&&) { M_unreachable("invalid type"); },
+        }, *e.type);
+    }
+
+    entry.discard(); // since it was always cloned
+
+    return _entry;
+}
+
+template<bool IsGlobal>
+void ChainedHashTable<IsGlobal>::rehash()
+{
+    auto emit_rehash = [this](){
+        auto S = CodeGenContext::Get().scoped_environment(); // fresh environment to remove predication while rehashing
+
+        /*----- Store old begin and end (since they will be overwritten). -----*/
+        const Var<Ptr<void>> begin_old(begin());
+        const Var<Ptr<void>> end_old(end());
+
+        /*----- Double capacity. -----*/
+        capacity_ <<= 1U;
+
+        /*----- Allocate memory for new hash table with updated capacity. -----*/
+        address_ = Module::Allocator().allocate(size_in_bytes(), sizeof(uint32_t));
+
+        /*----- Clear newly created hash table. -----*/
+        clear();
+
+        /*----- Insert each element from old hash table into new one. -----*/
+        Var<Ptr<void>> it(begin_old.val());
+        WHILE (it != end_old) {
+            Wasm_insist(begin_old <= it and it < end_old, "bucket out-of-bounds");
+            Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint32_t*>()));
+            WHILE (not bucket_it.is_nullptr()) { // another entry in old collision list
+                auto e_old = entry(it);
+
+                /*----- Access key from old entry. -----*/
+                std::vector<SQL_t> key;
+                for (auto k : key_indices_) {
+                    std::visit(overloaded {
+                        [&](auto &&r) -> void { key.emplace_back(r); },
+                        [](std::monostate) -> void { M_unreachable("invalid reference"); },
+                    }, e_old.extract(schema_.get()[k].id));
+                }
+
+                /*----- Compute new bucket address by hashing the key. Create variable to do not recompute the hash. -*/
+                const Var<Ptr<void>> bucket(hash_to_bucket(std::move(key)));
+
+                /*----- Store next entry's address in old collision list (since it will be overwritten). -----*/
+                const Var<Ptr<void>> tmp(Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>()));
+
+                /*----- Insert old entry at new collision list's front. No reallocation of the entry is needed. -----*/
+                *(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>() = *bucket.to<uint32_t*>();
+                *bucket.to<uint32_t*>() = bucket_it.to<uint32_t>();
+
+                /*----- Advance to next entry in old collision list. -----*/
+                bucket_it = tmp.val();
+            }
+
+            /*----- Advance to next bucket in old hash table. -----*/
+            it += int32_t(sizeof(uint32_t));
+        }
+
+        /*----- Free old hash table (without collision list entries since they are reused). -----*/
+        U32 size = (end_old - begin_old).make_unsigned();
+        Module::Allocator().deallocate(begin_old, size);
+    };
+
+    if constexpr (IsGlobal) {
+        if (not rehash_) {
+            /*----- Create function for rehashing. -----*/
+            FUNCTION(rehash, void(void))
+            {
+                emit_rehash();
+            }
+            rehash_ = std::move(rehash);
+        }
+
+        /*----- Call rehashing function. ------*/
+        M_insist(bool(rehash_));
+        (*rehash_)();
+    } else {
+        /*----- Emit rehashing code. ------*/
+        emit_rehash();
+    }
+}
+
+// explicit instantiations to prevent linker errors
+template struct m::wasm::ChainedHashTable<false>;
+template struct m::wasm::ChainedHashTable<true>;
+
+
 /*----- open addressing hash tables ----------------------------------------------------------------------------------*/
 
 void OpenAddressingHashTableBase::clear()

@@ -485,6 +485,123 @@ struct HashTable
 };
 
 
+/*----- chained hash tables ------------------------------------------------------------------------------------------*/
+
+template<bool IsGlobal>
+struct ChainedHashTable : HashTable
+{
+    private:
+    ///> variable type dependent on whether the hash table should be globally usable
+    template<typename T>
+    using var_t = std::conditional_t<IsGlobal, Global<T>, Var<T>>;
+
+    HashTable::size_t entry_size_in_bytes_; ///< entry size in bytes
+    HashTable::size_t entry_max_alignment_in_bytes_; ///< alignment requirement in bytes of a single entry
+    std::vector<HashTable::offset_t> entry_offsets_in_bytes_; ///< entry offsets, i.e. offsets of keys and values
+    ///> offset of NULL bitmap; only specified if at least one entry is nullable
+    HashTable::offset_t null_bitmap_offset_in_bytes_;
+    HashTable::offset_t ptr_offset_in_bytes_; ///< offset of pointer to next entry in linked collision list
+
+    var_t<Ptr<void>> address_; ///< base address of hash table
+    var_t<U32> capacity_; ///< capacity of hash table, i.e. number of buckets / collision lists; always a power of 2
+    var_t<U32> num_entries_; ///< number of occupied entries of hash table
+    double high_watermark_percentage_ = 1.0; ///< fraction of occupied entries before growing the hash table is required
+    var_t<U32> high_watermark_absolute_; ///< maximum number of entries before growing the hash table is required
+    ///> function to perform rehashing; only possible for global hash tables since variables have to be updated
+    std::optional<FunctionProxy<void(void)>> rehash_;
+    std::vector<std::pair<Ptr<void>, U32>> dummy_allocations_; ///< address-size pairs of dummy entry allocations
+    std::optional<var_t<Ptr<void>>> predication_dummy_; ///< dummy bucket used for predication
+
+    public:
+    /** Creates a chained hash table with schema \p schema, keys at \p key_indices, and an initial capacity
+     * for \p initial_capacity buckets, i.e. collision lists.  Emits code to allocate a fresh hash table.  The hash
+     * table is globally visible iff \tparam IsGlobal. */
+    ChainedHashTable(const Schema &schema, std::vector<HashTable::index_t> key_indices, uint32_t initial_capacity);
+
+    ChainedHashTable(ChainedHashTable&&) = default;
+
+    ~ChainedHashTable();
+
+    private:
+    /** Returns the address of the first bucket, i.e. the pointer to the first collision list. */
+    Ptr<void> begin() const { return address_; }
+    /** Returns the address of the past-the-end bucket. */
+    Ptr<void> end() const { return address_ + size_in_bytes().make_signed(); }
+    /** Returns the overall size in bytes of the actual hash table, i.e. without collision list entries. */
+    U32 size_in_bytes() const { return capacity_ * uint32_t(sizeof(uint32_t)); }
+
+    public:
+    /** Sets the high watermark, i.e. the fraction of occupied entries before growing the hash table is required, to
+     * \p percentage. */
+    void set_high_watermark(double percentage) override {
+        M_insist(percentage >= 1.0, "using chained collisions the load factor should be at least 1");
+        high_watermark_percentage_ = percentage;
+        update_high_watermark();
+    }
+    private:
+    /** Updates internal high watermark variables according to the currently set high watermark percentage. */
+    void update_high_watermark() {
+        auto high_watermark_absolute_new = high_watermark_percentage_ * capacity_.make_signed().template to<double>();
+        auto high_watermark_absolute_floored = high_watermark_absolute_new.template to<int32_t>().make_unsigned();
+        Wasm_insist(high_watermark_absolute_floored.clone() >= 1U,
+                    "at least one entry must be allowed to insert before growing the table");
+        high_watermark_absolute_ = high_watermark_absolute_floored;
+    }
+
+    /** Creates dummy entry for predication. */
+    void create_predication_dummy() {
+        M_insist(not predication_dummy_);
+        predication_dummy_.emplace(); // since globals cannot be constructed with runtime values
+        *predication_dummy_ = Module::Allocator().allocate(sizeof(uint32_t), sizeof(uint32_t));
+        *predication_dummy_->template to<uint32_t*>() = 0U; // set to nullptr
+    }
+
+    public:
+    void clear() override;
+
+    entry_t emplace(std::vector<SQL_t> key) override;
+    std::pair<entry_t, Bool> try_emplace(std::vector<SQL_t> key) override;
+
+    std::pair<const_entry_t, Bool> find(std::vector<SQL_t> key) const override;
+
+    void for_each(callback_t Pipeline) const override;
+    void for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline) const override;
+
+    entry_t dummy_entry() override;
+
+    private:
+    /** Returns the bucket address for the key \p key by hashing it. */
+    Ptr<void> hash_to_bucket(std::vector<SQL_t> key) const;
+
+    /** Inserts an entry into the hash table with key \p key regardless whether it already exists, i.e. duplicates
+     * are allowed.  Returns a handle to the newly inserted entry which may be used to write the values for this
+     * entry.  No rehashing of the hash table must be performed, i.e. the hash table must have at least
+     * one free entry slot. */
+    entry_t emplace_without_rehashing(std::vector<SQL_t> key);
+
+    /** Compares the key of the entry at address \p entry with \p key and returns `true` iff they are equal. */
+    Bool equal_key(Ptr<void> entry, std::vector<SQL_t> key) const;
+
+    /** Inserts the key \p key into the entry at address \p entry. */
+    void insert_key(Ptr<void> entry, std::vector<SQL_t> key);
+
+    /** Returns a handle for the entry at address \p entry which may be used to write the values of the corresponding
+     * entry. */
+    entry_t value_entry(Ptr<void> entry) const;
+    /** Returns a handle for the entry at address \p entry which may be used to read both the keys and the values of
+     * the corresponding entry. */
+    const_entry_t entry(Ptr<void> entry) const;
+
+    /** Performs rehashing, i.e. resizes the hash table to the double of its capacity (by internally creating a new
+     * one) while asserting that all entries are still correctly contained in the resized hash table (by rehashing
+     * and reinserting but not reallocating them into the newly created hash table). */
+    void rehash();
+};
+
+using LocalChainedHashTable = ChainedHashTable<false>;
+using GlobalChainedHashTable = ChainedHashTable<true>;
+
+
 /*----- open addressing hash tables ----------------------------------------------------------------------------------*/
 
 template<bool ValueInPlace>
@@ -716,6 +833,8 @@ struct QuadraticProbing : OpenAddressingHashTableBase::ProbingStrategy
  *====================================================================================================================*/
 
 extern template void quicksort(const GlobalBuffer&, const std::vector<SortingOperator::order_type>&);
+extern template struct m::wasm::ChainedHashTable<false>;
+extern template struct m::wasm::ChainedHashTable<true>;
 extern template struct m::wasm::OpenAddressingHashTable<false, false>;
 extern template struct m::wasm::OpenAddressingHashTable<false, true>;
 extern template struct m::wasm::OpenAddressingHashTable<true, false>;

@@ -3,6 +3,7 @@
 #include <functional>
 #include <limits>
 #include <mutable/IR/Operator.hpp>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -11,22 +12,67 @@
 namespace m {
 
 // forward declarations
-template<typename T, typename = void> struct pattern_validator;
-struct Condition;
 template<typename T> struct Match;
 struct PhysicalOptimizer;
-template<typename Actual, typename Pattern, typename SFINAE = decltype(pattern_validator<Pattern>{})>
-struct PhysicalOperator;
 
 
 /*======================================================================================================================
- * Pattern
+ * Helper concepts
+ *====================================================================================================================*/
+
+template<typename T>
+concept logical_operator = std::is_base_of_v<Operator, T>;
+
+template<typename T>
+concept producer = std::is_base_of_v<Producer, T>;
+
+template<typename T>
+concept consumer = std::is_base_of_v<Consumer, T>;
+
+
+/*======================================================================================================================
+ * Pattern type
  *====================================================================================================================*/
 
 using Wildcard = Producer;
 
-template<typename Op, typename... Children>
+template<logical_operator Op, logical_operator... Children>
 struct pattern_t {};
+
+
+/*======================================================================================================================
+ * Pattern validator
+ *====================================================================================================================*/
+
+template<typename>
+struct has_producer_root : std::false_type {};
+
+template<producer Op>
+struct has_producer_root<Op> : std::true_type {};
+
+template<producer Op, typename... Children>
+struct has_producer_root<pattern_t<Op, Children...>> : std::true_type {};
+
+template<typename T>
+concept producer_root = has_producer_root<T>::value;
+
+
+template<typename>
+struct pattern_validator : std::false_type {};
+
+template<logical_operator Op>
+struct pattern_validator<Op> : std::true_type {};
+
+template<consumer Op, producer_root... Children>
+requires (sizeof...(Children) != 0) and     // no singleton patterns inside pattern_t
+         (sizeof...(Children) <= 2)         // at most binary operations
+struct pattern_validator<pattern_t<Op, Children...>>
+{
+    static constexpr bool value = (pattern_validator<Children>::value and ...);
+};
+
+template<typename T>
+concept valid_pattern = pattern_validator<T>::value;
 
 
 /*======================================================================================================================
@@ -36,26 +82,10 @@ struct pattern_t {};
 template<std::size_t I, typename... Ts>
 using ith_type_of = std::tuple_element_t<I, std::tuple<Ts...>>;
 
-template<typename, typename = void>
-struct is_producer : std::false_type {};
-
-template<typename Op>
-struct is_producer<Op, std::enable_if_t<std::is_base_of_v<Producer, Op>, void>> : std::true_type {};
-
-template<typename Op, typename... Children>
-struct is_producer<pattern_t<Op, Children...>, void>
-{
-    static constexpr bool value = std::is_base_of_v<Producer, Op>;
-};
-
-template<typename T>
-static constexpr bool is_producer_v = is_producer<T>::value;
 
 template<typename Op>
 struct get_nodes
-{
-    using type = std::tuple<const Op*>;
-};
+{ using type = std::tuple<const Op*>; };
 
 template<typename Op, typename... Children>
 struct get_nodes<pattern_t<Op, Children...>>
@@ -69,32 +99,13 @@ using get_nodes_t = typename get_nodes<T>::type;
 
 
 /*======================================================================================================================
- * Pattern Validator
- *====================================================================================================================*/
-
-template<typename Op>
-struct pattern_validator<Op, std::enable_if_t<std::is_base_of_v<Operator, Op>, void>>
-{};
-
-template<typename Op, typename... Children>
-struct pattern_validator<pattern_t<Op, Children...>,
-                         std::enable_if_t<
-                             std::is_base_of_v<Consumer, Op> and
-                             sizeof...(Children) != 0 and sizeof...(Children) <= 2 and // at most binary operations
-                             (is_producer_v<Children> and ...),
-                         decltype((pattern_validator<Children>{}, ...), std::declval<void>())>>
-{};
-
-
-/*======================================================================================================================
  * Condition
  *====================================================================================================================*/
 
 struct Condition
 {
     friend struct PhysicalOptimizer;
-    template<typename, typename, typename>
-    friend struct PhysicalOperator;
+    template<typename, valid_pattern> friend struct PhysicalOperator;
 
     private:
     ///> flag whether `this` was created by the default-c'tor, used to reuse a single pre-condition as post-condition
@@ -154,8 +165,7 @@ struct pattern_matcher_base
  * dynamic programming. */
 struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
 {
-    template<typename, std::size_t, typename...>
-    friend struct pattern_matcher_recursive;
+    template<typename, std::size_t, typename...> friend struct pattern_matcher_recursive;
 
     struct table_entry;
 
@@ -167,11 +177,11 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
     {
         using order_t = std::vector<conditional_phys_op_map::const_iterator>;
 
-        ///> the found match
+        ///> found match
         std::unique_ptr<const MatchBase> match;
         ///> all children entries of the physical operator
         order_t children;
-        ///> the cumulative cost for this entry, i.e. the cost of the physical operator itself plus the cost of its children
+        ///> cumulative cost for this entry, i.e. cost of the physical operator itself plus costs of its children
         double cost;
 
         table_entry(std::unique_ptr<const MatchBase> &&match, order_t &&children, double cost)
@@ -189,7 +199,7 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
     private:
     ///> all pattern matchers for all registered physical operators
     std::vector<std::unique_ptr<const pattern_matcher_base>> pattern_matchers_;
-    ///> the dynamic programming table, stores the best covering for each logical operator per unique post-condition
+    ///> dynamic programming table, stores the best covering for each logical operator per unique post-condition
     std::vector<conditional_phys_op_map> table_;
 
     public:
@@ -253,7 +263,7 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
                     M_insist(children.size() == 1,
                              "must override `PhysicalOperator::post_condition(const Match<Actual>&)` for "
                              "pattern with multiple children");
-                    post_cond = PhysOp::adapt_post_condition_(*match, children[0]->first); // adapt post-condition of child
+                    post_cond = PhysOp::adapt_post_condition_(*match, children[0]->first); // adapt child post-condition
                 }
             }
 
@@ -263,8 +273,9 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
                 return; // better match already exists
 
             /* Update table and physical operator cost. */
-            table_[op.id()].insert_or_assign(it, post_cond,
-                                             PhysicalOptimizer::table_entry(std::move(match), std::move(children), cost));
+            table_[op.id()].insert_or_assign(
+                it, post_cond, PhysicalOptimizer::table_entry(std::move(match), std::move(children), cost)
+            );
             phys_op_cost_ = cost;
         }
     }
@@ -320,7 +331,8 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
     }
 
     public:
-    /** Prints a representation of the found physical operator covering for the logical plan rooted in `plan` to `out`. */
+    /** Prints a representation of the found physical operator covering for the logical plan rooted in `plan` to
+     * `out`. */
     void dump_plan(const Operator &plan, std::ostream &out) const { dump_plan_helper(get_plan(plan), out, 0); };
     /** Prints a representation of the found physical operator covering for the logical plan rooted in `plan` to
      * `std::cout`. */
@@ -334,11 +346,10 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
 
 /** A `PhysicalOperator` represents a physical operation in a *query plan*.  A single `PhysicalOperator` may combine
  * multiple logical `Operator`s according to the specified `Pattern`. */
-template<typename Actual, typename Pattern, typename SFINAE>
-struct PhysicalOperator : crtp<Actual, PhysicalOperator, Pattern, SFINAE>
+template<typename Actual, valid_pattern Pattern>
+struct PhysicalOperator : crtp<Actual, PhysicalOperator, Pattern>
 {
-    using crtp<Actual, PhysicalOperator, Pattern, SFINAE>::actual;
-    static_assert(std::is_same_v<SFINAE, pattern_validator<Pattern>>, "must not explicitly specify the SFINAE type");
+    using crtp<Actual, PhysicalOperator, Pattern>::actual;
 
     using pattern = Pattern;
     using callback_t = std::function<void(void)>;
@@ -405,8 +416,7 @@ struct pattern_matcher_recursive;
 template<typename PhysOp, std::size_t Idx, typename Op, typename... PatternQueue>
 struct pattern_matcher_recursive<PhysOp, Idx, Op, PatternQueue...>
 {
-    template<typename, std::size_t, typename...>
-    friend struct pattern_matcher_recursive;
+    template<typename, std::size_t, typename...> friend struct pattern_matcher_recursive;
 
     using pattern = typename PhysOp::pattern;
     using order_t = PhysicalOptimizer::table_entry::order_t;
@@ -427,7 +437,7 @@ struct pattern_matcher_recursive<PhysOp, Idx, Op, PatternQueue...>
         /* Check whether matches for all children exists and fulfill the pre-conditions for this physical operator.
          * If so, update current nodes and current children, otherwise, no match can be found. */
         std::get<Idx>(current_nodes) = op;
-        if constexpr (std::is_same_v<Op, Wildcard>) {
+        if constexpr (std::same_as<Op, Wildcard>) {
             if (op->id() >= opt.table().size())
                 return; // no match for this child exists
             order_t::value_type new_child;
@@ -443,7 +453,7 @@ struct pattern_matcher_recursive<PhysOp, Idx, Op, PatternQueue...>
             if (min_cost == std::numeric_limits<double>::infinity())
                 return; // no match fulfills pre-condition for this physical operator
             current_children.emplace_back(new_child);
-        } else if constexpr (std::is_base_of_v<Consumer, Op>) {
+        } else if constexpr (consumer<Op>) {
             order_t new_children;
             for (const auto c : op->children()) {
                 if (c->id() >= opt.table().size())
@@ -481,9 +491,9 @@ struct pattern_matcher_recursive<PhysOp, Idx, Op, PatternQueue...>
         }
 
         /* Restore current nodes and current children. */
-        if constexpr (std::is_same_v<Op, Wildcard>)
+        if constexpr (std::same_as<Op, Wildcard>)
             current_children.pop_back();
-        else if constexpr (std::is_base_of_v<Consumer, Op>)
+        else if constexpr (consumer<Op>)
             current_children.erase(current_children.end() - op->children().size(), current_children.end());
     }
 };
@@ -491,8 +501,7 @@ struct pattern_matcher_recursive<PhysOp, Idx, Op, PatternQueue...>
 template<typename PhysOp, std::size_t Idx, typename Op, typename... Children, typename... PatternQueue>
 struct pattern_matcher_recursive<PhysOp, Idx, pattern_t<Op, Children...>, PatternQueue...>
 {
-    template<typename, std::size_t, typename...>
-    friend struct pattern_matcher_recursive;
+    template<typename, std::size_t, typename...> friend struct pattern_matcher_recursive;
 
     using pattern = typename PhysOp::pattern;
     using order_t = PhysicalOptimizer::table_entry::order_t;
@@ -552,6 +561,9 @@ struct pattern_matcher_impl : pattern_matcher_base
 };
 
 template<typename PhysOp>
-void PhysicalOptimizer::register_operator() { pattern_matchers_.push_back(std::make_unique<pattern_matcher_impl<PhysOp>>()); }
+void PhysicalOptimizer::register_operator()
+{
+    pattern_matchers_.push_back(std::make_unique<pattern_matcher_impl<PhysOp>>());
+}
 
 }

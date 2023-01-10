@@ -94,9 +94,7 @@ struct primitive_expr;
 template<typename T>
 requires requires { typename primitive_expr<T>::type; }
 struct primitive_expr<T&>
-{
-    using type = typename primitive_expr<T>::type;
-};
+{ using type = typename primitive_expr<T>::type; };
 
 /** Specialization for decayable \tparam T. */
 template<decayable T>
@@ -152,9 +150,7 @@ struct expr;
 template<typename T>
 requires requires { typename expr<T>::type; }
 struct expr<T&>
-{
-    using type = typename expr<T>::type;
-};
+{ using type = typename expr<T>::type; };
 
 /** Specialization for decayable \tparam T. */
 template<decayable T>

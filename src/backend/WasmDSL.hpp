@@ -1920,6 +1920,8 @@ struct PrimitiveExpr<T>
     private:
     /** **Moves** the underlying Binaryen `::wasm::Expression` out of `this`. */
     ::wasm::Expression * expr() { return to<uint32_t>().expr(); }
+    /** **Moves** the referenced bits out of `this`. */
+    std::list<std::shared_ptr<LocalBit>> referenced_bits() { return addr_.referenced_bits(); }
     /** **Moves** the underlying Binaryen `wasm::Expression` and the referenced bits out of `this`. */
     std::pair<::wasm::Expression*, std::list<std::shared_ptr<LocalBit>>> move() { return addr_.move(); }
 
@@ -3532,7 +3534,13 @@ inline void Module::emit_break(PrimitiveExpr<bool> cond, std::size_t level)
 template<typename T>
 PrimitiveExpr<T> Module::emit_select(PrimitiveExpr<bool> cond, PrimitiveExpr<T> tru, PrimitiveExpr<T> fals)
 {
-    return PrimitiveExpr<T>(builder_.makeSelect(cond.expr(), tru.expr(), fals.expr()));
+    auto referenced_bits = cond.referenced_bits(); // moved
+    referenced_bits.splice(referenced_bits.end(), tru.referenced_bits());
+    referenced_bits.splice(referenced_bits.end(), fals.referenced_bits());
+    return PrimitiveExpr<T>(
+        /* expr=            */ builder_.makeSelect(cond.expr(), tru.expr(), fals.expr()),
+        /* referenced_bits= */ std::move(referenced_bits)
+    );
 }
 
 template<typename T>
@@ -3541,16 +3549,34 @@ Expr<T> Module::emit_select(PrimitiveExpr<bool> cond, Expr<T> tru, Expr<T> fals)
     if (tru.can_be_null() or fals.can_be_null()) {
         auto [tru_val, tru_is_null] = tru.split();
         auto [fals_val, fals_is_null] = fals.split();
+        auto referenced_bits_val = cond.referenced_bits(); // moved
+        auto referenced_bits_is_null = referenced_bits_val; // copied
+        referenced_bits_val.splice(referenced_bits_val.end(), tru_val.referenced_bits());
+        referenced_bits_val.splice(referenced_bits_val.end(), fals_val.referenced_bits());
+        referenced_bits_is_null.splice(referenced_bits_is_null.end(), tru_is_null.referenced_bits());
+        referenced_bits_is_null.splice(referenced_bits_is_null.end(), fals_is_null.referenced_bits());
         auto cond_cloned = cond.clone();
         return Expr<T>(
-            /* value=   */ PrimitiveExpr<T>(builder_.makeSelect(cond_cloned.expr(), tru_val.expr(), fals_val.expr())),
-            /* is_null= */ PrimitiveExpr<bool>(builder_.makeSelect(cond.expr(), tru_is_null.expr(),
-                                                                                fals_is_null.expr()))
+            /* value=   */ PrimitiveExpr<T>(
+                /* expr=            */ builder_.makeSelect(cond_cloned.expr(), tru_val.expr(), fals_val.expr()),
+                /* referenced_bits= */ std::move(referenced_bits_val)
+            ),
+            /* is_null= */ PrimitiveExpr<bool>(
+                /* expr=            */ builder_.makeSelect(cond.expr(), tru_is_null.expr(), fals_is_null.expr()),
+                /* referenced_bits= */ std::move(referenced_bits_is_null)
+            )
         );
     } else {
+        auto tru_val = tru.insist_not_null();
+        auto fals_val = fals.insist_not_null();
+        auto referenced_bits = cond.referenced_bits(); // moved
+        referenced_bits.splice(referenced_bits.end(), tru_val.referenced_bits());
+        referenced_bits.splice(referenced_bits.end(), fals_val.referenced_bits());
         return Expr<T>(
-            /* value=   */ PrimitiveExpr<T>(builder_.makeSelect(cond.expr(), tru.insist_not_null().expr(),
-                                                                             fals.insist_not_null().expr()))
+            /* value= */ PrimitiveExpr<T>(
+                /* expr=            */ builder_.makeSelect(cond.expr(), tru_val.expr(), fals_val.expr()),
+                /* referenced_bits= */ std::move(referenced_bits)
+            )
         );
     }
 }

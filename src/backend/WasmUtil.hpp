@@ -260,7 +260,7 @@ struct Environment
 
     /*----- Predication ----------------------------------------------------------------------------------------------*/
     ///> Returns `true` iff `this` `Environment` uses predication.
-    bool predicated() const { return predicate_.has_value(); }
+    bool predicated() const { return bool(predicate_); }
     ///> Adds the predicate \p pred to the predication predicate.
     void add_predicate(_Bool pred) {
         if (predicate_)
@@ -272,14 +272,14 @@ struct Environment
     void add_predicate(const cnf::CNF &cnf) { add_predicate(compile(cnf)); }
     ///> Returns the **moved** current predication predicate.
     _Bool extract_predicate() {
-        M_insist(predicate_.has_value(), "cannot access an undefined or already extracted predicate");
+        M_insist(predicated(), "cannot access an undefined or already extracted predicate");
         auto tmp = *predicate_;
         predicate_.reset();
         return tmp;
     }
     ///> Returns the **copied** current predication predicate.
     _Bool get_predicate() const {
-        M_insist(predicate_.has_value(), "cannot access an undefined or already extracted predicate");
+        M_insist(predicated(), "cannot access an undefined or already extracted predicate");
         return predicate_->clone();
     }
 

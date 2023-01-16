@@ -40,8 +40,8 @@ U64 murmur3_bit_mix(U64 bits);
 
 /** Hashes \p num_bytes bytes of \p bytes using the FNV-1a algorithm. */
 U64 fnv_1a(Ptr<U8> bytes, U32 num_bytes);
-/** Hashes the string \p str of type \p cs. */
-U64 str_hash(const CharacterSequence &cs, Ptr<Char> str);
+/** Hashes the string \p str. */
+U64 str_hash(NChar str);
 /** Hashes the elements of \p values where the first element is the type of the value to hash and the second element
  * is the value itself using the Murmur3-64a algorithm. */
 U64 murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> values);
@@ -61,7 +61,7 @@ struct HashTable
     struct the_reference;
 
     template<sql_type T, bool IsConst>
-    requires (not std::same_as<T, Ptr<Char>>)
+    requires (not std::same_as<T, NChar>)
     struct the_reference<T, IsConst>
     {
         using value_t = PrimitiveExpr<typename T::type>;
@@ -176,29 +176,23 @@ struct HashTable
     };
 
     template<bool IsConst>
-    struct the_reference<Ptr<Char>, IsConst>
+    struct the_reference<NChar, IsConst>
     {
         private:
-        Ptr<Char> addr_;
-        uint32_t num_bytes_;
+        NChar addr_;
         std::optional<Ptr<U8>> is_null_byte_;
         std::optional<U8> is_null_mask_;
 
-        explicit the_reference(Ptr<Char> addr, uint32_t num_bytes, Ptr<U8> is_null_byte, U8 is_null_mask)
+        explicit the_reference(NChar addr, Ptr<U8> is_null_byte, U8 is_null_mask)
             : addr_(addr)
-            , num_bytes_(num_bytes)
             , is_null_byte_(is_null_byte)
             , is_null_mask_(is_null_mask)
         { }
 
         public:
-        explicit the_reference(Ptr<Char> addr, uint32_t num_bytes)
+        explicit the_reference(NChar addr) : addr_(addr) { }
+        explicit the_reference(NChar addr, Ptr<void> null_bitmap, uint8_t null_bit_offset)
             : addr_(addr)
-            , num_bytes_(num_bytes)
-        { }
-        explicit the_reference(Ptr<Char> addr, uint32_t num_bytes, Ptr<void> null_bitmap, uint8_t null_bit_offset)
-            : addr_(addr)
-            , num_bytes_(num_bytes)
             , is_null_byte_((null_bitmap + (null_bit_offset / 8)).to<uint8_t*>())
             , is_null_mask_(1U << (null_bit_offset % 8))
         { }
@@ -216,28 +210,34 @@ struct HashTable
         the_reference clone() const {
             if (is_null_byte_) {
                 M_insist(bool(is_null_mask_));
-                return the_reference(addr_.clone(), num_bytes_, is_null_byte_->clone(), is_null_mask_->clone());
+                return the_reference(addr_.clone(), is_null_byte_->clone(), is_null_mask_->clone());
             } else {
-                return the_reference(addr_.clone(), num_bytes_);
+                return the_reference(addr_.clone());
             }
         }
 
         ///> Assigns `this` to the string stored at \p addr.
-        void operator=(Ptr<Char> addr) requires (not IsConst) {
+        void operator=(NChar addr) requires (not IsConst) {
+            M_insist(addr_.length() == addr.length() and
+                     addr_.guarantees_terminating_nul() == addr.guarantees_terminating_nul(),
+                     "type mismatch");
             if (is_null_byte_) {
                 M_insist(bool(is_null_mask_));
                 IF (not addr.clone().is_nullptr()) {
-                    strncpy(addr_, addr.clone(), U32(num_bytes_)).discard();
+                    strncpy(addr_, addr.clone(), U32(addr.size_in_bytes())).discard();
                 };
                 setbit(*is_null_byte_, addr.is_nullptr(), *is_null_mask_);
             } else {
                 Wasm_insist(not addr.clone().is_nullptr(), "value of non-nullable entry must not be nullable");
-                strncpy(addr_, addr, U32(num_bytes_)).discard();
+                strncpy(addr_, addr, U32(addr.size_in_bytes())).discard();
             }
         }
-        ///> Assigns `this` to the string stored at \p addr.
-        void set_value(Ptr<Char> addr) requires (not IsConst) {
-            strncpy(addr_, addr, U32(num_bytes_)).discard();
+        ///> Assigns the value of `this` to the string stored at \p addr.
+        void set_value(NChar addr) requires (not IsConst) {
+            M_insist(addr_.length() == addr.length() and
+                     addr_.guarantees_terminating_nul() == addr.guarantees_terminating_nul(),
+                     "type mismatch");
+            strncpy(addr_, addr, U32(addr.size_in_bytes())).discard();
             if (is_null_byte_) {
                 M_insist(bool(is_null_mask_));
                 is_null_byte_->discard();
@@ -253,10 +253,13 @@ struct HashTable
         }
 
         ///> Compares `this` with the string stored at \p _addr.
-        Bool operator==(Ptr<Char> _addr) {
+        Bool operator==(NChar _addr) {
+            M_insist(addr_.length() == _addr.length() and
+                     addr_.guarantees_terminating_nul() == _addr.guarantees_terminating_nul(),
+                     "type mismatch");
             auto [addr, is_nullptr] = _addr.split();
-            auto cs = Type::Get_Char(Type::TY_Vector, num_bytes_);
-            _Bool _equal_addrs = strncmp(*cs, *cs, addr_, addr, U32(num_bytes_), EQ); // FIXME: add NChar type
+            _Bool _equal_addrs = strncmp(addr_, NChar(addr, addr_.length(), addr_.guarantees_terminating_nul()),
+                                         U32(addr_.length()), EQ);
             auto [equal_addrs_val, equal_addrs_is_null] = _equal_addrs.split();
             equal_addrs_is_null.discard(); // use potentially-null value but it is overruled if it is invalid, i.e. NULL
             if (is_null_byte_) {
@@ -270,11 +273,12 @@ struct HashTable
         }
 
         ///> Loads the value of `this`.
-        operator Ptr<Char>() {
+        operator NChar() {
             if (is_null_byte_) {
                 M_insist(bool(is_null_mask_));
                 Bool is_null = (**is_null_byte_ bitand *is_null_mask_).to<bool>();
-                return Select(is_null, Ptr<Char>::Nullptr(), addr_);
+                return NChar(Select(is_null, Ptr<Char>::Nullptr(), addr_.val()), addr_.length(),
+                             addr_.guarantees_terminating_nul());
             } else {
                 return addr_;
             }
@@ -282,21 +286,24 @@ struct HashTable
 
         ///> Selects either the reference \p tru or \p fals depending on the value of \p cond.
         friend the_reference Select(Bool cond, the_reference tru, the_reference fals) {
-            M_insist(tru.num_bytes_ == fals.num_bytes_, "number of bytes mismatch");
+            M_insist(tru.addr_.length() == fals.addr_.length() and
+                     tru.addr_.guarantees_terminating_nul() == fals.addr_.guarantees_terminating_nul(),
+                     "type mismatch");
             M_insist(bool(tru.is_null_byte_) == bool(fals.is_null_byte_), "null byte mismatch");
             M_insist(bool(tru.is_null_mask_) == bool(fals.is_null_mask_), "null mask mismatch");
             if (tru.is_null_byte_) {
                 M_insist(bool(tru.is_null_mask_));
                 the_reference r(
-                    /* addr_=         */ Select(cond.clone(), tru.addr_, fals.addr_),
-                    /* num_bytes_     */ tru.num_bytes_,
+                    /* addr_=         */ NChar(Select(cond.clone(), tru.addr_, fals.addr_), tru.addr_.length(),
+                                               tru.addr_.guarantees_terminating_nul()),
                     /* is_null_byte_= */ Select(cond.clone(), *tru.is_null_byte_, *fals.is_null_byte_),
                     /* is_null_mask_= */ Select(cond.clone(), *tru.is_null_mask_, *fals.is_null_mask_)
                 );
                 cond.discard();
                 return r;
             } else {
-                return the_reference(Select(cond, tru.addr_, fals.addr_), tru.num_bytes_);
+                return the_reference(NChar(Select(cond, tru.addr_, fals.addr_), tru.addr_.length(),
+                                               tru.addr_.guarantees_terminating_nul()));
             }
         }
     };

@@ -121,9 +121,9 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Scan", "[core][wasm]")
                         else
                             WASM_CHECK(bool(data.b2.at(idx)) == env.get<_Bool>(schema[3].id), (msg + "b2").c_str());
                         if (data.is_null.at(idx) bitand 0b010000)
-                            WASM_CHECK(env.get<Ptr<Char>>(schema[4].id).is_nullptr(), (msg + "c").c_str());
+                            WASM_CHECK(env.get<NChar>(schema[4].id).is_nullptr(), (msg + "c").c_str());
                         else
-                            check_string(data.c.at(idx), env.get<Ptr<Char>>(schema[4].id),
+                            check_string(data.c.at(idx), env.get<NChar>(schema[4].id),
                                          std::min(strlen(data.c.at(idx)) + 1, max_string_length), msg + "c");
                         if (data.is_null.at(idx) bitand 0b100000)
                             WASM_CHECK(env.get<_I8>(schema[5].id).is_null(), (msg + "i8").c_str());

@@ -21,6 +21,35 @@ template<bool IsGlobal> struct buffer_swap_proxy_t;
 
 
 /*======================================================================================================================
+ * Declare SQL helper type for character sequences
+ *====================================================================================================================*/
+
+struct NChar : Ptr<Char>
+{
+    private:
+    const CharacterSequence *type_;
+
+    public:
+    NChar(Ptr<Char> ptr, const CharacterSequence *type) : Ptr<Char>(ptr), type_(type) { }
+    NChar(Ptr<Char> ptr, std::size_t length, bool guarantees_terminating_nul)
+        : Ptr<Char>(ptr)
+        , type_(guarantees_terminating_nul ? Type::Get_Varchar(Type::TY_Scalar, length)
+                                           : Type::Get_Char(Type::TY_Scalar, length))
+    { }
+
+    NChar(NChar&) = default;
+    NChar(NChar&&) = default;
+
+    NChar clone() const { return NChar(Ptr<Char>::clone(), type_); }
+
+    Ptr<Char> val() { return *this; }
+
+    std::size_t length() const { return type_->length; }
+    uint64_t size_in_bytes() const { return type_->size() / 8; }
+    bool guarantees_terminating_nul() const { return type_->is_varying; }
+};
+
+/*======================================================================================================================
  * Declare valid SQL types
  *====================================================================================================================*/
 
@@ -35,7 +64,7 @@ struct is_sql_type;
     X(_I64) \
     X(_Float) \
     X(_Double) \
-    X(Ptr<Char>)
+    X(NChar)
 
 #define ADD_EXPR_SQL_TYPE(TYPE) template<> struct is_sql_type<TYPE>{};
 SQL_TYPES(ADD_EXPR_SQL_TYPE)
@@ -74,7 +103,7 @@ inline Bool is_null(SQL_t &&variant)
 {
     return std::visit(overloaded {
         []<typename T>(Expr<T> value) -> Bool { return value.is_null(); },
-        [](Ptr<Char> value) -> Bool { return value.is_nullptr(); },
+        [](NChar value) -> Bool { return value.is_nullptr(); },
         [](std::monostate) -> Bool { M_unreachable("invalid variant"); },
     }, variant);
 }
@@ -327,7 +356,7 @@ struct CodeGenContext
     private:
     Environment *env_ = nullptr; ///< environment for locally bound identifiers
     Global<U32> num_tuples_; ///< variable to hold the number of result tuples produced
-    std::unordered_map<const char*, Ptr<Char>> literals_; ///< maps each literal to its address at which it is stored
+    std::unordered_map<const char*, NChar> literals_; ///< maps each literal to its address at which it is stored
 
     public:
     CodeGenContext() = default;
@@ -378,11 +407,11 @@ struct CodeGenContext
 
     /** Adds the string literal `literal` located at pointer offset `ptr`. */
     void add_literal(const char *literal, uint32_t ptr) {
-        auto [_, inserted] = literals_.emplace(literal, Ptr<Char>(U32(ptr)));
+        auto [_, inserted] = literals_.emplace(literal, NChar(Ptr<Char>(U32(ptr)), strlen(literal) + 1, true));
         M_insist(inserted);
     }
     /** Returns the address at which `literal` is stored. */
-    Ptr<Char> get_literal_address(const char *literal) const {
+    NChar get_literal_address(const char *literal) const {
         auto it = literals_.find(literal);
         M_insist(it != literals_.end(), "unknown literal");
         return it->second.clone();
@@ -658,21 +687,14 @@ enum cmp_op
     EQ, NE, LT, LE, GT, GE
 };
 
-/** Compares two strings \p left and \p right of type \p ty_left and \p ty_right, respectively.  Has similar semantics
- * to `strncmp` of libc. */
-_I32 strncmp(const CharacterSequence &ty_left, const CharacterSequence &ty_right, Ptr<Char> left, Ptr<Char> right,
-             U32 len);
-/** Compares two strings \p left and \p right of type \p ty_left and \p ty_right, respectively.  Has similar semantics
- * to `strcmp` of libc. */
-_I32 strcmp(const CharacterSequence &ty_left, const CharacterSequence &ty_right, Ptr<Char> left, Ptr<Char> right);
-/** Compares two strings \p left and \p right of type \p ty_left and \p ty_right, respectively.  Has similar semantics
- * to `strncmp` of libc. */
-_Bool strncmp(const CharacterSequence &ty_left, const CharacterSequence &ty_right, Ptr<Char> left, Ptr<Char> right,
-              U32 len, cmp_op op);
-/** Compares two strings \p left and \p right of type \p ty_left and \p ty_right, respectively.  Has similar semantics
- * to `strcmp` of libc. */
-_Bool strcmp(const CharacterSequence &ty_left, const CharacterSequence &ty_right, Ptr<Char> left, Ptr<Char> right,
-             cmp_op op);
+/** Compares two strings \p left and \p right.  Has similar semantics to `strncmp` of libc. */
+_I32 strncmp(NChar left, NChar right, U32 len);
+/** Compares two strings \p left and \p right.  Has similar semantics to `strcmp` of libc. */
+_I32 strcmp(NChar left, NChar right);
+/** Compares two strings \p left and \p right.  Has similar semantics to `strncmp` of libc. */
+_Bool strncmp(NChar left, NChar right, U32 len, cmp_op op);
+/** Compares two strings \p left and \p right.  Has similar semantics to `strcmp` of libc. */
+_Bool strcmp(NChar left, NChar right, cmp_op op);
 
 
 /*======================================================================================================================
@@ -690,10 +712,9 @@ Ptr<Char> strncpy(Ptr<Char> dst, Ptr<Char> src, U32 count);
  * SQL LIKE
  *====================================================================================================================*/
 
-/** Compares whether the string \p str of type \p ty_str matches the pattern \p pattern of type \p ty_pattern
- * regarding SQL LIKE semantics using escape character \p escape_char. */
-_Bool like(const CharacterSequence &ty_str, const CharacterSequence &ty_pattern, Ptr<Char> str, Ptr<Char> pattern,
-           const char escape_char = '\\');
+/** Compares whether the string \p str matches the pattern \p pattern regarding SQL LIKE semantics using escape
+ * character \p escape_char. */
+_Bool like(NChar str, NChar pattern, const char escape_char = '\\');
 
 
 /*======================================================================================================================

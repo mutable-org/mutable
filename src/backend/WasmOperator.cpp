@@ -312,9 +312,13 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
                         if (auto expr = std::get_if<const m::ast::Expr*>(&t)) {
                             /*----- Compile targeted expression. -----*/
                             std::visit(overloaded {
-                                [&]<sql_type T>(T value) -> void {
-                                    Var<T> var(value); // introduce variable s.t. uses only load from it
+                                [&]<typename T>(Expr<T> value) -> void {
+                                    Var<Expr<T>> var(value); // introduce variable s.t. uses only load from it
                                     new_env.add(e.id, var);
+                                },
+                                [&](NChar value) -> void {
+                                    Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
+                                    new_env.add(e.id, NChar(var, value.length(), value.guarantees_terminating_nul()));
                                 },
                                 [](std::monostate) -> void { M_unreachable("invalid reference"); },
                             }, old_env.compile(**expr));
@@ -327,9 +331,13 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
                     } else {
                         /*----- Compile expression. -----*/
                         std::visit(overloaded {
-                            [&]<sql_type T>(T value) -> void {
-                                Var<T> var(value); // introduce variable s.t. uses only load from it
+                            [&]<typename T>(Expr<T> value) -> void {
+                                Var<Expr<T>> var(value); // introduce variable s.t. uses only load from it
                                 new_env.add(e.id, var);
+                            },
+                            [&](NChar value) -> void {
+                                Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
+                                new_env.add(e.id, NChar(var, value.length(), value.guarantees_terminating_nul()));
                             },
                             [](std::monostate) -> void { M_unreachable("invalid reference"); },
                         }, old_env.compile(p->first));
@@ -573,7 +581,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pi
                         const auto &arg = *info.args[0];
                         std::visit(overloaded {
                             [&]<sql_type _T>(HashTable::reference_t<_T> &&r) -> void
-                            requires (not (std::same_as<_T, _Bool> or std::same_as<_T, Ptr<Char>>)) {
+                            requires (not (std::same_as<_T, _Bool> or std::same_as<_T, NChar>)) {
                                 using type = typename _T::type;
                                 using T = PrimitiveExpr<type>;
 
@@ -639,7 +647,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pi
                                 }
                             },
                             []<sql_type _T>(HashTable::reference_t<_T>&&) -> void
-                            requires std::same_as<_T,_Bool> or std::same_as<_T, Ptr<Char>> {
+                            requires std::same_as<_T,_Bool> or std::same_as<_T, NChar> {
                                 M_unreachable("invalid type");
                             },
                             [](std::monostate) -> void { M_unreachable("invalid reference"); },
@@ -709,7 +717,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pi
                         const auto &arg = *info.args[0];
                         std::visit(overloaded {
                             [&]<sql_type _T>(HashTable::reference_t<_T> &&r) -> void
-                            requires (not (std::same_as<_T, _Bool> or std::same_as<_T, Ptr<Char>>)) {
+                            requires (not (std::same_as<_T, _Bool> or std::same_as<_T, NChar>)) {
                                 using type = typename _T::type;
                                 using T = PrimitiveExpr<type>;
 
@@ -749,7 +757,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pi
                                 }
                             },
                             []<sql_type _T>(HashTable::reference_t<_T>&&) -> void
-                            requires std::same_as<_T,_Bool> or std::same_as<_T, Ptr<Char>> {
+                            requires std::same_as<_T,_Bool> or std::same_as<_T, NChar> {
                                 M_unreachable("invalid type");
                             },
                             [](std::monostate) -> void { M_unreachable("invalid reference"); },
@@ -816,19 +824,24 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pi
                     requires (std::same_as<T, _I64> or std::same_as<T, _Double>) {
                         return T(r).template to<double>();
                     },
-                    [](auto &&actual) -> _Double { M_unreachable("invalid type"); },
-                    [](std::monostate) -> _Double { M_unreachable("invalid reference"); },
+                    [](auto&&) -> _Double { M_unreachable("invalid type"); },
+                    [](std::monostate&&) -> _Double { M_unreachable("invalid reference"); },
                 }, entry.get(avg_info.sum));
                 auto count = _I64(entry.get<_I64>(avg_info.running_count)).insist_not_null().to<double>();
                 _Var<Double> avg(sum / count); // introduce variable s.t. uses only load from it
                 env.add(e.id, avg);
             } else { // part of key or already computed aggregate
                 std::visit(overloaded {
-                    [&]<sql_type T>(HashTable::const_reference_t<T> &&r) -> void {
-                        Var<T> var((T(r))); // introduce variable s.t. uses only load from it
+                    [&]<typename T>(HashTable::const_reference_t<Expr<T>> &&r) -> void {
+                        Var<Expr<T>> var((Expr<T>(r))); // introduce variable s.t. uses only load from it
                         env.add(e.id, var);
                     },
-                    [](std::monostate) -> void { M_unreachable("invalid reference"); },
+                    [&](HashTable::const_reference_t<NChar> &&r) -> void {
+                        NChar value(r);
+                        Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
+                        env.add(e.id, NChar(var, value.length(), value.guarantees_terminating_nul()));
+                    },
+                    [](std::monostate&&) -> void { M_unreachable("invalid reference"); },
                 }, entry.get(e.id)); // do not extract to be able to access for not-yet-computed AVG aggregates
             }
         }
@@ -1191,9 +1204,13 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Pipeline)
             env.add(e.id, avg);
         } else { // part of key or already computed aggregate
             std::visit(overloaded {
-                [&]<sql_type T>(T value) -> void {
-                    Var<T> var(value); // introduce variable s.t. uses only load from it
+                [&]<typename T>(Expr<T> value) -> void {
+                    Var<Expr<T>> var(value); // introduce variable s.t. uses only load from it
                     env.add(e.id, var);
+                },
+                [&](NChar value) -> void {
+                    Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
+                    env.add(e.id, NChar(var, value.length(), value.guarantees_terminating_nul()));
                 },
                 [](std::monostate) -> void { M_unreachable("invalid reference"); },
             }, results.get(e.id)); // do not extract to be able to access for not-yet-computed AVG aggregates
@@ -1406,9 +1423,7 @@ void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline
                 /*----- Insert payload. -----*/
                 for (auto &id : payload_ids) {
                     std::visit(overloaded {
-                        [&]<sql_type T>(HashTable::reference_t<T> &&r) -> void {
-                            r = env.extract<T>(id);
-                        },
+                        [&]<sql_type T>(HashTable::reference_t<T> &&r) -> void { r = env.extract<T>(id); },
                         [](std::monostate) -> void { M_unreachable("invalid reference"); },
                     }, entry.extract(id));
                 }
@@ -1428,9 +1443,14 @@ void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline
             /*----- Add both found key and payload from hash table, i.e. from build child, to current environment. -----*/
             for (auto &e : ht_schema) {
                 std::visit(overloaded {
-                    [&]<sql_type T>(HashTable::const_reference_t<T> &&r) -> void {
-                        Var<T> var((T(r))); // introduce variable s.t. uses only load from it
+                    [&]<typename T>(HashTable::const_reference_t<Expr<T>> &&r) -> void {
+                        Var<Expr<T>> var((Expr<T>(r))); // introduce variable s.t. uses only load from it
                         env.add(e.id, var);
+                    },
+                    [&](HashTable::const_reference_t<NChar> &&r) -> void {
+                        NChar value(r);
+                        Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
+                        env.add(e.id, NChar(var, value.length(), value.guarantees_terminating_nul()));
                     },
                     [](std::monostate) -> void { M_unreachable("invalid reference"); },
                 }, entry.extract(e.id));

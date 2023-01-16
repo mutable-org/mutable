@@ -21,7 +21,11 @@ void convert_in_place(SQL_t &operand)
         [&operand](auto &&actual) -> void requires requires { actual.template to<T>(); } {
             auto v = actual.template to<T>();
             operand.~SQL_t();
-            new (&operand) SQL_t(v);
+            if constexpr (std::same_as<T, char*>)
+                new (&operand) SQL_t(NChar(v, static_cast<NChar>(actual).length(),
+                                           static_cast<NChar>(actual).guarantees_terminating_nul()));
+            else
+                new (&operand) SQL_t(v);
         },
         [](auto &actual) -> void requires (not requires { actual.template to<T>(); }) {
             M_unreachable("illegal conversion");
@@ -209,11 +213,11 @@ void ExprCompiler::operator()(const ast::BinaryExpr &e)
         [](auto lhs, auto rhs) -> decltype(lhs.operator OP(rhs)) { return lhs.operator OP(rhs); } \
     ); break
 #define CMPOP(OP, STRCMP_OP) { \
-        if (auto ty_lhs = cast<const CharacterSequence>(e.lhs->type())) { \
-            auto ty_rhs = as<const CharacterSequence>(e.rhs->type()); \
+        if (e.lhs->type()->is_character_sequence()) { \
+            M_insist(e.rhs->type()->is_character_sequence()); \
             apply_binop( \
-                [&ty_lhs, &ty_rhs](Ptr<Char> lhs, Ptr<Char> rhs) -> _Bool { \
-                    return strcmp(*ty_lhs, *ty_rhs, lhs, rhs, STRCMP_OP); \
+                [](NChar lhs, NChar rhs) -> _Bool { \
+                    return strcmp(lhs, rhs, STRCMP_OP); \
                 } \
             ); break; \
         } else { \
@@ -242,39 +246,40 @@ void ExprCompiler::operator()(const ast::BinaryExpr &e)
 
         /*----- CharacterSequence operations -------------------------------------------------------------------------*/
         case TK_Like: {
-            auto &cs_str = as<const CharacterSequence>(*e.lhs->type());
-            auto &cs_pattern = as<const CharacterSequence>(*e.rhs->type());
+            M_insist(e.lhs->type()->is_character_sequence());
+            M_insist(e.rhs->type()->is_character_sequence());
             (*this)(*e.lhs);
-            Ptr<Char> str = get<Ptr<Char>>();
+            NChar str = get<NChar>();
             (*this)(*e.rhs);
-            Ptr<Char> pattern = get<Ptr<Char>>();
-            set(like(cs_str, cs_pattern, str, pattern));
+            NChar pattern = get<NChar>();
+            set(like(str, pattern));
             break;
         }
 
         case TK_DOTDOT: {
-            auto &cs_lhs = as<const CharacterSequence>(*e.lhs->type());
-            auto &cs_rhs = as<const CharacterSequence>(*e.rhs->type());
+            M_insist(e.lhs->type()->is_character_sequence());
+            M_insist(e.rhs->type()->is_character_sequence());
             (*this)(*e.lhs);
-            Ptr<Char> lhs = get<Ptr<Char>>();
+            NChar lhs = get<NChar>();
             (*this)(*e.rhs);
-            Ptr<Char> rhs = get<Ptr<Char>>();
-            auto size_lhs = cs_lhs.size() / 8;
-            auto size_rhs = cs_rhs.size() / 8;
+            NChar rhs = get<NChar>();
 
             Var<Ptr<Char>> res(Ptr<Char>::Nullptr()); // return value if at least one operand is NULL
+            std::size_t res_length = lhs.length() + rhs.length() + 1; // allocate space for terminating NUL byte
 
             auto [_ptr_lhs, is_nullptr_lhs] = lhs.split();
             auto [_ptr_rhs, is_nullptr_rhs] = rhs.split();
             Ptr<Char> ptr_lhs(_ptr_lhs), ptr_rhs(_ptr_rhs); // since structured bindings cannot be used in lambda capture
 
             IF (not is_nullptr_lhs and not is_nullptr_rhs) {
-                res = Module::Allocator().pre_malloc<char>(size_lhs + size_rhs); // create pre-allocation for result
+                res = Module::Allocator().pre_malloc<char>(res_length); // create pre-allocation for result
                 Var<Ptr<Char>> ptr(res.val()); // since res must not be changed
-                ptr = strncpy(ptr, ptr_lhs, U32(size_lhs));
-                strncpy(ptr, ptr_rhs, U32(size_rhs)).discard();
+                ptr = strncpy(ptr, ptr_lhs, U32(lhs.length()));
+                strncpy(ptr, ptr_rhs, U32(rhs.size_in_bytes())).discard(); // copy with possible terminating NUL byte
+                if (not rhs.guarantees_terminating_nul())
+                    *ptr = '\0'; // terminate with NUL byte
             };
-            set(SQL_t(res));
+            set(SQL_t(NChar(res, res_length, /* guarantees_terminating_nul= */ true)));
             break;
         }
 
@@ -602,7 +607,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                         BLOCK_OPEN(stores) {
                                             advance_to_next_bit();
 
-                                            auto value = env.get<Ptr<Char>>(tuple_it->id); // get value
+                                            auto value = env.get<NChar>(tuple_it->id); // get value
                                             setbit(null_bitmap_ptr->to<uint8_t*>(), value.is_nullptr(),
                                                    null_bitmap_mask->to<uint8_t>()); // update bit
                                         }
@@ -655,7 +660,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                         }
                                     },
                                     [&](const CharacterSequence&) {
-                                        Wasm_insist(not env.get<Ptr<Char>>(layout_entry.id).is_nullptr(),
+                                        Wasm_insist(not env.get<NChar>(layout_entry.id).is_nullptr(),
                                                     "value of non-nullable entry must not be nullable");
                                     },
                                     [&](const Date&) { check.template operator()<_I32>(); },
@@ -752,7 +757,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                     },
                                     [&](const CharacterSequence&) {
                                         BLOCK_OPEN(stores) {
-                                            auto value = env.get<Ptr<Char>>(tuple_entry.id); // get value
+                                            auto value = env.get<NChar>(tuple_entry.id); // get value
                                             Ptr<U8> byte_ptr =
                                                 (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
                                             setbit<U8>(byte_ptr, value.is_nullptr(), bit_offset); // update bit
@@ -801,7 +806,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                         }
                                     },
                                     [&](const CharacterSequence&) {
-                                        Wasm_insist(not env.get<Ptr<Char>>(tuple_entry.id).is_nullptr(),
+                                        Wasm_insist(not env.get<NChar>(tuple_entry.id).is_nullptr(),
                                                     "value of non-nullable entry must not be nullable");
                                     },
                                     [&](const Date&) { check.template operator()<_I32>(); },
@@ -928,7 +933,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                             if constexpr (IsStore) {
                                 /*----- Store value. -----*/
                                 BLOCK_OPEN(stores) {
-                                    auto value = env.get<Ptr<Char>>(tuple_it->id);
+                                    auto value = env.get<NChar>(tuple_it->id);
                                     IF (not value.clone().is_nullptr()) {
                                         Ptr<Char> address((ptr + byte_offset).template to<char*>());
                                         strncpy(address, value, U32(cs.size() / 8)).discard();
@@ -938,7 +943,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                 /*----- Load value. -----*/
                                 BLOCK_OPEN(loads) {
                                     Ptr<Char> address((ptr + byte_offset).template to<char*>());
-                                    values[tuple_idx].emplace<Ptr<Char>>(address);
+                                    values[tuple_idx].emplace<NChar>(address, cs.length, cs.is_varying);
                                 }
                             }
                         },
@@ -1193,15 +1198,15 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                         }
                     }
                 },
-                [&](Ptr<Char> value) {
+                [&](NChar value) {
                     BLOCK_OPEN(loads) {
                         M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
                         if (has_null_bitmap and tuple_entry.nullable()) {
-                            Var<Ptr<Char>> combined(Select(null_bits[idx], Ptr<Char>::Nullptr(), value));
-                            env.add(tuple_entry.id, combined);
+                            Var<Ptr<Char>> combined(Select(null_bits[idx], Ptr<Char>::Nullptr(), value.val()));
+                            env.add(tuple_entry.id, NChar(combined, value.length(), value.guarantees_terminating_nul()));
                         } else {
-                            Var<Ptr<Char>> _value(value); // introduce variable s.t. uses only load from it
-                            env.add(tuple_entry.id, _value);
+                            Var<Ptr<Char>> _value(value.val()); // introduce variable s.t. uses only load from it
+                            env.add(tuple_entry.id, NChar(_value, value.length(), value.guarantees_terminating_nul()));
                         }
                     }
                 },
@@ -1387,7 +1392,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                     }
                                 },
                                 [&](const CharacterSequence&) {
-                                    auto value = env.get<Ptr<Char>>(tuple_entry.id); // get value
+                                    auto value = env.get<NChar>(tuple_entry.id); // get value
                                     Ptr<U8> byte_ptr =
                                         (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
                                     setbit<U8>(byte_ptr, value.is_nullptr(), uint8_t(1) << bit_offset); // update bit
@@ -1432,7 +1437,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                     }
                                 },
                                 [&](const CharacterSequence&) {
-                                    Wasm_insist(not env.get<Ptr<Char>>(tuple_entry.id).is_nullptr(),
+                                    Wasm_insist(not env.get<NChar>(tuple_entry.id).is_nullptr(),
                                                 "value of non-nullable entry must not be nullable");
                                 },
                                 [&](const Date&) { check.template operator()<_I32>(); },
@@ -1515,13 +1520,13 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                         Wasm_insist(bit_offset == 0U, "leaf offset of `CharacterSequence` must be byte aligned");
                         if constexpr (IsStore) {
                             /*----- Store value. -----*/
-                            auto value = env.get<Ptr<Char>>(tuple_it->id);
+                            auto value = env.get<NChar>(tuple_it->id);
                             IF (not value.clone().is_nullptr()) {
                                 strncpy(ptr.template to<char*>(), value, U32(cs.size() / 8)).discard();
                             };
                         } else {
                             /*----- Load value. -----*/
-                            values[tuple_idx].emplace<Ptr<Char>>(ptr.template to<char*>());
+                            values[tuple_idx].emplace<NChar>(ptr.template to<char*>(), cs.length, cs.is_varying);
                         }
                     },
                     [&](const Date&) { CALL(_I32); },
@@ -1547,14 +1552,14 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                         env.add(tuple_entry.id, value);
                     }
                 },
-                [&](Ptr<Char> value) {
+                [&](NChar value) {
                     M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
                     if (has_null_bitmap and tuple_entry.nullable()) {
-                        Var<Ptr<Char>> combined(Select(null_bits[idx], Ptr<Char>::Nullptr(), value));
-                        env.add(tuple_entry.id, combined);
+                        Var<Ptr<Char>> combined(Select(null_bits[idx], Ptr<Char>::Nullptr(), value.val()));
+                        env.add(tuple_entry.id, NChar(combined, value.length(), value.guarantees_terminating_nul()));
                     } else {
-                        Var<Ptr<Char>> _value(value); // introduce variable s.t. uses only load from it
-                        env.add(tuple_entry.id, _value);
+                        Var<Ptr<Char>> _value(value.val()); // introduce variable s.t. uses only load from it
+                        env.add(tuple_entry.id, NChar(_value, value.length(), value.guarantees_terminating_nul()));
                     }
                 },
                 [](std::monostate) { M_unreachable("value must be loaded beforehand"); },
@@ -1786,12 +1791,10 @@ void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second)
 
         /*----- Temporarily save entry of first tuple by creating variable or separate string buffer. -----*/
         std::visit(overloaded {
-            [&](Ptr<Char> value) -> void {
-                auto &cs = as<const CharacterSequence>(*e.type);
-                const uint32_t length = cs.size() / 8;
-                auto ptr = Module::Allocator().pre_malloc<char>(length);
-                strncpy(ptr.clone(), value, U32(length)).discard();
-                env.add(e.id, ptr);
+            [&](NChar value) -> void {
+                auto ptr = Module::Allocator().pre_malloc<char>(value.size_in_bytes());
+                strncpy(ptr.clone(), value, U32(value.size_in_bytes())).discard();
+                env.add(e.id, NChar(ptr, value.length(), value.guarantees_terminating_nul()));
             },
             [&]<typename T>(Expr<T> value) -> void {
                 Var<Expr<T>> var(value);
@@ -1827,16 +1830,15 @@ template struct m::wasm::buffer_swap_proxy_t<true>;
  * string comparison
  *====================================================================================================================*/
 
-_I32 m::wasm::strncmp(const CharacterSequence &ty_left, const CharacterSequence &ty_right,
-                      Ptr<Char> _left, Ptr<Char> _right, U32 len)
+_I32 m::wasm::strncmp(NChar _left, NChar _right, U32 len)
 {
     static thread_local struct {} _; // unique caller handle
     struct data_t : GarbageCollectedData
     {
         public:
         using fn_t = int32_t(uint32_t, uint32_t, char*, char*, uint32_t);
-        std::optional<FunctionProxy<fn_t>> strncmp_varying;
-        std::optional<FunctionProxy<fn_t>> strncmp_non_varying;
+        std::optional<FunctionProxy<fn_t>> strncmp_terminating_nul;
+        std::optional<FunctionProxy<fn_t>> strncmp_no_terminating_nul;
 
         data_t(GarbageCollectedData &&d) : GarbageCollectedData(std::move(d)) { }
     };
@@ -1844,22 +1846,21 @@ _I32 m::wasm::strncmp(const CharacterSequence &ty_left, const CharacterSequence 
 
     Wasm_insist(len.clone() != 0U, "length to compare must not be 0");
 
-    Var<Ptr<Char>> left (_left);
-    Var<Ptr<Char>> right(_right);
+    Var<Ptr<Char>> left (_left.val()), right(_right.val());
     _Var<I32> result; // always set here
 
     IF (left.is_nullptr() or right.is_nullptr()) {
         /*----- If either side is `nullptr` (representing `NULL`), then the result is `NULL`. -----*/
         result = _I32::Null();
     } ELSE {
-        if (ty_left.length == 1 and ty_right.length == 1) {
+        if (_left.length() == 1 and _right.length() == 1) {
             /*----- Special handling of single char strings. -----*/
             result = (*left > *right).to<int32_t>() - (*left < *right).to<int32_t>();
         } else {
-            if (ty_left.is_varying and ty_right.is_varying) { // both strings end with NUL byte
-                if (not d.strncmp_varying) {
+            if (_left.guarantees_terminating_nul() and _right.guarantees_terminating_nul()) {
+                if (not d.strncmp_terminating_nul) {
                     /*----- Create function to compute the result for non-nullptr arguments character-wise. -----*/
-                    FUNCTION(strncmp_varying, data_t::fn_t)
+                    FUNCTION(strncmp_terminating_nul, data_t::fn_t)
                     {
                         const auto len_ty_left  = PARAMETER(0);
                         const auto len_ty_right = PARAMETER(1);
@@ -1893,16 +1894,16 @@ _I32 m::wasm::strncmp(const CharacterSequence &ty_left, const CharacterSequence 
 
                         RETURN(result);
                     }
-                    d.strncmp_varying = std::move(strncmp_varying);
+                    d.strncmp_terminating_nul = std::move(strncmp_terminating_nul);
                 }
 
-                /*----- Call strncmp_varying function. ------*/
-                M_insist(bool(d.strncmp_varying));
-                result = (*d.strncmp_varying)(ty_left.length, ty_right.length, left, right, len);
+                /*----- Call strncmp_terminating_nul function. ------*/
+                M_insist(bool(d.strncmp_terminating_nul));
+                result = (*d.strncmp_terminating_nul)(_left.length(), _right.length(), left, right, len);
             } else {
-                if (not d.strncmp_non_varying) {
+                if (not d.strncmp_no_terminating_nul) {
                     /*----- Create function to compute the result for non-nullptr arguments character-wise. -----*/
-                    FUNCTION(strncmp_non_varying, data_t::fn_t)
+                    FUNCTION(strncmp_no_terminating_nul, data_t::fn_t)
                     {
                         const auto len_ty_left  = PARAMETER(0);
                         const auto len_ty_right = PARAMETER(1);
@@ -1945,12 +1946,12 @@ _I32 m::wasm::strncmp(const CharacterSequence &ty_left, const CharacterSequence 
 
                         RETURN(result);
                     }
-                    d.strncmp_non_varying = std::move(strncmp_non_varying);
+                    d.strncmp_no_terminating_nul = std::move(strncmp_no_terminating_nul);
                 }
 
-                /*----- Call strncmp_non_varying function. ------*/
-                M_insist(bool(d.strncmp_non_varying));
-                result = (*d.strncmp_non_varying)(ty_left.length, ty_right.length, left, right, len);
+                /*----- Call strncmp_no_terminating_nul function. ------*/
+                M_insist(bool(d.strncmp_no_terminating_nul));
+                result = (*d.strncmp_no_terminating_nul)(_left.length(), _right.length(), left, right, len);
             }
         }
     };
@@ -1958,19 +1959,17 @@ _I32 m::wasm::strncmp(const CharacterSequence &ty_left, const CharacterSequence 
     return result;
 }
 
-_I32 m::wasm::strcmp(const CharacterSequence &ty_left, const CharacterSequence &ty_right,
-                     Ptr<Char> left, Ptr<Char> right)
+_I32 m::wasm::strcmp(NChar left, NChar right)
 {
     /* Delegate to `strncmp` with length set to minimum of both string lengths **plus** 1 since we need to check if
      * one string is a prefix of the other, i.e. all of its characters are equal but it is shorter than the other. */
-    U32 len(std::min<uint32_t>(ty_left.length, ty_left.length) + 1U);
-    return strncmp(ty_left, ty_right, left, right, len);
+    U32 len(std::min<uint32_t>(left.length(), left.length()) + 1U);
+    return strncmp(left, right, len);
 }
 
-_Bool m::wasm::strncmp(const CharacterSequence &ty_left, const CharacterSequence &ty_right,
-                       Ptr<Char> left, Ptr<Char> right, U32 len, cmp_op op)
+_Bool m::wasm::strncmp(NChar left, NChar right, U32 len, cmp_op op)
 {
-    _I32 res = strncmp(ty_left, ty_right, left, right, len);
+    _I32 res = strncmp(left, right, len);
 
     switch (op) {
         case EQ: return res == 0;
@@ -1982,10 +1981,9 @@ _Bool m::wasm::strncmp(const CharacterSequence &ty_left, const CharacterSequence
     }
 }
 
-_Bool m::wasm::strcmp(const CharacterSequence &ty_left, const CharacterSequence &ty_right,
-                      Ptr<Char> left, Ptr<Char> right, cmp_op op)
+_Bool m::wasm::strcmp(NChar left, NChar right, cmp_op op)
 {
-    _I32 res = strcmp(ty_left, ty_right, left, right);
+    _I32 res = strcmp(left, right);
 
     switch (op) {
         case EQ: return res == 0;
@@ -2048,8 +2046,7 @@ Ptr<Char> m::wasm::strncpy(Ptr<Char> dst, Ptr<Char> src, U32 count)
  * WasmLike
  *====================================================================================================================*/
 
-_Bool m::wasm::like(const CharacterSequence &ty_str, const CharacterSequence &ty_pattern,
-                    Ptr<Char> _str, Ptr<Char> _pattern, const char escape_char)
+_Bool m::wasm::like(NChar _str, NChar _pattern, const char escape_char)
 {
     static thread_local struct {} _; // unique caller handle
     struct data_t : GarbageCollectedData
@@ -2063,7 +2060,7 @@ _Bool m::wasm::like(const CharacterSequence &ty_str, const CharacterSequence &ty
 
     M_insist('_' != escape_char and '%' != escape_char, "illegal escape character");
 
-    if (ty_str.length == 0 and ty_pattern.length == 0) {
+    if (_str.length() == 0 and _pattern.length() == 0) {
         _str.discard();
         _pattern.discard();
         return _Bool(true);
@@ -2215,7 +2212,7 @@ _Bool m::wasm::like(const CharacterSequence &ty_str, const CharacterSequence &ty
 
         /*----- Call like function. ------*/
         M_insist(bool(d.like));
-        result = (*d.like)(ty_str.length, ty_pattern.length, val_str, val_pattern, escape_char);
+        result = (*d.like)(_str.length(), _pattern.length(), val_str, val_pattern, escape_char);
     };
 
     return result;
@@ -2301,17 +2298,19 @@ I32 m::wasm::compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
                 result <<= 1; // shift result s.t. first difference will determine order
                 result += cmp; // add current comparison to result
             },
-            [&](Ptr<Char> val_left) -> void {
+            [&](NChar val_left) -> void {
                 auto &cs = as<const CharacterSequence>(*o.first.get().type());
 
                 /*----- Compile order expression for right tuple. -----*/
-                Ptr<Char> val_right = env_right.template compile<Ptr<Char>>(o.first);
+                NChar val_right = env_right.template compile<NChar>(o.first);
 
-                Var<Ptr<Char>> left(val_left), right(val_right);
+                Var<Ptr<Char>> _left(val_left.val()), _right(val_right.val());
+                NChar left(_left, val_left.length(), val_left.guarantees_terminating_nul()),
+                      right(_right, val_right.length(), val_right.guarantees_terminating_nul());
 
                 /*----- Compare both with current order expression and update result. -----*/
                 I32 cmp_null = right.is_nullptr().to<int32_t>() - left.is_nullptr().to<int32_t>();
-                _I32 _delta = o.second ? strcmp(cs, cs, left, right) : strcmp(cs, cs, right, left);
+                _I32 _delta = o.second ? strcmp(left, right) : strcmp(right, left);
                 auto [cmp_val, cmp_is_null] = signum(_delta).split();
                 cmp_is_null.discard();
                 I32 cmp = (cmp_null << 1) + cmp_val; // potentially-null value of comparison is overruled by cmp_null

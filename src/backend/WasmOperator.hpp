@@ -63,7 +63,7 @@ struct BranchingFilter : PhysicalOperator<BranchingFilter, FilterOperator>
 struct PredicatedFilter : PhysicalOperator<PredicatedFilter, FilterOperator>
 {
     static void execute(const Match<PredicatedFilter> &M, callback_t Pipeline);
-    static double cost(const Match<PredicatedFilter>&) { return 0.5; }
+    static double cost(const Match<PredicatedFilter>&) { return 2.0; }
 };
 
 struct Projection : PhysicalOperator<Projection, ProjectionOperator>

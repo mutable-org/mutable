@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <limits>
+#include <mutable/IR/Condition.hpp>
 #include <mutable/IR/Operator.hpp>
 #include <type_traits>
 #include <unordered_map>
@@ -36,8 +37,22 @@ concept consumer = std::is_base_of_v<Consumer, T>;
 
 using Wildcard = Producer;
 
-template<logical_operator Op, logical_operator... Children>
+
+template<typename>
+struct is_pattern : std::false_type {};
+
+template<typename T>
+concept is_pattern_v = is_pattern<T>::value;
+
+
+template<logical_operator Op, typename... Children>
+requires ((logical_operator<Children> or is_pattern_v<Children>) and ...)
 struct pattern_t {};
+
+
+// delayed definition
+template<typename... Ts>
+struct is_pattern<pattern_t<Ts...>> : std::true_type {};
 
 
 /*======================================================================================================================
@@ -99,49 +114,6 @@ using get_nodes_t = typename get_nodes<T>::type;
 
 
 /*======================================================================================================================
- * Condition
- *====================================================================================================================*/
-
-struct Condition
-{
-    friend struct PhysicalOptimizer;
-    template<typename, valid_pattern> friend struct PhysicalOperator;
-
-    private:
-    ///> flag whether `this` was created by the default-c'tor, used to reuse a single pre-condition as post-condition
-    bool defaulted = false;
-    public:
-    Schema sorted_on;           ///< schema of attributes on which the data is already sorted
-    // TODO sorted asc or desc per attribute
-    int simd_vec_size = 0;      ///< the SIMD vector size given as log_2
-    Schema existing_hash_table; ///< schema of attributes on which a hash table already exists
-    // TODO domain
-
-    private:
-    Condition() : defaulted(true) { }
-
-    public:
-    Condition(Schema sorted_on, int simd_vec_size, Schema existing_hash_table)
-        : defaulted(false)
-        , sorted_on(std::move(sorted_on))
-        , simd_vec_size(simd_vec_size)
-        , existing_hash_table(std::move(existing_hash_table))
-    { }
-
-    bool operator==(const Condition &other) const {
-        return this->sorted_on == other.sorted_on and this->simd_vec_size == other.simd_vec_size and
-               this->existing_hash_table == other.existing_hash_table;
-    }
-    bool operator!=(const Condition &other) const { return not operator==(other); }
-};
-
-struct ConditionHash
-{
-    std::size_t operator()(const Condition &cond) const { return murmur3_64(cond.simd_vec_size); /* TODO better hash */ }
-};
-
-
-/*======================================================================================================================
  * PhysicalOptimizer
  *====================================================================================================================*/
 
@@ -149,7 +121,7 @@ struct MatchBase
 {
     using callback_t = std::function<void(void)>;
     virtual ~MatchBase() { }
-    virtual void execute(callback_t Return) const = 0;
+    virtual void execute(callback_t Pipeline) const = 0;
     virtual const char * name() const = 0;
 };
 
@@ -170,12 +142,12 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
     struct table_entry;
 
     private:
-    using conditional_phys_op_map = std::unordered_map<Condition, table_entry, ConditionHash>;
+    using conditional_phys_op_map = std::vector<std::pair<ConditionSet, table_entry>>;
 
     public:
     struct table_entry
     {
-        using order_t = std::vector<conditional_phys_op_map::const_iterator>;
+        using order_t = std::vector<std::reference_wrapper<const conditional_phys_op_map::value_type>>;
 
         ///> found match
         std::unique_ptr<const MatchBase> match;
@@ -250,32 +222,42 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
                       table_entry::order_t children) {
         /* Compute cost of the match and its children. */
         auto cost = PhysOp::cost(*match);
-        for (auto it : children)
-            cost += it->second.cost;
+        for (const auto &child : children)
+            cost += child.get().second.cost;
 
         if (cost < phys_op_cost_) {
             /* Compute post-condition. */
             auto post_cond = PhysOp::post_condition_(*match);
-            if (post_cond.defaulted) {
-                if (children.empty()) {
-                    post_cond = PhysOp::adapt_post_condition_(*match, Condition()); // adapt empty post-condition
+            if (post_cond.empty()) {
+                if (children.size() <= 1) {
+                    ConditionSet empty_cond;
+                    post_cond = PhysOp::adapt_post_condition_(*match, children.empty() ? empty_cond
+                                                                                       : children.front().get().first);
                 } else {
-                    M_insist(children.size() == 1,
-                             "must override `PhysicalOperator::post_condition(const Match<Actual>&)` for "
-                             "pattern with multiple children");
-                    post_cond = PhysOp::adapt_post_condition_(*match, children[0]->first); // adapt child post-condition
+                    std::vector<std::reference_wrapper<const ConditionSet>> children_post_conditions;
+                    children_post_conditions.reserve(children.size());
+                    for (const auto &child : children)
+                        children_post_conditions.emplace_back(child.get().first);
+                    post_cond = PhysOp::adapt_post_conditions_(*match, std::move(children_post_conditions));
                 }
             }
 
-            /* Compare to the best physical operator matched so far for *that* post-condition.  */
-            auto it = table_[op.id()].find(post_cond);
-            if (it != table_[op.id()].end() and it->second.cost <= cost)
-                return; // better match already exists
+            /* Compare to the best physical operator matched so far for *that* post-condition. */
+            auto it = std::find_if(table_[op.id()].begin(), table_[op.id()].end(), [&post_cond](const auto &p) {
+                return p.first == post_cond;
+            });
 
             /* Update table and physical operator cost. */
-            table_[op.id()].insert_or_assign(
-                it, post_cond, PhysicalOptimizer::table_entry(std::move(match), std::move(children), cost)
-            );
+            if (it == table_[op.id()].end()) {
+                table_[op.id()].emplace_back(
+                    std::move(post_cond), PhysicalOptimizer::table_entry(std::move(match), std::move(children), cost)
+                );
+            } else {
+                if (cost < it->second.cost)
+                    it->second = PhysicalOptimizer::table_entry(std::move(match), std::move(children), cost);
+                else
+                    return; // better match already exists
+            }
             phys_op_cost_ = cost;
         }
     }
@@ -298,8 +280,8 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
         out << "    " << id(e) << " [label=<<B>" << html_escape(e.match->name())
             << "</B> (cumulative cost=" << e.cost << ")>];\n";
         for (const auto &child : e.children) {
-            dot_plan_helper(child->second, out);
-            out << "    " << id(child->second) << " -> " << id(e) << ";\n";
+            dot_plan_helper(child.get().second, out);
+            out << "    " << id(child.get().second) << " -> " << id(e) << ";\n";
         }
 #undef id
 #undef q
@@ -327,7 +309,7 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
             out << std::string(2 * indent - 2, ' ') << "` ";
         out << e.match->name() << " (cumulative cost=" << e.cost << ")" << std::endl;
         for (const auto &child : e.children)
-            dump_plan_helper(child->second, out, indent + 1);
+            dump_plan_helper(child.get().second, out, indent + 1);
     }
 
     public:
@@ -349,47 +331,66 @@ struct PhysicalOptimizer : ConstPostOrderOperatorVisitor
 template<typename Actual, valid_pattern Pattern>
 struct PhysicalOperator : crtp<Actual, PhysicalOperator, Pattern>
 {
+    friend struct PhysicalOptimizer;
+    template<typename, std::size_t, typename...> friend struct pattern_matcher_recursive;
+
     using crtp<Actual, PhysicalOperator, Pattern>::actual;
 
     using pattern = Pattern;
-    using callback_t = std::function<void(void)>;
+    using callback_t = MatchBase::callback_t;
     using order_t = PhysicalOptimizer::table_entry::order_t;
 
-    /** Executes this physical operator given the match `M` and a callback `Return`. */
-    static void execute(const Match<Actual> &M, callback_t Return) { Actual::execute(M, Return); }
+    /** Executes this physical operator given the match `M` and a callback `Pipeline`. */
+    static void execute(const Match<Actual> &M, callback_t Pipeline) { Actual::execute(M, Pipeline); }
 
     /** Returns the cost of this physical operator given the match `M`. */
     static double cost(const Match<Actual> &M) { return Actual::cost(M); }
 
-    /** Returns true iff the post-condition `post_cond_child` matches the pre-condition for the `child_idx`-th child
-     * (indexed from left to right starting with 0) of the pattern (note that children are logical operators which
-     * either match to a `Wildcard` in the pattern or to a child of a non-wildcard operator in the pattern, i.e.
-     * there may be more children than leaves in the pattern) given the (potentially partially) matched logical
-     * operators `partial_inner_nodes` in pre-order (note that the operators not yet matched are nullptr). */
-    static bool check_pre_condition_(std::size_t child_idx, const Condition &post_cond_child,
-                                     const get_nodes_t<Pattern> &partial_inner_nodes)
-    {
-        return Actual::check_pre_condition(child_idx, post_cond_child, partial_inner_nodes);
+    private:
+    /** Returns the pre-condition for the `child_idx`-th child (indexed from left to right starting with 0) of the
+     * pattern (note that children are logical operators which either match to a `Wildcard` in the pattern or to a
+     * child of a non-wildcard operator in the pattern, i.e. there may be more children than leaves in the pattern)
+     * given the (potentially partially) matched logical operators `partial_inner_nodes` in pre-order (note that the
+     * operators not yet matched are nullptr). */
+    static ConditionSet pre_condition_(std::size_t child_idx, const get_nodes_t<Pattern> &partial_inner_nodes) {
+        return Actual::pre_condition(child_idx, partial_inner_nodes);
     }
+    public:
     /** Overwrite this to implement custom pre-conditions. */
-    static bool check_pre_condition(std::size_t child_idx, const Condition &post_cond_child,
-                                    const get_nodes_t<Pattern> &partial_inner_nodes)
-    {
-        return true;
-    }
+    static ConditionSet pre_condition(std::size_t, const get_nodes_t<Pattern>&) { return ConditionSet(); }
 
+    private:
     /** Returns the post-condition of this physical operator given the match `M`. */
-    static Condition post_condition_(const Match<Actual> &M) { return Actual::post_condition(M); }
+    static ConditionSet post_condition_(const Match<Actual> &M) { return Actual::post_condition(M); }
+    public:
     /** Overwrite this to implement a custom post-condition. */
-    static Condition post_condition(const Match<Actual> &M) { return Condition(); }
+    static ConditionSet post_condition(const Match<Actual>&) { return ConditionSet(); }
+
+    private:
     /** Returns the adapted post-condition of this physical operator given the match `M` and the former
      * post-condition of its only child. */
-    static Condition adapt_post_condition_(const Match<Actual> &M, const Condition &post_cond_child) {
+    static ConditionSet adapt_post_condition_(const Match<Actual> &M, const ConditionSet &post_cond_child) {
         return Actual::adapt_post_condition(M, post_cond_child);
     }
-    /** Overwrite this to implement adapting a post-condition. */
-    static Condition adapt_post_condition(const Match<Actual> &M, const Condition &post_cond_child) {
-        return post_cond_child;
+    /** Returns the adapted post-condition of this physical operator given the match `M` and the former
+     * post-conditions of its children. */
+    static ConditionSet
+    adapt_post_conditions_(const Match<Actual> &M,
+                           std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children)
+    {
+        return Actual::adapt_post_conditions(M, std::move(post_cond_children));
+    }
+    public:
+    /** Overwrite this to implement custom adaptation of a single post-condition. */
+    static ConditionSet adapt_post_condition(const Match<Actual>&, const ConditionSet &post_cond_child) {
+        return ConditionSet(post_cond_child);
+    }
+    /** Overwrite this to implement custom adaptation of multiple post-conditions. */
+    static ConditionSet adapt_post_conditions(const Match<Actual>&,
+                                              std::vector<std::reference_wrapper<const ConditionSet>>&&)
+    {
+        M_unreachable("for patterns with multiple children, either `PhysicalOperator::post_condition()` or this method "
+                      "must be overwritten");
     }
 
     /** Instantiates this physical operator given the matched logical operators `inner_nodes` in pre-order and the
@@ -397,8 +398,8 @@ struct PhysicalOperator : crtp<Actual, PhysicalOperator, Pattern>
     static std::unique_ptr<const Match<Actual>> instantiate(get_nodes_t<Pattern> inner_nodes, const order_t &children) {
         std::vector<std::reference_wrapper<const MatchBase>> children_matches;
         children_matches.reserve(children.size());
-        for (auto it : children)
-            children_matches.emplace_back(*it->second.match);
+        for (const auto &child : children)
+            children_matches.emplace_back(*child.get().second.match);
         return std::apply([children_matches=std::move(children_matches)](auto... args) mutable {
             return std::make_unique<Match<Actual>>(args..., std::move(children_matches));
         }, inner_nodes);
@@ -440,11 +441,12 @@ struct pattern_matcher_recursive<PhysOp, Idx, Op, PatternQueue...>
         if constexpr (std::same_as<Op, Wildcard>) {
             if (op->id() >= opt.table().size())
                 return; // no match for this child exists
-            order_t::value_type new_child;
+            PhysicalOptimizer::conditional_phys_op_map::const_iterator new_child;
             double min_cost = std::numeric_limits<double>::infinity();
             for (auto it = opt.table()[op->id()].cbegin(); it != opt.table()[op->id()].cend(); ++it) {
                 if (auto cost = it->second.cost;
-                    cost < min_cost and PhysOp::check_pre_condition_(current_children.size(), it->first, current_nodes))
+                    cost < min_cost and
+                    PhysOp::pre_condition_(current_children.size(), current_nodes).implied_by(it->first))
                 {
                     new_child = it;
                     min_cost = cost;
@@ -452,18 +454,19 @@ struct pattern_matcher_recursive<PhysOp, Idx, Op, PatternQueue...>
             }
             if (min_cost == std::numeric_limits<double>::infinity())
                 return; // no match fulfills pre-condition for this physical operator
-            current_children.emplace_back(new_child);
+            current_children.emplace_back(*new_child);
         } else if constexpr (consumer<Op>) {
             order_t new_children;
             for (const auto c : op->children()) {
                 if (c->id() >= opt.table().size())
                     return; // no match for current child exists
-                order_t::value_type new_child;
+                PhysicalOptimizer::conditional_phys_op_map::const_iterator new_child;
                 double min_cost = std::numeric_limits<double>::infinity();
                 for (auto it = opt.table()[c->id()].cbegin(); it != opt.table()[c->id()].cend(); ++it) {
                     if (auto cost = it->second.cost;
-                        cost < min_cost and PhysOp::check_pre_condition_(current_children.size() + new_children.size(),
-                                                                         it->first, current_nodes))
+                        cost < min_cost and PhysOp::pre_condition_(
+                            current_children.size() + new_children.size(), current_nodes
+                        ).implied_by(it->first))
                     {
                         new_child = it;
                         min_cost = cost;
@@ -471,7 +474,7 @@ struct pattern_matcher_recursive<PhysOp, Idx, Op, PatternQueue...>
                 }
                 if (min_cost == std::numeric_limits<double>::infinity())
                     return; // no match fulfills pre-condition for this physical operator
-                new_children.push_back(new_child);
+                new_children.emplace_back(*new_child);
             }
             current_children.insert(current_children.end(), new_children.begin(), new_children.end());
         }
@@ -483,11 +486,11 @@ struct pattern_matcher_recursive<PhysOp, Idx, Op, PatternQueue...>
 #endif
             /* Perform the callback with an instance of the found match. */
             auto M = PhysOp::instantiate(current_nodes, current_children);
-            opt.handle_match<PhysOp>(*op, std::move(M), current_children);
+            opt.handle_match<PhysOp>(*std::get<0>(current_nodes), std::move(M), current_children);
         } else {
             /* Proceed with queue. */
             pattern_matcher_recursive<PhysOp, Idx + 1, PatternQueue...> m;
-            m.for_each(opt, current_nodes, current_children, op_queue...);
+            m.matches(opt, current_nodes, current_children, op_queue...);
         }
 
         /* Restore current nodes and current children. */
@@ -529,7 +532,7 @@ struct pattern_matcher_recursive<PhysOp, Idx, pattern_t<Op, Children...>, Patter
             /* Recursively match single child. */
             using Child0 = ith_type_of<0, Children...>;
             pattern_matcher_recursive<PhysOp, Idx + 1, Child0, PatternQueue...> m;
-            m.match_helper(opt, current_nodes, current_children, *op->child(0), op_queue...);
+            m.matches(opt, current_nodes, current_children, *op->child(0), op_queue...);
         } else {
             /* Recursively match both children. Try both permutations of the logical plan. */
             static_assert(sizeof...(Children) == 2);
@@ -537,11 +540,11 @@ struct pattern_matcher_recursive<PhysOp, Idx, pattern_t<Op, Children...>, Patter
             using Child1 = ith_type_of<1, Children...>;
             {
                 pattern_matcher_recursive<PhysOp, Idx + 1, Child0, Child1, PatternQueue...> m;
-                m.match_helper(opt, current_nodes, current_children, *op->child(0), *op->child(1), op_queue...);
+                m.matches(opt, current_nodes, current_children, *op->child(0), *op->child(1), op_queue...);
             }
             {
                 pattern_matcher_recursive<PhysOp, Idx + 1, Child0, Child1, PatternQueue...> m;
-                m.match_helper(opt, current_nodes, current_children, *op->child(1), *op->child(0), op_queue...);
+                m.matches(opt, current_nodes, current_children, *op->child(1), *op->child(0), op_queue...);
             }
         }
     }

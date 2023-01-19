@@ -307,16 +307,14 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
             new_env.add_predicate(old_env.extract_predicate());
 
         /*----- Add projections to newly created environment. -----*/
-        std::vector<std::pair<Schema::Identifier, Schema::Identifier>> ids_to_add;
         M_insist(M.projection.projections().size() == M.projection.schema().num_entries(),
                  "projections must match the operator's schema");
         auto p = M.projection.projections().begin();
         for (auto &e: M.projection.schema()) {
-            auto pred = [&e](const std::pair<Schema::Identifier, Schema::Identifier> &p){ return p.first == e.id; };
-            if (not new_env.has(e.id) and std::find_if(ids_to_add.begin(), ids_to_add.end(), pred) == ids_to_add.end()) {
+            if (not new_env.has(e.id)) {
                 if (old_env.has(e.id)) {
                     /*----- Migrate compiled expression to new context. ------*/
-                    ids_to_add.emplace_back(e.id, e.id); // to retain `e.id` for later compilation of expressions
+                    new_env.add(e.id, old_env.get(e.id)); // to retain `e.id` for later compilation of expressions
                 } else {
                     M_insist(p != M.projection.projections().end());
                     if (auto d = cast<const ast::Designator>(p->first)) {
@@ -336,9 +334,10 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
                             }, old_env.compile(**expr));
                         } else {
                             /*----- Access renamed attribute. -----*/
-                            auto attr = std::get<const Attribute*>(t);
-                            Schema::Identifier id(attr->table.name, attr->name);
-                            ids_to_add.emplace_back(e.id, id); // to retain `id` for later compilation of expressions
+                            auto attr = std::get_if<const Attribute*>(&t);
+                            M_insist(attr, "Target must be an expression or an attribute");
+                            Schema::Identifier id((*attr)->table.name, (*attr)->name);
+                            new_env.add(e.id, old_env.get(id)); // to retain `id` for later compilation of expressions
                         }
                     } else {
                         /*----- Compile expression. -----*/
@@ -358,8 +357,6 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
             }
             ++p;
         }
-        for (auto &p : ids_to_add)
-            new_env.add(p.first, old_env.extract(p.second)); // extract retained identifiers
 
         /*----- Resume pipeline with newly created environment. -----*/
         {

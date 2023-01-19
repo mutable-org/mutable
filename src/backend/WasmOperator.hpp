@@ -12,21 +12,43 @@ namespace m {
     X(Callback) \
     X(Print) \
     X(Scan) \
-    X(BranchingFilter) \
-    X(PredicatedFilter) \
+    X(Filter<false>) \
+    X(Filter<true>) \
     X(Projection) \
     X(HashBasedGrouping) \
     X(Aggregation) \
     X(Sorting) \
-    X(NestedLoopsJoin) \
+    X(NestedLoopsJoin<false>) \
+    X(NestedLoopsJoin<true>) \
     X(SimpleHashJoin) \
     X(Limit)
 
+
+// forward declarations
+#define M_WASM_OPERATOR_DECLARATION_LIST(X) \
+    X(NoOp) \
+    X(Callback) \
+    X(Print) \
+    X(Scan) \
+    X(Projection) \
+    X(HashBasedGrouping) \
+    X(Aggregation) \
+    X(Sorting) \
+    X(SimpleHashJoin) \
+    X(Limit)
 #define DECLARE(OP) \
     namespace wasm { struct OP; } \
     template<> struct Match<wasm::OP>;
-    M_WASM_OPERATOR_LIST(DECLARE)
+    M_WASM_OPERATOR_DECLARATION_LIST(DECLARE)
 #undef DECLARE
+#undef M_WASM_OPERATOR_DECLARATION_LIST
+
+namespace wasm { template<bool Predicated> struct Filter; }
+template<bool Predicated> struct Match<wasm::Filter<Predicated>>;
+
+namespace wasm { template<bool Predicated> struct NestedLoopsJoin; }
+template<bool Predicated> struct Match<wasm::NestedLoopsJoin<Predicated>>;
+
 
 namespace wasm {
 
@@ -52,58 +74,66 @@ struct Scan : PhysicalOperator<Scan, ScanOperator>
 {
     static void execute(const Match<Scan> &M, callback_t Pipeline);
     static double cost(const Match<Scan>&) { return 1.0; }
+    static ConditionSet post_condition(const Match<Scan> &M);
 };
 
-struct BranchingFilter : PhysicalOperator<BranchingFilter, FilterOperator>
+template<bool Predicated>
+struct Filter : PhysicalOperator<Filter<Predicated>, FilterOperator>
 {
-    static void execute(const Match<BranchingFilter> &M, callback_t Pipeline);
-    static double cost(const Match<BranchingFilter>&) { return 1.0; }
-};
+    using typename PhysicalOperator<Filter<Predicated>, FilterOperator>::callback_t;
 
-struct PredicatedFilter : PhysicalOperator<PredicatedFilter, FilterOperator>
-{
-    static void execute(const Match<PredicatedFilter> &M, callback_t Pipeline);
-    static double cost(const Match<PredicatedFilter>&) { return 2.0; }
+    static void execute(const Match<Filter> &M, callback_t Pipeline);
+    static double cost(const Match<Filter>&) { return M_CONSTEXPR_COND(Predicated, 2.0, 1.0); }
+    static ConditionSet adapt_post_condition(const Match<Filter> &M, const ConditionSet &post_cond_child);
 };
 
 struct Projection : PhysicalOperator<Projection, ProjectionOperator>
 {
     static void execute(const Match<Projection> &M, callback_t Pipeline);
     static double cost(const Match<Projection>&) { return 1.0; }
-    static Condition adapt_post_condition(const Match<Projection> &M, const Condition &post_cond_child);
+    static ConditionSet adapt_post_condition(const Match<Projection> &M, const ConditionSet &post_cond_child);
 };
 
 struct HashBasedGrouping : PhysicalOperator<HashBasedGrouping, GroupingOperator>
 {
     static void execute(const Match<HashBasedGrouping>&, callback_t);
     static double cost(const Match<HashBasedGrouping>&) { return 1.0; }
+    static ConditionSet post_condition(const Match<HashBasedGrouping> &M);
 };
 
 struct Aggregation : PhysicalOperator<Aggregation, AggregationOperator>
 {
     static void execute(const Match<Aggregation>&, callback_t);
     static double cost(const Match<Aggregation>&) { return 1.0; }
+    static ConditionSet post_condition(const Match<Aggregation> &M);
 };
 
 struct Sorting : PhysicalOperator<Sorting, SortingOperator>
 {
     static void execute(const Match<Sorting> &M, callback_t Pipeline);
     static double cost(const Match<Sorting>&) { return 1.0; }
-    static Condition adapt_post_condition(const Match<Sorting> &M, const Condition &post_cond_child);
+    static ConditionSet post_condition(const Match<Sorting> &M);
 };
 
-struct NestedLoopsJoin : PhysicalOperator<NestedLoopsJoin, JoinOperator>
+template<bool Predicated>
+struct NestedLoopsJoin : PhysicalOperator<NestedLoopsJoin<Predicated>, JoinOperator>
 {
+    using typename PhysicalOperator<NestedLoopsJoin<Predicated>, JoinOperator>::callback_t;
+
     static void execute(const Match<NestedLoopsJoin> &M, callback_t Pipeline);
     static double cost(const Match<NestedLoopsJoin>&) { return 2.0; }
-    static Condition post_condition(const Match<NestedLoopsJoin> &M);
+    static ConditionSet
+    adapt_post_conditions(const Match<NestedLoopsJoin> &M,
+                          std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children);
 };
 
 struct SimpleHashJoin : PhysicalOperator<SimpleHashJoin, JoinOperator>
 {
     static void execute(const Match<SimpleHashJoin> &M, callback_t Pipeline);
     static double cost(const Match<SimpleHashJoin> &M);
-    static Condition post_condition(const Match<SimpleHashJoin> &M);
+    static ConditionSet
+    adapt_post_conditions(const Match<SimpleHashJoin> &M,
+                          std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children);
 };
 
 struct Limit : PhysicalOperator<Limit, LimitOperator>
@@ -200,8 +230,8 @@ struct Match<wasm::Scan> : MatchBase
     const char * name() const override { return "wasm::Scan"; }
 };
 
-template<>
-struct Match<wasm::BranchingFilter> : MatchBase
+template<bool Predicated>
+struct Match<wasm::Filter<Predicated>> : MatchBase
 {
     private:
     std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
@@ -222,52 +252,19 @@ struct Match<wasm::BranchingFilter> : MatchBase
             auto buffer_schema = filter.schema().drop_none().deduplicate();
             if (buffer_schema.num_entries()) {
                 wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_, std::move(Pipeline));
-                wasm::BranchingFilter::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
+                wasm::Filter<Predicated>::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
                 buffer.resume_pipeline();
             } else {
-                wasm::BranchingFilter::execute(*this, std::move(Pipeline));
+                wasm::Filter<Predicated>::execute(*this, std::move(Pipeline));
             }
         } else {
-            wasm::BranchingFilter::execute(*this, std::move(Pipeline));
+            wasm::Filter<Predicated>::execute(*this, std::move(Pipeline));
         }
     }
 
-    const char * name() const override { return "wasm::BranchingFilter"; }
-};
-
-template<>
-struct Match<wasm::PredicatedFilter> : MatchBase
-{
-    private:
-    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
-    std::size_t buffer_num_tuples_;
-    public:
-    const FilterOperator &filter;
-    const MatchBase &child;
-
-    Match(const FilterOperator *filter, std::vector<std::reference_wrapper<const MatchBase>> &&children)
-        : filter(*filter)
-        , child(children[0])
-    {
-        M_insist(children.size() == 1);
+    const char * name() const override {
+        return M_CONSTEXPR_COND(Predicated, "wasm::PredicatedFilter", "wasm::BranchingFilter");
     }
-
-    void execute(callback_t Pipeline) const override {
-        if (buffer_factory_) {
-            auto buffer_schema = filter.schema().drop_none().deduplicate();
-            if (buffer_schema.num_entries()) {
-                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_, std::move(Pipeline));
-                wasm::PredicatedFilter::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
-                buffer.resume_pipeline();
-            } else {
-                wasm::PredicatedFilter::execute(*this, std::move(Pipeline));
-            }
-        } else {
-            wasm::PredicatedFilter::execute(*this, std::move(Pipeline));
-        }
-    }
-
-    const char * name() const override { return "wasm::PredicatedFilter"; }
 };
 
 template<>
@@ -342,8 +339,8 @@ struct Match<wasm::Sorting> : MatchBase
     const char * name() const override { return "wasm::Sorting"; }
 };
 
-template<>
-struct Match<wasm::NestedLoopsJoin> : MatchBase
+template<bool Predicated>
+struct Match<wasm::NestedLoopsJoin<Predicated>> : MatchBase
 {
     private:
     std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
@@ -368,17 +365,19 @@ struct Match<wasm::NestedLoopsJoin> : MatchBase
             auto buffer_schema = join.schema().drop_none().deduplicate();
             if (buffer_schema.num_entries()) {
                 wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_, std::move(Pipeline));
-                wasm::NestedLoopsJoin::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
+                wasm::NestedLoopsJoin<Predicated>::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
                 buffer.resume_pipeline();
             } else {
-                wasm::NestedLoopsJoin::execute(*this, std::move(Pipeline));
+                wasm::NestedLoopsJoin<Predicated>::execute(*this, std::move(Pipeline));
             }
         } else {
-            wasm::NestedLoopsJoin::execute(*this, std::move(Pipeline));
+            wasm::NestedLoopsJoin<Predicated>::execute(*this, std::move(Pipeline));
         }
     }
 
-    const char * name() const override { return "wasm::NestedLoopsJoin"; }
+    const char * name() const override {
+        return M_CONSTEXPR_COND(Predicated, "wasm::PredicatedNestedLoopsJoin", "wasm::BranchingNestedLoopsJoin");
+    }
 };
 
 template<>
@@ -434,3 +433,9 @@ struct Match<wasm::Limit> : MatchBase
 };
 
 }
+
+// explicit instantiation declarations
+extern template struct m::wasm::Filter<false>;
+extern template struct m::wasm::Filter<true>;
+extern template struct m::wasm::NestedLoopsJoin<false>;
+extern template struct m::wasm::NestedLoopsJoin<true>;

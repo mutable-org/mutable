@@ -175,6 +175,19 @@ void Print::execute(const Match<Print> &M, callback_t)
  * Scan
  *====================================================================================================================*/
 
+ConditionSet Scan::post_condition(const Match<Scan>&)
+{
+    ConditionSet post_cond;
+
+    /*----- Scan does not introduce predication. -----*/
+    post_cond.add_condition(Predicated(false));
+
+    /*----- Add SIMD widths for scanned values. -----*/
+    // TODO: implement
+
+    return post_cond;
+}
+
 void Scan::execute(const Match<Scan> &M, callback_t Pipeline)
 {
     auto &schema = M.scan.schema();
@@ -221,67 +234,66 @@ void Scan::execute(const Match<Scan> &M, callback_t Pipeline)
  * Filter
  *====================================================================================================================*/
 
-void BranchingFilter::execute(const Match<BranchingFilter> &M, callback_t Pipeline)
+template<bool Predicated>
+ConditionSet Filter<Predicated>::adapt_post_condition(const Match<Filter>&, const ConditionSet &post_cond_child)
+{
+    ConditionSet post_cond(post_cond_child);
+
+    if constexpr (Predicated) {
+        /*----- Predicated filter introduces predication. -----*/
+        post_cond.add_or_replace_condition(m::Predicated(true));
+    }
+
+    return post_cond;
+}
+
+template<bool Predicated>
+void Filter<Predicated>::execute(const Match<Filter> &M, callback_t Pipeline)
 {
     M.child.execute([Pipeline=std::move(Pipeline), &M](){
-        IF (CodeGenContext::Get().env().compile(M.filter.filter()).is_true_and_not_null()) {
+        if constexpr (Predicated) {
+            CodeGenContext::Get().env().add_predicate(M.filter.filter());
             Pipeline();
-        };
+        } else {
+            IF (CodeGenContext::Get().env().compile(M.filter.filter()).is_true_and_not_null()) {
+                Pipeline();
+            };
+        }
     });
 }
 
-void PredicatedFilter::execute(const Match<PredicatedFilter> &M, callback_t Pipeline)
-{
-    M.child.execute([Pipeline=std::move(Pipeline), &M](){
-        CodeGenContext::Get().env().add_predicate(M.filter.filter());
-        Pipeline();
-    });
-}
+// explicit instantiations to prevent linker errors
+template struct m::wasm::Filter<false>;
+template struct m::wasm::Filter<true>;
 
 
 /*======================================================================================================================
  * Projection
  *====================================================================================================================*/
 
-Condition Projection::adapt_post_condition(const Match<Projection> &M, const Condition &post_cond_child)
+ConditionSet Projection::adapt_post_condition(const Match<Projection> &M, const ConditionSet &post_cond_child)
 {
+    ConditionSet post_cond(post_cond_child);
+
+    /*----- Project and rename in duplicated post condition. -----*/
     M_insist(M.projection.projections().size() == M.projection.schema().num_entries(),
              "projections must match the operator's schema");
-    Schema sorted_on;
-    for (auto &e_sorted: post_cond_child.sorted_on) {
-        auto p = M.projection.projections().begin();
-        for (auto &e_proj: M.projection.schema()) {
-            if (e_sorted.id == e_proj.id) {
-                sorted_on.add(e_proj.id, e_proj.type);
-                break;
-            } else {
-                M_insist(p != M.projection.projections().end());
-                if (auto d = cast<const ast::Designator>(p->first)) {
-                    auto t = d->target(); // consider target of renamed identifier
-                    if (auto expr = std::get_if<const m::ast::Expr*>(&t)) {
-                        if (auto des = cast<const ast::Designator>(*expr);
-                            des and e_sorted.id == Schema::Identifier(des->table_name.text, des->attr_name.text))
-                        {
-                            sorted_on.add(e_proj.id, e_proj.type);
-                            break;
-                        }
-                    } else {
-                        auto attr = std::get_if<const Attribute *>(&t);
-                        M_insist(attr, "Target must be an expression or an attribute");
-                        if (e_sorted.id == Schema::Identifier((*attr)->table.name, (*attr)->name)) {
-                            sorted_on.add(e_proj.id, e_proj.type);
-                            break;
-                        }
-                    }
-                }
-            }
-            ++p;
+    std::vector<std::pair<Schema::Identifier, Schema::Identifier>> old2new;
+    auto p = M.projection.projections().begin();
+    for (auto &e: M.projection.schema()) {
+        auto pred = [&e](const auto &p) { return p.second == e.id; };
+        if (std::find_if(old2new.cbegin(), old2new.cend(), pred) == old2new.cend()) {
+            M_insist(p != M.projection.projections().end());
+            old2new.emplace_back(Schema::Identifier(p->first.get()), e.id);
         }
-        if (p == M.projection.projections().end())
-            break; // break at first miss, but previously found identifiers remain sorted
+        ++p;
     }
-    // TODO hash table
-    return Condition(std::move(sorted_on), post_cond_child.simd_vec_size, Schema());
+    post_cond.project_and_rename(old2new);
+
+    /*----- Add SIMD widths for projected values. -----*/
+    // TODO: implement
+
+    return post_cond;
 }
 
 void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
@@ -366,6 +378,18 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
 /*======================================================================================================================
  * Grouping
  *====================================================================================================================*/
+
+ConditionSet HashBasedGrouping::post_condition(const Match<HashBasedGrouping>&)
+{
+    ConditionSet post_cond;
+
+    /*----- Hash-based grouping does not introduce predication (it is already handled by the hash table). -----*/
+    post_cond.add_condition(Predicated(false));
+
+    // TODO: SIMD width if hash table supports this
+
+    return post_cond;
+}
 
 void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pipeline)
 {
@@ -856,6 +880,22 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pi
  * Aggregation
  *====================================================================================================================*/
 
+ConditionSet Aggregation::post_condition(const Match<Aggregation> &M)
+{
+    ConditionSet post_cond;
+
+    /*----- Aggregation does not introduce predication. -----*/
+    post_cond.add_condition(Predicated(false));
+
+    /*----- Aggregation does implicitly sort the data since only one tuple is produced. -----*/
+    Sortedness::order_t orders;
+    for (auto &e : M.aggregation.schema().deduplicate())
+        orders.add(e.id, Sortedness::O_UNDEF);
+    post_cond.add_condition(Sortedness(std::move(orders)));
+
+    return post_cond;
+}
+
 void Aggregation::execute(const Match<Aggregation> &M, callback_t Pipeline)
 {
     ///> helper struct for aggregates
@@ -1226,14 +1266,26 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Pipeline)
  * Sorting
  *====================================================================================================================*/
 
-Condition Sorting::adapt_post_condition(const Match<Sorting> &M, const Condition &post_cond_child)
+ConditionSet Sorting::post_condition(const Match<Sorting> &M)
 {
-    Schema attrs;
+    ConditionSet post_cond;
+
+    /*----- Sorting does not introduce predication. -----*/
+    post_cond.add_condition(Predicated(false));
+
+    /*----- Sorting does sort the data. -----*/
+    Sortedness::order_t orders;
     for (auto &o : M.sorting.order_by()) {
-        if (auto des = cast<const ast::Designator>(o.first))
-            attrs.add(Schema::Identifier(des->table_name.text, des->attr_name.text), des->type());
+        Schema::Identifier id(o.first);
+        if (orders.find(id) == orders.cend())
+            orders.add(id, o.second ? Sortedness::O_ASC : Sortedness::O_DESC);
     }
-    return Condition(std::move(attrs), post_cond_child.simd_vec_size, post_cond_child.existing_hash_table);
+    post_cond.add_condition(Sortedness(std::move(orders)));
+
+    /*----- Add SIMD widths for sorted values. -----*/
+    // TODO: implement (dependent on materializing buffer's data layout)
+
+    return post_cond;
 }
 
 void Sorting::execute(const Match<Sorting> &M, callback_t Pipeline)
@@ -1261,15 +1313,31 @@ void Sorting::execute(const Match<Sorting> &M, callback_t Pipeline)
 
 
 /*======================================================================================================================
- * NestedLoopsJoin
+ * Join
  *====================================================================================================================*/
 
-Condition NestedLoopsJoin::post_condition(const Match<NestedLoopsJoin> &M)
+template<bool Predicated>
+ConditionSet NestedLoopsJoin<Predicated>::adapt_post_conditions(
+    const Match<NestedLoopsJoin> &M,
+    std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children)
 {
-    return Condition(Schema(), 0, Schema());
+    M_insist(post_cond_children.size() >= 2);
+
+    ConditionSet post_cond(post_cond_children.back().get()); // preserve conditions of right-most child
+
+    if constexpr (Predicated) {
+        /*----- Predicated nested-loops join introduces predication. -----*/
+        post_cond.add_or_replace_condition(m::Predicated(true));
+    }
+
+    /*----- Add SIMD widths for materialized left values. -----*/
+    // TODO: implement
+
+    return post_cond;
 }
 
-void NestedLoopsJoin::execute(const Match<NestedLoopsJoin> &M, callback_t Pipeline)
+template<bool Predicated>
+void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, callback_t Pipeline)
 {
     const auto num_left_children = M.children.size() - 1; // all children but right-most one
 
@@ -1295,9 +1363,14 @@ void NestedLoopsJoin::execute(const Match<NestedLoopsJoin> &M, callback_t Pipeli
                     /* factory=    */ *M.materializing_factories_[i],
                     /* num_tuples= */ 0, // i.e. infinite
                     /* Pipeline=   */ [&, Pipeline=std::move(Pipeline)](){
-                        IF (CodeGenContext::Get().env().compile(M.join.predicate()).is_true_and_not_null()) {
+                        if constexpr (Predicated) {
+                            CodeGenContext::Get().env().add_predicate(M.join.predicate());
                             Pipeline();
-                        }; // TODO: predicated version
+                        } else {
+                            IF (CodeGenContext::Get().env().compile(M.join.predicate()).is_true_and_not_null()) {
+                                Pipeline();
+                            };
+                        }
                 });
             } else {
                 /*----- All but exactly one child (here left-most one) load lastly inserted buffer again. -----*/
@@ -1326,10 +1399,9 @@ void NestedLoopsJoin::execute(const Match<NestedLoopsJoin> &M, callback_t Pipeli
     M.children.back().get().execute([&](){ buffers.back().resume_pipeline_inline(); });
 }
 
-
-/*======================================================================================================================
- * SimpleHashJoin
- *====================================================================================================================*/
+// explicit instantiations to prevent linker errors
+template struct m::wasm::NestedLoopsJoin<false>;
+template struct m::wasm::NestedLoopsJoin<true>;
 
 double SimpleHashJoin::cost(const Match<SimpleHashJoin> &M)
 {
@@ -1339,9 +1411,20 @@ double SimpleHashJoin::cost(const Match<SimpleHashJoin> &M)
         return std::numeric_limits<double>::infinity();
 }
 
-Condition SimpleHashJoin::post_condition(const Match<SimpleHashJoin>&)
+ConditionSet SimpleHashJoin::adapt_post_conditions(
+    const Match<SimpleHashJoin>&,
+    std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children)
 {
-    return Condition(Schema(), 0, Schema());
+    M_insist(post_cond_children.size() == 2);
+
+    ConditionSet post_cond(post_cond_children[1].get()); // preserve conditions of right child
+
+    /*----- Simple hash join does not introduce predication (it is already handled by the hash table). -----*/
+    post_cond.add_or_replace_condition(Predicated(false));
+
+    // TODO: SIMD width if hash table supports this
+
+    return post_cond;
 }
 
 void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline)

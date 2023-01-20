@@ -21,6 +21,19 @@ using namespace m;
  * Schema
  *====================================================================================================================*/
 
+Schema::Identifier::Identifier(const ast::Expr &expr)
+{
+    if (auto d = cast<const ast::Designator>(&expr)) {
+        prefix = d->table_name.text;
+        name = d->attr_name.text;
+    } else {
+        std::ostringstream oss;
+        oss << expr;
+        prefix = nullptr;
+        name = Catalog::Get().pool(oss.str().c_str());
+    }
+}
+
 M_LCOV_EXCL_START
 void Schema::dump(std::ostream &out) const { out << *this << std::endl; }
 void Schema::dump() const { dump(std::cerr); }

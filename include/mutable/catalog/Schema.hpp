@@ -45,6 +45,7 @@ struct M_EXPORT Schema
             if (prefix != nullptr and strlen(prefix) == 0)
                 throw invalid_argument("prefix must not be the empty string");
         }
+        explicit Identifier(const ast::Expr&);
 
         bool operator==(Identifier other) const {
             return this->prefix == other.prefix and this->name == other.name;

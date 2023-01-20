@@ -18,6 +18,7 @@ namespace m {
     X(HashBasedGrouping) \
     X(Aggregation) \
     X(Sorting) \
+    X(NoOpSorting) \
     X(NestedLoopsJoin<false>) \
     X(NestedLoopsJoin<true>) \
     X(SimpleHashJoin) \
@@ -34,6 +35,7 @@ namespace m {
     X(HashBasedGrouping) \
     X(Aggregation) \
     X(Sorting) \
+    X(NoOpSorting) \
     X(SimpleHashJoin) \
     X(Limit)
 #define DECLARE(OP) \
@@ -113,6 +115,14 @@ struct Sorting : PhysicalOperator<Sorting, SortingOperator>
     static void execute(const Match<Sorting> &M, callback_t Pipeline);
     static double cost(const Match<Sorting>&) { return 1.0; }
     static ConditionSet post_condition(const Match<Sorting> &M);
+};
+
+struct NoOpSorting : PhysicalOperator<NoOpSorting, SortingOperator>
+{
+    static void execute(const Match<NoOpSorting> &M, callback_t Pipeline);
+    static double cost(const Match<NoOpSorting>&) { return 0.0; }
+    static ConditionSet pre_condition(std::size_t child_idx,
+                                      const std::tuple<const SortingOperator*> &partial_inner_nodes);
 };
 
 template<bool Predicated>
@@ -344,6 +354,21 @@ struct Match<wasm::Sorting> : MatchBase
 
     void execute(callback_t Pipeline) const override { wasm::Sorting::execute(*this, std::move(Pipeline)); }
     std::string name() const override { return "wasm::Sorting"; }
+};
+
+template<>
+struct Match<wasm::NoOpSorting> : MatchBase
+{
+    const MatchBase &child;
+
+    Match(const SortingOperator*, std::vector<std::reference_wrapper<const MatchBase>> &&children)
+        : child(children[0])
+    {
+        M_insist(children.size() == 1);
+    }
+
+    void execute(callback_t Pipeline) const override { wasm::NoOpSorting::execute(*this, std::move(Pipeline)); }
+    std::string name() const override { return "wasm::NoOpSorting"; }
 };
 
 template<bool Predicated>

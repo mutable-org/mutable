@@ -1203,6 +1203,27 @@ void Sorting::execute(const Match<Sorting> &M, callback_t Pipeline)
     buffer.resume_pipeline(sorting_schema);
 }
 
+ConditionSet NoOpSorting::pre_condition(std::size_t child_idx,
+                                        const std::tuple<const SortingOperator*> &partial_inner_nodes)
+{
+    M_insist(child_idx == 0);
+
+    ConditionSet pre_cond;
+
+    /*----- NoOpSorting, i.e. a noop to match sorting, needs the data already sorted. -----*/
+    Sortedness::order_t orders;
+    for (auto &o : std::get<0>(partial_inner_nodes)->order_by()) {
+        Schema::Identifier id(o.first);
+        if (orders.find(id) == orders.cend())
+            orders.add(id, o.second ? Sortedness::O_ASC : Sortedness::O_DESC);
+    }
+    pre_cond.add_condition(Sortedness(std::move(orders)));
+
+    return pre_cond;
+}
+
+void NoOpSorting::execute(const Match<NoOpSorting> &M, callback_t Pipeline) { M.child.execute(std::move(Pipeline)); }
+
 
 /*======================================================================================================================
  * Join

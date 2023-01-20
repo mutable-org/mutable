@@ -16,6 +16,7 @@ namespace m {
     X(Filter<true>) \
     X(Projection) \
     X(HashBasedGrouping) \
+    X(OrderedGrouping) \
     X(Aggregation) \
     X(Sorting) \
     X(NoOpSorting) \
@@ -33,6 +34,7 @@ namespace m {
     X(Scan) \
     X(Projection) \
     X(HashBasedGrouping) \
+    X(OrderedGrouping) \
     X(Aggregation) \
     X(Sorting) \
     X(NoOpSorting) \
@@ -99,8 +101,17 @@ struct Projection : PhysicalOperator<Projection, ProjectionOperator>
 struct HashBasedGrouping : PhysicalOperator<HashBasedGrouping, GroupingOperator>
 {
     static void execute(const Match<HashBasedGrouping> &M, callback_t Pipeline);
-    static double cost(const Match<HashBasedGrouping>&) { return 1.0; }
+    static double cost(const Match<HashBasedGrouping>&) { return 2.0; }
     static ConditionSet post_condition(const Match<HashBasedGrouping> &M);
+};
+
+struct OrderedGrouping : PhysicalOperator<OrderedGrouping, GroupingOperator>
+{
+    static void execute(const Match<OrderedGrouping> &M, callback_t Pipeline);
+    static double cost(const Match<OrderedGrouping>&) { return 1.0; }
+    static ConditionSet pre_condition(std::size_t child_idx,
+                                      const std::tuple<const GroupingOperator*> &partial_inner_nodes);
+    static ConditionSet adapt_post_condition(const Match<OrderedGrouping> &M, const ConditionSet &post_cond_child);
 };
 
 struct Aggregation : PhysicalOperator<Aggregation, AggregationOperator>
@@ -318,6 +329,23 @@ struct Match<wasm::HashBasedGrouping> : MatchBase
 
     void execute(callback_t Pipeline) const override { wasm::HashBasedGrouping::execute(*this, std::move(Pipeline)); }
     std::string name() const override { return "wasm::HashBasedGrouping"; }
+};
+
+template<>
+struct Match<wasm::OrderedGrouping> : MatchBase
+{
+    const GroupingOperator &grouping;
+    const MatchBase &child;
+
+    Match(const GroupingOperator *grouping, std::vector<std::reference_wrapper<const MatchBase>> &&children)
+        : grouping(*grouping)
+        , child(children[0])
+    {
+        M_insist(children.size() == 1);
+    }
+
+    void execute(callback_t Pipeline) const override { wasm::OrderedGrouping::execute(*this, std::move(Pipeline)); }
+    std::string name() const override { return "wasm::OrderedGrouping"; }
 };
 
 template<>

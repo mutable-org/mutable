@@ -96,14 +96,14 @@ struct Projection : PhysicalOperator<Projection, ProjectionOperator>
 
 struct HashBasedGrouping : PhysicalOperator<HashBasedGrouping, GroupingOperator>
 {
-    static void execute(const Match<HashBasedGrouping>&, callback_t);
+    static void execute(const Match<HashBasedGrouping> &M, callback_t Pipeline);
     static double cost(const Match<HashBasedGrouping>&) { return 1.0; }
     static ConditionSet post_condition(const Match<HashBasedGrouping> &M);
 };
 
 struct Aggregation : PhysicalOperator<Aggregation, AggregationOperator>
 {
-    static void execute(const Match<Aggregation>&, callback_t);
+    static void execute(const Match<Aggregation> &M, callback_t Pipeline);
     static double cost(const Match<Aggregation>&) { return 1.0; }
     static ConditionSet post_condition(const Match<Aggregation> &M);
 };

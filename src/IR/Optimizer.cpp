@@ -19,20 +19,6 @@ using namespace m::ast;
  * Helper functions
  *====================================================================================================================*/
 
-/** Returns `true` iff the given join predicate in `cnf::CNF` formula is an equi-join. */
-bool is_equi_join(const cnf::CNF &cnf)
-{
-    if (cnf.size() != 1) return false;
-    auto &clause = cnf[0];
-    if (clause.size() != 1) return false;
-    auto &literal = clause[0];
-    if (literal.negative()) return false;
-    auto &expr = literal.expr();
-    auto binary = cast<const BinaryExpr>(&expr);
-    if (not binary or binary->tok != TK_EQUAL) return false;
-    return is<Designator>(binary->lhs) and is<Designator>(binary->rhs);
-}
-
 struct WeightFilterClauses : ConstASTExprVisitor
 {
     private:
@@ -248,7 +234,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
         auto new_model = CE.estimate_grouping(G, *entry.model, G.group_by()); // TODO provide aggregates
         entry.model = std::move(new_model);
         // TODO pick "best" algorithm
-        auto group_by = std::make_unique<GroupingOperator>(G.group_by(), G.aggregates(), GroupingOperator::G_Hashing);
+        auto group_by = std::make_unique<GroupingOperator>(G.group_by(), G.aggregates());
         group_by->add_child(plan.release());
 
         /* Set operator information. */
@@ -405,16 +391,9 @@ Optimizer::construct_plan(const QueryGraph &G, const PlanTable &plan_table, Prod
                 }
 
                 /* Construct the join. */
-                JoinOperator *join;
-                if (sub_plans.size() == 2 and is_equi_join(join_condition)) {
-                    join = new JoinOperator(join_condition, JoinOperator::J_SimpleHashJoin);
-                    for (auto sub_plan : sub_plans)
-                        join->add_child(sub_plan);
-                } else {
-                    join = new JoinOperator(join_condition, JoinOperator::J_NestedLoops);
-                    for (auto sub_plan : sub_plans)
-                        join->add_child(sub_plan);
-                }
+                auto join = new JoinOperator(join_condition);
+                for (auto sub_plan : sub_plans)
+                    join->add_child(sub_plan);
                 auto join_info = std::make_unique<OperatorInformation>();
                 join_info->subproblem = s;
                 join_info->estimated_cardinality = CE.predict_cardinality(*plan_table[s].model);

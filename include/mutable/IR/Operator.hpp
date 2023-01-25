@@ -265,30 +265,16 @@ struct M_EXPORT FilterOperator : Producer, Consumer
 
 struct M_EXPORT JoinOperator : Producer, Consumer
 {
-#define algorithm(X) \
-    X(J_Undefined) \
-    X(J_NestedLoops) \
-    X(J_SimpleHashJoin)
-
-    M_DECLARE_ENUM(algorithm);
-
     private:
     cnf::CNF predicate_;
-    algorithm algo_;
 
     public:
-    JoinOperator(cnf::CNF predicate, algorithm algo) : predicate_(predicate), algo_(algo) { }
+    JoinOperator(cnf::CNF predicate) : predicate_(predicate) { }
 
     const cnf::CNF & predicate() const { return predicate_; }
-    algorithm algo() const { return algo_; }
-    const char * algo_str() const {
-        static const char *ALGO_TO_STR[] = { M_ENUM_TO_STR(algorithm) };
-        return ALGO_TO_STR[algo_];
-    }
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-#undef algorithm
 };
 
 struct M_EXPORT ProjectionOperator : Producer, Consumer
@@ -342,24 +328,15 @@ struct M_EXPORT LimitOperator : Producer, Consumer
 
 struct M_EXPORT GroupingOperator : Producer, Consumer
 {
-#define algorithm(X) \
-    X(G_Undefined) \
-    X(G_Ordered) \
-    X(G_Hashing)
-
-    M_DECLARE_ENUM(algorithm);
-
     using group_type = QueryGraph::group_type;
 
     private:
     std::vector<group_type> group_by_; ///< the compound grouping key
     std::vector<std::reference_wrapper<const ast::FnApplicationExpr>> aggregates_; ///< the aggregates to compute
-    algorithm algo_;
 
     public:
     GroupingOperator(std::vector<group_type> group_by,
-                     std::vector<std::reference_wrapper<const ast::FnApplicationExpr>> aggregates,
-                     algorithm algo);
+                     std::vector<std::reference_wrapper<const ast::FnApplicationExpr>> aggregates);
 
     /*----- Override child setters to *NOT* modify the computed schema! ----------------------------------------------*/
     virtual void add_child(Producer *child) override {
@@ -379,17 +356,11 @@ struct M_EXPORT GroupingOperator : Producer, Consumer
         return old;
     }
 
-    algorithm algo() const { return algo_; }
-    const char * algo_str() const {
-        static const char *ALGO_TO_STR[] = { M_ENUM_TO_STR(algorithm) };
-        return ALGO_TO_STR[algo_];
-    }
     const auto & group_by() const { return group_by_; }
     const auto & aggregates() const { return aggregates_; }
 
     void accept(OperatorVisitor &v) override;
     void accept(ConstOperatorVisitor &v) const override;
-#undef algorithm
 };
 
 struct M_EXPORT AggregationOperator : Producer, Consumer

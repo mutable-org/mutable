@@ -902,119 +902,111 @@ void Pipeline::operator()(const FilterOperator &op)
 
 void Pipeline::operator()(const JoinOperator &op)
 {
-    switch (op.algo()) {
-        default:
-            M_unreachable("Illegal join algorithm.");
+    if (op.predicate().is_equi()) {
+        /* Perform simple hash join. */
+        auto data = as<SimpleHashJoinData>(op.data());
+        Tuple *args[2] = { &data->key, nullptr };
+        if (data->is_probe_phase) {
+            const auto &tuple_schema = op.child(1)->schema();
+            const auto num_entries_build = op.child(0)->schema().num_entries();
+            const auto num_entries_probe = tuple_schema.num_entries();
+            auto &pipeline = data->pipeline;
+            std::size_t i = 0;
+            for (auto &t : block_) {
+                args[1] = &t;
+                data->probe_key(args);
+                pipeline.block_.fill();
+                data->ht.for_all(*args[0], [&](const std::pair<const Tuple, Tuple> &v) {
+                    if (i == pipeline.block_.capacity()) {
+                        pipeline.push(*op.parent());
+                        i = 0;
+                    }
 
-        case JoinOperator::J_Undefined:
-            /* fall through */
-        case JoinOperator::J_NestedLoops: {
-            auto data = as<NestedLoopsJoinData>(op.data());
-            auto size = op.children().size();
+                    pipeline.block_[i].insert(v.second, 0, num_entries_build);
+                    pipeline.block_[i].insert(t, num_entries_build, num_entries_probe);
+                    ++i;
+                });
+            }
 
-            if (data->active_child == size - 1) {
-                /* This is the right-most child.  Combine its produced tuple with all combinations of the buffered
-                 * tuples. */
-                std::vector<std::size_t> positions(size - 1, std::size_t(-1L)); // positions within each buffer
-                std::size_t child_id = 0; // cursor to the child that provides the next part of the joined tuple
-                auto &pipeline = data->pipeline;
+            if (i != 0) {
+                M_insist(i <= pipeline.block_.capacity());
+                pipeline.block_.mask(i == pipeline.block_.capacity() ? -1UL : (1UL << i) - 1);
+                pipeline.push(*op.parent());
+            }
+        } else {
+            const auto &tuple_schema = op.child(0)->schema();
+            for (auto &t : block_) {
+                args[1] = &t;
+                data->build_key(args);
+                data->ht.insert_with_duplicates(args[0]->clone(data->key_schema), t.clone(tuple_schema));
+            }
+        }
+    } else {
+        /* Perform nested-loops join. */
+        auto data = as<NestedLoopsJoinData>(op.data());
+        auto size = op.children().size();
 
-                for (;;) {
-                    if (child_id == size - 1) { // right-most child, which produced the RHS `block_`
-                        /* Combine the tuples.  One tuple from each buffer. */
-                        pipeline.clear();
-                        pipeline.block_.mask(block_.mask());
+        if (data->active_child == size - 1) {
+            /* This is the right-most child.  Combine its produced tuple with all combinations of the buffered
+             * tuples. */
+            std::vector<std::size_t> positions(size - 1, std::size_t(-1L)); // positions within each buffer
+            std::size_t child_id = 0; // cursor to the child that provides the next part of the joined tuple
+            auto &pipeline = data->pipeline;
 
-                        /* Concatenate tuples from the first n-1 children. */
-                        auto output_it = pipeline.block_.begin();
-                        auto &first = *output_it++; // the first tuple in the output block
-                        std::size_t n = 0; // number of attrs in `first`
-                        for (std::size_t i = 0; i != positions.size(); ++i) {
-                            auto &buffer = data->buffers[i];
-                            auto n_child = op.child(i)->schema().num_entries(); // number of attributes from this child
-                            first.insert(buffer[positions[i]], n, n_child);
-                            n += n_child;
-                        }
+            for (;;) {
+                if (child_id == size - 1) { // right-most child, which produced the RHS `block_`
+                    /* Combine the tuples.  One tuple from each buffer. */
+                    pipeline.clear();
+                    pipeline.block_.mask(block_.mask());
 
-                        /* Fill block with clones of first tuple and append the tuple from the last child. */
-                        for (; output_it != pipeline.block_.end(); ++output_it)
-                            output_it->insert(first, 0, n);
+                    /* Concatenate tuples from the first n-1 children. */
+                    auto output_it = pipeline.block_.begin();
+                    auto &first = *output_it++; // the first tuple in the output block
+                    std::size_t n = 0; // number of attrs in `first`
+                    for (std::size_t i = 0; i != positions.size(); ++i) {
+                        auto &buffer = data->buffers[i];
+                        auto n_child = op.child(i)->schema().num_entries(); // number of attributes from this child
+                        first.insert(buffer[positions[i]], n, n_child);
+                        n += n_child;
+                    }
 
-                        /* Evaluate the join predicate on the joined tuple and set the block's mask accordingly. */
-                        const auto num_attrs_rhs = op.child(child_id)->schema().num_entries();
-                        for (auto it = pipeline.block_.begin(); it != pipeline.block_.end(); ++it) {
-                            auto &rhs = block_[it.index()];
-                            it->insert(rhs, n, num_attrs_rhs); // append attrs of tuple from last child
-                            Tuple *args[] = { &data->res, &*it };
-                            data->predicate(args);
-                            if (data->res.is_null(0) or not data->res[0].as_b())
-                                pipeline.block_.erase(it);
-                        }
+                    /* Fill block with clones of first tuple and append the tuple from the last child. */
+                    for (; output_it != pipeline.block_.end(); ++output_it)
+                        output_it->insert(first, 0, n);
 
-                        if (not pipeline.block_.empty())
-                            pipeline.push(*op.parent());
+                    /* Evaluate the join predicate on the joined tuple and set the block's mask accordingly. */
+                    const auto num_attrs_rhs = op.child(child_id)->schema().num_entries();
+                    for (auto it = pipeline.block_.begin(); it != pipeline.block_.end(); ++it) {
+                        auto &rhs = block_[it.index()];
+                        it->insert(rhs, n, num_attrs_rhs); // append attrs of tuple from last child
+                        Tuple *args[] = { &data->res, &*it };
+                        data->predicate(args);
+                        if (data->res.is_null(0) or not data->res[0].as_b())
+                            pipeline.block_.erase(it);
+                    }
+
+                    if (not pipeline.block_.empty())
+                        pipeline.push(*op.parent());
+                    --child_id;
+                } else { // child whose tuples have been materialized in a buffer
+                    ++positions[child_id];
+                    auto &buffer = data->buffers[child_id];
+                    if (positions[child_id] == buffer.size()) { // reached the end of this buffer; backtrack
+                        if (child_id == 0)
+                            break;
+                        positions[child_id] = std::size_t(-1L);
                         --child_id;
-                    } else { // child whose tuples have been materialized in a buffer
-                        ++positions[child_id];
-                        auto &buffer = data->buffers[child_id];
-                        if (positions[child_id] == buffer.size()) { // reached the end of this buffer; backtrack
-                            if (child_id == 0)
-                                break;
-                            positions[child_id] = std::size_t(-1L);
-                            --child_id;
-                        } else {
-                            M_insist(positions[child_id] < buffer.size(), "position out of bounds");
-                            ++child_id;
-                        }
+                    } else {
+                        M_insist(positions[child_id] < buffer.size(), "position out of bounds");
+                        ++child_id;
                     }
                 }
-            } else {
-                /* This is not the right-most child.  Collect its produced tuples in a buffer. */
-                const auto &tuple_schema = op.child(data->active_child)->schema();
-                for (auto &t : block_)
-                    data->buffers[data->active_child].emplace_back(t.clone(tuple_schema));
             }
-            break;
-        }
-
-        case JoinOperator::J_SimpleHashJoin: {
-            auto data = as<SimpleHashJoinData>(op.data());
-            Tuple *args[2] = { &data->key, nullptr };
-            if (data->is_probe_phase) {
-                const auto &tuple_schema = op.child(1)->schema();
-                const auto num_entries_build = op.child(0)->schema().num_entries();
-                const auto num_entries_probe = tuple_schema.num_entries();
-                auto &pipeline = data->pipeline;
-                std::size_t i = 0;
-                for (auto &t : block_) {
-                    args[1] = &t;
-                    data->probe_key(args);
-                    pipeline.block_.fill();
-                    data->ht.for_all(*args[0], [&](const std::pair<const Tuple, Tuple> &v) {
-                        if (i == pipeline.block_.capacity()) {
-                            pipeline.push(*op.parent());
-                            i = 0;
-                        }
-
-                        pipeline.block_[i].insert(v.second, 0, num_entries_build);
-                        pipeline.block_[i].insert(t, num_entries_build, num_entries_probe);
-                        ++i;
-                    });
-                }
-
-                if (i != 0) {
-                    M_insist(i <= pipeline.block_.capacity());
-                    pipeline.block_.mask(i == pipeline.block_.capacity() ? -1UL : (1UL << i) - 1);
-                    pipeline.push(*op.parent());
-                }
-            } else {
-                const auto &tuple_schema = op.child(0)->schema();
-                for (auto &t : block_) {
-                    args[1] = &t;
-                    data->build_key(args);
-                    data->ht.insert_with_duplicates(args[0]->clone(data->key_schema), t.clone(tuple_schema));
-                }
-            }
+        } else {
+            /* This is not the right-most child.  Collect its produced tuples in a buffer. */
+            const auto &tuple_schema = op.child(data->active_child)->schema();
+            for (auto &t : block_)
+                data->buffers[data->active_child].emplace_back(t.clone(tuple_schema));
         }
     }
 }
@@ -1164,30 +1156,21 @@ void Pipeline::operator()(const GroupingOperator &op)
     };
 
     /* Find the group. */
-    switch (op.algo()) {
-        case GroupingOperator::G_Undefined:
-        case GroupingOperator::G_Ordered:
-            M_unreachable("not implemented");
+    auto data = as<HashBasedGroupingData>(op.data());
+    auto &groups = data->groups;
 
-        case GroupingOperator::G_Hashing: {
-            auto data = as<HashBasedGroupingData>(op.data());
-            auto &groups = data->groups;
-
-            Tuple key(op.schema());
-            for (auto &tuple : block_) {
-                Tuple *args[] = { &key, &tuple };
-                data->compute_key(args);
-                auto it = groups.find(key);
-                if (it == groups.end()) {
-                    /* Initialize the group's aggregate to NULL.  This will be overwritten by the neutral element w.r.t.
-                     * the aggregation function. */
-                    it = groups.emplace_hint(it, std::move(key), 0);
-                    key = Tuple(op.schema());
-                }
-                perform_aggregation(*it, tuple, *data);
-            }
-            break;
+    Tuple key(op.schema());
+    for (auto &tuple : block_) {
+        Tuple *args[] = { &key, &tuple };
+        data->compute_key(args);
+        auto it = groups.find(key);
+        if (it == groups.end()) {
+            /* Initialize the group's aggregate to NULL.  This will be overwritten by the neutral element w.r.t.
+             * the aggregation function. */
+            it = groups.emplace_hint(it, std::move(key), 0);
+            key = Tuple(op.schema());
         }
+        perform_aggregation(*it, tuple, *data);
     }
 }
 
@@ -1331,31 +1314,23 @@ void Interpreter::operator()(const FilterOperator &op)
 
 void Interpreter::operator()(const JoinOperator &op)
 {
-    switch (op.algo()) {
-        default:
-            M_unreachable("Undefined join algorithm.");
-
-        case JoinOperator::J_Undefined:
-        case JoinOperator::J_NestedLoops: {
-            auto data = new NestedLoopsJoinData(op);
-            op.data(data);
-            for (std::size_t i = 0, end = op.children().size(); i != end; ++i) {
-                data->active_child = i;
-                auto c = op.child(i);
-                c->accept(*this);
-            }
-            break;
-        }
-
-        case JoinOperator::J_SimpleHashJoin: {
-            auto data = new SimpleHashJoinData(op);
-            op.data(data);
-            if (auto scan = cast<ScanOperator>(op.child(0))) /// XXX: hack for pre-allocation
-                data->ht.resize(scan->store().num_rows());
-            op.child(0)->accept(*this); // build HT on LHS
-            data->is_probe_phase = true;
-            op.child(1)->accept(*this); // probe HT with RHS
-            break;
+    if (op.predicate().is_equi()) {
+        /* Perform simple hash join. */
+        auto data = new SimpleHashJoinData(op);
+        op.data(data);
+        if (auto scan = cast<ScanOperator>(op.child(0))) /// XXX: hack for pre-allocation
+            data->ht.resize(scan->store().num_rows());
+        op.child(0)->accept(*this); // build HT on LHS
+        data->is_probe_phase = true;
+        op.child(1)->accept(*this); // probe HT with RHS
+    } else {
+        /* Perform nested-loops join. */
+        auto data = new NestedLoopsJoinData(op);
+        op.data(data);
+        for (std::size_t i = 0, end = op.children().size(); i != end; ++i) {
+            data->active_child = i;
+            auto c = op.child(i);
+            c->accept(*this);
         }
     }
 }
@@ -1389,40 +1364,30 @@ void Interpreter::operator()(const LimitOperator &op)
 void Interpreter::operator()(const GroupingOperator &op)
 {
     auto &parent = *op.parent();
-    switch (op.algo()) {
-        case GroupingOperator::G_Undefined:
-        case GroupingOperator::G_Ordered:
-            M_unreachable("not implemented");
+    auto data = new HashBasedGroupingData(op);
+    op.data(data);
 
-        case GroupingOperator::G_Hashing: {
-            auto data = new HashBasedGroupingData(op);
-            op.data(data);
+    op.child(0)->accept(*this);
 
-            op.child(0)->accept(*this);
-
-            const auto num_groups = data->groups.size();
-            const auto remainder = num_groups % data->pipeline.block_.capacity();
-            auto it = data->groups.begin();
-            for (std::size_t i = 0; i != num_groups - remainder; i += data->pipeline.block_.capacity()) {
-                data->pipeline.block_.clear();
-                data->pipeline.block_.fill();
-                for (std::size_t j = 0; j != data->pipeline.block_.capacity(); ++j) {
-                    auto node = data->groups.extract(it++);
-                    swap(data->pipeline.block_[j], node.key());
-                }
-                data->pipeline.push(parent);
-            }
-            data->pipeline.block_.clear();
-            data->pipeline.block_.mask((1UL << remainder) - 1UL);
-            for (std::size_t i = 0; i != remainder; ++i) {
-                auto node = data->groups.extract(it++);
-                swap(data->pipeline.block_[i], node.key());
-            }
-            data->pipeline.push(parent);
-
-            break;
+    const auto num_groups = data->groups.size();
+    const auto remainder = num_groups % data->pipeline.block_.capacity();
+    auto it = data->groups.begin();
+    for (std::size_t i = 0; i != num_groups - remainder; i += data->pipeline.block_.capacity()) {
+        data->pipeline.block_.clear();
+        data->pipeline.block_.fill();
+        for (std::size_t j = 0; j != data->pipeline.block_.capacity(); ++j) {
+            auto node = data->groups.extract(it++);
+            swap(data->pipeline.block_[j], node.key());
         }
+        data->pipeline.push(parent);
     }
+    data->pipeline.block_.clear();
+    data->pipeline.block_.mask((1UL << remainder) - 1UL);
+    for (std::size_t i = 0; i != remainder; ++i) {
+        auto node = data->groups.extract(it++);
+        swap(data->pipeline.block_[i], node.key());
+    }
+    data->pipeline.push(parent);
 }
 
 void Interpreter::operator()(const AggregationOperator &op)

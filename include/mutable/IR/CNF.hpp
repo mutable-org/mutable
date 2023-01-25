@@ -39,6 +39,15 @@ struct M_EXPORT Predicate
     /** Returns the `Expr` within this `Predicate`. */
     const ast::Expr * operator->() const { return &expr(); }
 
+    /** Returns `true` iff this `Predicate` is an equi-predicate, i.e. an equality comparison of two designators. */
+    bool is_equi() const {
+        auto binary = cast<const ast::BinaryExpr>(&expr());
+        if (not binary) return false;
+        if (not negative() and binary->tok != TK_EQUAL) return false;   // `=` is ok
+        if (negative() and binary->tok != TK_BANG_EQUAL) return false;  // negated `!=` is ok
+        return is<const ast::Designator>(binary->lhs) and is<const ast::Designator>(binary->rhs);
+    }
+
     /** Returns a negated version of this `Predicate`, i.e.\ if this `Predicate` is *positive*, the returned `Predicate`
      * is *negative*. */
     Predicate operator!() const { return Predicate(literal_ ^ 0x1UL); }
@@ -84,6 +93,14 @@ struct M_EXPORT Clause : public std::vector<Predicate>
         return required;
     }
 
+    /** Returns `true` iff this `cnf::Clause` formula is an equi-predicate, i.e. a single equality comparison of two
+     * designators. */
+    bool is_equi() const {
+        if (size() != 1) return false;
+        auto &literal = operator[](0);
+        return literal.is_equi();
+    }
+
     /** Print as SQL expression. */
     void to_sql(std::ostream &out) const;
 
@@ -105,6 +122,14 @@ struct M_EXPORT CNF : public std::vector<Clause>
         for (auto &clause : *this)
             required |= clause.get_required();
         return required;
+    }
+
+    /** Returns `true` iff this `CNF` formula is an equi-predicate, i.e. conjunction of equality comparisons of each
+     * two designators. */
+    bool is_equi() const {
+        for (auto &clause : *this)
+            if (not clause.is_equi()) return false;
+        return true;
     }
 
     bool operator<=(const CNF &other) const;

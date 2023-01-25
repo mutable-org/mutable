@@ -127,10 +127,13 @@ struct NestedLoopsJoin : PhysicalOperator<NestedLoopsJoin<Predicated>, JoinOpera
                           std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children);
 };
 
-struct SimpleHashJoin : PhysicalOperator<SimpleHashJoin, JoinOperator>
+struct SimpleHashJoin : PhysicalOperator<SimpleHashJoin, pattern_t<JoinOperator, Wildcard, Wildcard>>
 {
     static void execute(const Match<SimpleHashJoin> &M, callback_t Pipeline);
-    static double cost(const Match<SimpleHashJoin> &M);
+    static double cost(const Match<SimpleHashJoin>&) { return 1.0; }
+    static ConditionSet
+    pre_condition(std::size_t child_idx,
+                  const std::tuple<const JoinOperator*, const Wildcard*, const Wildcard*> &partial_inner_nodes);
     static ConditionSet
     adapt_post_conditions(const Match<SimpleHashJoin> &M,
                           std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children);
@@ -390,7 +393,8 @@ struct Match<wasm::SimpleHashJoin> : MatchBase
     const JoinOperator &join;
     std::vector<std::reference_wrapper<const MatchBase>> children;
 
-    Match(const JoinOperator *join, std::vector<std::reference_wrapper<const MatchBase>> &&children)
+    Match(const JoinOperator *join, const Wildcard*, const Wildcard*,
+          std::vector<std::reference_wrapper<const MatchBase>> &&children)
         : join(*join)
         , children(std::move(children))
     {

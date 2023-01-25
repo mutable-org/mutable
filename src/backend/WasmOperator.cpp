@@ -1400,12 +1400,18 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, callb
 template struct m::wasm::NestedLoopsJoin<false>;
 template struct m::wasm::NestedLoopsJoin<true>;
 
-double SimpleHashJoin::cost(const Match<SimpleHashJoin> &M)
+ConditionSet SimpleHashJoin::pre_condition(
+    std::size_t,
+    const std::tuple<const JoinOperator*, const Wildcard*, const Wildcard*> &partial_inner_nodes)
 {
-    if (M.join.algo() == JoinOperator::J_SimpleHashJoin) // TODO: remove enum from logical operator and decide here
-        return 1.0;
-    else
-        return std::numeric_limits<double>::infinity();
+    ConditionSet pre_cond;
+
+    /*----- Simple hash join can only be used for binary joins on equi-predicates. -----*/
+    auto &join = *std::get<0>(partial_inner_nodes);
+    if (not join.predicate().is_equi())
+        pre_cond.add_condition(Unsatisfiable());
+
+    return pre_cond;
 }
 
 ConditionSet SimpleHashJoin::adapt_post_conditions(

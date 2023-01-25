@@ -48,7 +48,7 @@ std::ostream & m::operator<<(std::ostream &out, const Operator &op) {
         },
         [&out, &depth](const FilterOperator &op) { indent(out, op, depth).out << "FilterOperator " << op.filter(); },
         [&out, &depth](const JoinOperator &op) {
-            indent(out, op, depth).out << "JoinOperator " << op.algo_str() << ' ' << op.predicate();
+            indent(out, op, depth).out << "JoinOperator " << op.predicate();
         },
         [&out, &depth](const ProjectionOperator &op) { indent(out, op, depth).out << "ProjectionOperator"; },
         [&out, &depth](const LimitOperator &op) {
@@ -238,11 +238,9 @@ ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
 }
 
 GroupingOperator::GroupingOperator(std::vector<group_type> group_by,
-                                   std::vector<std::reference_wrapper<const ast::FnApplicationExpr>> aggregates,
-                                   algorithm algo)
+                                   std::vector<std::reference_wrapper<const ast::FnApplicationExpr>> aggregates)
     : group_by_(group_by)
     , aggregates_(aggregates)
-    , algo_(algo)
 {
     auto &C = Catalog::Get();
     auto &S = schema();

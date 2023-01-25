@@ -1886,6 +1886,111 @@ void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline
     });
 }
 
+template<bool SortLeft, bool SortRight, bool Predicated>
+ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated>::pre_condition(
+    std::size_t child_idx,
+    const std::tuple<const JoinOperator*, const Wildcard*, const Wildcard*> &partial_inner_nodes)
+{
+    ConditionSet pre_cond;
+
+    /*----- Sort merge join can only be used for binary joins on conjunctions of equi-predicates. -----*/
+    auto &join = *std::get<0>(partial_inner_nodes);
+    if (not join.predicate().is_equi()) {
+        pre_cond.add_condition(Unsatisfiable());
+        return pre_cond;
+    }
+
+    // FIXME: must be foreign key join
+
+    M_insist(child_idx < 2);
+    if ((not SortLeft and child_idx == 0) or (not SortRight and child_idx == 1)) {
+        /*----- Decompose each clause of the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
+        auto &build = *std::get<1>(partial_inner_nodes);
+        auto [keys_left, keys_right] = decompose_equi_predicate(join.predicate(), build.schema());
+
+        /*----- Sort merge join without sorting needs its data sorted on the respective key (in either order). -----*/
+        Sortedness::order_t orders;
+        if (child_idx == 0) {
+            for (auto &key_left : keys_left) {
+                if (orders.find(key_left) == orders.cend())
+                    orders.add(key_left, Sortedness::O_UNDEF);
+            }
+        } else {
+            for (auto &key_right : keys_right) {
+                if (orders.find(key_right) == orders.cend())
+                    orders.add(key_right, Sortedness::O_UNDEF);
+            }
+        }
+        pre_cond.add_condition(Sortedness(std::move(orders)));
+    }
+
+    return pre_cond;
+}
+
+template<bool SortLeft, bool SortRight, bool Predicated>
+ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated>::adapt_post_conditions(
+    const Match<SortMergeJoin> &M,
+    std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children)
+{
+    M_insist(post_cond_children.size() == 2);
+
+    ConditionSet post_cond;
+
+    if constexpr (Predicated) {
+        /*----- Predicated sort merge join introduces predication. -----*/
+        post_cond.add_or_replace_condition(m::Predicated(true));
+    }
+
+    Sortedness::order_t orders;
+    if constexpr (not SortLeft) {
+        Sortedness sorting_left(post_cond_children[0].get().get_condition<Sortedness>());
+        orders.merge(sorting_left.orders()); // preserve sortedness of left child (including order)
+    }
+    if constexpr (not SortRight) {
+        Sortedness sorting_right(post_cond_children[1].get().get_condition<Sortedness>());
+        orders.merge(sorting_right.orders()); // preserve sortedness of right child (including order)
+    }
+    if constexpr (SortLeft or SortRight) {
+        /*----- Decompose each clause of the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
+        auto [keys_left, keys_right] = decompose_equi_predicate(M.join.predicate(), M.build.schema());
+
+        /*----- Sort merge join does sort the data on the respective key. -----*/
+        if constexpr (SortLeft) {
+            for (auto &key_left : keys_left) {
+                if (orders.find(key_left) == orders.cend())
+                    orders.add(key_left, Sortedness::O_ASC); // add sortedness for left child (with default order ASC)
+            }
+        }
+        if constexpr (SortRight) {
+            for (auto &key_right : keys_right) {
+                if (orders.find(key_right) == orders.cend())
+                    orders.add(key_right, Sortedness::O_ASC); // add sortedness for right child (with default order ASC)
+            }
+        }
+    }
+    post_cond.add_condition(Sortedness(std::move(orders)));
+
+    // TODO: SIMD widths if materialization took place for sorting
+
+    return post_cond;
+}
+
+template<bool SortLeft, bool SortRight, bool Predicated>
+void SortMergeJoin<SortLeft, SortRight, Predicated>::execute(const Match<SortMergeJoin>&, callback_t)
+{
+    M_unreachable("not implemented");
+}
+
+// explicit instantiations to prevent linker errors
+template struct m::wasm::SortMergeJoin<false, false, false>;
+template struct m::wasm::SortMergeJoin<false, false, true>;
+template struct m::wasm::SortMergeJoin<false, true,  false>;
+template struct m::wasm::SortMergeJoin<false, true,  true>;
+template struct m::wasm::SortMergeJoin<true,  false, false>;
+template struct m::wasm::SortMergeJoin<true,  false, true>;
+template struct m::wasm::SortMergeJoin<true,  true,  false>;
+template struct m::wasm::SortMergeJoin<true,  true,  true>;
+
 
 /*======================================================================================================================
  * Limit

@@ -23,6 +23,14 @@ namespace m {
     X(NestedLoopsJoin<false>) \
     X(NestedLoopsJoin<true>) \
     X(SimpleHashJoin) \
+    /*X(SortMergeJoin<M_COMMA(false) M_COMMA(false) false>) \
+    X(SortMergeJoin<M_COMMA(false) M_COMMA(false) true>) \
+    X(SortMergeJoin<M_COMMA(false) M_COMMA(true)  false>) \
+    X(SortMergeJoin<M_COMMA(false) M_COMMA(true)  true>) \
+    X(SortMergeJoin<M_COMMA(true)  M_COMMA(false) false>) \
+    X(SortMergeJoin<M_COMMA(true)  M_COMMA(false) true>) \
+    X(SortMergeJoin<M_COMMA(true)  M_COMMA(true)  false>) \
+    X(SortMergeJoin<M_COMMA(true)  M_COMMA(true)  true>)*/ \
     X(Limit)
 
 
@@ -52,6 +60,10 @@ template<bool Predicated> struct Match<wasm::Filter<Predicated>>;
 
 namespace wasm { template<bool Predicated> struct NestedLoopsJoin; }
 template<bool Predicated> struct Match<wasm::NestedLoopsJoin<Predicated>>;
+
+namespace wasm { template<bool SortLeft, bool SortRight, bool Predicated> struct SortMergeJoin; }
+template<bool SortLeft, bool SortRight, bool Predicated>
+struct Match<wasm::SortMergeJoin<SortLeft, SortRight, Predicated>>;
 
 
 namespace wasm {
@@ -157,6 +169,22 @@ struct SimpleHashJoin : PhysicalOperator<SimpleHashJoin, pattern_t<JoinOperator,
                   const std::tuple<const JoinOperator*, const Wildcard*, const Wildcard*> &partial_inner_nodes);
     static ConditionSet
     adapt_post_conditions(const Match<SimpleHashJoin> &M,
+                          std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children);
+};
+
+template<bool SortLeft, bool SortRight, bool Predicated>
+struct SortMergeJoin
+    : PhysicalOperator<SortMergeJoin<SortLeft, SortRight, Predicated>, pattern_t<JoinOperator, Wildcard, Wildcard>>
+{
+    using typename PhysicalOperator<SortMergeJoin, pattern_t<JoinOperator, Wildcard, Wildcard>>::callback_t;
+
+    static void execute(const Match<SortMergeJoin> &M, callback_t Pipeline);
+    static double cost(const Match<SortMergeJoin>&) { return 0.5 + double(SortLeft) + double(SortRight); }
+    static ConditionSet
+    pre_condition(std::size_t child_idx,
+                  const std::tuple<const JoinOperator*, const Wildcard*, const Wildcard*> &partial_inner_nodes);
+    static ConditionSet
+    adapt_post_conditions(const Match<SortMergeJoin> &M,
                           std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children);
 };
 
@@ -480,6 +508,48 @@ struct Match<wasm::SimpleHashJoin> : MatchBase
     std::string name() const override { return "wasm::SimpleHashJoin"; }
 };
 
+template<bool SortLeft, bool SortRight, bool Predicated>
+struct Match<wasm::SortMergeJoin<SortLeft, SortRight, Predicated>> : MatchBase
+{
+    const JoinOperator &join;
+    const Wildcard &build;
+    const Wildcard &probe;
+    std::vector<std::reference_wrapper<const MatchBase>> children;
+    std::unique_ptr<const storage::DataLayoutFactory> left_materializing_factory;
+    std::unique_ptr<const storage::DataLayoutFactory> right_materializing_factory;
+
+    Match(const JoinOperator *join, const Wildcard *build, const Wildcard *probe,
+          std::vector<std::reference_wrapper<const MatchBase>> &&children)
+        : join(*join)
+        , build(*build)
+        , probe(*probe)
+        , children(std::move(children))
+        , left_materializing_factory(std::make_unique<storage::RowLayoutFactory>()) // TODO: let optimizer decide this
+        , right_materializing_factory(std::make_unique<storage::RowLayoutFactory>()) // TODO: let optimizer decide this
+    {
+        M_insist(this->children.size() == 2);
+    }
+
+    void execute(callback_t Pipeline) const override {
+        wasm::SortMergeJoin<SortLeft, SortRight, Predicated>::execute(*this, std::move(Pipeline));
+    }
+
+    std::string name() const override {
+        if constexpr (SortLeft) {
+            if constexpr (SortRight)
+                return M_CONSTEXPR_COND(Predicated, "PredicatedLeftRightSortMergeJoin",
+                                                    "BranchingLeftRightSortMergeJoin");
+            else
+                return M_CONSTEXPR_COND(Predicated, "PredicatedLeftSortMergeJoin", "BranchingLeftSortMergeJoin");
+        } else {
+            if constexpr (SortRight)
+                return M_CONSTEXPR_COND(Predicated, "PredicatedRightSortMergeJoin", "BranchingRightSortMergeJoin");
+            else
+                return M_CONSTEXPR_COND(Predicated, "PredicatedMergeJoin", "BranchingMergeJoin");
+        }
+    }
+};
+
 template<>
 struct Match<wasm::Limit> : MatchBase
 {
@@ -504,3 +574,11 @@ extern template struct m::wasm::Filter<false>;
 extern template struct m::wasm::Filter<true>;
 extern template struct m::wasm::NestedLoopsJoin<false>;
 extern template struct m::wasm::NestedLoopsJoin<true>;
+extern template struct m::wasm::SortMergeJoin<false, false, false>;
+extern template struct m::wasm::SortMergeJoin<false, false, true>;
+extern template struct m::wasm::SortMergeJoin<false, true,  false>;
+extern template struct m::wasm::SortMergeJoin<false, true,  true>;
+extern template struct m::wasm::SortMergeJoin<true,  false, false>;
+extern template struct m::wasm::SortMergeJoin<true,  false, true>;
+extern template struct m::wasm::SortMergeJoin<true,  true,  false>;
+extern template struct m::wasm::SortMergeJoin<true,  true,  true>;

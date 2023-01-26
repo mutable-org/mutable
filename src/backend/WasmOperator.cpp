@@ -3,7 +3,6 @@
 #include "backend/WasmAlgo.hpp"
 #include "backend/WasmMacro.hpp"
 #include <mutable/catalog/Catalog.hpp>
-#include <mutable/util/enum_ops.hpp>
 #include <numeric>
 
 
@@ -14,7 +13,7 @@ using namespace m::wasm;
 
 
 /*======================================================================================================================
- * Helper functions
+ * Helper structs and functions
  *====================================================================================================================*/
 
 void write_result_set(const Schema &schema, const storage::DataLayoutFactory &factory,
@@ -125,6 +124,146 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
             Module::Get().emit_call<void>("read_result_set", result_set.base_address(), result_set.size());
         }
     }
+}
+
+///> helper struct for aggregates
+struct aggregate_info_t
+{
+    Schema::Identifier id; ///< aggregate identifier
+    const Type *type; ///< aggregate type
+    m::Function::fnid_t fnid; ///< aggregate function
+    const std::vector<std::unique_ptr<ast::Expr>> &args; ///< aggregate arguments
+};
+
+///> helper struct for AVG aggregates
+struct avg_aggregate_info_t
+{
+    Schema::Identifier running_count; ///< identifier of running count
+    Schema::Identifier sum; ///< potential identifier for sum (only set if AVG is computed once at the end)
+    bool compute_running_avg; ///< flag whether running AVG must be computed instead of one computation at the end
+};
+
+/** Computes and returns information about the aggregates \p aggregates which are contained in the schema \p schema
+ * starting at offset \p aggregates_offset.  The firstly returned element contains general information about each
+ * aggregates like its identifier, type, function type, and arguments.  The secondly returned element contains
+ * additional information about each AVG aggregates like a flag to determine whether it can be computed using a
+ * running AVG or lazily at the end.  Either way, the corresponding running count and an optional sum are contained
+ * in these elements, too. */
+std::pair<std::vector<aggregate_info_t>, std::unordered_map<Schema::Identifier, avg_aggregate_info_t>>
+compute_aggregate_info(const std::vector<std::reference_wrapper<const FnApplicationExpr>> &aggregates,
+                       const Schema &schema, std::size_t aggregates_offset = 0)
+{
+    std::vector<aggregate_info_t> aggregates_info;
+    std::unordered_map<Schema::Identifier, avg_aggregate_info_t> avg_aggregates_info;
+
+    for (std::size_t i = aggregates_offset; i < schema.num_entries(); ++i) {
+        auto &e = schema[i];
+
+        auto pred = [&e](const auto &info){ return info.id == e.id; };
+        if (auto it = std::find_if(aggregates_info.cbegin(), aggregates_info.cend(), pred); it != aggregates_info.cend())
+            continue; // duplicated aggregate
+
+        auto &fn_expr = aggregates[i - aggregates_offset].get();
+        auto &fn = fn_expr.get_function();
+        M_insist(fn.kind == m::Function::FN_Aggregate, "not an aggregation function");
+
+        if (fn.fnid == m::Function::FN_AVG) {
+            M_insist(fn_expr.args.size() == 1, "AVG aggregate function expects exactly one argument");
+
+            /*----- Insert a suitable running count, i.e. COUNT over the argument of the AVG aggregate. -----*/
+            auto pred = [&fn_expr](const auto &_fn_expr){
+                M_insist(_fn_expr.get().get_function().fnid != m::Function::FN_COUNT or _fn_expr.get().args.size() <= 1,
+                         "COUNT aggregate function expects exactly one argument");
+                return _fn_expr.get().get_function().fnid == m::Function::FN_COUNT and
+                       not _fn_expr.get().args.empty() and *_fn_expr.get().args[0] == *fn_expr.args[0];
+            };
+            Schema::Identifier running_count;
+            if (auto it = std::find_if(aggregates.cbegin(), aggregates.cend(), pred);
+                it != aggregates.cend())
+            { // reuse found running count
+                const auto idx_agg = std::distance(aggregates.cbegin(), it);
+                running_count = schema[aggregates_offset + idx_agg].id;
+            } else { // insert additional running count
+                std::ostringstream oss;
+                oss << "$running_count_" << fn_expr;
+                running_count = Schema::Identifier(Catalog::Get().pool(oss.str().c_str()));
+                aggregates_info.emplace_back(aggregate_info_t{
+                    .id = running_count,
+                    .type = Type::Get_Integer(Type::TY_Scalar, 8),
+                    .fnid = m::Function::FN_COUNT,
+                    .args = fn_expr.args
+                });
+            }
+
+            /*----- Decide how to compute the average aggregate and insert sum aggregate accordingly. -----*/
+            Schema::Identifier sum;
+            bool compute_running_avg;
+            if (e.type->size() <= 32) {
+                /* Compute average by summing up all values in a 64-bit field (thus no overflows should occur) and
+                 * dividing by the running count once at the end. */
+                compute_running_avg = false;
+                auto pred = [&fn_expr](const auto &_fn_expr){
+                    M_insist(_fn_expr.get().get_function().fnid != m::Function::FN_SUM or
+                             _fn_expr.get().args.size() == 1,
+                             "SUM aggregate function expects exactly one argument");
+                    return _fn_expr.get().get_function().fnid == m::Function::FN_SUM and
+                           *_fn_expr.get().args[0] == *fn_expr.args[0];
+                };
+                if (auto it = std::find_if(aggregates.cbegin(), aggregates.cend(), pred);
+                    it != aggregates.cend())
+                { // reuse found SUM aggregate
+                    const auto idx_agg = std::distance(aggregates.cbegin(), it);
+                    sum = schema[aggregates_offset + idx_agg].id;
+                } else { // insert additional SUM aggregate
+                    std::ostringstream oss;
+                    oss << "$sum_" << fn_expr;
+                    sum = Schema::Identifier(Catalog::Get().pool(oss.str().c_str()));
+                    const Type *type;
+                    switch (as<const Numeric>(*fn_expr.args[0]->type()).kind) {
+                        case Numeric::N_Int:
+                        case Numeric::N_Decimal:
+                            type = Type::Get_Integer(Type::TY_Scalar, 8);
+                            break;
+                        case Numeric::N_Float:
+                            type = Type::Get_Double(Type::TY_Scalar);
+                    }
+                    aggregates_info.emplace_back(aggregate_info_t{
+                        .id = sum,
+                        .type = type,
+                        .fnid = m::Function::FN_SUM,
+                        .args = fn_expr.args
+                    });
+                }
+            } else {
+                /* Compute average by computing a running average for each inserted value in a `_Double` field (since
+                 * the sum may overflow). */
+                compute_running_avg = true;
+                M_insist(e.type->is_double());
+                aggregates_info.emplace_back(aggregate_info_t{
+                    .id = e.id,
+                    .type = e.type,
+                    .fnid = m::Function::FN_AVG,
+                    .args = fn_expr.args
+                });
+            }
+
+            /*----- Add info for this AVG aggregate. -----*/
+            avg_aggregates_info.try_emplace(e.id, avg_aggregate_info_t{
+                .running_count = running_count,
+                .sum = sum,
+                .compute_running_avg = compute_running_avg
+            });
+        } else {
+            aggregates_info.emplace_back(aggregate_info_t{
+                .id = e.id,
+                .type = e.type,
+                .fnid = fn.fnid,
+                .args = fn_expr.args
+            });
+        }
+    }
+
+    return { std::move(aggregates_info), std::move(avg_aggregates_info) };
 }
 
 /** Decompose the equi-predicate \p cnf, i.e. a conjunction of equality comparisons of each two designators, into all
@@ -424,149 +563,23 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pi
 
     const auto num_keys = M.grouping.group_by().size();
 
-    ///> helper struct for aggregates
-    struct aggregate_info_t
-    {
-        Schema::Identifier id; ///< aggregate identifier
-        m::Function::fnid_t fnid; ///< aggregate function
-        const std::vector<m::Expr*> &args; ///< aggregate arguments
-    };
-
-    ///> helper struct for AVG aggregates
-    struct avg_aggregate_info_t
-    {
-        Schema::Identifier running_count; ///< identifier of running count
-        Schema::Identifier sum; ///< potential identifier for sum (only set if AVG is computed once at the end)
-        bool compute_running_avg; ///< flag whether running AVG must be computed instead of one computation at the end
-    };
-
     /*----- Compute hash table schema and information about aggregates, especially AVG aggregates. -----*/
     Schema ht_schema;
-    std::vector<aggregate_info_t> aggregates;
-    std::unordered_map<Schema::Identifier, avg_aggregate_info_t> avg_aggregates;
-    uint64_t aggregates_size_in_bits = 0;
     for (std::size_t i = 0; i < num_keys; ++i) {
         auto &e = M.grouping.schema()[i];
         if (not ht_schema.has(e.id))
             ht_schema.add(e.id, e.type);
     }
-    for (std::size_t i = num_keys; i < M.grouping.schema().num_entries(); ++i) {
-        auto &e = M.grouping.schema()[i];
-
-        if (ht_schema.has(e.id))
-            continue; // duplicated aggregate
-
-        auto &fn_expr = as<const FnApplicationExpr>(*M.grouping.aggregates()[i - num_keys]);
-        auto &fn = fn_expr.get_function();
-        M_insist(fn.kind == m::Function::FN_Aggregate, "not an aggregation function");
-
-        if (fn.fnid == m::Function::FN_AVG) {
-            M_insist(fn_expr.args.size() == 1, "AVG aggregate function expects exactly one argument");
-
-            /*----- Insert a suitable running count, i.e. COUNT over the argument of the AVG aggregate. -----*/
-            auto pred = [&fn_expr](auto _expr){
-                auto &expr = as<const FnApplicationExpr>(*_expr);
-                M_insist(expr.get_function().fnid != m::Function::FN_COUNT or expr.args.size() <= 1,
-                         "COUNT aggregate function expects exactly one argument");
-                return expr.get_function().fnid == m::Function::FN_COUNT and
-                       not expr.args.empty() and *expr.args[0] == *fn_expr.args[0];
-            };
-            Schema::Identifier running_count;
-            if (auto it = std::find_if(M.grouping.aggregates().begin(), M.grouping.aggregates().end(), pred);
-                it != M.grouping.aggregates().end())
-            { // reuse found running count
-                const auto idx_agg = std::distance(M.grouping.aggregates().begin(), it);
-                running_count = M.grouping.schema()[num_keys + idx_agg].id;
-            } else { // insert additional running count
-                std::ostringstream oss;
-                oss << "$running_count_" << fn_expr;
-                running_count = Schema::Identifier(Catalog::Get().pool(oss.str().c_str()));
-                Schema::entry_type::constraints_t constraints{0}; // i.e. not nullable
-                ht_schema.add(running_count, Type::Get_Integer(Type::TY_Scalar, 8), constraints);
-                aggregates.emplace_back(aggregate_info_t{
-                    .id = running_count,
-                    .fnid = m::Function::FN_COUNT,
-                    .args = fn_expr.args
-                });
-                aggregates_size_in_bits += 64;
-            }
-
-            /*----- Decide how to compute the average aggregate and update the hash table's schema accordingly. -----*/
-            Schema::Identifier sum;
-            bool compute_running_avg;
-            if (e.type->size() <= 32) {
-                /* Compute average by summing up all values in a 64-bit field (thus no overflows should occur) and
-                 * dividing by the running count once at the end. */
-                compute_running_avg = false;
-                auto pred = [&fn_expr](auto _expr){
-                    auto &expr = as<const FnApplicationExpr>(*_expr);
-                    M_insist(expr.get_function().fnid != m::Function::FN_SUM or expr.args.size() == 1,
-                             "SUM aggregate function expects exactly one argument");
-                    return expr.get_function().fnid == m::Function::FN_SUM and *expr.args[0] == *fn_expr.args[0];
-                };
-                if (auto it = std::find_if(M.grouping.aggregates().begin(), M.grouping.aggregates().end(), pred);
-                    it != M.grouping.aggregates().end())
-                { // reuse found SUM aggregate
-                    const auto idx_agg = std::distance(M.grouping.aggregates().begin(), it);
-                    sum = M.grouping.schema()[num_keys + idx_agg].id;
-                } else { // insert additional SUM aggregate
-                    std::ostringstream oss;
-                    oss << "$sum_" << fn_expr;
-                    sum = Schema::Identifier(Catalog::Get().pool(oss.str().c_str()));
-                    switch (as<const Numeric>(*fn_expr.args[0]->type()).kind) {
-                        case Numeric::N_Int:
-                        case Numeric::N_Decimal:
-                            ht_schema.add(sum, Type::Get_Integer(Type::TY_Scalar, 8));
-                            break;
-                        case Numeric::N_Float:
-                            ht_schema.add(sum, Type::Get_Double(Type::TY_Scalar));
-                    }
-                    aggregates.emplace_back(aggregate_info_t{
-                        .id = sum,
-                        .fnid = m::Function::FN_SUM,
-                        .args = fn_expr.args
-                    });
-                    aggregates_size_in_bits += 64;
-                }
-            } else {
-                /* Compute average by computing a running average for each inserted value in a `_Double` field (since
-                 * the sum may overflow). */
-                compute_running_avg = true;
-                M_insist(e.type->is_double());
-                ht_schema.add(e.id, e.type);
-                aggregates.emplace_back(aggregate_info_t{
-                    .id = e.id,
-                    .fnid = m::Function::FN_AVG,
-                    .args = fn_expr.args
-                });
-                aggregates_size_in_bits += e.type->size();
-            }
-
-            /*----- Add info for this AVG aggregate. -----*/
-            avg_aggregates.try_emplace(e.id, avg_aggregate_info_t{
-                .running_count = running_count,
-                .sum = sum,
-                .compute_running_avg = compute_running_avg
-            });
-        } else {
-#if 1 // TODO: use the else-case once the grouping operator's c'tor does compute the schema with nullability information
-            Schema::entry_type::constraints_t constraints = e.constraints;
-            if (fn.fnid == m::Function::FN_COUNT)
-                constraints -= Schema::entry_type::NULLABLE; // COUNT aggregate cannot be NULL
-            else
-                constraints |= Schema::entry_type::NULLABLE; // all aggregates except COUNT may be NULL
-            ht_schema.add(e.id, e.type, constraints);
-#else
-            M_insist((fn.fnid != m::Function::FN_COUNT) == e.nullable(), "only COUNT aggregates cannot be NULL");
-            ht_schema.add(e.id, e.type, e.constraints);
-#endif
-            aggregates.emplace_back(aggregate_info_t{
-                .id = e.id,
-                .fnid = fn.fnid,
-                .args = fn_expr.args
-            });
-            aggregates_size_in_bits += e.type->size();
-        }
+    auto p = compute_aggregate_info(M.grouping.aggregates(), M.grouping.schema(), num_keys);
+    const auto &aggregates = p.first;
+    const auto &avg_aggregates = p.second;
+    uint64_t aggregates_size_in_bits = 0;
+    for (auto &info : aggregates) {
+        if (info.fnid == m::Function::FN_COUNT)
+            ht_schema.add(info.id, info.type, Schema::entry_type::constraints_t(0)); // i.e. not nullable
+        else
+            ht_schema.add(info.id, info.type); // i.e. nullable (due to default value)
+        aggregates_size_in_bits += info.type->size();
     }
 
     /*----- Compute initial capacity of hash table. -----*/
@@ -921,132 +934,10 @@ ConditionSet Aggregation::post_condition(const Match<Aggregation> &M)
 
 void Aggregation::execute(const Match<Aggregation> &M, callback_t Pipeline)
 {
-    ///> helper struct for aggregates
-    struct aggregate_info_t
-    {
-        Schema::Identifier id; ///< aggregate identifier
-        const Type *type; ///< aggregate type
-        m::Function::fnid_t fnid; ///< aggregate function
-        const std::vector<m::Expr*> &args; ///< aggregate arguments
-    };
-
-    ///> helper struct for AVG aggregates
-    struct avg_aggregate_info_t
-    {
-        Schema::Identifier running_count; ///< identifier of running count
-        Schema::Identifier sum; ///< potential identifier for sum (only set if AVG is computed once at the end)
-        bool compute_running_avg; ///< flag whether running AVG must be computed instead of one computation at the end
-    };
-
     /*----- Compute information about aggregates, especially about AVG aggregates. -----*/
-    std::vector<aggregate_info_t> aggregates;
-    std::unordered_map<Schema::Identifier, avg_aggregate_info_t> avg_aggregates;
-    for (std::size_t i = 0; i < M.aggregation.schema().num_entries(); ++i) {
-        auto &e = M.aggregation.schema()[i];
-
-        auto pred = [&e](const auto &info){ return info.id == e.id; };
-        if (auto it = std::find_if(aggregates.begin(), aggregates.end(), pred); it != aggregates.end())
-            continue; // duplicated aggregate
-
-        auto &fn_expr = as<const FnApplicationExpr>(*M.aggregation.aggregates()[i]);
-        auto &fn = fn_expr.get_function();
-        M_insist(fn.kind == m::Function::FN_Aggregate, "not an aggregation function");
-
-        if (fn.fnid == m::Function::FN_AVG) {
-            M_insist(fn_expr.args.size() == 1, "AVG aggregate function expects exactly one argument");
-
-            /*----- Insert a suitable running count, i.e. COUNT over the argument of the AVG aggregate. -----*/
-            auto pred = [&fn_expr](auto _expr){
-                auto &expr = as<const FnApplicationExpr>(*_expr);
-                M_insist(expr.get_function().fnid != m::Function::FN_COUNT or expr.args.size() <= 1,
-                         "COUNT aggregate function expects exactly one argument");
-                return expr.get_function().fnid == m::Function::FN_COUNT and
-                       not expr.args.empty() and *expr.args[0] == *fn_expr.args[0];
-            };
-            Schema::Identifier running_count;
-            if (auto it = std::find_if(M.aggregation.aggregates().begin(), M.aggregation.aggregates().end(), pred);
-                it != M.aggregation.aggregates().end())
-            { // reuse found running count
-                const auto idx_agg = std::distance(M.aggregation.aggregates().begin(), it);
-                running_count = M.aggregation.schema()[idx_agg].id;
-            } else { // insert additional running count
-                std::ostringstream oss;
-                oss << "$running_count_" << fn_expr;
-                running_count = Schema::Identifier(Catalog::Get().pool(oss.str().c_str()));
-                aggregates.emplace_back(aggregate_info_t{
-                    .id = running_count,
-                    .type = Type::Get_Integer(Type::TY_Scalar, 8),
-                    .fnid = m::Function::FN_COUNT,
-                    .args = fn_expr.args
-                });
-            }
-
-            /*----- Decide how to compute the average aggregate and insert sum aggregate accordingly. -----*/
-            Schema::Identifier sum;
-            bool compute_running_avg;
-            if (e.type->size() <= 32) {
-                /* Compute average by summing up all values in a 64-bit field (thus no overflows should occur) and
-                 * dividing by the running count once at the end. */
-                compute_running_avg = false;
-                auto pred = [&fn_expr](auto _expr){
-                    auto &expr = as<const FnApplicationExpr>(*_expr);
-                    M_insist(expr.get_function().fnid != m::Function::FN_SUM or expr.args.size() == 1,
-                             "SUM aggregate function expects exactly one argument");
-                    return expr.get_function().fnid == m::Function::FN_SUM and *expr.args[0] == *fn_expr.args[0];
-                };
-                if (auto it = std::find_if(M.aggregation.aggregates().begin(), M.aggregation.aggregates().end(), pred);
-                    it != M.aggregation.aggregates().end())
-                { // reuse found SUM aggregate
-                    const auto idx_agg = std::distance(M.aggregation.aggregates().begin(), it);
-                    sum = M.aggregation.schema()[idx_agg].id;
-                } else { // insert additional SUM aggregate
-                    std::ostringstream oss;
-                    oss << "$sum_" << fn_expr;
-                    sum = Schema::Identifier(Catalog::Get().pool(oss.str().c_str()));
-                    const Type *type;
-                    switch (as<const Numeric>(*fn_expr.args[0]->type()).kind) {
-                        case Numeric::N_Int:
-                        case Numeric::N_Decimal:
-                            type = Type::Get_Integer(Type::TY_Scalar, 8);
-                            break;
-                        case Numeric::N_Float:
-                            type = Type::Get_Double(Type::TY_Scalar);
-                    }
-                    aggregates.emplace_back(aggregate_info_t{
-                        .id = sum,
-                        .type = type,
-                        .fnid = m::Function::FN_SUM,
-                        .args = fn_expr.args
-                    });
-                }
-            } else {
-                /* Compute average by computing a running average for each inserted value in a `_Double` field (since
-                 * the sum may overflow). */
-                compute_running_avg = true;
-                M_insist(e.type->is_double());
-                aggregates.emplace_back(aggregate_info_t{
-                    .id = e.id,
-                    .type = e.type,
-                    .fnid = m::Function::FN_AVG,
-                    .args = fn_expr.args
-                });
-            }
-
-            /*----- Add info for this AVG aggregate. -----*/
-            avg_aggregates.try_emplace(e.id, avg_aggregate_info_t{
-                .running_count = running_count,
-                .sum = sum,
-                .compute_running_avg = compute_running_avg
-            });
-        } else {
-            aggregates.emplace_back(aggregate_info_t{
-                .id = e.id,
-                .type = e.type,
-                .fnid = fn.fnid,
-                .args = fn_expr.args
-            });
-        }
-    }
+    auto p = compute_aggregate_info(M.aggregation.aggregates(), M.aggregation.schema());
+    const auto &aggregates = p.first;
+    const auto &avg_aggregates = p.second;
 
     /*----- Create child function. -----*/
     Environment results;

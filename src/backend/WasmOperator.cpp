@@ -613,12 +613,13 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pi
     FUNCTION(hash_based_grouping_child_pipeline, void(void)) // create function for pipeline
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
-        const auto &env = CodeGenContext::Get().env();
 
         /*----- Create dummy slot to ignore NULL values in aggregate computations. -----*/
         auto dummy = ht->dummy_entry();
 
         M.child.execute([&](){
+            const auto &env = CodeGenContext::Get().env();
+
             /*----- Insert key if not yet done. -----*/
             std::vector<SQL_t> key;
             for (auto &p : M.grouping.group_by())
@@ -944,12 +945,13 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Pipeline)
     FUNCTION(aggregation_child_pipeline, void(void)) // create function for pipeline
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
-        const auto &env = CodeGenContext::Get().env();
 
         M.child.execute([&](){
+            auto &env = CodeGenContext::Get().env();
+
             /*----- If predication is used, introduce predication variable and update it before computing aggregates. */
             std::optional<Var<Bool>> pred;
-            if (auto &env = CodeGenContext::Get().env(); env.predicated())
+            if (env.predicated())
                 pred = env.extract_predicate().is_true_and_not_null();
 
             /*----- Compute aggregates (except AVG). -----*/
@@ -1406,8 +1408,10 @@ void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline
     FUNCTION(simple_hash_join_child_pipeline, void(void)) // create function for pipeline
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
-        auto &env = CodeGenContext::Get().env();
+
         M.children[0].get().execute([&](){
+            auto &env = CodeGenContext::Get().env();
+
             std::unique_ptr<Bool> build_key_not_null;
             for (auto &build_key : build_keys) {
                 if (auto old = build_key_not_null.get())

@@ -54,7 +54,7 @@ struct MockInterface final : ::wasm::ModuleRunner::ExternalInterface
                                ::wasm::Literals&,
                                ::wasm::Type,
                                ::wasm::ModuleRunner&) override { M_unreachable("not supported"); }
-    bool growMemory(::wasm::Address, ::wasm::Address) override { M_unreachable("not supported"); }
+    bool growMemory(::wasm::Name, ::wasm::Address, ::wasm::Address) override { M_unreachable("not supported"); }
     bool growTable(::wasm::Name,
                    const ::wasm::Literal&,
                    ::wasm::Index,
@@ -80,7 +80,7 @@ struct MockInterface final : ::wasm::ModuleRunner::ExternalInterface
 
     public:
 #define DECLARE_LOAD(C_TYPE, BINARYEN_TYPE) \
-    C_TYPE load##BINARYEN_TYPE(::wasm::Address addr) override { \
+    C_TYPE load##BINARYEN_TYPE(::wasm::Address addr, ::wasm::Name) override { \
         return load<C_TYPE>(addr); \
     }
     DECLARE_LOAD(int8_t, 8s)
@@ -94,7 +94,7 @@ struct MockInterface final : ::wasm::ModuleRunner::ExternalInterface
 #undef DECLARE_LOAD
 
 #define DECLARE_STORE(SIZE) \
-    void store##SIZE(::wasm::Address addr, int##SIZE##_t value) override { \
+    void store##SIZE(::wasm::Address addr, int##SIZE##_t value, ::wasm::Name) override { \
         return store<int##SIZE##_t>(addr, value); \
     }
     DECLARE_STORE(8)
@@ -195,13 +195,20 @@ Module::Module()
     emit_function_import<void(uint64_t)>("insist"); // to implement insist at Wasm site
     emit_function_import<void(uint64_t, uint64_t)>("throw"); // to throw exceptions from Wasm site
 
+    /*----- Create module memory. -----*/
+    ::wasm::Name memory_name = std::to_string(id_);
+    {
+        auto mem = std::make_unique<::wasm::Memory>();
+        mem->name = memory_name;
+        module_.addMemory(std::move(mem));
+    }
+
     /*----- Export the Wasm linear memory, s.t. it can be accessed from the environment (JavaScript). -----*/
-    auto &mem = module_.memory;
-    mem.exists = true;
-    mem.initial = 1; // otherwise the Binaryen interpreter traps
-    mem.max = int32_t(WasmPlatform::WASM_MAX_MEMORY / WasmPlatform::WASM_PAGE_SIZE);
+    memory_ = module_.getMemory(memory_name);
+    memory_->initial = 1; // otherwise the Binaryen interpreter traps
+    memory_->max = int32_t(WasmPlatform::WASM_MAX_MEMORY / WasmPlatform::WASM_PAGE_SIZE);
     module_.exports.emplace_back(
-        builder_.makeExport("memory", mem.name, ::wasm::ExternalKind::Memory)
+        builder_.makeExport("memory", memory_->name, ::wasm::ExternalKind::Memory)
     );
 
     /*----- Set features. -----*/

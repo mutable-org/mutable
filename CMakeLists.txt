@@ -248,7 +248,7 @@ ExternalProject_Add(
     PREFIX third-party
     DOWNLOAD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party"
     GIT_REPOSITORY "https://github.com/WebAssembly/binaryen.git"
-    GIT_TAG 2a3de22a0a66ba749360bc72cf0cbb1f216bcb4f # version_109
+    GIT_TAG 66214bcaf00aecb4bb00af3fec3b59e717ad7927 # version_111
     GIT_SUBMODULES # fetch/update submodules of Binaryen
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/binaryen"
     CMAKE_ARGS -DBUILD_STATIC_LIB=${BINARYEN_build_static} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DBYN_ENABLE_ASSERTIONS=${BINARYEN_enable_assertions} -DBUILD_TESTS=Off -DBUILD_TOOLS=Off

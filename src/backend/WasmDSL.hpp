@@ -474,6 +474,8 @@ struct Module final
     ::wasm::Block *active_block_ = nullptr;
     ///> the currently active Binaryen function
     ::wasm::Function *active_function_ = nullptr;
+    ///> the main memory of the module
+    ::wasm::Memory *memory_ = nullptr;
     ///> the allocator
     std::unique_ptr<Allocator> allocator_;
     ///> stack of Binaryen branch targets
@@ -651,7 +653,7 @@ struct Module final
     ::wasm::ModuleRunner instantiate() { return ::wasm::ModuleRunner(module_, get_mock_interface()); }
 
     /*----- Module settings ------------------------------------------------------------------------------------------*/
-    void set_feature(FeatureSet feature, bool value) { module_.features.set(feature, value); }
+    void set_feature(::wasm::FeatureSet feature, bool value) { module_.features.set(feature, value); }
 
     /** Returns the binary representation of `module_` in a freshly allocated memory.  The caller must dispose of this
      * memory. */
@@ -783,8 +785,8 @@ struct Block final
     }
 
     public:
-    bool has_name() const { return get().name.is(); }
-    const char * name() const { M_insist(has_name()); return get().name.c_str(); }
+    bool has_name() const { return get().name; }
+    std::string name() const { M_insist(has_name()); return get().name.toString(); }
 
     /** Returns whether this `Block` is empty, i.e. contains to expressions. */
     bool empty() const { return this_block_->list.empty(); }
@@ -923,7 +925,7 @@ struct Function<PrimitiveExpr<ReturnType>(PrimitiveExpr<ParamTypes>...)>
     public:
     /** Constructs a fresh `Function` and expects a unique \p name.  To be called by `FunctionProxy`. */
     Function(const std::string &name)
-        : name_(name.c_str())
+        : name_(name)
         , body_(name + ".body", /* attach_to_parent= */ false)
     {
         /*----- Set block return type for non-`void` functions. -----*/
@@ -965,9 +967,7 @@ struct Function<PrimitiveExpr<ReturnType>(PrimitiveExpr<ParamTypes>...)>
     const Block & body() const { return body_; }
 
     /** Returns the name of this function. */
-    const char * name() const { return name_.c_str(); }
-    /** Returns the name of this function. */
-    const char * c_name() const { return name_.c_str(); }
+    std::string name() const { return name_.toString(); }
 
     /** Returns all parameters of this function. */
     std::tuple<Parameter<ParamTypes>...> parameters() { return make_parameters<ParamTypes...>(); }
@@ -2054,7 +2054,8 @@ struct PrimitiveExpr<T>
             /* offset= */ offset_ >= 0 ? offset_ : 0,
             /* align=  */ alignof(pointed_type),
             /* ptr=    */ offset_ >= 0 ? addr_.expr() : (addr_ - uint32_t(-offset_)).expr(),
-            /* type=   */ wasm_type<pointed_type>()
+            /* type=   */ wasm_type<pointed_type>(),
+            /* memory= */ Module::Get().memory_->name
         );
         return PrimitiveExpr<pointed_type>(value, addr_.referenced_bits());
     }
@@ -2068,7 +2069,8 @@ struct PrimitiveExpr<T>
             /* align=  */ alignof(pointed_type),
             /* ptr=    */ offset_ >= 0 ? addr_.expr() : (addr_ - uint32_t(-offset_)).expr(),
             /* value=  */ value.expr(),
-            /* type=   */ wasm_type<pointed_type>()
+            /* type=   */ wasm_type<pointed_type>(),
+            /* memory= */ Module::Get().memory_->name
         );
         return e;
     }
@@ -3229,7 +3231,7 @@ struct Loop
 
     Loop & operator=(Loop &&other) { swap(*this, other); return *this; }
 
-    const char * name() const { return loop_->name.c_str(); }
+    std::string name() const { return loop_->name.toString(); }
 
     Block & body() { return body_; }
     const Block & body() const { return body_; }

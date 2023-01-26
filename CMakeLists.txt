@@ -332,45 +332,6 @@ if(${WITH_V8})
     endif()
 endif()
 
-# SpiderMonkey - Mozilla's JavaScript and WebAssembly Engine (used in Firefox)
-if(${WITH_SPIDERMONKEY})
-    if(APPLE)
-        # Apple MacOSX10.11 SDK - Required by SpiderMonkey
-        ExternalProject_Add(
-            MacOSX10.11.sdk
-            PREFIX third-party
-            DOWNLOAD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party"
-            SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/MacOSX10.11.sdk"
-            URL "https://github.com/phracker/MacOSX-SDKs/releases/download/10.15/MacOSX10.11.sdk.tar.xz"
-            URL_HASH MD5=79940ed366bb2d711ecca85f7acd11b5
-            CONFIGURE_COMMAND ""
-            BUILD_COMMAND ""
-            INSTALL_COMMAND ""
-        )
-        set(SPIDERMONKEY_DEPENDS MacOSX10.11.sdk)
-        set(SPIDERMONKEY_MACOS_SDK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third-party/MacOSX10.11.sdk)
-    endif()
-    ExternalProject_Add(
-        SpiderMonkey
-        PREFIX third-party
-        DOWNLOAD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party"
-        SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey"
-        URL "https://codeload.github.com/mozilla/gecko-dev/zip/1808f51e9f84c6dc4a24c57a9757a6ee4d69692d"
-        URL_HASH MD5=da25d97009f8d390e58fe3acdb2ee0c8
-        DOWNLOAD_NAME "SpiderMonkey.zip"
-        PATCH_COMMAND patch --quiet --backup ${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/js/src/devtools/automation/autospider.py ${CMAKE_CURRENT_SOURCE_DIR}/autospider_macos_sdk.patch
-        DEPENDS ${SPIDERMONKEY_DEPENDS}
-        CONFIGURE_COMMAND ""
-        BUILD_COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/js/rust"
-        COMMAND MACOS_SDK_DIR=${SPIDERMONKEY_MACOS_SDK_DIR} cargo build --features debugmozjs
-        BUILD_BYPRODUCTS "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/target/debug/build/mozjs_sys-976838596e5f086e/out/dist/bin/libmozjs-72.${SHARED_LIB_SUFFIX}"
-        INSTALL_COMMAND ""
-    )
-    add_definitions(-DM_WITH_SPIDERMONKEY)
-    include_directories(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/target/debug/build/mozjs_sys-976838596e5f086e/out/dist/include/")
-    add_library(spidermonkey SHARED IMPORTED)
-    set_target_properties(spidermonkey PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/target/debug/build/mozjs_sys-976838596e5f086e/out/dist/bin/libmozjs-72.${SHARED_LIB_SUFFIX}")
-endif()
 
 ########################################################################################################################
 ### Project Configuration

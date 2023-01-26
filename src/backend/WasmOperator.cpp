@@ -127,6 +127,32 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
     }
 }
 
+/** Decompose the equi-predicate \p cnf, i.e. a conjunction of equality comparisons of each two designators, into all
+ * identifiers contained in schema \p schema_left (returned as first element) and all identifiers not contained in
+ * the aforementioned schema (return as second element). */
+std::pair<std::vector<Schema::Identifier>, std::vector<Schema::Identifier>>
+decompose_equi_predicate(const cnf::CNF &cnf, const Schema &schema_left)
+{
+    std::vector<Schema::Identifier> ids_left, ids_right;
+    for (auto &clause : cnf) {
+        M_insist(clause.size() == 1, "invalid equi-predicate");
+        auto &literal = clause[0];
+        auto &binary = as<const BinaryExpr>(literal.expr());
+        M_insist((not literal.negative() and binary.tok == TK_EQUAL) or
+                 (literal.negative() and binary.tok == TK_BANG_EQUAL), "invalid equi-predicate");
+        M_insist(is<const Designator>(binary.lhs), "invalid equi-predicate");
+        M_insist(is<const Designator>(binary.rhs), "invalid equi-predicate");
+        Schema::Identifier id_first(*binary.lhs), id_second(*binary.rhs);
+        auto [id_left, id_right] = schema_left.has(id_first) ? std::make_pair(id_first, id_second)
+                                                             : std::make_pair(id_second, id_first);
+        ids_left.push_back(id_left);
+        ids_right.push_back(id_right);
+    }
+    M_insist(ids_left.size() == ids_right.size(), "number of found IDs differ");
+    M_insist(not ids_left.empty(), "must find at least one ID");
+    return { std::move(ids_left), std::move(ids_right) };
+}
+
 
 /*======================================================================================================================
  * NoOp
@@ -1442,27 +1468,16 @@ void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline
     const auto &probe = *M.join.child(1);
     const auto ht_schema = build.schema().drop_none().deduplicate();
 
-    /*----- Decompose the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
-    auto &pred = M.join.predicate();
-    M_insist(pred.size() == 1, "invalid predicate for simple hash join");
-    auto &clause = pred[0];
-    M_insist(clause.size() == 1, "invalid predicate for simple hash join");
-    auto &literal = clause[0];
-    M_insist(not literal.negative(), "invalid predicate for simple hash join");
-    auto binary = as<const BinaryExpr>(literal.expr());
-    M_insist(binary->tok == TK_EQUAL, "invalid predicate for simple hash join");
-    M_insist(is<const Designator>(binary->lhs), "invalid predicate for sort merge join");
-    M_insist(is<const Designator>(binary->rhs), "invalid predicate for sort merge join");
-    Schema::Identifier id_first(binary->lhs), id_second(binary->rhs);
-    auto [_build_key, _probe_key] = ht_schema.has(id_first) ? std::make_pair(id_first, id_second)
-                                                            : std::make_pair(id_second, id_first);
-    Schema::Identifier build_key(_build_key), probe_key(_probe_key); // to avoid structured binding in lambda closure
+    /*----- Decompose each clause of the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
+    auto p = decompose_equi_predicate(M.join.predicate(), ht_schema);
+    const auto &build_keys = p.first;
+    const auto &probe_keys = p.second;
 
     /*----- Compute payload IDs and its total size in bits (ignoring padding). -----*/
     std::vector<Schema::Identifier> payload_ids;
     uint64_t payload_size_in_bits = 0;
     for (auto &e : ht_schema) {
-        if (e.id != build_key) {
+        if (std::find(build_keys.cbegin(), build_keys.cend(), e.id) == build_keys.cend()) {
             payload_ids.push_back(e.id);
             payload_size_in_bits += e.type->size();
         }
@@ -1479,16 +1494,18 @@ void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline
 
     /*----- Create hash table for build child. -----*/
     std::unique_ptr<HashTable> ht;
-    std::vector<HashTable::index_t> build_key_idx = { ht_schema[build_key].first };
+    std::vector<HashTable::index_t> build_key_indices;
+    for (auto &build_key : build_keys)
+        build_key_indices.push_back(ht_schema[build_key].first);
     if (USE_CHAINED_HASHING) {
-        ht = std::make_unique<GlobalChainedHashTable>(ht_schema, std::move(build_key_idx), initial_capacity);
+        ht = std::make_unique<GlobalChainedHashTable>(ht_schema, std::move(build_key_indices), initial_capacity);
     } else {
         ++initial_capacity; // since at least one entry must always be unoccupied for lookups
         if (payload_size_in_bits <= PAYLOAD_SIZE_THRESHOLD_IN_BITS)
-            ht = std::make_unique<GlobalOpenAddressingInPlaceHashTable>(ht_schema, std::move(build_key_idx),
+            ht = std::make_unique<GlobalOpenAddressingInPlaceHashTable>(ht_schema, std::move(build_key_indices),
                                                                         initial_capacity);
         else
-            ht = std::make_unique<GlobalOpenAddressingOutOfPlaceHashTable>(ht_schema, std::move(build_key_idx),
+            ht = std::make_unique<GlobalOpenAddressingOutOfPlaceHashTable>(ht_schema, std::move(build_key_indices),
                                                                            initial_capacity);
         as<OpenAddressingHashTableBase>(*ht).set_probing_strategy<PROBING_STRATEGY>();
     }
@@ -1500,10 +1517,19 @@ void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
         auto &env = CodeGenContext::Get().env();
         M.children[0].get().execute([&](){
-            IF (not is_null(env.get(build_key))) { // TODO: predicated version
+            std::unique_ptr<Bool> build_key_not_null;
+            for (auto &build_key : build_keys) {
+                if (auto old = build_key_not_null.get())
+                    build_key_not_null = std::make_unique<Bool>(*old and not is_null(env.get(build_key)));
+                else
+                    build_key_not_null = std::make_unique<Bool>(not is_null(env.get(build_key)));
+            }
+            M_insist(bool(build_key_not_null));
+            IF (*build_key_not_null) { // TODO: predicated version
                 /*----- Insert key. -----*/
                 std::vector<SQL_t> key;
-                key.emplace_back(env.extract(build_key));
+                for (auto &build_key : build_keys)
+                    key.emplace_back(env.extract(build_key));
                 auto entry = ht->emplace(std::move(key));
 
                 /*----- Insert payload. -----*/
@@ -1521,10 +1547,11 @@ void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline
     M.children[1].get().execute([&](){
         auto &env = CodeGenContext::Get().env();
 
-        /* TODO: may check for NULL on probe key as well, branching + predicated version */
+        /* TODO: may check for NULL on probe keys as well, branching + predicated version */
         /*----- Probe with probe key. -----*/
         std::vector<SQL_t> key;
-        key.emplace_back(env.get(probe_key));
+        for (auto &probe_key : probe_keys)
+            key.emplace_back(env.get(probe_key));
         ht->for_each_in_equal_range(std::move(key), [&, Pipeline=std::move(Pipeline)](HashTable::const_entry_t entry){
             /*----- Add both found key and payload from hash table, i.e. from build child, to current environment. -----*/
             for (auto &e : ht_schema) {

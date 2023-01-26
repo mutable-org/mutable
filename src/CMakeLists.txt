@@ -47,6 +47,7 @@ endif()
 
 # V8
 if(${WITH_V8})
+    add_dependencies(${PROJECT_NAME} V8)
     target_link_libraries(${PROJECT_NAME} PUBLIC v8)
     if (${BUILD_SHARED_LIBS})
         target_link_libraries(${PROJECT_NAME} PUBLIC v8_platform)
@@ -54,7 +55,8 @@ if(${WITH_V8})
 endif()
 
 # Binaryen
-if(${WITH_V8} OR ${WITH_SPIDERMONKEY})
+if(${WITH_V8})
+    add_dependencies(${PROJECT_NAME} Binaryen)
     target_link_libraries(${PROJECT_NAME} PUBLIC binaryen)
 endif()
 

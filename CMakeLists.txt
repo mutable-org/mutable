@@ -1,21 +1,66 @@
 cmake_minimum_required(VERSION 3.20)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 
-project("mutable" C CXX)
+project(
+    "mutable"
+    DESCRIPTION "A Modern DBMS for Research and Fast Prototyping"
+    HOMEPAGE_URL "https://bigdata.uni-saarland.de/projects/mutable/"
+    LANGUAGES C CXX
+)
 
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+########################################################################################################################
+### CMake Modules
+########################################################################################################################
 include(ExternalProject)
 include(FetchContent)
 include(GenerateExportHeader)
 enable_testing()
 
-OPTION(BUILD_SHARED_LIBS        "Build mutable as a shared library" OFF)
-OPTION(ENABLE_SANITIZERS        "Build mutable with address and UB sanitizers" ON)
-OPTION(ENABLE_SANITY_FIELDS     "Build mutable with sanity fields enabled" ON)
 
-# Backends
-set(WITH_V8 FALSE CACHE BOOL "Enable the V8 platform.")
-set(WITH_SPIDERMONKEY FALSE CACHE BOOL "Enable the SpiderMonkey platform.")
+########################################################################################################################
+### Required / Desired Executables
+########################################################################################################################
+
+find_program(LLD lld NO_CACHE)
+if(${LLD})
+    set(HAS_LLD TRUE)
+endif()
+
+
+########################################################################################################################
+### mutable build options
+########################################################################################################################
+
+# General build options
+if(APPLE)
+    set(USE_LIBCXX_default TRUE)
+else()
+    set(USE_LIBCXX_default FALSE)
+endif()
+
+option(BUILD_SHARED_LIBS    "Build mutable as a shared library" OFF)
+option(ENABLE_SANITIZERS    "Build mutable with address and UB sanitizers" ON)
+option(ENABLE_SANITY_FIELDS "Build mutable with sanity fields enabled" ON)
+option(USE_LIBCXX           "Use libcxx (aka. libc++), LLVM's new implementation of the C++ standard library, instead of GNU's libstdc++" ${USE_LIBCXX_default})
+option(USE_LLD              "Use LLD, a linker from the LLVM project" ${HAS_LLD})
+
+# Enable backends
+option(WITH_V8              "Build with the V8-based WebAssembly execution backend." ON)
+
+set(EXECUTABLE_OUTPUT_PATH      "${PROJECT_BINARY_DIR}/bin")
+set(LIBRARY_OUTPUT_PATH         "${PROJECT_BINARY_DIR}/lib")
+
+if(${BUILD_SHARED_LIBS})
+    set(LIB_TYPE SHARED)
+else()
+    set(LIB_TYPE STATIC)
+endif()
+
+
+########################################################################################################################
+### Packages
+########################################################################################################################
 
 # Threads
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
@@ -31,94 +76,110 @@ endif()
 set(Boost_USE_MULTITHREADED ON)
 find_package(Boost REQUIRED COMPONENTS system container)
 
-# Loading whole static library
-set(CMAKE_C_LINK_LIBRARY_USING_load_archive_SUPPORTED TRUE)
-if(CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
-    set(CMAKE_C_LINK_LIBRARY_USING_load_archive "-force_load <LIB_ITEM>")
-elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU"
-        AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(CMAKE_C_LINK_LIBRARY_USING_load_archive "LINKER:--push-state,--whole-archive"
-        "<LINK_ITEM>"
-        "LINKER:--pop-state")
-elseif(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
-    set(CMAKE_C_LINK_LIBRARY_USING_load_archive "/WHOLEARCHIVE:<LIBRARY>")
-else()
-    # feature not yet supported for the other environments
-    set(CMAKE_C_LINK_LIBRARY_USING_load_archive_SUPPORTED FALSE)
-endif()
-
 # Git
 find_package(Git REQUIRED)
 
-# Build flags
-# cmake_policy(SET CMP0063 NEW)
-# set(CMAKE_CXX_VISIBILITY_PRESET hidden)
-# set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
-set(EXECUTABLE_OUTPUT_PATH      "${PROJECT_BINARY_DIR}/bin")
-set(LIBRARY_OUTPUT_PATH         "${PROJECT_BINARY_DIR}/lib")
 
-# Fix macOS system includes
-if(APPLE)
-    include_directories(SYSTEM "/usr/local/include")
-endif()
+########################################################################################################################
+### Set Compiler and Linker Flags
+########################################################################################################################
 
+# Set required C standard
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED)
 
-# Shared library suffix
-if(APPLE)
-    set(SHARED_LIB_SUFFIX dylib)
-elseif(WINDOWS)
-    set(SHARED_LIB_SUFFIX dll)
+# Set required CXX standard
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED)
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(is_release_build FALSE)
 else()
-    set(SHARED_LIB_SUFFIX so)
+    set(is_release_build TRUE)
 endif()
 
-# Shared or Static library suffix & type
-if(${BUILD_SHARED_LIBS})
-    set(BUILD_STATIC_LIBS OFF)
-    set(LIB_SUFFIX ${SHARED_LIB_SUFFIX})
-    set(LIB_TYPE SHARED)
+# Run debug build with sanitizers, but exclude the vptr sanitizer.  We must do this because V8 is built without RTTI,
+# see https://groups.google.com/g/v8-users/c/MJztlKiWFUc/m/z3_V-SMvAwAJ.
+
+# Set global compile options
+add_compile_options(
+    -W
+    -Wall
+    -pedantic
+    -Wno-variadic-macros
+    -Wno-gnu-zero-variadic-macro-arguments
+    -Wno-gnu-label-as-value
+    -Wno-vla-extension
+    -Wno-gnu-conditional-omitted-operand
+    -mavx2
+    -mbmi2
+    -mavx
+    -msse4.2
+    -mbmi
+    -fdiagnostics-color=always
+)
+
+# Configure release builds
+if(${is_release_build})
+    add_compile_definitions(NDEBUG) # set NDEBUG macro
+    add_compile_options(-O2)
+endif()
+
+# Configure builds with debug information
+if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+    # Do not omit frame pointers.  They are necessary for correct stack traces when debugging or profiling.
+    add_compile_options(-fno-omit-frame-pointer -fno-optimize-sibling-calls)
+
+    # OS dependent debug annotations: lldb is the default debugger on macOS, gdb is the default on *nix
+    if(APPLE)
+        add_compile_options(-glldb)
+    else()
+        add_compile_options(-ggdb3)
+    endif()
+endif()
+
+# Set standard library implementation to use
+if(${USE_LIBCXX})
+    message("[mutable] Using LLVM's libcxx")
+    add_compile_options(-stdlib=libc++)
+    add_link_options(-stdlib=libc++ -lc++abi)
 else()
-    set(BUILD_STATIC_LIBS ON)
-    set(LIB_SUFFIX a)
-    set(LIB_TYPE STATIC)
+    message("[mutable] Using GNU's libstdc++")
+    add_compile_options(-stdlib=libstdc++)
+    add_link_options(-stdlib=libstdc++)
 endif()
 
-# Run debug build with sanitizers, but exclude the vptr sanitizer.  See
-# https://groups.google.com/g/v8-users/c/MJztlKiWFUc/m/z3_V-SMvAwAJ
-set(CMAKE_COMPILE_FLAGS             "${CMAKE_COMPILE_FLAGS} -W -Wall -pedantic -Wno-variadic-macros -Wno-gnu-zero-variadic-macro-arguments -Wno-gnu-label-as-value -Wno-vla-extension -Wno-gnu-conditional-omitted-operand -mavx2 -mbmi2 -mavx -msse4.2 -mbmi")
-set(CMAKE_C_FLAGS                   "${CMAKE_C_FLAGS} ${CMAKE_COMPILE_FLAGS}")
-set(CMAKE_CXX_FLAGS                 "-std=c++20 ${CMAKE_CXX_FLAGS} ${CMAKE_COMPILE_FLAGS}")
-set(CMAKE_CXX_FLAGS_DEBUG           "-fno-omit-frame-pointer -fno-optimize-sibling-calls")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "-DNDEBUG -fno-omit-frame-pointer -fno-optimize-sibling-calls -O2")
+# Enable position-independent code (PIC) when building shared libraries
 set(CMAKE_POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS})
 
+# Set the linker to use
+if(${USE_LLD})
+    message("[mutable] Using linker lld (${LLD})")
+    add_link_options("-fuse-ld=lld")
+endif()
+
 if(${ENABLE_SANITIZERS})
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fsanitize=undefined -fno-sanitize=vptr")
+    message("[mutable] Compiling with address and UB sanitizers")
+    add_compile_options(-fsanitize=address -fsanitize=undefined -fno-sanitize=vptr)
+    add_link_options(-fsanitize=address -fsanitize=undefined -fno-sanitize=vptr)
 endif()
 
 if(${ENABLE_SANITY_FIELDS})
-    add_definitions("-DM_ENABLE_SANITY_FIELDS")
-endif()
-
-# OS dependent debug annotations
-if(APPLE)
-    set(CMAKE_CXX_FLAGS_DEBUG           "${CMAKE_CXX_FLAGS_DEBUG} -glldb")
-    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -glldb")
-else()
-    set(CMAKE_CXX_FLAGS_DEBUG           "${CMAKE_CXX_FLAGS_DEBUG} -ggdb3") # expand macros
-    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO  "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -ggdb3") # expand macros
+    message("[mutable] Compiling mutable with sanity fields")
+    add_compile_definitions(M_ENABLE_SANITY_FIELDS)
 endif()
 
 
 ########################################################################################################################
-# Get Git Version Information
+### Get Git Version Information
 ########################################################################################################################
 
-SET(GITREV_BARE_FILE    "gitversion.tbl")
-SET(GITREV_BARE_TMP     "gitversion-tmp.tbl")
-SET(GITREV_FILE         "${CMAKE_SOURCE_DIR}/include/mutable/${GITREV_BARE_FILE}")
-SET(GITREV_TMP          "${CMAKE_BINARY_DIR}/${GITREV_BARE_TMP}")
+set(GITREV_BARE_FILE    "gitversion.tbl")
+set(GITREV_BARE_TMP     "gitversion-tmp.tbl")
+set(GITREV_FILE         "${CMAKE_SOURCE_DIR}/include/mutable/${GITREV_BARE_FILE}")
+set(GITREV_TMP          "${CMAKE_BINARY_DIR}/${GITREV_BARE_TMP}")
 
+# Generate a table file with the X-macro, that is included by mutable to obtain Git version information
 add_custom_command(
     OUTPUT "${GITREV_FILE}"
     COMMAND ${CMAKE_COMMAND} -E echo_append "X(GIT_REV, "               >  "${GITREV_TMP}"
@@ -142,10 +203,10 @@ set_source_files_properties(
 
 
 ########################################################################################################################
-# Third-Party
+### Third-Parties
 ########################################################################################################################
 
-# Catch2 - Unit testing
+# Catch2 - Unit Testing Framework
 FetchContent_Populate(
     Catch2
     URL "https://raw.githubusercontent.com/catchorg/Catch2/v2.13.7/single_include/catch2/catch.hpp"
@@ -155,11 +216,6 @@ FetchContent_Populate(
 )
 
 # Replxx - Interactive Command Line Tool with History and Completions
-if(${BUILD_SHARED_LIBS})
-    set(REPLXX_LIB_SUFFIX .${LIB_SUFFIX})
-else()
-    set(REPLXX_LIB_SUFFIX -static.a)
-endif()
 ExternalProject_Add(
     Replxx
     PREFIX third-party
@@ -171,15 +227,22 @@ ExternalProject_Add(
     COMMAND       sed -i.origin "s/^if *( *NOT BUILD_SHARED_LIBS AND MSVC *)/if ( NOT BUILD_SHARED_LIBS )/" "CMakeLists.txt"
     CMAKE_ARGS -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
     CONFIGURE_HANDLED_BY_BUILD true
-    BUILD_BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/third-party/src/Replxx-build/libreplxx${REPLXX_LIB_SUFFIX}"
     INSTALL_COMMAND ""
 )
 include_directories(SYSTEM third-party/replxx/include)
-add_library(replxx ${LIB_TYPE} IMPORTED)
-set_target_properties(replxx PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/third-party/src/Replxx-build/libreplxx${REPLXX_LIB_SUFFIX}")
-add_dependencies(replxx Replxx)
+link_directories(${CMAKE_CURRENT_BINARY_DIR}/third-party/src/Replxx-build)
 
-# Binaryen - WebAssembly CodeGen API with WASM-specific Optimizations
+# Binaryen - WebAssembly CodeGen Framework with WASM-specific Optimizations
+if(${BUILD_SHARED_LIBS})
+    set(BINARYEN_build_static OFF)
+else()
+    set(BINARYEN_build_static ON)
+endif()
+if(${is_release_build})
+    set(BINARYEN_enable_assertions OFF)
+else()
+    set(BINARYEN_enable_assertions ON)
+endif()
 ExternalProject_Add(
     Binaryen
     PREFIX third-party
@@ -188,18 +251,16 @@ ExternalProject_Add(
     GIT_TAG 2a3de22a0a66ba749360bc72cf0cbb1f216bcb4f # version_109
     GIT_SUBMODULES # fetch/update submodules of Binaryen
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/binaryen"
-    CMAKE_ARGS -DBUILD_STATIC_LIB=${BUILD_STATIC_LIBS} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+    CMAKE_ARGS -DBUILD_STATIC_LIB=${BINARYEN_build_static} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DBYN_ENABLE_ASSERTIONS=${BINARYEN_enable_assertions} -DBUILD_TESTS=Off -DBUILD_TOOLS=Off
     CONFIGURE_HANDLED_BY_BUILD true
     BUILD_BYPRODUCTS "${PROJECT_BINARY_DIR}/third-party/src/Binaryen-build/lib/libbinaryen.${LIB_SUFFIX}"
     BUILD_COMMAND ${CMAKE_BUILD_TOOL} binaryen
     INSTALL_COMMAND ""
 )
 include_directories(SYSTEM third-party/binaryen/src)
-add_library(binaryen ${LIB_TYPE} IMPORTED)
-set_target_properties(binaryen PROPERTIES IMPORTED_LOCATION "${PROJECT_BINARY_DIR}/third-party/src/Binaryen-build/lib/libbinaryen.${LIB_SUFFIX}")
-add_dependencies(binaryen Binaryen)
+link_directories(${PROJECT_BINARY_DIR}/third-party/src/Binaryen-build/lib)
 
-# nlohmann_json - A simple, header-only JSON parser
+# nlohmann_json - A Simple, Header-Only JSON Parser
 FetchContent_Populate(
     Json
     GIT_REPOSITORY https://github.com/ArthurSonzogni/nlohmann_json_cmake_fetchcontent.git
@@ -208,7 +269,7 @@ FetchContent_Populate(
 )
 include_directories(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/third-party/json/include")
 
-# Eigen - template library for linear algebra: matrices, vectors, numerical solvers, and related algorithms
+# Eigen - Template Library for Linear Algebra: Matrices, Vectors, Numerical Solvers, and related Algorithms
 FetchContent_Populate(
     Eigen
     GIT_REPOSITORY "https://gitlab.com/libeigen/eigen.git"
@@ -233,10 +294,10 @@ if(${WITH_V8})
         set(V8_PLATFORM_PATH)
         set(V8_BUILD_TARGETS v8_monolith)
     endif()
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        message(STATUS "Building V8 in debug mode")
-        set(V8_BUILD_ARGS "${V8_BUILD_ARGS} is_debug=true symbol_level=2 use_debug_fission=true")
-    else()
+    if(${USE_LLD})
+        set(V8_BUILD_ARGS "${V8_BUILD_ARGS} use_lld=true")
+    endif()
+    if(${is_release_build})
         message(STATUS "Building V8 in release mode")
         set(V8_BUILD_ARGS "${V8_BUILD_ARGS} is_debug=false symbol_level=0 v8_enable_disassembler=true")
     endif()
@@ -311,12 +372,21 @@ if(${WITH_SPIDERMONKEY})
     set_target_properties(spidermonkey PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/third-party/SpiderMonkey/target/debug/build/mozjs_sys-976838596e5f086e/out/dist/bin/libmozjs-72.${SHARED_LIB_SUFFIX}")
 endif()
 
-# Directories
+########################################################################################################################
+### Project Configuration
+########################################################################################################################
+
+# Include directories
 include_directories(include src)
+if(APPLE)
+    include_directories(SYSTEM "/usr/local/include") # Fix macOS system includes
+endif()
+
+# Subdirectories
 add_subdirectory(src)
 add_subdirectory(unittest)
 
-# generate export macros
+# Generate EXPORT macros to export symbols in dynamic libraries
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
 generate_export_header(
@@ -325,13 +395,19 @@ generate_export_header(
     EXPORT_FILE_NAME "${CMAKE_CURRENT_SOURCE_DIR}/include/mutable/mutable-config.hpp"
 )
 
-#===== Tests ===========================================================================================================
+
+########################################################################################################################
+### Testing
+########################################################################################################################
+
+# Set environment variables for test runs
 if(APPLE)
-    set(ENV env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0)
+    set(env "UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0")
 else()
-    set(ENV env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1)
+    set(env "UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1")
 endif()
 
+# Unit test target
 add_custom_target(
     check-unit
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -340,9 +416,10 @@ add_custom_target(
     COMMAND echo "##################"
     COMMAND echo "### Unit Tests ###"
     COMMAND echo "##################"
-    COMMAND ${ENV} ${EXECUTABLE_OUTPUT_PATH}/unittest "[core]"
+    COMMAND env ${env} ${EXECUTABLE_OUTPUT_PATH}/unittest "[core]"
 )
 
+# Integration test target
 add_custom_target(
     check-integration
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -351,9 +428,10 @@ add_custom_target(
     COMMAND echo "#########################"
     COMMAND echo "### Integration Tests ###"
     COMMAND echo "#########################"
-    COMMAND ${ENV} "${CMAKE_CURRENT_SOURCE_DIR}/test/IntegrationTest.py" -r "${PROJECT_BINARY_DIR}"
+    COMMAND env ${env} "${CMAKE_CURRENT_SOURCE_DIR}/test/IntegrationTest.py" -r "${PROJECT_BINARY_DIR}"
 )
 
+# Target `check` runs unit and integration tests, in that order
 add_custom_target(
     check
     VERBATIM USES_TERMINAL

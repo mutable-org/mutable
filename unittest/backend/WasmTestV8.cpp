@@ -82,9 +82,11 @@ struct invoke_v8<PrimitiveExpr<ReturnType>(PrimitiveExpr<ParamTypes>...)>
         M_insist(Module::Validate(), "invalid module"); // validate test code
 
         /* Set flags and create isolate. */
-        std::ostringstream flags;
-        v8::V8::SetFlagsFromString("--stack_size 1000000 --no-liftoff --no-wasm-bounds-checks --no-wasm-stack-checks "
-                                   "--experimental-wasm-simd");
+        v8::V8::SetFlagsFromString(
+            "--no-liftoff "
+            "--wasm-bounds-checks "
+            "--wasm-stack-checks "
+        );
         v8::Isolate::CreateParams create_params;
         create_params.array_buffer_allocator = allocator_ = v8::ArrayBuffer::Allocator::NewDefaultAllocator();
         isolate_ = v8::Isolate::New(create_params);

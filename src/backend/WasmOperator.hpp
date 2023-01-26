@@ -31,7 +31,8 @@ namespace m {
     X(SortMergeJoin<M_COMMA(true)  M_COMMA(false) true>) \
     X(SortMergeJoin<M_COMMA(true)  M_COMMA(true)  false>) \
     X(SortMergeJoin<M_COMMA(true)  M_COMMA(true)  true>)*/ \
-    X(Limit)
+    X(Limit) \
+    X(HashBasedGroupJoin)
 
 
 // forward declarations
@@ -47,7 +48,8 @@ namespace m {
     X(Sorting) \
     X(NoOpSorting) \
     X(SimpleHashJoin) \
-    X(Limit)
+    X(Limit) \
+    X(HashBasedGroupJoin)
 #define DECLARE(OP) \
     namespace wasm { struct OP; } \
     template<> struct Match<wasm::OP>;
@@ -192,6 +194,18 @@ struct Limit : PhysicalOperator<Limit, LimitOperator>
 {
     static void execute(const Match<Limit> &M, callback_t Pipeline);
     static double cost(const Match<Limit>&) { return 1.0; }
+};
+
+struct HashBasedGroupJoin
+    : PhysicalOperator<HashBasedGroupJoin, pattern_t<GroupingOperator, pattern_t<JoinOperator, Wildcard, Wildcard>>>
+{
+    static void execute(const Match<HashBasedGroupJoin> &M, callback_t Pipeline);
+    static double cost(const Match<HashBasedGroupJoin>&) { return 2.0; }
+    static ConditionSet
+    pre_condition(std::size_t child_idx,
+                  const std::tuple<const GroupingOperator*, const JoinOperator*, const Wildcard*, const Wildcard*>
+                      &partial_inner_nodes);
+    static ConditionSet post_condition(const Match<HashBasedGroupJoin> &M);
 };
 
 }
@@ -565,6 +579,48 @@ struct Match<wasm::Limit> : MatchBase
 
     void execute(callback_t Pipeline) const override { wasm::Limit::execute(*this, std::move(Pipeline)); }
     std::string name() const override { return "wasm::Limit"; }
+};
+
+template<>
+struct Match<wasm::HashBasedGroupJoin> : MatchBase
+{
+    private:
+    std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
+    std::size_t buffer_num_tuples_;
+    public:
+    const GroupingOperator &grouping;
+    const JoinOperator &join;
+    const Wildcard &build;
+    const Wildcard &probe;
+    std::vector<std::reference_wrapper<const MatchBase>> children;
+
+    Match(const GroupingOperator* grouping, const JoinOperator *join, const Wildcard *build, const Wildcard *probe,
+          std::vector<std::reference_wrapper<const MatchBase>> &&children)
+        : grouping(*grouping)
+        , join(*join)
+        , build(*build)
+        , probe(*probe)
+        , children(std::move(children))
+    {
+        M_insist(this->children.size() == 2);
+    }
+
+    void execute(callback_t Pipeline) const override {
+        if (buffer_factory_) {
+            auto buffer_schema = grouping.schema().drop_none().deduplicate();
+            if (buffer_schema.num_entries()) {
+                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_, std::move(Pipeline));
+                wasm::HashBasedGroupJoin::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
+                buffer.resume_pipeline();
+            } else {
+                wasm::HashBasedGroupJoin::execute(*this, std::move(Pipeline));
+            }
+        } else {
+            wasm::HashBasedGroupJoin::execute(*this, std::move(Pipeline));
+        }
+    }
+
+    std::string name() const override { return "wasm::HashBasedGroupJoin"; }
 };
 
 }

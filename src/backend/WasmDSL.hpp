@@ -2844,8 +2844,11 @@ struct Variable<T, Kind, CanBeNull>
     storage_type storage_;
 
     public:
+    /* XXX: `requires requires { storage_type(); }` should be added but is not yet supported by Clang 15.0.7 due to
+     *      possible missing evaluation of friend declarations.
+     */
     /** Default-constructs a new `Variable`. */
-    Variable() requires requires { storage_type(); } { }
+    Variable() = default;
 
     /** Constructs a new `Variable` and initializes it with \p t. */
     template<typename U>

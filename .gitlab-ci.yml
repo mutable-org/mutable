@@ -91,20 +91,19 @@ build:debug:linux-amd64:
         - .shared
         - .build_cache
     script:
-        - mkdir -p build/${BUILD_TYPE}
-        - cd build/${BUILD_TYPE}
-        - cmake -G Ninja
+        - cmake -S . -B build/${BUILD_TYPE}
+          --fresh
+          -G Ninja
           -DCMAKE_C_COMPILER=clang
           -DCMAKE_CXX_COMPILER=clang++
           -DCMAKE_BUILD_TYPE=Debug
-          -DBUILD_SHARED_LIBS=On
-          -DWITH_V8=On
-          -DENABLE_SANITIZERS=On
-          -DENABLE_SANITY_FIELDS=On
-          ../..
-        - ninja gitversion
-        - ninja all unittest
-        - find third-party -name '*.so' -exec cp {} lib \;     # collect shared libraries
+          -DBUILD_SHARED_LIBS=ON
+          -DWITH_V8=ON
+          -DENABLE_SANITIZERS=ON
+          -DENABLE_SANITY_FIELDS=ON
+        - cmake --build build/${BUILD_TYPE} --target gitversion all unittest
+        - find build/${BUILD_TYPE}/third-party -name '*.so' -exec cp {} build/${BUILD_TYPE}/lib \; # collect shared libraries
+        - find build/${BUILD_TYPE}/third-party -name '*.so.*' -exec cp {} build/${BUILD_TYPE}/lib \; # collect shared libraries
     artifacts:
         paths:
             - "build/${BUILD_TYPE}/bin/"
@@ -121,20 +120,18 @@ build:debug:macos-amd64:
         - .shared
         - .build_cache
     script:
-        - mkdir -p build/${BUILD_TYPE}
-        - cd build/${BUILD_TYPE}
-        - cmake -G Ninja
+        - cmake -S . -B build/${BUILD_TYPE}
+          --fresh
+          -G Ninja
           -DCMAKE_C_COMPILER=clang
           -DCMAKE_CXX_COMPILER=clang++
           -DCMAKE_BUILD_TYPE=Debug
-          -DBUILD_SHARED_LIBS=On
-          -DWITH_V8=On
-          -DENABLE_SANITIZERS=On
-          -DENABLE_SANITY_FIELDS=On
-          ../..
-        - ninja gitversion
-        - ninja all unittest
-        - find third-party -name '*.dylib' -exec cp {} lib \;  # collect shared libraries
+          -DBUILD_SHARED_LIBS=ON
+          -DWITH_V8=ON
+          -DENABLE_SANITIZERS=ON
+          -DENABLE_SANITY_FIELDS=ON
+        - cmake --build build/${BUILD_TYPE} --target gitversion all unittest
+        - find build/${BUILD_TYPE}/third-party -name '*.dylib' -exec cp {} build/${BUILD_TYPE}/lib \; # collect shared libraries
     artifacts:
         paths:
             - "build/${BUILD_TYPE}/bin/"
@@ -223,10 +220,10 @@ build:release:linux-amd64:
           -DCMAKE_C_COMPILER=clang
           -DCMAKE_CXX_COMPILER=clang++
           -DCMAKE_BUILD_TYPE=Release
-          -DBUILD_SHARED_LIBS=Off
-          -DWITH_V8=On
-          -DENABLE_SANITIZERS=Off
-          -DENABLE_SANITY_FIELDS=Off
+          -DBUILD_SHARED_LIBS=OFF
+          -DWITH_V8=ON
+          -DENABLE_SANITIZERS=OFF
+          -DENABLE_SANITY_FIELDS=OFF
           ../..
         - ninja gitversion
         - ninja
@@ -269,10 +266,10 @@ build:release:macos-amd64:
           -DCMAKE_C_COMPILER=clang
           -DCMAKE_CXX_COMPILER=clang++
           -DCMAKE_BUILD_TYPE=Release
-          -DBUILD_SHARED_LIBS=Off
-          -DWITH_V8=On
-          -DENABLE_SANITIZERS=Off
-          -DENABLE_SANITY_FIELDS=Off
+          -DBUILD_SHARED_LIBS=OFF
+          -DWITH_V8=ON
+          -DENABLE_SANITIZERS=OFF
+          -DENABLE_SANITY_FIELDS=OFF
           ../..
         - ninja gitversion
         - ninja

@@ -495,7 +495,7 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
                                     Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
                                     new_env.add(e.id, NChar(var, value.length(), value.guarantees_terminating_nul()));
                                 },
-                                [](std::monostate) -> void { M_unreachable("invalid reference"); },
+                                [](std::monostate) -> void { M_unreachable("invalid expression"); },
                             }, old_env.compile(**expr));
                         } else {
                             /*----- Access renamed attribute. -----*/
@@ -515,7 +515,7 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
                                 Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
                                 new_env.add(e.id, NChar(var, value.length(), value.guarantees_terminating_nul()));
                             },
-                            [](std::monostate) -> void { M_unreachable("invalid reference"); },
+                            [](std::monostate) -> void { M_unreachable("invalid expression"); },
                         }, old_env.compile(p->first));
                     }
                 }

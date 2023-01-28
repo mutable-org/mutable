@@ -95,3 +95,19 @@ target_link_libraries(cardinality_gen ${PROJECT_NAME})
 
 add_executable(query_slicer query_slicer.cpp)
 target_link_libraries(query_slicer ${PROJECT_NAME})
+
+
+########################################################################################################################
+### Copy used system libraries to project, to be self-contained
+########################################################################################################################
+
+# Copy required Boost libraries
+if(${BUILD_SHARED_LIBS})
+    foreach(lib_target ${Boost_LIBRARIES})
+        get_target_property(lib_location ${lib_target} LOCATION)
+        add_custom_command(
+            TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${lib_location} "${PROJECT_BINARY_DIR}/third-party"
+        )
+    endforeach()
+endif()

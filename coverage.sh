@@ -19,10 +19,6 @@ IGNORE_LIST=(
     '*src/storage/Linearization.cpp'
 )
 
-# Make coverage build
-mkdir -p build/coverage
-cd build/coverage
-
 set -x
 
 # Produce gcov alias for llvm-cov gcov
@@ -37,16 +33,19 @@ LCOV_FLAGS="\
     --no-external \
     --rc lcov_branch_coverage=1"
 
-cmake -G Ninja \
-    -DCMAKE_BUILD_TYPE=Debug \
-    -DBUILD_SHARED_LIBS=On \
+env CFLAGS=--coverage CXXFLAGS=--coverage \
+    cmake -S . -B build/coverage \
+    --fresh \
+    -G Ninja \
     -DCMAKE_C_COMPILER=clang \
     -DCMAKE_CXX_COMPILER=clang++ \
-    -DCMAKE_COMPILE_FLAGS=--coverage \
-    ../..
-# ninja clean
-ninja gitversion
-ninja -v unittest
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DBUILD_SHARED_LIBS=ON \
+    -DCMAKE_C_COMPILER=clang \
+    -DCMAKE_CXX_COMPILER=clang++
+cmake --build build/coverage
+
+cd build/coverage
 
 # Cleanup lcov
 lcov ${LCOV_FLAGS} --zerocounters --directory src --directory unittest

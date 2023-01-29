@@ -222,6 +222,11 @@ FetchContent_Populate(
 )
 
 # Replxx - Interactive Command Line Tool with History and Completions
+if(${BUILD_SHARED_LIBS})
+    set(Replxx_LIBRARIES replxx)
+else()
+    set(Replxx_LIBRARIES replxx-static)
+endif()
 ExternalProject_Add(
     Replxx
     PREFIX third-party
@@ -298,10 +303,10 @@ if(${WITH_V8})
     endif()
     if(${BUILD_SHARED_LIBS})
         set(V8_BUILD_ARGS "${V8_BUILD_ARGS} v8_monolithic=false is_component_build=true")
-        set(V8_BUILD_TARGETS v8 v8_libplatform)
+        set(V8_LIBRARIES v8 v8_libplatform)
     else()
         set(V8_BUILD_ARGS "${V8_BUILD_ARGS} v8_monolithic=true is_component_build=false")
-        set(V8_BUILD_TARGETS v8_monolith)
+        set(V8_LIBRARIES v8_monolith)
     endif()
     if(${USE_LLD})
         set(V8_BUILD_ARGS "${V8_BUILD_ARGS} use_lld=true")
@@ -328,11 +333,15 @@ if(${WITH_V8})
         COMMAND        cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/" && gclient sync -D -f
         CONFIGURE_COMMAND gn gen out --root=${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8 --args=${V8_BUILD_ARGS}
         CONFIGURE_HANDLED_BY_BUILD true
-        BUILD_COMMAND ninja -C out ${V8_BUILD_TARGETS}
+        BUILD_COMMAND ninja -C out ${V8_LIBRARIES}
         INSTALL_COMMAND ""
     )
     include_directories(SYSTEM third-party/v8/v8/include)
-    link_directories(${PROJECT_BINARY_DIR}/third-party/src/V8-build/out)
+    if(${BUILD_SHARED_LIBS})
+        link_directories(${PROJECT_BINARY_DIR}/third-party/src/V8-build/out)
+    else()
+        link_directories(${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/obj)
+    endif()
 endif()
 
 

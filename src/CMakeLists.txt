@@ -48,10 +48,7 @@ endif()
 # V8
 if(${WITH_V8})
     add_dependencies(${PROJECT_NAME} V8)
-    target_link_libraries(${PROJECT_NAME} PUBLIC v8)
-    if (${BUILD_SHARED_LIBS})
-        target_link_libraries(${PROJECT_NAME} PUBLIC v8_libplatform)
-    endif()
+    target_link_libraries(${PROJECT_NAME} PUBLIC ${V8_LIBRARIES})
 endif()
 
 # Binaryen
@@ -82,7 +79,7 @@ set_target_properties(check-bin PROPERTIES OUTPUT_NAME check)
 
 add_executable(shell shell.cpp)
 add_dependencies(shell Replxx)
-target_link_libraries(shell replxx ${PROJECT_NAME} Threads::Threads)
+target_link_libraries(shell ${Replxx_LIBRARIES} ${PROJECT_NAME} Threads::Threads)
 
 add_executable(train-operator-model train-operator-model.cpp)
 target_link_libraries(train-operator-model ${PROJECT_NAME} Threads::Threads)

@@ -214,9 +214,9 @@ build:release:linux-amd64:
         - .static
         - .build_cache
     script:
-        - mkdir -p build/${BUILD_TYPE}
-        - cd build/${BUILD_TYPE}
-        - cmake -G Ninja
+        - cmake -S . -B build/${BUILD_TYPE}
+          --fresh
+          -G Ninja
           -DCMAKE_C_COMPILER=clang
           -DCMAKE_CXX_COMPILER=clang++
           -DCMAKE_BUILD_TYPE=Release
@@ -224,10 +224,7 @@ build:release:linux-amd64:
           -DWITH_V8=ON
           -DENABLE_SANITIZERS=OFF
           -DENABLE_SANITY_FIELDS=OFF
-          ../..
-        - ninja gitversion
-        - ninja
-        - cd ../..
+        - cmake --build build/${BUILD_TYPE} --target gitversion all
         - mkdir mutable
         - cp -R include mutable
         - mkdir mutable/lib
@@ -260,9 +257,9 @@ build:release:macos-amd64:
         - .static
         - .build_cache
     script:
-        - mkdir -p build/${BUILD_TYPE}
-        - cd build/${BUILD_TYPE}
-        - cmake -G Ninja
+        - cmake -S . -B build/${BUILD_TYPE}
+          --fresh
+          -G Ninja
           -DCMAKE_C_COMPILER=clang
           -DCMAKE_CXX_COMPILER=clang++
           -DCMAKE_BUILD_TYPE=Release
@@ -270,10 +267,7 @@ build:release:macos-amd64:
           -DWITH_V8=ON
           -DENABLE_SANITIZERS=OFF
           -DENABLE_SANITY_FIELDS=OFF
-          ../..
-        - ninja gitversion
-        - ninja
-        - cd ../..
+        - cmake --build build/${BUILD_TYPE} --target gitversion all
         - mkdir mutable
         - cp -R include mutable
         - mkdir mutable/lib

@@ -557,14 +557,14 @@ std::pair<HashTable::entry_t, Bool> ChainedHashTable<IsGlobal>::try_emplace(std:
 }
 
 template<bool IsGlobal>
-std::pair<HashTable::const_entry_t, Bool> ChainedHashTable<IsGlobal>::find(std::vector<SQL_t> key) const
+std::pair<HashTable::entry_t, Bool> ChainedHashTable<IsGlobal>::find(std::vector<SQL_t> key)
 {
     /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
     std::optional<Bool> pred;
     if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
         pred.emplace(env.extract_predicate().is_true_and_not_null());
         if (not predication_dummy_)
-            const_cast<ChainedHashTable<IsGlobal>*>(this)->create_predication_dummy();
+            create_predication_dummy();
     }
     M_insist(not pred or predication_dummy_);
 
@@ -584,7 +584,7 @@ std::pair<HashTable::const_entry_t, Bool> ChainedHashTable<IsGlobal>::find(std::
     Bool key_found = not bucket_it.is_nullptr();
 
     /*----- Return entry handle containing both keys and values and the flag whether key was found. -----*/
-    return { entry(bucket_it), key_found };
+    return { value_entry(bucket_it), key_found };
 }
 
 template<bool IsGlobal>
@@ -1303,15 +1303,14 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
 }
 
 template<bool IsGlobal, bool ValueInPlace>
-std::pair<HashTable::const_entry_t, Bool>
-OpenAddressingHashTable<IsGlobal, ValueInPlace>::find(std::vector<SQL_t> key) const
+std::pair<HashTable::entry_t, Bool> OpenAddressingHashTable<IsGlobal, ValueInPlace>::find(std::vector<SQL_t> key)
 {
     /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
     std::optional<Bool> pred;
     if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
         pred.emplace(env.extract_predicate().is_true_and_not_null());
         if (not predication_dummy_)
-            const_cast<OpenAddressingHashTable<IsGlobal, ValueInPlace>*>(this)->create_predication_dummy();
+            create_predication_dummy();
     }
     M_insist(not pred or predication_dummy_);
 
@@ -1332,10 +1331,15 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::find(std::vector<SQL_t> key) co
     }
 
     /*----- Key is found iff current slot is occupied. -----*/
-    Bool key_found = reference_count(slot) != ref_t(0);
+    const Var<Bool> key_found(reference_count(slot) != ref_t(0)); // create constant variable since `slot` may change
+
+    if constexpr (not ValueInPlace) {
+        /*----- Set slot pointer to out-of-place values. -----*/
+        slot = *(slot + storage_.ptr_offset_in_bytes_).template to<uint32_t*>();
+    }
 
     /*----- Return entry handle containing both keys and values and the flag whether key was found. -----*/
-    return { entry(slot), key_found };
+    return { value_entry(slot), key_found };
 }
 
 template<bool IsGlobal, bool ValueInPlace>

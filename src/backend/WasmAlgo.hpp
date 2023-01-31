@@ -56,6 +56,9 @@ struct HashTable
     using offset_t = int32_t;
     using size_t = uint32_t;
 
+    // forward declaration
+    template<bool IsConst> struct the_entry;
+
     /** Helper struct as proxy to access a single value (inclusive NULL bit) of a hash table entry. */
     template<sql_type T, bool IsConst>
     struct the_reference;
@@ -64,6 +67,9 @@ struct HashTable
     requires (not std::same_as<T, NChar>)
     struct the_reference<T, IsConst>
     {
+        friend struct the_entry<false>;
+        friend struct the_entry<true>;
+
         using value_t = PrimitiveExpr<typename T::type>;
 
         private:
@@ -71,6 +77,11 @@ struct HashTable
         std::optional<Ptr<U8>> is_null_byte_;
         std::optional<U8> is_null_mask_;
 
+        explicit the_reference(Ptr<value_t> value, std::optional<Ptr<U8>> is_null_byte, std::optional<U8> is_null_mask)
+            : value_(value)
+            , is_null_byte_(std::move(is_null_byte))
+            , is_null_mask_(std::move(is_null_mask))
+        { }
         explicit the_reference(Ptr<value_t> value, Ptr<U8> is_null_byte, U8 is_null_mask)
             : value_(value)
             , is_null_byte_(is_null_byte)
@@ -178,11 +189,19 @@ struct HashTable
     template<bool IsConst>
     struct the_reference<NChar, IsConst>
     {
+        friend struct the_entry<false>;
+        friend struct the_entry<true>;
+
         private:
         NChar addr_;
         std::optional<Ptr<U8>> is_null_byte_;
         std::optional<U8> is_null_mask_;
 
+        explicit the_reference(NChar addr, std::optional<Ptr<U8>> is_null_byte, std::optional<U8> is_null_mask)
+            : addr_(addr)
+            , is_null_byte_(std::move(is_null_byte))
+            , is_null_mask_(std::move(is_null_mask))
+        { }
         explicit the_reference(NChar addr, Ptr<U8> is_null_byte, U8 is_null_mask)
             : addr_(addr)
             , is_null_byte_(is_null_byte)
@@ -317,6 +336,8 @@ struct HashTable
     template<bool IsConst>
     struct the_entry
     {
+        friend struct HashTable;
+
         using value_t = std::variant<
             std::monostate
 #define ADD_TYPE(TYPE) , the_reference<TYPE, IsConst>
@@ -342,6 +363,30 @@ struct HashTable
         the_entry(const the_entry&) = delete;
         the_entry(the_entry&&) = default;
 
+        private:
+        ///> constructs an entry from references of the *opposite* const-ness
+        the_entry(std::unordered_map<Schema::Identifier, typename the_entry<not IsConst>::value_t> refs) {
+            refs_.reserve(refs.size());
+            for (auto &p : refs) {
+                std::visit(overloaded {
+                    [&]<typename T>(the_reference<T, not IsConst> &r) {
+                        the_reference<T, IsConst> ref(
+                            r.value_, std::move(r.is_null_byte_), std::move(r.is_null_mask_)
+                        );
+                        refs_.emplace(std::move(p.first), std::move(ref));
+                    },
+                    [&](the_reference<NChar, not IsConst> &r) {
+                        the_reference<NChar, IsConst> ref(
+                            r.addr_, std::move(r.is_null_byte_), std::move(r.is_null_mask_)
+                        );
+                        refs_.emplace(std::move(p.first), std::move(ref));
+                    },
+                    [](std::monostate) { M_unreachable("invalid variant"); },
+                }, p.second);
+            }
+        }
+
+        public:
         ~the_entry() {
             for (auto &p : refs_)
                 discard(p.second);
@@ -462,11 +507,20 @@ struct HashTable
     virtual std::pair<entry_t, Bool> try_emplace(std::vector<SQL_t> key) = 0;
 
     /** Tries to find an entry with key \p key in the hash table.  Returns a pair of a handle to the found entry which
-     * may be used to read both the keys and the values of this entry (if none is found this handle points to an
+     * may be used to both read and write the values of this entry (if none is found this handle points to an
      * arbitrary entry and should be ignored) and a boolean flag to indicate whether an element with the specified
      * key was found.  Predication is supported, i.e. if the predication predicate is not fulfilled, no entry will be
      * found. */
-    virtual std::pair<const_entry_t, Bool> find(std::vector<SQL_t> key) const = 0;
+    virtual std::pair<entry_t, Bool> find(std::vector<SQL_t> key) = 0;
+    /** Tries to find an entry with key \p key in the hash table.  Returns a pair of a handle to the found entry which
+     * may be used to only read the values of this entry (if none is found this handle points to an arbitrary entry
+     * and should be ignored) and a boolean flag to indicate whether an element with the specified key was found.
+     * Predication is supported, i.e. if the predication predicate is not fulfilled, no entry will be found. */
+    std::pair<const_entry_t, Bool> find(std::vector<SQL_t> key) const {
+        auto [entry, found] = const_cast<HashTable*>(this)->find(std::move(key));
+        return { const_entry_t(std::move(entry.refs_)), found };
+    }
+
 
     /** Calls \p Pipeline for each entry contained in the hash table.  At each call the argument is a handle to the
      * respective entry which may be used to read both the keys and the values of this entry. */
@@ -569,7 +623,7 @@ struct ChainedHashTable : HashTable
     entry_t emplace(std::vector<SQL_t> key) override;
     std::pair<entry_t, Bool> try_emplace(std::vector<SQL_t> key) override;
 
-    std::pair<const_entry_t, Bool> find(std::vector<SQL_t> key) const override;
+    std::pair<entry_t, Bool> find(std::vector<SQL_t> key) override;
 
     void for_each(callback_t Pipeline) const override;
     void for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline) const override;
@@ -773,7 +827,7 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
     entry_t emplace(std::vector<SQL_t> key) override;
     std::pair<entry_t, Bool> try_emplace(std::vector<SQL_t> key) override;
 
-    std::pair<const_entry_t, Bool> find(std::vector<SQL_t> key) const override;
+    std::pair<entry_t, Bool> find(std::vector<SQL_t> key) override;
 
     void for_each(callback_t Pipeline) const override;
     void for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline) const override;

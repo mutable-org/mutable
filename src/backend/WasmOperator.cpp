@@ -5,6 +5,7 @@
 
 
 using namespace m;
+using namespace m::ast;
 using namespace m::storage;
 using namespace m::wasm;
 

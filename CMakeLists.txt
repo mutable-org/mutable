@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 
 project(

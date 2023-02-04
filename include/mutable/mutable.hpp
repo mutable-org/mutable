@@ -52,7 +52,10 @@ std::unique_ptr<ast::Stmt> M_EXPORT statement_from_string(Diagnostic &diag, cons
 std::unique_ptr<ast::Instruction> M_EXPORT instruction_from_string(Diagnostic &diag, const std::string &str);
 
 /** Optimizes and executes the given `Stmt`. */
-void M_EXPORT execute_statement(Diagnostic &diag, const ast::Stmt &stmt);
+void M_EXPORT execute_statement(Diagnostic &diag, const ast::Stmt &stmt, bool is_stdin = false);
+
+/** Extracts and executes statements from given stream. */
+void M_EXPORT process_stream(std::istream &in, const char *filename, Diagnostic diag);
 
 /** Executes the given `Instruction`. */
 void M_EXPORT execute_instruction(Diagnostic &diag, const ast::Instruction &instruction);

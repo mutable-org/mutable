@@ -4,8 +4,10 @@
 #include "backend/StackMachine.hpp"
 #include "backend/WebAssembly.hpp"
 #include "io/Reader.hpp"
+#include "IR/PartialPlanGenerator.hpp"
 #include "lex/Lexer.hpp"
 #include <mutable/IR/Tuple.hpp>
+#include <mutable/Options.hpp>
 #include <mutable/util/Diagnostic.hpp>
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
@@ -41,6 +43,65 @@ std::unique_ptr<Stmt> m::statement_from_string(Diagnostic &diag, const std::stri
     return stmt;
 }
 
+void m::process_stream(std::istream &in, const char *filename, Diagnostic diag)
+{
+    Catalog &C = Catalog::Get();
+    ast::Sema sema(diag);
+    std::size_t num_errors = 0;
+    const bool is_stdin = streq(filename, "-");
+
+    /*----- Process the input stream. --------------------------------------------------------------------------------*/
+    ast::Lexer lexer(diag, C.get_pool(), filename, in);
+    ast::Parser parser(lexer);
+
+    while (parser.token()) {
+        Timer &timer = C.timer();
+        auto command = parser.parse();
+
+        if (diag.num_errors() != num_errors)
+            goto next;
+
+        if (auto instruction = cast<ast::Instruction>(command)) {
+            auto instruction_name = instruction->name;
+            try {
+                auto &concrete_instruction = C.instruction(instruction_name);
+                concrete_instruction.execute_instruction(instruction->args, diag);
+            } catch (const std::exception &e) {
+                diag.err() << "Instruction " << instruction_name << " does not exist.\n";
+            }
+        } else {
+            auto stmt = as<ast::Stmt>(std::move(command));
+            if (Options::Get().echo)
+                std::cout << *stmt << std::endl;
+            M_TIME_EXPR(sema(*stmt), "Semantic Analysis", timer);
+            if (Options::Get().ast) stmt->dump(std::cout);
+            if (Options::Get().astdot) {
+                DotTool dot(diag);
+                stmt->dot(dot.stream());
+                dot.show("ast", is_stdin);
+            }
+            if (diag.num_errors() != num_errors) goto next;
+
+            execute_statement(diag, *stmt, is_stdin);
+        }
+next:
+        num_errors = diag.num_errors();
+
+        if (Options::Get().times) {
+            using namespace std::chrono;
+            for (const auto &M : timer) {
+                if (M.is_finished())
+                    std::cout << M.name << ": " << duration_cast<microseconds>(M.duration()).count() / 1e3 << '\n';
+            }
+            std::cout.flush();
+            timer.clear();
+        }
+    }
+
+    std::cout.flush();
+    std::cerr.flush();
+}
+
 std::unique_ptr<Instruction> m::instruction_from_string(Diagnostic &diag, const std::string &str)
 {
     Catalog &C = Catalog::Get();
@@ -57,22 +118,91 @@ std::unique_ptr<Instruction> m::instruction_from_string(Diagnostic &diag, const 
     return instruction;
 }
 
-void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
+void m::execute_statement(Diagnostic &diag, const ast::Stmt &stmt, const bool is_stdin)
 {
     diag.clear();
     Catalog &C = Catalog::Get();
+    auto timer = C.timer();
 
-    if (is<const SelectStmt>(stmt)) {
-        auto query_graph = M_TIME_EXPR(QueryGraph::Build(stmt), "Construct the query graph", C.timer());
-
+    if (is<const ast::SelectStmt>(stmt)) {
+        auto query_graph = M_TIME_EXPR(QueryGraph::Build(stmt), "Construct the query graph", timer);
+        if (Options::Get().graph) query_graph->dump(std::cout);
+        if (Options::Get().graphdot) {
+            DotTool dot(diag);
+            query_graph->dot(dot.stream());
+            dot.show("graph", is_stdin, "fdp");
+        }
+        if (Options::Get().graph2sql) {
+            query_graph->sql(std::cout);
+            std::cout.flush();
+        }
         Optimizer Opt(C.plan_enumerator(), C.cost_function());
-        auto optree = M_TIME_EXPR(Opt(*query_graph), "Compute the query plan", C.timer());
+        std::unique_ptr<Producer> optree;
+        if (Options::Get().output_partial_plans_file) {
+            auto res = M_TIME_EXPR(
+                Opt.optimize_with_plantable<PlanTableLargeAndSparse>(*query_graph),
+                "Compute the query plan",
+                timer
+            );
+            optree = std::move(res.first);
 
-        PrintOperator print(std::cout);
-        print.add_child(optree.release());
+            std::filesystem::path JSON_path(Options::Get().output_partial_plans_file);
+            errno = 0;
+            std::ofstream JSON_file(JSON_path);
+            if (not JSON_file or errno) {
+                const auto errsv = errno;
+                if (errsv) {
+                    diag.err() << "Failed to open output file for partial plans " << JSON_path << ": "
+                               << strerror(errsv) << std::endl;
+                } else {
+                    diag.err() << "Failed to open output file for partial plans " << JSON_path << std::endl;
+                }
+            } else {
+                auto for_each = [&res](PartialPlanGenerator::callback_type callback) {
+                    PartialPlanGenerator{}.for_each_complete_partial_plan(res.second, callback);
+                };
+                PartialPlanGenerator{}.write_partial_plans_JSON(JSON_file, *query_graph, res.second, for_each);
+            }
+        } else {
+            optree = M_TIME_EXPR(Opt(*query_graph), "Compute the query plan", timer);
+        }
+        M_insist(bool(optree), "optree must have been computed");
+        if (Options::Get().plan) optree->dump(std::cout);
+        if (Options::Get().plandot) {
+            DotTool dot(diag);
+            optree->dot(dot.stream());
+            dot.show("plan", is_stdin);
+        }
 
-        M_TIME_EXPR(C.backend().execute(print), "Execute the query", C.timer());
-    } else if (auto I = cast<const InsertStmt>(&stmt)) {
+        std::unique_ptr<Consumer> plan;
+        if (Options::Get().benchmark) {
+            plan = std::make_unique<NoOpOperator>(std::cout);
+        } else {
+#if 0
+            auto print = [&](const Schema &S, const Tuple &t) { t.print(std::cout, S); std::cout << '\n'; };
+            plan = std::make_unique<CallbackOperator>(print);
+#else
+            plan = std::make_unique<PrintOperator>(std::cout);
+#endif
+        }
+        plan->add_child(optree.release());
+
+/* TODO implement as command line argument of plugin
+    if (Options::Get().dryrun and streq("WasmV8", C.default_backend_name())) {
+        Backend &backend = C.backend();
+        auto &platform = as<WasmBackend>(backend).platform();
+        Module::Init(); // fresh module
+        M_TIME_EXPR(platform.compile(*plan), "Compile to WebAssembly", timer);
+        Module::Get().dump(std::cout);
+        Module::Dispose();
+    }
+*/
+
+        if (not Options::Get().dryrun) {
+            M_TIME_THIS("Execute query", timer);
+            C.backend().execute(*plan);
+        }
+    } else if (auto I = cast<const ast::InsertStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
         auto &T = DB.get_table(I->table_name.text);
         auto &store = T.store();
@@ -81,21 +211,20 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
         Tuple tup(S);
 
         /* Write all tuples to the store. */
-        M_TIME_THIS("Execute the query", C.timer());
         for (auto &t : I->tuples) {
             StackMachine get_tuple(Schema{});
             for (std::size_t i = 0; i != t.size(); ++i) {
                 auto &v = t[i];
                 switch (v.first) {
-                    case InsertStmt::I_Null:
+                    case ast::InsertStmt::I_Null:
                         get_tuple.emit_St_Tup_Null(0, i);
                         break;
 
-                    case InsertStmt::I_Default:
+                    case ast::InsertStmt::I_Default:
                         /* nothing to be done, Tuples are initialized to default values */
                         break;
 
-                    case InsertStmt::I_Expr:
+                    case ast::InsertStmt::I_Expr:
                         get_tuple.emit(*v.second);
                         get_tuple.emit_Cast(S[i].type, v.second->type());
                         get_tuple.emit_St_Tup(0, i, S[i].type);
@@ -106,12 +235,12 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
             get_tuple(args);
             W.append(tup);
         }
-    } else if (auto S = cast<const CreateTableStmt>(&stmt)) {
+    } else if (auto S = cast<const ast::CreateTableStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
         auto &T = DB.get_table(S->table_name.text);
-        T.store(C.create_store(T));
         T.layout(C.data_layout());
-    } else if (auto S = cast<const DSVImportStmt>(&stmt)) {
+        T.store(C.create_store(T));
+    } else if (auto S = cast<const ast::DSVImportStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
         auto &T = DB.get_table(S->table_name.text);
 
@@ -142,26 +271,32 @@ void m::execute_statement(Diagnostic &diag, const Stmt &stmt)
                 reader_config.skip_header
             );
 
-            const auto filename = unquote(S->path.text);
+            std::string filename(S->path.text, 1, strlen(S->path.text) - 2);
             errno = 0;
             std::ifstream file(filename);
             if (not file) {
                 const auto errsv = errno;
-                diag.e(S->path.pos) << "Could not open file '" << filename << '\'';
+                diag.e(S->path.pos) << "Could not open file '" << S->path.text << '\'';
                 if (errsv)
                     diag.err() << ": " << strerror(errsv);
                 diag.err() << std::endl;
             } else {
-                M_TIME_THIS("Read DSV file", C.timer());
-                R(file, filename.c_str());
+                M_TIME_EXPR(R(file, S->path.text), "Read DSV file", timer);
             }
-
-            if (diag.num_errors() != 0)
-                throw runtime_error("error while reading DSV file");
         } catch (m::invalid_argument e) {
             diag.e(Position("DSVReader")) << "Error reading DSV file.\n"
                                           << e.what() << "\n";
         }
+    }
+
+    if (Options::Get().times) {
+        using namespace std::chrono;
+        for (const auto &M : timer) {
+            if (M.is_finished())
+                std::cout << M.name << ": " << duration_cast<microseconds>(M.duration()).count() / 1e3 << '\n';
+        }
+        std::cout.flush();
+        timer.clear();
     }
 
     std::cout.flush();

@@ -1,10 +1,10 @@
-#include "util/terminal.hpp"
+#include <mutable/util/terminal.hpp>
 
 #include <mutable/util/fn.hpp>
 #include <cstdlib>
 
 
-bool term::has_color()
+bool m::term::has_color()
 {
     constexpr const char *SUPPORTED_TERMS[] = {
         "ansi",

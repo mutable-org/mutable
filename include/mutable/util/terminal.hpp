@@ -1,9 +1,10 @@
 #pragma once
 
 #include <iostream>
+#include <mutable/mutable-config.hpp>
 
 
-namespace term {
+namespace m::term {
 
 /*----- Common control codes. ----------------------------------------------------------------------------------------*/
 
@@ -68,7 +69,7 @@ constexpr const char *BG_WHITE           = "\033[47m";
 constexpr const char *BG_DEFAULT         = "\033[49m";
 
 /** Wrapper class to ease the use of terminal colors (foreground and background). */
-struct Color
+struct M_EXPORT Color
 {
     enum color_kind {
         FG = 0,
@@ -89,6 +90,6 @@ inline Color fg(unsigned color) { return Color(Color::FG, color); }
 inline Color bg(unsigned color) { return Color(Color::BG, color); }
 
 /** Returns true if the terminal is known to support colors, false otherwise. */
-bool has_color();
+bool M_EXPORT has_color();
 
 }

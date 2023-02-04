@@ -158,6 +158,12 @@ endif()
 # Enable position-independent code (PIC) when building shared libraries
 set(CMAKE_POSITION_INDEPENDENT_CODE ${BUILD_SHARED_LIBS})
 
+# Set symbol visibility for dynamic linking
+if(${BUILD_SHARED_LIBS})
+    set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+    set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
+endif()
+
 # Set the linker to use
 if(${USE_LLD})
     message("[mutable] Using linker lld (${LLD})")
@@ -358,10 +364,7 @@ endif()
 # Subdirectories
 add_subdirectory(src)
 add_subdirectory(unittest)
-
 # Generate EXPORT macros to export symbols in dynamic libraries
-set(CMAKE_CXX_VISIBILITY_PRESET hidden)
-set(CMAKE_VISIBILITY_INLINES_HIDDEN 1)
 generate_export_header(
     ${PROJECT_NAME}
     BASE_NAME "M"

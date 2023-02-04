@@ -289,7 +289,7 @@ struct CodeGenContext
 
     /*----- Thread-local instance ------------------------------------------------------------------------------------*/
     private:
-    static inline thread_local std::unique_ptr<CodeGenContext> the_context_;
+    static thread_local std::unique_ptr<CodeGenContext> the_context_;
 
     public:
     static void Init() {

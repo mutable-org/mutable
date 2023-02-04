@@ -186,6 +186,8 @@ struct LinearAllocator : Allocator
  * Module
  *====================================================================================================================*/
 
+thread_local std::unique_ptr<Module> Module::the_module_;
+
 Module::Module()
     : id_(NEXT_MODULE_ID_.fetch_add(1U, std::memory_order_relaxed))
     , module_()

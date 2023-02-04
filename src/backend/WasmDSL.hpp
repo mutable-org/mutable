@@ -491,7 +491,7 @@ struct Module final
 
     /*----- Thread-local instance ------------------------------------------------------------------------------------*/
     private:
-    static inline thread_local std::unique_ptr<Module> the_module_;
+    static thread_local std::unique_ptr<Module> the_module_;
 
     Module();
     Module(const Module&) = delete;

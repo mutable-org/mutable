@@ -85,7 +85,7 @@ struct M_EXPORT Operator
     virtual void accept(OperatorVisitor &v) = 0;
     virtual void accept(ConstOperatorVisitor &v) const = 0;
 
-    friend std::ostream & operator<<(std::ostream &out, const Operator &op);
+    friend M_EXPORT std::ostream & operator<<(std::ostream &out, const Operator &op);
 
     /** Minimizes the `Schema` of this `Operator`.  The `Schema` is reduced to the attributes actually
      * required by ancestors of this `Operator` in the plan. */

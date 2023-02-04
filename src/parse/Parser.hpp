@@ -13,7 +13,7 @@ namespace m {
 
 namespace ast {
 
-struct Parser
+struct M_EXPORT Parser
 {
     using follow_set_t = std::array<bool, unsigned(TokenType::TokenType_MAX) + 1U>;
 

@@ -6,7 +6,7 @@ namespace m {
 namespace ast {
 
 /** Pretty-prints the AST in SQL. */
-struct ASTPrinter : ConstASTVisitor
+struct M_EXPORT ASTPrinter : ConstASTVisitor
 {
     public:
     std::ostream &out; ///< the output stream to write to

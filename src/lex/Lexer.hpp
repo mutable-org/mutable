@@ -13,7 +13,7 @@ namespace m {
 
 namespace ast {
 
-struct Lexer
+struct M_EXPORT Lexer
 {
     public:
     Diagnostic &diag;

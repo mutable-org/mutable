@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutable/mutable-config.hpp>
 #include <cstdint>
 
 
@@ -7,7 +8,7 @@ namespace m {
 
 /** Singleton class representing options provided as command line argument to the binaries.  Implements Scott Meyer's
  * singleton pattern.  */
-struct Options
+struct M_EXPORT Options
 {
     /** Type of plan tables available for query optimization. */
     enum PlanTableType

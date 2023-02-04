@@ -12,7 +12,7 @@ namespace m {
 
 namespace ast {
 
-struct Sema : ASTExprVisitor, ASTClauseVisitor, ASTStmtVisitor
+struct M_EXPORT Sema : ASTExprVisitor, ASTClauseVisitor, ASTStmtVisitor
 {
     /** Holds context information used by semantic analysis of a single statement. */
     struct SemaContext

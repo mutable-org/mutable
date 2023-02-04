@@ -51,8 +51,8 @@ option(USE_LLD              "Use LLD, a linker from the LLVM project" ${HAS_LLD}
 # Enable backends
 option(WITH_V8              "Build with the V8-based WebAssembly execution backend." ON)
 
-set(EXECUTABLE_OUTPUT_PATH      "${PROJECT_BINARY_DIR}/bin")
-set(LIBRARY_OUTPUT_PATH         "${PROJECT_BINARY_DIR}/lib")
+set(EXECUTABLE_OUTPUT_PATH  "${PROJECT_BINARY_DIR}/bin")
+set(LIBRARY_OUTPUT_PATH     "${PROJECT_BINARY_DIR}/lib")
 
 if(${BUILD_SHARED_LIBS})
     set(LIB_TYPE SHARED)

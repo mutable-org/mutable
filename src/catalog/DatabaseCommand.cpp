@@ -23,8 +23,8 @@ void learn_spns::execute_instruction(const std::vector<const char*>&, Diagnostic
     if (not Options::Get().quiet) { diag.out() << "learned spn on every table in " << DB.name << ".\n"; }
 }
 
-__attribute__((constructor(201)))
-inline void register_instructions()
+__attribute__((constructor(202)))
+static void register_instructions()
 {
     Catalog &C = Catalog::Get();
 #define REGISTER(NAME, DESCRIPTION) \

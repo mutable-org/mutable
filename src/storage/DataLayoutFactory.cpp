@@ -146,8 +146,8 @@ DataLayout PAXLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
     return layout;
 }
 
-__attribute__((constructor(201)))
-inline void register_data_layouts()
+__attribute__((constructor(202)))
+static void register_data_layouts()
 {
     Catalog &C = Catalog::Get();
 #define REGISTER(NAME, DESCRIPTION) \

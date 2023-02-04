@@ -661,8 +661,8 @@ void m::GOO::operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const
     }, PT, G, M, CF, CE, nodes, nodes + G.num_sources());
 }
 
-__attribute__((constructor(201)))
-inline void register_plan_enumerators()
+__attribute__((constructor(202)))
+static void register_plan_enumerators()
 {
     Catalog &C = Catalog::Get();
 #define REGISTER(NAME, DESCRIPTION) \

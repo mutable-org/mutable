@@ -106,7 +106,7 @@ build:debug:linux-amd64:
         - find build/${BUILD_TYPE}/third-party -name '*.so.*' -exec cp {} build/${BUILD_TYPE}/lib \; # collect shared libraries
     artifacts:
         paths:
-            - "build/${BUILD_TYPE}/bin/"
+            - "build/${BUILD_TYPE}/bin/{lex,parse,check,shell,unittest}"
             - "build/${BUILD_TYPE}/lib/"
         expire_in: 1 day
 
@@ -132,9 +132,10 @@ build:debug:macos-amd64:
           -DENABLE_SANITY_FIELDS=ON
         - cmake --build build/${BUILD_TYPE} --target gitversion all unittest
         - find build/${BUILD_TYPE}/third-party -name '*.dylib' -exec cp {} build/${BUILD_TYPE}/lib \; # collect shared libraries
+        - find build/${BUILD_TYPE}/third-party -name '*.dylib.*' -exec cp {} build/${BUILD_TYPE}/lib \; # collect shared libraries
     artifacts:
         paths:
-            - "build/${BUILD_TYPE}/bin/"
+            - "build/${BUILD_TYPE}/bin/{lex,parse,check,shell,unittest}"
             - "build/${BUILD_TYPE}/lib/"
         expire_in: 1 day
 

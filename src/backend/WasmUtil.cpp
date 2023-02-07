@@ -718,7 +718,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                         M_insist(*tuple_entry.type == *layout_schema[tuple_entry.id].second.type);
                         M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
                         if (tuple_entry.nullable()) { // entry may be NULL
-                            const auto& [layout_idx, layout_entry] = layout_schema[tuple_entry.id];
+                            const auto &[layout_idx, layout_entry] = layout_schema[tuple_entry.id];
                             const uint8_t bit_offset =
                                 (additional_inode_offset_in_bits + leaf_info.offset_in_bits + layout_idx) % 8;
                             const int32_t byte_offset =
@@ -982,7 +982,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
 
                         /*----- Emit conditional stride jumps. -----*/
                         IF (cond) {
-                            for (auto& [_, value] : loading_context) {
+                            for (auto &[_, value] : loading_context) {
                                 if (is_predicated) {
                                     M_insist(bool(pred));
                                     value.ptr += Select(*pred, remaining_stride_in_bytes, 0); // possibly emit stride jump
@@ -1004,7 +1004,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                             rec(std::next(curr), end, rec);
                         };
                     } else {
-                        for (auto& [_, value] : loading_context) {
+                        for (auto &[_, value] : loading_context) {
                             if (is_predicated) {
                                 M_insist(bool(pred));
                                 value.ptr += Select(*pred, remaining_stride_in_bytes, 0); // possibly emit stride jump
@@ -1037,7 +1037,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
         /*----- Process path from DataLayout leaves to the root to emit stride jumps. -----*/
         BLOCK_OPEN(jumps) {
             /*----- Emit the per-leaf stride jumps, i.e. from one instance of the leaf to the next. -----*/
-            for (auto& [key, value] : loading_context) {
+            for (auto &[key, value] : loading_context) {
                 const uint8_t bit_stride  = key.second % 8;
                 const int32_t byte_stride = key.second / 8;
                 if (bit_stride) {
@@ -1067,7 +1067,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
             if (not levels.empty()) {
                 /*----- Emit the stride jumps between each leaf to the beginning of the parent INode. -----*/
                 Block lowest_inode_jumps(false);
-                for (auto& [key, value] : loading_context) {
+                for (auto &[key, value] : loading_context) {
                     M_insist(levels.back().stride_in_bits % 8 == 0,
                              "stride of INodes must be multiples of a whole byte");
                     const auto stride_remaining_in_bits = levels.back().stride_in_bits -
@@ -1358,7 +1358,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                     M_insist(*tuple_entry.type == *layout_schema[tuple_entry.id].second.type);
                     M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
                     if (tuple_entry.nullable()) { // entry may be NULL
-                        const auto& [layout_idx, layout_entry] = layout_schema[tuple_entry.id];
+                        const auto &[layout_idx, layout_entry] = layout_schema[tuple_entry.id];
                         auto offset_in_bits = additional_inode_offset_in_bits + (leaf_info.offset_in_bits + layout_idx);
                         U8  bit_offset  = (offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
                         I32 byte_offset = (offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8

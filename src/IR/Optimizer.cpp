@@ -192,9 +192,10 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
 
             /* If an alias for the nested query is given, prefix every attribute with the alias. */
             if (Q.alias()) {
+                M_insist(is<ProjectionOperator>(sub_plan), "only projection may rename attributes");
                 Schema S;
                 for (auto &e : sub_plan->schema())
-                    S.add({Q.alias(), e.id.name}, e.type);
+                    S.add({ Q.alias(), e.id.name }, e.type, e.constraints);
                 sub_plan->schema() = S;
             }
 
@@ -261,11 +262,9 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
     }
 
     auto additional_projections = compute_projections_required_for_order_by(G.projections(), G.order_by());
-    bool requires_post_projection = not additional_projections.empty();
-    /* Merge original projections with additinal projections. */
-    additional_projections.insert(additional_projections.end(),
-                                  G.projections().begin(),
-                                  G.projections().end());
+    bool requires_post_projection = true; // TODO: change to `not additional_projections.empty()` if plan is no subquery
+    /* Merge original projections with additional projections. */
+    additional_projections.insert(additional_projections.end(), G.projections().begin(), G.projections().end());
 
     /* Perform projection. */
     {
@@ -282,8 +281,19 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
         plan = std::move(order_by);
     }
 
+    /* Limit. */
+    if (G.limit().limit or G.limit().offset) {
+        /* Compute `DataModel` after limit. */
+        auto new_model = CE.estimate_limit(G, *entry.model, G.limit().limit, G.limit().offset);
+        entry.model = std::move(new_model);
+        // TODO estimate data model
+        auto limit = std::make_unique<LimitOperator>(G.limit().limit, G.limit().offset);
+        limit->add_child(plan.release());
+        plan = std::move(limit);
+    }
+
     /* Perform post-ordering projection. */
-    if (requires_post_projection) {
+    if (not G.order_by().empty() and requires_post_projection) {
         // TODO estimate data model
         /* Change aliased projections in designators with the alias as name since original projection is
          * performed beforehand. */
@@ -301,17 +311,6 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
         auto projection = std::make_unique<ProjectionOperator>(std::move(adapted_projections));
         projection->add_child(plan.release());
         plan = std::move(projection);
-    }
-
-    /* Limit. */
-    if (G.limit().limit or G.limit().offset) {
-        /* Compute `DataModel` after limit. */
-        auto new_model = CE.estimate_limit(G, *entry.model, G.limit().limit, G.limit().offset);
-        entry.model = std::move(new_model);
-        // TODO estimate data model
-        auto limit = std::make_unique<LimitOperator>(G.limit().limit, G.limit().offset);
-        limit->add_child(plan.release());
-        plan = std::move(limit);
     }
 
     // std::cerr << "Plan before minimizing:\n";

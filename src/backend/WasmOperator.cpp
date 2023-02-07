@@ -1207,10 +1207,10 @@ ConditionSet Sorting::post_condition(const Match<Sorting> &M)
 void Sorting::execute(const Match<Sorting> &M, callback_t Pipeline)
 {
     /*----- Create infinite buffer to materialize the current results but resume the pipeline later. -----*/
-    M_insist(M.sorting.child(0)->schema() == M.sorting.schema());
     M_insist(bool(M.materializing_factory), "`wasm::Sorting` must have a factory for the materialized child");
-    const auto schema = M.sorting.child(0)->schema().drop_none().deduplicate();
-    GlobalBuffer buffer(schema, *M.materializing_factory, 0, std::move(Pipeline));
+    const auto buffer_schema = M.sorting.child(0)->schema().drop_none().deduplicate();
+    const auto sorting_schema = M.sorting.schema().drop_none().deduplicate();
+    GlobalBuffer buffer(buffer_schema, *M.materializing_factory, 0, std::move(Pipeline));
 
     /*----- Create child function. -----*/
     FUNCTION(sorting_child_pipeline, void(void)) // create function for pipeline
@@ -1224,7 +1224,7 @@ void Sorting::execute(const Match<Sorting> &M, callback_t Pipeline)
     quicksort(buffer, M.sorting.order_by());
 
     /*----- Process sorted buffer. -----*/
-    buffer.resume_pipeline();
+    buffer.resume_pipeline(sorting_schema);
 }
 
 

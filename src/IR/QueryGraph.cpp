@@ -1633,21 +1633,8 @@ void m::GraphBuilder::operator()(const ast::SelectStmt &stmt) {
     /*----- Process GROUP BY and collect grouping keys. -----*/
     if (stmt.group_by) {
         auto &GROUP_BY = as<ast::GroupByClause>(*stmt.group_by);
-        for (auto &[grp, alias] : GROUP_BY.group_by) {
-            if (not alias) {
-                if (auto d = cast<const ast::Designator>(grp.get())) {
-                    graph_->group_by_.emplace_back(*grp, d->attr_name.text);
-                } else {
-                    static uint64_t counter;
-                    std::ostringstream oss;
-                    oss << "$grp" << counter++;
-                    auto grp_name = C.pool(oss.str().c_str());
-                    graph_->group_by_.emplace_back(*grp, grp_name);
-                }
-            } else {
-                graph_->group_by_.emplace_back(*grp, alias.text);
-            }
-        }
+        for (auto &[grp, alias] : GROUP_BY.group_by)
+            graph_->group_by_.emplace_back(*grp, alias.text);
     }
 
     /*----- Process SELECT and collect projections. -----*/

@@ -143,11 +143,9 @@ struct M_EXPORT Sema : ASTExprVisitor, ASTClauseVisitor, ASTStmtVisitor
     /** Creates a fresh `Designator` with the given \p name at location \p tok and with target \p target. */
     std::unique_ptr<Designator> create_designator(const char *name, Token tok, const Expr &target);
 
-    /** Creates a fresh `Designator` with the same syntactical representation as \p name and with target \p target. */
-    std::unique_ptr<Designator> create_designator(const Expr &name, const Expr &target);
-
-    /** Creates a fresh `Designator` that has the same syntactical representation as \p target and targets \target. */
-    std::unique_ptr<Designator> create_designator_to(const Expr &target);
+    /** Creates a fresh `Designator` with the same syntactical representation as \p name (except the table name if
+     * \p drop_table_name) and with target \p target. */
+    std::unique_ptr<Designator> create_designator(const Expr &name, const Expr &target, bool drop_table_name = false);
 
     /** Replaces \p to_replace by a fresh `Designator`, that has the same syntactical representation as \p to_replace
      * and targets \p target. */

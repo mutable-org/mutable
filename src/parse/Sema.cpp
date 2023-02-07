@@ -19,13 +19,14 @@ std::unique_ptr<Designator> Sema::create_designator(const char *name, Token tok,
     return new_designator;
 }
 
-std::unique_ptr<Designator> Sema::create_designator(const Expr &name, const Expr &target)
+std::unique_ptr<Designator> Sema::create_designator(const Expr &name, const Expr &target, bool drop_table_name)
 {
     auto &C = Catalog::Get();
 
     std::unique_ptr<Designator> new_designator;
     if (auto d = cast<const Designator>(&name)) {
-        new_designator = std::make_unique<Designator>(d->tok, d->table_name, d->attr_name); // exact copy of `name`
+        Token table_name = drop_table_name ? Token() : d->table_name; // possibly drop table name
+        new_designator = std::make_unique<Designator>(d->tok, table_name, d->attr_name); // copy of `name`
     } else {
         oss.str("");
         oss << name; // stringify `name`
@@ -36,11 +37,6 @@ std::unique_ptr<Designator> Sema::create_designator(const Expr &name, const Expr
     new_designator->type_ = target.type();
     new_designator->target_ = &target;
     return new_designator;
-}
-
-std::unique_ptr<Designator> Sema::create_designator_to(const Expr &target)
-{
-    return create_designator(/* name= */ target, /* target= */ target);
 }
 
 void Sema::replace_by_fresh_designator_to(std::unique_ptr<Expr> &to_replace, const Expr &target)
@@ -1025,7 +1021,7 @@ void Sema::operator()(Const<SelectClause> &c)
             has_scalar = has_scalar or not group_by.group_by.empty();
             for (auto &[expr, alias] : group_by.group_by) {
                 std::unique_ptr<Designator> d = alias ? create_designator(alias.text, expr->tok, *expr)
-                                                      : create_designator_to(*expr);
+                                                      : create_designator(expr->tok.text, expr->tok, *expr);
                 if (auto ty = cast<const PrimitiveType>(d->type()))
                     d->type_ = ty->as_scalar();
                 else

@@ -61,7 +61,7 @@ std::ostream & m::operator<<(std::ostream &out, const Operator &op) {
                 if (it != begin) out << ", ";
                 out << it->first.get();
                 if (it->second)
-                    out << it->second;
+                    out << " AS " << it->second;
             }
             out << "] [";
             for (auto begin = op.aggregates().begin(), it = begin, end = op.aggregates().end(); it != end; ++it) {

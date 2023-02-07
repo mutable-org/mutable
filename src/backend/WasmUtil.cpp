@@ -1628,26 +1628,33 @@ Buffer<IsGlobal>::~Buffer()
 }
 
 template<bool IsGlobal>
-buffer_load_proxy_t<IsGlobal> Buffer<IsGlobal>::create_load_proxy(proxy_param_t tuple_schema) const
+buffer_load_proxy_t<IsGlobal> Buffer<IsGlobal>::create_load_proxy(param_t tuple_schema) const
 {
-    return tuple_schema ? buffer_load_proxy_t(*this, tuple_schema->get()) : buffer_load_proxy_t(*this, schema_);
+    return tuple_schema ? buffer_load_proxy_t(*this, *tuple_schema) : buffer_load_proxy_t(*this, schema_);
 }
 
 template<bool IsGlobal>
-buffer_store_proxy_t<IsGlobal> Buffer<IsGlobal>::create_store_proxy(proxy_param_t tuple_schema) const
+buffer_store_proxy_t<IsGlobal> Buffer<IsGlobal>::create_store_proxy(param_t tuple_schema) const
 {
-    return tuple_schema ? buffer_store_proxy_t(*this, tuple_schema->get()) : buffer_store_proxy_t(*this, schema_);
+    return tuple_schema ? buffer_store_proxy_t(*this, *tuple_schema) : buffer_store_proxy_t(*this, schema_);
 }
 
 template<bool IsGlobal>
-buffer_swap_proxy_t<IsGlobal> Buffer<IsGlobal>::create_swap_proxy(proxy_param_t tuple_schema) const
+buffer_swap_proxy_t<IsGlobal> Buffer<IsGlobal>::create_swap_proxy(param_t tuple_schema) const
 {
-    return tuple_schema ? buffer_swap_proxy_t(*this, tuple_schema->get()) : buffer_swap_proxy_t(*this, schema_);
+    return tuple_schema ? buffer_swap_proxy_t(*this, *tuple_schema) : buffer_swap_proxy_t(*this, schema_);
 }
 
 template<bool IsGlobal>
-void Buffer<IsGlobal>::resume_pipeline()
+void Buffer<IsGlobal>::resume_pipeline(param_t tuple_schema_)
 {
+    const auto &tuple_schema = tuple_schema_ ? *tuple_schema_ : schema_;
+
+#ifndef NDEBUG
+    for (auto &e : tuple_schema.get())
+        M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple schema entry not found");
+#endif
+
     if (Pipeline_) { // Pipeline callback not empty, i.e. performs some work
         /*----- Create function on-demand to assert that all needed identifiers are already created. -----*/
         if (not resume_pipeline_) {
@@ -1663,7 +1670,7 @@ void Buffer<IsGlobal>::resume_pipeline()
                 /*----- Compile data layout to generate sequential load from buffer. -----*/
                 Var<U32> load_tuple_id; // default initialized to 0
                 auto [load_inits, loads, load_jumps] =
-                    compile_load_sequential(schema_, base_address, layout_, schema_, load_tuple_id);
+                    compile_load_sequential(tuple_schema, base_address, layout_, schema_, load_tuple_id);
 
                 /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
                 load_inits.attach_to_current();
@@ -1686,8 +1693,15 @@ void Buffer<IsGlobal>::resume_pipeline()
 }
 
 template<bool IsGlobal>
-void Buffer<IsGlobal>::resume_pipeline_inline()
+void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_schema_) const
 {
+    const auto &tuple_schema = tuple_schema_ ? *tuple_schema_ : schema_;
+
+#ifndef NDEBUG
+    for (auto &e : tuple_schema.get())
+        M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple schema entry not found");
+#endif
+
     if (Pipeline_) { // Pipeline callback not empty, i.e. performs some work
         /*----- If predication is used, compute number of tuples to load from buffer depending on predicate. -----*/
         std::optional<Var<Bool>> pred; // use variable since WHILE loop will clone it (for IF and DO_WHILE)
@@ -1698,7 +1712,7 @@ void Buffer<IsGlobal>::resume_pipeline_inline()
         /*----- Compile data layout to generate sequential load from buffer. -----*/
         Var<U32> load_tuple_id(0); // explicitly (re-)set tuple ID to 0
         auto [load_inits, loads, load_jumps] =
-            compile_load_sequential(schema_, base_address_, layout_, schema_, load_tuple_id);
+            compile_load_sequential(tuple_schema, base_address_, layout_, schema_, load_tuple_id);
 
         /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
         load_inits.attach_to_current();

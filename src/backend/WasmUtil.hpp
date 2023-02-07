@@ -497,8 +497,8 @@ struct Buffer
     using var_t = std::conditional_t<IsGlobal, Global<T>, Var<T>>;
     ///> function type for resuming pipeline dependent on whether buffer should be globally usable
     using fn_t = std::conditional_t<IsGlobal, void(void), void(void*, uint32_t)>;
-    ///> parameter type for proxy creation methods
-    using proxy_param_t = std::optional<std::reference_wrapper<const Schema>>;
+    ///> parameter type for proxy creation and pipeline resuming methods
+    using param_t = std::optional<std::reference_wrapper<const Schema>>;
 
     std::reference_wrapper<const Schema> schema_; ///< schema of buffer
     storage::DataLayout layout_; ///< data layout of buffer
@@ -534,22 +534,23 @@ struct Buffer
 
     /** Creates and returns a proxy object to load tuples of schema \p tuple_schema (default: entire tuples) from the
      * buffer. */
-    buffer_load_proxy_t<IsGlobal> create_load_proxy(proxy_param_t tuple_schema = proxy_param_t()) const;
+    buffer_load_proxy_t<IsGlobal> create_load_proxy(param_t tuple_schema = param_t()) const;
     /** Creates and returns a proxy object to store tuples of schema \p tuple_schema (default: entire tuples) to the
      * buffer. */
-    buffer_store_proxy_t<IsGlobal> create_store_proxy(proxy_param_t tuple_schema = proxy_param_t()) const;
+    buffer_store_proxy_t<IsGlobal> create_store_proxy(param_t tuple_schema = param_t()) const;
     /** Creates and returns a proxy object to swap tuples of schema \p tuple_schema (default: entire tuples) in the
      * buffer. */
-    buffer_swap_proxy_t<IsGlobal> create_swap_proxy(proxy_param_t tuple_schema = proxy_param_t()) const;
+    buffer_swap_proxy_t<IsGlobal> create_swap_proxy(param_t tuple_schema = param_t()) const;
 
-    /** Emits code into a separate function to resume the pipeline for each tuple in the buffer.  Used to explicitly
-     * resume pipeline for infinite or partially filled buffers. */
-    void resume_pipeline();
-    /** Emits code inline to resume the pipeline for each tuple in the buffer.  Due to inlining the current
-     * `Environment` must not be cleared and this method should be used for n-ary operators.  Used to explicitly resume
-     * pipeline for infinite or partially filled buffers.  Predication is supported, i.e. if the predication
-     * predicate is not fulfilled, no tuples will be loaded and thus the pipeline will not be resumed. */
-    void resume_pipeline_inline();
+    /** Emits code into a separate function to resume the pipeline for each tuple of schema \p tuple_schema (default:
+     * entire tuples) in the  buffer.  Used to explicitly resume pipeline for infinite or partially filled buffers. */
+    void resume_pipeline(param_t tuple_schema = param_t());
+    /** Emits code inline to resume the pipeline for each tuple of schema \p tuple_schema (default: entire tuples) in
+     * the buffer.  Due to inlining the current `Environment` must not be cleared and this method should be used for
+     * n-ary operators.  Used to explicitly resume pipeline for infinite or partially filled buffers.  Predication is
+     * supported, i.e. if the predication predicate is not fulfilled, no tuples will be loaded and thus the pipeline
+     * will not be resumed. */
+    void resume_pipeline_inline(param_t tuple_schema = param_t()) const;
 
     /** Emits code to store the current tuple into the buffer.  The behaviour depends on whether the buffer is finite:
      * - **finite:** If the buffer is full, resumes the pipeline for each tuple in the buffer and clears the buffer

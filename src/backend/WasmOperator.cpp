@@ -1301,7 +1301,7 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, callb
                     /* schema=     */ schema,
                     /* factory=    */ *M.materializing_factories_[i],
                     /* num_tuples= */ 0, // i.e. infinite
-                    /* Pipeline=   */ std::bind(&GlobalBuffer::resume_pipeline_inline, &buffers.back())
+                    /* Pipeline=   */ [&buffers](){ buffers.back().resume_pipeline_inline(); }
                 );
             }
 

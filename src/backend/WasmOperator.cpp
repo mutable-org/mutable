@@ -23,11 +23,14 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
 
     if (schema.num_entries() == 0) { // result set contains only NULL constants
         if (window_size) {
+            /* Create *global* counter since e.g. `Buffer::resume_pipeline()` may create new function in which
+             * the child's code is emitted. */
+            Global<U32> tuple_id; // default initialized to 0
+
             /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `Limit`). -----*/
-            FUNCTION(child_pipeline, uint32_t(void))
+            FUNCTION(child_pipeline, void(void))
             {
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
-                Var<U32> tuple_id; // default initialized to 0
                 child.execute([&](){
                     /*----- Increment tuple ID. -----*/
                     if (auto &env = CodeGenContext::Get().env(); env.predicated())
@@ -42,17 +45,14 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
                         tuple_id = 0U;
                     };
                 });
-
-                /* Return number of remaining results. */
-                RETURN(tuple_id);
             }
-            const Var<U32> remaining_results(child_pipeline()); // call child function
+            child_pipeline(); // call child function
 
             /*----- Update number of result tuples. -----*/
-            CodeGenContext::Get().inc_num_tuples(remaining_results);
+            CodeGenContext::Get().inc_num_tuples(tuple_id);
 
             /*----- Extract remaining results. -----*/
-            Module::Get().emit_call<void>("read_result_set", Ptr<void>::Nullptr(), remaining_results.val());
+            Module::Get().emit_call<void>("read_result_set", Ptr<void>::Nullptr(), tuple_id.val());
         } else {
             /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `Limit`). -----*/
             FUNCTION(child_pipeline, void(void))
@@ -86,7 +86,7 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
                 child.execute([&](){
                     /*----- Store whether only a single buffer slot is free to not extract result for empty buffer. --*/
-                    Var<Bool> single_slot_free(result_set.size() == *window_size - 1U);
+                    const Var<Bool> single_slot_free(result_set.size() == *window_size - 1U);
 
                     /*----- Write the result. -----*/
                     result_set.consume(); // also resets size to 0 in case buffer has reached window size

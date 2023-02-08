@@ -122,7 +122,7 @@ struct MatchBase
     using callback_t = std::function<void(void)>;
     virtual ~MatchBase() { }
     virtual void execute(callback_t Pipeline) const = 0;
-    virtual const char * name() const = 0;
+    virtual std::string name() const = 0;
 };
 
 /** Abstract base class of all matchable patterns. */

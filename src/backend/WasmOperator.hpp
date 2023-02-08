@@ -159,7 +159,7 @@ struct Match<wasm::NoOp> : MatchBase
     }
 
     void execute(callback_t Pipeline) const override { wasm::NoOp::execute(*this, std::move(Pipeline)); }
-    const char * name() const override { return "wasm::NoOp"; }
+    std::string name() const override { return "wasm::NoOp"; }
 };
 
 template<>
@@ -179,7 +179,7 @@ struct Match<wasm::Callback> : MatchBase
     }
 
     void execute(callback_t Pipeline) const override { wasm::Callback::execute(*this, std::move(Pipeline)); }
-    const char * name() const override { return "wasm::Callback"; }
+    std::string name() const override { return "wasm::Callback"; }
 };
 
 template<>
@@ -199,7 +199,7 @@ struct Match<wasm::Print> : MatchBase
     }
 
     void execute(callback_t Pipeline) const override { wasm::Print::execute(*this, std::move(Pipeline)); }
-    const char * name() const override { return "wasm::Print"; }
+    std::string name() const override { return "wasm::Print"; }
 };
 
 template<>
@@ -230,7 +230,11 @@ struct Match<wasm::Scan> : MatchBase
         }
     }
 
-    const char * name() const override { return "wasm::Scan"; }
+    std::string name() const override {
+        std::ostringstream oss;
+        oss << "wasm::Scan(" << scan.alias() << ')';
+        return oss.str();
+    }
 };
 
 template<bool Predicated>
@@ -265,7 +269,7 @@ struct Match<wasm::Filter<Predicated>> : MatchBase
         }
     }
 
-    const char * name() const override {
+    std::string name() const override {
         return M_CONSTEXPR_COND(Predicated, "wasm::PredicatedFilter", "wasm::BranchingFilter");
     }
 };
@@ -286,7 +290,7 @@ struct Match<wasm::Projection> : MatchBase
     }
 
     void execute(callback_t Pipeline) const override { wasm::Projection::execute(*this, std::move(Pipeline)); }
-    const char * name() const override { return "wasm::Projection"; }
+    std::string name() const override { return "wasm::Projection"; }
 };
 
 template<>
@@ -303,7 +307,7 @@ struct Match<wasm::HashBasedGrouping> : MatchBase
     }
 
     void execute(callback_t Pipeline) const override { wasm::HashBasedGrouping::execute(*this, std::move(Pipeline)); }
-    const char * name() const override { return "wasm::HashBasedGrouping"; }
+    std::string name() const override { return "wasm::HashBasedGrouping"; }
 };
 
 template<>
@@ -320,7 +324,7 @@ struct Match<wasm::Aggregation> : MatchBase
     }
 
     void execute(callback_t Pipeline) const override { wasm::Aggregation::execute(*this, std::move(Pipeline)); }
-    const char * name() const override { return "wasm::Aggregation"; }
+    std::string name() const override { return "wasm::Aggregation"; }
 };
 
 template<>
@@ -339,7 +343,7 @@ struct Match<wasm::Sorting> : MatchBase
     }
 
     void execute(callback_t Pipeline) const override { wasm::Sorting::execute(*this, std::move(Pipeline)); }
-    const char * name() const override { return "wasm::Sorting"; }
+    std::string name() const override { return "wasm::Sorting"; }
 };
 
 template<bool Predicated>
@@ -378,7 +382,7 @@ struct Match<wasm::NestedLoopsJoin<Predicated>> : MatchBase
         }
     }
 
-    const char * name() const override {
+    std::string name() const override {
         return M_CONSTEXPR_COND(Predicated, "wasm::PredicatedNestedLoopsJoin", "wasm::BranchingNestedLoopsJoin");
     }
 };
@@ -420,7 +424,7 @@ struct Match<wasm::SimpleHashJoin> : MatchBase
         }
     }
 
-    const char * name() const override { return "wasm::SimpleHashJoin"; }
+    std::string name() const override { return "wasm::SimpleHashJoin"; }
 };
 
 template<>
@@ -437,7 +441,7 @@ struct Match<wasm::Limit> : MatchBase
     }
 
     void execute(callback_t Pipeline) const override { wasm::Limit::execute(*this, std::move(Pipeline)); }
-    const char * name() const override { return "wasm::Limit"; }
+    std::string name() const override { return "wasm::Limit"; }
 };
 
 }

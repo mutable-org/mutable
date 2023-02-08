@@ -420,15 +420,18 @@ namespace m {
 namespace wasm {
 
 /** Compiles the data layout \p layout containing tuples of schema \p layout_schema such that it sequentially
- * stores/loads tuples of schema \p tuple_schema starting at memory address \p base_address and tuple ID \p
- * initial_tuple_id.  The caller has to provide a variable \p tuple_id which must be initialized to \p
- * initial_tuple_id and will be incremented automatically after storing/loading each tuple (i.e. code for this will
- * be emitted at the end of the block returned as second element).  Predication is supported and emitted
- * respectively for storing tuples.
+ * stores/loads (depending on \tparam IsStore) tuples of schema \p tuple_schema starting at memory address \p
+ * base_address and tuple ID \p initial_tuple_id.  If \tparam SinglePass, the store has to be done in a single pass,
+ * i.e. the execution of the returned code must *not* be split among multiple function calls.  Otherwise, the store
+ * does *not* have to be done in a single pass, i.e. the returned code may be emitted into a function which can be
+ * called multiple times and each call starts storing at exactly the point where it has ended in the last call.
+ * The caller has to provide a variable \p tuple_id which must be initialized to \p initial_tuple_id and will be
+ * incremented automatically after storing/loading each tuple (i.e. code for this will be emitted at the end of the
+ * block returned as second element).  Predication is supported and emitted respectively for storing tuples.
  *
  * Does not emit any code but returns three `wasm::Block`s containing code: the first one initializes all needed
  * variables, the second one stores/loads one tuple, and the third one advances to the next tuple. */
-template<bool IsStore, VariableKind Kind>
+template<bool IsStore, bool SinglePass, VariableKind Kind>
 std::tuple<Block, Block, Block>
 compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
                                const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id,
@@ -445,15 +448,20 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
     Bool *null_bits;
     if constexpr (not IsStore)
         null_bits = static_cast<Bool*>(alloca(sizeof(Bool) * tuple_schema.num_entries()));
+
+    using key_t = std::pair<uint8_t, uint64_t>;
+    ///> variable type for pointers dependent on whether access should be done using a single pass
+    using ptr_t = std::conditional_t<SinglePass, Var<Ptr<void>>, Global<Ptr<void>>>;
+    ///> variable type for pointers dependent on whether access should be done using a single pass
+    using mask_t = std::conditional_t<SinglePass, Var<U32>, Global<U32>>;
+    struct value_t
+    {
+        ptr_t ptr;
+        std::optional<mask_t> mask;
+    };
     /** a map from bit offset (mod 8) and stride in bits to runtime pointer and mask; reset for each leaf; used to
      * share pointers between attributes of the same leaf that have equal stride and to share masks between attributes
      * of the same leaf that have equal offset (mod 8) */
-    using key_t = std::pair<uint8_t, uint64_t>;
-    struct value_t
-    {
-        Var<Ptr<void>> ptr;
-        std::optional<Var<U32>> mask;
-    };
     std::unordered_map<key_t, value_t> loading_context;
 
     auto &env = CodeGenContext::Get().env(); // the current codegen environment
@@ -492,8 +500,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
         loading_context.clear();
 
         /*----- Remember whether and where we found the NULL bitmap. -----*/
-        std::optional<Var<Ptr<void>>> null_bitmap_ptr;
-        std::optional<Var<U32>> null_bitmap_mask;
+        std::optional<ptr_t> null_bitmap_ptr;
+        std::optional<mask_t> null_bitmap_mask;
         uint8_t null_bitmap_bit_offset;
         uint64_t null_bitmap_stride_in_bits;
 
@@ -524,7 +532,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                     null_bitmap_stride_in_bits = leaf_info.stride_in_bits;
                     BLOCK_OPEN(inits) {
                         /*----- Initialize pointer and mask. -----*/
-                        null_bitmap_ptr = base_address.clone() + inode_offset_in_bits / 8 + byte_offset;
+                        null_bitmap_ptr.emplace(); // default-construct for globals to be able to use assignment below
+                        *null_bitmap_ptr = base_address.clone() + inode_offset_in_bits / 8 + byte_offset;
                         null_bitmap_mask = 1U << bit_offset;
                     }
 
@@ -554,7 +563,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                         *null_bitmap_mask <<= bit_delta; // advance mask
                                     }
                                     /* If the mask surpasses the first byte, advance pointer to the next byte... */
-                                    *null_bitmap_ptr += (*null_bitmap_mask bitand 0xffU).eqz().to<int32_t>();
+                                    *null_bitmap_ptr += (*null_bitmap_mask bitand 0xffU).eqz().template to<int32_t>();
                                     /* ... and remove lowest byte from the mask. */
                                     *null_bitmap_mask = Select((*null_bitmap_mask bitand 0xffU).eqz(),
                                                                *null_bitmap_mask >> 8U, *null_bitmap_mask);
@@ -578,8 +587,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
 
                                         auto [value, is_null] = env.get<T>(tuple_it->id).split(); // get value
                                         value.discard(); // handled at entry leaf
-                                        setbit(null_bitmap_ptr->to<uint8_t*>(), is_null,
-                                               null_bitmap_mask->to<uint8_t>()); // update bit
+                                        setbit(null_bitmap_ptr->template to<uint8_t*>(), is_null,
+                                               null_bitmap_mask->template to<uint8_t>()); // update bit
                                     }
                                 };
                                 visit(overloaded{
@@ -608,8 +617,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                             advance_to_next_bit();
 
                                             auto value = env.get<NChar>(tuple_it->id); // get value
-                                            setbit(null_bitmap_ptr->to<uint8_t*>(), value.is_nullptr(),
-                                                   null_bitmap_mask->to<uint8_t>()); // update bit
+                                            setbit(null_bitmap_ptr->template to<uint8_t*>(), value.is_nullptr(),
+                                                   null_bitmap_mask->template to<uint8_t>()); // update bit
                                         }
                                     },
                                     [&](const Date&) { store.template operator()<_I32>(); },
@@ -621,9 +630,9 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                 BLOCK_OPEN(loads) {
                                     advance_to_next_bit();
 
-                                    U8 byte = *null_bitmap_ptr->to<uint8_t*>(); // load the byte
+                                    U8 byte = *null_bitmap_ptr->template to<uint8_t*>(); // load the byte
                                     Var<Bool> value(
-                                        (byte bitand *null_bitmap_mask).to<bool>()
+                                        (byte bitand *null_bitmap_mask).template to<bool>()
                                     ); // mask bit with dynamic mask
                                     new (&null_bits[tuple_idx]) Bool(value);
                                 }
@@ -687,7 +696,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                 *null_bitmap_mask <<= bit_delta; // advance mask
                             }
                             /* If the mask surpasses the first byte, advance pointer to the next byte... */
-                            *null_bitmap_ptr += (*null_bitmap_mask bitand 0xffU).eqz().to<int32_t>();
+                            *null_bitmap_ptr += (*null_bitmap_mask bitand 0xffU).eqz().template to<int32_t>();
                             /* ... and remove the lowest byte from the mask. */
                             *null_bitmap_mask = Select((*null_bitmap_mask bitand 0xffU).eqz(),
                                                        *null_bitmap_mask >> 8U, *null_bitmap_mask);
@@ -845,7 +854,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                             it->second.mask = 1U << bit_offset; // init mask
                         }
                     }
-                    const Var<U32> &mask = *it->second.mask;
+                    const mask_t &mask = *it->second.mask;
 
                     if constexpr (IsStore) {
                         /*----- Store value. -----*/
@@ -853,13 +862,13 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                             auto [value, is_null] = env.get<_Bool>(tuple_it->id).split(); // get value
                             is_null.discard(); // handled at NULL bitmap leaf
                             Ptr<U8> byte_ptr = (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
-                            setbit(byte_ptr, value, mask.to<uint8_t>()); // update bit
+                            setbit(byte_ptr, value, mask.template to<uint8_t>()); // update bit
                         }
                     } else {
                         /*----- Load value. -----*/
                         BLOCK_OPEN(loads) {
                             U8 byte = *(ptr + byte_offset).template to<uint8_t*>(); // load byte
-                            Var<Bool> value((byte bitand mask).to<bool>()); // mask bit with dynamic mask
+                            Var<Bool> value((byte bitand mask).template to<bool>()); // mask bit with dynamic mask
                             values[tuple_idx].emplace<_Bool>(value);
                         }
                     }
@@ -1261,8 +1270,18 @@ m::wasm::compile_store_sequential(const Schema &tuple_schema, Ptr<void> base_add
                                   const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id,
                                   uint32_t initial_tuple_id)
 {
-    return compile_data_layout_sequential<true>(tuple_schema, base_address, layout, layout_schema, tuple_id,
-                                                initial_tuple_id);
+    return compile_data_layout_sequential<true, false>(tuple_schema, base_address, layout, layout_schema, tuple_id,
+                                                       initial_tuple_id);
+}
+
+template<VariableKind Kind>
+std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block>
+m::wasm::compile_store_sequential_single_pass(const Schema &tuple_schema, Ptr<void> base_address,
+                                              const storage::DataLayout &layout, const Schema &layout_schema,
+                                              Variable<uint32_t, Kind, false> &tuple_id, uint32_t initial_tuple_id)
+{
+    return compile_data_layout_sequential<true, true>(tuple_schema, base_address, layout, layout_schema, tuple_id,
+                                                      initial_tuple_id);
 }
 
 template<VariableKind Kind>
@@ -1271,8 +1290,8 @@ m::wasm::compile_load_sequential(const Schema &tuple_schema, Ptr<void> base_addr
                                  const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id,
                                  uint32_t initial_tuple_id)
 {
-    return compile_data_layout_sequential<false>(tuple_schema, base_address, layout, layout_schema, tuple_id,
-                                                 initial_tuple_id);
+    return compile_data_layout_sequential<false, true>(tuple_schema, base_address, layout, layout_schema, tuple_id,
+                                                       initial_tuple_id);
 }
 
 namespace m {

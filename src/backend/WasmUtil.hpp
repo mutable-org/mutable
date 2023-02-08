@@ -441,7 +441,9 @@ inline Environment Scope::extract()
  *====================================================================================================================*/
 
 /** Compiles the data layout \p layout containing tuples of schema \p layout_schema such that it sequentially stores
- * tuples of schema \p tuple_schema starting at memory address \p base_address and tuple ID \p initial_tuple_id.
+ * tuples of schema \p tuple_schema starting at memory address \p base_address and tuple ID \p initial_tuple_id.  The
+ * store does *not* have to be done in a single pass, i.e. the returned code may be emitted into a function which can
+ * be called multiple times and each call starts storing at exactly the point where it has ended in the last call.
  * The caller has to provide a variable \p tuple_id which must be initialized to \p initial_tuple_id and will be
  * incremented automatically after storing each tuple (i.e. code for this will be emitted at the end of the block
  * returned as second element).  Predication is supported and emitted respectively.
@@ -453,6 +455,22 @@ std::tuple<Block, Block, Block>
 compile_store_sequential(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
                          const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id,
                          uint32_t initial_tuple_id = 0);
+
+/** Compiles the data layout \p layout containing tuples of schema \p layout_schema such that it sequentially stores
+ * tuples of schema \p tuple_schema starting at memory address \p base_address and tuple ID \p initial_tuple_id.  The
+ * store has to be done in a single pass, i.e. the execution of the returned code must *not* be split among multiple
+ * function calls.
+ * The caller has to provide a variable \p tuple_id which must be initialized to \p initial_tuple_id and will be
+ * incremented automatically after storing each tuple (i.e. code for this will be emitted at the end of the block
+ * returned as second element).  Predication is supported and emitted respectively.
+ *
+ * Does not emit any code but returns three `wasm::Block`s containing code: the first one initializes all needed
+ * variables, the second one stores one tuple, and the third one advances to the next tuple. */
+template<VariableKind Kind>
+std::tuple<Block, Block, Block>
+compile_store_sequential_single_pass(const Schema &tuple_schema, Ptr<void> base_address,
+                                     const storage::DataLayout &layout, const Schema &layout_schema,
+                                     Variable<uint32_t, Kind, false> &tuple_id, uint32_t initial_tuple_id = 0);
 
 /** Compiles the data layout \p layout containing tuples of schema \p layout_schema such that it sequentially loads
  * tuples of schema \p tuple_schema starting at memory address \p base_address and tuple ID \p initial_tuple_id.

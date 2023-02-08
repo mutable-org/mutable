@@ -391,11 +391,15 @@ struct Match<wasm::SimpleHashJoin> : MatchBase
     std::size_t buffer_num_tuples_;
     public:
     const JoinOperator &join;
+    const Wildcard &build;
+    const Wildcard &probe;
     std::vector<std::reference_wrapper<const MatchBase>> children;
 
-    Match(const JoinOperator *join, const Wildcard*, const Wildcard*,
+    Match(const JoinOperator *join, const Wildcard *build, const Wildcard *probe,
           std::vector<std::reference_wrapper<const MatchBase>> &&children)
         : join(*join)
+        , build(*build)
+        , probe(*probe)
         , children(std::move(children))
     {
         M_insist(this->children.size() == 2);

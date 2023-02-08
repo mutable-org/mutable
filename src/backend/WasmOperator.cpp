@@ -1357,9 +1357,7 @@ void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline
     constexpr uint64_t PAYLOAD_SIZE_THRESHOLD_IN_BITS = 64;
     constexpr double HIGH_WATERMARK = 1.5;
 
-    const auto &build = *M.join.child(0);
-    const auto &probe = *M.join.child(1);
-    const auto ht_schema = build.schema().drop_none().deduplicate();
+    const auto ht_schema = M.build.schema().drop_none().deduplicate();
 
     /*----- Decompose each clause of the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
     auto p = decompose_equi_predicate(M.join.predicate(), ht_schema);
@@ -1378,9 +1376,10 @@ void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline
 
     /*----- Compute initial capacity of hash table. -----*/
     uint32_t initial_capacity;
-    if (build.has_info())
-        initial_capacity = build.info().estimated_cardinality / HIGH_WATERMARK; // TODO: estimation depends on whether predication is enabled
-    else if (auto scan = cast<const ScanOperator>(&build))
+    if (M.build.has_info())
+        initial_capacity = M.build.info().estimated_cardinality / HIGH_WATERMARK; // TODO: estimation depends on
+        // whether predication is enabled
+    else if (auto scan = cast<const ScanOperator>(&M.build))
         initial_capacity = scan->store().num_rows() / HIGH_WATERMARK;
     else
         initial_capacity = 1024; // fallback

@@ -90,8 +90,8 @@ Below follows a list of CMake configuration options to tune the build.
 
 ### `-DBUILD_SHARED_LIBS`: Configure static or shared library build
 
-- `-DBUILD_SHARED_LIBS=On` -- Recommended for debug and/or developer builds.  Avoids long link times.
-- `-DBUILD_SHARED_LIBS=Off` -- Recommended for release builds.  Bundles all libraries (ours and third-parties) into the
+- `-DBUILD_SHARED_LIBS=ON` -- Recommended for debug and/or developer builds.  Avoids long link times.
+- `-DBUILD_SHARED_LIBS=OFF` -- Recommended for release builds.  Bundles all libraries (ours and third-parties) into the
   executables.  Reduces executable's start-up time.
 
 ### `-DENABLE_SANITIZERS`: Compile with the Address- and UndefinedBehaviorSanitizer
@@ -102,16 +102,16 @@ Enabling a sanitizer causes the compiler to instrument the generated binary by a
 Currently, we use Clang's [AddressSanitizer](https://clang.llvm.org/docs/AddressSanitizer.html) and [UndefinedBehaviorSanitizer](https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html).
 For the UndefinedBehaviorSanitizer, we explicitly disable the `vptr` sanitizer, as this causes [linking errors with V8](https://groups.google.com/g/v8-users/c/MJztlKiWFUc/m/z3_V-SMvAwAJ).
 
-- `-DENABLE_SANITIZERS=On` -- Build with sanitizers.
-- `-DENABLE_SANITIZERS=Off` -- Build without sanitizers.
+- `-DENABLE_SANITIZERS=ON` -- Build with sanitizers.
+- `-DENABLE_SANITIZERS=OFF` -- Build without sanitizers.
 
 ### `-DENABLE_SANITY_FIELDS`: Compile with custom sanity fields in data structures
 
 Few of our data structures have fields, that are only used for sanity checking at runtime.
 These fields (and the respective sanity checking code) can be enabled or disabled through a CMake option.
 
-- `-DENABLE_SANITY_FIELDS=On`: Compile with sanity fields and checking.
-- `-DENABLE_SANITY_FIELDS=Off`: Compile without sanity fields and checking.
+- `-DENABLE_SANITY_FIELDS=ON`: Compile with sanity fields and checking.
+- `-DENABLE_SANITY_FIELDS=OFF`: Compile without sanity fields and checking.
 
 **NOTE:** When compiling `libmutable` with sanity fields enabled, i.e. `-DENABLE_SANITY_FIELDS=On`, the client using `libmutable` must define `M_ENABLE_SANITY_FIELDS`.
 Otherwise, there will be runtime errors: the client will see a data structure w/o the sanity fields while `libmutable` was compiled with sanity fields.
@@ -120,7 +120,7 @@ Otherwise, there will be runtime errors: the client will see a data structure w/
 ### `-DWITH_V8`: Enable WebAssembly execution backend with V8 engine.
 Requirements: see [Building with V8](setup-building-with-V8.md)
 
-- `-DBUILD_WITH_V8=On` -- Build mu*t*able with the WebAssembly-based execution backend.
+- `-DBUILD_WITH_V8=ON` -- Build mu*t*able with the WebAssembly-based execution backend.
 
 Downloads, configures, and builds [Google's V8](https://v8.dev/) JavaScript and WebAssembly engine as part of
 mu*t*able's build step.
@@ -130,6 +130,23 @@ mu*t*able's build step.
 ### DEPRECATED: ~~`-DWITH_SPIDERMONKEY=1`: Enable SpiderMonkey WASM platform.~~
 
 We dropped support for using SpiderMonkey in the WebAssembly-based execution backend.
+
+### `-DUSE_LLD`: Use LLD, a linker from the LLVM project
+
+If you have [LLD](https://lld.llvm.org/) installed on your system, you can configure the build to use it for linking.
+
+- `-DUSE_LLD=ON` -- Use LLD for linking.
+
+Using LLD is likely to reduce link times over your system's standard linker.
+</br>
+**NOTE:** When configuring mu*t*able for the first time, we detect whether LLD is installed and set `USE_LLD` accordingly.
+
+### EXPERIMENTAL: `-DUSE_LIBCXX`: Use LLVM's `libc++`
+
+Configure the build to use [LLVM's implementation of the C++ standard library `libc++`](https://libcxx.llvm.org/). (This is already the default on macOS.)
+
+- `-DUSE_LIBCXX=ON` -- Build mu*t*able with `libc++`.
+
 
 # Troubleshooting
 This is a list of problems we have encountered when setting up the project and how we managed to solve them.

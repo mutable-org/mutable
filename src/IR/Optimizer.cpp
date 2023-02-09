@@ -209,7 +209,6 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
         /* Apply filter, if any. */
         if (ds->filter().size()) {
             auto filter = std::make_unique<FilterOperator>(ds->filter());
-            // auto filter = new FilterOperator(ds->filter());
             filter->add_child(source_plans[ds->id()]);
             filter = optimize_filter(std::move(filter));
             auto new_model = CE.estimate_filter(G, *plan_table[s].model, filter->filter());
@@ -267,7 +266,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
     additional_projections.insert(additional_projections.end(), G.projections().begin(), G.projections().end());
 
     /* Perform projection. */
-    {
+    if (not additional_projections.empty()) {
         auto projection = std::make_unique<ProjectionOperator>(std::move(additional_projections));
         projection->add_child(plan.release());
         plan = std::move(projection);
@@ -305,7 +304,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
                 adapted_projections.emplace_back(*d, nullptr);
                 created_exprs_.emplace_back(std::move(d));
             } else {
-                adapted_projections.emplace_back(expr, alias);
+                adapted_projections.emplace_back(expr, nullptr);
             }
         }
         auto projection = std::make_unique<ProjectionOperator>(std::move(adapted_projections));
@@ -410,48 +409,32 @@ std::vector<Optimizer::projection_type>
 Optimizer::compute_projections_required_for_order_by(const std::vector<projection_type> &projections,
                                                      const std::vector<order_type> &order_by) const
 {
-#if 0
-    std::cerr << "compute_projections_required_for_order_by(projections=[";
-    for (auto [expr, alias] : projections) {
-        std::cerr << expr;
-        if (alias) std::cerr << " AS " << alias;
-        std::cerr << ", ";
-    }
-    std::cerr << "], order_by=[";
-    for (auto [expr, _] : order_by) {
-        std::cerr << expr << ", ";
-    }
-    std::cerr << "])\n";
-#endif
-
     std::vector<Optimizer::projection_type> required_projections;
 
-    /* Collect all `Designator`s, and also store whether they target another `Expr`. */
-    auto get_designator_targets = overloaded {
-        [&](const ast::Designator &e) -> void {
-            // std::cerr << "  found designator '" << e << "'\n";
-            auto target = e.target();
+    /* Collect all required `Designator`s which are not included in the projection. */
+    auto get_required_designator = overloaded {
+        [&](const ast::Designator &d) -> void {
+            auto target = d.target();
             if (auto t = std::get_if<const Expr*>(&target)) { // refers to another expression?
                 /*----- Find `t` in projections. -----*/
                 for (auto &[expr, alias] : projections) {
-                    if (*t == &expr.get() or e == expr.get()) // refers to or is identical to an `Expr` in SELECT clause
-                        goto found;
+                    if (*t == &expr.get() or d == expr.get()) // refers to or is identical to an `Expr` in SELECT clause
+                        return; // found
                 }
             } else {
-                /*----- Find `e` in projections. -----*/
+                /*----- Find `d` in projections. -----*/
                 for (auto &[expr, _] : projections) {
-                    if (expr == e)
-                        goto found;
+                    if (expr == d)
+                        return; // found
                 }
             }
-            required_projections.emplace_back(e, nullptr);
-found: /* found in projections */ ;
+            required_projections.emplace_back(d, nullptr);
         },
         [](auto&&) -> void { /* nothing to be done */ },
     };
     /* Process the ORDER BY clause. */
     for (auto [expr, _] : order_by)
-        visit(get_designator_targets, expr, m::tag<m::ast::ConstPreOrderExprVisitor>());
+        visit(get_required_designator, expr, m::tag<m::ast::ConstPreOrderExprVisitor>());
 
     return required_projections;
 }

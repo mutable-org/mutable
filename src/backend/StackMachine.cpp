@@ -536,7 +536,14 @@ StackMachine::StackMachine(Schema in_schema, const cnf::CNF &cnf)
 
 void StackMachine::emit(const ast::Expr &expr, std::size_t tuple_id)
 {
-    StackMachineBuilder Builder(*this, in_schema, expr, tuple_id); // compute the command sequence for this stack machine
+    if (auto it = in_schema.find(Schema::Identifier(expr)); it != in_schema.end()) { // expression already computed
+        /* Given the expression, identify the position of its value in the tuple.  */
+        auto idx = std::distance(in_schema.begin(), it);
+        M_insist(idx < in_schema.num_entries(), "index out of bounds");
+        emit_Ld_Tup(tuple_id, idx);
+    } else { // expression has to be computed
+        StackMachineBuilder(*this, in_schema, expr, tuple_id); // compute the command sequence for this stack machine
+    }
 }
 
 void StackMachine::emit(const cnf::CNF &cnf, std::size_t tuple_id)

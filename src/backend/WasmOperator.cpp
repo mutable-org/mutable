@@ -481,43 +481,19 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
                     /*----- Migrate compiled expression to new context. ------*/
                     new_env.add(e.id, old_env.get(e.id)); // to retain `e.id` for later compilation of expressions
                 } else {
+                    /*----- Compile expression. -----*/
                     M_insist(p != M.projection.projections().end());
-                    if (auto d = cast<const ast::Designator>(p->first)) {
-                        auto t = d->target(); // consider target of renamed identifier
-                        if (auto expr = std::get_if<const m::ast::Expr*>(&t)) {
-                            /*----- Compile targeted expression. -----*/
-                            std::visit(overloaded {
-                                [&]<typename T>(Expr<T> value) -> void {
-                                    Var<Expr<T>> var(value); // introduce variable s.t. uses only load from it
-                                    new_env.add(e.id, var);
-                                },
-                                [&](NChar value) -> void {
-                                    Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
-                                    new_env.add(e.id, NChar(var, value.length(), value.guarantees_terminating_nul()));
-                                },
-                                [](std::monostate) -> void { M_unreachable("invalid expression"); },
-                            }, old_env.compile(**expr));
-                        } else {
-                            /*----- Access renamed attribute. -----*/
-                            auto attr = std::get_if<const Attribute*>(&t);
-                            M_insist(attr, "Target must be an expression or an attribute");
-                            Schema::Identifier id((*attr)->table.name, (*attr)->name);
-                            new_env.add(e.id, old_env.get(id)); // to retain `id` for later compilation of expressions
-                        }
-                    } else {
-                        /*----- Compile expression. -----*/
-                        std::visit(overloaded {
-                            [&]<typename T>(Expr<T> value) -> void {
-                                Var<Expr<T>> var(value); // introduce variable s.t. uses only load from it
-                                new_env.add(e.id, var);
-                            },
-                            [&](NChar value) -> void {
-                                Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
-                                new_env.add(e.id, NChar(var, value.length(), value.guarantees_terminating_nul()));
-                            },
-                            [](std::monostate) -> void { M_unreachable("invalid expression"); },
-                        }, old_env.compile(p->first));
-                    }
+                    std::visit(overloaded {
+                        [&]<typename T>(Expr<T> value) -> void {
+                            Var<Expr<T>> var(value); // introduce variable s.t. uses only load from it
+                            new_env.add(e.id, var);
+                        },
+                        [&](NChar value) -> void {
+                            Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
+                            new_env.add(e.id, NChar(var, value.length(), value.guarantees_terminating_nul()));
+                        },
+                        [](std::monostate) -> void { M_unreachable("invalid expression"); },
+                    }, old_env.compile(p->first));
                 }
             }
             ++p;

@@ -25,7 +25,7 @@ However, some third-parties are required to be installed on your system.
 
 Below is a list of **mandatory** dependencies, that **must be installed**:
 
-- Boost 1.80 libraries and development header files.
+- Boost libraries and development header files.
     - On ArchLinux: `pacman -S boost`
 - Graphviz development headers
     - Make sure `gvc.h` is found in one your system include directories.

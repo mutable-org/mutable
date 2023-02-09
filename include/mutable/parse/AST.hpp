@@ -47,7 +47,7 @@ struct M_EXPORT Expr
     const Type *type_ = nullptr;
     /** Whether this `Expr` is correlated within its query, i.e. whether this `Expr` contains free variables that are
      * bound by an outside query. */
-    bool is_correlated_;
+    bool is_correlated_ = false;
 
     public:
     explicit Expr(Token tok) : tok(tok) { }

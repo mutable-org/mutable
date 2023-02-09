@@ -40,11 +40,10 @@ $ cmake -S . -B build/debug_shared \
 -DCMAKE_C_COMPILER=clang \
 -DCMAKE_CXX_COMPILER=clang++ \
 -DCMAKE_BUILD_TYPE=Debug \
--DBUILD_SHARED_LIBS=On \
--DENABLE_SANITIZERS=On \
--DENABLE_SANITY_FIELDS=On \
--DWITH_V8=On \
-../..
+-DBUILD_SHARED_LIBS=ON \
+-DENABLE_SANITIZERS=ON \
+-DENABLE_SANITY_FIELDS=ON \
+-DWITH_V8=ON
 -- The C compiler identification is Clang 14.0.6
 -- The CXX compiler identification is Clang 14.0.6
 -- Check for working C compiler: /usr/bin/clang

@@ -424,7 +424,7 @@ Optimizer::compute_projections_required_for_order_by(const std::vector<projectio
             } else {
                 /*----- Find `d` in projections. -----*/
                 for (auto &[expr, _] : projections) {
-                    if (expr == d)
+                    if (expr.get() == d)
                         return; // found
                 }
             }
@@ -434,7 +434,7 @@ Optimizer::compute_projections_required_for_order_by(const std::vector<projectio
     };
     /* Process the ORDER BY clause. */
     for (auto [expr, _] : order_by)
-        visit(get_required_designator, expr, m::tag<m::ast::ConstPreOrderExprVisitor>());
+        visit(get_required_designator, expr.get(), m::tag<m::ast::ConstPreOrderExprVisitor>());
 
     return required_projections;
 }

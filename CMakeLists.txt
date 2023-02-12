@@ -101,9 +101,6 @@ else()
     set(is_release_build TRUE)
 endif()
 
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 20)
-
 # Run debug build with sanitizers, but exclude the vptr sanitizer.  We must do this because V8 is built without RTTI,
 # see https://groups.google.com/g/v8-users/c/MJztlKiWFUc/m/z3_V-SMvAwAJ.
 

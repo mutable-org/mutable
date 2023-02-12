@@ -19,7 +19,7 @@ namespace storage {
 struct ConstDataLayoutVisitor;
 
 /** Models how data is laid out in a linear address space. */
-struct DataLayout
+struct M_EXPORT DataLayout
 {
     /*----- Types ----------------------------------------------------------------------------------------------------*/
     using size_type = std::size_t;
@@ -28,7 +28,7 @@ struct DataLayout
     struct INode;
 
     ///> combines information of a single leaf for `for_sibling_leaves()`
-    struct leaf_info_t
+    struct M_EXPORT leaf_info_t
     {
         const Leaf &leaf;
         uint64_t offset_in_bits;
@@ -36,7 +36,7 @@ struct DataLayout
     };
 
     ///> combines information of a single internal level inside the `DataLayout`, used by `for_sibling_leaves()`
-    struct level_info_t
+    struct M_EXPORT level_info_t
     {
         ///> the stride of instances of this level
         uint64_t stride_in_bits;
@@ -51,7 +51,7 @@ struct DataLayout
                                                  uint64_t inode_offset_in_bits)>;
 
     ///> an abstract node in the recursive data layout model
-    struct Node
+    struct M_EXPORT Node
     {
         virtual ~Node() = 0;
 
@@ -63,7 +63,7 @@ struct DataLayout
 
     /** The `Leaf` represents exactly one attribue.  It holds the `Type` of the `Attribute` together with a unique
      * index.  With the unique index it is possible to associate the `Attribute` to this `Leaf`. */
-    struct Leaf : Node
+    struct M_EXPORT Leaf : Node
     {
         friend struct DataLayout;
         friend struct INode;
@@ -89,7 +89,7 @@ struct DataLayout
 
     /** An internal node of the recursive data layout model.  It holds one or oore child `Node`s and stores the offset
      * and stride for each child.  The offset and stride are relative within this `INode`. */
-    struct INode : Node
+    struct M_EXPORT INode : Node
     {
         friend struct DataLayout;
 

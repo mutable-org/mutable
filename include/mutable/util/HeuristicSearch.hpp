@@ -1,14 +1,12 @@
 #pragma once
 
 #include <algorithm>
-#include <boost/container/allocator.hpp>
-#include <boost/container/node_allocator.hpp>
-#include <boost/heap/binomial_heap.hpp>
-// #include <boost/heap/fibonacci_heap.hpp>
-// #include <boost/heap/pairing_heap.hpp>
+#include <concepts>
 #include <exception>
 #include <experimental/type_traits> // std::is_detected
+#include <iosfwd>
 #include <map>
+#include <mutable/Options.hpp>
 #include <queue>
 #include <ratio>
 #include <tuple>
@@ -31,114 +29,52 @@ namespace ai {
 
 /*===== State ========================================================================================================*/
 
-/*----- double State::g() const --------------------------------------------------------------------------------------*/
+/*----- State --------------------------------------------------------------------------------------------------------*/
 template<typename State>
-struct has_method_g : std::conjunction<
-    std::is_member_function_pointer<decltype(&State::g)>,
-    std::is_invocable_r<double, decltype(&State::g), const State&>,
-    std::is_member_function_pointer<decltype(&State::decrease_g)>,
-    std::is_invocable_r<void, decltype(&State::decrease_g), State&, const State*, double>
-> { };
+concept heuristic_search_state =
+    std::is_class_v<State> and
+    std::is_class_v<typename State::base_type> and
+    std::movable<State> and
+    requires (const State &S, const State *parent) {
+        { S.g() } -> std::convertible_to<double>;
+        { S.decrease_g(parent, double(0)) } -> std::same_as<void>;
+    };
 
 /*----- partitioning -------------------------------------------------------------------------------------------------*/
 template<typename State, typename... Context>
-struct provides_partitioning
-{
-    template<typename, typename = void>
-    struct helper : std::false_type { };
-    template<typename S>
-    struct helper<S, std::void_t<
-        decltype(S::num_partitions(std::declval<Context>()...)),
-        decltype(std::declval<const S>().partition_id(std::declval<Context>()...))
-    >> : std::true_type { };
-
-    static constexpr bool value = helper<State>::value;
-};
-template<typename State, typename... Context>
-static constexpr bool provides_partitioning_v = provides_partitioning<State, Context...>::value;
-
-/*----- State --------------------------------------------------------------------------------------------------------*/
-template<typename State, typename... Context>
-struct is_search_state : std::conjunction<
-    std::is_class<State>,
-    std::is_class<typename State::base_type>,
-    std::is_move_constructible<State>,
-    std::is_move_assignable<State>,
-    has_method_g<State>
-> { };
-template<typename State, typename... Context>
-inline constexpr bool is_search_state_v = is_search_state<State, Context...>::value;
+concept supports_partitioning =
+    requires (const State &S, Context&... ctx) {
+        { State::num_partitions(ctx...) } -> std::convertible_to<unsigned>;
+        { S.partition_id(ctx...) } -> std::convertible_to<unsigned>;
+    };
 
 
 /*===== Heuristic ====================================================================================================*/
 
-/*----- double Heuristic::operator(const State&, Context...) const ---------------------------------------------------*/
 template<typename Heuristic, typename... Context>
-struct is_callable : std::conjunction<
-    std::is_member_function_pointer<decltype(&Heuristic::operator())>,
-    std::is_invocable_r<double, decltype(&Heuristic::operator()), Heuristic&, const typename Heuristic::state_type&, Context...>
-> { };
-
-/*----- Heuristic ----------------------------------------------------------------------------------------------------*/
-template<typename Heuristic, typename... Context>
-struct is_search_heuristic : std::conjunction<
-    is_search_state<typename Heuristic::state_type, Context...>,
-    is_callable<Heuristic, Context...>
-> { };
-template<typename Heuristic, typename... Context>
-inline constexpr bool is_search_heuristic_v = is_search_heuristic<Heuristic, Context...>::value;
+concept heuristic_search_heuristic =
+    heuristic_search_state<typename Heuristic::state_type> and
+    requires (Heuristic &H, const typename Heuristic::state_type &S, Context&... ctx) {
+        { H.operator()(S, ctx...) } -> std::convertible_to<double>;
+    };
 
 
 /*===== Search Algorithm =============================================================================================*/
 
-/*----- void Search::search(State, Heuristic&, Context...) -----------------------------------------------------------*/
 template<typename Search, typename... Context>
-struct has_method_search : std::conjunction<
-    std::is_member_function_pointer<decltype(&Search::search)>,
-    std::is_invocable<decltype(&Search::search), Search&, typename Search::state_type, typename Search::heuristic_type&,
-                      typename Search::expand_type, Context...>
-> { };
-
-/*----- Search Algorithm ---------------------------------------------------------------------------------------------*/
-template<typename Search, typename... Context>
-struct is_search_search : std::conjunction<
-    is_search_state<typename Search::state_type, Context...>,
-    is_search_heuristic<typename Search::heuristic_type, Context...>,
-    std::is_same<typename Search::state_type, typename Search::heuristic_type::state_type>,
-    has_method_search<Search, Context...>
-> { };
-template<typename Search, typename... Context>
-inline constexpr bool is_search_search_v = is_search_search<Search, Context...>::value;
-
-
-/*======================================================================================================================
- * Heuristic Search
- *====================================================================================================================*/
-
-#if 0
-/** Find a path from an `initial_state` to a goal state and return its cost. */
-template<
-    typename State,
-    typename Heuristic,
-    typename Expand,
-    template</* State */ typename, /*Heuristic */ typename, /* Expand */ typename, /*Context */ typename...>
-        typename SearchAlgorithm,
-    typename... Context
->
-const State & search(State initial_state, Heuristic &heuristic, Expand expand, Context&... context)
-{
-    static_assert(is_search_state_v<State, Context...>, "State is not a valid state for this search");
-    static_assert(is_search_heuristic_v<Heuristic, Context...>, "Heuristic is not a valid heuristic");
-    static_assert(std::is_same_v<State, typename Heuristic::state_type>, "Heuristic is not applicable to State");
-
-    using search_algorithm = SearchAlgorithm<State, Heuristic, Expand, Context...>;
-    static_assert(is_search_search_v<search_algorithm, Context...>,
-                  "SearchAlgorithm is not a valid search algorithm for this search");
-
-    search_algorithm S(context...);
-    return S.search(std::move(initial_state), heuristic, std::move(expand), std::forward<Context>(context)...);
-}
-#endif
+concept heuristic_search =
+    heuristic_search_state<typename Search::state_type> and
+    heuristic_search_heuristic<typename Search::heuristic_type, Context...> and
+    std::same_as<typename Search::state_type, typename Search::heuristic_type::state_type> and
+    requires (
+            Search &search,
+            typename Search::state_type state,
+            typename Search::heuristic_type &heuristic,
+            typename Search::expand_type ex,
+            Context&... ctx
+    ) {
+        { search.search(state, ex, heuristic, ctx...) };
+    };
 
 
 /*======================================================================================================================
@@ -146,10 +82,15 @@ const State & search(State initial_state, Heuristic &heuristic, Expand expand, C
  *====================================================================================================================*/
 
 /** Tracks states and their presence in queues. */
-template<typename State, bool HasRegularQueue, bool HasBeamQueue, typename... Context>
+template<
+    heuristic_search_state State,
+    bool HasRegularQueue,
+    bool HasBeamQueue,
+    typename Config,
+    typename... Context
+>
 struct StateManager
 {
-    static_assert(is_search_state_v<State, Context...>, "State is not a valid search state");
     static_assert(HasRegularQueue or HasBeamQueue, "must have at least one kind of queue");
 
     using state_type = State;
@@ -164,9 +105,7 @@ struct StateManager
     ///> comparator for map entries based on states' *g + h* value
     struct comparator { bool operator()(pointer_type p_left, pointer_type p_right) const; };
     ///> the type of heap to implement the priority queues
-    using heap_type = boost::heap::binomial_heap<pointer_type, boost::heap::compare<comparator>>;
-    // using heap_type = boost::heap::fibonacci_heap<pointer_type, boost::heap::compare<comparator>>;
-    // using heap_type = boost::heap::pairing_heap<pointer_type, boost::heap::compare<comparator>>;
+    using heap_type = typename Config::template heap_type<pointer_type, typename Config::template compare<comparator>>;
 
     /*----- Counters -------------------------------------------------------------------------------------------------*/
 #ifndef NDEBUG
@@ -213,7 +152,7 @@ struct StateManager
         /* Mapped=    */ StateInfo,
         /* Hash=      */ std::hash<state_type>,
         /* KeyEqual=  */ std::equal_to<state_type>,
-        /* Allocator= */ boost::container::node_allocator<map_value_type>
+        /* Allocator= */ typename Config::template allocator_type<map_value_type>
     >;
 
     /*----- Helper type to manage potentially partitioned states. ----------------------------------------------------*/
@@ -278,7 +217,7 @@ struct StateManager
     };
 
     ///> map of all states ever explored, mapping state to its info; partitioned by state partition id
-    Partitions<provides_partitioning_v<State, Context...>> partitions_;
+    Partitions<supports_partitioning<State, Context...>> partitions_;
 
     ///> map of all states ever explored, mapping state to its info
     // map_type states_;
@@ -340,7 +279,7 @@ struct StateManager
                     } else {
                         /*----- Update the state's entry in the queue. -----*/
                         M_insist(it->second.queue == &Q, "the state must already be in its destinated queue");
-                        Q.increase(it->second.handle); // we need to *increase* because boost implements a max-heap
+                        Q.increase(it->second.handle); // we need to *increase* because the heap is a max-heap
                         inc_decrease_key();
                     }
                 }
@@ -470,8 +409,14 @@ struct StateManager
     void dump() const { dump(std::cerr); }
 };
 
-template<typename State, bool HasRegularQueue, bool HasBeamQueue, typename... Context>
-bool StateManager<State, HasRegularQueue, HasBeamQueue, Context...>::comparator::
+template<
+    heuristic_search_state State,
+    bool HasRegularQueue,
+    bool HasBeamQueue,
+    typename Config,
+    typename... Context
+>
+bool StateManager<State, HasRegularQueue, HasBeamQueue, Config, Context...>::comparator::
 operator()(StateManager::pointer_type p_left, StateManager::pointer_type p_right) const
 {
     auto left  = static_cast<typename map_type::value_type*>(p_left);
@@ -484,26 +429,23 @@ operator()(StateManager::pointer_type p_left, StateManager::pointer_type p_right
 /** Implements a generic A* search algorithm.  Allows for specifying a weighting factor for the heuristic value.  Allows
  * for lazy evaluation of the heuristic. */
 template<
-    typename State,
+    heuristic_search_state State,
     typename Expand,
     typename Heuristic,
     typename Weight,
     unsigned BeamWidth,
     bool Lazy,
     bool IsMonotone,
+    typename Config,
     typename... Context
 >
+requires heuristic_search_heuristic<Heuristic, Context...> and
+         std::convertible_to<decltype(Weight::num), double> and std::convertible_to<decltype(Weight::den), double>
 struct genericAStar
 {
-    static_assert(is_search_state_v<State, Context...>, "State is not a valid state for this search");
-    static_assert(is_search_heuristic_v<Heuristic, Context...>, "Heuristic is not a valid heuristic");
-    static_assert(std::is_same_v<State, typename Heuristic::state_type>, "Heuristic is not applicable to State");
-    static_assert(std::is_arithmetic_v<decltype(Weight::num)> and std::is_arithmetic_v<decltype(Weight::den)>,
-                  "Weight must be specified as std::ratio<Num, Denom>");
-
     using state_type = State;
-    using heuristic_type = Heuristic;
     using expand_type = Expand;
+    using heuristic_type = Heuristic;
     using weight = Weight;
 
     ///> The width of a beam used for *beam search*.  Set to 0 to disable beam search.
@@ -561,6 +503,7 @@ struct genericAStar
     StateManager</* State=           */ State,
                  /* HasRegularQueue= */ not (use_beam_search and is_monotone),
                  /* HasBeamQueue=    */ use_beam_search,
+                 /* Config=          */ Config,
                  /* Context...=      */ Context...
     > state_manager_;
 
@@ -586,7 +529,7 @@ struct genericAStar
      *
      * @return the cost of the computed path from `initial_state` to a goal state
      */
-    const State & search(state_type initial_state, heuristic_type &heuristic, expand_type expand, Context&... context);
+    const State & search(state_type initial_state, expand_type expand, heuristic_type &heuristic, Context&... context);
 
     /** Resets the state of the search. */
     void clear() {
@@ -738,19 +681,22 @@ struct genericAStar
 };
 
 template<
-    typename State,
+    heuristic_search_state State,
     typename Expand,
     typename Heuristic,
     typename Weight,
     unsigned BeamWidth,
     bool Lazy,
     bool IsMonotone,
+    typename Config,
     typename... Context
 >
-const State & genericAStar<State, Expand, Heuristic, Weight, BeamWidth, Lazy, IsMonotone, Context...>::search(
+requires heuristic_search_heuristic<Heuristic, Context...> and
+         std::convertible_to<decltype(Weight::num), double> and std::convertible_to<decltype(Weight::den), double>
+const State & genericAStar<State, Expand, Heuristic, Weight, BeamWidth, Lazy, IsMonotone, Config, Context...>::search(
     state_type initial_state,
-    heuristic_type &heuristic,
     expand_type expand,
+    heuristic_type &heuristic,
     Context&... context
 ) {
     /* Initialize queue with initial state. */
@@ -762,7 +708,6 @@ const State & genericAStar<State, Expand, Heuristic, Weight, BeamWidth, Lazy, Is
                  "the beam queue must not run empty with beam search on a monotone search space");
         auto top = state_manager_.pop();
         const state_type &state = top.first;
-        const double h = top.second;
 
         if (expand.is_goal(state, context...))
             return state;
@@ -774,79 +719,86 @@ const State & genericAStar<State, Expand, Heuristic, Weight, BeamWidth, Lazy, Is
 }
 
 template<
-    typename State,
-    typename Heuristic,
+    heuristic_search_state State,
     typename Expand,
+    typename Heuristic,
+    typename Config,
     typename... Context
 >
-using AStar = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, 0, false, false, Context...>;
+using AStar = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, 0, false, false, Config, Context...>;
 
 template<
-    typename State,
-    typename Heuristic,
+    heuristic_search_state State,
     typename Expand,
+    typename Heuristic,
+    typename Config,
     typename... Context
 >
-using lazy_AStar = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, 0, true, false, Context...>;
+using lazy_AStar = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, 0, true, false, Config, Context...>;
 
 template<typename Weight>
 struct wAStar
 {
     template<
-        typename State,
-        typename Heuristic,
+        heuristic_search_state State,
         typename Expand,
+        typename Heuristic,
+        typename Config,
         typename... Context
     >
-    using type = genericAStar<State, Expand, Heuristic, Weight, 0, false, false, Context...>;
+    using type = genericAStar<State, Expand, Heuristic, Weight, 0, false, false, Config, Context...>;
 };
 
 template<typename Weight>
 struct lazy_wAStar
 {
     template<
-        typename State,
-        typename Heuristic,
+        heuristic_search_state State,
         typename Expand,
+        typename Heuristic,
+        typename Config,
         typename... Context
     >
-    using type = genericAStar<State, Expand, Heuristic, Weight, 0, true, false, Context...>;
+    using type = genericAStar<State, Expand, Heuristic, Weight, 0, true, false, Config, Context...>;
 };
 
 template<unsigned BeamWidth>
 struct beam_search
 {
     template<
-        typename State,
-        typename Heuristic,
+        heuristic_search_state State,
         typename Expand,
+        typename Heuristic,
+        typename Config,
         typename... Context
     >
-    using type = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, BeamWidth, false, false, Context...>;
+    using type = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, BeamWidth, false, false, Config, Context...>;
 };
 
 template<unsigned BeamWidth>
 struct lazy_beam_search
 {
     template<
-        typename State,
-        typename Heuristic,
+        heuristic_search_state State,
         typename Expand,
+        typename Heuristic,
+        typename Config,
         typename... Context
     >
-    using type = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, BeamWidth, true, false, Context...>;
+    using type = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, BeamWidth, true, false, Config, Context...>;
 };
 
 template<unsigned BeamWidth>
 struct monotone_beam_search
 {
     template<
-        typename State,
-        typename Heuristic,
+        heuristic_search_state State,
         typename Expand,
+        typename Heuristic,
+        typename Config,
         typename... Context
     >
-    using type = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, BeamWidth, false, true, Context...>;
+    using type = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, BeamWidth, false, true, Config, Context...>;
 };
 
 }

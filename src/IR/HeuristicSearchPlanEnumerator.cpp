@@ -4,6 +4,9 @@
 #include <algorithm>
 #include <boost/container/allocator.hpp>
 #include <boost/container/node_allocator.hpp>
+#include <boost/heap/binomial_heap.hpp>
+#include <boost/heap/fibonacci_heap.hpp>
+#include <boost/heap/pairing_heap.hpp>
 #include <cstring>
 #include <execution>
 #include <functional>
@@ -590,7 +593,7 @@ struct SubproblemTableBottomUp : Base<SubproblemTableBottomUp>
     }
 
     template<typename Callback>
-    void for_each_subproblem(Callback &&callback, const QueryGraph &G) const {
+    void for_each_subproblem(Callback &&callback, const QueryGraph&) const {
         for (Subproblem S : *this)
             callback(S);
     }
@@ -630,7 +633,7 @@ struct SubproblemTableBottomUp : Base<SubproblemTableBottomUp>
 
     bool operator!=(const SubproblemTableBottomUp &other) const { return not operator==(other); }
 
-    bool operator<(const SubproblemTableBottomUp &other) const {
+    bool operator<(const SubproblemTableBottomUp&) const {
         M_unreachable("not implemented");
     }
 
@@ -1038,7 +1041,7 @@ struct EdgePtrBottomUp : Base<EdgePtrBottomUp>
     }
 
     /** Creates an initial state. */
-    EdgePtrBottomUp(const QueryGraph &G)
+    EdgePtrBottomUp(const QueryGraph&)
         : g_(0)
         , num_joins_(0)
     {
@@ -1406,7 +1409,7 @@ struct BottomUpComplete : BottomUp
 
     template<typename Callback, typename PlanTable>
     void operator()(const EdgesBottomUp &state, Callback &&callback, PlanTable &PT,
-                    const QueryGraph &G, const AdjacencyMatrix &M, const CostFunction &CF,
+                    const QueryGraph &G, const AdjacencyMatrix&, const CostFunction &CF,
                     const CardinalityEstimator &CE) const
     {
         state.INCREMENT_NUM_STATES_EXPANDED();
@@ -1761,8 +1764,8 @@ struct sum<PlanTable, State, TopDown>
     sum(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&, const CardinalityEstimator&)
     { }
 
-    double operator()(const state_type &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
-                      const CostFunction &CF, const CardinalityEstimator &CE) const
+    double operator()(const state_type &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix&,
+                      const CostFunction&, const CardinalityEstimator &CE) const
     {
         static cnf::CNF condition; // TODO use join condition
         double distance = 0;
@@ -1796,8 +1799,8 @@ struct sqrt_sum<PlanTable, State, TopDown>
     sqrt_sum(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&, const CardinalityEstimator&)
     { }
 
-    double operator()(const state_type &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
-                      const CostFunction &CF, const CardinalityEstimator &CE) const
+    double operator()(const state_type &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix&,
+                      const CostFunction&, const CardinalityEstimator &CE) const
     {
         static cnf::CNF condition; // TODO use join condition
         double distance = 0;
@@ -2020,7 +2023,7 @@ struct GOO<PlanTable, State, TopDown>
     { }
 
     double operator()(const state_type &state, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
-                      const CostFunction &CF, const CardinalityEstimator &CE) const
+                      const CostFunction&, const CardinalityEstimator &CE) const
     {
         using std::swap;
         static cnf::CNF condition; // TODO use join condition
@@ -2084,8 +2087,8 @@ struct avg_sel<PlanTable, State, BottomUp>
     avg_sel(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&, const CardinalityEstimator&)
     { }
 
-    double operator()(const state_type &state, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
-                      const CostFunction &CF, const CardinalityEstimator &CE) const
+    double operator()(const state_type &state, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix&,
+                      const CostFunction&, const CardinalityEstimator &CE) const
     {
         using std::swap;
         if (state.size() <= 2) return 0;
@@ -2420,24 +2423,24 @@ struct checkpoints<PlanTable, SubproblemsArray>
 
 }
 
-template<typename State, typename Expand, typename Heuristic, typename... Context>
-using AStar = ai::AStar<State, Expand, Heuristic, Context...>;
-template<typename State, typename Expand, typename Heuristic, typename... Context>
-using wAStar = ai::wAStar<std::ratio<2, 1>>::type<State, Expand, Heuristic, Context...>;
-template<typename State, typename Expand, typename Heuristic, typename... Context>
-using lazyAStar = ai::lazy_AStar<State, Expand, Heuristic, Context...>;
-template<typename State, typename Expand, typename Heuristic, typename... Context>
-using beam_search = ai::beam_search<2>::type<State, Expand, Heuristic, Context...>;
-template<typename State, typename Expand, typename Heuristic, typename... Context>
-using dynamic_beam_search = ai::beam_search<-1U>::type<State, Expand, Heuristic, Context...>;
-template<typename State, typename Expand, typename Heuristic, typename... Context>
-using lazy_beam_search = ai::lazy_beam_search<2>::type<State, Expand, Heuristic, Context...>;
-template<typename State, typename Expand, typename Heuristic, typename... Context>
-using lazy_dynamic_beam_search = ai::lazy_beam_search<-1U>::type<State, Expand, Heuristic, Context...>;
-template<typename State, typename Expand, typename Heuristic, typename... Context>
-using monotone_beam_search = ai::monotone_beam_search<2>::type<State, Expand, Heuristic, Context...>;
-template<typename State, typename Expand, typename Heuristic, typename... Context>
-using monotone_dynamic_beam_search = ai::monotone_beam_search<-1U>::type<State, Expand, Heuristic, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using AStar = ai::AStar<State, Expand, Heuristic, Config, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using wAStar = ai::wAStar<std::ratio<2, 1>>::type<State, Expand, Heuristic, Config, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using lazyAStar = ai::lazy_AStar<State, Expand, Heuristic, Config, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using beam_search = ai::beam_search<2>::type<State, Expand, Heuristic, Config, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using dynamic_beam_search = ai::beam_search<-1U>::type<State, Expand, Heuristic, Config, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using lazy_beam_search = ai::lazy_beam_search<2>::type<State, Expand, Heuristic, Config, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using lazy_dynamic_beam_search = ai::lazy_beam_search<-1U>::type<State, Expand, Heuristic, Config, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using monotone_beam_search = ai::monotone_beam_search<2>::type<State, Expand, Heuristic, Config, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using monotone_dynamic_beam_search = ai::monotone_beam_search<-1U>::type<State, Expand, Heuristic, Config, Context...>;
 
 template<typename State>
 std::array<Subproblem, 2> delta(const State &before_join, const State &after_join)
@@ -2491,12 +2494,25 @@ void reconstruct_plan_top_down(const State &goal, PlanTable &PT, const QueryGrap
 }
 
 
+struct data_structure_config
+{
+    template<typename Cmp>
+    using compare = boost::heap::compare<Cmp>;
+
+    template<typename T, typename... Options>
+    using heap_type = boost::heap::binomial_heap<T, Options...>;
+
+    template<typename T>
+    using allocator_type = boost::container::node_allocator<T>;
+};
+
+
 template<
     typename PlanTable,
     typename State,
     typename Expand,
     template<typename, typename, typename> typename Heuristic,
-    template<typename, typename, typename, typename...> typename Search
+    template<typename, typename, typename, typename, typename...> typename Search
 >
 bool heuristic_search_helper(const char *vertex_str, const char *expand_str, const char *heuristic_str,
                              const char *search_str, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
@@ -2513,7 +2529,7 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
         try {
             H h(PT, G, M, CF, CE);
             using search_algorithm = Search<
-                State, H, Expand,
+                State, Expand, H, data_structure_config,
                 /*----- context -----*/
                 PlanTable&,
                 const QueryGraph&,
@@ -2522,7 +2538,7 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
                 const CardinalityEstimator&
             >;
             search_algorithm S(PT, G, M, CF, CE);
-            const State &goal = S.search(std::move(initial_state), h, Expand{}, PT, G, M, CF, CE);
+            const State &goal = S.search(std::move(initial_state), Expand{}, h, PT, G, M, CF, CE);
             if (Options::Get().statistics)
                 S.dump(std::cout);
 
@@ -2550,6 +2566,7 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
         return true;
     }
     return false;
+
 }
 
 /** Computes the join order using heuristic search */
@@ -2564,12 +2581,14 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         auto &CE = C.get_database_in_use().cardinality_estimator();
         const AdjacencyMatrix &M = G.adjacency_matrix();
 
+
 #define HEURISTIC_SEARCH(STATE, EXPAND, HEURISTIC, SEARCH) \
         if (heuristic_search_helper<PlanTable, \
                                     search_states::STATE, \
                                     expansions::EXPAND, \
                                     heuristics::HEURISTIC, \
-                                    SEARCH>(#STATE, #EXPAND, #HEURISTIC, #SEARCH, PT, G, M, CF, CE)) \
+                                    SEARCH \
+                                   >(#STATE, #EXPAND, #HEURISTIC, #SEARCH, PT, G, M, CF, CE)) \
         { \
             goto matched_heuristic_search; \
         }

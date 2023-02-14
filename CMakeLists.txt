@@ -358,6 +358,11 @@ if(APPLE)
     include_directories(SYSTEM "/usr/local/include") # Fix macOS system includes
 endif()
 
+# Link directories
+# Add our LIBRARY_OUTPUT_PATH to the link directories.  This is necessary, as we copy our third-party libraries to that
+# path during deployment.
+link_directories(${LIBRARY_OUTPUT_PATH})
+
 # Subdirectories
 add_subdirectory(src)
 add_subdirectory(unittest)

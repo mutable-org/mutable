@@ -137,7 +137,7 @@ if(${BUILD_SHARED_LIBS})
         get_target_property(lib_location ${lib_target} LOCATION)
         add_custom_command(
             TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${lib_location} "${PROJECT_BINARY_DIR}/third-party"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${lib_location} "${PROJECT_BINARY_DIR}/lib"
         )
     endforeach()
 endif()

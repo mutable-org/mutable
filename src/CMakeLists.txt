@@ -55,33 +55,76 @@ if(${BUILD_SHARED_LIBS})
     # Link to the same libraries as ${PROJECT_NAME}
     target_link_libraries(${PROJECT_NAME}_complete INTERFACE $<TARGET_PROPERTY:${PROJECT_NAME},INTERFACE_LINK_LIBRARIES>)
 else()
-    # When creating a STATIC library, ensure that we don't strip unused symbols when linking ${PROJECT_NAME}
-    # (libmutable.a) to executables.  We need all symbols because plugins register themselves with the `Catalog` via
-    # `__attribute__((constructor))` et al.  To ensure that no symbols are stripped, we create an INTERFACE library
-    # ${PROJECT_NAME}_complete that wraps platform-dependent linker arguments *around* ${PROJECT_NAME} (libmutable.a)
-    # and its dependencies.  Link with ${PROJECT_NAME}_complete to get all symbols.  ${PROJECT_NAME} (libmutable.a) is
-    # mainly intended for distribution to clients.
-    # NOTE: ${PROJECT_NAME} (libmutable.a) still includes all symbols.  Symbols are only stripped when linking static
-    # libraries to executables or other static libraries.
+    # Specify the full name of our bundled static library.  We will need this multiple times.
+    set(
+        BUNDLED_FULL_NAME
+        "${LIBRARY_OUTPUT_PATH}/${CMAKE_STATIC_LIBRARY_PREFIX}${PROJECT_NAME}_bundled${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    )
+
+    # Collect all static libraries to incorporate into our bundled library.
+    set(static_libs)
+    list(
+        APPEND static_libs
+        "${LIBRARY_OUTPUT_PATH}/${CMAKE_STATIC_LIBRARY_PREFIX}${PROJECT_NAME}${CMAKE_STATIC_LIBRARY_SUFFIX}"
+        "${PROJECT_BINARY_DIR}/third-party/src/V8-build/out/obj/${CMAKE_STATIC_LIBRARY_PREFIX}v8_monolith${CMAKE_STATIC_LIBRARY_SUFFIX}"
+        "${PROJECT_BINARY_DIR}/third-party/src/Binaryen-build/lib/${CMAKE_STATIC_LIBRARY_PREFIX}binaryen${CMAKE_STATIC_LIBRARY_SUFFIX}"
+    )
+    foreach(lib_target ${Boost_LIBRARIES})
+        get_target_property(lib_location ${lib_target} LOCATION)
+        list(APPEND static_libs ${lib_location})
+    endforeach()
+
+    # Detect the toolchain to use for bundling.
+    if (CMAKE_CXX_COMPILER_ID MATCHES "^(Clang)$")
+        set(ar_tool ${CMAKE_CXX_COMPILER_AR})
+        file(
+            WRITE ${CMAKE_BINARY_DIR}/${PROJECT_NAME}_bundled.ar.in
+            "CREATE \"${BUNDLED_FULL_NAME}\"\n"
+        )
+        foreach(lib ${static_libs})
+            file(APPEND ${CMAKE_BINARY_DIR}/${PROJECT_NAME}_bundled.ar.in "ADDLIB \"${lib}\"\n")
+        endforeach()
+        file(APPEND ${CMAKE_BINARY_DIR}/${PROJECT_NAME}_bundled.ar.in "SAVE\nEND\n")
+
+        file(GENERATE
+            OUTPUT ${CMAKE_BINARY_DIR}/${PROJECT_NAME}_bundled.ar
+            INPUT ${CMAKE_BINARY_DIR}/${PROJECT_NAME}_bundled.ar.in
+        )
+
+        # Invoke the archiver tool to bundle the static libraries.
+        add_custom_command(
+            OUTPUT "${BUNDLED_FULL_NAME}"
+            COMMAND ${ar_tool} -M < "${CMAKE_BINARY_DIR}/${PROJECT_NAME}_bundled.ar"
+            DEPENDS ${static_libs}
+            COMMENT "Bundling ${PROJECT_NAME}"
+            VERBATIM
+        )
+    else()
+        message(FATAL_ERROR "Unknown bundle scenario!")
+    endif()
+
+    # Create a custom target to reqire building our bundled static library as a dependency.
+    add_custom_target(${PROJECT_NAME}_bundled ALL DEPENDS "${BUNDLED_FULL_NAME}")
+
+    # Ensure that we do not strip our bundled library from unused symbols.  We therefore create an INTERFACE library
+    # that simply augments linking to our static bundled library by additional linker flags.
+    # NOTE: Our bundled library still includes all symbols.  Symbols are only stripped when linking static libraries to
+    # executables or other static libraries.
     add_library(${PROJECT_NAME}_complete INTERFACE)
+    add_dependencies(${PROJECT_NAME}_complete ${PROJECT_NAME}_bundled)
     if(APPLE)
         target_link_libraries(
             ${PROJECT_NAME}_complete
             INTERFACE
             -Wl,-force_load
-            $<TARGET_LINKER_FILE:${PROJECT_NAME}>
-            $<TARGET_PROPERTY:${PROJECT_NAME},INTERFACE_LINK_LIBRARIES>
-            -Wl,-noall_load
+            "${BUNDLED_FULL_NAME}"
         )
     else()
         target_link_libraries(
             ${PROJECT_NAME}_complete
             INTERFACE
             -Wl,--whole-archive
-            -Wl,--gc-sections
-            -Wl,--gc-keep-exported
-            $<TARGET_LINKER_FILE:${PROJECT_NAME}>
-            $<TARGET_PROPERTY:${PROJECT_NAME},INTERFACE_LINK_LIBRARIES>
+            "${BUNDLED_FULL_NAME}"
             -Wl,--no-whole-archive
         )
     endif()
@@ -107,11 +150,11 @@ set_target_properties(check-bin PROPERTIES OUTPUT_NAME check)
 add_executable(shell shell.cpp)
 add_dependencies(shell Replxx)
 target_link_libraries(shell PRIVATE ${Replxx_LIBRARIES} Threads::Threads)
-target_link_libraries(shell PUBLIC ${PROJECT_NAME})
+target_link_libraries(shell PUBLIC ${PROJECT_NAME}_complete)
 set_target_properties(shell PROPERTIES ENABLE_EXPORTS on)
 
 add_executable(train-operator-model train-operator-model.cpp)
-target_link_libraries(train-operator-model ${PROJECT_NAME}_complete Threads::Threads)
+target_link_libraries(train-operator-model ${PROJECT_NAME} Threads::Threads)
 set_target_properties(train-operator-model PROPERTIES EXCLUDE_FROM_ALL ON)
 
 add_executable(allocator_benchmark allocator_benchmark.cpp)
@@ -119,11 +162,11 @@ target_link_libraries(allocator_benchmark $<TARGET_OBJECTS:util> dl Threads::Thr
 set_target_properties(allocator_benchmark PROPERTIES EXCLUDE_FROM_ALL ON)
 
 add_executable(cardinality_gen cardinality_gen.cpp)
-target_link_libraries(cardinality_gen ${PROJECT_NAME}_complete)
+target_link_libraries(cardinality_gen ${PROJECT_NAME})
 set_target_properties(cardinality_gen PROPERTIES EXCLUDE_FROM_ALL ON)
 
 add_executable(query_slicer query_slicer.cpp)
-target_link_libraries(query_slicer ${PROJECT_NAME}_complete)
+target_link_libraries(query_slicer ${PROJECT_NAME})
 set_target_properties(query_slicer PROPERTIES EXCLUDE_FROM_ALL ON)
 
 

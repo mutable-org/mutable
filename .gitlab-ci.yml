@@ -25,8 +25,9 @@ workflow:
 stages:
     - check
     - build:debug
-    - test
+    - test:debug
     - build:release
+    - test:release
     - report
 
 .build_cache:
@@ -141,11 +142,11 @@ build:debug:macos-amd64:
 
 
 #-----------------------------------------------------------------------------------------------------------------------
-# TEST
+# TEST DEBUG
 #-----------------------------------------------------------------------------------------------------------------------
 
 unittest:linux-amd64:
-    stage: test
+    stage: test:debug
     tags:
         - linux
         - amd64
@@ -161,7 +162,7 @@ unittest:linux-amd64:
             junit: unittest-results.xml
 
 unittest:macos-amd64:
-    stage: test
+    stage: test:debug
     tags:
         - macos
         - amd64
@@ -177,7 +178,7 @@ unittest:macos-amd64:
             junit: unittest-results.xml
 
 integrationtest:linux-amd64:
-    stage: test
+    stage: test:debug
     tags:
         - linux
         - amd64
@@ -189,7 +190,7 @@ integrationtest:linux-amd64:
         - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 --unset=TERM python3 test/IntegrationTest.py --verbose --required-only --debug build/debug
 
 integrationtest:macos-amd64:
-    stage: test
+    stage: test:debug
     tags:
         - macos
         - amd64
@@ -199,6 +200,32 @@ integrationtest:macos-amd64:
     script:
         - pip3 install --user --upgrade colorama pyyaml yamale tqdm
         - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 --unset=TERM python3 test/IntegrationTest.py --verbose --required-only --debug build/debug
+
+ensure-exported-symbols:debug:linux:
+    stage: test:debug
+    tags:
+        - linux
+    extends:
+        - .debug
+        - .shared
+    needs:
+        - job: "build:debug:linux-amd64"
+          artifacts: true
+    script:
+        - llvm-nm -C build/${BUILD_TYPE}/lib/libmutable.so | awk 'BEGIN{rc=1}; /T m::init\(\)/{rc=0}; END{exit rc}'
+
+ensure-exported-symbols:debug:macos:
+    stage: test:debug
+    tags:
+        - macos
+    extends:
+        - .debug
+        - .shared
+    needs:
+        - job: "build:debug:macos-amd64"
+          artifacts: true
+    script:
+        - llvm-nm -C build/${BUILD_TYPE}/lib/libmutable.dylib | awk 'BEGIN{rc=1}; /T m::init\(\)/{rc=0}; END{exit rc}'
 
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -229,7 +256,7 @@ build:release:linux-amd64:
         - mkdir mutable
         - cp -R include mutable
         - mkdir mutable/lib
-        - cp build/${BUILD_TYPE}/lib/libmutable.a mutable/lib
+        - cp build/${BUILD_TYPE}/lib/libmutable_bundled.a mutable/lib
     artifacts:
         paths:
             - "mutable"
@@ -272,7 +299,7 @@ build:release:macos-amd64:
         - mkdir mutable
         - cp -R include mutable
         - mkdir mutable/lib
-        - cp build/${BUILD_TYPE}/lib/libmutable.a mutable/lib
+        - cp build/${BUILD_TYPE}/lib/libmutable_bundled.a mutable/lib
     artifacts:
         paths:
             - "mutable"
@@ -291,6 +318,40 @@ build:release:macos-amd64:
         - if: $CI_MERGE_REQUEST_TITLE
           when: on_success
 
+
+#-----------------------------------------------------------------------------------------------------------------------
+# TEST RELEASE
+#-----------------------------------------------------------------------------------------------------------------------
+
+ensure-exported-symbols:release:linux:
+    stage: test:release
+    tags:
+        - linux
+    extends:
+        - .release
+        - .static
+    needs:
+        - job: "build:release:linux-amd64"
+          artifacts: true
+    script:
+        - llvm-nm -C mutable/lib/libmutable_bundled.a | awk 'BEGIN{rc=1}; /T m::init\(\)/{rc=0}; END{exit rc}'
+        - llvm-nm -C mutable/lib/libmutable_bundled.a | awk 'BEGIN{rc=1}; /T v8::V8::Initialize\(int\)/{rc=0}; END{exit rc}'
+        - llvm-nm -C mutable/lib/libmutable_bundled.a | awk 'BEGIN{rc=1}; /T wasm::IString::interned\(/{rc=0}; END{exit rc}'
+
+ensure-exported-symbols:release:macos:
+    stage: test:release
+    tags:
+        - macos
+    extends:
+        - .release
+        - .static
+    needs:
+        - job: "build:release:macos-amd64"
+          artifacts: true
+    script:
+        - llvm-nm -C mutable/lib/libmutable_bundled.a | awk 'BEGIN{rc=1}; /T m::init\(\)/{rc=0}; END{exit rc}'
+        - llvm-nm -C mutable/lib/libmutable_bundled.a | awk 'BEGIN{rc=1}; /T v8::V8::Initialize\(/{rc=0}; END{exit rc}'
+        - llvm-nm -C mutable/lib/libmutable_bundled.a | awk 'BEGIN{rc=1}; /T wasm::IString::interned\(/{rc=0}; END{exit rc}'
 
 #-----------------------------------------------------------------------------------------------------------------------
 # REPORT

@@ -44,10 +44,10 @@ endif()
 target_link_libraries(${PROJECT_NAME} PUBLIC ${Boost_LIBRARIES} dl)
 
 if(${BUILD_SHARED_LIBS})
-    # When creating a SHARED library ${PROJECT_NAME} (libmutable.so), it will be stripped of unused symbols.  Then
-    # ${PROJECT_NAME} (libmutable.so) cannot be linked to our internal executables that directly access non-API symbols.
-    # We therefore introduce an INTERFACE library that combines all object files under a common library name
-    # ${PROJECT_NAME}_complete.  Executables must then be linked to ${PROJECT_NAME}_complete.  ${PROJECT_NAME}
+    # When creating a SHARED library ${PROJECT_NAME} (libmutable.so), it will be stripped of unused and non-exported
+    # symbols.  Then ${PROJECT_NAME} (libmutable.so) cannot be linked to our internal executables that directly access
+    # non-API symbols. We therefore introduce an INTERFACE library that combines all object files under a common library
+    # name ${PROJECT_NAME}_complete.  Executables must then be linked to ${PROJECT_NAME}_complete.  ${PROJECT_NAME}
     # (libmutable.so) is mainly intended for distribution to clients, where we want it to be stripped of non-exported
     # symbols.
     add_library(${PROJECT_NAME}_complete INTERFACE)

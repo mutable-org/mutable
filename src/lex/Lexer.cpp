@@ -269,7 +269,7 @@ Token Lexer::read_date_or_datetime()
 
 Token Lexer::read_instruction()
 {
-    step(); // initial '\'
+    push(); // initial '\'
     while (';' != c_ and EOF != c_)
         push();
     return Token(start_, internalize(), TK_INSTRUCTION);

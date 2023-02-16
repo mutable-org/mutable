@@ -135,8 +135,9 @@ TEST_CASE("Lexer::next()", "[core][lex][unit]")
             { "d2021-01-29 12:17:49'", TK_IDENTIFIER, "d2021", TK_MINUS },
 
             /* instructions */
-            { "\\instr", TK_INSTRUCTION, "instr", TK_EOF },
-            { "\\instr arg1\narg2", TK_INSTRUCTION, "instr arg1\narg2", TK_EOF },
+            { "\\instr", TK_INSTRUCTION, "\\instr", TK_EOF },
+            { "\\instr arg1\narg2", TK_INSTRUCTION, "\\instr arg1\narg2", TK_EOF },
+            { "\\instr arg1 arg2 \n  arg3 ", TK_INSTRUCTION, "\\instr arg1 arg2 \n  arg3 ", TK_EOF },
         };
 
         for (auto e : expr) {

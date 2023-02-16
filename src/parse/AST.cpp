@@ -172,10 +172,10 @@ std::ostream & m::ast::operator<<(std::ostream &out, const Clause &c) {
     return out;
 }
 
-std::ostream & m::ast::operator<<(std::ostream &out, const Stmt &s) {
+std::ostream & m::ast::operator<<(std::ostream &out, const Command &cmd) {
     ASTPrinter p(out);
     p.expand_nested_queries(false);
-    p(s);
+    p(cmd);
     return out;
 }
 
@@ -224,13 +224,13 @@ void Clause::dump(std::ostream &out) const
 }
 void Clause::dump() const { dump(std::cerr); }
 
-void Stmt::dump(std::ostream &out) const
+void Command::dump(std::ostream &out) const
 {
     ASTDumper dumper(out);
     dumper(*this);
     out << std::endl;
 }
-void Stmt::dump() const { dump(std::cerr); }
+void Command::dump() const { dump(std::cerr); }
 M_LCOV_EXCL_STOP
 
 
@@ -352,3 +352,11 @@ M_AST_CONSTRAINT_LIST(ACCEPT_CONSTRAINT)
     void CLASS::accept(ConstASTStmtVisitor &v) const { v(*this); }
 M_AST_STMT_LIST(ACCEPT_STMT)
 #undef ACCEPT
+
+void Stmt::accept(ASTCommandVisitor &v) { accept(as<ASTStmtVisitor>(v)); }
+void Stmt::accept(ConstASTCommandVisitor &v) const { accept(as<ConstASTStmtVisitor>(v)); }
+
+/*===== AST ==========================================================================================================*/
+
+void Instruction::accept(ASTCommandVisitor &v) { v(*this); }
+void Instruction::accept(ConstASTCommandVisitor &v) const { v(*this); }

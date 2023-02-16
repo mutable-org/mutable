@@ -227,6 +227,17 @@ void ASTDumper::operator()(Const<ReferenceConstraint> &c)
 }
 
 
+/*===== Instruction ==================================================================================================*/
+
+void ASTDumper::operator()(Const<Instruction> &inst)
+{
+    out << "Instruction(" << inst.name;
+    for (auto &arg : inst.args)
+        out << ", " << arg;
+    out << ')';
+}
+
+
 /*===== Stmt =========================================================================================================*/
 
 void ASTDumper::operator()(Const<ErrorStmt> &s)

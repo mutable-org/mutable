@@ -18,16 +18,18 @@ struct Table;
 
 namespace ast {
 
-struct Stmt;
-struct ASTExprVisitor;
-struct ConstASTExprVisitor;
 struct ASTClauseVisitor;
-struct ConstASTClauseVisitor;
+struct ASTCommandVisitor;
 struct ASTConstraintVisitor;
-struct ConstASTConstraintVisitor;
+struct ASTExprVisitor;
 struct ASTStmtVisitor;
+struct ConstASTClauseVisitor;
+struct ConstASTCommandVisitor;
+struct ConstASTConstraintVisitor;
+struct ConstASTExprVisitor;
 struct ConstASTStmtVisitor;
 struct Sema;
+struct Stmt;
 
 
 /*======================================================================================================================
@@ -687,6 +689,7 @@ struct M_EXPORT ReferenceConstraint : Constraint
 M_DECLARE_VISITOR(ASTConstraintVisitor, Constraint, M_AST_CONSTRAINT_LIST)
 M_DECLARE_VISITOR(ConstASTConstraintVisitor, const Constraint, M_AST_CONSTRAINT_LIST)
 
+
 /*======================================================================================================================
  * Command
  *====================================================================================================================*/
@@ -694,6 +697,14 @@ M_DECLARE_VISITOR(ConstASTConstraintVisitor, const Constraint, M_AST_CONSTRAINT_
 struct M_EXPORT Command
 {
     virtual ~Command() = default;
+
+    virtual void accept(ASTCommandVisitor &v) = 0;
+    virtual void accept(ConstASTCommandVisitor &v) const = 0;
+
+    void dump(std::ostream &out) const;
+    void dump() const;
+
+    friend std::ostream & M_EXPORT operator<<(std::ostream &out, const Command &cmd);
 };
 
 
@@ -715,7 +726,11 @@ struct M_EXPORT Instruction : Command
         , name(name)
         , args(std::move(args))
     { }
+
+    void accept(ASTCommandVisitor &v) override;
+    void accept(ConstASTCommandVisitor &v) const override;
 };
+
 
 /*======================================================================================================================
  * Statements
@@ -726,15 +741,13 @@ struct M_EXPORT Stmt : Command
 {
     virtual ~Stmt() { }
 
+    void accept(ASTCommandVisitor &v) override;
+    void accept(ConstASTCommandVisitor &v) const override;
+
     virtual void accept(ASTStmtVisitor &v) = 0;
     virtual void accept(ConstASTStmtVisitor &v) const = 0;
 
     void dot(std::ostream &out) const;
-
-    void dump(std::ostream &out) const;
-    void dump() const;
-
-    friend std::ostream & M_EXPORT operator<<(std::ostream &out, const Stmt &s);
 };
 
 /** The error statement.  Used when the parser encountered a syntactical error. */
@@ -925,34 +938,57 @@ struct M_EXPORT DSVImportStmt : ImportStmt
 M_DECLARE_VISITOR(ASTStmtVisitor, Stmt, M_AST_STMT_LIST)
 M_DECLARE_VISITOR(ConstASTStmtVisitor, const Stmt, M_AST_STMT_LIST)
 
+struct M_EXPORT ASTCommandVisitor : ASTStmtVisitor
+{
+    using ASTStmtVisitor::operator();
+
+    virtual void operator()(Command &cmd) { cmd.accept(*this); }
+    virtual void operator()(Instruction &inst) = 0;
+};
+
+struct M_EXPORT ConstASTCommandVisitor : ConstASTStmtVisitor
+{
+    using ConstASTStmtVisitor::operator();
+
+    virtual void operator()(const Command &cmd) { cmd.accept(*this); }
+    virtual void operator()(const Instruction &inst) = 0;
+};
+
+#define M_AST_COMMAND_LIST(X) \
+    M_AST_STMT_LIST(X) \
+    X(m::ast::Instruction)
+
 #define M_AST_LIST(X) \
     M_AST_EXPR_LIST(X) \
     M_AST_CLAUSE_LIST(X) \
     M_AST_CONSTRAINT_LIST(X) \
-    M_AST_STMT_LIST(X)
+    M_AST_COMMAND_LIST(X)
 
 
-struct M_EXPORT ASTVisitor : ASTExprVisitor, ASTClauseVisitor, ASTConstraintVisitor, ASTStmtVisitor
+struct M_EXPORT ASTVisitor : ASTExprVisitor, ASTClauseVisitor, ASTConstraintVisitor, ASTCommandVisitor
 {
     template<typename T> using Const = ASTExprVisitor::Const<T>; // resolve ambiguous name lookup
+
     using ASTExprVisitor::operator();
     using ASTClauseVisitor::operator();
     using ASTConstraintVisitor::operator();
-    using ASTStmtVisitor::operator();
+    using ASTCommandVisitor::operator();
 };
-struct M_EXPORT ConstASTVisitor : ConstASTExprVisitor, ConstASTClauseVisitor, ConstASTConstraintVisitor, ConstASTStmtVisitor
+
+struct M_EXPORT ConstASTVisitor : ConstASTExprVisitor, ConstASTClauseVisitor, ConstASTConstraintVisitor, ConstASTCommandVisitor
 {
     template<typename T> using Const = ConstASTExprVisitor::Const<T>; // resolve ambiguous name lookup
+
     using ConstASTExprVisitor::operator();
     using ConstASTClauseVisitor::operator();
     using ConstASTConstraintVisitor::operator();
-    using ConstASTStmtVisitor::operator();
+    using ConstASTCommandVisitor::operator();
 };
 
-M_MAKE_STL_VISITABLE(ASTVisitor, Expr, M_AST_LIST)
-M_MAKE_STL_VISITABLE(ASTVisitor, Clause, M_AST_LIST)
-M_MAKE_STL_VISITABLE(ASTVisitor, Constraint, M_AST_LIST)
-M_MAKE_STL_VISITABLE(ASTVisitor, Stmt, M_AST_LIST)
+M_MAKE_STL_VISITABLE(ASTVisitor, Expr, M_AST_EXPR_LIST)
+M_MAKE_STL_VISITABLE(ASTVisitor, Clause, M_AST_CLAUSE_LIST)
+M_MAKE_STL_VISITABLE(ASTVisitor, Constraint, M_AST_CONSTRAINT_LIST)
+M_MAKE_STL_VISITABLE(ASTVisitor, Stmt, M_AST_COMMAND_LIST)
 
 M_MAKE_STL_VISITABLE(ConstASTVisitor, const Expr, M_AST_LIST)
 M_MAKE_STL_VISITABLE(ConstASTVisitor, const Clause, M_AST_LIST)

@@ -83,11 +83,11 @@ int main(int argc, const char **argv)
     ASTPrinter printer(std::cout);
 
     while (parser.token()) {
-        auto stmt = parser.parse_Stmt();
+        auto cmd = parser.parse();
         if (ast) {
-            stmt->dump(std::cout);
+            cmd->dump(std::cout);
         } else {
-            printer(*stmt);
+            printer(*cmd);
             std::cout << std::endl;
         }
     }

@@ -306,7 +306,17 @@ void ASTDot::operator()(Const<ReferenceConstraint> &c)
 }
 
 
-/*--- Statements -----------------------------------------------------------------------------------------------------*/
+/*----- Instruction --------------------------------------------------------------------------------------------------*/
+
+void ASTDot::operator()(const Instruction &inst)
+{
+    out << '\n';
+    std::ostringstream oss;
+    indent() << id(inst) << " [label=\"" << inst.tok.text << "\"];";
+}
+
+
+/*--- Stmt -----------------------------------------------------------------------------------------------------------*/
 
 void ASTDot::operator()(Const<ErrorStmt>&)
 {

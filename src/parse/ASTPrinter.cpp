@@ -168,6 +168,15 @@ void ASTPrinter::operator()(Const<ReferenceConstraint> &c)
     out << "REFERENCES " << c.table_name.text << '(' << c.attr_name.text << ')';
 }
 
+
+/*===== Instruction ==================================================================================================*/
+
+void ASTPrinter::operator()(Const<Instruction> &inst)
+{
+    out << inst.tok.text;
+}
+
+
 /*===== Stmt =========================================================================================================*/
 
 void ASTPrinter::operator()(Const<ErrorStmt>&)

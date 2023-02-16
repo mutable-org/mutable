@@ -188,7 +188,9 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
         } else {
             /* Recursively solve nested queries. */
             auto &Q = as<const Query>(*ds);
+            const bool old = std::exchange(needs_projection_, bool(Q.alias())); // aliased nested queries need projection
             auto [sub_plan, sub] = optimize(Q.query_graph());
+            needs_projection_ = old;
 
             /* If an alias for the nested query is given, prefix every attribute with the alias. */
             if (Q.alias()) {
@@ -261,12 +263,12 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
     }
 
     auto additional_projections = compute_projections_required_for_order_by(G.projections(), G.order_by());
-    bool requires_post_projection = true; // TODO: change to `not additional_projections.empty()` if plan is no subquery
-    /* Merge original projections with additional projections. */
-    additional_projections.insert(additional_projections.end(), G.projections().begin(), G.projections().end());
+    const bool requires_post_projection = not additional_projections.empty();
 
     /* Perform projection. */
-    if (not additional_projections.empty()) {
+    if (not additional_projections.empty() or not G.projections().empty()) {
+        /* Merge original projections with additional projections. */
+        additional_projections.insert(additional_projections.end(), G.projections().begin(), G.projections().end());
         auto projection = std::make_unique<ProjectionOperator>(std::move(additional_projections));
         projection->add_child(plan.release());
         plan = std::move(projection);
@@ -292,7 +294,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
     }
 
     /* Perform post-ordering projection. */
-    if (not G.order_by().empty() and requires_post_projection) {
+    if (requires_post_projection or (not is<ProjectionOperator>(plan) and needs_projection_)) {
         // TODO estimate data model
         /* Change aliased projections in designators with the alias as name since original projection is
          * performed beforehand. */

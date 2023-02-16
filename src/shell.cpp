@@ -52,13 +52,12 @@ void load_plugins(std::string list)
     for (;;) {
         std::filesystem::path path_to_shared = list.substr(last, next - last);
         if (path_to_shared.is_relative() and path_to_shared.string().find("./") != 0)
-                path_to_shared = cwd / path_to_shared; // prepend './'
+            path_to_shared = cwd / path_to_shared; // prepend './'
         if (not Options::Get().quiet)
             std::cerr << "loading plugin " << path_to_shared << "\n";
         void *handle = dlopen(path_to_shared.c_str(), RTLD_NOW);
-        if (not handle) {
+        if (not handle)
             std::cerr << "WARNING: Failed to load " << path_to_shared << ": " << dlerror() << '\n';
-        }
         if (next == std::string::npos)
             break;
         last = next + 1;

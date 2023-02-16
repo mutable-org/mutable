@@ -696,17 +696,21 @@ struct M_EXPORT Command
     virtual ~Command() = default;
 };
 
+
 /*======================================================================================================================
  * Instruction
  *====================================================================================================================*/
 
 struct M_EXPORT Instruction : Command
 {
+    ///> the token of the `Instruction`; starts with `\`
     Token tok;
+    ///> the name of the `Instruction` (without leading `\`)
     const char *name;
-    std::vector<const char*> args;
+    ///> the arguments to the `Instruction`; may be empty
+    std::vector<std::string> args;
 
-    Instruction(Token tok, const char *name, std::vector<const char*> args)
+    Instruction(Token tok, const char *name, std::vector<std::string> args)
         : tok(tok)
         , name(name)
         , args(std::move(args))

@@ -1615,14 +1615,11 @@ TEST_CASE("Parser::parse_Instruction() sanity tests", "[core][parse][unit]")
     SECTION("errors")
     {
         const char * instructions[] = {
-            "",
             "\\instr",
             "\\instr\n ",
             "\\instr arg1\n",
             "\\instr arg1 arg2",
             "\\instr \narg1 arg2\n   arg3  ",
-            "instr arg1;",
-            "/instr ;"
         };
 
         for (auto instruction_text : instructions) {

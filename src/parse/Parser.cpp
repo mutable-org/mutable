@@ -104,32 +104,28 @@ std::unique_ptr<Command> Parser::parse()
 std::unique_ptr<Instruction> Parser::parse_Instruction()
 {
     auto &C = Catalog::Get();
-    Token tok = token();
-    if (not expect(TK_INSTRUCTION)) {
-        recover(follow_set_COMMAND);
-    }
+    M_insist(is(TK_INSTRUCTION));
 
-    std::string_view instruction_text(tok.text);
+    Token instr = consume();
+    std::string_view sv(instr.text);
     const char *delimiter = " \n";
 
-    const char *instruction_name;
-    std::vector<const char*> args;
+    /*----- Isolate the instruction's name -----*/
+    std::string::size_type end = sv.find_first_of(delimiter);
+    const char *instruction_name = C.pool(sv.substr(1, end - 1)); // skip leading `\`
 
-    std::string::size_type start = 0;
-    std::string::size_type end = instruction_text.find_first_of(delimiter);
-    instruction_name = C.pool(instruction_text.substr(start, end - start));
-    start = instruction_text.find_first_not_of(delimiter, end);
-    end = instruction_text.find_first_of(delimiter, start);
-    while (start != std::string::npos) {
-        if (end == std::string::npos) { end = instruction_text.length(); }
-
-        args.emplace_back(C.pool(instruction_text.substr(start, end - start)));
-        start = instruction_text.find_first_not_of(delimiter, end);
-        end = instruction_text.find_first_of(delimiter, start);
+    /*----- Separate the arguments. -----*/
+    std::vector<std::string> args;
+    for (;;) {
+        std::string::size_type start = sv.find_first_not_of(delimiter, end);
+        if (start == std::string::npos)
+            break;
+        end = sv.find_first_of(delimiter, start);
+        args.emplace_back(sv.substr(start, end - start));
     }
 
-    if (not expect(TK_SEMICOL)) { recover(follow_set_COMMAND); };
-    return std::make_unique<Instruction>(tok, instruction_name, std::move(args));
+    expect(TK_SEMICOL);
+    return std::make_unique<Instruction>(instr, instruction_name, std::move(args));
 }
 
 std::unique_ptr<Stmt> Parser::parse_Stmt()
@@ -167,7 +163,7 @@ std::unique_ptr<Stmt> Parser::parse_Stmt()
         case TK_Delete: stmt = parse_DeleteStmt(); break;
         case TK_Import: stmt = parse_ImportStmt(); break;
     }
-    if (not expect(TK_SEMICOL)) recover(follow_set_STATEMENT);
+    expect(TK_SEMICOL);
     return stmt;
 }
 

@@ -19,14 +19,14 @@ struct DatabaseCommand
  * `execute_instruction`. The newly implemented instruction must then be registered in the `Catalog`. */
 struct DatabaseInstruction : DatabaseCommand
 {
-    void execute(Diagnostic &diag) const override { execute_instruction(std::vector<const char*>(), diag); };
-    virtual void execute_instruction(const std::vector<const char*> &args, Diagnostic &diag) const = 0;
+    void execute(Diagnostic &diag) const override { execute_instruction(std::vector<std::string>(), diag); };
+    virtual void execute_instruction(const std::vector<std::string> &args, Diagnostic &diag) const = 0;
 };
 
 /** Learn an SPN on every table in the database that is currently in use. */
 struct learn_spns : DatabaseInstruction
 {
-    void execute_instruction(const std::vector<const char*> &args, Diagnostic &diag) const override;
+    void execute_instruction(const std::vector<std::string>&, Diagnostic &diag) const override;
 };
 
 }

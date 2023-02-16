@@ -7,7 +7,7 @@
 using namespace m;
 
 
-void learn_spns::execute_instruction(const std::vector<const char*>&, Diagnostic &diag) const
+void learn_spns::execute_instruction(const std::vector<std::string>&, Diagnostic &diag) const
 {
     auto &C = Catalog::Get();
     if (not C.has_database_in_use()) { diag.err() << "No database selected.\n"; return; }

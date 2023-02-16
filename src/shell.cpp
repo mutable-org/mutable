@@ -609,9 +609,10 @@ Immanuel Haffner\
         } else {
             std::ifstream in(filename);
             if (not in) {
+                const auto errsv = errno;
                 diag.err() << "Could not open file '" << filename << '\'';
-                if (errno)
-                    diag.err() << ": " << strerror(errno);
+                if (errsv)
+                    diag.err() << ": " << strerror(errsv);
                 diag.err() << ".  Aborting." << std::endl;
                 break;
             }

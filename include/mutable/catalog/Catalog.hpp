@@ -54,6 +54,22 @@ struct ConcreteCardinalityEstimatorFactory : CardinalityEstimatorFactory
     }
 };
 
+struct DatabaseInstructionFactory
+{
+    virtual ~DatabaseInstructionFactory() { }
+
+    virtual std::unique_ptr<m::DatabaseInstruction> make(std::vector<std::string> args) const = 0;
+};
+
+template<typename T>
+requires std::derived_from<T, m::DatabaseInstruction>
+struct ConcreteDatabaseInstructionFactory : DatabaseInstructionFactory
+{
+    std::unique_ptr<m::DatabaseInstruction> make(std::vector<std::string> args) const override {
+        return std::make_unique<T>(std::move(args));
+    }
+};
+
 
 /*======================================================================================================================
  * Components
@@ -254,7 +270,7 @@ struct M_EXPORT Catalog
     ComponentSet<PlanEnumerator> plan_enumerators_;
     ComponentSet<Backend> backends_;
     ComponentSet<CostFunction> cost_functions_;
-    ComponentSet<DatabaseInstruction> instructions_;
+    ComponentSet<DatabaseInstructionFactory> instructions_;
 
     public:
     /*===== Stores ===================================================================================================*/
@@ -416,15 +432,23 @@ struct M_EXPORT Catalog
     auto cost_functions_cend()   const { return cost_functions_end(); }
 
     /*===== Instructions =============================================================================================*/
-    /** Registers a new `DatabaseCommand` with the given `name`. */
-    void register_instruction(const char *name,
-                              std::unique_ptr<DatabaseInstruction> I,
-                              const char *description = nullptr)
+    /** Registers a new `DatabaseInstruction` with the given `name`. */
+    template<typename T>
+    requires std::derived_from<T, m::DatabaseInstruction>
+    void register_instruction(const char *name, const char *description = nullptr)
     {
-        instructions_.add(pool(name), Component<DatabaseInstruction>(description, std::move(I)));
+        auto I = Component<DatabaseInstructionFactory>(
+            description,
+            std::make_unique<ConcreteDatabaseInstructionFactory<T>>()
+        );
+        instructions_.add(pool(name), std::move(I));
     }
-    /** Returns a reference to the `DatabaseCommand` with the given `name`. */
-    DatabaseInstruction & instruction(const char *name) const { return instructions_.get(pool(name)); }
+    /** Returns a reference to the `DatabaseInstruction` with the given `name`. */
+    std::unique_ptr<DatabaseInstruction> create_instruction(const char *name,
+                                                            const std::vector<std::string> &args) const
+    {
+        return instructions_.get(name).make(args);
+    }
 
     auto instructions_begin() { return instructions_.begin(); }
     auto instructions_end() { return instructions_.end(); }

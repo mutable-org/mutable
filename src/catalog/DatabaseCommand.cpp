@@ -1,13 +1,13 @@
 #include <mutable/catalog/DatabaseCommand.hpp>
 
-#include "mutable/catalog/Catalog.hpp"
-#include "mutable/Options.hpp"
+#include <mutable/catalog/Catalog.hpp>
+#include <mutable/Options.hpp>
 
 
 using namespace m;
 
 
-void learn_spns::execute_instruction(const std::vector<std::string>&, Diagnostic &diag) const
+void learn_spns::execute(Diagnostic &diag) const
 {
     auto &C = Catalog::Get();
     if (not C.has_database_in_use()) { diag.err() << "No database selected.\n"; return; }
@@ -20,15 +20,15 @@ void learn_spns::execute_instruction(const std::vector<std::string>&, Diagnostic
     spn_estimator->learn_spns();
     DB.cardinality_estimator(std::move(CE));
 
-    if (not Options::Get().quiet) { diag.out() << "learned spn on every table in " << DB.name << ".\n"; }
+    if (not Options::Get().quiet) { diag.out() << "Learned SPN on every table in " << DB.name << ".\n"; }
 }
 
-__attribute__((constructor(202)))
+__attribute__((constructor(201)))
 static void register_instructions()
 {
     Catalog &C = Catalog::Get();
 #define REGISTER(NAME, DESCRIPTION) \
-    C.register_instruction(#NAME, std::make_unique<NAME>(), DESCRIPTION)
-    REGISTER(learn_spns, "learn an SPN on every table in the database that is currently in use");
+    C.register_instruction<NAME>(#NAME, DESCRIPTION)
+    REGISTER(learn_spns, "create an SPN for every table in the database");
 #undef REGISTER
 }

@@ -62,12 +62,11 @@ void m::process_stream(std::istream &in, const char *filename, Diagnostic diag)
             goto next;
 
         if (auto instruction = cast<ast::Instruction>(command)) {
-            auto instruction_name = instruction->name;
             try {
-                auto &concrete_instruction = C.instruction(instruction_name);
-                concrete_instruction.execute_instruction(instruction->args, diag);
-            } catch (const std::exception &e) {
-                diag.err() << "Instruction " << instruction_name << " does not exist.\n";
+                auto I = C.create_instruction(instruction->name, instruction->args);
+                I->execute(diag);
+            } catch (std::invalid_argument) {
+                diag.err() << "Instruction '" << instruction->name << "' does not exist.\n";
             }
         } else {
             auto stmt = as<ast::Stmt>(std::move(command));
@@ -308,13 +307,11 @@ void m::execute_instruction(Diagnostic &diag, const Instruction &instruction)
     diag.clear();
     Catalog &C = Catalog::Get();
 
-    auto instruction_name = instruction.name;
-
     try {
-        auto &concrete_instruction = C.instruction(instruction_name);
-        concrete_instruction.execute_instruction(instruction.args, diag);
+        auto I = C.create_instruction(instruction.name, instruction.args);
+        I->execute(diag);
     } catch (const std::exception &e) {
-        diag.e(instruction.tok.pos) << "Instruction " << instruction_name << " does not exist.\n";
+        diag.e(instruction.tok.pos) << "Instruction " << instruction.name << " does not exist.\n";
     }
 }
 

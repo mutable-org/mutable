@@ -1,5 +1,6 @@
 #pragma once
 
+#include <concepts>
 #include <memory>
 #include <mutable/backend/Backend.hpp>
 #include <mutable/catalog/CardinalityEstimator.hpp>
@@ -31,10 +32,9 @@ struct StoreFactory
 };
 
 template<typename T>
+requires std::derived_from<T, m::Store>
 struct ConcreteStoreFactory : StoreFactory
 {
-    static_assert(std::is_base_of_v<m::Store, T>, "not a subclass of m::Store");
-
     std::unique_ptr<m::Store> make(const m::Table &tbl) const override { return std::make_unique<T>(tbl); }
 };
 
@@ -46,10 +46,9 @@ struct CardinalityEstimatorFactory
 };
 
 template<typename T>
+requires std::derived_from<T, m::CardinalityEstimator>
 struct ConcreteCardinalityEstimatorFactory : CardinalityEstimatorFactory
 {
-    static_assert(std::is_base_of_v<m::CardinalityEstimator, T>, "not a subclass of CardinalityEstimator");
-
     std::unique_ptr<m::CardinalityEstimator> make(const char *database) const override {
         return std::make_unique<T>(database);
     }

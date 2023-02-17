@@ -2850,6 +2850,12 @@ struct Variable<T, Kind, CanBeNull>
     /** Default-constructs a new `Variable`. */
     Variable() = default;
 
+    Variable(const Variable&) = delete;
+    Variable(Variable&&) = default;
+
+    Variable & operator=(const Variable &other) { operator=(other.val()); return *this; }
+    Variable & operator=(Variable &&other) { operator=(other.val()); return *this; }
+
     /** Constructs a new `Variable` and initializes it with \p t. */
     template<typename U>
     requires requires (U &&value) { storage_type(std::forward<U>(value)); }

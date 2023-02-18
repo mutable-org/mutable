@@ -62,7 +62,7 @@ struct Visitor
     }
 
 /*----- Declare a visitor to visit the class hierarchy with the given base class and list of subclasses. -------------*/
-#define M_DECLARE_VISIT_METHOD(CLASS) virtual void operator()(Const<CLASS>&) = 0;
+#define M_DECLARE_VISIT_METHOD(CLASS) virtual void operator()(Const<CLASS>&) { };
 #define M_DECLARE_VISITOR(NAME, BASE_CLASS, CLASS_LIST) \
     struct M_EXPORT NAME : m::Visitor<NAME, BASE_CLASS> \
     { \

@@ -38,7 +38,7 @@ struct ClauseInfo
     bool is_selection() const { return data_sources.size() == 1; }
 };
 
-struct GraphBuilder : ast::ConstASTStmtVisitor
+struct GraphBuilder : ast::ConstASTCommandVisitor
 {
     ///> maps a `cnf::Clause` to its `ClauseInfo`
     using clause_map = std::unordered_map<cnf::Clause, ClauseInfo>;
@@ -69,7 +69,7 @@ struct GraphBuilder : ast::ConstASTStmtVisitor
     std::unique_ptr<QueryGraph> get() { return std::move(graph_); }
 
     /*----- Visitor methods -----*/
-    using ConstASTStmtVisitor::operator();
+    using ConstASTCommandVisitor::operator();
     void operator()(Const<ast::Stmt> &s) { s.accept(*this); }
     void operator()(Const<ast::ErrorStmt>&) { M_unreachable("graph must not contain errors"); }
     void operator()(Const<ast::EmptyStmt>&) { /* nothing to be done */ }

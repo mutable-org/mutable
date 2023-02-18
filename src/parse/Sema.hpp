@@ -12,7 +12,7 @@ namespace m {
 
 namespace ast {
 
-struct M_EXPORT Sema : ASTExprVisitor, ASTClauseVisitor, ASTStmtVisitor
+struct M_EXPORT Sema : ASTVisitor
 {
     /** Holds context information used by semantic analysis of a single statement. */
     struct SemaContext
@@ -112,11 +112,11 @@ struct M_EXPORT Sema : ASTExprVisitor, ASTClauseVisitor, ASTStmtVisitor
     using ASTExprVisitor::Const;
     using ASTExprVisitor::operator();
     using ASTClauseVisitor::operator();
-    using ASTStmtVisitor::operator();
+    using ASTCommandVisitor::operator();
 #define DECLARE(CLASS) void operator()(Const<CLASS>&) override;
     M_AST_EXPR_LIST(DECLARE)
     M_AST_CLAUSE_LIST(DECLARE)
-    M_AST_STMT_LIST(DECLARE)
+    M_AST_COMMAND_LIST(DECLARE)
 #undef DECLARE
 
     private:

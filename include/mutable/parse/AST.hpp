@@ -22,12 +22,10 @@ struct ASTClauseVisitor;
 struct ASTCommandVisitor;
 struct ASTConstraintVisitor;
 struct ASTExprVisitor;
-struct ASTStmtVisitor;
 struct ConstASTClauseVisitor;
 struct ConstASTCommandVisitor;
 struct ConstASTConstraintVisitor;
 struct ConstASTExprVisitor;
-struct ConstASTStmtVisitor;
 struct Sema;
 struct Stmt;
 
@@ -741,12 +739,7 @@ struct M_EXPORT Stmt : Command
 {
     virtual ~Stmt() { }
 
-    void accept(ASTCommandVisitor &v) override;
-    void accept(ConstASTCommandVisitor &v) const override;
-
-    virtual void accept(ASTStmtVisitor &v) = 0;
-    virtual void accept(ConstASTStmtVisitor &v) const = 0;
-
+    /** Writes a Graphivz dot representation of this `Stmt` to `out`.  Used to render ASTs with Graphivz. */
     void dot(std::ostream &out) const;
 };
 
@@ -757,8 +750,8 @@ struct M_EXPORT ErrorStmt : Stmt
 
     explicit ErrorStmt(Token tok) : tok(tok) { }
 
-    void accept(ASTStmtVisitor &v) override;
-    void accept(ConstASTStmtVisitor &v) const override;
+    void accept(ASTCommandVisitor &v) override;
+    void accept(ConstASTCommandVisitor &v) const override;
 };
 
 struct M_EXPORT EmptyStmt : Stmt
@@ -767,8 +760,8 @@ struct M_EXPORT EmptyStmt : Stmt
 
     explicit EmptyStmt(Token tok) : tok(tok) { }
 
-    void accept(ASTStmtVisitor &v) override;
-    void accept(ConstASTStmtVisitor &v) const override;
+    void accept(ASTCommandVisitor &v) override;
+    void accept(ConstASTCommandVisitor &v) const override;
 };
 
 struct M_EXPORT CreateDatabaseStmt : Stmt
@@ -777,8 +770,8 @@ struct M_EXPORT CreateDatabaseStmt : Stmt
 
     explicit CreateDatabaseStmt(Token database_name) : database_name(database_name) { }
 
-    void accept(ASTStmtVisitor &v) override;
-    void accept(ConstASTStmtVisitor &v) const override;
+    void accept(ASTCommandVisitor &v) override;
+    void accept(ConstASTCommandVisitor &v) const override;
 };
 
 struct M_EXPORT UseDatabaseStmt : Stmt
@@ -787,8 +780,8 @@ struct M_EXPORT UseDatabaseStmt : Stmt
 
     explicit UseDatabaseStmt(Token database_name) : database_name(database_name) { }
 
-    void accept(ASTStmtVisitor &v) override;
-    void accept(ConstASTStmtVisitor &v) const override;
+    void accept(ASTCommandVisitor &v) override;
+    void accept(ConstASTCommandVisitor &v) const override;
 };
 
 struct M_EXPORT CreateTableStmt : Stmt
@@ -814,8 +807,8 @@ struct M_EXPORT CreateTableStmt : Stmt
             , attributes(std::move(attributes))
     { }
 
-    void accept(ASTStmtVisitor &v) override;
-    void accept(ConstASTStmtVisitor &v) const override;
+    void accept(ASTCommandVisitor &v) override;
+    void accept(ConstASTCommandVisitor &v) const override;
 };
 
 /** A SQL select statement. */
@@ -845,8 +838,8 @@ struct M_EXPORT SelectStmt : Stmt
             , limit(std::move(limit))
     { }
 
-    void accept(ASTStmtVisitor &v) override;
-    void accept(ConstASTStmtVisitor &v) const override;
+    void accept(ASTCommandVisitor &v) override;
+    void accept(ConstASTCommandVisitor &v) const override;
 };
 
 /** A SQL insert statement. */
@@ -864,8 +857,8 @@ struct M_EXPORT InsertStmt : Stmt
         , tuples(std::move(tuples))
     { }
 
-    void accept(ASTStmtVisitor &v) override;
-    void accept(ConstASTStmtVisitor &v) const override;
+    void accept(ASTCommandVisitor &v) override;
+    void accept(ConstASTCommandVisitor &v) const override;
 };
 
 /** A SQL update statement. */
@@ -883,8 +876,8 @@ struct M_EXPORT UpdateStmt : Stmt
         , where(std::move(where))
     { }
 
-    void accept(ASTStmtVisitor &v) override;
-    void accept(ConstASTStmtVisitor &v) const override;
+    void accept(ASTCommandVisitor &v) override;
+    void accept(ConstASTCommandVisitor &v) const override;
 };
 
 /** A SQL delete statement. */
@@ -898,8 +891,8 @@ struct M_EXPORT DeleteStmt : Stmt
         , where(std::move(where))
     { }
 
-    void accept(ASTStmtVisitor &v) override;
-    void accept(ConstASTStmtVisitor &v) const override;
+    void accept(ASTCommandVisitor &v) override;
+    void accept(ConstASTCommandVisitor &v) const override;
 };
 
 /** A SQL import statement. */
@@ -919,11 +912,12 @@ struct M_EXPORT DSVImportStmt : ImportStmt
     bool has_header = false;
     bool skip_header = false;
 
-    void accept(ASTStmtVisitor &v) override;
-    void accept(ConstASTStmtVisitor &v) const override;
+    void accept(ASTCommandVisitor &v) override;
+    void accept(ConstASTCommandVisitor &v) const override;
 };
 
-#define M_AST_STMT_LIST(X) \
+#define M_AST_COMMAND_LIST(X) \
+    X(m::ast::Instruction) \
     X(m::ast::ErrorStmt) \
     X(m::ast::EmptyStmt) \
     X(m::ast::CreateDatabaseStmt) \
@@ -935,35 +929,15 @@ struct M_EXPORT DSVImportStmt : ImportStmt
     X(m::ast::DeleteStmt) \
     X(m::ast::DSVImportStmt)
 
-M_DECLARE_VISITOR(ASTStmtVisitor, Stmt, M_AST_STMT_LIST)
-M_DECLARE_VISITOR(ConstASTStmtVisitor, const Stmt, M_AST_STMT_LIST)
+M_DECLARE_VISITOR(ASTCommandVisitor, Command, M_AST_COMMAND_LIST)
+M_DECLARE_VISITOR(ConstASTCommandVisitor, const Command, M_AST_COMMAND_LIST)
 
-struct M_EXPORT ASTCommandVisitor : ASTStmtVisitor
-{
-    using ASTStmtVisitor::operator();
-
-    virtual void operator()(Command &cmd) { cmd.accept(*this); }
-    virtual void operator()(Instruction &inst) = 0;
-};
-
-struct M_EXPORT ConstASTCommandVisitor : ConstASTStmtVisitor
-{
-    using ConstASTStmtVisitor::operator();
-
-    virtual void operator()(const Command &cmd) { cmd.accept(*this); }
-    virtual void operator()(const Instruction &inst) = 0;
-};
-
-#define M_AST_COMMAND_LIST(X) \
-    M_AST_STMT_LIST(X) \
-    X(m::ast::Instruction)
 
 #define M_AST_LIST(X) \
     M_AST_EXPR_LIST(X) \
     M_AST_CLAUSE_LIST(X) \
     M_AST_CONSTRAINT_LIST(X) \
     M_AST_COMMAND_LIST(X)
-
 
 struct M_EXPORT ASTVisitor : ASTExprVisitor, ASTClauseVisitor, ASTConstraintVisitor, ASTCommandVisitor
 {
@@ -988,12 +962,12 @@ struct M_EXPORT ConstASTVisitor : ConstASTExprVisitor, ConstASTClauseVisitor, Co
 M_MAKE_STL_VISITABLE(ASTVisitor, Expr, M_AST_EXPR_LIST)
 M_MAKE_STL_VISITABLE(ASTVisitor, Clause, M_AST_CLAUSE_LIST)
 M_MAKE_STL_VISITABLE(ASTVisitor, Constraint, M_AST_CONSTRAINT_LIST)
-M_MAKE_STL_VISITABLE(ASTVisitor, Stmt, M_AST_COMMAND_LIST)
+M_MAKE_STL_VISITABLE(ASTVisitor, Command, M_AST_COMMAND_LIST)
 
 M_MAKE_STL_VISITABLE(ConstASTVisitor, const Expr, M_AST_LIST)
 M_MAKE_STL_VISITABLE(ConstASTVisitor, const Clause, M_AST_LIST)
 M_MAKE_STL_VISITABLE(ConstASTVisitor, const Constraint, M_AST_LIST)
-M_MAKE_STL_VISITABLE(ConstASTVisitor, const Stmt, M_AST_LIST)
+M_MAKE_STL_VISITABLE(ConstASTVisitor, const Command, M_AST_LIST)
 
 }
 

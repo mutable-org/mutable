@@ -339,24 +339,16 @@ M_AST_CLAUSE_LIST(ACCEPT)
 
 /*===== Constraints ==================================================================================================*/
 
-#define ACCEPT_CONSTRAINT(CLASS) \
+#define ACCEPT(CLASS) \
     void CLASS::accept(ASTConstraintVisitor &v)            { v(*this); } \
     void CLASS::accept(ConstASTConstraintVisitor &v) const { v(*this); }
-M_AST_CONSTRAINT_LIST(ACCEPT_CONSTRAINT)
+M_AST_CONSTRAINT_LIST(ACCEPT)
 #undef ACCEPT
 
-/*===== Statements ===================================================================================================*/
+/*===== Commands =====================================================================================================*/
 
-#define ACCEPT_STMT(CLASS) \
-    void CLASS::accept(ASTStmtVisitor &v)            { v(*this); } \
-    void CLASS::accept(ConstASTStmtVisitor &v) const { v(*this); }
-M_AST_STMT_LIST(ACCEPT_STMT)
+#define ACCEPT(CLASS) \
+    void CLASS::accept(ASTCommandVisitor &v)            { v(*this); } \
+    void CLASS::accept(ConstASTCommandVisitor &v) const { v(*this); }
+M_AST_COMMAND_LIST(ACCEPT)
 #undef ACCEPT
-
-void Stmt::accept(ASTCommandVisitor &v) { accept(as<ASTStmtVisitor>(v)); }
-void Stmt::accept(ConstASTCommandVisitor &v) const { accept(as<ConstASTStmtVisitor>(v)); }
-
-/*===== AST ==========================================================================================================*/
-
-void Instruction::accept(ASTCommandVisitor &v) { v(*this); }
-void Instruction::accept(ConstASTCommandVisitor &v) const { v(*this); }

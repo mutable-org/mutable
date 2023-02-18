@@ -2,8 +2,8 @@ add_library(
     catalog
     OBJECT
     CardinalityEstimator.cpp
-    CostFunctionCout.cpp
     Catalog.cpp
+    CostFunctionCout.cpp
     CostModel.cpp
     DatabaseCommand.cpp
     Schema.cpp

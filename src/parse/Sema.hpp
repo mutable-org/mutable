@@ -140,6 +140,11 @@ struct M_EXPORT Sema : ASTVisitor
         return *contexts_.back();
     }
 
+
+    /*------------------------------------------------------------------------------------------------------------------
+     * Sema Designator Helpers
+     *----------------------------------------------------------------------------------------------------------------*/
+
     /** Creates a fresh `Designator` with the given \p name at location \p tok and with target \p target. */
     std::unique_ptr<Designator> create_designator(const char *name, Token tok, const Expr &target);
 
@@ -147,21 +152,10 @@ struct M_EXPORT Sema : ASTVisitor
      * \p drop_table_name) and with target \p target. */
     std::unique_ptr<Designator> create_designator(const Expr &name, const Expr &target, bool drop_table_name = false);
 
-    /** Replaces \p to_replace by a fresh `Designator`, that has the same syntactical representation as \p to_replace
-     * and targets \p target. */
-    void replace_by_fresh_designator_to(std::unique_ptr<Expr> &to_replace, const Expr &target);
-
-    /** Computes whether the bound parts of \p expr are composable of elements in \p components. */
-    bool is_composable_of(const ast::Expr &expr, const std::vector<std::reference_wrapper<ast::Expr>> components);
-
-    /** Recursively analyzes the `ast::Expr` referenced by \p ptr and replaces subexpressions that can be composed of
-     * the elements in \p components. */
-    void compose_of(std::unique_ptr<ast::Expr> &ptr, const std::vector<std::reference_wrapper<ast::Expr>> components);
-
     /** Creates an entirely new `Designator`.  This method is used to introduce artificial `Designator`s to *expand* an
      * anti-projection (`SELECT` with asterisk `*`). */
     std::unique_ptr<Designator> create_designator(Position pos, const char *table_name, const char *attr_name,
-                                                typename Designator::target_type target, const Type *type)
+                                                  typename Designator::target_type target, const Type *type)
     {
         auto &C = Catalog::Get();
         Token dot(pos, C.pool("."), TK_DOT);
@@ -172,6 +166,22 @@ struct M_EXPORT Sema : ASTVisitor
         d->target_ = target;
         return d;
     }
+
+    /** Replaces \p to_replace by a fresh `Designator`, that has the same syntactical representation as \p to_replace
+     * and targets \p target. */
+    void replace_by_fresh_designator_to(std::unique_ptr<Expr> &to_replace, const Expr &target);
+
+
+    /*------------------------------------------------------------------------------------------------------------------
+     * Other Sema Helpers
+     *----------------------------------------------------------------------------------------------------------------*/
+
+    /** Computes whether the bound parts of \p expr are composable of elements in \p components. */
+    bool is_composable_of(const ast::Expr &expr, const std::vector<std::reference_wrapper<ast::Expr>> components);
+
+    /** Recursively analyzes the `ast::Expr` referenced by \p ptr and replaces subexpressions that can be composed of
+     * the elements in \p components. */
+    void compose_of(std::unique_ptr<ast::Expr> &ptr, const std::vector<std::reference_wrapper<ast::Expr>> components);
 
     /** Creates a unique ID from a sequence of `SemaContext`s by concatenating their aliases. */
     const char * make_unique_id_from_binding_path(context_stack_t::reverse_iterator current_ctx,

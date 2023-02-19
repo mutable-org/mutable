@@ -11,6 +11,10 @@ using namespace m;
 using namespace m::ast;
 
 
+/*----------------------------------------------------------------------------------------------------------------------
+ * Sema Designator Helpers
+ *--------------------------------------------------------------------------------------------------------------------*/
+
 std::unique_ptr<Designator> Sema::create_designator(const char *name, Token tok, const Expr &target)
 {
     auto new_designator = std::make_unique<Designator>(tok, Token(), Token(tok.pos, name, TK_IDENTIFIER));
@@ -44,6 +48,11 @@ void Sema::replace_by_fresh_designator_to(std::unique_ptr<Expr> &to_replace, con
     auto new_designator = create_designator(*to_replace, target);
     to_replace = std::move(new_designator);
 }
+
+
+/*----------------------------------------------------------------------------------------------------------------------
+ * Other Sema Helpers
+ *--------------------------------------------------------------------------------------------------------------------*/
 
 const char * Sema::make_unique_id_from_binding_path(context_stack_t::reverse_iterator current_ctx,
                                                     context_stack_t::reverse_iterator binding_ctx)

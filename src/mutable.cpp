@@ -72,7 +72,7 @@ void m::process_stream(std::istream &in, const char *filename, Diagnostic diag)
             auto stmt = as<ast::Stmt>(std::move(command));
             if (Options::Get().echo)
                 std::cout << *stmt << std::endl;
-            M_TIME_EXPR(sema(*stmt), "Semantic Analysis", timer);
+            M_TIME_EXPR(sema.analyze(*stmt), "Semantic Analysis", timer);
             if (Options::Get().ast) stmt->dump(std::cout);
             if (Options::Get().astdot) {
                 DotTool dot(diag);

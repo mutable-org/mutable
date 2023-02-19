@@ -11,6 +11,12 @@ using namespace m;
 using namespace m::ast;
 
 
+std::unique_ptr<DatabaseCommand> Sema::analyze(ast::Command &cmd)
+{
+    (*this)(cmd);
+    return nullptr; // TODO return `DatabaseCommand`
+}
+
 /*----------------------------------------------------------------------------------------------------------------------
  * Sema Designator Helpers
  *--------------------------------------------------------------------------------------------------------------------*/

@@ -109,6 +109,10 @@ struct M_EXPORT Sema : ASTVisitor
     public:
     Sema(Diagnostic &diag) : diag(diag) { }
 
+    /** Perform semantic analysis of an `ast::Command`. Returns an `m::DatabaseCommand` to execute when no semantic
+     * errors occurred, `nullptr` otherwise. */
+    std::unique_ptr<DatabaseCommand> analyze(ast::Command &cmd);
+
     using ASTExprVisitor::Const;
     using ASTExprVisitor::operator();
     using ASTClauseVisitor::operator();

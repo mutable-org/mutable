@@ -133,12 +133,12 @@ void Sema::compose_of(std::unique_ptr<ast::Expr> &ptr, const std::vector<std::re
 
 /*===== Expr =========================================================================================================*/
 
-void Sema::operator()(Const<ErrorExpr> &e)
+void Sema::operator()(ErrorExpr &e)
 {
     e.type_ = Type::Get_Error();
 }
 
-void Sema::operator()(Const<Designator> &e)
+void Sema::operator()(Designator &e)
 {
     Catalog &C = Catalog::Get();
     SemaContext *current_ctx = &get_context();
@@ -385,7 +385,7 @@ void Sema::operator()(Const<Designator> &e)
     }
 }
 
-void Sema::operator()(Const<Constant> &e)
+void Sema::operator()(Constant &e)
 {
     int base = 8; // for integers
     switch (e.tok.type) {
@@ -493,7 +493,7 @@ void Sema::operator()(Const<Constant> &e)
     }
 }
 
-void Sema::operator()(Const<FnApplicationExpr> &e)
+void Sema::operator()(FnApplicationExpr &e)
 {
     SemaContext &Ctx = get_context();
     Catalog &C = Catalog::Get();
@@ -708,7 +708,7 @@ void Sema::operator()(Const<FnApplicationExpr> &e)
     }
 }
 
-void Sema::operator()(Const<UnaryExpr> &e)
+void Sema::operator()(UnaryExpr &e)
 {
     /* Analyze sub-expression. */
     (*this)(*e.expr);
@@ -745,7 +745,7 @@ void Sema::operator()(Const<UnaryExpr> &e)
     e.type_ = e.expr->type();
 }
 
-void Sema::operator()(Const<BinaryExpr> &e)
+void Sema::operator()(BinaryExpr &e)
 {
     /* Analyze sub-expressions. */
     (*this)(*e.lhs);
@@ -942,7 +942,7 @@ void Sema::operator()(Const<BinaryExpr> &e)
     }
 }
 
-void Sema::operator()(Const<QueryExpr> &e)
+void Sema::operator()(QueryExpr &e)
 {
     M_insist(is<SelectStmt>(*e.query), "nested statements are always select statements");
 
@@ -1009,12 +1009,12 @@ void Sema::operator()(Const<QueryExpr> &e)
 
 /*===== Clause =======================================================================================================*/
 
-void Sema::operator()(Const<ErrorClause>&)
+void Sema::operator()(ErrorClause&)
 {
     /* nothing to be done */
 }
 
-void Sema::operator()(Const<SelectClause> &c)
+void Sema::operator()(SelectClause &c)
 {
     SemaContext &Ctx = get_context();
     Ctx.stage = SemaContext::S_Select;
@@ -1155,7 +1155,7 @@ void Sema::operator()(Const<SelectClause> &c)
         diag.e(c.tok.pos) << "SELECT clause with mixed scalar and vectorial values is forbidden.\n";
 }
 
-void Sema::operator()(Const<FromClause> &c)
+void Sema::operator()(FromClause &c)
 {
     SemaContext &Ctx = get_context();
     Ctx.stage = SemaContext::S_From;
@@ -1227,7 +1227,7 @@ void Sema::operator()(Const<FromClause> &c)
     }
 }
 
-void Sema::operator()(Const<WhereClause> &c)
+void Sema::operator()(WhereClause &c)
 {
     SemaContext &Ctx = get_context();
     Ctx.stage = SemaContext::S_Where;
@@ -1247,7 +1247,7 @@ void Sema::operator()(Const<WhereClause> &c)
     }
 }
 
-void Sema::operator()(Const<GroupByClause> &c)
+void Sema::operator()(GroupByClause &c)
 {
     Catalog &C = Catalog::Get();
     SemaContext &Ctx = get_context();
@@ -1292,7 +1292,7 @@ void Sema::operator()(Const<GroupByClause> &c)
     }
 }
 
-void Sema::operator()(Const<HavingClause> &c)
+void Sema::operator()(HavingClause &c)
 {
     SemaContext &Ctx = get_context();
     Ctx.stage = SemaContext::S_Having;
@@ -1320,7 +1320,7 @@ void Sema::operator()(Const<HavingClause> &c)
     /* TODO The HAVING clause must be a conjunction or disjunction of aggregates or comparisons of grouping keys. */
 }
 
-void Sema::operator()(Const<OrderByClause> &c)
+void Sema::operator()(OrderByClause &c)
 {
     SemaContext &Ctx = get_context();
     Ctx.stage = SemaContext::S_OrderBy;
@@ -1348,7 +1348,7 @@ void Sema::operator()(Const<OrderByClause> &c)
     }
 }
 
-void Sema::operator()(Const<LimitClause> &c)
+void Sema::operator()(LimitClause &c)
 {
     SemaContext &Ctx = get_context();
     Ctx.stage = SemaContext::S_Limit;
@@ -1384,17 +1384,17 @@ void Sema::operator()(Instruction&) { /* nothing to be done */ }
 
 /*===== Stmt =========================================================================================================*/
 
-void Sema::operator()(Const<ErrorStmt>&)
+void Sema::operator()(ErrorStmt&)
 {
     /* nothing to be done */
 }
 
-void Sema::operator()(Const<EmptyStmt>&)
+void Sema::operator()(EmptyStmt&)
 {
     /* nothing to be done */
 }
 
-void Sema::operator()(Const<CreateDatabaseStmt> &s)
+void Sema::operator()(CreateDatabaseStmt &s)
 {
     RequireContext RCtx(this, s);
     Catalog &C = Catalog::Get();
@@ -1409,7 +1409,7 @@ void Sema::operator()(Const<CreateDatabaseStmt> &s)
     }
 }
 
-void Sema::operator()(Const<UseDatabaseStmt> &s)
+void Sema::operator()(UseDatabaseStmt &s)
 {
     RequireContext RCtx(this, s);
     Catalog &C = Catalog::Get();
@@ -1425,7 +1425,7 @@ void Sema::operator()(Const<UseDatabaseStmt> &s)
     }
 }
 
-void Sema::operator()(Const<CreateTableStmt> &s)
+void Sema::operator()(CreateTableStmt &s)
 {
     RequireContext RCtx(this, s);
     Catalog &C = Catalog::Get();
@@ -1550,7 +1550,7 @@ void Sema::operator()(Const<CreateTableStmt> &s)
         diag.out() << "Created table " << table_name << " in database " << DB.name << ".\n";
 }
 
-void Sema::operator()(Const<SelectStmt> &s)
+void Sema::operator()(SelectStmt &s)
 {
     RequireContext RCtx(this, s);
     Catalog &C = Catalog::Get();
@@ -1570,7 +1570,7 @@ void Sema::operator()(Const<SelectStmt> &s)
     if (s.limit) (*this)(*s.limit);
 }
 
-void Sema::operator()(Const<InsertStmt> &s)
+void Sema::operator()(InsertStmt &s)
 {
     RequireContext RCtx(this, s);
     Catalog &C = Catalog::Get();
@@ -1636,7 +1636,7 @@ void Sema::operator()(Const<InsertStmt> &s)
     }
 }
 
-void Sema::operator()(Const<UpdateStmt> &s)
+void Sema::operator()(UpdateStmt &s)
 {
     RequireContext RCtx(this, s);
     /* TODO */
@@ -1644,7 +1644,7 @@ void Sema::operator()(Const<UpdateStmt> &s)
     M_unreachable("Not implemented.");
 }
 
-void Sema::operator()(Const<DeleteStmt> &s)
+void Sema::operator()(DeleteStmt &s)
 {
     RequireContext RCtx(this, s);
     /* TODO */
@@ -1652,7 +1652,7 @@ void Sema::operator()(Const<DeleteStmt> &s)
     M_unreachable("Not implemented.");
 }
 
-void Sema::operator()(Const<DSVImportStmt> &s)
+void Sema::operator()(DSVImportStmt &s)
 {
     RequireContext RCtx(this, s);
     auto &C = Catalog::Get();

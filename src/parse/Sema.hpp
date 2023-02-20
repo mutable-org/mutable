@@ -113,11 +113,10 @@ struct M_EXPORT Sema : ASTVisitor
      * errors occurred, `nullptr` otherwise. */
     std::unique_ptr<DatabaseCommand> analyze(ast::Command &cmd);
 
-    using ASTExprVisitor::Const;
     using ASTExprVisitor::operator();
     using ASTClauseVisitor::operator();
     using ASTCommandVisitor::operator();
-#define DECLARE(CLASS) void operator()(Const<CLASS>&) override;
+#define DECLARE(CLASS) void operator()(CLASS&) override;
     M_AST_EXPR_LIST(DECLARE)
     M_AST_CLAUSE_LIST(DECLARE)
     M_AST_COMMAND_LIST(DECLARE)

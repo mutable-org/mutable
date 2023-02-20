@@ -143,6 +143,9 @@ struct M_EXPORT Sema : ASTVisitor
         return *contexts_.back();
     }
 
+    /** Returns true iff the current statement, that is being analyzed, is a nested statement. */
+    bool is_nested() const;
+
 
     /*------------------------------------------------------------------------------------------------------------------
      * Sema Designator Helpers

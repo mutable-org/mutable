@@ -17,6 +17,11 @@ std::unique_ptr<DatabaseCommand> Sema::analyze(ast::Command &cmd)
     return nullptr; // TODO return `DatabaseCommand`
 }
 
+bool Sema::is_nested() const
+{
+    return contexts_.size() > 1;
+}
+
 /*----------------------------------------------------------------------------------------------------------------------
  * Sema Designator Helpers
  *--------------------------------------------------------------------------------------------------------------------*/

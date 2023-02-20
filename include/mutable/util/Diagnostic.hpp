@@ -44,7 +44,9 @@ struct Diagnostic
         return err_;
     }
 
+    /** Returns the number of errors emitted since the last call to `clear()`. */
     unsigned num_errors() const { return num_errors_; }
+    /** Resets the error counter. */
     void clear() { num_errors_ = 0; }
 
     std::ostream & out() const { return out_; }

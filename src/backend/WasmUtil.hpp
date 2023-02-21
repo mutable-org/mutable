@@ -521,7 +521,7 @@ struct Buffer
     std::reference_wrapper<const Schema> schema_; ///< schema of buffer
     storage::DataLayout layout_; ///< data layout of buffer
     var_t<Ptr<void>> base_address_; ///< base address of buffer
-    std::optional<var_t<U32>> capacity_; ///< optional dynamic capacity of buffer, in number of tuples
+    std::optional<var_t<U32>> capacity_; ///< optional dynamic capacity of buffer, default initialized to 0
     var_t<U32> size_; ///< current size of buffer, default initialized to 0
     MatchBase::callback_t Pipeline_; ///< remaining pipeline
     ///> function to resume pipeline for entire buffer; for local buffer, expects its base address and size as parameters

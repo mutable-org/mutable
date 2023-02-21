@@ -1752,19 +1752,26 @@ void Buffer<IsGlobal>::consume()
     /* since structured bindings cannot be used in lambda capture */
     Block store_inits(std::move(_store_inits)), store_jumps(std::move(_store_jumps));
 
-    IF (size_ == 0U) { // buffer empty
-        if (not layout_.is_finite()) {
+    if (layout_.is_finite()) {
+        IF (size_ == 0U) { // buffer empty
+            /*----- Emit initialization code for storing (i.e. (re-)set to first buffer slot). -----*/
+            store_inits.attach_to_current();
+        };
+    } else {
+        M_insist(not capacity_);
+        capacity_.emplace(); // default initialize to 0
+        IF (*capacity_ == 0U) { // buffer not allocated
             /*----- Set initial capacity. -----*/
-            capacity_ = uint32_t(layout_.child().num_tuples());
+            *capacity_ = uint32_t(layout_.child().num_tuples());
 
             /*----- Allocate memory for one child instance. Use maximal possible alignment requirement of 8 bytes. ---*/
             const auto child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
             base_address_ = Module::Allocator().allocate(child_size_in_bytes, /* alignment= */ 8);
-        }
 
-        /*----- Emit initialization code for storing (i.e. (re-)set to first buffer slot). -----*/
-        store_inits.attach_to_current();
-    };
+            /*----- Emit initialization code for storing (i.e. set to first buffer slot). -----*/
+            store_inits.attach_to_current();
+        };
+    }
 
     /*----- Emit storing code and increment size of buffer. -----*/
     stores.attach_to_current();

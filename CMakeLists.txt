@@ -191,12 +191,15 @@ set(GITREV_TMP          "${CMAKE_BINARY_DIR}/${GITREV_BARE_TMP}")
 # Generate a table file with the X-macro, that is included by mutable to obtain Git version information
 add_custom_command(
     OUTPUT "${GITREV_FILE}"
-    COMMAND ${CMAKE_COMMAND} -E echo_append "X(GIT_REV, "               >  "${GITREV_TMP}"
-    COMMAND ${GIT_EXECUTABLE} rev-parse HEAD | tr -d "\\n"              >> "${GITREV_TMP}"
-    COMMAND ${CMAKE_COMMAND} -E echo ")"                                >> "${GITREV_TMP}"
-    COMMAND ${CMAKE_COMMAND} -E echo_append "X(GIT_BRANCH, "            >> "${GITREV_TMP}"
-    COMMAND ${GIT_EXECUTABLE} rev-parse --abbrev-ref HEAD | tr -d "\\n" >> "${GITREV_TMP}"
-    COMMAND ${CMAKE_COMMAND} -E echo ")"                                >> "${GITREV_TMP}"
+    COMMAND ${CMAKE_COMMAND} -E echo_append "X(GIT_REV, "                           >  "${GITREV_TMP}"
+    COMMAND ${GIT_EXECUTABLE} rev-parse HEAD | tr -d "\\n"                          >> "${GITREV_TMP}"
+    COMMAND ${CMAKE_COMMAND} -E echo ")"                                            >> "${GITREV_TMP}"
+    COMMAND ${CMAKE_COMMAND} -E echo_append "X(GIT_BRANCH, "                        >> "${GITREV_TMP}"
+    COMMAND ${GIT_EXECUTABLE} rev-parse --abbrev-ref HEAD | tr -d "\\n"             >> "${GITREV_TMP}"
+    COMMAND ${CMAKE_COMMAND} -E echo ")"                                            >> "${GITREV_TMP}"
+    COMMAND ${CMAKE_COMMAND} -E echo_append "X(SEM_VERSION, "                       >> "${GITREV_TMP}"
+    COMMAND ${GIT_EXECUTABLE} describe --tags --match "v*" --abbrev=0 | tr -d "\\n" >> "${GITREV_TMP}"
+    COMMAND ${CMAKE_COMMAND} -E echo ")"                                            >> "${GITREV_TMP}"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${GITREV_TMP}" "${GITREV_FILE}"
     COMMAND ${CMAKE_COMMAND} -E remove "${GITREV_TMP}"
     DEPENDS .git/HEAD .git/index

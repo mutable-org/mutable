@@ -14,6 +14,7 @@ struct version_info
 {
     const char *GIT_REV;
     const char *GIT_BRANCH;
+    const char *SEM_VERSION;
 };
 
 M_EXPORT const version_info & get();

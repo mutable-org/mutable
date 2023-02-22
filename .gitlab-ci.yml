@@ -29,6 +29,7 @@ stages:
     - build:release
     - test:release
     - report
+    - upload
 
 .build_cache:
     cache:
@@ -66,6 +67,15 @@ stages:
 .coverage:
     variables:
         BUILD_TYPE: coverage
+
+.upload:
+    rules:
+        # Do not run if tag was created
+        - if: $CI_COMMIT_TAG
+          when: never
+        # run on default branch
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+          when: on_success
 
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -405,3 +415,105 @@ report:coverage:
           when: on_success
         - if: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /coverage/i
           when: on_success
+
+#-----------------------------------------------------------------------------------------------------------------------
+# UPLOAD GENERIC PACKAGE & CREATE GITLAB RELEASE
+#-----------------------------------------------------------------------------------------------------------------------
+
+upload:tag-version:
+    stage: upload
+    extends:
+        - .upload
+    script:
+        # Find the latest version tag in the git log (ignore failure since we handle it inside this script)
+        - latest_version_tag=$(git describe --tags --match "v*" --abbrev=0 2>/dev/null) || true
+        # If no version tags are found, start with v0.0.0
+        # Else get the version number from the latest version tag
+        - |
+            if [ -z "$latest_version_tag" ]; then
+                latest_version="0.0.0"
+            else
+                latest_version=$(echo "$latest_version_tag" | tail -c +2)
+            fi
+        - echo "New version tag is ${new_version}"
+        - |
+         if git tag --points-at HEAD | grep -q "v[0-9]\+\.[0-9]\+\.[0-9]\+"; then
+             echo "Latest commit already has a version tag '$latest_version_tag'"
+             echo "TAG=${latest_version_tag}" >> variables.env
+         else
+             echo "Bump patch number"
+             patch=$(echo "$latest_version" | awk -F. '{print $3}')
+             ((new_patch = patch + 1))
+             new_version=$(printf "v%s.%s.%s" "$(echo "$latest_version" | head -c 1)" "$(echo "$latest_version" | cut -d "." -f 2)" "$new_patch")
+             echo "TAG=${new_version}" >> variables.env
+             echo "Push new tag '$new_version' to git."
+             curl --fail --header "PRIVATE-TOKEN: ${ADD_RELEASES_TOKEN}" --request POST "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/repository/tags?tag_name=${new_version}&ref=${CI_COMMIT_SHA}"
+         fi
+    artifacts:
+        reports:
+            dotenv: variables.env
+
+
+upload:package:linux-amd64:
+    stage: upload
+    extends:
+        - .upload
+    tags:
+        - linux
+        - amd64
+    needs:
+        - job: build:release:linux-amd64
+          artifacts: true
+        - job: upload:tag-version
+          artifacts: true
+    script:
+        - cd mutable
+        - zip -r mutable.zip *
+        - >
+          curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file mutable.zip
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/mutable/${TAG}/mutable-linux-amd64-${TAG}.zip"
+
+
+upload:package:macos-amd64:
+    stage: upload
+    extends:
+        - .upload
+    tags:
+        - macos
+        - amd64
+    needs:
+        - job: build:release:macos-amd64
+          artifacts: true
+        - job: upload:tag-version
+          artifacts: true
+    script:
+        - cd mutable
+        - zip -r mutable.zip *
+        - >
+          curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file mutable.zip
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/mutable/${TAG}/mutable-macos-amd64-${TAG}.zip"
+
+
+upload:release:
+    stage: upload
+    extends:
+        - .upload
+    needs:
+        - job: upload:package:linux-amd64
+        - job: upload:package:macos-amd64
+        - job: upload:tag-version
+          artifacts: true
+    script:
+        # Create Release on GitLab
+        - >
+          curl -v --fail --header "Content-Type: application/json"
+          --header "PRIVATE-TOKEN: ${ADD_RELEASES_TOKEN}"
+          --data "{ \"name\": \"Mutable Release ${TAG}\", \"tag_name\": \"${TAG}\",
+          \"assets\": { \"links\": [
+          { \"name\": \"mutable linux-amd64\",
+          \"url\": \"${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/mutable/${TAG}/mutable-linux-amd64-${TAG}.zip\",
+          \"link_type\": \"package\" },
+          { \"name\": \"mutable macos-amd64\",
+          \"url\": \"${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/mutable/${TAG}/mutable-macos-amd64-${TAG}.zip\",
+          \"link_type\": \"package\" } ] } }"
+          --request POST "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases"

@@ -1962,7 +1962,6 @@ TEST_CASE("Sema/Statements/CreateTable", "[core][parse][sema]")
     Catalog &C = Catalog::Get();
     const char *db_name = "mydb";
     auto &DB = C.add_database(db_name);
-    //C.set_database_in_use(DB);
 
     SECTION("Create table without database selected")
     {

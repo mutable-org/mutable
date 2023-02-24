@@ -229,7 +229,8 @@ struct M_EXPORT Catalog
     const char * pool(std::string_view str) const { return pool_(str); }
 
     /*===== Database =================================================================================================*/
-    /** Creates a new `Database` with the given `name`. */
+    /** Creates a new `Database` with the given `name`.  Throws `std::invalid_argument` if a `Database` with the given
+     * `name` already exists. */
     Database & add_database(const char *name);
     /** Returns the `Database` with the given `name`.  Throws `std::out_of_range` if no such `Database` exists. */
     Database & get_database(const char *name) const { return *databases_.at(name); }

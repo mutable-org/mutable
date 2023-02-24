@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <mutable/catalog/Catalog.hpp>
+#include <mutable/io/Reader.hpp>
 #include <mutable/Options.hpp>
 #include <sstream>
 #include <unordered_map>
@@ -1668,32 +1669,44 @@ void Sema::operator()(DSVImportStmt &s)
     }
     auto &DB = C.get_database_in_use();
 
+    const Table *table = nullptr;
     try {
-        DB.get_table(s.table_name.text);
+        table = &DB.get_table(s.table_name.text);
     } catch (std::out_of_range) {
         diag.e(s.table_name.pos) << "Table " << s.table_name.text << " does not exist in database " << DB.name << ".\n";
     }
 
+    DSVReader::Config cfg;
+    cfg.has_header = s.has_header;
+    cfg.skip_header = s.skip_header;
+
     /* If character was provided by user, check that length is equal to 1. */
-#define CHARACTER_LENGTH(NAME, SYMBOL) \
-    std::string NAME = s.NAME ? interpret(s.NAME.text) : SYMBOL; \
-    if (NAME.length() != 1) \
-        diag.e(s.NAME.pos) << "Invalid " #NAME " character " << s.NAME.text << ". Must have length 1.\n";
-    CHARACTER_LENGTH(delimiter, ",");
-    CHARACTER_LENGTH(quote,     "\"");
-    CHARACTER_LENGTH(escape,    "\\");
-#undef CHARACTER_LENGTH
+#define SET_CHAR(NAME) \
+    if (s.NAME) { \
+        std::string NAME = interpret(s.NAME.text); \
+        if (NAME.length() == 1) \
+            cfg.NAME = NAME[0]; \
+        else \
+            diag.e(s.NAME.pos) << "Invalid " #NAME " character " << s.NAME.text << ". Must have length 1.\n"; \
+    }
+    SET_CHAR(delimiter);
+    SET_CHAR(quote);
+    SET_CHAR(escape);
+#undef SET_CHAR
 
     /* Delimiter and quote character must be distinct. */
-    if (delimiter == quote) {
+    if (cfg.delimiter == cfg.quote) {
         auto pos = s.delimiter ? s.delimiter.pos : s.quote.pos;
-        diag.e(pos) << "The delimiter (" << delimiter << ") must differ from the quote character (" << quote << ").\n";
-        return;
+        diag.e(pos) << "The delimiter (" << cfg.delimiter << ") must differ from the quote character (" << cfg.quote
+                    << ").\n";
     }
 
     /* Sanity check for skip header. */
-    if (s.skip_header and not s.has_header) {
+    if (cfg.skip_header and not cfg.has_header) {
         if (not Options::Get().quiet)
             diag.n(s.path.pos) << "I will assume the existence of a header so I can skip it.\n";
     }
+
+    /* Get filesystem path from path token by removing surrounding quotation marks. */
+    std::filesystem::path path(std::string(s.path.text, 1, strlen(s.path.text) - 2));
 }

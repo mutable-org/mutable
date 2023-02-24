@@ -1,9 +1,5 @@
+#include <mutable/io/Reader.hpp>
 
-#include "io/Reader.hpp"
-
-#include <mutable/storage/DataLayout.hpp>
-#include <mutable/storage/Store.hpp>
-#include <mutable/util/macro.hpp>
 #include "backend/Interpreter.hpp"
 #include "backend/StackMachine.hpp"
 #include <cctype>
@@ -13,6 +9,9 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <mutable/storage/DataLayout.hpp>
+#include <mutable/storage/Store.hpp>
+#include <mutable/util/macro.hpp>
 #include <string>
 
 
@@ -20,20 +19,12 @@ using namespace m;
 using namespace m::storage;
 
 
-DSVReader::DSVReader(const Table &table, Diagnostic &diag,
-                     std::size_t num_rows,
-                     char delimiter, char escape, char quote,
-                     bool has_header, bool skip_header)
+DSVReader::DSVReader(const Table &table, Config cfg, Diagnostic &diag)
     : Reader(table, diag)
-    , num_rows_(num_rows)
-    , delimiter_(delimiter)
-    , escape_(escape)
-    , quote_(quote)
-    , has_header_(has_header)
-    , skip_header_(skip_header)
+    , cfg_(cfg)
     , pos(nullptr)
 {
-    if (delimiter_ == quote_)
+    if (config().delimiter == config().quote)
         throw invalid_argument("delimiter and quote must not be the same character");
 }
 
@@ -61,7 +52,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
 
     auto read_cell = [&]() -> const char* {
         buf.clear();
-        while (c != EOF and c != '\n' and c != delimiter_) {
+        while (c != EOF and c != '\n' and c != config().delimiter) {
             buf.push_back(c);
             step();
         }
@@ -70,7 +61,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
     };
 
     /*----- Handle header information. -------------------------------------------------------------------------------*/
-    if (has_header_ and not skip_header_) {
+    if (config().has_header and not config().skip_header) {
         while (c != EOF and c != '\n') {
             auto name = read_cell();
             const Attribute *attr = nullptr;
@@ -78,7 +69,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
                 attr = &table.at(name);
             } catch (std::out_of_range) { /* nothing to do */ }
             columns.push_back(attr);
-            if (c == delimiter_)
+            if (c == config().delimiter)
                 step(); // discard delimiter
         }
         M_insist(c == EOF or c == '\n');
@@ -86,7 +77,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
     } else {
         for (auto &attr : table)
             columns.push_back(&attr);
-        if (skip_header_) {
+        if (config().skip_header) {
             in.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // skip entire line
             c = '\n';
             step(); // skip newline
@@ -95,13 +86,13 @@ void DSVReader::operator()(std::istream &in, const char *name)
 
     /*----- Read data. -----------------------------------------------------------------------------------------------*/
     std::size_t idx = 0;
-    while (in.good() and idx < num_rows_) {
+    while (in.good() and idx < config().num_rows) {
         ++idx;
         store.append();
         for (std::size_t i = 0; i != columns.size(); ++i) {
             auto col = columns[i];
-            if (i != 0 and not accept(delimiter_)) {
-                diag.e(pos) << "Expected a delimiter (" << delimiter_ << ").\n";
+            if (i != 0 and not accept(config().delimiter)) {
+                diag.e(pos) << "Expected a delimiter (" << config().delimiter << ").\n";
                 discard_row();
                 --idx;
                 store.drop(); // drop the unfinished row
@@ -109,7 +100,7 @@ void DSVReader::operator()(std::istream &in, const char *name)
             }
 
             if (col) { // current cell should be read
-                if ((i == columns.size() - 1 and c == '\n') or (i < columns.size() - 1 and c == delimiter_)) { // NULL
+                if ((i == columns.size() - 1 and c == '\n') or (i < columns.size() - 1 and c == config().delimiter)) { // NULL
                     tup.null(col->id);
                     continue; // keep delimiter (expected at beginning of each loop)
                 }
@@ -145,7 +136,7 @@ end_of_row:
 void DSVReader::operator()(Const<Boolean>&)
 {
     buf.clear();
-    while (c != EOF and c != '\n' and c != delimiter_) { push(); }
+    while (c != EOF and c != '\n' and c != config().delimiter) { push(); }
     buf.push_back(0);
     if (streq("TRUE", &buf[0]))
         tup.set(col_idx, true);
@@ -162,14 +153,14 @@ void DSVReader::operator()(Const<CharacterSequence>&)
      * supported.  Note that EOF implicitly closes quoted strings.
      * Source: https://tools.ietf.org/html/rfc4180#section-2 */
     buf.clear();
-    if (accept(quote_)) {
-        if (escape_ == quote_) { // RFC 4180
+    if (accept(config().quote)) {
+        if (config().escape == config().quote) { // RFC 4180
             while (c != EOF) {
-                if (c != quote_) {
+                if (c != config().quote) {
                     push();
                 } else {
                     step();
-                    if (c == quote_)
+                    if (c == config().quote)
                         push();
                     else
                         break;
@@ -177,10 +168,10 @@ void DSVReader::operator()(Const<CharacterSequence>&)
             }
         } else {
             while (c != EOF) {
-                if (c == quote_) {
+                if (c == config().quote) {
                     step();
                     break;
-                } else if (c == escape_) {
+                } else if (c == config().escape) {
                     step();
                     push();
                 } else {
@@ -189,12 +180,12 @@ void DSVReader::operator()(Const<CharacterSequence>&)
             }
         }
     } else {
-        while (c != EOF and c != '\n' and c != delimiter_) {
-            if (c == quote_) {
-                diag.e(pos) << "WARNING: Illegal character " << quote_ << " found in unquoted string.\n";
+        while (c != EOF and c != '\n' and c != config().delimiter) {
+            if (c == config().quote) {
+                diag.e(pos) << "WARNING: Illegal character " << config().quote << " found in unquoted string.\n";
                 /* Entire cell is discarded. */
                 tup.null(col_idx);
-                while (c != EOF and c != '\n' and c != delimiter_) step();
+                while (c != EOF and c != '\n' and c != config().delimiter) step();
                 return;
             } else
                 push();
@@ -212,7 +203,7 @@ void DSVReader::operator()(Const<Date>&)
     buf.push_back('d');
     buf.push_back('\'');
 
-    const bool has_quote = accept(quote_);
+    const bool has_quote = accept(config().quote);
 #define DIGITS(num) for (auto i = 0; i < num; ++i) if (is_dec(c)) push(); else goto invalid;
     if ('-' == c) push();
     DIGITS(4);
@@ -221,7 +212,7 @@ void DSVReader::operator()(Const<Date>&)
     if ('-' == c) push(); else goto invalid;
     DIGITS(2);
 #undef DIGITS
-    if (has_quote and not accept(quote_))
+    if (has_quote and not accept(config().quote))
         goto invalid;
 
     buf.push_back('\'');
@@ -241,7 +232,7 @@ void DSVReader::operator()(Const<DateTime>&)
     buf.push_back('d');
     buf.push_back('\'');
 
-    const bool has_quote = accept(quote_);
+    const bool has_quote = accept(config().quote);
 #define DIGITS(num) for (auto i = 0; i < num; ++i) if (is_dec(c)) push(); else goto invalid;
     if ('-' == c) push();
     DIGITS(4);
@@ -256,7 +247,7 @@ void DSVReader::operator()(Const<DateTime>&)
     if (':' == c) push(); else goto invalid;
     DIGITS(2);
 #undef DIGITS
-    if (has_quote and not accept(quote_))
+    if (has_quote and not accept(config().quote))
         goto invalid;
 
     buf.push_back('\'');
@@ -279,10 +270,10 @@ void DSVReader::operator()(Const<Numeric> &ty)
             else
                 accept('+');
             int64_t i = read_unsigned_int();
-            if (c != EOF and c != '\n' and c != delimiter_) {
+            if (c != EOF and c != '\n' and c != config().delimiter) {
                 diag.e(pos) << "WARNING: Unexpected characters encountered in an integer.\n";
                 tup.null(col_idx);
-                while (c != EOF and c != '\n' and c != delimiter_) step();
+                while (c != EOF and c != '\n' and c != config().delimiter) step();
                 return;
             }
             if (is_neg) i = -i;
@@ -315,10 +306,10 @@ void DSVReader::operator()(Const<Numeric> &ty)
                 while (is_dec(c)) { step(); }
                 d += d >= 0 ? post_dot : -post_dot;
             }
-            if (c != EOF and c != '\n' and c != delimiter_) {
+            if (c != EOF and c != '\n' and c != config().delimiter) {
                 diag.e(pos) << "WARNING: Unexpected characters encountered in a decimal.\n";
                 tup.null(col_idx);
-                while (c != EOF and c != '\n' and c != delimiter_) step();
+                while (c != EOF and c != '\n' and c != config().delimiter) step();
                 return;
             }
             if (is_neg) d = -d;
@@ -328,7 +319,7 @@ void DSVReader::operator()(Const<Numeric> &ty)
 
         case Numeric::N_Float: {
             std::string float_str;
-            while(c != EOF and c != '\n' and c != delimiter_) {
+            while(c != EOF and c != '\n' and c != config().delimiter) {
                 float_str += c;
                 step();
             }

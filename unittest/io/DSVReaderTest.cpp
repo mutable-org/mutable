@@ -1,10 +1,10 @@
 #include "catch2/catch.hpp"
 
 #include "backend/Interpreter.hpp"
-#include "io/Reader.hpp"
 #include "storage/PaxStore.hpp"
 #include "storage/RowStore.hpp"
-#include "mutable/storage/Store.hpp"
+#include <mutable/io/Reader.hpp>
+#include <mutable/storage/Store.hpp>
 
 
 using namespace m;
@@ -59,22 +59,21 @@ void test_table_imports(const Table &table, const tuple_list &rows)
     }
 }
 
-std::string format_string(const char *str, const char delimiter = ',', const char escape = '\\',
-                          const char quote = '"')
+std::string format_string(const char *str, const DSVReader::Config cfg)
 {
     std::string char15;
 
     /* check if quotes are necessary */
-    if (std::strchr(str, delimiter)
-        or std::strchr(str, quote)
+    if (std::strchr(str, cfg.delimiter)
+        or std::strchr(str, cfg.quote)
         or std::strchr(str, '\n')) {
-        char15 += quote;
+        char15 += cfg.quote;
         while (*str) {
-            if (*str == quote)
-                char15 += escape;
+            if (*str == cfg.quote)
+                char15 += cfg.escape;
             char15 += *str++;
         }
-        char15 += quote;
+        char15 += cfg.quote;
     } else {
         char15 = std::string(str);
     }
@@ -90,6 +89,8 @@ std::string format_string(const char *str, const char delimiter = ',', const cha
 
 TEST_CASE("DSVReader HEADER", "[core][io][unit]")
 {
+    DSVReader::Config cfg;
+
     SECTION("no header")
     {
         auto &table = create_table();
@@ -97,8 +98,7 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
         /* Construct DSVReader. */
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
-
-        DSVReader R(table, diag, 5, ',', '\\', '"', false);
+        DSVReader R(table, cfg, diag);
 
         /* Construct istream. */
         tuple_list rows {
@@ -108,13 +108,13 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
                 { 3, 45, 2.09507, "Q7omKtKX,ojr1wO"},
                 { 4, 4, 8.05046, "ZE5jtNf\"oJIuhva"}
         };
-        std::stringstream in;
+        std::stringstream ss;
         for (auto row: rows) {
-            in << std::get<0>(row) << "," << std::get<1>(row) << "," << std::get<2>(row) << ","
-                    << format_string(std::get<3>(row)) << "\n";
+            ss << std::get<0>(row) << "," << std::get<1>(row) << "," << std::get<2>(row) << ","
+                    << format_string(std::get<3>(row), cfg) << "\n";
         }
 
-        R(in, "stringstream_in");
+        R(ss, "stringstream_in");
 
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(table.store().num_rows() == 5);
@@ -129,7 +129,8 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
 
-        DSVReader R(table, diag, 5, ',', '\\', '"', true, false);
+        cfg.has_header = true; // consider header
+        DSVReader R(table, cfg, diag);
 
         /* Construct istream. */
         tuple_list rows {
@@ -139,14 +140,14 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
                 { 3, 45, 2.09507, "Q7omKtKX,ojr1wO"},
                 { 4, 4, 8.05046, "ZE5jtNf\"oJIuhva"}
         };
-        std::stringstream in;
-        in << "i2,i4,f,char15\n";
+        std::stringstream ss;
+        ss << "i2,i4,f,char15\n";
         for (auto row: rows) {
-            in << std::get<0>(row) << "," << std::get<1>(row) << "," << std::get<2>(row) << ","
-                    << format_string(std::get<3>(row)) << "\n";
+            ss << std::get<0>(row) << "," << std::get<1>(row) << "," << std::get<2>(row) << ","
+                    << format_string(std::get<3>(row), cfg) << "\n";
         }
 
-        R(in, "stringstream_in");
+        R(ss, "stringstream_in");
 
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(table.store().num_rows() == 5);
@@ -161,7 +162,8 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
 
-        DSVReader R(table, diag, 5, ',', '\\', '"', true, false);
+        cfg.has_header = true;
+        DSVReader R(table, cfg, diag);
 
         /* Construct istream. */
         tuple_list rows {
@@ -171,14 +173,14 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
                 { 3, 45, 2.09507, "Q7omKtKX,ojr1wO"},
                 { 4, 4, 8.05046, "ZE5jtNf\"oJIuhva"}
         };
-        std::stringstream in;
-        in << "f,i2,char15,i4\n";
+        std::stringstream ss;
+        ss << "f,i2,char15,i4\n";
         for (auto row: rows) {
-            in << std::get<2>(row) << "," << std::get<0>(row) << "," << format_string(std::get<3>(row)) << ","
+            ss << std::get<2>(row) << "," << std::get<0>(row) << "," << format_string(std::get<3>(row), cfg) << ","
                 << std::get<1>(row) << "\n";
         }
 
-        R(in, "stringstream_in");
+        R(ss, "stringstream_in");
 
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(table.store().num_rows() == 5);
@@ -193,7 +195,8 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
 
-        DSVReader R(table, diag, 5, ',', '\\', '"', true, false);
+        cfg.has_header = true;
+        DSVReader R(table, cfg, diag);
 
         /* Construct istream. */
         tuple_list rows {
@@ -203,13 +206,13 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
                 { 3, 45, 2.09507, "Q7omKtKX,ojr1wO"},
                 { 4, 4, 8.05046, "ZE5jtNf\"oJIuhva"}
         };
-        std::stringstream in;
-        in << "i2,f,char15\n";
+        std::stringstream ss;
+        ss << "i2,f,char15\n";
         for (auto row: rows) {
-            in << std::get<0>(row) << "," << std::get<2>(row) << "," << format_string(std::get<3>(row)) << "\n";
+            ss << std::get<0>(row) << "," << std::get<2>(row) << "," << format_string(std::get<3>(row), cfg) << "\n";
         }
 
-        R(in, "stringstream_in");
+        R(ss, "stringstream_in");
 
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(table.store().num_rows() == 5);
@@ -237,7 +240,8 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
 
-        DSVReader R(table, diag, 5, ',', '\\', '"', true, false);
+        cfg.has_header = true;
+        DSVReader R(table, cfg, diag);
 
         /* Construct istream. */
         tuple_list rows {
@@ -247,14 +251,14 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
                 { 3, 45, 2.09507, "Q7omKtKX,ojr1wO"},
                 { 4, 4, 8.05046, "ZE5jtNf\"oJIuhva"}
         };
-        std::stringstream in;
-        in << "i2,i4,f,char15,extra_attr\n";
+        std::stringstream ss;
+        ss << "i2,i4,f,char15,extra_attr\n";
         for (auto row: rows) {
-            in << std::get<0>(row) << "," << std::get<1>(row) << "," << std::get<2>(row) << ","
-                    << format_string(std::get<3>(row)) << ",42\n";
+            ss << std::get<0>(row) << "," << std::get<1>(row) << "," << std::get<2>(row) << ","
+                    << format_string(std::get<3>(row), cfg) << ",42\n";
         }
 
-        R(in, "stringstream_in");
+        R(ss, "stringstream_in");
 
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(table.store().num_rows() == 5);
@@ -270,7 +274,8 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
 
-        DSVReader R(table, diag, 5, ',', '\\', '"', true, true);
+        cfg.has_header = cfg.skip_header = true;
+        DSVReader R(table, cfg, diag);
 
         /* Construct istream. */
         tuple_list rows {
@@ -280,14 +285,14 @@ TEST_CASE("DSVReader HEADER", "[core][io][unit]")
                 { 3, 45, 2.09507, "Q7omKtKX,ojr1wO"},
                 { 4, 4, 8.05046, "ZE5jtNf\"oJIuhva"}
         };
-        std::stringstream in;
-        in << "i2,i4,f,char15\n";
+        std::stringstream ss;
+        ss << "i2,i4,f,char15\n";
         for (auto row: rows) {
-            in << std::get<0>(row) << "," << std::get<1>(row) << "," << std::get<2>(row) << ","
-                    << format_string(std::get<3>(row)) << "\n";
+            ss << std::get<0>(row) << "," << std::get<1>(row) << "," << std::get<2>(row) << ","
+                    << format_string(std::get<3>(row), cfg) << "\n";
         }
 
-        R(in, "stringstream_in");
+        R(ss, "stringstream_in");
 
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(table.store().num_rows() == 5);
@@ -303,10 +308,12 @@ TEST_CASE("DSVReader DELIMITER == QUOTE sanity test", "[core][io][unit]")
     std::ostringstream out, err;
     Diagnostic diag(false, out, err);
 
-    REQUIRE_THROWS_AS(DSVReader(table, diag, 5, ',', '\\', ','), m::invalid_argument);
+    DSVReader::Config cfg;
+    cfg.delimiter = cfg.quote;
+    REQUIRE_THROWS_AS(DSVReader(table, std::move(cfg), diag), m::invalid_argument);
 }
 
-TEST_CASE("DSVReader QUOTE == ESCAPE (csv standard)", "[core][io][unit]")
+TEST_CASE("DSVReader QUOTE == ESCAPE (RFC 4180)", "[core][io][unit]")
 {
     auto &table = create_table();
 
@@ -314,7 +321,8 @@ TEST_CASE("DSVReader QUOTE == ESCAPE (csv standard)", "[core][io][unit]")
     std::ostringstream out, err;
     Diagnostic diag(false, out, err);
 
-    DSVReader R(table, diag, 5, ',', '"', '"');
+    DSVReader::Config cfg = DSVReader::Config::CSV();
+    DSVReader R(table, cfg, diag);
 
     /* Construct istream. */
     tuple_list rows {
@@ -324,13 +332,13 @@ TEST_CASE("DSVReader QUOTE == ESCAPE (csv standard)", "[core][io][unit]")
             { 3, 45, 2.09507, "Q7omKtKX,ojr1wO"},
             { 4, 4, 8.05046, "ZE5jtNf\"oJIuhva"}
     };
-    std::stringstream in;
+    std::stringstream ss;
     for (auto row: rows) {
-        in << std::get<0>(row) << "," << std::get<1>(row) << "," << std::get<2>(row) << ","
-                << format_string(std::get<3>(row), ',', '"', '"') << "\n";
+        ss << std::get<0>(row) << "," << std::get<1>(row) << "," << std::get<2>(row) << ","
+           << format_string(std::get<3>(row), cfg) << "\n";
     }
 
-    R(in, "stringstream_in");
+    R(ss, "stringstream_in");
 
     REQUIRE(diag.num_errors() == 0);
     REQUIRE(table.store().num_rows() == 5);
@@ -346,7 +354,11 @@ TEST_CASE("DSVReader explicitly set all characters", "[core][io][unit]")
     std::ostringstream out, err;
     Diagnostic diag(false, out, err);
 
-    DSVReader R(table, diag, 5, ';', '/', '\'');
+    DSVReader::Config cfg;
+    cfg.delimiter = ';';
+    cfg.quote = '\'';
+    cfg.escape = '/';
+    DSVReader R(table, cfg, diag);
 
     /* Construct istream. */
     tuple_list rows {
@@ -356,13 +368,13 @@ TEST_CASE("DSVReader explicitly set all characters", "[core][io][unit]")
             { 3, 45, 2.09507, "Q7omKtKX;ojr1wO"},
             { 4, 4, 8.05046, "ZE5jtNf'oJIuhva"}
     };
-    std::stringstream in;
+    std::stringstream ss;
     for (auto row: rows) {
-        in << std::get<0>(row) << ";" << std::get<1>(row) << ";" << std::get<2>(row) << ";"
-                << format_string(std::get<3>(row), ';', '/', '\'') << "\n";
+        ss << std::get<0>(row) << ";" << std::get<1>(row) << ";" << std::get<2>(row) << ";"
+           << format_string(std::get<3>(row), cfg) << "\n";
     }
 
-    R(in, "stringstream_in");
+    R(ss, "stringstream_in");
 
     REQUIRE(diag.num_errors() == 0);
     REQUIRE(table.store().num_rows() == 5);
@@ -380,7 +392,8 @@ TEST_CASE("DSVReader sanity tests", "[core][io][unit]")
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
 
-        DSVReader R(table, diag);
+        DSVReader::Config cfg;
+        DSVReader R(table, cfg, diag);
 
         /* Construct istream. */
         tuple_list rows {
@@ -390,17 +403,17 @@ TEST_CASE("DSVReader sanity tests", "[core][io][unit]")
                 { 3, 45, 2.09507, "Q7omKtKX,ojr1wO"},
                 { 4, 4, 8.05046, "ZE5jtNf\"oJIuhva"}
         };
-        std::stringstream in;
+        std::stringstream ss;
         for (unsigned i = 0; i < rows.size(); i++) {
             if (i % 2 == 0)
-                in << std::get<0>(rows[i]) << "," << std::get<1>(rows[i]) << std::get<2>(rows[i]) << ","
-                    << format_string(std::get<3>(rows[i])) << "\n";
+                ss << std::get<0>(rows[i]) << "," << std::get<1>(rows[i]) /* missing delimiter */
+                   << std::get<2>(rows[i]) << "," << format_string(std::get<3>(rows[i]), cfg) << "\n";
             else
-                in << std::get<0>(rows[i]) << "," << std::get<1>(rows[i]) << "," << std::get<2>(rows[i]) << ","
-                   << format_string(std::get<3>(rows[i])) << "\n";
+                ss << std::get<0>(rows[i]) << "," << std::get<1>(rows[i]) << "," << std::get<2>(rows[i]) << ","
+                   << format_string(std::get<3>(rows[i]), cfg) << "\n";
         }
 
-        R(in, "stringstream_in");
+        R(ss, "stringstream_in");
 
         REQUIRE(diag.num_errors() == 9);
         REQUIRE(table.store().num_rows() == 2);
@@ -425,13 +438,14 @@ TEST_CASE("DSVReader sanity tests", "[core][io][unit]")
         /* Construct DSVReader. */
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
-        DSVReader R(table, diag);
+        DSVReader::Config cfg;
+        DSVReader R(table, cfg, diag);
 
         /* Construct istream. */
-        std::stringstream in;
-        in << "42,,\n";
+        std::stringstream ss;
+        ss << "42,,\n";
 
-        R(in, "stringstream_in");
+        R(ss, "stringstream_in");
 
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(table.store().num_rows() == 1);
@@ -470,13 +484,13 @@ TEST_CASE("DSVReader::operator()", "[core][io][unit]")
         /* Construct DSVReader. */
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
-        DSVReader R(table, diag);
+        DSVReader R(table, DSVReader::Config(), diag);
 
         /* Construct istream. */
-        std::stringstream in;
-        in << "TRUE\nFALSE\n";
+        std::stringstream ss;
+        ss << "TRUE\nFALSE\n";
 
-        R(in, "stringstream_in");
+        R(ss, "stringstream_in");
 
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(table.store().num_rows() == 2);
@@ -509,13 +523,13 @@ TEST_CASE("DSVReader::operator()", "[core][io][unit]")
         /* Construct DSVReader. */
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
-        DSVReader R(table, diag);
+        DSVReader R(table, DSVReader::Config(), diag);
 
         /* Construct istream. */
-        std::stringstream in;
-        in << "\"2015-03-12\"\n2018-08-01\n";
+        std::stringstream ss;
+        ss << "\"2015-03-12\"\n2018-08-01\n";
 
-        R(in, "stringstream_in");
+        R(ss, "stringstream_in");
 
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(table.store().num_rows() == 2);
@@ -548,13 +562,13 @@ TEST_CASE("DSVReader::operator()", "[core][io][unit]")
         /* Construct DSVReader. */
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
-        DSVReader R(table, diag);
+        DSVReader R(table, DSVReader::Config(), diag);
 
         /* Construct istream. */
-        std::stringstream in;
-        in << "\"2017-12-07 04:20:00\"\n2019-05-09 13:37:42\n";
+        std::stringstream ss;
+        ss << "\"2017-12-07 04:20:00\"\n2019-05-09 13:37:42\n";
 
-        R(in, "stringstream_in");
+        R(ss, "stringstream_in");
 
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(table.store().num_rows() == 2);
@@ -589,14 +603,14 @@ TEST_CASE("DSVReader::operator()", "[core][io][unit]")
         /* Construct DSVReader. */
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
-        DSVReader R(table, diag);
+        DSVReader R(table, DSVReader::Config(), diag);
 
         /* Construct istream. */
-        std::stringstream in;
-        in << "1234,5.4321,0.5\n"
+        std::stringstream ss;
+        ss << "1234,5.4321,0.5\n"
             << "-4321,-1.2345,-0.5\n";
 
-        R(in, "stringstream_in");
+        R(ss, "stringstream_in");
 
         REQUIRE(diag.num_errors() == 0);
         REQUIRE(table.store().num_rows() == 2);
@@ -641,13 +655,12 @@ TEST_CASE("DSVReader::operator() sanity tests", "[core][io][unit]")
         /* Construct DSVReader. */
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
-        DSVReader R(table, diag);
-
+        DSVReader R(table, DSVReader::Config(), diag);
         /* Construct istream. */
-        std::stringstream in;
-        in << "0\n0.5\nasdf\n";
+        std::stringstream ss;
+        ss << "0\n0.5\nasdf\n";
 
-        R(in, "stringstream_in");
+        R(ss, "stringstream_in");
 
         REQUIRE(diag.num_errors() == 3);
         REQUIRE(table.store().num_rows() == 3);
@@ -682,13 +695,13 @@ TEST_CASE("DSVReader::operator() sanity tests", "[core][io][unit]")
         /* Construct DSVReader. */
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
-        DSVReader R(table, diag);
+        DSVReader R(table, DSVReader::Config(), diag);
 
         /* Construct istream. */
-        std::stringstream in;
-        in << "as\"df\nSn3WMEpw12Xc0K\n";
+        std::stringstream ss;
+        ss << "as\"df\nSn3WMEpw12Xc0K\n";
 
-        R(in, "stringstream_in");
+        R(ss, "stringstream_in");
 
         REQUIRE(diag.num_errors() == 1);
         REQUIRE(table.store().num_rows() == 2);
@@ -721,13 +734,13 @@ TEST_CASE("DSVReader::operator() sanity tests", "[core][io][unit]")
         /* Construct DSVReader. */
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
-        DSVReader R(table, diag);
+        DSVReader R(table, DSVReader::Config(), diag);
 
         /* Construct istream. */
-        std::stringstream in;
-        in << "2018-08-01 12:00:00\n\"2015-03-12\n2018-08-01\n";
+        std::stringstream ss;
+        ss << "2018-08-01 12:00:00\n\"2015-03-12\n2018-08-01\n";
 
-        R(in, "stringstream_in");
+        R(ss, "stringstream_in");
 
         REQUIRE(diag.num_errors() == 1);
         REQUIRE(table.store().num_rows() == 3);
@@ -764,13 +777,13 @@ TEST_CASE("DSVReader::operator() sanity tests", "[core][io][unit]")
         /* Construct DSVReader. */
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
-        DSVReader R(table, diag);
+        DSVReader R(table, DSVReader::Config(), diag);
 
         /* Construct istream. */
-        std::stringstream in;
-        in << "2019-05-09\n\"2017-12-07 04:20:00\n2019-05-09 13:37:42\n";
+        std::stringstream ss;
+        ss << "2019-05-09\n\"2017-12-07 04:20:00\n2019-05-09 13:37:42\n";
 
-        R(in, "stringstream_in");
+        R(ss, "stringstream_in");
 
         REQUIRE(diag.num_errors() == 2);
         REQUIRE(table.store().num_rows() == 3);
@@ -807,14 +820,14 @@ TEST_CASE("DSVReader::operator() sanity tests", "[core][io][unit]")
         /* Construct DSVReader. */
         std::ostringstream out, err;
         Diagnostic diag(false, out, err);
-        DSVReader R(table, diag);
+        DSVReader R(table, DSVReader::Config(), diag);
 
         /* Construct istream. */
-        std::stringstream in;
-        in << "qwer,asdf,yxcv\n"
+        std::stringstream ss;
+        ss << "qwer,asdf,yxcv\n"
            << "0.5,0.asdf,0.yxcv\n";
 
-        R(in, "stringstream_in");
+        R(ss, "stringstream_in");
 
         REQUIRE(diag.num_errors() == 6);
         REQUIRE(table.store().num_rows() == 2);

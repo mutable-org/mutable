@@ -3,17 +3,17 @@
 #include "backend/Interpreter.hpp"
 #include "backend/StackMachine.hpp"
 #include "backend/WebAssembly.hpp"
-#include "io/Reader.hpp"
 #include "IR/PartialPlanGenerator.hpp"
 #include "lex/Lexer.hpp"
-#include <mutable/IR/Tuple.hpp>
-#include <mutable/Options.hpp>
-#include <mutable/util/Diagnostic.hpp>
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "parse/Sema.hpp"
 #include <cerrno>
 #include <fstream>
+#include <mutable/io/Reader.hpp>
+#include <mutable/IR/Tuple.hpp>
+#include <mutable/Options.hpp>
+#include <mutable/util/Diagnostic.hpp>
 
 
 using namespace m;
@@ -243,32 +243,16 @@ void m::execute_statement(Diagnostic &diag, const ast::Stmt &stmt, const bool is
         auto &DB = C.get_database_in_use();
         auto &T = DB.get_table(S->table_name.text);
 
-        struct {
-            char delimiter = ',';
-            char escape = '\\';
-            char quote = '\"';
-            bool has_header = false;
-            bool skip_header = false;
-            std::size_t num_rows = std::numeric_limits<decltype(num_rows)>::max();
-        } reader_config;
-        if (S->rows) reader_config.num_rows = strtol(S->rows.text, nullptr, 10);
-        if (S->delimiter) reader_config.delimiter = unescape(S->delimiter.text)[1];
-        if (S->escape) reader_config.escape = unescape(S->escape.text)[1];
-        if (S->quote) reader_config.quote = unescape(S->quote.text)[1];
-        reader_config.has_header = S->has_header;
-        reader_config.skip_header = S->skip_header;
+        DSVReader::Config cfg;
+        if (S->rows) cfg.num_rows = strtol(S->rows.text, nullptr, 10);
+        if (S->delimiter) cfg.delimiter = unescape(S->delimiter.text)[1];
+        if (S->escape) cfg.escape = unescape(S->escape.text)[1];
+        if (S->quote) cfg.quote = unescape(S->quote.text)[1];
+        cfg.has_header = S->has_header;
+        cfg.skip_header = S->skip_header;
 
         try {
-            DSVReader R(
-                T,
-                diag,
-                reader_config.num_rows,
-                reader_config.delimiter,
-                reader_config.escape,
-                reader_config.quote,
-                reader_config.has_header,
-                reader_config.skip_header
-            );
+            DSVReader R(T, std::move(cfg), diag);
 
             std::string filename(S->path.text, 1, strlen(S->path.text) - 2);
             errno = 0;
@@ -283,8 +267,7 @@ void m::execute_statement(Diagnostic &diag, const ast::Stmt &stmt, const bool is
                 M_TIME_EXPR(R(file, S->path.text), "Read DSV file", timer);
             }
         } catch (m::invalid_argument e) {
-            diag.e(Position("DSVReader")) << "Error reading DSV file.\n"
-                                          << e.what() << "\n";
+            diag.err() << "Error reading DSV file: " << e.what() << "\n";
         }
     }
 
@@ -332,16 +315,11 @@ void m::load_from_CSV(Diagnostic &diag, Table &table, const std::filesystem::pat
                       bool has_header, bool skip_header)
 {
     diag.clear();
-    DSVReader R(
-        /* table=       */ table,
-        /* diag=        */ diag,
-        /* num_rows=    */ num_rows,
-        /* delimiter=   */ ',',
-        /* escape=      */ '\\',
-        /* quote=       */ '\"',
-        /* has_header=  */ has_header,
-        /* skip_header= */ skip_header
-    );
+    auto cfg = DSVReader::Config::CSV();
+    cfg.num_rows = num_rows;
+    cfg.has_header = has_header;
+    cfg.skip_header = skip_header;
+    DSVReader R(table, std::move(cfg), diag);
 
     errno = 0;
     std::ifstream file(path);
@@ -351,7 +329,7 @@ void m::load_from_CSV(Diagnostic &diag, Table &table, const std::filesystem::pat
             diag.err() << ": " << strerror(errno);
         diag.err() << std::endl;
     } else {
-        R(file, path.c_str());
+        R(file, path.c_str()); // read the file
     }
 
     if (diag.num_errors() != 0)

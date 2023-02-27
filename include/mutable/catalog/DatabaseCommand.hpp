@@ -1,5 +1,8 @@
 #pragma once
 
+#include <concepts>
+#include <mutable/io/Reader.hpp>
+#include <mutable/IR/Operator.hpp>
 #include <mutable/parse/AST.hpp>
 #include <mutable/util/Diagnostic.hpp>
 #include <vector>
@@ -15,13 +18,29 @@ struct DatabaseCommandVisitor;
 /** The command pattern for operations in the DBMS. */
 struct DatabaseCommand
 {
+    private:
+    ///> the AST of the command; optional
+    std::unique_ptr<ast::Command> ast_;
+
+    public:
     virtual ~DatabaseCommand() = default;
 
     virtual void accept(DatabaseCommandVisitor &v) = 0;
     virtual void accept(ConstDatabaseCommandVisitor &v) const = 0;
 
     /** Executes the command. */
-    virtual void execute(Diagnostic &diag) const = 0;
+    virtual void execute(Diagnostic &diag) = 0;
+
+    template<typename T = ast::Command>
+    requires std::derived_from<T, ast::Command>
+    T & ast() { return as<T>(*ast_); }
+    template<typename T = ast::Command>
+    requires std::derived_from<T, ast::Command>
+    const T & ast() const { return *as<T>(ast_); }
+
+    std::unique_ptr<ast::Command> ast(std::unique_ptr<ast::Command> new_ast) {
+        return std::exchange(ast_, std::move(new_ast));
+    }
 };
 
 
@@ -29,10 +48,9 @@ struct DatabaseCommand
  * Instructions
  *====================================================================================================================*/
 
-/** A `DatabaseInstruction` represents an invokation of an *instruction*, i.e. an input starting with `\`, an
- * instruction name, and the arguments for that instruction. A new instruction can be implemented by making a new
- * subclass of `DatabaseInstruction`. The newly implemented instruction must then be registered in the `Catalog` using
- * `Catalog::register_instruction()`. */
+/** A `DatabaseInstruction` represents an invokation of an *instruction* with (optional) arguments. A new instruction
+ * can be implemented by making a new subclass of `DatabaseInstruction`. The newly implemented instruction must then be
+ * registered in the `Catalog` using `Catalog::register_instruction()`. */
 struct DatabaseInstruction : DatabaseCommand
 {
     private:
@@ -53,7 +71,7 @@ struct learn_spns : DatabaseInstruction
     void accept(DatabaseCommandVisitor &v) override;
     void accept(ConstDatabaseCommandVisitor &v) const override;
 
-    void execute(Diagnostic &diag) const override;
+    void execute(Diagnostic &diag) override;
 };
 
 #define M_DATABASE_INSTRUCTION_LIST(X) \
@@ -78,16 +96,14 @@ struct DMLCommand : SQLCommand { };
 struct QueryDatabase : DMLCommand
 {
     private:
-    ast::SelectStmt stmt_;
-    // TODO more info? e.g. selected database?
+    std::unique_ptr<QueryGraph> graph_;
+    std::unique_ptr<Consumer> logical_plan_;
 
     public:
-    QueryDatabase(ast::SelectStmt stmt) : stmt_(std::move(stmt)) { }
-
     void accept(DatabaseCommandVisitor &v) override;
     void accept(ConstDatabaseCommandVisitor &v) const override;
 
-    void execute(Diagnostic &diag) const override;
+    void execute(Diagnostic &diag) override;
 };
 
 /** Insert records into a `Table` of a `Database`. */
@@ -98,7 +114,7 @@ struct InsertRecords : DMLCommand
     void accept(DatabaseCommandVisitor &v) override;
     void accept(ConstDatabaseCommandVisitor &v) const override;
 
-    void execute(Diagnostic &diag) const override;
+    void execute(Diagnostic &diag) override;
 };
 
 /** Modify records of a `Table` of a `Database`. */
@@ -107,7 +123,7 @@ struct UpdateRecords : DMLCommand
     void accept(DatabaseCommandVisitor &v) override;
     void accept(ConstDatabaseCommandVisitor &v) const override;
 
-    void execute(Diagnostic &diag) const override;
+    void execute(Diagnostic &diag) override;
 };
 
 /** Delete records from a `Table` of a `Database`. */
@@ -116,16 +132,29 @@ struct DeleteRecords : DMLCommand
     void accept(DatabaseCommandVisitor &v) override;
     void accept(ConstDatabaseCommandVisitor &v) const override;
 
-    void execute(Diagnostic &diag) const override;
+    void execute(Diagnostic &diag) override;
 };
 
 /** Import records from a *delimiter separated values* (DSV) file into a `Table` of a `Database`. */
 struct ImportDSV : DMLCommand
 {
+    using DSVConfig = DSVReader::Config;
+
+    private:
+    const Table &table_;
+    std::filesystem::path path_;
+    DSVConfig cfg_;
+
+    public:
+    ImportDSV(const Table &table, std::filesystem::path path, DSVConfig cfg)
+        : table_(table)
+        , path_(path)
+        , cfg_(std::move(cfg)) { }
+
     void accept(DatabaseCommandVisitor &v) override;
     void accept(ConstDatabaseCommandVisitor &v) const override;
 
-    void execute(Diagnostic &diag) const override;
+    void execute(Diagnostic &diag) override;
 };
 
 #define M_DATABASE_DML_LIST(X) \
@@ -142,34 +171,52 @@ struct ImportDSV : DMLCommand
 
 struct DDLCommand : SQLCommand { };
 
-struct CreateDatabaseCommand : DDLCommand
+struct CreateDatabase : DDLCommand
 {
+    private:
+    const char *db_name_;
+
+    public:
+    CreateDatabase(const char *db_name) : db_name_(M_notnull(db_name)) { }
+
     void accept(DatabaseCommandVisitor &v) override;
     void accept(ConstDatabaseCommandVisitor &v) const override;
 
-    void execute(Diagnostic &diag) const override;
+    void execute(Diagnostic &diag) override;
 };
 
-struct UseDatabaseCommand : DDLCommand
+struct UseDatabase : DDLCommand
 {
+    private:
+    const char *db_name_;
+
+    public:
+    UseDatabase(const char *db_name) : db_name_(M_notnull(db_name)) { }
+
     void accept(DatabaseCommandVisitor &v) override;
     void accept(ConstDatabaseCommandVisitor &v) const override;
 
-    void execute(Diagnostic &diag) const override;
+    void execute(Diagnostic &diag) override;
 };
 
-struct CreateTableCommand : DDLCommand
+struct CreateTable : DDLCommand
 {
+    private:
+    std::unique_ptr<Table> table_;
+
+    public:
+    CreateTable(std::unique_ptr<Table> table) : table_(M_notnull(std::move(table))) { }
+
     void accept(DatabaseCommandVisitor &v) override;
     void accept(ConstDatabaseCommandVisitor &v) const override;
 
-    void execute(Diagnostic &diag) const override;
+    void execute(Diagnostic &diag) override;
 };
 
 #define M_DATABASE_DDL_LIST(X)\
-    X(CreateDatabaseCommand) \
-    X(UseDatabaseCommand) \
-    X(CreateTableCommand)
+    X(CreateDatabase) \
+    X(UseDatabase) \
+    X(CreateTable)
 
 #define M_DATABASE_SQL_LIST(X) \
     M_DATABASE_DML_LIST(X) \

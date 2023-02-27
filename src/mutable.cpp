@@ -108,8 +108,7 @@ std::unique_ptr<Instruction> m::instruction_from_string(Diagnostic &diag, const 
     std::istringstream in(str);
     Lexer lexer(diag, C.get_pool(), "-", in);
     Parser parser(lexer);
-    auto instruction =
-            M_TIME_EXPR(std::unique_ptr<Instruction>(parser.parse_Instruction()), "Parse the instruction", C.timer());
+    auto instruction = M_TIME_EXPR(parser.parse_Instruction(), "Parse the instruction", C.timer());
     if (diag.num_errors() != 0)
         throw frontend_exception("syntactic error in instruction");
     M_insist(diag.num_errors() == 0);

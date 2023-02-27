@@ -12,10 +12,12 @@ using namespace m;
 using namespace m::ast;
 
 
-std::unique_ptr<DatabaseCommand> Sema::analyze(ast::Command &cmd)
+std::unique_ptr<DatabaseCommand> Sema::analyze(std::unique_ptr<ast::Command> ast)
 {
-    (*this)(cmd);
-    return nullptr; // TODO return `DatabaseCommand`
+    (*this)(*ast); // perform semantic analysis
+    if (command_)
+        command_->ast(std::move(ast)); // move AST into DatabaseCommand instance
+    return std::move(command_);
 }
 
 bool Sema::is_nested() const
@@ -1410,6 +1412,7 @@ void Sema::operator()(CreateDatabaseStmt &s)
         C.get_database(db_name);
         diag.e(s.database_name.pos) << "Database " << db_name << " already exists.\n";
     } catch (std::out_of_range) {
+        command_ = std::make_unique<CreateDatabase>(db_name);
     }
 }
 
@@ -1425,6 +1428,8 @@ void Sema::operator()(UseDatabaseStmt &s)
         diag.e(s.database_name.pos) << "Database " << db_name << " does not exist.\n";
         return;
     }
+
+    command_ = std::make_unique<UseDatabase>(db_name);
 }
 
 void Sema::operator()(CreateTableStmt &s)
@@ -1532,6 +1537,8 @@ void Sema::operator()(CreateTableStmt &s)
         }
     }
 
+    if (not is_nested() and not diag.num_errors())
+        command_ = std::make_unique<CreateTable>(std::move(T));
 }
 
 void Sema::operator()(SelectStmt &s)
@@ -1552,6 +1559,10 @@ void Sema::operator()(SelectStmt &s)
     (*this)(*s.select);
     if (s.order_by) (*this)(*s.order_by);
     if (s.limit) (*this)(*s.limit);
+
+
+    if (not is_nested() and not diag.num_errors())
+        command_ = std::make_unique<QueryDatabase>();
 }
 
 void Sema::operator()(InsertStmt &s)
@@ -1618,6 +1629,9 @@ void Sema::operator()(InsertStmt &s)
             }
         }
     }
+
+    if (not is_nested() and not diag.num_errors())
+        command_ = std::make_unique<InsertRecords>();
 }
 
 void Sema::operator()(UpdateStmt &s)
@@ -1687,4 +1701,7 @@ void Sema::operator()(DSVImportStmt &s)
 
     /* Get filesystem path from path token by removing surrounding quotation marks. */
     std::filesystem::path path(std::string(s.path.text, 1, strlen(s.path.text) - 2));
+
+    if (not diag.num_errors())
+        command_ = std::make_unique<ImportDSV>(*table, path, std::move(cfg));
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <mutable/catalog/Catalog.hpp>
+#include <mutable/catalog/DatabaseCommand.hpp>
 #include <mutable/parse/AST.hpp>
 #include <mutable/util/Diagnostic.hpp>
 #include <sstream>
@@ -106,13 +107,15 @@ struct M_EXPORT Sema : ASTVisitor
     context_stack_t contexts_;
     ///> used to create textual representation of complex AST objects, e.g. expressions
     std::ostringstream oss;
+    ///> the command to execute when semantic analysis completes without errors
+    std::unique_ptr<DatabaseCommand> command_;
 
     public:
     Sema(Diagnostic &diag) : diag(diag) { }
 
     /** Perform semantic analysis of an `ast::Command`. Returns an `m::DatabaseCommand` to execute when no semantic
      * errors occurred, `nullptr` otherwise. */
-    std::unique_ptr<DatabaseCommand> analyze(ast::Command &cmd);
+    std::unique_ptr<DatabaseCommand> analyze(std::unique_ptr<ast::Command> ast);
 
     using ASTExprVisitor::operator();
     using ASTClauseVisitor::operator();

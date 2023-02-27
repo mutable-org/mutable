@@ -7,6 +7,7 @@
 #include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/Catalog.hpp>
 #include <mutable/catalog/CostFunction.hpp>
+#include <mutable/catalog/DatabaseCommand.hpp>
 #include <mutable/catalog/Schema.hpp>
 #include <mutable/catalog/Type.hpp>
 #include <mutable/IR/CNF.hpp>
@@ -50,6 +51,9 @@ std::unique_ptr<ast::Stmt> M_EXPORT statement_from_string(Diagnostic &diag, cons
 
 /** Use lexer and parser to create an `Instruction` from `str`. */
 std::unique_ptr<ast::Instruction> M_EXPORT instruction_from_string(Diagnostic &diag, const std::string &str);
+
+/** Create a `DatabaseCommand` from `str`. */
+std::unique_ptr<DatabaseCommand> M_EXPORT command_from_string(Diagnostic &diag, const std::string &str);
 
 /** Optimizes and executes the given `Stmt`. */
 void M_EXPORT execute_statement(Diagnostic &diag, const ast::Stmt &stmt, bool is_stdin = false);

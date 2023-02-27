@@ -44,6 +44,27 @@ std::unique_ptr<Stmt> m::statement_from_string(Diagnostic &diag, const std::stri
     return stmt;
 }
 
+std::unique_ptr<DatabaseCommand> m::command_from_string(Diagnostic &diag, const std::string &str)
+{
+    Catalog &C = Catalog::Get();
+
+    std::istringstream in(str);
+    Lexer lexer(diag, C.get_pool(), "-", in);
+    Parser parser(lexer);
+    auto stmt = M_TIME_EXPR(std::unique_ptr<Stmt>(parser.parse_Stmt()), "Parse the statement", C.timer());
+    if (diag.num_errors() != 0)
+        throw frontend_exception("syntactic error in statement");
+    M_insist(diag.num_errors() == 0);
+
+    Sema sema(diag);
+    auto cmd = M_TIME_EXPR(sema.analyze(std::move(stmt)), "Semantic analysis", C.timer());
+    if (diag.num_errors() != 0)
+        throw frontend_exception("semantic error in statement");
+    M_insist(diag.num_errors() == 0);
+
+    return cmd;
+}
+
 void m::process_stream(std::istream &in, const char *filename, Diagnostic diag)
 {
     Catalog &C = Catalog::Get();

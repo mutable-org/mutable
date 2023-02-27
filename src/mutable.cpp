@@ -10,6 +10,7 @@
 #include "parse/Sema.hpp"
 #include <cerrno>
 #include <fstream>
+#include <mutable/catalog/DatabaseCommand.hpp>
 #include <mutable/io/Reader.hpp>
 #include <mutable/IR/Tuple.hpp>
 #include <mutable/Options.hpp>
@@ -46,45 +47,21 @@ std::unique_ptr<Stmt> m::statement_from_string(Diagnostic &diag, const std::stri
 void m::process_stream(std::istream &in, const char *filename, Diagnostic diag)
 {
     Catalog &C = Catalog::Get();
-    ast::Sema sema(diag);
-    std::size_t num_errors = 0;
-    const bool is_stdin = streq(filename, "-");
 
     /*----- Process the input stream. --------------------------------------------------------------------------------*/
     ast::Lexer lexer(diag, C.get_pool(), filename, in);
     ast::Parser parser(lexer);
+    ast::Sema sema(diag);
 
     while (parser.token()) {
         Timer &timer = C.timer();
-        auto command = parser.parse();
+        auto ast = parser.parse();
+        diag.clear();
+        auto cmd = sema.analyze(std::move(ast));
 
-        if (diag.num_errors() != num_errors)
-            goto next;
-
-        if (auto instruction = cast<ast::Instruction>(command)) {
-            try {
-                auto I = C.create_instruction(instruction->name, instruction->args);
-                I->execute(diag);
-            } catch (std::invalid_argument) {
-                diag.err() << "Instruction '" << instruction->name << "' does not exist.\n";
-            }
-        } else {
-            auto stmt = as<ast::Stmt>(std::move(command));
-            if (Options::Get().echo)
-                std::cout << *stmt << std::endl;
-            M_TIME_EXPR(sema(*stmt), "Semantic Analysis", timer);
-            if (Options::Get().ast) stmt->dump(std::cout);
-            if (Options::Get().astdot) {
-                DotTool dot(diag);
-                stmt->dot(dot.stream());
-                dot.show("ast", is_stdin);
-            }
-            if (diag.num_errors() != num_errors) goto next;
-
-            execute_statement(diag, *stmt, is_stdin);
-        }
-next:
-        num_errors = diag.num_errors();
+        M_insist((diag.num_errors() == 0) == bool(cmd), "when there are no errors, Sema must've returned a command");
+        if (cmd)
+            cmd->execute(diag);
 
         if (Options::Get().times) {
             using namespace std::chrono;

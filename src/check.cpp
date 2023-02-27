@@ -98,8 +98,10 @@ int main(int argc, const char **argv)
                 diag.clear();
                 continue;
             }
-            sema(*stmt);
-            if (Options::Get().ast) stmt->dump(std::cout);
+            auto cmd = sema.analyze(std::move(stmt));
+            if (Options::Get().ast) cmd->ast().dump(std::cout);
+            if (is<const DDLCommand>(cmd))
+                cmd->execute(diag);
             sema_error = sema_error or diag.num_errors();
             diag.clear(); // clear sema errors
         }

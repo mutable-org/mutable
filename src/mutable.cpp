@@ -234,9 +234,34 @@ void m::execute_statement(Diagnostic &diag, const ast::Stmt &stmt, const bool is
             get_tuple(args);
             W.append(tup);
         }
+    } else if (auto S = cast<const ast::CreateDatabaseStmt>(&stmt)) {
+        C.add_database(S->database_name.text);
+    } else if (auto S = cast<const ast::UseDatabaseStmt>(&stmt)) {
+        auto &DB = C.get_database(S->database_name.text);
+        C.set_database_in_use(DB);
     } else if (auto S = cast<const ast::CreateTableStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
-        auto &T = DB.get_table(S->table_name.text);
+        auto &T = DB.add_table(S->table_name.text);
+
+        for (auto &attr : S->attributes) {
+            const PrimitiveType *ty = cast<const PrimitiveType>(attr->type);
+
+            T.push_back(attr->name.text, ty->as_vectorial());
+            for (auto &c : attr->constraints) {
+                visit(overloaded {
+                    [&](const PrimaryKeyConstraint&) {
+                        T.add_primary_key(attr->name.text);
+                    },
+                    [&](const UniqueConstraint&) { M_unreachable("not implemented"); },
+                    [&](const NotNullConstraint&) {
+                        T.at(attr->name.text).nullable = false;
+                    },
+                    [&](const ReferenceConstraint&) { M_unreachable("not implemented"); },
+                    [](auto&&) { M_unreachable("constraint not implemented"); },
+                }, *c, tag<ConstASTConstraintVisitor>{});
+            }
+        }
+
         T.layout(C.data_layout());
         T.store(C.create_store(T));
     } else if (auto S = cast<const ast::DSVImportStmt>(&stmt)) {

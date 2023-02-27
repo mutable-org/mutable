@@ -52,7 +52,7 @@ struct M_EXPORT Sema : ASTVisitor
         ///> list of all computed expressions along with their order
         using named_expr_table = std::unordered_multimap<const char*, std::pair<std::reference_wrapper<Expr>, unsigned>>;
         ///> the type of a source of data: either a database table or a nested query with named results
-        using source_type = std::variant<const Table*, named_expr_table>;
+        using source_type = std::variant<std::monostate, std::reference_wrapper<const Table>, named_expr_table>;
         ///> associative container mapping source name to data source and its order
         using source_table = std::unordered_map<const char*, std::pair<source_type, unsigned>>;
         ///> list of all sources along with their order
@@ -67,6 +67,7 @@ struct M_EXPORT Sema : ASTVisitor
         /* Returns the `sources` in a sorted manner according to their order. */
         std::vector<std::pair<const char*, source_type>> sorted_sources() const {
             std::vector<std::pair<const char*, source_type>> res(sources.size());
+
             for (auto &src : sources)
                 res[src.second.second] = std::make_pair(src.first, src.second.first);
             return res;

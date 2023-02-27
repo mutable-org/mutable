@@ -219,8 +219,8 @@ void Sema::operator()(Designator &e)
 
         /* Find the target inside the source table. */
         Designator::target_type target;
-        if (auto T = std::get_if<const Table*>(&src)) {
-            const Table &tbl = **T;
+        if (auto ref = std::get_if<std::reference_wrapper<const Table>>(&src)) {
+            const Table &tbl = ref->get();
             /* Find the attribute inside the table. */
             try {
                 target = &tbl.at(e.attr_name.text); // we found an attribute of that name in the source tables
@@ -282,8 +282,8 @@ void Sema::operator()(Designator &e)
             /* Search all contexts, starting with the innermost and advancing outwards. */
             for (auto it = contexts_.rbegin(), end = contexts_.rend(); it != end; ++it) {
                 for (auto &src : (*it)->sources) {
-                    if (auto T = std::get_if<const Table*>(&src.second.first)) {
-                        const Table &tbl = **T;
+                    if (auto ref = std::get_if<std::reference_wrapper<const Table>>(&src.second.first)) {
+                        const Table &tbl = ref->get();
                         try {
                             const Attribute &A = tbl.at(e.attr_name.text);
                             if (not std::holds_alternative<std::monostate>(target)) {
@@ -1058,9 +1058,9 @@ void Sema::operator()(SelectClause &c)
         } else {
             /* The '*' in the SELECT clause selects all attributes of all sources. */
             for (auto &[src_name, src] : Ctx.sorted_sources()) {
-                if (auto ptr = std::get_if<const Table*>(&src)) {
+                if (auto ref = std::get_if<std::reference_wrapper<const Table>>(&src)) {
                     /* The source is a database table. */
-                    auto &tbl = **ptr;
+                    auto &tbl = ref->get();
                     for (auto &attr : tbl) {
                         auto d = create_designator(
                             /* pos=        */ c.select_all.pos,
@@ -1179,7 +1179,7 @@ void Sema::operator()(FromClause &c)
             try {
                 const Table &T = DB.get_table(name->text);
                 Token table_name = src.alias ? src.alias : *name; // FROM name AS alias ?
-                auto res = Ctx.sources.emplace(table_name.text, std::make_pair(&T, source_counter++));
+                auto res = Ctx.sources.emplace(table_name.text, std::make_pair(std::ref(T), source_counter++));
                 /* Check if the table name is already in use in other contexts. */
                 bool unique = true;
                 for (std::size_t i = 0; i < contexts_.size() - 1; ++i) {
@@ -1407,11 +1407,9 @@ void Sema::operator()(CreateDatabaseStmt &s)
     const char *db_name = s.database_name.text;
 
     try {
-        C.add_database(db_name);
-        if (not Options::Get().quiet)
-            diag.out() << "Created database " << db_name << ".\n";
-    } catch (std::invalid_argument) {
+        C.get_database(db_name);
         diag.e(s.database_name.pos) << "Database " << db_name << " already exists.\n";
+    } catch (std::out_of_range) {
     }
 }
 
@@ -1422,12 +1420,10 @@ void Sema::operator()(UseDatabaseStmt &s)
     const char *db_name = s.database_name.text;
 
     try {
-        auto &DB = C.get_database(db_name);
-        C.set_database_in_use(DB);
-        if (not Options::Get().quiet)
-            diag.out() << "Using database " << db_name << ".\n";
+        C.get_database(db_name);
     } catch (std::out_of_range) {
-        diag.e(s.database_name.pos) << "Database " << db_name << " not found.\n";
+        diag.e(s.database_name.pos) << "Database " << db_name << " does not exist.\n";
+        return;
     }
 }
 
@@ -1442,21 +1438,28 @@ void Sema::operator()(CreateTableStmt &s)
     }
     auto &DB = C.get_database_in_use();
     const char *table_name = s.table_name.text;
-    Table *T = new Table(table_name);
+    std::unique_ptr<Table> T = std::make_unique<Table>(table_name);
 
-    /* Add the newly declared table to the list of sources of the sema context. */
-    get_context().sources.emplace(table_name, std::make_pair(SemaContext::source_type(T), 0U));
+    /* Add the newly declared table to the list of sources of the sema context.  We need to add the table to the sema
+     * context so that semantic analysis of `CHECK` expressions can resolve references to attributes of the same table.
+     * */
+    get_context().sources.emplace(table_name, std::make_pair(SemaContext::source_type(*T), 0U));
+
+    /* Verify table does not yet exist. */
+    try {
+        DB.get_table(table_name);
+        diag.e(s.table_name.pos) << "Table " << table_name << " already exists in database " << DB.name << ".\n";
+    } catch (std::out_of_range) {
+        /* nothing to be done */
+    }
 
     /* Analyze attributes and add them to the new table. */
-    bool error = false;
     bool has_primary_key = false;
     for (auto &attr : s.attributes) {
         const PrimitiveType *ty = cast<const PrimitiveType>(attr->type);
-        if (not ty) {
+        if (not ty)
             diag.e(attr->name.pos) << "Attribute " << attr->name.text << " cannot be defined with type " << *attr->type
                                << ".\n";
-            error = true;
-        }
         attr->type = ty->as_vectorial(); // convert potentially scalar type to vectorial
 
         /* Before we check the constraints, we must add this newly declared attribute to its table, and hence to the
@@ -1467,7 +1470,6 @@ void Sema::operator()(CreateTableStmt &s)
             /* attribute name is a duplicate */
             diag.e(attr->name.pos) << "Attribute " << attr->name.text << " occurs multiple times in defintion of table "
                                    << table_name << ".\n";
-            error = true;
         }
 
         /* Check constraint definitions. */
@@ -1476,11 +1478,9 @@ void Sema::operator()(CreateTableStmt &s)
         get_context().stage = SemaContext::S_Where;
         for (auto &c : attr->constraints) {
             if (is<PrimaryKeyConstraint>(c)) {
-                if (has_primary_key) {
+                if (has_primary_key)
                     diag.e(attr->name.pos) << "Duplicate definition of primary key as attribute " << attr->name.text
                                           << ".\n";
-                    error = true;
-                }
                 has_primary_key = true;
                 T->add_primary_key(attr->name.text);
             }
@@ -1504,17 +1504,13 @@ void Sema::operator()(CreateTableStmt &s)
                  * invoking semantic analysis of the condition! */
                 (*this)(*check->cond);
                 auto ty = check->cond->type();
-                if (not ty->is_boolean()) {
+                if (not ty->is_boolean())
                     diag.e(check->tok.pos) << "Condition " << *check->cond << " is an invalid CHECK constraint.\n";
-                    error = true;
-                }
             }
 
             if (auto ref = cast<ReferenceConstraint>(c)) {
-                if (has_reference) {
+                if (has_reference)
                     diag.e(ref->tok.pos) << "Attribute " << attr->name.text << " must not have multiple references.\n";
-                    error = true;
-                }
                 has_reference = true;
 
                 /* Check that the referenced attribute exists. */
@@ -1522,38 +1518,20 @@ void Sema::operator()(CreateTableStmt &s)
                     auto &ref_table = DB.get_table(ref->table_name.text);
                     try {
                         auto &ref_attr = ref_table.at(ref->attr_name.text);
-                        if (attr->type != ref_attr.type) {
+                        if (attr->type != ref_attr.type)
                             diag.e(ref->attr_name.pos) << "Referenced attribute has different type.\n";
-                        }
                     } catch (std::out_of_range) {
                         diag.e(ref->attr_name.pos) << "Invalid reference, attribute " << ref->attr_name.text
                                                   << " not found in table " << ref->table_name.text << ".\n";
-                        error = true;
                     }
                 } catch (std::out_of_range) {
                     diag.e(ref->table_name.pos) << "Invalid reference, table " << ref->table_name.text
                                                 << " not found.\n";
-                        error = true;
                 }
             }
         }
     }
 
-    if (error) {
-        delete T;
-        return;
-    }
-
-    try {
-        DB.add(T);
-    } catch (std::invalid_argument) {
-        diag.e(s.table_name.pos) << "Table " << table_name << " already exists in database " << DB.name << ".\n";
-        delete T;
-        return;
-    }
-
-    if (not Options::Get().quiet)
-        diag.out() << "Created table " << table_name << " in database " << DB.name << ".\n";
 }
 
 void Sema::operator()(SelectStmt &s)

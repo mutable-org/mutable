@@ -111,7 +111,7 @@ void Operator::dot(std::ostream &out) const
 #define id(X) q(std::hex << &X << std::dec) // convert virtual address to identifier
     visit(overloaded {
         [&out](const ScanOperator &op) {
-            out << "    " << id(op) << " [label=<<B>" << html_escape(op.store().table().name) << "</B>>];\n";
+            out << "    " << id(op) << " [label=<<B>" << html_escape(op.alias()) << "</B>>];\n";
         },
         [&out](const FilterOperator &op) {
             out << "    " << id(op) << " [label=<<B>σ</B><SUB><FONT COLOR=\"0.0 0.0 0.25\" POINT-SIZE=\"10\">"

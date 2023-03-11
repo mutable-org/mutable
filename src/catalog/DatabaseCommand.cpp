@@ -3,6 +3,7 @@
 #include <mutable/catalog/Catalog.hpp>
 #include <mutable/IR/Optimizer.hpp>
 #include <mutable/Options.hpp>
+#include <mutable/util/DotTool.hpp>
 
 
 using namespace m;
@@ -42,18 +43,55 @@ static void register_instructions()
  * Data Manipulation Language (DML)
  *====================================================================================================================*/
 
-void QueryDatabase::execute(Diagnostic&)
+void QueryDatabase::execute(Diagnostic &diag)
 {
     Catalog &C = Catalog::Get();
+
+    if (auto stmt = cast<ast::Stmt>(&ast())) {
+        if (Options::Get().ast)
+            stmt->dump(diag.out());
+        if (Options::Get().astdot) {
+            DotTool dot(diag);
+            stmt->dot(dot.stream());
+            dot.show("ast", false, "dot");
+        }
+    }
+
     graph_ = M_TIME_EXPR(QueryGraph::Build(ast<ast::SelectStmt>()), "Construct the query graph", C.timer());
+
+    if (Options::Get().graph)
+        graph_->dump(std::cout);
+    if (Options::Get().graphdot) {
+        DotTool dot(diag);
+        graph_->dot(dot.stream());
+        dot.show("graph", false, "fdp");
+    }
+    if (Options::Get().graph2sql) {
+        graph_->sql(std::cout);
+        std::cout.flush();
+    }
+
     Optimizer Opt(C.plan_enumerator(), C.cost_function());
     std::unique_ptr<Producer> producer = M_TIME_EXPR(Opt(*graph_), "Compute the query plan", C.timer());
+
+    if (Options::Get().plan)
+        producer->dump(diag.out());
+    if (Options::Get().plandot) {
+        DotTool dot(diag);
+        producer->dot(dot.stream());
+        dot.show("plan", false, "dot");
+    }
+
     M_insist(bool(producer), "logical plan must have been computed");
     if (Options::Get().benchmark)
         logical_plan_ = std::make_unique<NoOpOperator>(std::cout);
     else
         logical_plan_ = std::make_unique<PrintOperator>(std::cout);
     logical_plan_->add_child(producer.release());
+
+    if (Options::Get().dryrun)
+        return;
+
     C.backend().execute(*logical_plan_);
 }
 

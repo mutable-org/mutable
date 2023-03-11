@@ -71,6 +71,13 @@ striving for performance that is competitive to state-of-the-art systems.
 </details>
 
 
+#### Podcast Episode about mu*t*able
+
+Immanuel Haffner was guest on [Disseminate: The Computer Science Research Podcast](https://disseminatepodcast.podcastpage.io/).
+Together with our host Jack Waudby, we discuss our CIDR 2023 paper and introduce the listener to mu*t*able.
+[[LINK TO EPISODE]](https://disseminatepodcast.podcastpage.io/episode/immanuel-haffner-mutable-a-modern-dbms-for-research-and-fast-prototyping-21)
+
+
 
 ### Features
 

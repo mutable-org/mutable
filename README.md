@@ -90,8 +90,6 @@ The DSL constructs an internal representation, that enables mu*t*able to underst
 
 Assume you want to create a table with the following schema:
 
-\
-
 | <ins>id</ins> : INT(4) | name : CHAR(80) | salary : DOUBLE |
 |-|-|-|
 
@@ -137,8 +135,8 @@ The leaf with the largest *alignment requirement* inside a row is `salary` of ty
 Hence, we must ceil 771 to a whole multiple of 64 to accommodate sufficient space in a row *while* guaranteeing self-alignment of all leaves.
 </sup>
 
-\
-\
+<br>
+<br>
 
 Alternatively, we can create a *partition attributes accross* (**PAX**) layout for the table.
 This is done in mu*t*able as shown below:
@@ -181,14 +179,14 @@ However, while sub-byte strides save memory by avoiding padding, they complicate
 In our example, we therefore opt for 8 bit stride to trade some unused bits for more efficient data accesses.
 </sup>
 
-\
-\
+<br>
+<br>
 
 It is also possible to nest `INode`s of the `DataLayout` to arbitrary depths.
 This allows the creation of layouts such as *PAX-in-PAX* or *vertical partitioning*.
 
-\
-\
+<br>
+<br>
 
 </details>
 
@@ -199,8 +197,8 @@ We achieved a relatively efficient implementation by implementing RSPN logic wit
 
 After loading data into a database, you can manually trigger training of RSPNs with our built-in command `\learn_spns`.
 
-\
-\
+<br>
+<br>
 
 </details>
 
@@ -256,8 +254,8 @@ To provide such a cardinality file to mu*t*able, use the following command line 
 
 Intermediate results for which *no cardinality estimate* is specified will fall back to Cartesian product and print a warning to `stderr`.
 
-\
-\
+<br>
+<br>
 
 </details>
 
@@ -279,8 +277,8 @@ See `--help` for a complete list of parameters.
 Important mentions are `--alpha` to steer the skew of join selectivities and `--uncorrelated` to decide whether to generate pairwise independent (uncorrelated) join selectivities.
 Note, that pairwise independent join selectivities are practically impossible and with *too small* cardinalities, slight deviations from pairwise independent may manifest.
 
-\
-\
+<br>
+<br>
 
 </details>
 
@@ -291,8 +289,8 @@ By now, mu*t*able has a dedicated Wasm backend that performs very fast JIT compi
 V8 takes care of JIT compiling Wasm to machine code, of applying compiler optimizations, and of adaptively switching from unoptimized to optimized code while the query is running.
 See our EDBT 2023 paper for more information.
 
-\
-\
+<br>
+<br>
 
 </details>
 
@@ -345,8 +343,8 @@ Furthermore, our DSL supports *three-valued logic* (3VL): elements can be declar
 This is a big relief when implementing database operator logic.
 When attributes in a table are declared `NOT NULL`, then the code that would implement 3VL is actually never even generated.
 
-\
-\
+<br>
+<br>
 
 </details>
 
@@ -373,8 +371,8 @@ In addition, we have developed a novel algorithm that is based on a reduction of
 The plan enumeration algorithm is named `HeuristicSearch`.
 See our SIGMOD 2023 paper for more information.
 
-\
-\
+<br>
+<br>
 
 </details>
 
@@ -385,8 +383,8 @@ Flags `--astdot`, `--graphdot`, and `--plandot` render the respective query repr
 Then, if the Graphviz library is installed, the graph is directly rendered to PDF.
 Otherwise, the *dot* representation of the graph is output.
 
-\
-\
+<br>
+<br>
 
 </details>
 

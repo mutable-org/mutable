@@ -135,6 +135,9 @@ void CreateTable::execute(Diagnostic &diag)
 
     table->layout(C.data_layout());
     table->store(C.create_store(*table));
+
+    if (not Options::Get().quiet)
+        diag.out() << "Created table " << table->name << ".\n";
 }
 
 

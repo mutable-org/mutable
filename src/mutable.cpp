@@ -75,13 +75,18 @@ void m::process_stream(std::istream &in, const char *filename, Diagnostic diag)
     ast::Sema sema(diag);
 
     while (parser.token()) {
+        bool err = false;
+        diag.clear();
         Timer &timer = C.timer();
         auto ast = parser.parse();
+        err |= diag.num_errors() > 0;
+
         diag.clear();
         auto cmd = sema.analyze(std::move(ast));
+        err |= diag.num_errors() > 0;
 
-        M_insist((diag.num_errors() == 0) == bool(cmd), "when there are no errors, Sema must've returned a command");
-        if (cmd)
+        M_insist(not err == bool(cmd), "when there are no errors, Sema must have returned a command");
+        if (not err and cmd)
             cmd->execute(diag);
 
         if (Options::Get().times) {

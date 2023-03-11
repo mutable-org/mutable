@@ -139,6 +139,8 @@ struct ComponentSet
         return it->second.description;
     }
 
+    /** Returns the `Component` of the specified \p name.  Throws `std::invalid_argument` if no such `Component` exists
+     */
     T & get(const char *name) const {
         auto it = components_.find(name);
         if (it == components_.end())
@@ -444,7 +446,8 @@ struct M_EXPORT Catalog
         );
         instructions_.add(pool(name), std::move(I));
     }
-    /** Returns a reference to the `DatabaseInstruction` with the given `name`. */
+    /** Returns a reference to the `DatabaseInstruction` with the given `name`.  Throws `std::invalid_argument` if no
+     * `Instruction` with the given `name` exists. */
     std::unique_ptr<DatabaseInstruction> create_instruction(const char *name,
                                                             const std::vector<std::string> &args) const
     {

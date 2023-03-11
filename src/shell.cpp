@@ -389,10 +389,12 @@ int main(int argc, const char **argv)
 
     if (Options::Get().show_version) {
         if (term_has_color)
-            std::cout << "mu" << Diagnostic::ITALIC << 't' << Diagnostic::RESET << "able";
+            std::cout << term::FG_WHITE << "mu"
+                      << term::ITALIC << term::fg(30) << 't' << term::RESET
+                      << term::FG_WHITE << "able" << term::RESET;
         else
             std::cout << "mutable";
-        std::cout << "\n© 2021, Big Data Analytics Group";
+        std::cout << "\n© 2023, Saarland University";
         auto &v = version::get();
         std::cout << "\nversion " << v.GIT_REV;
         if (not streq(v.GIT_BRANCH, ""))

@@ -607,8 +607,8 @@ Immanuel Haffner\
                     } else
                         ss.put('\n');
                 }
+                rx.history_save(history_file);
             }
-            rx.history_save(history_file);
         } else {
             std::ifstream in(filename);
             if (not in) {

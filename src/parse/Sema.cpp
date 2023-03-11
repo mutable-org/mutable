@@ -1387,7 +1387,14 @@ void Sema::operator()(LimitClause &c)
 
 /*===== Instruction ==================================================================================================*/
 
-void Sema::operator()(Instruction&) { /* nothing to be done */ }
+void Sema::operator()(Instruction &I) {
+    Catalog &C = Catalog::Get();
+    try {
+        command_ = C.create_instruction(I.name, I.args);
+    } catch (std::invalid_argument) {
+        diag.e(I.tok.pos) << "Instruction " << I.name << " unknown\n";
+    }
+}
 
 
 /*===== Stmt =========================================================================================================*/

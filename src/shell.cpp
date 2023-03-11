@@ -332,11 +332,11 @@ int main(int argc, const char **argv)
         "use the plan table optimized for large and sparse query graphs",               /* Description      */
         [&](bool) { Options::Get().plan_table_type = Options::PT_LargeAndSparse; });    /* Callback         */
 
-    ADD(bool, Options::Get().list_stores, false,            /* Type, Var, Init  */
-        nullptr, "--list-stores",                           /* Short, Long      */
-        "list all available stores",                        /* Description      */
+    ADD(bool, Options::Get().list_data_layouts, false,      /* Type, Var, Init  */
+        nullptr, "--list-data-layouts",                     /* Short, Long      */
+        "list all available data layouts",                  /* Description      */
         [&](bool) {                                         /* Callback         */
-            Options::Get().list_stores = true;
+            Options::Get().list_data_layouts = true;
             show_any_help = true;
         }
     );
@@ -418,15 +418,15 @@ Immanuel Haffner\
         std::cout << "WHERE\n" << AP;
     }
 
-    if (Options::Get().list_stores) {
-        std::cout << "List of available stores:";
-        range stores(C.stores_cbegin(), C.stores_cend());
+    if (Options::Get().list_data_layouts) {
+        std::cout << "List of available data layouts:";
+        range layouts(C.data_layouts_cbegin(), C.data_layouts_cend());
         std::size_t max_len = 0;
-        for (auto &store : stores) max_len = std::max(max_len, strlen(store.first));
-        for (auto &store : stores) {
-            std::cout << "\n    " << std::setw(max_len) << std::left << store.first;
-            if (store.second.description())
-                std::cout << "    -    " << store.second.description();
+        for (auto &layout : layouts) max_len = std::max(max_len, strlen(layout.first));
+        for (auto &layout : layouts) {
+            std::cout << "\n    " << std::setw(max_len) << std::left << layout.first;
+            if (layout.second.description())
+                std::cout << "    -    " << layout.second.description();
         }
         std::cout << std::endl;
     }

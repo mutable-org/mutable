@@ -253,9 +253,9 @@ def end2end_command(test_case):
     setup = os.path.join(os.path.dirname(test_case.filename), 'data', 'schema.sql')
     command = [binary, '--quiet', '--noprompt', setup, '-']
     configurations = list()
-    store_options = enumerate_feature_options('store')
+    data_layout_options = enumerate_feature_options('data-layout')
     backend_options = enumerate_feature_options('backend')
-    for combination in itertools.product(store_options, backend_options):
+    for combination in itertools.product(data_layout_options, backend_options):
         configurations.append(list(itertools.chain.from_iterable(combination)))
     if 'join' in test_case.filename:
         configurations.extend(enumerate_feature_options('plan-enumerator'))

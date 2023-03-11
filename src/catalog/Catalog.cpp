@@ -83,13 +83,13 @@ static void add_catalog_args()
     C.arg_parser().add<const char*>(
         /* group=       */ "Catalog",
         /* short=       */ nullptr,
-        /* long=        */ "--store",
-        /* description= */ "store implementation to use",
+        /* long=        */ "--data-layout",
+        /* description= */ "data layout to use",
         [&C] (const char *str) {
             try {
-                C.default_store(str);
+                C.default_data_layout(str);
             } catch (std::invalid_argument) {
-                std::cerr << "There is no store with the name \"" << str << "\".\n";
+                std::cerr << "There is no data layout with the name \"" << str << "\".\n";
                 std::exit(EXIT_FAILURE);
             }
         }

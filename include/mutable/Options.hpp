@@ -21,7 +21,7 @@ struct M_EXPORT Options
     /*----- Help -----------------------------------------------------------------------------------------------------*/
     bool show_help;
     bool show_version;
-    bool list_stores;
+    bool list_data_layouts;
     bool list_cardinality_estimators;
     bool list_plan_enumerators;
     bool list_backends;

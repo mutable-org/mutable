@@ -405,6 +405,7 @@ Immanuel Haffner\
 , Tobias Kopp\
 , Jonas Lauermann\
 , Felix Brinkmann\
+, Til Roth\
 ";
         std::cout << std::endl;
         std::exit(EXIT_SUCCESS);

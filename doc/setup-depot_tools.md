@@ -26,5 +26,3 @@ After the installation you must set proper permissions for `/opt/depot_tools`, e
 # setfacl -m g:depot_tools:rwX /opt/depot_tools/
 ```
 Then sign your user in to the new group with `newgrp depot_tools` or login to a new session.  Add every further user with permission to use the depot-tools to group `depot_tools`.
-
-You must additionally install the AUR package `google-cloud-sdk`.

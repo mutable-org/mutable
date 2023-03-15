@@ -4,8 +4,6 @@ import os
 import subprocess
 import sys
 
-import requests
-
 LEX_BINARY = os.path.join(os.path.dirname(sys.argv[0]), '../build/release-static/bin/lex')
 FOLLOW_SET_TABLE = os.path.join(os.path.dirname(sys.argv[0]), '../src/tables/FollowSet.tbl')
 
@@ -121,12 +119,9 @@ def parse(stream):
 
 def readGrammar(filename=None):
     if filename is None:
-        f = requests.get('https://gitlab.cs.uni-saarland.de/api/v4/projects/163/wikis/Syntax%2FGrammar',
-                         headers={'PRIVATE-TOKEN': 'yVSNGMpPZg_mcsCiV6eP'}).json()
-        return parse(tokenGenerator(codeGenerator(f['content'].split(sep='\n'))))
-    else:
-        with open(filename, 'rt') as f:
-            return parse(tokenGenerator(codeGenerator(f)))
+        filename = "../doc/syntax-grammar.md"
+    with open(filename, 'rt') as f:
+        return parse(tokenGenerator(codeGenerator(f)))
 
 
 def firstSet(G: dict):

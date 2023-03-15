@@ -27,8 +27,8 @@ SpnWrapper SpnWrapper::learn_spn_table(const char *name_of_database, const char 
 
     auto primary_key = table.primary_key();
     std::vector<std::size_t> primary_key_id;
-    for (auto elem : primary_key) {
-        primary_key_id.push_back(elem->id);
+    for (auto &elem : primary_key) {
+        primary_key_id.push_back(elem.get().id);
     }
 
     MatrixXf data(num_rows, num_columns - primary_key_id.size());

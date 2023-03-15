@@ -411,10 +411,10 @@ struct M_EXPORT Table
     void layout(const storage::DataLayoutFactory &factory);
 
     /** Returns all attributes forming the primary key. */
-    std::vector<const Attribute*> primary_key() const {
-        std::vector<const Attribute*> res;
+    std::vector<std::reference_wrapper<const Attribute>> primary_key() const {
+        std::vector<std::reference_wrapper<const Attribute>> res;
         for (auto id : primary_key_)
-            res.push_back(&operator[](id));
+            res.emplace_back(operator[](id));
         return res;
     }
     /** Adds an attribute with the given `name` to the primary key of this table. Throws `std::out_of_range` if no

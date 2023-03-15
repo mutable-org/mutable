@@ -1818,7 +1818,7 @@ void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second)
     for (auto &e : schema_.get()) {
         /*----- Create schema for single entry and load and store proxies for it. -----*/
         Schema entry_schema;
-        entry_schema.add(e.id, e.type);
+        entry_schema.add(e.id, e.type, e.constraints);
         auto load  = buffer_.get().create_load_proxy(entry_schema);
         auto store = buffer_.get().create_store_proxy(entry_schema);
 

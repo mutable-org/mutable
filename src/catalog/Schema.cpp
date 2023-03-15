@@ -10,6 +10,7 @@
 #include <mutable/IR/Operator.hpp>
 #include <mutable/IR/PlanTable.hpp>
 #include <mutable/Options.hpp>
+#include <mutable/util/enum_ops.hpp>
 #include <mutable/util/fn.hpp>
 #include <stdexcept>
 
@@ -44,6 +45,13 @@ M_LCOV_EXCL_STOP
  * Attribute
  *====================================================================================================================*/
 
+bool Attribute::is_unique() const {
+    auto primary_key = table.primary_key();
+    auto pred = [this](const auto &ref){ return *this == ref.get(); };
+    return unique or (primary_key.size() == 1 and
+                      std::find_if(primary_key.cbegin(), primary_key.cend(), pred) != primary_key.cend());
+}
+
 M_LCOV_EXCL_START
 void Attribute::dump(std::ostream &out) const
 {
@@ -64,8 +72,16 @@ M_LCOV_EXCL_STOP
 Schema Table::schema() const
 {
     Schema S;
-    for (auto &attr : *this)
-        S.add({this->name, attr.name}, attr.type);
+    for (auto &attr : *this) {
+        Schema::entry_type::constraints_t constraints{0};
+        if (attr.not_nullable)
+            constraints |= Schema::entry_type::NOT_NULLABLE;
+        if (attr.is_unique())
+            constraints |= Schema::entry_type::UNIQUE;
+        if (attr.reference and attr.reference->is_unique())
+            constraints |= Schema::entry_type::REFERENCES_UNIQUE;
+        S.add({this->name, attr.name}, attr.type, constraints);
+    }
     return S;
 }
 

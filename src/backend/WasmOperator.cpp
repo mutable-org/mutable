@@ -552,9 +552,9 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pi
     uint64_t aggregates_size_in_bits = 0;
     for (auto &info : aggregates) {
         if (info.fnid == m::Function::FN_COUNT)
-            ht_schema.add(info.id, info.type, Schema::entry_type::constraints_t(0)); // i.e. not nullable
+            ht_schema.add(info.id, info.type, Schema::entry_type::NOT_NULLABLE);
         else
-            ht_schema.add(info.id, info.type); // i.e. nullable (due to default value)
+            ht_schema.add(info.id, info.type);
         aggregates_size_in_bits += info.type->size();
     }
 
@@ -2107,14 +2107,13 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
     auto aggregates_info = compute_aggregate_info(M.grouping.aggregates(), M.grouping.schema(), num_keys);
     const auto &aggregates = aggregates_info.first;
     const auto &avg_aggregates = aggregates_info.second;
-    Schema::entry_type::constraints_t not_nullable{0}; // i.e. not nullable
     bool needs_build_counter = false; ///< flag whether additional COUNT per group during build phase must be emitted
     uint64_t aggregates_size_in_bits = 0;
     for (auto &info : aggregates) {
         if (info.fnid == m::Function::FN_COUNT)
-            ht_schema.add(info.id, info.type, not_nullable); // i.e. not nullable
+            ht_schema.add(info.id, info.type, Schema::entry_type::NOT_NULLABLE);
         else
-            ht_schema.add(info.id, info.type); // i.e. nullable (due to default value)
+            ht_schema.add(info.id, info.type);
         aggregates_size_in_bits += info.type->size();
 
         /* Add additional COUNT per group during build phase if COUNT or SUM dependent on probe relation occurs. */
@@ -2129,10 +2128,12 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
         }
     }
     if (needs_build_counter) {
-        ht_schema.add(Schema::Identifier(C.pool("$build_counter")), Type::Get_Integer(Type::TY_Scalar, 8), not_nullable);
+        ht_schema.add(Schema::Identifier(C.pool("$build_counter")), Type::Get_Integer(Type::TY_Scalar, 8),
+                      Schema::entry_type::NOT_NULLABLE);
         aggregates_size_in_bits += 64;
     }
-    ht_schema.add(Schema::Identifier(C.pool("$probe_counter")), Type::Get_Integer(Type::TY_Scalar, 8), not_nullable);
+    ht_schema.add(Schema::Identifier(C.pool("$probe_counter")), Type::Get_Integer(Type::TY_Scalar, 8),
+                  Schema::entry_type::NOT_NULLABLE);
     aggregates_size_in_bits += 64;
 
     /*----- Decompose each clause of the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/

@@ -1501,13 +1501,14 @@ void Sema::operator()(CreateTableStmt &s)
                 if (is_unique)
                     diag.w(c->tok.pos) << "Duplicate definition of attribute " << attr->name.text << " as UNIQUE.\n";
                 is_unique = true;
+                T->at(attr->name.text).unique = true;
             }
 
             if (is<NotNullConstraint>(c)) {
                 if (is_not_null)
                     diag.w(c->tok.pos) << "Duplicate definition of attribute " << attr->name.text << " as NOT NULL.\n";
                 is_not_null = true;
-                T->at(attr->name.text).nullable = false;
+                T->at(attr->name.text).not_nullable = true;
             }
 
             if (auto check = cast<CheckConditionConstraint>(c)) {
@@ -1532,6 +1533,7 @@ void Sema::operator()(CreateTableStmt &s)
                         auto &ref_attr = ref_table.at(ref->attr_name.text);
                         if (attr->type != ref_attr.type)
                             diag.e(ref->attr_name.pos) << "Referenced attribute has different type.\n";
+                        T->at(attr->name.text).reference = &ref_attr;
                     } catch (std::out_of_range) {
                         diag.e(ref->attr_name.pos) << "Invalid reference, attribute " << ref->attr_name.text
                                                   << " not found in table " << ref->table_name.text << ".\n";
@@ -1624,7 +1626,7 @@ void Sema::operator()(InsertStmt &s)
                 }
 
                 case InsertStmt::I_Null: {
-                    if (not attr.nullable)
+                    if (attr.not_nullable)
                         diag.e(s.table_name.pos) << "Value NULL is not valid for attribute " << attr.name
                                                  << " declared as NOT NULL.\n";
                     break;

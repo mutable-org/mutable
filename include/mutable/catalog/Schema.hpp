@@ -65,7 +65,9 @@ M_LCOV_EXCL_STOP
     {
         enum constraints_t : uint64_t
         {
-            NULLABLE = 0b1, ///< entry may be NULL
+            NOT_NULLABLE = 0b1U,           ///< entry must not be NULL
+            UNIQUE = 0b10U,                ///< entry has unique values
+            REFERENCES_UNIQUE = 0b100U,    ///< entry references unique values
         };
 
         Identifier id;
@@ -73,13 +75,16 @@ M_LCOV_EXCL_STOP
         constraints_t constraints;
 
         public:
-        entry_type(Identifier id, const Type *type, constraints_t constraints = NULLABLE)
+        entry_type() = default;
+        entry_type(Identifier id, const Type *type, constraints_t constraints = constraints_t{0})
             : id(id)
             , type(M_notnull(type))
-            , constraints(constraints) /* TODO: compute from table constraint */
+            , constraints(constraints)
         { }
 
-        bool nullable() const { return bool(NULLABLE & constraints); }
+        bool nullable() const { return not (NOT_NULLABLE & constraints); }
+        bool unique() const { return bool(UNIQUE & constraints); }
+        bool references_unique() const { return bool(REFERENCES_UNIQUE & constraints); }
     };
 
     private:
@@ -165,7 +170,7 @@ M_LCOV_EXCL_STOP
         Schema res;
         for (auto &e : *this) {
             if (not res.has(e.id))
-                res.add(e.id, e.type);
+                res.add(e.id, e.type, e.constraints);
         }
         return res;
     }
@@ -175,7 +180,7 @@ M_LCOV_EXCL_STOP
         Schema res;
         for (auto &e : *this) {
             if (not e.type->is_none())
-                res.add(e.id, e.type);
+                res.add(e.id, e.type, e.constraints);
         }
         return res;
     }
@@ -234,7 +239,9 @@ inline Schema operator&(const Schema &left, const Schema &right)
         if (it != right.end()) {
             if (e.type != it->type)
                 throw invalid_argument("type mismatch");
-            res.add(e.id, e.type);
+            if (e.constraints != it->constraints)
+                throw invalid_argument("constraints mismatch");
+            res.add(e.id, e.type, e.constraints);
         }
     }
     return res;
@@ -263,7 +270,10 @@ struct M_EXPORT Attribute
     const Table &table; ///< the table the attribute belongs to
     const PrimitiveType *type; ///< the type of the attribute
     const char *name; ///< the name of the attribute
-    bool nullable = true; ///< the flag indicating whether the attribute may be NULL
+    bool not_nullable = false; ///< the flag indicating whether the attribute must not be NULL
+    ///> the flag indicating whether the attribute is unique; note that a singleton primary key is also unique
+    bool unique = false;
+    const Attribute *reference = nullptr; ///< the referenced attribute
 
     private:
     explicit Attribute(std::size_t id, const Table &table, const PrimitiveType *type, const char *name)
@@ -279,6 +289,10 @@ struct M_EXPORT Attribute
     public:
     Attribute(const Attribute&) = delete;
     Attribute(Attribute&&) = default;
+
+    /** Returns `true` iff `this` `Attribute` is unique, i.e. it is either specified with an UNIQUE constraint or it is
+     * a singleton primary key of the corresponding table. */
+    bool is_unique() const;
 
     /** Compares to attributes.  Attributes are equal if they have the same `id` and belong to the same `table`. */
     bool operator==(const Attribute &other) const { return &this->table == &other.table and this->id == other.id; }

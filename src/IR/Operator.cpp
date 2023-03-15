@@ -220,7 +220,7 @@ ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
         if (alias) { // alias was given
             Schema::Identifier id(P.second);
             S.add(id, ty);
-        } else if (auto D = cast<const ast::Designator>(&P.first.get())) { // no alias, but designator -> keep name
+        } else if (auto D = cast<const ast::Designator>(P.first)) { // no alias, but designator -> keep name
             Schema::Identifier id(D->table_name.text, D->attr_name.text);
             S.add(id, ty);
         } else { // no designator, no alias -> derive name
@@ -244,18 +244,24 @@ GroupingOperator::GroupingOperator(std::vector<group_type> group_by,
 {
     auto &C = Catalog::Get();
     auto &S = schema();
-    for (auto [grp, alias] : group_by) {
-        auto pt = as<const PrimitiveType>(grp.get().type());
-        if (alias) {
-            S.add(alias, pt->as_scalar());
-        } else if (auto D = cast<const ast::Designator>(&grp.get())) { // designator -> keep name
-            Schema::Identifier id(nullptr, D->attr_name.text); // w/o table name
-            S.add(id, pt->as_scalar());
-        } else {
-            std::ostringstream oss;
-            oss << grp.get();
-            auto alias = C.pool(oss.str().c_str());
-            S.add(alias, pt->as_scalar());
+
+    {
+        Schema::entry_type::constraints_t constraints{0};
+        if (group_by.size() == 1)
+            constraints |= Schema::entry_type::UNIQUE;
+        for (auto [grp, alias] : group_by) {
+            auto pt = as<const PrimitiveType>(grp.get().type());
+            if (alias) {
+                S.add(alias, pt->as_scalar(), constraints);
+            } else if (auto D = cast<const ast::Designator>(grp)) { // designator -> keep name
+                Schema::Identifier id(nullptr, D->attr_name.text); // w/o table name
+                S.add(id, pt->as_scalar(), constraints);
+            } else {
+                std::ostringstream oss;
+                oss << grp.get();
+                auto alias = C.pool(oss.str().c_str());
+                S.add(alias, pt->as_scalar(), constraints);
+            }
         }
     }
 
@@ -264,7 +270,10 @@ GroupingOperator::GroupingOperator(std::vector<group_type> group_by,
         std::ostringstream oss;
         oss << e.get();
         auto alias = C.pool(oss.str().c_str());
-        S.add(alias, ty);
+        Schema::entry_type::constraints_t constraints{0};
+        if (e.get().get_function().fnid == Function::FN_COUNT)
+            constraints |= Schema::entry_type::NOT_NULLABLE;
+        S.add(alias, ty, constraints);
     }
 }
 
@@ -278,7 +287,10 @@ AggregationOperator::AggregationOperator(std::vector<std::reference_wrapper<cons
         std::ostringstream oss;
         oss << e.get();
         auto alias = C.pool(oss.str().c_str());
-        S.add(alias, ty);
+        Schema::entry_type::constraints_t constraints{Schema::entry_type::UNIQUE}; // since a single tuple is produced
+        if (e.get().get_function().fnid == Function::FN_COUNT)
+            constraints |= Schema::entry_type::NOT_NULLABLE;
+        S.add(alias, ty, constraints);
     }
 }
 

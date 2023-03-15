@@ -254,11 +254,17 @@ void m::execute_statement(Diagnostic &diag, const ast::Stmt &stmt, const bool is
                     [&](const PrimaryKeyConstraint&) {
                         T.add_primary_key(attr->name.text);
                     },
-                    [&](const UniqueConstraint&) { M_unreachable("not implemented"); },
-                    [&](const NotNullConstraint&) {
-                        T.at(attr->name.text).nullable = false;
+                    [&](const UniqueConstraint&) {
+                        T.at(attr->name.text).unique = true;
                     },
-                    [&](const ReferenceConstraint&) { M_unreachable("not implemented"); },
+                    [&](const NotNullConstraint&) {
+                        T.at(attr->name.text).not_nullable = true;
+                    },
+                    [&](const ReferenceConstraint &ref) {
+                        auto &ref_table = DB.get_table(ref.table_name.text);
+                        auto &ref_attr = ref_table.at(ref.attr_name.text);
+                        T.at(attr->name.text).reference = &ref_attr;
+                    },
                     [](auto&&) { M_unreachable("constraint not implemented"); },
                 }, *c, tag<ConstASTConstraintVisitor>{});
             }

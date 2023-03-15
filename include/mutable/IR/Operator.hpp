@@ -5,6 +5,7 @@
 #include <mutable/IR/CNF.hpp>
 #include <mutable/IR/QueryGraph.hpp>
 #include <mutable/storage/Store.hpp>
+#include <mutable/util/enum_ops.hpp>
 #include <mutable/util/macro.hpp>
 #include <functional>
 #include <iostream>
@@ -233,8 +234,8 @@ struct M_EXPORT ScanOperator : Producer
         , alias_(M_notnull(alias))
     {
         auto &S = schema();
-        for (auto &attr : store.table())
-            S.add({alias, attr.name}, attr.type);
+        for (auto &e : store.table().schema())
+            S.add({alias, e.id.name}, e.type, e.constraints);
     }
 
     const Store & store() const { return store_; }
@@ -293,9 +294,35 @@ struct M_EXPORT ProjectionOperator : Producer, Consumer
             throw invalid_argument("no child given");
         children().push_back(child);
         child->parent(this);
+
+        /* Add constraints from child to computed schema. */
+        auto &S = schema();
+        for (std::size_t i = 0; i < projections_.size(); ++i) {
+            if (auto D = cast<const ast::Designator>(projections_[i].first)) {
+                Schema::Identifier id(D->table_name.text, D->attr_name.text);
+                S[i].constraints |= child->schema()[id].second.constraints;
+            }
+        }
     }
-    virtual Producer * set_child(Producer*, std::size_t) override {
-        M_unreachable("not supported by ProjectionOperator");
+    virtual Producer * set_child(Producer *child, std::size_t i) override {
+        if (not child)
+            throw invalid_argument("no child given");
+        if (i >= children().size())
+            throw out_of_range("index i out of bounds");
+        auto old = children()[i];
+        children()[i] = child;
+        child->parent(this);
+
+        /* Add constraints from child to computed schema. */
+        auto &S = schema();
+        for (std::size_t i = 0; i < projections_.size(); ++i) {
+            if (auto D = cast<const ast::Designator>(projections_[i].first)) {
+                Schema::Identifier id(D->table_name.text, D->attr_name.text);
+                S[i].constraints |= child->schema()[id].second.constraints;
+            }
+        }
+
+        return old;
     }
 
     const std::vector<projection_type> & projections() const { return projections_; }
@@ -344,6 +371,15 @@ struct M_EXPORT GroupingOperator : Producer, Consumer
             throw invalid_argument("no child given");
         children().push_back(child);
         child->parent(this);
+
+        /* Add constraints from child to computed schema. */
+        auto &S = schema();
+        for (std::size_t i = 0; i < group_by_.size(); ++i) {
+            if (auto D = cast<const ast::Designator>(group_by_[i].first)) {
+                Schema::Identifier id(D->table_name.text, D->attr_name.text);
+                S[i].constraints |= child->schema()[id].second.constraints;
+            }
+        }
     }
     virtual Producer * set_child(Producer *child, std::size_t i) override {
         if (not child)
@@ -353,6 +389,16 @@ struct M_EXPORT GroupingOperator : Producer, Consumer
         auto old = children()[i];
         children()[i] = child;
         child->parent(this);
+
+        /* Add constraints from child to computed schema. */
+        auto &S = schema();
+        for (std::size_t i = 0; i < group_by_.size(); ++i) {
+            if (auto D = cast<const ast::Designator>(group_by_[i].first)) {
+                Schema::Identifier id(D->table_name.text, D->attr_name.text);
+                S[i].constraints |= child->schema()[id].second.constraints;
+            }
+        }
+
         return old;
     }
 

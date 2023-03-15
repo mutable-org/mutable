@@ -451,8 +451,8 @@ namespace wasm {
  * execution of the returned code must *not* be split among multiple function calls.  Otherwise, the store does *not*
  * have to be done in a single pass, i.e. the returned code may be emitted into a function which can be called
  * multiple times and each call starts storing at exactly the point where it has ended in the last call. The given
- * variable \p tuple_id will be incremented automatically after storing/loading each tuple (i.e. code for this will
- * be emitted at the end of the block returned as second element).  Predication is supported and emitted respectively
+ * variable \p tuple_id will be incremented automatically before advancing to the next tuple (i.e. code for this will
+ * be emitted at the start of the block returned as third element).  Predication is supported and emitted respectively
  * for storing tuples.
  *
  * Does not emit any code but returns three `wasm::Block`s containing code: the first one initializes all needed
@@ -512,6 +512,22 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
     if (is_predicated) {
         BLOCK_OPEN(stores) {
             pred = env.extract_predicate().is_true_and_not_null();
+        }
+    }
+
+    /*----- Increment tuple ID before advancing to the next tuple. -----*/
+    if constexpr (IsStore) {
+        BLOCK_OPEN(jumps) {
+            if (is_predicated) {
+                M_insist(bool(pred));
+                tuple_id += pred->to<uint32_t>();
+            } else {
+                tuple_id += 1U;
+            }
+        }
+    } else {
+        BLOCK_OPEN(jumps) {
+            tuple_id += 1U;
         }
     }
 
@@ -1308,22 +1324,6 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                 },
                 [](std::monostate) { M_unreachable("value must be loaded beforehand"); },
             }, values[idx]);
-        }
-    }
-
-    /*----- Increment tuple ID after storing/loading one tuple. -----*/
-    if constexpr (IsStore) {
-        BLOCK_OPEN(stores) {
-            if (is_predicated) {
-                M_insist(bool(pred));
-                tuple_id += pred->to<uint32_t>();
-            } else {
-                tuple_id += 1U;
-            }
-        }
-    } else {
-        BLOCK_OPEN(loads) {
-            tuple_id += 1U;
         }
     }
 
@@ -2184,20 +2184,21 @@ void Buffer<IsGlobal>::consume()
         };
     }
 
-    /*----- Emit storing code and increment size of buffer. -----*/
+    /*----- Emit storing code. -----*/
     stores.attach_to_current();
 
     if (layout_.is_finite()) {
-        IF (*size_ == uint32_t(layout_.num_tuples())) { // buffer full
+        IF (*size_ == uint32_t(layout_.num_tuples()) - 1U) { // buffer full
             /*----- Resume pipeline for each tuple in buffer and reset size of buffer to 0. -----*/
+            *size_ = uint32_t(layout_.num_tuples()); // increment size of buffer to resume pipeline even for last tuple
             resume_pipeline();
             *size_ = 0U;
         } ELSE { // buffer not full
-            /*----- Emit advancing code to next buffer slot. -----*/
+            /*----- Emit advancing code to next buffer slot and increment size of buffer. -----*/
             store_jumps.attach_to_current();
         };
     } else {
-        IF (*size_ == *capacity_) { // buffer full
+        IF (*size_ == *capacity_ - 1U) { // buffer full
             /*----- Resize buffer by doubling its capacity. -----*/
             const uint32_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
             auto buffer_size_in_bytes = (*capacity_ / uint32_t(layout_.child().num_tuples())) * child_size_in_bytes;
@@ -2207,7 +2208,7 @@ void Buffer<IsGlobal>::consume()
             *capacity_ *= 2U;
         };
 
-        /*----- Emit advancing code to next buffer slot. -----*/
+        /*----- Emit advancing code to next buffer slot and increment size of buffer. -----*/
         store_jumps.attach_to_current();
     }
 }

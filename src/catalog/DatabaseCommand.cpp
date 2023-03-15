@@ -1,7 +1,9 @@
 #include <mutable/catalog/DatabaseCommand.hpp>
 
+#include "backend/StackMachine.hpp"
 #include <mutable/catalog/Catalog.hpp>
 #include <mutable/IR/Optimizer.hpp>
+#include <mutable/mutable.hpp>
 #include <mutable/Options.hpp>
 #include <mutable/util/DotTool.hpp>
 
@@ -97,7 +99,41 @@ void QueryDatabase::execute(Diagnostic &diag)
 
 void InsertRecords::execute(Diagnostic&)
 {
-    M_unreachable("not yet implemented");
+    Catalog &C = Catalog::Get();
+    auto &DB = C.get_database_in_use();
+
+    auto &I = ast<ast::InsertStmt>();
+    auto &T = DB.get_table(I.table_name.text);
+    auto &store = T.store();
+    StoreWriter W(store);
+    auto &S = W.schema();
+    Tuple tup(S);
+
+    /* Write all tuples to the store. */
+    for (auto &t : I.tuples) {
+        StackMachine get_tuple(Schema{});
+        for (std::size_t i = 0; i != t.size(); ++i) {
+            auto &v = t[i];
+            switch (v.first) {
+                case ast::InsertStmt::I_Null:
+                    get_tuple.emit_St_Tup_Null(0, i);
+                    break;
+
+                case ast::InsertStmt::I_Default:
+                    /* nothing to be done, Tuples are initialized to default values */
+                    break;
+
+                case ast::InsertStmt::I_Expr:
+                    get_tuple.emit(*v.second);
+                    get_tuple.emit_Cast(S[i].type, v.second->type());
+                    get_tuple.emit_St_Tup(0, i, S[i].type);
+                    break;
+            }
+        }
+        Tuple *args[] = { &tup };
+        get_tuple(args);
+        W.append(tup);
+    }
 }
 
 void UpdateRecords::execute(Diagnostic&)

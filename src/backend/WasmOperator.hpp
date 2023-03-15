@@ -26,14 +26,14 @@ namespace m {
     X(SimpleHashJoin<M_COMMA(false) true>) \
     X(SimpleHashJoin<M_COMMA(true) false>) \
     X(SimpleHashJoin<M_COMMA(true) true>) \
-    /*X(SortMergeJoin<M_COMMA(false) M_COMMA(false) false>) \
+    X(SortMergeJoin<M_COMMA(false) M_COMMA(false) false>) \
     X(SortMergeJoin<M_COMMA(false) M_COMMA(false) true>) \
     X(SortMergeJoin<M_COMMA(false) M_COMMA(true)  false>) \
     X(SortMergeJoin<M_COMMA(false) M_COMMA(true)  true>) \
     X(SortMergeJoin<M_COMMA(true)  M_COMMA(false) false>) \
     X(SortMergeJoin<M_COMMA(true)  M_COMMA(false) true>) \
     X(SortMergeJoin<M_COMMA(true)  M_COMMA(true)  false>) \
-    X(SortMergeJoin<M_COMMA(true)  M_COMMA(true)  true>)*/ \
+    X(SortMergeJoin<M_COMMA(true)  M_COMMA(true)  true>) \
     X(Limit) \
     X(HashBasedGroupJoin)
 
@@ -598,17 +598,17 @@ template<bool SortLeft, bool SortRight, bool Predicated>
 struct Match<wasm::SortMergeJoin<SortLeft, SortRight, Predicated>> : MatchBase
 {
     const JoinOperator &join;
-    const Wildcard &build;
-    const Wildcard &probe;
+    const Wildcard &parent; ///< the referenced relation with unique join attributes
+    const Wildcard &child; ///< the relation referencing the parent relation
     std::vector<std::reference_wrapper<const MatchBase>> children;
     std::unique_ptr<const storage::DataLayoutFactory> left_materializing_factory;
     std::unique_ptr<const storage::DataLayoutFactory> right_materializing_factory;
 
-    Match(const JoinOperator *join, const Wildcard *build, const Wildcard *probe,
+    Match(const JoinOperator *join, const Wildcard *parent, const Wildcard *child,
           std::vector<std::reference_wrapper<const MatchBase>> &&children)
         : join(*join)
-        , build(*build)
-        , probe(*probe)
+        , parent(*parent)
+        , child(*child)
         , children(std::move(children))
         , left_materializing_factory(std::make_unique<storage::RowLayoutFactory>()) // TODO: let optimizer decide this
         , right_materializing_factory(std::make_unique<storage::RowLayoutFactory>()) // TODO: let optimizer decide this

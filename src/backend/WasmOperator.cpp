@@ -2921,25 +2921,50 @@ ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated>::pre_condition(
         return pre_cond;
     }
 
-    // FIXME: must be foreign key join
+    /*----- Decompose each clause of the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
+    auto parent = std::get<1>(partial_inner_nodes);
+    auto child  = std::get<2>(partial_inner_nodes);
+    M_insist(parent);
+    M_insist(child_idx != 1 or child);
+    std::vector<Schema::Identifier> keys_parent, keys_child;
+    for (auto &clause : join.predicate()) {
+        M_insist(clause.size() == 1, "invalid equi-predicate");
+        auto &literal = clause[0];
+        auto &binary = as<const BinaryExpr>(literal.expr());
+        M_insist((not literal.negative() and binary.tok == TK_EQUAL) or
+                 (literal.negative() and binary.tok == TK_BANG_EQUAL), "invalid equi-predicate");
+        M_insist(is<const Designator>(binary.lhs), "invalid equi-predicate");
+        M_insist(is<const Designator>(binary.rhs), "invalid equi-predicate");
+        Schema::Identifier id_first(*binary.lhs), id_second(*binary.rhs);
+        Schema::entry_type dummy; ///< dummy entry used in case of `child_idx` != 1, i.e. `child` is not yet set
+        const auto &[entry_parent, entry_child] = parent->schema().has(id_first)
+            ? std::make_pair(parent->schema()[id_first].second, child_idx == 1 ? child->schema()[id_second].second : dummy)
+            : std::make_pair(parent->schema()[id_second].second, child_idx == 1 ? child->schema()[id_first].second : dummy);
+        keys_parent.push_back(entry_parent.id);
+        keys_child.push_back(entry_child.id);
 
-    M_insist(child_idx < 2);
-    if ((not SortLeft and child_idx == 0) or (not SortRight and child_idx == 1)) {
-        /*----- Decompose each clause of the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
-        auto &build = *std::get<1>(partial_inner_nodes);
-        auto [keys_left, keys_right] = decompose_equi_predicate(join.predicate(), build.schema());
+        /*----- Sort merge join can only be used on unique parent key. -----*/
+        if (not entry_parent.unique()) {
+            pre_cond.add_condition(Unsatisfiable());
+            return pre_cond;
+        }
+    }
+    M_insist(keys_parent.size() == keys_child.size(), "number of found IDs differ");
+    M_insist(not keys_parent.empty(), "must find at least one ID");
 
-        /*----- Sort merge join without sorting needs its data sorted on the respective key (in either order). -----*/
+    if constexpr (not SortLeft or not SortRight) {
+        /*----- Sort merge join without sorting needs its data sorted on the respective key. -----*/
         Sortedness::order_t orders;
-        if (child_idx == 0) {
-            for (auto &key_left : keys_left) {
-                if (orders.find(key_left) == orders.cend())
-                    orders.add(key_left, Sortedness::O_UNDEF);
+        M_insist(child_idx < 2);
+        if (not SortLeft and child_idx == 0) {
+            for (auto &key_parent : keys_parent) {
+                if (orders.find(key_parent) == orders.cend())
+                    orders.add(key_parent, Sortedness::O_ASC); // TODO: support different order
             }
-        } else {
-            for (auto &key_right : keys_right) {
-                if (orders.find(key_right) == orders.cend())
-                    orders.add(key_right, Sortedness::O_UNDEF);
+        } else if (not SortRight and child_idx == 1) {
+            for (auto &key_child : keys_child) {
+                if (orders.find(key_child) == orders.cend())
+                    orders.add(key_child, Sortedness::O_ASC); // TODO: support different order
             }
         }
         pre_cond.add_condition(Sortedness(std::move(orders)));
@@ -2973,19 +2998,19 @@ ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated>::adapt_post_conditio
     }
     if constexpr (SortLeft or SortRight) {
         /*----- Decompose each clause of the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
-        auto [keys_left, keys_right] = decompose_equi_predicate(M.join.predicate(), M.build.schema());
+        auto [keys_parent, keys_child] = decompose_equi_predicate(M.join.predicate(), M.parent.schema());
 
         /*----- Sort merge join does sort the data on the respective key. -----*/
         if constexpr (SortLeft) {
-            for (auto &key_left : keys_left) {
-                if (orders.find(key_left) == orders.cend())
-                    orders.add(key_left, Sortedness::O_ASC); // add sortedness for left child (with default order ASC)
+            for (auto &key_parent : keys_parent) {
+                if (orders.find(key_parent) == orders.cend())
+                    orders.add(key_parent, Sortedness::O_ASC); // add sortedness for left child
             }
         }
         if constexpr (SortRight) {
-            for (auto &key_right : keys_right) {
-                if (orders.find(key_right) == orders.cend())
-                    orders.add(key_right, Sortedness::O_ASC); // add sortedness for right child (with default order ASC)
+            for (auto &key_child : keys_child) {
+                if (orders.find(key_child) == orders.cend())
+                    orders.add(key_child, Sortedness::O_ASC); // add sortedness for right child
             }
         }
     }
@@ -2997,10 +3022,124 @@ ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated>::adapt_post_conditio
 }
 
 template<bool SortLeft, bool SortRight, bool Predicated>
-void SortMergeJoin<SortLeft, SortRight, Predicated>::execute(const Match<SortMergeJoin>&, setup_t, pipeline_t,
-                                                             teardown_t)
+void SortMergeJoin<SortLeft, SortRight, Predicated>::execute(const Match<SortMergeJoin> &M, setup_t setup,
+                                                             pipeline_t pipeline, teardown_t teardown)
 {
-    M_unreachable("not implemented");
+    auto &env = CodeGenContext::Get().env();
+
+    /*----- Create infinite buffers to materialize the current results. -----*/
+    M_insist(bool(M.left_materializing_factory),
+             "`wasm::SortMergeJoin` must have a factory for the materialized left child");
+    M_insist(bool(M.right_materializing_factory),
+             "`wasm::SortMergeJoin` must have a factory for the materialized right child");
+    const auto schema_parent = M.parent.schema().drop_constants().deduplicate();
+    const auto schema_child  = M.child.schema().drop_constants().deduplicate();
+    GlobalBuffer buffer_parent(schema_parent, *M.left_materializing_factory),
+                 buffer_child(schema_child, *M.right_materializing_factory);
+
+    /*----- Create child functions. -----*/
+    FUNCTION(sort_merge_join_parent_pipeline, void(void)) // create function for parent pipeline
+    {
+        auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+        M.children[0].get().execute(
+            /* setup=    */ setup_t::Make_Without_Parent([&](){ buffer_parent.setup(); }),
+            /* pipeline= */ [&](){ buffer_parent.consume(); },
+            /* teardown= */ teardown_t::Make_Without_Parent([&](){ buffer_parent.teardown(); })
+        );
+    }
+    FUNCTION(sort_merge_join_child_pipeline, void(void)) // create function for child pipeline
+    {
+        auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+        M.children[1].get().execute(
+            /* setup=    */ setup_t::Make_Without_Parent([&](){ buffer_child.setup(); }),
+            /* pipeline= */ [&](){ buffer_child.consume(); },
+            /* teardown= */ teardown_t::Make_Without_Parent([&](){ buffer_child.teardown(); })
+        );
+    }
+    sort_merge_join_parent_pipeline(); // call parent function
+    sort_merge_join_child_pipeline(); // call child function
+
+    /*----- Decompose each clause of the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
+    std::vector<SortingOperator::order_type> order_parent, order_child;
+    for (auto &clause : M.join.predicate()) {
+        M_insist(clause.size() == 1, "invalid equi-predicate");
+        auto &literal = clause[0];
+        auto &binary = as<const BinaryExpr>(literal.expr());
+        M_insist((not literal.negative() and binary.tok == TK_EQUAL) or
+                 (literal.negative() and binary.tok == TK_BANG_EQUAL), "invalid equi-predicate");
+        M_insist(is<const Designator>(binary.lhs), "invalid equi-predicate");
+        M_insist(is<const Designator>(binary.rhs), "invalid equi-predicate");
+        auto [expr_parent, expr_child] = M.parent.schema().has(Schema::Identifier(*binary.lhs)) ?
+            std::make_pair(binary.lhs.get(), binary.rhs.get()) : std::make_pair(binary.rhs.get(), binary.lhs.get());
+        order_parent.emplace_back(*expr_parent, true); // ascending order
+        order_child.emplace_back(*expr_child, true); // ascending order
+    }
+    M_insist(order_parent.size() == order_child.size(), "number of found IDs differ");
+    M_insist(not order_parent.empty(), "must find at least one ID");
+
+    /*----- If necessary, invoke sorting algorithm with buffer to sort. -----*/
+    if constexpr (SortLeft)
+        quicksort(buffer_parent, order_parent);
+    if constexpr (SortRight)
+        quicksort(buffer_child, order_child);
+
+    /*----- Create predicate to check if child co-group is smaller or equal than the one of the parent relation. -----*/
+    auto child_smaller_equal = [&]() -> Bool {
+        std::unique_ptr<Bool> child_smaller_equal_;
+        for (std::size_t i = 0; i < order_child.size(); ++i) {
+            auto &des_parent = as<const Designator>(order_parent[i].first);
+            auto &des_child  = as<const Designator>(order_child[i].first);
+            Token leq(Position(nullptr), nullptr, TK_LESS_EQUAL);
+            auto cpy_parent = std::make_unique<Designator>(des_parent.tok, des_parent.table_name, des_parent.attr_name,
+                                                           des_parent.type(), des_parent.target());
+            auto cpy_child  = std::make_unique<Designator>(des_child.tok, des_child.table_name, des_child.attr_name,
+                                                           des_child.type(), des_child.target());
+            BinaryExpr expr(leq, std::move(cpy_child), std::move(cpy_parent));
+
+            auto child = env.get(Schema::Identifier(des_child));
+            Bool cmp = env.compile<_Bool>(expr).is_true_and_not_null();
+            if (auto old = child_smaller_equal_.get())
+                child_smaller_equal_ = std::make_unique<Bool>(*old and (is_null(child) or cmp));
+            else
+                child_smaller_equal_ = std::make_unique<Bool>(is_null(child) or cmp);
+        }
+        M_insist(bool(child_smaller_equal_));
+        return *child_smaller_equal_.release();
+    };
+
+    /*----- Compile data layouts to generate sequential loads from buffers. -----*/
+    Var<U32> tuple_id_parent, tuple_id_child; // default initialized to 0
+    auto [inits_parent, loads_parent, _jumps_parent] =
+        compile_load_sequential(buffer_parent.schema(), buffer_parent.base_address(), buffer_parent.layout(),
+                                buffer_parent.schema(), tuple_id_parent);
+    auto [inits_child, loads_child, _jumps_child] =
+        compile_load_sequential(buffer_child.schema(), buffer_child.base_address(), buffer_child.layout(),
+                                buffer_child.schema(), tuple_id_child);
+    /* since structured bindings cannot be used in lambda capture */
+    Block jumps_parent(std::move(_jumps_parent)), jumps_child(std::move(_jumps_child));
+
+    /*----- Process both buffers together. -----*/
+    setup();
+    inits_parent.attach_to_current();
+    inits_child.attach_to_current();
+    WHILE (tuple_id_parent < buffer_parent.size() and tuple_id_child < buffer_child.size()) { // neither end reached
+        loads_parent.attach_to_current();
+        loads_child.attach_to_current();
+        if constexpr (Predicated) {
+            env.add_predicate(M.join.predicate());
+            pipeline();
+        } else {
+            IF (env.compile(M.join.predicate()).is_true_and_not_null()) { // predicate fulfilled
+                pipeline();
+            };
+        }
+        IF (child_smaller_equal()) {
+            jumps_child.attach_to_current();
+        } ELSE {
+            jumps_parent.attach_to_current();
+        };
+    }
+    teardown();
 }
 
 // explicit instantiations to prevent linker errors

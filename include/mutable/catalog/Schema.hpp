@@ -116,30 +116,41 @@ M_LCOV_EXCL_STOP
     bool has(Identifier id) const { return find(id) != end(); }
 
     /** Returns the entry at index `idx` with in-bounds checking. */
-    const entry_type & at(std::size_t idx) const {
+    entry_type & at(std::size_t idx) {
         if (idx >= entries_.size())
             throw out_of_range("index out of bounds");
         return entries_[idx];
     }
+    /** Returns the entry at index `idx` with in-bounds checking. */
+    const entry_type & at(std::size_t idx) const { return const_cast<Schema*>(this)->at(idx); }
     /** Returns the entry at index `idx`. */
-    const entry_type & operator[](std::size_t idx) const {
+    entry_type & operator[](std::size_t idx) {
         M_insist(idx < entries_.size(), "index out of bounds");
         return entries_[idx];
     }
+    /** Returns the entry at index `idx`. */
+    const entry_type & operator[](std::size_t idx) const { return const_cast<Schema*>(this)->operator[](idx); }
 
     /** Returns a `std::pair` of the index and a reference to the entry with `Identifier` `id` with in-bounds checking.
      */
-    std::pair<std::size_t, const entry_type&> at(Identifier id) const {
+    std::pair<std::size_t, entry_type&> at(Identifier id) {
         auto pos = find(id);
         if (pos == end())
             throw out_of_range("identifier not found");
         return { std::distance(begin(), pos), *pos };
     }
+    /** Returns a `std::pair` of the index and a reference to the entry with `Identifier` `id` with in-bounds checking.
+     */
+    std::pair<std::size_t, const entry_type&> at(Identifier id) const { return const_cast<Schema*>(this)->at(id); }
     /** Returns a `std::pair` of the index and a reference to the entry with `Identifier` `id`. */
-    std::pair<std::size_t, const entry_type&> operator[](Identifier id) const {
+    std::pair<std::size_t, entry_type&> operator[](Identifier id) {
         auto pos = find(id);
         M_insist(pos != end(), "identifier not found");
         return { std::distance(begin(), pos), *pos };
+    }
+    /** Returns a `std::pair` of the index and a reference to the entry with `Identifier` `id`. */
+    std::pair<std::size_t, const entry_type&> operator[](Identifier id) const {
+        return const_cast<Schema*>(this)->operator[](id);
     }
 
     /** Adds a new entry `id` of type `type` to this `Schema`. */

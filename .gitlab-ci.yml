@@ -63,6 +63,19 @@ stages:
 .release:
     variables:
         BUILD_TYPE: release
+    rules:
+        # run on default branch
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+          when: on_success
+        # run on branches with `release` in their name
+        - if: $CI_COMMIT_BRANCH =~ /release/i
+          when: on_success
+        # never run on merge requests in WIP/Draft mode
+        - if: $CI_MERGE_REQUEST_TITLE == null || ($CI_MERGE_REQUEST_TITLE =~ /^wip:/i || $CI_MERGE_REQUEST_TITLE =~ /^draft:/i)
+          when: never
+        # run on other merge requests (i.e. not marked as WIP/Draft)
+        - if: $CI_MERGE_REQUEST_TITLE
+          when: on_success
 
 .coverage:
     variables:
@@ -271,19 +284,6 @@ build:release:linux-amd64:
         paths:
             - "mutable"
         expire_in: 1 day
-    rules:
-        # run on default branch
-        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-          when: on_success
-        # run on branches with `release` in their name
-        - if: $CI_COMMIT_BRANCH =~ /release/i
-          when: on_success
-        # never run on merge requests in WIP/Draft mode
-        - if: $CI_MERGE_REQUEST_TITLE == null || ($CI_MERGE_REQUEST_TITLE =~ /^wip:/i || $CI_MERGE_REQUEST_TITLE =~ /^draft:/i)
-          when: never
-        # run on other merge requests (i.e. not marked as WIP/Draft)
-        - if: $CI_MERGE_REQUEST_TITLE
-          when: on_success
 
 build:release:macos-amd64:
     stage: build:release
@@ -314,19 +314,6 @@ build:release:macos-amd64:
         paths:
             - "mutable"
         expire_in: 1 day
-    rules:
-        # run on default branch
-        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-          when: on_success
-        # run on branches with `release` in their name
-        - if: $CI_COMMIT_BRANCH =~ /release/i
-          when: on_success
-        # never run on merge requests in WIP/Draft mode
-        - if: $CI_MERGE_REQUEST_TITLE == null || ($CI_MERGE_REQUEST_TITLE =~ /^wip:/i || $CI_MERGE_REQUEST_TITLE =~ /^draft:/i)
-          when: never
-        # run on other merge requests (i.e. not marked as WIP/Draft)
-        - if: $CI_MERGE_REQUEST_TITLE
-          when: on_success
 
 
 #-----------------------------------------------------------------------------------------------------------------------

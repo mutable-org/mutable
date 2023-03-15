@@ -644,8 +644,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                             if constexpr (IsStore) {
                                 /*----- Check that value is also not NULL. -----*/
                                 auto check = [&]<typename T>() {
-                                    M_insist(not env.get<T>(layout_entry.id).can_be_null(),
-                                             "value of non-nullable entry must not be nullable");
+                                    Wasm_insist(env.get<T>(layout_entry.id).not_null(),
+                                                "value of non-nullable entry must not be nullable");
                                 };
                                 visit(overloaded{
                                     [&](const Boolean&) { check.template operator()<_Bool>(); },
@@ -790,8 +790,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                             if constexpr (IsStore) {
                                 /*----- Check that value is also not NULL. -----*/
                                 auto check = [&]<typename T>() {
-                                    M_insist(not env.get<T>(tuple_entry.id).can_be_null(),
-                                             "value of non-nullable entry must not be nullable");
+                                    Wasm_insist(env.get<T>(tuple_entry.id).not_null(),
+                                                "value of non-nullable entry must not be nullable");
                                 };
                                 visit(overloaded{
                                     [&](const Boolean&) { check.template operator()<_Bool>(); },
@@ -1431,8 +1431,8 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                         if constexpr (IsStore) {
                             /*----- Check that value is also not NULL. -----*/
                             auto check = [&]<typename T>() {
-                                M_insist(not env.get<T>(tuple_entry.id).can_be_null(),
-                                             "value of non-nullable entry must not be nullable");
+                                Wasm_insist(env.get<T>(tuple_entry.id).not_null(),
+                                            "value of non-nullable entry must not be nullable");
                             };
                             visit(overloaded{
                                 [&](const Boolean&) { check.template operator()<_Bool>(); },

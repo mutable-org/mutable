@@ -1680,6 +1680,8 @@ void Sema::operator()(DSVImportStmt &s)
     DSVReader::Config cfg;
     cfg.has_header = s.has_header;
     cfg.skip_header = s.skip_header;
+    if (s.rows)
+        cfg.num_rows = atoi(s.rows.text);
 
     /* If character was provided by user, check that length is equal to 1. */
 #define SET_CHAR(NAME) \

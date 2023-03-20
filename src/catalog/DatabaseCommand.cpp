@@ -94,7 +94,7 @@ void QueryDatabase::execute(Diagnostic &diag)
     if (Options::Get().dryrun)
         return;
 
-    C.backend().execute(*logical_plan_);
+    M_TIME_EXPR(C.backend().execute(*logical_plan_), "Execute query", C.timer());
 }
 
 void InsertRecords::execute(Diagnostic&)

@@ -15,7 +15,6 @@ before_script:
 workflow:
     rules:
         - if: $CI_MERGE_REQUEST_IID
-        - if: $CI_COMMIT_TAG
         - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
         - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
           when: never # prevent duplicate pipelines of branches with MR

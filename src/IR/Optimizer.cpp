@@ -271,6 +271,13 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
         additional_projections.insert(additional_projections.end(), G.projections().begin(), G.projections().end());
         auto projection = std::make_unique<ProjectionOperator>(std::move(additional_projections));
         projection->add_child(plan.release());
+
+        /* Set operator information. */
+        auto info = std::make_unique<OperatorInformation>();
+        info->subproblem = Subproblem((1UL << G.sources().size()) - 1UL);
+        info->estimated_cardinality = projection->child(0)->info().estimated_cardinality;
+
+        projection->info(std::move(info));
         plan = std::move(projection);
     }
 
@@ -279,6 +286,13 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
         // TODO estimate data model
         auto order_by = std::make_unique<SortingOperator>(G.order_by());
         order_by->add_child(plan.release());
+
+        /* Set operator information. */
+        auto info = std::make_unique<OperatorInformation>();
+        info->subproblem = Subproblem((1UL << G.sources().size()) - 1UL);
+        info->estimated_cardinality = order_by->child(0)->info().estimated_cardinality;
+
+        order_by->info(std::move(info));
         plan = std::move(order_by);
     }
 
@@ -290,6 +304,13 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
         // TODO estimate data model
         auto limit = std::make_unique<LimitOperator>(G.limit().limit, G.limit().offset);
         limit->add_child(plan.release());
+
+        /* Set operator information. */
+        auto info = std::make_unique<OperatorInformation>();
+        info->subproblem = Subproblem((1UL << G.sources().size()) - 1UL);
+        info->estimated_cardinality = CE.predict_cardinality(*entry.model);
+
+        limit->info(std::move(info));
         plan = std::move(limit);
     }
 
@@ -311,6 +332,13 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
         }
         auto projection = std::make_unique<ProjectionOperator>(std::move(adapted_projections));
         projection->add_child(plan.release());
+
+        /* Set operator information. */
+        auto info = std::make_unique<OperatorInformation>();
+        info->subproblem = Subproblem((1UL << G.sources().size()) - 1UL);
+        info->estimated_cardinality = projection->child(0)->info().estimated_cardinality;
+
+        projection->info(std::move(info));
         plan = std::move(projection);
     }
 

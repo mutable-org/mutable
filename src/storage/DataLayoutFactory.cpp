@@ -150,9 +150,13 @@ __attribute__((constructor(202)))
 static void register_data_layouts()
 {
     Catalog &C = Catalog::Get();
-#define REGISTER(NAME, DESCRIPTION) \
-    C.register_data_layout(#NAME, std::make_unique<NAME##Factory>(), DESCRIPTION)
-    REGISTER(PAXLayout, "stores attributes using PAX layout"); // register PAXLayout first to be default
-    REGISTER(RowLayout, "stores attributes in row-major order");
-#undef REGISTER
+#define REGISTER_PAX(NAME, BLOCK_SIZE, DESCRIPTION) \
+    C.register_data_layout(#NAME, std::make_unique<PAXLayoutFactory>(PAXLayoutFactory::NBytes, BLOCK_SIZE), DESCRIPTION)
+    REGISTER_PAX(PAX4M, 1UL << 22, "stores attributes using PAX layout with 4MiB blocks"); // default
+    REGISTER_PAX(PAX4K, 1UL << 12, "stores attributes using PAX layout with 4KiB blocks");
+    REGISTER_PAX(PAX64K, 1UL << 16, "stores attributes using PAX layout with 64KiB blocks");
+    REGISTER_PAX(PAX512K, 1UL << 19, "stores attributes using PAX layout with 512KiB blocks");
+    REGISTER_PAX(PAX64M, 1UL << 26, "stores attributes using PAX layout with 64MiB blocks");
+    C.register_data_layout("Row", std::make_unique<RowLayoutFactory>(), "stores attributes in row-major order");
+#undef REGISTER_PAX
 }

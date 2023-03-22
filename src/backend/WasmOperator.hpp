@@ -22,7 +22,10 @@ namespace m {
     X(NoOpSorting) \
     X(NestedLoopsJoin<false>) \
     X(NestedLoopsJoin<true>) \
-    X(SimpleHashJoin) \
+    X(SimpleHashJoin<M_COMMA(false) false>) \
+    X(SimpleHashJoin<M_COMMA(false) true>) \
+    X(SimpleHashJoin<M_COMMA(true) false>) \
+    X(SimpleHashJoin<M_COMMA(true) true>) \
     /*X(SortMergeJoin<M_COMMA(false) M_COMMA(false) false>) \
     X(SortMergeJoin<M_COMMA(false) M_COMMA(false) true>) \
     X(SortMergeJoin<M_COMMA(false) M_COMMA(true)  false>) \
@@ -47,7 +50,6 @@ namespace m {
     X(Aggregation) \
     X(Sorting) \
     X(NoOpSorting) \
-    X(SimpleHashJoin) \
     X(Limit) \
     X(HashBasedGroupJoin)
 #define DECLARE(OP) \
@@ -62,6 +64,9 @@ template<bool Predicated> struct Match<wasm::Filter<Predicated>>;
 
 namespace wasm { template<bool Predicated> struct NestedLoopsJoin; }
 template<bool Predicated> struct Match<wasm::NestedLoopsJoin<Predicated>>;
+
+namespace wasm { template<bool UniqueBuild, bool Predicated> struct SimpleHashJoin; }
+template<bool UniqueBuild, bool Predicated> struct Match<wasm::SimpleHashJoin<UniqueBuild, Predicated>>;
 
 namespace wasm { template<bool SortLeft, bool SortRight, bool Predicated> struct SortMergeJoin; }
 template<bool SortLeft, bool SortRight, bool Predicated>
@@ -162,8 +167,13 @@ struct NestedLoopsJoin : PhysicalOperator<NestedLoopsJoin<Predicated>, JoinOpera
                           std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children);
 };
 
-struct SimpleHashJoin : PhysicalOperator<SimpleHashJoin, pattern_t<JoinOperator, Wildcard, Wildcard>>
+template<bool UniqueBuild, bool Predicated>
+struct SimpleHashJoin
+    : PhysicalOperator<SimpleHashJoin<UniqueBuild, Predicated>, pattern_t<JoinOperator, Wildcard, Wildcard>>
 {
+    using typename PhysicalOperator<SimpleHashJoin<UniqueBuild, Predicated>,
+                                    pattern_t<JoinOperator, Wildcard, Wildcard>>::callback_t;
+
     static void execute(const Match<SimpleHashJoin> &M, callback_t Pipeline);
     static double cost(const Match<SimpleHashJoin>&) { return 1.0; }
     static ConditionSet
@@ -482,8 +492,8 @@ struct Match<wasm::NestedLoopsJoin<Predicated>> : MatchBase
     }
 };
 
-template<>
-struct Match<wasm::SimpleHashJoin> : MatchBase
+template<bool UniqueBuild, bool Predicated>
+struct Match<wasm::SimpleHashJoin<UniqueBuild, Predicated>> : MatchBase
 {
     private:
     std::unique_ptr<const storage::DataLayoutFactory> buffer_factory_;
@@ -509,17 +519,23 @@ struct Match<wasm::SimpleHashJoin> : MatchBase
             auto buffer_schema = join.schema().drop_none().deduplicate();
             if (buffer_schema.num_entries()) {
                 wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_, std::move(Pipeline));
-                wasm::SimpleHashJoin::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
+                wasm::SimpleHashJoin<UniqueBuild, Predicated>::execute(*this,
+                                                                       std::bind(&wasm::LocalBuffer::consume, &buffer));
                 buffer.resume_pipeline();
             } else {
-                wasm::SimpleHashJoin::execute(*this, std::move(Pipeline));
+                wasm::SimpleHashJoin<UniqueBuild, Predicated>::execute(*this, std::move(Pipeline));
             }
         } else {
-            wasm::SimpleHashJoin::execute(*this, std::move(Pipeline));
+            wasm::SimpleHashJoin<UniqueBuild, Predicated>::execute(*this, std::move(Pipeline));
         }
     }
 
-    std::string name() const override { return "wasm::SimpleHashJoin"; }
+    std::string name() const override {
+        std::ostringstream oss;
+        if constexpr (UniqueBuild) oss << "wasm::Unique";
+        oss << M_CONSTEXPR_COND(Predicated, "PredicatedSimpleHashJoin", "BranchingSimpleHashJoin");
+        return oss.str();
+    }
 };
 
 template<bool SortLeft, bool SortRight, bool Predicated>
@@ -630,6 +646,10 @@ extern template struct m::wasm::Filter<false>;
 extern template struct m::wasm::Filter<true>;
 extern template struct m::wasm::NestedLoopsJoin<false>;
 extern template struct m::wasm::NestedLoopsJoin<true>;
+extern template struct m::wasm::SimpleHashJoin<false, false>;
+extern template struct m::wasm::SimpleHashJoin<false, true>;
+extern template struct m::wasm::SimpleHashJoin<true,  false>;
+extern template struct m::wasm::SimpleHashJoin<true,  true>;
 extern template struct m::wasm::SortMergeJoin<false, false, false>;
 extern template struct m::wasm::SortMergeJoin<false, false, true>;
 extern template struct m::wasm::SortMergeJoin<false, true,  false>;

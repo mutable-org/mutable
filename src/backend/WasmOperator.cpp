@@ -1736,7 +1736,8 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, callb
 template struct m::wasm::NestedLoopsJoin<false>;
 template struct m::wasm::NestedLoopsJoin<true>;
 
-ConditionSet SimpleHashJoin::pre_condition(
+template<bool UniqueBuild, bool Predicated>
+ConditionSet SimpleHashJoin<UniqueBuild, Predicated>::pre_condition(
     std::size_t,
     const std::tuple<const JoinOperator*, const Wildcard*, const Wildcard*> &partial_inner_nodes)
 {
@@ -1744,13 +1745,39 @@ ConditionSet SimpleHashJoin::pre_condition(
 
     /*----- Simple hash join can only be used for binary joins on equi-predicates. -----*/
     auto &join = *std::get<0>(partial_inner_nodes);
-    if (not join.predicate().is_equi())
+    if (not join.predicate().is_equi()) {
         pre_cond.add_condition(Unsatisfiable());
+        return pre_cond;
+    }
+
+    if constexpr (UniqueBuild) {
+        /*----- Decompose each clause of the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
+        auto &build = *std::get<1>(partial_inner_nodes);
+        for (auto &clause : join.predicate()) {
+            M_insist(clause.size() == 1, "invalid equi-predicate");
+            auto &literal = clause[0];
+            auto &binary = as<const BinaryExpr>(literal.expr());
+            M_insist((not literal.negative() and binary.tok == TK_EQUAL) or
+                     (literal.negative() and binary.tok == TK_BANG_EQUAL), "invalid equi-predicate");
+            M_insist(is<const Designator>(binary.lhs), "invalid equi-predicate");
+            M_insist(is<const Designator>(binary.rhs), "invalid equi-predicate");
+            Schema::Identifier id_first(*binary.lhs), id_second(*binary.rhs);
+            const auto &entry_build = build.schema().has(id_first) ? build.schema()[id_first].second
+                                                                   : build.schema()[id_second].second;
+
+            /*----- Unique simple hash join can only be used on unique build key. -----*/
+            if (not entry_build.unique()) {
+                pre_cond.add_condition(Unsatisfiable());
+                return pre_cond;
+            }
+        }
+    }
 
     return pre_cond;
 }
 
-ConditionSet SimpleHashJoin::adapt_post_conditions(
+template<bool UniqueBuild, bool Predicated>
+ConditionSet SimpleHashJoin<UniqueBuild, Predicated>::adapt_post_conditions(
     const Match<SimpleHashJoin>&,
     std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children)
 {
@@ -1758,15 +1785,21 @@ ConditionSet SimpleHashJoin::adapt_post_conditions(
 
     ConditionSet post_cond(post_cond_children[1].get()); // preserve conditions of right child
 
-    /*----- Simple hash join does not introduce predication (it is already handled by the hash table). -----*/
-    post_cond.add_or_replace_condition(Predicated(false));
+    if constexpr (Predicated) {
+        /*----- Predicated simple hash join introduces predication. -----*/
+        post_cond.add_or_replace_condition(m::Predicated(true));
+    } else {
+        /*----- Branching simple hash join does not introduce predication (it is already handled by the hash table). -*/
+        post_cond.add_or_replace_condition(m::Predicated(false));
+    }
 
     // TODO: SIMD width if hash table supports this
 
     return post_cond;
 }
 
-void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline)
+template<bool UniqueBuild, bool Predicated>
+void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline)
 {
     // TODO: determine setup
     using PROBING_STRATEGY = QuadraticProbing;
@@ -1785,7 +1818,7 @@ void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline
     std::vector<Schema::Identifier> payload_ids;
     uint64_t payload_size_in_bits = 0;
     for (auto &e : ht_schema) {
-        if (std::find(build_keys.cbegin(), build_keys.cend(), e.id) == build_keys.cend()) {
+        if (not contains(build_keys, e.id)) {
             payload_ids.push_back(e.id);
             payload_size_in_bits += e.type->size();
         }
@@ -1794,8 +1827,7 @@ void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline
     /*----- Compute initial capacity of hash table. -----*/
     uint32_t initial_capacity;
     if (M.build.has_info())
-        initial_capacity = M.build.info().estimated_cardinality / HIGH_WATERMARK; // TODO: estimation depends on
-        // whether predication is enabled
+        initial_capacity = M.build.info().estimated_cardinality / HIGH_WATERMARK; // TODO: estimation depends on whether predication is enabled
     else if (auto scan = cast<const ScanOperator>(&M.build))
         initial_capacity = scan->store().num_rows() / HIGH_WATERMARK;
     else
@@ -1858,14 +1890,15 @@ void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline
     M.children[1].get().execute([&](){
         auto &env = CodeGenContext::Get().env();
 
-        /* TODO: may check for NULL on probe keys as well, branching + predicated version */
-        /*----- Probe with probe key. -----*/
-        std::vector<SQL_t> key;
-        for (auto &probe_key : probe_keys)
-            key.emplace_back(env.get(probe_key));
-        ht->for_each_in_equal_range(std::move(key), [&, Pipeline=std::move(Pipeline)](HashTable::const_entry_t entry){
-            /*----- Add both found key and payload from hash table, i.e. from build child, to current environment. -----*/
+        auto emit_tuple_and_resume_pipeline = [&, Pipeline=std::move(Pipeline)](HashTable::const_entry_t entry){
+            /*----- Add found entry from hash table, i.e. from build child, to current environment. -----*/
             for (auto &e : ht_schema) {
+                if (not entry.has(e.id)) { // entry may not contain build key in case `ht->find()` was used
+                    M_insist(contains(build_keys, e.id));
+                    M_insist(env.has(e.id), "build key must already be contained in the current environment");
+                    continue;
+                }
+
                 std::visit(overloaded {
                     [&]<typename T>(HashTable::const_reference_t<Expr<T>> &&r) -> void {
                         Var<Expr<T>> var((Expr<T>(r))); // introduce variable s.t. uses only load from it
@@ -1882,9 +1915,46 @@ void SimpleHashJoin::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline
 
             /*----- Resume pipeline. -----*/
             Pipeline();
-        });
+        };
+
+        /* TODO: may check for NULL on probe keys as well, branching + predicated version */
+        /*----- Probe with probe key. -----*/
+        std::vector<SQL_t> key;
+        for (auto &probe_key : probe_keys)
+            key.emplace_back(env.get(probe_key));
+        if constexpr (UniqueBuild) {
+            /*----- Add build key to current environment since `ht->find()` will only return the payload values. -----*/
+            for (auto build_it = build_keys.cbegin(), probe_it = probe_keys.cbegin(); build_it != build_keys.cend();
+                 ++build_it, ++probe_it)
+            {
+                M_insist(probe_it != probe_keys.cend());
+                env.add(*build_it, env.get(*probe_it)); // since build and probe keys match for join partners
+            }
+
+            /*----- Try to find the *single* possible join partner. -----*/
+            auto p = ht->find(std::move(key));
+            auto &entry = p.first;
+            auto &found = p.second;
+            if constexpr (Predicated) {
+                env.add_predicate(found);
+                emit_tuple_and_resume_pipeline(std::move(entry));
+            } else {
+                IF (found) {
+                    emit_tuple_and_resume_pipeline(std::move(entry));
+                };
+            }
+        } else {
+            /*----- Search for *all* join partners. -----*/
+            ht->for_each_in_equal_range(std::move(key), std::move(emit_tuple_and_resume_pipeline), Predicated);
+        }
     });
 }
+
+// explicit instantiations to prevent linker errors
+template struct m::wasm::SimpleHashJoin<false, false>;
+template struct m::wasm::SimpleHashJoin<false, true>;
+template struct m::wasm::SimpleHashJoin<true,  false>;
+template struct m::wasm::SimpleHashJoin<true,  true>;
 
 template<bool SortLeft, bool SortRight, bool Predicated>
 ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated>::pre_condition(

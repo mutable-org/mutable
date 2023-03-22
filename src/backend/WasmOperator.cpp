@@ -2134,7 +2134,7 @@ ConditionSet HashBasedGroupJoin::pre_condition(
         }
         for (std::size_t i = 0; i < num_grouping_keys; ++i) {
             Schema::Identifier grouping_key(grouping.group_by()[i].first.get());
-            if (std::find(build_keys.cbegin(), build_keys.cend(), grouping_key) == build_keys.cend()) {
+            if (not contains(build_keys, grouping_key)) {
                 pre_cond.add_condition(Unsatisfiable());
                 return pre_cond;
             }

@@ -11,6 +11,7 @@
 #include <mutable/storage/Store.hpp>
 #include <mutable/util/ADT.hpp>
 #include <mutable/util/exception.hpp>
+#include <mutable/util/enum_ops.hpp>
 #include <mutable/util/fn.hpp>
 #include <mutable/util/macro.hpp>
 #include <type_traits>
@@ -239,9 +240,7 @@ inline Schema operator&(const Schema &left, const Schema &right)
         if (it != right.end()) {
             if (e.type != it->type)
                 throw invalid_argument("type mismatch");
-            if (e.constraints != it->constraints)
-                throw invalid_argument("constraints mismatch");
-            res.add(e.id, e.type, e.constraints);
+            res.add(e.id, e.type, e.constraints | it->constraints); // merge constraints from both
         }
     }
     return res;

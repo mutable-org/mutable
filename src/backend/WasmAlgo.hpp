@@ -392,8 +392,14 @@ struct HashTable
                 discard(p.second);
         }
 
+        ///> Converts a non-const entry to a const entry.  The former entry is moved, i.e. must not be used afterwards.
+        operator the_entry<true>() requires (not IsConst) { return the_entry<true>(std::move(refs_)); }
+
         ///> Returns `true` iff `this` does not contain any references.
         bool empty() const { return refs_.empty(); }
+
+        ///> Returns `true` iff `this` contains identifier \p id.
+        bool has(Schema::Identifier id) const { return refs_.contains(id); }
 
         ///> Adds a mapping from identifier \p id to reference \p ref.
         template<sql_type T>
@@ -517,20 +523,19 @@ struct HashTable
      * and should be ignored) and a boolean flag to indicate whether an element with the specified key was found.
      * Predication is supported, i.e. if the predication predicate is not fulfilled, no entry will be found. */
     std::pair<const_entry_t, Bool> find(std::vector<SQL_t> key) const {
-        auto [entry, found] = const_cast<HashTable*>(this)->find(std::move(key));
-        return { const_entry_t(std::move(entry.refs_)), found };
+        return const_cast<HashTable*>(this)->find(std::move(key));
     }
-
 
     /** Calls \p Pipeline for each entry contained in the hash table.  At each call the argument is a handle to the
      * respective entry which may be used to read both the keys and the values of this entry. */
     virtual void for_each(callback_t Pipeline) const = 0;
-    /** Calls \p Pipeline for each entry with key \key in the hash table.  At each call the argument is a handle to
-     * the respective entry which may be used to read both the keys and the values of this entry.  Predication is
-     * supported, i.e. if the predication predicate is not fulfilled, the range of entries with an equal key will be
-     * empty. */
-    virtual void for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline) const = 0;
+    /** Calls \p Pipeline for each entry with key \p key in the hash table, where the key comparison is performed
+     * predicated iff \p predicated is set.  At each call the argument is a handle to the respective entry which may be
+     * used to read both the keys and the values of this entry.  Predication is supported, i.e. if the predication
+     * predicate is not fulfilled, the range of entries with an equal key will be empty. */
+    virtual void for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline, bool predicated = false) const = 0;
 
+    public:
     /** Returns a handle to a newly created dummy entry which may be used to write the values for this entry. */
     virtual entry_t dummy_entry() = 0;
 
@@ -626,7 +631,7 @@ struct ChainedHashTable : HashTable
     std::pair<entry_t, Bool> find(std::vector<SQL_t> key) override;
 
     void for_each(callback_t Pipeline) const override;
-    void for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline) const override;
+    void for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline, bool predicated) const override;
 
     entry_t dummy_entry() override;
 
@@ -830,7 +835,7 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
     std::pair<entry_t, Bool> find(std::vector<SQL_t> key) override;
 
     void for_each(callback_t Pipeline) const override;
-    void for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline) const override;
+    void for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline, bool predicated) const override;
 
     entry_t dummy_entry() override;
 

@@ -604,7 +604,8 @@ void ChainedHashTable<IsGlobal>::for_each(callback_t Pipeline) const
 }
 
 template<bool IsGlobal>
-void ChainedHashTable<IsGlobal>::for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline) const
+void ChainedHashTable<IsGlobal>::for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline,
+                                                         bool predicated) const
 {
     /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
     std::optional<Bool> pred;
@@ -623,9 +624,14 @@ void ChainedHashTable<IsGlobal>::for_each_in_equal_range(std::vector<SQL_t> key,
     /*----- Iterate over collision list entries and call pipeline (with entry handle argument) on matches. -----*/
     Var<Ptr<void>> bucket_it(Ptr<void>(*bucket.to<uint32_t*>()));
     WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
-        IF (equal_key(bucket_it, std::move(key))) { // match found
+        if (predicated) {
+            CodeGenContext::Get().env().add_predicate(equal_key(bucket_it, std::move(key)));
             Pipeline(entry(bucket_it));
-        };
+        } else {
+            IF (equal_key(bucket_it, std::move(key))) { // match found
+                Pipeline(entry(bucket_it));
+            };
+        }
         bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
     }
 }
@@ -1358,7 +1364,8 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::for_each(callback_t Pipeli
 
 template<bool IsGlobal, bool ValueInPlace>
 void OpenAddressingHashTable<IsGlobal, ValueInPlace>::for_each_in_equal_range(std::vector<SQL_t> key,
-                                                                              callback_t Pipeline) const
+                                                                              callback_t Pipeline,
+                                                                              bool predicated) const
 {
     /*----- If predication is used, introduce predication temporal and set it before looking-up a key. -----*/
     std::optional<Bool> pred;
@@ -1378,9 +1385,14 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::for_each_in_equal_range(st
     Var<Ptr<void>> slot(bucket);
     Var<PrimitiveExpr<ref_t>> steps(0);
     WHILE (reference_count(slot) != ref_t(0)) {
-        IF (equal_key(slot, std::move(key))) { // match found
+        if (predicated) {
+            CodeGenContext::Get().env().add_predicate(equal_key(slot, std::move(key)));
             Pipeline(entry(slot));
-        };
+        } else {
+            IF (equal_key(slot, std::move(key))) { // match found
+                Pipeline(entry(slot));
+            };
+        }
         slot = probing_strategy().advance_to_next_slot(slot, steps);
         Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
         steps += ref_t(1);

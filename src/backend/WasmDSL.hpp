@@ -1856,7 +1856,8 @@ struct PrimitiveExpr<T>
 #define MAKE_BINARY(OP) \
     template<primitive_convertible T, primitive_convertible U> \
     requires requires (primitive_expr_t<T> t, primitive_expr_t<U> u) { t.OP(u); } \
-    auto OP(T &&t, U &&u) { \
+    auto OP(T &&t, U &&u) \
+    { \
         return primitive_expr_t<T>(std::forward<T>(t)).OP(primitive_expr_t<U>(std::forward<U>(u))); \
     }
 BINARY_LIST(MAKE_BINARY)
@@ -2957,6 +2958,23 @@ struct Variable<T, Kind, CanBeNull>
 ASSIGNOP_LIST(ASSIGNOP)
 #undef ASSIGNOP
 };
+
+/*----- Overload forwarded binary operators for pointer advancing on PrimitiveExpr<T*> -------------------------------*/
+template<dsl_pointer_to_primitive T, VariableKind Kind, bool CanBeNull>
+requires requires (const Variable<T, Kind, CanBeNull> &var, typename PrimitiveExpr<T>::offset_t delta)
+         { var.val().operator+(delta); }
+auto operator+(const Variable<T, Kind, CanBeNull> &var, typename PrimitiveExpr<T>::offset_t delta)
+{
+    return var.val().operator+(delta);
+}
+
+template<dsl_pointer_to_primitive T, VariableKind Kind, bool CanBeNull>
+requires requires (const Variable<T, Kind, CanBeNull> &var, typename PrimitiveExpr<T>::offset_t delta)
+         { var.val().operator-(delta); }
+auto operator-(const Variable<T, Kind, CanBeNull> &var, typename PrimitiveExpr<T>::offset_t delta)
+{
+    return var.val().operator-(delta);
+}
 
 namespace detail {
 

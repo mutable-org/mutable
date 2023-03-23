@@ -90,12 +90,6 @@ using ConstReference = detail::the_reference<T, true>;
 template<typename T>
 struct primitive_expr;
 
-/** Specialization for reference type \tparam T. */
-template<typename T>
-requires requires { typename primitive_expr<T>::type; }
-struct primitive_expr<T&>
-{ using type = typename primitive_expr<T>::type; };
-
 /** Specialization for decayable \tparam T. */
 template<decayable T>
 requires requires { typename primitive_expr<std::decay_t<T>>::type; }
@@ -145,12 +139,6 @@ concept primitive_convertible = not pointer<T> and requires { typename primitive
 /** Helper type to deduce the `Expr<U>` type given a \tparam T. */
 template<typename T>
 struct expr;
-
-/** Specialization for reference type \tparam T. */
-template<typename T>
-requires requires { typename expr<T>::type; }
-struct expr<T&>
-{ using type = typename expr<T>::type; };
 
 /** Specialization for decayable \tparam T. */
 template<decayable T>

@@ -1469,9 +1469,11 @@ void Sema::operator()(CreateTableStmt &s)
     bool has_primary_key = false;
     for (auto &attr : s.attributes) {
         const PrimitiveType *ty = cast<const PrimitiveType>(attr->type);
-        if (not ty)
+        if (not ty) {
             diag.e(attr->name.pos) << "Attribute " << attr->name.text << " cannot be defined with type " << *attr->type
-                               << ".\n";
+                                   << ".\n";
+            return;
+        }
         attr->type = ty->as_vectorial(); // convert potentially scalar type to vectorial
 
         /* Before we check the constraints, we must add this newly declared attribute to its table, and hence to the

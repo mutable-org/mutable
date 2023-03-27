@@ -209,7 +209,7 @@ integrationtest:linux-amd64:
           artifacts: true
     script:
         - pip3 install --user --upgrade colorama pyyaml yamale tqdm
-        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 --unset=TERM python3 test/IntegrationTest.py --verbose --required-only --debug build/debug
+        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 --unset=TERM python3 test/IntegrationTest.py --required-only --debug build/debug
 
 integrationtest:macos-amd64:
     stage: test:debug
@@ -221,7 +221,7 @@ integrationtest:macos-amd64:
           artifacts: true
     script:
         - pip3 install --user --upgrade colorama pyyaml yamale tqdm
-        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 --unset=TERM python3 test/IntegrationTest.py --verbose --required-only --debug build/debug
+        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 --unset=TERM python3 test/IntegrationTest.py --required-only --debug build/debug
 
 ensure-exported-symbols:debug:linux:
     stage: test:debug

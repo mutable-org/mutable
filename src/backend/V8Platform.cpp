@@ -46,6 +46,8 @@ namespace options {
 int wasm_optimization_level = 0;
 /** Whether to execute Wasm adaptively. */
 bool wasm_adaptive = false;
+/** dump the generated WebAssembly code */
+bool wasm_dump = false;
 /** The port to use for the Chrome DevTools web socket. */
 uint16_t cdt_port = 0;
 
@@ -585,6 +587,10 @@ void V8Platform::compile(const Operator &plan) const
     /*----- Perform memory pre-allocations. --------------------------------------------------------------------------*/
     Module::Allocator().perform_pre_allocations();
 
+    /*----- Dump the generated WebAssembly code ----------------------------------------------------------------------*/
+    if (options::wasm_dump)
+        Module::Get().dump_all(std::cout);
+
 #ifndef NDEBUG
     /*----- Validate module before optimization. ---------------------------------------------------------------------*/
     if (not Module::Validate()) {
@@ -744,6 +750,13 @@ static void register_WasmV8()
         /* long=        */ "--wasm-adaptive",
         /* description= */ "enable adaptive execution of Wasm with Liftoff and dynamic tier-up",
                            [] (bool b) { options::wasm_adaptive = b; }
+    );
+    C.arg_parser().add<bool>(
+        /* group=       */ "WasmV8",
+        /* short=       */ nullptr,
+        /* long=        */ "--wasm-dump",
+        /* description= */ "dump the generated WebAssembly code to stdout",
+                           [] (bool b) { options::wasm_dump = b; }
     );
     C.arg_parser().add<int>(
         /* group=       */ "WasmV8",

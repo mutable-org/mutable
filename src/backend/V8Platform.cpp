@@ -588,7 +588,7 @@ void V8Platform::compile(const Operator &plan) const
 #ifndef NDEBUG
     /*----- Validate module before optimization. ---------------------------------------------------------------------*/
     if (not Module::Validate()) {
-        Module::Get().dump();
+        Module::Get().dump_all();
         throw std::logic_error("invalid module");
     }
 #endif

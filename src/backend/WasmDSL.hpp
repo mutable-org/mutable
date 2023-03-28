@@ -723,6 +723,9 @@ struct Module final
 
     void dump(std::ostream &out) const { out << *this << std::endl; }
     void dump() const { dump(std::cerr); }
+
+    void dump_all(std::ostream &out) { out << module_ << std::endl; }
+    void dump_all() { dump_all(std::cerr); }
 };
 
 

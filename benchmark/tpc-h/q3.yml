@@ -7,7 +7,7 @@ pattern: '^Execute query:.*'
 configurations:
     'WebAssembly': >-
       --backend WasmV8
-      --store ColumnStore
+      --data-layout PAX4M
       --cardinality-estimator Injected
       --use-cardinality-file benchmark/tpc-h/q3.json
 tables: [ ]

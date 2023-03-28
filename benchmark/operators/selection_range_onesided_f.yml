@@ -5,7 +5,7 @@ name: FLOAT
 readonly: true
 pattern: '^Execute query:.*'
 configurations:
-    WebAssembly: --backend WasmV8 --store ColumnStore
+    WebAssembly: --backend WasmV8 --data-layout PAX4M
 tables:
     - name: 'Attribute_f'
       header: 1

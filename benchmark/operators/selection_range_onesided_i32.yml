@@ -5,9 +5,9 @@ name: INT(4)
 readonly: true
 pattern: '^Execute query:.*'
 configurations:
-    Interpreter:                 --backend Interpreter
-    'WebAssembly (RowStore)':    --backend WasmV8 --store RowStore
-    'WebAssembly (ColumnStore)': --backend WasmV8 --store ColumnStore
+    Interpreter:           --backend Interpreter
+    'WebAssembly (Row)':   --backend WasmV8 --data-layout Row
+    'WebAssembly (PAX4M)': --backend WasmV8 --data-layout PAX4M
 tables: [ 'Attribute_i32' ]
 cases:
     0.01: SELECT 1 FROM Attribute_i32 WHERE val < -2104533974;

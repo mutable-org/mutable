@@ -5,7 +5,7 @@ name: Q1
 readonly: true
 pattern: '^Compile to WebAssembly:.*'
 configurations:
-    'WebAssembly': --backend WasmV8 --store ColumnStore --dryrun --quiet
+    'WebAssembly': --backend WasmV8 --data-layout PAX4M --dryrun --quiet
 tables: [ ]
 cases:
     1:

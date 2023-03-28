@@ -5,8 +5,8 @@ name: distinct INT(4)
 readonly: true
 pattern: '^Execute query:.*'
 configurations:
-    Interpreter:                 --backend Interpreter
-    "WebAssembly (ColumnStore)": --backend WasmV8 --store ColumnStore
+    Interpreter:           --backend Interpreter
+    "WebAssembly (PAX4M)": --backend WasmV8 --data-layout PAX4M
 tables:
     - name: 'Distinct_i32'
       header: 1

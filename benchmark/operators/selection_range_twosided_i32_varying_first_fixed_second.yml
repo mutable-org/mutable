@@ -7,8 +7,8 @@ name: INT(4), 1%
 readonly: true
 pattern: '^Execute query:.*'
 configurations:
-    'WebAssembly (RowStore)':    --backend WasmV8 --store RowStore
-    'WebAssembly (ColumnStore)': --backend WasmV8 --store ColumnStore
+    'WebAssembly (Row)':   --backend WasmV8 --data-layout Row
+    'WebAssembly (PAX4M)': --backend WasmV8 --data-layout PAX4M
 tables: [ 'Attribute_i32' ]
 cases:
     0.01: SELECT 1 FROM Attribute_i32 WHERE -2104533974 < val AND val < -2061584301;

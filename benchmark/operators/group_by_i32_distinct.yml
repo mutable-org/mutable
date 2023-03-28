@@ -7,12 +7,12 @@ pattern: '^Execute query:.*'
 configurations:
     Interpreter: >-
       --backend Interpreter
-      --store ColumnStore
+      --data-layout PAX4M
       --cardinality-estimator Injected
       --use-cardinality-file benchmark/operators/group_by_i32_distinct.json
-    'WebAssembly (ColumnStore)': >-
-      --backend WasmV8 --store ColumnStore
-      --store ColumnStore
+    'WebAssembly (PAX4M)': >-
+      --backend WasmV8
+      --data-layout PAX4M
       --cardinality-estimator Injected
       --use-cardinality-file benchmark/operators/group_by_i32_distinct.json
 tables:

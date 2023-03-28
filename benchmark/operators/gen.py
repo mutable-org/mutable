@@ -177,7 +177,7 @@ CREATE TABLE {table_name}
 ''')
             attrs = list()
             for attr in attributes:
-                attrs.append(f'    {attr[0]} {TYPE_TO_STR[attr[1]]}')
+                attrs.append(f'    {attr[0]} {TYPE_TO_STR[attr[1]]} NOT NULL')
             sql.write(',\n'.join(attrs))
 
             path_to_csv = os.path.join(path_to_dir, f'{table_name}.csv')

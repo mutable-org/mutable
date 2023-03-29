@@ -53,20 +53,20 @@ uint64_t FnApplicationExpr::hash() const
 {
     uint64_t hash = fn->hash();
     for (auto &arg : args)
-        hash ^= std::rotl(hash, 32) ^ arg->hash();
+        hash ^= std::rotl(hash, 32) xor arg->hash();
     return hash;
 }
 
 uint64_t UnaryExpr::hash() const
 {
-    return expr->hash() ^ 73UL << uint64_t(op().type);
+    return std::rotl(expr->hash(), 13) xor uint64_t(op().type);
 }
 
 uint64_t BinaryExpr::hash() const
 {
     const auto hl = lhs->hash();
     const auto hr = rhs->hash();
-    return std::rotl(hl, 41) ^ std::rotl(hr, 17) ^ uint64_t(op().type);
+    return std::rotl(hl, 41) xor std::rotl(hr, 17) xor uint64_t(op().type);
 }
 
 uint64_t QueryExpr::hash() const

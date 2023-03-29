@@ -545,7 +545,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pi
     for (std::size_t i = 0; i < num_keys; ++i) {
         auto &e = M.grouping.schema()[i];
         if (not ht_schema.has(e.id))
-            ht_schema.add(e.id, e.type);
+            ht_schema.add(e.id, e.type, e.constraints);
     }
     auto p = compute_aggregate_info(M.grouping.aggregates(), M.grouping.schema(), num_keys);
     const auto &aggregates = p.first;
@@ -2173,7 +2173,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
     for (std::size_t i = 0; i < num_keys; ++i) {
         auto &e = M.grouping.schema()[i];
         if (not ht_schema.has(e.id))
-            ht_schema.add(e.id, e.type);
+            ht_schema.add(e.id, e.type, e.constraints);
     }
     auto aggregates_info = compute_aggregate_info(M.grouping.aggregates(), M.grouping.schema(), num_keys);
     const auto &aggregates = aggregates_info.first;

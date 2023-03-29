@@ -112,7 +112,7 @@ def benchmark_query(command, query, pattern, timeout):
             process.terminate() # try to shut down gracefully
             try:
                 process.wait(timeout=5) # wait for process to terminate
-            except TimeoutExpired:
+            except subprocess.TimeoutExpired:
                 process.kill() # kill if process did not terminate in time
 
     out = out.decode('latin-1')

@@ -1014,8 +1014,12 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::OpenAddressingHashTable(const S
                                                                          std::vector<HashTable::index_t> key_indices,
                                                                          uint32_t initial_capacity)
     : OpenAddressingHashTableBase(schema, std::move(key_indices))
-    , capacity_(ceil_to_pow_2(initial_capacity))
-    , high_watermark_absolute_(ceil_to_pow_2(initial_capacity) - 1U) // at least one entry must always be unoccupied
+    , capacity_(
+        std::max<uint32_t>(4, ceil_to_pow_2(initial_capacity))
+    ) // at least capacity 4 to ensure absolute high watermark of at least 1 even for minimal percentage of 0.5
+    , high_watermark_absolute_(
+        std::max<uint32_t>(4, ceil_to_pow_2(initial_capacity)) - 1U
+    ) // at least one entry must always be unoccupied
 {
     std::vector<const Type*> types;
     bool has_nullable = false;

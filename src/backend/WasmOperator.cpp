@@ -383,7 +383,8 @@ void Scan::execute(const Match<Scan> &M, callback_t Pipeline)
     Ptr<void> base_address = Module::Get().get_global<void*>(oss.str().c_str());
 
     /*----- Compile data layout to generate sequential load from table. -----*/
-    auto [inits, loads, jumps] = compile_load_sequential(schema, base_address, table.layout(), table.schema(), tuple_id);
+    auto [inits, loads, jumps] = compile_load_sequential(schema, base_address, table.layout(),
+                                                         table.schema(M.scan.alias()), tuple_id);
 
     /*----- Generate the loop for the actual scan, with the pipeline emitted into the loop body. -----*/
     inits.attach_to_current();

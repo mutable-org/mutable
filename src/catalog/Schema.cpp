@@ -69,7 +69,7 @@ M_LCOV_EXCL_STOP
  * Table
  *====================================================================================================================*/
 
-Schema Table::schema() const
+Schema Table::schema(const char *alias) const
 {
     Schema S;
     for (auto &attr : *this) {
@@ -80,7 +80,7 @@ Schema Table::schema() const
             constraints |= Schema::entry_type::UNIQUE;
         if (attr.reference and attr.reference->is_unique())
             constraints |= Schema::entry_type::REFERENCES_UNIQUE;
-        S.add({this->name, attr.name}, attr.type, constraints);
+        S.add({alias ? alias : this->name, attr.name}, attr.type, constraints);
     }
     return S;
 }

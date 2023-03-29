@@ -446,8 +446,8 @@ struct M_EXPORT Table
         attrs_.emplace_back(Attribute(attrs_.size(), *this, type, name));
     }
 
-    /** Returns a `Schema` for this `Table`. */
-    Schema schema() const;
+    /** Returns a `Schema` for this `Table` given the alias `alias`. */
+    Schema schema(const char *alias = nullptr) const;
 
     void dump(std::ostream &out) const;
     void dump() const;

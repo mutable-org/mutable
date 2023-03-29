@@ -305,7 +305,9 @@ InjectionCardinalityEstimator::estimate_grouping(const QueryGraph&, const DataMo
     }
 
     if (auto it = cardinality_table_.find(oss_.str().c_str()); it != cardinality_table_.end()) {
-        return std::make_unique<InjectionCardinalityDataModel>(data.subproblem_, it->second);
+        /* Clamp injected cardinality to at most the cardinality of the grouping's child since it cannot produce more
+         * tuples than it receives. */
+        return std::make_unique<InjectionCardinalityDataModel>(data.subproblem_, std::min(it->second, data.size_));
     } else {
         /* This model cannot estimate the effects of grouping. */
         return std::make_unique<InjectionCardinalityDataModel>(data); // copy
@@ -324,7 +326,10 @@ InjectionCardinalityEstimator::estimate_join(const QueryGraph &G, const DataMode
 
     /* Lookup cardinality in table. */
     if (auto it = cardinality_table_.find(id); it != cardinality_table_.end()) {
-        return std::make_unique<InjectionCardinalityDataModel>(subproblem, it->second);
+        /* Clamp injected cardinality to at most the cardinality of the cartesian product of the join's children
+         * since it cannot produce more tuples than that. */
+        const std::size_t max_cardinality = left.size_ * right.size_;
+        return std::make_unique<InjectionCardinalityDataModel>(subproblem, std::min(it->second, max_cardinality));
     } else {
         /* Fallback to CartesianProductEstimator. */
         std::cerr << "warning: failed to estimate the join of " << left.subproblem_ << " and " << right.subproblem_
@@ -346,7 +351,12 @@ InjectionCardinalityEstimator::operator()(estimate_join_all_tag, PlanTable &&PT,
 {
     const char *id = make_identifier(G, to_join);
     if (auto it = cardinality_table_.find(id); it != cardinality_table_.end()) {
-        return std::make_unique<InjectionCardinalityDataModel>(to_join, it->second);
+        /* Clamp injected cardinality to at most the cardinality of the cartesian product of the join's children
+         * since it cannot produce more tuples than that. */
+        std::size_t max_cardinality = 1;
+        for (auto it = to_join.begin(); it != to_join.end(); ++it)
+            max_cardinality *= as<const InjectionCardinalityDataModel>(*PT[it.as_set()].model).size_;
+        return std::make_unique<InjectionCardinalityDataModel>(to_join, std::min(it->second, max_cardinality));
     } else {
         /* Fallback to cartesian product. */
         std::cerr << "warning: failed to estimate the join of all data sources in " << to_join << '\n';

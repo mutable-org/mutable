@@ -2384,7 +2384,12 @@ UNARY_LIST(UNARY)
 
     /*----- Hashing operations with special three-valued logic -------------------------------------------------------*/
 
-    PrimitiveExpr<uint64_t> hash() { return Select(is_null_, PrimitiveExpr<uint64_t>(1UL << 63), value_.hash()); }
+    PrimitiveExpr<uint64_t> hash() {
+        if (can_be_null())
+            return Select(is_null_, PrimitiveExpr<uint64_t>(1UL << 63), value_.hash());
+        else
+            return value_.hash();
+    }
 
 
     /*------------------------------------------------------------------------------------------------------------------

@@ -41,6 +41,9 @@ using Subproblem = SmallBitset;
 struct M_EXPORT DataModel
 {
     virtual ~DataModel() = 0;
+
+    /** Assigns `this` to the `Subproblem` `s`, i.e. this model now describes the result of evaluating `s`. */
+    virtual void assign_to(Subproblem s) = 0;
 };
 
 
@@ -174,6 +177,8 @@ struct M_EXPORT CartesianProductEstimator : CardinalityEstimatorCRTP<CartesianPr
 
         CartesianProductDataModel() = default;
         CartesianProductDataModel(std::size_t size) : size(size) { }
+
+        void assign_to(Subproblem) override { /* nothing to be done */ }
     };
 
     CartesianProductEstimator() { }
@@ -236,6 +241,8 @@ struct M_EXPORT InjectionCardinalityEstimator : CardinalityEstimatorCRTP<Injecti
         InjectionCardinalityDataModel(InjectionCardinalityDataModel&&) = default;
         InjectionCardinalityDataModel & operator=(InjectionCardinalityDataModel &&other) = default;
         InjectionCardinalityDataModel & operator=(const InjectionCardinalityDataModel &other) = default;
+
+        void assign_to(Subproblem s) override { subproblem_ = s; }
     };
 
     private:
@@ -333,6 +340,8 @@ struct M_EXPORT SpnEstimator : CardinalityEstimatorCRTP<SpnEstimator>
             : spns_(std::move(spns))
             , num_rows_(num_rows)
         { }
+
+        void assign_to(Subproblem) override { /* nothing to be done */ }
     };
 
     private:

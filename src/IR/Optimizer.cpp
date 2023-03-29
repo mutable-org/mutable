@@ -204,6 +204,7 @@ Optimizer::optimize_with_plantable(const QueryGraph &G) const
             /* Update the plan table with the `DataModel` and cost of the nested query and save the plan in the array of
              * source plans. */
             plan_table[s].cost = sub.cost;
+            sub.model->assign_to(s); // adapt model s.t. it describes the result of the current subproblem
             plan_table[s].model = std::move(sub.model);
             source_plans[ds->id()] = sub_plan.release();
         }

@@ -213,6 +213,7 @@ void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in
         return;
     }
     cardinality_table_.reserve(database_entry->size());
+    std::vector<std::string> names;
     for (auto &subproblem_entry : *database_entry) {
         json* relations_array;
         json* size;
@@ -226,11 +227,16 @@ void InjectionCardinalityEstimator::read_json(Diagnostic &diag, std::istream &in
             continue;
         }
 
+        names.clear();
+        for (auto it = relations_array->begin(); it != relations_array->end(); ++it)
+            names.emplace_back(it->get<std::string>());
+        std::sort(names.begin(), names.end());
+
         buf_.clear();
-        for (auto it = relations_array->begin(); it != relations_array->end(); ++it) {
-            if (it != relations_array->begin())
+        for (auto it = names.begin(); it != names.end(); ++it) {
+            if (it != names.begin())
                 buf_.emplace_back('$');
-            buf_append(it->get<std::string>());
+            buf_append(*it);
         }
         buf_.emplace_back(0);
         auto str = strdup(buf_view());
@@ -390,11 +396,17 @@ M_LCOV_EXCL_STOP
 
 const char * InjectionCardinalityEstimator::make_identifier(const QueryGraph &G, const Subproblem S) const
 {
+    static thread_local std::vector<const char*> names;
+    names.clear();
+    for (auto id : S)
+        names.push_back(G.sources()[id]->name());
+    std::sort(names.begin(), names.end(), [](auto lhs, auto rhs){ return strcmp(lhs, rhs) < 0; });
+
     buf_.clear();
-    for (auto it = S.begin(); it != S.end(); ++it) {
-        if (it != S.begin())
+    for (auto it = names.begin(); it != names.end(); ++it) {
+        if (it != names.begin())
             buf_.emplace_back('$');
-        buf_append(G.sources()[*it]->name());
+        buf_append(*it);
     }
 
     buf_.emplace_back(0);

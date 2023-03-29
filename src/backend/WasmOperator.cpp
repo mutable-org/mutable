@@ -562,7 +562,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pi
     /*----- Compute initial capacity of hash table. -----*/
     uint32_t initial_capacity;
     if (M.grouping.child(0)->has_info())
-        initial_capacity = M.grouping.child(0)->info().estimated_cardinality / HIGH_WATERMARK; // TODO: estimation depends on whether predication is enabled
+        initial_capacity = M.grouping.child(0)->info().estimated_cardinality / HIGH_WATERMARK;
     else if (auto scan = cast<const ScanOperator>(M.grouping.child(0)))
         initial_capacity = scan->store().num_rows() / HIGH_WATERMARK;
     else
@@ -1828,7 +1828,7 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
     /*----- Compute initial capacity of hash table. -----*/
     uint32_t initial_capacity;
     if (M.build.has_info())
-        initial_capacity = M.build.info().estimated_cardinality / HIGH_WATERMARK; // TODO: estimation depends on whether predication is enabled
+        initial_capacity = M.build.info().estimated_cardinality / HIGH_WATERMARK;
     else if (auto scan = cast<const ScanOperator>(&M.build))
         initial_capacity = scan->store().num_rows() / HIGH_WATERMARK;
     else
@@ -2216,7 +2216,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
     /*----- Compute initial capacity of hash table. -----*/
     uint32_t initial_capacity;
     if (M.build.has_info())
-        initial_capacity = M.build.info().estimated_cardinality / HIGH_WATERMARK; // TODO: estimation depends on whether predication is enabled
+        initial_capacity = M.build.info().estimated_cardinality / HIGH_WATERMARK;
     else if (auto scan = cast<const ScanOperator>(&M.build))
         initial_capacity = scan->store().num_rows() / HIGH_WATERMARK;
     else

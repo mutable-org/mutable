@@ -13,6 +13,9 @@ from colorama import Fore, Back, Style
 from tqdm import tqdm
 
 
+# number of CLI args to discard from the front for reporting
+NUM_CLI_ARGS_DISCARD = 5
+
 #-----------------------------------------------------------------------------------------------------------------------
 # HELPERS
 #-----------------------------------------------------------------------------------------------------------------------
@@ -117,7 +120,9 @@ def run_stage(args, test_case, stage_name, command):
     except TestException as ex:
         report_failure(str(ex), stage_name, test_case, args.debug, command)
         return False
-    report_success(stage_name, test_case, args.verbose)
+    cli_args = command[NUM_CLI_ARGS_DISCARD:]
+    argsstr = f"[…, {', '.join(cli_args)}]" if cli_args else ''
+    report_success(argsstr, stage_name, test_case, args.verbose)
     return True
 
 
@@ -183,10 +188,10 @@ def report_warning(message, stage_name, test_case):
     report(message, stage_name, test_case, symbol)
 
 
-def report_success(stage_name, test_case, verbose):
+def report_success(message, stage_name, test_case, verbose):
     if verbose:
         symbol = Fore.GREEN + '✓' + Style.RESET_ALL
-        report('', stage_name, test_case, symbol)
+        report(message, stage_name, test_case, symbol)
 
 
 def report_summary(stage_counter, stage_pass_counter, required_counter, required_pass_counter, bad_files_counter):

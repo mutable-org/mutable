@@ -2293,10 +2293,6 @@ I32 m::wasm::compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
                 /*----- Compile order expression for right tuple. -----*/
                 Expr<T> val_right = env_right.template compile<Expr<T>>(o.first);
 
-#if 0
-                /* XXX: default c'tor not (yet) viable because its constraint is checked before variable_storage
-                 *      types are instantiated, once this is supported use the following code and remove the lambda
-                 *      for the _Bool case */
                 using type = std::conditional_t<std::is_same_v<T, bool>, _I32, Expr<T>>;
                 Var<type> left, right;
                 if constexpr (std::is_same_v<T, bool>) {
@@ -2306,26 +2302,6 @@ I32 m::wasm::compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
                     left  = val_left;
                     right = val_right;
                 }
-#else
-                Var<Expr<T>> left(val_left), right(val_right);
-#endif
-
-                /*----- Compare both with current order expression and update result. -----*/
-                I32 cmp_null = right.is_null().template to<int32_t>() - left.is_null().template to<int32_t>();
-                _I32 _val_lt = (left < right).template to<int32_t>();
-                _I32 _val_gt = (left > right).template to<int32_t>();
-                _I32 _cmp_val = o.second ? _val_gt - _val_lt : _val_lt - _val_gt;
-                auto [cmp_val, cmp_is_null] = _cmp_val.split();
-                cmp_is_null.discard();
-                I32 cmp = (cmp_null << 1) + cmp_val; // potentially-null value of comparison is overruled by cmp_null
-                result <<= 1; // shift result s.t. first difference will determine order
-                result += cmp; // add current comparison to result
-            },
-            [&](_Bool val_left) -> void {
-                /*----- Compile order expression for right tuple. -----*/
-                _Bool val_right = env_right.template compile<_Bool>(o.first);
-
-                _Var<I32> left(val_left.template to<int32_t>()), right(val_right.template to<int32_t>());
 
                 /*----- Compare both with current order expression and update result. -----*/
                 I32 cmp_null = right.is_null().template to<int32_t>() - left.is_null().template to<int32_t>();

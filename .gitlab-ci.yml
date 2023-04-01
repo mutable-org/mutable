@@ -367,6 +367,7 @@ report:doxygen:
         - rm -rf /srv/http/mutable/doxy
         - mkdir -p /srv/http/mutable/doxy
         - mv doxy/html/* /srv/http/mutable/doxy
+        - scp -r doxy/html/* mutable@playground.bigdata.uni-saarland.de:/srv/http/mutable-doxy
     rules:
         - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 

@@ -332,6 +332,7 @@ if(${WITH_V8})
         DOWNLOAD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8"
         SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8"
         DOWNLOAD_COMMAND fetch --force v8 || true
+        COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/" && git remote remove mutable || true
         COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/" && git remote add mutable https://gitlab.cs.uni-saarland.de/bigdata/mutable/v8.git || true
         COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/" && git fetch mutable
         COMMAND cd "${CMAKE_CURRENT_SOURCE_DIR}/third-party/v8/v8/" && git checkout adfc01872f43132c74bbd2182b127ad6f462f2c1

@@ -3,13 +3,18 @@
 # GENERAL
 #-----------------------------------------------------------------------------------------------------------------------
 
-before_script:
-    - mkdir -p "${HOME}/.ssh"
-    - chmod 700 "${HOME}/.ssh"
-    - eval $(ssh-agent -s)
-    - echo "${SSH_PRIVATE_KEY}" | tr -d '\r' | ssh-add -
-    - echo "${SSH_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
-    - chmod 644 "${HOME}/.ssh/known_hosts"
+default:
+    before_script:
+        - |
+            if [ "$CI_COMMIT_REF_PROTECTED" == "true"];
+            then
+                mkdir -p "${HOME}/.ssh"
+                chmod 700 "${HOME}/.ssh"
+                eval $(ssh-agent -s)
+                echo "${SSH_PRIVATE_KEY}" | tr -d '\r' | ssh-add -
+                echo "${SSH_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
+                chmod 644 "${HOME}/.ssh/known_hosts"
+            fi
 
 
 workflow:

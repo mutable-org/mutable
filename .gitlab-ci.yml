@@ -363,7 +363,7 @@ report:doxygen:
     tags:
         - nginx
     script:
-        - doxygen Doxyfile
+        - doxygen -q Doxyfile
         - rm -rf /srv/http/mutable/doxy
         - mkdir -p /srv/http/mutable/doxy
         - mv doxy/html/* /srv/http/mutable/doxy

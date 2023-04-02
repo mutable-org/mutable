@@ -373,6 +373,9 @@ report:doxygen:
             - "doxygen.log"
     rules:
         - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+          when: on_success
+        - if: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /report/i
+          when: on_success
 
 report:coverage:
     stage: report

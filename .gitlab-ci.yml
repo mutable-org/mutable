@@ -363,11 +363,14 @@ report:doxygen:
     tags:
         - nginx
     script:
-        - doxygen -q Doxyfile
+        - doxygen -q Doxyfile 2>doxygen.log
         - rm -rf /srv/http/mutable/doxy
         - mkdir -p /srv/http/mutable/doxy
         - cp -rf doxy/html/* /srv/http/mutable/doxy
         - scp -r doxy/html/* mutable@playground.bigdata.uni-saarland.de:/srv/http/mutable-doxy
+    artifacts:
+        paths:
+            - "doxygen.log"
     rules:
         - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 

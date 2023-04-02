@@ -371,18 +371,6 @@ report:doxygen:
     rules:
         - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-report:doxygen:api:
-    stage: report
-    tags:
-        - nginx
-    script:
-        - doxygen Doxyfile-api
-    artifacts:
-        paths:
-            - "doxy-api/html"
-    rules:
-        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-
 report:coverage:
     stage: report
     tags:

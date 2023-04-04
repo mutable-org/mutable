@@ -22,10 +22,10 @@ default:
 
 workflow:
     rules:
-        - if: $CI_MERGE_REQUEST_IID
-        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-        - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
-          when: never # prevent duplicate pipelines of branches with MR
+        - if: $CI_MERGE_REQUEST_IID # run on MRs
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH # run on main branch after MR
+        - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS # don't run on individual commits that are part of a MR…
+          when: never # …to prevent duplicate pipelines for branches with a MR
 
 
 # Define the stages of the pipeline.

@@ -204,21 +204,12 @@ struct M_EXPORT Constant : Expr
     void accept(ConstASTExprVisitor &v) const override;
 
     bool is_null() const { return tok.type == TK_Null; }
-
+    bool is_bool() const { return tok.type == TK_True or tok.type == TK_False; }
     bool is_number() const { return is_integer() or is_float(); }
-
-    bool is_integer() const {
-        return tok.type == TK_OCT_INT or
-               tok.type == TK_DEC_INT or
-               tok.type == TK_HEX_FLOAT;
-    }
-
+    bool is_integer() const { return tok.type == TK_OCT_INT or tok.type == TK_DEC_INT or tok.type == TK_HEX_FLOAT; }
     bool is_float() const { return tok.type == TK_DEC_FLOAT or tok.type == TK_HEX_FLOAT; }
-
     bool is_string() const { return tok.type == TK_STRING_LITERAL; }
-
     bool is_date() const { return tok.type == TK_DATE; }
-
     bool is_datetime() const { return tok.type == TK_DATE_TIME; }
 };
 

@@ -47,6 +47,8 @@ struct M_EXPORT Predicate
         if (negative() and binary->tok != TK_BANG_EQUAL) return false;  // negated `!=` is ok
         return is<const ast::Designator>(binary->lhs) and is<const ast::Designator>(binary->rhs);
     }
+    /** Returns `true` iff this `Predicate` is nullable, i.e. may evaluate to `NULL` at runtime. */
+    bool can_be_null() const { return expr().can_be_null(); }
 
     /** Returns a negated version of this `Predicate`, i.e.\ if this `Predicate` is *positive*, the returned `Predicate`
      * is *negative*. */
@@ -100,6 +102,12 @@ struct M_EXPORT Clause : public std::vector<Predicate>
         auto &literal = operator[](0);
         return literal.is_equi();
     }
+    /** Returns `true` iff this `cnf::Clause` formula is nullable, i.e. may evaluate to `NULL` at runtime. */
+    bool can_be_null() const {
+        for (auto &P : *this)
+            if (P.can_be_null()) return true;
+        return false;
+    }
 
     /** Print as SQL expression. */
     void to_sql(std::ostream &out) const;
@@ -130,6 +138,12 @@ struct M_EXPORT CNF : public std::vector<Clause>
         for (auto &clause : *this)
             if (not clause.is_equi()) return false;
         return true;
+    }
+    /** Returns `true` iff this `CNF` formula is nullable, i.e. may evaluate to `NULL` at runtime. */
+    bool can_be_null() const {
+        for (auto &clause : *this)
+            if (clause.can_be_null()) return true;
+        return false;
     }
 
     bool operator<=(const CNF &other) const;

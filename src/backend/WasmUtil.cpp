@@ -74,6 +74,44 @@ void convert_in_place(SQL_t &operand, const Type *to_type)
     }, *to_type);
 }
 
+template<bool CanBeNull>
+std::conditional_t<CanBeNull, _Bool, Bool> compile_cnf(ExprCompiler &C, const cnf::CNF &cnf)
+{
+    using var_t = std::conditional_t<CanBeNull, _Var<Bool>, Var<Bool>>;
+
+    var_t wasm_cnf, wasm_clause;
+    bool wasm_cnf_empty = true;
+    for (auto &clause : cnf) {
+        bool wasm_clause_empty = true;
+        for (auto &pred : clause) {
+            /* Generate code for the literal of the predicate. */
+            M_insist(pred.expr().type()->is_boolean());
+            auto compiled = M_CONSTEXPR_COND(CanBeNull, C.compile<_Bool>(pred.expr()),
+                                                        C.compile<_Bool>(pred.expr()).insist_not_null());
+            auto wasm_pred = pred.negative() ? not compiled : compiled;
+
+            /* Add the predicate to the clause with an `or`. */
+            if (wasm_clause_empty) {
+                wasm_clause = wasm_pred;
+                wasm_clause_empty = false;
+            } else {
+                wasm_clause = wasm_clause or wasm_pred;
+            }
+        }
+
+        /* Add the clause to the CNF with an `and`. */
+        if (wasm_cnf_empty) {
+            wasm_cnf = wasm_clause;
+            wasm_cnf_empty = false;
+        } else {
+            wasm_cnf = wasm_cnf and wasm_clause;
+        }
+    }
+    M_insist(not wasm_cnf_empty, "empty CNF?");
+
+    return wasm_cnf;
+}
+
 
 /*======================================================================================================================
  * ExprCompiler
@@ -264,21 +302,31 @@ void ExprCompiler::operator()(const ast::BinaryExpr &e)
             (*this)(*e.rhs);
             NChar rhs = get<NChar>();
 
-            Var<Ptr<Char>> res(Ptr<Char>::Nullptr()); // return value if at least one operand is NULL
+            Var<Ptr<Char>> res; // always set here
             std::size_t res_length = lhs.length() + rhs.length() + 1; // allocate space for terminating NUL byte
 
-            auto [_ptr_lhs, is_nullptr_lhs] = lhs.split();
-            auto [_ptr_rhs, is_nullptr_rhs] = rhs.split();
-            Ptr<Char> ptr_lhs(_ptr_lhs), ptr_rhs(_ptr_rhs); // since structured bindings cannot be used in lambda capture
+            if (e.lhs->can_be_null() or e.rhs->can_be_null()) {
+                auto [_ptr_lhs, is_nullptr_lhs] = lhs.split();
+                auto [_ptr_rhs, is_nullptr_rhs] = rhs.split();
+                Ptr<Char> ptr_lhs(_ptr_lhs), ptr_rhs(_ptr_rhs); // since structured bindings cannot be used in lambda capture
 
-            IF (not is_nullptr_lhs and not is_nullptr_rhs) {
+                IF (is_nullptr_lhs or is_nullptr_rhs) {
+                    res = Ptr<Char>::Nullptr();
+                } ELSE {
+                    res = Module::Allocator().pre_malloc<char>(res_length); // create pre-allocation for result
+                    Var<Ptr<Char>> ptr(strncpy(res, ptr_lhs, U32(lhs.length()))); // since res must not be changed
+                    strncpy(ptr, ptr_rhs, U32(rhs.size_in_bytes())).discard(); // copy with possible terminating NUL byte
+                    if (not rhs.guarantees_terminating_nul())
+                        *ptr = '\0'; // terminate with NUL byte
+                };
+            } else {
                 res = Module::Allocator().pre_malloc<char>(res_length); // create pre-allocation for result
-                Var<Ptr<Char>> ptr(res.val()); // since res must not be changed
-                ptr = strncpy(ptr, ptr_lhs, U32(lhs.length()));
-                strncpy(ptr, ptr_rhs, U32(rhs.size_in_bytes())).discard(); // copy with possible terminating NUL byte
+                Var<Ptr<Char>> ptr(strncpy(res, lhs, U32(lhs.length()))); // since res must not be changed
+                strncpy(ptr, rhs, U32(rhs.size_in_bytes())).discard(); // copy with possible terminating NUL byte
                 if (not rhs.guarantees_terminating_nul())
                     *ptr = '\0'; // terminate with NUL byte
-            };
+            }
+
             set(SQL_t(NChar(res, res_length, /* guarantees_terminating_nul= */ true)));
             break;
         }
@@ -352,37 +400,12 @@ void ExprCompiler::operator()(const ast::QueryExpr &e)
 
 _Bool ExprCompiler::compile(const cnf::CNF &cnf)
 {
-    Var<_Bool> wasm_cnf; // to make it nullable
-    Var<_Bool> wasm_clause; // to make it nullable
-
-    bool wasm_cnf_empty = true;
-    for (auto &clause : cnf) {
-        bool wasm_clause_empty = true;
-        for (auto &pred : clause) {
-            /* Generate code for the literal of the predicate. */
-            M_insist(pred.expr().type()->is_boolean());
-            _Bool compiled = compile<_Bool>(pred.expr());
-            _Bool wasm_pred = pred.negative() ? not compiled : compiled;
-            /* Add the predicate to the clause with an `or`. */
-            if (wasm_clause_empty) {
-                wasm_clause = wasm_pred;
-                wasm_clause_empty = false;
-            } else {
-                wasm_clause = wasm_clause or wasm_pred;
-            }
-        }
-        /* Add the clause to the CNF with an `and`. */
-        if (wasm_cnf_empty) {
-            wasm_cnf = wasm_clause;
-            wasm_cnf_empty = false;
-        } else {
-            wasm_cnf = wasm_cnf and wasm_clause;
-        }
-    }
-    M_insist(not wasm_cnf_empty, "empty CNF?");
-
-    return wasm_cnf;
+    if (cnf.can_be_null())
+        return compile_cnf<true>(*this, cnf);
+    else
+        return compile_cnf<false>(*this, cnf);
 }
+
 
 
 /*======================================================================================================================
@@ -943,10 +966,15 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                 /*----- Store value. -----*/
                                 BLOCK_OPEN(stores) {
                                     auto value = env.get<NChar>(tuple_it->id);
-                                    IF (not value.clone().is_nullptr()) {
+                                    if (tuple_it->nullable()) {
+                                        IF (not value.clone().is_nullptr()) {
+                                            Ptr<Char> address((ptr + byte_offset).template to<char*>());
+                                            strncpy(address, value, U32(cs.size() / 8)).discard();
+                                        };
+                                    } else {
                                         Ptr<Char> address((ptr + byte_offset).template to<char*>());
                                         strncpy(address, value, U32(cs.size() / 8)).discard();
-                                    };
+                                    }
                                 }
                             } else {
                                 /*----- Load value. -----*/
@@ -1540,9 +1568,13 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                         if constexpr (IsStore) {
                             /*----- Store value. -----*/
                             auto value = env.get<NChar>(tuple_it->id);
-                            IF (not value.clone().is_nullptr()) {
+                            if (tuple_it->nullable()) {
+                                IF (not value.clone().is_nullptr()) {
+                                    strncpy(ptr.template to<char*>(), value, U32(cs.size() / 8)).discard();
+                                };
+                            } else {
                                 strncpy(ptr.template to<char*>(), value, U32(cs.size() / 8)).discard();
-                            };
+                            }
                         } else {
                             /*----- Load value. -----*/
                             values[tuple_idx].emplace<NChar>(ptr.template to<char*>(), cs.length, cs.is_varying);

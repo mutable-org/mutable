@@ -6,8 +6,8 @@
 DOXYFILE_ENCODING      = UTF-8
 PROJECT_NAME           = mutable
 PROJECT_NUMBER         =
-PROJECT_BRIEF          = "A database system for research"
-PROJECT_LOGO           = doxy/logo.png
+PROJECT_BRIEF          = "A Database System for Research and Fast Prototyping"
+PROJECT_LOGO           = doxy/mutable-logo-w.png
 OUTPUT_DIRECTORY       = doxy/
 CREATE_SUBDIRS         = NO
 CREATE_SUBDIRS_LEVEL   = 8

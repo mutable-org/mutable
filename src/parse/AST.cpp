@@ -243,10 +243,9 @@ bool QueryExpr::is_constant() const
     auto &stmt = as<const SelectStmt>(*query);
     if (stmt.from) return false;
     auto &select = as<const SelectClause>(*stmt.select);
-    for (const auto &s : select.select) {
-        if (not s.first->is_constant())
-            return false;
-    }
+    M_insist(select.select.size() == 1);
+    if (not select.select[0].first->is_constant())
+        return false;
     return true;
 }
 

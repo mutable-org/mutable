@@ -10,6 +10,26 @@ using namespace m;
 using namespace m::wasm;
 
 
+namespace {
+
+__attribute__((constructor(201)))
+static void add_wasm_dsl_args()
+{
+    Catalog &C = Catalog::Get();
+
+    /*----- Command-line arguments -----*/
+    C.arg_parser().add<bool>(
+        /* group=       */ "WasmV8",
+        /* short=       */ nullptr,
+        /* long=        */ "--insist-no-ternary-logic",
+        /* description= */ "insist that there is no ternary logic, i.e. NULL value computation",
+        /* callback=    */ [](bool){ options::insist_no_ternary_logic = true; }
+    );
+}
+
+}
+
+
 /*======================================================================================================================
  * MockInterface
  *====================================================================================================================*/

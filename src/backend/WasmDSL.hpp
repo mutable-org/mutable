@@ -29,6 +29,13 @@
 
 namespace m {
 
+namespace options {
+
+/** Whether there must not be any ternary logic, i.e. NULL value computation. */
+inline bool insist_no_ternary_logic = false;
+
+}
+
 // forward declarations
 struct Table;
 
@@ -2193,6 +2200,7 @@ struct Expr<T>
         , is_null_(is_null)
     {
         M_insist(bool(value_), "value must be present");
+        M_insist(not bool(is_null) or not options::insist_no_ternary_logic, "ternary logic must not occur");
     }
 
     ///> Constructs an `Expr` from a `std::pair` \p value of value and NULL info.
@@ -2697,7 +2705,7 @@ class variable_storage<T, VariableKind::Local, /* CanBeNull= */ true>
     variable_storage<bool, VariableKind::Local, false> is_null_;
 
     /** Default-construct. */
-    variable_storage() = default;
+    variable_storage() { M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur"); }
 
     /** Construct from value. */
     explicit variable_storage(T value) : variable_storage() { operator=(Expr<T>(value)); }

@@ -249,6 +249,16 @@ bool QueryExpr::is_constant() const
     return true;
 }
 
+bool QueryExpr::can_be_null() const
+{
+    auto &stmt = as<const SelectStmt>(*query);
+    auto &select = as<const SelectClause>(*stmt.select);
+    M_insist(select.select.size() == 1);
+    if (select.select[0].first->can_be_null())
+        return true;
+    return false;
+}
+
 
 /*======================================================================================================================
  * accept()

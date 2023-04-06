@@ -59,9 +59,11 @@ struct M_EXPORT Expr
     /** Returns true iff this `Expr` has been assigned a `Type`, most likely by `Sema`. */
     bool has_type() const { return type_ != nullptr; }
 
-    /** Returns true iff this `Expr` is constant, i.e. consists only of constatns and can be evaluated at compilation
+    /** Returns true iff this `Expr` is constant, i.e. consists only of constants and can be evaluated at compilation
      * time. */
     virtual bool is_constant() const = 0;
+    /** Returns true iff this `Expr` is nullable, i.e. may evaluate to `NULL` at runtime. */
+    virtual bool can_be_null() const = 0;
 
     /** Returns `true` iff this `Expr` contains a free variable.  A free variable is a `Designator` that is not bound to
      * an `Attribute` or another `Expr` within the query but defined by an outer, enclosing statement. */
@@ -108,6 +110,7 @@ struct M_EXPORT ErrorExpr : Expr
     explicit ErrorExpr(Token tok) : Expr(tok) {}
 
     bool is_constant() const override { return false; }
+    bool can_be_null() const override { return false; }
     bool contains_free_variables() const override { return false; }
     bool contains_bound_variables() const override { return false; }
 
@@ -153,6 +156,13 @@ struct M_EXPORT Designator : Expr
             return (*e)->is_constant();
         return false;
     }
+    bool can_be_null() const override {
+        return std::visit(overloaded {
+            [](const Expr *e) -> bool { return e->can_be_null(); },
+            [](const Attribute *a) -> bool { return not a->not_nullable; },
+            [](std::monostate) -> bool { return true; }
+        }, target_);
+    }
 
     /** Returns `true` iff this `Designator` is a free variable. */
     bool contains_free_variables() const override { return binding_depth_ != 0; }
@@ -193,6 +203,7 @@ struct M_EXPORT Constant : Expr
     Constant(Token tok) : Expr(tok) {}
 
     bool is_constant() const override { return true; }
+    bool can_be_null() const override { return is_null(); }
     bool contains_free_variables() const override { return false; }
     bool contains_bound_variables() const override { return false; }
 
@@ -241,6 +252,29 @@ struct M_EXPORT FnApplicationExpr : PostfixExpr
     }
 
     bool is_constant() const override { return false; }
+    bool can_be_null() const override {
+        if (not func_)
+            return true;
+        switch (func_->fnid) {
+            default:
+                M_unreachable("function kind not implemented");
+
+            case m::Function::FN_UDF:
+                return true;
+
+            case Function::FN_COUNT:
+            case Function::FN_ISNULL:
+                return false;
+
+            case Function::FN_MIN:
+            case Function::FN_MAX:
+            case Function::FN_SUM:
+            case Function::FN_AVG:
+            case Function::FN_INT:
+                M_insist(args.size() == 1);
+                return args[0]->can_be_null();
+        }
+    }
 
     /* A `FnApplicationExpr` is correlated iff at least one argument is correlated. */
     bool contains_free_variables() const override {
@@ -285,6 +319,7 @@ struct M_EXPORT UnaryExpr : Expr
     { }
 
     bool is_constant() const override { return expr->is_constant(); }
+    bool can_be_null() const override { return expr->can_be_null(); }
     bool contains_free_variables() const override { return expr->contains_free_variables(); }
     bool contains_bound_variables() const override { return expr->contains_bound_variables(); }
     Token op() const { return tok; }
@@ -311,6 +346,19 @@ struct M_EXPORT BinaryExpr : Expr
     { }
 
     bool is_constant() const override { return lhs->is_constant() and rhs->is_constant(); }
+    bool can_be_null() const override {
+        if (tok.type == TK_And or tok.type == TK_Or) { // special case handling for ternary logic of `AND` and `OR`
+            /* TODO: use `is_constant()` and check whether one side *evaluates* to dominating element */
+            const auto dominating_element = tok.type == TK_And ? TK_False : TK_True;
+            const auto lhs_const = cast<Constant>(lhs.get());
+            const auto rhs_const = cast<Constant>(rhs.get());
+            const bool lhs_dominates = lhs_const and lhs_const->tok.type == dominating_element;
+            const bool rhs_dominates = rhs_const and rhs_const->tok.type == dominating_element;
+            return not lhs_dominates and not rhs_dominates and (lhs->can_be_null() or rhs->can_be_null());
+        }
+        return lhs->can_be_null() or rhs->can_be_null();
+    }
+
     bool contains_free_variables() const override
     { return lhs->contains_free_variables() or rhs->contains_free_variables(); }
     bool contains_bound_variables() const override
@@ -341,6 +389,8 @@ struct M_EXPORT QueryExpr : Expr
     { }
 
     bool is_constant() const override;
+    bool can_be_null() const override;
+
     /** Conceptually, `QueryExpr`s have no variables at all.  They only contain another `SelectStmt`.  The correlation
      * of expressions within this `SelectStmt` does not matter here.  Therefore, `QueryExpr`s never have free variables
      * and this method always returns `false`. */

@@ -280,7 +280,7 @@ struct M_EXPORT JoinOperator : Producer, Consumer
 
 struct M_EXPORT ProjectionOperator : Producer, Consumer
 {
-    using projection_type = std::pair<std::reference_wrapper<const ast::Expr>, const char*>; // a named expression
+    using projection_type = QueryGraph::projection_type;
 
     private:
     std::vector<projection_type> projections_;
@@ -443,8 +443,7 @@ struct M_EXPORT AggregationOperator : Producer, Consumer
 
 struct M_EXPORT SortingOperator : Producer, Consumer
 {
-    /** A list of expressions to sort by.  True means ascending, false means descending. */
-    using order_type = std::pair<std::reference_wrapper<const ast::Expr>, bool>;
+    using order_type = QueryGraph::order_type;
 
     private:
     std::vector<order_type> order_by_; ///< the order to sort by

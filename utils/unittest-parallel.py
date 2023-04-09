@@ -226,9 +226,8 @@ if __name__ == '__main__':
                         default=os.path.join('build', 'debug', 'bin', 'unittest'), type=str, metavar='PATH', nargs='?')
     args = parser.parse_args()
 
-    binary_path = './' + str(args.binary_path)
     # check if executable
-    if not (os.path.isfile(binary_path) and os.access(binary_path, os.X_OK)):
+    if not (os.path.isfile(args.binary_path) and os.access(args.binary_path, os.X_OK)):
         raise ValueError("Not a valid path to an executable.")
 
 
@@ -236,9 +235,9 @@ if __name__ == '__main__':
     is_interactive = True if 'TERM' in os.environ else False
 
     # get all the test names
-    list_tests_command = binary_path + ' --list-test-names-only --order rand --rng-seed time ' + args.tag
+    list_tests_command = args.binary_path + ' --list-test-names-only --order rand --rng-seed time ' + args.tag
     output = subprocess.run(list_tests_command, shell=True, stdout=subprocess.PIPE)
     test_names = output.stdout.decode().strip().split('\n')
 
-    run_tests(args, test_names, binary_path, is_interactive)
+    run_tests(args, test_names, args.binary_path, is_interactive)
 

@@ -398,7 +398,7 @@ add_custom_target(
     COMMAND echo "##################"
     COMMAND echo "### Unit Tests ###"
     COMMAND echo "##################"
-    COMMAND env ${env} ${EXECUTABLE_OUTPUT_PATH}/unittest "[core]"
+    COMMAND env ${env} python3 "${CMAKE_CURRENT_SOURCE_DIR}/utils/unittest-parallel.py"
 )
 
 # Integration test target

@@ -183,7 +183,7 @@ unittest:linux-amd64:
     needs:
         - job: "build:debug:linux-amd64"
           artifacts: true
-    script: env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 python3 utils/unittest-parallel.py -r --out unittest-results.xml
+    script: env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 python3 utils/unittest-parallel.py -r --out unittest-results.xml build/debug/bin/unittest
     artifacts:
         when: always
         paths:
@@ -199,7 +199,7 @@ unittest:macos-amd64:
     needs:
         - job: "build:debug:macos-amd64"
           artifacts: true
-    script: env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 python3 utils/unittest-parallel.py -r --out unittest-results.xml
+    script: env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 python3 utils/unittest-parallel.py -r --out unittest-results.xml build/debug/bin/unittest
     artifacts:
         when: always
         paths:

@@ -486,8 +486,14 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
                     M_insist(p != M.projection.projections().end());
                     std::visit(overloaded {
                         [&]<typename T>(Expr<T> value) -> void {
-                            Var<Expr<T>> var(value); // introduce variable s.t. uses only load from it
-                            new_env.add(e.id, var);
+                            if (value.can_be_null()) {
+                                Var<Expr<T>> var(value); // introduce variable s.t. uses only load from it
+                                new_env.add(e.id, var);
+                            } else {
+                                /* introduce variable w/o NULL bit s.t. uses only load from it */
+                                Var<PrimitiveExpr<T>> var(value.insist_not_null());
+                                new_env.add(e.id, Expr<T>(var));
+                            }
                         },
                         [&](NChar value) -> void {
                             Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it

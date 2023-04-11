@@ -77,12 +77,11 @@ void convert_in_place(SQL_t &operand, const Type *to_type)
 template<bool CanBeNull>
 std::conditional_t<CanBeNull, _Bool, Bool> compile_cnf(ExprCompiler &C, const cnf::CNF &cnf)
 {
-    using var_t = std::conditional_t<CanBeNull, _Var<Bool>, Var<Bool>>;
+    using result_t = std::conditional_t<CanBeNull, _Bool, Bool>;
 
-    var_t wasm_cnf, wasm_clause;
-    bool wasm_cnf_empty = true;
+    std::unique_ptr<result_t> wasm_cnf, wasm_clause;
     for (auto &clause : cnf) {
-        bool wasm_clause_empty = true;
+        wasm_clause.reset();
         for (auto &pred : clause) {
             /* Generate code for the literal of the predicate. */
             M_insist(pred.expr().type()->is_boolean());
@@ -91,25 +90,22 @@ std::conditional_t<CanBeNull, _Bool, Bool> compile_cnf(ExprCompiler &C, const cn
             auto wasm_pred = pred.negative() ? not compiled : compiled;
 
             /* Add the predicate to the clause with an `or`. */
-            if (wasm_clause_empty) {
-                wasm_clause = wasm_pred;
-                wasm_clause_empty = false;
-            } else {
-                wasm_clause = wasm_clause or wasm_pred;
-            }
+            if (auto old = wasm_clause.get(); old)
+                wasm_clause = std::make_unique<result_t>(*old or wasm_pred);
+            else
+                wasm_clause = std::make_unique<result_t>(wasm_pred);
         }
+        M_insist(bool(wasm_clause), "empty clause?");
 
         /* Add the clause to the CNF with an `and`. */
-        if (wasm_cnf_empty) {
-            wasm_cnf = wasm_clause;
-            wasm_cnf_empty = false;
-        } else {
-            wasm_cnf = wasm_cnf and wasm_clause;
-        }
+        if (auto old = wasm_cnf.get(); old)
+            wasm_cnf = std::make_unique<result_t>(*old and *wasm_clause);
+        else
+            wasm_cnf = std::make_unique<result_t>(*wasm_clause);
     }
-    M_insist(not wasm_cnf_empty, "empty CNF?");
+    M_insist(bool(wasm_cnf), "empty CNF?");
 
-    return wasm_cnf;
+    return *wasm_cnf;
 }
 
 

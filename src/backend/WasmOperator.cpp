@@ -1183,7 +1183,7 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Pipeli
 
         /*----- Introduce variables for old and current grouping keys and compute whether new group starts. -----*/
         Block update_keys("ordered_grouping.update_grouping_keys", false);
-        std::unique_ptr<Bool> group_differs;
+        std::optional<Bool> group_differs;
         for (std::size_t i = 0; i < num_keys; ++i) {
             if (results.has(M.grouping.schema()[i].id))
                 continue; // duplicated grouping key
@@ -1201,10 +1201,10 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Pipeli
                         auto [val, is_null] = value.clone().split();
                         auto null_differs = is_null != key_is_null;
                         Bool key_differs = null_differs or (not key_is_null and val != key_val);
-                        if (auto old = group_differs.get())
-                            group_differs = std::make_unique<Bool>(key_differs or *old);
+                        if (group_differs)
+                            group_differs.emplace(key_differs or *group_differs);
                         else
-                            group_differs = std::make_unique<Bool>(key_differs);
+                            group_differs.emplace(key_differs);
 
                         BLOCK_OPEN(update_keys) {
                             std::tie(key_val, key_is_null) = value.split();
@@ -1214,10 +1214,10 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Pipeli
                         results.add(M.grouping.schema()[i].id, key.val());
 
                         Bool key_differs = key != value.clone().insist_not_null();
-                        if (auto old = group_differs.get())
-                            group_differs = std::make_unique<Bool>(key_differs or *old);
+                        if (group_differs)
+                            group_differs.emplace(key_differs or *group_differs);
                         else
-                            group_differs = std::make_unique<Bool>(key_differs);
+                            group_differs.emplace(key_differs);
 
                         BLOCK_OPEN(update_keys) {
                            key = value.insist_not_null();
@@ -1241,10 +1241,10 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Pipeli
                     addr_differs_is_null.discard(); // use potentially-null value but it is overruled if it is NULL
                     auto nullptr_differs = is_nullptr != key_is_nullptr.clone();
                     Bool key_differs = nullptr_differs or (not key_is_nullptr and addr_differs_value);
-                    if (auto old = group_differs.get())
-                        group_differs = std::make_unique<Bool>(key_differs or *old);
+                    if (group_differs)
+                        group_differs.emplace(key_differs or *group_differs);
                     else
-                        group_differs = std::make_unique<Bool>(key_differs);
+                        group_differs.emplace(key_differs);
 
                     BLOCK_OPEN(update_keys) {
                         key = value.val();
@@ -1867,12 +1867,12 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
         M.children[0].get().execute([&](){
             auto &env = CodeGenContext::Get().env();
 
-            std::unique_ptr<Bool> build_key_not_null;
+            std::optional<Bool> build_key_not_null;
             for (auto &build_key : build_keys) {
-                if (auto old = build_key_not_null.get())
-                    build_key_not_null = std::make_unique<Bool>(*old and not is_null(env.get(build_key)));
+                if (build_key_not_null)
+                    build_key_not_null.emplace(*build_key_not_null and not is_null(env.get(build_key)));
                 else
-                    build_key_not_null = std::make_unique<Bool>(not is_null(env.get(build_key)));
+                    build_key_not_null.emplace(not is_null(env.get(build_key)));
             }
             M_insist(bool(build_key_not_null));
             IF (*build_key_not_null) { // TODO: predicated version
@@ -2553,12 +2553,12 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
         M.children[0].get().execute([&](){
             const auto &env = CodeGenContext::Get().env();
 
-            std::unique_ptr<Bool> build_key_not_null;
+            std::optional<Bool> build_key_not_null;
             for (auto &build_key : build_keys) {
-                if (auto old = build_key_not_null.get())
-                    build_key_not_null = std::make_unique<Bool>(*old and not is_null(env.get(build_key)));
+                if (build_key_not_null)
+                    build_key_not_null.emplace(*build_key_not_null and not is_null(env.get(build_key)));
                 else
-                    build_key_not_null = std::make_unique<Bool>(not is_null(env.get(build_key)));
+                    build_key_not_null.emplace(not is_null(env.get(build_key)));
             }
             M_insist(bool(build_key_not_null));
             IF (*build_key_not_null) { // TODO: predicated version

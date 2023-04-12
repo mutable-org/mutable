@@ -79,7 +79,7 @@ std::conditional_t<CanBeNull, _Bool, Bool> compile_cnf(ExprCompiler &C, const cn
 {
     using result_t = std::conditional_t<CanBeNull, _Bool, Bool>;
 
-    std::unique_ptr<result_t> wasm_cnf, wasm_clause;
+    std::optional<result_t> wasm_cnf, wasm_clause;
     for (auto &clause : cnf) {
         wasm_clause.reset();
         for (auto &pred : clause) {
@@ -90,18 +90,18 @@ std::conditional_t<CanBeNull, _Bool, Bool> compile_cnf(ExprCompiler &C, const cn
             auto wasm_pred = pred.negative() ? not compiled : compiled;
 
             /* Add the predicate to the clause with an `or`. */
-            if (auto old = wasm_clause.get(); old)
-                wasm_clause = std::make_unique<result_t>(*old or wasm_pred);
+            if (wasm_clause)
+                wasm_clause.emplace(*wasm_clause or wasm_pred);
             else
-                wasm_clause = std::make_unique<result_t>(wasm_pred);
+                wasm_clause.emplace(wasm_pred);
         }
         M_insist(bool(wasm_clause), "empty clause?");
 
         /* Add the clause to the CNF with an `and`. */
-        if (auto old = wasm_cnf.get(); old)
-            wasm_cnf = std::make_unique<result_t>(*old and *wasm_clause);
+        if (wasm_cnf)
+            wasm_cnf.emplace(*wasm_cnf and *wasm_clause);
         else
-            wasm_cnf = std::make_unique<result_t>(*wasm_clause);
+            wasm_cnf.emplace(*wasm_clause);
     }
     M_insist(bool(wasm_cnf), "empty CNF?");
 

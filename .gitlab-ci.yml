@@ -13,6 +13,7 @@ default:
                 chmod 700 "${HOME}/.ssh"
                 eval $(ssh-agent -s)
                 echo "${SSH_PRIVATE_KEY}" | tr -d '\r' | ssh-add -
+                echo "${SSH_GITHUB_DEPLOY_KEY}" | tr -d '\r' | ssh-add -
                 echo "${SSH_KNOWN_HOSTS}" > "${HOME}/.ssh/known_hosts"
                 chmod 644 "${HOME}/.ssh/known_hosts"
             # else
@@ -37,6 +38,7 @@ stages:
     - test:release
     - report
     - upload
+    - publish
 
 .build_cache:
     cache:
@@ -506,3 +508,18 @@ upload:release:
           \"url\": \"${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/mutable/${TAG}/mutable-macos-amd64-${TAG}.zip\",
           \"link_type\": \"package\" } ] } }"
           --request POST "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases"
+
+#-----------------------------------------------------------------------------------------------------------------------
+# MIRROR TO GITHUB
+#-----------------------------------------------------------------------------------------------------------------------
+#
+publish:github:
+    stage: publish
+    script:
+        - git remote remove github || true
+        - git remote add github git@github.com:mutable-org/mutable.git
+        - git push --tags github $CI_DEFAULT_BRANCH:$CI_DEFAULT_BRANCH
+    rules:
+        - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+          when: on_success
+        - when: never

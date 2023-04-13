@@ -171,14 +171,13 @@ U64 m::wasm::fnv_1a(Ptr<U8> bytes, U32 num_bytes)
 U64 m::wasm::str_hash(NChar _str)
 {
     Var<U64> h(0); // always set here
-    Var<Ptr<Char>> str(_str.val());
 
-    IF (str.is_nullptr()) {
-        /*----- Handle nullptr. -----*/
+    IF (_str.clone().is_null()) {
         h = uint64_t(1UL << 63);
     } ELSE {
         if (_str.length() <= 8) {
             /*----- If the string fits in a single U64, combine all characters and bit mix. -----*/
+            const Var<Ptr<Char>> str(_str.val());
             for (int32_t i = 0; i != _str.length(); ++i) {
                 h <<= 8U;
                 Char c = *(str + i);
@@ -187,7 +186,7 @@ U64 m::wasm::str_hash(NChar _str)
             h = murmur3_bit_mix(h);
         } else {
             /*----- Compute FNV-1a hash of string. -----*/
-            h = fnv_1a(str.to<void*>().to<uint8_t*>(), U32(_str.length()));
+            h = fnv_1a(_str.to<void*>().to<uint8_t*>(), U32(_str.length()));
         }
     };
 
@@ -234,13 +233,12 @@ U64 m::wasm::murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> values)
                     }
                 },
                 [&](NChar _val) -> void {
-                    Var<Ptr<Char>> val(_val.val());
-
-                    IF (val.is_nullptr()) {
+                    IF (_val.clone().is_null()) {
                         uint64_t len_in_bits = 8 * _val.length();
                         h <<= len_in_bits;
-                        h |= uint64_t(1UL << (len_in_bits - 1)); // add nullptr
+                        h |= uint64_t(1UL << (len_in_bits - 1)); // add NULL
                     } ELSE {
+                        const Var<Ptr<Char>> val(_val.val());
                         for (int32_t i = 0; i != _val.length(); ++i) {
                             h <<= 8U;
                             Char c = *(val + i);
@@ -693,7 +691,7 @@ Bool ChainedHashTable<IsGlobal>::equal_key(Ptr<void> entry, std::vector<SQL_t> k
             },
             [&](const CharacterSequence &cs) {
                 M_insist(std::holds_alternative<NChar>(key[i]));
-                NChar val((entry.clone() + off).template to<char*>(), &cs);
+                NChar val((entry.clone() + off).template to<char*>(), e.nullable(), &cs);
                 if (e.nullable()) { // entry may be NULL
                     const_reference_t<NChar> ref(val, entry.clone() + null_bitmap_offset_in_bytes_, i);
                     res = res and ref == *std::get_if<NChar>(&key[i]);
@@ -754,7 +752,7 @@ void ChainedHashTable<IsGlobal>::insert_key(Ptr<void> entry, std::vector<SQL_t> 
             },
             [&](const CharacterSequence &cs) {
                 M_insist(std::holds_alternative<NChar>(key[i]));
-                NChar val((entry.clone() + off).template to<char*>(), &cs);
+                NChar val((entry.clone() + off).template to<char*>(), e.nullable(), &cs);
                 if (e.nullable()) { // entry may be NULL
                     reference_t<NChar> ref(val, entry.clone() + null_bitmap_offset_in_bytes_, i);
                     ref = *std::get_if<NChar>(&key[i]);
@@ -813,7 +811,7 @@ HashTable::entry_t ChainedHashTable<IsGlobal>::value_entry(Ptr<void> entry) cons
                 }
             },
             [&](const CharacterSequence &cs) {
-                NChar val((entry.clone() + off).template to<char*>(), &cs);
+                NChar val((entry.clone() + off).template to<char*>(), e.nullable(), &cs);
                 if (e.nullable()) { // entry may be NULL
                     reference_t<NChar> ref(val, entry.clone() + null_bitmap_offset_in_bytes_, i + key_indices_.size());
                     value_entry.add(e.id, std::move(ref));
@@ -874,7 +872,7 @@ HashTable::const_entry_t ChainedHashTable<IsGlobal>::entry(Ptr<void> entry) cons
                 }
             },
             [&](const CharacterSequence &cs) {
-                NChar val((entry.clone() + off).template to<char*>(), &cs);
+                NChar val((entry.clone() + off).template to<char*>(), e.nullable(), &cs);
                 if (e.nullable()) { // entry may be NULL
                     const_reference_t<NChar> ref(val, entry.clone() + null_bitmap_offset_in_bytes_, i);
                     _entry.add(e.id, std::move(ref));
@@ -1475,7 +1473,7 @@ Bool OpenAddressingHashTable<IsGlobal, ValueInPlace>::equal_key(Ptr<void> slot, 
             },
             [&](const CharacterSequence &cs) {
                 M_insist(std::holds_alternative<NChar>(key[i]));
-                NChar val((slot.clone() + off).template to<char*>(), &cs);
+                NChar val((slot.clone() + off).template to<char*>(), e.nullable(), &cs);
                 if (e.nullable()) { // entry may be NULL
                     const_reference_t<NChar> ref(val, slot.clone() + off_null_bitmap, i);
                     res = res and ref == *std::get_if<NChar>(&key[i]);
@@ -1538,7 +1536,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::insert_key(Ptr<void> slot,
             },
             [&](const CharacterSequence &cs) {
                 M_insist(std::holds_alternative<NChar>(key[i]));
-                NChar val((slot.clone() + off).template to<char*>(), &cs);
+                NChar val((slot.clone() + off).template to<char*>(), e.nullable(), &cs);
                 if (e.nullable()) { // entry may be NULL
                     reference_t<NChar> ref(val, slot.clone() + off_null_bitmap, i);
                     ref = *std::get_if<NChar>(&key[i]);
@@ -1600,7 +1598,7 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::value_entry(
                 }
             },
             [&](const CharacterSequence &cs) {
-                NChar val((ptr.clone() + off).template to<char*>(), &cs);
+                NChar val((ptr.clone() + off).template to<char*>(), e.nullable(), &cs);
                 if (e.nullable()) { // entry may be NULL
                     const auto off_null_bit = M_CONSTEXPR_COND(ValueInPlace, i + key_indices_.size(), i);
                     reference_t<NChar> ref(val, ptr.clone() + off_null_bitmap, off_null_bit);
@@ -1686,7 +1684,7 @@ HashTable::const_entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::entry(
                 }
             },
             [&](const CharacterSequence &cs) {
-                NChar val((ptr->clone() + off).template to<char*>(), &cs);
+                NChar val((ptr->clone() + off).template to<char*>(), e.nullable(), &cs);
                 if (e.nullable()) { // entry may be NULL
                     auto off_null_bit =
                         M_CONSTEXPR_COND(ValueInPlace, i, i < key_indices_.size() ? i : i - key_indices_.size());

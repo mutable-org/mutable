@@ -497,7 +497,8 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
                         },
                         [&](NChar value) -> void {
                             Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
-                            new_env.add(e.id, NChar(var, value.length(), value.guarantees_terminating_nul()));
+                            new_env.add(e.id, NChar(var, value.can_be_null(), value.length(),
+                                                    value.guarantees_terminating_nul()));
                         },
                         [](std::monostate) -> void { M_unreachable("invalid expression"); },
                     }, old_env.compile(p->first));
@@ -890,7 +891,8 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pi
                     [&](HashTable::const_reference_t<NChar> &&r) -> void {
                         NChar value(r);
                         Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
-                        env.add(e.id, NChar(var, value.length(), value.guarantees_terminating_nul()));
+                        env.add(e.id, NChar(var, value.can_be_null(), value.length(),
+                                            value.guarantees_terminating_nul()));
                     },
                     [](std::monostate&&) -> void { M_unreachable("invalid reference"); },
                 }, entry.get(e.id)); // do not extract to be able to access for not-yet-computed AVG aggregates
@@ -1233,14 +1235,16 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Pipeli
                 },
                 [&](NChar value) -> void {
                     Global<Ptr<Char>> key; // in first iteration defaulted but never needed (see below)
-                    results.add(M.grouping.schema()[i].id,
-                                NChar(key.val(), value.length(), value.guarantees_terminating_nul()));
+                    results.add(M.grouping.schema()[i].id, NChar(key.val(), value.can_be_null(), value.length(),
+                                                                 value.guarantees_terminating_nul()));
 
                     auto [key_addr, key_is_nullptr] = key.val().split();
                     auto [addr, is_nullptr] = value.val().clone().split();
                     auto addr_differs = strncmp(
-                        /* left=  */ NChar(addr, value.length(), value.guarantees_terminating_nul()),
-                        /* right= */ NChar(key_addr, value.length(), value.guarantees_terminating_nul()),
+                        /* left=  */ NChar(addr, value.can_be_null(), value.length(),
+                                           value.guarantees_terminating_nul()),
+                        /* right= */ NChar(key_addr, value.can_be_null(), value.length(),
+                                           value.guarantees_terminating_nul()),
                         /* len=   */ U32(value.length()),
                         /* op=    */ NE
                     );
@@ -1316,7 +1320,8 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Pipeli
                     },
                     [&](NChar value) -> void {
                         Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
-                        env.add(e.id, NChar(var, value.length(), value.guarantees_terminating_nul()));
+                        env.add(e.id, NChar(var, value.can_be_null(), value.length(),
+                                            value.guarantees_terminating_nul()));
                     },
                     [](std::monostate) -> void { M_unreachable("invalid reference"); },
                 }, results.get(e.id)); // do not extract to be able to access for not-yet-computed AVG aggregates
@@ -1588,7 +1593,7 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Pipeline)
                 },
                 [&](NChar value) -> void {
                     Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
-                    env.add(e.id, NChar(var, value.length(), value.guarantees_terminating_nul()));
+                    env.add(e.id, NChar(var, value.can_be_null(), value.length(), value.guarantees_terminating_nul()));
                 },
                 [](std::monostate) -> void { M_unreachable("invalid reference"); },
             }, results.get(e.id)); // do not extract to be able to access for not-yet-computed AVG aggregates
@@ -1940,7 +1945,8 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
                     [&](HashTable::const_reference_t<NChar> &&r) -> void {
                         NChar value(r);
                         Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
-                        env.add(e.id, NChar(var, value.length(), value.guarantees_terminating_nul()));
+                        env.add(e.id, NChar(var, value.can_be_null(), value.length(),
+                                            value.guarantees_terminating_nul()));
                     },
                     [](std::monostate) -> void { M_unreachable("invalid reference"); },
                 }, entry.extract(e.id));
@@ -2787,7 +2793,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
 #endif
                             NChar value(r);
                             Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
-                            env.add(e.id, NChar(var, value.length(), value.guarantees_terminating_nul()));
+                            env.add(e.id, NChar(var, value.can_be_null(), value.length(),
+                                                value.guarantees_terminating_nul()));
                         },
                         [](std::monostate&&) -> void { M_unreachable("invalid reference"); },
                     }, entry.get(e.id)); // do not extract to be able to access for not-yet-computed AVG aggregates

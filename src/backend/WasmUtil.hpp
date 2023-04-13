@@ -27,12 +27,16 @@ template<bool IsGlobal> struct buffer_swap_proxy_t;
 struct NChar : Ptr<Char>
 {
     private:
+    bool can_be_null_;
     const CharacterSequence *type_;
 
     public:
-    NChar(Ptr<Char> ptr, const CharacterSequence *type) : Ptr<Char>(ptr), type_(type) { }
-    NChar(Ptr<Char> ptr, std::size_t length, bool guarantees_terminating_nul)
+    NChar(Ptr<Char> ptr, bool can_be_null, const CharacterSequence *type)
+        : Ptr<Char>(ptr), can_be_null_(can_be_null), type_(type)
+    { }
+    NChar(Ptr<Char> ptr, bool can_be_null, std::size_t length, bool guarantees_terminating_nul)
         : Ptr<Char>(ptr)
+        , can_be_null_(can_be_null)
         , type_(guarantees_terminating_nul ? Type::Get_Varchar(Type::TY_Scalar, length)
                                            : Type::Get_Char(Type::TY_Scalar, length))
     { }
@@ -40,10 +44,28 @@ struct NChar : Ptr<Char>
     NChar(NChar&) = default;
     NChar(NChar&&) = default;
 
-    NChar clone() const { return NChar(Ptr<Char>::clone(), type_); }
+    NChar clone() const { return NChar(Ptr<Char>::clone(), can_be_null_, type_); }
 
     Ptr<Char> val() { return *this; }
 
+    Bool is_null() {
+        if (can_be_null()) {
+            return Ptr<Char>::is_null();
+        } else {
+            discard();
+            return Bool(false);
+        }
+    }
+    Bool not_null() {
+        if (can_be_null()) {
+            return Ptr<Char>::not_null();
+        } else {
+            discard();
+            return Bool(true);
+        }
+    }
+
+    bool can_be_null() const { return can_be_null_; }
     std::size_t length() const { return type_->length; }
     uint64_t size_in_bytes() const { return type_->size() / 8; }
     bool guarantees_terminating_nul() const { return type_->is_varying; }
@@ -407,7 +429,7 @@ struct CodeGenContext
 
     /** Adds the string literal `literal` located at pointer offset `ptr`. */
     void add_literal(const char *literal, uint32_t ptr) {
-        auto [_, inserted] = literals_.emplace(literal, NChar(Ptr<Char>(U32(ptr)), strlen(literal) + 1, true));
+        auto [_, inserted] = literals_.emplace(literal, NChar(Ptr<Char>(U32(ptr)), false, strlen(literal) + 1, true));
         M_insist(inserted);
     }
     /** Returns the address at which `literal` is stored. */

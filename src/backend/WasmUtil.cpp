@@ -22,7 +22,8 @@ void convert_in_place(SQL_t &operand)
             auto v = actual.template to<T>();
             operand.~SQL_t();
             if constexpr (std::same_as<T, char*>)
-                new (&operand) SQL_t(NChar(v, static_cast<NChar>(actual).length(),
+                new (&operand) SQL_t(NChar(v, static_cast<NChar>(actual).can_be_null(),
+                                           static_cast<NChar>(actual).length(),
                                            static_cast<NChar>(actual).guarantees_terminating_nul()));
             else
                 new (&operand) SQL_t(v);
@@ -298,10 +299,14 @@ void ExprCompiler::operator()(const ast::BinaryExpr &e)
             (*this)(*e.rhs);
             NChar rhs = get<NChar>();
 
+            M_insist(e.lhs->can_be_null() == lhs.can_be_null());
+            M_insist(e.rhs->can_be_null() == rhs.can_be_null());
+
             Var<Ptr<Char>> res; // always set here
+            bool res_can_be_null = lhs.can_be_null() or rhs.can_be_null();
             std::size_t res_length = lhs.length() + rhs.length() + 1; // allocate space for terminating NUL byte
 
-            if (e.lhs->can_be_null() or e.rhs->can_be_null()) {
+            if (res_can_be_null) {
                 auto [_ptr_lhs, is_nullptr_lhs] = lhs.split();
                 auto [_ptr_rhs, is_nullptr_rhs] = rhs.split();
                 Ptr<Char> ptr_lhs(_ptr_lhs), ptr_rhs(_ptr_rhs); // since structured bindings cannot be used in lambda capture
@@ -323,7 +328,7 @@ void ExprCompiler::operator()(const ast::BinaryExpr &e)
                     *ptr = '\0'; // terminate with NUL byte
             }
 
-            set(SQL_t(NChar(res, res_length, /* guarantees_terminating_nul= */ true)));
+            set(SQL_t(NChar(res, res_can_be_null, res_length, /* guarantees_terminating_nul= */ true)));
             break;
         }
 
@@ -636,6 +641,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                             advance_to_next_bit();
 
                                             auto value = env.get<NChar>(tuple_it->id); // get value
+                                            M_insist(tuple_it->nullable() == value.can_be_null());
                                             setbit(null_bitmap_ptr->template to<uint8_t*>(), value.is_null(),
                                                    null_bitmap_mask->template to<uint8_t>()); // update bit
                                         }
@@ -783,6 +789,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                     [&](const CharacterSequence&) {
                                         BLOCK_OPEN(stores) {
                                             auto value = env.get<NChar>(tuple_entry.id); // get value
+                                            M_insist(tuple_entry.nullable() == value.can_be_null());
                                             Ptr<U8> byte_ptr =
                                                 (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
                                             setbit<U8>(byte_ptr, value.is_null(), bit_offset); // update bit
@@ -956,21 +963,18 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                 /*----- Store value. -----*/
                                 BLOCK_OPEN(stores) {
                                     auto value = env.get<NChar>(tuple_it->id);
-                                    if (tuple_it->nullable()) {
-                                        IF (not value.clone().is_null()) {
-                                            Ptr<Char> address((ptr + byte_offset).template to<char*>());
-                                            strncpy(address, value, U32(cs.size() / 8)).discard();
-                                        };
-                                    } else {
+                                    M_insist(tuple_it->nullable() == value.can_be_null());
+                                    IF (value.clone().not_null()) {
                                         Ptr<Char> address((ptr + byte_offset).template to<char*>());
                                         strncpy(address, value, U32(cs.size() / 8)).discard();
-                                    }
+                                    };
                                 }
                             } else {
                                 /*----- Load value. -----*/
                                 BLOCK_OPEN(loads) {
                                     Ptr<Char> address((ptr + byte_offset).template to<char*>());
-                                    values[tuple_idx].emplace<NChar>(address, cs.length, cs.is_varying);
+                                    values[tuple_idx].emplace<NChar>(address, tuple_it->nullable(), cs.length,
+                                                                     cs.is_varying);
                                 }
                             }
                         },
@@ -1229,11 +1233,14 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                     BLOCK_OPEN(loads) {
                         M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
                         if (has_null_bitmap and tuple_entry.nullable()) {
+                            /* introduce variable s.t. uses only load from it*/
                             Var<Ptr<Char>> combined(Select(null_bits[idx], Ptr<Char>::Nullptr(), value.val()));
-                            env.add(tuple_entry.id, NChar(combined, value.length(), value.guarantees_terminating_nul()));
+                            env.add(tuple_entry.id, NChar(combined, /* can_be_null=*/ true, value.length(),
+                                                          value.guarantees_terminating_nul()));
                         } else {
                             Var<Ptr<Char>> _value(value.val()); // introduce variable s.t. uses only load from it
-                            env.add(tuple_entry.id, NChar(_value, value.length(), value.guarantees_terminating_nul()));
+                            env.add(tuple_entry.id, NChar(_value, /* can_be_null=*/ false, value.length(),
+                                                          value.guarantees_terminating_nul()));
                         }
                     }
                 },
@@ -1430,6 +1437,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                 },
                                 [&](const CharacterSequence&) {
                                     auto value = env.get<NChar>(tuple_entry.id); // get value
+                                    M_insist(tuple_entry.nullable() == value.can_be_null());
                                     Ptr<U8> byte_ptr =
                                         (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
                                     setbit<U8>(byte_ptr, value.is_null(), uint8_t(1) << bit_offset); // update bit
@@ -1555,16 +1563,14 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                         if constexpr (IsStore) {
                             /*----- Store value. -----*/
                             auto value = env.get<NChar>(tuple_it->id);
-                            if (tuple_it->nullable()) {
-                                IF (not value.clone().is_null()) {
-                                    strncpy(ptr.template to<char*>(), value, U32(cs.size() / 8)).discard();
-                                };
-                            } else {
+                            M_insist(tuple_it->nullable() == value.can_be_null());
+                            IF (value.clone().not_null()) {
                                 strncpy(ptr.template to<char*>(), value, U32(cs.size() / 8)).discard();
-                            }
+                            };
                         } else {
                             /*----- Load value. -----*/
-                            values[tuple_idx].emplace<NChar>(ptr.template to<char*>(), cs.length, cs.is_varying);
+                            values[tuple_idx].emplace<NChar>(ptr.template to<char*>(), tuple_it->nullable(), cs.length,
+                                                             cs.is_varying);
                         }
                     },
                     [&](const Date&) { CALL(_I32); },
@@ -1593,11 +1599,14 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                 [&](NChar value) {
                     M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
                     if (has_null_bitmap and tuple_entry.nullable()) {
+                        /* introduce variable s.t. uses only load from it */
                         Var<Ptr<Char>> combined(Select(null_bits[idx], Ptr<Char>::Nullptr(), value.val()));
-                        env.add(tuple_entry.id, NChar(combined, value.length(), value.guarantees_terminating_nul()));
+                        env.add(tuple_entry.id, NChar(combined, /* can_be_null=*/ true, value.length(),
+                                                      value.guarantees_terminating_nul()));
                     } else {
                         Var<Ptr<Char>> _value(value.val()); // introduce variable s.t. uses only load from it
-                        env.add(tuple_entry.id, NChar(_value, value.length(), value.guarantees_terminating_nul()));
+                        env.add(tuple_entry.id, NChar(_value, /* can_be_null=*/ false, value.length(),
+                                                      value.guarantees_terminating_nul()));
                     }
                 },
                 [](std::monostate) { M_unreachable("value must be loaded beforehand"); },
@@ -1852,13 +1861,13 @@ void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second)
         std::visit(overloaded {
             [&](NChar value) -> void {
                 Var<Ptr<Char>> ptr; // always set here
-                IF (value.is_null()) {
+                IF (value.clone().is_null()) {
                     ptr = Ptr<Char>::Nullptr();
                 } ELSE {
                     ptr = Module::Allocator().pre_malloc<char>(value.size_in_bytes());
                     strncpy(ptr, value, U32(value.size_in_bytes())).discard();
                 };
-                env.add(e.id, NChar(ptr, value.length(), value.guarantees_terminating_nul()));
+                env.add(e.id, NChar(ptr, value.can_be_null(), value.length(), value.guarantees_terminating_nul()));
             },
             [&]<typename T>(Expr<T> value) -> void {
                 if (value.can_be_null()) {
@@ -1913,18 +1922,16 @@ _I32 m::wasm::strncmp(NChar _left, NChar _right, U32 len)
     };
     auto &d = Module::Get().add_garbage_collected_data<data_t>(&_); // garbage collect the `data_t` instance
 
-    Wasm_insist(len.clone() != 0U, "length to compare must not be 0");
+    auto strncmp_non_null = [&d, &_left, &_right](Ptr<Char> left, Ptr<Char> right, U32 len) -> I32 {
+        Wasm_insist(left.clone().not_null(), "left operand must not be NULL");
+        Wasm_insist(right.clone().not_null(), "right operand must not be NULL");
+        Wasm_insist(len.clone() != 0U, "length to compare must not be 0");
 
-    Var<Ptr<Char>> left (_left.val()), right(_right.val());
-    _Var<I32> result; // always set here
-
-    IF (left.is_nullptr() or right.is_nullptr()) {
-        /*----- If either side is `nullptr` (representing `NULL`), then the result is `NULL`. -----*/
-        result = _I32::Null();
-    } ELSE {
         if (_left.length() == 1 and _right.length() == 1) {
             /*----- Special handling of single char strings. -----*/
-            result = (*left > *right).to<int32_t>() - (*left < *right).to<int32_t>();
+            len.discard();
+            auto left_gt_right = *left.clone() > *right.clone();
+            return left_gt_right.to<int32_t>() - (*left < *right).to<int32_t>();
         } else {
             if (_left.guarantees_terminating_nul() and _right.guarantees_terminating_nul()) {
                 if (not d.strncmp_terminating_nul) {
@@ -1968,7 +1975,7 @@ _I32 m::wasm::strncmp(NChar _left, NChar _right, U32 len)
 
                 /*----- Call strncmp_terminating_nul function. ------*/
                 M_insist(bool(d.strncmp_terminating_nul));
-                result = (*d.strncmp_terminating_nul)(_left.length(), _right.length(), left, right, len);
+                return (*d.strncmp_terminating_nul)(_left.length(), _right.length(), left, right, len);
             } else {
                 if (not d.strncmp_no_terminating_nul) {
                     /*----- Create function to compute the result for non-nullptr arguments character-wise. -----*/
@@ -2020,12 +2027,24 @@ _I32 m::wasm::strncmp(NChar _left, NChar _right, U32 len)
 
                 /*----- Call strncmp_no_terminating_nul function. ------*/
                 M_insist(bool(d.strncmp_no_terminating_nul));
-                result = (*d.strncmp_no_terminating_nul)(_left.length(), _right.length(), left, right, len);
+                return (*d.strncmp_no_terminating_nul)(_left.length(), _right.length(), left, right, len);
             }
         }
     };
 
-    return result;
+    const Var<Ptr<Char>> left(_left.val()), right(_right.val());
+    if (_left.can_be_null() or _right.can_be_null()) {
+        _Var<I32> result; // always set here
+        IF (left.is_null() or right.is_null()) {
+            result = _I32::Null();
+        } ELSE {
+            result = strncmp_non_null(left, right, len);
+        };
+        return result;
+    } else {
+        const Var<I32> result(strncmp_non_null(left, right, len)); // to prevent duplicated computation due to `clone()`
+        return _I32(result);
+    }
 }
 
 _I32 m::wasm::strcmp(NChar left, NChar right)
@@ -2136,16 +2155,10 @@ _Bool m::wasm::like(NChar _str, NChar _pattern, const char escape_char)
         return _Bool(true);
     }
 
-    _Var<Bool> result; // always set here
+    auto like_non_null = [&d, &_str, &_pattern, &escape_char](Ptr<Char> str, Ptr<Char> pattern) -> Bool {
+        Wasm_insist(str.clone().not_null(), "string operand must not be NULL");
+        Wasm_insist(pattern.clone().not_null(), "pattern operand must not be NULL");
 
-    auto [_val_str, is_null_str] = _str.split();
-    auto [_val_pattern, is_null_pattern] = _pattern.split();
-    Ptr<Char> val_str(_val_str), val_pattern(_val_pattern); // since structured bindings cannot be used in lambda capture
-
-    IF (is_null_str or is_null_pattern) {
-        /*----- If either side is `NULL`, then the result is `NULL`. -----*/
-        result = _Bool::Null();
-    } ELSE {
         if (not d.like) {
             /*----- Create function to compute the result. -----*/
             FUNCTION(like, bool(int32_t, int32_t, char*, char*, char))
@@ -2282,10 +2295,25 @@ _Bool m::wasm::like(NChar _str, NChar _pattern, const char escape_char)
 
         /*----- Call like function. ------*/
         M_insist(bool(d.like));
-        result = (*d.like)(_str.length(), _pattern.length(), val_str, val_pattern, escape_char);
+        return (*d.like)(_str.length(), _pattern.length(), str, pattern, escape_char);
     };
 
-    return result;
+    if (_str.can_be_null() or _pattern.can_be_null()) {
+        auto [_val_str, is_null_str] = _str.split();
+        auto [_val_pattern, is_null_pattern] = _pattern.split();
+        Ptr<Char> val_str(_val_str), val_pattern(_val_pattern); // since structured bindings cannot be used in lambda capture
+
+        _Var<Bool> result; // always set here
+        IF (is_null_str or is_null_pattern) {
+            result = _Bool::Null();
+        } ELSE {
+            result = like_non_null(val_str, val_pattern);
+        };
+        return result;
+    } else {
+        const Var<Bool> result(like_non_null(_str, _pattern)); // to prevent duplicated computation due to `clone()`
+        return _Bool(result);
+    }
 }
 
 
@@ -2372,17 +2400,26 @@ I32 m::wasm::compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
                 NChar val_right = env_right.template compile<NChar>(o.first);
 
                 Var<Ptr<Char>> _left(val_left.val()), _right(val_right.val());
-                NChar left(_left, val_left.length(), val_left.guarantees_terminating_nul()),
-                      right(_right, val_right.length(), val_right.guarantees_terminating_nul());
+                NChar left(_left, val_left.can_be_null(), val_left.length(), val_left.guarantees_terminating_nul()),
+                      right(_right, val_right.can_be_null(), val_right.length(), val_right.guarantees_terminating_nul());
 
-                /*----- Compare both with current order expression and update result. -----*/
-                I32 cmp_null = right.is_nullptr().to<int32_t>() - left.is_nullptr().to<int32_t>();
-                _I32 _delta = o.second ? strcmp(left, right) : strcmp(right, left);
-                auto [cmp_val, cmp_is_null] = signum(_delta).split();
-                cmp_is_null.discard();
-                I32 cmp = (cmp_null << 1) + cmp_val; // potentially-null value of comparison is overruled by cmp_null
-                result <<= 1; // shift result s.t. first difference will determine order
-                result += cmp; // add current comparison to result
+                M_insist(val_left.can_be_null() == val_right.can_be_null(),
+                         "either both or none of the value to compare must be nullable");
+                if (val_left.can_be_null()) {
+                    /*----- Compare both with current order expression and update result. -----*/
+                    I32 cmp_null = right.is_null().to<int32_t>() - left.is_null().to<int32_t>();
+                    _I32 _delta = o.second ? strcmp(left, right) : strcmp(right, left);
+                    auto [cmp_val, cmp_is_null] = signum(_delta).split();
+                    cmp_is_null.discard();
+                    I32 cmp = (cmp_null << 1) + cmp_val; // potentially-null value of comparison is overruled by cmp_null
+                    result <<= 1; // shift result s.t. first difference will determine order
+                    result += cmp; // add current comparison to result
+                } else {
+                    /*----- Compare both with current order expression and update result. -----*/
+                    I32 delta = o.second ? strcmp(left, right).insist_not_null() : strcmp(right, left).insist_not_null();
+                    result <<= 1; // shift result s.t. first difference will determine order
+                    result += signum(delta); // add current comparison to result
+                }
             },
             [](std::monostate) -> void { M_unreachable("invalid expression"); }
         }, _val_left);

@@ -1861,8 +1861,13 @@ void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second)
                 env.add(e.id, NChar(ptr, value.length(), value.guarantees_terminating_nul()));
             },
             [&]<typename T>(Expr<T> value) -> void {
-                Var<Expr<T>> var(value);
-                env.add(e.id, var);
+                if (value.can_be_null()) {
+                    Var<Expr<T>> var(value);
+                    env.add(e.id, var);
+                } else {
+                    Var<PrimitiveExpr<T>> var(value.insist_not_null());
+                    env.add(e.id, Expr<T>(var));
+                }
             },
             [](std::monostate) -> void { M_unreachable("value must be loaded beforehand"); }
         }, env.extract(e.id));

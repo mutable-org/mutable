@@ -877,8 +877,15 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pi
             } else { // part of key or already computed aggregate
                 std::visit(overloaded {
                     [&]<typename T>(HashTable::const_reference_t<Expr<T>> &&r) -> void {
-                        Var<Expr<T>> var((Expr<T>(r))); // introduce variable s.t. uses only load from it
-                        env.add(e.id, var);
+                        Expr<T> value = r;
+                        if (value.can_be_null()) {
+                            Var<Expr<T>> var(value); // introduce variable s.t. uses only load from it
+                            env.add(e.id, var);
+                        } else {
+                            /* introduce variable w/o NULL bit s.t. uses only load from it */
+                            Var<PrimitiveExpr<T>> var(value.insist_not_null());
+                            env.add(e.id, Expr<T>(var));
+                        }
                     },
                     [&](HashTable::const_reference_t<NChar> &&r) -> void {
                         NChar value(r);
@@ -1298,8 +1305,14 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Pipeli
             } else { // part of key or already computed aggregate
                 std::visit(overloaded {
                     [&]<typename T>(Expr<T> value) -> void {
-                        Var<Expr<T>> var(value); // introduce variable s.t. uses only load from it
-                        env.add(e.id, var);
+                        if (value.can_be_null()) {
+                            Var<Expr<T>> var(value); // introduce variable s.t. uses only load from it
+                            env.add(e.id, var);
+                        } else {
+                            /* introduce variable w/o NULL bit s.t. uses only load from it */
+                            Var<PrimitiveExpr<T>> var(value.insist_not_null());
+                            env.add(e.id, Expr<T>(var));
+                        }
                     },
                     [&](NChar value) -> void {
                         Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
@@ -1564,8 +1577,14 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Pipeline)
         } else { // part of key or already computed aggregate
             std::visit(overloaded {
                 [&]<typename T>(Expr<T> value) -> void {
-                    Var<Expr<T>> var(value); // introduce variable s.t. uses only load from it
-                    env.add(e.id, var);
+                    if (value.can_be_null()) {
+                        Var<Expr<T>> var(value); // introduce variable s.t. uses only load from it
+                        env.add(e.id, var);
+                    } else {
+                        /* introduce variable w/o NULL bit s.t. uses only load from it */
+                        Var<PrimitiveExpr<T>> var(value.insist_not_null());
+                        env.add(e.id, Expr<T>(var));
+                    }
                 },
                 [&](NChar value) -> void {
                     Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
@@ -1908,8 +1927,15 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
 
                 std::visit(overloaded {
                     [&]<typename T>(HashTable::const_reference_t<Expr<T>> &&r) -> void {
-                        Var<Expr<T>> var((Expr<T>(r))); // introduce variable s.t. uses only load from it
-                        env.add(e.id, var);
+                        Expr<T> value = r;
+                        if (value.can_be_null()) {
+                            Var<Expr<T>> var(value); // introduce variable s.t. uses only load from it
+                            env.add(e.id, var);
+                        } else {
+                            /* introduce variable w/o NULL bit s.t. uses only load from it */
+                            Var<PrimitiveExpr<T>> var(value.insist_not_null());
+                            env.add(e.id, Expr<T>(var));
+                        }
                     },
                     [&](HashTable::const_reference_t<NChar> &&r) -> void {
                         NChar value(r);
@@ -2673,6 +2699,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                 } else { // part of key or already computed aggregate (without multiplication with group counter)
                     std::visit(overloaded {
                         [&]<typename T>(HashTable::const_reference_t<Expr<T>> &&r) -> void {
+                            Expr<T> value = r;
+
                             auto pred = [&e](const auto &info) -> bool { return info.id == e.id; };
                             if (auto it = std::find_if(aggregates.cbegin(), aggregates.cend(), pred);
                                 it != aggregates.cend())
@@ -2684,9 +2712,9 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                                              "only COUNT aggregate function may have no argument");
                                     I64 probe_counter =
                                         _I64(entry.get<_I64>(C.pool("$probe_counter"))).insist_not_null();
-                                    auto count = Expr<T>(r).insist_not_null() * probe_counter.to<T>();
-                                    Var<Expr<T>> var(count); // introduce variable s.t. uses only load from it
-                                    env.add(e.id, var);
+                                    PrimitiveExpr<T> count = value.insist_not_null() * probe_counter.to<T>();
+                                    Var<PrimitiveExpr<T>> var(count); // introduce variable s.t. uses only load from it
+                                    env.add(e.id, Expr<T>(var));
                                     return; // next group tuple entry
                                 } else {
                                     M_insist(it->args.size() == 1, "aggregate functions expect at most one argument");
@@ -2696,17 +2724,29 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                                         if (M.probe.schema().has(arg)) {
                                             I64 build_counter =
                                                 _I64(entry.get<_I64>(C.pool("$build_counter"))).insist_not_null();
-                                            auto agg = Expr<T>(r) * build_counter.to<T>();
-                                            Var<Expr<T>> var(agg); // introduce variable s.t. uses only load from it
-                                            env.add(e.id, var);
+                                            auto agg = value * build_counter.to<T>();
+                                            if (agg.can_be_null()) {
+                                                Var<Expr<T>> var(agg); // introduce variable s.t. uses only load from it
+                                                env.add(e.id, var);
+                                            } else {
+                                                /* introduce variable w/o NULL bit s.t. uses only load from it */
+                                                Var<PrimitiveExpr<T>> var(agg.insist_not_null());
+                                                env.add(e.id, Expr<T>(var));
+                                            }
                                         } else {
                                             M_insist(M.build.schema().has(arg),
                                                      "argument ID must occur in either child schema");
                                             I64 probe_counter =
                                                 _I64(entry.get<_I64>(C.pool("$probe_counter"))).insist_not_null();
-                                            auto agg = Expr<T>(r) * probe_counter.to<T>();
-                                            Var<Expr<T>> var(agg); // introduce variable s.t. uses only load from it
-                                            env.add(e.id, var);
+                                            auto agg = value * probe_counter.to<T>();
+                                            if (agg.can_be_null()) {
+                                                Var<Expr<T>> var(agg); // introduce variable s.t. uses only load from it
+                                                env.add(e.id, var);
+                                            } else {
+                                                /* introduce variable w/o NULL bit s.t. uses only load from it */
+                                                Var<PrimitiveExpr<T>> var(agg.insist_not_null());
+                                                env.add(e.id, Expr<T>(var));
+                                            }
                                         }
                                         return; // next group tuple entry
                                     }
@@ -2714,8 +2754,14 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                             }
 
                             /* fallthrough: part of key or correctly computed aggregate */
-                            Var<Expr<T>> var((Expr<T>(r))); // introduce variable s.t. uses only load from it
-                            env.add(e.id, var);
+                            if (value.can_be_null()) {
+                                Var<Expr<T>> var(value); // introduce variable s.t. uses only load from it
+                                env.add(e.id, var);
+                            } else {
+                                /* introduce variable w/o NULL bit s.t. uses only load from it */
+                                Var<PrimitiveExpr<T>> var(value.insist_not_null());
+                                env.add(e.id, Expr<T>(var));
+                            }
                         },
                         [&](HashTable::const_reference_t<_Bool> &&r) -> void {
 #ifndef NDEBUG
@@ -2723,8 +2769,15 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                             M_insist(std::find_if(aggregates.cbegin(), aggregates.cend(), pred) == aggregates.cend(),
                                      "booleans must not be the result of aggregate functions");
 #endif
-                            _Var<Bool> var((_Bool(r))); // introduce variable s.t. uses only load from it
-                            env.add(e.id, var);
+                            _Bool value = r;
+                            if (value.can_be_null()) {
+                                _Var<Bool> var(value); // introduce variable s.t. uses only load from it
+                                env.add(e.id, var);
+                            } else {
+                                /* introduce variable w/o NULL bit s.t. uses only load from it */
+                                Var<Bool> var(value.insist_not_null());
+                                env.add(e.id, _Bool(var));
+                            }
                         },
                         [&](HashTable::const_reference_t<NChar> &&r) -> void {
 #ifndef NDEBUG

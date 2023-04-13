@@ -2182,10 +2182,7 @@ struct Expr<T>
     ///> the referenced value expression
     PrimitiveExpr<T> value_;
     /** A boolean expression that evaluates to `true` at runtime iff this `Expr` is `NULL`.
-     * If this `Expr` cannot be `NULL`, then `is_null_` evaluates to `false` at compile time, i.e. `not is_null_`.
-     *
-     * If `T` is a pointer type, then `is_null_` denotes whether the *pointed-to* value is `NULL`.  It does *not*
-     * store whether the pointer is a `nullptr`! */
+     * If this `Expr` cannot be `NULL`, then `is_null_` evaluates to `false` at compile time, i.e. `not is_null_`. */
     PrimitiveExpr<bool> is_null_ = PrimitiveExpr<bool>();
 
     public:

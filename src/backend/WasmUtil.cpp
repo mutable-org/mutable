@@ -2320,23 +2320,6 @@ I32 m::wasm::compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
                 M_insist(val_left.can_be_null() == val_right.can_be_null(),
                          "either both or none of the value to compare must be nullable");
                 if (val_left.can_be_null()) {
-                    using type = std::conditional_t<std::is_same_v<T, bool>, I32, PrimitiveExpr<T>>;
-                    Var<type> left, right;
-                    if constexpr (std::is_same_v<T, bool>) {
-                        left  = val_left.insist_not_null().template to<int32_t>();
-                        right = val_right.insist_not_null().template to<int32_t>();
-                    } else {
-                        left  = val_left.insist_not_null();
-                        right = val_right.insist_not_null();
-                    }
-
-                    /*----- Compare both with current order expression and update result. -----*/
-                    I32 val_lt = (left < right).template to<int32_t>();
-                    I32 val_gt = (left > right).template to<int32_t>();
-                    I32 cmp = o.second ? val_gt - val_lt : val_lt - val_gt;
-                    result <<= 1; // shift result s.t. first difference will determine order
-                    result += cmp; // add current comparison to result
-                } else {
                     using type = std::conditional_t<std::is_same_v<T, bool>, _I32, Expr<T>>;
                     Var<type> left, right;
                     if constexpr (std::is_same_v<T, bool>) {
@@ -2355,6 +2338,23 @@ I32 m::wasm::compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
                     auto [cmp_val, cmp_is_null] = _cmp_val.split();
                     cmp_is_null.discard();
                     I32 cmp = (cmp_null << 1) + cmp_val; // potentially-null value of comparison is overruled by cmp_null
+                    result <<= 1; // shift result s.t. first difference will determine order
+                    result += cmp; // add current comparison to result
+                } else {
+                    using type = std::conditional_t<std::is_same_v<T, bool>, I32, PrimitiveExpr<T>>;
+                    Var<type> left, right;
+                    if constexpr (std::is_same_v<T, bool>) {
+                        left  = val_left.insist_not_null().template to<int32_t>();
+                        right = val_right.insist_not_null().template to<int32_t>();
+                    } else {
+                        left  = val_left.insist_not_null();
+                        right = val_right.insist_not_null();
+                    }
+
+                    /*----- Compare both with current order expression and update result. -----*/
+                    I32 val_lt = (left < right).template to<int32_t>();
+                    I32 val_gt = (left > right).template to<int32_t>();
+                    I32 cmp = o.second ? val_gt - val_lt : val_lt - val_gt;
                     result <<= 1; // shift result s.t. first difference will determine order
                     result += cmp; // add current comparison to result
                 }

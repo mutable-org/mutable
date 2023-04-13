@@ -1851,8 +1851,13 @@ void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second)
         /*----- Temporarily save entry of first tuple by creating variable or separate string buffer. -----*/
         std::visit(overloaded {
             [&](NChar value) -> void {
-                auto ptr = Module::Allocator().pre_malloc<char>(value.size_in_bytes());
-                strncpy(ptr.clone(), value, U32(value.size_in_bytes())).discard();
+                Var<Ptr<Char>> ptr; // always set here
+                IF (value.is_null()) {
+                    ptr = Ptr<Char>::Nullptr();
+                } ELSE {
+                    ptr = Module::Allocator().pre_malloc<char>(value.size_in_bytes());
+                    strncpy(ptr, value, U32(value.size_in_bytes())).discard();
+                };
                 env.add(e.id, NChar(ptr, value.length(), value.guarantees_terminating_nul()));
             },
             [&]<typename T>(Expr<T> value) -> void {

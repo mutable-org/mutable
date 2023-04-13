@@ -2102,7 +2102,8 @@ Ptr<Char> m::wasm::strncpy(Ptr<Char> dst, Ptr<Char> src, U32 count)
 
     /*----- Call strncpy function. ------*/
     M_insist(bool(d.strncpy));
-    return (*d.strncpy)(dst, src, count);
+    const Var<Ptr<Char>> result((*d.strncpy)(dst, src, count)); // to prevent duplicated computation due to `clone()`
+    return result;
 }
 
 

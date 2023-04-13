@@ -242,12 +242,12 @@ struct HashTable
                      "type mismatch");
             if (is_null_byte_) {
                 M_insist(bool(is_null_mask_));
-                IF (not addr.clone().is_nullptr()) {
+                IF (not addr.clone().is_null()) {
                     strncpy(addr_, addr.clone(), U32(addr.size_in_bytes())).discard();
                 };
-                setbit(*is_null_byte_, addr.is_nullptr(), *is_null_mask_);
+                setbit(*is_null_byte_, addr.is_null(), *is_null_mask_);
             } else {
-                Wasm_insist(not addr.clone().is_nullptr(), "value of non-nullable entry must not be nullable");
+                Wasm_insist(not addr.clone().is_null(), "value of non-nullable entry must not be nullable");
                 strncpy(addr_, addr, U32(addr.size_in_bytes())).discard();
             }
         }

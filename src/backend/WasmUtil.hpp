@@ -103,7 +103,7 @@ inline Bool is_null(SQL_t &&variant)
 {
     return std::visit(overloaded {
         []<typename T>(Expr<T> value) -> Bool { return value.is_null(); },
-        [](NChar value) -> Bool { return value.is_nullptr(); },
+        [](NChar value) -> Bool { return value.is_null(); },
         [](std::monostate) -> Bool { M_unreachable("invalid variant"); },
     }, variant);
 }

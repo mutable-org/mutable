@@ -10,6 +10,10 @@ using namespace m;
 using namespace m::wasm;
 
 
+#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
+bool m::options::insist_no_ternary_logic = false;
+#endif
+
 namespace {
 
 __attribute__((constructor(201)))
@@ -17,14 +21,16 @@ static void add_wasm_dsl_args()
 {
     Catalog &C = Catalog::Get();
 
+#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
     /*----- Command-line arguments -----*/
     C.arg_parser().add<bool>(
-        /* group=       */ "WasmV8",
+        /* group=       */ "Wasm",
         /* short=       */ nullptr,
         /* long=        */ "--insist-no-ternary-logic",
         /* description= */ "insist that there is no ternary logic, i.e. NULL value computation",
         /* callback=    */ [](bool){ options::insist_no_ternary_logic = true; }
     );
+#endif
 }
 
 }

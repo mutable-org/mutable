@@ -31,8 +31,11 @@ namespace m {
 
 namespace options {
 
-/** Whether there must not be any ternary logic, i.e. NULL value computation. */
-inline bool insist_no_ternary_logic = false;
+#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
+/** Whether there must not be any ternary logic, i.e. NULL value computation.  Note that NULL values have different
+ * origins, e.g. NULL values stored in a table or default aggregate values in an aggregation operator. */
+extern bool insist_no_ternary_logic;
+#endif
 
 }
 
@@ -273,8 +276,20 @@ auto wasm_type() { return detail::wasm_type_helper<T>{}(); }
  *====================================================================================================================*/
 
 #ifndef NDEBUG
-#define WASM_INSIST2_(COND, MSG) m::wasm::Module::Get().emit_insist(COND, __FILE__, __LINE__, MSG)
-#define WASM_INSIST1_(COND) WASM_INSIST2_(COND, nullptr)
+
+#ifdef M_ENABLE_SANITY_FIELDS
+#define WASM_INSIST2_(COND, MSG) ({ \
+    auto old = std::exchange(options::insist_no_ternary_logic, false); \
+    m::wasm::Module::Get().emit_insist((COND), __FILE__, __LINE__, (MSG)); \
+    options::insist_no_ternary_logic = old; \
+})
+#else
+#define WASM_INSIST2_(COND, MSG) ({ \
+    m::wasm::Module::Get().emit_insist((COND), __FILE__, __LINE__, (MSG)); \
+})
+#endif
+
+#define WASM_INSIST1_(COND) WASM_INSIST2_((COND), nullptr)
 
 #else
 #define WASM_INSIST2_(COND, MSG) while (0) { ((void) (COND), (void) (MSG)); }
@@ -1987,10 +2002,30 @@ struct PrimitiveExpr<T>
      *----------------------------------------------------------------------------------------------------------------*/
 
     public:
-    /** Evaluates to `true` if `this` is `nullptr`. */
+    /** Returns `true` if `this` is `nullptr`. */
     PrimitiveExpr<bool> is_nullptr() { return to<uint32_t>() == 0U; }
 
-    /** Returnes a `std::pair` of `this` and a `PrimitiveExpr<bool>` that tells whether `this` is `nullptr`. */
+    /** Returns `true` if `this` is `NULL`, `false` otherwise.  Even if this method performs the same operation
+     * as `is_nullptr()` it should be used for ternary logic since it additionally checks whether ternary logic usage
+     * is expected. */
+    PrimitiveExpr<bool> is_null() {
+#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
+        M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur");
+#endif
+        return to<uint32_t>() == 0U;
+    }
+
+    /** Returns `true` if `this` is `NOT NULL`, `false` otherwise.  Even if this method performs the same operation
+     * as `not is_nullptr()` it should be used for ternary logic since it additionally checks whether ternary logic
+     * usage is expected. */
+    PrimitiveExpr<bool> not_null() {
+#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
+        M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur");
+#endif
+        return to<uint32_t>() != 0U;
+    }
+
+    /** Returns a `std::pair` of `this` and a `PrimitiveExpr<bool>` that tells whether `this` is `nullptr`. */
     std::pair<PrimitiveExpr<type>, PrimitiveExpr<bool>> split() { auto cpy = clone(); return { cpy, is_nullptr() }; }
 
     /** Dereferencing a pointer `PrimitiveExpr<T*>` yields a `Reference<T>`. */
@@ -2197,7 +2232,9 @@ struct Expr<T>
         , is_null_(is_null)
     {
         M_insist(bool(value_), "value must be present");
+#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
         M_insist(not bool(is_null) or not options::insist_no_ternary_logic, "ternary logic must not occur");
+#endif
     }
 
     ///> Constructs an `Expr` from a `std::pair` \p value of value and NULL info.
@@ -2283,6 +2320,9 @@ struct Expr<T>
 
     /** Returns `true` if `this` is `NULL`, `false` otherwise. */
     PrimitiveExpr<bool> is_null() {
+#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
+        M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur");
+#endif
         value_.discard();
         if (can_be_null())
             return is_null_;
@@ -2292,6 +2332,9 @@ struct Expr<T>
 
     /** Returns `true` if `this` is `NOT NULL`, `false` otherwise. */
     PrimitiveExpr<bool> not_null() {
+#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
+        M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur");
+#endif
         value_.discard();
         if (can_be_null())
             return not is_null_;
@@ -2702,7 +2745,11 @@ class variable_storage<T, VariableKind::Local, /* CanBeNull= */ true>
     variable_storage<bool, VariableKind::Local, false> is_null_;
 
     /** Default-construct. */
-    variable_storage() { M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur"); }
+    variable_storage() {
+#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
+        M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur");
+#endif
+    }
 
     /** Construct from value. */
     explicit variable_storage(T value) : variable_storage() { operator=(Expr<T>(value)); }

@@ -636,7 +636,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                             advance_to_next_bit();
 
                                             auto value = env.get<NChar>(tuple_it->id); // get value
-                                            setbit(null_bitmap_ptr->template to<uint8_t*>(), value.is_nullptr(),
+                                            setbit(null_bitmap_ptr->template to<uint8_t*>(), value.is_null(),
                                                    null_bitmap_mask->template to<uint8_t>()); // update bit
                                         }
                                     },
@@ -687,10 +687,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                                     check.template operator()<_Double>();
                                         }
                                     },
-                                    [&](const CharacterSequence&) {
-                                        Wasm_insist(not env.get<NChar>(layout_entry.id).is_nullptr(),
-                                                    "value of non-nullable entry must not be nullable");
-                                    },
+                                    [&](const CharacterSequence&) { check.template operator()<NChar>(); },
                                     [&](const Date&) { check.template operator()<_I32>(); },
                                     [&](const DateTime&) { check.template operator()<_I64>(); },
                                     [](auto&&) { M_unreachable("invalid type"); },
@@ -788,7 +785,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                             auto value = env.get<NChar>(tuple_entry.id); // get value
                                             Ptr<U8> byte_ptr =
                                                 (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
-                                            setbit<U8>(byte_ptr, value.is_nullptr(), bit_offset); // update bit
+                                            setbit<U8>(byte_ptr, value.is_null(), bit_offset); // update bit
                                         }
                                     },
                                     [&](const Date&) { store.template operator()<_I32>(); },
@@ -833,10 +830,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                                     check.template operator()<_Double>();
                                         }
                                     },
-                                    [&](const CharacterSequence&) {
-                                        Wasm_insist(not env.get<NChar>(tuple_entry.id).is_nullptr(),
-                                                    "value of non-nullable entry must not be nullable");
-                                    },
+                                    [&](const CharacterSequence&) { check.template operator()<NChar>(); },
                                     [&](const Date&) { check.template operator()<_I32>(); },
                                     [&](const DateTime&) { check.template operator()<_I64>(); },
                                     [](auto&&) { M_unreachable("invalid type"); },
@@ -963,7 +957,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                 BLOCK_OPEN(stores) {
                                     auto value = env.get<NChar>(tuple_it->id);
                                     if (tuple_it->nullable()) {
-                                        IF (not value.clone().is_nullptr()) {
+                                        IF (not value.clone().is_null()) {
                                             Ptr<Char> address((ptr + byte_offset).template to<char*>());
                                             strncpy(address, value, U32(cs.size() / 8)).discard();
                                         };
@@ -1438,7 +1432,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                     auto value = env.get<NChar>(tuple_entry.id); // get value
                                     Ptr<U8> byte_ptr =
                                         (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
-                                    setbit<U8>(byte_ptr, value.is_nullptr(), uint8_t(1) << bit_offset); // update bit
+                                    setbit<U8>(byte_ptr, value.is_null(), uint8_t(1) << bit_offset); // update bit
                                 },
                                 [&](const Date&) { store.template operator()<_I32>(); },
                                 [&](const DateTime&) { store.template operator()<_I64>(); },
@@ -1479,10 +1473,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                                 check.template operator()<_Double>();
                                     }
                                 },
-                                [&](const CharacterSequence&) {
-                                    Wasm_insist(not env.get<NChar>(tuple_entry.id).is_nullptr(),
-                                                "value of non-nullable entry must not be nullable");
-                                },
+                                [&](const CharacterSequence&) { check.template operator()<NChar>(); },
                                 [&](const Date&) { check.template operator()<_I32>(); },
                                 [&](const DateTime&) { check.template operator()<_I64>(); },
                                 [](auto&&) { M_unreachable("invalid type"); },
@@ -1565,7 +1556,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                             /*----- Store value. -----*/
                             auto value = env.get<NChar>(tuple_it->id);
                             if (tuple_it->nullable()) {
-                                IF (not value.clone().is_nullptr()) {
+                                IF (not value.clone().is_null()) {
                                     strncpy(ptr.template to<char*>(), value, U32(cs.size() / 8)).discard();
                                 };
                             } else {

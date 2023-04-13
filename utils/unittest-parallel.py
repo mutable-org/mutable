@@ -7,7 +7,13 @@ import os
 import time
 import subprocess
 import re
+from enum import Enum
 from tqdm import tqdm
+
+class ErrorType(Enum):
+    NO_ERROR = 1
+    TIMEOUT = 2
+    UNEXPECTED_RETURN = 3
 
 # data needed for junit output
 class JunitData:
@@ -17,9 +23,9 @@ class JunitData:
     execution_time = 0.0
     test_cases = []
 
-    def append_data(self, process: subprocess.Popen[bytes], timeout: bool):
+    def append_data(self, process: subprocess.Popen[bytes], error_type: ErrorType):
         # If a process times out we do not want to parse the result. It is just a failure.
-        if timeout:
+        if error_type != ErrorType.NO_ERROR:
             self.failures += 1
             return
         junit_xml = process.stdout
@@ -61,9 +67,9 @@ class TestData:
     error_msgs = []
     is_error = False
 
-    def append_data(self, process: subprocess.Popen[bytes], timeout: bool):
+    def append_data(self, process: subprocess.Popen[bytes], error_type: ErrorType):
         # If a process times out we do not want to parse the result. It is just a failure.
-        if timeout:
+        if error_type == ErrorType.TIMEOUT:
             self.timeouts += 1
             self.total_test_cases += 1
             self.failed_test_cases += 1
@@ -172,10 +178,13 @@ def run_tests(args, test_names: list[str], binary_path: str, is_interactive: boo
 
             # if process timed out we add as failure
             if returncode == 124 or returncode == 137:
-                data.append_data(finished_process, True)
+                data.append_data(finished_process, ErrorType.TIMEOUT)
+                continue
+            if returncode != 0 and returncode != 1:
+                data.append_data(finished_process, ErrorType.UNEXPECTED_RETURN)
                 continue
 
-            data.append_data(finished_process, False)
+            data.append_data(finished_process, ErrorType.NO_ERROR)
 
             # don't execute further tests on fail if --stop-fail is enabled
             if returncode == 1 and args.stop_fail:
@@ -191,9 +200,12 @@ def run_tests(args, test_names: list[str], binary_path: str, is_interactive: boo
         process.wait()
         progress_bar.update(1)
         if process.returncode == 124 or process.returncode == 137:
-            data.append_data(process, True)
+            data.append_data(process, ErrorType.TIMEOUT)
             continue
-        data.append_data(process, False)
+        if process.returncode != 0 and process.returncode != 1:
+            data.append_data(process, ErrorType.UNEXPECTED_RETURN)
+            continue
+        data.append_data(process, ErrorType.NO_ERROR)
 
         # don't execute further tests on fail if --stop-fail is enabled
         if process.returncode == 1 and args.stop_fail:

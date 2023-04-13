@@ -517,8 +517,10 @@ publish:github:
     stage: publish
     script:
         - git remote remove github || true
+        - git remote add gitlab git@gitlab.cs.uni-saarland.de:bigdata/mutable/mutable.git
+        - git fetch gitlab
         - git remote add github git@github.com:mutable-org/mutable.git
-        - git push --tags github $CI_DEFAULT_BRANCH:$CI_DEFAULT_BRANCH
+        - git push --tags github gitlab/$CI_DEFAULT_BRANCH:$CI_DEFAULT_BRANCH
     rules:
         - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
           when: on_success

@@ -99,11 +99,14 @@ int main(int argc, const char **argv)
                 continue;
             }
             auto cmd = sema.analyze(std::move(stmt));
+            sema_error = sema_error or diag.num_errors();
+            if (diag.num_errors()) {
+                diag.clear();
+                continue;
+            }
             if (Options::Get().ast) cmd->ast().dump(std::cout);
             if (is<const DDLCommand>(cmd))
                 cmd->execute(diag);
-            sema_error = sema_error or diag.num_errors();
-            diag.clear(); // clear sema errors
         }
 
         if (in != &std::cin)

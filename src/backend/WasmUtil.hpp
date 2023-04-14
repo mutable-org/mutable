@@ -385,6 +385,9 @@ struct CodeGenContext
     CodeGenContext(const CodeGenContext&) = delete;
 
     ~CodeGenContext() {
+#ifdef M_ENABLE_SANITY_FIELDS
+        num_tuples_.val().discard();  // artificial use of `num_tuples_` to silence diagnostics if unittests are executed
+#endif
         for (auto &p : literals_)
             p.second.discard();
     }

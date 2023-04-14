@@ -153,6 +153,9 @@ struct LinearAllocator : Allocator
         : pre_alloc_addr_(start_addr)
     {
         M_insist(start_addr != 0, "memory address 0 is reserved as `nullptr`");
+#ifdef M_ENABLE_SANITY_FIELDS
+        alloc_addr_.val().discard();  // artificial use of `alloc_addr_` to silence diagnostics if allocator is not used
+#endif
     }
 
     ~LinearAllocator() {

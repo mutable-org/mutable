@@ -2891,16 +2891,29 @@ struct Variable<T, Kind, CanBeNull>
     using storage_type = detail::variable_storage<T, Kind, CanBeNull>;
     ///> storage of this `Variable`
     storage_type storage_;
+#ifdef M_ENABLE_SANITY_FIELDS
+    ///> flag to insist that this `Variable` at least used once
+    mutable bool used_ = false;
+#define REGISTER_USE(VAR) (VAR).used_ = true
+#else
+#define REGISTER_USE(VAR)
+#endif
 
     public:
     /** Default-constructs a new `Variable`. */
     Variable() requires requires { storage_type(); } = default;
 
     Variable(const Variable&) = delete;
-    Variable(Variable&&) = default;
+    Variable(Variable &&other) : storage_(std::forward<storage_type>(other.storage_)) { REGISTER_USE(other); }
 
     Variable & operator=(const Variable &other) { operator=(other.val()); return *this; }
     Variable & operator=(Variable &&other) { operator=(other.val()); return *this; }
+
+    ~Variable() {
+#ifdef M_ENABLE_SANITY_FIELDS
+        M_insist(used_, "variable must be used at least once");
+#endif
+    }
 
     /** Constructs a new `Variable` and initializes it with \p t. */
     template<typename U>
@@ -2930,11 +2943,11 @@ struct Variable<T, Kind, CanBeNull>
     /** Obtain a `Variable<T>`s value as a `PrimitiveExpr<T>` or `Expr<T>`, depending on `CanBeNull`.  Although a
      * `Variable`'s value can also be obtained through implicit conversion (see below), some C/C++ constructs fail to do
      * so (e.g. arguments to calls) and it is therefore more convenient to call `val()`. */
-    dependent_expr_type val() const { return dependent_expr_type(storage_); }
+    dependent_expr_type val() const { REGISTER_USE(*this); return dependent_expr_type(storage_); }
 
     /** Obtain a `Variable<T>`s value as a `PrimitiveExpr<T>` or `Expr<T>`, depending on `CanBeNull`.  This implicit
      * conversion enables using a `Variable` much like a `PrimitiveExpr` or `Expr`, respectively. */
-    operator dependent_expr_type() const { return dependent_expr_type(storage_); }
+    operator dependent_expr_type() const { REGISTER_USE(*this); return dependent_expr_type(storage_); }
 
     template<typename U>
     requires requires (dependent_expr_type v) { dependent_expr_t<U>(v); }
@@ -3002,6 +3015,8 @@ struct Variable<T, Kind, CanBeNull>
     }
 ASSIGNOP_LIST(ASSIGNOP)
 #undef ASSIGNOP
+
+#undef REGISTER_USE
 };
 
 /*----- Overload forwarded binary operators for pointer advancing on PrimitiveExpr<T*> -------------------------------*/

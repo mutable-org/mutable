@@ -724,6 +724,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Variable/null_semantics", "[core][wasm]")
     });
     CHECK_RESULT_INLINE(false, bool(), {
         _Var<I32> a(_I32::Null()); _Var<I32> b(-a); /* b must allocate new NULL bit */ a = 42;
+        b.val().discard(); /* artificial use of `b` to silence diagnostics */
         RETURN(a.is_null());
     });
     CHECK_RESULT_INLINE(true, bool(), {
@@ -732,6 +733,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Variable/null_semantics", "[core][wasm]")
     });
     CHECK_RESULT_INLINE(true, bool(), {
         _Var<I32> a(_I32::Null()); _Var<I32> b(-a); /* b must allocate new NULL bit */ b = 17;
+        b.val().discard(); /* artificial use of `b` to silence diagnostics */
         RETURN(a.is_null());
     });
     CHECK_RESULT_INLINE(false, bool(), {
@@ -759,11 +761,13 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Variable/null_semantics", "[core][wasm]")
     CHECK_RESULT_INLINE(false, bool(), {
         _Var<I32> a(_I32::Null()); _Var<I32> b(_I32::Null()); _Var<I32> c(a + b); a = 42;
         /* a, b, and c must allocate their own NULL bit */
+        c.val().discard(); /* artificial use of `c` to silence diagnostics */
         RETURN(a.is_null());
     });
     CHECK_RESULT_INLINE( true, bool(), {
         _Var<I32> a(_I32::Null()); _Var<I32> b(_I32::Null()); _Var<I32> c(a + b); a = 42;
         /* a, b, and c must allocate their own NULL bit */
+        c.val().discard(); /* artificial use of `c` to silence diagnostics */
         RETURN(b.is_null());
     });
     CHECK_RESULT_INLINE( true, bool(), {
@@ -774,11 +778,13 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Variable/null_semantics", "[core][wasm]")
     CHECK_RESULT_INLINE( true, bool(), {
         _Var<I32> a(_I32::Null()); _Var<I32> b(_I32::Null()); _Var<I32> c(a + b); b = 17;
         /* a, b, and c must allocate their own NULL bit */
+        c.val().discard(); /* artificial use of `c` to silence diagnostics */
         RETURN(a.is_null());
     });
     CHECK_RESULT_INLINE(false, bool(), {
         _Var<I32> a(_I32::Null()); _Var<I32> b(_I32::Null()); _Var<I32> c(a + b); b = 17;
         /* a, b, and c must allocate their own NULL bit */
+        c.val().discard(); /* artificial use of `c` to silence diagnostics */
         RETURN(b.is_null());
     });
     CHECK_RESULT_INLINE( true, bool(), {
@@ -789,11 +795,13 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Variable/null_semantics", "[core][wasm]")
     CHECK_RESULT_INLINE( true, bool(), {
         _Var<I32> a(_I32::Null()); _Var<I32> b(_I32::Null()); _Var<I32> c(a + b); c = 99;
         /* a, b, and c must allocate their own NULL bit */
+        c.val().discard(); /* artificial use of `c` to silence diagnostics */
         RETURN(a.is_null());
     });
     CHECK_RESULT_INLINE( true, bool(), {
         _Var<I32> a(_I32::Null()); _Var<I32> b(_I32::Null()); _Var<I32> c(a + b); c = 99;
         /* a, b, and c must allocate their own NULL bit */
+        c.val().discard(); /* artificial use of `c` to silence diagnostics */
         RETURN(b.is_null());
     });
     CHECK_RESULT_INLINE(false, bool(), {
@@ -959,6 +967,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/If", "[core][wasm]")
         Var<I32> res(0);
         Var<U32> test(2);
         IF ((test = 1U).to<bool>()) { res = 1; } ELSE { res = 2; };
+        res.val().discard(); /* artificial use of `res` to silence diagnostics */
         RETURN(test);
     });
 
@@ -972,6 +981,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/If", "[core][wasm]")
         Var<I32> res(0);
         Var<U32> test(2);
         IF ((test = 0U).to<bool>()) { res = 1; } ELSE { res = 2; };
+        res.val().discard(); /* artificial use of `res` to silence diagnostics */
         RETURN(test);
     });
 
@@ -1609,7 +1619,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Memory", "[core][wasm]")
 
     /* free() */
     CHECK_RESULT_INLINE(true, bool(void), {
-        Module::Allocator().malloc<uint16_t>(); // to align to 2 bytes
+        Module::Allocator().malloc<uint16_t>().val().discard(); // to align to 2 bytes
         Var<Ptr<U8>> ptr1(Module::Allocator().malloc<uint8_t>()); // byte 0
         *ptr1 = uint8_t(0x12);
         Module::Allocator().free(ptr1);

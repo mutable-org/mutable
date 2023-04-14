@@ -212,7 +212,7 @@ ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
     : projections_(std::move(projections))
 {
     /* Compute the schema of the operator. */
-    uint64_t const_counter = 0;
+    uint64_t const_expr_counter = 0;
     auto &S = schema();
     for (auto &[proj, alias] : projections_) {
         auto ty = proj.get().type();
@@ -226,15 +226,15 @@ ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
             Schema::Identifier id(D->table_name.text, D->attr_name.text);
             S.add(id, ty, constraints);
         } else { // no designator, no alias -> derive name
-            std::ostringstream oss;
-            if (proj.get().is_constant())
-                oss << "$const" << const_counter++;
-            else
+            if (is<const ast::Constant>(proj)) {
+                // TODO: use `Expr::is_constant()` once interpretation of constant expressions is supported
+                S.add(Schema::Identifier::GetConstant(), ty, constraints);
+            } else {
+                std::ostringstream oss;
                 oss << proj.get();
-            auto &C = Catalog::Get();
-            auto alias = C.pool(oss.str().c_str());
-            Schema::Identifier id(alias);
-            S.add(id, ty, constraints);
+                Schema::Identifier id(Catalog::Get().pool(oss.str().c_str()));
+                S.add(id, ty, constraints);
+            }
         }
     }
 }

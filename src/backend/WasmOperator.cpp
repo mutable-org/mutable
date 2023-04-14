@@ -318,7 +318,7 @@ void Callback::execute(const Match<Callback> &M, callback_t)
 {
     M_insist(bool(M.result_set_factory), "`wasm::Callback` must have a factory for the result set");
 
-    auto result_set_schema = M.callback.schema().drop_none().deduplicate();
+    auto result_set_schema = M.callback.schema().drop_constants().deduplicate();
     write_result_set(result_set_schema, *M.result_set_factory, M.result_set_num_tuples_, M.child);
 }
 
@@ -331,7 +331,7 @@ void Print::execute(const Match<Print> &M, callback_t)
 {
     M_insist(bool(M.result_set_factory), "`wasm::Print` must have a factory for the result set");
 
-    auto result_set_schema = M.print.schema().drop_none().deduplicate();
+    auto result_set_schema = M.print.schema().drop_constants().deduplicate();
     write_result_set(result_set_schema, *M.result_set_factory, M.result_set_num_tuples_, M.child);
 }
 
@@ -358,7 +358,7 @@ void Scan::execute(const Match<Scan> &M, callback_t Pipeline)
     auto &schema = M.scan.schema();
     auto &table = M.scan.store().table();
 
-    M_insist(schema == schema.drop_none().deduplicate(), "schema of `ScanOperator` must not contain NULL or duplicates");
+    M_insist(schema == schema.drop_constants().deduplicate(), "schema of `ScanOperator` must not contain NULL or duplicates");
     M_insist(not table.layout().is_finite(), "layout for `wasm::Scan` must be infinite");
 
     Var<U32> tuple_id; // default initialized to 0
@@ -477,7 +477,7 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
                  "projections must match the operator's schema");
         auto p = M.projection.projections().begin();
         for (auto &e: M.projection.schema()) {
-            if (not new_env.has(e.id)) {
+            if (not new_env.has(e.id) and not e.id.is_constant()) { // no duplicate and no constant
                 if (old_env.has(e.id)) {
                     /*----- Migrate compiled expression to new context. ------*/
                     new_env.add(e.id, old_env.get(e.id)); // to retain `e.id` for later compilation of expressions
@@ -1635,8 +1635,8 @@ void Sorting::execute(const Match<Sorting> &M, callback_t Pipeline)
 {
     /*----- Create infinite buffer to materialize the current results but resume the pipeline later. -----*/
     M_insist(bool(M.materializing_factory), "`wasm::Sorting` must have a factory for the materialized child");
-    const auto buffer_schema = M.sorting.child(0)->schema().drop_none().deduplicate();
-    const auto sorting_schema = M.sorting.schema().drop_none().deduplicate();
+    const auto buffer_schema = M.sorting.child(0)->schema().drop_constants().deduplicate();
+    const auto sorting_schema = M.sorting.schema().drop_constants().deduplicate();
     GlobalBuffer buffer(buffer_schema, *M.materializing_factory, 0, std::move(Pipeline));
 
     /*----- Create child function. -----*/
@@ -1719,7 +1719,7 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, callb
             /*----- Create infinite buffer to materialize the current results. -----*/
             M_insist(bool(M.materializing_factories_[i]),
                      "`wasm::NestedLoopsJoin` must have a factory for each materialized child");
-            const auto &schema = schemas.emplace_back(M.join.child(i)->schema().drop_none().deduplicate());
+            const auto &schema = schemas.emplace_back(M.join.child(i)->schema().drop_constants().deduplicate());
             if (i == 0) {
                 /*----- Exactly one child (here left-most one) checks join predicate and resumes pipeline. -----*/
                 buffers.emplace_back(
@@ -1838,7 +1838,7 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
     constexpr uint64_t PAYLOAD_SIZE_THRESHOLD_IN_BITS = 64;
     constexpr double HIGH_WATERMARK = 1.5;
 
-    const auto ht_schema = M.build.schema().drop_none().deduplicate();
+    const auto ht_schema = M.build.schema().drop_constants().deduplicate();
 
     /*----- Decompose each clause of the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. -----*/
     auto p = decompose_equi_predicate(M.join.predicate(), ht_schema);

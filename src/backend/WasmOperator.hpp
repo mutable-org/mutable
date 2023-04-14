@@ -292,8 +292,8 @@ struct Match<wasm::Scan> : MatchBase
 
     void execute(callback_t Pipeline) const override {
         if (buffer_factory_) {
-            M_insist(scan.schema() == scan.schema().drop_none().deduplicate(),
-                     "schema of `ScanOperator` must not contain NULL or duplicates");
+            M_insist(scan.schema() == scan.schema().drop_constants().deduplicate(),
+                     "schema of `ScanOperator` must not contain constants or duplicates");
             M_insist(scan.schema().num_entries(), "schema of `ScanOperator` must not be empty");
             wasm::LocalBuffer buffer(scan.schema(), *buffer_factory_, buffer_num_tuples_, std::move(Pipeline));
             wasm::Scan::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
@@ -329,7 +329,7 @@ struct Match<wasm::Filter<Predicated>> : MatchBase
 
     void execute(callback_t Pipeline) const override {
         if (buffer_factory_) {
-            auto buffer_schema = filter.schema().drop_none().deduplicate();
+            auto buffer_schema = filter.schema().drop_constants().deduplicate();
             if (buffer_schema.num_entries()) {
                 wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_, std::move(Pipeline));
                 wasm::Filter<Predicated>::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
@@ -474,7 +474,7 @@ struct Match<wasm::NestedLoopsJoin<Predicated>> : MatchBase
 
     void execute(callback_t Pipeline) const override {
         if (buffer_factory_) {
-            auto buffer_schema = join.schema().drop_none().deduplicate();
+            auto buffer_schema = join.schema().drop_constants().deduplicate();
             if (buffer_schema.num_entries()) {
                 wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_, std::move(Pipeline));
                 wasm::NestedLoopsJoin<Predicated>::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));
@@ -516,7 +516,7 @@ struct Match<wasm::SimpleHashJoin<UniqueBuild, Predicated>> : MatchBase
 
     void execute(callback_t Pipeline) const override {
         if (buffer_factory_) {
-            auto buffer_schema = join.schema().drop_none().deduplicate();
+            auto buffer_schema = join.schema().drop_constants().deduplicate();
             if (buffer_schema.num_entries()) {
                 wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_, std::move(Pipeline));
                 wasm::SimpleHashJoin<UniqueBuild, Predicated>::execute(*this,
@@ -623,7 +623,7 @@ struct Match<wasm::HashBasedGroupJoin> : MatchBase
 
     void execute(callback_t Pipeline) const override {
         if (buffer_factory_) {
-            auto buffer_schema = grouping.schema().drop_none().deduplicate();
+            auto buffer_schema = grouping.schema().drop_constants().deduplicate();
             if (buffer_schema.num_entries()) {
                 wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_, std::move(Pipeline));
                 wasm::HashBasedGroupJoin::execute(*this, std::bind(&wasm::LocalBuffer::consume, &buffer));

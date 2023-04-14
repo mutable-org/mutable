@@ -22,6 +22,8 @@ using namespace m;
  * Schema
  *====================================================================================================================*/
 
+Schema::Identifier Schema::Identifier::CONST_ID_ = Schema::Identifier(Catalog::Get().pool("$const"));
+
 Schema::Identifier::Identifier(const ast::Expr &expr)
 {
     if (auto d = cast<const ast::Designator>(&expr)) {

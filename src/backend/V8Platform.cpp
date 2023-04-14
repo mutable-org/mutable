@@ -294,7 +294,7 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
 
     auto &schema = context.plan.schema();
     auto deduplicated_schema = schema.deduplicate();
-    auto deduplicated_schema_without_none = deduplicated_schema.drop_none();
+    auto deduplicated_schema_without_constants = deduplicated_schema.drop_constants();
 
     /* Get number of result tuples. */
     auto num_tuples = info[1].As<v8::Uint32>()->Value();
@@ -304,22 +304,107 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
     /* Compute address of result set. */
     M_insist(info.Length() == 2);
     auto result_set_offset = info[0].As<v8::Uint32>()->Value();
-    M_insist((result_set_offset == 0) == (deduplicated_schema_without_none.num_entries() == 0),
-             "result set offset equals 0 (i.e. nullptr) iff schema contains only NULL constants");
+    M_insist((result_set_offset == 0) == (deduplicated_schema_without_constants.num_entries() == 0),
+             "result set offset equals 0 (i.e. nullptr) iff schema contains only constants");
     auto result_set = context.vm.as<uint8_t*>() + result_set_offset;
 
-    if (deduplicated_schema_without_none.num_entries() == 0) {
-        /* Schema contains only NULL constants. Create simple loop to generate `num_tuples` constant result tuples. */
+    /* Find the projection nearest to the plan's root since it will determine the constants omitted in the result set. */
+    auto find_projection = [](const Operator &op) -> const ProjectionOperator & {
+        auto find_projection_impl = [](const Operator &op, auto &find_projection_ref) -> const ProjectionOperator & {
+            if (auto projection_op = cast<const ProjectionOperator>(&op)) {
+                return *projection_op;
+            } else {
+                auto c = cast<const Consumer>(&op);
+                M_insist(bool(c), "at least one projection must be contained");
+                M_insist(c->children().size() == 1,
+                         "at least one projection without siblings in the operator tree must be contained");
+                M_insist(c->schema().num_entries() == c->child(0)->schema().num_entries(),
+                         "at least one projection with the same schema as the plan's root must be contained");
+#ifndef NDEBUG
+                for (std::size_t i = 0; i < c->schema().num_entries(); ++i)
+                    M_insist(c->schema()[i].id == c->child(0)->schema()[i].id,
+                             "at least one projection with the same schema as the plan's root must be contained");
+#endif
+                return find_projection_ref(*c->child(0), find_projection_ref);
+            }
+        };
+        return find_projection_impl(op, find_projection_impl);
+    };
+    auto &projections = find_projection(context.plan).projections();
+
+    ///> helper function to print given `ast::Constant` \p c of `Type` \p type to \p out
+    auto print_constant = [](std::ostringstream &out, const ast::Constant &c, const Type *type){
+        if (type->is_none()) {
+            out << "NULL";
+            return;
+        }
+
+        /* Interpret constant. */
+        auto value = Interpreter::eval(c);
+
+        visit(overloaded {
+            [&](const Boolean&) { out << (value.as_b() ? "TRUE" : "FALSE"); },
+            [&](const Numeric &n) {
+                switch (n.kind) {
+                    case Numeric::N_Int:
+                    case Numeric::N_Decimal:
+                        out << value.as_i();
+                        break;
+                    case Numeric::N_Float:
+                        if (n.size() <= 32) {
+                            const auto old_precision = out.precision(std::numeric_limits<float>::max_digits10 - 1);
+                            out << value.as_f();
+                            out.precision(old_precision);
+                        } else {
+                            const auto old_precision = out.precision(std::numeric_limits<double>::max_digits10 - 1);
+                            out << value.as_d();
+                            out.precision(old_precision);
+                        }
+                }
+            },
+            [&](const CharacterSequence&) { out << '"' << reinterpret_cast<char*>(value.as_p()) << '"'; },
+            [&](const Date&) {
+                const int32_t date = value.as_i(); // signed because year is signed
+                const auto oldfill = out.fill('0');
+                const auto oldfmt = out.flags();
+                out << std::internal
+                    << std::setw(date >> 9 > 0 ? 4 : 5) << (date >> 9) << '-'
+                    << std::setw(2) << ((date >> 5) & 0xF) << '-'
+                    << std::setw(2) << (date & 0x1F);
+                out.fill(oldfill);
+                out.flags(oldfmt);
+            },
+            [&](const DateTime&) {
+                const time_t time = value.as_i();
+                std::tm tm;
+                gmtime_r(&time, &tm);
+                out << put_tm(tm);
+            },
+            [](const NoneType&) { M_unreachable("should've been handled earlier"); },
+            [](auto&&) { M_unreachable("invalid type"); },
+        }, *type);
+    };
+
+    if (deduplicated_schema_without_constants.num_entries() == 0) {
+        /* Schema contains only constants. Create simple loop to generate `num_tuples` constant result tuples. */
         if (auto callback_op = cast<const CallbackOperator>(&context.plan)) {
             Tuple tup(schema); // tuple entries which are not set are implicitly NULL
+            for (std::size_t i = 0; i < schema.num_entries(); ++i) {
+                auto &e = schema[i];
+                if (e.type->is_none()) continue; // NULL constant
+                M_insist(e.id.is_constant());
+                tup.set(i, Interpreter::eval(as<const ast::Constant>(projections[i].first)));
+            }
             for (std::size_t i = 0; i < num_tuples; ++i)
                 callback_op->callback()(schema, tup);
         } else if (auto print_op = cast<const PrintOperator>(&context.plan)) {
             std::ostringstream tup;
             for (std::size_t i = 0; i < schema.num_entries(); ++i) {
+                auto &e = schema[i];
                 if (i)
                     tup << ',';
-                tup << "NULL";
+                M_insist(e.id.is_constant());
+                print_constant(tup, as<const ast::Constant>(projections[i].first), e.type);
             }
             for (std::size_t i = 0; i < num_tuples; ++i)
                 print_op->out << tup.str() << '\n';
@@ -327,17 +412,23 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
         return;
     }
 
-    /* Create data layout (without NULL constants and duplicates). */
-    auto layout = RowLayoutFactory().make(deduplicated_schema_without_none);
+    /* Create data layout (without constants and duplicates). */
+    auto layout = RowLayoutFactory().make(deduplicated_schema_without_constants);
 
     /* Extract results. */
     if (auto callback_op = cast<const CallbackOperator>(&context.plan)) {
-        auto loader = Interpreter::compile_load(deduplicated_schema_without_none, result_set, layout,
-                                                deduplicated_schema_without_none);
+        auto loader = Interpreter::compile_load(deduplicated_schema_without_constants, result_set, layout,
+                                                deduplicated_schema_without_constants);
         if (schema.num_entries() == deduplicated_schema.num_entries()) {
-            /* No deduplication was performed. */
+            /* No deduplication was performed. Compute `Tuple` with constants. */
             M_insist(schema == deduplicated_schema);
             Tuple tup(schema); // tuple entries which are not set are implicitly NULL
+            for (std::size_t i = 0; i < schema.num_entries(); ++i) {
+                auto &e = schema[i];
+                if (e.type->is_none()) continue; // NULL constant
+                if (e.id.is_constant()) // other constant
+                    tup.set(i, Interpreter::eval(as<const ast::Constant>(projections[i].first)));
+            }
             Tuple *args[] = { &tup };
             for (std::size_t i = 0; i != num_tuples; ++i) {
                 loader(args);
@@ -345,12 +436,18 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
                 tup.clear();
             }
         } else {
-            /* Deduplication was performed. Compute a `Tuple` with duplicates. */
-            Tuple tup_dedupl(deduplicated_schema_without_none);
+            /* Deduplication was performed. Compute a `Tuple` with duplicates and constants. */
+            Tuple tup_dedupl(deduplicated_schema_without_constants);
             Tuple tup_dupl(schema); // tuple entries which are not set are implicitly NULL
+            for (std::size_t i = 0; i < schema.num_entries(); ++i) {
+                auto &e = schema[i];
+                if (e.type->is_none()) continue; // NULL constant
+                if (e.id.is_constant()) // other constant
+                    tup_dupl.set(i, Interpreter::eval(as<const ast::Constant>(projections[i].first)));
+            }
             Tuple *args[] = { &tup_dedupl, &tup_dupl };
-            for (std::size_t i = 0; i != deduplicated_schema_without_none.num_entries(); ++i) {
-                auto &entry = deduplicated_schema_without_none[i];
+            for (std::size_t i = 0; i != deduplicated_schema_without_constants.num_entries(); ++i) {
+                auto &entry = deduplicated_schema_without_constants[i];
                 if (not entry.type->is_none())
                     loader.emit_Ld_Tup(0, i);
                 for (std::size_t j = 0; j != schema.num_entries(); ++j) {
@@ -369,28 +466,37 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
             }
         }
     } else if (auto print_op = cast<const PrintOperator>(&context.plan)) {
-        Tuple tup(deduplicated_schema_without_none);
+        /* Compute a `Tuple` with duplicates and constants. */
+        Tuple tup(deduplicated_schema_without_constants);
         Tuple *args[] = { &tup };
-        auto printer = Interpreter::compile_load(deduplicated_schema_without_none, result_set, layout,
-                                                 deduplicated_schema_without_none);
+        auto printer = Interpreter::compile_load(deduplicated_schema_without_constants, result_set, layout,
+                                                 deduplicated_schema_without_constants);
         auto ostream_index = printer.add(&print_op->out);
+        bool constant_emitted = false;
         std::size_t old_idx = -1UL;
         for (std::size_t i = 0; i != schema.num_entries(); ++i) {
             if (i != 0)
                 printer.emit_Putc(ostream_index, ',');
             auto &e = schema[i];
             if (not e.type->is_none()) {
-                auto idx = deduplicated_schema_without_none[e.id].first;
-                if (idx != old_idx) {
-                    if (old_idx != -1UL)
-                        printer.emit_Pop(); // to remove last loaded value
-                    printer.emit_Ld_Tup(0, idx);
-                    old_idx = idx;
+                if (e.id.is_constant()) { // constant except NULL
+                    printer.add_and_emit_load(Interpreter::eval(as<const ast::Constant>(projections[i].first)));
+                    constant_emitted = true;
+                } else { // actual value
+                    auto idx = deduplicated_schema_without_constants[e.id].first;
+                    if (idx != old_idx) {
+                        if (old_idx != -1UL)
+                            printer.emit_Pop(); // to remove last loaded value
+                        printer.emit_Ld_Tup(0, idx);
+                        old_idx = idx;
+                    }
                 }
             }
             printer.emit_Print(ostream_index, e.type);
-            if (e.type->is_none())
-                printer.emit_Pop(); // to remove NULL pushed by `emit_Print()`
+            if (e.type->is_none() or constant_emitted) {
+                printer.emit_Pop(); // to remove NULL pushed by `emit_Print()` or other constant pushed above
+                constant_emitted = false;
+            }
         }
         if (old_idx != -1UL)
             printer.emit_Pop(); // to remove last loaded value

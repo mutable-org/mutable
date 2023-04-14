@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <cstring>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -35,6 +36,10 @@ struct M_EXPORT Schema
     /** An `Identifier` is composed of a name and an optional prefix. */
     struct Identifier
     {
+        private:
+        static Identifier CONST_ID_;
+
+        public:
         const char *prefix; ///< prefix of this `Identifier`, may be `nullptr`
         const char *name; ///< the name of this `Identifier`
 
@@ -47,6 +52,9 @@ struct M_EXPORT Schema
                 throw invalid_argument("prefix must not be the empty string");
         }
         explicit Identifier(const ast::Expr&);
+
+        static Identifier GetConstant() { return CONST_ID_; }
+        bool is_constant() const { return operator==(CONST_ID_); }
 
         bool operator==(Identifier other) const {
             return this->prefix == other.prefix and this->name == other.name;
@@ -176,11 +184,11 @@ M_LCOV_EXCL_STOP
         return res;
     }
 
-    /** Returns a copy of `this` `Schema` where all entries with `NoneType` are removed..  */
-    Schema drop_none() const {
+    /** Returns a copy of `this` `Schema` where all constant entries are removed..  */
+    Schema drop_constants() const {
         Schema res;
         for (auto &e : *this) {
-            if (not e.type->is_none())
+            if (not e.id.is_constant())
                 res.add(e.id, e.type, e.constraints);
         }
         return res;

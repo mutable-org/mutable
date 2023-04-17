@@ -114,6 +114,7 @@ add_compile_options(
     -Wno-gnu-label-as-value
     -Wno-vla-extension
     -Wno-gnu-conditional-omitted-operand
+    -Wno-gnu-statement-expression-from-macro-expansion
     -mavx2
     -mbmi2
     -mavx

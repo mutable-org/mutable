@@ -242,7 +242,7 @@ void Sema::operator()(Designator &e)
                 e.type_ = Type::Get_Error();
                 return;
             } else if (std::distance(begin, end) > 1) {
-                diag.e(e.attr_name.pos) << "Source " << e.table_name.text << " has multipe attributes "
+                diag.e(e.attr_name.pos) << "Source " << e.table_name.text << " has multiple attributes "
                                         << e.attr_name.text << ".\n";
                 e.type_ = Type::Get_Error();
                 return;

@@ -59,7 +59,7 @@ struct M_EXPORT DataSource
      * of the referenced `Table`.  May return `nullptr` for anonymous nested queries (e.g. in a WHERE clause).  */
     virtual const char * name() const = 0;
     /** Returns the filter of this `DataSource`.  May be empty. */
-    cnf::CNF filter() const { return filter_; }
+    const cnf::CNF & filter() const { return filter_; }
     /** Adds `filter` to the current filter of this `DataSource` by logical conjunction. */
     void update_filter(cnf::CNF filter) { filter_ = filter_ and filter; }
     /** Adds `join` to the set of `Join`s of this `DataSource`. */
@@ -140,10 +140,10 @@ struct M_EXPORT Join
     sources_t sources_; ///< the sources to join
 
     public:
-    Join(cnf::CNF condition, sources_t sources) : condition_(condition) , sources_(sources) { }
+    Join(cnf::CNF condition, sources_t sources) : condition_(std::move(condition)) , sources_(std::move(sources)) { }
 
     /** Returns the join condition. */
-    cnf::CNF condition() const { return condition_; }
+    const cnf::CNF & condition() const { return condition_; }
     /** Adds `condition` to the current condition of this `Join` by logical conjunction. */
     void update_condition(cnf::CNF update) { condition_ = condition_ and update; }
     /** Returns a reference to the joined `DataSource`s. */

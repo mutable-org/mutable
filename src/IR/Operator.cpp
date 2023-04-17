@@ -209,12 +209,12 @@ void Operator::dump() const { dump(std::cerr); }
 M_LCOV_EXCL_STOP
 
 ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
-    : projections_(projections)
+    : projections_(std::move(projections))
 {
     /* Compute the schema of the operator. */
     uint64_t const_counter = 0;
     auto &S = schema();
-    for (auto &[proj, alias] : projections) {
+    for (auto &[proj, alias] : projections_) {
         auto ty = proj.get().type();
         Schema::entry_type::constraints_t constraints{0};
         if (not proj.get().can_be_null())
@@ -241,14 +241,14 @@ ProjectionOperator::ProjectionOperator(std::vector<projection_type> projections)
 
 GroupingOperator::GroupingOperator(std::vector<group_type> group_by,
                                    std::vector<std::reference_wrapper<const ast::FnApplicationExpr>> aggregates)
-    : group_by_(group_by)
-    , aggregates_(aggregates)
+    : group_by_(std::move(group_by))
+    , aggregates_(std::move(aggregates))
 {
     auto &C = Catalog::Get();
     auto &S = schema();
 
     {
-        for (auto &[grp, alias] : group_by) {
+        for (auto &[grp, alias] : group_by_) {
             auto pt = as<const PrimitiveType>(grp.get().type());
             Schema::entry_type::constraints_t constraints{0};
             if (group_by.size() == 1)
@@ -269,7 +269,7 @@ GroupingOperator::GroupingOperator(std::vector<group_type> group_by,
         }
     }
 
-    for (auto &e : aggregates) {
+    for (auto &e : aggregates_) {
         auto ty = e.get().type();
         std::ostringstream oss;
         oss << e.get();
@@ -282,11 +282,11 @@ GroupingOperator::GroupingOperator(std::vector<group_type> group_by,
 }
 
 AggregationOperator::AggregationOperator(std::vector<std::reference_wrapper<const ast::FnApplicationExpr>> aggregates)
-    : aggregates_(aggregates)
+    : aggregates_(std::move(aggregates))
 {
     auto &C = Catalog::Get();
     auto &S = schema();
-    for (auto &e : aggregates) {
+    for (auto &e : aggregates_) {
         auto ty = e.get().type();
         std::ostringstream oss;
         oss << e.get();

@@ -251,7 +251,7 @@ struct M_EXPORT FilterOperator : Producer, Consumer
     cnf::CNF filter_;
 
     public:
-    FilterOperator(cnf::CNF filter) : filter_(filter) { }
+    FilterOperator(cnf::CNF filter) : filter_(std::move(filter)) { }
 
     const cnf::CNF & filter() const { return filter_; }
     const cnf::CNF filter(cnf::CNF f) {
@@ -270,7 +270,7 @@ struct M_EXPORT JoinOperator : Producer, Consumer
     cnf::CNF predicate_;
 
     public:
-    JoinOperator(cnf::CNF predicate) : predicate_(predicate) { }
+    JoinOperator(cnf::CNF predicate) : predicate_(std::move(predicate)) { }
 
     const cnf::CNF & predicate() const { return predicate_; }
 
@@ -449,7 +449,7 @@ struct M_EXPORT SortingOperator : Producer, Consumer
     std::vector<order_type> order_by_; ///< the order to sort by
 
     public:
-    SortingOperator(const std::vector<order_type> &order_by) : order_by_(order_by) { }
+    SortingOperator(std::vector<order_type> order_by) : order_by_(std::move(order_by)) { }
 
     const auto & order_by() const { return order_by_; }
 

@@ -469,6 +469,10 @@ upload:package:linux-amd64:
         - >
           curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file mutable-linux-amd64.zip
           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/mutable/${TAG}/mutable-linux-amd64-${TAG}.zip"
+    artifacts:
+        paths:
+            - "mutable-linux-amd64.zip"
+        expire_in: 1 day
 
 
 upload:package:macos-amd64:
@@ -489,6 +493,10 @@ upload:package:macos-amd64:
         - >
           curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file mutable-macos-amd64.zip
           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/mutable/${TAG}/mutable-macos-amd64-${TAG}.zip"
+    artifacts:
+        paths:
+            - "mutable-macos-amd64.zip"
+        expire_in: 1 day
 
 
 upload:release:
@@ -537,9 +545,9 @@ publish:github-release:
         - .publish
     needs:
         - job: publish:github-repository
-        - job: build:release:linux-amd64
+        - job: upload:package:linux-amd64
           artifacts: true
-        - job: build:release:macos-amd64
+        - job: upload:package:macos-amd64
           artifacts: true
         - job: upload:tag-version
           artifacts: true
@@ -548,7 +556,7 @@ publish:github-release:
       - |
         header=$(echo -n '{"typ":"JWT","alg":"RS256"}' | openssl base64 -A | sed 's/=*$//g')
         payload=$(echo -n '{"iat": '$(date +%s)', "exp": '$(($(date +%s) + 590))', "iss": "317308" }' | openssl base64 -A | sed 's/=*$//g')
-        signature=$(echo -n "$header.$payload" | openssl dgst -sha256 -sign <(echo "$SSH_GITHUB_API_TOKEN") | openssl base64 -A | sed 's/=*$//g' | tr '/' '_' | tr '+' '-')
+        signature=$(echo -n "$header.$payload" | openssl dgst -sha256 -sign <(echo "$SSH_GITHUB_APP_TOKEN") | openssl base64 -A | sed 's/=*$//g' | tr '/' '_' | tr '+' '-')
         jwt="$header.$payload.$signature"
       # generate installation access token for the mutable GitHub repository
       - >

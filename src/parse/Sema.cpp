@@ -1043,14 +1043,23 @@ void Sema::operator()(SelectClause &c)
             auto &group_by = as<const GroupByClause>(*stmt.group_by);
             has_scalar = has_scalar or not group_by.group_by.empty();
             for (auto &[expr, alias] : group_by.group_by) {
-                std::unique_ptr<Designator> d = alias ? create_designator(alias.text, expr->tok, *expr)
-                                                      : create_designator(expr->tok.text, expr->tok, *expr);
+                std::unique_ptr<Designator> d;
+                if (alias) { // alias was given
+                    d = create_designator(alias.text, expr->tok, *expr);
+                } else if (auto D = cast<const ast::Designator>(expr.get())) { // no alias, but designator -> keep name
+                    d = create_designator(D->attr_name.text, D->tok, *D);
+                } else { // no designator, no alias -> derive name
+                    std::ostringstream oss;
+                    oss << *expr;
+                    d = create_designator(C.pool(oss.str().c_str()), expr->tok, *expr);
+                }
                 if (auto ty = cast<const PrimitiveType>(d->type()))
                     d->type_ = ty->as_scalar();
                 else
                     M_insist(d->type()->is_error(), "grouping key must be of primitive type");
                 const char *attr_name = d->attr_name.text;
                 auto &ref = c.expanded_select_all.emplace_back(std::move(d));
+                (*this)(*ref);
                 Ctx.results.emplace(attr_name, SemaContext::result_t(*ref, result_counter++, alias.text));
             }
         } else if (stmt.having) {
@@ -1071,7 +1080,7 @@ void Sema::operator()(SelectClause &c)
                             /* target=     */ &attr,
                             /* type=       */ attr.type
                         );
-                        auto ref = c.expanded_select_all.emplace_back(std::move(d)).get();
+                        auto &ref = c.expanded_select_all.emplace_back(std::move(d));
                         (*this)(*ref);
                         Ctx.results.emplace(attr.name, SemaContext::result_t(*ref, result_counter++));
                     }
@@ -1089,7 +1098,7 @@ void Sema::operator()(SelectClause &c)
                             /* target=     */ &expr.get(),
                             /* type=       */ expr.get().type()
                         );
-                        auto ref = (expanded_select_all[pos] = std::move(d)).get();
+                        auto &ref = (expanded_select_all[pos] = std::move(d));
                         (*this)(*ref);
                         if (auto pt = cast<const PrimitiveType>(ref->type())) {
                             has_scalar = has_scalar or pt->is_scalar();

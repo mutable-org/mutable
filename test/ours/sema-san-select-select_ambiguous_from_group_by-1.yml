@@ -1,0 +1,54 @@
+description: Implicit ambiguous attribute in SELECT clause from GROUP BY
+db: ours
+query: |
+    SELECT * FROM R, S WHERE R.key = S.fkey GROUP BY R.key, S.key;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: * TK_ASTERISK
+            -:1:10: FROM TK_From
+            -:1:15: R TK_IDENTIFIER
+            -:1:16: , TK_COMMA
+            -:1:18: S TK_IDENTIFIER
+            -:1:20: WHERE TK_Where
+            -:1:26: R TK_IDENTIFIER
+            -:1:27: . TK_DOT
+            -:1:28: key TK_IDENTIFIER
+            -:1:32: = TK_EQUAL
+            -:1:34: S TK_IDENTIFIER
+            -:1:35: . TK_DOT
+            -:1:36: fkey TK_IDENTIFIER
+            -:1:41: GROUP TK_Group
+            -:1:47: BY TK_By
+            -:1:50: R TK_IDENTIFIER
+            -:1:51: . TK_DOT
+            -:1:52: key TK_IDENTIFIER
+            -:1:55: , TK_COMMA
+            -:1:57: S TK_IDENTIFIER
+            -:1:58: . TK_DOT
+            -:1:59: key TK_IDENTIFIER
+            -:1:62: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT *
+            FROM R, S
+            WHERE (R.key = S.fkey)
+            GROUP BY R.key, S.key;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: |
+            -:1:51: error: Designator key is ambiguous, multiple occurrences in GROUP BY clause.
+            -:1:58: error: Designator key is ambiguous, multiple occurrences in GROUP BY clause.
+        num_err: 2
+        returncode: 1

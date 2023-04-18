@@ -634,7 +634,7 @@ TEST_CASE("Sema/Expressions/Functions", "[core][parse][sema]")
         Sema sema(diag);
         sema(*stmt);
 
-        REQUIRE(diag.num_errors() == 2);
+        REQUIRE(diag.num_errors() == 3);
         REQUIRE(not err.str().empty());
     }
 
@@ -1607,7 +1607,7 @@ TEST_CASE("Sema/Clauses/GroupBy", "[core][parse][sema]")
         Sema sema(diag);
         sema(*stmt);
 
-        REQUIRE(diag.num_errors() == 1);
+        REQUIRE(diag.num_errors() == 2);
         REQUIRE(not err.str().empty());
     }
 
@@ -1636,7 +1636,7 @@ TEST_CASE("Sema/Clauses/GroupBy", "[core][parse][sema]")
         Sema sema(diag);
         sema(*stmt);
 
-        REQUIRE(diag.num_errors() == 2);
+        REQUIRE(diag.num_errors() == 3);
         REQUIRE(not err.str().empty());
     }
 
@@ -1650,7 +1650,7 @@ TEST_CASE("Sema/Clauses/GroupBy", "[core][parse][sema]")
         Sema sema(diag);
         sema(*stmt);
 
-        REQUIRE(diag.num_errors() == 1);
+        REQUIRE(diag.num_errors() == 2);
         REQUIRE(not err.str().empty());
     }
 

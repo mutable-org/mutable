@@ -1,0 +1,59 @@
+description: Explicit ambiguous attribute in SELECT clause from subquery
+db: ours
+query: |
+    SELECT X.key FROM (SELECT R.key, S.key FROM R, S WHERE R.key = S.fkey) AS X;
+required: YES
+
+stages:
+    lexer:
+        out: |
+            -:1:1: SELECT TK_Select
+            -:1:8: X TK_IDENTIFIER
+            -:1:9: . TK_DOT
+            -:1:10: key TK_IDENTIFIER
+            -:1:14: FROM TK_From
+            -:1:19: ( TK_LPAR
+            -:1:20: SELECT TK_Select
+            -:1:27: R TK_IDENTIFIER
+            -:1:28: . TK_DOT
+            -:1:29: key TK_IDENTIFIER
+            -:1:32: , TK_COMMA
+            -:1:34: S TK_IDENTIFIER
+            -:1:35: . TK_DOT
+            -:1:36: key TK_IDENTIFIER
+            -:1:40: FROM TK_From
+            -:1:45: R TK_IDENTIFIER
+            -:1:46: , TK_COMMA
+            -:1:48: S TK_IDENTIFIER
+            -:1:50: WHERE TK_Where
+            -:1:56: R TK_IDENTIFIER
+            -:1:57: . TK_DOT
+            -:1:58: key TK_IDENTIFIER
+            -:1:62: = TK_EQUAL
+            -:1:64: S TK_IDENTIFIER
+            -:1:65: . TK_DOT
+            -:1:66: fkey TK_IDENTIFIER
+            -:1:70: ) TK_RPAR
+            -:1:72: AS TK_As
+            -:1:75: X TK_IDENTIFIER
+            -:1:76: ; TK_SEMICOL
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    parser:
+        out: |
+            SELECT X.key
+            FROM (SELECT R.key, S.key
+            FROM R, S
+            WHERE (R.key = S.fkey)) AS X;
+        err: NULL
+        num_err: 0
+        returncode: 0
+
+    sema:
+        out: NULL
+        err: |
+            -:1:10: error: Source X has multiple attributes key.
+        num_err: 1
+        returncode: 1

@@ -189,7 +189,7 @@ struct M_EXPORT Designator : Expr
         return table_name.text;
     }
 
-    target_type target() const { return target_; }
+    const target_type & target() const { return target_; }
 
     private:
     /** Marks this `Designator` as free variable, i.e. *not* being bound by the query. */
@@ -456,7 +456,6 @@ struct M_EXPORT ThePreOrderExprVisitor : std::conditional_t<C, ConstASTExprVisit
     virtual ~ThePreOrderExprVisitor() { }
 
     void operator()(Const<Expr> &e);
-
 };
 
 template<bool C>

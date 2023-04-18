@@ -40,7 +40,10 @@ FromClause::~FromClause()
 uint64_t Designator::hash() const
 {
     std::hash<const char*> h;
-    return std::rotl(h(get_table_name()), 17) xor h(attr_name.text);
+    if (has_table_name())
+        return std::rotl(h(get_table_name()), 17) xor h(attr_name.text);
+    else
+        return h(attr_name.text);
 }
 
 uint64_t Constant::hash() const
@@ -53,7 +56,7 @@ uint64_t FnApplicationExpr::hash() const
 {
     uint64_t hash = fn->hash();
     for (auto &arg : args)
-        hash ^= std::rotl(hash, 32) xor arg->hash();
+        hash ^= std::rotl(hash, 31) xor arg->hash();
     return hash;
 }
 

@@ -299,19 +299,19 @@ struct recursive_expr_visitor : TheRecursiveExprVisitorBase<C>
     void operator()(Const<QueryExpr> &e) override { callback_(e); }
 
     void operator()(Const<FnApplicationExpr> &e) override {
-        if constexpr (PreOrder) callback_(e);
+        if constexpr (PreOrder) try { callback_(e); } catch (visit_stop_recursion) { return; }
         super::operator()(e);
         if constexpr (not PreOrder) callback_(e);
     }
 
     void operator()(Const<UnaryExpr> &e) override {
-        if constexpr (PreOrder) callback_(e);
+        if constexpr (PreOrder) try { callback_(e); } catch (visit_stop_recursion) { return; }
         super::operator()(e);
         if constexpr (not PreOrder) callback_(e);
     }
 
     void operator()(Const<BinaryExpr> &e) override {
-        if constexpr (PreOrder) callback_(e);
+        if constexpr (PreOrder) try { callback_(e); } catch (visit_stop_recursion) { return; }
         super::operator()(e);
         if constexpr (not PreOrder) callback_(e);
     }

@@ -10,6 +10,9 @@
 
 namespace m {
 
+/** Exception class which may be throw to stop recursion of pre-order visitors. */
+struct visit_stop_recursion { };
+
 /** Visitor base class. */
 template<typename V, typename Base>
 struct Visitor

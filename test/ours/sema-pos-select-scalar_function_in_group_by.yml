@@ -36,3 +36,10 @@ stages:
         err: NULL
         num_err: 0
         returncode: 0
+
+    end2end:
+        out: |
+            FALSE
+        err: NULL
+        num_err: 0
+        returncode: 0

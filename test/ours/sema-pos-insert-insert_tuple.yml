@@ -33,3 +33,15 @@ stages:
         err: NULL
         num_err: 0
         returncode: 0
+
+    sema:
+        out: NULL
+        err: NULL
+        num_err: NULL
+        returncode: 0
+
+    end2end:
+        out: NULL
+        err: NULL
+        num_err: 0
+        returncode: 0

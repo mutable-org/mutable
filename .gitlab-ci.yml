@@ -471,7 +471,7 @@ upload:package:linux-amd64:
           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/mutable/${TAG}/mutable-linux-amd64-${TAG}.zip"
     artifacts:
         paths:
-            - "mutable-linux-amd64.zip"
+            - "mutable/mutable-linux-amd64.zip"
         expire_in: 1 day
 
 
@@ -495,7 +495,7 @@ upload:package:macos-amd64:
           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/mutable/${TAG}/mutable-macos-amd64-${TAG}.zip"
     artifacts:
         paths:
-            - "mutable-macos-amd64.zip"
+            - "mutable/mutable-macos-amd64.zip"
         expire_in: 1 day
 
 
@@ -576,7 +576,7 @@ publish:github-release:
         -H "Authorization: Bearer $inst_acc_token"
         -H "X-GitHub-Api-Version: 2022-11-28"
         "https://api.github.com/repos/mutable-org/mutable/releases"
-        -d '{"tag_name":"${TAG}","target_commitish":"main"}')
+        -d "{\"tag_name\":\"${TAG}\",\"target_commitish\":\"main\"}")
 
       - |
         upload_url=$(echo "$response" | grep -oP '(?<=upload_url": ").*?(?={)')
@@ -590,7 +590,7 @@ publish:github-release:
         -H "X-GitHub-Api-Version: 2022-11-28"
         -H "Content-Type: application/octet-stream"
         "${upload_url}?name=mutable-linux-amd64-${TAG}.zip"
-        --data-binary "@mutable-linux-amd64.zip"
+        --data-binary "@mutable/mutable-linux-amd64.zip"
 
       - >
         curl -L -f
@@ -600,4 +600,4 @@ publish:github-release:
         -H "X-GitHub-Api-Version: 2022-11-28"
         -H "Content-Type: application/octet-stream"
         "${upload_url}?name=mutable-macos-amd64-${TAG}.zip"
-        --data-binary "@mutable-macos-amd64.zip"
+        --data-binary "@mutable/mutable-macos-amd64.zip"

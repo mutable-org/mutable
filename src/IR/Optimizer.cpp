@@ -445,21 +445,28 @@ Optimizer::compute_projections_required_for_order_by(const std::vector<projectio
     /* Collect all required `Designator`s which are not included in the projection. */
     auto get_required_designator = overloaded {
         [&](const ast::Designator &d) -> void {
-            auto target = d.target();
-            if (auto t = std::get_if<const Expr*>(&target)) { // refers to another expression?
+            if (auto t = std::get_if<const Expr*>(&d.target())) { // refers to another expression?
                 /*----- Find `t` in projections. -----*/
-                for (auto &[expr, alias] : projections) {
-                    if (*t == &expr.get() or d == expr.get()) // refers to or is identical to an `Expr` in SELECT clause
-                        return; // found
-                }
-            } else {
-                /*----- Find `d` in projections. -----*/
                 for (auto &[expr, _] : projections) {
-                    if (expr.get() == d)
+                    if (*t == &expr.get())
                         return; // found
                 }
             }
+            /*----- Find `d` in projections. -----*/
+            for (auto &[expr, alias] : projections) {
+                if (not alias and d == expr.get())
+                    return; // found
+            }
             required_projections.emplace_back(d, nullptr);
+        },
+        [&](const ast::FnApplicationExpr &fn) -> void {
+            /*----- Find `fn` in projections. -----*/
+            for (auto &[expr, alias] : projections) {
+                if (not alias and fn == expr.get())
+                    throw visit_stop_recursion(); // found
+            }
+            required_projections.emplace_back(fn, nullptr);
+            throw visit_stop_recursion();
         },
         [](auto&&) -> void { /* nothing to be done */ },
     };

@@ -278,17 +278,17 @@ struct SubproblemsArray : Base<SubproblemsArray>
     static SubproblemsArray Bottom(const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                                    const CostFunction &CF, const CardinalityEstimator &CE)
     {
-        SubproblemsArray S(
+        auto subproblems = allocator_.allocate(G.num_sources());
+        for (uint64_t i = 0; i != G.num_sources(); ++i)
+            subproblems[i] = Subproblem(1UL << i);
+        return SubproblemsArray(
             /* Context=     */ PT, G, M, CF, CE,
             /* parent=      */ nullptr,
             /* cost=        */ 0.,
             /* size=        */ G.num_sources(),
             /* marked=      */ Subproblem(1),
-            /* subproblems= */ allocator_.allocate(G.num_sources())
+            /* subproblems= */ subproblems
         );
-        for (uint64_t i = 0; i != G.num_sources(); ++i)
-            S.subproblems_[i] = Subproblem(1UL << i);
-        return S;
     }
 
     template<typename PlanTable>
@@ -296,16 +296,16 @@ struct SubproblemsArray : Base<SubproblemsArray>
                                 const CostFunction &CF, const CardinalityEstimator &CE)
     {
         const Subproblem All((1UL << G.num_sources()) - 1UL);
-        SubproblemsArray S(
+        auto subproblems = allocator_.allocate(1);
+        subproblems[0] = All;
+        return SubproblemsArray(
             /* Context=     */ PT, G, M, CF, CE,
             /* parent=      */ nullptr,
             /* cost=        */ 0.,
             /* size=        */ 1,
             /* marked=      */ All,
-            /* subproblems= */ allocator_.allocate(1)
+            /* subproblems= */ subproblems
         );
-        S.subproblems_[0] = All;
-        return S;
     }
 
     /*----- Getters --------------------------------------------------------------------------------------------------*/

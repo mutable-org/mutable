@@ -225,7 +225,7 @@ requires (not is_unique_ptr<From>) and (not is_reference_wrapper<From>)
 bool M_EXPORT is(From &v) { return is<To>(&v); }
 
 template<typename To, typename From>
-bool M_EXPORT is(std::reference_wrapper<From> &v) { return is<To>(v.get()); }
+bool M_EXPORT is(std::reference_wrapper<From> v) { return is<To>(v.get()); }
 
 template<typename To, typename From>
 bool M_EXPORT is(const std::unique_ptr<From> &v) { return is<To>(v.get()); }

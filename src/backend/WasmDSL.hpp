@@ -462,6 +462,29 @@ struct GarbageCollectedData
 
 
 /*======================================================================================================================
+ * ConstantFolding
+ *====================================================================================================================*/
+
+/** Helper struct to perform constant folding at compile time. */
+struct ConstantFolding
+{
+    enum boolean_result_t {
+        UNDEF,
+        TRUE,
+        FALSE
+    };
+
+    /** Tries to evaluate the given boolean expression \p expr using constant folding.  Returns `UNDEF` if the
+     * expression cannot be evaluated at compile time, `TRUE` if the expression evaluates to `true` at compile time,
+     * and `FALSE` otherwise.
+     * Currently supported are only expressions consisting of a single boolean constant, a negation (tested using
+     * `eqZ` instruction) of a constant boolean expression, and conjunctions or disjunctions of constant boolean
+     * expressions.  Expressions like `x == x` are currently not supported. */
+    static boolean_result_t EvalBoolean(const ::wasm::Expression *expr);
+};
+
+
+/*======================================================================================================================
  * Module
  *====================================================================================================================*/
 

@@ -37,6 +37,79 @@ static void add_wasm_dsl_args()
 
 
 /*======================================================================================================================
+ * ConstantFolding
+ *====================================================================================================================*/
+
+#define CASE(TYPE, BLOCK) \
+    case ::wasm::Expression::TYPE##Id: { \
+        auto _expr = expr; \
+        auto *expr = static_cast<const ::wasm::TYPE*>(_expr); \
+        BLOCK \
+        break; \
+    }
+
+ConstantFolding::boolean_result_t ConstantFolding::EvalBoolean(const ::wasm::Expression *expr)
+{
+    switch (expr->_id) {
+        default:
+            break;
+        CASE(Const, {
+            M_insist(expr->value.type == ::wasm::Type::i32, "invalid boolean expression");
+            return expr->value.geti32() ? TRUE : FALSE;
+        })
+        CASE(Unary, {
+            if (expr->op == ::wasm::UnaryOp::EqZInt32) { // negation
+                switch (EvalBoolean(expr->value)) {
+                    case UNDEF:
+                        return UNDEF;
+                    case TRUE:
+                        return FALSE;
+                    case FALSE:
+                        return TRUE;
+                }
+            }
+        })
+        CASE(Binary, {
+            if (expr->op == ::wasm::BinaryOp::AndInt32) { // conjunction
+                switch (EvalBoolean(expr->left)) {
+                    case UNDEF:
+                        switch (EvalBoolean(expr->right)) {
+                            case UNDEF:
+                            case TRUE:
+                                return UNDEF;
+                            case FALSE: // dominating element
+                                return FALSE;
+                        }
+                    case TRUE: // neutral element
+                        return EvalBoolean(expr->right);
+                    case FALSE: // dominating element
+                        return FALSE;
+                }
+            } else if (expr->op == ::wasm::BinaryOp::OrInt32) { // disjunction
+                switch (EvalBoolean(expr->left)) {
+                    case UNDEF:
+                        switch (EvalBoolean(expr->right)) {
+                            case UNDEF:
+                            case FALSE:
+                                return UNDEF;
+                            case TRUE: // dominating element
+                                return TRUE;
+                        }
+                    case TRUE: // dominating element
+                        return TRUE;
+                    case FALSE: // neutral element
+                        return EvalBoolean(expr->right);
+                }
+            }
+        })
+    }
+    return UNDEF;
+}
+
+#undef CASE
+
+
+/*======================================================================================================================
  * MockInterface
  *====================================================================================================================*/
 
@@ -432,14 +505,28 @@ If::~If()
         }
     }
 
-    /*----- If -----*/
-    Module::Block().list.push_back(
-        Module::Builder().makeIf(
-            cond_.expr(),
-            &then_block.get(),
-            &else_block.get()
-        )
-    );
+    auto cond = cond_.expr();
+    switch (ConstantFolding::EvalBoolean(cond)) {
+        case ConstantFolding::UNDEF:
+            /*----- If -----*/
+            Module::Block().list.push_back(
+                Module::Builder().makeIf(
+                    cond,
+                    &then_block.get(),
+                    Else ? &else_block.get() : nullptr
+                )
+            );
+            break;
+        case ConstantFolding::TRUE:
+            /*----- Then-block -----*/
+            Module::Block().list.push_back(&then_block.get());
+            break;
+        case ConstantFolding::FALSE:
+            /*----- Else-block -----*/
+            if (Else)
+                Module::Block().list.push_back(&else_block.get());
+            break;
+    }
 }
 
 /*----- Do-While -----------------------------------------------------------------------------------------------------*/

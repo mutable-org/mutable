@@ -1018,12 +1018,12 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
     /*----- Forward declare function to emit a group tuple in the current environment and resume the pipeline. -----*/
     FunctionProxy<void(void)> emit_group_and_resume_pipeline("emit_group_and_resume_pipeline");
 
-    /* Create *global* flag since e.g. `Buffer::resume_pipeline()` may create new function in which the following
-     * code is emitted. */
-    Global<Bool> first_iteration(true);
+    std::optional<Var<Bool>> first_iteration; ///< variable to *locally* count
+    ///> *global* flag backup since the following code may be called multiple times
+    Global<Bool> first_iteration_backup(true);
 
     M.child.execute(
-        /* Setup=    */ MatchBase::DoNothing,
+        /* Setup=    */ [&](){ first_iteration.emplace(first_iteration_backup); },
         /* Pipeline= */ [&](){
             auto &env = CodeGenContext::Get().env();
 
@@ -1327,13 +1327,14 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
             M_insist(bool(group_differs));
 
             /*----- Resume pipeline with computed group iff new one starts and emit code to initialize aggregates. ---*/
-            IF (first_iteration or *group_differs) { // `group_differs` defaulted in first iteration but overruled anyway
-                IF (not first_iteration) {
+            M_insist(bool(first_iteration));
+            IF (*first_iteration or *group_differs) { // `group_differs` defaulted in first iteration but overruled anyway
+                IF (not *first_iteration) {
                     emit_group_and_resume_pipeline();
                 };
                 update_keys.attach_to_current();
                 init_aggs.attach_to_current();
-                first_iteration = false;
+                *first_iteration = false;
             };
 
             /*----- If predication is used, update predication variable before updating aggregates. */
@@ -1344,11 +1345,15 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
             update_aggs.attach_to_current();
             update_avg_aggs.attach_to_current(); // after others to ensure that running count is incremented before
         },
-        /* Teardown= */ MatchBase::DoNothing
+        /* Teardown= */ [&](){
+            M_insist(bool(first_iteration));
+            first_iteration_backup = *first_iteration;
+            first_iteration.reset();
+        }
     );
 
     /*----- If input was not empty, emit last group tuple in the current environment and resume the pipeline. -----*/
-    IF (not first_iteration) {
+    IF (not first_iteration_backup) {
         emit_group_and_resume_pipeline();
     };
 

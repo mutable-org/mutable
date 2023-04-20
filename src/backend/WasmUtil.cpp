@@ -1708,13 +1708,13 @@ void Buffer<IsGlobal>::resume_pipeline(param_t tuple_schema_)
         /*----- Create function on-demand to assert that all needed identifiers are already created. -----*/
         if (not resume_pipeline_) {
             /*----- Create function to resume the pipeline for each tuple contained in the buffer. -----*/
-            FUNCTION(resume_pipeline, fn_t)
+            FUNCTION(resume_pipeline, void(void*, uint32_t))
             {
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
-                /*----- Access base address and size depending on whether they are globals or parameters. -----*/
-                Ptr<void> base_address = M_CONSTEXPR_COND(IsGlobal, base_address_.val(), PARAMETER(0));
-                U32 size = M_CONSTEXPR_COND(IsGlobal, size_.val(), PARAMETER(1));
+                /*----- Access base address and size parameters. -----*/
+                Ptr<void> base_address = PARAMETER(0);
+                U32 size = PARAMETER(1);
 
                 /*----- Compile data layout to generate sequential load from buffer. -----*/
                 Var<U32> load_tuple_id; // default initialized to 0
@@ -1736,10 +1736,7 @@ void Buffer<IsGlobal>::resume_pipeline(param_t tuple_schema_)
 
         /*----- Call created function. -----*/
         M_insist(bool(resume_pipeline_));
-        if constexpr (IsGlobal)
-            (*resume_pipeline_)(); // no argument since base address and size are globals
-        else
-            (*resume_pipeline_)(base_address_, size_); // base address and size as arguments since they are locals
+        (*resume_pipeline_)(base_address_, size_); // base address and size as arguments
     }
 }
 
@@ -1754,16 +1751,20 @@ void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_schema_) const
 #endif
 
     if (Pipeline_) { // Pipeline callback not empty, i.e. performs some work
+        /*----- Access base address and size depending on whether they are globals or locals. -----*/
+        Ptr<void> base_address = M_CONSTEXPR_COND(IsGlobal, Var<Ptr<void>>(base_address_).val(), base_address_.val());
+        U32 size = M_CONSTEXPR_COND(IsGlobal, Var<U32>(size_).val(), size_.val());
+
         /*----- If predication is used, compute number of tuples to load from buffer depending on predicate. -----*/
         std::optional<Var<Bool>> pred; // use variable since WHILE loop will clone it (for IF and DO_WHILE)
         if (auto &env = CodeGenContext::Get().env(); env.predicated())
             pred = env.extract_predicate().is_true_and_not_null();
-        U32 num_tuples = pred ? Select(*pred, size_, 0U) : size_;
+        U32 num_tuples = pred ? Select(*pred, size, 0U) : size;
 
         /*----- Compile data layout to generate sequential load from buffer. -----*/
         Var<U32> load_tuple_id(0); // explicitly (re-)set tuple ID to 0
         auto [load_inits, loads, load_jumps] =
-            compile_load_sequential(tuple_schema, base_address_, layout_, schema_, load_tuple_id);
+            compile_load_sequential(tuple_schema, base_address, layout_, schema_, load_tuple_id);
 
         /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
         Setup_();

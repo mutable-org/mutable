@@ -540,8 +540,6 @@ struct Buffer
     ///> variable type dependent on whether buffer should be globally usable
     template<typename T>
     using var_t = std::conditional_t<IsGlobal, Global<T>, Var<T>>;
-    ///> function type for resuming pipeline dependent on whether buffer should be globally usable
-    using fn_t = std::conditional_t<IsGlobal, void(void), void(void*, uint32_t)>;
     ///> parameter type for proxy creation and pipeline resuming methods
     using param_t = std::optional<std::reference_wrapper<const Schema>>;
 
@@ -553,8 +551,8 @@ struct Buffer
     MatchBase::callback_t Setup_; ///< remaining pipeline initializations
     MatchBase::callback_t Pipeline_; ///< remaining actual pipeline
     MatchBase::callback_t Teardown_; ///< remaining pipeline post-processing
-    ///> function to resume pipeline for entire buffer; for local buffer, expects its base address and size as parameters
-    std::optional<FunctionProxy<fn_t>> resume_pipeline_;
+    ///> function to resume pipeline for entire buffer; expects base address and size of buffer as parameters
+    std::optional<FunctionProxy<void(void*, uint32_t)>> resume_pipeline_;
 
     public:
     /** Creates a buffer for \p num_tuples tuples (0 means infinite) of schema \p schema using the data layout

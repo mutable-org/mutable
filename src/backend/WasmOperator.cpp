@@ -314,17 +314,22 @@ decompose_equi_predicate(const cnf::CNF &cnf, const Schema &schema_left)
 
 void NoOp::execute(const Match<NoOp> &M, callback_t, callback_t, callback_t)
 {
+    std::optional<Var<U32>> num_tuples; ///< variable to *locally* count additional result tuples
+
     M.child.execute(
-        /* Setup=    */ MatchBase::DoNothing,
+        /* Setup=    */ [&](){ num_tuples.emplace(CodeGenContext::Get().num_tuples()); },
         /* Pipeline= */ [&](){
-            if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
-                U32 n = env.extract_predicate().is_true_and_not_null().to<uint32_t>();
-                CodeGenContext::Get().inc_num_tuples(n);
-            } else {
-                CodeGenContext::Get().inc_num_tuples();
-            }
+            M_insist(bool(num_tuples));
+            if (auto &env = CodeGenContext::Get().env(); env.predicated())
+                *num_tuples += env.extract_predicate().is_true_and_not_null().to<uint32_t>();
+            else
+                *num_tuples += 1U;
         },
-        /* Teardown= */ MatchBase::DoNothing
+        /* Teardown= */ [&](){
+            M_insist(bool(num_tuples));
+            CodeGenContext::Get().set_num_tuples(*num_tuples);
+            num_tuples.reset();
+        }
     );
 }
 

@@ -427,6 +427,8 @@ struct CodeGenContext
 
     /** Returns the number of result tuples produced. */
     U32 num_tuples() const { return num_tuples_; }
+    /** Set the number of result tuples produced to `n`. */
+    void set_num_tuples(U32 n) { num_tuples_ = n; }
     /** Increments the number of result tuples produced by `n`. */
     void inc_num_tuples(U32 n = U32(1)) { num_tuples_ += n; }
 

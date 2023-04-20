@@ -298,15 +298,17 @@ struct Match<wasm::Scan> : MatchBase
 
     void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
         if (buffer_factory_) {
-            M_insist(scan.schema() == scan.schema().drop_constants().deduplicate(),
-                     "schema of `ScanOperator` must not contain constants or duplicates");
-            M_insist(scan.schema().num_entries(), "schema of `ScanOperator` must not be empty");
-            wasm::LocalBuffer buffer(scan.schema(), *buffer_factory_, buffer_num_tuples_,
-                                     std::move(Setup), std::move(Pipeline), std::move(Teardown));
-            wasm::Scan::execute(
-                *this, MatchBase::DoNothing, [&buffer](){ buffer.consume(); }, MatchBase::DoNothing
-            );
+            auto buffer_schema = scan.schema().drop_constants().deduplicate();
+            if (buffer_schema.num_entries()) {
+                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_,
+                                         std::move(Setup), std::move(Pipeline), std::move(Teardown));
+                wasm::Scan::execute(
+                    *this, MatchBase::DoNothing, [&buffer](){ buffer.consume(); }, MatchBase::DoNothing
+                );
             buffer.resume_pipeline();
+            } else {
+                wasm::Scan::execute(*this, std::move(Setup), std::move(Pipeline), std::move(Teardown));
+            }
         } else {
             wasm::Scan::execute(*this, std::move(Setup), std::move(Pipeline), std::move(Teardown));
         }

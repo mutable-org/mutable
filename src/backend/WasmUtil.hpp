@@ -548,16 +548,20 @@ struct Buffer
     var_t<Ptr<void>> base_address_; ///< base address of buffer
     std::optional<var_t<U32>> capacity_; ///< optional dynamic capacity of buffer, default initialized to 0
     var_t<U32> size_; ///< current size of buffer, default initialized to 0
-    MatchBase::callback_t Pipeline_; ///< remaining pipeline
+    MatchBase::callback_t Setup_; ///< remaining pipeline initializations
+    MatchBase::callback_t Pipeline_; ///< remaining actual pipeline
+    MatchBase::callback_t Teardown_; ///< remaining pipeline post-processing
     ///> function to resume pipeline for entire buffer; for local buffer, expects its base address and size as parameters
     std::optional<FunctionProxy<fn_t>> resume_pipeline_;
 
     public:
     /** Creates a buffer for \p num_tuples tuples (0 means infinite) of schema \p schema using the data layout
      * created by \p factory to temporarily materialize tuples before resuming with the remaining pipeline
-     * \p Pipeline.  For finite buffers, emits code to allocate entire buffer into the **current** block. */
+     * initializations \p Setup, the actual pipeline \p Pipeline, and the post-processing \p Teardown.  For finite
+     * buffers, emits code to allocate entire buffer into the **current** block. */
     Buffer(const Schema &schema, const storage::DataLayoutFactory &factory, std::size_t num_tuples = 0,
-           MatchBase::callback_t Pipeline = MatchBase::callback_t());
+           MatchBase::callback_t Setup = MatchBase::DoNothing, MatchBase::callback_t Pipeline = MatchBase::DoNothing,
+           MatchBase::callback_t Teardown = MatchBase::DoNothing);
 
     Buffer(const Buffer&) = delete;
     Buffer(Buffer&&) = default;

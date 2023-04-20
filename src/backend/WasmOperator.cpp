@@ -31,20 +31,24 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
             FUNCTION(child_pipeline, void(void))
             {
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
-                child.execute([&](){
-                    /*----- Increment tuple ID. -----*/
-                    if (auto &env = CodeGenContext::Get().env(); env.predicated())
-                        tuple_id += env.extract_predicate().is_true_and_not_null().to<uint32_t>();
-                    else
-                        tuple_id += 1U;
+                child.execute(
+                    /* Setup=    */ MatchBase::DoNothing,
+                    /* Pipeline= */ [&](){
+                        /*----- Increment tuple ID. -----*/
+                        if (auto &env = CodeGenContext::Get().env(); env.predicated())
+                            tuple_id += env.extract_predicate().is_true_and_not_null().to<uint32_t>();
+                        else
+                            tuple_id += 1U;
 
-                    /*----- If window size is reached, update result size, extract current results, and reset tuple ID. */
-                    IF (tuple_id == *window_size) {
-                        CodeGenContext::Get().inc_num_tuples(U32(*window_size));
-                        Module::Get().emit_call<void>("read_result_set", Ptr<void>::Nullptr(), U32(*window_size));
-                        tuple_id = 0U;
-                    };
-                });
+                        /*----- If window size is reached, update result size, extract current results, and reset tuple ID. */
+                        IF (tuple_id == *window_size) {
+                            CodeGenContext::Get().inc_num_tuples(U32(*window_size));
+                            Module::Get().emit_call<void>("read_result_set", Ptr<void>::Nullptr(), U32(*window_size));
+                            tuple_id = 0U;
+                        };
+                    },
+                    /* Teardown= */ MatchBase::DoNothing
+                );
             }
             child_pipeline(); // call child function
 
@@ -58,15 +62,19 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
             FUNCTION(child_pipeline, void(void))
             {
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
-                child.execute([&](){
-                    /*----- Update number of result tuples. -----*/
-                    if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
-                        U32 n = env.extract_predicate().is_true_and_not_null().to<uint32_t>();
-                        CodeGenContext::Get().inc_num_tuples(n);
-                    } else {
-                        CodeGenContext::Get().inc_num_tuples();
-                    }
-                });
+                child.execute(
+                    /* Setup=    */ MatchBase::DoNothing,
+                    /* Pipeline= */ [&](){
+                        /*----- Update number of result tuples. -----*/
+                        if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
+                            U32 n = env.extract_predicate().is_true_and_not_null().to<uint32_t>();
+                            CodeGenContext::Get().inc_num_tuples(n);
+                        } else {
+                            CodeGenContext::Get().inc_num_tuples();
+                        }
+                    },
+                    /* Teardown= */ MatchBase::DoNothing
+                );
             }
             child_pipeline(); // call child function
 
@@ -84,19 +92,25 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
             FUNCTION(child_pipeline, void(void))
             {
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
-                child.execute([&](){
-                    /*----- Store whether only a single buffer slot is free to not extract result for empty buffer. --*/
-                    const Var<Bool> single_slot_free(result_set.size() == *window_size - 1U);
 
-                    /*----- Write the result. -----*/
-                    result_set.consume(); // also resets size to 0 in case buffer has reached window size
+                child.execute(
+                    /* Setup=    */ MatchBase::DoNothing,
+                    /* Pipeline= */ [&](){
+                        /*----- Store whether only a single slot is free to not extract result for empty buffer. -----*/
+                        const Var<Bool> single_slot_free(result_set.size() == *window_size - 1U);
 
-                    /*----- If the last buffer slot was filled, update result size and extract current results. */
-                    IF (single_slot_free and result_set.size() == 0U) {
-                        CodeGenContext::Get().inc_num_tuples(U32(*window_size));
-                        Module::Get().emit_call<void>("read_result_set", result_set.base_address(), U32(*window_size));
-                    };
-                });
+                        /*----- Write the result. -----*/
+                        result_set.consume(); // also resets size to 0 in case buffer has reached window size
+
+                        /*----- If the last buffer slot was filled, update result size and extract current results. */
+                        IF (single_slot_free and result_set.size() == 0U) {
+                            CodeGenContext::Get().inc_num_tuples(U32(*window_size));
+                            Module::Get().emit_call<void>("read_result_set", result_set.base_address(),
+                                                          U32(*window_size));
+                        };
+                    },
+                    /* Teardown= */ MatchBase::DoNothing
+                );
             }
             child_pipeline(); // call child function
 
@@ -113,7 +127,8 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
             FUNCTION(child_pipeline, void(void))
             {
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
-                child.execute([&](){ result_set.consume(); });
+
+                child.execute(MatchBase::DoNothing, [&](){ result_set.consume(); }, MatchBase::DoNothing);
             }
             child_pipeline(); // call child function
 
@@ -297,16 +312,20 @@ decompose_equi_predicate(const cnf::CNF &cnf, const Schema &schema_left)
  * NoOp
  *====================================================================================================================*/
 
-void NoOp::execute(const Match<NoOp> &M, callback_t)
+void NoOp::execute(const Match<NoOp> &M, callback_t, callback_t, callback_t)
 {
-    M.child.execute([&](){
-        if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
-            U32 n = env.extract_predicate().is_true_and_not_null().to<uint32_t>();
-            CodeGenContext::Get().inc_num_tuples(n);
-        } else {
-            CodeGenContext::Get().inc_num_tuples();
-        }
-    });
+    M.child.execute(
+        /* Setup=    */ MatchBase::DoNothing,
+        /* Pipeline= */ [&](){
+            if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
+                U32 n = env.extract_predicate().is_true_and_not_null().to<uint32_t>();
+                CodeGenContext::Get().inc_num_tuples(n);
+            } else {
+                CodeGenContext::Get().inc_num_tuples();
+            }
+        },
+        /* Teardown= */ MatchBase::DoNothing
+    );
 }
 
 
@@ -314,7 +333,7 @@ void NoOp::execute(const Match<NoOp> &M, callback_t)
  * Callback
  *====================================================================================================================*/
 
-void Callback::execute(const Match<Callback> &M, callback_t)
+void Callback::execute(const Match<Callback> &M, callback_t, callback_t, callback_t)
 {
     M_insist(bool(M.result_set_factory), "`wasm::Callback` must have a factory for the result set");
 
@@ -327,7 +346,7 @@ void Callback::execute(const Match<Callback> &M, callback_t)
  * Print
  *====================================================================================================================*/
 
-void Print::execute(const Match<Print> &M, callback_t)
+void Print::execute(const Match<Print> &M, callback_t, callback_t, callback_t)
 {
     M_insist(bool(M.result_set_factory), "`wasm::Print` must have a factory for the result set");
 
@@ -353,7 +372,7 @@ ConditionSet Scan::post_condition(const Match<Scan>&)
     return post_cond;
 }
 
-void Scan::execute(const Match<Scan> &M, callback_t Pipeline)
+void Scan::execute(const Match<Scan> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown)
 {
     auto &schema = M.scan.schema();
     auto &table = M.scan.store().table();
@@ -370,10 +389,12 @@ void Scan::execute(const Match<Scan> &M, callback_t Pipeline)
 
     /*----- If no attributes must be loaded, generate a loop just executing the pipeline `num_rows`-times. -----*/
     if (schema.num_entries() == 0) {
+        Setup();
         WHILE (tuple_id < num_rows) {
             tuple_id += 1U;
             Pipeline();
         }
+        Teardown();
         return;
     }
 
@@ -387,12 +408,14 @@ void Scan::execute(const Match<Scan> &M, callback_t Pipeline)
                                                          table.schema(M.scan.alias()), tuple_id);
 
     /*----- Generate the loop for the actual scan, with the pipeline emitted into the loop body. -----*/
+    Setup();
     inits.attach_to_current();
     WHILE (tuple_id < num_rows) {
         loads.attach_to_current();
         Pipeline();
         jumps.attach_to_current();
     }
+    Teardown();
 }
 
 
@@ -414,18 +437,22 @@ ConditionSet Filter<Predicated>::adapt_post_condition(const Match<Filter>&, cons
 }
 
 template<bool Predicated>
-void Filter<Predicated>::execute(const Match<Filter> &M, callback_t Pipeline)
+void Filter<Predicated>::execute(const Match<Filter> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown)
 {
-    M.child.execute([Pipeline=std::move(Pipeline), &M](){
-        if constexpr (Predicated) {
-            CodeGenContext::Get().env().add_predicate(M.filter.filter());
-            Pipeline();
-        } else {
-            IF (CodeGenContext::Get().env().compile(M.filter.filter()).is_true_and_not_null()) {
+    M.child.execute(
+        /* Setup=    */ std::move(Setup),
+        /* Pipeline= */ [&, Pipeline=std::move(Pipeline)](){
+            if constexpr (Predicated) {
+                CodeGenContext::Get().env().add_predicate(M.filter.filter());
                 Pipeline();
-            };
-        }
-    });
+            } else {
+                IF (CodeGenContext::Get().env().compile(M.filter.filter()).is_true_and_not_null()) {
+                    Pipeline();
+                };
+            }
+        },
+        /* Teardown= */ std::move(Teardown)
+    );
 }
 
 // explicit instantiations to prevent linker errors
@@ -462,9 +489,9 @@ ConditionSet Projection::adapt_post_condition(const Match<Projection> &M, const 
     return post_cond;
 }
 
-void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
+void Projection::execute(const Match<Projection> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown)
 {
-    auto execute_projection = [Pipeline=std::move(Pipeline), &M](){
+    auto execute_projection = [&, Pipeline=std::move(Pipeline)](){
         auto &old_env = CodeGenContext::Get().env();
         Environment new_env; // fresh environment
 
@@ -514,10 +541,13 @@ void Projection::execute(const Match<Projection> &M, callback_t Pipeline)
         }
     };
 
-    if (M.child)
-        M.child->get().execute(std::move(execute_projection));
-    else
+    if (M.child) {
+        M.child->get().execute(std::move(Setup), std::move(execute_projection), std::move(Teardown));
+    } else {
+        Setup();
         execute_projection();
+        Teardown();
+    }
 }
 
 
@@ -537,7 +567,8 @@ ConditionSet HashBasedGrouping::post_condition(const Match<HashBasedGrouping>&)
     return post_cond;
 }
 
-void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pipeline)
+void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Setup, callback_t Pipeline,
+                                callback_t Teardown)
 {
     // TODO: determine setup
     using PROBING_STRATEGY = LinearProbing;
@@ -601,262 +632,270 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pi
         /*----- Create dummy slot to ignore NULL values in aggregate computations. -----*/
         auto dummy = ht->dummy_entry();
 
-        M.child.execute([&](){
-            const auto &env = CodeGenContext::Get().env();
+        M.child.execute(
+            /* Setup=    */ MatchBase::DoNothing,
+            /* Pipeline= */ [&](){
+                const auto &env = CodeGenContext::Get().env();
 
-            /*----- Insert key if not yet done. -----*/
-            std::vector<SQL_t> key;
-            for (auto &p : M.grouping.group_by())
-                key.emplace_back(env.compile(p.first.get()));
-            auto [entry, inserted] = ht->try_emplace(std::move(key));
+                /*----- Insert key if not yet done. -----*/
+                std::vector<SQL_t> key;
+                for (auto &p : M.grouping.group_by())
+                    key.emplace_back(env.compile(p.first.get()));
+                auto [entry, inserted] = ht->try_emplace(std::move(key));
 
-            /*----- Compute aggregates. -----*/
-            Block init_aggs("hash_based_grouping.init_aggs", false),
-                  update_aggs("hash_based_grouping.update_aggs", false),
-                  update_avg_aggs("hash_based_grouping.update_avg_aggs", false);
-            for (auto &info : aggregates) {
-                bool is_min = false; ///< flag to indicate whether aggregate function is MIN
-                switch (info.fnid) {
-                    default:
-                        M_unreachable("unsupported aggregate function");
-                    case m::Function::FN_MIN:
-                        is_min = true; // set flag and delegate to MAX case
-                    case m::Function::FN_MAX: {
-                        M_insist(info.args.size() == 1, "MIN and MAX aggregate functions expect exactly one argument");
-                        const auto &arg = *info.args[0];
-                        std::visit(overloaded {
-                            [&]<sql_type _T>(HashTable::reference_t<_T> &&r) -> void
-                            requires (not (std::same_as<_T, _Bool> or std::same_as<_T, NChar>)) {
-                                using type = typename _T::type;
-                                using T = PrimitiveExpr<type>;
-
-                                BLOCK_OPEN(init_aggs) {
-                                    auto [val_, is_null] = convert<_T>(env.compile(arg)).split();
-                                    T val(val_); // due to structured binding and lambda closure
-                                    IF (is_null) {
-                                        auto neutral = is_min ? T(std::numeric_limits<type>::max())
-                                                              : T(std::numeric_limits<type>::lowest());
-                                        r.clone().set_value(neutral); // initialize with neutral element +inf or -inf
-                                        r.clone().set_null_bit(Bool(true)); // first value is NULL
-                                    } ELSE {
-                                        r.clone().set_value(val); // initialize with first value
-                                        r.clone().set_null_bit(Bool(false)); // first value is not NULL
-                                    };
-                                }
-                                BLOCK_OPEN(update_aggs) {
-                                    _T _new_val = convert<_T>(env.compile(arg));
-                                    if (_new_val.can_be_null()) {
-                                        auto [new_val_, new_val_is_null_] = _new_val.split();
-                                        auto [old_min_max_, old_min_max_is_null] = _T(r.clone()).split();
-                                        const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
-
-                                        auto chosen_r = Select(new_val_is_null, dummy.extract<_T>(info.id), r.clone());
-                                        if constexpr (std::floating_point<type>) {
-                                            chosen_r.set_value(
-                                                is_min ? min(old_min_max_, new_val_) // update old min with new value
-                                                       : max(old_min_max_, new_val_) // update old max with new value
-                                            ); // if new value is NULL, only dummy is written
-                                        } else {
-                                            const Var<T> new_val(new_val_),
-                                                         old_min_max(old_min_max_); // due to multiple uses
-                                            auto cmp = is_min ? new_val < old_min_max : new_val > old_min_max;
-                                            chosen_r.set_value(
-                                                Select(cmp,
-                                                       new_val, // update to new value
-                                                       old_min_max) // do not update
-                                            ); // if new value is NULL, only dummy is written
-                                        }
-                                        r.set_null_bit(
-                                            old_min_max_is_null and new_val_is_null // MIN/MAX is NULL iff all values are NULL
-                                        );
-                                    } else {
-                                        auto new_val_ = _new_val.insist_not_null();
-                                        auto old_min_max_ = _T(r.clone()).insist_not_null();
-                                        if constexpr (std::floating_point<type>) {
-                                            r.set_value(
-                                                is_min ? min(old_min_max_, new_val_) // update old min with new value
-                                                       : max(old_min_max_, new_val_) // update old max with new value
-                                            );
-                                        } else {
-                                            const Var<T> new_val(new_val_),
-                                                         old_min_max(old_min_max_); // due to multiple uses
-                                            auto cmp = is_min ? new_val < old_min_max : new_val > old_min_max;
-                                            r.set_value(
-                                                Select(cmp,
-                                                       new_val, // update to new value
-                                                       old_min_max) // do not update
-                                            );
-                                        }
-                                        /* do not update NULL bit since it is already set to `false` */
-                                    }
-                                }
-                            },
-                            []<sql_type _T>(HashTable::reference_t<_T>&&) -> void
-                            requires std::same_as<_T,_Bool> or std::same_as<_T, NChar> {
-                                M_unreachable("invalid type");
-                            },
-                            [](std::monostate) -> void { M_unreachable("invalid reference"); },
-                        }, entry.extract(info.id));
-                        break;
-                    }
-                    case m::Function::FN_AVG: {
-                        auto it = avg_aggregates.find(info.id);
-                        M_insist(it != avg_aggregates.end());
-                        const auto &avg_info = it->second;
-                        M_insist(avg_info.compute_running_avg,
-                                 "AVG aggregate may only occur for running average computations");
-                        M_insist(info.args.size() == 1, "AVG aggregate function expects exactly one argument");
-                        const auto &arg = *info.args[0];
-
-                        auto r = entry.extract<_Double>(info.id);
-                        BLOCK_OPEN(init_aggs) {
-                            auto [val_, is_null] = convert<_Double>(env.compile(arg)).split();
-                            Double val(val_); // due to structured binding and lambda closure
-                            IF (is_null) {
-                                r.clone().set_value(Double(0.0)); // initialize with neutral element 0
-                                r.clone().set_null_bit(Bool(true)); // first value is NULL
-                            } ELSE {
-                                r.clone().set_value(val); // initialize with first value
-                                r.clone().set_null_bit(Bool(false)); // first value is not NULL
-                            };
-                        }
-                        BLOCK_OPEN(update_avg_aggs) {
-                            /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming
-                             * Vol 2, section 4.2.2. */
-                            _Double _new_val = convert<_Double>(env.compile(arg));
-                            if (_new_val.can_be_null()) {
-                                auto [new_val, new_val_is_null_] = _new_val.split();
-                                auto [old_avg_, old_avg_is_null] = _Double(r.clone()).split();
-                                const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
-                                const Var<Double> old_avg(old_avg_); // due to multiple uses
-
-                                auto delta_absolute = new_val - old_avg;
-                                auto running_count = _I64(entry.get<_I64>(avg_info.running_count)).insist_not_null();
-                                auto delta_relative = delta_absolute / running_count.to<double>();
-
-                                auto chosen_r = Select(new_val_is_null, dummy.extract<_Double>(info.id), r.clone());
-                                chosen_r.set_value(
-                                    old_avg + delta_relative // update old average with new value
-                                ); // if new value is NULL, only dummy is written
-                                r.set_null_bit(
-                                    old_avg_is_null and new_val_is_null // AVG is NULL iff all values are NULL
-                                );
-                            } else {
-                                auto new_val = _new_val.insist_not_null();
-                                auto old_avg_ = _Double(r.clone()).insist_not_null();
-                                const Var<Double> old_avg(old_avg_); // due to multiple uses
-
-                                auto delta_absolute = new_val - old_avg;
-                                auto running_count = _I64(entry.get<_I64>(avg_info.running_count)).insist_not_null();
-                                auto delta_relative = delta_absolute / running_count.to<double>();
-                                r.set_value(
-                                    old_avg + delta_relative // update old average with new value
-                                );
-                                /* do not update NULL bit since it is already set to `false` */
-                            }
-                        }
-                        break;
-                    }
-                    case m::Function::FN_SUM: {
-                        M_insist(info.args.size() == 1, "SUM aggregate function expects exactly one argument");
-                        const auto &arg = *info.args[0];
-                        std::visit(overloaded {
-                            [&]<sql_type _T>(HashTable::reference_t<_T> &&r) -> void
-                            requires (not (std::same_as<_T, _Bool> or std::same_as<_T, NChar>)) {
-                                using type = typename _T::type;
-                                using T = PrimitiveExpr<type>;
-
-                                BLOCK_OPEN(init_aggs) {
-                                    auto [val_, is_null] = convert<_T>(env.compile(arg)).split();
-                                    T val(val_); // due to structured binding and lambda closure
-                                    IF (is_null) {
-                                        r.clone().set_value(T(type(0))); // initialize with neutral element 0
-                                        r.clone().set_null_bit(Bool(true)); // first value is NULL
-                                    } ELSE {
-                                        r.clone().set_value(val); // initialize with first value
-                                        r.clone().set_null_bit(Bool(false)); // first value is not NULL
-                                    };
-                                }
-                                BLOCK_OPEN(update_aggs) {
-                                    _T _new_val = convert<_T>(env.compile(arg));
-                                    if (_new_val.can_be_null()) {
-                                        auto [new_val, new_val_is_null_] = _new_val.split();
-                                        auto [old_sum, old_sum_is_null] = _T(r.clone()).split();
-                                        const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
-
-                                        auto chosen_r = Select(new_val_is_null, dummy.extract<_T>(info.id), r.clone());
-                                        chosen_r.set_value(
-                                            old_sum + new_val // add new value to old sum
-                                        ); // if new value is NULL, only dummy is written
-                                        r.set_null_bit(
-                                            old_sum_is_null and new_val_is_null // SUM is NULL iff all values are NULL
-                                        );
-                                    } else {
-                                        auto new_val = _new_val.insist_not_null();
-                                        auto old_sum = _T(r.clone()).insist_not_null();
-                                        r.set_value(
-                                            old_sum + new_val // add new value to old sum
-                                        );
-                                        /* do not update NULL bit since it is already set to `false` */
-                                    }
-                                }
-                            },
-                            []<sql_type _T>(HashTable::reference_t<_T>&&) -> void
-                            requires std::same_as<_T,_Bool> or std::same_as<_T, NChar> {
-                                M_unreachable("invalid type");
-                            },
-                            [](std::monostate) -> void { M_unreachable("invalid reference"); },
-                        }, entry.extract(info.id));
-                        break;
-                    }
-                    case m::Function::FN_COUNT: {
-                        M_insist(info.args.size() <= 1, "COUNT aggregate function expects at most one argument");
-
-                        auto r = entry.get<_I64>(info.id); // do not extract to be able to access for AVG case
-                        if (info.args.empty()) {
-                            BLOCK_OPEN(init_aggs) {
-                                r.clone() = _I64(1); // initialize with 1 (for first value)
-                            }
-                            BLOCK_OPEN(update_aggs) {
-                                auto old_count = _I64(r.clone()).insist_not_null();
-                                r.set_value(
-                                    old_count + int64_t(1) // increment old count by 1
-                                );
-                                /* do not update NULL bit since it is already set to `false` */
-                            }
-                        } else {
+                /*----- Compute aggregates. -----*/
+                Block init_aggs("hash_based_grouping.init_aggs", false),
+                      update_aggs("hash_based_grouping.update_aggs", false),
+                      update_avg_aggs("hash_based_grouping.update_avg_aggs", false);
+                for (auto &info : aggregates) {
+                    bool is_min = false; ///< flag to indicate whether aggregate function is MIN
+                    switch (info.fnid) {
+                        default:
+                            M_unreachable("unsupported aggregate function");
+                        case m::Function::FN_MIN:
+                            is_min = true; // set flag and delegate to MAX case
+                        case m::Function::FN_MAX: {
+                            M_insist(info.args.size() == 1,
+                                     "MIN and MAX aggregate functions expect exactly one argument");
                             const auto &arg = *info.args[0];
-                            BLOCK_OPEN(init_aggs) {
-                                I64 not_null = (not is_null(env.compile(arg))).to<int64_t>();
-                                r.clone() = _I64(not_null); // initialize with 1 iff first value is present
-                            }
-                            BLOCK_OPEN(update_aggs) {
-                                I64 new_not_null = (not is_null(env.compile(arg))).to<int64_t>();
-                                auto old_count = _I64(r.clone()).insist_not_null();
-                                r.set_value(
-                                    old_count + new_not_null // increment old count by 1 iff new value is present
-                                );
-                                /* do not update NULL bit since it is already set to `false` */
-                            }
+                            std::visit(overloaded {
+                                [&]<sql_type _T>(HashTable::reference_t<_T> &&r) -> void
+                                requires (not (std::same_as<_T, _Bool> or std::same_as<_T, NChar>)) {
+                                    using type = typename _T::type;
+                                    using T = PrimitiveExpr<type>;
+
+                                    BLOCK_OPEN(init_aggs) {
+                                        auto [val_, is_null] = convert<_T>(env.compile(arg)).split();
+                                        T val(val_); // due to structured binding and lambda closure
+                                        IF (is_null) {
+                                            auto neutral = is_min ? T(std::numeric_limits<type>::max())
+                                                                  : T(std::numeric_limits<type>::lowest());
+                                            r.clone().set_value(neutral); // initialize with neutral element +inf or -inf
+                                            r.clone().set_null_bit(Bool(true)); // first value is NULL
+                                        } ELSE {
+                                            r.clone().set_value(val); // initialize with first value
+                                            r.clone().set_null_bit(Bool(false)); // first value is not NULL
+                                        };
+                                    }
+                                    BLOCK_OPEN(update_aggs) {
+                                        _T _new_val = convert<_T>(env.compile(arg));
+                                        if (_new_val.can_be_null()) {
+                                            auto [new_val_, new_val_is_null_] = _new_val.split();
+                                            auto [old_min_max_, old_min_max_is_null] = _T(r.clone()).split();
+                                            const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
+
+                                            auto chosen_r = Select(new_val_is_null, dummy.extract<_T>(info.id), r.clone());
+                                            if constexpr (std::floating_point<type>) {
+                                                chosen_r.set_value(
+                                                    is_min ? min(old_min_max_, new_val_) // update old min with new value
+                                                           : max(old_min_max_, new_val_) // update old max with new value
+                                                ); // if new value is NULL, only dummy is written
+                                            } else {
+                                                const Var<T> new_val(new_val_),
+                                                             old_min_max(old_min_max_); // due to multiple uses
+                                                auto cmp = is_min ? new_val < old_min_max : new_val > old_min_max;
+                                                chosen_r.set_value(
+                                                    Select(cmp,
+                                                           new_val, // update to new value
+                                                           old_min_max) // do not update
+                                                ); // if new value is NULL, only dummy is written
+                                            }
+                                            r.set_null_bit(
+                                                old_min_max_is_null and new_val_is_null // MIN/MAX is NULL iff all values are NULL
+                                            );
+                                        } else {
+                                            auto new_val_ = _new_val.insist_not_null();
+                                            auto old_min_max_ = _T(r.clone()).insist_not_null();
+                                            if constexpr (std::floating_point<type>) {
+                                                r.set_value(
+                                                    is_min ? min(old_min_max_, new_val_) // update old min with new value
+                                                           : max(old_min_max_, new_val_) // update old max with new value
+                                                );
+                                            } else {
+                                                const Var<T> new_val(new_val_),
+                                                             old_min_max(old_min_max_); // due to multiple uses
+                                                auto cmp = is_min ? new_val < old_min_max : new_val > old_min_max;
+                                                r.set_value(
+                                                    Select(cmp,
+                                                           new_val, // update to new value
+                                                           old_min_max) // do not update
+                                                );
+                                            }
+                                            /* do not update NULL bit since it is already set to `false` */
+                                        }
+                                    }
+                                },
+                                []<sql_type _T>(HashTable::reference_t<_T>&&) -> void
+                                requires std::same_as<_T,_Bool> or std::same_as<_T, NChar> {
+                                    M_unreachable("invalid type");
+                                },
+                                [](std::monostate) -> void { M_unreachable("invalid reference"); },
+                            }, entry.extract(info.id));
+                            break;
                         }
-                        break;
+                        case m::Function::FN_AVG: {
+                            auto it = avg_aggregates.find(info.id);
+                            M_insist(it != avg_aggregates.end());
+                            const auto &avg_info = it->second;
+                            M_insist(avg_info.compute_running_avg,
+                                     "AVG aggregate may only occur for running average computations");
+                            M_insist(info.args.size() == 1, "AVG aggregate function expects exactly one argument");
+                            const auto &arg = *info.args[0];
+
+                            auto r = entry.extract<_Double>(info.id);
+                            BLOCK_OPEN(init_aggs) {
+                                auto [val_, is_null] = convert<_Double>(env.compile(arg)).split();
+                                Double val(val_); // due to structured binding and lambda closure
+                                IF (is_null) {
+                                    r.clone().set_value(Double(0.0)); // initialize with neutral element 0
+                                    r.clone().set_null_bit(Bool(true)); // first value is NULL
+                                } ELSE {
+                                    r.clone().set_value(val); // initialize with first value
+                                    r.clone().set_null_bit(Bool(false)); // first value is not NULL
+                                };
+                            }
+                            BLOCK_OPEN(update_avg_aggs) {
+                                /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming
+                                 * Vol 2, section 4.2.2. */
+                                _Double _new_val = convert<_Double>(env.compile(arg));
+                                if (_new_val.can_be_null()) {
+                                    auto [new_val, new_val_is_null_] = _new_val.split();
+                                    auto [old_avg_, old_avg_is_null] = _Double(r.clone()).split();
+                                    const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
+                                    const Var<Double> old_avg(old_avg_); // due to multiple uses
+
+                                    auto delta_absolute = new_val - old_avg;
+                                    auto running_count = _I64(entry.get<_I64>(avg_info.running_count)).insist_not_null();
+                                    auto delta_relative = delta_absolute / running_count.to<double>();
+
+                                    auto chosen_r = Select(new_val_is_null, dummy.extract<_Double>(info.id), r.clone());
+                                    chosen_r.set_value(
+                                        old_avg + delta_relative // update old average with new value
+                                    ); // if new value is NULL, only dummy is written
+                                    r.set_null_bit(
+                                        old_avg_is_null and new_val_is_null // AVG is NULL iff all values are NULL
+                                    );
+                                } else {
+                                    auto new_val = _new_val.insist_not_null();
+                                    auto old_avg_ = _Double(r.clone()).insist_not_null();
+                                    const Var<Double> old_avg(old_avg_); // due to multiple uses
+
+                                    auto delta_absolute = new_val - old_avg;
+                                    auto running_count = _I64(entry.get<_I64>(avg_info.running_count)).insist_not_null();
+                                    auto delta_relative = delta_absolute / running_count.to<double>();
+                                    r.set_value(
+                                        old_avg + delta_relative // update old average with new value
+                                    );
+                                    /* do not update NULL bit since it is already set to `false` */
+                                }
+                            }
+                            break;
+                        }
+                        case m::Function::FN_SUM: {
+                            M_insist(info.args.size() == 1, "SUM aggregate function expects exactly one argument");
+                            const auto &arg = *info.args[0];
+                            std::visit(overloaded {
+                                [&]<sql_type _T>(HashTable::reference_t<_T> &&r) -> void
+                                requires (not (std::same_as<_T, _Bool> or std::same_as<_T, NChar>)) {
+                                    using type = typename _T::type;
+                                    using T = PrimitiveExpr<type>;
+
+                                    BLOCK_OPEN(init_aggs) {
+                                        auto [val_, is_null] = convert<_T>(env.compile(arg)).split();
+                                        T val(val_); // due to structured binding and lambda closure
+                                        IF (is_null) {
+                                            r.clone().set_value(T(type(0))); // initialize with neutral element 0
+                                            r.clone().set_null_bit(Bool(true)); // first value is NULL
+                                        } ELSE {
+                                            r.clone().set_value(val); // initialize with first value
+                                            r.clone().set_null_bit(Bool(false)); // first value is not NULL
+                                        };
+                                    }
+                                    BLOCK_OPEN(update_aggs) {
+                                        _T _new_val = convert<_T>(env.compile(arg));
+                                        if (_new_val.can_be_null()) {
+                                            auto [new_val, new_val_is_null_] = _new_val.split();
+                                            auto [old_sum, old_sum_is_null] = _T(r.clone()).split();
+                                            const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
+
+                                            auto chosen_r = Select(new_val_is_null, dummy.extract<_T>(info.id),
+                                                                                    r.clone());
+                                            chosen_r.set_value(
+                                                old_sum + new_val // add new value to old sum
+                                            ); // if new value is NULL, only dummy is written
+                                            r.set_null_bit(
+                                                old_sum_is_null and new_val_is_null // SUM is NULL iff all values are NULL
+                                            );
+                                        } else {
+                                            auto new_val = _new_val.insist_not_null();
+                                            auto old_sum = _T(r.clone()).insist_not_null();
+                                            r.set_value(
+                                                old_sum + new_val // add new value to old sum
+                                            );
+                                            /* do not update NULL bit since it is already set to `false` */
+                                        }
+                                    }
+                                },
+                                []<sql_type _T>(HashTable::reference_t<_T>&&) -> void
+                                requires std::same_as<_T,_Bool> or std::same_as<_T, NChar> {
+                                    M_unreachable("invalid type");
+                                },
+                                [](std::monostate) -> void { M_unreachable("invalid reference"); },
+                            }, entry.extract(info.id));
+                            break;
+                        }
+                        case m::Function::FN_COUNT: {
+                            M_insist(info.args.size() <= 1, "COUNT aggregate function expects at most one argument");
+
+                            auto r = entry.get<_I64>(info.id); // do not extract to be able to access for AVG case
+                            if (info.args.empty()) {
+                                BLOCK_OPEN(init_aggs) {
+                                    r.clone() = _I64(1); // initialize with 1 (for first value)
+                                }
+                                BLOCK_OPEN(update_aggs) {
+                                    auto old_count = _I64(r.clone()).insist_not_null();
+                                    r.set_value(
+                                        old_count + int64_t(1) // increment old count by 1
+                                    );
+                                    /* do not update NULL bit since it is already set to `false` */
+                                }
+                            } else {
+                                const auto &arg = *info.args[0];
+                                BLOCK_OPEN(init_aggs) {
+                                    I64 not_null = (not is_null(env.compile(arg))).to<int64_t>();
+                                    r.clone() = _I64(not_null); // initialize with 1 iff first value is present
+                                }
+                                BLOCK_OPEN(update_aggs) {
+                                    I64 new_not_null = (not is_null(env.compile(arg))).to<int64_t>();
+                                    auto old_count = _I64(r.clone()).insist_not_null();
+                                    r.set_value(
+                                        old_count + new_not_null // increment old count by 1 iff new value is present
+                                    );
+                                    /* do not update NULL bit since it is already set to `false` */
+                                }
+                            }
+                            break;
+                        }
                     }
                 }
-            }
 
-            /*----- If group has been inserted, initialize aggregates. Otherwise, update them. -----*/
-            IF (inserted) {
-                init_aggs.attach_to_current();
-            } ELSE {
-                update_aggs.attach_to_current();
-                update_avg_aggs.attach_to_current(); // after others to ensure that running count is incremented before
-            };
-        });
+                /*----- If group has been inserted, initialize aggregates. Otherwise, update them. -----*/
+                IF (inserted) {
+                    init_aggs.attach_to_current();
+                } ELSE {
+                    update_aggs.attach_to_current();
+                    update_avg_aggs.attach_to_current(); // after others to ensure that running count is incremented before
+                };
+            },
+            /* Teardown= */ MatchBase::DoNothing
+        );
     }
     hash_based_grouping_child_pipeline(); // call child function
 
-    /*----- Process each computed group. -----*/
     auto &env = CodeGenContext::Get().env();
+
+    /*----- Process each computed group. -----*/
+    Setup();
     ht->for_each([&, Pipeline=std::move(Pipeline)](HashTable::const_entry_t entry){
         /*----- Add computed group tuples to current environment. ----*/
         for (auto &e : M.grouping.schema().deduplicate()) {
@@ -902,6 +941,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Pi
         /*----- Resume pipeline. -----*/
         Pipeline();
     });
+    Teardown();
 }
 
 ConditionSet OrderedGrouping::pre_condition(
@@ -947,7 +987,8 @@ ConditionSet OrderedGrouping::adapt_post_condition(const Match<OrderedGrouping> 
     return post_cond;
 }
 
-void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Pipeline)
+void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup, callback_t Pipeline,
+                              callback_t Teardown)
 {
     Environment results; ///< stores current result tuple
     const auto num_keys = M.grouping.group_by().size();
@@ -964,326 +1005,330 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Pipeli
      * code is emitted. */
     Global<Bool> first_iteration(true);
 
-    M.child.execute([&](){
-        auto &env = CodeGenContext::Get().env();
+    M.child.execute(
+        /* Setup=    */ MatchBase::DoNothing,
+        /* Pipeline= */ [&](){
+            auto &env = CodeGenContext::Get().env();
 
-        std::optional<Var<Bool>> pred; ///< possible variable for predication predicate
+            std::optional<Var<Bool>> pred; ///< possible variable for predication predicate
 
-        /*----- Compute aggregates. -----*/
-        Block init_aggs("ordered_grouping.init_aggs", false),
-              update_aggs("ordered_grouping.update_aggs", false),
-              update_avg_aggs("ordered_grouping.update_avg_aggs", false);
-        for (auto &info : aggregates) {
-            bool is_min = false; ///< flag to indicate whether aggregate function is MIN
-            switch (info.fnid) {
-                default:
-                    M_unreachable("unsupported aggregate function");
-                case m::Function::FN_MIN:
-                    is_min = true; // set flag and delegate to MAX case
-                case m::Function::FN_MAX: {
-                    M_insist(info.args.size() == 1, "MIN and MAX aggregate functions expect exactly one argument");
-                    const auto &arg = *info.args[0];
-                    auto min_max = [&]<typename T>() {
-                        auto neutral = is_min ? std::numeric_limits<T>::max() : std::numeric_limits<T>::lowest();
+            /*----- Compute aggregates. -----*/
+            Block init_aggs("ordered_grouping.init_aggs", false),
+                  update_aggs("ordered_grouping.update_aggs", false),
+                  update_avg_aggs("ordered_grouping.update_avg_aggs", false);
+            for (auto &info : aggregates) {
+                bool is_min = false; ///< flag to indicate whether aggregate function is MIN
+                switch (info.fnid) {
+                    default:
+                        M_unreachable("unsupported aggregate function");
+                    case m::Function::FN_MIN:
+                        is_min = true; // set flag and delegate to MAX case
+                    case m::Function::FN_MAX: {
+                        M_insist(info.args.size() == 1, "MIN and MAX aggregate functions expect exactly one argument");
+                        const auto &arg = *info.args[0];
+                        auto min_max = [&]<typename T>() {
+                            auto neutral = is_min ? std::numeric_limits<T>::max() : std::numeric_limits<T>::lowest();
 
-                        Global<PrimitiveExpr<T>> min_max;
-                        Global<Bool> is_null;
+                            Global<PrimitiveExpr<T>> min_max;
+                            Global<Bool> is_null;
+
+                            BLOCK_OPEN(init_aggs) {
+                                min_max = neutral; // initialize with neutral element +inf or -inf
+                                is_null = true; // MIN/MAX is initially NULL
+                            }
+
+                            BLOCK_OPEN(update_aggs) {
+                                Expr<T> _new_val = convert<Expr<T>>(env.compile(arg));
+                                if (_new_val.can_be_null()) {
+                                    auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
+                                    auto [new_val_, new_val_is_null_] = _new_val_pred.split();
+                                    const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
+
+                                    if constexpr (std::floating_point<T>) {
+                                        min_max = Select(new_val_is_null,
+                                                         min_max, // ignore NULL
+                                                         is_min ? min(min_max, new_val_) // update old min with new value
+                                                                : max(min_max, new_val_)); // update old max with new value
+                                    } else {
+                                        const Var<PrimitiveExpr<T>> new_val(new_val_); // due to multiple uses
+                                        auto cmp = is_min ? new_val < min_max : new_val > min_max;
+                                        min_max = Select(new_val_is_null,
+                                                         min_max, // ignore NULL
+                                                         Select(cmp,
+                                                                new_val, // update to new value
+                                                                min_max)); // do not update
+                                    }
+                                    is_null = is_null and new_val_is_null; // MIN/MAX is NULL iff all values are NULL
+                                } else {
+                                    auto _new_val_pred = pred ? Select(*pred, _new_val, neutral) : _new_val;
+                                    auto new_val_ = _new_val_pred.insist_not_null();
+                                    if constexpr (std::floating_point<T>) {
+                                        min_max = is_min ? min(min_max, new_val_) // update old min with new value
+                                                         : max(min_max, new_val_); // update old max with new value
+                                    } else {
+                                        const Var<PrimitiveExpr<T>> new_val(new_val_); // due to multiple uses
+                                        auto cmp = is_min ? new_val < min_max : new_val > min_max;
+                                        min_max = Select(cmp,
+                                                         new_val, // update to new value
+                                                         min_max); // do not update
+                                    }
+                                    is_null = false; // at least one non-NULL value is consumed
+                                }
+                            }
+
+                            results.add(info.id, Select(is_null, Expr<T>::Null(), min_max));
+                        };
+                        auto &n = as<const Numeric>(*info.type);
+                        switch (n.kind) {
+                            case Numeric::N_Int:
+                            case Numeric::N_Decimal:
+                                switch (n.size()) {
+                                    default: M_unreachable("invalid size");
+                                    case  8: min_max.template operator()<int8_t >(); break;
+                                    case 16: min_max.template operator()<int16_t>(); break;
+                                    case 32: min_max.template operator()<int32_t>(); break;
+                                    case 64: min_max.template operator()<int64_t>(); break;
+                                }
+                                break;
+                            case Numeric::N_Float:
+                                if (n.size() <= 32)
+                                    min_max.template operator()<float>();
+                                else
+                                    min_max.template operator()<double>();
+                        }
+                        break;
+                    }
+                    case m::Function::FN_AVG:
+                        break; // skip here and handle later
+                    case m::Function::FN_SUM: {
+                        M_insist(info.args.size() == 1, "SUM aggregate function expects exactly one argument");
+                        const auto &arg = *info.args[0];
+
+                        auto sum = [&]<typename T>() {
+                            Global<PrimitiveExpr<T>> sum;
+                            Global<Bool> is_null;
+
+                            BLOCK_OPEN(init_aggs) {
+                                sum = T(0); // initialize with neutral element 0
+                                is_null = true; // SUM is initially NULL
+                            }
+
+                            BLOCK_OPEN(update_aggs) {
+                                Expr<T> _new_val = convert<Expr<T>>(env.compile(arg));
+                                if (_new_val.can_be_null()) {
+                                    auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
+                                    auto [new_val, new_val_is_null_] = _new_val_pred.split();
+                                    const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
+
+                                    sum += Select(new_val_is_null,
+                                                  T(0), // ignore NULL
+                                                  new_val); // add new value to old sum
+                                    is_null = is_null and new_val_is_null; // SUM is NULL iff all values are NULL
+                                } else {
+                                    auto _new_val_pred = pred ? Select(*pred, _new_val, T(0)) : _new_val;
+                                    sum += _new_val_pred.insist_not_null(); // add new value to old sum
+                                    is_null = false; // at least one non-NULL value is consumed
+                                }
+                            }
+
+                            results.add(info.id, Select(is_null, Expr<T>::Null(), sum));
+                        };
+                        auto &n = as<const Numeric>(*info.type);
+                        switch (n.kind) {
+                            case Numeric::N_Int:
+                            case Numeric::N_Decimal:
+                                switch (n.size()) {
+                                    default: M_unreachable("invalid size");
+                                    case  8: sum.template operator()<int8_t >(); break;
+                                    case 16: sum.template operator()<int16_t>(); break;
+                                    case 32: sum.template operator()<int32_t>(); break;
+                                    case 64: sum.template operator()<int64_t>(); break;
+                                }
+                                break;
+                            case Numeric::N_Float:
+                                if (n.size() <= 32)
+                                    sum.template operator()<float>();
+                                else
+                                    sum.template operator()<double>();
+                        }
+                        break;
+                    }
+                    case m::Function::FN_COUNT: {
+                        M_insist(info.args.size() <= 1, "COUNT aggregate function expects at most one argument");
+                        M_insist(info.type->is_integral() and info.type->size() == 64);
+
+                        Global<I64> count;
+                        /* no `is_null` variable needed since COUNT will not be NULL */
 
                         BLOCK_OPEN(init_aggs) {
-                            min_max = neutral; // initialize with neutral element +inf or -inf
-                            is_null = true; // MIN/MAX is initially NULL
+                            count = 0; // initialize with neutral element 0
                         }
 
                         BLOCK_OPEN(update_aggs) {
-                            Expr<T> _new_val = convert<Expr<T>>(env.compile(arg));
-                            if (_new_val.can_be_null()) {
-                                auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
-                                auto [new_val_, new_val_is_null_] = _new_val_pred.split();
-                                const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
-
-                                if constexpr (std::floating_point<T>) {
-                                    min_max = Select(new_val_is_null,
-                                                     min_max, // ignore NULL
-                                                     is_min ? min(min_max, new_val_) // update old min with new value
-                                                            : max(min_max, new_val_)); // update old max with new value
-                                } else {
-                                    const Var<PrimitiveExpr<T>> new_val(new_val_); // due to multiple uses
-                                    auto cmp = is_min ? new_val < min_max : new_val > min_max;
-                                    min_max = Select(new_val_is_null,
-                                                     min_max, // ignore NULL
-                                                     Select(cmp,
-                                                            new_val, // update to new value
-                                                            min_max)); // do not update
-                                }
-                                is_null = is_null and new_val_is_null; // MIN/MAX is NULL iff all values are NULL
+                            if (info.args.empty()) {
+                                count += pred ? pred->to<int64_t>() : I64(1); // increment old count by 1 iff `pred` is true
                             } else {
-                                auto _new_val_pred = pred ? Select(*pred, _new_val, neutral) : _new_val;
-                                auto new_val_ = _new_val_pred.insist_not_null();
-                                if constexpr (std::floating_point<T>) {
-                                    min_max = is_min ? min(min_max, new_val_) // update old min with new value
-                                                     : max(min_max, new_val_); // update old max with new value
-                                } else {
-                                    const Var<PrimitiveExpr<T>> new_val(new_val_); // due to multiple uses
-                                    auto cmp = is_min ? new_val < min_max : new_val > min_max;
-                                    min_max = Select(cmp,
-                                                     new_val, // update to new value
-                                                     min_max); // do not update
-                                }
-                                is_null = false; // at least one non-NULL value is consumed
+                                Bool not_null = not is_null(env.compile(*info.args[0]));
+                                I64 inc = pred ? (not_null and *pred).to<int64_t>() : not_null.to<int64_t>();
+                                count += inc; // increment old count by 1 iff new value is present and `pred` is true
                             }
                         }
 
-                        results.add(info.id, Select(is_null, Expr<T>::Null(), min_max));
-                    };
-                    auto &n = as<const Numeric>(*info.type);
-                    switch (n.kind) {
-                        case Numeric::N_Int:
-                        case Numeric::N_Decimal:
-                            switch (n.size()) {
-                                default: M_unreachable("invalid size");
-                                case  8: min_max.template operator()<int8_t >(); break;
-                                case 16: min_max.template operator()<int16_t>(); break;
-                                case 32: min_max.template operator()<int32_t>(); break;
-                                case 64: min_max.template operator()<int64_t>(); break;
-                            }
-                            break;
-                        case Numeric::N_Float:
-                            if (n.size() <= 32)
-                                min_max.template operator()<float>();
-                            else
-                                min_max.template operator()<double>();
+                        results.add(info.id, count.val());
+                        break;
                     }
-                    break;
                 }
-                case m::Function::FN_AVG:
-                    break; // skip here and handle later
-                case m::Function::FN_SUM: {
-                    M_insist(info.args.size() == 1, "SUM aggregate function expects exactly one argument");
+            }
+
+            /*----- Compute AVG aggregates after others to ensure that running count is in result environment. -----*/
+            for (auto &info : aggregates) {
+                if (info.fnid == m::Function::FN_AVG) {
+                    M_insist(info.args.size() == 1, "AVG aggregate function expects exactly one argument");
                     const auto &arg = *info.args[0];
+                    M_insist(info.type->is_double());
 
-                    auto sum = [&]<typename T>() {
-                        Global<PrimitiveExpr<T>> sum;
-                        Global<Bool> is_null;
+                    auto it = avg_aggregates.find(info.id);
+                    M_insist(it != avg_aggregates.end());
+                    const auto &avg_info = it->second;
+                    M_insist(avg_info.compute_running_avg,
+                             "AVG aggregate may only occur for running average computations");
 
-                        BLOCK_OPEN(init_aggs) {
-                            sum = T(0); // initialize with neutral element 0
-                            is_null = true; // SUM is initially NULL
-                        }
-
-                        BLOCK_OPEN(update_aggs) {
-                            Expr<T> _new_val = convert<Expr<T>>(env.compile(arg));
-                            if (_new_val.can_be_null()) {
-                                auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
-                                auto [new_val, new_val_is_null_] = _new_val_pred.split();
-                                const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
-
-                                sum += Select(new_val_is_null,
-                                              T(0), // ignore NULL
-                                              new_val); // add new value to old sum
-                                is_null = is_null and new_val_is_null; // SUM is NULL iff all values are NULL
-                            } else {
-                                auto _new_val_pred = pred ? Select(*pred, _new_val, T(0)) : _new_val;
-                                sum += _new_val_pred.insist_not_null(); // add new value to old sum
-                                is_null = false; // at least one non-NULL value is consumed
-                            }
-                        }
-
-                        results.add(info.id, Select(is_null, Expr<T>::Null(), sum));
-                    };
-                    auto &n = as<const Numeric>(*info.type);
-                    switch (n.kind) {
-                        case Numeric::N_Int:
-                        case Numeric::N_Decimal:
-                            switch (n.size()) {
-                                default: M_unreachable("invalid size");
-                                case  8: sum.template operator()<int8_t >(); break;
-                                case 16: sum.template operator()<int16_t>(); break;
-                                case 32: sum.template operator()<int32_t>(); break;
-                                case 64: sum.template operator()<int64_t>(); break;
-                            }
-                            break;
-                        case Numeric::N_Float:
-                            if (n.size() <= 32)
-                                sum.template operator()<float>();
-                            else
-                                sum.template operator()<double>();
-                    }
-                    break;
-                }
-                case m::Function::FN_COUNT: {
-                    M_insist(info.args.size() <= 1, "COUNT aggregate function expects at most one argument");
-                    M_insist(info.type->is_integral() and info.type->size() == 64);
-
-                    Global<I64> count;
-                    /* no `is_null` variable needed since COUNT will not be NULL */
+                    Global<Double> avg;
+                    Global<Bool> is_null;
 
                     BLOCK_OPEN(init_aggs) {
-                        count = 0; // initialize with neutral element 0
+                        avg = 0.0; // initialize with neutral element 0
+                        is_null = true; // AVG is initially NULL
                     }
 
-                    BLOCK_OPEN(update_aggs) {
-                        if (info.args.empty()) {
-                            count += pred ? pred->to<int64_t>() : I64(1); // increment old count by 1 iff `pred` is true
+                    BLOCK_OPEN(update_avg_aggs) {
+                        /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming
+                         * Vol 2, section 4.2.2. */
+                        _Double _new_val = convert<_Double>(env.compile(arg));
+                        if (_new_val.can_be_null()) {
+                            auto _new_val_pred = pred ? Select(*pred, _new_val, _Double::Null()) : _new_val;
+                            auto [new_val, new_val_is_null_] = _new_val_pred.split();
+                            const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
+
+                            auto delta_absolute = new_val - avg;
+                            auto running_count = results.get<_I64>(avg_info.running_count).insist_not_null();
+                            auto delta_relative = delta_absolute / running_count.to<double>();
+
+                            avg += Select(new_val_is_null,
+                                          0.0, // ignore NULL
+                                          delta_relative); // update old average with new value
+                            is_null = is_null and new_val_is_null; // AVG is NULL iff all values are NULL
                         } else {
-                            Bool not_null = not is_null(env.compile(*info.args[0]));
-                            I64 inc = pred ? (not_null and *pred).to<int64_t>() : not_null.to<int64_t>();
-                            count += inc; // increment old count by 1 iff new value is present and `pred` is true
+                            auto _new_val_pred = pred ? Select(*pred, _new_val, avg) : _new_val;
+                            auto delta_absolute = _new_val_pred.insist_not_null() - avg;
+                            auto running_count = results.get<_I64>(avg_info.running_count).insist_not_null();
+                            auto delta_relative = delta_absolute / running_count.to<double>();
+
+                            avg += delta_relative; // update old average with new value
+                            is_null = false; // at least one non-NULL value is consumed
                         }
                     }
 
-                    results.add(info.id, count.val());
-                    break;
+                    results.add(info.id, Select(is_null, _Double::Null(), avg));
                 }
             }
-        }
 
-        /*----- Compute AVG aggregates after others to ensure that running count is in result environment. -----*/
-        for (auto &info : aggregates) {
-            if (info.fnid == m::Function::FN_AVG) {
-                M_insist(info.args.size() == 1, "AVG aggregate function expects exactly one argument");
-                const auto &arg = *info.args[0];
-                M_insist(info.type->is_double());
+            /*----- Introduce variables for old and current grouping keys and compute whether new group starts. -----*/
+            Block update_keys("ordered_grouping.update_grouping_keys", false);
+            std::optional<Bool> group_differs;
+            for (std::size_t i = 0; i < num_keys; ++i) {
+                if (results.has(M.grouping.schema()[i].id))
+                    continue; // duplicated grouping key
 
-                auto it = avg_aggregates.find(info.id);
-                M_insist(it != avg_aggregates.end());
-                const auto &avg_info = it->second;
-                M_insist(avg_info.compute_running_avg,
-                         "AVG aggregate may only occur for running average computations");
+                /* Introduce globals for grouping keys to make them usable in `emit_group_and_resume_pipeline`. */
+                std::visit(overloaded {
+                    [&]<typename T>(Expr<T> value) -> void {
+                        if (value.can_be_null()) {
+                            /* split into value and NULL flag since globals must be not be nullable
+                             * TODO: change once nullable globals are supported */
+                            Global<PrimitiveExpr<T>> key_val; // in first iteration defaulted but never needed (see below)
+                            Global<Bool> key_is_null; // in first iteration defaulted but never needed (see below)
+                            results.add(M.grouping.schema()[i].id, Expr<T>(key_val, key_is_null));
 
-                Global<Double> avg;
-                Global<Bool> is_null;
+                            auto [val, is_null] = value.clone().split();
+                            auto null_differs = is_null != key_is_null;
+                            Bool key_differs = null_differs or (not key_is_null and val != key_val);
+                            if (group_differs)
+                                group_differs.emplace(key_differs or *group_differs);
+                            else
+                                group_differs.emplace(key_differs);
 
-                BLOCK_OPEN(init_aggs) {
-                    avg = 0.0; // initialize with neutral element 0
-                    is_null = true; // AVG is initially NULL
-                }
+                            BLOCK_OPEN(update_keys) {
+                                std::tie(key_val, key_is_null) = value.split();
+                            }
+                        } else {
+                            Global<PrimitiveExpr<T>> key; // in first iteration defaulted but never needed (see below)
+                            results.add(M.grouping.schema()[i].id, key.val());
 
-                BLOCK_OPEN(update_avg_aggs) {
-                    /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming
-                     * Vol 2, section 4.2.2. */
-                    _Double _new_val = convert<_Double>(env.compile(arg));
-                    if (_new_val.can_be_null()) {
-                        auto _new_val_pred = pred ? Select(*pred, _new_val, _Double::Null()) : _new_val;
-                        auto [new_val, new_val_is_null_] = _new_val_pred.split();
-                        const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
+                            Bool key_differs = key != value.clone().insist_not_null();
+                            if (group_differs)
+                                group_differs.emplace(key_differs or *group_differs);
+                            else
+                                group_differs.emplace(key_differs);
 
-                        auto delta_absolute = new_val - avg;
-                        auto running_count = results.get<_I64>(avg_info.running_count).insist_not_null();
-                        auto delta_relative = delta_absolute / running_count.to<double>();
+                            BLOCK_OPEN(update_keys) {
+                               key = value.insist_not_null();
+                            }
+                        }
+                    },
+                    [&](NChar value) -> void {
+                        Global<Ptr<Char>> key; // in first iteration defaulted but never needed (see below)
+                        results.add(M.grouping.schema()[i].id, NChar(key.val(), value.can_be_null(), value.length(),
+                                                                     value.guarantees_terminating_nul()));
 
-                        avg += Select(new_val_is_null,
-                                      0.0, // ignore NULL
-                                      delta_relative); // update old average with new value
-                        is_null = is_null and new_val_is_null; // AVG is NULL iff all values are NULL
-                    } else {
-                        auto _new_val_pred = pred ? Select(*pred, _new_val, avg) : _new_val;
-                        auto delta_absolute = _new_val_pred.insist_not_null() - avg;
-                        auto running_count = results.get<_I64>(avg_info.running_count).insist_not_null();
-                        auto delta_relative = delta_absolute / running_count.to<double>();
-
-                        avg += delta_relative; // update old average with new value
-                        is_null = false; // at least one non-NULL value is consumed
-                    }
-                }
-
-                results.add(info.id, Select(is_null, _Double::Null(), avg));
-            }
-        }
-
-        /*----- Introduce variables for old and current grouping keys and compute whether new group starts. -----*/
-        Block update_keys("ordered_grouping.update_grouping_keys", false);
-        std::optional<Bool> group_differs;
-        for (std::size_t i = 0; i < num_keys; ++i) {
-            if (results.has(M.grouping.schema()[i].id))
-                continue; // duplicated grouping key
-
-            /* Introduce globals for grouping keys to make them usable in `emit_group_and_resume_pipeline`. */
-            std::visit(overloaded {
-                [&]<typename T>(Expr<T> value) -> void {
-                    if (value.can_be_null()) {
-                        /* split into value and NULL flag since globals must be not be nullable
-                         * TODO: change once nullable globals are supported */
-                        Global<PrimitiveExpr<T>> key_val; // in first iteration defaulted but never needed (see below)
-                        Global<Bool> key_is_null; // in first iteration defaulted but never needed (see below)
-                        results.add(M.grouping.schema()[i].id, Expr<T>(key_val, key_is_null));
-
-                        auto [val, is_null] = value.clone().split();
-                        auto null_differs = is_null != key_is_null;
-                        Bool key_differs = null_differs or (not key_is_null and val != key_val);
+                        auto [key_addr, key_is_nullptr] = key.val().split();
+                        auto [addr, is_nullptr] = value.val().clone().split();
+                        auto addr_differs = strncmp(
+                            /* left=  */ NChar(addr, value.can_be_null(), value.length(),
+                                               value.guarantees_terminating_nul()),
+                            /* right= */ NChar(key_addr, value.can_be_null(), value.length(),
+                                               value.guarantees_terminating_nul()),
+                            /* len=   */ U32(value.length()),
+                            /* op=    */ NE
+                        );
+                        auto [addr_differs_value, addr_differs_is_null] = addr_differs.split();
+                        addr_differs_is_null.discard(); // use potentially-null value but it is overruled if it is NULL
+                        auto nullptr_differs = is_nullptr != key_is_nullptr.clone();
+                        Bool key_differs = nullptr_differs or (not key_is_nullptr and addr_differs_value);
                         if (group_differs)
                             group_differs.emplace(key_differs or *group_differs);
                         else
                             group_differs.emplace(key_differs);
 
                         BLOCK_OPEN(update_keys) {
-                            std::tie(key_val, key_is_null) = value.split();
+                            key = value.val();
                         }
-                    } else {
-                        Global<PrimitiveExpr<T>> key; // in first iteration defaulted but never needed (see below)
-                        results.add(M.grouping.schema()[i].id, key.val());
+                    },
+                    [](std::monostate) -> void { M_unreachable("invalid expression"); },
+                }, env.compile(M.grouping.group_by()[i].first.get()));
+            }
+            M_insist(bool(group_differs));
 
-                        Bool key_differs = key != value.clone().insist_not_null();
-                        if (group_differs)
-                            group_differs.emplace(key_differs or *group_differs);
-                        else
-                            group_differs.emplace(key_differs);
-
-                        BLOCK_OPEN(update_keys) {
-                           key = value.insist_not_null();
-                        }
-                    }
-                },
-                [&](NChar value) -> void {
-                    Global<Ptr<Char>> key; // in first iteration defaulted but never needed (see below)
-                    results.add(M.grouping.schema()[i].id, NChar(key.val(), value.can_be_null(), value.length(),
-                                                                 value.guarantees_terminating_nul()));
-
-                    auto [key_addr, key_is_nullptr] = key.val().split();
-                    auto [addr, is_nullptr] = value.val().clone().split();
-                    auto addr_differs = strncmp(
-                        /* left=  */ NChar(addr, value.can_be_null(), value.length(),
-                                           value.guarantees_terminating_nul()),
-                        /* right= */ NChar(key_addr, value.can_be_null(), value.length(),
-                                           value.guarantees_terminating_nul()),
-                        /* len=   */ U32(value.length()),
-                        /* op=    */ NE
-                    );
-                    auto [addr_differs_value, addr_differs_is_null] = addr_differs.split();
-                    addr_differs_is_null.discard(); // use potentially-null value but it is overruled if it is NULL
-                    auto nullptr_differs = is_nullptr != key_is_nullptr.clone();
-                    Bool key_differs = nullptr_differs or (not key_is_nullptr and addr_differs_value);
-                    if (group_differs)
-                        group_differs.emplace(key_differs or *group_differs);
-                    else
-                        group_differs.emplace(key_differs);
-
-                    BLOCK_OPEN(update_keys) {
-                        key = value.val();
-                    }
-                },
-                [](std::monostate) -> void { M_unreachable("invalid expression"); },
-            }, env.compile(M.grouping.group_by()[i].first.get()));
-        }
-        M_insist(bool(group_differs));
-
-        /*----- Resume pipeline with computed group iff new one starts and emit code to initialize aggregates. -----*/
-        IF (first_iteration or *group_differs) { // `group_differs` defaulted in first iteration but overruled anyway
-            IF (not first_iteration) {
-                emit_group_and_resume_pipeline();
+            /*----- Resume pipeline with computed group iff new one starts and emit code to initialize aggregates. ---*/
+            IF (first_iteration or *group_differs) { // `group_differs` defaulted in first iteration but overruled anyway
+                IF (not first_iteration) {
+                    emit_group_and_resume_pipeline();
+                };
+                update_keys.attach_to_current();
+                init_aggs.attach_to_current();
+                first_iteration = false;
             };
-            update_keys.attach_to_current();
-            init_aggs.attach_to_current();
-            first_iteration = false;
-        };
 
-        /*----- If predication is used, update predication variable before updating aggregates. */
-        if (env.predicated())
-            pred = env.extract_predicate().is_true_and_not_null();
+            /*----- If predication is used, update predication variable before updating aggregates. */
+            if (env.predicated())
+                pred = env.extract_predicate().is_true_and_not_null();
 
-        /*----- Emit code to update aggregates. -----*/
-        update_aggs.attach_to_current();
-        update_avg_aggs.attach_to_current(); // after others to ensure that running count is incremented before
-    });
+            /*----- Emit code to update aggregates. -----*/
+            update_aggs.attach_to_current();
+            update_avg_aggs.attach_to_current(); // after others to ensure that running count is incremented before
+        },
+        /* Teardown= */ MatchBase::DoNothing
+    );
 
     /*----- If input was not empty, emit last group tuple in the current environment and resume the pipeline. -----*/
     IF (not first_iteration) {
@@ -1329,7 +1374,9 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Pipeli
         }
 
         /*----- Resume pipeline. -----*/
+        Setup();
         Pipeline();
+        Teardown();
     }
 }
 
@@ -1354,217 +1401,224 @@ ConditionSet Aggregation::post_condition(const Match<Aggregation> &M)
     return post_cond;
 }
 
-void Aggregation::execute(const Match<Aggregation> &M, callback_t Pipeline)
+void Aggregation::execute(const Match<Aggregation> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown)
 {
+    Environment results; ///< stores result tuple
+
     /*----- Compute information about aggregates, especially about AVG aggregates. -----*/
     auto p = compute_aggregate_info(M.aggregation.aggregates(), M.aggregation.schema());
     const auto &aggregates = p.first;
     const auto &avg_aggregates = p.second;
 
     /*----- Create child function. -----*/
-    Environment results;
     FUNCTION(aggregation_child_pipeline, void(void)) // create function for pipeline
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
-        M.child.execute([&](){
-            auto &env = CodeGenContext::Get().env();
+        M.child.execute(
+            /* Setup=    */ MatchBase::DoNothing,
+            /* Pipeline= */ [&](){
+                auto &env = CodeGenContext::Get().env();
 
-            /*----- If predication is used, introduce predication variable and update it before computing aggregates. */
-            std::optional<Var<Bool>> pred;
-            if (env.predicated())
-                pred = env.extract_predicate().is_true_and_not_null();
+                /*----- If predication is used, introduce pred. var. and update it before computing aggregates. -----*/
+                std::optional<Var<Bool>> pred;
+                if (env.predicated())
+                    pred = env.extract_predicate().is_true_and_not_null();
 
-            /*----- Compute aggregates (except AVG). -----*/
-            for (auto &info : aggregates) {
-                bool is_min = false; ///< flag to indicate whether aggregate function is MIN
-                switch (info.fnid) {
-                    default:
-                        M_unreachable("unsupported aggregate function");
-                    case m::Function::FN_MIN:
-                        is_min = true; // set flag and delegate to MAX case
-                    case m::Function::FN_MAX: {
-                        M_insist(info.args.size() == 1, "MIN and MAX aggregate functions expect exactly one argument");
-                        const auto &arg = *info.args[0];
-                        auto min_max = [&]<typename T>() {
-                            auto neutral = is_min ? std::numeric_limits<T>::max() : std::numeric_limits<T>::lowest();
-                            Global<PrimitiveExpr<T>> min_max(neutral); // initialize with neutral element +inf or -inf
-                            Global<Bool> is_null(true); // MIN/MAX is initially NULL
+                /*----- Compute aggregates (except AVG). -----*/
+                for (auto &info : aggregates) {
+                    bool is_min = false; ///< flag to indicate whether aggregate function is MIN
+                    switch (info.fnid) {
+                        default:
+                            M_unreachable("unsupported aggregate function");
+                        case m::Function::FN_MIN:
+                            is_min = true; // set flag and delegate to MAX case
+                        case m::Function::FN_MAX: {
+                            M_insist(info.args.size() == 1,
+                                     "MIN and MAX aggregate functions expect exactly one argument");
+                            const auto &arg = *info.args[0];
+                            auto min_max = [&]<typename T>() {
+                                auto neutral = is_min ? std::numeric_limits<T>::max()
+                                                      : std::numeric_limits<T>::lowest();
+                                Global<PrimitiveExpr<T>> min_max(neutral); // initialize with neutral element +inf or -inf
+                                Global<Bool> is_null(true); // MIN/MAX is initially NULL
 
-                            Expr<T> _new_val = convert<Expr<T>>(env.compile(arg));
-                            if (_new_val.can_be_null()) {
-                                auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
-                                auto [new_val_, new_val_is_null_] = _new_val_pred.split();
-                                const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
+                                Expr<T> _new_val = convert<Expr<T>>(env.compile(arg));
+                                if (_new_val.can_be_null()) {
+                                    auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
+                                    auto [new_val_, new_val_is_null_] = _new_val_pred.split();
+                                    const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
 
-                                if constexpr (std::floating_point<T>) {
-                                    min_max = Select(new_val_is_null,
-                                                     min_max, // ignore NULL
-                                                     is_min ? min(min_max, new_val_) // update old min with new value
-                                                            : max(min_max, new_val_)); // update old max with new value
+                                    if constexpr (std::floating_point<T>) {
+                                        min_max = Select(new_val_is_null,
+                                                         min_max, // ignore NULL
+                                                         is_min ? min(min_max, new_val_) // update old min with new value
+                                                                : max(min_max, new_val_)); // update old max with new value
+                                    } else {
+                                        const Var<PrimitiveExpr<T>> new_val(new_val_); // due to multiple uses
+                                        auto cmp = is_min ? new_val < min_max : new_val > min_max;
+                                        min_max = Select(new_val_is_null,
+                                                         min_max, // ignore NULL
+                                                         Select(cmp,
+                                                                new_val, // update to new value
+                                                                min_max)); // do not update
+                                    }
+                                    is_null = is_null and new_val_is_null; // MIN/MAX is NULL iff all values are NULL
                                 } else {
-                                    const Var<PrimitiveExpr<T>> new_val(new_val_); // due to multiple uses
-                                    auto cmp = is_min ? new_val < min_max : new_val > min_max;
-                                    min_max = Select(new_val_is_null,
-                                                     min_max, // ignore NULL
-                                                     Select(cmp,
-                                                            new_val, // update to new value
-                                                            min_max)); // do not update
+                                    auto _new_val_pred = pred ? Select(*pred, _new_val, neutral) : _new_val;
+                                    auto new_val_ = _new_val_pred.insist_not_null();
+                                    if constexpr (std::floating_point<T>) {
+                                        min_max = is_min ? min(min_max, new_val_) // update old min with new value
+                                                         : max(min_max, new_val_); // update old max with new value
+                                    } else {
+                                        const Var<PrimitiveExpr<T>> new_val(new_val_); // due to multiple uses
+                                        auto cmp = is_min ? new_val < min_max : new_val > min_max;
+                                        min_max = Select(cmp,
+                                                         new_val, // update to new value
+                                                         min_max); // do not update
+                                    }
+                                    is_null = false; // at least one non-NULL value is consumed
                                 }
-                                is_null = is_null and new_val_is_null; // MIN/MAX is NULL iff all values are NULL
+
+                                results.add(info.id, Select(is_null, Expr<T>::Null(), min_max));
+                            };
+                            auto &n = as<const Numeric>(*info.type);
+                            switch (n.kind) {
+                                case Numeric::N_Int:
+                                case Numeric::N_Decimal:
+                                    switch (n.size()) {
+                                        default: M_unreachable("invalid size");
+                                        case  8: min_max.template operator()<int8_t >(); break;
+                                        case 16: min_max.template operator()<int16_t>(); break;
+                                        case 32: min_max.template operator()<int32_t>(); break;
+                                        case 64: min_max.template operator()<int64_t>(); break;
+                                    }
+                                    break;
+                                case Numeric::N_Float:
+                                    if (n.size() <= 32)
+                                        min_max.template operator()<float>();
+                                    else
+                                        min_max.template operator()<double>();
+                            }
+                            break;
+                        }
+                        case m::Function::FN_AVG:
+                            break; // skip here and handle later
+                        case m::Function::FN_SUM: {
+                            M_insist(info.args.size() == 1, "SUM aggregate function expects exactly one argument");
+                            const auto &arg = *info.args[0];
+
+                            auto sum = [&]<typename T>() {
+                                Global<PrimitiveExpr<T>> sum(T(0)); // initialize with neutral element 0
+                                Global<Bool> is_null(true); // SUM is initially NULL
+
+                                Expr<T> _new_val = convert<Expr<T>>(env.compile(arg));
+                                if (_new_val.can_be_null()) {
+                                    auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
+                                    auto [new_val, new_val_is_null_] = _new_val_pred.split();
+                                    const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
+
+                                    sum += Select(new_val_is_null,
+                                                  T(0), // ignore NULL
+                                                  new_val); // add new value to old sum
+                                    is_null = is_null and new_val_is_null; // SUM is NULL iff all values are NULL
+                                } else {
+                                    auto _new_val_pred = pred ? Select(*pred, _new_val, T(0)) : _new_val;
+                                    sum += _new_val_pred.insist_not_null(); // add new value to old sum
+                                    is_null = false; // at least one non-NULL value is consumed
+                                }
+
+                                results.add(info.id, Select(is_null, Expr<T>::Null(), sum));
+                            };
+                            auto &n = as<const Numeric>(*info.type);
+                            switch (n.kind) {
+                                case Numeric::N_Int:
+                                case Numeric::N_Decimal:
+                                    switch (n.size()) {
+                                        default: M_unreachable("invalid size");
+                                        case  8: sum.template operator()<int8_t >(); break;
+                                        case 16: sum.template operator()<int16_t>(); break;
+                                        case 32: sum.template operator()<int32_t>(); break;
+                                        case 64: sum.template operator()<int64_t>(); break;
+                                    }
+                                    break;
+                                case Numeric::N_Float:
+                                    if (n.size() <= 32)
+                                        sum.template operator()<float>();
+                                    else
+                                        sum.template operator()<double>();
+                            }
+                            break;
+                        }
+                        case m::Function::FN_COUNT: {
+                            M_insist(info.args.size() <= 1, "COUNT aggregate function expects at most one argument");
+                            M_insist(info.type->is_integral() and info.type->size() == 64);
+
+                            Global<I64> count(0); // initialize with neutral element 0
+                            /* no `is_null` variable needed since COUNT will not be NULL */
+
+                            if (info.args.empty()) {
+                                count += pred ? pred->to<int64_t>() : I64(1); // increment old count by 1 iff `pred` is true
                             } else {
-                                auto _new_val_pred = pred ? Select(*pred, _new_val, neutral) : _new_val;
-                                auto new_val_ = _new_val_pred.insist_not_null();
-                                if constexpr (std::floating_point<T>) {
-                                    min_max = is_min ? min(min_max, new_val_) // update old min with new value
-                                                     : max(min_max, new_val_); // update old max with new value
-                                } else {
-                                    const Var<PrimitiveExpr<T>> new_val(new_val_); // due to multiple uses
-                                    auto cmp = is_min ? new_val < min_max : new_val > min_max;
-                                    min_max = Select(cmp,
-                                                     new_val, // update to new value
-                                                     min_max); // do not update
-                                }
-                                is_null = false; // at least one non-NULL value is consumed
+                                Bool not_null = not is_null(env.compile(*info.args[0]));
+                                I64 inc = pred ? (not_null and *pred).to<int64_t>() : not_null.to<int64_t>();
+                                count += inc; // increment old count by 1 iff new value is present and `pred` is true
                             }
 
-                            results.add(info.id, Select(is_null, Expr<T>::Null(), min_max));
-                        };
-                        auto &n = as<const Numeric>(*info.type);
-                        switch (n.kind) {
-                            case Numeric::N_Int:
-                            case Numeric::N_Decimal:
-                                switch (n.size()) {
-                                    default: M_unreachable("invalid size");
-                                    case  8: min_max.template operator()<int8_t >(); break;
-                                    case 16: min_max.template operator()<int16_t>(); break;
-                                    case 32: min_max.template operator()<int32_t>(); break;
-                                    case 64: min_max.template operator()<int64_t>(); break;
-                                }
-                                break;
-                            case Numeric::N_Float:
-                                if (n.size() <= 32)
-                                    min_max.template operator()<float>();
-                                else
-                                    min_max.template operator()<double>();
+                            results.add(info.id, count.val());
+                            break;
                         }
-                        break;
                     }
-                    case m::Function::FN_AVG:
-                        break; // skip here and handle later
-                    case m::Function::FN_SUM: {
-                        M_insist(info.args.size() == 1, "SUM aggregate function expects exactly one argument");
+                }
+
+                /*----- Compute AVG aggregates after others to ensure that running count is incremented before. -----*/
+                for (auto &info : aggregates) {
+                    if (info.fnid == m::Function::FN_AVG) {
+                        M_insist(info.args.size() == 1, "AVG aggregate function expects exactly one argument");
                         const auto &arg = *info.args[0];
+                        M_insist(info.type->is_double());
 
-                        auto sum = [&]<typename T>() {
-                            Global<PrimitiveExpr<T>> sum(T(0)); // initialize with neutral element 0
-                            Global<Bool> is_null(true); // SUM is initially NULL
+                        auto it = avg_aggregates.find(info.id);
+                        M_insist(it != avg_aggregates.end());
+                        const auto &avg_info = it->second;
+                        M_insist(avg_info.compute_running_avg,
+                                 "AVG aggregate may only occur for running average computations");
 
-                            Expr<T> _new_val = convert<Expr<T>>(env.compile(arg));
-                            if (_new_val.can_be_null()) {
-                                auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
-                                auto [new_val, new_val_is_null_] = _new_val_pred.split();
-                                const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
+                        Global<Double> avg(0.0); // initialize with neutral element 0
+                        Global<Bool> is_null(true); // AVG is initially NULL
 
-                                sum += Select(new_val_is_null,
-                                              T(0), // ignore NULL
-                                              new_val); // add new value to old sum
-                                is_null = is_null and new_val_is_null; // SUM is NULL iff all values are NULL
-                            } else {
-                                auto _new_val_pred = pred ? Select(*pred, _new_val, T(0)) : _new_val;
-                                sum += _new_val_pred.insist_not_null(); // add new value to old sum
-                                is_null = false; // at least one non-NULL value is consumed
-                            }
+                        /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming
+                         * Vol 2, section 4.2.2. */
+                        _Double _new_val = convert<_Double>(env.compile(arg));
+                        if (_new_val.can_be_null()) {
+                            auto _new_val_pred = pred ? Select(*pred, _new_val, _Double::Null()) : _new_val;
+                            auto [new_val, new_val_is_null_] = _new_val_pred.split();
+                            const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
 
-                            results.add(info.id, Select(is_null, Expr<T>::Null(), sum));
-                        };
-                        auto &n = as<const Numeric>(*info.type);
-                        switch (n.kind) {
-                            case Numeric::N_Int:
-                            case Numeric::N_Decimal:
-                                switch (n.size()) {
-                                    default: M_unreachable("invalid size");
-                                    case  8: sum.template operator()<int8_t >(); break;
-                                    case 16: sum.template operator()<int16_t>(); break;
-                                    case 32: sum.template operator()<int32_t>(); break;
-                                    case 64: sum.template operator()<int64_t>(); break;
-                                }
-                                break;
-                            case Numeric::N_Float:
-                                if (n.size() <= 32)
-                                    sum.template operator()<float>();
-                                else
-                                    sum.template operator()<double>();
-                        }
-                        break;
-                    }
-                    case m::Function::FN_COUNT: {
-                        M_insist(info.args.size() <= 1, "COUNT aggregate function expects at most one argument");
-                        M_insist(info.type->is_integral() and info.type->size() == 64);
+                            auto delta_absolute = new_val - avg;
+                            auto running_count = results.get<_I64>(avg_info.running_count).insist_not_null();
+                            auto delta_relative = delta_absolute / running_count.to<double>();
 
-                        Global<I64> count(0); // initialize with neutral element 0
-                        /* no `is_null` variable needed since COUNT will not be NULL */
-
-                        if (info.args.empty()) {
-                            count += pred ? pred->to<int64_t>() : I64(1); // increment old count by 1 iff `pred` is true
+                            avg += Select(new_val_is_null,
+                                          0.0, // ignore NULL
+                                          delta_relative); // update old average with new value
+                            is_null = is_null and new_val_is_null; // AVG is NULL iff all values are NULL
                         } else {
-                            Bool not_null = not is_null(env.compile(*info.args[0]));
-                            I64 inc = pred ? (not_null and *pred).to<int64_t>() : not_null.to<int64_t>();
-                            count += inc; // increment old count by 1 iff new value is present and `pred` is true
+                            auto _new_val_pred = pred ? Select(*pred, _new_val, avg) : _new_val;
+                            auto delta_absolute = _new_val_pred.insist_not_null() - avg;
+                            auto running_count = results.get<_I64>(avg_info.running_count).insist_not_null();
+                            auto delta_relative = delta_absolute / running_count.to<double>();
+
+                            avg += delta_relative; // update old average with new value
+                            is_null = false; // at least one non-NULL value is consumed
                         }
 
-                        results.add(info.id, count.val());
-                        break;
+                        results.add(info.id, Select(is_null, _Double::Null(), avg));
                     }
                 }
-            }
-
-            /*----- Compute AVG aggregates after others to ensure that running count is incremented before. -----*/
-            for (auto &info : aggregates) {
-                if (info.fnid == m::Function::FN_AVG) {
-                    M_insist(info.args.size() == 1, "AVG aggregate function expects exactly one argument");
-                    const auto &arg = *info.args[0];
-                    M_insist(info.type->is_double());
-
-                    auto it = avg_aggregates.find(info.id);
-                    M_insist(it != avg_aggregates.end());
-                    const auto &avg_info = it->second;
-                    M_insist(avg_info.compute_running_avg,
-                             "AVG aggregate may only occur for running average computations");
-
-                    Global<Double> avg(0.0); // initialize with neutral element 0
-                    Global<Bool> is_null(true); // AVG is initially NULL
-
-                    /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming
-                     * Vol 2, section 4.2.2. */
-                    _Double _new_val = convert<_Double>(env.compile(arg));
-                    if (_new_val.can_be_null()) {
-                        auto _new_val_pred = pred ? Select(*pred, _new_val, _Double::Null()) : _new_val;
-                        auto [new_val, new_val_is_null_] = _new_val_pred.split();
-                        const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
-
-                        auto delta_absolute = new_val - avg;
-                        auto running_count = results.get<_I64>(avg_info.running_count).insist_not_null();
-                        auto delta_relative = delta_absolute / running_count.to<double>();
-
-                        avg += Select(new_val_is_null,
-                                      0.0, // ignore NULL
-                                      delta_relative); // update old average with new value
-                        is_null = is_null and new_val_is_null; // AVG is NULL iff all values are NULL
-                    } else {
-                        auto _new_val_pred = pred ? Select(*pred, _new_val, avg) : _new_val;
-                        auto delta_absolute = _new_val_pred.insist_not_null() - avg;
-                        auto running_count = results.get<_I64>(avg_info.running_count).insist_not_null();
-                        auto delta_relative = delta_absolute / running_count.to<double>();
-
-                        avg += delta_relative; // update old average with new value
-                        is_null = false; // at least one non-NULL value is consumed
-                    }
-
-                    results.add(info.id, Select(is_null, _Double::Null(), avg));
-                }
-            }
-        });
+           },
+           /* Teardown= */ MatchBase::DoNothing
+       );
     }
     aggregation_child_pipeline(); // call child function
 
@@ -1601,7 +1655,9 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Pipeline)
     }
 
     /*----- Resume pipeline. -----*/
+    Setup();
     Pipeline();
+    Teardown();
 }
 
 
@@ -1631,19 +1687,21 @@ ConditionSet Sorting::post_condition(const Match<Sorting> &M)
     return post_cond;
 }
 
-void Sorting::execute(const Match<Sorting> &M, callback_t Pipeline)
+void Sorting::execute(const Match<Sorting> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown)
 {
     /*----- Create infinite buffer to materialize the current results but resume the pipeline later. -----*/
     M_insist(bool(M.materializing_factory), "`wasm::Sorting` must have a factory for the materialized child");
     const auto buffer_schema = M.sorting.child(0)->schema().drop_constants().deduplicate();
     const auto sorting_schema = M.sorting.schema().drop_constants().deduplicate();
-    GlobalBuffer buffer(buffer_schema, *M.materializing_factory, 0, std::move(Pipeline));
+    GlobalBuffer buffer(
+        buffer_schema, *M.materializing_factory, 0, std::move(Setup), std::move(Pipeline), std::move(Teardown)
+    );
 
     /*----- Create child function. -----*/
     FUNCTION(sorting_child_pipeline, void(void)) // create function for pipeline
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
-        M.child.execute([&](){ buffer.consume(); });
+        M.child.execute(MatchBase::DoNothing, [&](){ buffer.consume(); }, MatchBase::DoNothing);
     }
     sorting_child_pipeline(); // call child function
 
@@ -1673,7 +1731,10 @@ ConditionSet NoOpSorting::pre_condition(std::size_t child_idx,
     return pre_cond;
 }
 
-void NoOpSorting::execute(const Match<NoOpSorting> &M, callback_t Pipeline) { M.child.execute(std::move(Pipeline)); }
+void NoOpSorting::execute(const Match<NoOpSorting> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown)
+{
+    M.child.execute(std::move(Setup), std::move(Pipeline), std::move(Teardown));
+}
 
 
 /*======================================================================================================================
@@ -1701,7 +1762,8 @@ ConditionSet NestedLoopsJoin<Predicated>::adapt_post_conditions(
 }
 
 template<bool Predicated>
-void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, callback_t Pipeline)
+void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, callback_t Setup, callback_t Pipeline,
+                                          callback_t Teardown)
 {
     const auto num_left_children = M.children.size() - 1; // all children but right-most one
 
@@ -1726,6 +1788,7 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, callb
                     /* schema=     */ schema,
                     /* factory=    */ *M.materializing_factories_[i],
                     /* num_tuples= */ 0, // i.e. infinite
+                    /* Setup=      */ MatchBase::DoNothing,
                     /* Pipeline=   */ [&, Pipeline=std::move(Pipeline)](){
                         if constexpr (Predicated) {
                             CodeGenContext::Get().env().add_predicate(M.join.predicate());
@@ -1735,7 +1798,9 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, callb
                                 Pipeline();
                             };
                         }
-                });
+                    },
+                    /* Teardown=   */ MatchBase::DoNothing
+                );
             } else {
                 /*----- All but exactly one child (here left-most one) load lastly inserted buffer again. -----*/
                 /* All buffers are "connected" with each other by setting the pipeline callback as calling the
@@ -1749,18 +1814,24 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, callb
                     /* schema=     */ schema,
                     /* factory=    */ *M.materializing_factories_[i],
                     /* num_tuples= */ 0, // i.e. infinite
-                    /* Pipeline=   */ [&buffers](){ buffers.back().resume_pipeline_inline(); }
+                    /* Setup=      */ MatchBase::DoNothing,
+                    /* Pipeline=   */ [&](){ buffers.back().resume_pipeline_inline(); },
+                    /* Teardown=   */ MatchBase::DoNothing
                 );
             }
 
             /*----- Materialize the current result tuple in pipeline. -----*/
-            M.children[i].get().execute([&](){ buffers.back().consume(); });
+            M.children[i].get().execute(
+                MatchBase::DoNothing, [&](){ buffers.back().consume(); }, MatchBase::DoNothing
+            );
         }
         nested_loop_join_child_pipeline(); // call child function
     }
 
     /*----- Process right-most child. -----*/
-    M.children.back().get().execute([&](){ buffers.back().resume_pipeline_inline(); });
+    M.children.back().get().execute(
+        std::move(Setup), [&](){ buffers.back().resume_pipeline_inline(); }, std::move(Teardown)
+    );
 }
 
 // explicit instantiations to prevent linker errors
@@ -1830,7 +1901,8 @@ ConditionSet SimpleHashJoin<UniqueBuild, Predicated>::adapt_post_conditions(
 }
 
 template<bool UniqueBuild, bool Predicated>
-void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin> &M, callback_t Pipeline)
+void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin> &M, callback_t Setup,
+                                                      callback_t Pipeline, callback_t Teardown)
 {
     // TODO: determine setup
     using PROBING_STRATEGY = QuadraticProbing;
@@ -1888,105 +1960,113 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
-        M.children[0].get().execute([&](){
-            auto &env = CodeGenContext::Get().env();
+        M.children[0].get().execute(
+            /* Setup=    */ MatchBase::DoNothing,
+            /* Pipeline= */ [&](){
+                auto &env = CodeGenContext::Get().env();
 
-            std::optional<Bool> build_key_not_null;
-            for (auto &build_key : build_keys) {
-                if (build_key_not_null)
-                    build_key_not_null.emplace(*build_key_not_null and not is_null(env.get(build_key)));
-                else
-                    build_key_not_null.emplace(not is_null(env.get(build_key)));
-            }
-            M_insist(bool(build_key_not_null));
-            IF (*build_key_not_null) { // TODO: predicated version
-                /*----- Insert key. -----*/
-                std::vector<SQL_t> key;
-                for (auto &build_key : build_keys)
-                    key.emplace_back(env.extract(build_key));
-                auto entry = ht->emplace(std::move(key));
-
-                /*----- Insert payload. -----*/
-                for (auto &id : payload_ids) {
-                    std::visit(overloaded {
-                        [&]<sql_type T>(HashTable::reference_t<T> &&r) -> void { r = env.extract<T>(id); },
-                        [](std::monostate) -> void { M_unreachable("invalid reference"); },
-                    }, entry.extract(id));
+                std::optional<Bool> build_key_not_null;
+                for (auto &build_key : build_keys) {
+                    if (build_key_not_null)
+                        build_key_not_null.emplace(*build_key_not_null and not is_null(env.get(build_key)));
+                    else
+                        build_key_not_null.emplace(not is_null(env.get(build_key)));
                 }
-            };
-        });
+                M_insist(bool(build_key_not_null));
+                IF (*build_key_not_null) { // TODO: predicated version
+                    /*----- Insert key. -----*/
+                    std::vector<SQL_t> key;
+                    for (auto &build_key : build_keys)
+                        key.emplace_back(env.extract(build_key));
+                    auto entry = ht->emplace(std::move(key));
+
+                    /*----- Insert payload. -----*/
+                    for (auto &id : payload_ids) {
+                        std::visit(overloaded {
+                            [&]<sql_type T>(HashTable::reference_t<T> &&r) -> void { r = env.extract<T>(id); },
+                            [](std::monostate) -> void { M_unreachable("invalid reference"); },
+                        }, entry.extract(id));
+                    }
+                };
+            },
+            /* Teardown= */ MatchBase::DoNothing
+        );
     }
     simple_hash_join_child_pipeline(); // call child function
 
-    M.children[1].get().execute([&](){
-        auto &env = CodeGenContext::Get().env();
+    M.children[1].get().execute(
+        /* Setup=    */ std::move(Setup),
+        /* Pipeline= */ [&, Pipeline=std::move(Pipeline)](){
+            auto &env = CodeGenContext::Get().env();
 
-        auto emit_tuple_and_resume_pipeline = [&, Pipeline=std::move(Pipeline)](HashTable::const_entry_t entry){
-            /*----- Add found entry from hash table, i.e. from build child, to current environment. -----*/
-            for (auto &e : ht_schema) {
-                if (not entry.has(e.id)) { // entry may not contain build key in case `ht->find()` was used
-                    M_insist(contains(build_keys, e.id));
-                    M_insist(env.has(e.id), "build key must already be contained in the current environment");
-                    continue;
+            auto emit_tuple_and_resume_pipeline = [&, Pipeline=std::move(Pipeline)](HashTable::const_entry_t entry){
+                /*----- Add found entry from hash table, i.e. from build child, to current environment. -----*/
+                for (auto &e : ht_schema) {
+                    if (not entry.has(e.id)) { // entry may not contain build key in case `ht->find()` was used
+                        M_insist(contains(build_keys, e.id));
+                        M_insist(env.has(e.id), "build key must already be contained in the current environment");
+                        continue;
+                    }
+
+                    std::visit(overloaded {
+                        [&]<typename T>(HashTable::const_reference_t<Expr<T>> &&r) -> void {
+                            Expr<T> value = r;
+                            if (value.can_be_null()) {
+                                Var<Expr<T>> var(value); // introduce variable s.t. uses only load from it
+                                env.add(e.id, var);
+                            } else {
+                                /* introduce variable w/o NULL bit s.t. uses only load from it */
+                                Var<PrimitiveExpr<T>> var(value.insist_not_null());
+                                env.add(e.id, Expr<T>(var));
+                            }
+                        },
+                        [&](HashTable::const_reference_t<NChar> &&r) -> void {
+                            NChar value(r);
+                            Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
+                            env.add(e.id, NChar(var, value.can_be_null(), value.length(),
+                                                value.guarantees_terminating_nul()));
+                        },
+                        [](std::monostate) -> void { M_unreachable("invalid reference"); },
+                    }, entry.extract(e.id));
                 }
 
-                std::visit(overloaded {
-                    [&]<typename T>(HashTable::const_reference_t<Expr<T>> &&r) -> void {
-                        Expr<T> value = r;
-                        if (value.can_be_null()) {
-                            Var<Expr<T>> var(value); // introduce variable s.t. uses only load from it
-                            env.add(e.id, var);
-                        } else {
-                            /* introduce variable w/o NULL bit s.t. uses only load from it */
-                            Var<PrimitiveExpr<T>> var(value.insist_not_null());
-                            env.add(e.id, Expr<T>(var));
-                        }
-                    },
-                    [&](HashTable::const_reference_t<NChar> &&r) -> void {
-                        NChar value(r);
-                        Var<Ptr<Char>> var(value.val()); // introduce variable s.t. uses only load from it
-                        env.add(e.id, NChar(var, value.can_be_null(), value.length(),
-                                            value.guarantees_terminating_nul()));
-                    },
-                    [](std::monostate) -> void { M_unreachable("invalid reference"); },
-                }, entry.extract(e.id));
-            }
+                /*----- Resume pipeline. -----*/
+                Pipeline();
+            };
 
-            /*----- Resume pipeline. -----*/
-            Pipeline();
-        };
+            /* TODO: may check for NULL on probe keys as well, branching + predicated version */
+            /*----- Probe with probe key. -----*/
+            std::vector<SQL_t> key;
+            for (auto &probe_key : probe_keys)
+                key.emplace_back(env.get(probe_key));
+            if constexpr (UniqueBuild) {
+                /*----- Add build key to current environment since `ht->find()` will only return the payload values. -----*/
+                for (auto build_it = build_keys.cbegin(), probe_it = probe_keys.cbegin(); build_it != build_keys.cend();
+                     ++build_it, ++probe_it)
+                {
+                    M_insist(probe_it != probe_keys.cend());
+                    env.add(*build_it, env.get(*probe_it)); // since build and probe keys match for join partners
+                }
 
-        /* TODO: may check for NULL on probe keys as well, branching + predicated version */
-        /*----- Probe with probe key. -----*/
-        std::vector<SQL_t> key;
-        for (auto &probe_key : probe_keys)
-            key.emplace_back(env.get(probe_key));
-        if constexpr (UniqueBuild) {
-            /*----- Add build key to current environment since `ht->find()` will only return the payload values. -----*/
-            for (auto build_it = build_keys.cbegin(), probe_it = probe_keys.cbegin(); build_it != build_keys.cend();
-                 ++build_it, ++probe_it)
-            {
-                M_insist(probe_it != probe_keys.cend());
-                env.add(*build_it, env.get(*probe_it)); // since build and probe keys match for join partners
-            }
-
-            /*----- Try to find the *single* possible join partner. -----*/
-            auto p = ht->find(std::move(key));
-            auto &entry = p.first;
-            auto &found = p.second;
-            if constexpr (Predicated) {
-                env.add_predicate(found);
-                emit_tuple_and_resume_pipeline(std::move(entry));
-            } else {
-                IF (found) {
+                /*----- Try to find the *single* possible join partner. -----*/
+                auto p = ht->find(std::move(key));
+                auto &entry = p.first;
+                auto &found = p.second;
+                if constexpr (Predicated) {
+                    env.add_predicate(found);
                     emit_tuple_and_resume_pipeline(std::move(entry));
-                };
+                } else {
+                    IF (found) {
+                        emit_tuple_and_resume_pipeline(std::move(entry));
+                    };
+                }
+            } else {
+                /*----- Search for *all* join partners. -----*/
+                ht->for_each_in_equal_range(std::move(key), std::move(emit_tuple_and_resume_pipeline), Predicated);
             }
-        } else {
-            /*----- Search for *all* join partners. -----*/
-            ht->for_each_in_equal_range(std::move(key), std::move(emit_tuple_and_resume_pipeline), Predicated);
-        }
-    });
+        },
+        /* Teardown= */ std::move(Teardown)
+    );
 }
 
 // explicit instantiations to prevent linker errors
@@ -2085,7 +2165,8 @@ ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated>::adapt_post_conditio
 }
 
 template<bool SortLeft, bool SortRight, bool Predicated>
-void SortMergeJoin<SortLeft, SortRight, Predicated>::execute(const Match<SortMergeJoin>&, callback_t)
+void SortMergeJoin<SortLeft, SortRight, Predicated>::execute(const Match<SortMergeJoin>&, callback_t, callback_t,
+                                                             callback_t)
 {
     M_unreachable("not implemented");
 }
@@ -2105,34 +2186,43 @@ template struct m::wasm::SortMergeJoin<true,  true,  true>;
  * Limit
  *====================================================================================================================*/
 
-void Limit::execute(const Match<Limit> &M, callback_t Pipeline)
+void Limit::execute(const Match<Limit> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown)
 {
     /* Create *global* counter since e.g. `Buffer::resume_pipeline()` may create new function in which the following
      * code is emitted. */
     Global<U32> counter; // default initialized to 0
 
-    M.child.execute([&, Pipeline=std::move(Pipeline)](){
-        const uint32_t limit = M.limit.offset() + M.limit.limit();
+    M.child.execute(
+        /* Setup=    */ std::move(Setup),
+        /* Pipeline= */ [&, Pipeline=std::move(Pipeline)](){ // do not move `Teardown` to use it twice
+            const uint32_t limit = M.limit.offset() + M.limit.limit();
 
-        /*----- Abort pipeline, i.e. return from pipeline function, if limit is exceeded. -----*/
-        IF (counter >= limit) {
-            RETURN_UNSAFE(); // unsafe version since pipeline function is not created in current C-scope
-        };
+            /*----- Abort pipeline, i.e. return from pipeline function, if limit is exceeded. -----*/
+            IF (counter >= limit) {
+                /*----- Perform same code as in passed teardown callback before returning. -----*/
+                Teardown();
 
-        /*----- Emit result if in bounds. -----*/
-        if (M.limit.offset()) {
-            IF (counter >= uint32_t(M.limit.offset())) {
+                RETURN_UNSAFE(); // unsafe version since pipeline function is not created in current C-scope
+            };
+
+            /*----- Emit result if in bounds. -----*/
+            if (M.limit.offset()) {
+                IF (counter >= uint32_t(M.limit.offset())) {
+                    Wasm_insist(counter < limit, "counter must not exceed limit");
+                    Pipeline();
+                };
+            } else {
                 Wasm_insist(counter < limit, "counter must not exceed limit");
                 Pipeline();
-            };
-        } else {
-            Wasm_insist(counter < limit, "counter must not exceed limit");
-            Pipeline();
-        }
+            }
 
-        /*----- Update counter. -----*/
-        counter += 1U;
-    });
+            /*----- Update counter. -----*/
+            counter += 1U;
+        },
+        /* Teardown= */ [&](){ // do not move `Teardown` to use it twice
+            Teardown();
+        }
+    );
 }
 
 
@@ -2200,7 +2290,8 @@ ConditionSet HashBasedGroupJoin::post_condition(const Match<HashBasedGroupJoin>&
     return post_cond;
 }
 
-void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t Pipeline)
+void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t Setup, callback_t Pipeline,
+                                 callback_t Teardown)
 {
     // TODO: determine setup
     using PROBING_STRATEGY = QuadraticProbing;
@@ -2292,9 +2383,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
      *
      * Returns three code blocks: the first one initializes all aggregates, the second one updates all but the AVG
      * aggregates, and the third one updates the AVG aggregates. */
-    auto compile_aggregates =
-        [&aggregates, &avg_aggregates, &dummy](HashTable::entry_t &entry, const Environment &env, const Schema &schema,
-                                               bool build_phase) -> std::tuple<Block, Block, Block>
+    auto compile_aggregates = [&](HashTable::entry_t &entry, const Environment &env, const Schema &schema,
+                                  bool build_phase) -> std::tuple<Block, Block, Block>
     {
         Block init_aggs("hash_based_group_join.init_aggs", false),
               update_aggs("hash_based_group_join.update_aggs", false),
@@ -2587,58 +2677,62 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
-        M.children[0].get().execute([&](){
-            const auto &env = CodeGenContext::Get().env();
+        M.children[0].get().execute(
+            /* Setup=    */ MatchBase::DoNothing,
+            /* Pipeline= */ [&](){
+                const auto &env = CodeGenContext::Get().env();
 
-            std::optional<Bool> build_key_not_null;
-            for (auto &build_key : build_keys) {
-                if (build_key_not_null)
-                    build_key_not_null.emplace(*build_key_not_null and not is_null(env.get(build_key)));
-                else
-                    build_key_not_null.emplace(not is_null(env.get(build_key)));
-            }
-            M_insist(bool(build_key_not_null));
-            IF (*build_key_not_null) { // TODO: predicated version
-                /*----- Insert key if not yet done. -----*/
-                std::vector<SQL_t> key;
-                for (auto &build_key : build_keys)
-                    key.emplace_back(env.get(build_key));
-                auto [entry, inserted] = ht->try_emplace(std::move(key));
+                std::optional<Bool> build_key_not_null;
+                for (auto &build_key : build_keys) {
+                    if (build_key_not_null)
+                        build_key_not_null.emplace(*build_key_not_null and not is_null(env.get(build_key)));
+                    else
+                        build_key_not_null.emplace(not is_null(env.get(build_key)));
+                }
+                M_insist(bool(build_key_not_null));
+                IF (*build_key_not_null) { // TODO: predicated version
+                    /*----- Insert key if not yet done. -----*/
+                    std::vector<SQL_t> key;
+                    for (auto &build_key : build_keys)
+                        key.emplace_back(env.get(build_key));
+                    auto [entry, inserted] = ht->try_emplace(std::move(key));
 
-                /*----- Compile aggregates. -----*/
-                auto t = compile_aggregates(entry, env, M.build.schema(), /* build_phase= */ true);
-                auto &init_aggs = std::get<0>(t);
-                auto &update_aggs = std::get<1>(t);
-                auto &update_avg_aggs = std::get<2>(t);
+                    /*----- Compile aggregates. -----*/
+                    auto t = compile_aggregates(entry, env, M.build.schema(), /* build_phase= */ true);
+                    auto &init_aggs = std::get<0>(t);
+                    auto &update_aggs = std::get<1>(t);
+                    auto &update_avg_aggs = std::get<2>(t);
 
-                /*----- Add group counters to compiled aggregates. -----*/
-                if (needs_build_counter) {
-                    auto r = entry.extract<_I64>(C.pool("$build_counter"));
+                    /*----- Add group counters to compiled aggregates. -----*/
+                    if (needs_build_counter) {
+                        auto r = entry.extract<_I64>(C.pool("$build_counter"));
+                        BLOCK_OPEN(init_aggs) {
+                            r.clone() = _I64(1); // initialize with 1 (for first value)
+                        }
+                        BLOCK_OPEN(update_aggs) {
+                            auto old_count = _I64(r.clone()).insist_not_null();
+                            r.set_value(
+                                old_count + int64_t(1) // increment old count by 1
+                            );
+                            /* do not update NULL bit since it is already set to `false` */
+                        }
+                    }
                     BLOCK_OPEN(init_aggs) {
-                        r.clone() = _I64(1); // initialize with 1 (for first value)
+                        auto r = entry.extract<_I64>(C.pool("$probe_counter"));
+                        r = _I64(0); // initialize with neutral element 0
                     }
-                    BLOCK_OPEN(update_aggs) {
-                        auto old_count = _I64(r.clone()).insist_not_null();
-                        r.set_value(
-                            old_count + int64_t(1) // increment old count by 1
-                        );
-                        /* do not update NULL bit since it is already set to `false` */
-                    }
-                }
-                BLOCK_OPEN(init_aggs) {
-                    auto r = entry.extract<_I64>(C.pool("$probe_counter"));
-                    r = _I64(0); // initialize with neutral element 0
-                }
 
-                /*----- If group has been inserted, initialize aggregates. Otherwise, update them. -----*/
-                IF (inserted) {
-                    init_aggs.attach_to_current();
-                } ELSE {
-                    update_aggs.attach_to_current();
-                    update_avg_aggs.attach_to_current(); // after others to ensure that running count is incremented before
+                    /*----- If group has been inserted, initialize aggregates. Otherwise, update them. -----*/
+                    IF (inserted) {
+                        init_aggs.attach_to_current();
+                    } ELSE {
+                        update_aggs.attach_to_current();
+                        update_avg_aggs.attach_to_current(); // after others to ensure that running count is incremented before
+                    };
                 };
-            };
-        });
+            },
+            /* Teardown= */ MatchBase::DoNothing
+        );
     }
     hash_based_group_join_build_child_pipeline(); // call build child function
 
@@ -2647,44 +2741,50 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
-        M.children[1].get().execute([&](){
-            const auto &env = CodeGenContext::Get().env();
+        M.children[1].get().execute(
+            /* Setup=    */ MatchBase::DoNothing,
+            /* Piepline= */ [&](){
+                const auto &env = CodeGenContext::Get().env();
 
-            /* TODO: may check for NULL on probe keys as well, branching + predicated version */
-            /*----- Probe with probe key. -----*/
-            std::vector<SQL_t> key;
-            for (auto &probe_key : probe_keys)
-                key.emplace_back(env.get(probe_key));
-            auto [entry, found] = ht->find(std::move(key));
+                /* TODO: may check for NULL on probe keys as well, branching + predicated version */
+                /*----- Probe with probe key. -----*/
+                std::vector<SQL_t> key;
+                for (auto &probe_key : probe_keys)
+                    key.emplace_back(env.get(probe_key));
+                auto [entry, found] = ht->find(std::move(key));
 
-            /*----- Compile aggregates. -----*/
-            auto t = compile_aggregates(entry, env, M.probe.schema(), /* build_phase= */ false);
-            auto &init_aggs = std::get<0>(t);
-            auto &update_aggs = std::get<1>(t);
-            auto &update_avg_aggs = std::get<2>(t);
+                /*----- Compile aggregates. -----*/
+                auto t = compile_aggregates(entry, env, M.probe.schema(), /* build_phase= */ false);
+                auto &init_aggs = std::get<0>(t);
+                auto &update_aggs = std::get<1>(t);
+                auto &update_avg_aggs = std::get<2>(t);
 
-            /*----- Add probe counter to compiled aggregates. -----*/
-            BLOCK_OPEN(update_aggs) {
-                auto r = entry.extract<_I64>(C.pool("$probe_counter"));
-                auto old_count = _I64(r.clone()).insist_not_null();
-                r.set_value(
-                    old_count + int64_t(1) // increment old count by 1
-                );
-                /* do not update NULL bit since it is already set to `false` */
-            }
+                /*----- Add probe counter to compiled aggregates. -----*/
+                BLOCK_OPEN(update_aggs) {
+                    auto r = entry.extract<_I64>(C.pool("$probe_counter"));
+                    auto old_count = _I64(r.clone()).insist_not_null();
+                    r.set_value(
+                        old_count + int64_t(1) // increment old count by 1
+                    );
+                    /* do not update NULL bit since it is already set to `false` */
+                }
 
-            /*----- If group has been inserted, initialize aggregates. Otherwise, update them. -----*/
-            M_insist(init_aggs.empty(), "aggregates must be initialized in build phase");
-            IF (found) {
-                update_aggs.attach_to_current();
-                update_avg_aggs.attach_to_current(); // after others to ensure that running count is incremented before
-            };
-        });
+                /*----- If group has been inserted, initialize aggregates. Otherwise, update them. -----*/
+                M_insist(init_aggs.empty(), "aggregates must be initialized in build phase");
+                IF (found) {
+                    update_aggs.attach_to_current();
+                    update_avg_aggs.attach_to_current(); // after others to ensure that running count is incremented before
+                };
+            },
+            /* Teardown= */ MatchBase::DoNothing
+        );
     }
     hash_based_group_join_probe_child_pipeline(); // call probe child function
 
-    /*----- Process each computed group. -----*/
     auto &env = CodeGenContext::Get().env();
+
+    /*----- Process each computed group. -----*/
+    Setup();
     ht->for_each([&, Pipeline=std::move(Pipeline)](HashTable::const_entry_t entry){
         /*----- Check whether probe match was found. -----*/
         I64 probe_counter = _I64(entry.get<_I64>(C.pool("$probe_counter"))).insist_not_null();
@@ -2810,4 +2910,5 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
             Pipeline();
         };
     });
+    Teardown();
 }

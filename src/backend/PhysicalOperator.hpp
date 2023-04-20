@@ -120,8 +120,11 @@ using get_nodes_t = typename get_nodes<T>::type;
 struct MatchBase
 {
     using callback_t = std::function<void(void)>;
+
+    static inline callback_t DoNothing = [](){};
+
     virtual ~MatchBase() { }
-    virtual void execute(callback_t Pipeline) const = 0;
+    virtual void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const = 0;
     virtual std::string name() const = 0;
 };
 
@@ -340,8 +343,11 @@ struct PhysicalOperator : crtp<Actual, PhysicalOperator, Pattern>
     using callback_t = MatchBase::callback_t;
     using order_t = PhysicalOptimizer::table_entry::order_t;
 
-    /** Executes this physical operator given the match `M` and a callback `Pipeline`. */
-    static void execute(const Match<Actual> &M, callback_t Pipeline) { Actual::execute(M, Pipeline); }
+    /** Executes this physical operator given the match `M` and three callbacks: `Setup` for some initializations,
+     * `Pipeline` for the actual computation, and `Teardown` for post-processing. */
+    static void execute(const Match<Actual> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown) {
+        Actual::execute(M, std::move(Setup), std::move(Pipeline), std::move(Teardown));
+    }
 
     /** Returns the cost of this physical operator given the match `M`. */
     static double cost(const Match<Actual> &M) { return Actual::cost(M); }

@@ -7,6 +7,7 @@
 #endif
 
 
+using namespace m;
 using namespace m::memory;
 using namespace m::storage;
 using namespace m::wasm;
@@ -135,7 +136,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Scan", "[core][wasm]")
             };
 
             /* Execute the scan operator. */
-            Scan::execute(M, Return);
+            Scan::execute(M, MatchBase::DoNothing, Return, MatchBase::DoNothing);
 
         }
         CodeGenContext::Dispose(); // dispose codegen context

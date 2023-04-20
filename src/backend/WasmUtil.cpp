@@ -1648,10 +1648,12 @@ void m::wasm::compile_load_point_access(const Schema &tuple_schema, Ptr<void> ba
 
 template<bool IsGlobal>
 Buffer<IsGlobal>::Buffer(const Schema &schema, const DataLayoutFactory &factory, std::size_t num_tuples,
-                         MatchBase::callback_t Pipeline)
+                         MatchBase::callback_t Setup, MatchBase::callback_t Pipeline, MatchBase::callback_t Teardown)
     : schema_(std::cref(schema))
     , layout_(factory.make(schema, num_tuples))
+    , Setup_(std::move(Setup))
     , Pipeline_(std::move(Pipeline))
+    , Teardown_(std::move(Teardown))
 {
     M_insist(schema.num_entries() != 0, "buffer schema must not be empty");
 
@@ -1720,12 +1722,14 @@ void Buffer<IsGlobal>::resume_pipeline(param_t tuple_schema_)
                     compile_load_sequential(tuple_schema, base_address, layout_, schema_, load_tuple_id);
 
                 /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
+                Setup_();
                 load_inits.attach_to_current();
                 WHILE (load_tuple_id < size) {
                     loads.attach_to_current();
                     Pipeline_();
                     load_jumps.attach_to_current();
                 }
+                Teardown_();
             }
             resume_pipeline_ = std::move(resume_pipeline);
         }
@@ -1762,12 +1766,14 @@ void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_schema_) const
             compile_load_sequential(tuple_schema, base_address_, layout_, schema_, load_tuple_id);
 
         /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
+        Setup_();
         load_inits.attach_to_current();
         WHILE (load_tuple_id < num_tuples) {
             loads.attach_to_current();
             Pipeline_();
             load_jumps.attach_to_current();
         }
+        Teardown_();
     }
 }
 

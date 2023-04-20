@@ -14,7 +14,7 @@ void PhysicalOptimizer::execute(const Operator &plan) const {
     FUNCTION(run, void(void))
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
-        get_plan(plan).match->execute([](){});
+        get_plan(plan).match->execute(MatchBase::DoNothing, MatchBase::DoNothing, MatchBase::DoNothing);
     }
 
     /* Call run function. */

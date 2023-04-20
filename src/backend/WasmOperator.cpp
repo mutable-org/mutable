@@ -23,57 +23,69 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
 
     if (schema.num_entries() == 0) { // result set contains only NULL constants
         if (window_size) {
-            /* Create *global* counter since e.g. `Buffer::resume_pipeline()` may create new function in which
-             * the child's code is emitted. */
-            Global<U32> tuple_id; // default initialized to 0
+            std::optional<Var<U32>> counter; ///< variable to *locally* count
+            ///> *global* counter backup since the following code may be called multiple times
+            Global<U32> counter_backup; // default initialized to 0
 
             /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `Limit`). -----*/
             FUNCTION(child_pipeline, void(void))
             {
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+
                 child.execute(
-                    /* Setup=    */ MatchBase::DoNothing,
+                    /* Setup=    */ [&](){ counter.emplace(counter_backup); },
                     /* Pipeline= */ [&](){
+                        M_insist(bool(counter));
+
                         /*----- Increment tuple ID. -----*/
                         if (auto &env = CodeGenContext::Get().env(); env.predicated())
-                            tuple_id += env.extract_predicate().is_true_and_not_null().to<uint32_t>();
+                            *counter += env.extract_predicate().is_true_and_not_null().to<uint32_t>();
                         else
-                            tuple_id += 1U;
+                            *counter += 1U;
 
                         /*----- If window size is reached, update result size, extract current results, and reset tuple ID. */
-                        IF (tuple_id == *window_size) {
+                        IF (*counter == *window_size) {
                             CodeGenContext::Get().inc_num_tuples(U32(*window_size));
                             Module::Get().emit_call<void>("read_result_set", Ptr<void>::Nullptr(), U32(*window_size));
-                            tuple_id = 0U;
+                            *counter = 0U;
                         };
                     },
-                    /* Teardown= */ MatchBase::DoNothing
+                    /* Teardown= */ [&](){
+                        M_insist(bool(counter));
+                        counter_backup = *counter;
+                        counter.reset();
+                    }
                 );
             }
             child_pipeline(); // call child function
 
             /*----- Update number of result tuples. -----*/
-            CodeGenContext::Get().inc_num_tuples(tuple_id);
+            CodeGenContext::Get().inc_num_tuples(counter_backup);
 
             /*----- Extract remaining results. -----*/
-            Module::Get().emit_call<void>("read_result_set", Ptr<void>::Nullptr(), tuple_id.val());
+            Module::Get().emit_call<void>("read_result_set", Ptr<void>::Nullptr(), counter_backup.val());
         } else {
             /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `Limit`). -----*/
             FUNCTION(child_pipeline, void(void))
             {
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+
+                std::optional<Var<U32>> num_tuples; ///< variable to *locally* count additional result tuples
+
                 child.execute(
-                    /* Setup=    */ MatchBase::DoNothing,
+                    /* Setup=    */ [&](){ num_tuples.emplace(CodeGenContext::Get().num_tuples()); },
                     /* Pipeline= */ [&](){
-                        /*----- Update number of result tuples. -----*/
-                        if (auto &env = CodeGenContext::Get().env(); env.predicated()) {
-                            U32 n = env.extract_predicate().is_true_and_not_null().to<uint32_t>();
-                            CodeGenContext::Get().inc_num_tuples(n);
-                        } else {
-                            CodeGenContext::Get().inc_num_tuples();
-                        }
+                        M_insist(bool(num_tuples));
+                        if (auto &env = CodeGenContext::Get().env(); env.predicated())
+                            *num_tuples += env.extract_predicate().is_true_and_not_null().to<uint32_t>();
+                        else
+                            *num_tuples += 1U;
                     },
-                    /* Teardown= */ MatchBase::DoNothing
+                    /* Teardown= */ [&](){
+                        M_insist(bool(num_tuples));
+                        CodeGenContext::Get().set_num_tuples(*num_tuples);
+                        num_tuples.reset();
+                    }
                 );
             }
             child_pipeline(); // call child function

@@ -2205,18 +2205,23 @@ template struct m::wasm::SortMergeJoin<true,  true,  true>;
 
 void Limit::execute(const Match<Limit> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown)
 {
-    /* Create *global* counter since e.g. `Buffer::resume_pipeline()` may create new function in which the following
-     * code is emitted. */
-    Global<U32> counter; // default initialized to 0
+    std::optional<Var<U32>> counter; ///< variable to *locally* count
+    /* default initialized to 0 */
+    Global<U32> counter_backup; ///< *global* counter backup since the following code may be called multiple times
 
     M.child.execute(
-        /* Setup=    */ std::move(Setup),
+        /* Setup=    */ [&, Setup=std::move(Setup)](){
+            Setup();
+            counter.emplace(counter_backup);
+        },
         /* Pipeline= */ [&, Pipeline=std::move(Pipeline)](){ // do not move `Teardown` to use it twice
+            M_insist(bool(counter));
             const uint32_t limit = M.limit.offset() + M.limit.limit();
 
             /*----- Abort pipeline, i.e. return from pipeline function, if limit is exceeded. -----*/
-            IF (counter >= limit) {
+            IF (*counter >= limit) {
                 /*----- Perform same code as in passed teardown callback before returning. -----*/
+                counter_backup = *counter;
                 Teardown();
 
                 RETURN_UNSAFE(); // unsafe version since pipeline function is not created in current C-scope
@@ -2224,19 +2229,22 @@ void Limit::execute(const Match<Limit> &M, callback_t Setup, callback_t Pipeline
 
             /*----- Emit result if in bounds. -----*/
             if (M.limit.offset()) {
-                IF (counter >= uint32_t(M.limit.offset())) {
-                    Wasm_insist(counter < limit, "counter must not exceed limit");
+                IF (*counter >= uint32_t(M.limit.offset())) {
+                    Wasm_insist(*counter < limit, "counter must not exceed limit");
                     Pipeline();
                 };
             } else {
-                Wasm_insist(counter < limit, "counter must not exceed limit");
+                Wasm_insist(*counter < limit, "counter must not exceed limit");
                 Pipeline();
             }
 
             /*----- Update counter. -----*/
-            counter += 1U;
+            *counter += 1U;
         },
         /* Teardown= */ [&](){ // do not move `Teardown` to use it twice
+            M_insist(bool(counter));
+            counter_backup = *counter;
+            counter.reset();
             Teardown();
         }
     );

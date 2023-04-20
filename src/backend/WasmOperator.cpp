@@ -2120,10 +2120,15 @@ void Limit::execute(const Match<Limit> &M, callback_t Pipeline)
         };
 
         /*----- Emit result if in bounds. -----*/
-        IF (counter >= uint32_t(M.limit.offset())) {
+        if (M.limit.offset()) {
+            IF (counter >= uint32_t(M.limit.offset())) {
+                Wasm_insist(counter < limit, "counter must not exceed limit");
+                Pipeline();
+            };
+        } else {
             Wasm_insist(counter < limit, "counter must not exceed limit");
             Pipeline();
-        };
+        }
 
         /*----- Update counter. -----*/
         counter += 1U;

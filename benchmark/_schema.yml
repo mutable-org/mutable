@@ -1,28 +1,19 @@
 description: str()
-version: int(required=False, min=1)
 suite: str()
 benchmark: str()
 name: str(required=False)
 readonly: bool()
-pattern: str()
-args: str(required=False)
-configurations: map(str(), required=False)
-tables: include('table_list')
-cases: map(any(str(), include('case')), key=any())
-compare_to: map(required=False)
-chart: include('chart', required=False)
+chart: include('chart_def', required=False)
+data: map(include('table'), required=False)      # Map from table name to 'table'
+systems:
+    mutable: include('mutable', required=False)
+    PostgreSQL: include('PostgreSQL', required=False)
+    DuckDB: include('DuckDB', required=False)
+    HyPer: include('HyPer', required=False)
 ---
-table:
-    name: str()                             # table name
-    path: str(required=False)               # path to table file
-    sf: num(required=False, min=0, max=1)   # scale factor as portion of file to load; defaults to 1
-    delimiter: str(required=False)          # defaults to ','
-    header: int(required=False)             # 1 if file has header, 0 otherwise; defaults to 0
-table_list:
-    list(any(str(), include('table')), required=True)
-case:
-    query: str()
-    tables: include('table_list')
+chart_def:
+    x: include('axis', required=False)
+    y: include('axis', required=False)
 ---
 axis:
     # Kind of scale, one of
@@ -37,6 +28,28 @@ axis:
     type: str(required=False)
     # A label for the axis
     label: str(required=False)
-chart:
-    x: include('axis', required=False)
-    y: include('axis', required=False)
+---
+table:
+    attributes: map(str(), key=str(), required=False)           # table column names and types
+    file: str(required=False)                   # path to table file
+    delimiter: str(required=False)              # defaults to ','
+    header: int()                               # 1 if file has header, 0 otherwise; defaults to 0
+    format: str(required=False)                 # file format
+    scale_factors: map(num(min=0, max=1), required=False) # map from case name to scale factor (portion of file to load)
+    lines_in_file: int(required=False)          # Number of lines in the file. Is counted and added by the benchmark script
+---
+mutable:
+    cases: include('cases')
+    pattern: str()
+    args: str(required=False)
+    configurations: map(str(), required=False)
+PostgreSQL:
+    cases: include('cases')
+DuckDB:
+    cases: include('cases')
+HyPer:
+    single_core: bool(required=False)
+    all_cores: bool(required=False)
+    cases: include('cases')
+---
+cases: map(str(), key=any())

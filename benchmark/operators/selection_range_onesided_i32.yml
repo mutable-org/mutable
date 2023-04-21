@@ -3,31 +3,6 @@ suite: operators
 benchmark: selection-onesided
 name: INT(4)
 readonly: true
-pattern: '^Execute query:.*'
-configurations:
-    Interpreter:           --backend Interpreter
-    'WebAssembly (Row)':   --backend WasmV8 --data-layout Row
-    'WebAssembly (PAX4M)': --backend WasmV8 --data-layout PAX4M
-tables: [ 'Attribute_i32' ]
-cases:
-    0.01: SELECT 1 FROM Attribute_i32 WHERE val < -2104533974;
-    0.05: SELECT 1 FROM Attribute_i32 WHERE val < -1932735282;
-    0.10: SELECT 1 FROM Attribute_i32 WHERE val < -1717986917;
-    0.20: SELECT 1 FROM Attribute_i32 WHERE val < -1288490188;
-    0.30: SELECT 1 FROM Attribute_i32 WHERE val <  -858993458;
-    0.40: SELECT 1 FROM Attribute_i32 WHERE val <  -429496729;
-    0.50: SELECT 1 FROM Attribute_i32 WHERE val <           0;
-    0.60: SELECT 1 FROM Attribute_i32 WHERE val <   429496729;
-    0.70: SELECT 1 FROM Attribute_i32 WHERE val <   858993458;
-    0.80: SELECT 1 FROM Attribute_i32 WHERE val <  1288490188;
-    0.90: SELECT 1 FROM Attribute_i32 WHERE val <  1717986917;
-    0.95: SELECT 1 FROM Attribute_i32 WHERE val <  1932735282;
-    0.99: SELECT 1 FROM Attribute_i32 WHERE val <  2104533974;
-compare_to:
-    'PostgreSQL':           'benchmark/operators/selection_range_onesided_i32_postgresql.sh'
-    'DuckDB':               'benchmark/operators/selection_range_onesided_i32_duckdb.sh'
-    'HyPer (single core)':  'taskset -c 0 benchmark/operators/selection_range_onesided_i32_hyper.py'
-    'HyPer (all cores)':    'benchmark/operators/selection_range_onesided_i32_hyper.py'
 chart:
     x:
         scale: linear
@@ -37,3 +12,78 @@ chart:
         scale: linear
         type: Q
         label: 'Execution time [ms]'
+data:
+    'Attribute_i32':
+        attributes:
+            'id': 'INT'
+            'val': 'INT'
+        file: 'benchmark/operators/data/Attribute_i32.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+systems:
+    mutable:
+        pattern: '^Execute query:.*'
+        configurations:
+            Interpreter:           --backend Interpreter
+            'WebAssembly (Row)':   --backend WasmV8 --data-layout Row
+            'WebAssembly (PAX4M)': --backend WasmV8 --data-layout PAX4M
+        cases:
+            0.01: SELECT 1 FROM Attribute_i32 WHERE val < -2104533974;
+            0.05: SELECT 1 FROM Attribute_i32 WHERE val < -1932735282;
+            0.10: SELECT 1 FROM Attribute_i32 WHERE val < -1717986917;
+            0.20: SELECT 1 FROM Attribute_i32 WHERE val < -1288490188;
+            0.30: SELECT 1 FROM Attribute_i32 WHERE val <  -858993458;
+            0.40: SELECT 1 FROM Attribute_i32 WHERE val <  -429496729;
+            0.50: SELECT 1 FROM Attribute_i32 WHERE val <           0;
+            0.60: SELECT 1 FROM Attribute_i32 WHERE val <   429496729;
+            0.70: SELECT 1 FROM Attribute_i32 WHERE val <   858993458;
+            0.80: SELECT 1 FROM Attribute_i32 WHERE val <  1288490188;
+            0.90: SELECT 1 FROM Attribute_i32 WHERE val <  1717986917;
+            0.95: SELECT 1 FROM Attribute_i32 WHERE val <  1932735282;
+            0.99: SELECT 1 FROM Attribute_i32 WHERE val <  2104533974;
+    PostgreSQL:
+        cases:
+            0.01: SELECT COUNT(*) FROM Attribute_i32 WHERE val < -2104533974;
+            0.05: SELECT COUNT(*) FROM Attribute_i32 WHERE val < -1932735282;
+            0.10: SELECT COUNT(*) FROM Attribute_i32 WHERE val < -1717986917;
+            0.20: SELECT COUNT(*) FROM Attribute_i32 WHERE val < -1288490188;
+            0.30: SELECT COUNT(*) FROM Attribute_i32 WHERE val <  -858993458;
+            0.40: SELECT COUNT(*) FROM Attribute_i32 WHERE val <  -429496729;
+            0.50: SELECT COUNT(*) FROM Attribute_i32 WHERE val <           0;
+            0.60: SELECT COUNT(*) FROM Attribute_i32 WHERE val <   429496729;
+            0.70: SELECT COUNT(*) FROM Attribute_i32 WHERE val <   858993458;
+            0.80: SELECT COUNT(*) FROM Attribute_i32 WHERE val <  1288490188;
+            0.90: SELECT COUNT(*) FROM Attribute_i32 WHERE val <  1717986917;
+            0.95: SELECT COUNT(*) FROM Attribute_i32 WHERE val <  1932735282;
+            0.99: SELECT COUNT(*) FROM Attribute_i32 WHERE val <  2104533974;
+    DuckDB:
+        cases:
+            0.01: SELECT COUNT(*) FROM Attribute_i32 WHERE val < -2104533974;
+            0.05: SELECT COUNT(*) FROM Attribute_i32 WHERE val < -1932735282;
+            0.10: SELECT COUNT(*) FROM Attribute_i32 WHERE val < -1717986917;
+            0.20: SELECT COUNT(*) FROM Attribute_i32 WHERE val < -1288490188;
+            0.30: SELECT COUNT(*) FROM Attribute_i32 WHERE val <  -858993458;
+            0.40: SELECT COUNT(*) FROM Attribute_i32 WHERE val <  -429496729;
+            0.50: SELECT COUNT(*) FROM Attribute_i32 WHERE val <           0;
+            0.60: SELECT COUNT(*) FROM Attribute_i32 WHERE val <   429496729;
+            0.70: SELECT COUNT(*) FROM Attribute_i32 WHERE val <   858993458;
+            0.80: SELECT COUNT(*) FROM Attribute_i32 WHERE val <  1288490188;
+            0.90: SELECT COUNT(*) FROM Attribute_i32 WHERE val <  1717986917;
+            0.95: SELECT COUNT(*) FROM Attribute_i32 WHERE val <  1932735282;
+            0.99: SELECT COUNT(*) FROM Attribute_i32 WHERE val <  2104533974;
+    HyPer:
+        cases:
+            0.01: SELECT COUNT(*) FROM Attribute_i32 WHERE val < -2104533974;
+            0.05: SELECT COUNT(*) FROM Attribute_i32 WHERE val < -1932735282;
+            0.10: SELECT COUNT(*) FROM Attribute_i32 WHERE val < -1717986917;
+            0.20: SELECT COUNT(*) FROM Attribute_i32 WHERE val < -1288490188;
+            0.30: SELECT COUNT(*) FROM Attribute_i32 WHERE val <  -858993458;
+            0.40: SELECT COUNT(*) FROM Attribute_i32 WHERE val <  -429496729;
+            0.50: SELECT COUNT(*) FROM Attribute_i32 WHERE val <           0;
+            0.60: SELECT COUNT(*) FROM Attribute_i32 WHERE val <   429496729;
+            0.70: SELECT COUNT(*) FROM Attribute_i32 WHERE val <   858993458;
+            0.80: SELECT COUNT(*) FROM Attribute_i32 WHERE val <  1288490188;
+            0.90: SELECT COUNT(*) FROM Attribute_i32 WHERE val <  1717986917;
+            0.95: SELECT COUNT(*) FROM Attribute_i32 WHERE val <  1932735282;
+            0.99: SELECT COUNT(*) FROM Attribute_i32 WHERE val <  2104533974;

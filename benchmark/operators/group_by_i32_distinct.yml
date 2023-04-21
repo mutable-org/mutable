@@ -3,32 +3,6 @@ suite: operators
 benchmark: grouping
 name: distinct INT(4)
 readonly: true
-pattern: '^Execute query:.*'
-configurations:
-    Interpreter: >-
-      --backend Interpreter
-      --data-layout PAX4M
-      --cardinality-estimator Injected
-      --use-cardinality-file benchmark/operators/group_by_i32_distinct.json
-    'WebAssembly (PAX4M)': >-
-      --backend WasmV8
-      --data-layout PAX4M
-      --cardinality-estimator Injected
-      --use-cardinality-file benchmark/operators/group_by_i32_distinct.json
-tables:
-    - name: 'Distinct_i32'
-      header: 1
-cases:
-    10:     SELECT 1 FROM Distinct_i32 GROUP BY     n10;
-    100:    SELECT 1 FROM Distinct_i32 GROUP BY    n100;
-    1000:   SELECT 1 FROM Distinct_i32 GROUP BY   n1000;
-    10000:  SELECT 1 FROM Distinct_i32 GROUP BY  n10000;
-    100000: SELECT 1 FROM Distinct_i32 GROUP BY n100000;
-compare_to:
-    'PostgreSQL':           'benchmark/operators/group_by_i32_distinct_postgresql.sh'
-    'DuckDB':               'benchmark/operators/group_by_i32_distinct_duckdb.sh'
-    'HyPer (single core)':  'taskset -c 0 benchmark/operators/group_by_i32_distinct_hyper.py'
-    'HyPer (all cores)':    'benchmark/operators/group_by_i32_distinct_hyper.py'
 chart:
     x:
         scale: log
@@ -38,3 +12,58 @@ chart:
         scale: linear
         type: Q
         label: 'Execution time [ms]'
+data:
+    'Distinct_i32':
+        file: 'benchmark/operators/data/Distinct_i32.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT'
+            'n1': 'INT'
+            'n10': 'INT'
+            'n100': 'INT'
+            'n1000': 'INT'
+            'n10000': 'INT'
+            'n100000': 'INT'
+systems:
+    mutable:
+        pattern: '^Execute query:.*'
+        configurations:
+            Interpreter: >-
+              --backend Interpreter
+              --data-layout PAX4M
+              --cardinality-estimator Injected
+              --use-cardinality-file benchmark/operators/group_by_i32_distinct.json
+            'WebAssembly (PAX4M)': >-
+              --backend WasmV8
+              --data-layout PAX4M
+              --cardinality-estimator Injected
+              --use-cardinality-file benchmark/operators/group_by_i32_distinct.json
+        cases:
+            10:     SELECT 1 FROM Distinct_i32 GROUP BY     n10;
+            100:    SELECT 1 FROM Distinct_i32 GROUP BY    n100;
+            1000:   SELECT 1 FROM Distinct_i32 GROUP BY   n1000;
+            10000:  SELECT 1 FROM Distinct_i32 GROUP BY  n10000;
+            100000: SELECT 1 FROM Distinct_i32 GROUP BY n100000;
+    PostgreSQL:
+        cases:
+            10:     SELECT COUNT(DISTINCT     n10) FROM Distinct_i32 AS T;
+            100:    SELECT COUNT(DISTINCT    n100) FROM Distinct_i32 AS T;
+            1000:   SELECT COUNT(DISTINCT   n1000) FROM Distinct_i32 AS T;
+            10000:  SELECT COUNT(DISTINCT  n10000) FROM Distinct_i32 AS T;
+            100000: SELECT COUNT(DISTINCT n100000) FROM Distinct_i32 AS T;
+    DuckDB:
+        cases:
+            10:     SELECT COUNT(DISTINCT     n10) FROM Distinct_i32 AS T;
+            100:    SELECT COUNT(DISTINCT    n100) FROM Distinct_i32 AS T;
+            1000:   SELECT COUNT(DISTINCT   n1000) FROM Distinct_i32 AS T;
+            10000:  SELECT COUNT(DISTINCT  n10000) FROM Distinct_i32 AS T;
+            100000: SELECT COUNT(DISTINCT n100000) FROM Distinct_i32 AS T;
+    HyPer:
+        cases:
+            10:     SELECT COUNT(DISTINCT     n10) FROM Distinct_i32 AS T;
+            100:    SELECT COUNT(DISTINCT    n100) FROM Distinct_i32 AS T;
+            1000:   SELECT COUNT(DISTINCT   n1000) FROM Distinct_i32 AS T;
+            10000:  SELECT COUNT(DISTINCT  n10000) FROM Distinct_i32 AS T;
+            100000: SELECT COUNT(DISTINCT n100000) FROM Distinct_i32 AS T;

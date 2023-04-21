@@ -3,38 +3,76 @@ suite: TPC
 benchmark: TPC-H Compilation Times
 name: Q1
 readonly: true
-pattern: '^Compile to WebAssembly:.*'
-configurations:
-    'WebAssembly': --backend WasmV8 --data-layout PAX4M --dryrun --quiet
-tables: [ ]
-cases:
-    1:
-        query: |
-            SELECT
-                    l_returnflag,
-                    l_linestatus,
-                    SUM(l_quantity) AS sum_qty,
-                    SUM(l_extendedprice) AS sum_base_price,
-                    SUM(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
-                    SUM(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
-                    AVG(l_quantity) AS avg_qty,
-                    AVG(l_extendedprice) AS avg_price,
-                    AVG(l_discount) AS avg_disc,
-                    COUNT(*) AS count_order
-            FROM
-                    Lineitem
-            WHERE
-                    l_shipdate <= d'1998-09-02'
-            GROUP BY
-                    l_returnflag,
-                    l_linestatus
-            ORDER BY
-                    l_returnflag,
-                    l_linestatus;
-        tables:
-            - name: Lineitem
-              path: benchmark/tpc-h/data/lineitem.tbl
-              delimiter: '|'
-compare_to:
-    'HyPer (single core)':  'taskset -c 0 benchmark/tpc-h/compile_q1_hyper.py'
-    'HyPer (all cores)':    'benchmark/tpc-h/compile_q1_hyper.py'
+data:
+    Lineitem:
+        file: benchmark/tpc-h/data/lineitem.tbl
+        format: 'CSV'
+        delimiter: '|'
+        header: 0
+        attributes:
+            'l_orderkey': 'INT'
+            'l_partkey': 'INT'
+            'l_suppkey': 'INT'
+            'l_linenumber': 'INT'
+            'l_quantity': 'DECIMAL 10 2'
+            'l_extendedprice': 'DECIMAL 10 2'
+            'l_discount': 'DECIMAL 10 2'
+            'l_tax': 'DECIMAL 10 2'
+            'l_returnflag': 'CHAR 1'
+            'l_linestatus': 'CHAR 1'
+            'l_shipdate': 'DATE'
+            'l_commitdate': 'DATE'
+            'l_receiptdate': 'DATE'
+            'l_shipinstruct': 'CHAR 25'
+            'l_shipmode': 'CHAR 10'
+            'l_comment': 'CHAR 44'
+systems:
+    mutable:
+        pattern: '^Compile to WebAssembly:.*'
+        configurations:
+            'WebAssembly': --backend WasmV8 --data-layout PAX4M --dryrun --quiet
+        cases:
+            1:  SELECT
+                        l_returnflag,
+                        l_linestatus,
+                        SUM(l_quantity) AS sum_qty,
+                        SUM(l_extendedprice) AS sum_base_price,
+                        SUM(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
+                        SUM(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
+                        AVG(l_quantity) AS avg_qty,
+                        AVG(l_extendedprice) AS avg_price,
+                        AVG(l_discount) AS avg_disc,
+                        COUNT(*) AS count_order
+                FROM
+                        Lineitem
+                WHERE
+                        l_shipdate <= d'1998-09-02'
+                GROUP BY
+                        l_returnflag,
+                        l_linestatus
+                ORDER BY
+                        l_returnflag,
+                        l_linestatus;
+    HyPer:
+        cases:
+            1:  SELECT
+                        l_returnflag,
+                        l_linestatus,
+                        SUM(l_quantity) AS sum_qty,
+                        SUM(l_extendedprice) AS sum_base_price,
+                        SUM(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
+                        SUM(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
+                        AVG(l_quantity) AS avg_qty,
+                        AVG(l_extendedprice) AS avg_price,
+                        AVG(l_discount) AS avg_disc,
+                        COUNT(*) AS count_order
+                FROM
+                        Lineitem
+                WHERE
+                        l_shipdate <= date '1998-09-02'
+                GROUP BY
+                        l_returnflag,
+                        l_linestatus
+                ORDER BY
+                        l_returnflag,
+                        l_linestatus;

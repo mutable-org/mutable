@@ -3,43 +3,127 @@ suite: TPC
 benchmark: TPC-H
 name: Q12
 readonly: true
-pattern: '^Execute query:.*'
-configurations:
-    'WebAssembly': >-
-      --backend WasmV8
-      --data-layout PAX4M
-      --cardinality-estimator Injected
-      --use-cardinality-file benchmark/tpc-h/q12.json
-tables: [ ]
-cases:
-    1:
-        query: |
-            SELECT
-                l_shipmode, COUNT(*)
-            FROM
-                Lineitem,
-                Orders
-            WHERE
-                o_orderkey = l_orderkey
-                AND (l_shipmode = "MAIL" OR l_shipmode = "SHIP")
-                AND l_commitdate < l_receiptdate
-                AND l_shipdate < l_commitdate
-                AND l_receiptdate >= d'1994-01-01'
-                AND l_receiptdate < d'1995-01-01'
-                AND (o_orderpriority = "1-URGENT" OR o_orderpriority = "2-HIGH")
-            GROUP BY
-                l_shipmode
-            ORDER BY
-                l_shipmode;
-        tables:
-            - name: Lineitem
-              path: benchmark/tpc-h/data/lineitem.tbl
-              delimiter: '|'
-            - name: Orders
-              path: benchmark/tpc-h/data/orders.tbl
-              delimiter: '|'
-compare_to:
-    'PostgreSQL':           'benchmark/tpc-h/q12_postgresql.sh'
-    'DuckDB':               'benchmark/tpc-h/q12_duckdb.sh'
-    'HyPer (single core)':  'taskset -c 0 benchmark/tpc-h/q12_hyper.py'
-    'HyPer (all cores)':    'benchmark/tpc-h/q12_hyper.py'
+data:
+    Lineitem:
+        file: benchmark/tpc-h/data/lineitem.tbl
+        delimiter: '|'
+        header: 0
+        attributes:
+            'l_orderkey': 'INT'
+            'l_partkey': 'INT'
+            'l_suppkey': 'INT'
+            'l_linenumber': 'INT'
+            'l_quantity': 'DECIMAL 10 2'
+            'l_extendedprice': 'DECIMAL 10 2'
+            'l_discount': 'DECIMAL 10 2'
+            'l_tax': 'DECIMAL 10 2'
+            'l_returnflag': 'CHAR 1'
+            'l_linestatus': 'CHAR 1'
+            'l_shipdate': 'DATE'
+            'l_commitdate': 'DATE'
+            'l_receiptdate': 'DATE'
+            'l_shipinstruct': 'CHAR 25'
+            'l_shipmode': 'CHAR 10'
+            'l_comment': 'CHAR 44'
+    Orders:
+        file: benchmark/tpc-h/data/orders.tbl
+        delimiter: '|'
+        header: 0
+        attributes:
+            'o_orderkey':      'INT 4'
+            'o_custkey':       'INT 4'
+            'o_orderstatus':   'CHAR 1'
+            'o_totalprice':    'DECIMAL 10 2'
+            'o_orderdate':     'DATE'
+            'o_orderpriority': 'CHAR 15'
+            'o_clerk':         'CHAR 15'
+            'o_shippriority':  'INT 4'
+            'o_comment':       'CHAR 80'
+systems:
+    mutable:
+        pattern: '^Execute query:.*'
+        configurations:
+            'WebAssembly': >-
+              --backend WasmV8
+              --data-layout PAX4M
+              --cardinality-estimator Injected
+              --use-cardinality-file benchmark/tpc-h/q12.json
+        cases:
+            1: |
+                SELECT
+                    l_shipmode, COUNT(*)
+                FROM
+                    Lineitem,
+                    Orders
+                WHERE
+                    o_orderkey = l_orderkey
+                    AND (l_shipmode = "MAIL" OR l_shipmode = "SHIP")
+                    AND l_commitdate < l_receiptdate
+                    AND l_shipdate < l_commitdate
+                    AND l_receiptdate >= d'1994-01-01'
+                    AND l_receiptdate < d'1995-01-01'
+                    AND (o_orderpriority = "1-URGENT" OR o_orderpriority = "2-HIGH")
+                GROUP BY
+                    l_shipmode
+                ORDER BY
+                    l_shipmode;
+    DuckDB:
+        cases:
+            1: |
+                SELECT
+                    l_shipmode, COUNT(*)
+                FROM
+                    Orders,
+                    Lineitem
+                WHERE
+                    o_orderkey = l_orderkey
+                    AND (l_shipmode = 'MAIL' OR l_shipmode = 'SHIP')
+                    AND l_commitdate < l_receiptdate
+                    AND l_shipdate < l_commitdate
+                    AND l_receiptdate >= date '1994-01-01'
+                    AND l_receiptdate < date '1995-01-01'
+                    AND (o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH')
+                GROUP BY
+                    l_shipmode
+                ORDER BY
+                    l_shipmode;
+    PostgreSQL:
+        cases:
+            1: |
+                SELECT
+                    l_shipmode, COUNT(*)
+                FROM
+                    Orders,
+                    Lineitem
+                WHERE
+                    o_orderkey = l_orderkey
+                    AND (l_shipmode = 'MAIL' OR l_shipmode = 'SHIP')
+                    AND l_commitdate < l_receiptdate
+                    AND l_shipdate < l_commitdate
+                    AND l_receiptdate >= date '1994-01-01'
+                    AND l_receiptdate < date '1995-01-01'
+                    AND (o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH')
+                GROUP BY
+                    l_shipmode
+                ORDER BY
+                    l_shipmode;
+    HyPer:
+        cases:
+            1: |
+                SELECT
+                    l_shipmode, COUNT(*)
+                FROM
+                    {lineitem.table_name},
+                    {orders.table_name}
+                WHERE
+                    o_orderkey = l_orderkey
+                    AND (l_shipmode = 'MAIL' OR l_shipmode = 'SHIP')
+                    AND l_commitdate < l_receiptdate
+                    AND l_shipdate < l_commitdate
+                    AND l_receiptdate >= date '1994-01-01'
+                    AND l_receiptdate < date '1995-01-01'
+                    AND (o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH')
+                GROUP BY
+                    l_shipmode
+                ORDER BY
+                    l_shipmode;

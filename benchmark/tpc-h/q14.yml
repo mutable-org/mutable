@@ -3,35 +3,95 @@ suite: TPC
 benchmark: TPC-H
 name: Q14
 readonly: true
-pattern: '^Execute query:.*'
-configurations:
-    'WebAssembly': >-
-      --backend WasmV8
-      --data-layout PAX4M
-      --cardinality-estimator Injected
-      --use-cardinality-file benchmark/tpc-h/q14.json
-tables: [ ]
-cases:
-    1:
-        query: |
-            SELECT
-                    SUM(l_extendedprice * (1 - l_discount)) AS promo_revenue
-            FROM
-                    Lineitem,
-                    Part
-            WHERE
-                    l_partkey = p_partkey
-                    AND l_shipdate >= d'1995-09-01'
-                    AND l_shipdate < d'1995-10-01';
-        tables:
-            - name: Lineitem
-              path: benchmark/tpc-h/data/lineitem.tbl
-              delimiter: '|'
-            - name: Part
-              path: benchmark/tpc-h/data/part.tbl
-              delimiter: '|'
-compare_to:
-    'PostgreSQL':           'benchmark/tpc-h/q14_postgresql.sh'
-    'DuckDB':               'benchmark/tpc-h/q14_duckdb.sh'
-    'HyPer (single core)':  'taskset -c 0 benchmark/tpc-h/q14_hyper.py'
-    'HyPer (all cores)':    'benchmark/tpc-h/q14_hyper.py'
+data:
+    Lineitem:
+        file: benchmark/tpc-h/data/lineitem.tbl
+        delimiter: '|'
+        header: 0
+        attributes:
+            'l_orderkey': 'INT'
+            'l_partkey': 'INT'
+            'l_suppkey': 'INT'
+            'l_linenumber': 'INT'
+            'l_quantity': 'DECIMAL 10 2'
+            'l_extendedprice': 'DECIMAL 10 2'
+            'l_discount': 'DECIMAL 10 2'
+            'l_tax': 'DECIMAL 10 2'
+            'l_returnflag': 'CHAR 1'
+            'l_linestatus': 'CHAR 1'
+            'l_shipdate': 'DATE'
+            'l_commitdate': 'DATE'
+            'l_receiptdate': 'DATE'
+            'l_shipinstruct': 'CHAR 25'
+            'l_shipmode': 'CHAR 10'
+            'l_comment': 'CHAR 44'
+    Part:
+        file: benchmark/tpc-h/data/part.tbl
+        delimiter: '|'
+        header: 0
+        attributes:
+            'p_partkey':       'INT 4'
+            'p_name':          'CHAR 55'
+            'p_mfgr':          'CHAR 25'
+            'p_brand':         'CHAR 10'
+            'p_type':          'CHAR 25'
+            'p_size':          'INT 4'
+            'p_container':     'CHAR 10'
+            'p_retailprice':   'DECIMAL 10 2'
+            'p_comment':       'CHAR 23'
+systems:
+    mutable:
+        pattern: '^Execute query:.*'
+        configurations:
+            'WebAssembly': >-
+              --backend WasmV8
+              --data-layout PAX4M
+              --cardinality-estimator Injected
+              --use-cardinality-file benchmark/tpc-h/q14.json
+        cases:
+            1: |
+                SELECT
+                        SUM(l_extendedprice * (1 - l_discount)) AS promo_revenue
+                FROM
+                        Lineitem,
+                        Part
+                WHERE
+                        l_partkey = p_partkey
+                        AND l_shipdate >= d'1995-09-01'
+                        AND l_shipdate < d'1995-10-01';
+    DuckDB:
+        cases:
+            1: |
+                SELECT
+                        SUM(l_extendedprice * (1 - l_discount)) AS promo_revenue
+                FROM
+                        Lineitem,
+                        Part
+                WHERE
+                        l_partkey = p_partkey
+                        AND l_shipdate >= date '1995-09-01'
+                        AND l_shipdate < date '1995-10-01';
+    PostgreSQL:
+        cases:
+            1: |
+                SELECT
+                        SUM(l_extendedprice * (1 - l_discount)) AS promo_revenue
+                FROM
+                        Lineitem,
+                        Part
+                WHERE
+                        l_partkey = p_partkey
+                        AND l_shipdate >= date '1995-09-01'
+                        AND l_shipdate < date '1995-10-01';
+    HyPer:
+        cases:
+            1: |
+                SELECT
+                        SUM(l_extendedprice * (1 - l_discount)) AS promo_revenue
+                FROM
+                        {lineitem.table_name},
+                        {part.table_name}
+                WHERE
+                        l_partkey = p_partkey
+                        AND l_shipdate >= date '1995-09-01'
+                        AND l_shipdate < date '1995-10-01';

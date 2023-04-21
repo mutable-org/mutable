@@ -5,30 +5,6 @@ suite: operators
 benchmark: selection-multiple
 name: one varying, one fixed
 readonly: true
-pattern: '^Execute query:.*'
-configurations:
-    'WebAssembly (Row)':   --backend WasmV8 --data-layout Row
-    'WebAssembly (PAX4M)': --backend WasmV8 --data-layout PAX4M
-tables: [ 'Attributes_multi_i32' ]
-cases:
-    0.01: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -2104533974 AND a1 < -2104533974;
-    0.05: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -1932735282 AND a1 < -2104533974;
-    0.10: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -1717986917 AND a1 < -2104533974;
-    0.20: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -1288490188 AND a1 < -2104533974;
-    0.30: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  -858993458 AND a1 < -2104533974;
-    0.40: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  -429496729 AND a1 < -2104533974;
-    0.50: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <           0 AND a1 < -2104533974;
-    0.60: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <   429496729 AND a1 < -2104533974;
-    0.70: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <   858993458 AND a1 < -2104533974;
-    0.80: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  1288490188 AND a1 < -2104533974;
-    0.90: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  1717986917 AND a1 < -2104533974;
-    0.95: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  1932735282 AND a1 < -2104533974;
-    0.99: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  2104533974 AND a1 < -2104533974;
-compare_to:
-    'PostgreSQL':           'benchmark/operators/selection_multi_i32_varying_first_fixed_second_postgresql.sh'
-    'DuckDB':               'benchmark/operators/selection_multi_i32_varying_first_fixed_second_duckdb.sh'
-    'HyPer (single core)':  'taskset -c 0 benchmark/operators/selection_multi_i32_varying_first_fixed_second_hyper.py'
-    'HyPer (all cores)':    'benchmark/operators/selection_multi_i32_varying_first_fixed_second_hyper.py'
 chart:
     x:
         scale: linear
@@ -38,3 +14,80 @@ chart:
         scale: linear
         type: Q
         label: 'Execution time [ms]'
+data:
+    'Attributes_multi_i32':
+        attributes:
+            'id': 'INT'
+            'a0': 'INT'
+            'a1': 'INT'
+            'a2': 'INT'
+            'a3': 'INT'
+        file: 'benchmark/operators/data/Attributes_multi_i32.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+systems:
+    mutable:
+        pattern: '^Execute query:.*'
+        configurations:
+            'WebAssembly (Row)':   --backend WasmV8 --data-layout Row
+            'WebAssembly (PAX4M)': --backend WasmV8 --data-layout PAX4M
+        cases:
+            0.01: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -2104533974 AND a1 < -2104533974;
+            0.05: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -1932735282 AND a1 < -2104533974;
+            0.10: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -1717986917 AND a1 < -2104533974;
+            0.20: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -1288490188 AND a1 < -2104533974;
+            0.30: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  -858993458 AND a1 < -2104533974;
+            0.40: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  -429496729 AND a1 < -2104533974;
+            0.50: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <           0 AND a1 < -2104533974;
+            0.60: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <   429496729 AND a1 < -2104533974;
+            0.70: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <   858993458 AND a1 < -2104533974;
+            0.80: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  1288490188 AND a1 < -2104533974;
+            0.90: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  1717986917 AND a1 < -2104533974;
+            0.95: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  1932735282 AND a1 < -2104533974;
+            0.99: SELECT 1 FROM Attributes_multi_i32 WHERE a0 <  2104533974 AND a1 < -2104533974;
+    PostgreSQL:
+        cases:
+            0.01: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 < -2104533974 AND a1 < -2104533974;
+            0.05: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 < -1932735282 AND a1 < -2104533974;
+            0.10: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 < -1717986917 AND a1 < -2104533974;
+            0.20: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 < -1288490188 AND a1 < -2104533974;
+            0.30: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <  -858993458 AND a1 < -2104533974;
+            0.40: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <  -429496729 AND a1 < -2104533974;
+            0.50: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <           0 AND a1 < -2104533974;
+            0.60: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <   429496729 AND a1 < -2104533974;
+            0.70: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <   858993458 AND a1 < -2104533974;
+            0.80: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <  1288490188 AND a1 < -2104533974;
+            0.90: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <  1717986917 AND a1 < -2104533974;
+            0.95: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <  1932735282 AND a1 < -2104533974;
+            0.99: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <  2104533974 AND a1 < -2104533974;
+    DuckDB:
+        cases:
+            0.01: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 < -2104533974 AND a1 < -2104533974;
+            0.05: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 < -1932735282 AND a1 < -2104533974;
+            0.10: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 < -1717986917 AND a1 < -2104533974;
+            0.20: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 < -1288490188 AND a1 < -2104533974;
+            0.30: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <  -858993458 AND a1 < -2104533974;
+            0.40: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <  -429496729 AND a1 < -2104533974;
+            0.50: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <           0 AND a1 < -2104533974;
+            0.60: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <   429496729 AND a1 < -2104533974;
+            0.70: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <   858993458 AND a1 < -2104533974;
+            0.80: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <  1288490188 AND a1 < -2104533974;
+            0.90: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <  1717986917 AND a1 < -2104533974;
+            0.95: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <  1932735282 AND a1 < -2104533974;
+            0.99: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <  2104533974 AND a1 < -2104533974;
+    HyPer:
+        cases:
+            0.01: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 < -2104533974 AND a1 < -2104533974;
+            0.05: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 < -1932735282 AND a1 < -2104533974;
+            0.10: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 < -1717986917 AND a1 < -2104533974;
+            0.20: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 < -1288490188 AND a1 < -2104533974;
+            0.30: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <  -858993458 AND a1 < -2104533974;
+            0.40: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <  -429496729 AND a1 < -2104533974;
+            0.50: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <           0 AND a1 < -2104533974;
+            0.60: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <   429496729 AND a1 < -2104533974;
+            0.70: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <   858993458 AND a1 < -2104533974;
+            0.80: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <  1288490188 AND a1 < -2104533974;
+            0.90: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <  1717986917 AND a1 < -2104533974;
+            0.95: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <  1932735282 AND a1 < -2104533974;
+            0.99: SELECT COUNT(*) FROM Attributes_multi_i32 WHERE a0 <  2104533974 AND a1 < -2104533974;

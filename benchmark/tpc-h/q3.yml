@@ -3,52 +3,164 @@ suite: TPC
 benchmark: TPC-H
 name: Q3
 readonly: true
-pattern: '^Execute query:.*'
-configurations:
-    'WebAssembly': >-
-      --backend WasmV8
-      --data-layout PAX4M
-      --cardinality-estimator Injected
-      --use-cardinality-file benchmark/tpc-h/q3.json
-tables: [ ]
-cases:
-    1:
-        query: |
-            SELECT
-                    l_orderkey,
-                    SUM(l_extendedprice * (1 - l_discount)) AS revenue,
-                    o_orderdate,
-                    o_shippriority
-            FROM
-                    Customer,
-                    Orders,
-                    Lineitem
-            WHERE
-                    c_mktsegment = "BUILDING"
-                    AND c_custkey = o_custkey
-                    AND l_orderkey = o_orderkey
-                    AND o_orderdate < d'1995-03-15'
-                    AND l_shipdate > d'1995-03-15'
-            GROUP BY
-                    l_orderkey,
-                    o_orderdate,
-                    o_shippriority
-            ORDER BY
-                    revenue DESC,
-                    o_orderdate
-            LIMIT 10;
-        tables:
-            - name: Lineitem
-              path: benchmark/tpc-h/data/lineitem.tbl
-              delimiter: '|'
-            - name: Orders
-              path: benchmark/tpc-h/data/orders.tbl
-              delimiter: '|'
-            - name: Customer
-              path: benchmark/tpc-h/data/customer.tbl
-              delimiter: '|'
-compare_to:
-    'PostgreSQL':           'benchmark/tpc-h/q3_postgresql.sh'
-    'DuckDB':               'benchmark/tpc-h/q3_duckdb.sh'
-    'HyPer (single core)':  'taskset -c 0 benchmark/tpc-h/q3_hyper.py'
-    'HyPer (all cores)':    'benchmark/tpc-h/q3_hyper.py'
+data:
+    Lineitem:
+        file: benchmark/tpc-h/data/lineitem.tbl
+        delimiter: '|'
+        header: 0
+        attributes:
+            'l_orderkey': 'INT'
+            'l_partkey': 'INT'
+            'l_suppkey': 'INT'
+            'l_linenumber': 'INT'
+            'l_quantity': 'DECIMAL 10 2'
+            'l_extendedprice': 'DECIMAL 10 2'
+            'l_discount': 'DECIMAL 10 2'
+            'l_tax': 'DECIMAL 10 2'
+            'l_returnflag': 'CHAR 1'
+            'l_linestatus': 'CHAR 1'
+            'l_shipdate': 'DATE'
+            'l_commitdate': 'DATE'
+            'l_receiptdate': 'DATE'
+            'l_shipinstruct': 'CHAR 25'
+            'l_shipmode': 'CHAR 10'
+            'l_comment': 'CHAR 44'
+    Orders:
+        file: benchmark/tpc-h/data/orders.tbl
+        delimiter: '|'
+        header: 0
+        attributes:
+            'o_orderkey':      'INT 4'
+            'o_custkey':       'INT 4'
+            'o_orderstatus':   'CHAR 1'
+            'o_totalprice':    'DECIMAL 10 2'
+            'o_orderdate':     'DATE'
+            'o_orderpriority': 'CHAR 15'
+            'o_clerk':         'CHAR 15'
+            'o_shippriority':  'INT 4'
+            'o_comment':       'CHAR 80'
+    Customer:
+        file: benchmark/tpc-h/data/customer.tbl
+        delimiter: '|'
+        header: 0
+        attributes:
+            'c_custkey':       'INT 4'
+            'c_name':          'CHAR 25'
+            'c_address':       'CHAR 40'
+            'c_nationkey':     'INT 4'
+            'c_phone':         'CHAR 15'
+            'c_acctbal':       'DECIMAL 10 2'
+            'c_mktsegment':    'CHAR 10'
+            'c_comment':       'CHAR 117'
+systems:
+    mutable:
+        pattern: '^Execute query:.*'
+        configurations:
+            'WebAssembly': >-
+              --backend WasmV8
+              --data-layout PAX4M
+              --cardinality-estimator Injected
+              --use-cardinality-file benchmark/tpc-h/q3.json
+        cases:
+            1: |
+                SELECT
+                        l_orderkey,
+                        SUM(l_extendedprice * (1 - l_discount)) AS revenue,
+                        o_orderdate,
+                        o_shippriority
+                FROM
+                        Customer,
+                        Orders,
+                        Lineitem
+                WHERE
+                        c_mktsegment = "BUILDING"
+                        AND c_custkey = o_custkey
+                        AND l_orderkey = o_orderkey
+                        AND o_orderdate < d'1995-03-15'
+                        AND l_shipdate > d'1995-03-15'
+                GROUP BY
+                        l_orderkey,
+                        o_orderdate,
+                        o_shippriority
+                ORDER BY
+                        revenue DESC,
+                        o_orderdate
+                LIMIT 10;
+    DuckDB:
+        cases:
+            1: |
+                SELECT
+                        l_orderkey,
+                        SUM(l_extendedprice * (1 - l_discount)) AS revenue,
+                        o_orderdate,
+                        o_shippriority
+                FROM
+                        Customer,
+                        Orders,
+                        Lineitem
+                WHERE
+                        c_mktsegment = 'BUILDING'
+                        AND c_custkey = o_custkey
+                        AND l_orderkey = o_orderkey
+                        AND o_orderdate < date '1995-03-15'
+                        AND l_shipdate > date '1995-03-15'
+                GROUP BY
+                        l_orderkey,
+                        o_orderdate,
+                        o_shippriority
+                ORDER BY
+                        revenue DESC,
+                        o_orderdate
+                LIMIT 10;
+    PostgreSQL:
+        cases:
+            1: |
+                SELECT
+                        l_orderkey,
+                        SUM(l_extendedprice * (1 - l_discount)) AS revenue,
+                        o_orderdate,
+                        o_shippriority
+                FROM
+                        Customer,
+                        Orders,
+                        Lineitem
+                WHERE
+                        c_mktsegment = 'BUILDING'
+                        AND c_custkey = o_custkey
+                        AND l_orderkey = o_orderkey
+                        AND o_orderdate < date '1995-03-15'
+                        AND l_shipdate > date '1995-03-15'
+                GROUP BY
+                        l_orderkey,
+                        o_orderdate,
+                        o_shippriority
+                ORDER BY
+                        revenue DESC,
+                        o_orderdate
+                LIMIT 10;
+    HyPer:
+        cases:
+            1: |
+                SELECT
+                        l_orderkey,
+                        SUM(l_extendedprice * (1 - l_discount)) AS revenue,
+                        o_orderdate,
+                        o_shippriority
+                FROM
+                        {customer.table_name},
+                        {orders.table_name},
+                        {lineitem.table_name}
+                WHERE
+                        c_mktsegment = 'BUILDING'
+                        AND c_custkey = o_custkey
+                        AND l_orderkey = o_orderkey
+                        AND o_orderdate < date '1995-03-15'
+                        AND l_shipdate > date '1995-03-15'
+                GROUP BY
+                        l_orderkey,
+                        o_orderdate,
+                        o_shippriority
+                ORDER BY
+                        revenue DESC,
+                        o_orderdate
+                LIMIT 10;

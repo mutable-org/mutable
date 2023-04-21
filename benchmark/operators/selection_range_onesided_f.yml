@@ -3,31 +3,6 @@ suite: operators
 benchmark: selection-onesided
 name: FLOAT
 readonly: true
-pattern: '^Execute query:.*'
-configurations:
-    WebAssembly: --backend WasmV8 --data-layout PAX4M
-tables:
-    - name: 'Attribute_f'
-      header: 1
-cases:
-    0.01: SELECT 1 FROM Attribute_f WHERE val < 0.01;
-    0.05: SELECT 1 FROM Attribute_f WHERE val < 0.05;
-    0.10: SELECT 1 FROM Attribute_f WHERE val < 0.10;
-    0.20: SELECT 1 FROM Attribute_f WHERE val < 0.20;
-    0.30: SELECT 1 FROM Attribute_f WHERE val < 0.30;
-    0.40: SELECT 1 FROM Attribute_f WHERE val < 0.40;
-    0.50: SELECT 1 FROM Attribute_f WHERE val < 0.50;
-    0.60: SELECT 1 FROM Attribute_f WHERE val < 0.60;
-    0.70: SELECT 1 FROM Attribute_f WHERE val < 0.70;
-    0.80: SELECT 1 FROM Attribute_f WHERE val < 0.80;
-    0.90: SELECT 1 FROM Attribute_f WHERE val < 0.90;
-    0.95: SELECT 1 FROM Attribute_f WHERE val < 0.95;
-    0.99: SELECT 1 FROM Attribute_f WHERE val < 0.99;
-compare_to:
-    'PostgreSQL':           'benchmark/operators/selection_range_onesided_f_postgresql.sh'
-    'DuckDB':               'benchmark/operators/selection_range_onesided_f_duckdb.sh'
-    'HyPer (single core)':  'taskset -c 0 benchmark/operators/selection_range_onesided_f_hyper.py'
-    'HyPer (all cores)':    'benchmark/operators/selection_range_onesided_f_hyper.py'
 chart:
     x:
         scale: linear
@@ -37,3 +12,76 @@ chart:
         scale: linear
         type: Q
         label: 'Execution time [ms]'
+data:
+    'Attribute_f':
+        attributes:
+            'id': 'INT'
+            'val': 'FLOAT'
+        file: 'benchmark/operators/data/Attribute_f.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+systems:
+    mutable:
+        pattern: '^Execute query:.*'
+        configurations:
+            WebAssembly: --backend WasmV8 --data-layout PAX4M
+        cases:
+            0.01: SELECT 1 FROM Attribute_f WHERE val < 0.01;
+            0.05: SELECT 1 FROM Attribute_f WHERE val < 0.05;
+            0.10: SELECT 1 FROM Attribute_f WHERE val < 0.10;
+            0.20: SELECT 1 FROM Attribute_f WHERE val < 0.20;
+            0.30: SELECT 1 FROM Attribute_f WHERE val < 0.30;
+            0.40: SELECT 1 FROM Attribute_f WHERE val < 0.40;
+            0.50: SELECT 1 FROM Attribute_f WHERE val < 0.50;
+            0.60: SELECT 1 FROM Attribute_f WHERE val < 0.60;
+            0.70: SELECT 1 FROM Attribute_f WHERE val < 0.70;
+            0.80: SELECT 1 FROM Attribute_f WHERE val < 0.80;
+            0.90: SELECT 1 FROM Attribute_f WHERE val < 0.90;
+            0.95: SELECT 1 FROM Attribute_f WHERE val < 0.95;
+            0.99: SELECT 1 FROM Attribute_f WHERE val < 0.99;
+    PostgreSQL:
+        cases:
+            0.01: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.01;
+            0.05: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.05;
+            0.10: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.10;
+            0.20: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.20;
+            0.30: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.30;
+            0.40: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.40;
+            0.50: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.50;
+            0.60: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.60;
+            0.70: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.70;
+            0.80: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.80;
+            0.90: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.90;
+            0.95: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.95;
+            0.99: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.99;
+    DuckDB:
+        cases:
+            0.01: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.01;
+            0.05: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.05;
+            0.10: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.10;
+            0.20: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.20;
+            0.30: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.30;
+            0.40: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.40;
+            0.50: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.50;
+            0.60: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.60;
+            0.70: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.70;
+            0.80: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.80;
+            0.90: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.90;
+            0.95: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.95;
+            0.99: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.99;
+    HyPer:
+        cases:
+            0.01: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.01;
+            0.05: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.05;
+            0.10: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.10;
+            0.20: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.20;
+            0.30: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.30;
+            0.40: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.40;
+            0.50: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.50;
+            0.60: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.60;
+            0.70: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.70;
+            0.80: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.80;
+            0.90: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.90;
+            0.95: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.95;
+            0.99: SELECT COUNT(*) FROM Attribute_f WHERE val < 0.99;

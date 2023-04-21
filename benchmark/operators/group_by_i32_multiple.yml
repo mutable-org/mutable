@@ -3,23 +3,6 @@ suite: operators
 benchmark: grouping
 name: multiple INT(4)
 readonly: true
-pattern: '^Execute query:.*'
-configurations:
-    Interpreter:           --backend Interpreter
-    "WebAssembly (PAX4M)": --backend WasmV8 --data-layout PAX4M
-tables:
-    - name: 'Distinct_i32'
-      header: 1
-cases:
-    1: SELECT 1 FROM Distinct_i32 GROUP BY n10000;
-    2: SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000;
-    3: SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000, n100;
-    4: SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000, n100, n10;
-compare_to:
-    'PostgreSQL':           'benchmark/operators/group_by_i32_multiple_postgresql.sh'
-    'DuckDB':               'benchmark/operators/group_by_i32_multiple_duckdb.sh'
-    'HyPer (single core)':  'taskset -c 0 benchmark/operators/group_by_i32_multiple_hyper.py'
-    'HyPer (all cores)':    'benchmark/operators/group_by_i32_multiple_hyper.py'
 chart:
     x:
         scale: linear
@@ -29,3 +12,46 @@ chart:
         scale: linear
         type: Q
         label: 'Execution time [ms]'
+data:
+    'Distinct_i32':
+        file: 'benchmark/operators/data/Distinct_i32.csv'
+        format: 'csv'
+        delimiter: ','
+        header: 1
+        attributes:
+            'id': 'INT'
+            'n1': 'INT'
+            'n10': 'INT'
+            'n100': 'INT'
+            'n1000': 'INT'
+            'n10000': 'INT'
+            'n100000': 'INT'
+systems:
+    mutable:
+        pattern: '^Execute query:.*'
+        configurations:
+            Interpreter:           --backend Interpreter
+            "WebAssembly (PAX4M)": --backend WasmV8 --data-layout PAX4M
+        cases:
+            1: SELECT 1 FROM Distinct_i32 GROUP BY n10000;
+            2: SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000;
+            3: SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000, n100;
+            4: SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000, n100, n10;
+    PostgreSQL:
+        cases:
+            1: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000) AS T;
+            2: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000) AS T;
+            3: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000, n100) AS T;
+            4: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000, n100, n10) AS T;
+    DuckDB:
+        cases:
+            1: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000) AS T;
+            2: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000) AS T;
+            3: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000, n100) AS T;
+            4: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000, n100, n10) AS T;
+    HyPer:
+        cases:
+            1: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000) AS T;
+            2: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000) AS T;
+            3: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000, n100) AS T;
+            4: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000, n100, n10) AS T;

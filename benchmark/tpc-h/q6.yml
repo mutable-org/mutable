@@ -3,22 +3,75 @@ suite: TPC
 benchmark: TPC-H
 name: Q6
 readonly: true
-pattern: '^Execute query:.*'
-configurations:
-    'WebAssembly': --backend WasmV8 --data-layout PAX4M
-tables: [ ]
-cases:
-    1:
-        query: |
-            SELECT SUM(l_extendedprice * l_discount) AS revenue
-            FROM Lineitem
-            WHERE l_shipdate >= d'1994-01-01' AND l_shipdate < d'1995-01-01' AND l_quantity < 24;
-        tables:
-            - name: Lineitem
-              path: benchmark/tpc-h/data/lineitem.tbl
-              delimiter: '|'
-compare_to:
-    'PostgreSQL':           'benchmark/tpc-h/q6_postgresql.sh'
-    'DuckDB':               'benchmark/tpc-h/q6_duckdb.sh'
-    'HyPer (single core)':  'taskset -c 0 benchmark/tpc-h/q6_hyper.py'
-    'HyPer (all cores)':    'benchmark/tpc-h/q6_hyper.py'
+data:
+    Lineitem:
+        file: benchmark/tpc-h/data/lineitem.tbl
+        delimiter: '|'
+        header: 0
+        attributes:
+            'l_orderkey': 'INT'
+            'l_partkey': 'INT'
+            'l_suppkey': 'INT'
+            'l_linenumber': 'INT'
+            'l_quantity': 'DECIMAL 10 2'
+            'l_extendedprice': 'DECIMAL 10 2'
+            'l_discount': 'DECIMAL 10 2'
+            'l_tax': 'DECIMAL 10 2'
+            'l_returnflag': 'CHAR 1'
+            'l_linestatus': 'CHAR 1'
+            'l_shipdate': 'DATE'
+            'l_commitdate': 'DATE'
+            'l_receiptdate': 'DATE'
+            'l_shipinstruct': 'CHAR 25'
+            'l_shipmode': 'CHAR 10'
+            'l_comment': 'CHAR 44'
+systems:
+    mutable:
+        pattern: '^Execute query:.*'
+        configurations:
+            'WebAssembly': --backend WasmV8 --data-layout PAX4M
+        cases:
+            1: |
+                SELECT
+                        SUM(l_extendedprice * l_discount) AS revenue
+                FROM
+                        Lineitem
+                WHERE
+                        l_shipdate >= d'1994-01-01'
+                        AND l_shipdate < d'1995-01-01'
+                        AND l_quantity < 24;
+    DuckDB:
+        cases:
+            1: |
+                SELECT
+                        SUM(l_extendedprice * l_discount) AS revenue
+                FROM
+                        Lineitem
+                WHERE
+                        l_shipdate >= DATE '1994-01-01'
+                        AND l_shipdate < DATE '1995-01-01'
+                        AND l_discount > 0.05 AND l_discount < 0.07
+                        AND l_quantity < 24;
+    PostgreSQL:
+        cases:
+            1: |
+                SELECT
+                        SUM(l_extendedprice * l_discount) AS revenue
+                FROM
+                        Lineitem
+                WHERE
+                        l_shipdate >= DATE '1994-01-01'
+                        AND l_shipdate < DATE '1995-01-01'
+                        AND l_discount > 0.05 AND l_discount < 0.07
+                        AND l_quantity < 24;
+    HyPer:
+        cases:
+            1: |
+                SELECT
+                        SUM(l_extendedprice * l_discount) AS revenue
+                FROM
+                        {lineitem.table_name}
+                WHERE
+                        l_shipdate >= date '1994-01-01'
+                        AND l_shipdate < date '1995-01-01'
+                        AND l_quantity < 24;

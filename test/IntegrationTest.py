@@ -237,12 +237,16 @@ def report_summary(stage_counter, stage_pass_counter, required_counter, required
 def lexer_command(test_case):
     binary = BINARIES['lex']
     command = [binary, '-']
+    if test_case.cli_args:
+        command.append(test_case.cli_args)
     return [ command ]
 
 
 def parser_command(test_case):
     binary = BINARIES['parse']
     command = [binary, '-']
+    if test_case.cli_args:
+        command.append(test_case.cli_args)
     return [ command ]
 
 
@@ -250,6 +254,8 @@ def sema_command(test_case):
     binary = BINARIES['check']
     setup = os.path.join(os.path.dirname(test_case.filename), 'data', 'schema.sql')
     command = [binary, '--quiet', setup, '-']
+    if test_case.cli_args:
+        command.append(test_case.cli_args)
     return [ command ]
 
 
@@ -257,6 +263,8 @@ def end2end_command(test_case):
     binary = BINARIES['shell']
     setup = os.path.join(os.path.dirname(test_case.filename), 'data', 'schema.sql')
     command = [binary, '--quiet', '--noprompt', setup, '-']
+    if test_case.cli_args:
+        command.append(test_case.cli_args)
     configurations = list()
     data_layout_options = enumerate_feature_options('data-layout')
     backend_options = enumerate_feature_options('backend')
@@ -359,6 +367,9 @@ if __name__ == '__main__':
         # Execute test stages
         success = True
         for stage in test_case.stages:
+            # Set optionally provided additional CLI args
+            test_case.cli_args = test_case.stages[stage].get('cli_args', None)
+
             # Execute test
             if success:
                 cmds = COMMAND[stage](test_case)

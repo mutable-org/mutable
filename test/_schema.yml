@@ -10,6 +10,7 @@ stages:
     end2end: include('stage', required=False)
 ---
 stage:
+    cli_args: str(required=False)
     out: str(required=False)
     err: str(required=False)
     num_err: int(required=False)

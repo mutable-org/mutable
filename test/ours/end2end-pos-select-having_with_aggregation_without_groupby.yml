@@ -5,7 +5,6 @@ query: |
 required: YES
 
 stages:
-
     lexer:
         out: |
             -:1:1: SELECT TK_Select
@@ -45,6 +44,7 @@ stages:
         returncode: 0
 
     end2end:
+        # no `--insist-no-ternary-logic` because of default value of SUM without groupby
         out: |
             42,100
         err: NULL

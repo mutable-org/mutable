@@ -36,6 +36,7 @@ stages:
         returncode: 0
 
     end2end:
+        cli_args: --insist-no-ternary-logic
         out: |
             "Nmt5pToB 1aGsb4"
         err: NULL

@@ -36,6 +36,7 @@ stages:
         returncode: 0
 
     end2end:
+        cli_args: --insist-no-ternary-logic
         # maybe switch to sqlite3 ref
         out: |
             "uPIGuilCFOljtsa"

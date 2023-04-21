@@ -3,30 +3,30 @@ CREATE DATABASE ours;
 USE ours;
 
 CREATE TABLE R (
-    key INT(2),
-    fkey INT(2),
-    rfloat FLOAT,
-    rstring CHAR(15)
+    key INT(2) NOT NULL,
+    fkey INT(2) NOT NULL,
+    rfloat FLOAT NOT NULL,
+    rstring CHAR(15) NOT NULL
 );
 
 CREATE TABLE S (
-    key INT(2),
-    fkey INT(2),
-    rfloat FLOAT,
-    rstring CHAR(15)
+    key INT(2) NOT NULL,
+    fkey INT(2) NOT NULL,
+    rfloat FLOAT NOT NULL,
+    rstring CHAR(15) NOT NULL
 );
 
 CREATE TABLE T (
-    key INT(2),
-    fkey INT(2),
-    rfloat FLOAT,
-    rstring CHAR(15)
+    key INT(2) NOT NULL,
+    fkey INT(2) NOT NULL,
+    rfloat FLOAT NOT NULL,
+    rstring CHAR(15) NOT NULL
 );
 
 CREATE TABLE D (
-    key INT(2),
-    rdate DATE,
-    rdatetime DATETIME
+    key INT(2) NOT NULL,
+    rdate DATE NOT NULL,
+    rdatetime DATETIME NOT NULL
 );
 
 IMPORT INTO R DSV "test/ours/data/R.csv" HAS HEADER SKIP HEADER;

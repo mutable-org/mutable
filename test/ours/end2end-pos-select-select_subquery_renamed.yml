@@ -5,7 +5,6 @@ query: |
 required: YES
 
 stages:
-
     lexer:
         out: |
             -:1:1: SELECT TK_Select
@@ -40,6 +39,7 @@ stages:
         returncode: 0
 
     parser:
+        cli_args: --insist-no-ternary-logic
         out: |
             SELECT *
             FROM R, (SELECT *

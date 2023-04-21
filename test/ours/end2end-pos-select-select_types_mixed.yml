@@ -1,11 +1,10 @@
 description: select types mixed
 db: ours
 query: |
-    SELECT 42, 13.37, "Hello, wolrd!", TRUE, d'2001-09-28', d'2001-09-28 20:38:40', NULL;
+    SELECT 42, 13.37, "Hello, world!", TRUE, d'2001-09-28', d'2001-09-28 20:38:40', NULL;
 required: YES
 
 stages:
-
     lexer:
         out: |
             -:1:1: SELECT TK_Select
@@ -13,7 +12,7 @@ stages:
             -:1:10: , TK_COMMA
             -:1:12: 13.37 TK_DEC_FLOAT
             -:1:17: , TK_COMMA
-            -:1:19: "Hello, wolrd!" TK_STRING_LITERAL
+            -:1:19: "Hello, world!" TK_STRING_LITERAL
             -:1:34: , TK_COMMA
             -:1:36: TRUE TK_True
             -:1:40: , TK_COMMA
@@ -29,7 +28,7 @@ stages:
 
     parser:
         out: |
-            SELECT 42, 13.37, "Hello, wolrd!", TRUE, d'2001-09-28', d'2001-09-28 20:38:40', NULL;
+            SELECT 42, 13.37, "Hello, world!", TRUE, d'2001-09-28', d'2001-09-28 20:38:40', NULL;
         err: NULL
         num_err: 0
         returncode: 0
@@ -41,8 +40,9 @@ stages:
         returncode: 0
 
     end2end:
+        cli_args: --insist-no-ternary-logic # since constants should not be computed
         out: |
-            42,13.37,"Hello, wolrd!",TRUE,2001-09-28,2001-09-28 20:38:40,NULL
+            42,13.37,"Hello, world!",TRUE,2001-09-28,2001-09-28 20:38:40,NULL
         err: NULL
         num_err: 0
         returncode: 0

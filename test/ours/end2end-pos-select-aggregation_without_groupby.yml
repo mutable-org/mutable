@@ -5,7 +5,6 @@ query: |
 required: YES
 
 stages:
-
     lexer:
         out: |
             -:1:1: SELECT TK_Select
@@ -35,6 +34,7 @@ stages:
         returncode: 0
 
     end2end:
+        cli_args: --insist-no-ternary-logic
         out: |
             100
         err: NULL

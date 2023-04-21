@@ -38,6 +38,7 @@ stages:
         returncode: 0
 
     end2end:
+        cli_args: --insist-no-ternary-logic
         out: |
             "3a0ZtTTQ8rdFFbu"
         err: NULL

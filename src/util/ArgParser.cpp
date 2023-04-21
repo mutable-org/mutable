@@ -108,10 +108,14 @@ void ArgParser::parse_args(int, const char **argv) {
         if (streq(*argv, "--"))
             goto positional;
         auto it = key_map_.find(pool_(*argv));
-        if (it != key_map_.end())
+        if (it != key_map_.end()) {
             it->second.get().parse(argv); // option
-        else
-            args_.emplace_back(*argv); // positional argument
+        } else {
+            if (strneq(*argv, "--", 2))
+                std::cerr << "warning: ignore unknown option " << *argv << std::endl;
+            else
+                args_.emplace_back(*argv); // positional argument
+        }
     }
     return;
 

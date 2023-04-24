@@ -167,6 +167,8 @@ M_LCOV_EXCL_STOP
         return const_cast<Schema*>(this)->operator[](id);
     }
 
+    /** Adds the entry `e` to this `Schema`. */
+    void add(entry_type e) { entries_.push_back(e); }
     /** Adds a new entry `id` of type `type` to this `Schema`. */
     void add(Identifier id, const Type *type) { entries_.emplace_back(id, type); }
     /** Adds a new entry `id` of type `type` with constraints `constraints` to this `Schema`. */

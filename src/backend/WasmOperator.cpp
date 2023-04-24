@@ -1197,9 +1197,15 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                                 count += pred ? pred->to<int64_t>() : I64(1); // increment old count by 1 iff `pred` is true
                             } else {
                                 auto _new_val = env.compile(*info.args[0]);
-                                I64 inc = pred ? (not_null(_new_val) and *pred).to<int64_t>()
-                                               : not_null(_new_val).to<int64_t>();
-                                count += inc; // increment old count by 1 iff new value is present and `pred` is true
+                                if (can_be_null(_new_val)) {
+                                    I64 inc = pred ? (not_null(_new_val) and *pred).to<int64_t>()
+                                                   : not_null(_new_val).to<int64_t>();
+                                    count += inc; // increment old count by 1 iff new value is present and `pred` is true
+                                } else {
+                                    discard(_new_val); // since it is not needed in this case
+                                    I64 inc = pred ? pred->to<int64_t>() : I64(1);
+                                    count += inc; // increment old count by 1 iff new value is present and `pred` is true
+                                }
                             }
                         }
 
@@ -1598,9 +1604,15 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Setup, callbac
                                 count += pred ? pred->to<int64_t>() : I64(1); // increment old count by 1 iff `pred` is true
                             } else {
                                 auto _new_val = env.compile(*info.args[0]);
-                                I64 inc = pred ? (not_null(_new_val) and *pred).to<int64_t>()
-                                               : not_null(_new_val).to<int64_t>();
-                                count += inc; // increment old count by 1 iff new value is present and `pred` is true
+                                if (can_be_null(_new_val)) {
+                                    I64 inc = pred ? (not_null(_new_val) and *pred).to<int64_t>()
+                                                   : not_null(_new_val).to<int64_t>();
+                                    count += inc; // increment old count by 1 iff new value is present and `pred` is true
+                                } else {
+                                    discard(_new_val); // since it is not needed in this case
+                                    I64 inc = pred ? pred->to<int64_t>() : I64(1);
+                                    count += inc; // increment old count by 1 iff new value is present and `pred` is true
+                                }
                             }
 
                             results.add(info.id, count.val());
@@ -2705,7 +2717,9 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                             BLOCK_OPEN(init_aggs) {
                                 if (bound) {
                                     auto _arg = env.compile(arg);
-                                    I64 new_val_not_null = not_null(_arg).to<int64_t>();
+                                    I64 new_val_not_null =
+                                        can_be_null(_arg) ? not_null(_arg).to<int64_t>()
+                                                          : (discard(_arg), I64(1)); // discard since no use
                                     r.clone() = _I64(new_val_not_null); // initialize with 1 iff first value is present
                                 } else {
                                     r.clone() = _I64(0); // initialize with neutral element 0
@@ -2718,7 +2732,9 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                         }
                         BLOCK_OPEN(update_aggs) {
                             auto _arg = env.compile(arg);
-                            I64 new_val_not_null = not_null(_arg).to<int64_t>();
+                            I64 new_val_not_null =
+                                can_be_null(_arg) ? not_null(_arg).to<int64_t>()
+                                                  : (discard(_arg), I64(1)); // discard since no use
                             auto old_count = _I64(r.clone()).insist_not_null();
                             r.set_value(
                                 old_count + new_val_not_null // increment old count by 1 iff new value is present

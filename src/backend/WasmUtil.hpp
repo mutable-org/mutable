@@ -107,6 +107,14 @@ using SQL_t = std::variant<
  * Helper functions for SQL types
  *====================================================================================================================*/
 
+inline void discard(SQL_t &variant)
+{
+    std::visit(overloaded {
+        []<sql_type T>(T actual) -> void { actual.discard(); },
+        [](std::monostate) -> void { M_unreachable("invalid variant"); },
+    }, variant);
+}
+
 template<sql_type To>
 inline To convert(SQL_t &variant)
 {
@@ -118,6 +126,14 @@ inline To convert(SQL_t &variant)
             M_unreachable("illegal conversion");
         },
         [](std::monostate) -> To { M_unreachable("invalid variant"); },
+    }, variant);
+}
+
+inline bool can_be_null(const SQL_t &variant)
+{
+    return std::visit(overloaded {
+        []<sql_type T>(const T &actual) -> bool { return actual.can_be_null(); },
+        [](std::monostate) -> bool { M_unreachable("invalid variant"); },
     }, variant);
 }
 
@@ -203,15 +219,6 @@ struct ExprCompiler : ast::ConstASTExprVisitor
 /** Binds `Schema::Identifier`s to `Expr<T>`s. */
 struct Environment
 {
-    private:
-    /** Discards the held expression of `expr`. */
-    static void discard(SQL_t &expr) {
-        std::visit(overloaded {
-            [](auto &e) { e.discard(); },
-            [](std::monostate) { M_unreachable("invalid variant"); },
-        }, expr);
-    }
-
     private:
     ///> maps `Schema::Identifier`s to `Expr<T>`s that evaluate to the current expression
     std::unordered_map<Schema::Identifier, SQL_t> exprs_;

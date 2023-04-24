@@ -938,8 +938,15 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Se
                     [](std::monostate&&) -> _Double { M_unreachable("invalid reference"); },
                 }, entry.get(avg_info.sum));
                 auto count = _I64(entry.get<_I64>(avg_info.running_count)).insist_not_null().to<double>();
-                _Var<Double> avg(sum / count); // introduce variable s.t. uses only load from it
-                env.add(e.id, avg);
+                auto avg = sum / count;
+                if (avg.can_be_null()) {
+                    _Var<Double> var(avg); // introduce variable s.t. uses only load from it
+                    env.add(e.id, var);
+                } else {
+                    /* introduce variable w/o NULL bit s.t. uses only load from it */
+                    Var<Double> var(avg.insist_not_null());
+                    env.add(e.id, _Double(var));
+                }
             } else { // part of key or already computed aggregate
                 std::visit(overloaded {
                     [&]<typename T>(HashTable::const_reference_t<Expr<T>> &&r) -> void {
@@ -1410,8 +1417,15 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                 auto &avg_info = it->second;
                 auto sum = results.get(avg_info.sum);
                 auto count = results.get<_I64>(avg_info.running_count).insist_not_null().to<double>();
-                _Var<Double> avg(convert<_Double>(sum) / count); // introduce variable s.t. uses only load from it
-                env.add(e.id, avg);
+                auto avg = convert<_Double>(sum) / count;
+                if (avg.can_be_null()) {
+                    _Var<Double> var(avg); // introduce variable s.t. uses only load from it
+                    env.add(e.id, var);
+                } else {
+                    /* introduce variable w/o NULL bit s.t. uses only load from it */
+                    Var<Double> var(avg.insist_not_null());
+                    env.add(e.id, _Double(var));
+                }
             } else { // part of key or already computed aggregate
                 std::visit(overloaded {
                     [&]<typename T>(Expr<T> value) -> void {
@@ -1702,8 +1716,10 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Setup, callbac
             auto &avg_info = it->second;
             auto sum = results.get(avg_info.sum);
             auto count = results.get<_I64>(avg_info.running_count).insist_not_null().to<double>();
-            _Var<Double> avg(convert<_Double>(sum) / count); // introduce variable s.t. uses only load from it
-            env.add(e.id, avg);
+            auto avg = convert<_Double>(sum) / count;
+            M_insist(avg.can_be_null());
+            _Var<Double> var(avg); // introduce variable s.t. uses only load from it
+            env.add(e.id, var);
         } else { // part of key or already computed aggregate
             std::visit(overloaded {
                 [&]<typename T>(Expr<T> value) -> void {
@@ -2910,9 +2926,15 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                         [](std::monostate&&) -> _Double { M_unreachable("invalid reference"); },
                     }, entry.get(avg_info.sum));
                     auto count = _I64(entry.get<_I64>(avg_info.running_count)).insist_not_null().to<double>();
-                    auto _avg = sum / count; // no need to multiply with group counter as the factor would not change the fraction
-                    _Var<Double> avg(_avg); // introduce variable s.t. uses only load from it
-                    env.add(e.id, avg);
+                    auto avg = sum / count; // no need to multiply with group counter as the factor would not change the fraction
+                    if (avg.can_be_null()) {
+                        _Var<Double> var(avg); // introduce variable s.t. uses only load from it
+                        env.add(e.id, var);
+                    } else {
+                        /* introduce variable w/o NULL bit s.t. uses only load from it */
+                        Var<Double> var(avg.insist_not_null());
+                        env.add(e.id, _Double(var));
+                    }
                 } else { // part of key or already computed aggregate (without multiplication with group counter)
                     std::visit(overloaded {
                         [&]<typename T>(HashTable::const_reference_t<Expr<T>> &&r) -> void {

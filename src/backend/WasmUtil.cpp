@@ -367,14 +367,16 @@ void ExprCompiler::operator()(const ast::FnApplicationExpr &e)
         /*----- NULL check -------------------------------------------------------------------------------------------*/
         case m::Function::FN_ISNULL: {
             (*this)(*e.args[0]);
-            set(_Bool(is_null(get())));
+            auto arg = get();
+            set(_Bool(is_null(arg)));
             break;
         }
 
         /*----- Type cast --------------------------------------------------------------------------------------------*/
         case m::Function::FN_INT: {
             (*this)(*e.args[0]);
-            set(convert<_I32>(get()));
+            auto arg = get();
+            set(convert<_I32>(arg));
             break;
         }
 

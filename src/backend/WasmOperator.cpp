@@ -681,8 +681,11 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Se
                                     using type = typename _T::type;
                                     using T = PrimitiveExpr<type>;
 
+                                    auto _arg = env.compile(arg);
+                                    _T _new_val = convert<_T>(_arg);
+
                                     BLOCK_OPEN(init_aggs) {
-                                        auto [val_, is_null] = convert<_T>(env.compile(arg)).split();
+                                        auto [val_, is_null] = _new_val.clone().split();
                                         T val(val_); // due to structured binding and lambda closure
                                         IF (is_null) {
                                             auto neutral = is_min ? T(std::numeric_limits<type>::max())
@@ -695,7 +698,6 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Se
                                         };
                                     }
                                     BLOCK_OPEN(update_aggs) {
-                                        _T _new_val = convert<_T>(env.compile(arg));
                                         if (_new_val.can_be_null()) {
                                             auto [new_val_, new_val_is_null_] = _new_val.split();
                                             auto [old_min_max_, old_min_max_is_null] = _T(r.clone()).split();
@@ -760,8 +762,11 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Se
                             const auto &arg = *info.args[0];
 
                             auto r = entry.extract<_Double>(info.id);
+                            auto _arg = env.compile(arg);
+                            _Double _new_val = convert<_Double>(_arg);
+
                             BLOCK_OPEN(init_aggs) {
-                                auto [val_, is_null] = convert<_Double>(env.compile(arg)).split();
+                                auto [val_, is_null] = _new_val.clone().split();
                                 Double val(val_); // due to structured binding and lambda closure
                                 IF (is_null) {
                                     r.clone().set_value(Double(0.0)); // initialize with neutral element 0
@@ -774,7 +779,6 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Se
                             BLOCK_OPEN(update_avg_aggs) {
                                 /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming
                                  * Vol 2, section 4.2.2. */
-                                _Double _new_val = convert<_Double>(env.compile(arg));
                                 if (_new_val.can_be_null()) {
                                     auto [new_val, new_val_is_null_] = _new_val.split();
                                     auto [old_avg_, old_avg_is_null] = _Double(r.clone()).split();
@@ -817,8 +821,11 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Se
                                     using type = typename _T::type;
                                     using T = PrimitiveExpr<type>;
 
+                                    auto _arg = env.compile(arg);
+                                    _T _new_val = convert<_T>(_arg);
+
                                     BLOCK_OPEN(init_aggs) {
-                                        auto [val_, is_null] = convert<_T>(env.compile(arg)).split();
+                                        auto [val_, is_null] = _new_val.clone().split();
                                         T val(val_); // due to structured binding and lambda closure
                                         IF (is_null) {
                                             r.clone().set_value(T(type(0))); // initialize with neutral element 0
@@ -829,7 +836,6 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Se
                                         };
                                     }
                                     BLOCK_OPEN(update_aggs) {
-                                        _T _new_val = convert<_T>(env.compile(arg));
                                         if (_new_val.can_be_null()) {
                                             auto [new_val, new_val_is_null_] = _new_val.split();
                                             auto [old_sum, old_sum_is_null] = _T(r.clone()).split();
@@ -865,6 +871,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Se
                             M_insist(info.args.size() <= 1, "COUNT aggregate function expects at most one argument");
 
                             auto r = entry.get<_I64>(info.id); // do not extract to be able to access for AVG case
+
                             if (info.args.empty()) {
                                 BLOCK_OPEN(init_aggs) {
                                     r.clone() = _I64(1); // initialize with 1 (for first value)
@@ -878,15 +885,17 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Se
                                 }
                             } else {
                                 const auto &arg = *info.args[0];
+
+                                auto _arg = env.compile(arg);
+                                I64 new_val_not_null = not_null(_arg).to<int64_t>();
+
                                 BLOCK_OPEN(init_aggs) {
-                                    I64 not_null = (not is_null(env.compile(arg))).to<int64_t>();
-                                    r.clone() = _I64(not_null); // initialize with 1 iff first value is present
+                                    r.clone() = _I64(new_val_not_null.clone()); // initialize with 1 iff first value is present
                                 }
                                 BLOCK_OPEN(update_aggs) {
-                                    I64 new_not_null = (not is_null(env.compile(arg))).to<int64_t>();
                                     auto old_count = _I64(r.clone()).insist_not_null();
                                     r.set_value(
-                                        old_count + new_not_null // increment old count by 1 iff new value is present
+                                        old_count + new_val_not_null // increment old count by 1 iff new value is present
                                     );
                                     /* do not update NULL bit since it is already set to `false` */
                                 }
@@ -1055,7 +1064,8 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                             }
 
                             BLOCK_OPEN(update_aggs) {
-                                Expr<T> _new_val = convert<Expr<T>>(env.compile(arg));
+                                auto _arg = env.compile(arg);
+                                Expr<T> _new_val = convert<Expr<T>>(_arg);
                                 if (_new_val.can_be_null()) {
                                     auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
                                     auto [new_val_, new_val_is_null_] = _new_val_pred.split();
@@ -1131,7 +1141,8 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                             }
 
                             BLOCK_OPEN(update_aggs) {
-                                Expr<T> _new_val = convert<Expr<T>>(env.compile(arg));
+                                auto _arg = env.compile(arg);
+                                Expr<T> _new_val = convert<Expr<T>>(_arg);
                                 if (_new_val.can_be_null()) {
                                     auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
                                     auto [new_val, new_val_is_null_] = _new_val_pred.split();
@@ -1185,8 +1196,9 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                             if (info.args.empty()) {
                                 count += pred ? pred->to<int64_t>() : I64(1); // increment old count by 1 iff `pred` is true
                             } else {
-                                Bool not_null = not is_null(env.compile(*info.args[0]));
-                                I64 inc = pred ? (not_null and *pred).to<int64_t>() : not_null.to<int64_t>();
+                                auto _new_val = env.compile(*info.args[0]);
+                                I64 inc = pred ? (not_null(_new_val) and *pred).to<int64_t>()
+                                               : not_null(_new_val).to<int64_t>();
                                 count += inc; // increment old count by 1 iff new value is present and `pred` is true
                             }
                         }
@@ -1221,7 +1233,8 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                     BLOCK_OPEN(update_avg_aggs) {
                         /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming
                          * Vol 2, section 4.2.2. */
-                        _Double _new_val = convert<_Double>(env.compile(arg));
+                        auto _arg = env.compile(arg);
+                        _Double _new_val = convert<_Double>(_arg);
                         if (_new_val.can_be_null()) {
                             auto _new_val_pred = pred ? Select(*pred, _new_val, _Double::Null()) : _new_val;
                             auto [new_val, new_val_is_null_] = _new_val_pred.split();
@@ -1369,9 +1382,9 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                 it != avg_aggregates.end() and not it->second.compute_running_avg)
             { // AVG aggregates which is not yet computed, divide computed sum with computed count
                 auto &avg_info = it->second;
-                auto sum = convert<_Double>(results.get(avg_info.sum));
+                auto sum = results.get(avg_info.sum);
                 auto count = results.get<_I64>(avg_info.running_count).insist_not_null().to<double>();
-                _Var<Double> avg(sum / count); // introduce variable s.t. uses only load from it
+                _Var<Double> avg(convert<_Double>(sum) / count); // introduce variable s.t. uses only load from it
                 env.add(e.id, avg);
             } else { // part of key or already computed aggregate
                 std::visit(overloaded {
@@ -1465,7 +1478,8 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Setup, callbac
                                 Global<PrimitiveExpr<T>> min_max(neutral); // initialize with neutral element +inf or -inf
                                 Global<Bool> is_null(true); // MIN/MAX is initially NULL
 
-                                Expr<T> _new_val = convert<Expr<T>>(env.compile(arg));
+                                auto _arg = env.compile(arg);
+                                Expr<T> _new_val = convert<Expr<T>>(_arg);
                                 if (_new_val.can_be_null()) {
                                     auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
                                     auto [new_val_, new_val_is_null_] = _new_val_pred.split();
@@ -1534,7 +1548,8 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Setup, callbac
                                 Global<PrimitiveExpr<T>> sum(T(0)); // initialize with neutral element 0
                                 Global<Bool> is_null(true); // SUM is initially NULL
 
-                                Expr<T> _new_val = convert<Expr<T>>(env.compile(arg));
+                                auto _arg = env.compile(arg);
+                                Expr<T> _new_val = convert<Expr<T>>(_arg);
                                 if (_new_val.can_be_null()) {
                                     auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
                                     auto [new_val, new_val_is_null_] = _new_val_pred.split();
@@ -1582,8 +1597,9 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Setup, callbac
                             if (info.args.empty()) {
                                 count += pred ? pred->to<int64_t>() : I64(1); // increment old count by 1 iff `pred` is true
                             } else {
-                                Bool not_null = not is_null(env.compile(*info.args[0]));
-                                I64 inc = pred ? (not_null and *pred).to<int64_t>() : not_null.to<int64_t>();
+                                auto _new_val = env.compile(*info.args[0]);
+                                I64 inc = pred ? (not_null(_new_val) and *pred).to<int64_t>()
+                                               : not_null(_new_val).to<int64_t>();
                                 count += inc; // increment old count by 1 iff new value is present and `pred` is true
                             }
 
@@ -1611,7 +1627,8 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Setup, callbac
 
                         /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming
                          * Vol 2, section 4.2.2. */
-                        _Double _new_val = convert<_Double>(env.compile(arg));
+                        auto _arg = env.compile(arg);
+                        _Double _new_val = convert<_Double>(_arg);
                         if (_new_val.can_be_null()) {
                             auto _new_val_pred = pred ? Select(*pred, _new_val, _Double::Null()) : _new_val;
                             auto [new_val, new_val_is_null_] = _new_val_pred.split();
@@ -1651,9 +1668,9 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Setup, callbac
             it != avg_aggregates.end() and not it->second.compute_running_avg)
         { // AVG aggregates which is not yet computed, divide computed sum with computed count
             auto &avg_info = it->second;
-            auto sum = convert<_Double>(results.get(avg_info.sum));
+            auto sum = results.get(avg_info.sum);
             auto count = results.get<_I64>(avg_info.running_count).insist_not_null().to<double>();
-            _Var<Double> avg(sum / count); // introduce variable s.t. uses only load from it
+            _Var<Double> avg(convert<_Double>(sum) / count); // introduce variable s.t. uses only load from it
             env.add(e.id, avg);
         } else { // part of key or already computed aggregate
             std::visit(overloaded {
@@ -1989,10 +2006,11 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
 
                 std::optional<Bool> build_key_not_null;
                 for (auto &build_key : build_keys) {
+                    auto val = env.get(build_key);
                     if (build_key_not_null)
-                        build_key_not_null.emplace(*build_key_not_null and not is_null(env.get(build_key)));
+                        build_key_not_null.emplace(*build_key_not_null and not_null(val));
                     else
-                        build_key_not_null.emplace(not is_null(env.get(build_key)));
+                        build_key_not_null.emplace(not_null(val));
                 }
                 M_insist(bool(build_key_not_null));
                 IF (*build_key_not_null) { // TODO: predicated version
@@ -2430,6 +2448,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                     M_insist(info.args.size() == 1, "MIN and MAX aggregate functions expect exactly one argument");
                     auto &arg = as<const Designator>(*info.args[0]);
                     const bool bound = schema.has(Schema::Identifier(arg.table_name.text, arg.attr_name.text));
+
                     std::visit(overloaded {
                         [&]<sql_type _T>(HashTable::reference_t<_T> &&r) -> void
                         requires (not (std::same_as<_T, _Bool> or std::same_as<_T, NChar>)) {
@@ -2441,7 +2460,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                                     auto neutral = is_min ? T(std::numeric_limits<type>::max())
                                                           : T(std::numeric_limits<type>::lowest());
                                     if (bound) {
-                                        auto [val_, is_null] = convert<_T>(env.compile(arg)).split();
+                                        auto _arg = env.compile(arg);
+                                        auto [val_, is_null] = convert<_T>(_arg).split();
                                         T val(val_); // due to structured binding and lambda closure
                                         IF (is_null) {
                                             r.clone().set_value(neutral); // initialize with neutral element +inf or -inf
@@ -2461,7 +2481,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                                 return; // MIN and MAX does not change in phase when argument is unbound
                             }
                             BLOCK_OPEN(update_aggs) {
-                                _T _new_val = convert<_T>(env.compile(arg));
+                                auto _arg = env.compile(arg);
+                                _T _new_val = convert<_T>(_arg);
                                 if (_new_val.can_be_null()) {
                                     auto [new_val_, new_val_is_null_] = _new_val.split();
                                     auto [old_min_max_, old_min_max_is_null] = _T(r.clone()).split();
@@ -2527,10 +2548,12 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                     const bool bound = schema.has(Schema::Identifier(arg.table_name.text, arg.attr_name.text));
 
                     auto r = entry.extract<_Double>(info.id);
+
                     if (build_phase) {
                         BLOCK_OPEN(init_aggs) {
                             if (bound) {
-                                auto [val_, is_null] = convert<_Double>(env.compile(arg)).split();
+                                auto _arg = env.compile(arg);
+                                auto [val_, is_null] = convert<_Double>(_arg).split();
                                 Double val(val_); // due to structured binding and lambda closure
                                 IF (is_null) {
                                     r.clone().set_value(Double(0.0)); // initialize with neutral element 0
@@ -2552,7 +2575,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                     BLOCK_OPEN(update_avg_aggs) {
                         /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming
                          * Vol 2, section 4.2.2. */
-                        _Double _new_val = convert<_Double>(env.compile(arg));
+                        auto _arg = env.compile(arg);
+                        _Double _new_val = convert<_Double>(_arg);
                         if (_new_val.can_be_null()) {
                             auto [new_val, new_val_is_null_] = _new_val.split();
                             auto [old_avg_, old_avg_is_null] = _Double(r.clone()).split();
@@ -2590,6 +2614,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                     M_insist(info.args.size() == 1, "SUM aggregate function expects exactly one argument");
                     auto &arg = as<const Designator>(*info.args[0]);
                     const bool bound = schema.has(Schema::Identifier(arg.table_name.text, arg.attr_name.text));
+
                     std::visit(overloaded {
                         [&]<sql_type _T>(HashTable::reference_t<_T> &&r) -> void
                         requires (not (std::same_as<_T, _Bool> or std::same_as<_T, NChar>)) {
@@ -2599,7 +2624,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                             if (build_phase) {
                                 BLOCK_OPEN(init_aggs) {
                                     if (bound) {
-                                        auto [val_, is_null] = convert<_T>(env.compile(arg)).split();
+                                        auto _arg = env.compile(arg);
+                                        auto [val_, is_null] = convert<_T>(_arg).split();
                                         T val(val_); // due to structured binding and lambda closure
                                         IF (is_null) {
                                             r.clone().set_value(T(type(0))); // initialize with neutral element 0
@@ -2619,7 +2645,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                                 return; // SUM may later be multiplied with group counter but does not change here
                             }
                             BLOCK_OPEN(update_aggs) {
-                                _T _new_val = convert<_T>(env.compile(arg));
+                                auto _arg = env.compile(arg);
+                                _T _new_val = convert<_T>(_arg);
                                 if (_new_val.can_be_null()) {
                                     auto [new_val, new_val_is_null_] = _new_val.split();
                                     auto [old_sum, old_sum_is_null] = _T(r.clone()).split();
@@ -2654,6 +2681,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                     M_insist(info.args.size() <= 1, "COUNT aggregate function expects at most one argument");
 
                     auto r = entry.get<_I64>(info.id); // do not extract to be able to access for AVG case
+
                     if (info.args.empty()) {
                         if (not build_phase) {
                             r.discard();
@@ -2672,11 +2700,13 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                     } else {
                         auto &arg = as<const Designator>(*info.args[0]);
                         const bool bound = schema.has(Schema::Identifier(arg.table_name.text, arg.attr_name.text));
+
                         if (build_phase) {
                             BLOCK_OPEN(init_aggs) {
                                 if (bound) {
-                                    I64 not_null = (not is_null(env.compile(arg))).to<int64_t>();
-                                    r.clone() = _I64(not_null); // initialize with 1 iff first value is present
+                                    auto _arg = env.compile(arg);
+                                    I64 new_val_not_null = not_null(_arg).to<int64_t>();
+                                    r.clone() = _I64(new_val_not_null); // initialize with 1 iff first value is present
                                 } else {
                                     r.clone() = _I64(0); // initialize with neutral element 0
                                 }
@@ -2687,10 +2717,11 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                             break; // COUNT may later be multiplied with group counter but does not change here
                         }
                         BLOCK_OPEN(update_aggs) {
-                            I64 new_not_null = (not is_null(env.compile(arg))).to<int64_t>();
+                            auto _arg = env.compile(arg);
+                            I64 new_val_not_null = not_null(_arg).to<int64_t>();
                             auto old_count = _I64(r.clone()).insist_not_null();
                             r.set_value(
-                                old_count + new_not_null // increment old count by 1 iff new value is present
+                                old_count + new_val_not_null // increment old count by 1 iff new value is present
                             );
                             /* do not update NULL bit since it is already set to `false` */
                         }
@@ -2714,10 +2745,11 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
 
                 std::optional<Bool> build_key_not_null;
                 for (auto &build_key : build_keys) {
+                    auto val = env.get(build_key);
                     if (build_key_not_null)
-                        build_key_not_null.emplace(*build_key_not_null and not is_null(env.get(build_key)));
+                        build_key_not_null.emplace(*build_key_not_null and not_null(val));
                     else
-                        build_key_not_null.emplace(not is_null(env.get(build_key)));
+                        build_key_not_null.emplace(not_null(val));
                 }
                 M_insist(bool(build_key_not_null));
                 IF (*build_key_not_null) { // TODO: predicated version

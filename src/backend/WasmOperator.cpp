@@ -1056,11 +1056,14 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                             auto neutral = is_min ? std::numeric_limits<T>::max() : std::numeric_limits<T>::lowest();
 
                             Global<PrimitiveExpr<T>> min_max;
-                            Global<Bool> is_null;
+                            std::optional<Global<Bool>> is_null;
+                            if (info.entry.nullable())
+                                is_null.emplace();
 
                             BLOCK_OPEN(init_aggs) {
                                 min_max = neutral; // initialize with neutral element +inf or -inf
-                                is_null = true; // MIN/MAX is initially NULL
+                                if (info.entry.nullable())
+                                    *is_null = true; // MIN/MAX is initially NULL
                             }
 
                             BLOCK_OPEN(update_aggs) {
@@ -1085,7 +1088,8 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                                                                 new_val, // update to new value
                                                                 min_max)); // do not update
                                     }
-                                    is_null = is_null and new_val_is_null; // MIN/MAX is NULL iff all values are NULL
+                                    M_insist(bool(is_null));
+                                    *is_null = *is_null and new_val_is_null; // MIN/MAX is NULL iff all values are NULL
                                 } else {
                                     auto _new_val_pred = pred ? Select(*pred, _new_val, neutral) : _new_val;
                                     auto new_val_ = _new_val_pred.insist_not_null();
@@ -1099,11 +1103,14 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                                                          new_val, // update to new value
                                                          min_max); // do not update
                                     }
-                                    is_null = false; // at least one non-NULL value is consumed
+                                    M_insist(not is_null);
                                 }
                             }
 
-                            results.add(info.entry.id, Select(is_null, Expr<T>::Null(), min_max));
+                            if (info.entry.nullable())
+                                results.add(info.entry.id, Select(*is_null, Expr<T>::Null(), min_max));
+                            else
+                                results.add(info.entry.id, min_max.val());
                         };
                         auto &n = as<const Numeric>(*info.entry.type);
                         switch (n.kind) {
@@ -1133,11 +1140,14 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
 
                         auto sum = [&]<typename T>() {
                             Global<PrimitiveExpr<T>> sum;
-                            Global<Bool> is_null;
+                            std::optional<Global<Bool>> is_null;
+                            if (info.entry.nullable())
+                                is_null.emplace();
 
                             BLOCK_OPEN(init_aggs) {
                                 sum = T(0); // initialize with neutral element 0
-                                is_null = true; // SUM is initially NULL
+                                if (info.entry.nullable())
+                                    *is_null = true; // SUM is initially NULL
                             }
 
                             BLOCK_OPEN(update_aggs) {
@@ -1151,15 +1161,19 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                                     sum += Select(new_val_is_null,
                                                   T(0), // ignore NULL
                                                   new_val); // add new value to old sum
-                                    is_null = is_null and new_val_is_null; // SUM is NULL iff all values are NULL
+                                    M_insist(bool(is_null));
+                                    *is_null = *is_null and new_val_is_null; // SUM is NULL iff all values are NULL
                                 } else {
                                     auto _new_val_pred = pred ? Select(*pred, _new_val, T(0)) : _new_val;
                                     sum += _new_val_pred.insist_not_null(); // add new value to old sum
-                                    is_null = false; // at least one non-NULL value is consumed
+                                    M_insist(not is_null);
                                 }
                             }
 
-                            results.add(info.entry.id, Select(is_null, Expr<T>::Null(), sum));
+                            if (info.entry.nullable())
+                                results.add(info.entry.id, Select(*is_null, Expr<T>::Null(), sum));
+                            else
+                                results.add(info.entry.id, sum.val());
                         };
                         auto &n = as<const Numeric>(*info.entry.type);
                         switch (n.kind) {
@@ -1229,11 +1243,14 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                              "AVG aggregate may only occur for running average computations");
 
                     Global<Double> avg;
-                    Global<Bool> is_null;
+                    std::optional<Global<Bool>> is_null;
+                    if (info.entry.nullable())
+                        is_null.emplace();
 
                     BLOCK_OPEN(init_aggs) {
                         avg = 0.0; // initialize with neutral element 0
-                        is_null = true; // AVG is initially NULL
+                        if (info.entry.nullable())
+                            *is_null = true; // AVG is initially NULL
                     }
 
                     BLOCK_OPEN(update_avg_aggs) {
@@ -1253,7 +1270,8 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                             avg += Select(new_val_is_null,
                                           0.0, // ignore NULL
                                           delta_relative); // update old average with new value
-                            is_null = is_null and new_val_is_null; // AVG is NULL iff all values are NULL
+                            M_insist(bool(is_null));
+                            *is_null = *is_null and new_val_is_null; // AVG is NULL iff all values are NULL
                         } else {
                             auto _new_val_pred = pred ? Select(*pred, _new_val, avg) : _new_val;
                             auto delta_absolute = _new_val_pred.insist_not_null() - avg;
@@ -1261,11 +1279,14 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                             auto delta_relative = delta_absolute / running_count.to<double>();
 
                             avg += delta_relative; // update old average with new value
-                            is_null = false; // at least one non-NULL value is consumed
+                            M_insist(not is_null);
                         }
                     }
 
-                    results.add(info.entry.id, Select(is_null, _Double::Null(), avg));
+                    if (info.entry.nullable())
+                        results.add(info.entry.id, Select(*is_null, _Double::Null(), avg));
+                    else
+                        results.add(info.entry.id, avg.val());
                 }
             }
 

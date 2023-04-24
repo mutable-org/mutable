@@ -1947,6 +1947,8 @@ _I32 m::wasm::strncmp(NChar _left, NChar _right, U32 len)
                     /*----- Create function to compute the result for non-nullptr arguments character-wise. -----*/
                     FUNCTION(strncmp_terminating_nul, data_t::fn_t)
                     {
+                        auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+
                         const auto len_ty_left  = PARAMETER(0);
                         const auto len_ty_right = PARAMETER(1);
                         auto left  = PARAMETER(2);
@@ -1990,6 +1992,8 @@ _I32 m::wasm::strncmp(NChar _left, NChar _right, U32 len)
                     /*----- Create function to compute the result for non-nullptr arguments character-wise. -----*/
                     FUNCTION(strncmp_no_terminating_nul, data_t::fn_t)
                     {
+                        auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+
                         const auto len_ty_left  = PARAMETER(0);
                         const auto len_ty_right = PARAMETER(1);
                         auto left  = PARAMETER(2);
@@ -2113,6 +2117,8 @@ Ptr<Char> m::wasm::strncpy(Ptr<Char> dst, Ptr<Char> src, U32 count)
         /*----- Create function to compute the result. -----*/
         FUNCTION(strncpy, char*(char*, char*, uint32_t))
         {
+            auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+
             auto dst = PARAMETER(0);
             auto src = PARAMETER(1);
             const auto count = PARAMETER(2);
@@ -2172,6 +2178,8 @@ _Bool m::wasm::like(NChar _str, NChar _pattern, const char escape_char)
             /*----- Create function to compute the result. -----*/
             FUNCTION(like, bool(int32_t, int32_t, char*, char*, char))
             {
+                auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+
                 const auto len_ty_str = PARAMETER(0);
                 const auto len_ty_pattern = PARAMETER(1);
                 const auto val_str = PARAMETER(2);

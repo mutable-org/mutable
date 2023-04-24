@@ -1773,6 +1773,7 @@ void Sorting::execute(const Match<Sorting> &M, callback_t Setup, callback_t Pipe
     FUNCTION(sorting_child_pipeline, void(void)) // create function for pipeline
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+
         M.child.execute(MatchBase::DoNothing, [&](){ buffer.consume(); }, MatchBase::DoNothing);
     }
     sorting_child_pipeline(); // call child function
@@ -1850,6 +1851,7 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, callb
         FUNCTION(nested_loop_join_child_pipeline, void(void))
         {
             auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+
             /*----- Create infinite buffer to materialize the current results. -----*/
             M_insist(bool(M.materializing_factories_[i]),
                      "`wasm::NestedLoopsJoin` must have a factory for each materialized child");

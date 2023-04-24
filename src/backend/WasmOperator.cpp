@@ -1036,7 +1036,10 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
         /* Pipeline= */ [&](){
             auto &env = CodeGenContext::Get().env();
 
-            std::optional<Var<Bool>> pred; ///< possible variable for predication predicate
+            /*----- If predication is used, introduce pred. var. and update it before computing aggregates. -----*/
+            std::optional<Var<Bool>> pred;
+            if (env.predicated())
+                pred = env.extract_predicate().is_true_and_not_null();
 
             /*----- Compute aggregates. -----*/
             Block init_aggs("ordered_grouping.init_aggs", false),
@@ -1376,10 +1379,6 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                 init_aggs.attach_to_current();
                 *first_iteration = false;
             };
-
-            /*----- If predication is used, update predication variable before updating aggregates. */
-            if (env.predicated())
-                pred = env.extract_predicate().is_true_and_not_null();
 
             /*----- Emit code to update aggregates. -----*/
             update_aggs.attach_to_current();

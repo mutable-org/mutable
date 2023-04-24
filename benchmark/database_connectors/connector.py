@@ -1,5 +1,27 @@
 from abc import ABC, abstractmethod
 
+
+#=======================================================================================================================
+# Connector exceptions
+#=======================================================================================================================
+
+class ConnectorException(Exception):
+    def __init__(self, what :str):
+        super().__init__(what)
+
+class ExperimentTimeoutExpired(ConnectorException):
+    def __init__(self, what :str):
+        super().__init__(what)
+
+class AttributeTypeUnknown(ConnectorException):
+    def __init__(self, what :str):
+        super().__init__(what)
+
+
+#=======================================================================================================================
+# Connector Abstract Base Class (ABC)
+#=======================================================================================================================
+
 class Connector(ABC):
 
     # Function that performs an experiment n_runs times given the parameters `params`.

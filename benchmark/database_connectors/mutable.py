@@ -18,10 +18,6 @@ TIMEOUT_PER_CASE = 10 # seconds
 
 class Mutable(Connector):
 
-    def __new__(cls, *args, **kwargs):
-        return super().__new__(cls)
-
-
     def __init__(self, mutable_binary, verbose=False):
         self.verbose = verbose
         self.mutable_binary=mutable_binary

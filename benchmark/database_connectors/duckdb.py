@@ -12,10 +12,6 @@ TMP_SQL_FILE = 'tmp.sql'
 
 class DuckDB(Connector):
 
-    def __new__(cls, *args, **kwargs):
-        return super().__new__(cls)
-
-
     def __init__(self, duckdb_cli, verbose=False):
         self.duckdb_cli=duckdb_cli
 

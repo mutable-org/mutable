@@ -275,7 +275,7 @@ GroupingOperator::GroupingOperator(std::vector<group_type> group_by,
         oss << e.get();
         auto alias = C.pool(oss.str().c_str());
         Schema::entry_type::constraints_t constraints{0};
-        if (not e.get().can_be_null())
+        if (not e.get().can_be_null()) // group cannot be empty, thus no default NULL will occur
             constraints |= Schema::entry_type::NOT_NULLABLE;
         S.add(alias, ty, constraints);
     }
@@ -292,7 +292,7 @@ AggregationOperator::AggregationOperator(std::vector<std::reference_wrapper<cons
         oss << e.get();
         auto alias = C.pool(oss.str().c_str());
         Schema::entry_type::constraints_t constraints{Schema::entry_type::UNIQUE}; // since a single tuple is produced
-        if (not e.get().can_be_null())
+        if (e.get().get_function().fnid == Function::FN_COUNT) // COUNT cannot be NULL (even for empty input)
             constraints |= Schema::entry_type::NOT_NULLABLE;
         S.add(alias, ty, constraints);
     }

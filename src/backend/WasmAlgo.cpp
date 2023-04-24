@@ -375,8 +375,9 @@ ChainedHashTable<IsGlobal>::~ChainedHashTable()
 {
     /*----- Free collision list entries. -----*/
     Var<Ptr<void>> it(begin());
-    WHILE (it != end()) {
-        Wasm_insist(begin() <= it and it < end(), "bucket out-of-bounds");
+    const Var<Ptr<void>> end(this->end());
+    WHILE (it != end) {
+        Wasm_insist(begin() <= it and it < end, "bucket out-of-bounds");
         Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint32_t*>()));
         WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
             const Var<Ptr<void>> tmp(bucket_it);
@@ -412,8 +413,9 @@ template<bool IsGlobal>
 void ChainedHashTable<IsGlobal>::clear()
 {
     Var<Ptr<void>> it(begin());
-    WHILE (it != end()) {
-        Wasm_insist(begin() <= it and it < end(), "entry out-of-bounds");
+    const Var<Ptr<void>> end(this->end());
+    WHILE (it != end) {
+        Wasm_insist(begin() <= it and it < end, "entry out-of-bounds");
 #if 0
         Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint32_t*>())); // XXX: may be random address
         WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
@@ -590,8 +592,9 @@ void ChainedHashTable<IsGlobal>::for_each(callback_t Pipeline) const
 {
     /*----- Iterate over all collision list entries and call pipeline (with entry handle argument). -----*/
     Var<Ptr<void>> it(begin());
-    WHILE (it != end()) {
-        Wasm_insist(begin() <= it and it < end(), "bucket out-of-bounds");
+    const Var<Ptr<void>> end(this->end());
+    WHILE (it != end) {
+        Wasm_insist(begin() <= it and it < end, "bucket out-of-bounds");
         Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint32_t*>()));
         WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
             Pipeline(entry(bucket_it));
@@ -980,8 +983,9 @@ template struct m::wasm::ChainedHashTable<true>;
 void OpenAddressingHashTableBase::clear()
 {
     Var<Ptr<void>> it(begin());
-    WHILE (it != end()) {
-        Wasm_insist(begin() <= it and it < end(), "entry out-of-bounds");
+    const Var<Ptr<void>> end(this->end());
+    WHILE (it != end) {
+        Wasm_insist(begin() <= it and it < end, "entry out-of-bounds");
         reference_count(it) = ref_t(0);
         it += int32_t(entry_size_in_bytes_);
     }
@@ -1126,8 +1130,9 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::~OpenAddressingHashTable()
     if constexpr (not ValueInPlace) {
         /*----- Free out-of-place values. -----*/
         Var<Ptr<void>> it(begin());
-        WHILE (it != end()) {
-            Wasm_insist(begin() <= it and it < end(), "entry out-of-bounds");
+        const Var<Ptr<void>> end(this->end());
+        WHILE (it != end) {
+            Wasm_insist(begin() <= it and it < end, "entry out-of-bounds");
             IF (reference_count(it) != ref_t(0)) { // occupied
                 Module::Allocator().deallocate(Ptr<void>(*(it + storage_.ptr_offset_in_bytes_).template to<uint32_t*>()),
                                                storage_.values_size_in_bytes_);
@@ -1355,8 +1360,9 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::for_each(callback_t Pipeli
 {
     /*----- Iterate over all entries and call pipeline (with entry handle argument) on occupied ones. -----*/
     Var<Ptr<void>> it(begin());
-    WHILE (it != end()) {
-        Wasm_insist(begin() <= it and it < end(), "entry out-of-bounds");
+    const Var<Ptr<void>> end(this->end());
+    WHILE (it != end) {
+        Wasm_insist(begin() <= it and it < end, "entry out-of-bounds");
         IF (reference_count(it) != ref_t(0)) { // occupied
             Pipeline(entry(it));
         };

@@ -19,9 +19,15 @@ tmp_sql_file = 'tmp.sql'
 # The connector for PostgreSQL
 class PostgreSQL(Connector):
 
+    def __init__(self, args = dict()):
+        pass
+
     # Runs an experiment one time, all parameters are in 'params'
     def execute(self, n_runs, params: dict):
-        self.clean_up()
+        try:
+            self.clean_up()
+        except psycopg2.OperationalError as ex:
+            raise ConnectorException(str(ex))
 
         # map that is returned with the measured times
         measurement_times = dict()
@@ -44,7 +50,7 @@ class PostgreSQL(Connector):
                 self.create_tables(cursor, params['data'], with_scale_factors)
 
                 # If tables contain scale factors, they have to be loaded separately for every case
-                if (with_scale_factors and bool(params.get('readonly'))):
+                if (with_scale_factors or not bool(params.get('readonly'))):
                     for case, query_stmt in params['cases'].items():
                         # Create tables from tmp tables with scale factor
                         for table_name, table in params['data'].items():

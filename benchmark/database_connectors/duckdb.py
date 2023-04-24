@@ -1,6 +1,5 @@
 from .connector import *
 
-import duckdb
 import os
 import json
 
@@ -12,9 +11,10 @@ TMP_SQL_FILE = 'tmp.sql'
 
 class DuckDB(Connector):
 
-    def __init__(self, duckdb_cli, verbose=False):
-        self.duckdb_cli=duckdb_cli
-
+    def __init__(self, args = dict()):
+        self.duckdb_cli = args.get('path_to_binary') # required
+        self.verbose = args.get('verbose', False) # optional
+        self.multithreaded = args.get('multithreaded', False)
 
     # Runs an experiment 'n_runs' times, all parameters are in 'params'
     def execute(self, n_runs, params: dict):
@@ -36,7 +36,7 @@ class DuckDB(Connector):
 
 
                 # If tables contain scale factors, they have to be loaded separately for every case
-                if (with_scale_factors and bool(params.get('readonly'))):
+                if (with_scale_factors or not bool(params.get('readonly'))):
                     # Write cases/queries to a file that will be passed to the command to execute
                     statements = list()
                     for case, query_stmt in params['cases'].items():
@@ -74,6 +74,8 @@ class DuckDB(Connector):
 
                 # Execute query file and collect measurement data
                 command = f"./{self.duckdb_cli} {TMP_DB} < {TMP_SQL_FILE}" + " | grep 'Run Time' | cut -d ' ' -f 5 | awk '{print $1 * 1000;}'"
+                if not self.multithreaded:
+                    command = f'taskset -c 2 {command}'
                 stream = os.popen(f'{command}')
                 for idx, line in enumerate(stream):
                     time = float(line.replace("\n", "").replace(",", ".")) # in milliseconds
@@ -87,7 +89,8 @@ class DuckDB(Connector):
             finally:
                 self.clean_up()
 
-        return {'DuckDB': measurement_times}
+        name = 'DuckDB (MT)' if self.multithreaded else 'DuckDB (ST)'
+        return { name: measurement_times }
 
 
     # Deletes the used temporary database
@@ -120,7 +123,7 @@ class DuckDB(Connector):
                 case 'BIGINT':
                     typ = 'BIGINT'
                 case _:
-                    raise Exception(f"Unknown type given for '{column_name}'")
+                    raise AttributeTypeUnknown(f"Unknown type given for '{column_name}'")
             columns += f"{column_name} {typ} {not_null}, "
         columns = columns[:-2] + ')'
         return columns

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
-from database_connectors import mutable, postgresql, hyper, duckdb
+from database_connectors import mutable, postgresql, hyper, duckdb, connector
 
 from colorama import Fore, Back, Style
 from git import Repo
 from pandas.api.types import is_numeric_dtype
 from sqlobject.converters import sqlrepr
 from tqdm import tqdm
+from types import SimpleNamespace
 import argparse
 import datetime
 import glob
@@ -31,9 +32,6 @@ N_RUNS = 5
 
 
 class BenchmarkError(Exception):
-    pass
-
-class BenchmarkTimeoutException(Exception):
     pass
 
 
@@ -239,6 +237,61 @@ BEGIN
 
         output_sql_file.write('END$$;')
 
+def perform_experiment(yml, conn, info, results) -> list():
+    # Experiment parameters
+    systems = yml.get('systems')
+    params = dict(systems[system])
+    params['description']  = yml.get('description')
+    params['suite']        = info.suite_name
+    params['benchmark']    = info.benchmark_name
+    params['name']         = info.experiment_name
+    params['readonly']     = yml.get('readonly')
+    params['chart']        = yml.get('chart')
+    params['data']         = info.experiment_data
+    params['path_to_file'] = info.path_to_file
+
+    # Perform benchmark
+    try:
+        sys.stdout.flush()
+        experiment_times = conn.execute(N_RUNS, params)
+    except connector.ConnectorException as ex:
+        tqdm.write(f"\nAn error occurred for {system} while executing {path_to_file}: {str(ex)}\n")
+        raise BenchmarkError()
+
+    # Add measurements to result
+    for config_name, execution_times in experiment_times.items():
+        # Skip empty measurements
+        if (not execution_times):
+            return list()
+
+        columns = ['commit', 'date', 'version', 'suite', 'benchmark', 'experiment', 'name', 'config', 'case', 'time', 'run_id']
+        config = config_name
+        configurations = systems[system].get('configurations')
+        if configurations:
+            if configurations.get(config_name):
+                config = configurations.get(config_name)
+
+        measurements = list()
+        for case, times in execution_times.items():
+            for run in range(len(times)):
+                measurements.append([str(commit), info.date, info.version, info.suite_name, info.benchmark_name, info.experiment_name, config_name, config, case, times[run], run])
+
+        # Create dataframe
+        measurements = pandas.DataFrame(measurements, columns=columns)
+
+        # Write to CSV file
+        if output_csv_file:
+            measurements.to_csv(output_csv_file, index=False, header=False, mode='a')
+
+        # Add to benchmark results
+        suite = results.get(yml['suite'], dict())
+        benchmark = suite.get(yml['benchmark'], dict())
+        experiment, _ = benchmark.get(info.experiment_name, (dict(), None))
+        experiment[config_name] = measurements
+        benchmark[info.experiment_name] = (experiment, yml)
+        suite[info.benchmark_name] = benchmark
+        results[info.suite_name] = suite
+
 
 #=======================================================================================================================
 # main
@@ -279,8 +332,8 @@ if __name__ == '__main__':
 
 
     # Set up counters
-    num_benchmarks_total = len(benchmark_files)
-    num_benchmarks_passed = 0
+    num_experiments_total = 0
+    num_experiments_passed = 0
 
     # Get date
     date = datetime.date.today().isoformat()
@@ -336,17 +389,20 @@ if __name__ == '__main__':
             yml = yaml.safe_load(yml_file)
 
             # Get information about experiment
-            version = yml.get('version', 1)
-            suite_name = yml.get('suite')
-            benchmark_name = yml.get('benchmark')
-            experiment_name = yml.get('name', path_to_file)
+            info = SimpleNamespace()
+            info.path_to_file = path_to_file
+            info.date = date
+            info.version = yml.get('version', 1)
+            info.suite_name = yml.get('suite')
+            info.benchmark_name = yml.get('benchmark')
+            info.experiment_name = yml.get('name', path_to_file)
 
             # Count the lines in each table file and add it to the table entry
-            experiment_data = yml.get('data')
-            if (experiment_data):
-                for table_name, table in experiment_data.items():
+            info.experiment_data = yml.get('data')
+            if info.experiment_data:
+                for table_name, table in info.experiment_data.items():
                     p = os.path.join(table['file'])
-                    experiment_data[table_name]['lines_in_file'] = int(os.popen(f"wc -l < {p}").read())
+                    info.experiment_data[table_name]['lines_in_file'] = int(os.popen(f"wc -l < {p}").read())
 
 
             tqdm.write(f'Perform benchmarks in \'{path_to_file}\'.')
@@ -356,77 +412,34 @@ if __name__ == '__main__':
                 if system not in test_systems:
                     continue
 
+                connectors = list()
+
                 match system:
                     case 'mutable':
-                        connector = mutable.Mutable(mutable_binary='build/release/bin/shell', verbose=args.verbose)
+                        connectors.append(mutable.Mutable(dict(
+                            path_to_binary = 'build/release/bin/shell',
+                            verbose = args.verbose,
+                        )))
                     case 'PostgreSQL':
-                        connector = postgresql.PostgreSQL()
+                        connectors.append(postgresql.PostgreSQL())
                     case 'DuckDB':
-                        connector = duckdb.DuckDB(duckdb_cli='benchmark/database_connectors/duckdb')
+                        connectors.append(duckdb.DuckDB(dict(
+                            path_to_binary = 'benchmark/database_connectors/duckdb',
+                        )))
                     case 'HyPer':
-                        connector = hyper.HyPer()
+                        connectors.append(hyper.HyPer())
 
-                # Experiment parameters
-                systems = yml.get('systems')
-                params = dict(systems[system])
-                params['description']   = yml.get('description')
-                params['suite']         = suite_name
-                params['benchmark']     = benchmark_name
-                params['name']          = experiment_name
-                params['readonly']      = yml.get('readonly')
-                params['chart']         = yml.get('chart')
-                params['data']          = experiment_data
-                params['path_to_file']  = path_to_file
-
-                # Perform benchmark
-                try:
-                    sys.stdout.flush()
-                    experiment_times = connector.execute(N_RUNS, params)
-                except KeyboardInterrupt:
-                    tqdm.write("\nKeyboardInterrupt. Abort.\n\n")
-                    exit(-1)
-                except:
-                    tqdm.write(f"\nAn error occurred for {system} while executing {path_to_file}\n")
-                    continue
-
-                # Add measurements to result
-                for config_name, execution_times in experiment_times.items():
-                    # Skip empty measurements
-                    if (not execution_times):
-                        continue
-
-                    columns = ['commit', 'date', 'version', 'suite', 'benchmark', 'experiment', 'name', 'config', 'case', 'time', 'run_id']
-                    config = config_name
-                    configurations = systems[system].get('configurations')
-                    if configurations:
-                        if configurations.get(config_name):
-                            config = configurations.get(config_name)
-
-                    measurements = list()
-                    for case, times in execution_times.items():
-                        for run in range(len(times)):
-                            measurements.append([str(commit), date, version, suite_name, benchmark_name, experiment_name, config_name, config, case, times[run], run])
-
-                    # Create dataframe
-                    measurements = pandas.DataFrame(measurements, columns=columns)
-
-                    # Write to CSV file
-                    if output_csv_file:
-                        measurements.to_csv(output_csv_file, index=False, header=False, mode='a')
-
-                    # Add to benchmark results
-                    suite = results.get(yml['suite'], dict())
-                    benchmark = suite.get(yml['benchmark'], dict())
-                    experiment, _ = benchmark.get(experiment_name, (dict(), None))
-                    experiment[config_name] = measurements
-                    benchmark[experiment_name] = (experiment, yml)
-                    suite[benchmark_name] = benchmark
-                    results[suite_name] = suite
-
-                    # Count number of benchmarks passed on mutable
-                    if (system=='mutable'):
-                        num_benchmarks_passed += 1
-
+                for conn in connectors:
+                    if system == 'mutable':
+                        num_experiments_total += 1
+                    try:
+                        perform_experiment(yml, conn, info, results)
+                    except BenchmarkError:
+                        pass # nothing to be done
+                    else:
+                        # Count number of benchmarks passed on mutable
+                        if system == 'mutable':
+                            num_experiments_passed += 1
 
     # Create .pgsql file
     if args.pgsql:
@@ -436,4 +449,5 @@ if __name__ == '__main__':
     log.clear()
     log.close()
 
-    exit(num_benchmarks_passed != num_benchmarks_total)
+    print(f'Performed {num_experiments_total} experiments on mutable')
+    exit(num_experiments_passed != num_experiments_total)

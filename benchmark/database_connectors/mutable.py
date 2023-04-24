@@ -18,9 +18,9 @@ TIMEOUT_PER_CASE = 10 # seconds
 
 class Mutable(Connector):
 
-    def __init__(self, mutable_binary, verbose=False):
-        self.verbose = verbose
-        self.mutable_binary=mutable_binary
+    def __init__(self, args = dict()):
+        self.mutable_binary = args.get('path_to_binary') # required
+        self.verbose = args.get('verbose', False) # optional
 
 
     def execute(self, n_runs, params: dict):
@@ -173,7 +173,7 @@ class Mutable(Connector):
             out, err = process.communicate(query.encode('latin-1'), timeout=timeout)
         except subprocess.TimeoutExpired:
             process.kill()
-            raise BenchmarkTimeoutException(f'Benchmark timed out after {timeout} seconds')
+            raise TimeoutExpiredException(f'Query timed out after {timeout} seconds')
         finally:
             if process.poll() is None: # if process is still alive
                 process.terminate() # try to shut down gracefully
@@ -198,7 +198,7 @@ class Mutable(Connector):
     ==================
     ''')
             if process.returncode:
-                raise BenchmarkError(f'Benchmark failed with return code {process.returncode}.')
+                raise ConnectorException(f'Benchmark failed with return code {process.returncode}.')
 
         # Parse `out` for timings
         durations = list()

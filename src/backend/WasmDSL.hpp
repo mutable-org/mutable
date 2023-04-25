@@ -2343,26 +2343,28 @@ struct Expr<T>
 
     /** Returns `true` if `this` is `NULL`, `false` otherwise. */
     PrimitiveExpr<bool> is_null() {
-#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
-        M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur");
-#endif
         value_.discard();
-        if (can_be_null())
+        if (can_be_null()) {
+#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
+            M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur");
+#endif
             return is_null_;
-        else
+        } else {
             return PrimitiveExpr<bool>(false);
+        }
     }
 
     /** Returns `true` if `this` is `NOT NULL`, `false` otherwise. */
     PrimitiveExpr<bool> not_null() {
+        value_.discard();
+        if (can_be_null()) {
 #if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
         M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur");
 #endif
-        value_.discard();
-        if (can_be_null())
             return not is_null_;
-        else
+        } else {
             return PrimitiveExpr<bool>(true);
+        }
     }
 
     /** Returns `true` if the value is `true` and `NOT NULL`.  Useful to use this `Expr<bool>` for conditional control

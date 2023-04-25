@@ -42,3 +42,14 @@ stages:
         err: NULL
         num_err: 0
         returncode: 0
+
+    end2end:
+        cli_args: --insist-no-ternary-logic
+        # rfloat column rounded to nearest value
+        out: |
+            2,48,0.78799999,"Sn3WMEpw 12Xc0K"
+            3,45,2.0950699,"Q7omKtKX ojr1wO"
+            4,4,8.0504599,"ZE5jtNf3oJIuhva"
+        err: NULL
+        num_err: 0
+        returncode: 0

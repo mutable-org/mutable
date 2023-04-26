@@ -135,6 +135,21 @@ struct OrderedGrouping : PhysicalOperator<OrderedGrouping, GroupingOperator>
 
 struct Aggregation : PhysicalOperator<Aggregation, AggregationOperator>
 {
+    private:
+    template<bool IsGlobal, typename T>
+    using var_t_ = std::conditional_t<IsGlobal, Global<T>, Var<T>>;
+    template<bool IsGlobal>
+    using agg_t_ = std::variant<
+        var_t_<IsGlobal, I64>,
+        std::pair<var_t_<IsGlobal, I8>,     var_t_<IsGlobal, Bool>>,
+        std::pair<var_t_<IsGlobal, I16>,    var_t_<IsGlobal, Bool>>,
+        std::pair<var_t_<IsGlobal, I32>,    var_t_<IsGlobal, Bool>>,
+        std::pair<var_t_<IsGlobal, I64>,    var_t_<IsGlobal, Bool>>,
+        std::pair<var_t_<IsGlobal, Float>,  var_t_<IsGlobal, Bool>>,
+        std::pair<var_t_<IsGlobal, Double>, var_t_<IsGlobal, Bool>>
+    >;
+
+    public:
     static void execute(const Match<Aggregation> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown);
     static double cost(const Match<Aggregation>&) { return 1.0; }
     static ConditionSet post_condition(const Match<Aggregation> &M);

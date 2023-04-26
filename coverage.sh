@@ -33,6 +33,9 @@ LCOV_FLAGS="\
     --no-external \
     --rc lcov_branch_coverage=1"
 
+# cleanup old files
+find build/coverage \( -iname '*.gcno' -or -iname '*.gcda' \) -exec rm {} +
+
 env CFLAGS=--coverage CXXFLAGS=--coverage \
     cmake -S . -B build/coverage \
     --fresh \
@@ -41,8 +44,11 @@ env CFLAGS=--coverage CXXFLAGS=--coverage \
     -DCMAKE_CXX_COMPILER=clang++ \
     -DCMAKE_BUILD_TYPE=Debug \
     -DBUILD_SHARED_LIBS=ON \
-    -DCMAKE_C_COMPILER=clang \
-    -DCMAKE_CXX_COMPILER=clang++
+    -DENABLE_SANITIZERS=OFF \
+    -DENABLE_SANITY_FIELDS=OFF \
+    -DUSE_LLD=ON
+
+cmake --build build/coverage -t clean
 cmake --build build/coverage
 
 cd build/coverage

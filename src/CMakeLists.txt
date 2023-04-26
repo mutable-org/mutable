@@ -14,6 +14,9 @@ add_subdirectory(backend)
 
 set(
     MUTABLE_SOURCES
+    mutable.cpp
+    Options.cpp
+    version.cpp
     $<TARGET_OBJECTS:backend>
     $<TARGET_OBJECTS:IR>
     $<TARGET_OBJECTS:io>
@@ -22,9 +25,6 @@ set(
     $<TARGET_OBJECTS:lex>
     $<TARGET_OBJECTS:catalog>
     $<TARGET_OBJECTS:util>
-    mutable.cpp
-    Options.cpp
-    version.cpp
 )
 add_library(${PROJECT_NAME} ${MUTABLE_SOURCES}) # STATIC or DYNAMIC, depends on BUILD_SHARED_LIBS
 

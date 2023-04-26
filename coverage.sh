@@ -59,7 +59,7 @@ lcov ${LCOV_FLAGS} --zerocounters --directory src --directory unittest
 lcov ${LCOV_FLAGS} --capture --initial --directory src --directory unittest --output-file base.info
 # lcov ${LCOV_FLAGS} --capture --initial --output-file unittest.base
 # Run tests
-bin/unittest --durations yes --reporter junit --out catch.xml '[core]'
+bin/unittest --reporter compact '[core]'
 # Capture lcov counters and generate report
 lcov ${LCOV_FLAGS} --capture --directory src --directory unittest --output-file test.info
 # lcov ${LCOV_FLAGS} --capture --directory unittest --output-file unittest.capture

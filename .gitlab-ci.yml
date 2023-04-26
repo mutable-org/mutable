@@ -402,11 +402,6 @@ report:coverage:
         - .coverage
         - .shared
         - .build_cache
-    artifacts:
-        paths:
-            - "build/${BUILD_TYPE}/catch.xml"
-        reports:
-            junit: "build/${BUILD_TYPE}/catch.xml"
     rules:
         - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
           when: on_success

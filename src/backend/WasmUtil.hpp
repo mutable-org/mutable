@@ -425,11 +425,11 @@ struct CodeGenContext
     }
 
     /** Creates a new, *scoped* `Environment`.  The new `Environment` is immediately used by the `CodeGenContext`.  When
-     * the `Scope` is destroyed (i.e. when it goes out of scope or its methods `extract()` is called), the *old*
+     * the `Scope` is destroyed (i.e. when it goes out of scope or its method `extract()` is called), the *old*
      * `Environment` is used again by the `CodeGenContext`. */
     Scope scoped_environment() { return Scope(Environment()); }
     /** Creates a new `Scope` using the `Environment` `env` which is immediately used by the `CodeGenContext`.  When
-     * the `Scope` is destroyed (i.e. when it goes out of scope or its methods `extract()` is called), the *old*
+     * the `Scope` is destroyed (i.e. when it goes out of scope or its method `extract()` is called), the *old*
      * `Environment` is used again by the `CodeGenContext`. */
     Scope scoped_environment(Environment env) { return Scope(std::move(env)); }
 

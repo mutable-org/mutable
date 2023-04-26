@@ -11,55 +11,71 @@ using namespace m;
  * Value
  *====================================================================================================================*/
 
+#ifdef M_ENABLE_SANITY_FIELDS
 TEST_CASE("Value/default c'tor", "[core][storage][Value]")
 {
     Value val;
     REQUIRE(val.type == Value::VNone);
 }
+#endif
 
 TEST_CASE("Value/value c'tor", "[core][storage][Value]")
 {
     SECTION("b")
     {
         Value val(true);
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(val.type == Value::Vb);
+#endif
         REQUIRE(val.as_b() == true);
     }
     SECTION("i32")
     {
         Value val(42);
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(val.type == Value::Vi);
+#endif
         REQUIRE(val.as_i() == 42);
     }
     SECTION("i64")
     {
         Value val(1337L);
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(val.type == Value::Vi);
+#endif
         REQUIRE(val.as_i() == 1337L);
     }
     SECTION("u64")
     {
         Value val(1337UL);
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(val.type == Value::Vi);
+#endif
         REQUIRE(val.as_i() == 1337L);
     }
     SECTION("f")
     {
         Value val(3.14f);
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(val.type == Value::Vf);
+#endif
         REQUIRE(val.as_f() == 3.14f);
     }
     SECTION("d")
     {
         Value val(3.14159);
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(val.type == Value::Vd);
+#endif
         REQUIRE(val.as_d() == 3.14159);
     }
     SECTION("p")
     {
         int x;
         Value val(&x);
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(val.type == Value::Vp);
+#endif
         REQUIRE(val.as_p() == &x);
     }
 }
@@ -112,50 +128,74 @@ TEST_CASE("Value/assignment", "[core][storage][Value]")
     SECTION("b")
     {
         src = true;
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(src.type == Value::Vb);
+#endif
         REQUIRE(src.as_b() == true);
 
         dst = src;
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(src.type == Value::Vb);
+#endif
         REQUIRE(src.as_b() == true);
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(dst.type == Value::Vb);
+#endif
         REQUIRE(dst.as_b() == true);
     }
     SECTION("i32")
     {
         src = 42;
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(src.type == Value::Vi);
+#endif
         REQUIRE(src.as_i() == 42);
 
         dst = src;
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(src.type == Value::Vi);
+#endif
         REQUIRE(src.as_i() == 42);
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(dst.type == Value::Vi);
+#endif
         REQUIRE(dst.as_i() == 42);
     }
     SECTION("i64")
     {
         src = 1337L;
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(src.type == Value::Vi);
+#endif
         REQUIRE(src.as_i() == 1337L);
 
         dst = src;
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(src.type == Value::Vi);
+#endif
         REQUIRE(src.as_i() == 1337L);
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(dst.type == Value::Vi);
+#endif
         REQUIRE(dst.as_i() == 1337L);
     }
     SECTION("p")
     {
         int x;
         src = &x;
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(src.type == Value::Vp);
+#endif
         REQUIRE(src.as_p() == &x);
 
         dst = src;
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(src.type == Value::Vp);
+#endif
         REQUIRE(src.as_p() == &x);
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(dst.type == Value::Vp);
+#endif
         REQUIRE(dst.as_p() == &x);
     }
 }
@@ -168,21 +208,27 @@ TEST_CASE("Value/conversion assignment", "[core][storage][Value]")
     {
         val = true;
         val.as_b() = false;
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(val.type == Value::Vb);
+#endif
         REQUIRE(val.as_b() == false);
     }
     SECTION("i32")
     {
         val = 1337;
         val.as_i() = 42;
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(val.type == Value::Vi);
+#endif
         REQUIRE(val.as_i() == 42);
     }
     SECTION("i64")
     {
         val = 42L;
         val.as_i() = 1337L;
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(val.type == Value::Vi);
+#endif
         REQUIRE(val.as_i() == 1337L);
     }
 }

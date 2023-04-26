@@ -673,11 +673,17 @@ TEST_CASE("DSVReader::operator() sanity tests", "[core][io][unit]")
                                                                      table.layout(), S));
         Tuple *args[] = { &tup };
         (*W)(args);
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(tup[0].type == m::Value::VNone);
+#endif
         (*W)(args);
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(tup[0].type == m::Value::VNone);
+#endif
         (*W)(args);
+#ifdef M_ENABLE_SANITY_FIELDS
         REQUIRE(tup[0].type == m::Value::VNone);
+#endif
     }
 
     SECTION("Const<CharacterSequence>& sanity tests")

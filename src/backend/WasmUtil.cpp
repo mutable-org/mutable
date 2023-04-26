@@ -891,7 +891,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                         BLOCK_OPEN(loads) {
                             U8 byte = *(ptr + byte_offset).template to<uint8_t*>(); // load byte
                             Var<Bool> value((byte bitand mask).template to<bool>()); // mask bit with dynamic mask
-                            values[tuple_idx].emplace<_Bool>(value);
+                            new (&values[tuple_idx]) SQL_t(_Bool(value));
                         }
                     }
                 } else { // entry without bit stride; if masking is required, we can use a static mask
@@ -913,7 +913,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                  "leaf offset of `Numeric`, `Date`, or `DateTime` must be byte aligned");
                         BLOCK_OPEN(loads) {
                             Var<PrimitiveExpr<type>> value(*(ptr + byte_offset).template to<type*>());
-                            values[tuple_idx].emplace<T>(value);
+                            new (&values[tuple_idx]) SQL_t(T(value));
                         }
                     };
                     /*----- Select call target (store or load) and visit attribute type. -----*/
@@ -936,7 +936,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                     U8 byte = *(ptr + byte_offset).template to<uint8_t*>(); // load byte
                                     const uint8_t static_mask = 1U << bit_offset;
                                     Var<Bool> value((byte bitand static_mask).to<bool>()); // mask bit with static mask
-                                    values[tuple_idx].emplace<_Bool>(value);
+                                    new (&values[tuple_idx]) SQL_t(_Bool(value));
                                 }
                             }
                         },
@@ -975,8 +975,9 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                 /*----- Load value. -----*/
                                 BLOCK_OPEN(loads) {
                                     Ptr<Char> address((ptr + byte_offset).template to<char*>());
-                                    values[tuple_idx].emplace<NChar>(address, tuple_it->nullable(), cs.length,
-                                                                     cs.is_varying);
+                                    new (&values[tuple_idx]) SQL_t(
+                                        NChar(address, tuple_it->nullable(), cs.length, cs.is_varying)
+                                    );
                                 }
                             }
                         },
@@ -1267,6 +1268,9 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
         }
     }
 
+    /*----- Destroy created values. -----*/
+    for (std::size_t idx = 0; idx < tuple_schema.num_entries(); ++idx)
+        values[idx].~SQL_t();
     if constexpr (not IsStore) {
         /*----- Destroy created NULL bits. -----*/
         for (std::size_t idx = 0; idx != tuple_schema.num_entries(); ++idx) {
@@ -1522,7 +1526,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                     Wasm_insist(bit_offset == 0U,
                                 "leaf offset of `Numeric`, `Date`, or `DateTime` must be byte aligned");
                     Var<PrimitiveExpr<type>> value(*ptr.template to<type*>());
-                    values[tuple_idx].emplace<T>(value);
+                    new (&values[tuple_idx]) SQL_t(T(value));
                 };
                 /*----- Select call target (store or load) and visit attribute type. -----*/
 #define CALL(TYPE) if constexpr (IsStore) store.template operator()<TYPE>(); else load.template operator()<TYPE>()
@@ -1538,7 +1542,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                             /* TODO: load byte once, create values with respective mask */
                             U8 byte = *ptr.template to<uint8_t*>(); // load byte
                             Var<Bool> value((byte bitand (uint8_t(1) << bit_offset)).to<bool>()); // mask bit
-                            values[tuple_idx].emplace<_Bool>(value);
+                            new (&values[tuple_idx]) SQL_t(_Bool(value));
                         }
                     },
                     [&](const Numeric &n) {
@@ -1571,8 +1575,9 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                             };
                         } else {
                             /*----- Load value. -----*/
-                            values[tuple_idx].emplace<NChar>(ptr.template to<char*>(), tuple_it->nullable(), cs.length,
-                                                             cs.is_varying);
+                            new (&values[tuple_idx]) SQL_t(
+                                NChar(ptr.template to<char*>(), tuple_it->nullable(), cs.length, cs.is_varying)
+                            );
                         }
                     },
                     [&](const Date&) { CALL(_I32); },
@@ -1616,6 +1621,9 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
         }
     }
 
+    /*----- Destroy created values. -----*/
+    for (std::size_t idx = 0; idx < tuple_schema.num_entries(); ++idx)
+        values[idx].~SQL_t();
     if constexpr (not IsStore) {
         /*----- Destroy created NULL bits. -----*/
         for (std::size_t idx = 0; idx != tuple_schema.num_entries(); ++idx) {

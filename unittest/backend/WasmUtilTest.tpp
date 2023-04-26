@@ -11,6 +11,7 @@ using namespace m::wasm;
 TEST_CASE("Wasm/" BACKEND_NAME "/setbit", "[core][wasm]")
 {
     Module::Init();
+    CodeGenContext::Init();
 
     /* with bit offset */
     CHECK_RESULT_INLINE(0b10010100, uint8_t(void), {
@@ -40,12 +41,14 @@ TEST_CASE("Wasm/" BACKEND_NAME "/setbit", "[core][wasm]")
         RETURN(*ptr);
     });
 
+    CodeGenContext::Dispose();
     Module::Dispose();
 }
 
 TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
 {
     Module::Init();
+    CodeGenContext::Init();
 
     SECTION("strncmp with equal-length chars")
     {
@@ -420,12 +423,14 @@ TEST_CASE("Wasm/" BACKEND_NAME "/string comparison", "[core][wasm]")
         }
     }
 
+    CodeGenContext::Dispose();
     Module::Dispose();
 }
 
 TEST_CASE("Wasm/" BACKEND_NAME "/strncpy", "[core][wasm]")
 {
     Module::Init();
+    CodeGenContext::Init();
 
     SECTION("copy all, terminated")
     {
@@ -483,5 +488,6 @@ TEST_CASE("Wasm/" BACKEND_NAME "/strncpy", "[core][wasm]")
         REQUIRE_NOTHROW(INVOKE(test));
     }
 
+    CodeGenContext::Dispose();
     Module::Dispose();
 }

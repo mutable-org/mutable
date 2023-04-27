@@ -126,6 +126,32 @@ struct HashBasedGrouping : PhysicalOperator<HashBasedGrouping, GroupingOperator>
 
 struct OrderedGrouping : PhysicalOperator<OrderedGrouping, GroupingOperator>
 {
+    private:
+    template<bool IsGlobal, typename T>
+    using var_t_ = std::conditional_t<IsGlobal, Global<T>, Var<T>>;
+    template<bool IsGlobal>
+    using agg_t_ = std::variant<
+        var_t_<IsGlobal, I64>,
+        std::pair<var_t_<IsGlobal, I8>,     std::optional<var_t_<IsGlobal, Bool>>>,
+        std::pair<var_t_<IsGlobal, I16>,    std::optional<var_t_<IsGlobal, Bool>>>,
+        std::pair<var_t_<IsGlobal, I32>,    std::optional<var_t_<IsGlobal, Bool>>>,
+        std::pair<var_t_<IsGlobal, I64>,    std::optional<var_t_<IsGlobal, Bool>>>,
+        std::pair<var_t_<IsGlobal, Float>,  std::optional<var_t_<IsGlobal, Bool>>>,
+        std::pair<var_t_<IsGlobal, Double>, std::optional<var_t_<IsGlobal, Bool>>>
+    >;
+    template<bool IsGlobal>
+    using key_t_ = std::variant<
+        var_t_<IsGlobal, Ptr<Char>>,
+        std::pair<var_t_<IsGlobal, Bool>,      std::optional<var_t_<IsGlobal, Bool>>>,
+        std::pair<var_t_<IsGlobal, I8>,        std::optional<var_t_<IsGlobal, Bool>>>,
+        std::pair<var_t_<IsGlobal, I16>,       std::optional<var_t_<IsGlobal, Bool>>>,
+        std::pair<var_t_<IsGlobal, I32>,       std::optional<var_t_<IsGlobal, Bool>>>,
+        std::pair<var_t_<IsGlobal, I64>,       std::optional<var_t_<IsGlobal, Bool>>>,
+        std::pair<var_t_<IsGlobal, Float>,     std::optional<var_t_<IsGlobal, Bool>>>,
+        std::pair<var_t_<IsGlobal, Double>,    std::optional<var_t_<IsGlobal, Bool>>>
+    >;
+
+    public:
     static void execute(const Match<OrderedGrouping> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown);
     static double cost(const Match<OrderedGrouping>&) { return 1.0; }
     static ConditionSet pre_condition(std::size_t child_idx,

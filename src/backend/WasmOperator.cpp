@@ -1034,12 +1034,408 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
     /*----- Forward declare function to emit a group tuple in the current environment and resume the pipeline. -----*/
     FunctionProxy<void(void)> emit_group_and_resume_pipeline("emit_group_and_resume_pipeline");
 
-    std::optional<Var<Bool>> first_iteration; ///< variable to *locally* count
+    std::optional<Var<Bool>> first_iteration; ///< variable to *locally* check for first iteration
     ///> *global* flag backup since the following code may be called multiple times
     Global<Bool> first_iteration_backup(true);
 
+    using agg_t = agg_t_<false>;
+    using agg_backup_t = agg_t_<true>;
+    agg_t agg_values[aggregates.size()]; ///< *local* values of the computed aggregates
+    agg_backup_t agg_value_backups[aggregates.size()]; ///< *global* value backups of the computed aggregates
+
+    using key_t = key_t_<false>;
+    using key_backup_t = key_t_<true>;
+    key_t key_values[num_keys]; ///< *local* values of the computed keys
+    key_backup_t key_value_backups[num_keys]; ///< *global* value backups of the computed keys
+
+    auto store_locals_to_globals = [&](){
+        /*----- Store local aggregate values to globals to access them in other function. -----*/
+        for (std::size_t idx = 0; idx < aggregates.size(); ++idx) {
+            auto &info = aggregates[idx];
+
+            bool is_min = false; ///< flag to indicate whether aggregate function is MIN
+            switch (info.fnid) {
+                default:
+                    M_unreachable("unsupported aggregate function");
+                case m::Function::FN_MIN:
+                    is_min = true; // set flag and delegate to MAX case
+                case m::Function::FN_MAX: {
+                    auto min_max = [&]<typename T>() {
+                        auto &[min_max, is_null] = *M_notnull((
+                            std::get_if<std::pair<Var<PrimitiveExpr<T>>, std::optional<Var<Bool>>>>(&agg_values[idx])
+                        ));
+                        auto &[min_max_backup, is_null_backup] = *M_notnull((
+                            std::get_if<std::pair<Global<PrimitiveExpr<T>>,
+                                                  std::optional<Global<Bool>>>>(&agg_value_backups[idx])
+                        ));
+                        M_insist(bool(is_null) == bool(is_null_backup));
+
+                        min_max_backup = min_max;
+                        if (is_null)
+                            *is_null_backup = *is_null;
+                    };
+                    auto &n = as<const Numeric>(*info.entry.type);
+                    switch (n.kind) {
+                        case Numeric::N_Int:
+                        case Numeric::N_Decimal:
+                            switch (n.size()) {
+                                default: M_unreachable("invalid size");
+                                case  8: min_max.template operator()<int8_t >(); break;
+                                case 16: min_max.template operator()<int16_t>(); break;
+                                case 32: min_max.template operator()<int32_t>(); break;
+                                case 64: min_max.template operator()<int64_t>(); break;
+                            }
+                            break;
+                        case Numeric::N_Float:
+                            if (n.size() <= 32)
+                                min_max.template operator()<float>();
+                            else
+                                min_max.template operator()<double>();
+                    }
+                    break;
+                }
+                case m::Function::FN_AVG: {
+                    auto &[avg, is_null] = *M_notnull((
+                        std::get_if<std::pair<Var<Double>, std::optional<Var<Bool>>>>(&agg_values[idx])
+                    ));
+                    auto &[avg_backup, is_null_backup] = *M_notnull((
+                        std::get_if<std::pair<Global<Double>, std::optional<Global<Bool>>>>(&agg_value_backups[idx])
+                    ));
+                    M_insist(bool(is_null) == bool(is_null_backup));
+
+                    avg_backup = avg;
+                    if (is_null)
+                        *is_null_backup = *is_null;
+
+                    break;
+                }
+                case m::Function::FN_SUM: {
+                    M_insist(info.args.size() == 1, "SUM aggregate function expects exactly one argument");
+                    const auto &arg = *info.args[0];
+
+                    auto sum = [&]<typename T>() {
+                        auto &[sum, is_null] = *M_notnull((
+                            std::get_if<std::pair<Var<PrimitiveExpr<T>>, std::optional<Var<Bool>>>>(&agg_values[idx])
+                        ));
+                        auto &[sum_backup, is_null_backup] = *M_notnull((
+                            std::get_if<std::pair<Global<PrimitiveExpr<T>>,
+                                                  std::optional<Global<Bool>>>>(&agg_value_backups[idx])
+                        ));
+                        M_insist(bool(is_null) == bool(is_null_backup));
+
+                        sum_backup = sum;
+                        if (is_null)
+                            *is_null_backup = *is_null;
+                    };
+                    auto &n = as<const Numeric>(*info.entry.type);
+                    switch (n.kind) {
+                        case Numeric::N_Int:
+                        case Numeric::N_Decimal:
+                            switch (n.size()) {
+                                default: M_unreachable("invalid size");
+                                case  8: sum.template operator()<int8_t >(); break;
+                                case 16: sum.template operator()<int16_t>(); break;
+                                case 32: sum.template operator()<int32_t>(); break;
+                                case 64: sum.template operator()<int64_t>(); break;
+                            }
+                            break;
+                        case Numeric::N_Float:
+                            if (n.size() <= 32)
+                                sum.template operator()<float>();
+                            else
+                                sum.template operator()<double>();
+                    }
+                    break;
+                }
+                case m::Function::FN_COUNT: {
+                    auto &count = *M_notnull(std::get_if<Var<I64>>(&agg_values[idx]));
+                    auto &count_backup = *M_notnull(std::get_if<Global<I64>>(&agg_value_backups[idx]));
+
+                    count_backup = count;
+
+                    break;
+                }
+            }
+        }
+
+        /*----- Store local key values to globals to access them in other function. -----*/
+        auto store = [&]<typename T>(std::size_t idx) {
+            auto &[key, is_null] = *M_notnull((
+                std::get_if<std::pair<Var<PrimitiveExpr<T>>, std::optional<Var<Bool>>>>(&key_values[idx])
+            ));
+            auto &[key_backup, is_null_backup] = *M_notnull((
+                std::get_if<std::pair<Global<PrimitiveExpr<T>>, std::optional<Global<Bool>>>>(&key_value_backups[idx])
+            ));
+            M_insist(bool(is_null) == bool(is_null_backup));
+
+            key_backup = key;
+            if (is_null)
+                *is_null_backup = *is_null;
+        };
+        for (std::size_t idx = 0; idx < num_keys; ++idx) {
+            visit(overloaded{
+                [&](const Boolean&) { store.template operator()<bool>(idx); },
+                [&](const Numeric &n) {
+                    switch (n.kind) {
+                        case Numeric::N_Int:
+                        case Numeric::N_Decimal:
+                            switch (n.size()) {
+                                default: M_unreachable("invalid size");
+                                case  8: store.template operator()<int8_t >(idx); break;
+                                case 16: store.template operator()<int16_t>(idx); break;
+                                case 32: store.template operator()<int32_t>(idx); break;
+                                case 64: store.template operator()<int64_t>(idx); break;
+                            }
+                            break;
+                        case Numeric::N_Float:
+                            if (n.size() <= 32)
+                                store.template operator()<float>(idx);
+                            else
+                                store.template operator()<double>(idx);
+                    }
+                },
+                [&](const CharacterSequence &cs) {
+                    auto &key = *M_notnull(std::get_if<Var<Ptr<Char>>>(&key_values[idx]));
+                    auto &key_backup = *M_notnull(std::get_if<Global<Ptr<Char>>>(&key_value_backups[idx]));
+
+                    key_backup = key;
+                },
+                [&](const Date&) { store.template operator()<int32_t>(idx); },
+                [&](const DateTime&) { store.template operator()<int64_t>(idx); },
+                [](auto&&) { M_unreachable("invalid type"); },
+            }, *M.grouping.schema()[idx].type);
+        }
+    };
+
     M.child.execute(
-        /* Setup=    */ [&](){ first_iteration.emplace(first_iteration_backup); },
+        /* Setup=    */ [&](){
+            first_iteration.emplace(first_iteration_backup);
+
+            /*----- Initialize aggregates and their backups. -----*/
+            for (std::size_t idx = 0; idx < aggregates.size(); ++idx) {
+                auto &info = aggregates[idx];
+                const bool nullable = info.entry.nullable();
+
+                bool is_min = false; ///< flag to indicate whether aggregate function is MIN
+                switch (info.fnid) {
+                    default:
+                        M_unreachable("unsupported aggregate function");
+                    case m::Function::FN_MIN:
+                        is_min = true; // set flag and delegate to MAX case
+                    case m::Function::FN_MAX: {
+                        auto min_max = [&]<typename T>() {
+                            auto neutral = is_min ? std::numeric_limits<T>::max()
+                                                  : std::numeric_limits<T>::lowest();
+
+                            Var<PrimitiveExpr<T>> min_max;
+                            Global<PrimitiveExpr<T>> min_max_backup(neutral); // initialize with neutral element +inf or -inf
+                            std::optional<Var<Bool>> is_null;
+                            std::optional<Global<Bool>> is_null_backup;
+
+                            /*----- Set local aggregate variables to global backups. -----*/
+                            min_max = min_max_backup;
+                            if (nullable) {
+                                is_null_backup.emplace(true); // MIN/MAX is initially NULL
+                                is_null.emplace(*is_null_backup);
+                            }
+
+                            /*----- Add global aggregate to result environment to access it in other function. -----*/
+                            if (nullable)
+                                results.add(info.entry.id, Select(*is_null_backup, Expr<T>::Null(), min_max_backup));
+                            else
+                                results.add(info.entry.id, min_max_backup.val());
+
+                            /*----- Move aggregate variables to access them later. ----*/
+                            new (&agg_values[idx]) agg_t(std::make_pair(std::move(min_max), std::move(is_null)));
+                            new (&agg_value_backups[idx]) agg_backup_t(std::make_pair(
+                                std::move(min_max_backup), std::move(is_null_backup)
+                            ));
+                        };
+                        auto &n = as<const Numeric>(*info.entry.type);
+                        switch (n.kind) {
+                            case Numeric::N_Int:
+                            case Numeric::N_Decimal:
+                                switch (n.size()) {
+                                    default: M_unreachable("invalid size");
+                                    case  8: min_max.template operator()<int8_t >(); break;
+                                    case 16: min_max.template operator()<int16_t>(); break;
+                                    case 32: min_max.template operator()<int32_t>(); break;
+                                    case 64: min_max.template operator()<int64_t>(); break;
+                                }
+                                break;
+                            case Numeric::N_Float:
+                                if (n.size() <= 32)
+                                    min_max.template operator()<float>();
+                                else
+                                    min_max.template operator()<double>();
+                        }
+                        break;
+                    }
+                    case m::Function::FN_AVG: {
+                        Var<Double> avg;
+                        Global<Double> avg_backup(0.0); // initialize with neutral element 0
+                        std::optional<Var<Bool>> is_null;
+                        std::optional<Global<Bool>> is_null_backup;
+
+                        /*----- Set local aggregate variables to global backups. -----*/
+                        avg = avg_backup;
+                        if (nullable) {
+                            is_null_backup.emplace(true); // AVG is initially NULL
+                            is_null.emplace(*is_null_backup);
+                        }
+
+                        /*----- Add global aggregate to result environment to access it in other function. -----*/
+                        if (nullable)
+                            results.add(info.entry.id, Select(*is_null_backup, _Double::Null(), avg_backup));
+                        else
+                            results.add(info.entry.id, avg_backup.val());
+
+                        /*----- Move aggregate variables to access them later. ----*/
+                        new (&agg_values[idx]) agg_t(std::make_pair(std::move(avg), std::move(is_null)));
+                        new (&agg_value_backups[idx]) agg_backup_t(std::make_pair(
+                            std::move(avg_backup), std::move(is_null_backup)
+                        ));
+
+                        break;
+                    }
+                    case m::Function::FN_SUM: {
+                        auto sum = [&]<typename T>() {
+                            Var<PrimitiveExpr<T>> sum;
+                            Global<PrimitiveExpr<T>> sum_backup(T(0)); // initialize with neutral element 0
+                            std::optional<Var<Bool>> is_null;
+                            std::optional<Global<Bool>> is_null_backup;
+
+                            /*----- Set local aggregate variables to global backups. -----*/
+                            sum = sum_backup;
+                            if (nullable) {
+                                is_null_backup.emplace(true); // SUM is initially NULL
+                                is_null.emplace(*is_null_backup);
+                            }
+
+                            /*----- Add global aggregate to result environment to access it in other function. -----*/
+                            if (nullable)
+                                results.add(info.entry.id, Select(*is_null_backup, Expr<T>::Null(), sum_backup));
+                            else
+                                results.add(info.entry.id, sum_backup.val());
+
+                            /*----- Move aggregate variables to access them later. ----*/
+                            new (&agg_values[idx]) agg_t(std::make_pair(std::move(sum), std::move(is_null)));
+                            new (&agg_value_backups[idx]) agg_backup_t(std::make_pair(
+                                std::move(sum_backup), std::move(is_null_backup)
+                            ));
+                        };
+                        auto &n = as<const Numeric>(*info.entry.type);
+                        switch (n.kind) {
+                            case Numeric::N_Int:
+                            case Numeric::N_Decimal:
+                                switch (n.size()) {
+                                    default: M_unreachable("invalid size");
+                                    case  8: sum.template operator()<int8_t >(); break;
+                                    case 16: sum.template operator()<int16_t>(); break;
+                                    case 32: sum.template operator()<int32_t>(); break;
+                                    case 64: sum.template operator()<int64_t>(); break;
+                                }
+                                break;
+                            case Numeric::N_Float:
+                                if (n.size() <= 32)
+                                    sum.template operator()<float>();
+                                else
+                                    sum.template operator()<double>();
+                        }
+                        break;
+                    }
+                    case m::Function::FN_COUNT: {
+                        Var<I64> count;
+                        Global<I64> count_backup(0); // initialize with neutral element 0
+                        /* no `is_null` variables needed since COUNT will not be NULL */
+
+                        /*----- Set local aggregate variable to global backup. -----*/
+                        count = count_backup;
+
+                        /*----- Add global aggregate to result environment to access it in other function. -----*/
+                        results.add(info.entry.id, count_backup.val());
+
+                        /*----- Move aggregate variables to access them later. ----*/
+                        new (&agg_values[idx]) agg_t(std::move(count));
+                        new (&agg_value_backups[idx]) agg_backup_t(std::move(count_backup));
+
+                        break;
+                    }
+                }
+            }
+
+            /*----- Initialize keys and their backups. -----*/
+            auto init = [&]<typename T>(std::size_t idx) {
+                const bool nullable = M.grouping.schema()[idx].nullable();
+
+                Var<PrimitiveExpr<T>> key;
+                Global<PrimitiveExpr<T>> key_backup;
+                std::optional<Var<Bool>> is_null;
+                std::optional<Global<Bool>> is_null_backup;
+
+                /*----- Set local key variables to global backups. -----*/
+                key = key_backup;
+                if (nullable) {
+                    is_null_backup.emplace();
+                    is_null.emplace(*is_null_backup);
+                }
+
+                /*----- Add global key to result environment to access it in other function. -----*/
+                if (nullable)
+                    results.add(M.grouping.schema()[idx].id, Select(*is_null_backup, Expr<T>::Null(), key_backup));
+                else
+                    results.add(M.grouping.schema()[idx].id, key_backup.val());
+
+                /*----- Move key variables to access them later. ----*/
+                new (&key_values[idx]) key_t(std::make_pair(std::move(key), std::move(is_null)));
+                new (&key_value_backups[idx]) key_backup_t(std::make_pair(
+                    std::move(key_backup), std::move(is_null_backup)
+                ));
+            };
+            for (std::size_t idx = 0; idx < num_keys; ++idx) {
+                visit(overloaded{
+                    [&](const Boolean&) { init.template operator()<bool>(idx); },
+                    [&](const Numeric &n) {
+                        switch (n.kind) {
+                            case Numeric::N_Int:
+                            case Numeric::N_Decimal:
+                                switch (n.size()) {
+                                    default: M_unreachable("invalid size");
+                                    case  8: init.template operator()<int8_t >(idx); break;
+                                    case 16: init.template operator()<int16_t>(idx); break;
+                                    case 32: init.template operator()<int32_t>(idx); break;
+                                    case 64: init.template operator()<int64_t>(idx); break;
+                                }
+                                break;
+                            case Numeric::N_Float:
+                                if (n.size() <= 32)
+                                    init.template operator()<float>(idx);
+                                else
+                                    init.template operator()<double>(idx);
+                        }
+                    },
+                    [&](const CharacterSequence &cs) {
+                        Var<Ptr<Char>> key;
+                        Global<Ptr<Char>> key_backup;
+                        /* no `is_null` variables needed since pointer types must not be NULL */
+
+                        /*----- Set local key variable to global backup. -----*/
+                        key = key_backup;
+
+                        /*----- Add global key to result environment to access it in other function. -----*/
+                        NChar str(key_backup.val(), M.grouping.schema()[idx].nullable(), cs.length, cs.is_varying);
+                        results.add(M.grouping.schema()[idx].id, std::move(str));
+
+                        /*----- Move key variables to access them later. ----*/
+                        new (&key_values[idx]) key_t(std::move(key));
+                        new (&key_value_backups[idx]) key_backup_t(std::move(key_backup));
+                    },
+                    [&](const Date&) { init.template operator()<int32_t>(idx); },
+                    [&](const DateTime&) { init.template operator()<int64_t>(idx); },
+                    [](auto&&) { M_unreachable("invalid type"); },
+                }, *M.grouping.schema()[idx].type);
+            }
+        },
         /* Pipeline= */ [&](){
             auto &env = CodeGenContext::Get().env();
 
@@ -1049,10 +1445,12 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                 pred = env.extract_predicate().is_true_and_not_null();
 
             /*----- Compute aggregates. -----*/
-            Block init_aggs("ordered_grouping.init_aggs", false),
+            Block reset_aggs("ordered_grouping.reset_aggs", false),
                   update_aggs("ordered_grouping.update_aggs", false),
                   update_avg_aggs("ordered_grouping.update_avg_aggs", false);
-            for (auto &info : aggregates) {
+            for (std::size_t idx = 0; idx < aggregates.size(); ++idx) {
+                auto &info = aggregates[idx];
+
                 bool is_min = false; ///< flag to indicate whether aggregate function is MIN
                 switch (info.fnid) {
                     default:
@@ -1063,22 +1461,23 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                         M_insist(info.args.size() == 1, "MIN and MAX aggregate functions expect exactly one argument");
                         const auto &arg = *info.args[0];
                         auto min_max = [&]<typename T>() {
-                            auto neutral = is_min ? std::numeric_limits<T>::max() : std::numeric_limits<T>::lowest();
+                            auto neutral = is_min ? std::numeric_limits<T>::max()
+                                                  : std::numeric_limits<T>::lowest();
 
-                            Global<PrimitiveExpr<T>> min_max;
-                            std::optional<Global<Bool>> is_null;
-                            if (info.entry.nullable())
-                                is_null.emplace();
+                            auto &[min_max, is_null] = *M_notnull((
+                                std::get_if<std::pair<Var<PrimitiveExpr<T>>, std::optional<Var<Bool>>>>(&agg_values[idx])
+                            ));
 
-                            BLOCK_OPEN(init_aggs) {
-                                min_max = neutral; // initialize with neutral element +inf or -inf
-                                if (info.entry.nullable())
-                                    *is_null = true; // MIN/MAX is initially NULL
+                            BLOCK_OPEN(reset_aggs) {
+                                min_max = neutral;
+                                if (is_null)
+                                    *is_null = true;
                             }
 
                             BLOCK_OPEN(update_aggs) {
                                 auto _arg = env.compile(arg);
                                 Expr<T> _new_val = convert<Expr<T>>(_arg);
+                                M_insist(_new_val.can_be_null() == bool(is_null));
                                 if (_new_val.can_be_null()) {
                                     auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
                                     auto [new_val_, new_val_is_null_] = _new_val_pred.split();
@@ -1098,7 +1497,6 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                                                                 new_val, // update to new value
                                                                 min_max)); // do not update
                                     }
-                                    M_insist(bool(is_null));
                                     *is_null = *is_null and new_val_is_null; // MIN/MAX is NULL iff all values are NULL
                                 } else {
                                     auto _new_val_pred = pred ? Select(*pred, _new_val, neutral) : _new_val;
@@ -1113,14 +1511,8 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                                                          new_val, // update to new value
                                                          min_max); // do not update
                                     }
-                                    M_insist(not is_null);
                                 }
                             }
-
-                            if (info.entry.nullable())
-                                results.add(info.entry.id, Select(*is_null, Expr<T>::Null(), min_max));
-                            else
-                                results.add(info.entry.id, min_max.val());
                         };
                         auto &n = as<const Numeric>(*info.entry.type);
                         switch (n.kind) {
@@ -1149,20 +1541,20 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                         const auto &arg = *info.args[0];
 
                         auto sum = [&]<typename T>() {
-                            Global<PrimitiveExpr<T>> sum;
-                            std::optional<Global<Bool>> is_null;
-                            if (info.entry.nullable())
-                                is_null.emplace();
+                            auto &[sum, is_null] = *M_notnull((
+                                std::get_if<std::pair<Var<PrimitiveExpr<T>>, std::optional<Var<Bool>>>>(&agg_values[idx])
+                            ));
 
-                            BLOCK_OPEN(init_aggs) {
-                                sum = T(0); // initialize with neutral element 0
-                                if (info.entry.nullable())
-                                    *is_null = true; // SUM is initially NULL
+                            BLOCK_OPEN(reset_aggs) {
+                                sum = T(0);
+                                if (is_null)
+                                    *is_null = true;
                             }
 
                             BLOCK_OPEN(update_aggs) {
                                 auto _arg = env.compile(arg);
                                 Expr<T> _new_val = convert<Expr<T>>(_arg);
+                                M_insist(_new_val.can_be_null() == bool(is_null));
                                 if (_new_val.can_be_null()) {
                                     auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
                                     auto [new_val, new_val_is_null_] = _new_val_pred.split();
@@ -1171,19 +1563,12 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                                     sum += Select(new_val_is_null,
                                                   T(0), // ignore NULL
                                                   new_val); // add new value to old sum
-                                    M_insist(bool(is_null));
                                     *is_null = *is_null and new_val_is_null; // SUM is NULL iff all values are NULL
                                 } else {
                                     auto _new_val_pred = pred ? Select(*pred, _new_val, T(0)) : _new_val;
                                     sum += _new_val_pred.insist_not_null(); // add new value to old sum
-                                    M_insist(not is_null);
                                 }
                             }
-
-                            if (info.entry.nullable())
-                                results.add(info.entry.id, Select(*is_null, Expr<T>::Null(), sum));
-                            else
-                                results.add(info.entry.id, sum.val());
                         };
                         auto &n = as<const Numeric>(*info.entry.type);
                         switch (n.kind) {
@@ -1209,11 +1594,10 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                         M_insist(info.args.size() <= 1, "COUNT aggregate function expects at most one argument");
                         M_insist(info.entry.type->is_integral() and info.entry.type->size() == 64);
 
-                        Global<I64> count;
-                        /* no `is_null` variable needed since COUNT will not be NULL */
+                        auto &count = *M_notnull(std::get_if<Var<I64>>(&agg_values[idx]));
 
-                        BLOCK_OPEN(init_aggs) {
-                            count = 0; // initialize with neutral element 0
+                        BLOCK_OPEN(reset_aggs) {
+                            count = int64_t(0);
                         }
 
                         BLOCK_OPEN(update_aggs) {
@@ -1232,15 +1616,15 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                                 }
                             }
                         }
-
-                        results.add(info.entry.id, count.val());
                         break;
                     }
                 }
             }
 
-            /*----- Compute AVG aggregates after others to ensure that running count is in result environment. -----*/
-            for (auto &info : aggregates) {
+            /*----- Compute AVG aggregates after others to ensure that running count is already created. -----*/
+            for (std::size_t idx = 0; idx < aggregates.size(); ++idx) {
+                auto &info = aggregates[idx];
+
                 if (info.fnid == m::Function::FN_AVG) {
                     M_insist(info.args.size() == 1, "AVG aggregate function expects exactly one argument");
                     const auto &arg = *info.args[0];
@@ -1252,74 +1636,69 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                     M_insist(avg_info.compute_running_avg,
                              "AVG aggregate may only occur for running average computations");
 
-                    Global<Double> avg;
-                    std::optional<Global<Bool>> is_null;
-                    if (info.entry.nullable())
-                        is_null.emplace();
+                    auto &[avg, is_null] = *M_notnull((
+                        std::get_if<std::pair<Var<Double>, std::optional<Var<Bool>>>>(&agg_values[idx])
+                    ));
 
-                    BLOCK_OPEN(init_aggs) {
-                        avg = 0.0; // initialize with neutral element 0
-                        if (info.entry.nullable())
-                            *is_null = true; // AVG is initially NULL
+                    BLOCK_OPEN(reset_aggs) {
+                        avg = 0.0;
+                        if (is_null)
+                            *is_null = true;
                     }
 
                     BLOCK_OPEN(update_avg_aggs) {
                         /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming
                          * Vol 2, section 4.2.2. */
+                        auto running_count_idx = std::distance(
+                            aggregates.cbegin(),
+                            std::find_if(aggregates.cbegin(), aggregates.cend(), [&avg_info](const auto &info){
+                                return info.entry.id == avg_info.running_count;
+                            })
+                        );
+                        M_insist(0 <= running_count_idx and running_count_idx < aggregates.size());
+                        auto &running_count = *M_notnull(std::get_if<Var<I64>>(&agg_values[running_count_idx]));
+
                         auto _arg = env.compile(arg);
                         _Double _new_val = convert<_Double>(_arg);
+                        M_insist(_new_val.can_be_null() == bool(is_null));
                         if (_new_val.can_be_null()) {
                             auto _new_val_pred = pred ? Select(*pred, _new_val, _Double::Null()) : _new_val;
                             auto [new_val, new_val_is_null_] = _new_val_pred.split();
                             const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
 
                             auto delta_absolute = new_val - avg;
-                            auto running_count = results.get<_I64>(avg_info.running_count).insist_not_null();
                             auto delta_relative = delta_absolute / running_count.to<double>();
 
                             avg += Select(new_val_is_null,
                                           0.0, // ignore NULL
                                           delta_relative); // update old average with new value
-                            M_insist(bool(is_null));
                             *is_null = *is_null and new_val_is_null; // AVG is NULL iff all values are NULL
                         } else {
                             auto _new_val_pred = pred ? Select(*pred, _new_val, avg) : _new_val;
                             auto delta_absolute = _new_val_pred.insist_not_null() - avg;
-                            auto running_count = results.get<_I64>(avg_info.running_count).insist_not_null();
                             auto delta_relative = delta_absolute / running_count.to<double>();
 
                             avg += delta_relative; // update old average with new value
-                            M_insist(not is_null);
                         }
                     }
-
-                    if (info.entry.nullable())
-                        results.add(info.entry.id, Select(*is_null, _Double::Null(), avg));
-                    else
-                        results.add(info.entry.id, avg.val());
                 }
             }
 
-            /*----- Introduce variables for old and current grouping keys and compute whether new group starts. -----*/
-            Block update_keys("ordered_grouping.update_grouping_keys", false);
+            /*----- Compute whether new group starts and update key variables accordingly. -----*/
             std::optional<Bool> group_differs;
-            for (std::size_t i = 0; i < num_keys; ++i) {
-                if (results.has(M.grouping.schema()[i].id))
-                    continue; // duplicated grouping key
-
-                /* Introduce globals for grouping keys to make them usable in `emit_group_and_resume_pipeline`. */
+            Block update_keys("ordered_grouping.update_grouping_keys", false);
+            for (std::size_t idx = 0; idx < num_keys; ++idx) {
                 std::visit(overloaded {
                     [&]<typename T>(Expr<T> value) -> void {
-                        if (value.can_be_null()) {
-                            /* split into value and NULL flag since globals must be not be nullable
-                             * TODO: change once nullable globals are supported */
-                            Global<PrimitiveExpr<T>> key_val; // in first iteration defaulted but never needed (see below)
-                            Global<Bool> key_is_null; // in first iteration defaulted but never needed (see below)
-                            results.add(M.grouping.schema()[i].id, Expr<T>(key_val, key_is_null));
+                        auto &[key_val, key_is_null] = *M_notnull((
+                            std::get_if<std::pair<Var<PrimitiveExpr<T>>, std::optional<Var<Bool>>>>(&key_values[idx])
+                        ));
+                        M_insist(value.can_be_null() == bool(key_is_null));
 
+                        if (value.can_be_null()) {
                             auto [val, is_null] = value.clone().split();
-                            auto null_differs = is_null != key_is_null;
-                            Bool key_differs = null_differs or (not key_is_null and val != key_val);
+                            auto null_differs = is_null != *key_is_null;
+                            Bool key_differs = null_differs or (not *key_is_null and val != key_val);
                             if (group_differs)
                                 group_differs.emplace(key_differs or *group_differs);
                             else
@@ -1329,24 +1708,19 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                                 std::tie(key_val, key_is_null) = value.split();
                             }
                         } else {
-                            Global<PrimitiveExpr<T>> key; // in first iteration defaulted but never needed (see below)
-                            results.add(M.grouping.schema()[i].id, key.val());
-
-                            Bool key_differs = key != value.clone().insist_not_null();
+                            Bool key_differs = key_val != value.clone().insist_not_null();
                             if (group_differs)
                                 group_differs.emplace(key_differs or *group_differs);
                             else
                                 group_differs.emplace(key_differs);
 
                             BLOCK_OPEN(update_keys) {
-                               key = value.insist_not_null();
+                               key_val = value.insist_not_null();
                             }
                         }
                     },
                     [&](NChar value) -> void {
-                        Global<Ptr<Char>> key; // in first iteration defaulted but never needed (see below)
-                        results.add(M.grouping.schema()[i].id, NChar(key.val(), value.can_be_null(), value.length(),
-                                                                     value.guarantees_terminating_nul()));
+                        auto &key = *M_notnull(std::get_if<Var<Ptr<Char>>>(&key_values[idx]));
 
                         auto [key_addr, key_is_nullptr] = key.val().split();
                         auto [addr, is_nullptr] = value.val().clone().split();
@@ -1372,18 +1746,19 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                         }
                     },
                     [](std::monostate) -> void { M_unreachable("invalid expression"); },
-                }, env.compile(M.grouping.group_by()[i].first.get()));
+                }, env.compile(M.grouping.group_by()[idx].first.get()));
             }
             M_insist(bool(group_differs));
 
-            /*----- Resume pipeline with computed group iff new one starts and emit code to initialize aggregates. ---*/
+            /*----- Resume pipeline with computed group iff new one starts and emit code to reset aggregates. ---*/
             M_insist(bool(first_iteration));
             IF (*first_iteration or *group_differs) { // `group_differs` defaulted in first iteration but overruled anyway
                 IF (not *first_iteration) {
+                    store_locals_to_globals();
                     emit_group_and_resume_pipeline();
+                    reset_aggs.attach_to_current();
                 };
                 update_keys.attach_to_current();
-                init_aggs.attach_to_current();
                 *first_iteration = false;
             };
 
@@ -1392,6 +1767,14 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
             update_avg_aggs.attach_to_current(); // after others to ensure that running count is incremented before
         },
         /* Teardown= */ [&](){
+            store_locals_to_globals();
+
+            /*----- Destroy created aggregate values and their backups. -----*/
+            for (std::size_t idx = 0; idx < aggregates.size(); ++idx) {
+                agg_values[idx].~agg_t();
+                agg_value_backups[idx].~agg_backup_t();
+            }
+
             M_insist(bool(first_iteration));
             first_iteration_backup = *first_iteration;
             first_iteration.reset();

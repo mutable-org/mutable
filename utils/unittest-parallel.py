@@ -54,6 +54,13 @@ class JunitData:
         else:
             result_xml.write(sys.stdout.buffer)
 
+    def is_failure(self):
+        if (self.errors > 0 or self.failures > 0):
+            return True
+        else:
+            return False
+
+
 # data needed for human readable output
 class TestData:
     total_assertions = 0
@@ -138,6 +145,11 @@ class TestData:
             print(f'\u001b[32;1mAll tests passed\u001b[39;0m ({self.passed_assertions} assertions in {self.passed_test_cases} test cases)\n')
             print(f'Execution time: {self.execution_time}s\n')
 
+    def is_failure(self):
+        if (self.failed_assertions > 0 or self.failed_test_cases > 0):
+            return True
+        else:
+            return False
 
 
 def run_tests(args, test_names: list[str], binary_path: str, is_interactive: bool):
@@ -217,8 +229,7 @@ def run_tests(args, test_names: list[str], binary_path: str, is_interactive: boo
     execution_time = time_end - time_start
     data.execution_time = execution_time
 
-    out = args.out
-    data.dump(out)
+    return data
 
 
 if __name__ == '__main__':
@@ -251,5 +262,11 @@ if __name__ == '__main__':
     output = subprocess.run(list_tests_command, shell=True, stdout=subprocess.PIPE)
     test_names = output.stdout.decode().strip().split('\n')
 
-    run_tests(args, test_names, args.binary_path, is_interactive)
+    data = run_tests(args, test_names, args.binary_path, is_interactive)
+
+    data.dump(args.out)
+    if data.is_failure():
+        exit(1)
+    else:
+        exit(0)
 

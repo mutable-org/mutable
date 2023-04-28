@@ -55,10 +55,15 @@ class PostgreSQL(Connector):
                 cursor = connection.cursor()
                 cursor.execute("set jit=off;")
                 self.create_tables(cursor, params['data'], with_scale_factors)
+                connection.close()
+
 
                 # If tables contain scale factors, they have to be loaded separately for every case
                 if (with_scale_factors or not bool(params.get('readonly'))):
                     for case, query_stmt in params['cases'].items():
+                        connection = psycopg2.connect(**db_options)
+                        connection.autocommit = True
+                        cursor = connection.cursor()
                         # Create tables from tmp tables with scale factor
                         for table_name, table in params['data'].items():
                             if table.get('scale_factors'):
@@ -69,6 +74,7 @@ class PostgreSQL(Connector):
                             num_rows = round((table['lines_in_file'] - header) * sf)
                             cursor.execute(f"DELETE FROM {table_name};")     # empty existing table
                             cursor.execute(f"INSERT INTO {table_name} SELECT * FROM {table_name}_tmp LIMIT {num_rows};")    # copy data with scale factor
+                        connection.close()
 
                         # Write case/query to a file that will be passed to the command to execute
                         with open(TMP_SQL_FILE, "w") as tmp:
@@ -84,20 +90,25 @@ class PostgreSQL(Connector):
                                 verbose_printed = True
                                 with open(TMP_SQL_FILE) as tmp:
                                     tqdm.write("    " + "    ".join(tmp.readlines()))
-                        stream = os.popen(f'{command}')
-                        for idx, line in enumerate(stream):
-                            time = float(line.replace("\n", "").replace(",", ".")) # in milliseconds
+
+                        timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
+                        benchmark_info = f"{suite}/{benchmark}/{experiment} [PostgreSQL]"
+                        try:
+                            durations = self.run_command(command, timeout, benchmark_info)
+                        except ExperimentTimeoutExpired as ex:
                             if case not in measurement_times.keys():
                                 measurement_times[case] = list()
-                            measurement_times[case].append(time)
-
-                        stream.close()
+                            measurement_times[case].append(TIMEOUT_PER_CASE * 1000)
+                        else:
+                            for idx, line in enumerate(durations):
+                                time = float(line.replace("\n", "").replace(",", ".")) # in milliseconds
+                                if case not in measurement_times.keys():
+                                    measurement_times[case] = list()
+                                measurement_times[case].append(time)
 
 
                 # Otherwise, tables have to be created just once before the measurements (done above)
                 else:
-                    connection.close()
-
                     # Write cases/queries to a file that will be passed to the command to execute
                     with open(TMP_SQL_FILE, "w") as tmp:
                         tmp.write("\\timing on\n")
@@ -113,14 +124,23 @@ class PostgreSQL(Connector):
                             verbose_printed = True
                             with open(TMP_SQL_FILE) as tmp:
                                 tqdm.write("    " + "    ".join(tmp.readlines()))
-                    stream = os.popen(f'{command}')
-                    for idx, line in enumerate(stream):
-                        time = float(line.replace("\n", "").replace(",", ".")) # in milliseconds
-                        case = list(params['cases'].keys())[idx]
-                        if case not in measurement_times.keys():
-                            measurement_times[case] = list()
-                        measurement_times[case].append(time)
-                    stream.close()
+
+                    timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(params['cases'])
+                    benchmark_info = f"{suite}/{benchmark}/{experiment} [PostgreSQL]"
+                    try:
+                        durations = self.run_command(command, timeout, benchmark_info)
+                    except ExperimentTimeoutExpired as ex:
+                        for case in params['cases'].keys():
+                            if case not in measurement_times.keys():
+                                measurement_times[case] = list()
+                            measurement_times[case].append(TIMEOUT_PER_CASE * 1000)
+                    else:
+                        for idx, line in enumerate(durations):
+                            time = float(line.replace("\n", "").replace(",", ".")) # in milliseconds
+                            case = list(params['cases'].keys())[idx]
+                            if case not in measurement_times.keys():
+                                measurement_times[case] = list()
+                            measurement_times[case].append(time)
 
             finally:
                 if(connection):
@@ -146,7 +166,10 @@ class PostgreSQL(Connector):
         connection = psycopg2.connect(user=db_options['user'])
         connection.autocommit = True
         cursor = connection.cursor()
-        cursor.execute(f"DROP DATABASE IF EXISTS {db_options['dbname']};")
+        try:
+            cursor.execute(f"DROP DATABASE IF EXISTS {db_options['dbname']};")
+        except Exception as ex:
+            tqdm.write(f"Unexpeced error while executing 'DROP DATABASE IF EXISTS {db_options['dbname']}' : {ex}")
         connection.close()
         if os.path.exists(TMP_SQL_FILE):
             os.remove(TMP_SQL_FILE)
@@ -213,3 +236,45 @@ class PostgreSQL(Connector):
 
             if with_scale_factors:
                 cursor.execute(f"CREATE TABLE {table_name[:-4]} {columns};")     # Create actual table that will be used for experiment
+
+
+    def run_command(self, command, timeout, benchmark_info):
+        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   cwd=os.getcwd(), shell=True)
+        try:
+            out, err = process.communicate("".encode('latin-1'), timeout=timeout)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            self.clean_up()
+            raise ExperimentTimeoutExpired(f'Query timed out after {timeout} seconds')
+        finally:
+            if process.poll() is None: # if process is still alive
+                process.terminate() # try to shut down gracefully
+                try:
+                    process.wait(timeout=1) # wait for process to terminate
+                except subprocess.TimeoutExpired:
+                    process.kill() # kill if process did not terminate in time
+
+        out = out.decode('latin-1')
+        err = err.decode('latin-1')
+
+        if process.returncode or len(err):
+            outstr = '\n'.join(out.split('\n')[-20:])
+            tqdm.write(f'''\
+    Unexpected failure during execution of benchmark "{benchmark_info}" with return code {process.returncode}:''')
+            tqdm.write(command)
+            tqdm.write(f'''\
+    ===== stdout =====
+    {outstr}
+    ===== stderr =====
+    {err}
+    ==================
+    ''')
+            if process.returncode:
+                raise ConnectorException(f'Benchmark failed with return code {process.returncode}.')
+
+        # Parse `out` for timings
+        durations = out.split('\n')
+        durations.remove('')
+
+        return durations

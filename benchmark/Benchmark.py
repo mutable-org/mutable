@@ -405,7 +405,7 @@ if __name__ == '__main__':
                     info.experiment_data[table_name]['lines_in_file'] = int(os.popen(f"wc -l < {p}").read())
 
 
-            tqdm.write('\n\n======================================================')
+            tqdm.write('\n\n==========================================================')
             tqdm.write(f'Perform benchmarks in \'{path_to_file}\'.')
             tqdm.write('==========================================================')
 

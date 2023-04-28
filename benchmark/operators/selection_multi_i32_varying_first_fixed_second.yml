@@ -30,8 +30,8 @@ systems:
     mutable:
         pattern: '^Execute query:.*'
         configurations:
-            'WebAssembly (Row)':   --backend WasmV8 --data-layout Row
-            'WebAssembly (PAX4M)': --backend WasmV8 --data-layout PAX4M
+            'WasmV8, Row':   --backend WasmV8 --data-layout Row
+            'WasmV8, PAX4M': --backend WasmV8 --data-layout PAX4M
         cases:
             0.01: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -2104533974 AND a1 < -2104533974;
             0.05: SELECT 1 FROM Attributes_multi_i32 WHERE a0 < -1932735282 AND a1 < -2104533974;

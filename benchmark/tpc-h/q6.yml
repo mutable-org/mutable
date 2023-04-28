@@ -29,7 +29,7 @@ systems:
     mutable:
         pattern: '^Execute query:.*'
         configurations:
-            'WebAssembly': --backend WasmV8 --data-layout PAX4M
+            'WasmV8, PAX4M': --backend WasmV8 --data-layout PAX4M
         cases:
             1: |
                 SELECT

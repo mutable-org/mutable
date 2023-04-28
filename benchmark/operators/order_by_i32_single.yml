@@ -42,9 +42,9 @@ systems:
     mutable:
         pattern: '^Execute query:.*'
         configurations:
-            Interpreter:           --backend Interpreter
-            'WebAssembly (Row)':   --backend WasmV8 --data-layout Row
-            'WebAssembly (PAX4M)': --backend WasmV8 --data-layout PAX4M
+            'Interpreter':  --backend Interpreter
+            'WasmV8, Row':   --backend WasmV8 --data-layout Row
+            'WasmV8, PAX4M': --backend WasmV8 --data-layout PAX4M
         cases:
             0.0: SELECT id FROM Distinct_i32 ORDER BY n100000;
             0.1: SELECT id FROM Distinct_i32 ORDER BY n100000;

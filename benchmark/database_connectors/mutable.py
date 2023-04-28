@@ -49,6 +49,7 @@ class Mutable(Connector):
         if configs:
             # Run benchmark under different configurations
             for config_name, config in configs.items():
+                config_name = f"mutable (single core, {config_name})"
                 measurements = self.run_configuration(experiment_name, config_name, config, params)
                 experiment[config_name] = measurements
         else:

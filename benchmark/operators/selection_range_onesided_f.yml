@@ -25,7 +25,7 @@ systems:
     mutable:
         pattern: '^Execute query:.*'
         configurations:
-            WebAssembly: --backend WasmV8 --data-layout PAX4M
+            'WasmV8, PAX4M': --backend WasmV8 --data-layout PAX4M
         cases:
             0.01: SELECT 1 FROM Attribute_f WHERE val < 0.01;
             0.05: SELECT 1 FROM Attribute_f WHERE val < 0.05;

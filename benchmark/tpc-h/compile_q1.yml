@@ -30,7 +30,7 @@ systems:
     mutable:
         pattern: '^Compile to WebAssembly:.*'
         configurations:
-            'WebAssembly': --backend WasmV8 --data-layout PAX4M --dryrun --quiet
+            'WasmV8, PAX4M': --backend WasmV8 --data-layout PAX4M --dryrun --quiet
         cases:
             1:  SELECT
                         l_returnflag,

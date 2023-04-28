@@ -30,12 +30,12 @@ systems:
     mutable:
         pattern: '^Execute query:.*'
         configurations:
-            Interpreter: >-
+            'Interpreter, PAX4M': >-
               --backend Interpreter
               --data-layout PAX4M
               --cardinality-estimator Injected
               --use-cardinality-file benchmark/operators/group_by_i32_distinct.json
-            'WebAssembly (PAX4M)': >-
+            'WasmV8, PAX4M': >-
               --backend WasmV8
               --data-layout PAX4M
               --cardinality-estimator Injected

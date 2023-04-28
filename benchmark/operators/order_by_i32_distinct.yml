@@ -30,8 +30,8 @@ systems:
     mutable:
         pattern: '^Execute query:.*'
         configurations:
-            Interpreter:                 --backend Interpreter
-            "WebAssembly (PAX4M)": --backend WasmV8 --data-layout PAX4M
+            'Interpreter':  --backend Interpreter
+            'WasmV8, PAX4M': --backend WasmV8 --data-layout PAX4M
         cases:
             10:     SELECT id FROM Distinct_i32 ORDER BY     n10;
             100:    SELECT id FROM Distinct_i32 ORDER BY    n100;

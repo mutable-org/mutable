@@ -32,7 +32,7 @@ class HyPer(Connector):
 
         result = None
         if self.multithreaded:
-            result = _execute(self, n_runs, params)
+            result = HyPer._execute(n_runs, params)
         else:
             path = os.getcwd()
             script = f'''

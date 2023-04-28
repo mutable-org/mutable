@@ -13,9 +13,6 @@ class BenchmarkTimeoutException(Exception):
     pass
 
 
-DEFAULT_TIMEOUT = 30  # seconds
-TIMEOUT_PER_CASE = 10 # seconds
-
 class Mutable(Connector):
 
     def __init__(self, args = dict()):
@@ -173,7 +170,7 @@ class Mutable(Connector):
             out, err = process.communicate(query.encode('latin-1'), timeout=timeout)
         except subprocess.TimeoutExpired:
             process.kill()
-            raise TimeoutExpiredException(f'Query timed out after {timeout} seconds')
+            raise BenchmarkTimeoutException(f'Query timed out after {timeout} seconds')
         finally:
             if process.poll() is None: # if process is still alive
                 process.terminate() # try to shut down gracefully

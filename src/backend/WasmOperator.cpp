@@ -594,8 +594,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Se
     Schema ht_schema;
     for (std::size_t i = 0; i < num_keys; ++i) {
         auto &e = M.grouping.schema()[i];
-        if (not ht_schema.has(e.id))
-            ht_schema.add(e.id, e.type, e.constraints);
+        ht_schema.add(e.id, e.type, e.constraints);
     }
     auto p = compute_aggregate_info(M.grouping.aggregates(), M.grouping.schema(), num_keys);
     const auto &aggregates = p.first;
@@ -923,8 +922,21 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Se
     /*----- Process each computed group. -----*/
     Setup();
     ht->for_each([&, Pipeline=std::move(Pipeline)](HashTable::const_entry_t entry){
+        /*----- Compute key schema to detect duplicated keys. -----*/
+        Schema key_schema;
+        for (std::size_t i = 0; i < num_keys; ++i) {
+            auto &e = M.grouping.schema()[i];
+            key_schema.add(e.id, e.type, e.constraints);
+        }
+
         /*----- Add computed group tuples to current environment. ----*/
         for (auto &e : M.grouping.schema().deduplicate()) {
+            try {
+                key_schema.find(e.id);
+            } catch (invalid_argument&) {
+                continue; // skip duplicated keys since they must not be used afterwards
+            }
+
             if (auto it = avg_aggregates.find(e.id);
                 it != avg_aggregates.end() and not it->second.compute_running_avg)
             { // AVG aggregates which is not yet computed, divide computed sum with computed count
@@ -1011,7 +1023,8 @@ ConditionSet OrderedGrouping::adapt_post_condition(const Match<OrderedGrouping> 
         auto it = sortedness_child.orders().find(Schema::Identifier(expr));
         M_insist(it != sortedness_child.orders().cend());
         Schema::Identifier id = alias ? Schema::Identifier(alias) : Schema::Identifier(expr);
-        orders.add(id, it->second);
+        if (orders.find(id) == orders.cend())
+            orders.add(id, it->second); // drop duplicate since it must not be used afterwards
     }
     post_cond.add_condition(Sortedness(std::move(orders)));
 
@@ -1025,6 +1038,13 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
 {
     Environment results; ///< stores current result tuple
     const auto num_keys = M.grouping.group_by().size();
+
+    /*----- Compute key schema to detect duplicated keys. -----*/
+    Schema key_schema;
+    for (std::size_t i = 0; i < num_keys; ++i) {
+        auto &e = M.grouping.schema()[i];
+        key_schema.add(e.id, e.type, e.constraints);
+    }
 
     /*----- Compute information about aggregates, especially about AVG aggregates. -----*/
     auto p = compute_aggregate_info(M.grouping.aggregates(), M.grouping.schema(), num_keys);
@@ -1380,11 +1400,18 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                     is_null.emplace(*is_null_backup);
                 }
 
-                /*----- Add global key to result environment to access it in other function. -----*/
-                if (nullable)
-                    results.add(M.grouping.schema()[idx].id, Select(*is_null_backup, Expr<T>::Null(), key_backup));
-                else
-                    results.add(M.grouping.schema()[idx].id, key_backup.val());
+                try {
+                    auto id = M.grouping.schema()[idx].id;
+                    key_schema.find(id);
+
+                    /*----- Add global key to result environment to access it in other function. -----*/
+                    if (nullable)
+                        results.add(id, Select(*is_null_backup, Expr<T>::Null(), key_backup));
+                    else
+                        results.add(id, key_backup.val());
+                } catch (invalid_argument&) {
+                    /* skip adding to result environment for duplicate keys since they must not be used afterwards */
+                }
 
                 /*----- Move key variables to access them later. ----*/
                 new (&key_values[idx]) key_t(std::make_pair(std::move(key), std::move(is_null)));
@@ -1422,9 +1449,17 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                         /*----- Set local key variable to global backup. -----*/
                         key = key_backup;
 
-                        /*----- Add global key to result environment to access it in other function. -----*/
-                        NChar str(key_backup.val(), M.grouping.schema()[idx].nullable(), cs.length, cs.is_varying);
-                        results.add(M.grouping.schema()[idx].id, std::move(str));
+                        try {
+                            auto id = M.grouping.schema()[idx].id;
+                            key_schema.find(id);
+
+                            /*----- Add global key to result environment to access it in other function. -----*/
+                            NChar str(key_backup.val(), M.grouping.schema()[idx].nullable(), cs.length, cs.is_varying);
+                            results.add(id, std::move(str));
+                        } catch (invalid_argument&) {
+                            /* skip adding to result environment for duplicate keys since they must not be used
+                             * afterwards */
+                        }
 
                         /*----- Move key variables to access them later. ----*/
                         new (&key_values[idx]) key_t(std::move(key));
@@ -1794,6 +1829,12 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
 
         /*----- Add computed group tuple to current environment. ----*/
         for (auto &e : M.grouping.schema().deduplicate()) {
+            try {
+                key_schema.find(e.id);
+            } catch (invalid_argument&) {
+                continue; // skip duplicated keys since they must not be used afterwards
+            }
+
             if (auto it = avg_aggregates.find(e.id);
                 it != avg_aggregates.end() and not it->second.compute_running_avg)
             { // AVG aggregates which is not yet computed, divide computed sum with computed count
@@ -3027,8 +3068,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
     Schema ht_schema;
     for (std::size_t i = 0; i < num_keys; ++i) {
         auto &e = M.grouping.schema()[i];
-        if (not ht_schema.has(e.id))
-            ht_schema.add(e.id, e.type, e.constraints);
+        ht_schema.add(e.id, e.type, e.constraints);
     }
     auto aggregates_info = compute_aggregate_info(M.grouping.aggregates(), M.grouping.schema(), num_keys);
     const auto &aggregates = aggregates_info.first;
@@ -3534,8 +3574,21 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
         /*----- Check whether probe match was found. -----*/
         I64 probe_counter = _I64(entry.get<_I64>(C.pool("$probe_counter"))).insist_not_null();
         IF (probe_counter != int64_t(0)) {
+            /*----- Compute key schema to detect duplicated keys. -----*/
+            Schema key_schema;
+            for (std::size_t i = 0; i < num_keys; ++i) {
+                auto &e = M.grouping.schema()[i];
+                key_schema.add(e.id, e.type, e.constraints);
+            }
+
             /*----- Add computed group tuples to current environment. ----*/
             for (auto &e : M.grouping.schema().deduplicate()) {
+                try {
+                    key_schema.find(e.id);
+                } catch (invalid_argument&) {
+                    continue; // skip duplicated keys since they must not be used afterwards
+                }
+
                 if (auto it = avg_aggregates.find(e.id);
                     it != avg_aggregates.end() and not it->second.compute_running_avg)
                 { // AVG aggregates which is not yet computed, divide computed sum with computed count

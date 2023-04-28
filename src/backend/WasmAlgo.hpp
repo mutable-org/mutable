@@ -355,8 +355,9 @@ struct HashTable
         }
 
         private:
-        ///> maps `Schema::Identifier`s to `the_reference<T, IsConst>`s that reference the stored expression
-        std::unordered_map<Schema::Identifier, value_t> refs_;
+        ///> maps `Schema::Identifier`s to `the_reference<T, IsConst>`s that reference the stored expression,
+        ///> allows for duplicates similar to `Schema`
+        std::unordered_multimap<Schema::Identifier, value_t> refs_;
 
         public:
         the_entry() = default;
@@ -365,7 +366,7 @@ struct HashTable
 
         private:
         ///> constructs an entry from references of the *opposite* const-ness
-        the_entry(std::unordered_map<Schema::Identifier, typename the_entry<not IsConst>::value_t> refs) {
+        the_entry(std::unordered_multimap<Schema::Identifier, typename the_entry<not IsConst>::value_t> refs) {
             refs_.reserve(refs.size());
             for (auto &p : refs) {
                 std::visit(overloaded {
@@ -404,8 +405,7 @@ struct HashTable
         ///> Adds a mapping from identifier \p id to reference \p ref.
         template<sql_type T>
         void add(Schema::Identifier id, the_reference<T, IsConst> &&ref) {
-            auto res = refs_.emplace(id, std::forward<the_reference<T, IsConst>>(ref));
-            M_insist(res.second, "duplicate ID");
+            refs_.emplace(id, std::forward<the_reference<T, IsConst>>(ref));
         }
 
         ///> Returns the **moved** entry for identifier \p id.
@@ -419,6 +419,7 @@ struct HashTable
         template<sql_type T>
         the_reference<T, IsConst> extract(Schema::Identifier id) {
             using type = the_reference<T, IsConst>;
+            M_insist(refs_.count(id) <= 1, "duplicate identifier, lookup ambiguous");
             auto it = refs_.find(id);
             M_insist(it != refs_.end(), "identifier not found");
             auto nh = refs_.extract(it);
@@ -428,6 +429,7 @@ struct HashTable
 
         ///> Returns the **copied** entry for identifier \p id.
         value_t get(Schema::Identifier id) const {
+            M_insist(refs_.count(id) <= 1, "duplicate identifier, lookup ambiguous");
             auto it = refs_.find(id);
             M_insist(it != refs_.end(), "identifier not found");
             return std::visit(overloaded {
@@ -439,6 +441,7 @@ struct HashTable
         template<sql_type T>
         the_reference<T, IsConst> get(Schema::Identifier id) const {
             using type = the_reference<T, IsConst>;
+            M_insist(refs_.count(id) <= 1, "duplicate identifier, lookup ambiguous");
             auto it = refs_.find(id);
             M_insist(it != refs_.end(), "identifier not found");
             M_insist(std::holds_alternative<type>(it->second));

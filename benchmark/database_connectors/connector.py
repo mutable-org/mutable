@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 import os
 
+DEFAULT_TIMEOUT = 30  # seconds
+TIMEOUT_PER_CASE = 10 # seconds
 
 #=======================================================================================================================
 # Connector exceptions

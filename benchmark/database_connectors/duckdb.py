@@ -2,6 +2,7 @@ from .connector import *
 
 import os
 import json
+import subprocess
 from tqdm import tqdm
 
 
@@ -43,6 +44,7 @@ class DuckDB(Connector):
 
                 # If tables contain scale factors, they have to be loaded separately for every case
                 if (with_scale_factors or not bool(params.get('readonly'))):
+                    timeout = (DEFAULT_TIMEOUT + TIMEOUT_PER_CASE) * len(params['cases'])
                     # Write cases/queries to a file that will be passed to the command to execute
                     statements = list()
                     for case, query_stmt in params['cases'].items():
@@ -70,6 +72,7 @@ class DuckDB(Connector):
 
                 # Otherwise, tables have to be created just once before the measurements (done above)
                 else:
+                    timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(params['cases'])
                     # Write cases/queries to a file that will be passed to the command to execute
                     with open(TMP_SQL_FILE, "a+") as tmp:
                         tmp.write(".timer on\n")
@@ -81,7 +84,7 @@ class DuckDB(Connector):
                 # Execute query file and collect measurement data
                 command = f"./{self.duckdb_cli} {TMP_DB} < {TMP_SQL_FILE}" + " | grep 'Run Time' | cut -d ' ' -f 5 | awk '{print $1 * 1000;}'"
                 if not self.multithreaded:
-                    command = f'taskset -c 2 {command}'
+                    command = 'taskset -c 2 ' + command
 
                 if self.verbose:
                     tqdm.write(f"    $ {command}")
@@ -90,14 +93,21 @@ class DuckDB(Connector):
                         with open(TMP_SQL_FILE) as tmp:
                             tqdm.write("    " + "    ".join(tmp.readlines()))
 
-                stream = os.popen(f'{command}')
-                for idx, line in enumerate(stream):
-                    time = float(line.replace("\n", "").replace(",", ".")) # in milliseconds
-                    case = list(params['cases'].keys())[idx]
-                    if case not in measurement_times.keys():
-                        measurement_times[case] = list()
-                    measurement_times[case].append(time)
-                stream.close()
+                benchmark_info = f"{suite}/{benchmark}/{experiment} [{configname}]"
+                try:
+                    durations = self.run_command(command, timeout, benchmark_info)
+                except ExperimentTimeoutExpired as ex:
+                    for case in params['cases'].keys():
+                        if case not in measurement_times.keys():
+                            measurement_times[case] = list()
+                        measurement_times[case].append(TIMEOUT_PER_CASE * 1000)
+                else:
+                    for idx, line in enumerate(durations):
+                        time = float(line.replace("\n", "").replace(",", ".")) # in milliseconds
+                        case = list(params['cases'].keys())[idx]
+                        if case not in measurement_times.keys():
+                            measurement_times[case] = list()
+                        measurement_times[case].append(time)
 
 
             finally:
@@ -180,3 +190,44 @@ class DuckDB(Connector):
         with open(TMP_SQL_FILE, "w") as tmp:
             for stmt in statements:
                 tmp.write(stmt + "\n")
+
+
+    def run_command(self, command, timeout, benchmark_info):
+        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   cwd=os.getcwd(), shell=True)
+        try:
+            out, err = process.communicate("".encode('latin-1'), timeout=timeout)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            raise ExperimentTimeoutExpired(f'Query timed out after {timeout} seconds')
+        finally:
+            if process.poll() is None: # if process is still alive
+                process.terminate() # try to shut down gracefully
+                try:
+                    process.wait(timeout=5) # wait for process to terminate
+                except subprocess.TimeoutExpired:
+                    process.kill() # kill if process did not terminate in time
+
+        out = out.decode('latin-1')
+        err = err.decode('latin-1')
+
+        if process.returncode or len(err):
+            outstr = '\n'.join(out.split('\n')[-20:])
+            tqdm.write(f'''\
+    Unexpected failure during execution of benchmark "{benchmark_info}" with return code {process.returncode}:''')
+            tqdm.write(command)
+            tqdm.write(f'''\
+    ===== stdout =====
+    {outstr}
+    ===== stderr =====
+    {err}
+    ==================
+    ''')
+            if process.returncode:
+                raise ConnectorException(f'Benchmark failed with return code {process.returncode}.')
+
+        # Parse `out` for timings
+        durations = out.split('\n')
+        durations.remove('')
+
+        return durations

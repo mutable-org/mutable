@@ -2,12 +2,11 @@ from .connector import *
 
 import os
 import json
+from tqdm import tqdm
 
 
 TMP_DB = 'tmp.duckdb'
 TMP_SQL_FILE = 'tmp.sql'
-
-# TODO way of measuring time is wrong. Use duckdb_cli like in older version.
 
 class DuckDB(Connector):
 
@@ -18,6 +17,12 @@ class DuckDB(Connector):
 
     # Runs an experiment 'n_runs' times, all parameters are in 'params'
     def execute(self, n_runs, params: dict):
+        suite = params['suite']
+        benchmark = params['benchmark']
+        experiment = params['name']
+        configname = 'DuckDB (multi core)' if self.multithreaded else 'DuckDB (single core)'
+        tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration {configname}.')
+
         self.clean_up()
 
         measurement_times = dict()      # map that is returned with the measured times
@@ -29,6 +34,7 @@ class DuckDB(Connector):
                 with_scale_factors = True
                 break
 
+        verbose_printed = False
         for _ in range(n_runs):
             try:
                 # Set up database
@@ -76,6 +82,14 @@ class DuckDB(Connector):
                 command = f"./{self.duckdb_cli} {TMP_DB} < {TMP_SQL_FILE}" + " | grep 'Run Time' | cut -d ' ' -f 5 | awk '{print $1 * 1000;}'"
                 if not self.multithreaded:
                     command = f'taskset -c 2 {command}'
+
+                if self.verbose:
+                    tqdm.write(f"    $ {command}")
+                    if not verbose_printed:
+                        verbose_printed = True
+                        with open(TMP_SQL_FILE) as tmp:
+                            tqdm.write("    " + "    ".join(tmp.readlines()))
+
                 stream = os.popen(f'{command}')
                 for idx, line in enumerate(stream):
                     time = float(line.replace("\n", "").replace(",", ".")) # in milliseconds
@@ -89,8 +103,7 @@ class DuckDB(Connector):
             finally:
                 self.clean_up()
 
-        name = 'DuckDB (MT)' if self.multithreaded else 'DuckDB (ST)'
-        return { name: measurement_times }
+        return { configname: measurement_times }
 
 
     # Deletes the used temporary database

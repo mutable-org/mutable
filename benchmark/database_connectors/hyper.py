@@ -21,8 +21,15 @@ class HyPer(Connector):
 
     def __init__(self, args = dict()):
         self.multithreaded = args.get('multithreaded', False)
+        self.verbose = args.get('verbose', False) # optional
 
     def execute(self, n_runs, params: dict()):
+        suite = params['suite']
+        benchmark = params['benchmark']
+        experiment = params['name']
+        suffix = ' (multi core)' if self.multithreaded else ' (single core)'
+        tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration HyPer{suffix}.')
+
         result = None
         if self.multithreaded:
             result = _execute(self, n_runs, params)
@@ -34,8 +41,11 @@ sys.path.insert(0, '{path}/benchmark')
 import database_connectors.hyper
 print(repr(database_connectors.hyper.HyPer._execute({n_runs}, {repr(params)})))
 '''
+            args = ['taskset', '-c', '2', 'python3', '-c', script]
+            if self.verbose:
+                tqdm.write(f"    $ {' '.join(args)}")
             P = subprocess.run(
-                args=['taskset', '-c', '2', 'python3', '-c', script],
+                args=args,
                 capture_output=True,
                 text=True,
                 cwd=path
@@ -44,7 +54,6 @@ print(repr(database_connectors.hyper.HyPer._execute({n_runs}, {repr(params)})))
 
             result = eval(P.stdout)
 
-        suffix = ' (MT)' if self.multithreaded else ' (ST)'
         patched_result = dict()
 
         for key, val in result.items():

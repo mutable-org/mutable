@@ -8,22 +8,28 @@ from psycopg2.extras import LoggingConnection, LoggingCursor
 import logging
 import subprocess
 import shlex
+from tqdm import tqdm
 
 db_options = {
     'dbname': 'benchmark_tmp',
     'user': 'postgres'
 }
-tmp_sql_file = 'tmp.sql'
+TMP_SQL_FILE = 'tmp.sql'
 
 
 # The connector for PostgreSQL
 class PostgreSQL(Connector):
 
     def __init__(self, args = dict()):
-        pass
+        self.verbose = args.get('verbose', False) # optional
 
     # Runs an experiment one time, all parameters are in 'params'
     def execute(self, n_runs, params: dict):
+        suite = params['suite']
+        benchmark = params['benchmark']
+        experiment = params['name']
+        tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration PostgreSQL.')
+
         try:
             self.clean_up()
         except psycopg2.OperationalError as ex:
@@ -39,6 +45,7 @@ class PostgreSQL(Connector):
                 with_scale_factors = True
                 break
 
+        verbose_printed = False
         for _ in range(n_runs):
             try:
                 # Set up database
@@ -64,13 +71,19 @@ class PostgreSQL(Connector):
                             cursor.execute(f"INSERT INTO {table_name} SELECT * FROM {table_name}_tmp LIMIT {num_rows};")    # copy data with scale factor
 
                         # Write case/query to a file that will be passed to the command to execute
-                        with open(tmp_sql_file, "w") as tmp:
+                        with open(TMP_SQL_FILE, "w") as tmp:
                             tmp.write("\\timing on\n")
                             tmp.write(query_stmt + '\n')
                             tmp.write("\\timing off\n")
 
                         # Execute query as benchmark and get measurement time
-                        command = f"psql -U {db_options['user']} -d {db_options['dbname']} -f {tmp_sql_file} | grep 'Time' | cut -d ' ' -f 2"
+                        command = f"psql -U {db_options['user']} -d {db_options['dbname']} -f {TMP_SQL_FILE} | grep 'Time' | cut -d ' ' -f 2"
+                        if self.verbose:
+                            tqdm.write(f"    $ {command}")
+                            if not verbose_printed:
+                                verbose_printed = True
+                                with open(TMP_SQL_FILE) as tmp:
+                                    tqdm.write("    " + "    ".join(tmp.readlines()))
                         stream = os.popen(f'{command}')
                         for idx, line in enumerate(stream):
                             time = float(line.replace("\n", "").replace(",", ".")) # in milliseconds
@@ -86,14 +99,20 @@ class PostgreSQL(Connector):
                     connection.close()
 
                     # Write cases/queries to a file that will be passed to the command to execute
-                    with open(tmp_sql_file, "w") as tmp:
+                    with open(TMP_SQL_FILE, "w") as tmp:
                         tmp.write("\\timing on\n")
                         for case_query in params['cases'].values():
                             tmp.write(case_query + '\n')
                         tmp.write("\\timing off\n")
 
                     # Execute query file and collect measurement data
-                    command = f"psql -U {db_options['user']} -d {db_options['dbname']} -f {tmp_sql_file} | grep 'Time' | cut -d ' ' -f 2"
+                    command = f"psql -U {db_options['user']} -d {db_options['dbname']} -f {TMP_SQL_FILE} | grep 'Time' | cut -d ' ' -f 2"
+                    if self.verbose:
+                        tqdm.write(f"    $ {command}")
+                        if not verbose_printed:
+                            verbose_printed = True
+                            with open(TMP_SQL_FILE) as tmp:
+                                tqdm.write("    " + "    ".join(tmp.readlines()))
                     stream = os.popen(f'{command}')
                     for idx, line in enumerate(stream):
                         time = float(line.replace("\n", "").replace(",", ".")) # in milliseconds
@@ -129,8 +148,8 @@ class PostgreSQL(Connector):
         cursor = connection.cursor()
         cursor.execute(f"DROP DATABASE IF EXISTS {db_options['dbname']};")
         connection.close()
-        if os.path.exists(tmp_sql_file):
-            os.remove(tmp_sql_file)
+        if os.path.exists(TMP_SQL_FILE):
+            os.remove(TMP_SQL_FILE)
 
 
     # Parse attributes of one table, return as string ready for a CREATE TABLE query

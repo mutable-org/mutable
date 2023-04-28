@@ -405,7 +405,9 @@ if __name__ == '__main__':
                     info.experiment_data[table_name]['lines_in_file'] = int(os.popen(f"wc -l < {p}").read())
 
 
+            tqdm.write('\n\n===========================================')
             tqdm.write(f'Perform benchmarks in \'{path_to_file}\'.')
+            tqdm.write('===========================================')
 
             # Perform experiment for each system
             for system in yml.get('systems').keys():
@@ -421,13 +423,18 @@ if __name__ == '__main__':
                             verbose = args.verbose,
                         )))
                     case 'PostgreSQL':
-                        connectors.append(postgresql.PostgreSQL())
+                        connectors.append(postgresql.PostgreSQL(dict(
+                            verbose = args.verbose
+                        )))
                     case 'DuckDB':
                         connectors.append(duckdb.DuckDB(dict(
                             path_to_binary = 'benchmark/database_connectors/duckdb',
+                            verbose = args.verbose
                         )))
                     case 'HyPer':
-                        connectors.append(hyper.HyPer())
+                        connectors.append(hyper.HyPer(dict(
+                            verbose = args.verbose
+                        )))
 
                 for conn in connectors:
                     if system == 'mutable':

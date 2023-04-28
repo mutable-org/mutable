@@ -261,6 +261,30 @@ struct HashBasedGroupJoin
 
 }
 
+template<typename T>
+void execute_buffered(const Match<T> &M, const Schema &schema,
+                      const std::unique_ptr<const storage::DataLayoutFactory> &buffer_factory,
+                      std::size_t buffer_num_tuples, MatchBase::callback_t Setup, MatchBase::callback_t Pipeline,
+                      MatchBase::callback_t Teardown)
+{
+    if (buffer_factory) {
+        auto buffer_schema = schema.drop_constants().deduplicate();
+        if (buffer_schema.num_entries()) {
+            /* Use global buffer since own operator may be executed partially in multiple function calls. */
+            wasm::GlobalBuffer buffer(buffer_schema, *buffer_factory, buffer_num_tuples,
+                                     std::move(Setup), std::move(Pipeline), std::move(Teardown));
+            T::execute(
+                M, [&buffer](){ buffer.setup(); }, [&buffer](){ buffer.consume(); }, [&buffer](){ buffer.teardown(); }
+            );
+            buffer.resume_pipeline();
+        } else {
+            T::execute(M, std::move(Setup), std::move(Pipeline), std::move(Teardown));
+        }
+    } else {
+        T::execute(M, std::move(Setup), std::move(Pipeline), std::move(Teardown));
+    }
+}
+
 template<>
 struct Match<wasm::NoOp> : MatchBase
 {
@@ -341,12 +365,18 @@ struct Match<wasm::Scan> : MatchBase
         if (buffer_factory_) {
             auto buffer_schema = scan.schema().drop_constants().deduplicate();
             if (buffer_schema.num_entries()) {
+                /* Use local buffer since scan loop will not be executed partially in multiple function calls. */
                 wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_,
                                          std::move(Setup), std::move(Pipeline), std::move(Teardown));
                 wasm::Scan::execute(
-                    *this, MatchBase::DoNothing, [&buffer](){ buffer.consume(); }, MatchBase::DoNothing
+                    /* M=        */ *this,
+                    /* Setup=    */ [&buffer](){ buffer.setup(); },
+                    /* Pipeline= */ [&buffer](){ buffer.consume(); },
+                    /* Teardown= */ [&buffer](){
+                        buffer.resume_pipeline(); // must be placed before teardown method for local buffers
+                        buffer.teardown();
+                    }
                 );
-            buffer.resume_pipeline();
             } else {
                 wasm::Scan::execute(*this, std::move(Setup), std::move(Pipeline), std::move(Teardown));
             }
@@ -380,21 +410,8 @@ struct Match<wasm::Filter<Predicated>> : MatchBase
     }
 
     void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
-        if (buffer_factory_) {
-            auto buffer_schema = filter.schema().drop_constants().deduplicate();
-            if (buffer_schema.num_entries()) {
-                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_,
-                                         std::move(Setup), std::move(Pipeline), std::move(Teardown));
-                wasm::Filter<Predicated>::execute(
-                    *this, MatchBase::DoNothing, [&buffer](){ buffer.consume(); }, MatchBase::DoNothing
-                );
-                buffer.resume_pipeline();
-            } else {
-                wasm::Filter<Predicated>::execute(*this, std::move(Setup), std::move(Pipeline), std::move(Teardown));
-            }
-        } else {
-            wasm::Filter<Predicated>::execute(*this, std::move(Setup), std::move(Pipeline), std::move(Teardown));
-        }
+        execute_buffered(*this, filter.schema(), buffer_factory_, buffer_num_tuples_,
+                         std::move(Setup), std::move(Pipeline), std::move(Teardown));
     }
 
     std::string name() const override {
@@ -540,25 +557,8 @@ struct Match<wasm::NestedLoopsJoin<Predicated>> : MatchBase
     }
 
     void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
-        if (buffer_factory_) {
-            auto buffer_schema = join.schema().drop_constants().deduplicate();
-            if (buffer_schema.num_entries()) {
-                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_,
-                                         std::move(Setup), std::move(Pipeline), std::move(Teardown));
-                wasm::NestedLoopsJoin<Predicated>::execute(
-                    *this, MatchBase::DoNothing, [&buffer](){ buffer.consume(); }, MatchBase::DoNothing
-                );
-                buffer.resume_pipeline();
-            } else {
-                wasm::NestedLoopsJoin<Predicated>::execute(
-                    *this, std::move(Setup), std::move(Pipeline), std::move(Teardown)
-                );
-            }
-        } else {
-            wasm::NestedLoopsJoin<Predicated>::execute(
-                *this, std::move(Setup), std::move(Pipeline), std::move(Teardown)
-            );
-        }
+        execute_buffered(*this, join.schema(), buffer_factory_, buffer_num_tuples_,
+                         std::move(Setup), std::move(Pipeline), std::move(Teardown));
     }
 
     std::string name() const override {
@@ -589,25 +589,8 @@ struct Match<wasm::SimpleHashJoin<UniqueBuild, Predicated>> : MatchBase
     }
 
     void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
-        if (buffer_factory_) {
-            auto buffer_schema = join.schema().drop_constants().deduplicate();
-            if (buffer_schema.num_entries()) {
-                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_,
-                                         std::move(Setup), std::move(Pipeline), std::move(Teardown));
-                wasm::SimpleHashJoin<UniqueBuild, Predicated>::execute(
-                    *this, MatchBase::DoNothing, [&buffer](){ buffer.consume(); }, MatchBase::DoNothing
-                );
-                buffer.resume_pipeline();
-            } else {
-                wasm::SimpleHashJoin<UniqueBuild, Predicated>::execute(
-                    *this, std::move(Setup), std::move(Pipeline), std::move(Teardown)
-                );
-            }
-        } else {
-            wasm::SimpleHashJoin<UniqueBuild, Predicated>::execute(
-                *this, std::move(Setup), std::move(Pipeline), std::move(Teardown)
-            );
-        }
+        execute_buffered(*this, join.schema(), buffer_factory_, buffer_num_tuples_,
+                         std::move(Setup), std::move(Pipeline), std::move(Teardown));
     }
 
     std::string name() const override {
@@ -706,21 +689,8 @@ struct Match<wasm::HashBasedGroupJoin> : MatchBase
     }
 
     void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
-        if (buffer_factory_) {
-            auto buffer_schema = grouping.schema().drop_constants().deduplicate();
-            if (buffer_schema.num_entries()) {
-                wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_,
-                                         std::move(Setup), std::move(Pipeline), std::move(Teardown));
-                wasm::HashBasedGroupJoin::execute(
-                    *this, MatchBase::DoNothing, [&buffer](){ buffer.consume(); }, MatchBase::DoNothing
-                );
-                buffer.resume_pipeline();
-            } else {
-                wasm::HashBasedGroupJoin::execute(*this, std::move(Setup), std::move(Pipeline), std::move(Teardown));
-            }
-        } else {
-            wasm::HashBasedGroupJoin::execute(*this, std::move(Setup), std::move(Pipeline), std::move(Teardown));
-        }
+        execute_buffered(*this, grouping.schema(), buffer_factory_, buffer_num_tuples_,
+                         std::move(Setup), std::move(Pipeline), std::move(Teardown));
     }
 
     std::string name() const override { return "wasm::HashBasedGroupJoin"; }

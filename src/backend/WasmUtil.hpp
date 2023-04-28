@@ -15,6 +15,7 @@ namespace wasm {
 
 // forward declarations
 struct Environment;
+template<bool IsGlobal> struct Buffer;
 template<bool IsGlobal> struct buffer_load_proxy_t;
 template<bool IsGlobal> struct buffer_store_proxy_t;
 template<bool IsGlobal> struct buffer_swap_proxy_t;
@@ -546,22 +547,38 @@ void compile_load_point_access(const Schema &tuple_schema, Ptr<void> base_addres
  * Buffer
  *====================================================================================================================*/
 
+template<bool IsGlobal>
+class buffer_storage;
+
+template<>
+class buffer_storage<false> {};
+
+template<>
+class buffer_storage<true>
+{
+    friend struct Buffer<true>;
+
+    Global<Ptr<void>> base_address_; ///< global backup for base address of buffer
+    Global<U32> size_; ///< global backup for current size of buffer, default initialized to 0
+    ///> global backup for dynamic capacity of infinite buffer, default initialized to 0
+    std::optional<Global<U32>> capacity_;
+};
+
 /** Buffers tuples by materializing them into memory. */
 template<bool IsGlobal>
 struct Buffer
 {
     private:
-    ///> variable type dependent on whether buffer should be globally usable
-    template<typename T>
-    using var_t = std::conditional_t<IsGlobal, Global<T>, Var<T>>;
     ///> parameter type for proxy creation and pipeline resuming methods
     using param_t = std::optional<std::reference_wrapper<const Schema>>;
 
     std::reference_wrapper<const Schema> schema_; ///< schema of buffer
     storage::DataLayout layout_; ///< data layout of buffer
-    var_t<Ptr<void>> base_address_; ///< base address of buffer
-    std::optional<var_t<U32>> capacity_; ///< optional dynamic capacity of buffer, default initialized to 0
-    var_t<U32> size_; ///< current size of buffer, default initialized to 0
+    std::optional<Var<Ptr<void>>> base_address_; ///< base address of buffer
+    std::optional<Var<U32>> size_; ///< current size of buffer, default initialized to 0
+    std::optional<Var<U32>> capacity_; ///< dynamic capacity of infinite buffer, default initialized to 0
+    std::optional<Var<Bool>> first_iteration_; ///< flag to indicate first loop iteration for infinite buffer
+    buffer_storage<IsGlobal> storage_; ///< if `IsGlobal`, contains backups for base address, capacity, and size
     MatchBase::callback_t Setup_; ///< remaining pipeline initializations
     MatchBase::callback_t Pipeline_; ///< remaining actual pipeline
     MatchBase::callback_t Teardown_; ///< remaining pipeline post-processing
@@ -571,8 +588,8 @@ struct Buffer
     public:
     /** Creates a buffer for \p num_tuples tuples (0 means infinite) of schema \p schema using the data layout
      * created by \p factory to temporarily materialize tuples before resuming with the remaining pipeline
-     * initializations \p Setup, the actual pipeline \p Pipeline, and the post-processing \p Teardown.  For finite
-     * buffers, emits code to allocate entire buffer into the **current** block. */
+     * initializations \p Setup, the actual pipeline \p Pipeline, and the post-processing \p Teardown.  For global
+     * finite buffers, emits code to pre-allocate entire buffer into the **current** block. */
     Buffer(const Schema &schema, const storage::DataLayoutFactory &factory, std::size_t num_tuples = 0,
            MatchBase::callback_t Setup = MatchBase::DoNothing, MatchBase::callback_t Pipeline = MatchBase::DoNothing,
            MatchBase::callback_t Teardown = MatchBase::DoNothing);
@@ -589,9 +606,23 @@ struct Buffer
     /** Returns the layout of the buffer. */
     const storage::DataLayout & layout() const { return layout_; }
     /** Returns the base address of the buffer. */
-    Ptr<void> base_address() const { return base_address_; }
+    Ptr<void> base_address() const {
+        if constexpr (IsGlobal) {
+            return base_address_ ? base_address_->val() : storage_.base_address_.val(); // since global may be outdated
+        } else {
+            M_insist(bool(base_address_));
+            return *base_address_;
+        }
+    }
     /** Returns the current size of the buffer. */
-    U32 size() const { return size_; }
+    U32 size() const {
+        if constexpr (IsGlobal) {
+            return size_ ? size_->val() : storage_.size_.val(); // since global may be outdated
+        } else {
+            M_insist(bool(size_));
+            return *size_;
+        }
+    }
 
     /** Creates and returns a proxy object to load tuples of schema \p tuple_schema (default: entire tuples) from the
      * buffer. */
@@ -602,6 +633,13 @@ struct Buffer
     /** Creates and returns a proxy object to swap tuples of schema \p tuple_schema (default: entire tuples) in the
      * buffer. */
     buffer_swap_proxy_t<IsGlobal> create_swap_proxy(param_t tuple_schema = param_t()) const;
+
+    /** Performs the setup of all local variables of this buffer (by reading them from the global backups iff
+     * \tparam IsGlobal) for a write access.  Must be called before any call to `consume()`. */
+    void setup();
+    /** Performs the teardown of all local variables of this buffer (by storing them into the global backups iff
+     * \tparam IsGlobal) for a write access.  Must be called after all calls to `consume()`. */
+    void teardown();
 
     /** Emits code into a separate function to resume the pipeline for each tuple of schema \p tuple_schema (default:
      * entire tuples) in the  buffer.  Used to explicitly resume pipeline for infinite or partially filled buffers. */

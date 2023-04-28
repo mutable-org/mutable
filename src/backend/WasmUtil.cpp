@@ -1667,22 +1667,32 @@ Buffer<IsGlobal>::Buffer(const Schema &schema, const DataLayoutFactory &factory,
 {
     M_insist(schema.num_entries() != 0, "buffer schema must not be empty");
 
-    if (layout_.is_finite()) {
-        /*----- Pre-allocate memory for entire buffer. Use maximal possible alignment requirement of 8 bytes. -----*/
-        const auto child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
-        const auto num_children =
-            (layout_.num_tuples() + layout_.child().num_tuples() - 1) / layout_.child().num_tuples();
-        base_address_ = Module::Allocator().pre_allocate(num_children * child_size_in_bytes, /* alignment= */ 8);
+    if constexpr (IsGlobal) {
+        if (layout_.is_finite()) {
+            /*----- Pre-allocate memory for entire buffer. Use maximal possible alignment requirement of 8 bytes. ----*/
+            const uint32_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
+            const uint32_t num_children =
+                (layout_.num_tuples() + layout_.child().num_tuples() - 1) / layout_.child().num_tuples();
+            storage_.base_address_ =
+                Module::Allocator().pre_allocate(num_children * child_size_in_bytes, /* alignment= */ 8);
+        } else {
+            storage_.capacity_.emplace(); // create global for capacity
+        }
     }
 }
 
 template<bool IsGlobal>
 Buffer<IsGlobal>::~Buffer()
 {
-    if (not layout_.is_finite()) {
-        /*----- Deallocate memory for buffer. -----*/
-        const auto child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
-        Module::Allocator().deallocate(base_address_, child_size_in_bytes);
+    if constexpr (IsGlobal) { // free memory of global buffer when object is destroyed and no use may occur later
+        if (not layout_.is_finite()) {
+            /*----- Deallocate memory for buffer. -----*/
+            M_insist(bool(storage_.capacity_));
+            const uint32_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
+            auto buffer_size_in_bytes =
+                (*storage_.capacity_ / uint32_t(layout_.child().num_tuples())) * child_size_in_bytes;
+            Module::Allocator().deallocate(storage_.base_address_, buffer_size_in_bytes);
+        }
     }
 }
 
@@ -1702,6 +1712,101 @@ template<bool IsGlobal>
 buffer_swap_proxy_t<IsGlobal> Buffer<IsGlobal>::create_swap_proxy(param_t tuple_schema) const
 {
     return tuple_schema ? buffer_swap_proxy_t(*this, *tuple_schema) : buffer_swap_proxy_t(*this, schema_);
+}
+
+template<bool IsGlobal>
+void Buffer<IsGlobal>::setup()
+{
+    M_insist(not base_address_, "must not call `setup()` twice");
+    M_insist(not size_, "must not call `setup()` twice");
+    M_insist(not layout_.is_finite() == not capacity_, "must not call `setup()` twice");
+    M_insist(not layout_.is_finite() == not first_iteration_, "must not call `setup()` twice");
+
+    /*----- Create local variables. -----*/
+    base_address_.emplace();
+    size_.emplace();
+    if (not layout_.is_finite()) {
+        capacity_.emplace();
+        first_iteration_.emplace(true); // set to true
+    }
+
+    /*----- For global buffers, read values from global backups into local variables. -----*/
+    if constexpr (IsGlobal) {
+        /* omit assigning base address here as it will always be set below */
+        *size_ = storage_.size_;
+        if (not layout_.is_finite()) {
+            M_insist(bool(storage_.capacity_));
+            *capacity_ = *storage_.capacity_;
+        }
+    }
+
+    if (layout_.is_finite()) {
+        if constexpr (IsGlobal) {
+            *base_address_ = storage_.base_address_; // buffer always already pre-allocated
+        } else {
+            /*----- Pre-allocate memory for entire buffer. Use maximal possible alignment requirement of 8 bytes. ----*/
+            const uint32_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
+            const uint32_t num_children =
+                (layout_.num_tuples() + layout_.child().num_tuples() - 1) / layout_.child().num_tuples();
+            *base_address_ = Module::Allocator().pre_allocate(num_children * child_size_in_bytes, /* alignment= */ 8);
+        }
+    } else {
+        if constexpr (IsGlobal) {
+            IF (*capacity_ == 0U) { // buffer not yet allocated
+                /*----- Set initial capacity. -----*/
+                *capacity_ = uint32_t(layout_.child().num_tuples());
+
+                /*----- Allocate memory for one child instance. Use max. possible alignment requirement of 8 bytes. --*/
+                const uint32_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
+                *base_address_ = Module::Allocator().allocate(child_size_in_bytes, /* alignment= */ 8);
+            } ELSE {
+                *base_address_ = storage_.base_address_;
+            };
+        } else {
+            /*----- Set initial capacity. -----*/
+            *capacity_ = uint32_t(layout_.child().num_tuples());
+
+            /*----- Allocate memory for one child instance. Use max. possible alignment requirement of 8 bytes. -----*/
+            const uint32_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
+            *base_address_ = Module::Allocator().allocate(child_size_in_bytes, /* alignment= */ 8);
+        }
+    }
+}
+
+template<bool IsGlobal>
+void Buffer<IsGlobal>::teardown()
+{
+    M_insist(bool(base_address_), "must call `setup()` before");
+    M_insist(bool(size_), "must call `setup()` before");
+    M_insist(not layout_.is_finite() == bool(capacity_), "must call `setup()` before");
+
+    if constexpr (not IsGlobal) { // free memory of local buffer when user calls teardown method
+        if (not layout_.is_finite()) {
+            /*----- Deallocate memory for buffer. -----*/
+            const uint32_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
+            auto buffer_size_in_bytes = (*capacity_ / uint32_t(layout_.child().num_tuples())) * child_size_in_bytes;
+            Module::Allocator().deallocate(*base_address_, buffer_size_in_bytes);
+        }
+    }
+
+    /*----- For global buffers, write values from local variables into global backups. -----*/
+    if constexpr (IsGlobal) {
+        storage_.base_address_ = *base_address_;
+        storage_.size_ = *size_;
+        if (not layout_.is_finite()) {
+            M_insist(bool(storage_.capacity_));
+            *storage_.capacity_ = *capacity_;
+        }
+    }
+
+    /*----- Destroy local variables. -----*/
+    base_address_.reset();
+    size_.reset();
+    if (not layout_.is_finite()) {
+        capacity_.reset();
+        first_iteration_->val().discard(); // artificial use to silence diagnostics if `consume()` is not called
+        first_iteration_.reset();
+    }
 }
 
 template<bool IsGlobal>
@@ -1746,7 +1851,7 @@ void Buffer<IsGlobal>::resume_pipeline(param_t tuple_schema_)
 
         /*----- Call created function. -----*/
         M_insist(bool(resume_pipeline_));
-        (*resume_pipeline_)(base_address_, size_); // base address and size as arguments
+        (*resume_pipeline_)(base_address(), size()); // base address and size as arguments
     }
 }
 
@@ -1762,8 +1867,14 @@ void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_schema_) const
 
     if (Pipeline_) { // Pipeline callback not empty, i.e. performs some work
         /*----- Access base address and size depending on whether they are globals or locals. -----*/
-        Ptr<void> base_address = M_CONSTEXPR_COND(IsGlobal, Var<Ptr<void>>(base_address_).val(), base_address_.val());
-        U32 size = M_CONSTEXPR_COND(IsGlobal, Var<U32>(size_).val(), size_.val());
+        Ptr<void> base_address =
+            M_CONSTEXPR_COND(IsGlobal,
+                             base_address_ ? base_address_->val() : Var<Ptr<void>>(storage_.base_address_.val()).val(),
+                             ({ M_insist(bool(base_address_)); base_address_->val(); }));
+        U32 size =
+            M_CONSTEXPR_COND(IsGlobal,
+                             size_ ? size_->val() : Var<U32>(storage_.size_.val()).val(),
+                             ({ M_insist(bool(size_)); size_->val(); }));
 
         /*----- If predication is used, compute number of tuples to load from buffer depending on predicate. -----*/
         std::optional<Var<Bool>> pred; // use variable since WHILE loop will clone it (for IF and DO_WHILE)
@@ -1791,30 +1902,30 @@ void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_schema_) const
 template<bool IsGlobal>
 void Buffer<IsGlobal>::consume()
 {
-    /*----- Compile data layout to generate sequential store into the buffer. -----*/
+    M_insist(bool(base_address_), "must call `setup()` before");
+    M_insist(bool(size_), "must call `setup()` before");
+    M_insist(not layout_.is_finite() == bool(capacity_), "must call `setup()` before");
+    M_insist(not layout_.is_finite() == bool(first_iteration_), "must call `setup()` before");
+
+    /*----- Compile data layout to generate sequential single-pass store into the buffer. -----*/
+    /* We are able to use a single-pass store, i.e. *local* pointers and masks, since we explicitly save the needed
+     * variables, i.e. base address and size, using *global* backups and restore them before performing the actual
+     * store in the case of global buffers.  For local buffers, stores must be done in a single pass anyway. */
     auto [_store_inits, stores, _store_jumps] =
-        compile_store_sequential(schema_, base_address_, layout_, schema_, size_);
-    /* since structured bindings cannot be used in lambda capture */
+        compile_store_sequential_single_pass(schema_, *base_address_, layout_, schema_, *size_);
     Block store_inits(std::move(_store_inits)), store_jumps(std::move(_store_jumps));
 
     if (layout_.is_finite()) {
-        IF (size_ == 0U) { // buffer empty
+        IF (*size_ == 0U) { // buffer empty
             /*----- Emit initialization code for storing (i.e. (re-)set to first buffer slot). -----*/
             store_inits.attach_to_current();
         };
     } else {
-        M_insist(not capacity_);
-        capacity_.emplace(); // default initialize to 0
-        IF (*capacity_ == 0U) { // buffer not allocated
-            /*----- Set initial capacity. -----*/
-            *capacity_ = uint32_t(layout_.child().num_tuples());
-
-            /*----- Allocate memory for one child instance. Use maximal possible alignment requirement of 8 bytes. ---*/
-            const auto child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
-            base_address_ = Module::Allocator().allocate(child_size_in_bytes, /* alignment= */ 8);
-
-            /*----- Emit initialization code for storing (i.e. set to first buffer slot). -----*/
+        IF (*first_iteration_) {
+            /*----- Emit initialization code for storing (i.e. set to current buffer slot). -----*/
             store_inits.attach_to_current();
+
+            *first_iteration_ = false;
         };
     }
 
@@ -1822,22 +1933,21 @@ void Buffer<IsGlobal>::consume()
     stores.attach_to_current();
 
     if (layout_.is_finite()) {
-        IF (size_ == uint32_t(layout_.num_tuples())) { // buffer full
+        IF (*size_ == uint32_t(layout_.num_tuples())) { // buffer full
             /*----- Resume pipeline for each tuple in buffer and reset size of buffer to 0. -----*/
             resume_pipeline();
-            size_ = 0U;
+            *size_ = 0U;
         } ELSE { // buffer not full
             /*----- Emit advancing code to next buffer slot. -----*/
             store_jumps.attach_to_current();
         };
     } else {
-        M_insist(bool(capacity_));
-        IF (size_ == *capacity_) { // buffer full
+        IF (*size_ == *capacity_) { // buffer full
             /*----- Resize buffer by doubling its capacity. -----*/
             const uint32_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
             auto buffer_size_in_bytes = (*capacity_ / uint32_t(layout_.child().num_tuples())) * child_size_in_bytes;
             auto ptr = Module::Allocator().allocate(buffer_size_in_bytes.clone());
-            Wasm_insist(ptr == base_address_ + buffer_size_in_bytes.make_signed(),
+            Wasm_insist(ptr == *base_address_ + buffer_size_in_bytes.make_signed(),
                         "buffer could not be resized sequentially in memory");
             *capacity_ *= 2U;
         };

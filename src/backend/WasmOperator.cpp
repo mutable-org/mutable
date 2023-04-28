@@ -106,7 +106,7 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
                 child.execute(
-                    /* Setup=    */ MatchBase::DoNothing,
+                    /* Setup=    */ [&](){ result_set.setup(); },
                     /* Pipeline= */ [&](){
                         /*----- Store whether only a single slot is free to not extract result for empty buffer. -----*/
                         const Var<Bool> single_slot_free(result_set.size() == *window_size - 1U);
@@ -121,7 +121,7 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
                                                           U32(*window_size));
                         };
                     },
-                    /* Teardown= */ MatchBase::DoNothing
+                    /* Teardown= */ [&](){ result_set.teardown(); }
                 );
             }
             child_pipeline(); // call child function
@@ -140,7 +140,11 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
             {
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
-                child.execute(MatchBase::DoNothing, [&](){ result_set.consume(); }, MatchBase::DoNothing);
+                child.execute(
+                    /* Setup=    */ [&](){ result_set.setup(); },
+                    /* Pipeline= */ [&](){ result_set.consume(); },
+                    /* Teardown= */ [&](){ result_set.teardown(); }
+                );
             }
             child_pipeline(); // call child function
 
@@ -2453,7 +2457,11 @@ void Sorting::execute(const Match<Sorting> &M, callback_t Setup, callback_t Pipe
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
-        M.child.execute(MatchBase::DoNothing, [&](){ buffer.consume(); }, MatchBase::DoNothing);
+        M.child.execute(
+            /* Setup=    */ [&](){ buffer.setup(); },
+            /* Pipeline= */ [&](){ buffer.consume(); },
+            /* Teardown= */ [&](){ buffer.teardown(); }
+        );
     }
     sorting_child_pipeline(); // call child function
 
@@ -2575,7 +2583,9 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, callb
 
             /*----- Materialize the current result tuple in pipeline. -----*/
             M.children[i].get().execute(
-                MatchBase::DoNothing, [&](){ buffers.back().consume(); }, MatchBase::DoNothing
+                /* Setup=    */ [&](){ buffers.back().setup(); },
+                /* Pipeline= */ [&](){ buffers.back().consume(); },
+                /* Teardown= */ [&](){ buffers.back().teardown(); }
             );
         }
         nested_loop_join_child_pipeline(); // call child function
@@ -2583,7 +2593,9 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, callb
 
     /*----- Process right-most child. -----*/
     M.children.back().get().execute(
-        std::move(Setup), [&](){ buffers.back().resume_pipeline_inline(); }, std::move(Teardown)
+        /* Setup=    */ std::move(Setup),
+        /* Pipeline= */ [&](){ buffers.back().resume_pipeline_inline(); },
+        /* Teardown= */ std::move(Teardown)
     );
 }
 

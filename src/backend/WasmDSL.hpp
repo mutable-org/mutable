@@ -2929,7 +2929,14 @@ struct Variable<T, Kind, CanBeNull>
     Variable() requires requires { storage_type(); } = default;
 
     Variable(const Variable&) = delete;
-    Variable(Variable &&other) : storage_(std::forward<storage_type>(other.storage_)) { REGISTER_USE(other); }
+    Variable(Variable &&other)
+        : storage_(std::forward<storage_type>(other.storage_))
+#ifdef M_ENABLE_SANITY_FIELDS
+        , used_(other.used_)
+#endif
+    {
+        REGISTER_USE(other);
+    }
 
     Variable & operator=(const Variable &other) { operator=(other.val()); return *this; }
     Variable & operator=(Variable &&other) { operator=(other.val()); return *this; }

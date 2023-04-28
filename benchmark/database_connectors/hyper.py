@@ -27,9 +27,10 @@ class HyPer(Connector):
         if self.multithreaded:
             result = _execute(self, n_runs, params)
         else:
+            path = os.getcwd()
             script = f'''
 import sys
-sys.path.insert(0, '/home/immanuel/Documents/Work/PhD/mutable/mutable/benchmark')
+sys.path.insert(0, '{path}/benchmark')
 import database_connectors.hyper
 print(repr(database_connectors.hyper.HyPer._execute({n_runs}, {repr(params)})))
 '''
@@ -37,7 +38,7 @@ print(repr(database_connectors.hyper.HyPer._execute({n_runs}, {repr(params)})))
                 args=['taskset', '-c', '2', 'python3', '-c', script],
                 capture_output=True,
                 text=True,
-                cwd='/home/immanuel/Documents/Work/PhD/mutable/mutable'
+                cwd=path
             )
             # TODO error handling
 

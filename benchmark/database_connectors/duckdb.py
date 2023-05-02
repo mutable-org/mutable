@@ -21,7 +21,7 @@ class DuckDB(Connector):
         suite = params['suite']
         benchmark = params['benchmark']
         experiment = params['name']
-        configname = 'DuckDB (multi core)' if self.multithreaded else 'DuckDB (single core)'
+        configname = f'DuckDB ({get_num_cores()} cores)' if self.multithreaded else 'DuckDB (single core)'
         tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration {configname}.')
 
         self.clean_up()

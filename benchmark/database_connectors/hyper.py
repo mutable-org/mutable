@@ -27,7 +27,7 @@ class HyPer(Connector):
         suite = params['suite']
         benchmark = params['benchmark']
         experiment = params['name']
-        suffix = ' (multi core)' if self.multithreaded else ' (single core)'
+        suffix = f' ({get_num_cores()} cores)' if self.multithreaded else ' (single core)'
         tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration HyPer{suffix}.')
 
         result = None

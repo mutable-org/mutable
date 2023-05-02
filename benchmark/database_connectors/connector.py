@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import os
+import multiprocessing
 
 DEFAULT_TIMEOUT = 30  # seconds
 TIMEOUT_PER_CASE = 10 # seconds
@@ -19,6 +20,12 @@ class ExperimentTimeoutExpired(ConnectorException):
 class AttributeTypeUnknown(ConnectorException):
     def __init__(self, what :str):
         super().__init__(what)
+
+
+
+# Helper function to get number of cores
+def get_num_cores():
+    return multiprocessing.cpu_count()
 
 
 #=======================================================================================================================

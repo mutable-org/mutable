@@ -8,6 +8,7 @@ import os
 import sys
 import subprocess
 from tqdm import tqdm
+import multiprocessing
 
 
 # Converting table names to lower case is needed because then
@@ -15,6 +16,17 @@ from tqdm import tqdm
 # of using 'table_def.table_name'
 def table_name_to_lower_case(name: str):
     return name.lower()
+
+
+# Used as function for new process to track time / timeout
+def run_multiple_queries(connection, queries, data, queue):
+    times = hyperconf.benchmark_execution_times(connection, queries, data)
+    queue.put(times)
+
+def run_single_query(connection, query):
+    with connection.execute_query(query) as result:
+        for row in result:
+            pass
 
 
 class HyPer(Connector):
@@ -33,6 +45,12 @@ class HyPer(Connector):
         result = None
         if self.multithreaded:
             result = HyPer._execute(n_runs, params)
+            try:
+                result = HyPer._execute(n_runs, params)
+            except Exception as ex:
+                tqdm.write(str(ex))
+                return dict()
+
         else:
             path = os.getcwd()
             script = f'''
@@ -44,18 +62,26 @@ print(repr(database_connectors.hyper.HyPer._execute({n_runs}, {repr(params)})))
             args = ['taskset', '-c', '2', 'python3', '-c', script]
             if self.verbose:
                 tqdm.write(f"    $ {' '.join(args)}")
+            # try:
+            #     P = subprocess.run(
+            #         args=args,
+            #         capture_output=True,
+            #         text=True,
+            #         cwd=path
+            #     )
+            #     result = eval(P.stdout)
+            # except Exception as ex:
+            #     tqdm.write(str(ex))
+            #     return dict()
             P = subprocess.run(
-                args=args,
-                capture_output=True,
-                text=True,
-                cwd=path
-            )
-            # TODO error handling
-
+                    args=args,
+                    capture_output=True,
+                    text=True,
+                    cwd=path
+                )
             result = eval(P.stdout)
 
         patched_result = dict()
-
         for key, val in result.items():
             patched_result[f'{key}{suffix}'] = val
         return patched_result
@@ -72,6 +98,8 @@ print(repr(database_connectors.hyper.HyPer._execute({n_runs}, {repr(params)})))
                 break
 
         hyperconf.init() # prepare for measurements
+
+        num_timeout_cases = 0
 
         for run_id in range(n_runs):
             # If tables contain scale factors, they have to be loaded separately for every case
@@ -95,8 +123,11 @@ print(repr(database_connectors.hyper.HyPer._execute({n_runs}, {repr(params)})))
 
                         # Execute cases
                         for case, query in params['cases'].items():
+                            # Set up tables
                             for table_name, table in params['data'].items():
                                 table_name = table_name_to_lower_case(table_name)
+                                connection.execute_command(f'DELETE FROM {table_name};')  # Empty table first
+
                                 if table.get('scale_factors'):
                                     sf = table['scale_factors'][case]
                                 else:
@@ -105,29 +136,41 @@ print(repr(database_connectors.hyper.HyPer._execute({n_runs}, {repr(params)})))
                                 num_rows = round((table['lines_in_file'] - header) * sf)
                                 connection.execute_command(f'INSERT INTO {table_name} SELECT * FROM {table_name}_tmp LIMIT {num_rows};')
 
-                            with connection.execute_query(query) as result:
-                                for row in result:
-                                    pass
-                            for table_name, table in params['data'].items():
-                                connection.execute_command(f'DELETE FROM {table_name_to_lower_case(table_name)};')
+                            timeout = TIMEOUT_PER_CASE
+                            times = None
+                            p = multiprocessing.Process(target=run_single_query, args=(connection, query))
+                            try:
+                                p.start()
+                                p.join(timeout=timeout)
+                                if p.is_alive():
+                                    # timeout happened
+                                    num_timeout_cases += 1
+                                    time = timeout * 1000 # in ms
+                                    p.terminate()
+                                    p.join()
+                                else:
+                                    # no timeout, extract result
+                                    matches = hyperconf.filter_results(
+                                        hyperconf.extract_results(),
+                                        { 'k': 'query-end'},
+                                        [ hyperconf.MATCH_SELECT ]
+                                    )
+                                    times = map(lambda m: m['v']['execution-time'] * 1000, matches)
+                                    times = list(map(lambda t: f'{t:.3f}', times))
+                                    case_idx = list(params['cases'].keys()).index(case)
+                                    time = times[run_id * len(list(params['cases'].keys())) + case_idx - num_timeout_cases]
 
-                        # extract results
-                        matches = hyperconf.filter_results(
-                            hyperconf.extract_results(),
-                            { 'k': 'query-end'},
-                            [ hyperconf.MATCH_SELECT ]
-                        )
-                        times = map(lambda m: m['v']['execution-time'] * 1000, matches)
-                        times = list(map(lambda t: f'{t:.3f}', times))
-                        times = times[run_id * len(list(params['cases'].keys())) : ]    # get only times of this run, ignore previous runs
-                        times = list(zip(params['cases'].keys(), times))
-                        for case, time in times:
-                            if case not in measurement_times.keys():
-                                measurement_times[case] = list()
-                            measurement_times[case].append(time)
+                                if case not in measurement_times.keys():
+                                    measurement_times[case] = list()
+                                measurement_times[case].append(time)
+
+                            except Exception as ex:
+                                raise(ConnectorException(ex))
+
 
 
             else:
+                open(hyperconf.HYPER_LOG_FILE, 'w').close() # to clear the log file and ignore previous runs
                 # Otherwise, tables have to be created just once before the measurements
                 with HyperProcess(telemetry=Telemetry.DO_NOT_SEND_USAGE_DATA_TO_TABLEAU) as hyper:
                     with Connection(endpoint=hyper.endpoint, database='benchmark.hyper', create_mode=CreateMode.CREATE_AND_REPLACE) as connection:
@@ -135,14 +178,28 @@ print(repr(database_connectors.hyper.HyPer._execute({n_runs}, {repr(params)})))
                         queries = HyPer.get_cases_queries(params, table_defs)
                         data = HyPer.get_data(params, table_defs)
 
-                        times = hyperconf.benchmark_execution_times(connection, queries.values(), data)
-                        times = times[run_id * len(queries.keys()):]    # get only times of this run, ignore previous runs
-                        times = list(zip(queries.keys(), list(map(lambda t: float(f'{t:.3f}'), times))))
+                        timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(params['cases'])
+                        times = None
+                        q = multiprocessing.Queue()
+                        p = multiprocessing.Process(target=run_multiple_queries, args=(connection, queries.values(), data, q))
+                        try:
+                            p.start()
+                            p.join(timeout=timeout)
+                            if p.is_alive():
+                                # timeout happened
+                                times = times = list(zip(queries.keys(), [TIMEOUT_PER_CASE for _ in range(len(params['cases']))]))
+                            else:
+                                times = q.get()
+                                times = list(zip(queries.keys(), list(map(lambda t: float(f'{t:.3f}'), times))))
 
-                        for case, time in times:
-                            if case not in measurement_times.keys():
-                                measurement_times[case] = list()
-                            measurement_times[case].append(time)
+                            for case, time in times:
+                                if case not in measurement_times.keys():
+                                    measurement_times[case] = list()
+                                measurement_times[case].append(time)
+
+                        except Exception as ex:
+                                raise(ConnectorException(ex))
+
 
 
         return {'HyPer': measurement_times}

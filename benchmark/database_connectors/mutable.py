@@ -137,7 +137,7 @@ class Mutable(Connector):
                 for case, query in cases.items():
                     # Produce code to load data into tables with scale factor
                     path_to_data = os.path.join('benchmark', suite, 'data')
-                    case_imports = create_import_statements(path_to_data, yml['data'], case)   # TODO refactor
+                    case_imports = create_import_statements(path_to_data, yml['data'], case)
                     import_str = '\n'.join(case_imports)
 
                     query_str = import_str + '\n' + query
@@ -147,7 +147,7 @@ class Mutable(Connector):
                         durations = self.benchmark_query(command, query_str, yml['pattern'], timeout, path_to_file)
                     except BenchmarkTimeoutException as ex:
                         tqdm.write(str(ex))
-                        execution_times[case] = TIMEOUT_PER_CASE * 1000
+                        execution_times[case] = timeout * 1000
                     else:
                         execution_times[case] = durations[0]
         except BenchmarkError as ex:

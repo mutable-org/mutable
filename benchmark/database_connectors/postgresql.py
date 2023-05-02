@@ -91,7 +91,7 @@ class PostgreSQL(Connector):
                                 with open(TMP_SQL_FILE) as tmp:
                                     tqdm.write("    " + "    ".join(tmp.readlines()))
 
-                        timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
+                        timeout = TIMEOUT_PER_CASE
                         benchmark_info = f"{suite}/{benchmark}/{experiment} [PostgreSQL]"
                         try:
                             durations = self.run_command(command, timeout, benchmark_info)

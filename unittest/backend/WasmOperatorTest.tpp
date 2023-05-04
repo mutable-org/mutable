@@ -136,7 +136,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Scan", "[core][wasm]")
             };
 
             /* Execute the scan operator. */
-            Scan::execute(M, MatchBase::DoNothing, Return, MatchBase::DoNothing);
+            Scan::execute(M, setup_t::Make_Without_Parent(), Return, teardown_t::Make_Without_Parent());
 
         }
         CodeGenContext::Dispose(); // dispose codegen context

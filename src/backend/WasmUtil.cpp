@@ -1658,12 +1658,12 @@ void m::wasm::compile_load_point_access(const Schema &tuple_schema, Ptr<void> ba
 
 template<bool IsGlobal>
 Buffer<IsGlobal>::Buffer(const Schema &schema, const DataLayoutFactory &factory, std::size_t num_tuples,
-                         MatchBase::callback_t Setup, MatchBase::callback_t Pipeline, MatchBase::callback_t Teardown)
+                         setup_t setup, pipeline_t pipeline, teardown_t teardown)
     : schema_(std::cref(schema))
     , layout_(factory.make(schema, num_tuples))
-    , Setup_(std::move(Setup))
-    , Pipeline_(std::move(Pipeline))
-    , Teardown_(std::move(Teardown))
+    , setup_(std::move(setup))
+    , pipeline_(std::move(pipeline))
+    , teardown_(std::move(teardown))
 {
     M_insist(schema.num_entries() != 0, "buffer schema must not be empty");
 
@@ -1812,6 +1812,8 @@ void Buffer<IsGlobal>::teardown()
 template<bool IsGlobal>
 void Buffer<IsGlobal>::resume_pipeline(param_t tuple_schema_)
 {
+    M_insist(bool(pipeline_), "pipeline must not be empty");
+
     const auto &tuple_schema = tuple_schema_ ? *tuple_schema_ : schema_;
 
 #ifndef NDEBUG
@@ -1819,45 +1821,45 @@ void Buffer<IsGlobal>::resume_pipeline(param_t tuple_schema_)
         M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple schema entry not found");
 #endif
 
-    if (Pipeline_) { // Pipeline callback not empty, i.e. performs some work
-        /*----- Create function on-demand to assert that all needed identifiers are already created. -----*/
-        if (not resume_pipeline_) {
-            /*----- Create function to resume the pipeline for each tuple contained in the buffer. -----*/
-            FUNCTION(resume_pipeline, void(void*, uint32_t))
-            {
-                auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
+    /*----- Create function on-demand to assert that all needed identifiers are already created. -----*/
+    if (not resume_pipeline_) {
+        /*----- Create function to resume the pipeline for each tuple contained in the buffer. -----*/
+        FUNCTION(resume_pipeline, void(void*, uint32_t))
+        {
+            auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
-                /*----- Access base address and size parameters. -----*/
-                Ptr<void> base_address = PARAMETER(0);
-                U32 size = PARAMETER(1);
+            /*----- Access base address and size parameters. -----*/
+            Ptr<void> base_address = PARAMETER(0);
+            U32 size = PARAMETER(1);
 
-                /*----- Compile data layout to generate sequential load from buffer. -----*/
-                Var<U32> load_tuple_id; // default initialized to 0
-                auto [load_inits, loads, load_jumps] =
-                    compile_load_sequential(tuple_schema, base_address, layout_, schema_, load_tuple_id);
+            /*----- Compile data layout to generate sequential load from buffer. -----*/
+            Var<U32> load_tuple_id; // default initialized to 0
+            auto [load_inits, loads, load_jumps] =
+                compile_load_sequential(tuple_schema, base_address, layout_, schema_, load_tuple_id);
 
-                /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
-                Setup_();
-                load_inits.attach_to_current();
-                WHILE (load_tuple_id < size) {
-                    loads.attach_to_current();
-                    Pipeline_();
-                    load_jumps.attach_to_current();
-                }
-                Teardown_();
+            /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
+            setup_();
+            load_inits.attach_to_current();
+            WHILE (load_tuple_id < size) {
+                loads.attach_to_current();
+                pipeline_();
+                load_jumps.attach_to_current();
             }
-            resume_pipeline_ = std::move(resume_pipeline);
+            teardown_();
         }
-
-        /*----- Call created function. -----*/
-        M_insist(bool(resume_pipeline_));
-        (*resume_pipeline_)(base_address(), size()); // base address and size as arguments
+        resume_pipeline_ = std::move(resume_pipeline);
     }
+
+    /*----- Call created function. -----*/
+    M_insist(bool(resume_pipeline_));
+    (*resume_pipeline_)(base_address(), size()); // base address and size as arguments
 }
 
 template<bool IsGlobal>
 void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_schema_) const
 {
+    M_insist(bool(pipeline_), "pipeline must not be empty");
+
     const auto &tuple_schema = tuple_schema_ ? *tuple_schema_ : schema_;
 
 #ifndef NDEBUG
@@ -1865,38 +1867,36 @@ void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_schema_) const
         M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple schema entry not found");
 #endif
 
-    if (Pipeline_) { // Pipeline callback not empty, i.e. performs some work
-        /*----- Access base address and size depending on whether they are globals or locals. -----*/
-        Ptr<void> base_address =
-            M_CONSTEXPR_COND(IsGlobal,
-                             base_address_ ? base_address_->val() : Var<Ptr<void>>(storage_.base_address_.val()).val(),
-                             ({ M_insist(bool(base_address_)); base_address_->val(); }));
-        U32 size =
-            M_CONSTEXPR_COND(IsGlobal,
-                             size_ ? size_->val() : Var<U32>(storage_.size_.val()).val(),
-                             ({ M_insist(bool(size_)); size_->val(); }));
+    /*----- Access base address and size depending on whether they are globals or locals. -----*/
+    Ptr<void> base_address =
+        M_CONSTEXPR_COND(IsGlobal,
+                         base_address_ ? base_address_->val() : Var<Ptr<void>>(storage_.base_address_.val()).val(),
+                         ({ M_insist(bool(base_address_)); base_address_->val(); }));
+    U32 size =
+        M_CONSTEXPR_COND(IsGlobal,
+                         size_ ? size_->val() : Var<U32>(storage_.size_.val()).val(),
+                         ({ M_insist(bool(size_)); size_->val(); }));
 
-        /*----- If predication is used, compute number of tuples to load from buffer depending on predicate. -----*/
-        std::optional<Var<Bool>> pred; // use variable since WHILE loop will clone it (for IF and DO_WHILE)
-        if (auto &env = CodeGenContext::Get().env(); env.predicated())
-            pred = env.extract_predicate().is_true_and_not_null();
-        U32 num_tuples = pred ? Select(*pred, size, 0U) : size;
+    /*----- If predication is used, compute number of tuples to load from buffer depending on predicate. -----*/
+    std::optional<Var<Bool>> pred; // use variable since WHILE loop will clone it (for IF and DO_WHILE)
+    if (auto &env = CodeGenContext::Get().env(); env.predicated())
+        pred = env.extract_predicate().is_true_and_not_null();
+    U32 num_tuples = pred ? Select(*pred, size, 0U) : size;
 
-        /*----- Compile data layout to generate sequential load from buffer. -----*/
-        Var<U32> load_tuple_id(0); // explicitly (re-)set tuple ID to 0
-        auto [load_inits, loads, load_jumps] =
-            compile_load_sequential(tuple_schema, base_address, layout_, schema_, load_tuple_id);
+    /*----- Compile data layout to generate sequential load from buffer. -----*/
+    Var<U32> load_tuple_id(0); // explicitly (re-)set tuple ID to 0
+    auto [load_inits, loads, load_jumps] =
+        compile_load_sequential(tuple_schema, base_address, layout_, schema_, load_tuple_id);
 
-        /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
-        Setup_();
-        load_inits.attach_to_current();
-        WHILE (load_tuple_id < num_tuples) {
-            loads.attach_to_current();
-            Pipeline_();
-            load_jumps.attach_to_current();
-        }
-        Teardown_();
+    /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
+    setup_();
+    load_inits.attach_to_current();
+    WHILE (load_tuple_id < num_tuples) {
+        loads.attach_to_current();
+        pipeline_();
+        load_jumps.attach_to_current();
     }
+    teardown_();
 }
 
 template<bool IsGlobal>

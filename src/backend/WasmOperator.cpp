@@ -33,8 +33,8 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
                 child.execute(
-                    /* Setup=    */ [&](){ counter.emplace(counter_backup); },
-                    /* Pipeline= */ [&](){
+                    /* setup=    */ setup_t::Make_Without_Parent([&](){ counter.emplace(counter_backup); }),
+                    /* pipeline= */ [&](){
                         M_insist(bool(counter));
 
                         /*----- Increment tuple ID. -----*/
@@ -50,11 +50,11 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
                             *counter = 0U;
                         };
                     },
-                    /* Teardown= */ [&](){
+                    /* teardown= */ teardown_t::Make_Without_Parent([&](){
                         M_insist(bool(counter));
                         counter_backup = *counter;
                         counter.reset();
-                    }
+                    })
                 );
             }
             child_pipeline(); // call child function
@@ -73,19 +73,21 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
                 std::optional<Var<U32>> num_tuples; ///< variable to *locally* count additional result tuples
 
                 child.execute(
-                    /* Setup=    */ [&](){ num_tuples.emplace(CodeGenContext::Get().num_tuples()); },
-                    /* Pipeline= */ [&](){
+                    /* setup=    */ setup_t::Make_Without_Parent([&](){
+                        num_tuples.emplace(CodeGenContext::Get().num_tuples());
+                    }),
+                    /* pipeline= */ [&](){
                         M_insist(bool(num_tuples));
                         if (auto &env = CodeGenContext::Get().env(); env.predicated())
                             *num_tuples += env.extract_predicate().is_true_and_not_null().to<uint32_t>();
                         else
                             *num_tuples += 1U;
                     },
-                    /* Teardown= */ [&](){
+                    /* teardown= */ teardown_t::Make_Without_Parent([&](){
                         M_insist(bool(num_tuples));
                         CodeGenContext::Get().set_num_tuples(*num_tuples);
                         num_tuples.reset();
-                    }
+                    })
                 );
             }
             child_pipeline(); // call child function
@@ -97,7 +99,7 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
         if (window_size) {
             M_insist(*window_size > 1U);
 
-            /*----- Create finite global buffer (without `Pipeline`-callback) used as reusable result set. -----*/
+            /*----- Create finite global buffer (without `pipeline`-callback) used as reusable result set. -----*/
             GlobalBuffer result_set(schema, factory, *window_size); // no callback to extract results all at once
 
             /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `Limit`). -----*/
@@ -106,8 +108,8 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
                 child.execute(
-                    /* Setup=    */ [&](){ result_set.setup(); },
-                    /* Pipeline= */ [&](){
+                    /* setup=    */ setup_t::Make_Without_Parent([&](){ result_set.setup(); }),
+                    /* pipeline= */ [&](){
                         /*----- Store whether only a single slot is free to not extract result for empty buffer. -----*/
                         const Var<Bool> single_slot_free(result_set.size() == *window_size - 1U);
 
@@ -121,7 +123,7 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
                                                           U32(*window_size));
                         };
                     },
-                    /* Teardown= */ [&](){ result_set.teardown(); }
+                    /* teardown= */ teardown_t::Make_Without_Parent([&](){ result_set.teardown(); })
                 );
             }
             child_pipeline(); // call child function
@@ -132,7 +134,7 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
             /*----- Extract remaining results. -----*/
             Module::Get().emit_call<void>("read_result_set", result_set.base_address(), result_set.size());
         } else {
-            /*----- Create infinite global buffer (without `Pipeline`-callback) used as single result set. -----*/
+            /*----- Create infinite global buffer (without `pipeline`-callback) used as single result set. -----*/
             GlobalBuffer result_set(schema, factory); // no callback to extract results all at once
 
             /*----- Create child function s.t. result set is extracted in case of returns (e.g. due to `Limit`). -----*/
@@ -141,9 +143,9 @@ void write_result_set(const Schema &schema, const storage::DataLayoutFactory &fa
                 auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
                 child.execute(
-                    /* Setup=    */ [&](){ result_set.setup(); },
-                    /* Pipeline= */ [&](){ result_set.consume(); },
-                    /* Teardown= */ [&](){ result_set.teardown(); }
+                    /* setup=    */ setup_t::Make_Without_Parent([&](){ result_set.setup(); }),
+                    /* pipeline= */ [&](){ result_set.consume(); },
+                    /* teardown= */ teardown_t::Make_Without_Parent([&](){ result_set.teardown(); })
                 );
             }
             child_pipeline(); // call child function
@@ -323,24 +325,24 @@ decompose_equi_predicate(const cnf::CNF &cnf, const Schema &schema_left)
  * NoOp
  *====================================================================================================================*/
 
-void NoOp::execute(const Match<NoOp> &M, callback_t, callback_t, callback_t)
+void NoOp::execute(const Match<NoOp> &M, setup_t, pipeline_t, teardown_t)
 {
     std::optional<Var<U32>> num_tuples; ///< variable to *locally* count additional result tuples
 
     M.child.execute(
-        /* Setup=    */ [&](){ num_tuples.emplace(CodeGenContext::Get().num_tuples()); },
-        /* Pipeline= */ [&](){
+        /* setup=    */ setup_t::Make_Without_Parent([&](){ num_tuples.emplace(CodeGenContext::Get().num_tuples()); }),
+        /* pipeline= */ [&](){
             M_insist(bool(num_tuples));
             if (auto &env = CodeGenContext::Get().env(); env.predicated())
                 *num_tuples += env.extract_predicate().is_true_and_not_null().to<uint32_t>();
             else
                 *num_tuples += 1U;
         },
-        /* Teardown= */ [&](){
+        /* teardown= */ teardown_t::Make_Without_Parent([&](){
             M_insist(bool(num_tuples));
             CodeGenContext::Get().set_num_tuples(*num_tuples);
             num_tuples.reset();
-        }
+        })
     );
 }
 
@@ -349,7 +351,7 @@ void NoOp::execute(const Match<NoOp> &M, callback_t, callback_t, callback_t)
  * Callback
  *====================================================================================================================*/
 
-void Callback::execute(const Match<Callback> &M, callback_t, callback_t, callback_t)
+void Callback::execute(const Match<Callback> &M, setup_t, pipeline_t, teardown_t)
 {
     M_insist(bool(M.result_set_factory), "`wasm::Callback` must have a factory for the result set");
 
@@ -362,7 +364,7 @@ void Callback::execute(const Match<Callback> &M, callback_t, callback_t, callbac
  * Print
  *====================================================================================================================*/
 
-void Print::execute(const Match<Print> &M, callback_t, callback_t, callback_t)
+void Print::execute(const Match<Print> &M, setup_t, pipeline_t, teardown_t)
 {
     M_insist(bool(M.result_set_factory), "`wasm::Print` must have a factory for the result set");
 
@@ -388,7 +390,7 @@ ConditionSet Scan::post_condition(const Match<Scan>&)
     return post_cond;
 }
 
-void Scan::execute(const Match<Scan> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown)
+void Scan::execute(const Match<Scan> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown)
 {
     auto &schema = M.scan.schema();
     auto &table = M.scan.store().table();
@@ -405,12 +407,12 @@ void Scan::execute(const Match<Scan> &M, callback_t Setup, callback_t Pipeline, 
 
     /*----- If no attributes must be loaded, generate a loop just executing the pipeline `num_rows`-times. -----*/
     if (schema.num_entries() == 0) {
-        Setup();
+        setup();
         WHILE (tuple_id < num_rows) {
             tuple_id += 1U;
-            Pipeline();
+            pipeline();
         }
-        Teardown();
+        teardown();
         return;
     }
 
@@ -424,14 +426,14 @@ void Scan::execute(const Match<Scan> &M, callback_t Setup, callback_t Pipeline, 
                                                          table.schema(M.scan.alias()), tuple_id);
 
     /*----- Generate the loop for the actual scan, with the pipeline emitted into the loop body. -----*/
-    Setup();
+    setup();
     inits.attach_to_current();
     WHILE (tuple_id < num_rows) {
         loads.attach_to_current();
-        Pipeline();
+        pipeline();
         jumps.attach_to_current();
     }
-    Teardown();
+    teardown();
 }
 
 
@@ -453,21 +455,21 @@ ConditionSet Filter<Predicated>::adapt_post_condition(const Match<Filter>&, cons
 }
 
 template<bool Predicated>
-void Filter<Predicated>::execute(const Match<Filter> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown)
+void Filter<Predicated>::execute(const Match<Filter> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown)
 {
     M.child.execute(
-        /* Setup=    */ std::move(Setup),
-        /* Pipeline= */ [&, Pipeline=std::move(Pipeline)](){
+        /* setup=    */ std::move(setup),
+        /* pipeline= */ [&, pipeline=std::move(pipeline)](){
             if constexpr (Predicated) {
                 CodeGenContext::Get().env().add_predicate(M.filter.filter());
-                Pipeline();
+                pipeline();
             } else {
                 IF (CodeGenContext::Get().env().compile(M.filter.filter()).is_true_and_not_null()) {
-                    Pipeline();
+                    pipeline();
                 };
             }
         },
-        /* Teardown= */ std::move(Teardown)
+        /* teardown= */ std::move(teardown)
     );
 }
 
@@ -505,9 +507,9 @@ ConditionSet Projection::adapt_post_condition(const Match<Projection> &M, const 
     return post_cond;
 }
 
-void Projection::execute(const Match<Projection> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown)
+void Projection::execute(const Match<Projection> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown)
 {
-    auto execute_projection = [&, Pipeline=std::move(Pipeline)](){
+    auto execute_projection = [&, pipeline=std::move(pipeline)](){
         auto &old_env = CodeGenContext::Get().env();
         Environment new_env; // fresh environment
 
@@ -553,16 +555,16 @@ void Projection::execute(const Match<Projection> &M, callback_t Setup, callback_
         /*----- Resume pipeline with newly created environment. -----*/
         {
             auto S = CodeGenContext::Get().scoped_environment(std::move(new_env));
-            Pipeline();
+            pipeline();
         }
     };
 
     if (M.child) {
-        M.child->get().execute(std::move(Setup), std::move(execute_projection), std::move(Teardown));
+        M.child->get().execute(std::move(setup), std::move(execute_projection), std::move(teardown));
     } else {
-        Setup();
+        setup();
         execute_projection();
-        Teardown();
+        teardown();
     }
 }
 
@@ -583,8 +585,8 @@ ConditionSet HashBasedGrouping::post_condition(const Match<HashBasedGrouping>&)
     return post_cond;
 }
 
-void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Setup, callback_t Pipeline,
-                                callback_t Teardown)
+void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup, pipeline_t pipeline,
+                                teardown_t teardown)
 {
     // TODO: determine setup
     using PROBING_STRATEGY = LinearProbing;
@@ -645,8 +647,8 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Se
         auto dummy = ht->dummy_entry();
 
         M.child.execute(
-            /* Setup=    */ MatchBase::DoNothing,
-            /* Pipeline= */ [&](){
+            /* setup=    */ setup_t::Make_Without_Parent(),
+            /* pipeline= */ [&](){
                 const auto &env = CodeGenContext::Get().env();
 
                 /*----- Insert key if not yet done. -----*/
@@ -916,7 +918,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Se
                     update_avg_aggs.attach_to_current(); // after others to ensure that running count is incremented before
                 };
             },
-            /* Teardown= */ MatchBase::DoNothing
+            /* teardown= */ teardown_t::Make_Without_Parent()
         );
     }
     hash_based_grouping_child_pipeline(); // call child function
@@ -924,8 +926,8 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Se
     auto &env = CodeGenContext::Get().env();
 
     /*----- Process each computed group. -----*/
-    Setup();
-    ht->for_each([&, Pipeline=std::move(Pipeline)](HashTable::const_entry_t entry){
+    setup();
+    ht->for_each([&, pipeline=std::move(pipeline)](HashTable::const_entry_t entry){
         /*----- Compute key schema to detect duplicated keys. -----*/
         Schema key_schema;
         for (std::size_t i = 0; i < num_keys; ++i) {
@@ -988,9 +990,9 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, callback_t Se
         }
 
         /*----- Resume pipeline. -----*/
-        Pipeline();
+        pipeline();
     });
-    Teardown();
+    teardown();
 }
 
 ConditionSet OrderedGrouping::pre_condition(
@@ -1037,8 +1039,7 @@ ConditionSet OrderedGrouping::adapt_post_condition(const Match<OrderedGrouping> 
     return post_cond;
 }
 
-void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup, callback_t Pipeline,
-                              callback_t Teardown)
+void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown)
 {
     Environment results; ///< stores current result tuple
     const auto num_keys = M.grouping.group_by().size();
@@ -1232,7 +1233,7 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
     };
 
     M.child.execute(
-        /* Setup=    */ [&](){
+        /* setup=    */ setup_t::Make_Without_Parent([&](){
             first_iteration.emplace(first_iteration_backup);
 
             /*----- Initialize aggregates and their backups. -----*/
@@ -1474,8 +1475,8 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
                     [](auto&&) { M_unreachable("invalid type"); },
                 }, *M.grouping.schema()[idx].type);
             }
-        },
-        /* Pipeline= */ [&](){
+        }),
+        /* pipeline= */ [&](){
             auto &env = CodeGenContext::Get().env();
 
             /*----- If predication is used, introduce pred. var. and update it before computing aggregates. -----*/
@@ -1805,7 +1806,7 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
             update_aggs.attach_to_current();
             update_avg_aggs.attach_to_current(); // after others to ensure that running count is incremented before
         },
-        /* Teardown= */ [&](){
+        /* teardown= */ teardown_t::Make_Without_Parent([&](){
             store_locals_to_globals();
 
             /*----- Destroy created aggregate values and their backups. -----*/
@@ -1817,7 +1818,7 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
             M_insist(bool(first_iteration));
             first_iteration_backup = *first_iteration;
             first_iteration.reset();
-        }
+        })
     );
 
     /*----- If input was not empty, emit last group tuple in the current environment and resume the pipeline. -----*/
@@ -1877,9 +1878,9 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, callback_t Setup,
         }
 
         /*----- Resume pipeline. -----*/
-        Setup();
-        Pipeline();
-        Teardown();
+        setup();
+        pipeline();
+        teardown();
     }
 }
 
@@ -1904,7 +1905,7 @@ ConditionSet Aggregation::post_condition(const Match<Aggregation> &M)
     return post_cond;
 }
 
-void Aggregation::execute(const Match<Aggregation> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown)
+void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown)
 {
     Environment results; ///< stores result tuple
 
@@ -1924,7 +1925,7 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Setup, callbac
         agg_backup_t agg_value_backups[aggregates.size()]; ///< *global* value backups of the computed aggregates
 
         M.child.execute(
-            /* Setup=    */ [&](){
+            /* setup=    */ setup_t::Make_Without_Parent([&](){
                 /*----- Initialize aggregates and their backups. -----*/
                 for (std::size_t idx = 0; idx < aggregates.size(); ++idx) {
                     auto &info = aggregates[idx];
@@ -2058,8 +2059,8 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Setup, callbac
                         }
                     }
                 }
-            },
-            /* Pipeline= */ [&](){
+            }),
+            /* pipeline= */ [&](){
                 auto &env = CodeGenContext::Get().env();
 
                 /*----- If predication is used, introduce pred. var. and update it before computing aggregates. -----*/
@@ -2274,7 +2275,7 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Setup, callbac
                     }
                 }
             },
-            /* Teardown= */ [&](){
+            /* teardown= */ teardown_t::Make_Without_Parent([&](){
                 /*----- Store local aggregate values to globals to access them in other function. -----*/
                 for (std::size_t idx = 0; idx < aggregates.size(); ++idx) {
                     auto &info = aggregates[idx];
@@ -2370,7 +2371,7 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Setup, callbac
                     agg_values[idx].~agg_t();
                     agg_value_backups[idx].~agg_backup_t();
                 }
-            }
+            })
        );
     }
     aggregation_child_pipeline(); // call child function
@@ -2410,9 +2411,9 @@ void Aggregation::execute(const Match<Aggregation> &M, callback_t Setup, callbac
     }
 
     /*----- Resume pipeline. -----*/
-    Setup();
-    Pipeline();
-    Teardown();
+    setup();
+    pipeline();
+    teardown();
 }
 
 
@@ -2442,14 +2443,14 @@ ConditionSet Sorting::post_condition(const Match<Sorting> &M)
     return post_cond;
 }
 
-void Sorting::execute(const Match<Sorting> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown)
+void Sorting::execute(const Match<Sorting> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown)
 {
     /*----- Create infinite buffer to materialize the current results but resume the pipeline later. -----*/
     M_insist(bool(M.materializing_factory), "`wasm::Sorting` must have a factory for the materialized child");
     const auto buffer_schema = M.sorting.child(0)->schema().drop_constants().deduplicate();
     const auto sorting_schema = M.sorting.schema().drop_constants().deduplicate();
     GlobalBuffer buffer(
-        buffer_schema, *M.materializing_factory, 0, std::move(Setup), std::move(Pipeline), std::move(Teardown)
+        buffer_schema, *M.materializing_factory, 0, std::move(setup), std::move(pipeline), std::move(teardown)
     );
 
     /*----- Create child function. -----*/
@@ -2458,9 +2459,9 @@ void Sorting::execute(const Match<Sorting> &M, callback_t Setup, callback_t Pipe
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
         M.child.execute(
-            /* Setup=    */ [&](){ buffer.setup(); },
-            /* Pipeline= */ [&](){ buffer.consume(); },
-            /* Teardown= */ [&](){ buffer.teardown(); }
+            /* setup=    */ setup_t::Make_Without_Parent([&](){ buffer.setup(); }),
+            /* pipeline= */ [&](){ buffer.consume(); },
+            /* teardown= */ teardown_t::Make_Without_Parent([&](){ buffer.teardown(); })
         );
     }
     sorting_child_pipeline(); // call child function
@@ -2491,9 +2492,9 @@ ConditionSet NoOpSorting::pre_condition(std::size_t child_idx,
     return pre_cond;
 }
 
-void NoOpSorting::execute(const Match<NoOpSorting> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown)
+void NoOpSorting::execute(const Match<NoOpSorting> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown)
 {
-    M.child.execute(std::move(Setup), std::move(Pipeline), std::move(Teardown));
+    M.child.execute(std::move(setup), std::move(pipeline), std::move(teardown));
 }
 
 
@@ -2522,8 +2523,8 @@ ConditionSet NestedLoopsJoin<Predicated>::adapt_post_conditions(
 }
 
 template<bool Predicated>
-void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, callback_t Setup, callback_t Pipeline,
-                                          callback_t Teardown)
+void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, setup_t setup, pipeline_t pipeline,
+                                          teardown_t teardown)
 {
     const auto num_left_children = M.children.size() - 1; // all children but right-most one
 
@@ -2549,18 +2550,18 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, callb
                     /* schema=     */ schema,
                     /* factory=    */ *M.materializing_factories_[i],
                     /* num_tuples= */ 0, // i.e. infinite
-                    /* Setup=      */ MatchBase::DoNothing,
-                    /* Pipeline=   */ [&, Pipeline=std::move(Pipeline)](){
+                    /* setup=      */ setup_t::Make_Without_Parent(),
+                    /* pipeline=   */ [&, pipeline=std::move(pipeline)](){
                         if constexpr (Predicated) {
                             CodeGenContext::Get().env().add_predicate(M.join.predicate());
-                            Pipeline();
+                            pipeline();
                         } else {
                             IF (CodeGenContext::Get().env().compile(M.join.predicate()).is_true_and_not_null()) {
-                                Pipeline();
+                                pipeline();
                             };
                         }
                     },
-                    /* Teardown=   */ MatchBase::DoNothing
+                    /* teardown=   */ teardown_t::Make_Without_Parent()
                 );
             } else {
                 /*----- All but exactly one child (here left-most one) load lastly inserted buffer again. -----*/
@@ -2575,17 +2576,17 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, callb
                     /* schema=     */ schema,
                     /* factory=    */ *M.materializing_factories_[i],
                     /* num_tuples= */ 0, // i.e. infinite
-                    /* Setup=      */ MatchBase::DoNothing,
-                    /* Pipeline=   */ [&](){ buffers.back().resume_pipeline_inline(); },
-                    /* Teardown=   */ MatchBase::DoNothing
+                    /* setup=      */ setup_t::Make_Without_Parent(),
+                    /* pipeline=   */ [&](){ buffers.back().resume_pipeline_inline(); },
+                    /* teardown=   */ teardown_t::Make_Without_Parent()
                 );
             }
 
             /*----- Materialize the current result tuple in pipeline. -----*/
             M.children[i].get().execute(
-                /* Setup=    */ [&](){ buffers.back().setup(); },
-                /* Pipeline= */ [&](){ buffers.back().consume(); },
-                /* Teardown= */ [&](){ buffers.back().teardown(); }
+                /* setup=    */ setup_t::Make_Without_Parent([&](){ buffers.back().setup(); }),
+                /* pipeline= */ [&](){ buffers.back().consume(); },
+                /* teardown= */ teardown_t::Make_Without_Parent([&](){ buffers.back().teardown(); })
             );
         }
         nested_loop_join_child_pipeline(); // call child function
@@ -2593,9 +2594,9 @@ void NestedLoopsJoin<Predicated>::execute(const Match<NestedLoopsJoin> &M, callb
 
     /*----- Process right-most child. -----*/
     M.children.back().get().execute(
-        /* Setup=    */ std::move(Setup),
-        /* Pipeline= */ [&](){ buffers.back().resume_pipeline_inline(); },
-        /* Teardown= */ std::move(Teardown)
+        /* setup=    */ std::move(setup),
+        /* pipeline= */ [&](){ buffers.back().resume_pipeline_inline(); },
+        /* teardown= */ std::move(teardown)
     );
 }
 
@@ -2666,8 +2667,8 @@ ConditionSet SimpleHashJoin<UniqueBuild, Predicated>::adapt_post_conditions(
 }
 
 template<bool UniqueBuild, bool Predicated>
-void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin> &M, callback_t Setup,
-                                                      callback_t Pipeline, callback_t Teardown)
+void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin> &M, setup_t setup,
+                                                      pipeline_t pipeline, teardown_t teardown)
 {
     // TODO: determine setup
     using PROBING_STRATEGY = QuadraticProbing;
@@ -2726,8 +2727,8 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
         M.children[0].get().execute(
-            /* Setup=    */ MatchBase::DoNothing,
-            /* Pipeline= */ [&](){
+            /* setup=    */ setup_t::Make_Without_Parent(),
+            /* pipeline= */ [&](){
                 auto &env = CodeGenContext::Get().env();
 
                 std::optional<Bool> build_key_not_null;
@@ -2755,17 +2756,17 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
                     }
                 };
             },
-            /* Teardown= */ MatchBase::DoNothing
+            /* teardown= */ teardown_t::Make_Without_Parent()
         );
     }
     simple_hash_join_child_pipeline(); // call child function
 
     M.children[1].get().execute(
-        /* Setup=    */ std::move(Setup),
-        /* Pipeline= */ [&, Pipeline=std::move(Pipeline)](){
+        /* setup=    */ std::move(setup),
+        /* pipeline= */ [&, pipeline=std::move(pipeline)](){
             auto &env = CodeGenContext::Get().env();
 
-            auto emit_tuple_and_resume_pipeline = [&, Pipeline=std::move(Pipeline)](HashTable::const_entry_t entry){
+            auto emit_tuple_and_resume_pipeline = [&, pipeline=std::move(pipeline)](HashTable::const_entry_t entry){
                 /*----- Add found entry from hash table, i.e. from build child, to current environment. -----*/
                 for (auto &e : ht_schema) {
                     if (not entry.has(e.id)) { // entry may not contain build key in case `ht->find()` was used
@@ -2797,7 +2798,7 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
                 }
 
                 /*----- Resume pipeline. -----*/
-                Pipeline();
+                pipeline();
             };
 
             /* TODO: may check for NULL on probe keys as well, branching + predicated version */
@@ -2831,7 +2832,7 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
                 ht->for_each_in_equal_range(std::move(key), std::move(emit_tuple_and_resume_pipeline), Predicated);
             }
         },
-        /* Teardown= */ std::move(Teardown)
+        /* teardown= */ std::move(teardown)
     );
 }
 
@@ -2931,8 +2932,8 @@ ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated>::adapt_post_conditio
 }
 
 template<bool SortLeft, bool SortRight, bool Predicated>
-void SortMergeJoin<SortLeft, SortRight, Predicated>::execute(const Match<SortMergeJoin>&, callback_t, callback_t,
-                                                             callback_t)
+void SortMergeJoin<SortLeft, SortRight, Predicated>::execute(const Match<SortMergeJoin>&, setup_t, pipeline_t,
+                                                             teardown_t)
 {
     M_unreachable("not implemented");
 }
@@ -2952,7 +2953,7 @@ template struct m::wasm::SortMergeJoin<true,  true,  true>;
  * Limit
  *====================================================================================================================*/
 
-void Limit::execute(const Match<Limit> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown)
+void Limit::execute(const Match<Limit> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown)
 {
     std::optional<Block> teardown_block; ///< block around pipeline code to jump to teardown code when limit is reached
     std::optional<BlockUser> use_teardown; ///< block user to set teardown block active
@@ -2962,13 +2963,12 @@ void Limit::execute(const Match<Limit> &M, callback_t Setup, callback_t Pipeline
     Global<U32> counter_backup; ///< *global* counter backup since the following code may be called multiple times
 
     M.child.execute(
-        /* Setup=    */ [&, Setup=std::move(Setup)](){
-            Setup();
+        /* setup=    */ setup_t(std::move(setup), [&](){
             counter.emplace(counter_backup);
             teardown_block.emplace("limit.teardown", true); // create block
             use_teardown.emplace(*teardown_block); // set block active s.t. it contains all following pipeline code
-        },
-        /* Pipeline= */ [&, Pipeline=std::move(Pipeline)](){
+        }),
+        /* pipeline= */ [&, pipeline=std::move(pipeline)](){
             M_insist(bool(teardown_block));
             M_insist(bool(counter));
             const uint32_t limit = M.limit.offset() + M.limit.limit();
@@ -2982,26 +2982,26 @@ void Limit::execute(const Match<Limit> &M, callback_t Setup, callback_t Pipeline
             if (M.limit.offset()) {
                 IF (*counter >= uint32_t(M.limit.offset())) {
                     Wasm_insist(*counter < limit, "counter must not exceed limit");
-                    Pipeline();
+                    pipeline();
                 };
             } else {
                 Wasm_insist(*counter < limit, "counter must not exceed limit");
-                Pipeline();
+                pipeline();
             }
 
             /*----- Update counter. -----*/
             *counter += 1U;
         },
-        /* Teardown= */ [&, Teardown=std::move(Teardown)](){
+        /* teardown= */ teardown_t::Make_Without_Parent([&, teardown=std::move(teardown)](){
             M_insist(bool(teardown_block));
             M_insist(bool(use_teardown));
             use_teardown.reset(); // deactivate block
             teardown_block.reset(); // emit block containing pipeline code into parent -> GOTO jumps here
-            Teardown(); // *before* own teardown code to *not* jump over it in case of another limit operator
+            teardown(); // *before* own teardown code to *not* jump over it in case of another limit operator
             M_insist(bool(counter));
             counter_backup = *counter;
             counter.reset();
-        }
+        })
     );
 }
 
@@ -3070,8 +3070,8 @@ ConditionSet HashBasedGroupJoin::post_condition(const Match<HashBasedGroupJoin>&
     return post_cond;
 }
 
-void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t Setup, callback_t Pipeline,
-                                 callback_t Teardown)
+void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t setup, pipeline_t pipeline,
+                                 teardown_t teardown)
 {
     // TODO: determine setup
     using PROBING_STRATEGY = QuadraticProbing;
@@ -3480,8 +3480,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
         M.children[0].get().execute(
-            /* Setup=    */ MatchBase::DoNothing,
-            /* Pipeline= */ [&](){
+            /* setup=    */ setup_t::Make_Without_Parent(),
+            /* pipeline= */ [&](){
                 const auto &env = CodeGenContext::Get().env();
 
                 std::optional<Bool> build_key_not_null;
@@ -3534,7 +3534,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                     };
                 };
             },
-            /* Teardown= */ MatchBase::DoNothing
+            /* teardown= */ teardown_t::Make_Without_Parent()
         );
     }
     hash_based_group_join_build_child_pipeline(); // call build child function
@@ -3545,8 +3545,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
         M.children[1].get().execute(
-            /* Setup=    */ MatchBase::DoNothing,
-            /* Piepline= */ [&](){
+            /* setup=    */ setup_t::Make_Without_Parent(),
+            /* pipeline= */ [&](){
                 const auto &env = CodeGenContext::Get().env();
 
                 /* TODO: may check for NULL on probe keys as well, branching + predicated version */
@@ -3579,7 +3579,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
                     update_avg_aggs.attach_to_current(); // after others to ensure that running count is incremented before
                 };
             },
-            /* Teardown= */ MatchBase::DoNothing
+            /* teardown= */ teardown_t::Make_Without_Parent()
         );
     }
     hash_based_group_join_probe_child_pipeline(); // call probe child function
@@ -3587,8 +3587,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
     auto &env = CodeGenContext::Get().env();
 
     /*----- Process each computed group. -----*/
-    Setup();
-    ht->for_each([&, Pipeline=std::move(Pipeline)](HashTable::const_entry_t entry){
+    setup();
+    ht->for_each([&, pipeline=std::move(pipeline)](HashTable::const_entry_t entry){
         /*----- Check whether probe match was found. -----*/
         I64 probe_counter = _I64(entry.get<_I64>(C.pool("$probe_counter"))).insist_not_null();
         IF (probe_counter != int64_t(0)) {
@@ -3729,8 +3729,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, callback_t 
             }
 
             /*----- Resume pipeline. -----*/
-            Pipeline();
+            pipeline();
         };
     });
-    Teardown();
+    teardown();
 }

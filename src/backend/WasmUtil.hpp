@@ -579,20 +579,20 @@ struct Buffer
     std::optional<Var<U32>> capacity_; ///< dynamic capacity of infinite buffer, default initialized to 0
     std::optional<Var<Bool>> first_iteration_; ///< flag to indicate first loop iteration for infinite buffer
     buffer_storage<IsGlobal> storage_; ///< if `IsGlobal`, contains backups for base address, capacity, and size
-    MatchBase::callback_t Setup_; ///< remaining pipeline initializations
-    MatchBase::callback_t Pipeline_; ///< remaining actual pipeline
-    MatchBase::callback_t Teardown_; ///< remaining pipeline post-processing
+    setup_t setup_; ///< remaining pipeline initializations
+    pipeline_t pipeline_; ///< remaining actual pipeline
+    teardown_t teardown_; ///< remaining pipeline post-processing
     ///> function to resume pipeline for entire buffer; expects base address and size of buffer as parameters
     std::optional<FunctionProxy<void(void*, uint32_t)>> resume_pipeline_;
 
     public:
     /** Creates a buffer for \p num_tuples tuples (0 means infinite) of schema \p schema using the data layout
      * created by \p factory to temporarily materialize tuples before resuming with the remaining pipeline
-     * initializations \p Setup, the actual pipeline \p Pipeline, and the post-processing \p Teardown.  For global
+     * initializations \p setup, the actual pipeline \p pipeline, and the post-processing \p teardown.  For global
      * finite buffers, emits code to pre-allocate entire buffer into the **current** block. */
     Buffer(const Schema &schema, const storage::DataLayoutFactory &factory, std::size_t num_tuples = 0,
-           MatchBase::callback_t Setup = MatchBase::DoNothing, MatchBase::callback_t Pipeline = MatchBase::DoNothing,
-           MatchBase::callback_t Teardown = MatchBase::DoNothing);
+           setup_t setup = setup_t::Make_Without_Parent(), pipeline_t pipeline = pipeline_t(),
+           teardown_t teardown = teardown_t::Make_Without_Parent());
 
     Buffer(const Buffer&) = delete;
     Buffer(Buffer&&) = default;

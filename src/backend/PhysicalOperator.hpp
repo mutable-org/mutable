@@ -114,17 +114,55 @@ using get_nodes_t = typename get_nodes<T>::type;
 
 
 /*======================================================================================================================
- * PhysicalOptimizer
+ * MatchBase
  *====================================================================================================================*/
+
+using pipeline_t = std::function<void(void)>;
+
+struct setup_t : std::function<void(void)>
+{
+    using base_t = std::function<void(void)>;
+
+    private:
+    setup_t(base_t &&callback) : base_t(std::move(callback)) { }
+
+    public:
+    setup_t(setup_t &&parent_setup, base_t &&callback)
+        : base_t([parent_setup=std::move(parent_setup), callback=std::move(callback)](){
+            parent_setup();
+            callback();
+        })
+    { }
+
+    base_t::result_type operator()() const { if (*this) base_t::operator()(); }
+
+    static setup_t Make_Without_Parent(base_t &&callback = base_t()) { return setup_t(std::move(callback)); }
+};
+
+struct teardown_t : std::function<void(void)>
+{
+    using base_t = std::function<void(void)>;
+
+    private:
+    teardown_t(base_t &&callback) : base_t(std::move(callback)) { }
+
+    public:
+    teardown_t(teardown_t &&parent_teardown, base_t &&callback)
+        : base_t([parent_teardown=std::move(parent_teardown), callback=std::move(callback)](){
+            parent_teardown(); // parent teardown has to be placed before new code
+            callback();
+        })
+    { }
+
+    base_t::result_type operator()() const { if (*this) base_t::operator()(); }
+
+    static teardown_t Make_Without_Parent(base_t &&callback = base_t()) { return teardown_t(std::move(callback)); }
+};
 
 struct MatchBase
 {
-    using callback_t = std::function<void(void)>;
-
-    static inline callback_t DoNothing = [](){};
-
     virtual ~MatchBase() { }
-    virtual void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const = 0;
+    virtual void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const = 0;
     virtual std::string name() const = 0;
 };
 
@@ -134,6 +172,11 @@ struct pattern_matcher_base
     virtual ~pattern_matcher_base() { }
     virtual void matches(PhysicalOptimizer &opt, const Operator &op) const = 0;
 };
+
+
+/*======================================================================================================================
+ * PhysicalOptimizer
+ *====================================================================================================================*/
 
 /** A `PhysicalOptimizer` stores available `PhysicalOperator`s covering possibly multiple logical `Operator`s.  It
  * is able to find an optimal physical operator covering (similar to instruction selection used in compilers) using
@@ -340,13 +383,12 @@ struct PhysicalOperator : crtp<Actual, PhysicalOperator, Pattern>
     using crtp<Actual, PhysicalOperator, Pattern>::actual;
 
     using pattern = Pattern;
-    using callback_t = MatchBase::callback_t;
     using order_t = PhysicalOptimizer::table_entry::order_t;
 
     /** Executes this physical operator given the match `M` and three callbacks: `Setup` for some initializations,
      * `Pipeline` for the actual computation, and `Teardown` for post-processing. */
-    static void execute(const Match<Actual> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown) {
-        Actual::execute(M, std::move(Setup), std::move(Pipeline), std::move(Teardown));
+    static void execute(const Match<Actual> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown) {
+        Actual::execute(M, std::move(setup), std::move(pipeline), std::move(teardown));
     }
 
     /** Returns the cost of this physical operator given the match `M`. */

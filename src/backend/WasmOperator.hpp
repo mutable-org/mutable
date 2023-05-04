@@ -77,25 +77,25 @@ namespace wasm {
 
 struct NoOp : PhysicalOperator<NoOp, NoOpOperator>
 {
-    static void execute(const Match<NoOp> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown);
+    static void execute(const Match<NoOp> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<NoOp>&) { return 1.0; }
 };
 
 struct Callback : PhysicalOperator<Callback, CallbackOperator>
 {
-    static void execute(const Match<Callback> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown);
+    static void execute(const Match<Callback> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<Callback>&) { return 1.0; }
 };
 
 struct Print : PhysicalOperator<Print, PrintOperator>
 {
-    static void execute(const Match<Print> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown);
+    static void execute(const Match<Print> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<Print>&) { return 1.0; }
 };
 
 struct Scan : PhysicalOperator<Scan, ScanOperator>
 {
-    static void execute(const Match<Scan> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown);
+    static void execute(const Match<Scan> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<Scan>&) { return 1.0; }
     static ConditionSet post_condition(const Match<Scan> &M);
 };
@@ -103,23 +103,21 @@ struct Scan : PhysicalOperator<Scan, ScanOperator>
 template<bool Predicated>
 struct Filter : PhysicalOperator<Filter<Predicated>, FilterOperator>
 {
-    using typename PhysicalOperator<Filter<Predicated>, FilterOperator>::callback_t;
-
-    static void execute(const Match<Filter> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown);
+    static void execute(const Match<Filter> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<Filter>&) { return M_CONSTEXPR_COND(Predicated, 2.0, 1.0); }
     static ConditionSet adapt_post_condition(const Match<Filter> &M, const ConditionSet &post_cond_child);
 };
 
 struct Projection : PhysicalOperator<Projection, ProjectionOperator>
 {
-    static void execute(const Match<Projection> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown);
+    static void execute(const Match<Projection> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<Projection>&) { return 1.0; }
     static ConditionSet adapt_post_condition(const Match<Projection> &M, const ConditionSet &post_cond_child);
 };
 
 struct HashBasedGrouping : PhysicalOperator<HashBasedGrouping, GroupingOperator>
 {
-    static void execute(const Match<HashBasedGrouping> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown);
+    static void execute(const Match<HashBasedGrouping> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<HashBasedGrouping>&) { return 2.0; }
     static ConditionSet post_condition(const Match<HashBasedGrouping> &M);
 };
@@ -152,7 +150,7 @@ struct OrderedGrouping : PhysicalOperator<OrderedGrouping, GroupingOperator>
     >;
 
     public:
-    static void execute(const Match<OrderedGrouping> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown);
+    static void execute(const Match<OrderedGrouping> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<OrderedGrouping>&) { return 1.0; }
     static ConditionSet pre_condition(std::size_t child_idx,
                                       const std::tuple<const GroupingOperator*> &partial_inner_nodes);
@@ -176,21 +174,21 @@ struct Aggregation : PhysicalOperator<Aggregation, AggregationOperator>
     >;
 
     public:
-    static void execute(const Match<Aggregation> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown);
+    static void execute(const Match<Aggregation> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<Aggregation>&) { return 1.0; }
     static ConditionSet post_condition(const Match<Aggregation> &M);
 };
 
 struct Sorting : PhysicalOperator<Sorting, SortingOperator>
 {
-    static void execute(const Match<Sorting> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown);
+    static void execute(const Match<Sorting> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<Sorting>&) { return 1.0; }
     static ConditionSet post_condition(const Match<Sorting> &M);
 };
 
 struct NoOpSorting : PhysicalOperator<NoOpSorting, SortingOperator>
 {
-    static void execute(const Match<NoOpSorting> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown);
+    static void execute(const Match<NoOpSorting> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<NoOpSorting>&) { return 0.0; }
     static ConditionSet pre_condition(std::size_t child_idx,
                                       const std::tuple<const SortingOperator*> &partial_inner_nodes);
@@ -199,9 +197,7 @@ struct NoOpSorting : PhysicalOperator<NoOpSorting, SortingOperator>
 template<bool Predicated>
 struct NestedLoopsJoin : PhysicalOperator<NestedLoopsJoin<Predicated>, JoinOperator>
 {
-    using typename PhysicalOperator<NestedLoopsJoin<Predicated>, JoinOperator>::callback_t;
-
-    static void execute(const Match<NestedLoopsJoin> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown);
+    static void execute(const Match<NestedLoopsJoin> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<NestedLoopsJoin>&) { return 2.0; }
     static ConditionSet
     adapt_post_conditions(const Match<NestedLoopsJoin> &M,
@@ -212,10 +208,7 @@ template<bool UniqueBuild, bool Predicated>
 struct SimpleHashJoin
     : PhysicalOperator<SimpleHashJoin<UniqueBuild, Predicated>, pattern_t<JoinOperator, Wildcard, Wildcard>>
 {
-    using typename PhysicalOperator<SimpleHashJoin<UniqueBuild, Predicated>,
-                                    pattern_t<JoinOperator, Wildcard, Wildcard>>::callback_t;
-
-    static void execute(const Match<SimpleHashJoin> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown);
+    static void execute(const Match<SimpleHashJoin> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<SimpleHashJoin>&) { return 1.0; }
     static ConditionSet
     pre_condition(std::size_t child_idx,
@@ -229,9 +222,7 @@ template<bool SortLeft, bool SortRight, bool Predicated>
 struct SortMergeJoin
     : PhysicalOperator<SortMergeJoin<SortLeft, SortRight, Predicated>, pattern_t<JoinOperator, Wildcard, Wildcard>>
 {
-    using typename PhysicalOperator<SortMergeJoin, pattern_t<JoinOperator, Wildcard, Wildcard>>::callback_t;
-
-    static void execute(const Match<SortMergeJoin> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown);
+    static void execute(const Match<SortMergeJoin> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<SortMergeJoin>&) { return 0.5 + double(SortLeft) + double(SortRight); }
     static ConditionSet
     pre_condition(std::size_t child_idx,
@@ -243,14 +234,14 @@ struct SortMergeJoin
 
 struct Limit : PhysicalOperator<Limit, LimitOperator>
 {
-    static void execute(const Match<Limit> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown);
+    static void execute(const Match<Limit> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<Limit>&) { return 1.0; }
 };
 
 struct HashBasedGroupJoin
     : PhysicalOperator<HashBasedGroupJoin, pattern_t<GroupingOperator, pattern_t<JoinOperator, Wildcard, Wildcard>>>
 {
-    static void execute(const Match<HashBasedGroupJoin> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown);
+    static void execute(const Match<HashBasedGroupJoin> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<HashBasedGroupJoin>&) { return 2.0; }
     static ConditionSet
     pre_condition(std::size_t child_idx,
@@ -264,24 +255,26 @@ struct HashBasedGroupJoin
 template<typename T>
 void execute_buffered(const Match<T> &M, const Schema &schema,
                       const std::unique_ptr<const storage::DataLayoutFactory> &buffer_factory,
-                      std::size_t buffer_num_tuples, MatchBase::callback_t Setup, MatchBase::callback_t Pipeline,
-                      MatchBase::callback_t Teardown)
+                      std::size_t buffer_num_tuples, setup_t setup, pipeline_t pipeline, teardown_t teardown)
 {
     if (buffer_factory) {
         auto buffer_schema = schema.drop_constants().deduplicate();
         if (buffer_schema.num_entries()) {
             /* Use global buffer since own operator may be executed partially in multiple function calls. */
             wasm::GlobalBuffer buffer(buffer_schema, *buffer_factory, buffer_num_tuples,
-                                     std::move(Setup), std::move(Pipeline), std::move(Teardown));
+                                     std::move(setup), std::move(pipeline), std::move(teardown));
             T::execute(
-                M, [&buffer](){ buffer.setup(); }, [&buffer](){ buffer.consume(); }, [&buffer](){ buffer.teardown(); }
+                /* M=        */ M,
+                /* setup=    */ setup_t::Make_Without_Parent([&buffer](){ buffer.setup(); }),
+                /* pipeline= */ [&buffer](){ buffer.consume(); },
+                /* teardown= */ teardown_t::Make_Without_Parent([&buffer](){ buffer.teardown(); })
             );
             buffer.resume_pipeline();
         } else {
-            T::execute(M, std::move(Setup), std::move(Pipeline), std::move(Teardown));
+            T::execute(M, std::move(setup), std::move(pipeline), std::move(teardown));
         }
     } else {
-        T::execute(M, std::move(Setup), std::move(Pipeline), std::move(Teardown));
+        T::execute(M, std::move(setup), std::move(pipeline), std::move(teardown));
     }
 }
 
@@ -296,8 +289,8 @@ struct Match<wasm::NoOp> : MatchBase
         M_insist(children.size() == 1);
     }
 
-    void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
-        wasm::NoOp::execute(*this, std::move(Setup), std::move(Pipeline), std::move(Teardown));
+    void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
+        wasm::NoOp::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::NoOp"; }
 };
@@ -318,8 +311,8 @@ struct Match<wasm::Callback> : MatchBase
         M_insist(children.size() == 1);
     }
 
-    void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
-        wasm::Callback::execute(*this, std::move(Setup), std::move(Pipeline), std::move(Teardown));
+    void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
+        wasm::Callback::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::Callback"; }
 };
@@ -340,8 +333,8 @@ struct Match<wasm::Print> : MatchBase
         M_insist(children.size() == 1);
     }
 
-    void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
-        wasm::Print::execute(*this, std::move(Setup), std::move(Pipeline), std::move(Teardown));
+    void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
+        wasm::Print::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::Print"; }
 };
@@ -361,27 +354,27 @@ struct Match<wasm::Scan> : MatchBase
         M_insist(children.empty());
     }
 
-    void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
+    void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         if (buffer_factory_) {
             auto buffer_schema = scan.schema().drop_constants().deduplicate();
             if (buffer_schema.num_entries()) {
                 /* Use local buffer since scan loop will not be executed partially in multiple function calls. */
                 wasm::LocalBuffer buffer(buffer_schema, *buffer_factory_, buffer_num_tuples_,
-                                         std::move(Setup), std::move(Pipeline), std::move(Teardown));
+                                         std::move(setup), std::move(pipeline), std::move(teardown));
                 wasm::Scan::execute(
                     /* M=        */ *this,
-                    /* Setup=    */ [&buffer](){ buffer.setup(); },
-                    /* Pipeline= */ [&buffer](){ buffer.consume(); },
-                    /* Teardown= */ [&buffer](){
+                    /* setup=    */ setup_t::Make_Without_Parent([&buffer](){ buffer.setup(); }),
+                    /* pipeline= */ [&buffer](){ buffer.consume(); },
+                    /* teardown= */ teardown_t::Make_Without_Parent([&buffer](){
                         buffer.resume_pipeline(); // must be placed before teardown method for local buffers
                         buffer.teardown();
-                    }
+                    })
                 );
             } else {
-                wasm::Scan::execute(*this, std::move(Setup), std::move(Pipeline), std::move(Teardown));
+                wasm::Scan::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
             }
         } else {
-            wasm::Scan::execute(*this, std::move(Setup), std::move(Pipeline), std::move(Teardown));
+            wasm::Scan::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
         }
     }
 
@@ -409,9 +402,9 @@ struct Match<wasm::Filter<Predicated>> : MatchBase
         M_insist(children.size() == 1);
     }
 
-    void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
+    void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         execute_buffered(*this, filter.schema(), buffer_factory_, buffer_num_tuples_,
-                         std::move(Setup), std::move(Pipeline), std::move(Teardown));
+                         std::move(setup), std::move(pipeline), std::move(teardown));
     }
 
     std::string name() const override {
@@ -434,8 +427,8 @@ struct Match<wasm::Projection> : MatchBase
         }
     }
 
-    void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
-        wasm::Projection::execute(*this, std::move(Setup), std::move(Pipeline), std::move(Teardown));
+    void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
+        wasm::Projection::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::Projection"; }
 };
@@ -453,8 +446,8 @@ struct Match<wasm::HashBasedGrouping> : MatchBase
         M_insist(children.size() == 1);
     }
 
-    void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
-        wasm::HashBasedGrouping::execute(*this, std::move(Setup), std::move(Pipeline), std::move(Teardown));
+    void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
+        wasm::HashBasedGrouping::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::HashBasedGrouping"; }
 };
@@ -472,8 +465,8 @@ struct Match<wasm::OrderedGrouping> : MatchBase
         M_insist(children.size() == 1);
     }
 
-    void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
-        wasm::OrderedGrouping::execute(*this, std::move(Setup), std::move(Pipeline), std::move(Teardown));
+    void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
+        wasm::OrderedGrouping::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::OrderedGrouping"; }
 };
@@ -491,8 +484,8 @@ struct Match<wasm::Aggregation> : MatchBase
         M_insist(children.size() == 1);
     }
 
-    void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
-        wasm::Aggregation::execute(*this, std::move(Setup), std::move(Pipeline), std::move(Teardown));
+    void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
+        wasm::Aggregation::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::Aggregation"; }
 };
@@ -512,8 +505,8 @@ struct Match<wasm::Sorting> : MatchBase
         M_insist(children.size() == 1);
     }
 
-    void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
-        wasm::Sorting::execute(*this, std::move(Setup), std::move(Pipeline), std::move(Teardown));
+    void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
+        wasm::Sorting::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::Sorting"; }
 };
@@ -529,8 +522,8 @@ struct Match<wasm::NoOpSorting> : MatchBase
         M_insist(children.size() == 1);
     }
 
-    void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
-        wasm::NoOpSorting::execute(*this, std::move(Setup), std::move(Pipeline), std::move(Teardown));
+    void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
+        wasm::NoOpSorting::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::NoOpSorting"; }
 };
@@ -556,9 +549,9 @@ struct Match<wasm::NestedLoopsJoin<Predicated>> : MatchBase
             materializing_factories_.emplace_back(std::make_unique<storage::RowLayoutFactory>()); // TODO: let optimizer decide this
     }
 
-    void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
+    void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         execute_buffered(*this, join.schema(), buffer_factory_, buffer_num_tuples_,
-                         std::move(Setup), std::move(Pipeline), std::move(Teardown));
+                         std::move(setup), std::move(pipeline), std::move(teardown));
     }
 
     std::string name() const override {
@@ -588,9 +581,9 @@ struct Match<wasm::SimpleHashJoin<UniqueBuild, Predicated>> : MatchBase
         M_insist(this->children.size() == 2);
     }
 
-    void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
+    void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         execute_buffered(*this, join.schema(), buffer_factory_, buffer_num_tuples_,
-                         std::move(Setup), std::move(Pipeline), std::move(Teardown));
+                         std::move(setup), std::move(pipeline), std::move(teardown));
     }
 
     std::string name() const override {
@@ -623,9 +616,9 @@ struct Match<wasm::SortMergeJoin<SortLeft, SortRight, Predicated>> : MatchBase
         M_insist(this->children.size() == 2);
     }
 
-    void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
+    void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         wasm::SortMergeJoin<SortLeft, SortRight, Predicated>::execute(
-            *this, std::move(Setup), std::move(Pipeline), std::move(Teardown)
+            *this, std::move(setup), std::move(pipeline), std::move(teardown)
         );
     }
 
@@ -658,8 +651,8 @@ struct Match<wasm::Limit> : MatchBase
         M_insist(children.size() == 1);
     }
 
-    void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
-        wasm::Limit::execute(*this, std::move(Setup), std::move(Pipeline), std::move(Teardown));
+    void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
+        wasm::Limit::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
     std::string name() const override { return "wasm::Limit"; }
 };
@@ -688,9 +681,9 @@ struct Match<wasm::HashBasedGroupJoin> : MatchBase
         M_insist(this->children.size() == 2);
     }
 
-    void execute(callback_t Setup, callback_t Pipeline, callback_t Teardown) const override {
+    void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
         execute_buffered(*this, grouping.schema(), buffer_factory_, buffer_num_tuples_,
-                         std::move(Setup), std::move(Pipeline), std::move(Teardown));
+                         std::move(setup), std::move(pipeline), std::move(teardown));
     }
 
     std::string name() const override { return "wasm::HashBasedGroupJoin"; }

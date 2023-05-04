@@ -12,7 +12,7 @@ using namespace m::wasm;
  *====================================================================================================================*/
 
 template<bool IsGlobal>
-void m::wasm::quicksort(const Buffer<IsGlobal> &buffer, const std::vector<SortingOperator::order_type> &order)
+void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOperator::order_type> &order)
 {
     static_assert(IsGlobal, "quicksort on local buffers is not yet supported");
 
@@ -28,6 +28,8 @@ void m::wasm::quicksort(const Buffer<IsGlobal> &buffer, const std::vector<Sortin
     FUNCTION(partition, uint32_t(uint32_t, uint32_t, uint32_t))
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment
+
+        buffer.setup_base_address(); // to access base address during loading and swapping as local
 
         auto begin = PARAMETER(0); // first ID to partition
         auto end = PARAMETER(1); // past-the-end ID to partition
@@ -72,6 +74,8 @@ void m::wasm::quicksort(const Buffer<IsGlobal> &buffer, const std::vector<Sortin
 
         Wasm_insist(begin > pivot, "partition boundary must be located within the partitioned area");
         RETURN(begin);
+
+        buffer.teardown_base_address();
     }
 
     /*---- Create quicksort function. -----*/
@@ -79,6 +83,8 @@ void m::wasm::quicksort(const Buffer<IsGlobal> &buffer, const std::vector<Sortin
     FUNCTION(quicksort, void(uint32_t, uint32_t))
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment
+
+        buffer.setup_base_address(); // to access base address during loading and swapping as local
 
         const auto begin = PARAMETER(0); // first ID to sort
         auto end = PARAMETER(1); // past-the-end ID to sort
@@ -144,12 +150,14 @@ void m::wasm::quicksort(const Buffer<IsGlobal> &buffer, const std::vector<Sortin
             /*----- Update end pointer. -----*/
             end = mid;
         }
+
+        buffer.teardown_base_address();
     }
     quicksort(0, buffer.size());
 }
 
 // explicit instantiations to prevent linker errors
-template void m::wasm::quicksort(const GlobalBuffer&, const std::vector<SortingOperator::order_type>&);
+template void m::wasm::quicksort(GlobalBuffer&, const std::vector<SortingOperator::order_type>&);
 
 
 /*======================================================================================================================

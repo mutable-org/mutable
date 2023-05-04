@@ -641,6 +641,22 @@ struct Buffer
      * \tparam IsGlobal) for a write access.  Must be called after all calls to `consume()`. */
     void teardown();
 
+    /** Performs the setup of the local base address of this buffer by reading it from the global backup. */
+    void setup_base_address() requires IsGlobal {
+        M_insist(not base_address_, "must not call `setup_base_address()` twice");
+        if (not layout_.is_finite()) {
+            M_insist(bool(storage_.capacity_));
+            Wasm_insist(*storage_.capacity_ != 0U, "buffer must be already allocated");
+        }
+        base_address_.emplace(storage_.base_address_);
+    }
+    /** Performs the teardown of the local base address of this buffer by destroying it but *without* storing it into
+     * the global backup. */
+    void teardown_base_address() requires IsGlobal {
+        M_insist(bool(base_address_), "must call `setup_base_address()` before");
+        base_address_.reset();
+    }
+
     /** Emits code into a separate function to resume the pipeline for each tuple of schema \p tuple_schema (default:
      * entire tuples) in the  buffer.  Used to explicitly resume pipeline for infinite or partially filled buffers. */
     void resume_pipeline(param_t tuple_schema = param_t());

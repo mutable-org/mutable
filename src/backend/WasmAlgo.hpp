@@ -23,7 +23,7 @@ struct ProbingStrategy;
  * ordering is specified by \p order where the first element is the expression to order on and the second element is
  * `true` iff ordering should be performed ascending. */
 template<bool IsGlobal>
-void quicksort(const Buffer<IsGlobal> &buffer, const std::vector<SortingOperator::order_type> &order);
+void quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOperator::order_type> &order);
 
 
 /*======================================================================================================================
@@ -900,7 +900,7 @@ struct QuadraticProbing : OpenAddressingHashTableBase::ProbingStrategy
  * explicit instantiation declarations
  *====================================================================================================================*/
 
-extern template void quicksort(const GlobalBuffer&, const std::vector<SortingOperator::order_type>&);
+extern template void quicksort(GlobalBuffer&, const std::vector<SortingOperator::order_type>&);
 extern template struct m::wasm::ChainedHashTable<false>;
 extern template struct m::wasm::ChainedHashTable<true>;
 extern template struct m::wasm::OpenAddressingHashTable<false, false>;

@@ -866,6 +866,9 @@ struct Block final
         attach_to(Module::Block());
     }
 
+    /** Emits a jump to the end of this `Block`. */
+    void go_to() const { Module::Block().list.push_back(Module::Builder().makeBreak(get().name)); }
+
     friend std::ostream & operator<<(std::ostream &out, const Block &B) {
         out << "vvvvvvvvvv block";
         if (B.has_name())
@@ -3311,6 +3314,10 @@ inline void CONTINUE(C &&_cond, std::size_t level = 1)
     PrimitiveExpr<bool> cond(std::forward<C>(_cond));
     Module::Get().emit_continue(cond, level);
 }
+
+/*----- GOTO ---------------------------------------------------------------------------------------------------------*/
+
+inline void GOTO(const Block &block) { block.go_to(); }
 
 /*----- Select -------------------------------------------------------------------------------------------------------*/
 

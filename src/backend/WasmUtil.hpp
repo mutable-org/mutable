@@ -830,14 +830,13 @@ T signum(T value)
     return (value.clone() > type(0)).template to<type>() - (value < type(0)).template to<type>();
 }
 
-/** Compares two tuples with IDs \p left and \p right, loadable using the buffer load handle \p load, according to
+/** Compares two tuples, which must be already loaded into the environments \p env_left and \p env_right, according to
  * the ordering \p order (the second element of each pair is `true` iff the corresponding sorting should be
  * ascending).  Note that the value NULL is always considered smaller regardless of the ordering.
  *
  * Returns a negative number if \p left is smaller than \p right, 0 if both are equal, and a positive number if
  * \p left is greater than \p right, according to the ordering. */
-template<bool IsGlobal>
-I32 compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
+I32 compare(const Environment &env_left, const Environment &env_right,
             const std::vector<SortingOperator::order_type> &order);
 
 
@@ -849,10 +848,6 @@ extern template struct Buffer<false>;
 extern template struct Buffer<true>;
 extern template struct buffer_swap_proxy_t<false>;
 extern template struct buffer_swap_proxy_t<true>;
-extern template I32 compare(buffer_load_proxy_t<false> &load, U32 left, U32 right,
-                            const std::vector<SortingOperator::order_type> &order);
-extern template I32 compare(buffer_load_proxy_t<true> &load, U32 left, U32 right,
-                            const std::vector<SortingOperator::order_type> &order);
 
 }
 

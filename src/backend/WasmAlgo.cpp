@@ -41,9 +41,30 @@ void m::wasm::quicksort(const Buffer<IsGlobal> &buffer, const std::vector<Sortin
             /*----- Swap begin and last tuples. -----*/
             swap(begin, last.clone());
 
+            /*----- Load begin tuple. -----*/
+            auto env_begin = [&](){
+                auto S = CodeGenContext::Get().scoped_environment();
+                load(begin);
+                return S.extract();
+            }();
+
+            /*----- Load pivot tuple. -----*/
+            auto env_pivot = [&](){
+                auto S = CodeGenContext::Get().scoped_environment();
+                load(pivot);
+                return S.extract();
+            }();
+
+            /*----- Load last tuple. -----*/
+            auto env_last = [&](){
+                auto S = CodeGenContext::Get().scoped_environment();
+                load(last);
+                return S.extract();
+            }();
+
             /*----- Compare begin and last tuples to pivot element and advance cursors respectively. -----*/
-            Bool begin_lt_pivot = compare(load, begin, pivot, order) < 0;
-            Bool last_ge_pivot  = compare(load, last, pivot, order) >= 0;
+            Bool begin_lt_pivot = compare(env_begin, env_pivot, order) < 0;
+            Bool last_ge_pivot  = compare(env_last, env_pivot, order) >= 0;
 
             begin += begin_lt_pivot.to<uint32_t>();
             end -= last_ge_pivot.to<uint32_t>();
@@ -68,10 +89,31 @@ void m::wasm::quicksort(const Buffer<IsGlobal> &buffer, const std::vector<Sortin
         WHILE(end - begin >= 2U) {
             Var<U32> mid((begin + end) >> 1U); // (begin + end) / 2
 
+            /*----- Load begin tuple. -----*/
+            auto env_begin = [&](){
+                auto S = CodeGenContext::Get().scoped_environment();
+                load(begin);
+                return S.extract();
+            }();
+
+            /*----- Load mid tuple. -----*/
+            auto env_mid = [&](){
+                auto S = CodeGenContext::Get().scoped_environment();
+                load(mid);
+                return S.extract();
+            }();
+
+            /*----- Load last tuple. -----*/
+            auto env_last = [&](){
+                auto S = CodeGenContext::Get().scoped_environment();
+                load(last.clone());
+                return S.extract();
+            }();
+
             /*----- Swap pivot (median of three) to begin. ----.*/
-            Bool begin_le_mid  = compare(load, begin, mid, order) <= 0;
-            Bool begin_le_last = compare(load, begin, last.clone(), order) <= 0;
-            Bool mid_le_last   = compare(load, mid, last.clone(), order) <= 0;
+            Bool begin_le_mid  = compare(env_begin, env_mid, order) <= 0;
+            Bool begin_le_last = compare(env_begin, env_last, order) <= 0;
+            Bool mid_le_last   = compare(env_mid, env_last, order) <= 0;
             IF (begin_le_mid) {
                 IF (begin_le_last.clone()) {
                     IF (mid_le_last.clone()) {

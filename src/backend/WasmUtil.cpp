@@ -2456,25 +2456,10 @@ _Bool m::wasm::like(NChar _str, NChar _pattern, const char escape_char)
  * comparator
  *====================================================================================================================*/
 
-template<bool IsGlobal>
-I32 m::wasm::compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
+I32 m::wasm::compare(const Environment &env_left, const Environment &env_right,
                      const std::vector<SortingOperator::order_type> &order)
 {
     Var<I32> result(0); // explicitly (re-)set result to 0
-
-    /*----- Load left tuple. -----*/
-    auto env_left = [&](){
-        auto S = CodeGenContext::Get().scoped_environment();
-        load(left);
-        return S.extract();
-    }();
-
-    /*----- Load right tuple. -----*/
-    auto env_right = [&](){
-        auto S = CodeGenContext::Get().scoped_environment();
-        load(right);
-        return S.extract();
-    }();
 
     /*----- Compile ordering. -----*/
     for (auto &o : order) {
@@ -2562,9 +2547,3 @@ I32 m::wasm::compare(buffer_load_proxy_t<IsGlobal> &load, U32 left, U32 right,
 
     return result;
 }
-
-// explicit instantiations to prevent linker errors
-template I32 m::wasm::compare(buffer_load_proxy_t<false> &load, U32 left, U32 right,
-                              const std::vector<SortingOperator::order_type> &order);
-template I32 m::wasm::compare(buffer_load_proxy_t<true> &load, U32 left, U32 right,
-                              const std::vector<SortingOperator::order_type> &order);

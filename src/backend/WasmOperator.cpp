@@ -2954,6 +2954,9 @@ template struct m::wasm::SortMergeJoin<true,  true,  true>;
 
 void Limit::execute(const Match<Limit> &M, callback_t Setup, callback_t Pipeline, callback_t Teardown)
 {
+    std::optional<Block> teardown_block; ///< block around pipeline code to jump to teardown code when limit is reached
+    std::optional<BlockUser> use_teardown; ///< block user to set teardown block active
+
     std::optional<Var<U32>> counter; ///< variable to *locally* count
     /* default initialized to 0 */
     Global<U32> counter_backup; ///< *global* counter backup since the following code may be called multiple times
@@ -2962,18 +2965,17 @@ void Limit::execute(const Match<Limit> &M, callback_t Setup, callback_t Pipeline
         /* Setup=    */ [&, Setup=std::move(Setup)](){
             Setup();
             counter.emplace(counter_backup);
+            teardown_block.emplace("limit.teardown", true); // create block
+            use_teardown.emplace(*teardown_block); // set block active s.t. it contains all following pipeline code
         },
-        /* Pipeline= */ [&, Pipeline=std::move(Pipeline)](){ // do not move `Teardown` to use it twice
+        /* Pipeline= */ [&, Pipeline=std::move(Pipeline)](){
+            M_insist(bool(teardown_block));
             M_insist(bool(counter));
             const uint32_t limit = M.limit.offset() + M.limit.limit();
 
-            /*----- Abort pipeline, i.e. return from pipeline function, if limit is exceeded. -----*/
+            /*----- Abort pipeline, i.e. go to teardown code, if limit is exceeded. -----*/
             IF (*counter >= limit) {
-                /*----- Perform same code as in passed teardown callback before returning. -----*/
-                counter_backup = *counter;
-                Teardown();
-
-                RETURN_UNSAFE(); // unsafe version since pipeline function is not created in current C-scope
+                GOTO(*teardown_block);
             };
 
             /*----- Emit result if in bounds. -----*/
@@ -2990,11 +2992,15 @@ void Limit::execute(const Match<Limit> &M, callback_t Setup, callback_t Pipeline
             /*----- Update counter. -----*/
             *counter += 1U;
         },
-        /* Teardown= */ [&](){ // do not move `Teardown` to use it twice
+        /* Teardown= */ [&, Teardown=std::move(Teardown)](){
+            M_insist(bool(teardown_block));
+            M_insist(bool(use_teardown));
+            use_teardown.reset(); // deactivate block
+            teardown_block.reset(); // emit block containing pipeline code into parent -> GOTO jumps here
+            Teardown(); // *before* own teardown code to *not* jump over it in case of another limit operator
             M_insist(bool(counter));
             counter_backup = *counter;
             counter.reset();
-            Teardown();
         }
     );
 }

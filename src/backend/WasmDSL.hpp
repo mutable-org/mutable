@@ -852,7 +852,7 @@ struct Block final
     std::string name() const { M_insist(has_name()); return get().name.toString(); }
 
     /** Returns whether this `Block` is empty, i.e. contains to expressions. */
-    bool empty() const { return this_block_->list.empty(); }
+    bool empty() const { return get().list.empty(); }
 
     /** Attaches this `Block` to the given `Block` \p other. */
     void attach_to(Block &other) {

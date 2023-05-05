@@ -447,21 +447,20 @@ namespace wasm {
 
 /** Compiles the data layout \p layout containing tuples of schema \p layout_schema such that it sequentially
  * stores/loads (depending on \tparam IsStore) tuples of schema \p tuple_schema starting at memory address \p
- * base_address and tuple ID \p initial_tuple_id.  If \tparam SinglePass, the store has to be done in a single pass,
- * i.e. the execution of the returned code must *not* be split among multiple function calls.  Otherwise, the store
- * does *not* have to be done in a single pass, i.e. the returned code may be emitted into a function which can be
- * called multiple times and each call starts storing at exactly the point where it has ended in the last call.
- * The caller has to provide a variable \p tuple_id which must be initialized to \p initial_tuple_id and will be
- * incremented automatically after storing/loading each tuple (i.e. code for this will be emitted at the end of the
- * block returned as second element).  Predication is supported and emitted respectively for storing tuples.
+ * base_address and tuple ID \p tuple_id.  If \tparam SinglePass, the store has to be done in a single pass, i.e. the
+ * execution of the returned code must *not* be split among multiple function calls.  Otherwise, the store does *not*
+ * have to be done in a single pass, i.e. the returned code may be emitted into a function which can be called
+ * multiple times and each call starts storing at exactly the point where it has ended in the last call. The given
+ * variable \p tuple_id will be incremented automatically after storing/loading each tuple (i.e. code for this will
+ * be emitted at the end of the block returned as second element).  Predication is supported and emitted respectively
+ * for storing tuples.
  *
  * Does not emit any code but returns three `wasm::Block`s containing code: the first one initializes all needed
  * variables, the second one stores/loads one tuple, and the third one advances to the next tuple. */
 template<bool IsStore, bool SinglePass, VariableKind Kind>
 std::tuple<Block, Block, Block>
 compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
-                               const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id,
-                               uint32_t initial_tuple_id = 0)
+                               const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id)
 {
     M_insist(tuple_schema.num_entries() != 0, "sequential access must access at least one tuple schema entry");
 
@@ -492,10 +491,6 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
 
     auto &env = CodeGenContext::Get().env(); // the current codegen environment
 
-    BLOCK_OPEN(inits) {
-        Wasm_insist(tuple_id == initial_tuple_id, "initial value of tuple ID must be equal `initial_tuple_id`");
-    }
-
     /*----- Check whether any of the entries in `tuple_schema` can be NULL, so that we need the NULL bitmap. -----*/
     const bool needs_null_bitmap = [&]() {
         for (auto &tuple_entry : tuple_schema) {
@@ -520,8 +515,6 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
     layout.for_sibling_leaves([&](const std::vector<DataLayout::leaf_info_t> &leaves,
                                   const DataLayout::level_info_stack_t &levels, uint64_t inode_offset_in_bits)
     {
-        M_insist(inode_offset_in_bits % 8 == 0, "inode offset must be byte aligned");
-
         /*----- Clear the per-leaf data structure. -----*/
         loading_context.clear();
 
@@ -531,21 +524,48 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
         uint8_t null_bitmap_bit_offset;
         uint64_t null_bitmap_stride_in_bits;
 
-        /*----- Compute additional initial INode offset in bits depending on the given initial tuple ID. -----*/
-        auto current_tuple_id = initial_tuple_id;
-        uint64_t additional_inode_offset_in_bits = 0;
-        for (auto &level : levels) {
-            const auto child_iter = current_tuple_id / level.num_tuples;
-            current_tuple_id = current_tuple_id % level.num_tuples;
-            additional_inode_offset_in_bits += child_iter * level.stride_in_bits;
-        }
+        /*----- Compute INode offset in bytes and INode iteration depending on the given tuple ID. -----*/
+        auto compute_additional_inode_byte_offset = [&](U32 tuple_id) -> I32 {
+            auto rec = [&](U32 curr_tuple_id, decltype(levels.cbegin()) curr, const decltype(levels.cend()) end,
+                           auto rec) -> U64
+            {
+                if (curr == end) {
+                    Wasm_insist(curr_tuple_id == tuple_id % uint32_t(levels.back().num_tuples));
+                    return U64(0);
+                }
+
+                if (is_pow_2(curr->num_tuples)) {
+                    U32 child_iter = curr_tuple_id.clone() >> uint32_t(__builtin_ctzl(curr->num_tuples));
+                    U32 inner_tuple_id = curr_tuple_id bitand uint32_t(curr->num_tuples - 1U);
+                    U64 offset_in_bits = child_iter * curr->stride_in_bits;
+                    return offset_in_bits + rec(inner_tuple_id, std::next(curr), end, rec);
+                } else {
+                    U32 child_iter = curr_tuple_id.clone() / uint32_t(curr->num_tuples);
+                    U32 inner_tuple_id = curr_tuple_id % uint32_t(curr->num_tuples);
+                    U64 offset_in_bits = child_iter * curr->stride_in_bits;
+                    return offset_in_bits + rec(inner_tuple_id, std::next(curr), end, rec);
+                }
+            };
+            auto res = rec(tuple_id.clone(), levels.cbegin(), levels.cend(), rec);
+            Wasm_insist(res.clone() % 8U == 0U, "additional INode offset must be byte aligned");
+            return (res >> uint64_t(3)).make_signed().template to<int32_t>(); // div 8
+        };
+        std::optional<Var<I32>> inode_byte_offset;
+        std::optional<Var<U32>> inode_iter;
+        BLOCK_OPEN(inits) {
+            M_insist(inode_offset_in_bits % 8 == 0, "INode offset must be byte aligned");
+            inode_byte_offset.emplace(
+                int32_t(inode_offset_in_bits / 8) + compute_additional_inode_byte_offset(tuple_id)
+            );
+            inode_iter.emplace(
+                is_pow_2(levels.back().num_tuples) ? tuple_id bitand uint32_t(levels.back().num_tuples - 1U)
+                                                   : tuple_id % uint32_t(levels.back().num_tuples)
+            );
+        };
 
         /*----- Iterate over sibling leaves, i.e. leaf children of a common parent INode, to emit code. -----*/
         for (auto &leaf_info : leaves) {
-            const uint8_t bit_offset  = (additional_inode_offset_in_bits + leaf_info.offset_in_bits) % 8;
-            const int32_t byte_offset = (additional_inode_offset_in_bits + leaf_info.offset_in_bits) / 8;
-
-            const uint8_t bit_stride  = leaf_info.stride_in_bits % 8; // need byte stride later for the stride jumps
+            const uint8_t bit_stride = leaf_info.stride_in_bits % 8; // need byte stride later for the stride jumps
 
             if (leaf_info.leaf.index() == layout_schema.num_entries()) { // NULL bitmap
                 if (not needs_null_bitmap)
@@ -554,13 +574,18 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                 M_insist(not has_null_bitmap, "at most one bitmap may be specified");
                 has_null_bitmap = true;
                 if (bit_stride) { // NULL bitmap with bit stride requires dynamic masking
-                    null_bitmap_bit_offset = bit_offset;
+                    U64 leaf_offset_in_bits = leaf_info.offset_in_bits + *inode_iter * leaf_info.stride_in_bits;
+                    U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
+                    I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+
+                    null_bitmap_bit_offset = leaf_info.offset_in_bits % 8;
                     null_bitmap_stride_in_bits = leaf_info.stride_in_bits;
                     BLOCK_OPEN(inits) {
                         /*----- Initialize pointer and mask. -----*/
                         null_bitmap_ptr.emplace(); // default-construct for globals to be able to use assignment below
-                        *null_bitmap_ptr = base_address.clone() + inode_offset_in_bits / 8 + byte_offset;
-                        null_bitmap_mask = 1U << bit_offset;
+                        *null_bitmap_ptr = base_address.clone() + *inode_byte_offset + leaf_byte_offset;
+                        null_bitmap_mask.emplace(); // default-construct for globals to be able to use assignment below
+                        *null_bitmap_mask = 1U << leaf_bit_offset;
                     }
 
                     /*----- Iterate over layout entries in *ascending* order. -----*/
@@ -737,11 +762,22 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                         }
                     }
                 } else { // NULL bitmap without bit stride can benefit from static masking of NULL bits
-                    auto [it, inserted] = loading_context.try_emplace(key_t(bit_offset, leaf_info.stride_in_bits));
+                    /* omit `leaf_info.offset_in_bits` here to add it to the static offsets and masks;
+                     * this is valid since no bit stride means that the leaf byte offset computation is independent
+                     * of the static parts */
+                    U64 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
+                    U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
+                    I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                    Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
+
+                    auto [it, inserted] =
+                        loading_context.try_emplace(key_t(leaf_info.offset_in_bits % 8, leaf_info.stride_in_bits));
                     if (inserted) {
                         BLOCK_OPEN(inits) {
-                            it->second.ptr = base_address.clone() + inode_offset_in_bits / 8;
+                            it->second.ptr = base_address.clone() + *inode_byte_offset + leaf_byte_offset;
                         }
+                    } else {
+                        leaf_byte_offset.discard();
                     }
                     const auto &ptr = it->second.ptr;
 
@@ -752,10 +788,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                         M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
                         if (tuple_entry.nullable()) { // entry may be NULL
                             const auto &[layout_idx, layout_entry] = layout_schema[tuple_entry.id];
-                            const uint8_t bit_offset =
-                                (additional_inode_offset_in_bits + leaf_info.offset_in_bits + layout_idx) % 8;
-                            const int32_t byte_offset =
-                                (additional_inode_offset_in_bits + leaf_info.offset_in_bits + layout_idx) / 8;
+                            const uint8_t static_bit_offset  = (leaf_info.offset_in_bits + layout_idx) % 8;
+                            const int32_t static_byte_offset = (leaf_info.offset_in_bits + layout_idx) / 8;
                             if constexpr (IsStore) {
                                 /*----- Store NULL bit depending on its type. -----*/
                                 auto store = [&]<typename T>() {
@@ -763,8 +797,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                         auto [value, is_null] = env.get<T>(tuple_entry.id).split(); // get value
                                         value.discard(); // handled at entry leaf
                                         Ptr<U8> byte_ptr =
-                                            (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
-                                        setbit<U8>(byte_ptr, is_null, bit_offset); // update bit
+                                            (ptr + static_byte_offset).template to<uint8_t*>(); // compute byte address
+                                        setbit<U8>(byte_ptr, is_null, static_bit_offset); // update bit
                                     }
                                 };
                                 visit(overloaded{
@@ -793,8 +827,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                             auto value = env.get<NChar>(tuple_entry.id); // get value
                                             M_insist(tuple_entry.nullable() == value.can_be_null());
                                             Ptr<U8> byte_ptr =
-                                                (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
-                                            setbit<U8>(byte_ptr, value.is_null(), bit_offset); // update bit
+                                                (ptr + static_byte_offset).template to<uint8_t*>(); // compute byte address
+                                            setbit<U8>(byte_ptr, value.is_null(), static_bit_offset); // update bit
                                         }
                                     },
                                     [&](const Date&) { store.template operator()<_I32>(); },
@@ -804,8 +838,8 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                             } else {
                                 /*----- Load NULL bit. -----*/
                                 BLOCK_OPEN(loads) {
-                                    U8 byte = *(ptr + byte_offset).template to<uint8_t*>(); // load the byte
-                                    const uint8_t static_mask = 1U << bit_offset;
+                                    U8 byte = *(ptr + static_byte_offset).template to<uint8_t*>(); // load the byte
+                                    const uint8_t static_mask = 1U << static_bit_offset;
                                     Var<Bool> value((byte bitand static_mask).to<bool>()); // mask bit with static mask
                                     new (&null_bits[tuple_idx]) Bool(value);
                                 }
@@ -858,61 +892,89 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                 M_insist(*tuple_it->type == *layout_entry.type);
                 const auto tuple_idx = std::distance(tuple_schema.begin(), tuple_it);
 
-                auto [it, inserted] = loading_context.try_emplace(key_t(bit_offset, leaf_info.stride_in_bits));
-                if (inserted) {
-                    BLOCK_OPEN(inits) {
-                        it->second.ptr = base_address.clone() + inode_offset_in_bits / 8;
-                    }
-                }
-                const auto &ptr = it->second.ptr;
-
                 if (bit_stride) { // entry with bit stride requires dynamic masking
                     M_insist(tuple_it->type->is_boolean(),
                              "leaf bit stride currently only for `Boolean` supported");
 
+                    U64 leaf_offset_in_bits = leaf_info.offset_in_bits + *inode_iter * leaf_info.stride_in_bits;
+                    U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
+                    I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+
+                    auto [it, inserted] =
+                        loading_context.try_emplace(key_t(leaf_info.offset_in_bits % 8, leaf_info.stride_in_bits));
                     M_insist(inserted == not it->second.mask);
                     if (inserted) {
                         BLOCK_OPEN(inits) {
-                            it->second.mask = 1U << bit_offset; // init mask
+                            /* do not add `leaf_byte_offset` to pointer here as it may be different for shared entries */
+                            it->second.ptr = base_address.clone() + *inode_byte_offset;
+                            it->second.mask.emplace(); // default-construct for globals to be able to use assignment below
+                            *it->second.mask = 1U << leaf_bit_offset; // init mask
                         }
+                    } else {
+                        leaf_bit_offset.discard();
                     }
-                    const mask_t &mask = *it->second.mask;
+                    const auto &ptr = it->second.ptr;
+                    const auto &mask = *it->second.mask;
 
                     if constexpr (IsStore) {
                         /*----- Store value. -----*/
                         BLOCK_OPEN(stores) {
                             auto [value, is_null] = env.get<_Bool>(tuple_it->id).split(); // get value
                             is_null.discard(); // handled at NULL bitmap leaf
-                            Ptr<U8> byte_ptr = (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
+                            Ptr<U8> byte_ptr = (ptr + leaf_byte_offset).template to<uint8_t*>(); // compute byte address
                             setbit(byte_ptr, value, mask.template to<uint8_t>()); // update bit
                         }
                     } else {
                         /*----- Load value. -----*/
                         BLOCK_OPEN(loads) {
-                            U8 byte = *(ptr + byte_offset).template to<uint8_t*>(); // load byte
-                            Var<Bool> value((byte bitand mask).template to<bool>()); // mask bit with dynamic mask
+                            U8 byte = *(ptr + leaf_byte_offset).template to<uint8_t*>(); // load byte
+                            Var<Bool> value(
+                                (byte bitand mask.template to<uint8_t>()).template to<bool>() // mask bit with dynamic mask
+                            );
                             new (&values[tuple_idx]) SQL_t(_Bool(value));
                         }
                     }
                 } else { // entry without bit stride; if masking is required, we can use a static mask
+                    /* omit `leaf_info.offset_in_bits` here to use it as static offset and mask;
+                     * this is valid since no bit stride means that the leaf byte offset computation is independent
+                     * of the static parts */
+                    U64 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
+                    U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
+                    I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                    Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
+
+                    const uint8_t static_bit_offset  = leaf_info.offset_in_bits % 8;
+                    const int32_t static_byte_offset = leaf_info.offset_in_bits / 8;
+
+                    auto [it, inserted] =
+                        loading_context.try_emplace(key_t(leaf_info.offset_in_bits % 8, leaf_info.stride_in_bits));
+                    if (inserted) {
+                        BLOCK_OPEN(inits) {
+                            it->second.ptr = base_address.clone() + *inode_byte_offset + leaf_byte_offset;
+                        }
+                    } else {
+                        leaf_byte_offset.discard();
+                    }
+                    const auto &ptr = it->second.ptr;
+
                     /*----- Store value depending on its type. -----*/
                     auto store = [&]<typename T>() {
                         using type = typename T::type;
-                        M_insist(bit_offset == 0,
+                        M_insist(static_bit_offset == 0,
                                  "leaf offset of `Numeric`, `Date`, or `DateTime` must be byte aligned");
                         BLOCK_OPEN(stores) {
-                            auto [value, is_null] = env.get<T>(tuple_it->id).split();
+                            auto [value, is_null] = env.get<T>(tuple_it->id).split(); // get value
                             is_null.discard(); // handled at NULL bitmap leaf
-                            *(ptr + byte_offset).template to<type*>() = value;
+                            *(ptr + static_byte_offset).template to<type*>() = value;
                         }
                     };
                     /*----- Load value depending on its type. -----*/
                     auto load = [&]<typename T>() {
                         using type = typename T::type;
-                        M_insist(bit_offset == 0,
+                        M_insist(static_bit_offset == 0,
                                  "leaf offset of `Numeric`, `Date`, or `DateTime` must be byte aligned");
                         BLOCK_OPEN(loads) {
-                            Var<PrimitiveExpr<type>> value(*(ptr + byte_offset).template to<type*>());
+                            Var<PrimitiveExpr<type>> value(*(ptr + static_byte_offset).template to<type*>());
                             new (&values[tuple_idx]) SQL_t(T(value));
                         }
                     };
@@ -926,15 +988,15 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                     auto [value, is_null] = env.get<_Bool>(tuple_it->id).split(); // get value
                                     is_null.discard(); // handled at NULL bitmap leaf
                                     Ptr<U8> byte_ptr =
-                                        (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
-                                    setbit<U8>(byte_ptr, value, bit_offset); // update bit
+                                        (ptr + static_byte_offset).template to<uint8_t*>(); // compute byte address
+                                    setbit<U8>(byte_ptr, value, static_bit_offset); // update bit
                                 }
                             } else {
                                 /*----- Load value. -----*/
                                 BLOCK_OPEN(loads) {
                                     /* TODO: load byte once, create values with respective mask */
-                                    U8 byte = *(ptr + byte_offset).template to<uint8_t*>(); // load byte
-                                    const uint8_t static_mask = 1U << bit_offset;
+                                    U8 byte = *(ptr + static_byte_offset).template to<uint8_t*>(); // load byte
+                                    const uint8_t static_mask = 1U << static_bit_offset;
                                     Var<Bool> value((byte bitand static_mask).to<bool>()); // mask bit with static mask
                                     new (&values[tuple_idx]) SQL_t(_Bool(value));
                                 }
@@ -960,21 +1022,21 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                             }
                         },
                         [&](const CharacterSequence &cs) {
-                            M_insist(bit_offset == 0, "leaf offset of `CharacterSequence` must be byte aligned");
+                            M_insist(static_bit_offset == 0, "leaf offset of `CharacterSequence` must be byte aligned");
                             if constexpr (IsStore) {
                                 /*----- Store value. -----*/
                                 BLOCK_OPEN(stores) {
-                                    auto value = env.get<NChar>(tuple_it->id);
+                                    auto value = env.get<NChar>(tuple_it->id); // get value
                                     M_insist(tuple_it->nullable() == value.can_be_null());
                                     IF (value.clone().not_null()) {
-                                        Ptr<Char> address((ptr + byte_offset).template to<char*>());
+                                        Ptr<Char> address((ptr + static_byte_offset).template to<char*>());
                                         strncpy(address, value, U32(cs.size() / 8)).discard();
                                     };
                                 }
                             } else {
                                 /*----- Load value. -----*/
                                 BLOCK_OPEN(loads) {
-                                    Ptr<Char> address((ptr + byte_offset).template to<char*>());
+                                    Ptr<Char> address((ptr + static_byte_offset).template to<char*>());
                                     new (&values[tuple_idx]) SQL_t(
                                         NChar(address, tuple_it->nullable(), cs.length, cs.is_varying)
                                     );
@@ -1087,7 +1149,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                     /* ... and remove the lowest byte from the mask. */
                     *value.mask = Select((*value.mask bitand 0xffU).eqz(), *value.mask >> 8U, *value.mask);
                 }
-                if (byte_stride) {
+                if (byte_stride) [[likely]] {
                     if (is_predicated) {
                         M_insist(bool(pred));
                         value.ptr += Select(*pred, byte_stride, 0); // possibly advance pointer
@@ -1108,7 +1170,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                                           levels.back().num_tuples * key.second;
                     const uint8_t remaining_bit_stride  = stride_remaining_in_bits % 8;
                     const int32_t remaining_byte_stride = stride_remaining_in_bits / 8;
-                    if (remaining_bit_stride) [[likely]] {
+                    if (remaining_bit_stride) {
                         M_insist(bool(value.mask));
                         BLOCK_OPEN(lowest_inode_jumps) {
                             const uint8_t end_bit_offset = (key.first + levels.back().num_tuples * key.second) % 8;
@@ -1149,7 +1211,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                                           levels.back().num_tuples * null_bitmap_stride_in_bits;
                     const uint8_t remaining_bit_stride  = stride_remaining_in_bits % 8;
                     const int32_t remaining_byte_stride = stride_remaining_in_bits / 8;
-                    if (remaining_bit_stride) [[likely]] {
+                    if (remaining_bit_stride) {
                         BLOCK_OPEN(lowest_inode_jumps) {
                             const uint8_t end_bit_offset =
                                 (null_bitmap_bit_offset + levels.back().num_tuples * null_bitmap_stride_in_bits) % 8;
@@ -1298,32 +1360,56 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
 template<VariableKind Kind>
 std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block>
 m::wasm::compile_store_sequential(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
-                                  const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id,
-                                  uint32_t initial_tuple_id)
+                                  const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id)
 {
-    return compile_data_layout_sequential<true, false>(tuple_schema, base_address, layout, layout_schema, tuple_id,
-                                                       initial_tuple_id);
+    return compile_data_layout_sequential<true, false>(tuple_schema, base_address, layout, layout_schema, tuple_id);
 }
 
 template<VariableKind Kind>
 std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block>
 m::wasm::compile_store_sequential_single_pass(const Schema &tuple_schema, Ptr<void> base_address,
                                               const storage::DataLayout &layout, const Schema &layout_schema,
-                                              Variable<uint32_t, Kind, false> &tuple_id, uint32_t initial_tuple_id)
+                                              Variable<uint32_t, Kind, false> &tuple_id)
 {
-    return compile_data_layout_sequential<true, true>(tuple_schema, base_address, layout, layout_schema, tuple_id,
-                                                      initial_tuple_id);
+    return compile_data_layout_sequential<true, true>(tuple_schema, base_address, layout, layout_schema, tuple_id);
 }
 
 template<VariableKind Kind>
 std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block>
 m::wasm::compile_load_sequential(const Schema &tuple_schema, Ptr<void> base_address, const storage::DataLayout &layout,
-                                 const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id,
-                                 uint32_t initial_tuple_id)
+                                 const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id)
 {
-    return compile_data_layout_sequential<false, true>(tuple_schema, base_address, layout, layout_schema, tuple_id,
-                                                       initial_tuple_id);
+    return compile_data_layout_sequential<false, true>(tuple_schema, base_address, layout, layout_schema, tuple_id);
 }
+
+// explicit instantiations to prevent linker errors
+template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential(
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Var<U32>&
+);
+template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential(
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Global<U32>&
+);
+template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential(
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Variable<uint32_t, VariableKind::Param, false>&
+);
+template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential_single_pass(
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Var<U32>&
+);
+template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential_single_pass(
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Global<U32>&
+);
+template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_store_sequential_single_pass(
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Variable<uint32_t, VariableKind::Param, false>&
+);
+template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_load_sequential(
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Var<U32>&
+);
+template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_load_sequential(
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Global<U32>&
+);
+template std::tuple<m::wasm::Block, m::wasm::Block, m::wasm::Block> m::wasm::compile_load_sequential(
+    const Schema&, Ptr<void>, const storage::DataLayout&, const Schema&, Variable<uint32_t, VariableKind::Param, false>&
+);
 
 namespace m {
 

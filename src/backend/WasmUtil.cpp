@@ -1449,15 +1449,13 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
     layout.for_sibling_leaves([&](const std::vector<DataLayout::leaf_info_t> &leaves,
                                   const DataLayout::level_info_stack_t &levels, uint64_t inode_offset_in_bits)
     {
-        M_insist(inode_offset_in_bits % 8 == 0, "inode offset must be byte aligned");
-
-        /*----- Compute additional initial INode offset in bits depending on the given initial tuple ID. -----*/
-        auto compute_additional_offset = [&](U32 tuple_id) -> U64 {
+        /*----- Compute INode pointer and INode iteration depending on the given tuple ID. -----*/
+        auto compute_additional_inode_byte_offset = [&](U32 tuple_id) -> I32 {
             auto rec = [&](U32 curr_tuple_id, decltype(levels.cbegin()) curr, const decltype(levels.cend()) end,
                            auto rec) -> U64
             {
                 if (curr == end) {
-                    curr_tuple_id.discard();
+                    Wasm_insist(curr_tuple_id == tuple_id % uint32_t(levels.back().num_tuples));
                     return U64(0);
                 }
 
@@ -1473,113 +1471,239 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                     return offset_in_bits + rec(inner_tuple_id, std::next(curr), end, rec);
                 }
             };
-            return rec(tuple_id, levels.cbegin(), levels.cend(), rec);
+            auto res = rec(tuple_id.clone(), levels.cbegin(), levels.cend(), rec);
+            Wasm_insist(res.clone() % 8U == 0U, "additional INode offset must be byte aligned");
+            return (res >> uint64_t(3)).make_signed().template to<int32_t>(); // div 8
         };
-        Var<U64> additional_inode_offset_in_bits(compute_additional_offset(tuple_id));
+        M_insist(inode_offset_in_bits % 8 == 0, "INode offset must be byte aligned");
+        const Var<Ptr<void>> inode_ptr(
+            base_address.clone() + int32_t(inode_offset_in_bits / 8)
+                                 + compute_additional_inode_byte_offset(tuple_id.clone())
+        );
+        const Var<U32> inode_iter(
+            is_pow_2(levels.back().num_tuples) ? tuple_id bitand uint32_t(levels.back().num_tuples - 1U)
+                                               : tuple_id % uint32_t(levels.back().num_tuples)
+        );
 
         /*----- Iterate over sibling leaves, i.e. leaf children of a common parent INode, to emit code. -----*/
         for (auto &leaf_info : leaves) {
+            const uint8_t bit_stride = leaf_info.stride_in_bits % 8;
+
             if (leaf_info.leaf.index() == layout_schema.num_entries()) { // NULL bitmap
                 if (not needs_null_bitmap)
                     continue;
 
                 M_insist(not has_null_bitmap, "at most one bitmap may be specified");
                 has_null_bitmap = true;
+                if (bit_stride) { // NULL bitmap with bit stride requires dynamic masking
+                    U64 leaf_offset_in_bits = leaf_info.offset_in_bits + inode_iter * leaf_info.stride_in_bits;
+                    const Var<U8> leaf_bit_offset(
+                        (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() // mod 8
+                    );
+                    I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
 
-                Var<Ptr<void>> ptr(base_address.clone() + inode_offset_in_bits / 8); // pointer to NULL bitmap
+                    const Var<Ptr<void>> ptr(inode_ptr + leaf_byte_offset); // pointer to NULL bitmap
 
-                /*----- For each tuple entry that can be NULL, create a store/load with offset and mask. --*/
-                for (std::size_t tuple_idx = 0; tuple_idx != tuple_schema.num_entries(); ++tuple_idx) {
-                    auto &tuple_entry = tuple_schema[tuple_idx];
-                    M_insist(*tuple_entry.type == *layout_schema[tuple_entry.id].second.type);
-                    M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
-                    if (tuple_entry.nullable()) { // entry may be NULL
-                        const auto &[layout_idx, layout_entry] = layout_schema[tuple_entry.id];
-                        auto offset_in_bits = additional_inode_offset_in_bits + (leaf_info.offset_in_bits + layout_idx);
-                        U8  bit_offset  = (offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
-                        I32 byte_offset = (offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
-                        if constexpr (IsStore) {
-                            /*----- Store NULL bit depending on its type. -----*/
-                            auto store = [&]<typename T>() {
-                                auto [value, is_null] = env.get<T>(tuple_entry.id).split(); // get value
-                                value.discard(); // handled at entry leaf
-                                Ptr<U8> byte_ptr = (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
-                                setbit<U8>(byte_ptr, is_null, uint8_t(1) << bit_offset); // update bit
-                            };
-                            visit(overloaded{
-                                [&](const Boolean&) { store.template operator()<_Bool>(); },
-                                [&](const Numeric &n) {
-                                    switch (n.kind) {
-                                        case Numeric::N_Int:
-                                        case Numeric::N_Decimal:
-                                            switch (n.size()) {
-                                                default: M_unreachable("invalid size");
-                                                case  8: store.template operator()<_I8 >(); break;
-                                                case 16: store.template operator()<_I16>(); break;
-                                                case 32: store.template operator()<_I32>(); break;
-                                                case 64: store.template operator()<_I64>(); break;
-                                            }
-                                            break;
-                                        case Numeric::N_Float:
-                                            if (n.size() <= 32)
-                                                store.template operator()<_Float>();
-                                            else
-                                                store.template operator()<_Double>();
-                                    }
-                                },
-                                [&](const CharacterSequence&) {
-                                    auto value = env.get<NChar>(tuple_entry.id); // get value
-                                    M_insist(tuple_entry.nullable() == value.can_be_null());
+                    /*----- For each tuple entry that can be NULL, create a store/load with offset and mask. --*/
+                    for (std::size_t tuple_idx = 0; tuple_idx != tuple_schema.num_entries(); ++tuple_idx) {
+                        auto &tuple_entry = tuple_schema[tuple_idx];
+                        M_insist(*tuple_entry.type == *layout_schema[tuple_entry.id].second.type);
+                        M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
+                        if (tuple_entry.nullable()) { // entry may be NULL
+                            const auto &[layout_idx, layout_entry] = layout_schema[tuple_entry.id];
+                            U64 offset_in_bits = leaf_bit_offset + layout_idx;
+                            U8  bit_offset  = (offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
+                            I32 byte_offset = (offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                            if constexpr (IsStore) {
+                                /*----- Store NULL bit depending on its type. -----*/
+                                auto store = [&]<typename T>() {
+                                    auto [value, is_null] = env.get<T>(tuple_entry.id).split(); // get value
+                                    value.discard(); // handled at entry leaf
                                     Ptr<U8> byte_ptr =
                                         (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
-                                    setbit<U8>(byte_ptr, value.is_null(), uint8_t(1) << bit_offset); // update bit
-                                },
-                                [&](const Date&) { store.template operator()<_I32>(); },
-                                [&](const DateTime&) { store.template operator()<_I64>(); },
-                                [](auto&&) { M_unreachable("invalid type"); },
-                            }, *tuple_entry.type);
-                        } else {
-                            /*----- Load NULL bit. -----*/
-                            U8 byte = *(ptr + byte_offset).template to<uint8_t*>(); // load the byte
-                            Var<Bool> value((byte bitand (uint8_t(1) << bit_offset)).to<bool>()); // mask bit
-                            new (&null_bits[tuple_idx]) Bool(value);
-                        }
-                    } else { // entry must not be NULL
+                                    setbit<U8>(byte_ptr, is_null, uint8_t(1) << bit_offset); // update bit
+                                };
+                                visit(overloaded{
+                                    [&](const Boolean&) { store.template operator()<_Bool>(); },
+                                    [&](const Numeric &n) {
+                                        switch (n.kind) {
+                                            case Numeric::N_Int:
+                                            case Numeric::N_Decimal:
+                                                switch (n.size()) {
+                                                    default: M_unreachable("invalid size");
+                                                    case  8: store.template operator()<_I8 >(); break;
+                                                    case 16: store.template operator()<_I16>(); break;
+                                                    case 32: store.template operator()<_I32>(); break;
+                                                    case 64: store.template operator()<_I64>(); break;
+                                                }
+                                                break;
+                                            case Numeric::N_Float:
+                                                if (n.size() <= 32)
+                                                    store.template operator()<_Float>();
+                                                else
+                                                    store.template operator()<_Double>();
+                                        }
+                                    },
+                                    [&](const CharacterSequence&) {
+                                        auto value = env.get<NChar>(tuple_entry.id); // get value
+                                        M_insist(tuple_entry.nullable() == value.can_be_null());
+                                        Ptr<U8> byte_ptr =
+                                            (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
+                                        setbit<U8>(byte_ptr, value.is_null(), uint8_t(1) << bit_offset); // update bit
+                                    },
+                                    [&](const Date&) { store.template operator()<_I32>(); },
+                                    [&](const DateTime&) { store.template operator()<_I64>(); },
+                                    [](auto&&) { M_unreachable("invalid type"); },
+                                }, *tuple_entry.type);
+                            } else {
+                                /*----- Load NULL bit. -----*/
+                                U8 byte = *(ptr + byte_offset).template to<uint8_t*>(); // load the byte
+                                Var<Bool> value((byte bitand (uint8_t(1) << bit_offset)).to<bool>()); // mask bit
+                                new (&null_bits[tuple_idx]) Bool(value);
+                            }
+                        } else { // entry must not be NULL
 #ifndef NDEBUG
-                        if constexpr (IsStore) {
-                            /*----- Check that value is also not NULL. -----*/
-                            auto check = [&]<typename T>() {
-                                Wasm_insist(env.get<T>(tuple_entry.id).not_null(),
-                                            "value of non-nullable entry must not be nullable");
-                            };
-                            visit(overloaded{
-                                [&](const Boolean&) { check.template operator()<_Bool>(); },
-                                [&](const Numeric &n) {
-                                    switch (n.kind) {
-                                        case Numeric::N_Int:
-                                        case Numeric::N_Decimal:
-                                            switch (n.size()) {
-                                                default: M_unreachable("invalid size");
-                                                case  8: check.template operator()<_I8 >(); break;
-                                                case 16: check.template operator()<_I16>(); break;
-                                                case 32: check.template operator()<_I32>(); break;
-                                                case 64: check.template operator()<_I64>(); break;
-                                            }
-                                            break;
-                                        case Numeric::N_Float:
-                                            if (n.size() <= 32)
-                                                check.template operator()<_Float>();
-                                            else
-                                                check.template operator()<_Double>();
-                                    }
-                                },
-                                [&](const CharacterSequence&) { check.template operator()<NChar>(); },
-                                [&](const Date&) { check.template operator()<_I32>(); },
-                                [&](const DateTime&) { check.template operator()<_I64>(); },
-                                [](auto&&) { M_unreachable("invalid type"); },
-                            }, *tuple_entry.type);
-                        }
+                            if constexpr (IsStore) {
+                                /*----- Check that value is also not NULL. -----*/
+                                auto check = [&]<typename T>() {
+                                    Wasm_insist(env.get<T>(tuple_entry.id).not_null(),
+                                                "value of non-nullable entry must not be nullable");
+                                };
+                                visit(overloaded{
+                                    [&](const Boolean&) { check.template operator()<_Bool>(); },
+                                    [&](const Numeric &n) {
+                                        switch (n.kind) {
+                                            case Numeric::N_Int:
+                                            case Numeric::N_Decimal:
+                                                switch (n.size()) {
+                                                    default: M_unreachable("invalid size");
+                                                    case  8: check.template operator()<_I8 >(); break;
+                                                    case 16: check.template operator()<_I16>(); break;
+                                                    case 32: check.template operator()<_I32>(); break;
+                                                    case 64: check.template operator()<_I64>(); break;
+                                                }
+                                                break;
+                                            case Numeric::N_Float:
+                                                if (n.size() <= 32)
+                                                    check.template operator()<_Float>();
+                                                else
+                                                    check.template operator()<_Double>();
+                                        }
+                                    },
+                                    [&](const CharacterSequence&) { check.template operator()<NChar>(); },
+                                    [&](const Date&) { check.template operator()<_I32>(); },
+                                    [&](const DateTime&) { check.template operator()<_I64>(); },
+                                    [](auto&&) { M_unreachable("invalid type"); },
+                                }, *tuple_entry.type);
+                            }
 #endif
+                        }
+                    }
+                } else { // NULL bitmap without bit stride can benefit from static masking of NULL bits
+                    /* omit `leaf_info.offset_in_bits` here to add it to the static offsets and masks;
+                     * this is valid since no bit stride means that the leaf byte offset computation is independent
+                     * of the static parts */
+                    U64 leaf_offset_in_bits = inode_iter * leaf_info.stride_in_bits;
+                    U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
+                    I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                    Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
+
+                    const Var<Ptr<void>> ptr(inode_ptr + leaf_byte_offset); // pointer to NULL bitmap
+
+                    /*----- For each tuple entry that can be NULL, create a store/load with offset and mask. --*/
+                    for (std::size_t tuple_idx = 0; tuple_idx != tuple_schema.num_entries(); ++tuple_idx) {
+                        auto &tuple_entry = tuple_schema[tuple_idx];
+                        M_insist(*tuple_entry.type == *layout_schema[tuple_entry.id].second.type);
+                        M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
+                        if (tuple_entry.nullable()) { // entry may be NULL
+                            const auto &[layout_idx, layout_entry] = layout_schema[tuple_entry.id];
+                            const uint8_t static_bit_offset  = (leaf_info.offset_in_bits + layout_idx) % 8;
+                            const int32_t static_byte_offset = (leaf_info.offset_in_bits + layout_idx) / 8;
+                            if constexpr (IsStore) {
+                                /*----- Store NULL bit depending on its type. -----*/
+                                auto store = [&]<typename T>() {
+                                    auto [value, is_null] = env.get<T>(tuple_entry.id).split(); // get value
+                                    value.discard(); // handled at entry leaf
+                                    Ptr<U8> byte_ptr =
+                                        (ptr + static_byte_offset).template to<uint8_t*>(); // compute byte address
+                                    setbit<U8>(byte_ptr, is_null, static_bit_offset); // update bit
+                                };
+                                visit(overloaded{
+                                    [&](const Boolean&) { store.template operator()<_Bool>(); },
+                                    [&](const Numeric &n) {
+                                        switch (n.kind) {
+                                            case Numeric::N_Int:
+                                            case Numeric::N_Decimal:
+                                                switch (n.size()) {
+                                                    default: M_unreachable("invalid size");
+                                                    case  8: store.template operator()<_I8 >(); break;
+                                                    case 16: store.template operator()<_I16>(); break;
+                                                    case 32: store.template operator()<_I32>(); break;
+                                                    case 64: store.template operator()<_I64>(); break;
+                                                }
+                                                break;
+                                            case Numeric::N_Float:
+                                                if (n.size() <= 32)
+                                                    store.template operator()<_Float>();
+                                                else
+                                                    store.template operator()<_Double>();
+                                        }
+                                    },
+                                    [&](const CharacterSequence&) {
+                                        auto value = env.get<NChar>(tuple_entry.id); // get value
+                                        M_insist(tuple_entry.nullable() == value.can_be_null());
+                                        Ptr<U8> byte_ptr =
+                                            (ptr + static_byte_offset).template to<uint8_t*>(); // compute byte address
+                                        setbit<U8>(byte_ptr, value.is_null(), static_bit_offset); // update bit
+                                    },
+                                    [&](const Date&) { store.template operator()<_I32>(); },
+                                    [&](const DateTime&) { store.template operator()<_I64>(); },
+                                    [](auto&&) { M_unreachable("invalid type"); },
+                                }, *tuple_entry.type);
+                            } else {
+                                /*----- Load NULL bit. -----*/
+                                U8 byte = *(ptr + static_byte_offset).template to<uint8_t*>(); // load the byte
+                                const uint8_t static_mask = 1U << static_bit_offset;
+                                Var<Bool> value((byte bitand static_mask).to<bool>()); // mask bit
+                                new (&null_bits[tuple_idx]) Bool(value);
+                            }
+                        } else { // entry must not be NULL
+#ifndef NDEBUG
+                            if constexpr (IsStore) {
+                                /*----- Check that value is also not NULL. -----*/
+                                auto check = [&]<typename T>() {
+                                    Wasm_insist(env.get<T>(tuple_entry.id).not_null(),
+                                                "value of non-nullable entry must not be nullable");
+                                };
+                                visit(overloaded{
+                                    [&](const Boolean&) { check.template operator()<_Bool>(); },
+                                    [&](const Numeric &n) {
+                                        switch (n.kind) {
+                                            case Numeric::N_Int:
+                                            case Numeric::N_Decimal:
+                                                switch (n.size()) {
+                                                    default: M_unreachable("invalid size");
+                                                    case  8: check.template operator()<_I8 >(); break;
+                                                    case 16: check.template operator()<_I16>(); break;
+                                                    case 32: check.template operator()<_I32>(); break;
+                                                    case 64: check.template operator()<_I64>(); break;
+                                                }
+                                                break;
+                                            case Numeric::N_Float:
+                                                if (n.size() <= 32)
+                                                    check.template operator()<_Float>();
+                                                else
+                                                    check.template operator()<_Double>();
+                                        }
+                                    },
+                                    [&](const CharacterSequence&) { check.template operator()<NChar>(); },
+                                    [&](const Date&) { check.template operator()<_I32>(); },
+                                    [&](const DateTime&) { check.template operator()<_I64>(); },
+                                    [](auto&&) { M_unreachable("invalid type"); },
+                                }, *tuple_entry.type);
+                            }
+#endif
+                        }
                     }
                 }
             } else { // regular entry
@@ -1591,86 +1715,118 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                 M_insist(*tuple_it->type == *layout_entry.type);
                 const auto tuple_idx = std::distance(tuple_schema.begin(), tuple_it);
 
-                auto offset_in_bits = additional_inode_offset_in_bits + leaf_info.offset_in_bits;
-                U8  bit_offset  = (offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
-                I32 byte_offset = (offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                if (bit_stride) { // entry with bit stride requires dynamic masking
+                    M_insist(tuple_it->type->is_boolean(), "leaf bit stride currently only for `Boolean` supported");
 
-                Ptr<void> ptr = base_address.clone() + byte_offset + inode_offset_in_bits / 8; // pointer to entry
+                    U64 leaf_offset_in_bits = leaf_info.offset_in_bits + inode_iter * leaf_info.stride_in_bits;
+                    U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
+                    I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
 
-                /*----- Store value depending on its type. -----*/
-                auto store = [&]<typename T>() {
-                    using type = typename T::type;
-                    Wasm_insist(bit_offset == 0U,
-                                "leaf offset of `Numeric`, `Date`, or `DateTime` must be byte aligned");
-                    auto [value, is_null] = env.get<T>(tuple_it->id).split();
-                    is_null.discard(); // handled at NULL bitmap leaf
-                    *ptr.template to<type*>() = value;
-                };
-                /*----- Load value depending on its type. -----*/
-                auto load = [&]<typename T>() {
-                    using type = typename T::type;
-                    Wasm_insist(bit_offset == 0U,
-                                "leaf offset of `Numeric`, `Date`, or `DateTime` must be byte aligned");
-                    Var<PrimitiveExpr<type>> value(*ptr.template to<type*>());
-                    new (&values[tuple_idx]) SQL_t(T(value));
-                };
-                /*----- Select call target (store or load) and visit attribute type. -----*/
+                    Ptr<U8> byte_ptr = (inode_ptr + leaf_byte_offset).template to<uint8_t*>();
+                    U8 mask = uint8_t(1) << leaf_bit_offset;
+
+                    if constexpr (IsStore) {
+                        /*----- Store value. -----*/
+                        auto [value, is_null] = env.get<_Bool>(tuple_it->id).split(); // get value
+                        is_null.discard(); // handled at NULL bitmap leaf
+                        setbit(byte_ptr, value, mask); // update bit
+                    } else {
+                        /*----- Load value. -----*/
+                        /* TODO: load byte once, create values with respective mask */
+                        Var<Bool> value((*byte_ptr bitand mask).template to<bool>()); // mask bit with dynamic mask
+                        new (&values[tuple_idx]) SQL_t(_Bool(value));
+                    }
+                } else { // entry without bit stride; if masking is required, we can use a static mask
+                    /* omit `leaf_info.offset_in_bits` here to use it as static offset and mask;
+                     * this is valid since no bit stride means that the leaf byte offset computation is independent
+                     * of the static parts */
+                    U64 leaf_offset_in_bits = inode_iter * leaf_info.stride_in_bits;
+                    U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
+                    I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                    Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
+
+                    const uint8_t static_bit_offset  = leaf_info.offset_in_bits % 8;
+                    const int32_t static_byte_offset = leaf_info.offset_in_bits / 8;
+
+                    Ptr<void> ptr = inode_ptr + leaf_byte_offset; // pointer to entry
+
+                    /*----- Store value depending on its type. -----*/
+                    auto store = [&]<typename T>() {
+                        using type = typename T::type;
+                        M_insist(static_bit_offset == 0,
+                                 "leaf offset of `Numeric`, `Date`, or `DateTime` must be byte aligned");
+                        auto [value, is_null] = env.get<T>(tuple_it->id).split(); // get value
+                        is_null.discard(); // handled at NULL bitmap leaf
+                        *(ptr + static_byte_offset).template to<type*>() = value;
+                    };
+                    /*----- Load value depending on its type. -----*/
+                    auto load = [&]<typename T>() {
+                        using type = typename T::type;
+                        M_insist(static_bit_offset == 0,
+                                 "leaf offset of `Numeric`, `Date`, or `DateTime` must be byte aligned");
+                        Var<PrimitiveExpr<type>> value(*(ptr + static_byte_offset).template to<type*>());
+                        new (&values[tuple_idx]) SQL_t(T(value));
+                    };
+                    /*----- Select call target (store or load) and visit attribute type. -----*/
 #define CALL(TYPE) if constexpr (IsStore) store.template operator()<TYPE>(); else load.template operator()<TYPE>()
-                visit(overloaded{
-                    [&](const Boolean&) {
-                        if constexpr (IsStore) {
-                            /*----- Store value. -----*/
-                            auto [value, is_null] = env.get<_Bool>(tuple_it->id).split(); // get value
-                            is_null.discard(); // handled at NULL bitmap leaf
-                            setbit<U8>(ptr.template to<uint8_t*>(), value, uint8_t(1) << bit_offset); // update bit
-                        } else {
-                            /*----- Load value. -----*/
-                            /* TODO: load byte once, create values with respective mask */
-                            U8 byte = *ptr.template to<uint8_t*>(); // load byte
-                            Var<Bool> value((byte bitand (uint8_t(1) << bit_offset)).to<bool>()); // mask bit
-                            new (&values[tuple_idx]) SQL_t(_Bool(value));
-                        }
-                    },
-                    [&](const Numeric &n) {
-                        switch (n.kind) {
-                            case Numeric::N_Int:
-                            case Numeric::N_Decimal:
-                                switch (n.size()) {
-                                    default: M_unreachable("invalid size");
-                                    case  8: CALL(_I8 ); break;
-                                    case 16: CALL(_I16); break;
-                                    case 32: CALL(_I32); break;
-                                    case 64: CALL(_I64); break;
-                                }
-                                break;
-                            case Numeric::N_Float:
-                                if (n.size() <= 32)
-                                    CALL(_Float);
-                                else
-                                    CALL(_Double);
-                        }
-                    },
-                    [&](const CharacterSequence &cs) {
-                        Wasm_insist(bit_offset == 0U, "leaf offset of `CharacterSequence` must be byte aligned");
-                        if constexpr (IsStore) {
-                            /*----- Store value. -----*/
-                            auto value = env.get<NChar>(tuple_it->id);
-                            M_insist(tuple_it->nullable() == value.can_be_null());
-                            IF (value.clone().not_null()) {
-                                strncpy(ptr.template to<char*>(), value, U32(cs.size() / 8)).discard();
-                            };
-                        } else {
-                            /*----- Load value. -----*/
-                            new (&values[tuple_idx]) SQL_t(
-                                NChar(ptr.template to<char*>(), tuple_it->nullable(), cs.length, cs.is_varying)
-                            );
-                        }
-                    },
-                    [&](const Date&) { CALL(_I32); },
-                    [&](const DateTime&) { CALL(_I64); },
-                    [](auto&&) { M_unreachable("invalid type"); },
-                }, *tuple_it->type);
+                    visit(overloaded{
+                        [&](const Boolean&) {
+                            Ptr<U8> byte_ptr = (ptr + static_byte_offset).template to<uint8_t*>();
+                            if constexpr (IsStore) {
+                                /*----- Store value. -----*/
+                                auto [value, is_null] = env.get<_Bool>(tuple_it->id).split(); // get value
+                                is_null.discard(); // handled at NULL bitmap leaf
+                                setbit<U8>(byte_ptr, value, static_bit_offset); // update bit
+                            } else {
+                                /*----- Load value. -----*/
+                                /* TODO: load byte once, create values with respective mask */
+                                const uint8_t static_mask = 1U << static_bit_offset;
+                                Var<Bool> value((*byte_ptr bitand static_mask).to<bool>()); // mask bit
+                                new (&values[tuple_idx]) SQL_t(_Bool(value));
+                            }
+                        },
+                        [&](const Numeric &n) {
+                            switch (n.kind) {
+                                case Numeric::N_Int:
+                                case Numeric::N_Decimal:
+                                    switch (n.size()) {
+                                        default: M_unreachable("invalid size");
+                                        case  8: CALL(_I8 ); break;
+                                        case 16: CALL(_I16); break;
+                                        case 32: CALL(_I32); break;
+                                        case 64: CALL(_I64); break;
+                                    }
+                                    break;
+                                case Numeric::N_Float:
+                                    if (n.size() <= 32)
+                                        CALL(_Float);
+                                    else
+                                        CALL(_Double);
+                            }
+                        },
+                        [&](const CharacterSequence &cs) {
+                            M_insist(static_bit_offset == 0, "leaf offset of `CharacterSequence` must be byte aligned");
+                            Ptr<Char> addr = (ptr + static_byte_offset).template to<char*>();
+                            if constexpr (IsStore) {
+                                /*----- Store value. -----*/
+                                auto value = env.get<NChar>(tuple_it->id); // get value
+                                M_insist(tuple_it->nullable() == value.can_be_null());
+                                IF (value.clone().not_null()) {
+                                    strncpy(addr, value, U32(cs.size() / 8)).discard();
+                                };
+                            } else {
+                                /*----- Load value. -----*/
+                                new (&values[tuple_idx]) SQL_t(
+                                    NChar(addr, tuple_it->nullable(), cs.length, cs.is_varying)
+                                );
+                            }
+                        },
+                        [&](const Date&) { CALL(_I32); },
+                        [&](const DateTime&) { CALL(_I64); },
+                        [](auto&&) { M_unreachable("invalid type"); },
+                    }, *tuple_it->type);
 #undef CALL
+                }
             }
         }
     });

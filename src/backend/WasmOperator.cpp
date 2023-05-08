@@ -636,19 +636,22 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
                                                                            initial_capacity);
         as<OpenAddressingHashTableBase>(*ht).set_probing_strategy<PROBING_STRATEGY>();
     }
-    ht->set_high_watermark(HIGH_WATERMARK);
 
     /*----- Create child function. -----*/
     FUNCTION(hash_based_grouping_child_pipeline, void(void)) // create function for pipeline
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
-        /*----- Create dummy slot to ignore NULL values in aggregate computations. -----*/
-        auto dummy = ht->dummy_entry();
+        std::optional<HashTable::entry_t> dummy; ///< *local* dummy slot
 
         M.child.execute(
-            /* setup=    */ setup_t::Make_Without_Parent(),
+            /* setup=    */ setup_t::Make_Without_Parent([&](){
+                ht->setup();
+                ht->set_high_watermark(HIGH_WATERMARK);
+                dummy.emplace(ht->dummy_entry()); // create dummy slot to ignore NULL values in aggregate computations
+            }),
             /* pipeline= */ [&](){
+                M_insist(bool(dummy));
                 const auto &env = CodeGenContext::Get().env();
 
                 /*----- Insert key if not yet done. -----*/
@@ -702,7 +705,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
                                             auto [old_min_max_, old_min_max_is_null] = _T(r.clone()).split();
                                             const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
 
-                                            auto chosen_r = Select(new_val_is_null, dummy.extract<_T>(info.entry.id),
+                                            auto chosen_r = Select(new_val_is_null, dummy->extract<_T>(info.entry.id),
                                                                                     r.clone());
                                             if constexpr (std::floating_point<type>) {
                                                 chosen_r.set_value(
@@ -791,7 +794,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
                                     auto running_count = _I64(entry.get<_I64>(avg_info.running_count)).insist_not_null();
                                     auto delta_relative = delta_absolute / running_count.to<double>();
 
-                                    auto chosen_r = Select(new_val_is_null, dummy.extract<_Double>(info.entry.id),
+                                    auto chosen_r = Select(new_val_is_null, dummy->extract<_Double>(info.entry.id),
                                                                             r.clone());
                                     chosen_r.set_value(
                                         old_avg + delta_relative // update old average with new value
@@ -846,7 +849,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
                                             auto [old_sum, old_sum_is_null] = _T(r.clone()).split();
                                             const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
 
-                                            auto chosen_r = Select(new_val_is_null, dummy.extract<_T>(info.entry.id),
+                                            auto chosen_r = Select(new_val_is_null, dummy->extract<_T>(info.entry.id),
                                                                                     r.clone());
                                             chosen_r.set_value(
                                                 old_sum + new_val // add new value to old sum
@@ -918,7 +921,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
                     update_avg_aggs.attach_to_current(); // after others to ensure that running count is incremented before
                 };
             },
-            /* teardown= */ teardown_t::Make_Without_Parent()
+            /* teardown= */ teardown_t::Make_Without_Parent([&](){ ht->teardown(); })
         );
     }
     hash_based_grouping_child_pipeline(); // call child function
@@ -926,7 +929,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
     auto &env = CodeGenContext::Get().env();
 
     /*----- Process each computed group. -----*/
-    setup();
+    setup_t(std::move(setup), [&](){ ht->setup(); })();
     ht->for_each([&, pipeline=std::move(pipeline)](HashTable::const_entry_t entry){
         /*----- Compute key schema to detect duplicated keys. -----*/
         Schema key_schema;
@@ -992,7 +995,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
         /*----- Resume pipeline. -----*/
         pipeline();
     });
-    teardown();
+    teardown_t(std::move(teardown), [&](){ ht->teardown(); })();
 }
 
 ConditionSet OrderedGrouping::pre_condition(
@@ -2719,7 +2722,6 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
                                                                            initial_capacity);
         as<OpenAddressingHashTableBase>(*ht).set_probing_strategy<PROBING_STRATEGY>();
     }
-    ht->set_high_watermark(HIGH_WATERMARK);
 
     /*----- Create function for build child. -----*/
     FUNCTION(simple_hash_join_child_pipeline, void(void)) // create function for pipeline
@@ -2727,7 +2729,10 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
         M.children[0].get().execute(
-            /* setup=    */ setup_t::Make_Without_Parent(),
+            /* setup=    */ setup_t::Make_Without_Parent([&](){
+                ht->setup();
+                ht->set_high_watermark(HIGH_WATERMARK);
+            }),
             /* pipeline= */ [&](){
                 auto &env = CodeGenContext::Get().env();
 
@@ -2756,13 +2761,13 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
                     }
                 };
             },
-            /* teardown= */ teardown_t::Make_Without_Parent()
+            /* teardown= */ teardown_t::Make_Without_Parent([&](){ ht->teardown(); })
         );
     }
     simple_hash_join_child_pipeline(); // call child function
 
     M.children[1].get().execute(
-        /* setup=    */ std::move(setup),
+        /* setup=    */ setup_t(std::move(setup), [&](){ ht->setup(); }),
         /* pipeline= */ [&, pipeline=std::move(pipeline)](){
             auto &env = CodeGenContext::Get().env();
 
@@ -2832,7 +2837,7 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
                 ht->for_each_in_equal_range(std::move(key), std::move(emit_tuple_and_resume_pipeline), Predicated);
             }
         },
-        /* teardown= */ std::move(teardown)
+        /* teardown= */ teardown_t(std::move(teardown), [&](){ ht->teardown(); })
     );
 }
 
@@ -3148,10 +3153,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
                                                                            initial_capacity);
         as<OpenAddressingHashTableBase>(*ht).set_probing_strategy<PROBING_STRATEGY>();
     }
-    ht->set_high_watermark(HIGH_WATERMARK);
 
-    /*----- Create dummy slot to ignore NULL values in aggregate computations. -----*/
-    auto dummy = ht->dummy_entry();
+    std::optional<HashTable::entry_t> dummy; ///< *local* dummy slot
 
     /** Helper function to compute aggregates to be stored in \p entry given the arguments contained in environment \p
      * env for the phase (i.e. build or probe) with the schema \p schema.  The flag \p build_phase determines which
@@ -3219,7 +3222,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
                                     auto [old_min_max_, old_min_max_is_null] = _T(r.clone()).split();
                                     const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
 
-                                    auto chosen_r = Select(new_val_is_null, dummy.extract<_T>(info.entry.id), r.clone());
+                                    auto chosen_r = Select(new_val_is_null, dummy->extract<_T>(info.entry.id), r.clone());
                                     if constexpr (std::floating_point<type>) {
                                         chosen_r.set_value(
                                             is_min ? min(old_min_max_, new_val_) // update old min with new value
@@ -3321,7 +3324,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
                             auto running_count = _I64(entry.get<_I64>(avg_info.running_count)).insist_not_null();
                             auto delta_relative = delta_absolute / running_count.to<double>();
 
-                            auto chosen_r = Select(new_val_is_null, dummy.extract<_Double>(info.entry.id), r.clone());
+                            auto chosen_r = Select(new_val_is_null, dummy->extract<_Double>(info.entry.id), r.clone());
                             chosen_r.set_value(
                                 old_avg + delta_relative // update old average with new value
                             ); // if new value is NULL, only dummy is written
@@ -3389,7 +3392,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
                                     auto [old_sum, old_sum_is_null] = _T(r.clone()).split();
                                     const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
 
-                                    auto chosen_r = Select(new_val_is_null, dummy.extract<_T>(info.entry.id), r.clone());
+                                    auto chosen_r = Select(new_val_is_null, dummy->extract<_T>(info.entry.id), r.clone());
                                     chosen_r.set_value(
                                         old_sum + new_val // add new value to old sum
                                     ); // if new value is NULL, only dummy is written
@@ -3480,8 +3483,13 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
         M.children[0].get().execute(
-            /* setup=    */ setup_t::Make_Without_Parent(),
+            /* setup=    */ setup_t::Make_Without_Parent([&](){
+                ht->setup();
+                ht->set_high_watermark(HIGH_WATERMARK);
+                dummy.emplace(ht->dummy_entry()); // create dummy slot to ignore NULL values in aggregate computations
+            }),
             /* pipeline= */ [&](){
+                M_insist(bool(dummy));
                 const auto &env = CodeGenContext::Get().env();
 
                 std::optional<Bool> build_key_not_null;
@@ -3534,7 +3542,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
                     };
                 };
             },
-            /* teardown= */ teardown_t::Make_Without_Parent()
+            /* teardown= */ teardown_t::Make_Without_Parent([&](){ ht->teardown(); })
         );
     }
     hash_based_group_join_build_child_pipeline(); // call build child function
@@ -3545,8 +3553,12 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
 
         M.children[1].get().execute(
-            /* setup=    */ setup_t::Make_Without_Parent(),
+            /* setup=    */ setup_t::Make_Without_Parent([&](){
+                ht->setup();
+                dummy.emplace(ht->dummy_entry()); // create dummy slot to ignore NULL values in aggregate computations
+            }),
             /* pipeline= */ [&](){
+                M_insist(bool(dummy));
                 const auto &env = CodeGenContext::Get().env();
 
                 /* TODO: may check for NULL on probe keys as well, branching + predicated version */
@@ -3579,7 +3591,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
                     update_avg_aggs.attach_to_current(); // after others to ensure that running count is incremented before
                 };
             },
-            /* teardown= */ teardown_t::Make_Without_Parent()
+            /* teardown= */ teardown_t::Make_Without_Parent([&](){ ht->teardown(); })
         );
     }
     hash_based_group_join_probe_child_pipeline(); // call probe child function
@@ -3587,7 +3599,7 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
     auto &env = CodeGenContext::Get().env();
 
     /*----- Process each computed group. -----*/
-    setup();
+    setup_t(std::move(setup), [&](){ ht->setup(); })();
     ht->for_each([&, pipeline=std::move(pipeline)](HashTable::const_entry_t entry){
         /*----- Check whether probe match was found. -----*/
         I64 probe_counter = _I64(entry.get<_I64>(C.pool("$probe_counter"))).insist_not_null();
@@ -3732,5 +3744,5 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
             pipeline();
         };
     });
-    teardown();
+    teardown_t(std::move(teardown), [&](){ ht->teardown(); })();
 }

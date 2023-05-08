@@ -12,6 +12,7 @@ namespace m {
 namespace wasm {
 
 // forward declarations
+template<bool IsGlobal> struct ChainedHashTable;
 template<bool IsGlobal, bool ValueInPlace> struct OpenAddressingHashTable;
 struct ProbingStrategy;
 
@@ -496,6 +497,13 @@ struct HashTable
 
     virtual ~HashTable() { }
 
+    /** Performs the setup of the hash table.  Must be called before any call to a setup method, i.e. setting the
+     * high watermark, or an access method, i.e. clearing, insertion, lookup, or dummy entry creation. */
+    virtual void setup() = 0;
+    /** Performs the teardown of the hash table.  Must be called after all calls to a setup method, i.e. setting the
+     * high watermark, or an access method, i.e. clearing, insertion, lookup, or dummy entry creation. */
+    virtual void teardown() = 0;
+
     /** Sets the high watermark, i.e. the fraction of occupied entries before growing the hash table is required, to
      * \p percentage. */
     virtual void set_high_watermark(double percentage) = 0;
@@ -538,8 +546,9 @@ struct HashTable
      * predicate is not fulfilled, the range of entries with an equal key will be empty. */
     virtual void for_each_in_equal_range(std::vector<SQL_t> key, callback_t Pipeline, bool predicated = false) const = 0;
 
-    public:
-    /** Returns a handle to a newly created dummy entry which may be used to write the values for this entry. */
+    /** Returns a handle to a newly created dummy entry which may be used to write the values for this entry.
+     * Note that even if the hash table is globally visible, this entry can only be used *locally*, i.e. within the
+     * function it is created in. */
     virtual entry_t dummy_entry() = 0;
 
     protected:
@@ -557,6 +566,23 @@ struct HashTable
 /*----- chained hash tables ------------------------------------------------------------------------------------------*/
 
 template<bool IsGlobal>
+class chained_hash_table_storage;
+
+template<>
+class chained_hash_table_storage<false> {};
+
+template<>
+class chained_hash_table_storage<true>
+{
+    friend struct ChainedHashTable<true>;
+
+    Global<Ptr<void>> address_; ///< global backup for address of hash table
+    Global<U32> capacity_; ///< global backup for capacity of hash table
+    Global<U32> num_entries_; ///< global backup for number of occupied entries of hash table
+    Global<U32> high_watermark_absolute_; ///< global backup for absolute high watermark of hash table
+};
+
+template<bool IsGlobal>
 struct ChainedHashTable : HashTable
 {
     private:
@@ -571,11 +597,15 @@ struct ChainedHashTable : HashTable
     HashTable::offset_t null_bitmap_offset_in_bytes_;
     HashTable::offset_t ptr_offset_in_bytes_; ///< offset of pointer to next entry in linked collision list
 
-    var_t<Ptr<void>> address_; ///< base address of hash table
-    var_t<U32> capacity_; ///< capacity of hash table, i.e. number of buckets / collision lists; always a power of 2
-    var_t<U32> num_entries_; ///< number of occupied entries of hash table
+    std::optional<Var<Ptr<void>>> address_; ///< base address of hash table
+     ///> capacity of hash table, i.e. number of buckets / collision lists; always a power of 2
+    std::optional<Var<U32>> capacity_;
+    std::optional<Var<U32>> num_entries_; ///< number of occupied entries of hash table
     double high_watermark_percentage_ = 1.0; ///< fraction of occupied entries before growing the hash table is required
-    var_t<U32> high_watermark_absolute_; ///< maximum number of entries before growing the hash table is required
+    ///> maximum number of entries before growing the hash table is required
+    std::optional<Var<U32>> high_watermark_absolute_;
+    ///> if `IsGlobal`, contains backups for address, capacity, number of entries, and absolute high watermark
+    chained_hash_table_storage<IsGlobal> storage_;
     ///> function to perform rehashing; only possible for global hash tables since variables have to be updated
     std::optional<FunctionProxy<void(void)>> rehash_;
     std::vector<std::pair<Ptr<void>, U32>> dummy_allocations_; ///< address-size pairs of dummy entry allocations
@@ -593,13 +623,25 @@ struct ChainedHashTable : HashTable
 
     private:
     /** Returns the address of the first bucket, i.e. the pointer to the first collision list. */
-    Ptr<void> begin() const { return address_; }
+    Ptr<void> begin() const { M_insist(bool(address_), "must call `setup()` before"); return *address_; }
     /** Returns the address of the past-the-end bucket. */
-    Ptr<void> end() const { return address_ + size_in_bytes().make_signed(); }
+    Ptr<void> end() const { return begin() + size_in_bytes().make_signed(); }
     /** Returns the overall size in bytes of the actual hash table, i.e. without collision list entries. */
-    U32 size_in_bytes() const { return capacity_ * uint32_t(sizeof(uint32_t)); }
+    U32 size_in_bytes() const {
+        M_insist(bool(capacity_), "must call `setup()` before");
+        return *capacity_ * uint32_t(sizeof(uint32_t));
+    }
 
     public:
+    /** Performs the setup of all local variables of the hash table (by reading them from the global backups iff
+     * \tparam IsGlobal).  Must be called before any call to a setup method, i.e. setting the high watermark, or an
+     * access method, i.e. clearing, insertion, lookup, or dummy entry creation. */
+    void setup() override;
+    /** Performs the teardown of all local variables of the hash table (by storing them into the global backups iff
+     * \tparam IsGlobal).  Must be called after all calls to a setup method, i.e. setting the high watermark, or an
+     * access method, i.e. clearing, insertion, lookup, or dummy entry creation. */
+    void teardown() override;
+
     /** Sets the high watermark, i.e. the fraction of occupied entries before growing the hash table is required, to
      * \p percentage. */
     void set_high_watermark(double percentage) override {
@@ -610,11 +652,13 @@ struct ChainedHashTable : HashTable
     private:
     /** Updates internal high watermark variables according to the currently set high watermark percentage. */
     void update_high_watermark() {
-        auto high_watermark_absolute_new = high_watermark_percentage_ * capacity_.make_signed().template to<double>();
+        M_insist(bool(capacity_), "must call `setup()` before");
+        M_insist(bool(high_watermark_absolute_), "must call `setup()` before");
+        auto high_watermark_absolute_new = high_watermark_percentage_ * capacity_->make_signed().template to<double>();
         auto high_watermark_absolute_floored = high_watermark_absolute_new.template to<int32_t>().make_unsigned();
         Wasm_insist(high_watermark_absolute_floored.clone() >= 1U,
                     "at least one entry must be allowed to insert before growing the table");
-        high_watermark_absolute_ = high_watermark_absolute_floored;
+        *high_watermark_absolute_ = high_watermark_absolute_floored;
     }
 
     /** Creates dummy entry for predication. */
@@ -672,34 +716,6 @@ using GlobalChainedHashTable = ChainedHashTable<true>;
 
 
 /*----- open addressing hash tables ----------------------------------------------------------------------------------*/
-
-template<bool ValueInPlace>
-class open_addressing_hash_table_storage;
-
-template<>
-class open_addressing_hash_table_storage<true>
-{
-    friend struct OpenAddressingHashTable<false, true>;
-    friend struct OpenAddressingHashTable<true, true>;
-
-    std::vector<HashTable::offset_t> entry_offsets_in_bytes_;
-    HashTable::offset_t null_bitmap_offset_in_bytes_; ///< only specified if at least one entry is nullable
-};
-
-template<>
-class open_addressing_hash_table_storage<false>
-{
-    friend struct OpenAddressingHashTable<false, false>;
-    friend struct OpenAddressingHashTable<true, false>;
-
-    std::vector<HashTable::offset_t> key_offsets_in_bytes_;
-    std::vector<HashTable::offset_t> value_offsets_in_bytes_;
-    HashTable::offset_t ptr_offset_in_bytes_; ///< pointer to out-of-place values
-    HashTable::size_t values_size_in_bytes_;
-    HashTable::size_t values_max_alignment_in_bytes_;
-    HashTable::offset_t keys_null_bitmap_offset_in_bytes_; ///< only specified if at least one key entry is nullable
-    HashTable::offset_t values_null_bitmap_offset_in_bytes_; ///< only specified if at least one value entry is nullable
-};
 
 struct OpenAddressingHashTableBase : HashTable
 {
@@ -779,6 +795,52 @@ struct OpenAddressingHashTableBase : HashTable
     Ptr<void> hash_to_bucket(std::vector<SQL_t> key) const;
 };
 
+template<bool ValueInPlace>
+class open_addressing_hash_table_layout;
+
+template<>
+class open_addressing_hash_table_layout<true>
+{
+    friend struct OpenAddressingHashTable<false, true>;
+    friend struct OpenAddressingHashTable<true, true>;
+
+    std::vector<HashTable::offset_t> entry_offsets_in_bytes_;
+    HashTable::offset_t null_bitmap_offset_in_bytes_; ///< only specified if at least one entry is nullable
+};
+
+template<>
+class open_addressing_hash_table_layout<false>
+{
+    friend struct OpenAddressingHashTable<false, false>;
+    friend struct OpenAddressingHashTable<true, false>;
+
+    std::vector<HashTable::offset_t> key_offsets_in_bytes_;
+    std::vector<HashTable::offset_t> value_offsets_in_bytes_;
+    HashTable::offset_t ptr_offset_in_bytes_; ///< pointer to out-of-place values
+    HashTable::size_t values_size_in_bytes_;
+    HashTable::size_t values_max_alignment_in_bytes_;
+    HashTable::offset_t keys_null_bitmap_offset_in_bytes_; ///< only specified if at least one key entry is nullable
+    HashTable::offset_t values_null_bitmap_offset_in_bytes_; ///< only specified if at least one value entry is nullable
+};
+
+template<bool IsGlobal>
+class open_addressing_hash_table_storage;
+
+template<>
+class open_addressing_hash_table_storage<false> {};
+
+template<>
+class open_addressing_hash_table_storage<true>
+{
+    friend struct OpenAddressingHashTable<true, false>;
+    friend struct OpenAddressingHashTable<true, true>;
+
+    Global<Ptr<void>> address_; ///< global backup for address of hash table
+    Global<U32> capacity_; ///< global backup for capacity of hash table
+    Global<U32> num_entries_; ///< global backup for number of occupied entries of hash table
+    Global<U32> high_watermark_absolute_; ///< global backup for absolute high watermark of hash table
+};
+
 template<bool IsGlobal, bool ValueInPlace>
 struct OpenAddressingHashTable : OpenAddressingHashTableBase
 {
@@ -787,11 +849,13 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
     template<typename T>
     using var_t = std::conditional_t<IsGlobal, Global<T>, Var<T>>;
 
-    open_addressing_hash_table_storage<ValueInPlace> storage_; ///< additional fields depending on the template params
-    var_t<Ptr<void>> address_; ///< base address of hash table
-    var_t<U32> capacity_; ///< capacity of hash table; always a power of 2
-    var_t<U32> num_entries_; ///< number of occupied entries of hash table
-    var_t<U32> high_watermark_absolute_; ///< maximum number of entries before growing the hash table is required
+    open_addressing_hash_table_layout<ValueInPlace> layout_; ///< layout of hash table
+    std::optional<Var<Ptr<void>>> address_; ///< base address of hash table
+    std::optional<Var<U32>> capacity_; ///< capacity of hash table; always a power of 2
+    std::optional<Var<U32>> num_entries_; ///< number of occupied entries of hash table
+    std::optional<Var<U32>> high_watermark_absolute_; ///< maximum number of entries before growing the hash table is required
+    ///> if `IsGlobal`, contains backups for address, capacity, number of entries, and absolute high watermark
+    open_addressing_hash_table_storage<IsGlobal> storage_;
     ///> function to perform rehashing; only possible for global hash tables since variables have to be updated
     std::optional<FunctionProxy<void(void)>> rehash_;
     std::vector<std::pair<Ptr<void>, U32>> dummy_allocations_; ///< address-size pairs of dummy entry allocations
@@ -808,17 +872,30 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
 
     ~OpenAddressingHashTable();
 
-    Ptr<void> begin() const override { return address_; }
-    Ptr<void> end() const override { return address_ + (capacity_ * entry_size_in_bytes_).make_signed(); }
-    U32 capacity() const override { return capacity_; }
+    private:
+    Ptr<void> begin() const override { M_insist(bool(address_), "must call `setup()` before"); return *address_; }
+    Ptr<void> end() const override { return begin() + (capacity() * entry_size_in_bytes_).make_signed(); }
+    U32 capacity() const override { M_insist(bool(capacity_), "must call `setup()` before"); return *capacity_; }
+
+    public:
+    /** Performs the setup of all local variables of the hash table (by reading them from the global backups iff
+     * \tparam IsGlobal).  Must be called before any call to a setup method, i.e. setting the high watermark, or an
+     * access method, i.e. clearing, insertion, lookup, or dummy entry creation. */
+    void setup() override;
+    /** Performs the teardown of all local variables of the hash table (by storing them into the global backups iff
+     * \tparam IsGlobal).  Must be called after all calls to a setup method, i.e. setting the high watermark, or an
+     * access method, i.e. clearing, insertion, lookup, or dummy entry creation. */
+    void teardown() override;
 
     private:
     void update_high_watermark() override {
-        auto high_watermark_absolute_new = high_watermark_percentage_ * capacity_.make_signed().template to<double>();
-        high_watermark_absolute_ = high_watermark_absolute_new.template to<int32_t>().make_unsigned() - 1U;
-        Wasm_insist(high_watermark_absolute_ >= 1U,
+        M_insist(bool(capacity_), "must call `setup()` before");
+        M_insist(bool(high_watermark_absolute_), "must call `setup()` before");
+        auto high_watermark_absolute_new = high_watermark_percentage_ * capacity_->make_signed().template to<double>();
+        *high_watermark_absolute_ = high_watermark_absolute_new.template to<int32_t>().make_unsigned() - 1U;
+        Wasm_insist(*high_watermark_absolute_ >= 1U,
                     "at least one entry must be allowed to insert before growing the table");
-        Wasm_insist(high_watermark_absolute_ < capacity_, "at least one entry must always be unoccupied for lookups");
+        Wasm_insist(*high_watermark_absolute_ < *capacity_, "at least one entry must always be unoccupied for lookups");
     }
 
     /** Creates dummy entry for predication. */

@@ -2842,7 +2842,7 @@ class variable_storage<T, VariableKind::Global, /* CanBeNull= */ false>
 {
     using type = T;
 
-    friend struct Variable<T, VariableKind::Global, false>;
+    friend struct Variable<T, VariableKind::Global, false>; // to be usable by the respective Variable
 
     ::wasm::Name name_; ///< the global's unique name
     ::wasm::Type type_; ///< the type of the global variable
@@ -2929,7 +2929,7 @@ struct Variable<T, Kind, CanBeNull>
 
     public:
     /** Default-constructs a new `Variable`. */
-    Variable() requires requires { storage_type(); } = default;
+    Variable() = default;
 
     Variable(const Variable&) = delete;
     Variable(Variable &&other)

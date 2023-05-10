@@ -617,6 +617,8 @@ V8Platform::V8Platform()
 #define REGISTER(CLASS) phys_opt_.register_operator<m::wasm::CLASS>();
     M_WASM_OPERATOR_LIST(REGISTER)
 #undef REGISTER
+
+    initialize();
 }
 
 V8Platform::~V8Platform()
@@ -741,9 +743,7 @@ void V8Platform::execute(const Operator &plan)
         dot.show("physical_plan", true);
     }
 
-    if (not isolate_)
-        initialize();
-
+    M_insist(bool(isolate_), "must have an isolate");
     v8::Locker locker(isolate_);
     isolate_->Enter();
 

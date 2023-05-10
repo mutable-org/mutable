@@ -191,9 +191,9 @@ void m::execute_statement(Diagnostic &diag, const ast::Stmt &stmt, const bool is
 /* TODO implement as command line argument of plugin
     if (Options::Get().dryrun and streq("WasmV8", C.default_backend_name())) {
         Backend &backend = C.backend();
-        auto &platform = as<WasmBackend>(backend).platform();
+        auto &engine = as<WasmBackend>(backend).engine();
         Module::Init(); // fresh module
-        M_TIME_EXPR(platform.compile(*plan), "Compile to WebAssembly", timer);
+        M_TIME_EXPR(engine.compile(*plan), "Compile to WebAssembly", timer);
         Module::Get().dump(std::cout);
         Module::Dispose();
     }

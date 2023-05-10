@@ -1,4 +1,4 @@
-#include "backend/V8Platform.hpp"
+#include "backend/V8Engine.hpp"
 
 #include "backend/Interpreter.hpp"
 #include "backend/PhysicalOperator.hpp"
@@ -55,15 +55,15 @@ uint16_t cdt_port = 0;
 
 
 /*======================================================================================================================
- * V8Platform
+ * V8Engine
  *====================================================================================================================*/
 
-/** The `V8Platform` is a `WasmPlatform` using [V8, Google's open source high-performance JavaScript and WebAssembly
+/** The `V8Engine` is a `WasmEngine` using [V8, Google's open source high-performance JavaScript and WebAssembly
  * engine] (https://v8.dev/). */
-struct V8Platform : m::WasmPlatform
+struct V8Engine : m::WasmEngine
 {
-    friend void create_V8Platform();
-    friend void destroy_V8Platform();
+    friend void create_V8Engine();
+    friend void destroy_V8Engine();
     friend void register_WasmV8();
 
     private:
@@ -76,11 +76,11 @@ struct V8Platform : m::WasmPlatform
     std::unique_ptr<V8InspectorClientImpl> inspector_;
 
     public:
-    V8Platform();
-    V8Platform(const V8Platform&) = delete;
-    V8Platform(V8Platform&&) = default;
+    V8Engine();
+    V8Engine(const V8Engine&) = delete;
+    V8Engine(V8Engine&&) = default;
 
-    ~V8Platform();
+    ~V8Engine();
 
     static v8::Platform * platform() {
         M_insist(bool(PLATFORM_));
@@ -214,7 +214,7 @@ void V8InspectorClientImpl::runMessageLoopOnPause(int)
     is_terminated_ = false;
     is_nested = true;
     while (not is_terminated_ and conn_->wait_on_message())
-        while (v8::platform::PumpMessageLoop(V8Platform::platform(), isolate_)) { }
+        while (v8::platform::PumpMessageLoop(V8Engine::platform(), isolate_)) { }
     is_terminated_ = true;
     is_nested = false;
 }
@@ -279,7 +279,7 @@ void m::wasm::detail::set_wasm_instance_raw_memory(const v8::FunctionCallbackInf
     v8::Local<v8::WasmModuleObject> wasm_instance = info[0].As<v8::WasmModuleObject>();
     v8::Local<v8::Int32> wasm_context_id = info[1].As<v8::Int32>();
 
-    auto &wasm_context = WasmPlatform::Get_Wasm_Context_By_ID(wasm_context_id->Value());
+    auto &wasm_context = WasmEngine::Get_Wasm_Context_By_ID(wasm_context_id->Value());
 #ifndef NDEBUG
     std::cerr << "Setting Wasm instance raw memory of the given instance to the VM of Wasm context "
               << wasm_context_id->Value() << " at " << wasm_context.vm.addr() << " of " << wasm_context.vm.size()
@@ -290,7 +290,7 @@ void m::wasm::detail::set_wasm_instance_raw_memory(const v8::FunctionCallbackInf
 
 void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> &info)
 {
-    auto &context = WasmPlatform::Get_Wasm_Context_By_ID(Module::ID());
+    auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
 
     auto &schema = context.plan.schema();
     auto deduplicated_schema = schema.deduplicate();
@@ -509,7 +509,7 @@ void m::wasm::detail::read_result_set(const v8::FunctionCallbackInfo<v8::Value> 
 
 
 /*======================================================================================================================
- * V8Platform helper classes
+ * V8Engine helper classes
  *====================================================================================================================*/
 
 namespace {
@@ -609,10 +609,10 @@ struct CollectStringLiterals : ConstOperatorVisitor, ast::ConstASTExprVisitor
 
 
 /*======================================================================================================================
- * V8Platform implementation
+ * V8Engine implementation
  *====================================================================================================================*/
 
-V8Platform::V8Platform()
+V8Engine::V8Engine()
 {
 #define REGISTER(CLASS) phys_opt_.register_operator<m::wasm::CLASS>();
     M_WASM_OPERATOR_LIST(REGISTER)
@@ -621,7 +621,7 @@ V8Platform::V8Platform()
     initialize();
 }
 
-V8Platform::~V8Platform()
+V8Engine::~V8Engine()
 {
     inspector_.reset();
     if (isolate_) {
@@ -631,7 +631,7 @@ V8Platform::~V8Platform()
     }
 }
 
-void V8Platform::initialize()
+void V8Engine::initialize()
 {
     M_insist(not allocator_);
     M_insist(not isolate_);
@@ -669,7 +669,7 @@ void V8Platform::initialize()
     isolate_ = v8::Isolate::New(create_params);
 }
 
-void V8Platform::compile(const Operator &plan) const
+void V8Engine::compile(const Operator &plan) const
 {
 #if 1
     /*----- Add print function. --------------------------------------------------------------------------------------*/
@@ -727,7 +727,7 @@ void V8Platform::compile(const Operator &plan) const
 #endif
 }
 
-void V8Platform::execute(const Operator &plan)
+void V8Engine::execute(const Operator &plan)
 {
     Module::Init();
     CodeGenContext::Init(); // fresh context
@@ -819,16 +819,16 @@ void V8Platform::execute(const Operator &plan)
 }
 
 __attribute__((constructor(101)))
-static void create_V8Platform()
+static void create_V8Engine()
 {
-    V8Platform::PLATFORM_ = v8::platform::NewDefaultPlatform().release();
-    v8::V8::InitializePlatform(V8Platform::PLATFORM_);
+    V8Engine::PLATFORM_ = v8::platform::NewDefaultPlatform().release();
+    v8::V8::InitializePlatform(V8Engine::PLATFORM_);
     v8::V8::SetFlagsFromString("--no-freeze-flags-after-init"); // allow changing flags after initialization
     v8::V8::Initialize();
 }
 
 __attribute__((destructor(101)))
-static void destroy_V8Platform()
+static void destroy_V8Engine()
 {
     v8::V8::Dispose();
     v8::V8::DisposePlatform();
@@ -838,7 +838,7 @@ __attribute__((constructor(202)))
 static void register_WasmV8()
 {
     Catalog &C = Catalog::Get();
-    C.register_wasm_backend<V8Platform>("WasmV8", "WebAssembly backend using Google's V8 engine");
+    C.register_wasm_backend<V8Engine>("WasmV8", "WebAssembly backend using Google's V8 engine");
 
     /*----- Command-line arguments -----------------------------------------------------------------------------------*/
     C.arg_parser().add<int>(
@@ -908,7 +908,7 @@ v8::Local<v8::WasmModuleObject> m::wasm::detail::instantiate(v8::Isolate &isolat
 
 v8::Local<v8::Object> m::wasm::detail::create_env(v8::Isolate &isolate, const Operator &plan)
 {
-    auto &context = WasmPlatform::Get_Wasm_Context_By_ID(Module::ID());
+    auto &context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
     auto Ctx = isolate.GetCurrentContext();
     auto env = v8::Object::New(&isolate);
 
@@ -977,7 +977,7 @@ v8::Local<v8::String> m::wasm::detail::to_json(v8::Isolate &isolate, v8::Local<v
 }
 
 std::string m::wasm::detail::create_js_debug_script(v8::Isolate &isolate, v8::Local<v8::Object> env,
-                                                    const WasmPlatform::WasmContext &wasm_context)
+                                                    const WasmEngine::WasmContext &wasm_context)
 {
     std::ostringstream oss;
 
@@ -1038,7 +1038,7 @@ debugger;";
 void m::wasm::detail::run_inspector(V8InspectorClientImpl &inspector, v8::Isolate &isolate, v8::Local<v8::Object> env)
 {
     auto Ctx = isolate.GetCurrentContext();
-    auto &wasm_context = WasmPlatform::Get_Wasm_Context_By_ID(Module::ID());
+    auto &wasm_context = WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
 
     inspector.register_context(Ctx);
     inspector.start([&]() {

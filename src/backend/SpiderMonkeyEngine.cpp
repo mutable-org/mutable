@@ -1,4 +1,4 @@
-#include "backend/SpiderMonkeyPlatform.hpp"
+#include "backend/SpiderMonkeyEngine.hpp"
 
 #include "js/ArrayBuffer.h"
 #include "js/Initialization.h"
@@ -7,9 +7,9 @@
 using namespace m;
 
 
-bool SpiderMonkeyPlatform::is_init_ = false;
+bool SpiderMonkeyEngine::is_init_ = false;
 
-SpiderMonkeyPlatform::SpiderMonkeyPlatform()
+SpiderMonkeyEngine::SpiderMonkeyEngine()
 {
     if (not is_init_) {
         if (not JS_Init())
@@ -21,7 +21,7 @@ SpiderMonkeyPlatform::SpiderMonkeyPlatform()
     }
 }
 
-SpiderMonkeyPlatform::~SpiderMonkeyPlatform()
+SpiderMonkeyEngine::~SpiderMonkeyEngine()
 {
     if (ctx_)
         JS_DestroyContext(ctx_);
@@ -29,13 +29,13 @@ SpiderMonkeyPlatform::~SpiderMonkeyPlatform()
         JS_ShutDown();
 }
 
-void SpiderMonkeyPlatform::execute(const WASMModule &module)
+void SpiderMonkeyEngine::execute(const WASMModule &module)
 {
-    std::cerr << "Executing the WASM module on the SpiderMonkey platform.\n";
+    std::cerr << "Executing the WASM module on the SpiderMonkey engine.\n";
     // TODO
 }
 
 std::unique_ptr<Backend> Backend::CreateWasmSpiderMonkey()
 {
-    return std::make_unique<WasmBackend>(std::make_unique<SpiderMonkeyPlatform>());
+    return std::make_unique<WasmBackend>(std::make_unique<SpiderMonkeyEngine>());
 }

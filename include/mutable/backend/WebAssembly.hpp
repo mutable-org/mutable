@@ -10,8 +10,8 @@
 
 namespace m {
 
-/** A `WasmPlatform` provides an environment to compile and execute WebAssembly modules. */
-struct WasmPlatform
+/** A `WasmEngine` provides an environment to compile and execute WebAssembly modules. */
+struct WasmEngine
 {
     /** the size of a WebAssembly memory page, 64 KiB. */
     static constexpr std::size_t WASM_PAGE_SIZE = 1UL << 16;
@@ -88,29 +88,29 @@ struct WasmPlatform
     /** Tests if the `WasmContext` with ID `id` exists. */
     static bool Has_Wasm_Context(unsigned id) { return contexts_.find(id) != contexts_.end(); }
 
-    WasmPlatform() = default;
-    virtual ~WasmPlatform() { }
-    WasmPlatform(const WasmPlatform&) = delete;
-    WasmPlatform(WasmPlatform&&) = default;
+    WasmEngine() = default;
+    virtual ~WasmEngine() { }
+    WasmEngine(const WasmEngine&) = delete;
+    WasmEngine(WasmEngine&&) = default;
 
-    /** Compiles the given `plan` for this `WasmPlatform`. */
+    /** Compiles the given `plan` for this `WasmEngine`. */
     virtual void compile(const Operator &plan) const = 0;
 
-    /** Executes the given `plan` on this `WasmPlatform`. */
+    /** Executes the given `plan` on this `WasmEngine`. */
     virtual void execute(const Operator &plan) = 0;
 };
 
-/** A `Backend` to execute a plan on a specific `WasmPlatform`. */
+/** A `Backend` to execute a plan on a specific `WasmEngine`. */
 struct WasmBackend : Backend
 {
     private:
-    std::unique_ptr<WasmPlatform> platform_; ///< the `WasmPlatform` of this backend
+    std::unique_ptr<WasmEngine> engine_; ///< the `WasmEngine` of this backend
 
     public:
-    WasmBackend(std::unique_ptr<WasmPlatform> platform) : platform_(std::move(platform)) { }
+    WasmBackend(std::unique_ptr<WasmEngine> engine) : engine_(std::move(engine)) { }
 
-    /** Returns this backend's `WasmPlatform`. */
-    const WasmPlatform & platform() const { return *platform_; }
+    /** Returns this backend's `WasmEngine`. */
+    const WasmEngine & engine() const { return *engine_; }
 
     /** Executes the given `plan` with this backend. */
     void execute(const Operator &plan) const override;

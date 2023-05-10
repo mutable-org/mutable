@@ -124,8 +124,8 @@ struct MockInterface final : ::wasm::ModuleRunner::ExternalInterface
 
     public:
     MockInterface()
-        : memory_(malloc(WasmPlatform::WASM_MAX_MEMORY))
-        , size_(WasmPlatform::WASM_MAX_MEMORY)
+        : memory_(malloc(WasmEngine::WASM_MAX_MEMORY))
+        , size_(WasmEngine::WASM_MAX_MEMORY)
         , allocated_(true)
     {
         M_insist(memory_, "memory allocation failed");
@@ -310,7 +310,7 @@ Module::Module()
     /*----- Export the Wasm linear memory, s.t. it can be accessed from the environment (JavaScript). -----*/
     memory_ = module_.getMemory(memory_name);
     memory_->initial = 1; // otherwise the Binaryen interpreter traps
-    memory_->max = int32_t(WasmPlatform::WASM_MAX_MEMORY / WasmPlatform::WASM_PAGE_SIZE);
+    memory_->max = int32_t(WasmEngine::WASM_MAX_MEMORY / WasmEngine::WASM_PAGE_SIZE);
     module_.exports.emplace_back(
         builder_.makeExport("memory", memory_->name, ::wasm::ExternalKind::Memory)
     );
@@ -322,8 +322,8 @@ Module::Module()
 ::wasm::ModuleRunner::ExternalInterface * Module::get_mock_interface()
 {
     if (not interface_) [[unlikely]] {
-        if (WasmPlatform::Has_Wasm_Context(id_))
-            interface_ = std::make_unique<MockInterface>(WasmPlatform::Get_Wasm_Context_By_ID(id_).vm);
+        if (WasmEngine::Has_Wasm_Context(id_))
+            interface_ = std::make_unique<MockInterface>(WasmEngine::Get_Wasm_Context_By_ID(id_).vm);
         else
             interface_ = std::make_unique<MockInterface>();
     }
@@ -437,8 +437,8 @@ void Module::emit_continue(PrimitiveExpr<bool> cond, std::size_t level)
 Allocator & Module::Allocator()
 {
     if (not Get().allocator_) [[unlikely]] {
-        if (WasmPlatform::Has_Wasm_Context(ID()))
-            Get().allocator_ = std::make_unique<LinearAllocator>(WasmPlatform::Get_Wasm_Context_By_ID(ID()).heap);
+        if (WasmEngine::Has_Wasm_Context(ID()))
+            Get().allocator_ = std::make_unique<LinearAllocator>(WasmEngine::Get_Wasm_Context_By_ID(ID()).heap);
         else
             Get().allocator_ = std::make_unique<LinearAllocator>(1); // reserve address 0 for `nullptr`
     }

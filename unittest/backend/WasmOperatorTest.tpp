@@ -54,7 +54,7 @@ struct DummyStore : m::Store
 TEST_CASE("Wasm/" BACKEND_NAME "/Scan", "[core][wasm]")
 {
     Module::Init(); // fresh module
-    auto &wasm_context = m::WasmPlatform::Create_Wasm_Context_For_ID(Module::ID()); // create fresh wasm context
+    auto &wasm_context = m::WasmEngine::Create_Wasm_Context_For_ID(Module::ID()); // create fresh wasm context
 
     /* Create table. */
     m::Table table("dummy_table");
@@ -475,6 +475,6 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Scan", "[core][wasm]")
         REQUIRE_NOTHROW(invoke());
     }
 
-    m::WasmPlatform::Dispose_Wasm_Context(Module::ID());
+    m::WasmEngine::Dispose_Wasm_Context(Module::ID());
     Module::Dispose();
 }

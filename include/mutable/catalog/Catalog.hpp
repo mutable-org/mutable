@@ -55,18 +55,18 @@ struct ConcreteCardinalityEstimatorFactory : CardinalityEstimatorFactory
     }
 };
 
-struct WasmPlatformFactory
+struct WasmEngineFactory
 {
-    virtual ~WasmPlatformFactory() { }
+    virtual ~WasmEngineFactory() { }
 
-    virtual std::unique_ptr<m::WasmPlatform> make() const = 0;
+    virtual std::unique_ptr<m::WasmEngine> make() const = 0;
 };
 
 template<typename T>
-requires std::derived_from<T, m::WasmPlatform>
-struct ConcreteWasmPlatformFactory : WasmPlatformFactory
+requires std::derived_from<T, m::WasmEngine>
+struct ConcreteWasmEngineFactory : WasmEngineFactory
 {
-    std::unique_ptr<m::WasmPlatform> make() const override { return std::make_unique<T>(); }
+    std::unique_ptr<m::WasmEngine> make() const override { return std::make_unique<T>(); }
 };
 
 struct BackendFactory
@@ -86,10 +86,10 @@ struct ConcreteBackendFactory : BackendFactory
 struct ConcreteWasmBackendFactory : BackendFactory
 {
     private:
-    std::unique_ptr<WasmPlatformFactory> platform_factory_;
+    std::unique_ptr<WasmEngineFactory> platform_factory_;
 
     public:
-    ConcreteWasmBackendFactory(std::unique_ptr<WasmPlatformFactory> platform_factory)
+    ConcreteWasmBackendFactory(std::unique_ptr<WasmEngineFactory> platform_factory)
         : platform_factory_(std::move(platform_factory))
     { }
 
@@ -440,13 +440,13 @@ struct M_EXPORT Catalog
         auto c = Component<BackendFactory>(description, std::make_unique<ConcreteBackendFactory<T>>());
         backends_.add(pool(name), std::move(c));
     }
-    /** Registers a new `WasmBackend` using the given `WasmPlatform` with the given `name`. */
+    /** Registers a new `WasmBackend` using the given `WasmEngine` with the given `name`. */
     template<typename T>
-    requires std::derived_from<T, m::WasmPlatform>
+    requires std::derived_from<T, m::WasmEngine>
     void register_wasm_backend(const char *name, const char *description = nullptr) {
         auto c = Component<BackendFactory>(
             description,
-            std::make_unique<ConcreteWasmBackendFactory>(std::make_unique<ConcreteWasmPlatformFactory<T>>())
+            std::make_unique<ConcreteWasmBackendFactory>(std::make_unique<ConcreteWasmEngineFactory<T>>())
         );
         backends_.add(pool(name), std::move(c));
     }

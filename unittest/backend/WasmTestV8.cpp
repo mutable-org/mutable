@@ -1,7 +1,7 @@
 #include "catch2/catch.hpp"
 #include "backend/WasmTest.hpp"
 
-#include "backend/V8Platform.hpp"
+#include "backend/V8Engine.hpp"
 #include "backend/WebAssembly.hpp"
 #include <string>
 #include <v8.h>
@@ -120,9 +120,9 @@ struct invoke_v8<PrimitiveExpr<ReturnType>(PrimitiveExpr<ParamTypes>...)>
         auto instance = instantiate(*isolate_, imports);
 
         /* If a wasm context was given by the caller, map its memory. */
-        if (m::WasmPlatform::Has_Wasm_Context(Module::ID())) {
+        if (m::WasmEngine::Has_Wasm_Context(Module::ID())) {
             /* Map the remaining address space to the output buffer. */
-            auto &wasm_context = m::WasmPlatform::Get_Wasm_Context_By_ID(Module::ID());
+            auto &wasm_context = m::WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
             const auto bytes_remaining = wasm_context.vm.size() - wasm_context.heap;
             Memory mem = Catalog::Get().allocator().allocate(bytes_remaining);
             mem.map(bytes_remaining, 0, wasm_context.vm, wasm_context.heap);

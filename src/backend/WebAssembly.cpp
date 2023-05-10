@@ -49,10 +49,10 @@ M_LCOV_EXCL_STOP
 
 
 /*======================================================================================================================
- * WasmPlatform
+ * WasmEngine
  *====================================================================================================================*/
 
-WasmPlatform::WasmContext::WasmContext(uint32_t id, config_t config, const Operator &plan, std::size_t size)
+WasmEngine::WasmContext::WasmContext(uint32_t id, config_t config, const Operator &plan, std::size_t size)
     : config_(config)
     , id(id)
     , plan(plan)
@@ -61,7 +61,7 @@ WasmPlatform::WasmContext::WasmContext(uint32_t id, config_t config, const Opera
     install_guard_page();
 }
 
-uint32_t WasmPlatform::WasmContext::map_table(const Table &table)
+uint32_t WasmEngine::WasmContext::map_table(const Table &table)
 {
     M_insist(Is_Page_Aligned(heap));
 
@@ -84,7 +84,7 @@ uint32_t WasmPlatform::WasmContext::map_table(const Table &table)
     return off;
 }
 
-void WasmPlatform::WasmContext::install_guard_page()
+void WasmEngine::WasmContext::install_guard_page()
 {
     M_insist(Is_Page_Aligned(heap));
     if (not config(TRAP_GUARD_PAGES)) {
@@ -100,4 +100,4 @@ void WasmPlatform::WasmContext::install_guard_page()
  * WasmBackend
  *====================================================================================================================*/
 
-void WasmBackend::execute(const Operator &plan) const { platform_->execute(plan); }
+void WasmBackend::execute(const Operator &plan) const { engine_->execute(plan); }

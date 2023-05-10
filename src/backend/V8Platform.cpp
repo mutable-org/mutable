@@ -798,7 +798,9 @@ void V8Platform::execute(const Operator &plan)
 
         /* Invoke the exported function `main` of the module. */
         args_t args { v8::Int32::New(isolate_, wasm_context.id), };
-        const uint32_t num_rows = main->Call(context, context->Global(), 1, args).ToLocalChecked().As<v8::Uint32>()->Value();
+        const uint32_t num_rows =
+            M_TIME_EXPR(main->Call(context, context->Global(), 1, args).ToLocalChecked().As<v8::Uint32>()->Value(),
+                        "Execute machine code", C.timer());
 
         /* Print total number of result tuples. */
         if (auto print_op = cast<const PrintOperator>(&plan)) {

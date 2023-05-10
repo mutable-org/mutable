@@ -48,7 +48,6 @@ def validate_schema(path_to_file, path_to_schema) -> bool:
     return True
 
 
-
 #=======================================================================================================================
 # Generate a .pgsql file to load the results into the database
 #=======================================================================================================================
@@ -268,8 +267,9 @@ def perform_experiment(yml, conn, info, results) -> list():
         config = config_name
         configurations = systems[system].get('configurations')
         if configurations:
-            if configurations.get(config_name):
-                config = configurations.get(config_name)
+            for n, c in configurations.items():
+                if (n==config_name) or (n in config_name):
+                    config = c
 
         measurements = list()
         for case, times in execution_times.items():
@@ -291,6 +291,7 @@ def perform_experiment(yml, conn, info, results) -> list():
         benchmark[info.experiment_name] = (experiment, yml)
         suite[info.benchmark_name] = benchmark
         results[info.suite_name] = suite
+
 
 
 #=======================================================================================================================

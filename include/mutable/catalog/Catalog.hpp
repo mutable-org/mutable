@@ -279,6 +279,7 @@ struct M_EXPORT Catalog
     /*===== Stores ===================================================================================================*/
     /** Registers a new `Store` with the given `name`. */
     template<typename T>
+    requires std::derived_from<T, m::Store>
     void register_store(const char *name, const char *description = nullptr) {
         auto c = Component<StoreFactory>(description, std::make_unique<ConcreteStoreFactory<T>>());
         stores_.add(pool(name), std::move(c));
@@ -331,6 +332,7 @@ struct M_EXPORT Catalog
     /*===== CardinalityEstimators ====================================================================================*/
     /** Registers a new `CardinalityEstimator` with the given `name`. */
     template<typename T>
+    requires std::derived_from<T, m::CardinalityEstimator>
     void register_cardinality_estimator(const char *name, const char *description = nullptr) {
         auto c = Component<CardinalityEstimatorFactory>(
             description,

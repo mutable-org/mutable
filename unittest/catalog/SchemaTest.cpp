@@ -34,7 +34,7 @@ TEST_CASE("Table empty access")
 {
     Table r("mytable");
 
-    REQUIRE_THROWS_AS(r["attribute"], std::out_of_range);
+    REQUIRE_THROWS_AS(r.at("attribute"), std::out_of_range);
 
     for (auto it = r.cbegin(), end = r.cend(); it != end; ++it)
         REQUIRE(((void) "this code must be dead or the table is not empty", false));

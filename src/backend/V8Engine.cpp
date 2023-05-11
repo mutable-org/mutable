@@ -637,6 +637,8 @@ void V8Engine::initialize()
     M_insist(not isolate_);
 
     /*----- Set V8 flags. --------------------------------------------------------------------------------------------*/
+    /* A documentation of these flags can be found at
+     * https://chromium.googlesource.com/v8/v8/+/67180425bcecc021a3aa8df23b44afa531ab6630/src/flags/flag-definitions.h.*/
     std::ostringstream flags;
     flags << "--stack_size 1000000 ";
     if (options::wasm_adaptive) {
@@ -644,9 +646,10 @@ void V8Engine::initialize()
               << "--liftoff "
               << "--wasm-tier-up "
               << "--wasm-dynamic-tiering "
-              << "--wasm-lazy-compilation ";
+              << "--wasm-lazy-compilation "; // compile code lazily at runtime if needed
     } else {
-        flags << "--no-liftoff ";
+        flags << "--no-liftoff "
+              << "--no-wasm-lazy-compilation "; // compile code before starting execution
     }
     if (options::cdt_port >= 1024) {
         flags << "--wasm-bounds-checks "

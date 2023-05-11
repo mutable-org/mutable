@@ -30,11 +30,6 @@ class PostgreSQL(Connector):
         experiment = params['name']
         tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration PostgreSQL.')
 
-        try:
-            self.clean_up()
-        except psycopg2.OperationalError as ex:
-            raise ConnectorException(str(ex))
-
         # map that is returned with the measured times
         measurement_times = dict()
 
@@ -47,21 +42,24 @@ class PostgreSQL(Connector):
 
         verbose_printed = False
         for _ in range(n_runs):
+            # Set up database
+            self.setup()
+
+            # Connect to database and set up tables
+            connection = psycopg2.connect(**db_options)
             try:
-                # Set up database
-                self.setup()
-                connection = psycopg2.connect(**db_options)
                 connection.autocommit = True
                 cursor = connection.cursor()
                 cursor.execute("set jit=off;")
                 self.create_tables(cursor, params['data'], with_scale_factors)
+            finally:
                 connection.close()
 
-
-                # If tables contain scale factors, they have to be loaded separately for every case
-                if (with_scale_factors or not bool(params.get('readonly'))):
-                    for case, query_stmt in params['cases'].items():
-                        connection = psycopg2.connect(**db_options)
+            # If tables contain scale factors, they have to be loaded separately for every case
+            if (with_scale_factors or not bool(params.get('readonly'))):
+                for case, query_stmt in params['cases'].items():
+                    connection = psycopg2.connect(**db_options)
+                    try:
                         connection.autocommit = True
                         cursor = connection.cursor()
                         # Create tables from tmp tables with scale factor
@@ -74,49 +72,18 @@ class PostgreSQL(Connector):
                             num_rows = round((table['lines_in_file'] - header) * sf)
                             cursor.execute(f"DELETE FROM {table_name};")     # empty existing table
                             cursor.execute(f"INSERT INTO {table_name} SELECT * FROM {table_name}_tmp LIMIT {num_rows};")    # copy data with scale factor
+                    finally:
                         connection.close()
 
-                        # Write case/query to a file that will be passed to the command to execute
-                        with open(TMP_SQL_FILE, "w") as tmp:
-                            tmp.write("\\timing on\n")
-                            tmp.write(query_stmt + '\n')
-                            tmp.write("\\timing off\n")
-
-                        # Execute query as benchmark and get measurement time
-                        command = f"psql -U {db_options['user']} -d {db_options['dbname']} -f {TMP_SQL_FILE} | grep 'Time' | cut -d ' ' -f 2"
-                        if self.verbose:
-                            tqdm.write(f"    $ {command}")
-                            if not verbose_printed:
-                                verbose_printed = True
-                                with open(TMP_SQL_FILE) as tmp:
-                                    tqdm.write("    " + "    ".join(tmp.readlines()))
-
-                        timeout = TIMEOUT_PER_CASE
-                        benchmark_info = f"{suite}/{benchmark}/{experiment} [PostgreSQL]"
-                        try:
-                            durations = self.run_command(command, timeout, benchmark_info)
-                        except ExperimentTimeoutExpired as ex:
-                            if case not in measurement_times.keys():
-                                measurement_times[case] = list()
-                            measurement_times[case].append(TIMEOUT_PER_CASE * 1000)
-                        else:
-                            for idx, line in enumerate(durations):
-                                time = float(line.replace("\n", "").replace(",", ".")) # in milliseconds
-                                if case not in measurement_times.keys():
-                                    measurement_times[case] = list()
-                                measurement_times[case].append(time)
-
-
-                # Otherwise, tables have to be created just once before the measurements (done above)
-                else:
-                    # Write cases/queries to a file that will be passed to the command to execute
+                    # Write case/query to a file that will be passed to the command to execute
                     with open(TMP_SQL_FILE, "w") as tmp:
+                        tmp.write(f'set statement_timeout = {TIMEOUT_PER_CASE * 1000:.0f};\n')
                         tmp.write("\\timing on\n")
-                        for case_query in params['cases'].values():
-                            tmp.write(case_query + '\n')
+                        tmp.write(query_stmt + '\n')
                         tmp.write("\\timing off\n")
+                        tmp.write(f'set statement_timeout = 0;\n')
 
-                    # Execute query file and collect measurement data
+                    # Execute query as benchmark and get measurement time
                     command = f"psql -U {db_options['user']} -d {db_options['dbname']} -f {TMP_SQL_FILE} | grep 'Time' | cut -d ' ' -f 2"
                     if self.verbose:
                         tqdm.write(f"    $ {command}")
@@ -125,27 +92,59 @@ class PostgreSQL(Connector):
                             with open(TMP_SQL_FILE) as tmp:
                                 tqdm.write("    " + "    ".join(tmp.readlines()))
 
-                    timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(params['cases'])
+                    timeout = TIMEOUT_PER_CASE
                     benchmark_info = f"{suite}/{benchmark}/{experiment} [PostgreSQL]"
                     try:
                         durations = self.run_command(command, timeout, benchmark_info)
                     except ExperimentTimeoutExpired as ex:
-                        for case in params['cases'].keys():
-                            if case not in measurement_times.keys():
-                                measurement_times[case] = list()
-                            measurement_times[case].append(TIMEOUT_PER_CASE * 1000)
+                        if case not in measurement_times.keys():
+                            measurement_times[case] = list()
+                        measurement_times[case].append(TIMEOUT_PER_CASE * 1000)
                     else:
                         for idx, line in enumerate(durations):
                             time = float(line.replace("\n", "").replace(",", ".")) # in milliseconds
-                            case = list(params['cases'].keys())[idx]
                             if case not in measurement_times.keys():
                                 measurement_times[case] = list()
                             measurement_times[case].append(time)
 
-            finally:
-                if(connection):
-                    connection.close()
-                self.clean_up()
+            # Otherwise, tables have to be created just once before the measurements (done above)
+            else:
+                # Write cases/queries to a file that will be passed to the command to execute
+                with open(TMP_SQL_FILE, "w") as tmp:
+                    tmp.write(f'set statement_timeout = {TIMEOUT_PER_CASE * 1000:.0f};\n')
+                    tmp.write("\\timing on\n")
+                    for case_query in params['cases'].values():
+                        tmp.write(case_query + '\n')
+                    tmp.write("\\timing off\n")
+                    tmp.write(f'set statement_timeout = 0;\n')
+
+                # Execute query file and collect measurement data
+                command = f"psql -U {db_options['user']} -d {db_options['dbname']} -f {TMP_SQL_FILE} | grep 'Time' | cut -d ' ' -f 2"
+                if self.verbose:
+                    tqdm.write(f"    $ {command}")
+                    if not verbose_printed:
+                        verbose_printed = True
+                        with open(TMP_SQL_FILE) as tmp:
+                            tqdm.write("    " + "    ".join(tmp.readlines()))
+
+                timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(params['cases'])
+                benchmark_info = f"{suite}/{benchmark}/{experiment} [PostgreSQL]"
+                try:
+                    durations = self.run_command(command, timeout, benchmark_info)
+                except ExperimentTimeoutExpired as ex:
+                    for case in params['cases'].keys():
+                        if case not in measurement_times.keys():
+                            measurement_times[case] = list()
+                        measurement_times[case].append(TIMEOUT_PER_CASE * 1000)
+                else:
+                    for idx, line in enumerate(durations):
+                        time = float(line.replace("\n", "").replace(",", ".")) # in milliseconds
+                        case = list(params['cases'].keys())[idx]
+                        if case not in measurement_times.keys():
+                            measurement_times[case] = list()
+                        measurement_times[case].append(time)
+
+            self.clean_up()
 
         return {'PostgreSQL': measurement_times}
 
@@ -154,25 +153,26 @@ class PostgreSQL(Connector):
     def setup(self):
         # Delete existing 'benchmark_tmp' database and create a new empty one
         connection = psycopg2.connect(user=db_options['user'])
-        connection.autocommit = True
-        cursor = connection.cursor()
-        cursor.execute(f"DROP DATABASE IF EXISTS {db_options['dbname']};")
-        cursor.execute(f"CREATE DATABASE {db_options['dbname']};")
-        connection.close()
+        try:
+            connection.autocommit = True
+            cursor = connection.cursor()
+            cursor.execute(f"DROP DATABASE IF EXISTS {db_options['dbname']};")
+            cursor.execute(f"CREATE DATABASE {db_options['dbname']};")
+        finally:
+            connection.close()
 
 
     # Deletes the used temporary database and file
     def clean_up(self):
         connection = psycopg2.connect(user=db_options['user'])
-        connection.autocommit = True
-        cursor = connection.cursor()
         try:
+            connection.autocommit = True
+            cursor = connection.cursor()
             cursor.execute(f"DROP DATABASE IF EXISTS {db_options['dbname']};")
-        except Exception as ex:
-            tqdm.write(f"Unexpeced error while executing 'DROP DATABASE IF EXISTS {db_options['dbname']}' : {ex}")
-        connection.close()
-        if os.path.exists(TMP_SQL_FILE):
-            os.remove(TMP_SQL_FILE)
+        finally:
+            connection.close()
+            if os.path.exists(TMP_SQL_FILE):
+                os.remove(TMP_SQL_FILE)
 
 
     # Parse attributes of one table, return as string ready for a CREATE TABLE query
@@ -245,7 +245,6 @@ class PostgreSQL(Connector):
             out, err = process.communicate("".encode('latin-1'), timeout=timeout)
         except subprocess.TimeoutExpired:
             process.kill()
-            self.clean_up()
             raise ExperimentTimeoutExpired(f'Query timed out after {timeout} seconds')
         finally:
             if process.poll() is None: # if process is still alive

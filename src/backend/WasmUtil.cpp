@@ -1933,19 +1933,40 @@ Buffer<IsGlobal>::~Buffer()
 template<bool IsGlobal>
 buffer_load_proxy_t<IsGlobal> Buffer<IsGlobal>::create_load_proxy(param_t tuple_schema) const
 {
+#ifndef NDEBUG
+    if (tuple_schema) {
+        for (auto &e : tuple_schema->get())
+            M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple schema entry not found");
+    }
+#endif
+
     return tuple_schema ? buffer_load_proxy_t(*this, *tuple_schema) : buffer_load_proxy_t(*this, schema_);
 }
 
 template<bool IsGlobal>
 buffer_store_proxy_t<IsGlobal> Buffer<IsGlobal>::create_store_proxy(param_t tuple_schema) const
 {
+#ifndef NDEBUG
+    if (tuple_schema) {
+        for (auto &e : tuple_schema->get())
+            M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple schema entry not found");
+    }
+#endif
+
     return tuple_schema ? buffer_store_proxy_t(*this, *tuple_schema) : buffer_store_proxy_t(*this, schema_);
 }
 
 template<bool IsGlobal>
 buffer_swap_proxy_t<IsGlobal> Buffer<IsGlobal>::create_swap_proxy(param_t tuple_schema) const
 {
-    return tuple_schema ? buffer_swap_proxy_t(*this, *tuple_schema) : buffer_swap_proxy_t(*this, schema_);
+#ifndef NDEBUG
+    if (tuple_schema) {
+        for (auto &e : tuple_schema->get())
+            M_insist(schema_.get().find(e.id) != schema_.get().cend(), "tuple schema entry not found");
+    }
+#endif
+
+   return tuple_schema ? buffer_swap_proxy_t(*this, *tuple_schema) : buffer_swap_proxy_t(*this, schema_);
 }
 
 template<bool IsGlobal>

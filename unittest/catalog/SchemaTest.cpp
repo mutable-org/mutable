@@ -30,7 +30,7 @@ TEST_CASE("Table c'tor", "[core][catalog][schema]")
     CHECK(r.num_attrs() == 0);
 }
 
-TEST_CASE("Table empty access")
+TEST_CASE("Table empty access", "[core][catalog][schema]")
 {
     Table r("mytable");
 

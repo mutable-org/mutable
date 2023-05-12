@@ -94,7 +94,10 @@ void QueryDatabase::execute(Diagnostic &diag)
     if (Options::Get().dryrun)
         return;
 
-    M_TIME_EXPR(C.backend().execute(*logical_plan_), "Execute query", C.timer());
+    static thread_local std::unique_ptr<Backend> backend;
+    if (not backend)
+        backend = M_TIME_EXPR(C.create_backend(), "Create backend", C.timer());
+    M_TIME_EXPR(backend->execute(*logical_plan_), "Execute query", C.timer());
 }
 
 void InsertRecords::execute(Diagnostic&)

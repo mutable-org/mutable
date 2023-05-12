@@ -1520,9 +1520,5 @@ __attribute__((constructor(202)))
 static void register_interpreter()
 {
     Catalog &C = Catalog::Get();
-    C.register_backend(
-        "Interpreter",
-        std::make_unique<Interpreter>(),
-        "tuple-at-a-time Interpreter built with virtual stack machines"
-    );
+    C.register_backend<Interpreter>("Interpreter", "tuple-at-a-time Interpreter built with virtual stack machines");
 }

@@ -836,11 +836,7 @@ __attribute__((constructor(202)))
 static void register_WasmV8()
 {
     Catalog &C = Catalog::Get();
-    C.register_backend(
-        "WasmV8",
-        std::make_unique<WasmBackend>(as<WasmPlatform>(std::make_unique<V8Platform>())),
-        "WebAssembly backend using Google's V8 engine"
-    );
+    C.register_wasm_backend<V8Platform>("WasmV8", "WebAssembly backend using Google's V8 engine");
 
     /*----- Command-line arguments -----------------------------------------------------------------------------------*/
     C.arg_parser().add<int>(

@@ -1,5 +1,6 @@
 #include "backend/WasmAlgo.hpp"
 
+#include <mutable/catalog/Catalog.hpp>
 #include <numeric>
 
 
@@ -16,8 +17,39 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
 {
     static_assert(IsGlobal, "quicksort on local buffers is not yet supported");
 
+    /*----- Compute entries which are needed for `order`. -----*/
+    Schema entries_to_order;
+    for (auto &o : order) {
+        visit(overloaded {
+            [&entries_to_order](const ast::Designator &d) -> void {
+                Schema::Identifier id(d.table_name.text, d.attr_name.text);
+                if (not entries_to_order.has(id))
+                    entries_to_order.add(id, d.type());
+            },
+            [&entries_to_order](const ast::FnApplicationExpr &fn) {
+                switch (fn.get_function().fnid) {
+                    default:
+                        break; // nothing to be done
+                    case m::Function::FN_COUNT:
+                    case m::Function::FN_MIN:
+                    case m::Function::FN_MAX:
+                    case m::Function::FN_SUM:
+                    case m::Function::FN_AVG: {
+                        std::ostringstream oss;
+                        oss << fn;
+                        Schema::Identifier id(Catalog::Get().pool(oss.str().c_str()));
+                        if (not entries_to_order.has(id))
+                            entries_to_order.add(id, fn.type());
+                    }
+                }
+                throw visit_stop_recursion(); // to not visit function and argument expressions
+            },
+            [](auto&) { /* nothing to be done */ }
+        }, o.first, tag<ast::ConstPreOrderExprVisitor>());
+    }
+
     /*----- Create load and swap proxies for buffer. -----*/
-    auto load = buffer.create_load_proxy();
+    auto load = buffer.create_load_proxy(entries_to_order); // loading is only used for comparison w.r.t. `order`
     auto swap = buffer.create_swap_proxy();
 
     /*---- Create branchless binary partition function. -----*/

@@ -463,6 +463,10 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                const Schema &layout_schema, Variable<uint32_t, Kind, false> &tuple_id)
 {
     M_insist(tuple_schema.num_entries() != 0, "sequential access must access at least one tuple schema entry");
+#ifndef NDEBUG
+    for (auto &e : tuple_schema)
+        M_insist(layout_schema.find(e.id) != layout_schema.cend(), "tuple schema entry not found");
+#endif
 
     /** code blocks for pointer/mask initialization, stores/loads of values, and stride jumps for pointers / updates
      * of masks */
@@ -494,10 +498,10 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
     /*----- Check whether any of the entries in `tuple_schema` can be NULL, so that we need the NULL bitmap. -----*/
     const bool needs_null_bitmap = [&]() {
         for (auto &tuple_entry : tuple_schema) {
-            M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
-            if (tuple_entry.nullable()) return true; // found an entry in `tuple_schema` that can be NULL
+            if (layout_schema[tuple_entry.id].second.nullable())
+                return true; // found an entry in `tuple_schema` that can be NULL according to `layout_schema`
         }
-        return false; // no attribute in `schema` can be NULL
+        return false; // no attribute in `tuple_schema` can be NULL according to `layout_schema`
     }();
     bool has_null_bitmap = false; // indicates whether the data layout specifies a NULL bitmap
 
@@ -599,7 +603,6 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                             M_insist(prev_layout_idx == 0 or layout_idx > prev_layout_idx,
                                      "layout entries not processed in ascending order");
                             M_insist(*tuple_it->type == *layout_entry.type);
-                            M_insist(tuple_it->nullable() == layout_entry.nullable());
                             const auto delta = layout_idx - prev_layout_idx;
                             const uint8_t bit_delta  = delta % 8;
                             const int32_t byte_delta = delta / 8;
@@ -668,7 +671,6 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                             advance_to_next_bit();
 
                                             auto value = env.get<NChar>(tuple_it->id); // get value
-                                            M_insist(tuple_it->nullable() == value.can_be_null());
                                             setbit(null_bitmap_ptr->template to<uint8_t*>(), value.is_null(),
                                                    null_bitmap_mask->template to<uint8_t>()); // update bit
                                         }
@@ -784,10 +786,9 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                     /*----- For each tuple entry that can be NULL, create a store/load with static offset and mask. --*/
                     for (std::size_t tuple_idx = 0; tuple_idx != tuple_schema.num_entries(); ++tuple_idx) {
                         auto &tuple_entry = tuple_schema[tuple_idx];
-                        M_insist(*tuple_entry.type == *layout_schema[tuple_entry.id].second.type);
-                        M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
-                        if (tuple_entry.nullable()) { // entry may be NULL
-                            const auto &[layout_idx, layout_entry] = layout_schema[tuple_entry.id];
+                        const auto &[layout_idx, layout_entry] = layout_schema[tuple_entry.id];
+                        M_insist(*tuple_entry.type == *layout_entry.type);
+                        if (layout_entry.nullable()) { // layout entry may be NULL
                             const uint8_t static_bit_offset  = (leaf_info.offset_in_bits + layout_idx) % 8;
                             const int32_t static_byte_offset = (leaf_info.offset_in_bits + layout_idx) / 8;
                             if constexpr (IsStore) {
@@ -825,7 +826,6 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                     [&](const CharacterSequence&) {
                                         BLOCK_OPEN(stores) {
                                             auto value = env.get<NChar>(tuple_entry.id); // get value
-                                            M_insist(tuple_entry.nullable() == value.can_be_null());
                                             Ptr<U8> byte_ptr =
                                                 (ptr + static_byte_offset).template to<uint8_t*>(); // compute byte address
                                             setbit<U8>(byte_ptr, value.is_null(), static_bit_offset); // update bit
@@ -1027,7 +1027,6 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                 /*----- Store value. -----*/
                                 BLOCK_OPEN(stores) {
                                     auto value = env.get<NChar>(tuple_it->id); // get value
-                                    M_insist(tuple_it->nullable() == value.can_be_null());
                                     IF (value.clone().not_null()) {
                                         Ptr<Char> address((ptr + static_byte_offset).template to<char*>());
                                         strncpy(address, value, U32(cs.size() / 8)).discard();
@@ -1038,7 +1037,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                                 BLOCK_OPEN(loads) {
                                     Ptr<Char> address((ptr + static_byte_offset).template to<char*>());
                                     new (&values[tuple_idx]) SQL_t(
-                                        NChar(address, tuple_it->nullable(), cs.length, cs.is_varying)
+                                        NChar(address, layout_entry.nullable(), cs.length, cs.is_varying)
                                     );
                                 }
                             }
@@ -1285,8 +1284,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
             std::visit(overloaded{
                 [&]<typename T>(Expr<T> value) {
                     BLOCK_OPEN(loads) {
-                        M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
-                        if (has_null_bitmap and tuple_entry.nullable()) {
+                        if (has_null_bitmap and layout_schema[tuple_entry.id].second.nullable()) {
                             Expr<T> combined(value.insist_not_null(), null_bits[idx]);
                             env.add(tuple_entry.id, combined);
                         } else {
@@ -1296,8 +1294,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                 },
                 [&](NChar value) {
                     BLOCK_OPEN(loads) {
-                        M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
-                        if (has_null_bitmap and tuple_entry.nullable()) {
+                        if (has_null_bitmap and layout_schema[tuple_entry.id].second.nullable()) {
                             /* introduce variable s.t. uses only load from it*/
                             Var<Ptr<Char>> combined(Select(null_bits[idx], Ptr<Char>::Nullptr(), value.val()));
                             env.add(tuple_entry.id, NChar(combined, /* can_be_null=*/ true, value.length(),
@@ -1336,8 +1333,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
     if constexpr (not IsStore) {
         /*----- Destroy created NULL bits. -----*/
         for (std::size_t idx = 0; idx != tuple_schema.num_entries(); ++idx) {
-            M_insist(tuple_schema[idx].nullable() == layout_schema[tuple_schema[idx].id].second.nullable());
-            if (has_null_bitmap and tuple_schema[idx].nullable())
+            if (has_null_bitmap and layout_schema[tuple_schema[idx].id].second.nullable())
                 null_bits[idx].~Bool();
         }
     }
@@ -1425,6 +1421,10 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                       const storage::DataLayout &layout, const Schema &layout_schema, U32 tuple_id)
 {
     M_insist(tuple_schema.num_entries() != 0, "point access must access at least one tuple schema entry");
+#ifndef NDEBUG
+    for (auto &e : tuple_schema)
+        M_insist(layout_schema.find(e.id) != layout_schema.cend(), "tuple schema entry not found");
+#endif
 
     ///> the values loaded for the entries in `tuple_schema`
     SQL_t values[tuple_schema.num_entries()];
@@ -1438,10 +1438,10 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
     /*----- Check whether any of the entries in `tuple_schema` can be NULL, so that we need the NULL bitmap. -----*/
     const bool needs_null_bitmap = [&]() {
         for (auto &tuple_entry : tuple_schema) {
-            M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
-            if (tuple_entry.nullable()) return true; // found an entry in `tuple_schema` that can be NULL
+            if (layout_schema[tuple_entry.id].second.nullable())
+                return true; // found an entry in `tuple_schema` that can be NULL according to `layout_schema`
         }
-        return false; // no attribute in `schema` can be NULL
+        return false; // no attribute in `schema` can be NULL according to `layout_schema`
     }();
     bool has_null_bitmap = false; // indicates whether the data layout specifies a NULL bitmap
 
@@ -1507,10 +1507,9 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                     /*----- For each tuple entry that can be NULL, create a store/load with offset and mask. --*/
                     for (std::size_t tuple_idx = 0; tuple_idx != tuple_schema.num_entries(); ++tuple_idx) {
                         auto &tuple_entry = tuple_schema[tuple_idx];
-                        M_insist(*tuple_entry.type == *layout_schema[tuple_entry.id].second.type);
-                        M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
-                        if (tuple_entry.nullable()) { // entry may be NULL
-                            const auto &[layout_idx, layout_entry] = layout_schema[tuple_entry.id];
+                        const auto &[layout_idx, layout_entry] = layout_schema[tuple_entry.id];
+                        M_insist(*tuple_entry.type == *layout_entry.type);
+                        if (layout_entry.nullable()) { // layout entry may be NULL
                             U64 offset_in_bits = leaf_bit_offset + layout_idx;
                             U8  bit_offset  = (offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
                             I32 byte_offset = (offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
@@ -1546,7 +1545,6 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                     },
                                     [&](const CharacterSequence&) {
                                         auto value = env.get<NChar>(tuple_entry.id); // get value
-                                        M_insist(tuple_entry.nullable() == value.can_be_null());
                                         Ptr<U8> byte_ptr =
                                             (ptr + byte_offset).template to<uint8_t*>(); // compute byte address
                                         setbit<U8>(byte_ptr, value.is_null(), uint8_t(1) << bit_offset); // update bit
@@ -1613,10 +1611,9 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                     /*----- For each tuple entry that can be NULL, create a store/load with offset and mask. --*/
                     for (std::size_t tuple_idx = 0; tuple_idx != tuple_schema.num_entries(); ++tuple_idx) {
                         auto &tuple_entry = tuple_schema[tuple_idx];
-                        M_insist(*tuple_entry.type == *layout_schema[tuple_entry.id].second.type);
-                        M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
-                        if (tuple_entry.nullable()) { // entry may be NULL
-                            const auto &[layout_idx, layout_entry] = layout_schema[tuple_entry.id];
+                        const auto &[layout_idx, layout_entry] = layout_schema[tuple_entry.id];
+                        M_insist(*tuple_entry.type == *layout_entry.type);
+                        if (layout_entry.nullable()) { // layout entry may be NULL
                             const uint8_t static_bit_offset  = (leaf_info.offset_in_bits + layout_idx) % 8;
                             const int32_t static_byte_offset = (leaf_info.offset_in_bits + layout_idx) / 8;
                             if constexpr (IsStore) {
@@ -1651,7 +1648,6 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                     },
                                     [&](const CharacterSequence&) {
                                         auto value = env.get<NChar>(tuple_entry.id); // get value
-                                        M_insist(tuple_entry.nullable() == value.can_be_null());
                                         Ptr<U8> byte_ptr =
                                             (ptr + static_byte_offset).template to<uint8_t*>(); // compute byte address
                                         setbit<U8>(byte_ptr, value.is_null(), static_bit_offset); // update bit
@@ -1810,14 +1806,13 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                             if constexpr (IsStore) {
                                 /*----- Store value. -----*/
                                 auto value = env.get<NChar>(tuple_it->id); // get value
-                                M_insist(tuple_it->nullable() == value.can_be_null());
                                 IF (value.clone().not_null()) {
                                     strncpy(addr, value, U32(cs.size() / 8)).discard();
                                 };
                             } else {
                                 /*----- Load value. -----*/
                                 new (&values[tuple_idx]) SQL_t(
-                                    NChar(addr, tuple_it->nullable(), cs.length, cs.is_varying)
+                                    NChar(addr, layout_entry.nullable(), cs.length, cs.is_varying)
                                 );
                             }
                         },
@@ -1837,8 +1832,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
             auto &tuple_entry = tuple_schema[idx];
             std::visit(overloaded{
                 [&]<typename T>(Expr<T> value) {
-                    M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
-                    if (has_null_bitmap and tuple_entry.nullable()) {
+                    if (has_null_bitmap and layout_schema[tuple_entry.id].second.nullable()) {
                         Expr<T> combined(value.insist_not_null(), null_bits[idx]);
                         env.add(tuple_entry.id, combined);
                     } else {
@@ -1846,8 +1840,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                     }
                 },
                 [&](NChar value) {
-                    M_insist(tuple_entry.nullable() == layout_schema[tuple_entry.id].second.nullable());
-                    if (has_null_bitmap and tuple_entry.nullable()) {
+                    if (has_null_bitmap and layout_schema[tuple_entry.id].second.nullable()) {
                         /* introduce variable s.t. uses only load from it */
                         Var<Ptr<Char>> combined(Select(null_bits[idx], Ptr<Char>::Nullptr(), value.val()));
                         env.add(tuple_entry.id, NChar(combined, /* can_be_null=*/ true, value.length(),
@@ -1869,8 +1862,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
     if constexpr (not IsStore) {
         /*----- Destroy created NULL bits. -----*/
         for (std::size_t idx = 0; idx != tuple_schema.num_entries(); ++idx) {
-            M_insist(tuple_schema[idx].nullable() == layout_schema[tuple_schema[idx].id].second.nullable());
-            if (has_null_bitmap and tuple_schema[idx].nullable())
+            if (has_null_bitmap and layout_schema[tuple_schema[idx].id].second.nullable())
                 null_bits[idx].~Bool();
         }
     }

@@ -336,10 +336,10 @@ void m::execute_instruction(Diagnostic &diag, const Instruction &instruction)
 void m::execute_query(Diagnostic&, const SelectStmt &stmt, std::unique_ptr<Consumer> consumer)
 {
     Catalog &C = Catalog::Get();
-    auto query_graph = QueryGraph::Build(stmt);
+    auto query_graph = M_TIME_EXPR(QueryGraph::Build(stmt), "Construct the query graph", C.timer());
 
     Optimizer Opt(C.plan_enumerator(), C.cost_function());
-    auto optree = Opt(*query_graph);
+    auto optree = M_TIME_EXPR(Opt(*query_graph), "Compute the query plan", C.timer());
 
     consumer->add_child(optree.release());
 

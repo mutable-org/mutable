@@ -198,7 +198,7 @@ print(repr(database_connectors.hyper.HyPer._execute({n_runs}, {repr(params)})))
                                 measurement_times[case].append(time)
 
                         except Exception as ex:
-                                raise(ConnectorException(ex))
+                            raise(ConnectorException(ex))
 
 
 

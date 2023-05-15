@@ -55,8 +55,8 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
     /*---- Create branchless binary partition function. -----*/
     /* Receives the ID of the first tuple to partition, the past-the-end ID to partition, and the ID of the pivot
      * element as parameters. Returns ID of partition boundary s.t. all elements before this boundary are smaller
-     * than or equal to the pivot element and all elements after or equal this boundary are greater than the pivot
-     * element. */
+     * than or equal to the pivot element and all elements after or equal this boundary are greater than or equal to
+     * the pivot element. */
     FUNCTION(partition, uint32_t(uint32_t, uint32_t, uint32_t))
     {
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment
@@ -97,10 +97,10 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
             }();
 
             /*----- Compare begin and last tuples to pivot element and advance cursors respectively. -----*/
-            Bool begin_lt_pivot = compare(env_begin, env_pivot, order) < 0;
+            Bool begin_le_pivot = compare(env_begin, env_pivot, order) <= 0;
             Bool last_ge_pivot  = compare(env_last, env_pivot, order) >= 0;
 
-            begin += begin_lt_pivot.to<uint32_t>();
+            begin += begin_le_pivot.to<uint32_t>();
             end -= last_ge_pivot.to<uint32_t>();
         }
 

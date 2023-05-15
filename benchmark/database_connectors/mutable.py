@@ -3,8 +3,9 @@ from .connector import *
 from tqdm import tqdm
 import os
 import pandas
-import subprocess
 import re
+import subprocess
+import sys
 
 class BenchmarkError(Exception):
     pass
@@ -84,6 +85,7 @@ class Mutable(Connector):
             tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration {config_name}.')
         else:
             tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment}.')
+        sys.stdout.flush()
 
         # Get database schema
         schema = os.path.join(os.path.dirname(path_to_file), 'data', 'schema.sql')
@@ -125,6 +127,7 @@ class Mutable(Connector):
                     durations = self.benchmark_query(command, query, yml['pattern'], timeout, path_to_file)
                 except BenchmarkTimeoutException as ex:
                     tqdm.write(str(ex))
+                    sys.stdout.flush()
                     # Add timeout durations
                     for case in cases.keys():
                         execution_times[case] = TIMEOUT_PER_CASE * 1000
@@ -147,11 +150,13 @@ class Mutable(Connector):
                         durations = self.benchmark_query(command, query_str, yml['pattern'], timeout, path_to_file)
                     except BenchmarkTimeoutException as ex:
                         tqdm.write(str(ex))
+                        sys.stdout.flush()
                         execution_times[case] = timeout * 1000
                     else:
                         execution_times[case] = durations[0]
         except BenchmarkError as ex:
             tqdm.write(str(ex))
+            sys.stdout.flush()
 
         return execution_times
 
@@ -195,6 +200,7 @@ class Mutable(Connector):
     {err}
     ==================
     ''')
+            sys.stdout.flush()
             if process.returncode:
                 raise ConnectorException(f'Benchmark failed with return code {process.returncode}.')
 
@@ -253,3 +259,4 @@ def print_command(command :list, query :str, indent = ''):
     query_str = query.strip().replace('\n', ' ').replace('"', '\\"')
     command_str = ' '.join(command)
     tqdm.write(f'{indent}$ echo "{query_str}" | {command_str}')
+    sys.stdout.flush()

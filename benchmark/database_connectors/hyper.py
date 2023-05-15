@@ -3,12 +3,13 @@ from database_connectors import hyperconf
 
 from tableauhyperapi import HyperProcess, Telemetry, Connection, CreateMode, NOT_NULLABLE, NULLABLE, SqlType, \
         TableDefinition, Inserter, escape_name, escape_string_literal, HyperException, TableName
-import time
-import os
-import sys
-import subprocess
 from tqdm import tqdm
 import multiprocessing
+import os
+import subprocess
+import sys
+import sys
+import time
 
 
 # Converting table names to lower case is needed because then
@@ -41,6 +42,7 @@ class HyPer(Connector):
         experiment = params['name']
         suffix = f' ({get_num_cores()} cores)' if self.multithreaded else ' (single core)'
         tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration HyPer{suffix}.')
+        sys.stdout.flush()
 
         result = None
         if self.multithreaded:
@@ -49,6 +51,7 @@ class HyPer(Connector):
                 result = HyPer._execute(n_runs, params)
             except Exception as ex:
                 tqdm.write(str(ex))
+                sys.stdout.flush()
                 return dict()
 
         else:
@@ -62,6 +65,7 @@ print(repr(database_connectors.hyper.HyPer._execute({n_runs}, {repr(params)})))
             args = ['taskset', '-c', '2', 'python3', '-c', script]
             if self.verbose:
                 tqdm.write(f"    $ {' '.join(args)}")
+                sys.stdout.flush()
             # try:
             #     P = subprocess.run(
             #         args=args,

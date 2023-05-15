@@ -1,9 +1,10 @@
 from .connector import *
 
-import os
-import json
-import subprocess
 from tqdm import tqdm
+import json
+import os
+import subprocess
+import sys
 
 
 TMP_DB = 'tmp.duckdb'
@@ -22,6 +23,7 @@ class DuckDB(Connector):
         experiment = params['name']
         configname = f'DuckDB ({get_num_cores()} cores)' if self.multithreaded else 'DuckDB (single core)'
         tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration {configname}.')
+        sys.stdout.flush()
 
         self.clean_up()
 
@@ -74,6 +76,7 @@ class DuckDB(Connector):
                         if self.verbose and not verbose_printed:
                             verbose_printed = True
                             tqdm.write(combined_query)
+                            sys.stdout.flush()
 
                         benchmark_info = f"{suite}/{benchmark}/{experiment} [{configname}]"
                         try:
@@ -102,6 +105,7 @@ class DuckDB(Connector):
                     if self.verbose and not verbose_printed:
                         verbose_printed = True
                         tqdm.write(combined_query)
+                        sys.stdout.flush()
 
                     benchmark_info = f"{suite}/{benchmark}/{experiment} [{configname}]"
                     try:
@@ -209,6 +213,7 @@ class DuckDB(Connector):
         except subprocess.TimeoutExpired:
             process.kill()
             tqdm.write(f"    ! Query \n'{query}'\n' timed out after {timeout} seconds")
+            sys.stdout.flush()
             raise ExperimentTimeoutExpired(f'Query timed out after {timeout} seconds')
         finally:
             if process.poll() is None: # if process is still alive
@@ -231,6 +236,7 @@ class DuckDB(Connector):
     {err}
     ==================
     ''')
+            sys.stdout.flush()
             if process.returncode:
                 raise ConnectorException(f'Benchmark failed with return code {process.returncode}.')
 

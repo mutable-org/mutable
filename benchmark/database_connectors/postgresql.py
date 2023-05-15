@@ -1,14 +1,15 @@
 from .connector import *
 
-import time
+from psycopg2.extras import LoggingConnection, LoggingCursor
+from tqdm import tqdm
+import logging
 import os
 import psycopg2
 import psycopg2.extensions
-from psycopg2.extras import LoggingConnection, LoggingCursor
-import logging
-import subprocess
 import shlex
-from tqdm import tqdm
+import subprocess
+import sys
+import time
 
 db_options = {
     'dbname': 'benchmark_tmp',
@@ -29,6 +30,7 @@ class PostgreSQL(Connector):
         benchmark = params['benchmark']
         experiment = params['name']
         tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration PostgreSQL.')
+        sys.stdout.flush()
 
         # map that is returned with the measured times
         measurement_times = dict()
@@ -91,6 +93,7 @@ class PostgreSQL(Connector):
                             verbose_printed = True
                             with open(TMP_SQL_FILE) as tmp:
                                 tqdm.write("    " + "    ".join(tmp.readlines()))
+                        sys.stdout.flush()
 
                     timeout = TIMEOUT_PER_CASE
                     benchmark_info = f"{suite}/{benchmark}/{experiment} [PostgreSQL]"
@@ -126,6 +129,7 @@ class PostgreSQL(Connector):
                         verbose_printed = True
                         with open(TMP_SQL_FILE) as tmp:
                             tqdm.write("    " + "    ".join(tmp.readlines()))
+                    sys.stdout.flush()
 
                 timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(params['cases'])
                 benchmark_info = f"{suite}/{benchmark}/{experiment} [PostgreSQL]"
@@ -269,6 +273,7 @@ class PostgreSQL(Connector):
     {err}
     ==================
     ''')
+            sys.stdout.flush()
             if process.returncode:
                 raise ConnectorException(f'Benchmark failed with return code {process.returncode}.')
 

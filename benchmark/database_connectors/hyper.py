@@ -47,12 +47,6 @@ class HyPer(Connector):
         result = None
         if self.multithreaded:
             result = HyPer._execute(n_runs, params)
-            try:
-                result = HyPer._execute(n_runs, params)
-            except Exception as ex:
-                tqdm.write(str(ex))
-                sys.stdout.flush()
-                return dict()
 
         else:
             path = os.getcwd()
@@ -61,29 +55,26 @@ import sys
 sys.path.insert(0, '{path}/benchmark')
 import database_connectors.hyper
 print(repr(database_connectors.hyper.HyPer._execute({n_runs}, {repr(params)})))
+sys.stdout.flush()
 '''
             args = ['taskset', '-c', '2', 'python3', '-c', script]
             if self.verbose:
                 tqdm.write(f"    $ {' '.join(args)}")
                 sys.stdout.flush()
-            # try:
-            #     P = subprocess.run(
-            #         args=args,
-            #         capture_output=True,
-            #         text=True,
-            #         cwd=path
-            #     )
-            #     result = eval(P.stdout)
-            # except Exception as ex:
-            #     tqdm.write(str(ex))
-            #     return dict()
+
             P = subprocess.run(
-                    args=args,
-                    capture_output=True,
-                    text=True,
-                    cwd=path
-                )
-            result = eval(P.stdout)
+                args=args,
+                capture_output=True,
+                text=True,
+                cwd=path
+            )
+
+            # Check returncode
+            if P.returncode==0:
+                result = eval(P.stdout)
+            else:
+                raise ConnectorException(f"Process failed with return code {P.returncode}")
+                return dict()
 
         patched_result = dict()
         for key, val in result.items():
@@ -143,33 +134,34 @@ print(repr(database_connectors.hyper.HyPer._execute({n_runs}, {repr(params)})))
                             timeout = TIMEOUT_PER_CASE
                             times = None
                             p = multiprocessing.Process(target=run_single_query, args=(connection, query))
-                            try:
-                                p.start()
-                                p.join(timeout=timeout)
+                            p.start()
+                            p.join(timeout=timeout)
+                            if p.is_alive():
+                                # timeout happened
+                                num_timeout_cases += 1
+                                time = timeout * 1000 # in ms
+
+                                p.terminate()       # try to shut down gracefully
+                                p.join(timeout=1)   # wait for process to terminate
                                 if p.is_alive():
-                                    # timeout happened
-                                    num_timeout_cases += 1
-                                    time = timeout * 1000 # in ms
-                                    p.terminate()
-                                    p.join()
-                                else:
-                                    # no timeout, extract result
-                                    matches = hyperconf.filter_results(
-                                        hyperconf.extract_results(),
-                                        { 'k': 'query-end'},
-                                        [ hyperconf.MATCH_SELECT ]
-                                    )
-                                    times = map(lambda m: m['v']['execution-time'] * 1000, matches)
-                                    times = list(map(lambda t: f'{t:.3f}', times))
-                                    case_idx = list(params['cases'].keys()).index(case)
-                                    time = times[run_id * len(list(params['cases'].keys())) + case_idx - num_timeout_cases]
+                                    p.kill()        # kill if process did not terminate in time
+                                assert(not p.is_alive())
+                            else:
+                                # no timeout, extract result
+                                matches = hyperconf.filter_results(
+                                    hyperconf.extract_results(),
+                                    { 'k': 'query-end'},
+                                    [ hyperconf.MATCH_SELECT ]
+                                )
+                                times = map(lambda m: m['v']['execution-time'] * 1000, matches)
+                                times = list(map(lambda t: f'{t:.3f}', times))
+                                case_idx = list(params['cases'].keys()).index(case)
+                                time = times[run_id * len(list(params['cases'].keys())) + case_idx - num_timeout_cases]
 
-                                if case not in measurement_times.keys():
-                                    measurement_times[case] = list()
-                                measurement_times[case].append(time)
+                            if case not in measurement_times.keys():
+                                measurement_times[case] = list()
+                            measurement_times[case].append(time)
 
-                            except Exception as ex:
-                                raise(ConnectorException(ex))
 
 
 
@@ -182,32 +174,38 @@ print(repr(database_connectors.hyper.HyPer._execute({n_runs}, {repr(params)})))
                         queries = HyPer.get_cases_queries(params, table_defs)
                         data = HyPer.get_data(params, table_defs)
 
+
                         timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(params['cases'])
                         times = None
                         q = multiprocessing.Queue()
                         p = multiprocessing.Process(target=run_multiple_queries, args=(connection, queries.values(), data, q))
-                        try:
-                            p.start()
-                            p.join(timeout=timeout)
+                        p.start()
+                        p.join(timeout=timeout)
+                        if p.is_alive():
+                            # timeout happened
+                            times = list(zip(queries.keys(), [TIMEOUT_PER_CASE for _ in range(len(params['cases']))]))
+
+                            p.terminate()       # try to shut down gracefully
+                            p.join(timeout=1)   # wait for process to terminate
                             if p.is_alive():
-                                # timeout happened
-                                times = times = list(zip(queries.keys(), [TIMEOUT_PER_CASE for _ in range(len(params['cases']))]))
-                            else:
-                                times = q.get()
-                                times = list(zip(queries.keys(), list(map(lambda t: float(f'{t:.3f}'), times))))
+                                p.kill()        # kill if process did not terminate in time
+                            assert(not p.is_alive())
+                        else:
+                            times = q.get()
+                            times = list(zip(queries.keys(), list(map(lambda t: float(f'{t:.3f}'), times))))
 
-                            for case, time in times:
-                                if case not in measurement_times.keys():
-                                    measurement_times[case] = list()
-                                measurement_times[case].append(time)
+                        for case, time in times:
+                            if case not in measurement_times.keys():
+                                measurement_times[case] = list()
+                            measurement_times[case].append(time)
 
-                        except Exception as ex:
-                            raise(ConnectorException(ex))
+                        connection.close()
+                        hyper.close()
+                continue
 
 
 
         return {'HyPer': measurement_times}
-
 
 
     # returns dict of {table_name: table_def} for each table_def
@@ -289,4 +287,3 @@ print(repr(database_connectors.hyper.HyPer._execute({n_runs}, {repr(params)})))
             }
             result.append((table_defs[table_name], file, par))
         return result
-

@@ -332,7 +332,6 @@ if __name__ == '__main__':
 
     benchmark_files = sorted(list(set(benchmark_files)))
 
-
     # Set up counters
     num_experiments_total = 0
     num_experiments_passed = 0
@@ -375,6 +374,7 @@ if __name__ == '__main__':
 
     repo = Repo('.')
     commit = repo.head.commit
+    repo.__del__()
 
     # Set up event log
     log = tqdm(total=0, position=1, ncols=80, leave=False, bar_format='{desc}', disable=not is_interactive)

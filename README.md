@@ -193,9 +193,14 @@ This allows the creation of layouts such as *PAX-in-PAX* or *vertical partitioni
 <details><summary><b>Cardinality Estimation with Sum-Product Networks</b></summary>
 
 We implemented *relational sum-product networks* (RSPNs), as proposed in [DeepDB](http://www.vldb.org/pvldb/vol13/p992-hilprecht.pdf), in mu*t*able.
-We achieved a relatively efficient implementation by implementing RSPN logic with [Eigen, a "C++ template library for linear algebra"](https://eigen.tuxfamily.org/index.php?title=Main_Page).
+We achieve a relatively efficient implementation by implementing RSPN logic with [Eigen, a "C++ template library for linear algebra"](https://eigen.tuxfamily.org/index.php?title=Main_Page).
 
 After loading data into a database, you can manually trigger training of RSPNs with our built-in command `\learn_spns`.
+Documentation on the implementation of vanilla *sum-product networks* (SPNs) can be found [here](src/util/README.md) and the
+database specific extension making them RSPNs can be found [here](src/catalog/README.md).
+
+Disclaimer: Currently we have not yet implemented automatic updates of SPNs and string support. These are future tasks.
+
 
 <br>
 <br>

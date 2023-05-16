@@ -62,19 +62,32 @@ sys.stdout.flush()
                 tqdm.write(f"    $ {' '.join(args)}")
                 sys.stdout.flush()
 
-            P = subprocess.run(
+            timeout = DEFAULT_TIMEOUT + n_runs * TIMEOUT_PER_CASE # XXX correct timeout?
+            process = subprocess.Popen(
                 args=args,
-                capture_output=True,
-                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 cwd=path
             )
 
+            try:
+                process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                # TODO handle
+                pass
+            finally:
+                if process.poll() is None: # if process is still alive
+                    process.terminate() # try to shut down gracefully
+                    try:
+                        process.wait(timeout=1) #give process 1 second to terminate
+                    except subprocess.TimeoutExpired:
+                        process.kill() # kill if process did not terminate in time
+
             # Check returncode
-            if P.returncode==0:
-                result = eval(P.stdout)
+            if process.returncode == 0:
+                result = eval(process.stdout)
             else:
-                raise ConnectorException(f"Process failed with return code {P.returncode}")
-                return dict()
+                raise ConnectorException(f"Process failed with return code {process.returncode}")
 
         patched_result = dict()
         for key, val in result.items():
@@ -98,7 +111,7 @@ sys.stdout.flush()
 
         for run_id in range(n_runs):
             # If tables contain scale factors, they have to be loaded separately for every case
-            if (with_scale_factors or not bool(params.get('readonly'))):
+            if with_scale_factors or not bool(params.get('readonly')):
                 with HyperProcess(telemetry=Telemetry.DO_NOT_SEND_USAGE_DATA_TO_TABLEAU) as hyper:
                     with Connection(endpoint=hyper.endpoint, database='benchmark.hyper', create_mode=CreateMode.CREATE_AND_REPLACE) as connection:
                         # Create tmp tables used for copying
@@ -133,9 +146,11 @@ sys.stdout.flush()
 
                             timeout = TIMEOUT_PER_CASE
                             times = None
+
                             p = multiprocessing.Process(target=run_single_query, args=(connection, query))
                             p.start()
-                            p.join(timeout=timeout)
+                            p.join(timeout=timeout) # wait for `timeout` seconds
+
                             if p.is_alive():
                                 # timeout happened
                                 num_timeout_cases += 1
@@ -145,7 +160,7 @@ sys.stdout.flush()
                                 p.join(timeout=1)   # wait for process to terminate
                                 if p.is_alive():
                                     p.kill()        # kill if process did not terminate in time
-                                assert(not p.is_alive())
+                                assert not p.is_alive()
                             else:
                                 # no timeout, extract result
                                 matches = hyperconf.filter_results(
@@ -158,12 +173,11 @@ sys.stdout.flush()
                                 case_idx = list(params['cases'].keys()).index(case)
                                 time = times[run_id * len(list(params['cases'].keys())) + case_idx - num_timeout_cases]
 
+                            p.close()
+
                             if case not in measurement_times.keys():
                                 measurement_times[case] = list()
                             measurement_times[case].append(time)
-
-
-
 
             else:
                 open(hyperconf.HYPER_LOG_FILE, 'w').close() # to clear the log file and ignore previous runs
@@ -177,10 +191,12 @@ sys.stdout.flush()
 
                         timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(params['cases'])
                         times = None
+
                         q = multiprocessing.Queue()
                         p = multiprocessing.Process(target=run_multiple_queries, args=(connection, queries.values(), data, q))
                         p.start()
                         p.join(timeout=timeout)
+
                         if p.is_alive():
                             # timeout happened
                             times = list(zip(queries.keys(), [TIMEOUT_PER_CASE for _ in range(len(params['cases']))]))
@@ -189,10 +205,12 @@ sys.stdout.flush()
                             p.join(timeout=1)   # wait for process to terminate
                             if p.is_alive():
                                 p.kill()        # kill if process did not terminate in time
-                            assert(not p.is_alive())
+                            assert not p.is_alive()
                         else:
                             times = q.get()
                             times = list(zip(queries.keys(), list(map(lambda t: float(f'{t:.3f}'), times))))
+
+                        p.close()
 
                         for case, time in times:
                             if case not in measurement_times.keys():
@@ -201,9 +219,6 @@ sys.stdout.flush()
 
                         connection.close()
                         hyper.close()
-                continue
-
-
 
         return {'HyPer': measurement_times}
 

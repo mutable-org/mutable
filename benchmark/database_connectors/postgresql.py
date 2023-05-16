@@ -56,9 +56,10 @@ class PostgreSQL(Connector):
                 self.create_tables(cursor, params['data'], with_scale_factors)
             finally:
                 connection.close()
+                del connection
 
             # If tables contain scale factors, they have to be loaded separately for every case
-            if (with_scale_factors or not bool(params.get('readonly'))):
+            if with_scale_factors or not params.get('readonly', False):
                 for case, query_stmt in params['cases'].items():
                     connection = psycopg2.connect(**db_options)
                     try:
@@ -76,6 +77,7 @@ class PostgreSQL(Connector):
                             cursor.execute(f"INSERT INTO {table_name} SELECT * FROM {table_name}_tmp LIMIT {num_rows};")    # copy data with scale factor
                     finally:
                         connection.close()
+                        del connection
 
                     # Write case/query to a file that will be passed to the command to execute
                     with open(TMP_SQL_FILE, "w") as tmp:
@@ -248,19 +250,19 @@ class PostgreSQL(Connector):
         try:
             out, err = process.communicate("".encode('latin-1'), timeout=timeout)
         except subprocess.TimeoutExpired:
-            process.kill()
             raise ExperimentTimeoutExpired(f'Query timed out after {timeout} seconds')
         finally:
             if process.poll() is None: # if process is still alive
                 process.terminate() # try to shut down gracefully
                 try:
-                    process.wait(timeout=1) # wait for process to terminate
+                    process.wait(timeout=1) # give process 1 second to terminate
                 except subprocess.TimeoutExpired:
                     process.kill() # kill if process did not terminate in time
 
         out = out.decode('latin-1')
         err = err.decode('latin-1')
 
+        assert process.returncode is not None
         if process.returncode or len(err):
             outstr = '\n'.join(out.split('\n')[-20:])
             tqdm.write(f'''\

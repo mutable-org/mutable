@@ -62,7 +62,7 @@ sys.stdout.flush()
             tqdm.write(f"    $ {' '.join(args)}")
             sys.stdout.flush()
 
-        timeout = n_runs * (DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(params['cases'])) # XXX correct timeout?
+        timeout = n_runs * (DEFAULT_TIMEOUT + TIMEOUT_PER_CASE * len(params['cases']))
         process = subprocess.Popen(
             args=args,
             stdout=subprocess.PIPE,
@@ -73,7 +73,12 @@ sys.stdout.flush()
         try:
             process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
-            return dict()  # TODO timeouts
+            tqdm.write(f'Benchmark timed out after {timeout} seconds')
+            times = [TIMEOUT_PER_CASE for _ in range(n_runs)]
+            result = {case: times for case in params['cases'].keys()}
+            result = {f'HyPer{suffix}': result}
+            tqdm.write(str(result))
+            return result
         finally:
             if process.poll() is None: # if process is still alive
                 process.terminate() # try to shut down gracefully

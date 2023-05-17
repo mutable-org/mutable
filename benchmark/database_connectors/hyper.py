@@ -74,10 +74,10 @@ sys.stdout.flush()
             process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
             tqdm.write(f'Benchmark timed out after {timeout} seconds')
+            # Set execution time of every case of every run to timeout
             times = [TIMEOUT_PER_CASE for _ in range(n_runs)]
             result = {case: times for case in params['cases'].keys()}
             result = {f'HyPer{suffix}': result}
-            tqdm.write(str(result))
             return result
         finally:
             if process.poll() is None: # if process is still alive

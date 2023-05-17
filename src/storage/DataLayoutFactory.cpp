@@ -9,6 +9,15 @@
 using namespace m;
 using namespace m::storage;
 
+M_LCOV_EXCL_START
+std::ostream & m::storage::operator<<(std::ostream &out, const DataLayoutFactory &factory)
+{
+    factory.print(out);
+    return out;
+}
+void DataLayoutFactory::dump(std::ostream &out) const { out << *this << std::endl; }
+void DataLayoutFactory::dump() const { dump(std::cerr); }
+M_LCOV_EXCL_STOP
 
 namespace m {
 

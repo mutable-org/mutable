@@ -34,6 +34,14 @@ struct DataLayoutFactory
 
     /** Returns a `DataLayout` for the given \p types and length \p num_tuples (0 means infinite layout). */
     virtual DataLayout make(std::vector<const Type*> types, std::size_t num_tuples = 0) const = 0;
+
+    friend M_EXPORT std::ostream & operator<<(std::ostream &out, const DataLayoutFactory &factory);
+
+    void dump(std::ostream &out) const;
+    void dump() const;
+
+    private:
+    virtual void print(std::ostream &out) const = 0;
 };
 
 struct RowLayoutFactory : DataLayoutFactory
@@ -42,6 +50,9 @@ struct RowLayoutFactory : DataLayoutFactory
 
     using DataLayoutFactory::make;
     DataLayout make(std::vector<const Type*> types, std::size_t num_tuples = 0) const override;
+
+    private:
+    void print(std::ostream &out) const override { out << "Row"; }
 };
 
 struct PAXLayoutFactory : DataLayoutFactory
@@ -83,6 +94,16 @@ struct PAXLayoutFactory : DataLayoutFactory
 
     using DataLayoutFactory::make;
     DataLayout make(std::vector<const Type*> types, std::size_t num_tuples = 0) const override;
+
+    private:
+    void print(std::ostream &out) const override {
+        out << "PAX(";
+        if (NTuples == option_)
+            out << "#tuples=" << num_tuples_;
+        else
+            out << "#bytes=" << num_bytes_;
+        out << ")";
+    }
 };
 
 }

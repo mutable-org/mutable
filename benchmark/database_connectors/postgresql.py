@@ -15,7 +15,8 @@ db_options = {
     'dbname': 'benchmark_tmp',
     'user': 'postgres'
 }
-TMP_SQL_FILE = 'tmp.sql'
+TMP_SQL_FILE            = 'tmp.sql'
+COMPLETE_TABLE_SUFFIX   = '_complete'
 
 
 # The connector for PostgreSQL
@@ -74,7 +75,7 @@ class PostgreSQL(Connector):
                             header = int(table.get('header', 0))
                             num_rows = round((table['lines_in_file'] - header) * sf)
                             cursor.execute(f"DELETE FROM {table_name};")     # empty existing table
-                            cursor.execute(f"INSERT INTO {table_name} SELECT * FROM {table_name}_tmp LIMIT {num_rows};")    # copy data with scale factor
+                            cursor.execute(f"INSERT INTO {table_name} SELECT * FROM {table_name}{COMPLETE_TABLE_SUFFIX} LIMIT {num_rows};")    # copy data with scale factor
                     finally:
                         connection.close()
                         del connection
@@ -221,11 +222,12 @@ class PostgreSQL(Connector):
             header = table.get('header')
             format = table['format'].upper()
 
-            if with_scale_factors:
-                table_name += "_tmp"
+            # Use an additional table with the *complete* data set to quickly recreate the table with the benchmark
+            # data, in case of varying scale factor.
+            complete_table_name = table_name + COMPLETE_TABLE_SUFFIX if with_scale_factors else table_name
 
-            create = f"CREATE TABLE {table_name} {columns};"
-            copy = f"COPY {table_name} FROM STDIN"
+            create = f"CREATE UNLOGGED TABLE {complete_table_name} {columns};"
+            copy = f"COPY {complete_table_name} FROM STDIN"
             if delimiter:
                 delim = delimiter.replace("'", "")
                 copy += f" WITH DELIMITER \'{delim}\'"
@@ -241,7 +243,7 @@ class PostgreSQL(Connector):
                 cursor.copy_expert(sql=copy, file=datafile)
 
             if with_scale_factors:
-                cursor.execute(f"CREATE TABLE {table_name[:-4]} {columns};")     # Create actual table that will be used for experiment
+                cursor.execute(f"CREATE UNLOGGED TABLE {table_name} {columns};")     # Create actual table that will be used for experiment
 
 
     def run_command(self, command, timeout, benchmark_info):

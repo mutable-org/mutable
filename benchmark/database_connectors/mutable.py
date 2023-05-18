@@ -19,6 +19,7 @@ class Mutable(Connector):
     def __init__(self, args = dict()):
         self.mutable_binary = args.get('path_to_binary') # required
         self.verbose = args.get('verbose', False) # optional
+        self.info_printed = False
 
 
     def execute(self, n_runs, params: dict):
@@ -81,11 +82,13 @@ class Mutable(Connector):
         binargs = yml.get('binargs', None)
         path_to_file = yml['path_to_file']
 
-        if config_name:
-            tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration {config_name}.')
-        else:
-            tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment}.')
-        sys.stdout.flush()
+        if not self.info_printed:
+            if config_name:
+                tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration {config_name}.')
+            else:
+                tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment}.')
+            sys.stdout.flush()
+            self.info_printed = True
 
         # Get database schema
         schema = os.path.join(os.path.dirname(path_to_file), 'data', 'schema.sql')

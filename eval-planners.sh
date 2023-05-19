@@ -45,19 +45,22 @@ declare -A TOPOLOGIES=(
 )
 
 ORDERED_PLANNERS=(
+    ###### HANWEN Manuelly Test #####
+    "BU-A*-sqrt_sum"
+    "TD-A*-sqrt_sum"
     ###### Traditional Planners #####
     # "DPsub"
-    "DPccp"
-    "TDMinCutAGaT"
-    "IKKBZ"
-    "linDP"
-    "GOO"
+#    "DPccp"
+#    "TDMinCutAGaT"
+#    "IKKBZ"
+#    "linDP"
+#    "GOO"
     ##### Heuristic Search #####
     # BottomUp
     ## A*
-    "BU-A*-zero"
+#    "BU-A*-zero"
     # "BU-A*-avg_sel"
-    "BU-A*-GOO"
+#    "BU-A*-GOO"
     ## beam
     # "BU-beam-zero"
     # "BU-beam-avg_sel"
@@ -66,9 +69,9 @@ ORDERED_PLANNERS=(
     # "BU-rel_beam-zero"
     # TopDown
     ## A*
-    "TD-A*-zero"
-    "TD-A*-sum"
-    "TD-A*-GOO"
+#    "TD-A*-zero"
+#    "TD-A*-sum"
+#    "TD-A*-GOO"
     ## beam
     # "TD-beam-zero"
     # "TD-beam-sum"

@@ -12,6 +12,7 @@ declare -A PLANNER_CONFIGS=(
     [BU-A*-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search AStar"
     [BU-A*-avg_sel]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic avg_sel --hs-search AStar"
     [BU-A*-GOO]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic GOO --hs-search AStar"
+    [BU-A*-sqrt_sum]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic sqrt_sum --hs-search AStar"
     ## beam
     [BU-beam-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search monotone_beam_search"
     [BU-beam-avg_sel]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic avg_sel --hs-search monotone_beam_search"
@@ -23,6 +24,7 @@ declare -A PLANNER_CONFIGS=(
     [TD-A*-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic zero --hs-search AStar"
     [TD-A*-sum]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic sum --hs-search AStar"
     [TD-A*-GOO]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic GOO --hs-search AStar"
+    [TD-A*-sqrt_sum]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic sqrt_sum --hs-search AStar"
     ## beam
     [TD-beam-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic zero --hs-search monotone_beam_search"
     [TD-beam-sum]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete  --hs-heuristic sum --hs-search monotone_beam_search"

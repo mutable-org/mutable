@@ -1974,8 +1974,8 @@ void Buffer<IsGlobal>::setup()
 {
     M_insist(not base_address_, "must not call `setup()` twice");
     M_insist(not size_, "must not call `setup()` twice");
-    M_insist(not layout_.is_finite() == not capacity_, "must not call `setup()` twice");
-    M_insist(not layout_.is_finite() == not first_iteration_, "must not call `setup()` twice");
+    M_insist(not capacity_, "must not call `setup()` twice");
+    M_insist(not first_iteration_, "must not call `setup()` twice");
 
     /*----- Create local variables. -----*/
     base_address_.emplace();

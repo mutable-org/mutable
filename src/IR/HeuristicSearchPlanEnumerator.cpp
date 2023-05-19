@@ -1792,43 +1792,43 @@ template<typename PlanTable, typename State, typename Expand>
 struct sqrt_sum;
 
 template<typename PlanTable, typename State>
-struct sqrt_sum<PlanTable, State, BottomUp>
-{
+struct sqrt_sum<PlanTable, State, BottomUp> {
     using state_type = State;
 
-    sqrt_sum(const PlanTable &, const QueryGraph &, const AdjacencyMatrix &, const CostFunction &,const CardinalityEstimator &)
-    {}
+    sqrt_sum(const PlanTable &, const QueryGraph &, const AdjacencyMatrix &, const CostFunction &,
+             const CardinalityEstimator &) {}
 
     double operator()(const state_type &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
-                          const CostFunction &CF, const CardinalityEstimator &CE) const
-                          {
-            double distance = 0;
-            if (not state.is_top(PT, G, M, CF, CE)) {
-                state.for_each_subproblem([&](const Subproblem S) {
-                    distance += CE.predict_number_distinct_values(*PT[S].model);
-                }, G);
-            }
-            return distance;
-        }
-    };
-
-    template<typename PlanTable, typename State>
-    struct sqrt_sum<PlanTable, State, TopDown> {
-        using state_type = State;
-
-        sqrt_sum(const PlanTable &, const QueryGraph &, const AdjacencyMatrix &, const CostFunction &,
-                 const CardinalityEstimator &) {}
-
-        double operator()(const state_type &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &,
-                          const CostFunction &, const CardinalityEstimator &CE) const {
-            static cnf::CNF condition; // TODO use join condition
-            double distance = 0;
+                      const CostFunction &CF, const CardinalityEstimator &CE) const
+    {
+        double distance = 0;
+        if (not state.is_top(PT, G, M, CF, CE)) {
             state.for_each_subproblem([&](const Subproblem S) {
-                if (not S.singleton()) { // skip base relations
-                    if (not PT[S].model)
-                        PT[S].model = CE.estimate_join_all(G, PT, S, condition);
-                    distance += 2 * std::sqrt(CE.predict_cardinality(*PT[S].model));
-                }
+//                distance += CE.predict_cardinality(*PT[S].model);
+                distance += 2 * std::sqrt(CE.predict_cardinality(*PT[S].model));
+            }, G);
+        }
+        return distance;
+    }
+};
+
+template<typename PlanTable, typename State>
+struct sqrt_sum<PlanTable, State, TopDown> {
+    using state_type = State;
+
+    sqrt_sum(const PlanTable &, const QueryGraph &, const AdjacencyMatrix &, const CostFunction &,
+             const CardinalityEstimator &) {}
+
+    double operator()(const state_type &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &,
+                      const CostFunction &, const CardinalityEstimator &CE) const {
+        static cnf::CNF condition; // TODO use join condition
+        double distance = 0;
+        state.for_each_subproblem([&](const Subproblem S) {
+            if (not S.singleton()) { // skip base relations
+                if (not PT[S].model)
+                    PT[S].model = CE.estimate_join_all(G, PT, S, condition);
+                distance += 2 * std::sqrt(CE.predict_cardinality(*PT[S].model));
+            }
         }, G);
         return distance;
     }
@@ -2625,7 +2625,7 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, sum, monotone_dynamic_beam_search)
 
         //   sqrt_sum
-//        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,    sqrt_sum,                       AStar                          )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete, sqrt_sum,  AStar  )
 
         //   scaled_sum
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, scaled_sum, AStar)

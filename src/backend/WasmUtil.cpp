@@ -2225,22 +2225,19 @@ template struct m::wasm::Buffer<true>;
 template<bool IsGlobal>
 void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second)
 {
-    /*---- Swap each entry individually to reduce number of variables needed at once. -----*/
+    /*----- Create load and store proxies. -----*/
+    auto load  = buffer_.get().create_load_proxy(schema_.get());
+    auto store = buffer_.get().create_store_proxy(schema_.get());
+
+    /*----- Load first tuple into fresh environment. -----*/
+    auto env = [&](){
+        auto S = CodeGenContext::Get().scoped_environment();
+        load(first.clone());
+        return S.extract();
+    }();
+
+    /*----- Temporarily save first tuple by creating variable or separate string buffer. -----*/
     for (auto &e : schema_.get()) {
-        /*----- Create schema for single entry and load and store proxies for it. -----*/
-        Schema entry_schema;
-        entry_schema.add(e.id, e.type, e.constraints);
-        auto load  = buffer_.get().create_load_proxy(entry_schema);
-        auto store = buffer_.get().create_store_proxy(entry_schema);
-
-        /*----- Load entry of first tuple into fresh environment. -----*/
-        auto env = [&](){
-            auto S = CodeGenContext::Get().scoped_environment();
-            load(first.clone());
-            return S.extract();
-        }();
-
-        /*----- Temporarily save entry of first tuple by creating variable or separate string buffer. -----*/
         std::visit(overloaded {
             [&](NChar value) -> void {
                 Var<Ptr<Char>> ptr; // always set here
@@ -2263,23 +2260,20 @@ void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second)
             },
             [](std::monostate) -> void { M_unreachable("value must be loaded beforehand"); }
         }, env.extract(e.id));
-
-        /*----- Load entry of second tuple in scoped environment and store it directly at first tuples address. -----*/
-        {
-            auto S = CodeGenContext::Get().scoped_environment();
-            load(second.clone());
-            store(first.clone());
-        }
-
-        /*----- Store temporarily saved entry of first tuple at second tuples address. ----*/
-        {
-            auto S = CodeGenContext::Get().scoped_environment(std::move(env));
-            store(second.clone());
-        }
     }
 
-    first.discard(); // since it was always cloned
-    second.discard(); // since it was always cloned
+    /*----- Load second tuple in scoped environment and store it directly at first tuples address. -----*/
+    {
+        auto S = CodeGenContext::Get().scoped_environment();
+        load(second.clone());
+        store(first);
+    }
+
+    /*----- Store temporarily saved first tuple at second tuples address. ----*/
+    {
+        auto S = CodeGenContext::Get().scoped_environment(std::move(env));
+        store(second);
+    }
 }
 
 // explicit instantiations to prevent linker errors

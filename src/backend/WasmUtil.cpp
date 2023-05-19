@@ -2176,6 +2176,16 @@ void Buffer<IsGlobal>::consume()
             store_inits.attach_to_current();
         };
     } else {
+        IF (*size_ == *capacity_) { // buffer full
+            /*----- Resize buffer by doubling its capacity. -----*/
+            const uint32_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
+            auto buffer_size_in_bytes = (*capacity_ / uint32_t(layout_.child().num_tuples())) * child_size_in_bytes;
+            auto ptr = Module::Allocator().allocate(buffer_size_in_bytes.clone());
+            Wasm_insist(ptr == *base_address_ + buffer_size_in_bytes.make_signed(),
+                        "buffer could not be resized sequentially in memory");
+            *capacity_ *= 2U;
+        };
+
         IF (*first_iteration_) {
             /*----- Emit initialization code for storing (i.e. set to current buffer slot). -----*/
             store_inits.attach_to_current();
@@ -2198,16 +2208,6 @@ void Buffer<IsGlobal>::consume()
             store_jumps.attach_to_current();
         };
     } else {
-        IF (*size_ == *capacity_ - 1U) { // buffer full
-            /*----- Resize buffer by doubling its capacity. -----*/
-            const uint32_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
-            auto buffer_size_in_bytes = (*capacity_ / uint32_t(layout_.child().num_tuples())) * child_size_in_bytes;
-            auto ptr = Module::Allocator().allocate(buffer_size_in_bytes.clone());
-            Wasm_insist(ptr == *base_address_ + buffer_size_in_bytes.make_signed(),
-                        "buffer could not be resized sequentially in memory");
-            *capacity_ *= 2U;
-        };
-
         /*----- Emit advancing code to next buffer slot and increment size of buffer. -----*/
         store_jumps.attach_to_current();
     }

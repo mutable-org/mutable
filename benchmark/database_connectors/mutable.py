@@ -19,13 +19,12 @@ class Mutable(Connector):
     def __init__(self, args = dict()):
         self.mutable_binary = args.get('path_to_binary') # required
         self.verbose = args.get('verbose', False) # optional
-        self.info_printed = False
 
 
     def execute(self, n_runs, params: dict):
         result = dict()
-        for _ in range(n_runs):
-            exp = self.perform_experiment(params)
+        for run_id in range(n_runs):
+            exp = self.perform_experiment(run_id, params)
             for config, cases in exp.items():
                 if config not in result.keys():
                     result[config] = dict()
@@ -44,19 +43,30 @@ class Mutable(Connector):
 # @param params             the parameters for the experiment
 # @return                   a map from configuration name to {map from case name to measurement}
 #=======================================================================================================================
-    def perform_experiment(self, params: dict):
+    def perform_experiment(self, run_id, params: dict):
         configs = params.get('configurations')
         experiment_name = params['name']
+        suite = params['suite']
+        benchmark = params['benchmark']
         experiment = dict()
         if configs:
             # Run benchmark under different configurations
             for config_name, config in configs.items():
                 config_name = f"mutable (single core, {config_name})"
+                if run_id==0:
+                    tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment_name} with configuration {config_name}.')
+                    sys.stdout.flush()
+
                 measurements = self.run_configuration(experiment_name, config_name, config, params)
                 experiment[config_name] = measurements
         else:
-            measurements = self.run_configuration(experiment_name, '', '', params)
-            experiment[''] = measurements
+            config_name = "mutable (single core)"
+            if run_id==0:
+                tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment_name} on mutable.')
+                sys.stdout.flush()
+
+            measurements = self.run_configuration(experiment_name, config_name, '', params)
+            experiment[config_name] = measurements
 
         return experiment
 
@@ -81,14 +91,6 @@ class Mutable(Connector):
         supplementary_args = yml.get('args', None)
         binargs = yml.get('binargs', None)
         path_to_file = yml['path_to_file']
-
-        if not self.info_printed:
-            if config_name:
-                tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration {config_name}.')
-            else:
-                tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment}.')
-            sys.stdout.flush()
-            self.info_printed = True
 
         # Get database schema
         schema = os.path.join(os.path.dirname(path_to_file), 'data', 'schema.sql')

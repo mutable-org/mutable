@@ -197,7 +197,7 @@ sys.stdout.flush()
         table_defs = dict()
         for table_name, table in params['data'].items():
             table_defs[table_name] = HyPer.get_single_table_def(table_name, table)
-            return table_defs
+        return table_defs
 
 
     @staticmethod

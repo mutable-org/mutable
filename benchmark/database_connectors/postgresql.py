@@ -220,7 +220,7 @@ class PostgreSQL(Connector):
 
             delimiter = table.get('delimiter')
             header = table.get('header')
-            format = table['format'].upper()
+            format = table.get('format')
 
             # Use an additional table with the *complete* data set to quickly recreate the table with the benchmark
             # data, in case of varying scale factor.
@@ -232,7 +232,7 @@ class PostgreSQL(Connector):
                 delim = delimiter.replace("'", "")
                 copy += f" WITH DELIMITER \'{delim}\'"
             if format:
-                copy += f" {format}"
+                copy += f" {format.upper()}"
             if header:
                 copy += ' HEADER' if (header==1) else ''
 
@@ -240,7 +240,10 @@ class PostgreSQL(Connector):
 
             cursor.execute(create)
             with open(f"{os.path.abspath(os.getcwd())}/{table['file']}", 'r') as datafile:
-                cursor.copy_expert(sql=copy, file=datafile)
+                try:
+                    cursor.copy_expert(sql=copy, file=datafile)
+                except psycopg2.errors.BadCopyFileFormat as ex:
+                    raise ConnectorException(str(ex))
 
             if with_scale_factors:
                 cursor.execute(f"CREATE UNLOGGED TABLE {table_name} {columns};")     # Create actual table that will be used for experiment

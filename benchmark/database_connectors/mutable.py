@@ -137,9 +137,13 @@ class Mutable(Connector):
                     for case in cases.keys():
                         execution_times[case] = TIMEOUT_PER_CASE * 1000
                 else:
+                    if len(durations) < len(cases):
+                        raise ConnectorException(f"Expected {len(cases)} measurements but got {len(durations)}.")
                     # Add measured times
                     for case_index in range(len(cases.keys())):
-                        execution_times[list(cases.keys())[case_index]] = durations[case_index]
+                        dur = durations[case_index]
+                        case = list(cases.keys())[case_index]
+                        execution_times[case] = dur
             else:
                 timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
                 for case, query in cases.items():

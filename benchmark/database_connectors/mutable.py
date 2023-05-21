@@ -140,9 +140,7 @@ class Mutable(Connector):
                     if len(durations) < len(cases):
                         raise ConnectorException(f"Expected {len(cases)} measurements but got {len(durations)}.")
                     # Add measured times
-                    for case_index in range(len(cases.keys())):
-                        dur = durations[case_index]
-                        case = list(cases.keys())[case_index]
+                    for case, dur in zip(list(cases.keys()), durations):
                         execution_times[case] = dur
             else:
                 timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
@@ -162,6 +160,8 @@ class Mutable(Connector):
                         sys.stdout.flush()
                         execution_times[case] = timeout * 1000
                     else:
+                        if len(durations) == 0:
+                            raise ConnectorException("Expected 1 measurement but got 0.")
                         execution_times[case] = durations[0]
         except BenchmarkError as ex:
             tqdm.write(str(ex))

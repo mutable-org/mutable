@@ -766,6 +766,14 @@ struct buffer_swap_proxy_t
 
     /** Swaps tuples with IDs \p first and \p second. */
     void operator()(U32 first, U32 second);
+    /** Swaps tuples with IDs \p first and \p second where the first one is already loaded and accessible through
+     * \p env_first.  Note that environments are also swapped afterwards, i.e. \p env_first contains still the values
+     * of the former tuple with ID \p first which is located at ID \p second after the call. */
+    void operator()(U32 first, U32 second, const Environment &env_first);
+    /** Swaps tuples with IDs \p first and \p second which are already loaded and accessible through \p env_first and
+     * \p env_second.  Note that environments are also swapped afterwards, i.e. \p env_first contains still the values
+     * of the former tuple with ID \p first which is located at ID \p second after the call and vice versa. */
+    void operator()(U32 first, U32 second, const Environment &env_first, const Environment &env_second);
 };
 
 

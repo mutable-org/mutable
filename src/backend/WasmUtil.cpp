@@ -2225,18 +2225,28 @@ template struct m::wasm::Buffer<true>;
 template<bool IsGlobal>
 void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second)
 {
-    /*----- Create load and store proxies. -----*/
-    auto load  = buffer_.get().create_load_proxy(schema_.get());
-    auto store = buffer_.get().create_store_proxy(schema_.get());
+    /*----- Create load proxy. -----*/
+    auto load = buffer_.get().create_load_proxy(schema_.get());
 
     /*----- Load first tuple into fresh environment. -----*/
-    auto env = [&](){
+    auto env_first = [&](){
         auto S = CodeGenContext::Get().scoped_environment();
         load(first.clone());
         return S.extract();
     }();
 
+    operator()(first, second, env_first);
+}
+
+template<bool IsGlobal>
+void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second, const Environment &env_first)
+{
+    /*----- Create load and store proxies. -----*/
+    auto load  = buffer_.get().create_load_proxy(schema_.get());
+    auto store = buffer_.get().create_store_proxy(schema_.get());
+
     /*----- Temporarily save first tuple by creating variable or separate string buffer. -----*/
+    Environment _env_first;
     for (auto &e : schema_.get()) {
         std::visit(overloaded {
             [&](NChar value) -> void {
@@ -2247,19 +2257,19 @@ void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second)
                     ptr = Module::Allocator().pre_malloc<char>(value.size_in_bytes());
                     strncpy(ptr, value, U32(value.size_in_bytes())).discard();
                 };
-                env.add(e.id, NChar(ptr, value.can_be_null(), value.length(), value.guarantees_terminating_nul()));
+                _env_first.add(e.id, NChar(ptr, value.can_be_null(), value.length(), value.guarantees_terminating_nul()));
             },
             [&]<typename T>(Expr<T> value) -> void {
                 if (value.can_be_null()) {
                     Var<Expr<T>> var(value);
-                    env.add(e.id, var);
+                    _env_first.add(e.id, var);
                 } else {
                     Var<PrimitiveExpr<T>> var(value.insist_not_null());
-                    env.add(e.id, Expr<T>(var));
+                    _env_first.add(e.id, Expr<T>(var));
                 }
             },
             [](std::monostate) -> void { M_unreachable("value must be loaded beforehand"); }
-        }, env.extract(e.id));
+        }, env_first.get(e.id));
     }
 
     /*----- Load second tuple in scoped environment and store it directly at first tuples address. -----*/
@@ -2271,7 +2281,55 @@ void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second)
 
     /*----- Store temporarily saved first tuple at second tuples address. ----*/
     {
-        auto S = CodeGenContext::Get().scoped_environment(std::move(env));
+        auto S = CodeGenContext::Get().scoped_environment(std::move(_env_first));
+        store(second);
+    }
+}
+
+template<bool IsGlobal>
+void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second, const Environment &env_first,
+                                               const Environment &env_second)
+{
+    /*----- Create store proxy. -----*/
+    auto store = buffer_.get().create_store_proxy(schema_.get());
+
+    /*----- Temporarily save first tuple by creating variable or separate string buffer. -----*/
+    Environment _env_first;
+    for (auto &e : schema_.get()) {
+        std::visit(overloaded {
+            [&](NChar value) -> void {
+                Var<Ptr<Char>> ptr; // always set here
+                IF (value.clone().is_null()) {
+                    ptr = Ptr<Char>::Nullptr();
+                } ELSE {
+                    ptr = Module::Allocator().pre_malloc<char>(value.size_in_bytes());
+                    strncpy(ptr, value, U32(value.size_in_bytes())).discard();
+                };
+                _env_first.add(e.id, NChar(ptr, value.can_be_null(), value.length(), value.guarantees_terminating_nul()));
+            },
+            [&]<typename T>(Expr<T> value) -> void {
+                if (value.can_be_null()) {
+                    Var<Expr<T>> var(value);
+                    _env_first.add(e.id, var);
+                } else {
+                    Var<PrimitiveExpr<T>> var(value.insist_not_null());
+                    _env_first.add(e.id, Expr<T>(var));
+                }
+            },
+            [](std::monostate) -> void { M_unreachable("value must be loaded beforehand"); }
+        }, env_first.get(e.id));
+    }
+
+    /*----- Store already loaded second tuple directly at first tuples address. -----*/
+    {
+        auto S = CodeGenContext::Get().scoped_environment();
+        CodeGenContext::Get().env().add(env_second);
+        store(first);
+    }
+
+    /*----- Store temporarily saved first tuple at second tuples address. ----*/
+    {
+        auto S = CodeGenContext::Get().scoped_environment(std::move(_env_first));
         store(second);
     }
 }

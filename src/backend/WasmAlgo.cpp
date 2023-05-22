@@ -17,88 +17,53 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
 {
     static_assert(IsGlobal, "quicksort on local buffers is not yet supported");
 
-    /*----- Compute entries which are needed for `order`. -----*/
-    Schema entries_to_order;
-    for (auto &o : order) {
-        visit(overloaded {
-            [&entries_to_order](const ast::Designator &d) -> void {
-                Schema::Identifier id(d.table_name.text, d.attr_name.text);
-                if (not entries_to_order.has(id))
-                    entries_to_order.add(id, d.type());
-            },
-            [&entries_to_order](const ast::FnApplicationExpr &fn) {
-                switch (fn.get_function().fnid) {
-                    default:
-                        break; // nothing to be done
-                    case m::Function::FN_COUNT:
-                    case m::Function::FN_MIN:
-                    case m::Function::FN_MAX:
-                    case m::Function::FN_SUM:
-                    case m::Function::FN_AVG: {
-                        std::ostringstream oss;
-                        oss << fn;
-                        Schema::Identifier id(Catalog::Get().pool(oss.str().c_str()));
-                        if (not entries_to_order.has(id))
-                            entries_to_order.add(id, fn.type());
-                    }
-                }
-                throw visit_stop_recursion(); // to not visit function and argument expressions
-            },
-            [](auto&) { /* nothing to be done */ }
-        }, o.first, tag<ast::ConstPreOrderExprVisitor>());
-    }
-
     /*----- Create load and swap proxies for buffer. -----*/
-    auto load = buffer.create_load_proxy(entries_to_order); // loading is only used for comparison w.r.t. `order`
+    auto load = buffer.create_load_proxy();
     auto swap = buffer.create_swap_proxy();
 
     /*---- Create branchless binary partition function. -----*/
-    /* Receives the ID of the first tuple to partition, the past-the-end ID to partition, and the ID of the pivot
-     * element as parameters. Returns ID of partition boundary s.t. all elements before this boundary are smaller
+    /* Receives the ID of the first tuple to partition, the past-the-end ID to partition, and an environment
+     * containing the entries of the pivot element needed for ordering as parameters (note that the pivot element
+     * must not be contained in the interval [begin, end[ since these entries may be swapped which would render the
+     * given environment invalid). Returns ID of partition boundary s.t. all elements before this boundary are smaller
      * than or equal to the pivot element and all elements after or equal this boundary are greater than or equal to
      * the pivot element. */
-    auto partition = [&](U32 _begin, U32 _end, U32 pivot) -> U32 {
+    auto partition = [&](U32 _begin, U32 _end, const Environment &env_pivot) -> U32 {
         Var<U32> begin(_begin), end(_end);
 
-        Wasm_insist(begin == pivot + 1U);
         Wasm_insist(begin < end);
 
         U32 last = end - 1U;
 
         DO_WHILE(begin < end) {
-            /*----- Swap begin and last tuples. -----*/
-            swap(begin, last.clone());
-
-            /*----- Load begin tuple. -----*/
+            /*----- Load entire begin tuple. -----*/
             auto env_begin = [&](){
                 auto S = CodeGenContext::Get().scoped_environment();
                 load(begin);
                 return S.extract();
             }();
 
-            /*----- Load pivot tuple. -----*/
-            auto env_pivot = [&](){
-                auto S = CodeGenContext::Get().scoped_environment();
-                load(pivot);
-                return S.extract();
-            }();
-
-            /*----- Load last tuple. -----*/
+            /*----- Load entire last tuple. -----*/
             auto env_last = [&](){
                 auto S = CodeGenContext::Get().scoped_environment();
-                load(last);
+                load(last.clone());
                 return S.extract();
             }();
 
+            /*----- Swap entire begin and last tuples. -----*/
+            swap(begin, last, env_begin, env_last);
+            /* Note that environments are now also swapped, i.e. `env_begin` contains still the values of the former
+             * begin tuple which is now located at ID `last` and vice versa. Thus, use `env_begin` to access the last
+             * tuple and use `env_last` to use the begin tuple in the following. */
+
             /*----- Compare begin and last tuples to pivot element and advance cursors respectively. -----*/
-            Bool begin_le_pivot = compare(env_begin, env_pivot, order) <= 0;
-            Bool last_ge_pivot  = compare(env_last, env_pivot, order) >= 0;
+            Bool begin_le_pivot = compare(env_last, env_pivot, order) <= 0;
+            Bool last_ge_pivot  = compare(env_begin, env_pivot, order) >= 0;
 
             begin += begin_le_pivot.to<uint32_t>();
             end -= last_ge_pivot.to<uint32_t>();
         }
 
-        Wasm_insist(begin > pivot, "partition boundary must be located within the partitioned area");
         return begin;
     };
 
@@ -119,21 +84,21 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
         WHILE(end - begin > 2U) {
             Var<U32> mid((begin + end) >> 1U); // (begin + end) / 2
 
-            /*----- Load begin tuple. -----*/
+            /*----- Load entire begin tuple. -----*/
             auto env_begin = [&](){
                 auto S = CodeGenContext::Get().scoped_environment();
                 load(begin);
                 return S.extract();
             }();
 
-            /*----- Load mid tuple. -----*/
+            /*----- Load entire mid tuple. -----*/
             auto env_mid = [&](){
                 auto S = CodeGenContext::Get().scoped_environment();
                 load(mid);
                 return S.extract();
             }();
 
-            /*----- Load last tuple. -----*/
+            /*----- Load entire last tuple. -----*/
             auto env_last = [&](){
                 auto S = CodeGenContext::Get().scoped_environment();
                 load(last.clone());
@@ -147,24 +112,32 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
             IF (begin_le_mid) {
                 IF (begin_le_last.clone()) {
                     IF (mid_le_last.clone()) {
-                        swap(begin, mid); // [begin, mid, last]
+                        swap(begin, mid, env_begin, env_mid); // [begin, mid, last]
                     } ELSE {
-                        swap(begin, last.clone()); // [begin, last, mid]
+                        swap(begin, last.clone(), env_begin, env_last); // [begin, last, mid]
                     };
                 }; // else [last, begin, mid]
             } ELSE {
                 IF (mid_le_last) {
                     IF (not begin_le_last) {
-                        swap(begin, last.clone()); // [mid, last, begin]
+                        swap(begin, last.clone(), env_begin, env_last); // [mid, last, begin]
                     }; // else [mid, begin, last]
                 } ELSE {
-                    swap(begin, mid); // [last, mid, begin]
+                    swap(begin, mid, env_begin, env_mid); // [last, mid, begin]
                 };
             };
 
-            /*----- Partition range [begin + 1, end[ using begin as pivot. -----*/
-            mid = partition(begin + 1U, end, begin);
-            swap(begin, mid - 1U); // patch mid
+            /*----- Load entire pivot tuple. Must be loaded again as begin tuple may be swapped above. -----*/
+            U32 pivot = begin; // use begin as pivot
+            auto env_pivot = [&](){
+                auto S = CodeGenContext::Get().scoped_environment();
+                load(pivot.clone());
+                return S.extract();
+            }();
+
+            /*----- Partition range [begin + 1, end[ using pivot. -----*/
+            mid = partition(begin + 1U, end, env_pivot);
+            swap(pivot, mid - 1U, env_pivot); // patch mid
 
             /*----- Recurse right partition, if necessary. -----*/
             IF (end - mid >= 2U) {
@@ -177,14 +150,14 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
 
         /* TODO: remove this special case handling and integrate into loop iff buffer elements are small */
         IF (end - begin == 2U) {
-            /*----- Load begin tuple. -----*/
+            /*----- Load entire begin tuple. -----*/
             auto env_begin = [&](){
                 auto S = CodeGenContext::Get().scoped_environment();
                 load(begin);
                 return S.extract();
             }();
 
-            /*----- Load last tuple. -----*/
+            /*----- Load entire last tuple. -----*/
             auto env_last = [&](){
                 auto S = CodeGenContext::Get().scoped_environment();
                 load(last.clone());
@@ -194,7 +167,7 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
             /*----- Swap begin and last if they are not yet sorted. -----.*/
             Bool begin_gt_last = compare(env_begin, env_last, order) > 0;
             IF (begin_gt_last) {
-                swap(begin, last);
+                swap(begin, last, env_begin, env_last);
             };
         };
 

@@ -717,11 +717,17 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
                                                 const Var<T> new_val(new_val_),
                                                              old_min_max(old_min_max_); // due to multiple uses
                                                 auto cmp = is_min ? new_val < old_min_max : new_val > old_min_max;
+#if 1
                                                 chosen_r.set_value(
                                                     Select(cmp,
                                                            new_val, // update to new value
                                                            old_min_max) // do not update
                                                 ); // if new value is NULL, only dummy is written
+#else
+                                                IF (cmp) {
+                                                    r.set_value(new_val);
+                                                };
+#endif
                                             }
                                             r.set_null_bit(
                                                 old_min_max_is_null and new_val_is_null // MIN/MAX is NULL iff all values are NULL
@@ -738,11 +744,17 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
                                                 const Var<T> new_val(new_val_),
                                                              old_min_max(old_min_max_); // due to multiple uses
                                                 auto cmp = is_min ? new_val < old_min_max : new_val > old_min_max;
+#if 1
                                                 r.set_value(
                                                     Select(cmp,
                                                            new_val, // update to new value
                                                            old_min_max) // do not update
                                                 );
+#else
+                                                IF (cmp) {
+                                                    r.set_value(new_val);
+                                                };
+#endif
                                             }
                                             /* do not update NULL bit since it is already set to `false` */
                                         }
@@ -1538,11 +1550,17 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pi
                                     } else {
                                         const Var<PrimitiveExpr<T>> new_val(new_val_); // due to multiple uses
                                         auto cmp = is_min ? new_val < min_max : new_val > min_max;
+#if 1
                                         min_max = Select(new_val_is_null,
                                                          min_max, // ignore NULL
                                                          Select(cmp,
                                                                 new_val, // update to new value
                                                                 min_max)); // do not update
+#else
+                                        IF (not new_val_is_null and cmp) {
+                                            min_max = new_val;
+                                        };
+#endif
                                     }
                                     *is_null = *is_null and new_val_is_null; // MIN/MAX is NULL iff all values are NULL
                                 } else {
@@ -1554,9 +1572,15 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pi
                                     } else {
                                         const Var<PrimitiveExpr<T>> new_val(new_val_); // due to multiple uses
                                         auto cmp = is_min ? new_val < min_max : new_val > min_max;
+#if 1
                                         min_max = Select(cmp,
                                                          new_val, // update to new value
                                                          min_max); // do not update
+#else
+                                        IF (cmp) {
+                                            min_max = new_val;
+                                        };
+#endif
                                     }
                                 }
                             }
@@ -2114,11 +2138,17 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
                                     } else {
                                         const Var<PrimitiveExpr<T>> new_val(new_val_); // due to multiple uses
                                         auto cmp = is_min ? new_val < min_max : new_val > min_max;
+#if 1
                                         min_max = Select(new_val_is_null,
                                                          min_max, // ignore NULL
                                                          Select(cmp,
                                                                 new_val, // update to new value
                                                                 min_max)); // do not update
+#else
+                                        IF (not new_val_is_null and cmp) {
+                                            min_max = new_val;
+                                        };
+#endif
                                     }
                                     is_null = is_null and new_val_is_null; // MIN/MAX is NULL iff all values are NULL
                                 } else {
@@ -2132,9 +2162,15 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
                                     } else {
                                         const Var<PrimitiveExpr<T>> new_val(new_val_); // due to multiple uses
                                         auto cmp = is_min ? new_val < min_max : new_val > min_max;
+#if 1
                                         min_max = Select(cmp,
                                                          new_val, // update to new value
                                                          min_max); // do not update
+#else
+                                        IF (cmp) {
+                                            min_max = new_val;
+                                        };
+#endif
                                     }
                                     is_null = false; // at least one non-NULL value is consumed
                                 }

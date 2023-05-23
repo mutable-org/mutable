@@ -613,10 +613,10 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
 
     /*----- Compute initial capacity of hash table. -----*/
     uint32_t initial_capacity;
-    if (M.grouping.child(0)->has_info())
-        initial_capacity = M.grouping.child(0)->info().estimated_cardinality / HIGH_WATERMARK;
+    if (M.grouping.has_info())
+        initial_capacity = std::ceil(M.grouping.info().estimated_cardinality / HIGH_WATERMARK);
     else if (auto scan = cast<const ScanOperator>(M.grouping.child(0)))
-        initial_capacity = scan->store().num_rows() / HIGH_WATERMARK;
+        initial_capacity = std::ceil(scan->store().num_rows() / HIGH_WATERMARK);
     else
         initial_capacity = 1024; // fallback
 
@@ -2711,9 +2711,9 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
     /*----- Compute initial capacity of hash table. -----*/
     uint32_t initial_capacity;
     if (M.build.has_info())
-        initial_capacity = M.build.info().estimated_cardinality / HIGH_WATERMARK;
+        initial_capacity = std::ceil(M.build.info().estimated_cardinality / HIGH_WATERMARK);
     else if (auto scan = cast<const ScanOperator>(&M.build))
-        initial_capacity = scan->store().num_rows() / HIGH_WATERMARK;
+        initial_capacity = std::ceil(scan->store().num_rows() / HIGH_WATERMARK);
     else
         initial_capacity = 1024; // fallback
 
@@ -3143,9 +3143,9 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
     /*----- Compute initial capacity of hash table. -----*/
     uint32_t initial_capacity;
     if (M.build.has_info())
-        initial_capacity = M.build.info().estimated_cardinality / HIGH_WATERMARK;
+        initial_capacity = std::ceil(M.build.info().estimated_cardinality / HIGH_WATERMARK);
     else if (auto scan = cast<const ScanOperator>(&M.build))
-        initial_capacity = scan->store().num_rows() / HIGH_WATERMARK;
+        initial_capacity = std::ceil(scan->store().num_rows() / HIGH_WATERMARK);
     else
         initial_capacity = 1024; // fallback
 

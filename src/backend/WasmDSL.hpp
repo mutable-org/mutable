@@ -35,6 +35,12 @@ namespace options {
 /** Whether there must not be any ternary logic, i.e. NULL value computation.  Note that NULL values have different
  * origins, e.g. NULL values stored in a table or default aggregate values in an aggregation operator. */
 extern bool insist_no_ternary_logic;
+
+#define M_insist_no_ternary_logic() M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur")
+
+#else
+#define M_insist_no_ternary_logic()
+
 #endif
 
 }
@@ -2035,9 +2041,7 @@ struct PrimitiveExpr<T>
      * as `is_nullptr()` it should be used for ternary logic since it additionally checks whether ternary logic usage
      * is expected. */
     PrimitiveExpr<bool> is_null() {
-#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
-        M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur");
-#endif
+        M_insist_no_ternary_logic();
         return to<uint32_t>() == 0U;
     }
 
@@ -2045,9 +2049,7 @@ struct PrimitiveExpr<T>
      * as `not is_nullptr()` it should be used for ternary logic since it additionally checks whether ternary logic
      * usage is expected. */
     PrimitiveExpr<bool> not_null() {
-#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
-        M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur");
-#endif
+        M_insist_no_ternary_logic();
         return to<uint32_t>() != 0U;
     }
 
@@ -2258,9 +2260,8 @@ struct Expr<T>
         , is_null_(is_null)
     {
         M_insist(bool(value_), "value must be present");
-#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
-        M_insist(not bool(is_null) or not options::insist_no_ternary_logic, "ternary logic must not occur");
-#endif
+        if (is_null)
+            M_insist_no_ternary_logic();
     }
 
     ///> Constructs an `Expr` from a `std::pair` \p value of value and NULL info.
@@ -2348,9 +2349,7 @@ struct Expr<T>
     PrimitiveExpr<bool> is_null() {
         value_.discard();
         if (can_be_null()) {
-#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
-            M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur");
-#endif
+            M_insist_no_ternary_logic();
             return is_null_;
         } else {
             return PrimitiveExpr<bool>(false);
@@ -2361,9 +2360,7 @@ struct Expr<T>
     PrimitiveExpr<bool> not_null() {
         value_.discard();
         if (can_be_null()) {
-#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
-        M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur");
-#endif
+            M_insist_no_ternary_logic();
             return not is_null_;
         } else {
             return PrimitiveExpr<bool>(true);
@@ -2774,9 +2771,7 @@ class variable_storage<T, VariableKind::Local, /* CanBeNull= */ true>
 
     /** Default-construct. */
     variable_storage() {
-#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
-        M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur");
-#endif
+        M_insist_no_ternary_logic();
     }
 
     /** Construct from value. */

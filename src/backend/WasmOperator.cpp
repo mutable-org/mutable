@@ -701,6 +701,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
                                     }
                                     BLOCK_OPEN(update_aggs) {
                                         if (_new_val.can_be_null()) {
+                                            M_insist_no_ternary_logic();
                                             auto [new_val_, new_val_is_null_] = _new_val.split();
                                             auto [old_min_max_, old_min_max_is_null] = _T(r.clone()).split();
                                             const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
@@ -785,6 +786,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
                                 /* Compute AVG as iterative mean as described in Knuth, The Art of Computer Programming
                                  * Vol 2, section 4.2.2. */
                                 if (_new_val.can_be_null()) {
+                                    M_insist_no_ternary_logic();
                                     auto [new_val, new_val_is_null_] = _new_val.split();
                                     auto [old_avg_, old_avg_is_null] = _Double(r.clone()).split();
                                     const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
@@ -845,6 +847,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
                                     }
                                     BLOCK_OPEN(update_aggs) {
                                         if (_new_val.can_be_null()) {
+                                            M_insist_no_ternary_logic();
                                             auto [new_val, new_val_is_null_] = _new_val.split();
                                             auto [old_sum, old_sum_is_null] = _T(r.clone()).split();
                                             const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
@@ -1522,6 +1525,7 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pi
                                 Expr<T> _new_val = convert<Expr<T>>(_arg);
                                 M_insist(_new_val.can_be_null() == bool(is_null));
                                 if (_new_val.can_be_null()) {
+                                    M_insist_no_ternary_logic();
                                     auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
                                     auto [new_val_, new_val_is_null_] = _new_val_pred.split();
                                     const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
@@ -1599,6 +1603,7 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pi
                                 Expr<T> _new_val = convert<Expr<T>>(_arg);
                                 M_insist(_new_val.can_be_null() == bool(is_null));
                                 if (_new_val.can_be_null()) {
+                                    M_insist_no_ternary_logic();
                                     auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
                                     auto [new_val, new_val_is_null_] = _new_val_pred.split();
                                     const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
@@ -1649,6 +1654,7 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pi
                             } else {
                                 auto _new_val = env.compile(*info.args[0]);
                                 if (can_be_null(_new_val)) {
+                                    M_insist_no_ternary_logic();
                                     I64 inc = pred ? (not_null(_new_val) and *pred).to<int64_t>()
                                                    : not_null(_new_val).to<int64_t>();
                                     count += inc; // increment old count by 1 iff new value is present and `pred` is true
@@ -1705,6 +1711,7 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pi
                         _Double _new_val = convert<_Double>(_arg);
                         M_insist(_new_val.can_be_null() == bool(is_null));
                         if (_new_val.can_be_null()) {
+                            M_insist_no_ternary_logic();
                             auto _new_val_pred = pred ? Select(*pred, _new_val, _Double::Null()) : _new_val;
                             auto [new_val, new_val_is_null_] = _new_val_pred.split();
                             const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
@@ -1739,6 +1746,7 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pi
                         M_insist(value.can_be_null() == bool(key_is_null));
 
                         if (value.can_be_null()) {
+                            M_insist_no_ternary_logic();
                             auto [val, is_null] = value.clone().split();
                             auto null_differs = is_null != *key_is_null;
                             Bool key_differs = null_differs or (not *key_is_null and val != key_val);
@@ -2093,6 +2101,7 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
                                 auto _arg = env.compile(arg);
                                 Expr<T> _new_val = convert<Expr<T>>(_arg);
                                 if (_new_val.can_be_null()) {
+                                    M_insist_no_ternary_logic();
                                     auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
                                     auto [new_val_, new_val_is_null_] = _new_val_pred.split();
                                     const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
@@ -2164,6 +2173,7 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
                                 auto _arg = env.compile(arg);
                                 Expr<T> _new_val = convert<Expr<T>>(_arg);
                                 if (_new_val.can_be_null()) {
+                                    M_insist_no_ternary_logic();
                                     auto _new_val_pred = pred ? Select(*pred, _new_val, Expr<T>::Null()) : _new_val;
                                     auto [new_val, new_val_is_null_] = _new_val_pred.split();
                                     const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses
@@ -2209,6 +2219,7 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
                             } else {
                                 auto _new_val = env.compile(*info.args[0]);
                                 if (can_be_null(_new_val)) {
+                                    M_insist_no_ternary_logic();
                                     I64 inc = pred ? (not_null(_new_val) and *pred).to<int64_t>()
                                                    : not_null(_new_val).to<int64_t>();
                                     count += inc; // increment old count by 1 iff new value is present and `pred` is true
@@ -2256,6 +2267,7 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
                         auto _arg = env.compile(arg);
                         _Double _new_val = convert<_Double>(_arg);
                         if (_new_val.can_be_null()) {
+                            M_insist_no_ternary_logic();
                             auto _new_val_pred = pred ? Select(*pred, _new_val, _Double::Null()) : _new_val;
                             auto [new_val, new_val_is_null_] = _new_val_pred.split();
                             const Var<Bool> new_val_is_null(new_val_is_null_); // due to multiple uses

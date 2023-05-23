@@ -589,7 +589,7 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
                                 teardown_t teardown)
 {
     // TODO: determine setup
-    using PROBING_STRATEGY = LinearProbing;
+    using PROBING_STRATEGY = QuadraticProbing;
     constexpr bool USE_CHAINED_HASHING = false;
     constexpr uint64_t AGGREGATES_SIZE_THRESHOLD_IN_BITS = 64;
     constexpr double HIGH_WATERMARK = 0.8;

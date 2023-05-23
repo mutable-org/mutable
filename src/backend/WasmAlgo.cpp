@@ -57,15 +57,9 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
      * element as parameters. Returns ID of partition boundary s.t. all elements before this boundary are smaller
      * than or equal to the pivot element and all elements after or equal this boundary are greater than or equal to
      * the pivot element. */
-    FUNCTION(partition, uint32_t(uint32_t, uint32_t, uint32_t))
-    {
-        auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment
+    auto partition = [&](U32 _begin, U32 _end, U32 pivot) -> U32 {
+        Var<U32> begin(_begin), end(_end);
 
-        buffer.setup_base_address(); // to access base address during loading and swapping as local
-
-        auto begin = PARAMETER(0); // first ID to partition
-        auto end = PARAMETER(1); // past-the-end ID to partition
-        const auto pivot = PARAMETER(2); // pivot element
         Wasm_insist(begin == pivot + 1U);
         Wasm_insist(begin < end);
 
@@ -105,10 +99,8 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
         }
 
         Wasm_insist(begin > pivot, "partition boundary must be located within the partitioned area");
-        RETURN(begin);
-
-        buffer.teardown_base_address();
-    }
+        return begin;
+    };
 
     /*---- Create quicksort function. -----*/
     /* Receives the ID of the first tuple to sort and the past-the-end ID to sort. */

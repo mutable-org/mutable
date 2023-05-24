@@ -282,7 +282,7 @@ U64 m::wasm::murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> values)
     uint64_t total_size_in_bits = 0;
     for (const auto &p : values) {
         std::visit(overloaded {
-            [&]<typename T>(const Expr<T> &val) -> void { total_size_in_bits += p.first->size() + val.can_be_null(); },
+            [&]<typename T>(const Expr<T> &val) -> void { total_size_in_bits += p.first->size(); },
             [&](const NChar &val) -> void { total_size_in_bits += 8 * val.length(); },
             [](std::monostate) -> void { M_unreachable("invalid variant"); }
         }, p.second);
@@ -294,19 +294,25 @@ U64 m::wasm::murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> values)
         for (auto &p : values) {
             std::visit(overloaded {
                 [&]<typename T>(Expr<T> _val) -> void {
-                    auto [val, is_null] = _val.split();
                     h <<= p.first->size();
-                    h |= reinterpret_to_U64(val); // add reinterpreted value
-                    if (is_null) {
-                        h <<= 1U;
-                        h |= is_null.template to<uint64_t>(); // add NULL bit
+                    if (_val.can_be_null()) {
+                        auto [val, is_null] = _val.split();
+#if 0
+                        IF (not is_null) {
+                            h |= reinterpret_to_U64(val); // add reinterpreted value
+                        };
+#else
+                        h |= (~uint64_t(0) + is_null.template to<uint64_t>()) bitand reinterpret_to_U64(val);
+#endif
+                    } else {
+                        auto val = _val.insist_not_null();
+                        h |= reinterpret_to_U64(val); // add reinterpreted value
                     }
                 },
                 [&](NChar _val) -> void {
                     IF (_val.clone().is_null()) {
                         uint64_t len_in_bits = 8 * _val.length();
                         h <<= len_in_bits;
-                        h |= uint64_t(1UL << (len_in_bits - 1)); // add NULL
                     } ELSE {
                         const Var<Ptr<Char>> val(_val.val());
                         for (int32_t i = 0; i != _val.length(); ++i) {

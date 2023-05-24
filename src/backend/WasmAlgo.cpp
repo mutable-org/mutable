@@ -1506,10 +1506,10 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace_with
 
     /*----- Search first unoccupied slot. -----*/
     WHILE (reference_count(slot) != ref_t(0)) {
-        slot = probing_strategy().advance_to_next_slot(slot, refs);
-        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
         refs += ref_t(1);
         Wasm_insist(refs <= *num_entries_, "probing strategy has to find unoccupied slot if there is one");
+        slot = probing_strategy().advance_to_next_slot(slot, refs);
+        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
     }
 
     /*----- Update reference count of this bucket. -----*/
@@ -1583,10 +1583,10 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
     Var<Ptr<void>> slot(bucket.val());
     WHILE (reference_count(slot) != ref_t(0)) {
         BREAK(equal_key(slot, clone(key))); // clone key (see above)
-        slot = probing_strategy().advance_to_next_slot(slot, refs);
-        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
         refs += ref_t(1);
         Wasm_insist(refs <= *num_entries_, "probing strategy has to find unoccupied slot if there is one");
+        slot = probing_strategy().advance_to_next_slot(slot, refs);
+        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
     }
 
     /*----- If unoccupied slot is found, i.e. key does not already exist, insert entry for it. -----*/
@@ -1658,10 +1658,10 @@ std::pair<HashTable::entry_t, Bool> OpenAddressingHashTable<IsGlobal, ValueInPla
     Var<PrimitiveExpr<ref_t>> steps(0);
     WHILE (reference_count(slot) != ref_t(0)) {
         BREAK(equal_key(slot, std::move(key)));
-        slot = probing_strategy().advance_to_next_slot(slot, steps);
-        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
         steps += ref_t(1);
         Wasm_insist(steps <= *num_entries_, "probing strategy has to find unoccupied slot if there is one");
+        slot = probing_strategy().advance_to_next_slot(slot, steps);
+        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
     }
 
     /*----- Key is found iff current slot is occupied. -----*/
@@ -1723,10 +1723,10 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::for_each_in_equal_range(st
                 Pipeline(entry(slot));
             };
         }
-        slot = probing_strategy().advance_to_next_slot(slot, steps);
-        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
         steps += ref_t(1);
         Wasm_insist(steps <= *num_entries_, "probing strategy has to find unoccupied slot if there is one");
+        slot = probing_strategy().advance_to_next_slot(slot, steps);
+        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
     }
 }
 
@@ -2168,8 +2168,8 @@ template struct m::wasm::OpenAddressingHashTable<true, true>;
 
 Ptr<void> LinearProbing::skip_slots(Ptr<void> bucket, U32 skips) const
 {
-    U32 skips_floored = skips bitand (ht_.capacity() - 1U); // modulo capacity
-    const Var<Ptr<void>> slot(bucket + (skips_floored * ht_.entry_size_in_bytes()).make_signed());
+    Wasm_insist(skips.clone() < ht_.capacity());
+    const Var<Ptr<void>> slot(bucket + (skips * ht_.entry_size_in_bytes()).make_signed());
     Wasm_insist(slot < ht_.end() + ht_.size_in_bytes().make_signed());
     return Select(slot < ht_.end(), slot, slot - ht_.size_in_bytes().make_signed());
 }
@@ -2187,15 +2187,15 @@ Ptr<void> QuadraticProbing::skip_slots(Ptr<void> bucket, U32 skips) const
 {
     auto skips_cloned = skips.clone();
     U32 slots_skipped = (skips_cloned * (skips + 1U)) >> 1U; // compute gaussian sum
-    U32 slots_skipped_floored = slots_skipped bitand (ht_.capacity() - 1U); // modulo capacity
-    const Var<Ptr<void>> slot(bucket + (slots_skipped_floored * ht_.entry_size_in_bytes()).make_signed());
+    U32 slots_skipped_mod = slots_skipped bitand (ht_.capacity() - 1U); // modulo capacity
+    const Var<Ptr<void>> slot(bucket + (slots_skipped_mod * ht_.entry_size_in_bytes()).make_signed());
     Wasm_insist(slot < ht_.end() + ht_.size_in_bytes().make_signed());
     return Select(slot < ht_.end(), slot, slot - ht_.size_in_bytes().make_signed());
 }
 
 Ptr<void> QuadraticProbing::advance_to_next_slot(Ptr<void> slot, U32 current_step) const
 {
-    const Var<Ptr<void>> next(slot + ((current_step + 1U) * ht_.entry_size_in_bytes()).make_signed());
+    const Var<Ptr<void>> next(slot + (current_step * ht_.entry_size_in_bytes()).make_signed());
     Wasm_insist(next < ht_.end() + ht_.size_in_bytes().make_signed());
     return Select(next < ht_.end(), next, next - ht_.size_in_bytes().make_signed());
 }

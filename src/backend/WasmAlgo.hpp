@@ -736,8 +736,8 @@ struct OpenAddressingHashTableBase : HashTable
 
         /** Returns the address of the \p skips -th (starting with index 0) slot in the bucket starting at \p bucket. */
         virtual Ptr<void> skip_slots(Ptr<void> bucket, U32 skips) const = 0;
-        /** Returns the address of the slot following the \p current_step -th (starting with index 0) slot \p slot in
-         * the same bucket. */
+        /** Returns the address of the \p current_step -th slot (starting with index 0) of a bucket which follows the
+         * slot \p slot. */
         virtual Ptr<void> advance_to_next_slot(Ptr<void> slot, U32 current_step) const = 0;
     };
 

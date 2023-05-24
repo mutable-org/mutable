@@ -577,7 +577,7 @@ class chained_hash_table_storage<true>
     friend struct ChainedHashTable<true>;
 
     Global<Ptr<void>> address_; ///< global backup for address of hash table
-    Global<U32> capacity_; ///< global backup for capacity of hash table
+    Global<U32> mask_; ///< global backup for mask of hash table
     Global<U32> num_entries_; ///< global backup for number of occupied entries of hash table
     Global<U32> high_watermark_absolute_; ///< global backup for absolute high watermark of hash table
 };
@@ -598,8 +598,8 @@ struct ChainedHashTable : HashTable
     HashTable::offset_t ptr_offset_in_bytes_; ///< offset of pointer to next entry in linked collision list
 
     std::optional<Var<Ptr<void>>> address_; ///< base address of hash table
-     ///> capacity of hash table, i.e. number of buckets / collision lists; always a power of 2
-    std::optional<Var<U32>> capacity_;
+     ///> mask of hash table, i.e. number of buckets / collision lists minus 1; always a power of 2 minus 1
+    std::optional<Var<U32>> mask_;
     std::optional<Var<U32>> num_entries_; ///< number of occupied entries of hash table
     double high_watermark_percentage_ = 1.0; ///< fraction of occupied entries before growing the hash table is required
     ///> maximum number of entries before growing the hash table is required
@@ -626,11 +626,13 @@ struct ChainedHashTable : HashTable
     Ptr<void> begin() const { M_insist(bool(address_), "must call `setup()` before"); return *address_; }
     /** Returns the address of the past-the-end bucket. */
     Ptr<void> end() const { return begin() + size_in_bytes().make_signed(); }
+    /** Returns the mask of the hash table, i.e. capacity - 1U, which can be used to mask a hash value into the range
+     * of the hash table. */
+    U32 mask() const { M_insist(bool(mask_), "must call `setup()` before"); return *mask_; }
+    /** Returns the capacity of the hash table. */
+    U32 capacity() const { return mask() + 1U; }
     /** Returns the overall size in bytes of the actual hash table, i.e. without collision list entries. */
-    U32 size_in_bytes() const {
-        M_insist(bool(capacity_), "must call `setup()` before");
-        return *capacity_ * uint32_t(sizeof(uint32_t));
-    }
+    U32 size_in_bytes() const { return capacity() * uint32_t(sizeof(uint32_t)); }
 
     public:
     /** Performs the setup of all local variables of the hash table (by reading them from the global backups iff
@@ -652,9 +654,8 @@ struct ChainedHashTable : HashTable
     private:
     /** Updates internal high watermark variables according to the currently set high watermark percentage. */
     void update_high_watermark() {
-        M_insist(bool(capacity_), "must call `setup()` before");
         M_insist(bool(high_watermark_absolute_), "must call `setup()` before");
-        auto high_watermark_absolute_new = high_watermark_percentage_ * capacity_->make_signed().template to<double>();
+        auto high_watermark_absolute_new = high_watermark_percentage_ * capacity().make_signed().template to<double>();
         auto high_watermark_absolute_floored = high_watermark_absolute_new.template to<int32_t>().make_unsigned();
         Wasm_insist(high_watermark_absolute_floored.clone() >= 1U,
                     "at least one entry must be allowed to insert before growing the table");
@@ -758,8 +759,11 @@ struct OpenAddressingHashTableBase : HashTable
     virtual Ptr<void> begin() const = 0;
     /** Returns the address of the past-the-end entry. */
     virtual Ptr<void> end() const = 0;
+    /** Returns the mask of the hash table, i.e. capacity - 1U, which can be used to mask a hash value into the range
+     * of the hash table. */
+    virtual U32 mask() const = 0;
     /** Returns the capacity of the hash table. */
-    virtual U32 capacity() const = 0;
+    U32 capacity() const { return mask() + 1U; }
     /** Returns the overall size in bytes of the hash table. */
     U32 size_in_bytes() const { return capacity() * entry_size_in_bytes_; }
     /** Returns the size in bytes of a single entry in the hash table. */
@@ -836,7 +840,7 @@ class open_addressing_hash_table_storage<true>
     friend struct OpenAddressingHashTable<true, true>;
 
     Global<Ptr<void>> address_; ///< global backup for address of hash table
-    Global<U32> capacity_; ///< global backup for capacity of hash table
+    Global<U32> mask_; ///< global backup for mask of hash table
     Global<U32> num_entries_; ///< global backup for number of occupied entries of hash table
     Global<U32> high_watermark_absolute_; ///< global backup for absolute high watermark of hash table
 };
@@ -851,7 +855,7 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
 
     open_addressing_hash_table_layout<ValueInPlace> layout_; ///< layout of hash table
     std::optional<Var<Ptr<void>>> address_; ///< base address of hash table
-    std::optional<Var<U32>> capacity_; ///< capacity of hash table; always a power of 2
+    std::optional<Var<U32>> mask_; ///< mask of hash table; always a power of 2 minus 1, i.e. 0b0..01..1
     std::optional<Var<U32>> num_entries_; ///< number of occupied entries of hash table
     std::optional<Var<U32>> high_watermark_absolute_; ///< maximum number of entries before growing the hash table is required
     ///> if `IsGlobal`, contains backups for address, capacity, number of entries, and absolute high watermark
@@ -875,7 +879,7 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
     private:
     Ptr<void> begin() const override { M_insist(bool(address_), "must call `setup()` before"); return *address_; }
     Ptr<void> end() const override { return begin() + (capacity() * entry_size_in_bytes_).make_signed(); }
-    U32 capacity() const override { M_insist(bool(capacity_), "must call `setup()` before"); return *capacity_; }
+    U32 mask() const override { M_insist(bool(mask_), "must call `setup()` before"); return *mask_; }
 
     public:
     /** Performs the setup of all local variables of the hash table (by reading them from the global backups iff
@@ -889,13 +893,12 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
 
     private:
     void update_high_watermark() override {
-        M_insist(bool(capacity_), "must call `setup()` before");
         M_insist(bool(high_watermark_absolute_), "must call `setup()` before");
-        auto high_watermark_absolute_new = high_watermark_percentage_ * capacity_->make_signed().template to<double>();
+        auto high_watermark_absolute_new = high_watermark_percentage_ * capacity().make_signed().template to<double>();
         *high_watermark_absolute_ = high_watermark_absolute_new.template to<int32_t>().make_unsigned() - 1U;
         Wasm_insist(*high_watermark_absolute_ >= 1U,
                     "at least one entry must be allowed to insert before growing the table");
-        Wasm_insist(*high_watermark_absolute_ < *capacity_, "at least one entry must always be unoccupied for lookups");
+        Wasm_insist(*high_watermark_absolute_ < capacity(), "at least one entry must always be unoccupied for lookups");
     }
 
     /** Creates dummy entry for predication. */

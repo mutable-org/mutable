@@ -439,12 +439,13 @@ ChainedHashTable<IsGlobal>::ChainedHashTable(const Schema &schema, std::vector<H
 
     /*----- Initialize capacity and absolute high watermark. -----*/
     const auto capacity_init = ceil_to_pow_2(initial_capacity);
+    const auto mask_init = capacity_init - 1U;
     const auto high_watermark_absolute_init = capacity_init;
     if constexpr (IsGlobal) {
-        storage_.capacity_.init(capacity_init);
+        storage_.mask_.init(mask_init);
         storage_.high_watermark_absolute_.init(high_watermark_absolute_init);
     } else {
-        capacity_.emplace(capacity_init);
+        mask_.emplace(mask_init);
         high_watermark_absolute_.emplace(high_watermark_absolute_init);
     }
 }
@@ -455,7 +456,7 @@ ChainedHashTable<IsGlobal>::~ChainedHashTable()
     if constexpr (IsGlobal) { // free memory of global hash table when object is destroyed and no use may occur later
         /*----- Free collision list entries. -----*/
         Var<Ptr<void>> it(storage_.address_);
-        const Var<Ptr<void>> end(storage_.address_ + (storage_.capacity_ * uint32_t(sizeof(uint32_t))).make_signed());
+        const Var<Ptr<void>> end(storage_.address_ + ((storage_.mask_ + 1U) * uint32_t(sizeof(uint32_t))).make_signed());
         WHILE (it != end) {
             Wasm_insist(storage_.address_ <= it and it < end, "bucket out-of-bounds");
             Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint32_t*>()));
@@ -468,7 +469,7 @@ ChainedHashTable<IsGlobal>::~ChainedHashTable()
         }
 
         /*----- Free all buckets. -----*/
-        Module::Allocator().deallocate(storage_.address_, storage_.capacity_ * uint32_t(sizeof(uint32_t)));
+        Module::Allocator().deallocate(storage_.address_, (storage_.mask_ + 1U) * uint32_t(sizeof(uint32_t)));
 
         /*----- Free dummy entries. -----*/
         for (auto it = dummy_allocations_.rbegin(); it != dummy_allocations_.rend(); ++it)
@@ -500,19 +501,19 @@ void ChainedHashTable<IsGlobal>::setup()
     address_.emplace();
     num_entries_.emplace();
     if constexpr (IsGlobal) {
-        M_insist(not capacity_, "must not call `setup()` twice");
+        M_insist(not mask_, "must not call `setup()` twice");
         M_insist(not high_watermark_absolute_, "must not call `setup()` twice");
-        capacity_.emplace();
+        mask_.emplace();
         high_watermark_absolute_.emplace();
     } else {
-        M_insist(bool(capacity_)); // already initialized in c'tor
+        M_insist(bool(mask_)); // already initialized in c'tor
         M_insist(bool(high_watermark_absolute_)); // already initialized in c'tor
     }
 
     /*----- For global hash tables, read values from global backups into local variables. -----*/
     if constexpr (IsGlobal) {
         /* omit assigning address here as it will always be set below */
-        *capacity_ = storage_.capacity_;
+        *mask_ = storage_.mask_;
         *num_entries_ = storage_.num_entries_;
         *high_watermark_absolute_ = storage_.high_watermark_absolute_;
     }
@@ -540,7 +541,7 @@ template<bool IsGlobal>
 void ChainedHashTable<IsGlobal>::teardown()
 {
     M_insist(bool(address_), "must call `setup()` before");
-    M_insist(bool(capacity_), "must call `setup()` before");
+    M_insist(bool(mask_), "must call `setup()` before");
     M_insist(bool(num_entries_), "must call `setup()` before");
     M_insist(bool(high_watermark_absolute_), "must call `setup()` before");
 
@@ -583,14 +584,14 @@ void ChainedHashTable<IsGlobal>::teardown()
     /*----- For global hash tables, write values from local variables into global backups. -----*/
     if constexpr (IsGlobal) {
         storage_.address_ = *address_;
-        storage_.capacity_ = *capacity_;
+        storage_.mask_ = *mask_;
         storage_.num_entries_ = *num_entries_;
         storage_.high_watermark_absolute_ = *high_watermark_absolute_;
     }
 
     /*----- Destroy local variables. -----*/
     address_.reset();
-    capacity_.reset();
+    mask_.reset();
     num_entries_.reset();
     high_watermark_absolute_.reset();
 }
@@ -617,7 +618,7 @@ void ChainedHashTable<IsGlobal>::clear()
 template<bool IsGlobal>
 Ptr<void> ChainedHashTable<IsGlobal>::hash_to_bucket(std::vector<SQL_t> key) const
 {
-    M_insist(bool(capacity_), "must call `setup()` before");
+    M_insist(bool(mask_), "must call `setup()` before");
     M_insist(key.size() == key_indices_.size(),
              "provided number of key elements does not match hash table's number of key indices");
 
@@ -632,7 +633,7 @@ Ptr<void> ChainedHashTable<IsGlobal>::hash_to_bucket(std::vector<SQL_t> key) con
     U64 hash = murmur3_64a_hash(std::move(values));
 
     /*----- Compute bucket address. -----*/
-    U32 bucket_idx = hash.to<uint32_t>() bitand (*capacity_ - 1U); // modulo capacity_
+    U32 bucket_idx = hash.to<uint32_t>() bitand *mask_; // modulo capacity
     return begin() + (bucket_idx * uint32_t(sizeof(uint32_t))).make_signed();
 }
 
@@ -1096,14 +1097,14 @@ void ChainedHashTable<IsGlobal>::rehash()
         auto S = CodeGenContext::Get().scoped_environment(); // fresh environment to remove predication while rehashing
 
         M_insist(bool(address_), "must call `setup()` before");
-        M_insist(bool(capacity_), "must call `setup()` before");
+        M_insist(bool(mask_), "must call `setup()` before");
 
         /*----- Store old begin and end (since they will be overwritten). -----*/
         const Var<Ptr<void>> begin_old(begin());
         const Var<Ptr<void>> end_old(end());
 
         /*----- Double capacity. -----*/
-        *capacity_ <<= 1U;
+        *mask_ = (*mask_ << 1U) + 1U;
 
         /*----- Allocate memory for new hash table with updated capacity. -----*/
         *address_ = Module::Allocator().allocate(size_in_bytes(), sizeof(uint32_t));
@@ -1155,7 +1156,7 @@ void ChainedHashTable<IsGlobal>::rehash()
         if (not rehash_) {
             /*----- Backup former local variables to be able to use new ones for rehashing function. -----*/
             auto old_address = std::exchange(address_, std::optional<Var<Ptr<void>>>());
-            auto old_capacity = std::exchange(capacity_, std::optional<Var<U32>>());
+            auto old_mask = std::exchange(mask_, std::optional<Var<U32>>());
             /* omit `num_entries_` and `high_watermark_absolute_` as they are never accessed during rehashing */
 
             /*----- Create function for rehashing. -----*/
@@ -1163,21 +1164,21 @@ void ChainedHashTable<IsGlobal>::rehash()
             {
                 /*----- Perform setup for local variables. -----*/
                 address_.emplace(storage_.address_);
-                capacity_.emplace(storage_.capacity_);
+                mask_.emplace(storage_.mask_);
 
                 emit_rehash();
 
                 /*----- Perform teardown for local variables. -----*/
                 storage_.address_ = *address_;
-                storage_.capacity_ = *capacity_;
+                storage_.mask_ = *mask_;
                 address_.reset();
-                capacity_.reset();
+                mask_.reset();
             }
             rehash_ = std::move(rehash);
 
             /*----- Restore local variables. -----*/
             std::exchange(address_, std::move(old_address));
-            std::exchange(capacity_, std::move(old_capacity));
+            std::exchange(mask_, std::move(old_mask));
         }
 
         /*----- Call rehashing function. ------*/
@@ -1222,7 +1223,7 @@ Ptr<void> OpenAddressingHashTableBase::hash_to_bucket(std::vector<SQL_t> key) co
     U64 hash = murmur3_64a_hash(std::move(values));
 
     /*----- Compute bucket address. -----*/
-    U32 bucket_idx = hash.to<uint32_t>() bitand (capacity() - 1U); // modulo capacity_
+    U32 bucket_idx = hash.to<uint32_t>() bitand mask(); // modulo capacity
     return begin() + (bucket_idx * entry_size_in_bytes_).make_signed();
 }
 
@@ -1329,12 +1330,13 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::OpenAddressingHashTable(const S
     /*----- Initialize capacity and absolute high watermark. -----*/
     /* at least capacity 4 to ensure absolute high watermark of at least 1 even for minimal percentage of 0.5 */
     const auto capacity_init = std::max<uint32_t>(4, ceil_to_pow_2(initial_capacity));
+    const auto mask_init = capacity_init - 1U;
     const auto high_watermark_absolute_init = capacity_init - 1U; // at least one entry must always be unoccupied
     if constexpr (IsGlobal) {
-        storage_.capacity_.init(capacity_init);
+        storage_.mask_.init(mask_init);
         storage_.high_watermark_absolute_.init(high_watermark_absolute_init);
     } else {
-        capacity_.emplace(capacity_init);
+        mask_.emplace(mask_init);
         high_watermark_absolute_.emplace(high_watermark_absolute_init);
     }
 }
@@ -1346,7 +1348,7 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::~OpenAddressingHashTable()
         if constexpr (not ValueInPlace) {
             /*----- Free out-of-place values. -----*/
             Var<Ptr<void>> it(storage_.address_);
-            const Var<Ptr<void>> end(storage_.address_ + (storage_.capacity_ * entry_size_in_bytes_).make_signed());
+            const Var<Ptr<void>> end(storage_.address_ + ((storage_.mask_ + 1U) * entry_size_in_bytes_).make_signed());
             WHILE (it != end) {
                 Wasm_insist(storage_.address_ <= it and it < end, "entry out-of-bounds");
                 IF (reference_count(it) != ref_t(0)) { // occupied
@@ -1358,7 +1360,7 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::~OpenAddressingHashTable()
         }
 
         /*----- Free all entries. -----*/
-        Module::Allocator().deallocate(storage_.address_, storage_.capacity_ * entry_size_in_bytes_);
+        Module::Allocator().deallocate(storage_.address_, (storage_.mask_ + 1U) * entry_size_in_bytes_);
 
         /*----- Free dummy entries. -----*/
         for (auto it = dummy_allocations_.rbegin(); it != dummy_allocations_.rend(); ++it)
@@ -1376,19 +1378,19 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::setup()
     address_.emplace();
     num_entries_.emplace();
     if constexpr (IsGlobal) {
-        M_insist(not capacity_, "must not call `setup()` twice");
+        M_insist(not mask_, "must not call `setup()` twice");
         M_insist(not high_watermark_absolute_, "must not call `setup()` twice");
-        capacity_.emplace();
+        mask_.emplace();
         high_watermark_absolute_.emplace();
     } else {
-        M_insist(bool(capacity_)); // already initialized in c'tor
+        M_insist(bool(mask_)); // already initialized in c'tor
         M_insist(bool(high_watermark_absolute_)); // already initialized in c'tor
     }
 
     /*----- For global hash tables, read values from global backups into local variables. -----*/
     if constexpr (IsGlobal) {
         /* omit assigning address here as it will always be set below */
-        *capacity_ = storage_.capacity_;
+        *mask_ = storage_.mask_;
         *num_entries_ = storage_.num_entries_;
         *high_watermark_absolute_ = storage_.high_watermark_absolute_;
     }
@@ -1416,7 +1418,7 @@ template<bool IsGlobal, bool ValueInPlace>
 void OpenAddressingHashTable<IsGlobal, ValueInPlace>::teardown()
 {
     M_insist(bool(address_), "must call `setup()` before");
-    M_insist(bool(capacity_), "must call `setup()` before");
+    M_insist(bool(mask_), "must call `setup()` before");
     M_insist(bool(num_entries_), "must call `setup()` before");
     M_insist(bool(high_watermark_absolute_), "must call `setup()` before");
 
@@ -1445,14 +1447,14 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::teardown()
     /*----- For global hash tables, write values from local variables into global backups. -----*/
     if constexpr (IsGlobal) {
         storage_.address_ = *address_;
-        storage_.capacity_ = *capacity_;
+        storage_.mask_ = *mask_;
         storage_.num_entries_ = *num_entries_;
         storage_.high_watermark_absolute_ = *high_watermark_absolute_;
     }
 
     /*----- Destroy local variables. -----*/
     address_.reset();
-    capacity_.reset();
+    mask_.reset();
     num_entries_.reset();
     high_watermark_absolute_.reset();
 }
@@ -1475,7 +1477,6 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace(std:
 template<bool IsGlobal, bool ValueInPlace>
 HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace_without_rehashing(std::vector<SQL_t> key)
 {
-    M_insist(bool(capacity_), "must call `setup()` before");
     M_insist(bool(num_entries_), "must call `setup()` before");
     M_insist(bool(high_watermark_absolute_), "must call `setup()` before");
 
@@ -1520,7 +1521,7 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace_with
 
     /*----- Update number of entries. -----*/
     *num_entries_ += pred ? pred->to<uint32_t>() : U32(1);
-    Wasm_insist(*num_entries_ < *capacity_, "at least one entry must always be unoccupied for lookups");
+    Wasm_insist(*num_entries_ < capacity(), "at least one entry must always be unoccupied for lookups");
 
     /*----- Insert key. -----*/
     insert_key(slot, std::move(key));
@@ -1550,7 +1551,6 @@ template<bool IsGlobal, bool ValueInPlace>
 std::pair<HashTable::entry_t, Bool>
 OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> key)
 {
-    M_insist(bool(capacity_), "must call `setup()` before");
     M_insist(bool(num_entries_), "must call `setup()` before");
     M_insist(bool(high_watermark_absolute_), "must call `setup()` before");
 
@@ -1603,7 +1603,7 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
 
         /*----- Update number of entries. -----*/
         *num_entries_ += pred ? pred->to<uint32_t>() : U32(1);
-        Wasm_insist(*num_entries_ < *capacity_, "at least one entry must always be unoccupied for lookups");
+        Wasm_insist(*num_entries_ < capacity(), "at least one entry must always be unoccupied for lookups");
 
         /*----- Insert key. -----*/
         insert_key(slot, std::move(key));
@@ -2042,7 +2042,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
         auto S = CodeGenContext::Get().scoped_environment(); // fresh environment to remove predication while rehashing
 
         M_insist(bool(address_), "must call `setup()` before");
-        M_insist(bool(capacity_), "must call `setup()` before");
+        M_insist(bool(mask_), "must call `setup()` before");
         M_insist(bool(num_entries_), "must call `setup()` before");
 
         /*----- Store old begin and end (since they will be overwritten). -----*/
@@ -2050,7 +2050,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
         const Var<Ptr<void>> end_old(end());
 
         /*----- Double capacity. -----*/
-        *capacity_ <<= 1U;
+        *mask_ = (*mask_ << 1U) + 1U;
 
         /*----- Allocate memory for new hash table with updated capacity. -----*/
         *address_ = Module::Allocator().allocate(size_in_bytes(), entry_max_alignment_in_bytes_);
@@ -2114,7 +2114,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
         if (not rehash_) {
             /*----- Backup former local variables to be able to use new ones for rehashing function. -----*/
             auto old_address = std::exchange(address_, std::optional<Var<Ptr<void>>>());
-            auto old_capacity = std::exchange(capacity_, std::optional<Var<U32>>());
+            auto old_mask = std::exchange(mask_, std::optional<Var<U32>>());
             auto old_num_entries = std::exchange(num_entries_, std::optional<Var<U32>>());
             auto old_high_watermark_absolute = std::exchange(high_watermark_absolute_, std::optional<Var<U32>>());
 
@@ -2123,7 +2123,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
             {
                 /*----- Perform setup for local variables. -----*/
                 address_.emplace(storage_.address_);
-                capacity_.emplace(storage_.capacity_);
+                mask_.emplace(storage_.mask_);
                 num_entries_.emplace(storage_.num_entries_);
                 high_watermark_absolute_.emplace(storage_.high_watermark_absolute_);
 
@@ -2131,11 +2131,11 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
 
                 /*----- Perform teardown for local variables. -----*/
                 storage_.address_ = *address_;
-                storage_.capacity_ = *capacity_;
+                storage_.mask_ = *mask_;
                 storage_.num_entries_ = *num_entries_;
                 storage_.high_watermark_absolute_ = *high_watermark_absolute_;
                 address_.reset();
-                capacity_.reset();
+                mask_.reset();
                 num_entries_.reset();
                 high_watermark_absolute_.reset();
             }
@@ -2143,7 +2143,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
 
             /*----- Restore local variables. -----*/
             std::exchange(address_, std::move(old_address));
-            std::exchange(capacity_, std::move(old_capacity));
+            std::exchange(mask_, std::move(old_mask));
             std::exchange(num_entries_, std::move(old_num_entries));
             std::exchange(high_watermark_absolute_, std::move(old_high_watermark_absolute));
         }
@@ -2187,7 +2187,7 @@ Ptr<void> QuadraticProbing::skip_slots(Ptr<void> bucket, U32 skips) const
 {
     auto skips_cloned = skips.clone();
     U32 slots_skipped = (skips_cloned * (skips + 1U)) >> 1U; // compute gaussian sum
-    U32 slots_skipped_mod = slots_skipped bitand (ht_.capacity() - 1U); // modulo capacity
+    U32 slots_skipped_mod = slots_skipped bitand ht_.mask(); // modulo capacity
     const Var<Ptr<void>> slot(bucket + (slots_skipped_mod * ht_.entry_size_in_bytes()).make_signed());
     Wasm_insist(slot < ht_.end() + ht_.size_in_bytes().make_signed());
     return Select(slot < ht_.end(), slot, slot - ht_.size_in_bytes().make_signed());

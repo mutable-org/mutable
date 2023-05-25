@@ -720,19 +720,22 @@ std::pair<HashTable::entry_t, Bool> ChainedHashTable<IsGlobal>::try_emplace(std:
              : hash_to_bucket(clone(key))
     ); // clone key since we need it again for insertion
 
-    /*----- Iterate until the end of the collision list but abort if key already exists. -----*/
+    /*----- Probe collision list, abort and skip insertion if key already exists. -----*/
+    Var<Bool> entry_inserted(false);
     Var<Ptr<void>> bucket_it(Ptr<void>(*bucket.to<uint32_t*>()));
-    WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
-        BREAK(equal_key(bucket_it, clone(key))); // clone key (see above)
-        bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
-    }
+    BLOCK(insert_entry) {
+        WHILE (not bucket_it.is_nullptr()) {
+            GOTO(equal_key(bucket_it, clone(key)), insert_entry); // clone key (see above)
+            bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
+        }
+        Wasm_insist(bucket_it.is_nullptr());
+        if (pred)
+            Wasm_insist(*pred or bucket_it == Ptr<void>(*bucket.to<uint32_t*>()),
+                        "predication dummy must always contain an empty collision list");
 
-    /*----- If end is reached, i.e. key does not already exist, insert entry for it. -----*/
-    Bool end_reached = bucket_it.is_nullptr();
-    if (pred)
-        Wasm_insist(*pred or (end_reached.clone() and bucket_it == Ptr<void>(*bucket.to<uint32_t*>())),
-                    "predication dummy must always contain an empty collision list");
-    IF (end_reached.clone()) {
+        /*----- Set flag to indicate insertion. -----*/
+        entry_inserted = true;
+
         /*----- Allocate memory for entry. -----*/
         Ptr<void> entry = Module::Allocator().allocate(entry_size_in_bytes_, entry_max_alignment_in_bytes_);
         bucket_it = entry.clone();
@@ -745,11 +748,13 @@ std::pair<HashTable::entry_t, Bool> ChainedHashTable<IsGlobal>::try_emplace(std:
         *num_entries_ += pred ? pred->to<uint32_t>() : U32(1);
 
         /*----- Insert key. -----*/
-        insert_key(entry, std::move(key));
-    };
+        insert_key(entry, std::move(key)); // move key at last use
+    }
+
+    /* GOTO from above jumps here */
 
     /*----- Return entry handle containing all values and the flag whether an insertion was performed. -----*/
-    return { value_entry(bucket_it), end_reached };
+    return { value_entry(bucket_it), entry_inserted };
 }
 
 template<bool IsGlobal>
@@ -769,10 +774,10 @@ std::pair<HashTable::entry_t, Bool> ChainedHashTable<IsGlobal>::find(std::vector
         pred ? Select(*pred, hash_to_bucket(clone(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
              : hash_to_bucket(clone(key)); // clone key since we need it again for comparison
 
-    /*----- Iterate until the end of the collision list but abort if key is found. -----*/
+    /*----- Probe collision list, abort if key already exists. -----*/
     Var<Ptr<void>> bucket_it(Ptr<void>(*bucket.to<uint32_t*>()));
     WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
-        BREAK(equal_key(bucket_it, std::move(key)));
+        BREAK(equal_key(bucket_it, std::move(key))); // move key at last use
         bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
     }
 
@@ -1524,7 +1529,7 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace_with
     Wasm_insist(*num_entries_ < capacity(), "at least one entry must always be unoccupied for lookups");
 
     /*----- Insert key. -----*/
-    insert_key(slot, std::move(key));
+    insert_key(slot, std::move(key)); // move key at last use
 
     if constexpr (ValueInPlace) {
         /*----- Return entry handle containing all values. -----*/
@@ -1579,24 +1584,27 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
     /*----- Set reference count, i.e. occupied slots, of this bucket to its initial value. -----*/
     Var<PrimitiveExpr<ref_t>> refs(0);
 
-    /*----- Search first unoccupied slot but abort if key already exists. -----*/
+    /*----- Probe slots, abort and skip insertion if key already exists. -----*/
+    Var<Bool> entry_inserted(false);
     Var<Ptr<void>> slot(bucket.val());
-    WHILE (reference_count(slot) != ref_t(0)) {
-        BREAK(equal_key(slot, clone(key))); // clone key (see above)
-        refs += ref_t(1);
-        Wasm_insist(refs <= *num_entries_, "probing strategy has to find unoccupied slot if there is one");
-        slot = probing_strategy().advance_to_next_slot(slot, refs);
-        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
-    }
+    BLOCK(insert_entry) {
+        WHILE (reference_count(slot) != ref_t(0)) {
+            GOTO(equal_key(slot, clone(key)), insert_entry); // clone key (see above)
+            refs += ref_t(1);
+            Wasm_insist(refs <= *num_entries_, "probing strategy has to find unoccupied slot if there is one");
+            slot = probing_strategy().advance_to_next_slot(slot, refs);
+            Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
+        }
+        Wasm_insist(reference_count(slot) == ref_t(0));
+        if (pred)
+            Wasm_insist(*pred or refs == ref_t(0), "predication dummy must always be unoccupied");
 
-    /*----- If unoccupied slot is found, i.e. key does not already exist, insert entry for it. -----*/
-    const Var<Bool> slot_unoccupied(reference_count(slot) == ref_t(0)); // create constant variable since `slot` may change
-    if (pred)
-        Wasm_insist(*pred or (slot_unoccupied and refs == ref_t(0)), "predication dummy must always be unoccupied");
-    IF (slot_unoccupied) {
+        /*----- Set flag to indicate insertion. -----*/
+        entry_inserted = true;
+
         /*----- Update reference count of this bucket. -----*/
         Wasm_insist(reference_count(bucket) <= refs, "reference count must increase if unoccupied slot is found");
-        reference_count(bucket) = refs + ref_t(1); // no predication special case since bucket equals slot if dummy is used
+        reference_count(bucket) = refs + ref_t(1); // no pred. special case since bucket equals slot if dummy is used
 
         /*----- Iff no predication is used or predicate is fulfilled, set slot as occupied. -----*/
         reference_count(slot) = pred ? pred->to<ref_t>() : PrimitiveExpr<ref_t>(1);
@@ -1606,7 +1614,7 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
         Wasm_insist(*num_entries_ < capacity(), "at least one entry must always be unoccupied for lookups");
 
         /*----- Insert key. -----*/
-        insert_key(slot, std::move(key));
+        insert_key(slot, std::move(key)); // move key at last use
 
         if constexpr (not ValueInPlace) {
             /*----- Allocate memory for out-of-place values and set pointer to it. -----*/
@@ -1616,14 +1624,16 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
 
             if (pred) {
                 /*----- Store address and size of dummy predication entry to free them later. -----*/
-                var_t<Ptr<void>> ptr_; // create global variable iff `IsGlobal` to be able to access it later for deallocation
+                var_t<Ptr<void>> ptr_; // create global variable iff `IsGlobal` to access it later for deallocation
                 ptr_ = ptr.clone();
                 dummy_allocations_.emplace_back(ptr_, layout_.values_size_in_bytes_);
             }
 
             ptr.discard(); // since it was always cloned
         }
-    };
+    }
+
+    /* GOTO from above jumps here */
 
     if constexpr (not ValueInPlace) {
         /*----- Set slot pointer to out-of-place values. -----*/
@@ -1631,7 +1641,7 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
     }
 
     /*----- Return entry handle containing all values and the flag whether an insertion was performed. -----*/
-    return { value_entry(slot), slot_unoccupied };
+    return { value_entry(slot), entry_inserted };
 }
 
 template<bool IsGlobal, bool ValueInPlace>
@@ -1653,11 +1663,11 @@ std::pair<HashTable::entry_t, Bool> OpenAddressingHashTable<IsGlobal, ValueInPla
         pred ? Select(*pred, hash_to_bucket(clone(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
              : hash_to_bucket(clone(key)); // clone key since we need it again for comparison
 
-    /*----- Search first slot with the given key but abort if an unoccupied slot is found. -----*/
+    /*----- Probe slots, abort if key already exists. -----*/
     Var<Ptr<void>> slot(bucket);
     Var<PrimitiveExpr<ref_t>> steps(0);
     WHILE (reference_count(slot) != ref_t(0)) {
-        BREAK(equal_key(slot, std::move(key)));
+        BREAK(equal_key(slot, std::move(key))); // move key at last use
         steps += ref_t(1);
         Wasm_insist(steps <= *num_entries_, "probing strategy has to find unoccupied slot if there is one");
         slot = probing_strategy().advance_to_next_slot(slot, steps);

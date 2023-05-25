@@ -874,6 +874,8 @@ struct Block final
 
     /** Emits a jump to the end of this `Block`. */
     void go_to() const { Module::Block().list.push_back(Module::Builder().makeBreak(get().name)); }
+    /** Emits a jump to the end of this `Block` iff `cond` is fulfilled. */
+    void go_to(PrimitiveExpr<bool> cond) const;
 
     friend std::ostream & operator<<(std::ostream &out, const Block &B) {
         out << "vvvvvvvvvv block";
@@ -1202,6 +1204,7 @@ struct PrimitiveExpr<T>
     template<typename, VariableKind, bool>
     friend class detail::variable_storage; // to construct from `::wasm::Expression` and access private `expr()`
     friend struct Module; // to access internal `::wasm::Expression`, e.g. in `emit_return()`
+    friend struct Block; // to access internal `::wasm::Expression`, e.g. in `go_to()`
     template<typename> friend struct FunctionProxy; // to access internal `::wasm::Expr` to construct function calls
     friend struct If; // to use PrimitiveExpr<bool> as condition
     friend struct While; // to use PrimitiveExpr<bool> as condition
@@ -3312,7 +3315,16 @@ inline void CONTINUE(C &&_cond, std::size_t level = 1)
 
 /*----- GOTO ---------------------------------------------------------------------------------------------------------*/
 
+/** Jumps to the end of \p block. */
 inline void GOTO(const Block &block) { block.go_to(); }
+template<primitive_convertible C>
+requires requires (C &&c) { PrimitiveExpr<bool>(std::forward<C>(c)); }
+/** Jumps to the end of \p block iff \p _cond is fulfilled. */
+inline void GOTO(C &&_cond, const Block &block)
+{
+    PrimitiveExpr<bool> cond(std::forward<C>(_cond));
+    block.go_to(cond);
+}
 
 /*----- Select -------------------------------------------------------------------------------------------------------*/
 
@@ -3705,6 +3717,16 @@ Expr<T> Module::emit_select(PrimitiveExpr<bool> cond, Expr<T> tru, Expr<T> fals)
 inline void Module::push_branch_targets(::wasm::Name brk, ::wasm::Name continu, PrimitiveExpr<bool> condition)
 {
     branch_target_stack_.emplace_back(brk, continu, condition.expr());
+}
+
+
+/*======================================================================================================================
+ * Block
+ *====================================================================================================================*/
+
+inline void Block::go_to(PrimitiveExpr<bool> cond) const
+{
+    Module::Block().list.push_back(Module::Builder().makeBreak(get().name, nullptr, cond.expr()));
 }
 
 

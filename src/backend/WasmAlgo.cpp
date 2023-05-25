@@ -1668,15 +1668,19 @@ std::pair<HashTable::entry_t, Bool> OpenAddressingHashTable<IsGlobal, ValueInPla
     }
     M_insist(not pred or predication_dummy_);
 
-    /*----- Compute bucket address by hashing the key. -----*/
-    Ptr<void> bucket =
+    /*----- Compute bucket address by hashing the key. Create constant variable to do not recompute the hash. -----*/
+    const Var<Ptr<void>> bucket(
         pred ? Select(*pred, hash_to_bucket(clone(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
-             : hash_to_bucket(clone(key)); // clone key since we need it again for comparison
+             : hash_to_bucket(clone(key))
+    ); // clone key since we need it again for comparison
 
-    /*----- Probe slots, abort if key already exists. -----*/
-    Var<Ptr<void>> slot(bucket);
+    /*----- Get reference count, i.e. occupied slots, of this bucket. -----*/
+    const Var<PrimitiveExpr<ref_t>> refs(reference_count(bucket));
+
+    /*----- Probe slots, abort if end of bucket is reached or key already exists. -----*/
+    Var<Ptr<void>> slot(bucket.val());
     Var<PrimitiveExpr<ref_t>> steps(0);
-    WHILE (reference_count(slot) != ref_t(0)) {
+    WHILE (steps != refs and reference_count(slot) != ref_t(0)) {
         BREAK(equal_key(slot, std::move(key))); // move key at last use
         steps += ref_t(1);
         Wasm_insist(steps <= *num_entries_, "probing strategy has to find unoccupied slot if there is one");
@@ -1726,15 +1730,19 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::for_each_in_equal_range(st
     }
     M_insist(not pred or predication_dummy_);
 
-    /*----- Compute bucket address by hashing the key. -----*/
-    Ptr<void> bucket =
+    /*----- Compute bucket address by hashing the key. Create constant variable to do not recompute the hash. -----*/
+    const Var<Ptr<void>> bucket(
         pred ? Select(*pred, hash_to_bucket(clone(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
-             : hash_to_bucket(clone(key)); // clone key since we need it again for comparison
+             : hash_to_bucket(clone(key))
+    ); // clone key since we need it again for comparison
+
+    /*----- Get reference count, i.e. occupied slots, of this bucket. -----*/
+    const Var<PrimitiveExpr<ref_t>> refs(reference_count(bucket));
 
     /*----- Iterate over slots and call pipeline (with entry handle argument) on matches with the given key. -----*/
-    Var<Ptr<void>> slot(bucket);
+    Var<Ptr<void>> slot(bucket.val());
     Var<PrimitiveExpr<ref_t>> steps(0);
-    WHILE (reference_count(slot) != ref_t(0)) {
+    WHILE (steps != refs and reference_count(slot) != ref_t(0)) { // end of bucket not reached and slot occupied
         if (predicated) {
             CodeGenContext::Get().env().add_predicate(equal_key(slot, std::move(key)));
             Pipeline(entry(slot));

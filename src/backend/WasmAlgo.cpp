@@ -725,13 +725,20 @@ std::pair<HashTable::entry_t, Bool> ChainedHashTable<IsGlobal>::try_emplace(std:
     Var<Bool> entry_inserted(false);
     Var<Ptr<void>> bucket_it(Ptr<void>(*bucket.to<uint32_t*>()));
     BLOCK(insert_entry) {
-        WHILE (not bucket_it.is_nullptr()) {
-            GOTO(equal_key(bucket_it, clone(key)), insert_entry); // clone key (see above)
-            bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
-        }
-        Wasm_insist(bucket_it.is_nullptr());
+        IF (bucket_it.is_nullptr()) { // empty collision list
+            bucket_it = bucket - ptr_offset_in_bytes_; // set bucket iterator to point to bucket's collision list front
+        } ELSE {
+            LOOP () {
+                GOTO(equal_key(bucket_it, clone(key)), insert_entry); // clone key (see above)
+                const Var<Ptr<void>> next_bucket_it(Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>()));
+                BREAK(next_bucket_it.is_nullptr());
+                bucket_it = next_bucket_it;
+                CONTINUE();
+            }
+        };
+        Wasm_insist(Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>()).is_nullptr());
         if (pred)
-            Wasm_insist(*pred or bucket_it == Ptr<void>(*bucket.to<uint32_t*>()),
+            Wasm_insist(*pred or bucket_it == bucket - ptr_offset_in_bytes_,
                         "predication dummy must always contain an empty collision list");
 
         /*----- Set flag to indicate insertion. -----*/
@@ -739,12 +746,13 @@ std::pair<HashTable::entry_t, Bool> ChainedHashTable<IsGlobal>::try_emplace(std:
 
         /*----- Allocate memory for entry. -----*/
         Var<Ptr<void>> entry = Module::Allocator().allocate(entry_size_in_bytes_, entry_max_alignment_in_bytes_);
-        bucket_it = entry;
 
-        /*----- Iff no predication is used or predicate is fulfilled, insert entry at the collision list's front. ----*/
-        *(entry + ptr_offset_in_bytes_).to<uint32_t*>() = *bucket.to<uint32_t*>();
-        *bucket.to<uint32_t*>() = pred ? Select(*pred, entry.to<uint32_t>(), *bucket.to<uint32_t*>())
-                                       : entry.to<uint32_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
+        /*----- Iff no predication is used or predicate is fulfilled, insert entry at the collision list's end. -----*/
+        *(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>() = pred ? Select(*pred, entry.to<uint32_t>(), 0U)
+                                                                   : entry.to<uint32_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
+
+        /*----- Set bucket iterator to inserted entry. -----*/
+        bucket_it = entry;
 
         /*----- Update number of entries. -----*/
         *num_entries_ += pred ? pred->to<uint32_t>() : U32(1);

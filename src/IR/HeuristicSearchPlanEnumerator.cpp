@@ -1874,42 +1874,42 @@ struct scaled_sum<PlanTable, State, BottomUp>
     }
 };
 
-    template<typename PlanTable, typename State>
-    struct scaled_sum<PlanTable, State, TopDown> {
-        using state_type = State;
+template<typename PlanTable, typename State>
+struct scaled_sum<PlanTable, State, TopDown> {
+    using state_type = State;
 
-        scaled_sum(const PlanTable &, const QueryGraph &, const AdjacencyMatrix &, const CostFunction &,
-                   const CardinalityEstimator &) {}
+    scaled_sum(const PlanTable &, const QueryGraph &, const AdjacencyMatrix &, const CostFunction &,
+               const CardinalityEstimator &) {}
 
-        double operator()(const state_type &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
-                          const CostFunction &CF, const CardinalityEstimator &CE) const {
-            static cnf::CNF condition;
-            double cardinalities[G.num_sources()];
-            std::size_t num_sources = 0;
+    double operator()(const state_type &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &,
+                      const CostFunction &, const CardinalityEstimator &CE) const {
+        static cnf::CNF condition;
+        double cardinalities[G.num_sources()];
+        std::size_t num_sources = 0;
 
-            double distance = 0;
-            state.for_each_subproblem([&](const Subproblem S) {
-                if (not S.singleton()) {
-                    if (not PT[S].model) {
-                        PT[S].model = CE.estimate_join_all(G, PT, S, condition);
-                    }
-                    cardinalities[num_sources++] = CE.predict_cardinality((*PT[S].model));
+        double distance = 0;
+        state.for_each_subproblem([&](const Subproblem S) {
+            if (not S.singleton()) {
+                if (not PT[S].model) {
+                    PT[S].model = CE.estimate_join_all(G, PT, S, condition);
                 }
-            }, G);
-            std::sort(cardinalities, cardinalities + num_sources, std::greater<double>());;
-            for (std::size_t i = 0; i != num_sources - 1; ++i) {
-                distance += (i + 1) * cardinalities[i];
+                cardinalities[num_sources++] = CE.predict_cardinality((*PT[S].model));
             }
-            distance += (num_sources - 1) * cardinalities[num_sources - 1];
-            return distance;
+        }, G);
+        std::sort(cardinalities, cardinalities + num_sources, std::greater<double>());;
+        for (std::size_t i = 0; i != num_sources - 1; ++i) {
+            distance += (i + 1) * cardinalities[i];
         }
+        distance += (num_sources - 1) * cardinalities[num_sources - 1];
+        return distance;
+    }
 
-    };
+};
 
-    template<typename PlanTable, typename State, typename Expand>
-    struct scaled_sum : scaled_sum<PlanTable, State, typename Expand::direction> {
-        using scaled_sum<PlanTable, State, typename Expand::direction>::scaled_sum; // forward base c'tor
-    };
+template<typename PlanTable, typename State, typename Expand>
+struct scaled_sum : scaled_sum<PlanTable, State, typename Expand::direction> {
+    using scaled_sum<PlanTable, State, typename Expand::direction>::scaled_sum; // forward base c'tor
+};
 
 /*----- product ------------------------------------------------------------------------------------------------------*/
 
@@ -1919,8 +1919,8 @@ struct scaled_sum<PlanTable, State, BottomUp>
  * starting point for development of other heuristics that try to estimate the cost by making the margin of error for
  * the overestimation smaller.
  */
-    template<typename PlanTable, typename State, typename Expand>
-    struct product;
+template<typename PlanTable, typename State, typename Expand>
+struct product;
 
 template<typename PlanTable, typename State>
 struct product<PlanTable, State, BottomUp>
@@ -2686,6 +2686,9 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
 
         //   sum
         HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,                            AStar                           )
+
+        //   scaled_sum
+        HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    scaled_sum,                      AStar                           )
 
         //    GOO
         HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,                            AStar                           )

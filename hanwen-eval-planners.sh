@@ -48,10 +48,13 @@ declare -A TOPOLOGIES=(
 
 ORDERED_PLANNERS=(
     ###### HANWEN Manuelly Test #####
-    "BU-A*-sqrt_sum"
     "BU-A*-sum"
+    "BU-A*-sqrt_sum"
+    "BU-A*-scaled_sum"
+
     "TD-A*-sum"
     "TD-A*-sqrt_sum"
+    "TD-A*-scaled_sum"
     ###### Traditional Planners #####
     # "DPsub"
 #    "DPccp"

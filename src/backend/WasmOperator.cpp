@@ -591,8 +591,8 @@ void HashBasedGrouping::execute(const Match<HashBasedGrouping> &M, setup_t setup
     // TODO: determine setup
     using PROBING_STRATEGY = QuadraticProbing;
     constexpr bool USE_CHAINED_HASHING = false;
-    constexpr uint64_t AGGREGATES_SIZE_THRESHOLD_IN_BITS = 64;
-    constexpr double HIGH_WATERMARK = 0.8;
+    constexpr uint64_t AGGREGATES_SIZE_THRESHOLD_IN_BITS = std::numeric_limits<uint64_t>::infinity();
+    constexpr double HIGH_WATERMARK = 0.7;
 
     const auto num_keys = M.grouping.group_by().size();
 
@@ -2723,9 +2723,9 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
 {
     // TODO: determine setup
     using PROBING_STRATEGY = QuadraticProbing;
-    constexpr bool USE_CHAINED_HASHING = true;
-    constexpr uint64_t PAYLOAD_SIZE_THRESHOLD_IN_BITS = 64;
-    constexpr double HIGH_WATERMARK = 1.5;
+    constexpr bool USE_CHAINED_HASHING = false;
+    constexpr uint64_t PAYLOAD_SIZE_THRESHOLD_IN_BITS = std::numeric_limits<uint64_t>::infinity();
+    constexpr double HIGH_WATERMARK = 0.7;
 
     const auto ht_schema = M.build.schema().drop_constants().deduplicate();
 
@@ -3129,8 +3129,8 @@ void HashBasedGroupJoin::execute(const Match<HashBasedGroupJoin> &M, setup_t set
     // TODO: determine setup
     using PROBING_STRATEGY = QuadraticProbing;
     constexpr bool USE_CHAINED_HASHING = false;
-    constexpr uint64_t AGGREGATES_SIZE_THRESHOLD_IN_BITS = 64;
-    constexpr double HIGH_WATERMARK = 0.8;
+    constexpr uint64_t AGGREGATES_SIZE_THRESHOLD_IN_BITS = std::numeric_limits<uint64_t>::infinity();
+    constexpr double HIGH_WATERMARK = 0.7;
 
     auto &C = Catalog::Get();
     const auto num_keys = M.grouping.group_by().size();

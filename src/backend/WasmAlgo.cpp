@@ -676,17 +676,18 @@ HashTable::entry_t ChainedHashTable<IsGlobal>::emplace_without_rehashing(std::ve
     ); // clone key since we need it again for insertion
 
     /*----- Allocate memory for entry. -----*/
-    Ptr<void> entry = Module::Allocator().allocate(entry_size_in_bytes_, entry_max_alignment_in_bytes_);
+    Var<Ptr<void>> entry = Module::Allocator().allocate(entry_size_in_bytes_, entry_max_alignment_in_bytes_);
 
-    /*----- Iff no predication is used or predicate is fulfilled, insert entry at collision list's front. ---*/
-    *(entry.clone() + ptr_offset_in_bytes_).to<uint32_t*>() = *bucket.to<uint32_t*>();
-    *bucket.to<uint32_t*>() = pred ? Select(*pred, entry.clone().to<uint32_t>(), 0U) : entry.clone().to<uint32_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
+    /*----- Iff no predication is used or predicate is fulfilled, insert entry at collision list's front. -----*/
+    *(entry + ptr_offset_in_bytes_).to<uint32_t*>() = *bucket.to<uint32_t*>();
+    *bucket.to<uint32_t*>() = pred ? Select(*pred, entry.to<uint32_t>(), *bucket.to<uint32_t*>())
+                                   : entry.to<uint32_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
 
     /*----- Update number of entries. -----*/
     *num_entries_ += pred ? pred->to<uint32_t>() : U32(1);
 
     /*----- Insert key. -----*/
-    insert_key(entry.clone(), std::move(key));
+    insert_key(entry, std::move(key)); // move key at last use
 
     /*----- Return entry handle containing all values. -----*/
     return value_entry(entry);
@@ -737,12 +738,13 @@ std::pair<HashTable::entry_t, Bool> ChainedHashTable<IsGlobal>::try_emplace(std:
         entry_inserted = true;
 
         /*----- Allocate memory for entry. -----*/
-        Ptr<void> entry = Module::Allocator().allocate(entry_size_in_bytes_, entry_max_alignment_in_bytes_);
-        bucket_it = entry.clone();
+        Var<Ptr<void>> entry = Module::Allocator().allocate(entry_size_in_bytes_, entry_max_alignment_in_bytes_);
+        bucket_it = entry;
 
-        /*----- Iff no predication is used or predicate is fulfilled, insert entry at the collision list's front. ---.*/
-        *(entry.clone() + ptr_offset_in_bytes_).to<uint32_t*>() = *bucket.to<uint32_t*>();
-        *bucket.to<uint32_t*>() = pred ? Select(*pred, entry.clone().to<uint32_t>(), 0U) : entry.clone().to<uint32_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
+        /*----- Iff no predication is used or predicate is fulfilled, insert entry at the collision list's front. ----*/
+        *(entry + ptr_offset_in_bytes_).to<uint32_t*>() = *bucket.to<uint32_t*>();
+        *bucket.to<uint32_t*>() = pred ? Select(*pred, entry.to<uint32_t>(), *bucket.to<uint32_t*>())
+                                       : entry.to<uint32_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
 
         /*----- Update number of entries. -----*/
         *num_entries_ += pred ? pred->to<uint32_t>() : U32(1);

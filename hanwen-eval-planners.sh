@@ -25,7 +25,7 @@ TIMEOUT=15s
 MAX_TIMEOUTS_PER_CONFIG=1
 
 # Number of repetitions per query
-QUERY_REPEAT_COUNT=3
+QUERY_REPEAT_COUNT=100000
 
 
 HANWEN_MAKE_FOLDER=cmake-build-debug
@@ -33,7 +33,7 @@ BIN=cmake-build-debug/bin/shell
 CSV=planner-benchmark.csv
 CORRELATED=1
 MIN_RELATIONS=10
-REPETITIONS_PER_NUM_RELATIONS=10
+REPETITIONS_PER_NUM_RELATIONS=100
 
 MIN_CARDINALITY=10
 MAX_CARDINALITY=10000
@@ -47,14 +47,20 @@ declare -A TOPOLOGIES=(
 )
 
 ORDERED_PLANNERS=(
-    ###### HANWEN Manuelly Test #####
-    "BU-A*-sum"
-    "BU-A*-sqrt_sum"
-    "BU-A*-scaled_sum"
+    ###### HANWEN Manuelly Test #####'
+    "DPccp"
+#    "BU-IDDFS-zero"
+#    "BU-A*-zero"
 
-    "TD-A*-sum"
-    "TD-A*-sqrt_sum"
-    "TD-A*-scaled_sum"
+#    "BU-A*-sum"
+#    "BU-A*-sqrt_sum"
+    "BU-A*-scaled_sum"
+#
+#    "TD-A*-sum"
+#    "TD-A*-sqrt_sum"
+#    "TD-A*-scaled_sum"
+
+
     ###### Traditional Planners #####
     # "DPsub"
 #    "DPccp"

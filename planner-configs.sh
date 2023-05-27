@@ -8,6 +8,9 @@ declare -A PLANNER_CONFIGS=(
     [GOO]="--plan-enumerator GOO"
     ##### Heuristic Search #####
     # BottomUp
+    ## IDDFS
+    [BU-IDDFS-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search IDDFS"
+
     ## A*
     [BU-A*-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search AStar"
     [BU-A*-avg_sel]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic avg_sel --hs-search AStar"

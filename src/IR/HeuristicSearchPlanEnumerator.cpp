@@ -1884,23 +1884,24 @@ struct scaled_sum<PlanTable, State, TopDown> {
     double operator()(const state_type &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &,
                       const CostFunction &, const CardinalityEstimator &CE) const {
         static cnf::CNF condition;
-        double cardinalities[G.num_sources()];
-        std::size_t num_sources = 0;
-
+        std::vector<double> cardinalities;
         double distance = 0;
+
         state.for_each_subproblem([&](const Subproblem S) {
             if (not S.singleton()) {
                 if (not PT[S].model) {
                     PT[S].model = CE.estimate_join_all(G, PT, S, condition);
                 }
-                cardinalities[num_sources++] = CE.predict_cardinality((*PT[S].model));
+                cardinalities.push_back(CE.predict_cardinality((*PT[S].model)));
             }
         }, G);
-        std::sort(cardinalities, cardinalities + num_sources, std::greater<double>());;
-        for (std::size_t i = 0; i != num_sources - 1; ++i) {
+        std::sort(cardinalities.begin(), cardinalities.end(), std::greater<double>());
+
+        std::size_t length=cardinalities.size();
+        std::cout<<"AAALength: "<<length<<std::endl;
+
+        for (std::size_t i = 0; i < length; ++i)
             distance += (i + 1) * cardinalities[i];
-        }
-        distance += (num_sources - 1) * cardinalities[num_sources - 1];
         return distance;
     }
 
@@ -2472,6 +2473,9 @@ struct checkpoints<PlanTable, SubproblemsArray>
 
 }
 
+template<typename State, typename Expand, typename Heuristic, typename Config, typename ... Context>
+using IDDFS = ai::IDDFS<State, Expand, Heuristic, Config, Context...>;
+
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using AStar = ai::AStar<State, Expand, Heuristic, Config, Context...>;
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
@@ -2642,7 +2646,12 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
             goto matched_heuristic_search; \
         }
 
+
+
         // bottom-up
+        // IDDFS
+        HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, IDDFS)
+
         //   zero
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, AStar)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, monotone_beam_search)
@@ -2688,7 +2697,9 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,                            AStar                           )
 
         //   scaled_sum
-        HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    scaled_sum,                      AStar                           )
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, scaled_sum, AStar)
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, scaled_sum, monotone_beam_search)
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, scaled_sum, monotone_dynamic_beam_search)
 
         //    GOO
         HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,                            AStar                           )

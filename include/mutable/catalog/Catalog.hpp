@@ -3,6 +3,7 @@
 #include <concepts>
 #include <memory>
 #include <mutable/backend/Backend.hpp>
+#include <mutable/backend/WebAssembly.hpp>
 #include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/CostFunction.hpp>
 #include <mutable/catalog/DatabaseCommand.hpp>
@@ -51,6 +52,49 @@ struct ConcreteCardinalityEstimatorFactory : CardinalityEstimatorFactory
 {
     std::unique_ptr<m::CardinalityEstimator> make(const char *database) const override {
         return std::make_unique<T>(database);
+    }
+};
+
+struct WasmEngineFactory
+{
+    virtual ~WasmEngineFactory() { }
+
+    virtual std::unique_ptr<m::WasmEngine> make() const = 0;
+};
+
+template<typename T>
+requires std::derived_from<T, m::WasmEngine>
+struct ConcreteWasmEngineFactory : WasmEngineFactory
+{
+    std::unique_ptr<m::WasmEngine> make() const override { return std::make_unique<T>(); }
+};
+
+struct BackendFactory
+{
+    virtual ~BackendFactory() { }
+
+    virtual std::unique_ptr<m::Backend> make() const = 0;
+};
+
+template<typename T>
+requires std::derived_from<T, m::Backend>
+struct ConcreteBackendFactory : BackendFactory
+{
+    std::unique_ptr<m::Backend> make() const override { return std::make_unique<T>(); }
+};
+
+struct ConcreteWasmBackendFactory : BackendFactory
+{
+    private:
+    std::unique_ptr<WasmEngineFactory> platform_factory_;
+
+    public:
+    ConcreteWasmBackendFactory(std::unique_ptr<WasmEngineFactory> platform_factory)
+        : platform_factory_(std::move(platform_factory))
+    { }
+
+    std::unique_ptr<m::Backend> make() const override {
+        return std::make_unique<m::WasmBackend>(platform_factory_->make());
     }
 };
 
@@ -271,7 +315,7 @@ struct M_EXPORT Catalog
     ComponentSet<storage::DataLayoutFactory> data_layouts_;
     ComponentSet<CardinalityEstimatorFactory> cardinality_estimators_;
     ComponentSet<PlanEnumerator> plan_enumerators_;
-    ComponentSet<Backend> backends_;
+    ComponentSet<BackendFactory> backends_;
     ComponentSet<CostFunction> cost_functions_;
     ComponentSet<DatabaseInstructionFactory> instructions_;
 
@@ -279,6 +323,7 @@ struct M_EXPORT Catalog
     /*===== Stores ===================================================================================================*/
     /** Registers a new `Store` with the given `name`. */
     template<typename T>
+    requires std::derived_from<T, m::Store>
     void register_store(const char *name, const char *description = nullptr) {
         auto c = Component<StoreFactory>(description, std::make_unique<ConcreteStoreFactory<T>>());
         stores_.add(pool(name), std::move(c));
@@ -331,6 +376,7 @@ struct M_EXPORT Catalog
     /*===== CardinalityEstimators ====================================================================================*/
     /** Registers a new `CardinalityEstimator` with the given `name`. */
     template<typename T>
+    requires std::derived_from<T, m::CardinalityEstimator>
     void register_cardinality_estimator(const char *name, const char *description = nullptr) {
         auto c = Component<CardinalityEstimatorFactory>(
             description,
@@ -388,17 +434,30 @@ struct M_EXPORT Catalog
 
     /*===== Backends =================================================================================================*/
     /** Registers a new `Backend` with the given `name`. */
-    void register_backend(const char *name, std::unique_ptr<Backend> backend, const char *description = nullptr) {
-        backends_.add(pool(name), Component<Backend>(description, std::move(backend)));
+    template<typename T>
+    requires std::derived_from<T, m::Backend>
+    void register_backend(const char *name, const char *description = nullptr) {
+        auto c = Component<BackendFactory>(description, std::make_unique<ConcreteBackendFactory<T>>());
+        backends_.add(pool(name), std::move(c));
+    }
+    /** Registers a new `WasmBackend` using the given `WasmEngine` with the given `name`. */
+    template<typename T>
+    requires std::derived_from<T, m::WasmEngine>
+    void register_wasm_backend(const char *name, const char *description = nullptr) {
+        auto c = Component<BackendFactory>(
+            description,
+            std::make_unique<ConcreteWasmBackendFactory>(std::make_unique<ConcreteWasmEngineFactory<T>>())
+        );
+        backends_.add(pool(name), std::move(c));
     }
     /** Sets the default `Backend` to use. */
     void default_backend(const char *name) { backends_.set_default(pool(name)); }
     /** Returns `true` iff the `Catalog` has a default `Backend`. */
     bool has_default_backend() const { return backends_.has_default(); }
-    /** Returns a reference to the default `Backend`. */
-    Backend & backend() const { return backends_.get_default(); }
-    /** Returns a reference to the `Backend` with the given `name`. */
-    Backend & backend(const char *name) const { return backends_.get(pool(name)); }
+    /** Returns a new `Backend`. */
+    std::unique_ptr<Backend> create_backend() const { return backends_.get_default().make(); }
+    /** Returns a new `Backend` of name `name`. */
+    std::unique_ptr<Backend> create_backend(const char *name) const { return backends_.get(pool(name)).make(); }
     /** Returns the name of the default `Backend`. */
     const char * default_backend_name() const { return backends_.get_default_name(); }
 

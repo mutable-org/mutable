@@ -23,8 +23,8 @@ class Mutable(Connector):
 
     def execute(self, n_runs, params: dict):
         result = dict()
-        for _ in range(n_runs):
-            exp = self.perform_experiment(params)
+        for run_id in range(n_runs):
+            exp = self.perform_experiment(run_id, params)
             for config, cases in exp.items():
                 if config not in result.keys():
                     result[config] = dict()
@@ -43,19 +43,30 @@ class Mutable(Connector):
 # @param params             the parameters for the experiment
 # @return                   a map from configuration name to {map from case name to measurement}
 #=======================================================================================================================
-    def perform_experiment(self, params: dict):
+    def perform_experiment(self, run_id, params: dict):
         configs = params.get('configurations')
         experiment_name = params['name']
+        suite = params['suite']
+        benchmark = params['benchmark']
         experiment = dict()
         if configs:
             # Run benchmark under different configurations
             for config_name, config in configs.items():
                 config_name = f"mutable (single core, {config_name})"
+                if run_id==0:
+                    tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment_name} with configuration {config_name}.')
+                    sys.stdout.flush()
+
                 measurements = self.run_configuration(experiment_name, config_name, config, params)
                 experiment[config_name] = measurements
         else:
-            measurements = self.run_configuration(experiment_name, '', '', params)
-            experiment[''] = measurements
+            config_name = "mutable (single core)"
+            if run_id==0:
+                tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment_name} on mutable.')
+                sys.stdout.flush()
+
+            measurements = self.run_configuration(experiment_name, config_name, '', params)
+            experiment[config_name] = measurements
 
         return experiment
 
@@ -80,12 +91,6 @@ class Mutable(Connector):
         supplementary_args = yml.get('args', None)
         binargs = yml.get('binargs', None)
         path_to_file = yml['path_to_file']
-
-        if config_name:
-            tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment} with configuration {config_name}.')
-        else:
-            tqdm.write(f'` Perform experiment {suite}/{benchmark}/{experiment}.')
-        sys.stdout.flush()
 
         # Get database schema
         schema = os.path.join(os.path.dirname(path_to_file), 'data', 'schema.sql')
@@ -132,9 +137,11 @@ class Mutable(Connector):
                     for case in cases.keys():
                         execution_times[case] = TIMEOUT_PER_CASE * 1000
                 else:
+                    if len(durations) < len(cases):
+                        raise ConnectorException(f"Expected {len(cases)} measurements but got {len(durations)}.")
                     # Add measured times
-                    for case_index in range(len(cases.keys())):
-                        execution_times[list(cases.keys())[case_index]] = durations[case_index]
+                    for case, dur in zip(list(cases.keys()), durations):
+                        execution_times[case] = dur
             else:
                 timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
                 for case, query in cases.items():
@@ -153,6 +160,8 @@ class Mutable(Connector):
                         sys.stdout.flush()
                         execution_times[case] = timeout * 1000
                     else:
+                        if len(durations) == 0:
+                            raise ConnectorException("Expected 1 measurement but got 0.")
                         execution_times[case] = durations[0]
         except BenchmarkError as ex:
             tqdm.write(str(ex))

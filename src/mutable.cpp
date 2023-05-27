@@ -191,17 +191,19 @@ void m::execute_statement(Diagnostic &diag, const ast::Stmt &stmt, const bool is
 /* TODO implement as command line argument of plugin
     if (Options::Get().dryrun and streq("WasmV8", C.default_backend_name())) {
         Backend &backend = C.backend();
-        auto &platform = as<WasmBackend>(backend).platform();
+        auto &engine = as<WasmBackend>(backend).engine();
         Module::Init(); // fresh module
-        M_TIME_EXPR(platform.compile(*plan), "Compile to WebAssembly", timer);
+        M_TIME_EXPR(engine.compile(*plan), "Compile to WebAssembly", timer);
         Module::Get().dump(std::cout);
         Module::Dispose();
     }
 */
 
         if (not Options::Get().dryrun) {
-            M_TIME_THIS("Execute query", timer);
-            C.backend().execute(*plan);
+            static thread_local std::unique_ptr<Backend> backend;
+            if (not backend)
+                backend = M_TIME_EXPR(C.create_backend(), "Create backend", timer);
+            M_TIME_EXPR(backend->execute(*plan), "Execute query", timer);
         }
     } else if (auto I = cast<const ast::InsertStmt>(&stmt)) {
         auto &DB = C.get_database_in_use();
@@ -334,14 +336,17 @@ void m::execute_instruction(Diagnostic &diag, const Instruction &instruction)
 void m::execute_query(Diagnostic&, const SelectStmt &stmt, std::unique_ptr<Consumer> consumer)
 {
     Catalog &C = Catalog::Get();
-    auto query_graph = QueryGraph::Build(stmt);
+    auto query_graph = M_TIME_EXPR(QueryGraph::Build(stmt), "Construct the query graph", C.timer());
 
     Optimizer Opt(C.plan_enumerator(), C.cost_function());
-    auto optree = Opt(*query_graph);
+    auto optree = M_TIME_EXPR(Opt(*query_graph), "Compute the query plan", C.timer());
 
     consumer->add_child(optree.release());
 
-    M_TIME_EXPR(C.backend().execute(*consumer), "Execute the query", C.timer());
+    static thread_local std::unique_ptr<Backend> backend;
+    if (not backend)
+        backend = M_TIME_EXPR(C.create_backend(), "Create backend", C.timer());
+    M_TIME_EXPR(backend->execute(*consumer), "Execute the query", C.timer());
 }
 
 void m::load_from_CSV(Diagnostic &diag, Table &table, const std::filesystem::path &path, std::size_t num_rows,

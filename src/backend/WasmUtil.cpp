@@ -451,8 +451,8 @@ namespace wasm {
  * execution of the returned code must *not* be split among multiple function calls.  Otherwise, the store does *not*
  * have to be done in a single pass, i.e. the returned code may be emitted into a function which can be called
  * multiple times and each call starts storing at exactly the point where it has ended in the last call. The given
- * variable \p tuple_id will be incremented automatically after storing/loading each tuple (i.e. code for this will
- * be emitted at the end of the block returned as second element).  Predication is supported and emitted respectively
+ * variable \p tuple_id will be incremented automatically before advancing to the next tuple (i.e. code for this will
+ * be emitted at the start of the block returned as third element).  Predication is supported and emitted respectively
  * for storing tuples.
  *
  * Does not emit any code but returns three `wasm::Block`s containing code: the first one initializes all needed
@@ -515,6 +515,22 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
         }
     }
 
+    /*----- Increment tuple ID before advancing to the next tuple. -----*/
+    if constexpr (IsStore) {
+        BLOCK_OPEN(jumps) {
+            if (is_predicated) {
+                M_insist(bool(pred));
+                tuple_id += pred->to<uint32_t>();
+            } else {
+                tuple_id += 1U;
+            }
+        }
+    } else {
+        BLOCK_OPEN(jumps) {
+            tuple_id += 1U;
+        }
+    }
+
     /*----- Visit the data layout. -----*/
     layout.for_sibling_leaves([&](const std::vector<DataLayout::leaf_info_t> &leaves,
                                   const DataLayout::level_info_stack_t &levels, uint64_t inode_offset_in_bits)
@@ -529,7 +545,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
         uint64_t null_bitmap_stride_in_bits;
 
         /*----- Compute INode offset in bytes and INode iteration depending on the given tuple ID. -----*/
-        auto compute_additional_inode_byte_offset = [&](U32 tuple_id) -> I32 {
+        auto compute_additional_inode_byte_offset = [&](U32 tuple_id) -> U64 {
             auto rec = [&](U32 curr_tuple_id, decltype(levels.cbegin()) curr, const decltype(levels.cend()) end,
                            auto rec) -> U64
             {
@@ -541,30 +557,36 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                 if (is_pow_2(curr->num_tuples)) {
                     U32 child_iter = curr_tuple_id.clone() >> uint32_t(__builtin_ctzl(curr->num_tuples));
                     U32 inner_tuple_id = curr_tuple_id bitand uint32_t(curr->num_tuples - 1U);
-                    U64 offset_in_bits = child_iter * curr->stride_in_bits;
-                    return offset_in_bits + rec(inner_tuple_id, std::next(curr), end, rec);
+                    M_insist(curr->stride_in_bits % 8 == 0, "INode stride must be byte aligned");
+                    U64 offset_in_bytes = child_iter * uint64_t(curr->stride_in_bits / 8);
+                    return offset_in_bytes + rec(inner_tuple_id, std::next(curr), end, rec);
                 } else {
                     U32 child_iter = curr_tuple_id.clone() / uint32_t(curr->num_tuples);
                     U32 inner_tuple_id = curr_tuple_id % uint32_t(curr->num_tuples);
-                    U64 offset_in_bits = child_iter * curr->stride_in_bits;
-                    return offset_in_bits + rec(inner_tuple_id, std::next(curr), end, rec);
+                    M_insist(curr->stride_in_bits % 8 == 0, "INode stride must be byte aligned");
+                    U64 offset_in_bytes = child_iter * uint64_t(curr->stride_in_bits / 8);
+                    return offset_in_bytes + rec(inner_tuple_id, std::next(curr), end, rec);
                 }
             };
-            auto res = rec(tuple_id.clone(), levels.cbegin(), levels.cend(), rec);
-            Wasm_insist(res.clone() % 8U == 0U, "additional INode offset must be byte aligned");
-            return (res >> uint64_t(3)).make_signed().template to<int32_t>(); // div 8
+            return rec(tuple_id.clone(), levels.cbegin(), levels.cend(), rec);
         };
-        std::optional<Var<I32>> inode_byte_offset;
-        std::optional<Var<U32>> inode_iter;
+        std::optional<const Var<I32>> inode_byte_offset;
+        std::optional<const Var<U32>> inode_iter;
         BLOCK_OPEN(inits) {
             M_insist(inode_offset_in_bits % 8 == 0, "INode offset must be byte aligned");
             inode_byte_offset.emplace(
-                int32_t(inode_offset_in_bits / 8) + compute_additional_inode_byte_offset(tuple_id)
+                int32_t(inode_offset_in_bits / 8)
+                + compute_additional_inode_byte_offset(tuple_id).make_signed().template to<int32_t>()
             );
-            inode_iter.emplace(
-                is_pow_2(levels.back().num_tuples) ? tuple_id bitand uint32_t(levels.back().num_tuples - 1U)
-                                                   : tuple_id % uint32_t(levels.back().num_tuples)
-            );
+            M_insist(levels.back().num_tuples != 0, "INode must be large enough for at least one tuple");
+            if (levels.back().num_tuples != 1) {
+                inode_iter.emplace(
+                    is_pow_2(levels.back().num_tuples) ? tuple_id bitand uint32_t(levels.back().num_tuples - 1U)
+                                                       : tuple_id % uint32_t(levels.back().num_tuples)
+                );
+            } else {
+                /* omit computation of INode iteration since it is always the first iteration, i.e. equals 0 */
+            }
         };
 
         /*----- Iterate over sibling leaves, i.e. leaf children of a common parent INode, to emit code. -----*/
@@ -578,6 +600,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                 M_insist(not has_null_bitmap, "at most one bitmap may be specified");
                 has_null_bitmap = true;
                 if (bit_stride) { // NULL bitmap with bit stride requires dynamic masking
+                    M_insist(bool(inode_iter), "stride requires repetition");
                     U64 leaf_offset_in_bits = leaf_info.offset_in_bits + *inode_iter * leaf_info.stride_in_bits;
                     U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
                     I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
@@ -764,22 +787,31 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                         }
                     }
                 } else { // NULL bitmap without bit stride can benefit from static masking of NULL bits
-                    /* omit `leaf_info.offset_in_bits` here to add it to the static offsets and masks;
-                     * this is valid since no bit stride means that the leaf byte offset computation is independent
-                     * of the static parts */
-                    U64 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
-                    U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
-                    I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
-                    Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
+                    auto byte_offset = [&]() -> I32 {
+                        if (inode_iter and leaf_info.stride_in_bits) {
+                            /* omit `leaf_info.offset_in_bits` here to add it to the static offsets and masks;
+                             * this is valid since no bit stride means that the leaf byte offset computation is
+                             * independent of the static parts */
+                            U64 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
+                            U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
+                            I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                            BLOCK_OPEN(inits) {
+                                Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
+                            }
+                            return *inode_byte_offset + leaf_byte_offset;
+                        } else {
+                            return *inode_byte_offset;
+                        }
+                    }();
 
                     auto [it, inserted] =
                         loading_context.try_emplace(key_t(leaf_info.offset_in_bits % 8, leaf_info.stride_in_bits));
                     if (inserted) {
                         BLOCK_OPEN(inits) {
-                            it->second.ptr = base_address.clone() + *inode_byte_offset + leaf_byte_offset;
+                            it->second.ptr = base_address.clone() + byte_offset;
                         }
                     } else {
-                        leaf_byte_offset.discard();
+                        byte_offset.discard();
                     }
                     const auto &ptr = it->second.ptr;
 
@@ -896,6 +928,7 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                     M_insist(tuple_it->type->is_boolean(),
                              "leaf bit stride currently only for `Boolean` supported");
 
+                    M_insist(bool(inode_iter), "stride requires repetition");
                     U64 leaf_offset_in_bits = leaf_info.offset_in_bits + *inode_iter * leaf_info.stride_in_bits;
                     U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
                     I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
@@ -935,13 +968,22 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                         }
                     }
                 } else { // entry without bit stride; if masking is required, we can use a static mask
-                    /* omit `leaf_info.offset_in_bits` here to use it as static offset and mask;
-                     * this is valid since no bit stride means that the leaf byte offset computation is independent
-                     * of the static parts */
-                    U64 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
-                    U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
-                    I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
-                    Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
+                    auto byte_offset = [&]() -> I32 {
+                        if (inode_iter and leaf_info.stride_in_bits) {
+                            /* omit `leaf_info.offset_in_bits` here to use it as static offset and mask;
+                             * this is valid since no bit stride means that the leaf byte offset computation is
+                             * independent of the static parts */
+                            U64 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
+                            U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
+                            I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                            BLOCK_OPEN(inits) {
+                                Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
+                            }
+                            return *inode_byte_offset + leaf_byte_offset;
+                        } else {
+                            return *inode_byte_offset;
+                        }
+                    }();
 
                     const uint8_t static_bit_offset  = leaf_info.offset_in_bits % 8;
                     const int32_t static_byte_offset = leaf_info.offset_in_bits / 8;
@@ -950,10 +992,10 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                         loading_context.try_emplace(key_t(leaf_info.offset_in_bits % 8, leaf_info.stride_in_bits));
                     if (inserted) {
                         BLOCK_OPEN(inits) {
-                            it->second.ptr = base_address.clone() + *inode_byte_offset + leaf_byte_offset;
+                            it->second.ptr = base_address.clone() + byte_offset;
                         }
                     } else {
-                        leaf_byte_offset.discard();
+                        byte_offset.discard();
                     }
                     const auto &ptr = it->second.ptr;
 
@@ -1311,22 +1353,6 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
         }
     }
 
-    /*----- Increment tuple ID after storing/loading one tuple. -----*/
-    if constexpr (IsStore) {
-        BLOCK_OPEN(stores) {
-            if (is_predicated) {
-                M_insist(bool(pred));
-                tuple_id += pred->to<uint32_t>();
-            } else {
-                tuple_id += 1U;
-            }
-        }
-    } else {
-        BLOCK_OPEN(loads) {
-            tuple_id += 1U;
-        }
-    }
-
     /*----- Destroy created values. -----*/
     for (std::size_t idx = 0; idx < tuple_schema.num_entries(); ++idx)
         values[idx].~SQL_t();
@@ -1450,7 +1476,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                   const DataLayout::level_info_stack_t &levels, uint64_t inode_offset_in_bits)
     {
         /*----- Compute INode pointer and INode iteration depending on the given tuple ID. -----*/
-        auto compute_additional_inode_byte_offset = [&](U32 tuple_id) -> I32 {
+        auto compute_additional_inode_byte_offset = [&](U32 tuple_id) -> U64 {
             auto rec = [&](U32 curr_tuple_id, decltype(levels.cbegin()) curr, const decltype(levels.cend()) end,
                            auto rec) -> U64
             {
@@ -1462,28 +1488,36 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                 if (is_pow_2(curr->num_tuples)) {
                     U32 child_iter = curr_tuple_id.clone() >> uint32_t(__builtin_ctzl(curr->num_tuples));
                     U32 inner_tuple_id = curr_tuple_id bitand uint32_t(curr->num_tuples - 1U);
-                    U64 offset_in_bits = child_iter * curr->stride_in_bits;
-                    return offset_in_bits + rec(inner_tuple_id, std::next(curr), end, rec);
+                    M_insist(curr->stride_in_bits % 8 == 0, "INode stride must be byte aligned");
+                    U64 offset_in_bytes = child_iter * uint64_t(curr->stride_in_bits / 8);
+                    return offset_in_bytes + rec(inner_tuple_id, std::next(curr), end, rec);
                 } else {
                     U32 child_iter = curr_tuple_id.clone() / uint32_t(curr->num_tuples);
                     U32 inner_tuple_id = curr_tuple_id % uint32_t(curr->num_tuples);
-                    U64 offset_in_bits = child_iter * curr->stride_in_bits;
-                    return offset_in_bits + rec(inner_tuple_id, std::next(curr), end, rec);
+                    M_insist(curr->stride_in_bits % 8 == 0, "INode stride must be byte aligned");
+                    U64 offset_in_bytes = child_iter * uint64_t(curr->stride_in_bits / 8);
+                    return offset_in_bytes + rec(inner_tuple_id, std::next(curr), end, rec);
                 }
             };
-            auto res = rec(tuple_id.clone(), levels.cbegin(), levels.cend(), rec);
-            Wasm_insist(res.clone() % 8U == 0U, "additional INode offset must be byte aligned");
-            return (res >> uint64_t(3)).make_signed().template to<int32_t>(); // div 8
+            return rec(tuple_id.clone(), levels.cbegin(), levels.cend(), rec);
         };
         M_insist(inode_offset_in_bits % 8 == 0, "INode offset must be byte aligned");
         const Var<Ptr<void>> inode_ptr(
-            base_address.clone() + int32_t(inode_offset_in_bits / 8)
-                                 + compute_additional_inode_byte_offset(tuple_id.clone())
+            base_address.clone()
+            + int32_t(inode_offset_in_bits / 8)
+            + compute_additional_inode_byte_offset(tuple_id.clone()).make_signed().template to<int32_t>()
         );
-        const Var<U32> inode_iter(
-            is_pow_2(levels.back().num_tuples) ? tuple_id bitand uint32_t(levels.back().num_tuples - 1U)
-                                               : tuple_id % uint32_t(levels.back().num_tuples)
-        );
+        std::optional<const Var<U32>> inode_iter;
+        M_insist(levels.back().num_tuples != 0, "INode must be large enough for at least one tuple");
+        if (levels.back().num_tuples != 1) {
+            inode_iter.emplace(
+                is_pow_2(levels.back().num_tuples) ? tuple_id bitand uint32_t(levels.back().num_tuples - 1U)
+                                                   : tuple_id % uint32_t(levels.back().num_tuples)
+            );
+        } else {
+            /* omit computation of INode iteration since it is always the first iteration, i.e. equals 0 */
+            tuple_id.discard();
+        }
 
         /*----- Iterate over sibling leaves, i.e. leaf children of a common parent INode, to emit code. -----*/
         for (auto &leaf_info : leaves) {
@@ -1496,7 +1530,8 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                 M_insist(not has_null_bitmap, "at most one bitmap may be specified");
                 has_null_bitmap = true;
                 if (bit_stride) { // NULL bitmap with bit stride requires dynamic masking
-                    U64 leaf_offset_in_bits = leaf_info.offset_in_bits + inode_iter * leaf_info.stride_in_bits;
+                    M_insist(bool(inode_iter), "stride requires repetition");
+                    U64 leaf_offset_in_bits = leaf_info.offset_in_bits + *inode_iter * leaf_info.stride_in_bits;
                     const Var<U8> leaf_bit_offset(
                         (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() // mod 8
                     );
@@ -1598,15 +1633,21 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                         }
                     }
                 } else { // NULL bitmap without bit stride can benefit from static masking of NULL bits
-                    /* omit `leaf_info.offset_in_bits` here to add it to the static offsets and masks;
-                     * this is valid since no bit stride means that the leaf byte offset computation is independent
-                     * of the static parts */
-                    U64 leaf_offset_in_bits = inode_iter * leaf_info.stride_in_bits;
-                    U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
-                    I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
-                    Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
-
-                    const Var<Ptr<void>> ptr(inode_ptr + leaf_byte_offset); // pointer to NULL bitmap
+                    auto ptr = [&]() -> Ptr<void> {
+                        if (inode_iter and leaf_info.stride_in_bits) {
+                            /* omit `leaf_info.offset_in_bits` here to add it to the static offsets and masks;
+                             * this is valid since no bit stride means that the leaf byte offset computation is
+                             * independent of the static parts */
+                            U64 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
+                            U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
+                            I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                            Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
+                            const Var<Ptr<void>> ptr(inode_ptr + leaf_byte_offset);
+                            return ptr;
+                        } else {
+                            return inode_ptr;
+                        }
+                    }(); // pointer to NULL bitmap
 
                     /*----- For each tuple entry that can be NULL, create a store/load with offset and mask. --*/
                     for (std::size_t tuple_idx = 0; tuple_idx != tuple_schema.num_entries(); ++tuple_idx) {
@@ -1622,7 +1663,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                     auto [value, is_null] = env.get<T>(tuple_entry.id).split(); // get value
                                     value.discard(); // handled at entry leaf
                                     Ptr<U8> byte_ptr =
-                                        (ptr + static_byte_offset).template to<uint8_t*>(); // compute byte address
+                                        (ptr.clone() + static_byte_offset).template to<uint8_t*>(); // compute byte address
                                     setbit<U8>(byte_ptr, is_null, static_bit_offset); // update bit
                                 };
                                 visit(overloaded{
@@ -1649,7 +1690,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                     [&](const CharacterSequence&) {
                                         auto value = env.get<NChar>(tuple_entry.id); // get value
                                         Ptr<U8> byte_ptr =
-                                            (ptr + static_byte_offset).template to<uint8_t*>(); // compute byte address
+                                            (ptr.clone() + static_byte_offset).template to<uint8_t*>(); // compute byte address
                                         setbit<U8>(byte_ptr, value.is_null(), static_bit_offset); // update bit
                                     },
                                     [&](const Date&) { store.template operator()<_I32>(); },
@@ -1658,7 +1699,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                                 }, *tuple_entry.type);
                             } else {
                                 /*----- Load NULL bit. -----*/
-                                U8 byte = *(ptr + static_byte_offset).template to<uint8_t*>(); // load the byte
+                                U8 byte = *(ptr.clone() + static_byte_offset).template to<uint8_t*>(); // load the byte
                                 const uint8_t static_mask = 1U << static_bit_offset;
                                 Var<Bool> value((byte bitand static_mask).to<bool>()); // mask bit
                                 new (&null_bits[tuple_idx]) Bool(value);
@@ -1701,6 +1742,7 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
 #endif
                         }
                     }
+                    ptr.discard(); // since it was always cloned
                 }
             } else { // regular entry
                 auto &layout_entry = layout_schema[leaf_info.leaf.index()];
@@ -1714,7 +1756,8 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                 if (bit_stride) { // entry with bit stride requires dynamic masking
                     M_insist(tuple_it->type->is_boolean(), "leaf bit stride currently only for `Boolean` supported");
 
-                    U64 leaf_offset_in_bits = leaf_info.offset_in_bits + inode_iter * leaf_info.stride_in_bits;
+                    M_insist(bool(inode_iter), "stride requires repetition");
+                    U64 leaf_offset_in_bits = leaf_info.offset_in_bits + *inode_iter * leaf_info.stride_in_bits;
                     U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
                     I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
 
@@ -1733,18 +1776,23 @@ void compile_data_layout_point_access(const Schema &tuple_schema, Ptr<void> base
                         new (&values[tuple_idx]) SQL_t(_Bool(value));
                     }
                 } else { // entry without bit stride; if masking is required, we can use a static mask
-                    /* omit `leaf_info.offset_in_bits` here to use it as static offset and mask;
-                     * this is valid since no bit stride means that the leaf byte offset computation is independent
-                     * of the static parts */
-                    U64 leaf_offset_in_bits = inode_iter * leaf_info.stride_in_bits;
-                    U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>() ; // mod 8
-                    I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
-                    Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
+                    auto ptr = [&]() -> Ptr<void> {
+                        if (inode_iter and leaf_info.stride_in_bits) {
+                            /* omit `leaf_info.offset_in_bits` here to use it as static offset and mask;
+                             * this is valid since no bit stride means that the leaf byte offset computation is
+                             * independent of the static parts */
+                            U64 leaf_offset_in_bits = *inode_iter * leaf_info.stride_in_bits;
+                            U8  leaf_bit_offset  = (leaf_offset_in_bits.clone() bitand uint64_t(7)).to<uint8_t>(); // mod 8
+                            I32 leaf_byte_offset = (leaf_offset_in_bits >> uint64_t(3)).make_signed().to<int32_t>(); // div 8
+                            Wasm_insist(leaf_bit_offset == 0U, "no leaf bit offset without bit stride");
+                            return inode_ptr + leaf_byte_offset;
+                        } else {
+                            return inode_ptr;
+                        }
+                    }(); // pointer to entry
 
                     const uint8_t static_bit_offset  = leaf_info.offset_in_bits % 8;
                     const int32_t static_byte_offset = leaf_info.offset_in_bits / 8;
-
-                    Ptr<void> ptr = inode_ptr + leaf_byte_offset; // pointer to entry
 
                     /*----- Store value depending on its type. -----*/
                     auto store = [&]<typename T>() {
@@ -1974,8 +2022,8 @@ void Buffer<IsGlobal>::setup()
 {
     M_insist(not base_address_, "must not call `setup()` twice");
     M_insist(not size_, "must not call `setup()` twice");
-    M_insist(not layout_.is_finite() == not capacity_, "must not call `setup()` twice");
-    M_insist(not layout_.is_finite() == not first_iteration_, "must not call `setup()` twice");
+    M_insist(not capacity_, "must not call `setup()` twice");
+    M_insist(not first_iteration_, "must not call `setup()` twice");
 
     /*----- Create local variables. -----*/
     base_address_.emplace();
@@ -2176,27 +2224,6 @@ void Buffer<IsGlobal>::consume()
             store_inits.attach_to_current();
         };
     } else {
-        IF (*first_iteration_) {
-            /*----- Emit initialization code for storing (i.e. set to current buffer slot). -----*/
-            store_inits.attach_to_current();
-
-            *first_iteration_ = false;
-        };
-    }
-
-    /*----- Emit storing code and increment size of buffer. -----*/
-    stores.attach_to_current();
-
-    if (layout_.is_finite()) {
-        IF (*size_ == uint32_t(layout_.num_tuples())) { // buffer full
-            /*----- Resume pipeline for each tuple in buffer and reset size of buffer to 0. -----*/
-            resume_pipeline();
-            *size_ = 0U;
-        } ELSE { // buffer not full
-            /*----- Emit advancing code to next buffer slot. -----*/
-            store_jumps.attach_to_current();
-        };
-    } else {
         IF (*size_ == *capacity_) { // buffer full
             /*----- Resize buffer by doubling its capacity. -----*/
             const uint32_t child_size_in_bytes = (layout_.stride_in_bits() + 7) / 8;
@@ -2207,7 +2234,29 @@ void Buffer<IsGlobal>::consume()
             *capacity_ *= 2U;
         };
 
-        /*----- Emit advancing code to next buffer slot. -----*/
+        IF (*first_iteration_) {
+            /*----- Emit initialization code for storing (i.e. set to current buffer slot). -----*/
+            store_inits.attach_to_current();
+
+            *first_iteration_ = false;
+        };
+    }
+
+    /*----- Emit storing code. -----*/
+    stores.attach_to_current();
+
+    if (layout_.is_finite()) {
+        IF (*size_ == uint32_t(layout_.num_tuples()) - 1U) { // buffer full
+            /*----- Resume pipeline for each tuple in buffer and reset size of buffer to 0. -----*/
+            *size_ = uint32_t(layout_.num_tuples()); // increment size of buffer to resume pipeline even for last tuple
+            resume_pipeline();
+            *size_ = 0U;
+        } ELSE { // buffer not full
+            /*----- Emit advancing code to next buffer slot and increment size of buffer. -----*/
+            store_jumps.attach_to_current();
+        };
+    } else {
+        /*----- Emit advancing code to next buffer slot and increment size of buffer. -----*/
         store_jumps.attach_to_current();
     }
 }
@@ -2224,22 +2273,29 @@ template struct m::wasm::Buffer<true>;
 template<bool IsGlobal>
 void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second)
 {
-    /*---- Swap each entry individually to reduce number of variables needed at once. -----*/
+    /*----- Create load proxy. -----*/
+    auto load = buffer_.get().create_load_proxy(schema_.get());
+
+    /*----- Load first tuple into fresh environment. -----*/
+    auto env_first = [&](){
+        auto S = CodeGenContext::Get().scoped_environment();
+        load(first.clone());
+        return S.extract();
+    }();
+
+    operator()(first, second, env_first);
+}
+
+template<bool IsGlobal>
+void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second, const Environment &env_first)
+{
+    /*----- Create load and store proxies. -----*/
+    auto load  = buffer_.get().create_load_proxy(schema_.get());
+    auto store = buffer_.get().create_store_proxy(schema_.get());
+
+    /*----- Temporarily save first tuple by creating variable or separate string buffer. -----*/
+    Environment _env_first;
     for (auto &e : schema_.get()) {
-        /*----- Create schema for single entry and load and store proxies for it. -----*/
-        Schema entry_schema;
-        entry_schema.add(e.id, e.type, e.constraints);
-        auto load  = buffer_.get().create_load_proxy(entry_schema);
-        auto store = buffer_.get().create_store_proxy(entry_schema);
-
-        /*----- Load entry of first tuple into fresh environment. -----*/
-        auto env = [&](){
-            auto S = CodeGenContext::Get().scoped_environment();
-            load(first.clone());
-            return S.extract();
-        }();
-
-        /*----- Temporarily save entry of first tuple by creating variable or separate string buffer. -----*/
         std::visit(overloaded {
             [&](NChar value) -> void {
                 Var<Ptr<Char>> ptr; // always set here
@@ -2249,36 +2305,81 @@ void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second)
                     ptr = Module::Allocator().pre_malloc<char>(value.size_in_bytes());
                     strncpy(ptr, value, U32(value.size_in_bytes())).discard();
                 };
-                env.add(e.id, NChar(ptr, value.can_be_null(), value.length(), value.guarantees_terminating_nul()));
+                _env_first.add(e.id, NChar(ptr, value.can_be_null(), value.length(), value.guarantees_terminating_nul()));
             },
             [&]<typename T>(Expr<T> value) -> void {
                 if (value.can_be_null()) {
                     Var<Expr<T>> var(value);
-                    env.add(e.id, var);
+                    _env_first.add(e.id, var);
                 } else {
                     Var<PrimitiveExpr<T>> var(value.insist_not_null());
-                    env.add(e.id, Expr<T>(var));
+                    _env_first.add(e.id, Expr<T>(var));
                 }
             },
             [](std::monostate) -> void { M_unreachable("value must be loaded beforehand"); }
-        }, env.extract(e.id));
-
-        /*----- Load entry of second tuple in scoped environment and store it directly at first tuples address. -----*/
-        {
-            auto S = CodeGenContext::Get().scoped_environment();
-            load(second.clone());
-            store(first.clone());
-        }
-
-        /*----- Store temporarily saved entry of first tuple at second tuples address. ----*/
-        {
-            auto S = CodeGenContext::Get().scoped_environment(std::move(env));
-            store(second.clone());
-        }
+        }, env_first.get(e.id));
     }
 
-    first.discard(); // since it was always cloned
-    second.discard(); // since it was always cloned
+    /*----- Load second tuple in scoped environment and store it directly at first tuples address. -----*/
+    {
+        auto S = CodeGenContext::Get().scoped_environment();
+        load(second.clone());
+        store(first);
+    }
+
+    /*----- Store temporarily saved first tuple at second tuples address. ----*/
+    {
+        auto S = CodeGenContext::Get().scoped_environment(std::move(_env_first));
+        store(second);
+    }
+}
+
+template<bool IsGlobal>
+void buffer_swap_proxy_t<IsGlobal>::operator()(U32 first, U32 second, const Environment &env_first,
+                                               const Environment &env_second)
+{
+    /*----- Create store proxy. -----*/
+    auto store = buffer_.get().create_store_proxy(schema_.get());
+
+    /*----- Temporarily save first tuple by creating variable or separate string buffer. -----*/
+    Environment _env_first;
+    for (auto &e : schema_.get()) {
+        std::visit(overloaded {
+            [&](NChar value) -> void {
+                Var<Ptr<Char>> ptr; // always set here
+                IF (value.clone().is_null()) {
+                    ptr = Ptr<Char>::Nullptr();
+                } ELSE {
+                    ptr = Module::Allocator().pre_malloc<char>(value.size_in_bytes());
+                    strncpy(ptr, value, U32(value.size_in_bytes())).discard();
+                };
+                _env_first.add(e.id, NChar(ptr, value.can_be_null(), value.length(), value.guarantees_terminating_nul()));
+            },
+            [&]<typename T>(Expr<T> value) -> void {
+                if (value.can_be_null()) {
+                    Var<Expr<T>> var(value);
+                    _env_first.add(e.id, var);
+                } else {
+                    Var<PrimitiveExpr<T>> var(value.insist_not_null());
+                    _env_first.add(e.id, Expr<T>(var));
+                }
+            },
+            [](std::monostate) -> void { M_unreachable("value must be loaded beforehand"); }
+        }, env_first.get(e.id));
+    }
+
+    /*----- Store already loaded second tuple directly at first tuples address. -----*/
+    {
+        auto S = CodeGenContext::Get().scoped_environment();
+        CodeGenContext::Get().env().add(env_second);
+        store(first);
+    }
+
+    /*----- Store temporarily saved first tuple at second tuples address. ----*/
+    {
+        auto S = CodeGenContext::Get().scoped_environment(std::move(_env_first));
+        store(second);
+    }
 }
 
 // explicit instantiations to prevent linker errors

@@ -6,15 +6,15 @@
 
 namespace m {
 
-struct SpiderMonkeyPlatform : WasmPlatform
+struct SpiderMonkeyEngine : WasmEngine
 {
     private:
     static bool is_init_;
     JSContext *ctx_ = nullptr;
 
     public:
-    SpiderMonkeyPlatform();
-    ~SpiderMonkeyPlatform();
+    SpiderMonkeyEngine();
+    ~SpiderMonkeyEngine();
 
     void execute(const WASMModule &module) override;
 };

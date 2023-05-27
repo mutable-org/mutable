@@ -35,6 +35,12 @@ namespace options {
 /** Whether there must not be any ternary logic, i.e. NULL value computation.  Note that NULL values have different
  * origins, e.g. NULL values stored in a table or default aggregate values in an aggregation operator. */
 extern bool insist_no_ternary_logic;
+
+#define M_insist_no_ternary_logic() M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur")
+
+#else
+#define M_insist_no_ternary_logic()
+
 #endif
 
 }
@@ -868,6 +874,8 @@ struct Block final
 
     /** Emits a jump to the end of this `Block`. */
     void go_to() const { Module::Block().list.push_back(Module::Builder().makeBreak(get().name)); }
+    /** Emits a jump to the end of this `Block` iff `cond` is fulfilled. */
+    void go_to(PrimitiveExpr<bool> cond) const;
 
     friend std::ostream & operator<<(std::ostream &out, const Block &B) {
         out << "vvvvvvvvvv block";
@@ -1196,6 +1204,7 @@ struct PrimitiveExpr<T>
     template<typename, VariableKind, bool>
     friend class detail::variable_storage; // to construct from `::wasm::Expression` and access private `expr()`
     friend struct Module; // to access internal `::wasm::Expression`, e.g. in `emit_return()`
+    friend struct Block; // to access internal `::wasm::Expression`, e.g. in `go_to()`
     template<typename> friend struct FunctionProxy; // to access internal `::wasm::Expr` to construct function calls
     friend struct If; // to use PrimitiveExpr<bool> as condition
     friend struct While; // to use PrimitiveExpr<bool> as condition
@@ -2035,9 +2044,7 @@ struct PrimitiveExpr<T>
      * as `is_nullptr()` it should be used for ternary logic since it additionally checks whether ternary logic usage
      * is expected. */
     PrimitiveExpr<bool> is_null() {
-#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
-        M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur");
-#endif
+        M_insist_no_ternary_logic();
         return to<uint32_t>() == 0U;
     }
 
@@ -2045,9 +2052,7 @@ struct PrimitiveExpr<T>
      * as `not is_nullptr()` it should be used for ternary logic since it additionally checks whether ternary logic
      * usage is expected. */
     PrimitiveExpr<bool> not_null() {
-#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
-        M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur");
-#endif
+        M_insist_no_ternary_logic();
         return to<uint32_t>() != 0U;
     }
 
@@ -2258,9 +2263,8 @@ struct Expr<T>
         , is_null_(is_null)
     {
         M_insist(bool(value_), "value must be present");
-#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
-        M_insist(not bool(is_null) or not options::insist_no_ternary_logic, "ternary logic must not occur");
-#endif
+        if (is_null)
+            M_insist_no_ternary_logic();
     }
 
     ///> Constructs an `Expr` from a `std::pair` \p value of value and NULL info.
@@ -2348,9 +2352,7 @@ struct Expr<T>
     PrimitiveExpr<bool> is_null() {
         value_.discard();
         if (can_be_null()) {
-#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
-            M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur");
-#endif
+            M_insist_no_ternary_logic();
             return is_null_;
         } else {
             return PrimitiveExpr<bool>(false);
@@ -2361,9 +2363,7 @@ struct Expr<T>
     PrimitiveExpr<bool> not_null() {
         value_.discard();
         if (can_be_null()) {
-#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
-        M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur");
-#endif
+            M_insist_no_ternary_logic();
             return not is_null_;
         } else {
             return PrimitiveExpr<bool>(true);
@@ -2774,9 +2774,7 @@ class variable_storage<T, VariableKind::Local, /* CanBeNull= */ true>
 
     /** Default-construct. */
     variable_storage() {
-#if !defined(NDEBUG) && defined(M_ENABLE_SANITY_FIELDS)
-        M_insist(not options::insist_no_ternary_logic, "ternary logic must not occur");
-#endif
+        M_insist_no_ternary_logic();
     }
 
     /** Construct from value. */
@@ -3317,7 +3315,16 @@ inline void CONTINUE(C &&_cond, std::size_t level = 1)
 
 /*----- GOTO ---------------------------------------------------------------------------------------------------------*/
 
+/** Jumps to the end of \p block. */
 inline void GOTO(const Block &block) { block.go_to(); }
+template<primitive_convertible C>
+requires requires (C &&c) { PrimitiveExpr<bool>(std::forward<C>(c)); }
+/** Jumps to the end of \p block iff \p _cond is fulfilled. */
+inline void GOTO(C &&_cond, const Block &block)
+{
+    PrimitiveExpr<bool> cond(std::forward<C>(_cond));
+    block.go_to(cond);
+}
 
 /*----- Select -------------------------------------------------------------------------------------------------------*/
 
@@ -3710,6 +3717,16 @@ Expr<T> Module::emit_select(PrimitiveExpr<bool> cond, Expr<T> tru, Expr<T> fals)
 inline void Module::push_branch_targets(::wasm::Name brk, ::wasm::Name continu, PrimitiveExpr<bool> condition)
 {
     branch_target_stack_.emplace_back(brk, continu, condition.expr());
+}
+
+
+/*======================================================================================================================
+ * Block
+ *====================================================================================================================*/
+
+inline void Block::go_to(PrimitiveExpr<bool> cond) const
+{
+    Module::Block().list.push_back(Module::Builder().makeBreak(get().name, nullptr, cond.expr()));
 }
 
 

@@ -174,7 +174,7 @@ class DuckDB(Connector):
 
             delimiter = table.get('delimiter')
             header = table.get('header')
-            format = table['format'].upper()
+            format = table.get('format')
 
             if with_scale_factors:
                 table_name += "_tmp"
@@ -185,7 +185,7 @@ class DuckDB(Connector):
                 delim = delimiter.replace("'", "")
                 copy += f" DELIMITER \'{delim}\',"
             if format:
-                copy += f" FORMAT {format},"
+                copy += f" FORMAT {format.upper()},"
             if header:
                 copy += f" HEADER," if (header==1) else ""
 

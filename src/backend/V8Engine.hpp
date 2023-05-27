@@ -88,7 +88,7 @@ v8::Local<v8::WasmModuleObject> instantiate(v8::Isolate &isolate, v8::Local<v8::
 v8::Local<v8::Object> create_env(v8::Isolate &isolate, const Operator &plan);
 v8::Local<v8::String> to_json(v8::Isolate &isolate, v8::Local<v8::Value> val);
 std::string create_js_debug_script(v8::Isolate &isolate, v8::Local<v8::Object> env,
-                                   const WasmPlatform::WasmContext &wasm_context);
+                                   const WasmEngine::WasmContext &wasm_context);
 void run_inspector(V8InspectorClientImpl &inspector, v8::Isolate &isolate, v8::Local<v8::Object> env);
 
 }

@@ -17,98 +17,55 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
 {
     static_assert(IsGlobal, "quicksort on local buffers is not yet supported");
 
-    /*----- Compute entries which are needed for `order`. -----*/
-    Schema entries_to_order;
-    for (auto &o : order) {
-        visit(overloaded {
-            [&entries_to_order](const ast::Designator &d) -> void {
-                Schema::Identifier id(d.table_name.text, d.attr_name.text);
-                if (not entries_to_order.has(id))
-                    entries_to_order.add(id, d.type());
-            },
-            [&entries_to_order](const ast::FnApplicationExpr &fn) {
-                switch (fn.get_function().fnid) {
-                    default:
-                        break; // nothing to be done
-                    case m::Function::FN_COUNT:
-                    case m::Function::FN_MIN:
-                    case m::Function::FN_MAX:
-                    case m::Function::FN_SUM:
-                    case m::Function::FN_AVG: {
-                        std::ostringstream oss;
-                        oss << fn;
-                        Schema::Identifier id(Catalog::Get().pool(oss.str().c_str()));
-                        if (not entries_to_order.has(id))
-                            entries_to_order.add(id, fn.type());
-                    }
-                }
-                throw visit_stop_recursion(); // to not visit function and argument expressions
-            },
-            [](auto&) { /* nothing to be done */ }
-        }, o.first, tag<ast::ConstPreOrderExprVisitor>());
-    }
-
     /*----- Create load and swap proxies for buffer. -----*/
-    auto load = buffer.create_load_proxy(entries_to_order); // loading is only used for comparison w.r.t. `order`
+    auto load = buffer.create_load_proxy();
     auto swap = buffer.create_swap_proxy();
 
     /*---- Create branchless binary partition function. -----*/
-    /* Receives the ID of the first tuple to partition, the past-the-end ID to partition, and the ID of the pivot
-     * element as parameters. Returns ID of partition boundary s.t. all elements before this boundary are smaller
+    /* Receives the ID of the first tuple to partition, the past-the-end ID to partition, and an environment
+     * containing the entries of the pivot element needed for ordering as parameters (note that the pivot element
+     * must not be contained in the interval [begin, end[ since these entries may be swapped which would render the
+     * given environment invalid). Returns ID of partition boundary s.t. all elements before this boundary are smaller
      * than or equal to the pivot element and all elements after or equal this boundary are greater than or equal to
      * the pivot element. */
-    FUNCTION(partition, uint32_t(uint32_t, uint32_t, uint32_t))
-    {
-        auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment
+    auto partition = [&](U32 _begin, U32 _end, const Environment &env_pivot) -> U32 {
+        Var<U32> begin(_begin), end(_end);
 
-        buffer.setup_base_address(); // to access base address during loading and swapping as local
-
-        auto begin = PARAMETER(0); // first ID to partition
-        auto end = PARAMETER(1); // past-the-end ID to partition
-        const auto pivot = PARAMETER(2); // pivot element
-        Wasm_insist(begin == pivot + 1U);
         Wasm_insist(begin < end);
 
         U32 last = end - 1U;
 
         DO_WHILE(begin < end) {
-            /*----- Swap begin and last tuples. -----*/
-            swap(begin, last.clone());
-
-            /*----- Load begin tuple. -----*/
+            /*----- Load entire begin tuple. -----*/
             auto env_begin = [&](){
                 auto S = CodeGenContext::Get().scoped_environment();
                 load(begin);
                 return S.extract();
             }();
 
-            /*----- Load pivot tuple. -----*/
-            auto env_pivot = [&](){
-                auto S = CodeGenContext::Get().scoped_environment();
-                load(pivot);
-                return S.extract();
-            }();
-
-            /*----- Load last tuple. -----*/
+            /*----- Load entire last tuple. -----*/
             auto env_last = [&](){
                 auto S = CodeGenContext::Get().scoped_environment();
-                load(last);
+                load(last.clone());
                 return S.extract();
             }();
 
+            /*----- Swap entire begin and last tuples. -----*/
+            swap(begin, last, env_begin, env_last);
+            /* Note that environments are now also swapped, i.e. `env_begin` contains still the values of the former
+             * begin tuple which is now located at ID `last` and vice versa. Thus, use `env_begin` to access the last
+             * tuple and use `env_last` to use the begin tuple in the following. */
+
             /*----- Compare begin and last tuples to pivot element and advance cursors respectively. -----*/
-            Bool begin_le_pivot = compare(env_begin, env_pivot, order) <= 0;
-            Bool last_ge_pivot  = compare(env_last, env_pivot, order) >= 0;
+            Bool begin_le_pivot = compare(env_last, env_pivot, order) <= 0;
+            Bool last_ge_pivot  = compare(env_begin, env_pivot, order) >= 0;
 
             begin += begin_le_pivot.to<uint32_t>();
             end -= last_ge_pivot.to<uint32_t>();
         }
 
-        Wasm_insist(begin > pivot, "partition boundary must be located within the partitioned area");
-        RETURN(begin);
-
-        buffer.teardown_base_address();
-    }
+        return begin;
+    };
 
     /*---- Create quicksort function. -----*/
     /* Receives the ID of the first tuple to sort and the past-the-end ID to sort. */
@@ -127,21 +84,21 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
         WHILE(end - begin > 2U) {
             Var<U32> mid((begin + end) >> 1U); // (begin + end) / 2
 
-            /*----- Load begin tuple. -----*/
+            /*----- Load entire begin tuple. -----*/
             auto env_begin = [&](){
                 auto S = CodeGenContext::Get().scoped_environment();
                 load(begin);
                 return S.extract();
             }();
 
-            /*----- Load mid tuple. -----*/
+            /*----- Load entire mid tuple. -----*/
             auto env_mid = [&](){
                 auto S = CodeGenContext::Get().scoped_environment();
                 load(mid);
                 return S.extract();
             }();
 
-            /*----- Load last tuple. -----*/
+            /*----- Load entire last tuple. -----*/
             auto env_last = [&](){
                 auto S = CodeGenContext::Get().scoped_environment();
                 load(last.clone());
@@ -155,24 +112,32 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
             IF (begin_le_mid) {
                 IF (begin_le_last.clone()) {
                     IF (mid_le_last.clone()) {
-                        swap(begin, mid); // [begin, mid, last]
+                        swap(begin, mid, env_begin, env_mid); // [begin, mid, last]
                     } ELSE {
-                        swap(begin, last.clone()); // [begin, last, mid]
+                        swap(begin, last.clone(), env_begin, env_last); // [begin, last, mid]
                     };
                 }; // else [last, begin, mid]
             } ELSE {
                 IF (mid_le_last) {
                     IF (not begin_le_last) {
-                        swap(begin, last.clone()); // [mid, last, begin]
+                        swap(begin, last.clone(), env_begin, env_last); // [mid, last, begin]
                     }; // else [mid, begin, last]
                 } ELSE {
-                    swap(begin, mid); // [last, mid, begin]
+                    swap(begin, mid, env_begin, env_mid); // [last, mid, begin]
                 };
             };
 
-            /*----- Partition range [begin + 1, end[ using begin as pivot. -----*/
-            mid = partition(begin + 1U, end, begin);
-            swap(begin, mid - 1U); // patch mid
+            /*----- Load entire pivot tuple. Must be loaded again as begin tuple may be swapped above. -----*/
+            U32 pivot = begin; // use begin as pivot
+            auto env_pivot = [&](){
+                auto S = CodeGenContext::Get().scoped_environment();
+                load(pivot.clone());
+                return S.extract();
+            }();
+
+            /*----- Partition range [begin + 1, end[ using pivot. -----*/
+            mid = partition(begin + 1U, end, env_pivot);
+            swap(pivot, mid - 1U, env_pivot); // patch mid
 
             /*----- Recurse right partition, if necessary. -----*/
             IF (end - mid >= 2U) {
@@ -185,14 +150,14 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
 
         /* TODO: remove this special case handling and integrate into loop iff buffer elements are small */
         IF (end - begin == 2U) {
-            /*----- Load begin tuple. -----*/
+            /*----- Load entire begin tuple. -----*/
             auto env_begin = [&](){
                 auto S = CodeGenContext::Get().scoped_environment();
                 load(begin);
                 return S.extract();
             }();
 
-            /*----- Load last tuple. -----*/
+            /*----- Load entire last tuple. -----*/
             auto env_last = [&](){
                 auto S = CodeGenContext::Get().scoped_environment();
                 load(last.clone());
@@ -202,7 +167,7 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
             /*----- Swap begin and last if they are not yet sorted. -----.*/
             Bool begin_gt_last = compare(env_begin, env_last, order) > 0;
             IF (begin_gt_last) {
-                swap(begin, last);
+                swap(begin, last, env_begin, env_last);
             };
         };
 
@@ -317,7 +282,7 @@ U64 m::wasm::murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> values)
     uint64_t total_size_in_bits = 0;
     for (const auto &p : values) {
         std::visit(overloaded {
-            [&]<typename T>(const Expr<T> &val) -> void { total_size_in_bits += p.first->size() + val.can_be_null(); },
+            [&]<typename T>(const Expr<T> &val) -> void { total_size_in_bits += p.first->size(); },
             [&](const NChar &val) -> void { total_size_in_bits += 8 * val.length(); },
             [](std::monostate) -> void { M_unreachable("invalid variant"); }
         }, p.second);
@@ -329,19 +294,25 @@ U64 m::wasm::murmur3_64a_hash(std::vector<std::pair<const Type*, SQL_t>> values)
         for (auto &p : values) {
             std::visit(overloaded {
                 [&]<typename T>(Expr<T> _val) -> void {
-                    auto [val, is_null] = _val.split();
                     h <<= p.first->size();
-                    h |= reinterpret_to_U64(val); // add reinterpreted value
-                    if (is_null) {
-                        h <<= 1U;
-                        h |= is_null.template to<uint64_t>(); // add NULL bit
+                    if (_val.can_be_null()) {
+                        auto [val, is_null] = _val.split();
+#if 0
+                        IF (not is_null) {
+                            h |= reinterpret_to_U64(val); // add reinterpreted value
+                        };
+#else
+                        h |= (~uint64_t(0) + is_null.template to<uint64_t>()) bitand reinterpret_to_U64(val);
+#endif
+                    } else {
+                        auto val = _val.insist_not_null();
+                        h |= reinterpret_to_U64(val); // add reinterpreted value
                     }
                 },
                 [&](NChar _val) -> void {
                     IF (_val.clone().is_null()) {
                         uint64_t len_in_bits = 8 * _val.length();
                         h <<= len_in_bits;
-                        h |= uint64_t(1UL << (len_in_bits - 1)); // add NULL
                     } ELSE {
                         const Var<Ptr<Char>> val(_val.val());
                         for (int32_t i = 0; i != _val.length(); ++i) {
@@ -468,12 +439,13 @@ ChainedHashTable<IsGlobal>::ChainedHashTable(const Schema &schema, std::vector<H
 
     /*----- Initialize capacity and absolute high watermark. -----*/
     const auto capacity_init = ceil_to_pow_2(initial_capacity);
+    const auto mask_init = capacity_init - 1U;
     const auto high_watermark_absolute_init = capacity_init;
     if constexpr (IsGlobal) {
-        storage_.capacity_.init(capacity_init);
+        storage_.mask_.init(mask_init);
         storage_.high_watermark_absolute_.init(high_watermark_absolute_init);
     } else {
-        capacity_.emplace(capacity_init);
+        mask_.emplace(mask_init);
         high_watermark_absolute_.emplace(high_watermark_absolute_init);
     }
 }
@@ -484,7 +456,7 @@ ChainedHashTable<IsGlobal>::~ChainedHashTable()
     if constexpr (IsGlobal) { // free memory of global hash table when object is destroyed and no use may occur later
         /*----- Free collision list entries. -----*/
         Var<Ptr<void>> it(storage_.address_);
-        const Var<Ptr<void>> end(storage_.address_ + (storage_.capacity_ * uint32_t(sizeof(uint32_t))).make_signed());
+        const Var<Ptr<void>> end(storage_.address_ + ((storage_.mask_ + 1U) * uint32_t(sizeof(uint32_t))).make_signed());
         WHILE (it != end) {
             Wasm_insist(storage_.address_ <= it and it < end, "bucket out-of-bounds");
             Var<Ptr<void>> bucket_it(Ptr<void>(*it.to<uint32_t*>()));
@@ -497,7 +469,7 @@ ChainedHashTable<IsGlobal>::~ChainedHashTable()
         }
 
         /*----- Free all buckets. -----*/
-        Module::Allocator().deallocate(storage_.address_, storage_.capacity_ * uint32_t(sizeof(uint32_t)));
+        Module::Allocator().deallocate(storage_.address_, (storage_.mask_ + 1U) * uint32_t(sizeof(uint32_t)));
 
         /*----- Free dummy entries. -----*/
         for (auto it = dummy_allocations_.rbegin(); it != dummy_allocations_.rend(); ++it)
@@ -529,19 +501,19 @@ void ChainedHashTable<IsGlobal>::setup()
     address_.emplace();
     num_entries_.emplace();
     if constexpr (IsGlobal) {
-        M_insist(not capacity_, "must not call `setup()` twice");
+        M_insist(not mask_, "must not call `setup()` twice");
         M_insist(not high_watermark_absolute_, "must not call `setup()` twice");
-        capacity_.emplace();
+        mask_.emplace();
         high_watermark_absolute_.emplace();
     } else {
-        M_insist(bool(capacity_)); // already initialized in c'tor
+        M_insist(bool(mask_)); // already initialized in c'tor
         M_insist(bool(high_watermark_absolute_)); // already initialized in c'tor
     }
 
     /*----- For global hash tables, read values from global backups into local variables. -----*/
     if constexpr (IsGlobal) {
         /* omit assigning address here as it will always be set below */
-        *capacity_ = storage_.capacity_;
+        *mask_ = storage_.mask_;
         *num_entries_ = storage_.num_entries_;
         *high_watermark_absolute_ = storage_.high_watermark_absolute_;
     }
@@ -569,7 +541,7 @@ template<bool IsGlobal>
 void ChainedHashTable<IsGlobal>::teardown()
 {
     M_insist(bool(address_), "must call `setup()` before");
-    M_insist(bool(capacity_), "must call `setup()` before");
+    M_insist(bool(mask_), "must call `setup()` before");
     M_insist(bool(num_entries_), "must call `setup()` before");
     M_insist(bool(high_watermark_absolute_), "must call `setup()` before");
 
@@ -612,14 +584,14 @@ void ChainedHashTable<IsGlobal>::teardown()
     /*----- For global hash tables, write values from local variables into global backups. -----*/
     if constexpr (IsGlobal) {
         storage_.address_ = *address_;
-        storage_.capacity_ = *capacity_;
+        storage_.mask_ = *mask_;
         storage_.num_entries_ = *num_entries_;
         storage_.high_watermark_absolute_ = *high_watermark_absolute_;
     }
 
     /*----- Destroy local variables. -----*/
     address_.reset();
-    capacity_.reset();
+    mask_.reset();
     num_entries_.reset();
     high_watermark_absolute_.reset();
 }
@@ -646,7 +618,7 @@ void ChainedHashTable<IsGlobal>::clear()
 template<bool IsGlobal>
 Ptr<void> ChainedHashTable<IsGlobal>::hash_to_bucket(std::vector<SQL_t> key) const
 {
-    M_insist(bool(capacity_), "must call `setup()` before");
+    M_insist(bool(mask_), "must call `setup()` before");
     M_insist(key.size() == key_indices_.size(),
              "provided number of key elements does not match hash table's number of key indices");
 
@@ -661,7 +633,7 @@ Ptr<void> ChainedHashTable<IsGlobal>::hash_to_bucket(std::vector<SQL_t> key) con
     U64 hash = murmur3_64a_hash(std::move(values));
 
     /*----- Compute bucket address. -----*/
-    U32 bucket_idx = hash.to<uint32_t>() bitand (*capacity_ - 1U); // modulo capacity_
+    U32 bucket_idx = hash.to<uint32_t>() bitand *mask_; // modulo capacity
     return begin() + (bucket_idx * uint32_t(sizeof(uint32_t))).make_signed();
 }
 
@@ -704,17 +676,18 @@ HashTable::entry_t ChainedHashTable<IsGlobal>::emplace_without_rehashing(std::ve
     ); // clone key since we need it again for insertion
 
     /*----- Allocate memory for entry. -----*/
-    Ptr<void> entry = Module::Allocator().allocate(entry_size_in_bytes_, entry_max_alignment_in_bytes_);
+    Var<Ptr<void>> entry = Module::Allocator().allocate(entry_size_in_bytes_, entry_max_alignment_in_bytes_);
 
-    /*----- Iff no predication is used or predicate is fulfilled, insert entry at collision list's front. ---*/
-    *(entry.clone() + ptr_offset_in_bytes_).to<uint32_t*>() = *bucket.to<uint32_t*>();
-    *bucket.to<uint32_t*>() = pred ? Select(*pred, entry.clone().to<uint32_t>(), 0U) : entry.clone().to<uint32_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
+    /*----- Iff no predication is used or predicate is fulfilled, insert entry at collision list's front. -----*/
+    *(entry + ptr_offset_in_bytes_).to<uint32_t*>() = *bucket.to<uint32_t*>();
+    *bucket.to<uint32_t*>() = pred ? Select(*pred, entry.to<uint32_t>(), *bucket.to<uint32_t*>())
+                                   : entry.to<uint32_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
 
     /*----- Update number of entries. -----*/
     *num_entries_ += pred ? pred->to<uint32_t>() : U32(1);
 
     /*----- Insert key. -----*/
-    insert_key(entry.clone(), std::move(key));
+    insert_key(entry, std::move(key)); // move key at last use
 
     /*----- Return entry handle containing all values. -----*/
     return value_entry(entry);
@@ -748,36 +721,50 @@ std::pair<HashTable::entry_t, Bool> ChainedHashTable<IsGlobal>::try_emplace(std:
              : hash_to_bucket(clone(key))
     ); // clone key since we need it again for insertion
 
-    /*----- Iterate until the end of the collision list but abort if key already exists. -----*/
+    /*----- Probe collision list, abort and skip insertion if key already exists. -----*/
+    Var<Bool> entry_inserted(false);
     Var<Ptr<void>> bucket_it(Ptr<void>(*bucket.to<uint32_t*>()));
-    WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
-        BREAK(equal_key(bucket_it, clone(key))); // clone key (see above)
-        bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
-    }
+    BLOCK(insert_entry) {
+        IF (bucket_it.is_nullptr()) { // empty collision list
+            bucket_it = bucket - ptr_offset_in_bytes_; // set bucket iterator to point to bucket's collision list front
+        } ELSE {
+            LOOP () {
+                GOTO(equal_key(bucket_it, clone(key)), insert_entry); // clone key (see above)
+                const Var<Ptr<void>> next_bucket_it(Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>()));
+                BREAK(next_bucket_it.is_nullptr());
+                bucket_it = next_bucket_it;
+                CONTINUE();
+            }
+        };
+        Wasm_insist(Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>()).is_nullptr());
+        if (pred)
+            Wasm_insist(*pred or bucket_it == bucket - ptr_offset_in_bytes_,
+                        "predication dummy must always contain an empty collision list");
 
-    /*----- If end is reached, i.e. key does not already exist, insert entry for it. -----*/
-    Bool end_reached = bucket_it.is_nullptr();
-    if (pred)
-        Wasm_insist(*pred or (end_reached.clone() and bucket_it == Ptr<void>(*bucket.to<uint32_t*>())),
-                    "predication dummy must always contain an empty collision list");
-    IF (end_reached.clone()) {
+        /*----- Set flag to indicate insertion. -----*/
+        entry_inserted = true;
+
         /*----- Allocate memory for entry. -----*/
-        Ptr<void> entry = Module::Allocator().allocate(entry_size_in_bytes_, entry_max_alignment_in_bytes_);
-        bucket_it = entry.clone();
+        Var<Ptr<void>> entry = Module::Allocator().allocate(entry_size_in_bytes_, entry_max_alignment_in_bytes_);
 
-        /*----- Iff no predication is used or predicate is fulfilled, insert entry at the collision list's front. ---.*/
-        *(entry.clone() + ptr_offset_in_bytes_).to<uint32_t*>() = *bucket.to<uint32_t*>();
-        *bucket.to<uint32_t*>() = pred ? Select(*pred, entry.clone().to<uint32_t>(), 0U) : entry.clone().to<uint32_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
+        /*----- Iff no predication is used or predicate is fulfilled, insert entry at the collision list's end. -----*/
+        *(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>() = pred ? Select(*pred, entry.to<uint32_t>(), 0U)
+                                                                   : entry.to<uint32_t>(); // FIXME: entry memory never freed iff predicate is not fulfilled
+
+        /*----- Set bucket iterator to inserted entry. -----*/
+        bucket_it = entry;
 
         /*----- Update number of entries. -----*/
         *num_entries_ += pred ? pred->to<uint32_t>() : U32(1);
 
         /*----- Insert key. -----*/
-        insert_key(entry, std::move(key));
-    };
+        insert_key(entry, std::move(key)); // move key at last use
+    }
+
+    /* GOTO from above jumps here */
 
     /*----- Return entry handle containing all values and the flag whether an insertion was performed. -----*/
-    return { value_entry(bucket_it), end_reached };
+    return { value_entry(bucket_it), entry_inserted };
 }
 
 template<bool IsGlobal>
@@ -797,10 +784,10 @@ std::pair<HashTable::entry_t, Bool> ChainedHashTable<IsGlobal>::find(std::vector
         pred ? Select(*pred, hash_to_bucket(clone(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
              : hash_to_bucket(clone(key)); // clone key since we need it again for comparison
 
-    /*----- Iterate until the end of the collision list but abort if key is found. -----*/
+    /*----- Probe collision list, abort if key already exists. -----*/
     Var<Ptr<void>> bucket_it(Ptr<void>(*bucket.to<uint32_t*>()));
     WHILE (not bucket_it.is_nullptr()) { // another entry in collision list
-        BREAK(equal_key(bucket_it, std::move(key)));
+        BREAK(equal_key(bucket_it, std::move(key))); // move key at last use
         bucket_it = Ptr<void>(*(bucket_it + ptr_offset_in_bytes_).to<uint32_t*>());
     }
 
@@ -1125,14 +1112,14 @@ void ChainedHashTable<IsGlobal>::rehash()
         auto S = CodeGenContext::Get().scoped_environment(); // fresh environment to remove predication while rehashing
 
         M_insist(bool(address_), "must call `setup()` before");
-        M_insist(bool(capacity_), "must call `setup()` before");
+        M_insist(bool(mask_), "must call `setup()` before");
 
         /*----- Store old begin and end (since they will be overwritten). -----*/
         const Var<Ptr<void>> begin_old(begin());
         const Var<Ptr<void>> end_old(end());
 
         /*----- Double capacity. -----*/
-        *capacity_ <<= 1U;
+        *mask_ = (*mask_ << 1U) + 1U;
 
         /*----- Allocate memory for new hash table with updated capacity. -----*/
         *address_ = Module::Allocator().allocate(size_in_bytes(), sizeof(uint32_t));
@@ -1184,7 +1171,7 @@ void ChainedHashTable<IsGlobal>::rehash()
         if (not rehash_) {
             /*----- Backup former local variables to be able to use new ones for rehashing function. -----*/
             auto old_address = std::exchange(address_, std::optional<Var<Ptr<void>>>());
-            auto old_capacity = std::exchange(capacity_, std::optional<Var<U32>>());
+            auto old_mask = std::exchange(mask_, std::optional<Var<U32>>());
             /* omit `num_entries_` and `high_watermark_absolute_` as they are never accessed during rehashing */
 
             /*----- Create function for rehashing. -----*/
@@ -1192,21 +1179,21 @@ void ChainedHashTable<IsGlobal>::rehash()
             {
                 /*----- Perform setup for local variables. -----*/
                 address_.emplace(storage_.address_);
-                capacity_.emplace(storage_.capacity_);
+                mask_.emplace(storage_.mask_);
 
                 emit_rehash();
 
                 /*----- Perform teardown for local variables. -----*/
                 storage_.address_ = *address_;
-                storage_.capacity_ = *capacity_;
+                storage_.mask_ = *mask_;
                 address_.reset();
-                capacity_.reset();
+                mask_.reset();
             }
             rehash_ = std::move(rehash);
 
             /*----- Restore local variables. -----*/
             std::exchange(address_, std::move(old_address));
-            std::exchange(capacity_, std::move(old_capacity));
+            std::exchange(mask_, std::move(old_mask));
         }
 
         /*----- Call rehashing function. ------*/
@@ -1251,7 +1238,7 @@ Ptr<void> OpenAddressingHashTableBase::hash_to_bucket(std::vector<SQL_t> key) co
     U64 hash = murmur3_64a_hash(std::move(values));
 
     /*----- Compute bucket address. -----*/
-    U32 bucket_idx = hash.to<uint32_t>() bitand (capacity() - 1U); // modulo capacity_
+    U32 bucket_idx = hash.to<uint32_t>() bitand mask(); // modulo capacity
     return begin() + (bucket_idx * entry_size_in_bytes_).make_signed();
 }
 
@@ -1358,12 +1345,13 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::OpenAddressingHashTable(const S
     /*----- Initialize capacity and absolute high watermark. -----*/
     /* at least capacity 4 to ensure absolute high watermark of at least 1 even for minimal percentage of 0.5 */
     const auto capacity_init = std::max<uint32_t>(4, ceil_to_pow_2(initial_capacity));
+    const auto mask_init = capacity_init - 1U;
     const auto high_watermark_absolute_init = capacity_init - 1U; // at least one entry must always be unoccupied
     if constexpr (IsGlobal) {
-        storage_.capacity_.init(capacity_init);
+        storage_.mask_.init(mask_init);
         storage_.high_watermark_absolute_.init(high_watermark_absolute_init);
     } else {
-        capacity_.emplace(capacity_init);
+        mask_.emplace(mask_init);
         high_watermark_absolute_.emplace(high_watermark_absolute_init);
     }
 }
@@ -1375,7 +1363,7 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::~OpenAddressingHashTable()
         if constexpr (not ValueInPlace) {
             /*----- Free out-of-place values. -----*/
             Var<Ptr<void>> it(storage_.address_);
-            const Var<Ptr<void>> end(storage_.address_ + (storage_.capacity_ * entry_size_in_bytes_).make_signed());
+            const Var<Ptr<void>> end(storage_.address_ + ((storage_.mask_ + 1U) * entry_size_in_bytes_).make_signed());
             WHILE (it != end) {
                 Wasm_insist(storage_.address_ <= it and it < end, "entry out-of-bounds");
                 IF (reference_count(it) != ref_t(0)) { // occupied
@@ -1387,7 +1375,7 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::~OpenAddressingHashTable()
         }
 
         /*----- Free all entries. -----*/
-        Module::Allocator().deallocate(storage_.address_, storage_.capacity_ * entry_size_in_bytes_);
+        Module::Allocator().deallocate(storage_.address_, (storage_.mask_ + 1U) * entry_size_in_bytes_);
 
         /*----- Free dummy entries. -----*/
         for (auto it = dummy_allocations_.rbegin(); it != dummy_allocations_.rend(); ++it)
@@ -1405,19 +1393,19 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::setup()
     address_.emplace();
     num_entries_.emplace();
     if constexpr (IsGlobal) {
-        M_insist(not capacity_, "must not call `setup()` twice");
+        M_insist(not mask_, "must not call `setup()` twice");
         M_insist(not high_watermark_absolute_, "must not call `setup()` twice");
-        capacity_.emplace();
+        mask_.emplace();
         high_watermark_absolute_.emplace();
     } else {
-        M_insist(bool(capacity_)); // already initialized in c'tor
+        M_insist(bool(mask_)); // already initialized in c'tor
         M_insist(bool(high_watermark_absolute_)); // already initialized in c'tor
     }
 
     /*----- For global hash tables, read values from global backups into local variables. -----*/
     if constexpr (IsGlobal) {
         /* omit assigning address here as it will always be set below */
-        *capacity_ = storage_.capacity_;
+        *mask_ = storage_.mask_;
         *num_entries_ = storage_.num_entries_;
         *high_watermark_absolute_ = storage_.high_watermark_absolute_;
     }
@@ -1445,7 +1433,7 @@ template<bool IsGlobal, bool ValueInPlace>
 void OpenAddressingHashTable<IsGlobal, ValueInPlace>::teardown()
 {
     M_insist(bool(address_), "must call `setup()` before");
-    M_insist(bool(capacity_), "must call `setup()` before");
+    M_insist(bool(mask_), "must call `setup()` before");
     M_insist(bool(num_entries_), "must call `setup()` before");
     M_insist(bool(high_watermark_absolute_), "must call `setup()` before");
 
@@ -1474,14 +1462,14 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::teardown()
     /*----- For global hash tables, write values from local variables into global backups. -----*/
     if constexpr (IsGlobal) {
         storage_.address_ = *address_;
-        storage_.capacity_ = *capacity_;
+        storage_.mask_ = *mask_;
         storage_.num_entries_ = *num_entries_;
         storage_.high_watermark_absolute_ = *high_watermark_absolute_;
     }
 
     /*----- Destroy local variables. -----*/
     address_.reset();
-    capacity_.reset();
+    mask_.reset();
     num_entries_.reset();
     high_watermark_absolute_.reset();
 }
@@ -1504,7 +1492,6 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace(std:
 template<bool IsGlobal, bool ValueInPlace>
 HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace_without_rehashing(std::vector<SQL_t> key)
 {
-    M_insist(bool(capacity_), "must call `setup()` before");
     M_insist(bool(num_entries_), "must call `setup()` before");
     M_insist(bool(high_watermark_absolute_), "must call `setup()` before");
 
@@ -1535,10 +1522,10 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace_with
 
     /*----- Search first unoccupied slot. -----*/
     WHILE (reference_count(slot) != ref_t(0)) {
-        slot = probing_strategy().advance_to_next_slot(slot, refs);
-        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
         refs += ref_t(1);
         Wasm_insist(refs <= *num_entries_, "probing strategy has to find unoccupied slot if there is one");
+        slot = probing_strategy().advance_to_next_slot(slot, refs);
+        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
     }
 
     /*----- Update reference count of this bucket. -----*/
@@ -1549,10 +1536,10 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace_with
 
     /*----- Update number of entries. -----*/
     *num_entries_ += pred ? pred->to<uint32_t>() : U32(1);
-    Wasm_insist(*num_entries_ < *capacity_, "at least one entry must always be unoccupied for lookups");
+    Wasm_insist(*num_entries_ < capacity(), "at least one entry must always be unoccupied for lookups");
 
     /*----- Insert key. -----*/
-    insert_key(slot, std::move(key));
+    insert_key(slot, std::move(key)); // move key at last use
 
     if constexpr (ValueInPlace) {
         /*----- Return entry handle containing all values. -----*/
@@ -1579,7 +1566,6 @@ template<bool IsGlobal, bool ValueInPlace>
 std::pair<HashTable::entry_t, Bool>
 OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> key)
 {
-    M_insist(bool(capacity_), "must call `setup()` before");
     M_insist(bool(num_entries_), "must call `setup()` before");
     M_insist(bool(high_watermark_absolute_), "must call `setup()` before");
 
@@ -1608,34 +1594,37 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
     /*----- Set reference count, i.e. occupied slots, of this bucket to its initial value. -----*/
     Var<PrimitiveExpr<ref_t>> refs(0);
 
-    /*----- Search first unoccupied slot but abort if key already exists. -----*/
+    /*----- Probe slots, abort and skip insertion if key already exists. -----*/
+    Var<Bool> entry_inserted(false);
     Var<Ptr<void>> slot(bucket.val());
-    WHILE (reference_count(slot) != ref_t(0)) {
-        BREAK(equal_key(slot, clone(key))); // clone key (see above)
-        slot = probing_strategy().advance_to_next_slot(slot, refs);
-        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
-        refs += ref_t(1);
-        Wasm_insist(refs <= *num_entries_, "probing strategy has to find unoccupied slot if there is one");
-    }
+    BLOCK(insert_entry) {
+        WHILE (reference_count(slot) != ref_t(0)) {
+            GOTO(equal_key(slot, clone(key)), insert_entry); // clone key (see above)
+            refs += ref_t(1);
+            Wasm_insist(refs <= *num_entries_, "probing strategy has to find unoccupied slot if there is one");
+            slot = probing_strategy().advance_to_next_slot(slot, refs);
+            Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
+        }
+        Wasm_insist(reference_count(slot) == ref_t(0));
+        if (pred)
+            Wasm_insist(*pred or refs == ref_t(0), "predication dummy must always be unoccupied");
 
-    /*----- If unoccupied slot is found, i.e. key does not already exist, insert entry for it. -----*/
-    const Var<Bool> slot_unoccupied(reference_count(slot) == ref_t(0)); // create constant variable since `slot` may change
-    if (pred)
-        Wasm_insist(*pred or (slot_unoccupied and refs == ref_t(0)), "predication dummy must always be unoccupied");
-    IF (slot_unoccupied) {
+        /*----- Set flag to indicate insertion. -----*/
+        entry_inserted = true;
+
         /*----- Update reference count of this bucket. -----*/
         Wasm_insist(reference_count(bucket) <= refs, "reference count must increase if unoccupied slot is found");
-        reference_count(bucket) = refs + ref_t(1); // no predication special case since bucket equals slot if dummy is used
+        reference_count(bucket) = refs + ref_t(1); // no pred. special case since bucket equals slot if dummy is used
 
         /*----- Iff no predication is used or predicate is fulfilled, set slot as occupied. -----*/
         reference_count(slot) = pred ? pred->to<ref_t>() : PrimitiveExpr<ref_t>(1);
 
         /*----- Update number of entries. -----*/
         *num_entries_ += pred ? pred->to<uint32_t>() : U32(1);
-        Wasm_insist(*num_entries_ < *capacity_, "at least one entry must always be unoccupied for lookups");
+        Wasm_insist(*num_entries_ < capacity(), "at least one entry must always be unoccupied for lookups");
 
         /*----- Insert key. -----*/
-        insert_key(slot, std::move(key));
+        insert_key(slot, std::move(key)); // move key at last use
 
         if constexpr (not ValueInPlace) {
             /*----- Allocate memory for out-of-place values and set pointer to it. -----*/
@@ -1645,14 +1634,16 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
 
             if (pred) {
                 /*----- Store address and size of dummy predication entry to free them later. -----*/
-                var_t<Ptr<void>> ptr_; // create global variable iff `IsGlobal` to be able to access it later for deallocation
+                var_t<Ptr<void>> ptr_; // create global variable iff `IsGlobal` to access it later for deallocation
                 ptr_ = ptr.clone();
                 dummy_allocations_.emplace_back(ptr_, layout_.values_size_in_bytes_);
             }
 
             ptr.discard(); // since it was always cloned
         }
-    };
+    }
+
+    /* GOTO from above jumps here */
 
     if constexpr (not ValueInPlace) {
         /*----- Set slot pointer to out-of-place values. -----*/
@@ -1660,7 +1651,7 @@ OpenAddressingHashTable<IsGlobal, ValueInPlace>::try_emplace(std::vector<SQL_t> 
     }
 
     /*----- Return entry handle containing all values and the flag whether an insertion was performed. -----*/
-    return { value_entry(slot), slot_unoccupied };
+    return { value_entry(slot), entry_inserted };
 }
 
 template<bool IsGlobal, bool ValueInPlace>
@@ -1677,20 +1668,24 @@ std::pair<HashTable::entry_t, Bool> OpenAddressingHashTable<IsGlobal, ValueInPla
     }
     M_insist(not pred or predication_dummy_);
 
-    /*----- Compute bucket address by hashing the key. -----*/
-    Ptr<void> bucket =
+    /*----- Compute bucket address by hashing the key. Create constant variable to do not recompute the hash. -----*/
+    const Var<Ptr<void>> bucket(
         pred ? Select(*pred, hash_to_bucket(clone(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
-             : hash_to_bucket(clone(key)); // clone key since we need it again for comparison
+             : hash_to_bucket(clone(key))
+    ); // clone key since we need it again for comparison
 
-    /*----- Search first slot with the given key but abort if an unoccupied slot is found. -----*/
-    Var<Ptr<void>> slot(bucket);
+    /*----- Get reference count, i.e. occupied slots, of this bucket. -----*/
+    const Var<PrimitiveExpr<ref_t>> refs(reference_count(bucket));
+
+    /*----- Probe slots, abort if end of bucket is reached or key already exists. -----*/
+    Var<Ptr<void>> slot(bucket.val());
     Var<PrimitiveExpr<ref_t>> steps(0);
-    WHILE (reference_count(slot) != ref_t(0)) {
-        BREAK(equal_key(slot, std::move(key)));
-        slot = probing_strategy().advance_to_next_slot(slot, steps);
-        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
+    WHILE (steps != refs and reference_count(slot) != ref_t(0)) {
+        BREAK(equal_key(slot, std::move(key))); // move key at last use
         steps += ref_t(1);
         Wasm_insist(steps <= *num_entries_, "probing strategy has to find unoccupied slot if there is one");
+        slot = probing_strategy().advance_to_next_slot(slot, steps);
+        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
     }
 
     /*----- Key is found iff current slot is occupied. -----*/
@@ -1735,15 +1730,19 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::for_each_in_equal_range(st
     }
     M_insist(not pred or predication_dummy_);
 
-    /*----- Compute bucket address by hashing the key. -----*/
-    Ptr<void> bucket =
+    /*----- Compute bucket address by hashing the key. Create constant variable to do not recompute the hash. -----*/
+    const Var<Ptr<void>> bucket(
         pred ? Select(*pred, hash_to_bucket(clone(key)), *predication_dummy_) // use dummy if predicate is not fulfilled
-             : hash_to_bucket(clone(key)); // clone key since we need it again for comparison
+             : hash_to_bucket(clone(key))
+    ); // clone key since we need it again for comparison
+
+    /*----- Get reference count, i.e. occupied slots, of this bucket. -----*/
+    const Var<PrimitiveExpr<ref_t>> refs(reference_count(bucket));
 
     /*----- Iterate over slots and call pipeline (with entry handle argument) on matches with the given key. -----*/
-    Var<Ptr<void>> slot(bucket);
+    Var<Ptr<void>> slot(bucket.val());
     Var<PrimitiveExpr<ref_t>> steps(0);
-    WHILE (reference_count(slot) != ref_t(0)) {
+    WHILE (steps != refs and reference_count(slot) != ref_t(0)) { // end of bucket not reached and slot occupied
         if (predicated) {
             CodeGenContext::Get().env().add_predicate(equal_key(slot, std::move(key)));
             Pipeline(entry(slot));
@@ -1752,10 +1751,10 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::for_each_in_equal_range(st
                 Pipeline(entry(slot));
             };
         }
-        slot = probing_strategy().advance_to_next_slot(slot, steps);
-        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
         steps += ref_t(1);
         Wasm_insist(steps <= *num_entries_, "probing strategy has to find unoccupied slot if there is one");
+        slot = probing_strategy().advance_to_next_slot(slot, steps);
+        Wasm_insist(begin() <= slot and slot < end(), "slot out-of-bounds");
     }
 }
 
@@ -2071,7 +2070,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
         auto S = CodeGenContext::Get().scoped_environment(); // fresh environment to remove predication while rehashing
 
         M_insist(bool(address_), "must call `setup()` before");
-        M_insist(bool(capacity_), "must call `setup()` before");
+        M_insist(bool(mask_), "must call `setup()` before");
         M_insist(bool(num_entries_), "must call `setup()` before");
 
         /*----- Store old begin and end (since they will be overwritten). -----*/
@@ -2079,7 +2078,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
         const Var<Ptr<void>> end_old(end());
 
         /*----- Double capacity. -----*/
-        *capacity_ <<= 1U;
+        *mask_ = (*mask_ << 1U) + 1U;
 
         /*----- Allocate memory for new hash table with updated capacity. -----*/
         *address_ = Module::Allocator().allocate(size_in_bytes(), entry_max_alignment_in_bytes_);
@@ -2143,7 +2142,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
         if (not rehash_) {
             /*----- Backup former local variables to be able to use new ones for rehashing function. -----*/
             auto old_address = std::exchange(address_, std::optional<Var<Ptr<void>>>());
-            auto old_capacity = std::exchange(capacity_, std::optional<Var<U32>>());
+            auto old_mask = std::exchange(mask_, std::optional<Var<U32>>());
             auto old_num_entries = std::exchange(num_entries_, std::optional<Var<U32>>());
             auto old_high_watermark_absolute = std::exchange(high_watermark_absolute_, std::optional<Var<U32>>());
 
@@ -2152,7 +2151,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
             {
                 /*----- Perform setup for local variables. -----*/
                 address_.emplace(storage_.address_);
-                capacity_.emplace(storage_.capacity_);
+                mask_.emplace(storage_.mask_);
                 num_entries_.emplace(storage_.num_entries_);
                 high_watermark_absolute_.emplace(storage_.high_watermark_absolute_);
 
@@ -2160,11 +2159,11 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
 
                 /*----- Perform teardown for local variables. -----*/
                 storage_.address_ = *address_;
-                storage_.capacity_ = *capacity_;
+                storage_.mask_ = *mask_;
                 storage_.num_entries_ = *num_entries_;
                 storage_.high_watermark_absolute_ = *high_watermark_absolute_;
                 address_.reset();
-                capacity_.reset();
+                mask_.reset();
                 num_entries_.reset();
                 high_watermark_absolute_.reset();
             }
@@ -2172,7 +2171,7 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
 
             /*----- Restore local variables. -----*/
             std::exchange(address_, std::move(old_address));
-            std::exchange(capacity_, std::move(old_capacity));
+            std::exchange(mask_, std::move(old_mask));
             std::exchange(num_entries_, std::move(old_num_entries));
             std::exchange(high_watermark_absolute_, std::move(old_high_watermark_absolute));
         }
@@ -2197,8 +2196,8 @@ template struct m::wasm::OpenAddressingHashTable<true, true>;
 
 Ptr<void> LinearProbing::skip_slots(Ptr<void> bucket, U32 skips) const
 {
-    U32 skips_floored = skips bitand (ht_.capacity() - 1U); // modulo capacity
-    const Var<Ptr<void>> slot(bucket + (skips_floored * ht_.entry_size_in_bytes()).make_signed());
+    Wasm_insist(skips.clone() < ht_.capacity());
+    const Var<Ptr<void>> slot(bucket + (skips * ht_.entry_size_in_bytes()).make_signed());
     Wasm_insist(slot < ht_.end() + ht_.size_in_bytes().make_signed());
     return Select(slot < ht_.end(), slot, slot - ht_.size_in_bytes().make_signed());
 }
@@ -2216,15 +2215,15 @@ Ptr<void> QuadraticProbing::skip_slots(Ptr<void> bucket, U32 skips) const
 {
     auto skips_cloned = skips.clone();
     U32 slots_skipped = (skips_cloned * (skips + 1U)) >> 1U; // compute gaussian sum
-    U32 slots_skipped_floored = slots_skipped bitand (ht_.capacity() - 1U); // modulo capacity
-    const Var<Ptr<void>> slot(bucket + (slots_skipped_floored * ht_.entry_size_in_bytes()).make_signed());
+    U32 slots_skipped_mod = slots_skipped bitand ht_.mask(); // modulo capacity
+    const Var<Ptr<void>> slot(bucket + (slots_skipped_mod * ht_.entry_size_in_bytes()).make_signed());
     Wasm_insist(slot < ht_.end() + ht_.size_in_bytes().make_signed());
     return Select(slot < ht_.end(), slot, slot - ht_.size_in_bytes().make_signed());
 }
 
 Ptr<void> QuadraticProbing::advance_to_next_slot(Ptr<void> slot, U32 current_step) const
 {
-    const Var<Ptr<void>> next(slot + ((current_step + 1U) * ht_.entry_size_in_bytes()).make_signed());
+    const Var<Ptr<void>> next(slot + (current_step * ht_.entry_size_in_bytes()).make_signed());
     Wasm_insist(next < ht_.end() + ht_.size_in_bytes().make_signed());
     return Select(next < ht_.end(), next, next - ht_.size_in_bytes().make_signed());
 }

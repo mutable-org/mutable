@@ -142,7 +142,17 @@ DataLayout::Leaf & DataLayout::add_leaf(const m::Type *type, size_type idx, uint
 DataLayout::INode & DataLayout::add_inode(size_type num_tuples, uint64_t stride_in_bits)
 {
     M_insist(inode_.num_children() == 0, "child already set");
-    return inode_.add_inode(num_tuples, 0, stride_in_bits);
+    M_insist(num_tuples != 0, "the new INode must be large enough for at least one tuple");
+    M_insist(inode_.num_tuples() != 1 or stride_in_bits == 0, "no stride without repetition");
+    M_insist(stride_in_bits % 8 == 0, "the stride of the newly created INode must be byte aligned");
+
+    auto inode = new INode(num_tuples);
+    inode_.children_.emplace_back(INode::child_t{
+        .ptr = std::unique_ptr<DataLayout::Node>(as<Node>(inode)),
+        .offset_in_bits = 0,
+        .stride_in_bits = stride_in_bits,
+    });
+    return *inode;
 }
 
 void DataLayout::accept(ConstDataLayoutVisitor &v) const { v(*this); }

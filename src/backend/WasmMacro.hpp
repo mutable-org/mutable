@@ -5,14 +5,14 @@
  * Convenience macros
  *====================================================================================================================*/
 
-#define BLOCK_OPEN(BLK) if (m::wasm::BlockUser ThisBlock((BLK)); (void)(ThisBlock), false) { } else
+#define BLOCK_OPEN(BLK) if (m::wasm::BlockUser ThisBlockUser((BLK)); (void)(ThisBlockUser), false) { } else
 
-#define M_WASM_BLOCK_NAMED_(NAME) if (m::wasm::Block ThisBlock((NAME), true); (void)(ThisBlock), false) { } else
-#define M_WASM_BLOCK_ANON_() if (m::wasm::Block ThisBlock(true); (void)(ThisBlock), false) { } else
+#define M_WASM_BLOCK_NAMED_(NAME) \
+    if (m::wasm::Block NAME(#NAME, true); (void)(NAME), false) { } else BLOCK_OPEN(NAME)
+#define M_WASM_BLOCK_ANON_() \
+    if (m::wasm::Block ThisBlock(true); (void)(ThisBlock), false) { } else BLOCK_OPEN(ThisBlock)
 #define M_GET_WASM_BLOCK_(XXX, _1, NAME, ...) NAME
-#define BLOCK(...) \
-    M_GET_WASM_BLOCK_(XXX, ##__VA_ARGS__, M_WASM_BLOCK_NAMED_, M_WASM_BLOCK_ANON_)(__VA_ARGS__) \
-    BLOCK_OPEN(ThisBlock)
+#define BLOCK(...) M_GET_WASM_BLOCK_(XXX, ##__VA_ARGS__, M_WASM_BLOCK_NAMED_, M_WASM_BLOCK_ANON_)(__VA_ARGS__)
 
 #define FUNCTION(NAME, TYPE) \
     m::wasm::FunctionProxy<TYPE> NAME(#NAME); \

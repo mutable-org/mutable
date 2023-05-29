@@ -783,7 +783,7 @@ struct OpenAddressingHashTableBase : HashTable
     /** Sets the high watermark, i.e. the fraction of occupied entries before growing the hash table is required, to
      * \p percentage. */
     void set_high_watermark(double percentage) override {
-        M_insist(percentage >= 0.5 and percentage <= 1.0, "using open addressing the load factor must be in [0.5,1]");
+        M_insist(percentage >= 0.5 and percentage < 1.0, "using open addressing the load factor must be in [0.5,1)");
         high_watermark_percentage_ = percentage;
         update_high_watermark();
     }
@@ -894,8 +894,12 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
     private:
     void update_high_watermark() override {
         M_insist(bool(high_watermark_absolute_), "must call `setup()` before");
-        auto high_watermark_absolute_new = high_watermark_percentage_ * capacity().make_signed().template to<double>();
-        *high_watermark_absolute_ = high_watermark_absolute_new.template to<int32_t>().make_unsigned() - 1U;
+        auto _capacity = capacity().make_signed().template to<double>();
+        const Var<U32> high_watermark_absolute_new(
+            (high_watermark_percentage_ * _capacity).ceil().template to<int32_t>().make_unsigned()
+        );
+        *high_watermark_absolute_ =
+            Select(capacity() <= high_watermark_absolute_new, capacity() - 1U, high_watermark_absolute_new);
         Wasm_insist(*high_watermark_absolute_ >= 1U,
                     "at least one entry must be allowed to insert before growing the table");
         Wasm_insist(*high_watermark_absolute_ < capacity(), "at least one entry must always be unoccupied for lookups");

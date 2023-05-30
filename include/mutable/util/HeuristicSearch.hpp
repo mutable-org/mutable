@@ -688,13 +688,50 @@ template<
     unsigned BeamWidth,
     bool Lazy,
     bool IsMonotone,
-    bool IDDFS,
     typename Config,
     typename... Context
 >
 requires heuristic_search_heuristic<Heuristic, Context...> and
          std::convertible_to<decltype(Weight::num), double> and std::convertible_to<decltype(Weight::den), double>
-struct genericAStar
+const State & genericAStar<State, Expand, Heuristic, Weight, BeamWidth, Lazy, IsMonotone, Config, Context...>::search(
+    state_type initial_state,
+    expand_type expand,
+    heuristic_type &heuristic,
+    Context&... context
+) {
+    /* Initialize queue with initial state. */
+    state_manager_.template push<use_beam_search and is_monotone>(std::move(initial_state), 0, context...);
+
+    /* Run work list algorithm. */
+    while (not state_manager_.queues_empty()) {
+        M_insist(not (is_monotone and use_beam_search) or not state_manager_.is_beam_queue_empty(),
+                 "the beam queue must not run empty with beam search on a monotone search space");
+        auto top = state_manager_.pop();
+        const state_type &state = top.first;
+
+        if (expand.is_goal(state, context...))
+            return state;
+
+        explore_state(state, heuristic, expand, context...);
+    }
+
+    throw std::logic_error("goal state unreachable from provided initial state");
+}
+
+template<
+        heuristic_search_state State,
+        typename Expand,
+        typename Heuristic,
+        typename Weight,
+        unsigned BeamWidth,
+        bool Lazy,
+        bool IsMonotone,
+        typename Config,
+        typename... Context
+>
+requires heuristic_search_heuristic<Heuristic, Context...> and
+         std::convertible_to<decltype(Weight::num), double> and std::convertible_to<decltype(Weight::den), double>
+struct hanwenSearch
 {
     using state_type = State;
     using expand_type = Expand;
@@ -713,21 +750,19 @@ struct genericAStar
     static constexpr bool is_monotone = IsMonotone;
     ///> The fraction of a state's successors to add to the beam (if performing beam search)
     static constexpr float BEAM_FACTOR = .2f;
-    ///> using the IDDFS
-    static constexpr bool is_iddfs=IDDFS;
 
     using callback_t = std::function<void(state_type, double)>;
 
 private:
 #if 1
 #define DEF_COUNTER(NAME) \
-    std::size_t num_##NAME##_ = 0; \
-    void inc_##NAME() { ++num_##NAME##_; } \
-    std::size_t num_##NAME() const { return num_##NAME##_; }
+std::size_t num_##NAME##_ = 0; \
+void inc_##NAME() { ++num_##NAME##_; } \
+std::size_t num_##NAME() const { return num_##NAME##_; }
 #else
     #define DEF_COUNTER(NAME) \
-    void inc_##NAME() { } \
-    std::size_t num_##NAME() const { return 0; }
+void inc_##NAME() { } \
+std::size_t num_##NAME() const { return 0; }
 #endif
 
     DEF_COUNTER(cached_heuristic_value)
@@ -766,7 +801,7 @@ private:
     std::vector<weighted_state> candidates;
 
 public:
-    explicit genericAStar(Context&... context)
+    explicit hanwenSearch(Context&... context)
             : state_manager_(context...)
     {
         if constexpr (use_beam_search) {
@@ -775,10 +810,10 @@ public:
         }
     }
 
-    genericAStar(const genericAStar&) = delete;
-    genericAStar(genericAStar&&) = default;
+    hanwenSearch(const hanwenSearch&) = delete;
+    hanwenSearch(hanwenSearch&&) = default;
 
-    genericAStar & operator=(genericAStar&&) = default;
+    hanwenSearch & operator=(hanwenSearch&&) = default;
 
     /** Search for a path from the given `initial_state` to a goal state.  Uses the given heuristic to guide the search.
      *
@@ -926,7 +961,7 @@ private:
     };
 
 public:
-    friend std::ostream & operator<<(std::ostream &out, const genericAStar &AStar) {
+    friend std::ostream & operator<<(std::ostream &out, const hanwenSearch &AStar) {
         return out << AStar.state_manager_ << ", used cached heuristic value " << AStar.num_cached_heuristic_value()
                    << " times";
     }
@@ -936,23 +971,23 @@ public:
 };
 
 template<
-    heuristic_search_state State,
-    typename Expand,
-    typename Heuristic,
-    typename Weight,
-    unsigned BeamWidth,
-    bool Lazy,
-    bool IsMonotone,
-    typename Config,
-    typename... Context
+        heuristic_search_state State,
+        typename Expand,
+        typename Heuristic,
+        typename Weight,
+        unsigned BeamWidth,
+        bool Lazy,
+        bool IsMonotone,
+        typename Config,
+        typename... Context
 >
 requires heuristic_search_heuristic<Heuristic, Context...> and
          std::convertible_to<decltype(Weight::num), double> and std::convertible_to<decltype(Weight::den), double>
-const State & genericAStar<State, Expand, Heuristic, Weight, BeamWidth, Lazy, IsMonotone, Config, Context...>::search(
-    state_type initial_state,
-    expand_type expand,
-    heuristic_type &heuristic,
-    Context&... context
+const State & hanwenSearch<State, Expand, Heuristic, Weight, BeamWidth, Lazy, IsMonotone, Config, Context...>::search(
+        state_type initial_state,
+        expand_type expand,
+        heuristic_type &heuristic,
+        Context&... context
 ) {
     /* Initialize queue with initial state. */
     state_manager_.template push<use_beam_search and is_monotone>(std::move(initial_state), 0, context...);
@@ -980,7 +1015,8 @@ template<
     typename Config,
     typename... Context
 >
-using IDDFS = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, 0, false, false, true,Config, Context...>;
+//using IDDFS = hanwenSearch<State, Expand, Heuristic,  true, Config, Context...>;
+using IDDFS=hanwenSearch<State, Expand, Heuristic, std::ratio<1, 1>, 0, false, false, Config, Context...>;
 
 template<
     heuristic_search_state State,

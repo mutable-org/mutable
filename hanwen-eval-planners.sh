@@ -47,10 +47,10 @@ declare -A TOPOLOGIES=(
 )
 
 ORDERED_PLANNERS=(
-    ###### HANWEN Manuelly Test #####'
+    ###### HANWEN Manuelly Test #####
     "DPccp"
-#    "BU-IDDFS-zero"
-#    "BU-A*-zero"
+    "BU-IDDFS-zero"
+    "BU-A*-zero"
 
 #    "BU-A*-sum"
 #    "BU-A*-sqrt_sum"

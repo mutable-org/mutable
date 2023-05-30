@@ -722,34 +722,19 @@ template<
         heuristic_search_state State,
         typename Expand,
         typename Heuristic,
-        typename Weight,
-        unsigned BeamWidth,
-        bool Lazy,
-        bool IsMonotone,
+        bool IsIDDFS,
         typename Config,
         typename... Context
 >
-requires heuristic_search_heuristic<Heuristic, Context...> and
-         std::convertible_to<decltype(Weight::num), double> and std::convertible_to<decltype(Weight::den), double>
+requires heuristic_search_heuristic<Heuristic, Context...>
 struct hanwenSearch
 {
     using state_type = State;
     using expand_type = Expand;
     using heuristic_type = Heuristic;
-    using weight = Weight;
 
-    ///> The width of a beam used for *beam search*.  Set to 0 to disable beam search.
-    static constexpr unsigned beam_width = BeamWidth;
-    ///> Whether to perform beam search or regular A*
-    static constexpr bool use_beam_search = beam_width != 0;
-    ///> Whether to use a dynamic beam width for beam search
-    static constexpr bool use_dynamic_beam_sarch = beam_width == decltype(beam_width)(-1);
-    ///> Whether to evaluate the heuristic lazily
-    static constexpr bool is_lazy = Lazy;
-    ///> Whether the state space is acyclic and without dead ends (useful in combination with beam search)
-    static constexpr bool is_monotone = IsMonotone;
-    ///> The fraction of a state's successors to add to the beam (if performing beam search)
-    static constexpr float BEAM_FACTOR = .2f;
+    ///> Whether to perform IDDFS
+    static constexpr bool use_iddfs = IsIDDFS;
 
     using callback_t = std::function<void(state_type, double)>;
 
@@ -769,46 +754,20 @@ std::size_t num_##NAME() const { return 0; }
 
 #undef DEF_COUNTER
 
-    /** A state plus its heuristic value. */
-    struct weighted_state
-    {
-        state_type state;
-        double h;
-
-        weighted_state(state_type state, double h) : state(std::move(state)), h(h) { }
-        weighted_state(const weighted_state&) = delete;
-        weighted_state(weighted_state&&) = default;
-        weighted_state & operator=(weighted_state&&) = default;
-
-        bool operator<(const weighted_state &other) const { return this->weight() < other.weight(); }
-        bool operator>(const weighted_state &other) const { return this->weight() > other.weight(); }
-        bool operator<=(const weighted_state &other) const { return this->weight() <= other.weight(); }
-        bool operator>=(const weighted_state &other) const { return this->weight() >= other.weight(); }
-
-    private:
-        double weight() const { return state.g() + h; }
-
-    };
-
+    // todo: start using StateManager
+    // decide the core details in queue
     StateManager</* State=           */ State,
-            /* HasRegularQueue= */ not (use_beam_search and is_monotone),
-            /* HasBeamQueue=    */ use_beam_search,
+            /* HasRegularQueue= */ true,
+            /* HasBeamQueue=    */ false,
             /* Config=          */ Config,
             /* Context...=      */ Context...
     > state_manager_;
 
-    ///> candidates for the beam
-    std::vector<weighted_state> candidates;
 
 public:
     explicit hanwenSearch(Context&... context)
             : state_manager_(context...)
-    {
-        if constexpr (use_beam_search) {
-            if constexpr (not use_dynamic_beam_sarch)
-                candidates.reserve(beam_width + 1);
-        }
-    }
+    {}
 
     hanwenSearch(const hanwenSearch&) = delete;
     hanwenSearch(hanwenSearch&&) = default;
@@ -824,7 +783,6 @@ public:
     /** Resets the state of the search. */
     void clear() {
         state_manager_.clear();
-        candidates.clear();
     }
 
 private:
@@ -1015,8 +973,7 @@ template<
     typename Config,
     typename... Context
 >
-//using IDDFS = hanwenSearch<State, Expand, Heuristic,  true, Config, Context...>;
-using IDDFS=hanwenSearch<State, Expand, Heuristic, std::ratio<1, 1>, 0, false, false, Config, Context...>;
+using IDDFS = hanwenSearch<State, Expand, Heuristic, true, Config, Context...>;
 
 template<
     heuristic_search_state State,

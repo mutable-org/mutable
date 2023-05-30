@@ -413,7 +413,6 @@ If not explicitly stated otherwise, this license applies to all files in this pr
 
 ## Important Links
 
-- [Wiki](https://gitlab.cs.uni-saarland.de/bigdata/mutable/mutable/-/wikis/home)
-- [Benchmarks](https://cb.mutable.uni-saarland.de/)
-- [Documentation](http://deeprig02.cs.uni-saarland.de/mutable/doxy/) (only reachable from within our subnet)
-- [Coverage](http://deeprig02.cs.uni-saarland.de/mutable/coverage/) (only reachable from within our subnet)
+- [Code Documentation](https://api.mutable.uni-saarland.de/) -- Doxygen documentation extracted from our in-source documentation.
+- [Benchmarking Website](https://cb.mutable.uni-saarland.de/) -- Website visualizing our nightly benchmarks.
+- [Coverage Reports](http://deeprig02.cs.uni-saarland.de/mutable/coverage/) -- LCOV coverage reports.

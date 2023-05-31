@@ -26,17 +26,17 @@ MAX_TIMEOUTS_PER_CONFIG=1
 
 # Number of repetitions per query
 # Used in the querygen, need more investigation
-QUERY_REPEAT_COUNT=100
+QUERY_REPEAT_COUNT=10
 
 
 HANWEN_MAKE_FOLDER=cmake-build-debug
 BIN=cmake-build-debug/bin/shell
 CSV=planner-benchmark.csv
 CORRELATED=1
-MIN_RELATIONS=10
+MIN_RELATIONS=3
 
 # outside large loop execution time
-REPETITIONS_PER_NUM_RELATIONS=100
+REPETITIONS_PER_NUM_RELATIONS=10
 
 MIN_CARDINALITY=10
 MAX_CARDINALITY=10000
@@ -77,6 +77,9 @@ ORDERED_PLANNERS=(
     "BU-A*-zero"
     "BU-A*-avg_sel"
     "BU-A*-GOO"
+    "BU-A*-sum"
+    "BU-A*-sqrt_sum"
+    "BU-A*-scaled_sum"
     ## beam
     "BU-beam-zero"
     "BU-beam-avg_sel"

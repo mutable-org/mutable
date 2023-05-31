@@ -46,8 +46,10 @@ namespace options {
 int wasm_optimization_level = 0;
 /** Whether to execute Wasm adaptively. */
 bool wasm_adaptive = false;
-/** dump the generated WebAssembly code */
+/** Whether to dump the generated WebAssembly code. */
 bool wasm_dump = false;
+/** Whether to dump the generated assembly code. */
+bool asm_dump = false;
 /** The port to use for the Chrome DevTools web socket. */
 uint16_t cdt_port = 0;
 
@@ -651,6 +653,10 @@ void V8Engine::initialize()
         flags << "--no-liftoff "
               << "--no-wasm-lazy-compilation "; // compile code before starting execution
     }
+    if (options::asm_dump) {
+        flags << "--code-comments " // include code comments
+              << "--print-code ";
+    }
     if (options::cdt_port >= 1024) {
         flags << "--wasm-bounds-checks "
               << "--wasm-stack-checks "
@@ -864,6 +870,13 @@ static void register_WasmV8()
         /* long=        */ "--wasm-dump",
         /* description= */ "dump the generated WebAssembly code to stdout",
                            [] (bool b) { options::wasm_dump = b; }
+    );
+    C.arg_parser().add<bool>(
+        /* group=       */ "WasmV8",
+        /* short=       */ nullptr,
+        /* long=        */ "--asm-dump",
+        /* description= */ "dump the generated assembly code to stdout",
+                           [] (bool b) { options::asm_dump = b; }
     );
     C.arg_parser().add<int>(
         /* group=       */ "WasmV8",

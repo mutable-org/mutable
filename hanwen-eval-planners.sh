@@ -25,7 +25,8 @@ TIMEOUT=15s
 MAX_TIMEOUTS_PER_CONFIG=1
 
 # Number of repetitions per query
-QUERY_REPEAT_COUNT=100000
+# Used in the querygen, need more investigation
+QUERY_REPEAT_COUNT=100
 
 
 HANWEN_MAKE_FOLDER=cmake-build-debug
@@ -33,6 +34,8 @@ BIN=cmake-build-debug/bin/shell
 CSV=planner-benchmark.csv
 CORRELATED=1
 MIN_RELATIONS=10
+
+# outside large loop execution time
 REPETITIONS_PER_NUM_RELATIONS=100
 
 MIN_CARDINALITY=10
@@ -48,13 +51,13 @@ declare -A TOPOLOGIES=(
 
 ORDERED_PLANNERS=(
     ###### HANWEN Manuelly Test #####
-    "DPccp"
-    "BU-IDDFS-zero"
-    "BU-A*-zero"
+#    "DPccp"
+#    "BU-IDDFS-zero"
+#    "BU-A*-zero"
 
 #    "BU-A*-sum"
 #    "BU-A*-sqrt_sum"
-    "BU-A*-scaled_sum"
+#    "BU-A*-scaled_sum"
 #
 #    "TD-A*-sum"
 #    "TD-A*-sqrt_sum"
@@ -62,35 +65,35 @@ ORDERED_PLANNERS=(
 
 
     ###### Traditional Planners #####
-    # "DPsub"
-#    "DPccp"
-#    "TDMinCutAGaT"
-#    "IKKBZ"
-#    "linDP"
-#    "GOO"
+    "DPsub"
+    "DPccp"
+    "TDMinCutAGaT"
+    "IKKBZ"
+    "linDP"
+    "GOO"
     ##### Heuristic Search #####
     # BottomUp
     ## A*
-#    "BU-A*-zero"
-    # "BU-A*-avg_sel"
-#    "BU-A*-GOO"
+    "BU-A*-zero"
+    "BU-A*-avg_sel"
+    "BU-A*-GOO"
     ## beam
-    # "BU-beam-zero"
-    # "BU-beam-avg_sel"
-    # "BU-beam-GOO"
+    "BU-beam-zero"
+    "BU-beam-avg_sel"
+    "BU-beam-GOO"
     ## relative beam
-    # "BU-rel_beam-zero"
+    "BU-rel_beam-zero"
     # TopDown
     ## A*
-#    "TD-A*-zero"
-#    "TD-A*-sum"
-#    "TD-A*-GOO"
+    "TD-A*-zero"
+    "TD-A*-sum"
+    "TD-A*-GOO"
     ## beam
-    # "TD-beam-zero"
-    # "TD-beam-sum"
-    # "TD-beam-GOO"
+    "TD-beam-zero"
+    "TD-beam-sum"
+    "TD-beam-GOO"
     ## relative beam
-    # "TD-rel_beam-zero"
+    "TD-rel_beam-zero"
 )
 
 declare -A TOPOLOGY_STEPS=(

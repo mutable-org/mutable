@@ -272,7 +272,7 @@ TEST_CASE("list_allocator", "[core][util][allocator]")
         SECTION("across pages, within allocations")
         {
             const auto pagesize = get_pagesize();
-            list_allocator B(64 * 1024);
+            list_allocator B(16 * pagesize);
             CHECK(B.num_chunks_available() == 1); // pre-allocation
 
             auto *p0 = B.allocate(2 * pagesize);

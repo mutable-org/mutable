@@ -3,7 +3,9 @@
 #include "backend/WasmMacro.hpp"
 #include <mutable/catalog/Catalog.hpp>
 #include <mutable/catalog/Schema.hpp>
+#ifdef __BMI2__
 #include <immintrin.h>
+#endif
 
 
 using namespace m;

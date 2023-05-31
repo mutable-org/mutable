@@ -1196,9 +1196,17 @@ void ChainedHashTable<IsGlobal>::rehash()
             std::exchange(mask_, std::move(old_mask));
         }
 
+        /*----- Store local variables in global backups. -----*/
+        storage_.address_ = *address_;
+        storage_.mask_ = *mask_;
+
         /*----- Call rehashing function. ------*/
         M_insist(bool(rehash_));
         (*rehash_)();
+
+        /*----- Restore local variables from global backups. -----*/
+        *address_ = storage_.address_;
+        *mask_ = storage_.mask_;
     } else {
         /*----- Emit rehashing code. ------*/
         emit_rehash();
@@ -2176,9 +2184,21 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
             std::exchange(high_watermark_absolute_, std::move(old_high_watermark_absolute));
         }
 
+        /*----- Store local variables in global backups. -----*/
+        storage_.address_ = *address_;
+        storage_.mask_ = *mask_;
+        storage_.num_entries_ = *num_entries_;
+        storage_.high_watermark_absolute_ = *high_watermark_absolute_;
+
         /*----- Call rehashing function. ------*/
         M_insist(bool(rehash_));
         (*rehash_)();
+
+        /*----- Restore local variables from global backups. -----*/
+        *address_ = storage_.address_;
+        *mask_ = storage_.mask_;
+        *num_entries_ = storage_.num_entries_;
+        *high_watermark_absolute_ = storage_.high_watermark_absolute_;
     } else {
         /*----- Emit rehashing code. ------*/
         emit_rehash();

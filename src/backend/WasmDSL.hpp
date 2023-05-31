@@ -17,7 +17,9 @@
 #include <tuple>
 #include <type_traits>
 #include <utility>
+#ifdef __BMI2__
 #include <x86intrin.h>
+#endif
 
 // Binaryen
 #include <wasm-binary.h>

@@ -14,7 +14,9 @@
 #include <string>
 #include <type_traits>
 #include <utility>
+#ifdef __BMI2__
 #include <x86intrin.h>
+#endif
 
 
 namespace m {

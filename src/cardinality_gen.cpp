@@ -16,7 +16,9 @@
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
+#ifdef __BMI2__
 #include <x86intrin.h>
+#endif
 
 
 using Subproblem = m::SmallBitset;

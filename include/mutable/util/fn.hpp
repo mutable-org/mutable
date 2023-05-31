@@ -745,4 +745,42 @@ inline double fast_sqrtd(double n)
 }
 inline double fast_sqrt(double n) { return fast_sqrtd(n); }
 
+#ifdef __aarch64__
+
+inline uint64_t _pdep_u64(uint64_t source, uint64_t mask) {
+    uint64_t result = 0;
+    uint64_t srcBit = 1;
+    uint64_t dstBit = 1;
+
+    for (int i = 0; i < 64; i++) {
+        if (mask & dstBit) {
+            if (source & srcBit)
+                result |= dstBit;
+            srcBit <<= 1;
+        }
+        dstBit <<= 1;
+    }
+
+    return result;
+}
+
+inline uint64_t pext_u64(uint64_t source, uint64_t mask) {
+    uint64_t result = 0;
+    uint64_t srcBit = 1;
+    uint64_t dstBit = 1;
+
+    for (int i = 0; i < 64; i++) {
+        if (source & srcBit) {
+            if (mask & dstBit)
+                result |= dstBit;
+            dstBit <<= 1;
+        }
+        srcBit <<= 1;
+    }
+
+    return result;
+}
+
+#endif
+
 }

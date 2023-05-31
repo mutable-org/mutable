@@ -298,8 +298,20 @@ include_directories(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/third-party/eigen")
 
 # V8 - Google's JavaScript and WebAssembly Engine (used in Chrome, Node.js)
 if(${WITH_V8})
+    # Determine target CPU architecture (supporting x64 or arm64)
+    # more info: "gn help target_cpu"
+    execute_process(
+        COMMAND uname -m
+        OUTPUT_VARIABLE CPU_ARCH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+
+    if(NOT "${CPU_ARCH}" STREQUAL "arm64")
+        set(CPU_ARCH "x64")
+    endif()
+
     set(V8_VERSION "11.1.276")
-    set(V8_BUILD_ARGS "is_clang=true v8_enable_sandbox=false v8_enable_pointer_compression=false v8_enable_webassembly=true treat_warnings_as_errors=false use_sysroot=false use_glib=false use_custom_libcxx=false v8_use_external_startup_data=false use_locally_built_instrumented_libraries=false clang_use_chrome_plugins=false target_cpu=\"x64\"")
+    set(V8_BUILD_ARGS "is_clang=true v8_enable_sandbox=false v8_enable_pointer_compression=false v8_enable_webassembly=true treat_warnings_as_errors=false use_sysroot=false use_glib=false use_custom_libcxx=false v8_use_external_startup_data=false use_locally_built_instrumented_libraries=false clang_use_chrome_plugins=false target_cpu=\"${CPU_ARCH}\"")
     if(APPLE)
         # Compute Clang's base path, so we can propagate it to V8
         find_program(CLANG_PATH ${CMAKE_CXX_COMPILER})

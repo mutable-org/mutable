@@ -24,7 +24,9 @@
 #include <mutable/util/MinCutAGaT.hpp>
 #include <numeric>
 #include <type_traits>
+#ifdef __BMI2__
 #include <x86intrin.h>
+#endif
 
 
 using namespace m;

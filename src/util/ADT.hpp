@@ -1,8 +1,9 @@
 #pragma once
 
 #include <mutable/util/ADT.hpp>
+#ifdef __BMI2__
 #include <x86intrin.h>
-
+#endif
 
 namespace m {
 

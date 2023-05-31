@@ -17,7 +17,9 @@
 #include <queue>
 #include <set>
 #include <type_traits>
+#ifdef __BMI2__
 #include <x86intrin.h>
+#endif
 
 
 using namespace m;

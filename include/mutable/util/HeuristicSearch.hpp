@@ -754,7 +754,7 @@ std::size_t num_##NAME() const { return 0; }
 
 #undef DEF_COUNTER
 
-    // todo: start using StateManager
+    // todo: hanwen: start using StateManager
     // decide the core details in queue
     StateManager</* State=           */ State,
             /* HasRegularQueue= */ true,
@@ -932,16 +932,12 @@ template<
         heuristic_search_state State,
         typename Expand,
         typename Heuristic,
-        typename Weight,
-        unsigned BeamWidth,
-        bool Lazy,
-        bool IsMonotone,
+        bool IsIDDFS,
         typename Config,
         typename... Context
 >
-requires heuristic_search_heuristic<Heuristic, Context...> and
-         std::convertible_to<decltype(Weight::num), double> and std::convertible_to<decltype(Weight::den), double>
-const State & hanwenSearch<State, Expand, Heuristic, Weight, BeamWidth, Lazy, IsMonotone, Config, Context...>::search(
+requires heuristic_search_heuristic<Heuristic, Context...>
+const State & hanwenSearch<State, Expand, Heuristic, IsIDDFS, Config, Context...>::search(
         state_type initial_state,
         expand_type expand,
         heuristic_type &heuristic,

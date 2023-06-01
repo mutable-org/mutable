@@ -754,7 +754,6 @@ std::size_t num_##NAME() const { return 0; }
 
 #undef DEF_COUNTER
 
-    // todo: hanwen: start using StateManager
     // decide the core details in queue
     StateManager</* State=           */ State,
             /* HasRegularQueue= */ true,
@@ -793,76 +792,6 @@ private:
     template<typename T>
     using has_mark = decltype(std::declval<T>().mark(Subproblem()));
 
-    /* Try to add the successor state `s` to the beam.  If the weight of `s` is already higher than the highest weight
-     * in the beam, immediately bypass the beam. */
-    void beam(state_type state, double h, Context&... context) {
-        auto &top = candidates.front();
-#ifndef NDEBUG
-        M_insist(std::is_heap(candidates.begin(), candidates.end()), "candidates must always be a max-heap");
-        for (auto &elem : candidates)
-            M_insist(top >= elem, "the top candidate at the front must be no less than any other candidate");
-#endif
-        if (candidates.size() < beam_width) {
-            /* There is still space in the candidates, so simply add the state to the heap. */
-            candidates.emplace_back(std::move(state), h);
-            if (candidates.size() == beam_width) // heapify when filled
-                std::make_heap(candidates.begin(), candidates.end());
-        } else if (state.g() + h >= top.state.g() + top.h) {
-            /* The state has higher g+h than the top of the candidates heap, so bypass the candidates immediately. */
-            state_manager_.push_regular_queue(std::move(state), h, context...);
-        } else {
-            /* The state has less g+h than the top of candidates heap.  Pop the current top and insert the state into
-             * the candidates heap. */
-            M_insist(candidates.size() == beam_width);
-            M_insist(std::is_heap(candidates.begin(), candidates.end()));
-            candidates.emplace_back(std::move(state), h);
-            std::pop_heap(candidates.begin(), candidates.end());
-            weighted_state worst_candidate = std::move(candidates.back()); // extract worst candidate
-            candidates.pop_back();
-            M_insist(std::is_heap(candidates.begin(), candidates.end()));
-            M_insist(candidates.size() == beam_width);
-#ifndef NDEBUG
-            for (auto &elem : candidates)
-                M_insist(worst_candidate >= elem, "worst candidate must be no less than any other candidate");
-#endif
-            state_manager_.push_regular_queue(std::move(worst_candidate.state), worst_candidate.h, context...); // move to regular
-        }
-    };
-
-    /* Compute a beam of dynamic (relative) size from the set of successor states. */
-    void beam_dynamic(expand_type &expand, Context&... context) {
-        std::sort(candidates.begin(), candidates.end());
-        const std::size_t num_beamed = std::ceil(candidates.size() * BEAM_FACTOR);
-        M_insist(not candidates.size() or num_beamed, "if the state has successors, at least one must be in the beam");
-        auto it = candidates.begin();
-        /*----- Add states in the beam to the beam queue. -----*/
-        for (auto end = it + num_beamed; it != end; ++it) {
-            if constexpr (std::experimental::is_detected_v<has_mark, state_type>)
-                expand.reset_marked(it->state, context...);
-            state_manager_.push_beam_queue(std::move(it->state), it->h, context...);
-        }
-        /*----- Add remaining states to the regular queue. -----*/
-        for (auto end = candidates.end(); it != end; ++it)
-            state_manager_.push_regular_queue(std::move(it->state), it->h, context...);
-    };
-
-    /** Expands the given `state` by *lazily* evaluating the heuristic function. */
-    void for_each_successor_lazily(callback_t &&callback, const state_type &state, heuristic_type &heuristic,
-                                   expand_type &expand, Context&... context)
-    {
-        /*----- Evaluate heuristic lazily by using heurisitc value of current state. -----*/
-        double h_current_state;
-        if (auto it = state_manager_.find(state, context...); it == state_manager_.end(state, context...)) {
-            h_current_state = double(Weight::num) * heuristic(state, context...) / Weight::den;
-        } else {
-            inc_cached_heuristic_value();
-            h_current_state = it->second.h; // use cached `h`
-        }
-        expand(state, [&callback, h_current_state](state_type successor) {
-            callback(std::move(successor), h_current_state);
-        }, context...);
-    };
-
     /** Expands the given `state` by *eagerly* evaluating the heuristic function. */
     void for_each_successor_eagerly(callback_t &&callback, const state_type &state, heuristic_type &heuristic,
                                     expand_type &expand, Context&... context)
@@ -870,7 +799,7 @@ private:
         /*----- Evaluate heuristic eagerly. -----*/
         expand(state, [this, callback=std::move(callback), &state, &heuristic, &context...](state_type successor) {
             if (auto it = state_manager_.find(successor, context...); it == state_manager_.end(state, context...)) {
-                const double h = double(Weight::num) * heuristic(successor, context...) / Weight::den;
+                const double h =  heuristic(successor, context...) ;
                 callback(std::move(successor), h);
             } else {
                 inc_cached_heuristic_value();
@@ -883,39 +812,16 @@ private:
     void for_each_successor(callback_t &&callback, const state_type &state, heuristic_type &heuristic,
                             expand_type &expand, Context&... context)
     {
-        if constexpr (is_lazy)
-            for_each_successor_lazily(std::move(callback), state, heuristic, expand, context...);
-        else
-            for_each_successor_eagerly(std::move(callback), state, heuristic, expand, context...);
+        for_each_successor_eagerly(std::move(callback), state, heuristic, expand, context...);
     };
 
     /** Explores the given `state`. */
     void explore_state(const state_type &state, heuristic_type &heuristic, expand_type &expand, Context&... context) {
-        if constexpr (use_dynamic_beam_sarch) {
-            /*----- Add all successors to candidates.  Only best `BEAM_FACTOR` will be added to beam queue. -----*/
-            candidates.clear();
-            for_each_successor([this](state_type successor, double h) {
-                candidates.emplace_back(std::move(successor), h);
-            }, state, heuristic, expand, context...);
-            beam_dynamic(expand, context...); // order by g+h and partition into beam and regular states
-        } else if constexpr (use_beam_search) {
-            /*----- Keep only `beam_width` best successors in `candidates`, rest is added to regular queue. ----*/
-            candidates.clear();
-            for_each_successor([this, &context...](state_type successor, double h) {
-                beam(std::move(successor), h, context...); // try to add to candidates
-            }, state, heuristic, expand, context...);
-            /*----- The states remaining in `candidates` are within the beam. -----*/
-            for (auto &s : candidates) {
-                if constexpr (std::experimental::is_detected_v<has_mark, state_type>)
-                    expand.reset_marked(s.state, context...);
-                state_manager_.push_beam_queue(std::move(s.state), s.h, context...);
-            }
-        } else {
-            /*----- Have only regular queue. -----*/
-            for_each_successor([this, &context...](state_type successor, double h) {
-                state_manager_.push_regular_queue(std::move(successor), h, context...);
-            }, state, heuristic, expand, context...);
-        }
+        /*----- Have only regular queue. -----*/
+        for_each_successor([this, &context...](state_type successor, double h) {
+            state_manager_.push_regular_queue(std::move(successor), h, context...);
+        }, state, heuristic, expand, context...);
+
     };
 
 public:
@@ -944,12 +850,10 @@ const State & hanwenSearch<State, Expand, Heuristic, IsIDDFS, Config, Context...
         Context&... context
 ) {
     /* Initialize queue with initial state. */
-    state_manager_.template push<use_beam_search and is_monotone>(std::move(initial_state), 0, context...);
+    state_manager_.template push<false>(std::move(initial_state), 0, context...);
 
     /* Run work list algorithm. */
     while (not state_manager_.queues_empty()) {
-        M_insist(not (is_monotone and use_beam_search) or not state_manager_.is_beam_queue_empty(),
-                 "the beam queue must not run empty with beam search on a monotone search space");
         auto top = state_manager_.pop();
         const state_type &state = top.first;
 

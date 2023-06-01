@@ -26,6 +26,42 @@ using namespace m;
 
 
 /*======================================================================================================================
+ * PEall
+ *====================================================================================================================*/
+
+/** Computes the join order by enumerating *all* join orders, including Cartesian products. */
+struct PEall final : PlanEnumeratorCRTP<PEall>
+{
+    using base_type = PlanEnumeratorCRTP<PEall>;
+    using base_type::operator();
+
+    template<typename PlanTable>
+    void operator()(enumerate_tag, PlanTable &PT, const QueryGraph &G, const CostFunction &CF) const {
+        auto &sources = G.sources();
+        const std::size_t n = sources.size();
+        auto &CE = Catalog::Get().get_database_in_use().cardinality_estimator();
+
+        for (std::size_t i = 1, end = 1UL << n; i < end; ++i) {
+            Subproblem S(i);
+            if (S.size() == 1) continue; // skip
+            /* Compute break condition to avoid enumerating symmetric subproblems. */
+            uint64_t offset = S.capacity() - __builtin_clzl(uint64_t(S));
+            M_insist(offset != 0, "invalid subproblem offset");
+            Subproblem limit(1UL << (offset - 1UL));
+            for (Subproblem S1(least_subset(S)); S1 != limit; S1 = Subproblem(next_subset(S1, S))) {
+                Subproblem S2 = S - S1; // = S \ S1;
+                M_insist(PT.has_plan(S1), "must have found the optimal plan for S1");
+                M_insist(PT.has_plan(S2), "must have found the optimal plan for S2");
+                /* Exploit commutativity of join. */
+                cnf::CNF condition; // TODO use join condition
+                PT.update(G, CE, CF, S1, S2, condition);
+            }
+        }
+    }
+};
+
+
+/*======================================================================================================================
  * DPsize
  *====================================================================================================================*/
 
@@ -680,5 +716,6 @@ static void register_plan_enumerators()
     REGISTER(LinearizedDP, "DP with search space linearization based on IK/KBZ");
     REGISTER(TDbasic,      "basic top-down join enumeration using generate-and-test partitioning");
     REGISTER(TDMinCutAGaT, "top-down join enumeration using minimal graph cuts and advanced generate-and-test partitioning");
+    REGISTER(PEall,        "enumerates ALL join orders, inclding Cartesian products");
 #undef REGISTER
 }

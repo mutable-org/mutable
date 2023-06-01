@@ -735,6 +735,7 @@ struct hanwenSearch
 
     ///> Whether to perform IDDFS
     static constexpr bool use_iddfs = IsIDDFS;
+    const double INF = std::numeric_limits<double>::max();
 
     using callback_t = std::function<void(state_type, double)>;
 
@@ -777,7 +778,9 @@ public:
      *
      * @return the cost of the computed path from `initial_state` to a goal state
      */
-    const State & search(state_type initial_state, expand_type expand, heuristic_type &heuristic, Context&... context);
+    const State &search(state_type initial_state, expand_type expand, heuristic_type &heuristic, Context &... context);
+
+    double id_search(double bound, expand_type expand, heuristic_type &heuristic, Context &... context);
 
     /** Resets the state of the search. */
     void clear() {
@@ -816,13 +819,16 @@ private:
     };
 
     /** Explores the given `state`. */
-    void explore_state(const state_type &state, heuristic_type &heuristic, expand_type &expand, Context&... context) {
+    void explore_state(const state_type &state, double bound, double result, heuristic_type &heuristic, expand_type &expand,
+                  Context &... context) {
         /*----- Have only regular queue. -----*/
-        for_each_successor([this, &context...](state_type successor, double h) {
+        for_each_successor([this, &bound, &result, &heuristic, &expand, &context...](state_type successor, double h) {
             state_manager_.push_regular_queue(std::move(successor), h, context...);
+            result = id_search(bound, expand, heuristic, context...);
         }, state, heuristic, expand, context...);
-
     };
+
+    void hanwen_explore_state(const )
 
 public:
     friend std::ostream & operator<<(std::ostream &out, const hanwenSearch &AStar) {
@@ -843,28 +849,60 @@ template<
         typename... Context
 >
 requires heuristic_search_heuristic<Heuristic, Context...>
-const State & hanwenSearch<State, Expand, Heuristic, IsIDDFS, Config, Context...>::search(
+const State &hanwenSearch<State, Expand, Heuristic, IsIDDFS, Config, Context...>::search(
         state_type initial_state,
         expand_type expand,
         heuristic_type &heuristic,
-        Context&... context
+        Context &... context
 ) {
-    /* Initialize queue with initial state. */
+    double bound = heuristic(initial_state, context...);
+
     state_manager_.template push<false>(std::move(initial_state), 0, context...);
-
-    /* Run work list algorithm. */
-    while (not state_manager_.queues_empty()) {
-        auto top = state_manager_.pop();
-        const state_type &state = top.first;
-
-        if (expand.is_goal(state, context...))
+    while (true) {
+        double result = id_search(bound, expand, context...);
+        if (result == 0) {
+            // how to fetch the state from ID_Search
             return state;
-
-        explore_state(state, heuristic, expand, context...);
+        }
+        if (result == INF) {
+            throw std::logic_error("goal state unreachable from provided initial state");
+        }
+        bound = result;
     }
 
-    throw std::logic_error("goal state unreachable from provided initial state");
+
 }
+
+template<
+        heuristic_search_state State,
+        typename Expand,
+        typename Heuristic,
+        bool IsIDDFS,
+        typename Config,
+        typename... Context
+>
+requires heuristic_search_heuristic<Heuristic, Context...>
+double hanwenSearch<State, Expand, Heuristic, IsIDDFS, Config, Context...>::id_search(
+        double bound, expand_type expand, heuristic_type &heuristic, Context &... context
+) {
+    auto top = state_manager_.pop();
+    const state_type &state = top.first;
+
+    /// TODO: prune, need the f value;
+    double f = state.g() + heuristic(state, context...);
+    if (f > bound) { return f; }
+    if (expand.is_goad(state, context...)) {
+        return state;
+    }
+    double min=INF;
+    for (auto succ : successors){
+        push
+    }
+
+
+}
+
+
 
 template<
     heuristic_search_state State,

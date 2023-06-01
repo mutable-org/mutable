@@ -397,9 +397,18 @@ generate_export_header(
 
 # Set environment variables for test runs
 if(APPLE)
-    set(env "UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0")
+    set(
+        env
+        "UBSAN_OPTIONS=print_stacktrace=1"
+        "ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0"
+        "MallocNanoZone=0"
+    )
 else()
-    set(env "UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1")
+    set(
+        env
+        "UBSAN_OPTIONS=print_stacktrace=1"
+        "ASAN_OPTIONS=detect_stack_use_after_return=1"
+    )
 endif()
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)

@@ -811,6 +811,19 @@ private:
         }, context...);
     };
 
+    void hanwen_for_each_successor(callback_t &&callback, const state_type &state, heuristic_type &heuristic,
+                                   expand_type &expand, Context &... context) {
+        expand(state, [this,callback=std::move(callback), &state, &heuristic, &context...](state_type successor) {
+            if (auto it = state_manager_.find(successor, context...);it == state_manager_.end(state, context...)) {
+                const double h = heurist(successor, context...);
+                callback(std::move(successor), h);
+            } else {
+                inc_cached_heuristic_value();
+                callback(std::move(successor), it->second.h);
+            }
+        }, context...);
+    }
+
     /** Expands the given `state` according to `is_lazy`. */
     void for_each_successor(callback_t &&callback, const state_type &state, heuristic_type &heuristic,
                             expand_type &expand, Context&... context)
@@ -818,17 +831,38 @@ private:
         for_each_successor_eagerly(std::move(callback), state, heuristic, expand, context...);
     };
 
-    /** Explores the given `state`. */
-    void explore_state(const state_type &state, double bound, double result, heuristic_type &heuristic, expand_type &expand,
-                  Context &... context) {
-        /*----- Have only regular queue. -----*/
-        for_each_successor([this, &bound, &result, &heuristic, &expand, &context...](state_type successor, double h) {
-            state_manager_.push_regular_queue(std::move(successor), h, context...);
-            result = id_search(bound, expand, heuristic, context...);
-        }, state, heuristic, expand, context...);
-    };
 
-    void hanwen_explore_state(const )
+//    /** Explores the given `state`. */
+//    void explore_state(const state_type &state, double bound, double result, heuristic_type &heuristic, expand_type &expand,
+//                  Context &... context) {
+//        /*----- Have only regular queue. -----*/
+//        for_each_successor([this, &bound, &result, &heuristic, &expand, &context...](state_type successor, double h) {
+//            state_manager_.push_regular_queue(std::move(successor), h, context...);
+//            result = id_search(bound, expand, heuristic, context...);
+//        }, state, heuristic, expand, context...);
+//    };
+
+    void hanwen_explore_state(double bound, double &min,
+                              const state_type &state, heuristic_type &heuristic, expand_type &expand,
+                              Context &... context) {
+        hanwen_for_each_successor(
+                [this, bound, &min, &expand, &heuristic, &context...](state_type successor, double h) {
+//                    state_manager_.push_regular_queue(std::move(successor), h, context...);
+                    hanwen_path.emplace(successor);
+                    if (expand.is_goal(successor, context...)) {
+                        is_solved = true;
+                        final_state = successor;
+                        return;
+                    }
+                    double temp = id_search(bound, min, std::move(successor), expand, heuristic, context...);
+                    if (temp < min) { min = temp; }
+                    hanwen_path.pop_back();
+                }, state, heuristic, expand, context...);
+    }
+
+    std::vector<State> hanwen_path;
+    bool is_solved = false;
+    state_type final_state;
 
 public:
     friend std::ostream & operator<<(std::ostream &out, const hanwenSearch &AStar) {
@@ -860,9 +894,9 @@ const State &hanwenSearch<State, Expand, Heuristic, IsIDDFS, Config, Context...>
     state_manager_.template push<false>(std::move(initial_state), 0, context...);
     while (true) {
         double result = id_search(bound, expand, context...);
-        if (result == 0) {
+        if (is_solved) {
             // how to fetch the state from ID_Search
-            return state;
+            return final_state;
         }
         if (result == INF) {
             throw std::logic_error("goal state unreachable from provided initial state");
@@ -885,21 +919,16 @@ requires heuristic_search_heuristic<Heuristic, Context...>
 double hanwenSearch<State, Expand, Heuristic, IsIDDFS, Config, Context...>::id_search(
         double bound, expand_type expand, heuristic_type &heuristic, Context &... context
 ) {
-    auto top = state_manager_.pop();
-    const state_type &state = top.first;
-
-    /// TODO: prune, need the f value;
+    state_type state=hanwen_path.back();
     double f = state.g() + heuristic(state, context...);
     if (f > bound) { return f; }
     if (expand.is_goad(state, context...)) {
         return state;
     }
-    double min=INF;
-    for (auto succ : successors){
-        push
-    }
 
-
+    double min = INF;
+    hanwen_explore_state(bound, min, state, heuristic, expand, context...);
+    return min;
 }
 
 

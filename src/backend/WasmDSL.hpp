@@ -404,6 +404,7 @@ inline ::wasm::Literal make_literal(U value)
 
 #define M_EXCEPTION_LIST(X) \
     X(invalid_escape_sequence) \
+    X(unreachable) \
     X(failed_unittest_check)
 
 struct exception : backend_exception

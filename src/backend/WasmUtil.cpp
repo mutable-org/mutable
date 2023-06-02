@@ -2116,7 +2116,8 @@ void Buffer<IsGlobal>::teardown()
 template<bool IsGlobal>
 void Buffer<IsGlobal>::resume_pipeline(param_t tuple_schema_)
 {
-    M_insist(bool(pipeline_), "pipeline must not be empty");
+    if (not pipeline_)
+        return;
 
     const auto &tuple_schema = tuple_schema_ ? *tuple_schema_ : schema_;
 
@@ -2166,7 +2167,8 @@ void Buffer<IsGlobal>::resume_pipeline(param_t tuple_schema_)
 template<bool IsGlobal>
 void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_schema_) const
 {
-    M_insist(bool(pipeline_), "pipeline must not be empty");
+    if (not pipeline_)
+        return;
 
     const auto &tuple_schema = tuple_schema_ ? *tuple_schema_ : schema_;
 

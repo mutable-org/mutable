@@ -780,8 +780,6 @@ public:
      */
     const State &search(state_type initial_state, expand_type expand, heuristic_type &heuristic, Context &... context);
 
-    double id_search(double bound, expand_type expand, heuristic_type &heuristic, Context &... context);
-
     /** Resets the state of the search. */
     void clear() {
         state_manager_.clear();
@@ -795,27 +793,12 @@ private:
     template<typename T>
     using has_mark = decltype(std::declval<T>().mark(Subproblem()));
 
-    /** Expands the given `state` by *eagerly* evaluating the heuristic function. */
-    void for_each_successor_eagerly(callback_t &&callback, const state_type &state, heuristic_type &heuristic,
-                                    expand_type &expand, Context&... context)
-    {
-        /*----- Evaluate heuristic eagerly. -----*/
-        expand(state, [this, callback=std::move(callback), &state, &heuristic, &context...](state_type successor) {
-            if (auto it = state_manager_.find(successor, context...); it == state_manager_.end(state, context...)) {
-                const double h =  heuristic(successor, context...) ;
-                callback(std::move(successor), h);
-            } else {
-                inc_cached_heuristic_value();
-                callback(std::move(successor), it->second.h); // use cached `h`
-            }
-        }, context...);
-    };
 
     void hanwen_for_each_successor(callback_t &&callback, const state_type &state, heuristic_type &heuristic,
                                    expand_type &expand, Context &... context) {
-        expand(state, [this,callback=std::move(callback), &state, &heuristic, &context...](state_type successor) {
-            if (auto it = state_manager_.find(successor, context...);it == state_manager_.end(state, context...)) {
-                const double h = heurist(successor, context...);
+        expand(state, [this, callback=std::move(callback), &heuristic, &context...](state_type successor) {
+            if (auto it = state_manager_.find(successor, context...);it == state_manager_.end(successor, context...)) {
+                const double h = heuristic(successor, context...);
                 callback(std::move(successor), h);
             } else {
                 inc_cached_heuristic_value();
@@ -824,45 +807,23 @@ private:
         }, context...);
     }
 
-    /** Expands the given `state` according to `is_lazy`. */
-    void for_each_successor(callback_t &&callback, const state_type &state, heuristic_type &heuristic,
-                            expand_type &expand, Context&... context)
-    {
-        for_each_successor_eagerly(std::move(callback), state, heuristic, expand, context...);
-    };
-
-
-//    /** Explores the given `state`. */
-//    void explore_state(const state_type &state, double bound, double result, heuristic_type &heuristic, expand_type &expand,
-//                  Context &... context) {
-//        /*----- Have only regular queue. -----*/
-//        for_each_successor([this, &bound, &result, &heuristic, &expand, &context...](state_type successor, double h) {
-//            state_manager_.push_regular_queue(std::move(successor), h, context...);
-//            result = id_search(bound, expand, heuristic, context...);
-//        }, state, heuristic, expand, context...);
-//    };
-
-    void hanwen_explore_state(double bound, double &min,
-                              const state_type &state, heuristic_type &heuristic, expand_type &expand,
+    void hanwen_explore_state(double bound, double &min, state_type &final_state, state_type &state,
+                              heuristic_type &heuristic, expand_type &expand,
                               Context &... context) {
         hanwen_for_each_successor(
-                [this, bound, &min, &expand, &heuristic, &context...](state_type successor, double h) {
-//                    state_manager_.push_regular_queue(std::move(successor), h, context...);
-                    hanwen_path.emplace(successor);
-                    if (expand.is_goal(successor, context...)) {
-                        is_solved = true;
-                        final_state = successor;
-                        return;
-                    }
-                    double temp = id_search(bound, min, std::move(successor), expand, heuristic, context...);
+                [this, bound, &min, &final_state, &heuristic, &expand, &context...](state_type successor, double h) {
+                    state_manager_.push_regular_queue(std::move(successor), h, context...);
+                    hanwen_path.push_back(std::move(successor));
+                    double temp = id_search(bound, min, final_state, heuristic, expand, context...);
+                    if (temp == FOUND) { return FOUND; }
                     if (temp < min) { min = temp; }
                     hanwen_path.pop_back();
                 }, state, heuristic, expand, context...);
     }
 
     std::vector<State> hanwen_path;
-    bool is_solved = false;
-    state_type final_state;
+    const double NOT_FOUND = -1;  // Value to indicate goal not found
+    const double FOUND = std::numeric_limits<int>::max();  // Unique value to indicate goal found
 
 public:
     friend std::ostream & operator<<(std::ostream &out, const hanwenSearch &AStar) {
@@ -872,6 +833,9 @@ public:
 
     void dump(std::ostream &out) const { out << *this << std::endl; }
     void dump() const { dump(std::cerr); }
+
+    double id_search(double bound, double &min, state_type &final_state, heuristic_type &heuristic, expand_type expand,
+                     Context &... context);
 };
 
 template<
@@ -889,22 +853,22 @@ const State &hanwenSearch<State, Expand, Heuristic, IsIDDFS, Config, Context...>
         heuristic_type &heuristic,
         Context &... context
 ) {
+    state_type &final_state = initial_state;
     double bound = heuristic(initial_state, context...);
+    double min = INF - 1;
+    hanwen_path.emplace_back(std::move(initial_state));
 
-    state_manager_.template push<false>(std::move(initial_state), 0, context...);
     while (true) {
-        double result = id_search(bound, expand, context...);
-        if (is_solved) {
-            // how to fetch the state from ID_Search
+        double result = id_search(bound, min, final_state, heuristic, expand, context...);
+        if (result == FOUND) {
             return final_state;
         }
-        if (result == INF) {
+
+        if (result == NOT_FOUND) {
             throw std::logic_error("goal state unreachable from provided initial state");
         }
         bound = result;
     }
-
-
 }
 
 template<
@@ -917,17 +881,18 @@ template<
 >
 requires heuristic_search_heuristic<Heuristic, Context...>
 double hanwenSearch<State, Expand, Heuristic, IsIDDFS, Config, Context...>::id_search(
-        double bound, expand_type expand, heuristic_type &heuristic, Context &... context
+        double bound, double &min, state_type &final_state,
+        heuristic_type &heuristic, expand_type expand, Context &... context
 ) {
-    state_type state=hanwen_path.back();
+    state_type &state = hanwen_path.back();
     double f = state.g() + heuristic(state, context...);
     if (f > bound) { return f; }
-    if (expand.is_goad(state, context...)) {
-        return state;
+    if (expand.is_goal(state, context...)) {
+        final_state = std::move(state);
+        return FOUND;
     }
 
-    double min = INF;
-    hanwen_explore_state(bound, min, state, heuristic, expand, context...);
+    hanwen_explore_state(bound, min, final_state, state, heuristic, expand, context...);
     return min;
 }
 

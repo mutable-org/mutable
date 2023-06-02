@@ -8,6 +8,37 @@ using namespace m;
 using namespace m::wasm;
 
 
+namespace m {
+
+namespace options {
+
+/** Whether there must not occur any rehashing. */
+bool insist_no_rehashing = false;
+
+}
+
+}
+
+namespace {
+
+__attribute__((constructor(201)))
+static void add_wasm_algo_args()
+{
+    Catalog &C = Catalog::Get();
+
+    /*----- Command-line arguments -----*/
+    C.arg_parser().add<bool>(
+        /* group=       */ "Wasm",
+        /* short=       */ nullptr,
+        /* long=        */ "--insist-no-rehashing",
+        /* description= */ "insist that no rehashing occurs",
+        /* callback=    */ [](bool){ options::insist_no_rehashing = true; }
+    );
+}
+
+}
+
+
 /*======================================================================================================================
  * sorting
  *====================================================================================================================*/
@@ -1125,6 +1156,9 @@ HashTable::const_entry_t ChainedHashTable<IsGlobal>::entry(Ptr<void> entry) cons
 template<bool IsGlobal>
 void ChainedHashTable<IsGlobal>::rehash()
 {
+    if (options::insist_no_rehashing)
+        Throw(exception::unreachable, "rehashing must not occur");
+
     auto emit_rehash = [this](){
         auto S = CodeGenContext::Get().scoped_environment(); // fresh environment to remove predication while rehashing
 
@@ -2091,6 +2125,9 @@ HashTable::const_entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::entry(
 template<bool IsGlobal, bool ValueInPlace>
 void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
 {
+    if (options::insist_no_rehashing)
+        Throw(exception::unreachable, "rehashing must not occur");
+
     auto emit_rehash = [this](){
         auto S = CodeGenContext::Get().scoped_environment(); // fresh environment to remove predication while rehashing
 

@@ -845,7 +845,7 @@ static void register_WasmV8()
 
     /*----- Command-line arguments -----------------------------------------------------------------------------------*/
     C.arg_parser().add<int>(
-        /* group=       */ "WasmV8",
+        /* group=       */ "Wasm",
         /* short=       */ nullptr,
         /* long=        */ "--wasm-opt",
         /* description= */ "set the optimization level for Wasm modules (0, 1, or 2)",
@@ -859,7 +859,7 @@ static void register_WasmV8()
                            [] (bool b) { options::wasm_adaptive = b; }
     );
     C.arg_parser().add<bool>(
-        /* group=       */ "WasmV8",
+        /* group=       */ "Wasm",
         /* short=       */ nullptr,
         /* long=        */ "--wasm-dump",
         /* description= */ "dump the generated WebAssembly code to stdout",

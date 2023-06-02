@@ -26,8 +26,11 @@
 
 namespace m {
 
-inline bool streq(const char *first, const char *second) { return 0 == strcmp(first, second); }
-inline bool strneq(const char *first, const char *second, std::size_t n) { return 0 == strncmp(first, second, n); }
+inline bool streq(const char *first, const char *second) { return 0 == strcmp(M_notnull(first), M_notnull(second)); }
+inline bool strneq(const char *first, const char *second, std::size_t n)
+{
+    return 0 == strncmp(M_notnull(first), M_notnull(second), n);
+}
 
 inline std::string replace_all(std::string str, const std::string &from, const std::string &to)
 {

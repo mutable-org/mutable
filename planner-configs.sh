@@ -1,5 +1,6 @@
 declare -A PLANNER_CONFIGS=(
     ###### Traditional Planners #####
+    [PEall]="--plan-enumerator PEall"
     [DPsub]="--plan-enumerator DPsubOpt"
     [DPccp]="--plan-enumerator DPccp"
     [TDMinCutAGaT]="--plan-enumerator TDMinCutAGaT"

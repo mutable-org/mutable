@@ -3508,8 +3508,8 @@ void SimpleHashJoin<UniqueBuild, Predicated>::execute(const Match<SimpleHashJoin
     );
 }
 
-template<bool SortLeft, bool SortRight, bool Predicated>
-ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated>::pre_condition(
+template<bool SortLeft, bool SortRight, bool Predicated, bool CmpPredicated>
+ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>::pre_condition(
     std::size_t child_idx,
     const std::tuple<const JoinOperator*, const Wildcard*, const Wildcard*> &partial_inner_nodes)
 {
@@ -3577,8 +3577,8 @@ ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated>::pre_condition(
     return pre_cond;
 }
 
-template<bool SortLeft, bool SortRight, bool Predicated>
-ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated>::adapt_post_conditions(
+template<bool SortLeft, bool SortRight, bool Predicated, bool CmpPredicated>
+ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>::adapt_post_conditions(
     const Match<SortMergeJoin> &M,
     std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children)
 {
@@ -3623,8 +3623,8 @@ ConditionSet SortMergeJoin<SortLeft, SortRight, Predicated>::adapt_post_conditio
     return post_cond;
 }
 
-template<bool SortLeft, bool SortRight, bool Predicated>
-double SortMergeJoin<SortLeft, SortRight, Predicated>::cost(const Match<SortMergeJoin> &M)
+template<bool SortLeft, bool SortRight, bool Predicated, bool CmpPredicated>
+double SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>::cost(const Match<SortMergeJoin> &M)
 {
     const double card_left  = M.parent.info().estimated_cardinality;
     const double card_right = M.child.info().estimated_cardinality;
@@ -3638,9 +3638,12 @@ double SortMergeJoin<SortLeft, SortRight, Predicated>::cost(const Match<SortMerg
     return cost;
 }
 
-template<bool SortLeft, bool SortRight, bool Predicated>
-void SortMergeJoin<SortLeft, SortRight, Predicated>::execute(const Match<SortMergeJoin> &M, setup_t setup,
-                                                             pipeline_t pipeline, teardown_t teardown)
+template<bool SortLeft, bool SortRight, bool Predicated, bool CmpPredicated>
+void SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>::execute(
+    const Match<SortMergeJoin> &M,
+    setup_t setup,
+    pipeline_t pipeline,
+    teardown_t teardown)
 {
     auto &env = CodeGenContext::Get().env();
 
@@ -3696,9 +3699,9 @@ void SortMergeJoin<SortLeft, SortRight, Predicated>::execute(const Match<SortMer
 
     /*----- If necessary, invoke sorting algorithm with buffer to sort. -----*/
     if constexpr (SortLeft)
-        quicksort(buffer_parent, order_parent);
+        quicksort<CmpPredicated>(buffer_parent, order_parent);
     if constexpr (SortRight)
-        quicksort(buffer_child, order_child);
+        quicksort<CmpPredicated>(buffer_child, order_child);
 
     /*----- Create predicate to check if child co-group is smaller or equal than the one of the parent relation. -----*/
     auto child_smaller_equal = [&]() -> Boolx1 {
@@ -4708,16 +4711,17 @@ void Match<m::wasm::SimpleHashJoin<Unique, Predicated>>::print(std::ostream &out
     build.print(out, level + 1);
 }
 
-template<bool SortLeft, bool SortRight, bool Predicated>
-void Match<m::wasm::SortMergeJoin<SortLeft, SortRight, Predicated>>::print(std::ostream &out, unsigned level) const
+template<bool SortLeft, bool SortRight, bool Predicated, bool CmpPredicated>
+void Match<m::wasm::SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>>::print(std::ostream &out,
+                                                                                          unsigned level) const
 {
     indent(out, level) << "wasm::" << (Predicated ? "Predicated" : "") << "SortMergeJoin ";
     switch ((unsigned(SortLeft) << 1) | unsigned(SortRight))
     {
         case 0: out << "pre-sorted "; break;
-        case 1: out << "sorting right input "; break;
-        case 2: out << "sorting left input "; break;
-        case 3: out << "sorting both inputs "; break;
+        case 1: out << "sorting right input " << (CmpPredicated ? "predicated " : ""); break;
+        case 2: out << "sorting left input " << (CmpPredicated ? "predicated " : ""); break;
+        case 3: out << "sorting both inputs " << (CmpPredicated ? "predicated " : ""); break;
     }
     if (this->left_materializing_factory and this->right_materializing_factory)
         out << "and materializing both inputs ";

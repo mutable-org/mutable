@@ -24,14 +24,22 @@ namespace m {
     X(SimpleHashJoin<M_COMMA(false) true>) \
     X(SimpleHashJoin<M_COMMA(true) false>) \
     X(SimpleHashJoin<M_COMMA(true) true>) \
-    X(SortMergeJoin<M_COMMA(false) M_COMMA(false) false>) \
-    X(SortMergeJoin<M_COMMA(false) M_COMMA(false) true>) \
-    X(SortMergeJoin<M_COMMA(false) M_COMMA(true)  false>) \
-    X(SortMergeJoin<M_COMMA(false) M_COMMA(true)  true>) \
-    X(SortMergeJoin<M_COMMA(true)  M_COMMA(false) false>) \
-    X(SortMergeJoin<M_COMMA(true)  M_COMMA(false) true>) \
-    X(SortMergeJoin<M_COMMA(true)  M_COMMA(true)  false>) \
-    X(SortMergeJoin<M_COMMA(true)  M_COMMA(true)  true>)
+    X(SortMergeJoin<M_COMMA(false) M_COMMA(false) M_COMMA(false) false>) \
+    X(SortMergeJoin<M_COMMA(false) M_COMMA(false) M_COMMA(false) true>) \
+    X(SortMergeJoin<M_COMMA(false) M_COMMA(false) M_COMMA(true)  false>) \
+    X(SortMergeJoin<M_COMMA(false) M_COMMA(false) M_COMMA(true)  true>) \
+    X(SortMergeJoin<M_COMMA(false) M_COMMA(true)  M_COMMA(false) false>) \
+    X(SortMergeJoin<M_COMMA(false) M_COMMA(true)  M_COMMA(false) true>) \
+    X(SortMergeJoin<M_COMMA(false) M_COMMA(true)  M_COMMA(true)  false>) \
+    X(SortMergeJoin<M_COMMA(false) M_COMMA(true)  M_COMMA(true)  true>) \
+    X(SortMergeJoin<M_COMMA(true)  M_COMMA(false) M_COMMA(false) false>) \
+    X(SortMergeJoin<M_COMMA(true)  M_COMMA(false) M_COMMA(false) true>) \
+    X(SortMergeJoin<M_COMMA(true)  M_COMMA(false) M_COMMA(true)  false>) \
+    X(SortMergeJoin<M_COMMA(true)  M_COMMA(false) M_COMMA(true)  true>) \
+    X(SortMergeJoin<M_COMMA(true)  M_COMMA(true)  M_COMMA(false) false>) \
+    X(SortMergeJoin<M_COMMA(true)  M_COMMA(true)  M_COMMA(false) true>) \
+    X(SortMergeJoin<M_COMMA(true)  M_COMMA(true)  M_COMMA(true)  false>) \
+    X(SortMergeJoin<M_COMMA(true)  M_COMMA(true)  M_COMMA(true)  true>)
 
 #define M_WASM_OPERATOR_LIST(X) \
     X(NoOp) \
@@ -85,9 +93,9 @@ template<bool Predicated> struct Match<wasm::NestedLoopsJoin<Predicated>>;
 namespace wasm { template<bool UniqueBuild, bool Predicated> struct SimpleHashJoin; }
 template<bool UniqueBuild, bool Predicated> struct Match<wasm::SimpleHashJoin<UniqueBuild, Predicated>>;
 
-namespace wasm { template<bool SortLeft, bool SortRight, bool Predicated> struct SortMergeJoin; }
-template<bool SortLeft, bool SortRight, bool Predicated>
-struct Match<wasm::SortMergeJoin<SortLeft, SortRight, Predicated>>;
+namespace wasm { template<bool SortLeft, bool SortRight, bool Predicated, bool CmpPredicated> struct SortMergeJoin; }
+template<bool SortLeft, bool SortRight, bool Predicated, bool CmpPredicated>
+struct Match<wasm::SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>>;
 
 
 namespace wasm {
@@ -264,9 +272,10 @@ struct SimpleHashJoin
                           std::vector<std::reference_wrapper<const ConditionSet>> &&post_cond_children);
 };
 
-template<bool SortLeft, bool SortRight, bool Predicated>
+template<bool SortLeft, bool SortRight, bool Predicated, bool CmpPredicated>
 struct SortMergeJoin
-    : PhysicalOperator<SortMergeJoin<SortLeft, SortRight, Predicated>, pattern_t<JoinOperator, Wildcard, Wildcard>>
+    : PhysicalOperator<SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>,
+                       pattern_t<JoinOperator, Wildcard, Wildcard>>
 {
     static void execute(const Match<SortMergeJoin> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
     static double cost(const Match<SortMergeJoin> &M);
@@ -689,8 +698,8 @@ struct Match<wasm::SimpleHashJoin<UniqueBuild, Predicated>> : MatchBase
     void print(std::ostream &out, unsigned level) const override;
 };
 
-template<bool SortLeft, bool SortRight, bool Predicated>
-struct Match<wasm::SortMergeJoin<SortLeft, SortRight, Predicated>> : MatchBase
+template<bool SortLeft, bool SortRight, bool Predicated, bool CmpPredicated>
+struct Match<wasm::SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>> : MatchBase
 {
     const JoinOperator &join;
     const Wildcard &parent; ///< the referenced relation with unique join attributes
@@ -712,7 +721,7 @@ struct Match<wasm::SortMergeJoin<SortLeft, SortRight, Predicated>> : MatchBase
     }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
-        wasm::SortMergeJoin<SortLeft, SortRight, Predicated>::execute(
+        wasm::SortMergeJoin<SortLeft, SortRight, Predicated, CmpPredicated>::execute(
             *this, std::move(setup), std::move(pipeline), std::move(teardown)
         );
     }

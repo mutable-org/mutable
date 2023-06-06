@@ -1179,12 +1179,14 @@ T signum(T value)
 
 /** Compares two tuples, which must be already loaded into the environments \p env_left and \p env_right, according to
  * the ordering \p order (the second element of each pair is `true` iff the corresponding sorting should be
- * ascending).  Note that the value NULL is always considered smaller regardless of the ordering.
+ * ascending).  Note that the value NULL is always considered smaller regardless of the ordering.  Comparison is
+ * performed branchless iff \tparam Predicated.
  *
  * Returns a negative number if \p left is smaller than \p right, 0 if both are equal, and a positive number if
  * \p left is greater than \p right, according to the ordering. */
+template<bool Predicated>
 I32x1 compare(const Environment &env_left, const Environment &env_right,
-            const std::vector<SortingOperator::order_type> &order);
+              const std::vector<SortingOperator::order_type> &order);
 
 
 /*======================================================================================================================
@@ -1231,6 +1233,12 @@ extern template struct Buffer<false>;
 extern template struct Buffer<true>;
 extern template struct buffer_swap_proxy_t<false>;
 extern template struct buffer_swap_proxy_t<true>;
+extern template I32x1 compare<false>(
+    const Environment&, const Environment&, const std::vector<SortingOperator::order_type>&
+);
+extern template I32x1 compare<true>(
+    const Environment&, const Environment&, const std::vector<SortingOperator::order_type>&
+);
 
 }
 

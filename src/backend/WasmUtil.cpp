@@ -3114,99 +3114,250 @@ _Boolx1 m::wasm::like(NChar _str, NChar _pattern, const char escape_char)
  * comparator
  *====================================================================================================================*/
 
+template<bool Predicated>
 I32x1 m::wasm::compare(const Environment &env_left, const Environment &env_right,
-                     const std::vector<SortingOperator::order_type> &order)
+                       const std::vector<SortingOperator::order_type> &order)
 {
-    Var<I32x1> result(0); // explicitly (re-)set result to 0
+    if constexpr (Predicated) {
+        Var<I32x1> result(0); // explicitly (re-)set result to 0
 
-    /*----- Compile ordering. -----*/
-    for (auto &o : order) {
-        /*----- Compile order expression for left tuple. -----*/
-        SQL_t _val_left = env_left.template compile(o.first);
+        /*----- Compile ordering. -----*/
+        for (auto &o : order) {
+            /*----- Compile order expression for left tuple. -----*/
+            SQL_t _val_left = env_left.template compile(o.first);
 
-        std::visit(overloaded {
-            [&]<typename T>(Expr<T> val_left) -> void {
-                /*----- Compile order expression for right tuple. -----*/
-                Expr<T> val_right = env_right.template compile<Expr<T>>(o.first);
+            std::visit(overloaded {
+                [&]<typename T>(Expr<T> val_left) -> void {
+                    /*----- Compile order expression for right tuple. -----*/
+                    Expr<T> val_right = env_right.template compile<Expr<T>>(o.first);
 
-                M_insist(val_left.can_be_null() == val_right.can_be_null(),
-                         "either both or none of the value to compare must be nullable");
-                if (val_left.can_be_null()) {
-                    using type = std::conditional_t<std::is_same_v<T, bool>, _I32x1, Expr<T>>;
-                    Var<type> left, right;
-                    if constexpr (std::is_same_v<T, bool>) {
-                        left  = val_left.template to<int32_t>();
-                        right = val_right.template to<int32_t>();
+                    M_insist(val_left.can_be_null() == val_right.can_be_null(),
+                             "either both or none of the value to compare must be nullable");
+                    if (val_left.can_be_null()) {
+                        using type = std::conditional_t<std::is_same_v<T, bool>, _I32x1, Expr<T>>;
+                        Var<type> left, right;
+                        if constexpr (std::is_same_v<T, bool>) {
+                            left  = val_left.template to<int32_t>();
+                            right = val_right.template to<int32_t>();
+                        } else {
+                            left  = val_left;
+                            right = val_right;
+                        }
+
+                        /*----- Compare both with current order expression and update result. -----*/
+                        I32x1 cmp_null = right.is_null().template to<int32_t>() - left.is_null().template to<int32_t>();
+                        _I32x1 _val_lt = (left < right).template to<int32_t>();
+                        _I32x1 _val_gt = (left > right).template to<int32_t>();
+                        _I32x1 _cmp_val = o.second ? _val_gt - _val_lt : _val_lt - _val_gt;
+                        auto [cmp_val, cmp_is_null] = _cmp_val.split();
+                        cmp_is_null.discard();
+                        I32x1 cmp = (cmp_null << 1) + cmp_val; // potentially-null value of comparison is overruled by cmp_null
+                        result <<= 2; // shift result s.t. first difference will determine order
+                        result += cmp; // add current comparison to result
                     } else {
-                        left  = val_left;
-                        right = val_right;
-                    }
+                        using type = std::conditional_t<std::is_same_v<T, bool>, I32x1, PrimitiveExpr<T>>;
+                        Var<type> left, right;
+                        if constexpr (std::is_same_v<T, bool>) {
+                            left  = val_left.insist_not_null().template to<int32_t>();
+                            right = val_right.insist_not_null().template to<int32_t>();
+                        } else {
+                            left  = val_left.insist_not_null();
+                            right = val_right.insist_not_null();
+                        }
 
-                    /*----- Compare both with current order expression and update result. -----*/
-                    I32x1 cmp_null = right.is_null().template to<int32_t>() - left.is_null().template to<int32_t>();
-                    _I32x1 _val_lt = (left < right).template to<int32_t>();
-                    _I32x1 _val_gt = (left > right).template to<int32_t>();
-                    _I32x1 _cmp_val = o.second ? _val_gt - _val_lt : _val_lt - _val_gt;
-                    auto [cmp_val, cmp_is_null] = _cmp_val.split();
-                    cmp_is_null.discard();
-                    I32x1 cmp = (cmp_null << 1) + cmp_val; // potentially-null value of comparison is overruled by cmp_null
-                    result <<= 2; // shift result s.t. first difference will determine order
-                    result += cmp; // add current comparison to result
-                } else {
-                    using type = std::conditional_t<std::is_same_v<T, bool>, I32x1, PrimitiveExpr<T>>;
-                    Var<type> left, right;
-                    if constexpr (std::is_same_v<T, bool>) {
-                        left  = val_left.insist_not_null().template to<int32_t>();
-                        right = val_right.insist_not_null().template to<int32_t>();
+                        /*----- Compare both with current order expression and update result. -----*/
+                        I32x1 val_lt = (left < right).template to<int32_t>();
+                        I32x1 val_gt = (left > right).template to<int32_t>();
+                        I32x1 cmp = o.second ? val_gt - val_lt : val_lt - val_gt;
+                        result <<= 1; // shift result s.t. first difference will determine order
+                        result += cmp; // add current comparison to result
+                    }
+                },
+                [&](NChar val_left) -> void {
+                    auto &cs = as<const CharacterSequence>(*o.first.get().type());
+
+                    /*----- Compile order expression for right tuple. -----*/
+                    NChar val_right = env_right.template compile<NChar>(o.first);
+
+                    Var<Ptr<Charx1>> _left(val_left.val()), _right(val_right.val());
+                    NChar left(_left, val_left.can_be_null(), val_left.length(), val_left.guarantees_terminating_nul()),
+                          right(_right, val_right.can_be_null(), val_right.length(), val_right.guarantees_terminating_nul());
+
+                    M_insist(val_left.can_be_null() == val_right.can_be_null(),
+                             "either both or none of the value to compare must be nullable");
+                    if (val_left.can_be_null()) {
+                        /*----- Compare both with current order expression and update result. -----*/
+                        I32x1 cmp_null = _right.is_null().to<int32_t>() - _left.is_null().to<int32_t>();
+                        _I32x1 _delta = o.second ? strcmp(left, right) : strcmp(right, left);
+                        auto [delta_val, delta_is_null] = _delta.split();
+                        Wasm_insist(delta_val.clone() >= -1 and delta_val.clone() <= 1,
+                                    "result of strcmp is assumed to be in [-1,1]");
+                        delta_is_null.discard();
+                        I32x1 cmp = (cmp_null << 1) + delta_val; // potentially-null value of comparison is overruled by cmp_null
+                        result <<= 2; // shift result s.t. first difference will determine order
+                        result += cmp; // add current comparison to result
                     } else {
-                        left  = val_left.insist_not_null();
-                        right = val_right.insist_not_null();
+                        /*----- Compare both with current order expression and update result. -----*/
+                        I32x1 delta = o.second ? strcmp(left, right).insist_not_null()
+                                               : strcmp(right, left).insist_not_null();
+                        Wasm_insist(delta.clone() >= -1 and delta.clone() <= 1,
+                                    "result of strcmp is assumed to be in [-1,1]");
+                        result <<= 1; // shift result s.t. first difference will determine order
+                        result += delta; // add current comparison to result
                     }
+                },
+                [](auto&&) -> void { M_unreachable("SIMDfication currently not supported"); },
+                [](std::monostate) -> void { M_unreachable("invalid expression"); }
+            }, _val_left);
+        }
 
-                    /*----- Compare both with current order expression and update result. -----*/
-                    I32x1 val_lt = (left < right).template to<int32_t>();
-                    I32x1 val_gt = (left > right).template to<int32_t>();
-                    I32x1 cmp = o.second ? val_gt - val_lt : val_lt - val_gt;
-                    result <<= 1; // shift result s.t. first difference will determine order
-                    result += cmp; // add current comparison to result
+        return result;
+    } else {
+        Var<I32x1> result; // always set here
+
+        /*----- Compile ordering. -----*/
+        BLOCK(compare) {
+            auto emit_comparison_rec = [&](decltype(order.cbegin()) curr, const decltype(order.cend()) end,
+                                           auto &rec) -> void
+            {
+                /*----- If end of ordering is reached, left and right tuple are equal. -----*/
+                if (curr == end) {
+                    result = 0;
+                    return;
                 }
-            },
-            [&](NChar val_left) -> void {
-                auto &cs = as<const CharacterSequence>(*o.first.get().type());
 
-                /*----- Compile order expression for right tuple. -----*/
-                NChar val_right = env_right.template compile<NChar>(o.first);
+                /*----- Compile order expression for left tuple. -----*/
+                SQL_t _val_left = env_left.template compile(curr->first);
 
-                Var<Ptr<Charx1>> _left(val_left.val()), _right(val_right.val());
-                NChar left(_left, val_left.can_be_null(), val_left.length(), val_left.guarantees_terminating_nul()),
-                      right(_right, val_right.can_be_null(), val_right.length(), val_right.guarantees_terminating_nul());
+                std::visit(overloaded {
+                    [&]<typename T>(Expr<T> val_left) -> void {
+                        /*----- Compile order expression for right tuple. -----*/
+                        Expr<T> val_right = env_right.template compile<Expr<T>>(curr->first);
 
-                M_insist(val_left.can_be_null() == val_right.can_be_null(),
-                         "either both or none of the value to compare must be nullable");
-                if (val_left.can_be_null()) {
-                    /*----- Compare both with current order expression and update result. -----*/
-                    I32x1 cmp_null = _right.is_null().to<int32_t>() - _left.is_null().to<int32_t>();
-                    _I32x1 _delta = o.second ? strcmp(left, right) : strcmp(right, left);
-                    auto [delta_val, delta_is_null] = _delta.split();
-                    Wasm_insist(delta_val.clone() >= -1 and delta_val.clone() <= 1,
-                                "result of strcmp is assumed to be in [-1,1]");
-                    delta_is_null.discard();
-                    I32x1 cmp = (cmp_null << 1) + delta_val; // potentially-null value of comparison is overruled by cmp_null
-                    result <<= 2; // shift result s.t. first difference will determine order
-                    result += cmp; // add current comparison to result
-                } else {
-                    /*----- Compare both with current order expression and update result. -----*/
-                    I32x1 delta = o.second ? strcmp(left, right).insist_not_null() : strcmp(right, left).insist_not_null();
-                    Wasm_insist(delta.clone() >= -1 and delta.clone() <= 1,
-                                "result of strcmp is assumed to be in [-1,1]");
-                    result <<= 1; // shift result s.t. first difference will determine order
-                    result += delta; // add current comparison to result
-                }
-            },
-            [](auto) -> void { M_unreachable("SIMDfication currently not supported"); },
-            [](std::monostate) -> void { M_unreachable("invalid expression"); }
-        }, _val_left);
+                        M_insist(val_left.can_be_null() == val_right.can_be_null(),
+                                 "either both or none of the value to compare must be nullable");
+                        if (val_left.can_be_null()) {
+                            using type = std::conditional_t<std::is_same_v<T, bool>, _I32x1, Expr<T>>;
+                            Var<type> _left, _right;
+                            if constexpr (std::is_same_v<T, bool>) {
+                                _left  = val_left.template to<int32_t>();
+                                _right = val_right.template to<int32_t>();
+                            } else {
+                                _left  = val_left;
+                                _right = val_right;
+                            }
+
+                            /*----- Compare both with current order expression and potentially set result. -----*/
+                            IF (_left.not_null()) {
+                                IF (_right.is_null()) {
+                                    result = 1;
+                                    GOTO(compare);
+                                };
+                                auto left = _left.val().insist_not_null(),
+                                     right = _right.val().insist_not_null();
+                                Boolx1 left_lt_right = curr->second ? left.clone() < right.clone()
+                                                                    : left.clone() > right.clone();
+                                IF (left_lt_right) {
+                                    result = -1;
+                                    GOTO(compare);
+                                };
+                                Boolx1 left_gt_right = curr->second ? left > right : left < right;
+                                IF (left_gt_right) {
+                                    result = 1;
+                                    GOTO(compare);
+                                };
+                            } ELSE {
+                                IF (_right.not_null()) {
+                                    result = -1;
+                                    GOTO(compare);
+                                };
+                            };
+                        } else {
+                            using type = std::conditional_t<std::is_same_v<T, bool>, I32x1, PrimitiveExpr<T>>;
+                            Var<type> left, right;
+                            if constexpr (std::is_same_v<T, bool>) {
+                                left  = val_left.insist_not_null().template to<int32_t>();
+                                right = val_right.insist_not_null().template to<int32_t>();
+                            } else {
+                                left  = val_left.insist_not_null();
+                                right = val_right.insist_not_null();
+                            }
+
+                            /*----- Compare both with current order expression and potentially set result. -----*/
+                            Boolx1 left_lt_right = curr->second ? left < right : left > right;
+                            IF (left_lt_right) {
+                                result = -1;
+                                GOTO(compare);
+                            };
+                            Boolx1 left_gt_right = curr->second ? left > right : left < right;
+                            IF (left_gt_right) {
+                                result = 1;
+                                GOTO(compare);
+                            };
+                        }
+                    },
+                    [&](NChar val_left) -> void {
+                        auto &cs = as<const CharacterSequence>(*curr->first.get().type());
+
+                        /*----- Compile order expression for right tuple. -----*/
+                        NChar val_right = env_right.template compile<NChar>(curr->first);
+
+                        Var<Ptr<Charx1>> _left(val_left.val()), _right(val_right.val());
+                        ///> create non-nullable `NChar`s since NULL checks are done explicitly here before using them
+                        NChar left(_left, false, val_left.length(), val_left.guarantees_terminating_nul()),
+                              right(_right, false, val_right.length(), val_right.guarantees_terminating_nul());
+
+                        M_insist(val_left.can_be_null() == val_right.can_be_null(),
+                                 "either both or none of the value to compare must be nullable");
+                        if (val_left.can_be_null()) {
+                            /*----- Compare both with current order expression and potentially set result. -----*/
+                            IF (_left.not_null()) {
+                                IF (_right.is_null()) {
+                                    result = 1;
+                                    GOTO(compare);
+                                };
+                                I32x1 cmp = curr->second ? strcmp(left, right).insist_not_null()
+                                                         : strcmp(right, left).insist_not_null();
+                                IF (cmp.clone() != 0) {
+                                    result = cmp;
+                                    GOTO(compare);
+                                };
+                            } ELSE {
+                                IF (_right.not_null()) {
+                                    result = -1;
+                                    GOTO(compare);
+                                };
+                            };
+                        } else {
+                            /*----- Compare both with current order expression and potentially set result. -----*/
+                            I32x1 cmp = curr->second ? strcmp(left, right).insist_not_null()
+                                                     : strcmp(right, left).insist_not_null();
+                            IF (cmp.clone() != 0) {
+                                result = cmp;
+                                GOTO(compare);
+                            };
+                        }
+                    },
+                    [](auto&&) -> void { M_unreachable("SIMDfication currently not supported"); },
+                    [](std::monostate) -> void { M_unreachable("invalid expression"); }
+                }, _val_left);
+
+                /*----- Recurse to next comparison. -----*/
+                rec(std::next(curr), end, rec);
+            };
+            emit_comparison_rec(order.cbegin(), order.cend(), emit_comparison_rec);
+        }
+
+        /* GOTOs from above jump here */
+
+        return result;
     }
-
-    return result;
 }
+
+// explicit instantiations to prevent linker errors
+template I32x1 m::wasm::compare<false>(
+    const Environment&, const Environment&, const std::vector<SortingOperator::order_type>&
+);
+template I32x1 m::wasm::compare<true>(
+    const Environment&, const Environment&, const std::vector<SortingOperator::order_type>&
+);

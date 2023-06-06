@@ -22,8 +22,8 @@ struct ProbingStrategy;
 
 /** Sorts the buffer \p buffer using the quicksort algorithm and a branchless binary partition algorithm.  The
  * ordering is specified by \p order where the first element is the expression to order on and the second element is
- * `true` iff ordering should be performed ascending. */
-template<bool IsGlobal>
+ * `true` iff ordering should be performed ascending.  Comparison is performed branchless iff \tparam CmpPredicated. */
+template<bool CmpPredicated, bool IsGlobal>
 void quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOperator::order_type> &order);
 
 
@@ -1013,7 +1013,8 @@ struct QuadraticProbing : OpenAddressingHashTableBase::ProbingStrategy
  * explicit instantiation declarations
  *====================================================================================================================*/
 
-extern template void quicksort(GlobalBuffer&, const std::vector<SortingOperator::order_type>&);
+extern template void quicksort<false>(GlobalBuffer&, const std::vector<SortingOperator::order_type>&);
+extern template void quicksort<true>(GlobalBuffer&, const std::vector<SortingOperator::order_type>&);
 extern template struct m::wasm::ChainedHashTable<false>;
 extern template struct m::wasm::ChainedHashTable<true>;
 extern template struct m::wasm::OpenAddressingHashTable<false, false>;

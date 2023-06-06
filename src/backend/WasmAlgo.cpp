@@ -43,7 +43,7 @@ static void add_wasm_algo_args()
  * sorting
  *====================================================================================================================*/
 
-template<bool IsGlobal>
+template<bool CmpPredicated, bool IsGlobal>
 void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOperator::order_type> &order)
 {
     static_assert(IsGlobal, "quicksort on local buffers is not yet supported");
@@ -101,8 +101,8 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
             }
 
             /*----- Compare begin and last tuples to pivot element and advance cursors respectively. -----*/
-            Boolx1 begin_le_pivot = compare(env_begin, env_pivot, order) <= 0;
-            Boolx1 last_ge_pivot  = compare(env_last, env_pivot, order) >= 0;
+            Boolx1 begin_le_pivot = compare<CmpPredicated>(env_begin, env_pivot, order) <= 0;
+            Boolx1 last_ge_pivot  = compare<CmpPredicated>(env_last, env_pivot, order) >= 0;
 
             begin += begin_le_pivot.to<uint32_t>();
             end -= last_ge_pivot.to<uint32_t>();
@@ -150,9 +150,9 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
             }();
 
             /*----- Swap pivot (median of three) to begin. -----.*/
-            Boolx1 begin_le_mid  = compare(env_begin, env_mid, order) <= 0;
-            Boolx1 begin_le_last = compare(env_begin, env_last, order) <= 0;
-            Boolx1 mid_le_last   = compare(env_mid, env_last, order) <= 0;
+            Boolx1 begin_le_mid  = compare<CmpPredicated>(env_begin, env_mid, order) <= 0;
+            Boolx1 begin_le_last = compare<CmpPredicated>(env_begin, env_last, order) <= 0;
+            Boolx1 mid_le_last   = compare<CmpPredicated>(env_mid, env_last, order) <= 0;
             IF (begin_le_mid) {
                 IF (begin_le_last.clone()) {
                     IF (mid_le_last.clone()) {
@@ -209,7 +209,7 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
             }();
 
             /*----- Swap begin and last if they are not yet sorted. -----.*/
-            Boolx1 begin_gt_last = compare(env_begin, env_last, order) > 0;
+            Boolx1 begin_gt_last = compare<CmpPredicated>(env_begin, env_last, order) > 0;
             IF (begin_gt_last) {
                 swap(begin, last, env_begin, env_last);
             };
@@ -221,7 +221,8 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
 }
 
 // explicit instantiations to prevent linker errors
-template void m::wasm::quicksort(GlobalBuffer&, const std::vector<SortingOperator::order_type>&);
+template void m::wasm::quicksort<false>(GlobalBuffer&, const std::vector<SortingOperator::order_type>&);
+template void m::wasm::quicksort<true>(GlobalBuffer&, const std::vector<SortingOperator::order_type>&);
 
 
 /*======================================================================================================================

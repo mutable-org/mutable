@@ -16,6 +16,8 @@ namespace m {
     X(Scan<true>) \
     X(Filter<false>) \
     X(Filter<true>) \
+    X(Quicksort<false>) \
+    X(Quicksort<true>) \
     X(NestedLoopsJoin<false>) \
     X(NestedLoopsJoin<true>) \
     X(SimpleHashJoin<M_COMMA(false) false>) \
@@ -38,7 +40,6 @@ namespace m {
     X(HashBasedGrouping) \
     X(OrderedGrouping) \
     X(Aggregation) \
-    X(Quicksort) \
     X(NoOpSorting) \
     X(Limit) \
     X(HashBasedGroupJoin) \
@@ -53,7 +54,6 @@ namespace m {
     X(HashBasedGrouping) \
     X(OrderedGrouping) \
     X(Aggregation) \
-    X(Quicksort) \
     X(NoOpSorting) \
     X(Limit) \
     X(HashBasedGroupJoin)
@@ -75,6 +75,9 @@ template<bool SIMDfied> struct Match<wasm::Scan<SIMDfied>>;
 
 namespace wasm { template<bool Predicated> struct Filter; }
 template<bool Predicated> struct Match<wasm::Filter<Predicated>>;
+
+namespace wasm { template<bool CmpPredicated> struct Quicksort; }
+template<bool CmpPredicated> struct Match<wasm::Quicksort<CmpPredicated>>;
 
 namespace wasm { template<bool Predicated> struct NestedLoopsJoin; }
 template<bool Predicated> struct Match<wasm::NestedLoopsJoin<Predicated>>;
@@ -218,10 +221,11 @@ struct Aggregation : PhysicalOperator<Aggregation, AggregationOperator>
     static ConditionSet post_condition(const Match<Aggregation> &M);
 };
 
-struct Quicksort : PhysicalOperator<Quicksort, SortingOperator>
+template<bool CmpPredicated>
+struct Quicksort : PhysicalOperator<Quicksort<CmpPredicated>, SortingOperator>
 {
     static void execute(const Match<Quicksort> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown);
-    static double cost(const Match<Quicksort>&) { return 1.0; }
+    static double cost(const Match<Quicksort>&) { return M_CONSTEXPR_COND(CmpPredicated, 1.0, 1.1); }
     static ConditionSet pre_condition(std::size_t child_idx,
                                       const std::tuple<const SortingOperator*> &partial_inner_nodes);
     static ConditionSet post_condition(const Match<Quicksort> &M);
@@ -582,8 +586,8 @@ struct Match<wasm::Aggregation> : MatchBase
     void print(std::ostream &out, unsigned level) const override;
 };
 
-template<>
-struct Match<wasm::Quicksort> : MatchBase
+template<bool CmpPredicated>
+struct Match<wasm::Quicksort<CmpPredicated>> : MatchBase
 {
     const SortingOperator &sorting;
     const MatchBase &child;
@@ -598,7 +602,7 @@ struct Match<wasm::Quicksort> : MatchBase
     }
 
     void execute(setup_t setup, pipeline_t pipeline, teardown_t teardown) const override {
-        wasm::Quicksort::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
+        wasm::Quicksort<CmpPredicated>::execute(*this, std::move(setup), std::move(pipeline), std::move(teardown));
     }
 
     protected:

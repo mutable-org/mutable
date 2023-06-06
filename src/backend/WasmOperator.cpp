@@ -3050,7 +3050,8 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
  * Sorting
  *====================================================================================================================*/
 
-ConditionSet Quicksort::pre_condition(std::size_t child_idx, const std::tuple<const SortingOperator*>&)
+template<bool CmpPredicated>
+ConditionSet Quicksort<CmpPredicated>::pre_condition(std::size_t child_idx, const std::tuple<const SortingOperator*>&)
 {
      M_insist(child_idx == 0);
 
@@ -3062,7 +3063,8 @@ ConditionSet Quicksort::pre_condition(std::size_t child_idx, const std::tuple<co
     return pre_cond;
 }
 
-ConditionSet Quicksort::post_condition(const Match<Quicksort> &M)
+template<bool CmpPredicated>
+ConditionSet Quicksort<CmpPredicated>::post_condition(const Match<Quicksort> &M)
 {
     ConditionSet post_cond;
 
@@ -3084,7 +3086,9 @@ ConditionSet Quicksort::post_condition(const Match<Quicksort> &M)
     return post_cond;
 }
 
-void Quicksort::execute(const Match<Quicksort> &M, setup_t setup, pipeline_t pipeline, teardown_t teardown)
+template<bool CmpPredicated>
+void Quicksort<CmpPredicated>::execute(const Match<Quicksort> &M, setup_t setup, pipeline_t pipeline,
+                                       teardown_t teardown)
 {
     /*----- Create infinite buffer to materialize the current results but resume the pipeline later. -----*/
     M_insist(bool(M.materializing_factory), "`wasm::Quicksort` must have a factory for the materialized child");
@@ -3108,7 +3112,7 @@ void Quicksort::execute(const Match<Quicksort> &M, setup_t setup, pipeline_t pip
     sorting_child_pipeline(); // call child function
 
     /*----- Invoke quicksort algorithm with buffer to sort. -----*/
-    quicksort(buffer, M.sorting.order_by());
+    quicksort<CmpPredicated>(buffer, M.sorting.order_by());
 
     /*----- Process sorted buffer. -----*/
     buffer.resume_pipeline(sorting_schema);
@@ -4655,9 +4659,11 @@ void Match<m::wasm::Aggregation>::print(std::ostream &out, unsigned level) const
     this->child.print(out, level + 1);
 }
 
-void Match<m::wasm::Quicksort>::print(std::ostream &out, unsigned level) const
+template<bool CmpPredicated>
+void Match<m::wasm::Quicksort<CmpPredicated>>::print(std::ostream &out, unsigned level) const
 {
-    indent(out, level) << "wasm::Quicksort " << this->sorting.schema() << " (cumulative cost " << cost() << ')';
+    indent(out, level) << "wasm::" << (CmpPredicated ? "Predicated" : "") << "Quicksort " << this->sorting.schema()
+                       << " (cumulative cost " << cost() << ')';
     this->child.print(out, level + 1);
 }
 

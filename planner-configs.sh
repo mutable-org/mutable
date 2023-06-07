@@ -7,6 +7,8 @@ declare -A PLANNER_CONFIGS=(
     [linDP]="--plan-enumerator LinearizedDP"
     [GOO]="--plan-enumerator GOO"
     ##### Heuristic Search #####
+    [BU-cleanAStar-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search cleanAStar"
+    [TD-cleanAStar-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic zero --hs-search cleanAStar"
     # BottomUp
     [BU-BIDIRECTIONAL-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search BIDIRECTIONAL"
     ## IDDFS

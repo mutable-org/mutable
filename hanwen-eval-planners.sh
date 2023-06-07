@@ -51,12 +51,16 @@ declare -A TOPOLOGIES=(
 
 ORDERED_PLANNERS=(
     ###### HANWEN Manuelly Test #####
-#    "DPccp"
-#    "IKKBZ"
+    "DPccp"
+    "IKKBZ"
+#    "TD-cleanAStar-zero"
+#    "BU-cleanAStar-zero"
+
 #    "BU-IDDFS-zero"
+    "BU-A*-zero"
     "BU-BIDIRECTIONAL-zero"
 
-    "BU-A*-zero"
+
 #    "BU-A*-sum"
 #    "BU-beam-zero"
 #    "BU-beam-sum"

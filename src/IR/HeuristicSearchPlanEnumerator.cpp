@@ -2475,8 +2475,11 @@ struct checkpoints<PlanTable, SubproblemsArray>
 
 }
 
+
 template<typename State, typename Expand, typename Heuristic, typename Config, typename ... Context>
-using BIDIRECTIONAL=ai::BIDIRECTIONAL<State, Expand, Heuristic, Config, Context...>;
+using cleanAStar = ai::cleanAStar<State, Expand, Heuristic, Config, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename Config, typename ... Context>
+using BIDIRECTIONAL = ai::BIDIRECTIONAL<State, Expand, Heuristic, Config, Context...>;
 template<typename State, typename Expand, typename Heuristic, typename Config, typename ... Context>
 using IDDFS = ai::IDDFS<State, Expand, Heuristic, Config, Context...>;
 
@@ -2651,6 +2654,8 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         }
 
 
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, cleanAStar)
+        HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, cleanAStar)
         // biDirectionalSearch
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, BIDIRECTIONAL)
         // bottom-up

@@ -19,31 +19,31 @@ SECONDS=0
 RANDOM=42
 
 # Timeout for single invocations
-TIMEOUT=15s
+TIMEOUT=180s
 
 # Maximum number of timeouts allowed per planner configuration.  If this value is reached, the configuration is skipped.
 MAX_TIMEOUTS_PER_CONFIG=1
 
 # Number of repetitions per query
 # Used in the querygen, need more investigation
-QUERY_REPEAT_COUNT=10
+QUERY_REPEAT_COUNT=1
 
 
 HANWEN_MAKE_FOLDER=cmake-build-debug
 BIN=cmake-build-debug/bin/shell
 CSV=planner-benchmark.csv
 CORRELATED=1
-MIN_RELATIONS=3
+MIN_RELATIONS=10
 
 # outside large loop execution time
-REPETITIONS_PER_NUM_RELATIONS=10
+REPETITIONS_PER_NUM_RELATIONS=1
 
 MIN_CARDINALITY=10
 MAX_CARDINALITY=10000
 
 # Associative array mapping topologies to their max. number of relations tested
 declare -A TOPOLOGIES=(
-#    [chain]=50
+#    [chain]=30
 #    [cycle]=50
 #    [star]=28
     [clique]=10
@@ -52,10 +52,14 @@ declare -A TOPOLOGIES=(
 ORDERED_PLANNERS=(
     ###### HANWEN Manuelly Test #####
 #    "DPccp"
+#    "IKKBZ"
 #    "BU-IDDFS-zero"
-#    "BU-A*-zero"
+    "BU-BIDIRECTIONAL-zero"
 
+    "BU-A*-zero"
 #    "BU-A*-sum"
+#    "BU-beam-zero"
+#    "BU-beam-sum"
 #    "BU-A*-sqrt_sum"
 #    "BU-A*-scaled_sum"
 #
@@ -64,45 +68,45 @@ ORDERED_PLANNERS=(
 #    "TD-A*-scaled_sum"
 
 
-    ###### Traditional Planners #####
-    "DPsub"
-    "DPccp"
-    "TDMinCutAGaT"
-    "IKKBZ"
-    "linDP"
-    "GOO"
-    ##### Heuristic Search #####
-    # BottomUp
-    ## A*
-    "BU-A*-zero"
-    "BU-A*-avg_sel"
-    "BU-A*-GOO"
-    "BU-A*-sum"
-    "BU-A*-sqrt_sum"
-    "BU-A*-scaled_sum"
-    ## beam
-    "BU-beam-zero"
-    "BU-beam-avg_sel"
-    "BU-beam-GOO"
-    ## relative beam
-    "BU-rel_beam-zero"
-    # TopDown
-    ## A*
-    "TD-A*-zero"
-    "TD-A*-sum"
-    "TD-A*-GOO"
-    ## beam
-    "TD-beam-zero"
-    "TD-beam-sum"
-    "TD-beam-GOO"
-    ## relative beam
-    "TD-rel_beam-zero"
+#    ###### Traditional Planners #####
+#    "DPsub"
+#    "DPccp"
+#    "TDMinCutAGaT"
+#    "IKKBZ"
+#    "linDP"
+#    "GOO"
+#    ##### Heuristic Search #####
+#    # BottomUp
+#    ## A*
+#    "BU-A*-zero"
+#    "BU-A*-avg_sel"
+#    "BU-A*-GOO"
+#    "BU-A*-sum"
+#    "BU-A*-sqrt_sum"
+#    "BU-A*-scaled_sum"
+#    ## beam
+#    "BU-beam-zero"
+#    "BU-beam-avg_sel"
+#    "BU-beam-GOO"
+#    ## relative beam
+#    "BU-rel_beam-zero"
+#    # TopDown
+#    ## A*
+#    "TD-A*-zero"
+#    "TD-A*-sum"
+#    "TD-A*-GOO"
+#    ## beam
+#    "TD-beam-zero"
+#    "TD-beam-sum"
+#    "TD-beam-GOO"
+#    ## relative beam
+#    "TD-rel_beam-zero"
 )
 
 declare -A TOPOLOGY_STEPS=(
-#    [chain]=3
-#    [cycle]=3
-#    [star]=2
+    [chain]=3
+    [cycle]=3
+    [star]=2
     [clique]=1
 )
 

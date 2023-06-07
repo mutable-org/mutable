@@ -718,6 +718,10 @@ const State & genericAStar<State, Expand, Heuristic, Weight, BeamWidth, Lazy, Is
     throw std::logic_error("goal state unreachable from provided initial state");
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////hanwenSearch -> IDDFS, currently not in use////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////
+
 template<
         heuristic_search_state State,
         typename Expand,
@@ -896,7 +900,157 @@ double hanwenSearch<State, Expand, Heuristic, IsIDDFS, Config, Context...>::id_s
     return min;
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////biDirectionSearch -> TopDown & BottomUp////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////
 
+template<
+        heuristic_search_state State,
+        typename Expand,
+        typename Heuristic,
+        bool IsIDDFS,
+        typename Config,
+        typename... Context
+>
+requires heuristic_search_heuristic<Heuristic, Context...>
+struct biDirectionalSearch
+{
+    using state_type = State;
+    using expand_type = Expand;
+    using heuristic_type = Heuristic;
+
+    const double INF = std::numeric_limits<double>::max();
+
+    using callback_t = std::function<void(state_type, double)>;
+
+private:
+#if 1
+#define DEF_COUNTER(NAME) \
+std::size_t num_##NAME##_ = 0; \
+void inc_##NAME() { ++num_##NAME##_; } \
+std::size_t num_##NAME() const { return num_##NAME##_; }
+#else
+    #define DEF_COUNTER(NAME) \
+void inc_##NAME() { } \
+std::size_t num_##NAME() const { return 0; }
+#endif
+
+    DEF_COUNTER(cached_heuristic_value)
+
+#undef DEF_COUNTER
+
+    // decide the core details in queue
+    StateManager</* State=           */ State,
+            /* HasRegularQueue= */ true,
+            /* HasBeamQueue=    */ false,
+            /* Config=          */ Config,
+            /* Context...=      */ Context...
+    > state_manager_;
+
+
+public:
+    explicit biDirectionalSearch(Context&... context)
+            : state_manager_(context...)
+    {}
+
+    biDirectionalSearch(const biDirectionalSearch&) = delete;
+    biDirectionalSearch(biDirectionalSearch&&) = default;
+
+    biDirectionalSearch & operator=(biDirectionalSearch&&) = default;
+
+    /** Search for a path from the given `initial_state` to a goal state.  Uses the given heuristic to guide the search.
+     *
+     * @return the cost of the computed path from `initial_state` to a goal state
+     */
+    const State &search(state_type initial_state, expand_type expand, heuristic_type &heuristic, Context &... context);
+
+    /** Resets the state of the search. */
+    void clear() {
+        state_manager_.clear();
+    }
+
+private:
+    /*------------------------------------------------------------------------------------------------------------------
+     * Helper methods
+     *----------------------------------------------------------------------------------------------------------------*/
+
+    template<typename T>
+    using has_mark = decltype(std::declval<T>().mark(Subproblem()));
+
+
+    void bidirectional_for_each_successor(callback_t &&callback, const state_type &state, heuristic_type &heuristic,
+                                   expand_type &expand, Context &... context) {
+        expand(state, [this, callback=std::move(callback), &heuristic, &context...](state_type successor) {
+            if (auto it = state_manager_.find(successor, context...);it == state_manager_.end(successor, context...)) {
+                const double h = heuristic(successor, context...);
+                callback(std::move(successor), h);
+            } else {
+                inc_cached_heuristic_value();
+                callback(std::move(successor), it->second.h);
+            }
+        }, context...);
+    }
+
+    void explore_state(const state_type &state, heuristic_type &heuristic, expand_type &expand, Context&... context) {
+        bidirectional_for_each_successor([this, &context...](state_type successor, double h) {
+            state_manager_.push_regular_queue(std::move(successor), h, context...);
+        }, state, heuristic, expand, context...);
+    }
+
+    std::vector<State> hanwen_path;
+    const double NOT_FOUND = -1;  // Value to indicate goal not found
+    const double FOUND = std::numeric_limits<int>::max();  // Unique value to indicate goal found
+
+public:
+    friend std::ostream & operator<<(std::ostream &out, const biDirectionalSearch &AStar) {
+        return out << AStar.state_manager_ << ", used cached heuristic value " << AStar.num_cached_heuristic_value()
+                   << " times";
+    }
+
+    void dump(std::ostream &out) const { out << *this << std::endl; }
+    void dump() const { dump(std::cerr); }
+
+
+};
+
+template<
+        heuristic_search_state State,
+        typename Expand,
+        typename Heuristic,
+        bool IsIDDFS,
+        typename Config,
+        typename... Context
+>
+requires heuristic_search_heuristic<Heuristic, Context...>
+const State &biDirectionalSearch<State, Expand, Heuristic, IsIDDFS, Config, Context...>::search(
+        state_type initial_state,
+        expand_type expand,
+        heuristic_type &heuristic,
+        Context &... context
+) {
+    state_manager_.template push<false>(std::move(initial_state), 0, context...);
+    while (not state_manager_.queues_empty()) {
+        auto top = state_manager_.pop();
+        const state_type &state = top.first;
+
+        if (expand.is_goal(state, context...))
+            return state;
+        explore_state(state, heuristic, expand, context...);
+    }
+    throw std::logic_error("goal state unreachable from provided initial state");
+}
+/////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////Definition -> Heuristic Algorithm//////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////
+
+template<
+        heuristic_search_state State,
+        typename Expand,
+        typename Heuristic,
+        typename Config,
+        typename... Context
+>
+using BIDIRECTIONAL = biDirectionalSearch<State, Expand, Heuristic, true, Config, Context...>;
 
 template<
     heuristic_search_state State,

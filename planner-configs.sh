@@ -8,6 +8,7 @@ declare -A PLANNER_CONFIGS=(
     [GOO]="--plan-enumerator GOO"
     ##### Heuristic Search #####
     # BottomUp
+    [BU-BIDIRECTIONAL-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search BIDIRECTIONAL"
     ## IDDFS
     [BU-IDDFS-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search IDDFS"
 

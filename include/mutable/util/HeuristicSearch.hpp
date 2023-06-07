@@ -917,8 +917,6 @@ struct cleanAStarSearch
     using expand_type = Expand;
     using heuristic_type = Heuristic;
 
-    const double INF = std::numeric_limits<double>::max();
-
     using callback_t = std::function<void(state_type, double)>;
 
 private:
@@ -995,9 +993,6 @@ private:
         }, state, heuristic, expand, context...);
     }
 
-    const double NOT_FOUND = -1;  // Value to indicate goal not found
-    const double FOUND = std::numeric_limits<int>::max();  // Unique value to indicate goal found
-
 public:
     friend std::ostream & operator<<(std::ostream &out, const cleanAStarSearch &AStar) {
         return out << AStar.state_manager_ << ", used cached heuristic value " << AStar.num_cached_heuristic_value()
@@ -1043,7 +1038,6 @@ template<
         heuristic_search_state State,
         typename Expand,
         typename Heuristic,
-        bool IsIDDFS,
         typename Config,
         typename... Context
 >
@@ -1053,8 +1047,6 @@ struct biDirectionalSearch
     using state_type = State;
     using expand_type = Expand;
     using heuristic_type = Heuristic;
-
-    const double INF = std::numeric_limits<double>::max();
 
     using callback_t = std::function<void(state_type, double)>;
 
@@ -1132,9 +1124,6 @@ private:
         }, state, heuristic, expand, context...);
     }
 
-    std::vector<State> hanwen_path;
-    const double NOT_FOUND = -1;  // Value to indicate goal not found
-    const double FOUND = std::numeric_limits<int>::max();  // Unique value to indicate goal found
 
 public:
     friend std::ostream & operator<<(std::ostream &out, const biDirectionalSearch &AStar) {
@@ -1152,12 +1141,11 @@ template<
         heuristic_search_state State,
         typename Expand,
         typename Heuristic,
-        bool IsIDDFS,
         typename Config,
         typename... Context
 >
 requires heuristic_search_heuristic<Heuristic, Context...>
-const State &biDirectionalSearch<State, Expand, Heuristic, IsIDDFS, Config, Context...>::search(
+const State &biDirectionalSearch<State, Expand, Heuristic, Config, Context...>::search(
         state_type initial_state,
         expand_type expand,
         heuristic_type &heuristic,

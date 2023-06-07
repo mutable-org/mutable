@@ -1036,6 +1036,349 @@ const State &cleanAStarSearch<State, Expand, Heuristic, Config, Context...>::sea
 
 template<
         heuristic_search_state State,
+        bool HasRegularQueue,
+        bool HasBeamQueue,
+        typename Config,
+        typename... Context
+>
+struct BiDirectionStateManager
+{
+    static_assert(HasRegularQueue or HasBeamQueue, "must have at least one kind of queue");
+
+    using state_type = State;
+    static constexpr bool has_regular_queue = HasRegularQueue;
+    static constexpr bool has_beam_queue = HasBeamQueue;
+
+    static constexpr bool detect_duplicates = true;
+
+private:
+    ///> type for a pointer to an entry in the map of states
+    using pointer_type = void*;
+    ///> comparator for map entries based on states' *g + h* value
+    struct comparator { bool operator()(pointer_type p_left, pointer_type p_right) const; };
+    ///> the type of heap to implement the priority queues
+    using heap_type = typename Config::template heap_type<pointer_type, typename Config::template compare<comparator>>;
+
+    /*----- Counters -------------------------------------------------------------------------------------------------*/
+#ifndef NDEBUG
+#define DEF_COUNTER(NAME) \
+std::size_t num_##NAME##_ = 0; \
+void inc_##NAME() { ++num_##NAME##_; } \
+std::size_t num_##NAME() const { return num_##NAME##_; }
+#else
+    #define DEF_COUNTER(NAME) \
+void inc_##NAME() { } \
+std::size_t num_##NAME() const { return 0; }
+#endif
+
+    DEF_COUNTER(new)
+    DEF_COUNTER(duplicates)
+    DEF_COUNTER(regular_to_beam)
+    DEF_COUNTER(none_to_beam)
+    DEF_COUNTER(discarded)
+    DEF_COUNTER(cheaper)
+    DEF_COUNTER(decrease_key)
+
+#undef DEF_COUNTER
+
+    ///> information attached to each state
+    struct StateInfo
+    {
+        ///> heuristic value of the state
+        double h;
+        ///> the heap in which the state is currently present; may be `nullptr`
+        heap_type *queue;
+        ///> handle to the state's node in a heap
+        typename heap_type::handle_type handle;
+
+        StateInfo() = delete;
+        StateInfo(double h, heap_type *queue) : h(h), queue(queue) { }
+        StateInfo(const StateInfo&) = delete;
+        StateInfo(StateInfo&&) = default;
+        StateInfo & operator=(StateInfo&&) = default;
+    };
+
+    using map_value_type = std::pair<const state_type, StateInfo>;
+    using map_type = std::unordered_map<
+            /* Key=       */ state_type,
+            /* Mapped=    */ StateInfo,
+            /* Hash=      */ std::hash<state_type>,
+            /* KeyEqual=  */ std::equal_to<state_type>,
+            /* Allocator= */ typename Config::template allocator_type<map_value_type>
+    >;
+
+    /*----- Helper type to manage potentially partitioned states. ----------------------------------------------------*/
+    template<bool Partition>
+    struct Partitions;
+
+    template<>
+    struct Partitions<true>
+    {
+        std::vector<map_type> partitions_;
+
+        Partitions(Context&... context) : partitions_(state_type::num_partitions(context...)) { }
+        Partitions(const Partitions&) = delete;
+        Partitions(Partitions&&) = default;
+
+        ~Partitions() {
+            if (Options::Get().statistics) {
+                std::cout << partitions_.size() << " partitions:";
+                for (auto &P : partitions_)
+                    std::cout << "\n  " << P.size();
+                std::cout << std::endl;
+            }
+        }
+
+        map_type & operator()(const state_type &state, Context&... context) {
+            M_insist(state.partition_id(context...) < partitions_.size(), "index out of bounds");
+            return partitions_[state.partition_id(context...)];
+        }
+        const map_type & operator()(const state_type &state, Context&... context) const {
+            M_insist(state.partition_id(context...) < partitions_.size(), "index out of bounds");
+            return partitions_[state.partition_id(context...)];
+        }
+
+        std::size_t size() const {
+            std::size_t n = 0;
+            for (auto &P : partitions_)
+                n += P.size();
+            return n;
+        }
+
+        void clear() {
+            for (auto &P : partitions_)
+                P.clear();
+        }
+    };
+
+    template<>
+    struct Partitions<false>
+    {
+        map_type states_;
+
+        Partitions(Context&...) { }
+        Partitions(const Partitions&) = delete;
+        Partitions(Partitions&&) = default;
+
+        map_type & operator()(const state_type&, Context&...) { return states_; }
+        const map_type & operator()(const state_type&, Context&...) const { return states_; }
+
+        std::size_t size() const { return states_.size(); }
+
+        void clear() { states_.clear(); }
+    };
+
+    ///> map of all states ever explored, mapping state to its info; partitioned by state partition id
+    Partitions<supports_partitioning<State, Context...>> partitions_;
+
+    ///> map of all states ever explored, mapping state to its info
+    // map_type states_;
+
+    heap_type regular_queue_;
+    heap_type beam_queue_;
+
+public:
+    BiDirectionStateManager(Context&... context) : partitions_(context...) { }
+    BiDirectionStateManager(const BiDirectionStateManager&) = delete;
+    BiDirectionStateManager(BiDirectionStateManager&&) = default;
+    BiDirectionStateManager & operator=(BiDirectionStateManager&&) = default;
+
+    template<bool ToBeamQueue>
+    void push(state_type state, double h, Context&... context) {
+        static_assert(not ToBeamQueue or HasBeamQueue, "ToBeamQueue implies HasBeamQueue");
+        static_assert(ToBeamQueue or HasRegularQueue, "not ToBeamQueue implies HasRegularQueue");
+
+        auto &Q = ToBeamQueue ? beam_queue_ : regular_queue_;
+        auto &P = partition(state, context...);
+
+        if constexpr (detect_duplicates) {
+            if (auto it = P.find(state); it == P.end()) [[likely]] {
+                /*----- Entirely new state, never seen before. -----*/
+                it = P.emplace_hint(it, std::move(state), StateInfo(h, &Q));
+                /*----- Enqueue state, obtain handle, and add to `StateInfo`. -----*/
+                it->second.handle = Q.push(&*it);
+                inc_new();
+            } else {
+                /*----- Duplicate, seen before. -----*/
+                M_insist(it->second.h == h, "must not have a different heuristic value for the same state");
+                inc_duplicates();
+
+                if (ToBeamQueue and it->second.queue == &regular_queue_) {
+                    /*----- The state is in the regular queue and needs to be moved to the beam queue. -----*/
+                    if constexpr (HasRegularQueue)
+                        it->second.queue->erase(it->second.handle); // erase from regular queue
+                    if (state.g() < it->first.g())
+                        it->first.decrease_g(state.parent(), state.g()); // update *g* value
+                    it->second.handle = beam_queue_.push(&*it); // add to beam queue and update handle
+                    it->second.queue = &beam_queue_; // update queue
+                    if constexpr (HasRegularQueue)
+                        inc_regular_to_beam();
+                    else
+                        inc_none_to_beam();
+                } else if (state.g() >= it->first.g()) [[likely]] {
+                    /*----- The state wasn't reached on a cheaper path and hence cannot produce better solutions. -----*/
+                    inc_discarded();
+                    return; // XXX is it safe to not add the state to any queue?
+                } else {
+                    /*----- The state was reached on a cheaper path.  We must reconsider the state. -----*/
+                    M_insist(state.g() < it->first.g(), "the state was reached on a cheaper path");
+                    inc_cheaper();
+                    it->first.decrease_g(state.parent(), state.g()); // decrease value of *g*
+                    if (it->second.queue == nullptr) {
+                        /*----- The state is currently not present in a queue. -----*/
+                        it->second.handle = Q.push(&*it); // add to dedicated queue and update handle
+                        it->second.queue = &Q; // update queue
+                    } else {
+                        /*----- Update the state's entry in the queue. -----*/
+                        M_insist(it->second.queue == &Q, "the state must already be in its destinated queue");
+                        Q.increase(it->second.handle); // we need to *increase* because the heap is a max-heap
+                        inc_decrease_key();
+                    }
+                }
+            }
+        } else {
+            const auto new_g = state.g();
+            auto [it, res] = P.try_emplace(std::move(state), StateInfo(h, &Q));
+            Q.push(&*it);
+            if (res) {
+                inc_new();
+            } else {
+                inc_duplicates();
+                if (new_g < it->first.g())
+                    inc_cheaper();
+            }
+        }
+    }
+
+    void push_regular_queue(state_type state, double h, Context&... context) {
+        if constexpr (detect_duplicates) {
+            if constexpr (HasRegularQueue) {
+                push<false>(std::move(state), h, context...);
+            } else {
+                auto &P = partition(state, context...);
+                /*----- There is no regular queue.  Only update the state's mapping. -----*/
+                if (auto it = P.find(state); it == P.end()) {
+                    /*----- This is a new state.  Simply create a new entry. -----*/
+                    it = P.emplace_hint(it, std::move(state), StateInfo(h, &regular_queue_));
+                    inc_new();
+                    /* We must not add the state to the regular queue, but we must remember that the state can still be
+                     * "moved" to the beam queue. */
+                } else {
+                    /*----- This is a duplicate state.  Check whether it has lower cost *g*. -----*/
+                    M_insist(it->second.h == h, "must not have a different heuristic value for the same state");
+                    inc_duplicates();
+                    if (state.g() < it->first.g()) {
+                        inc_cheaper();
+                        it->first.decrease_g(state.parent(), state.g());
+                        if (it->second.queue == &beam_queue_) { // if state is currently in a queue
+                            it->second.queue->increase(it->second.handle); // *increase* because max-heap
+                            inc_decrease_key();
+                        }
+                    } else {
+                        inc_discarded();
+                    }
+                }
+            }
+        } else {
+            push<not HasRegularQueue>(std::move(state), h, context...);
+        }
+    }
+
+    void push_beam_queue(state_type state, double h, Context&... context) {
+        push<true>(std::move(state), h, context...);
+    }
+
+    bool is_regular_queue_empty() const { return not HasRegularQueue or regular_queue_.empty(); }
+    bool is_beam_queue_empty() const { return not HasBeamQueue or beam_queue_.empty(); }
+    bool queues_empty() const { return is_regular_queue_empty() and is_beam_queue_empty(); }
+
+    std::pair<const state_type&, double> pop() {
+        M_insist(not queues_empty());
+        pointer_type ptr = nullptr;
+        if (HasBeamQueue and not beam_queue_.empty()) {
+            ptr = beam_queue_.top();
+            beam_queue_.pop();
+        } else if (HasRegularQueue and not regular_queue_.empty()) {
+            ptr = regular_queue_.top();
+            regular_queue_.pop();
+        }
+        M_insist(ptr, "ptr must have been set, the queues must not have been empty");
+
+        auto &entry = *static_cast<typename map_type::value_type*>(ptr);
+        entry.second.queue = nullptr; // remove from queue
+        return { entry.first, entry.second.h };
+    }
+
+    typename map_type::iterator find(const state_type &state, Context&... context) {
+        return partition(state, context...).find(state);
+    }
+    typename map_type::iterator end(const state_type &state, Context&... context) {
+        return partition(state, context...).end();
+    }
+    typename map_type::const_iterator find(const state_type &state, Context&... context) const {
+        return partition(state, context...).find(state);
+    }
+    typename map_type::const_iterator end(const state_type &state, Context&... context) const {
+        return partition(state, context...).end();
+    }
+
+    void clear() {
+        if constexpr (HasRegularQueue)
+            regular_queue_.clear();
+        if constexpr (HasBeamQueue)
+            beam_queue_.clear();
+        // states_.clear();
+        partitions_.clear();
+    }
+
+    void print_counters(std::ostream &out) const {
+#define X(NAME) num_##NAME() << " " #NAME
+        out << X(new) ", " << X(duplicates) ", ";
+        if (HasRegularQueue and HasBeamQueue)
+            out << X(regular_to_beam) ", ";
+        if (HasBeamQueue)
+            out << X(none_to_beam) ", ";
+        out << X(discarded) ", " << X(cheaper) ", " << X(decrease_key);
+#undef X
+    }
+
+    map_type & partition(const state_type &state, Context&... context) { return partitions_(state, context...); }
+    const map_type & partition(const state_type &state, Context&... context) const {
+        return partitions_(state, context...);
+    }
+
+    friend std::ostream & operator<<(std::ostream &out, const BiDirectionStateManager &SM) {
+#ifndef NDEBUG
+        SM.print_counters(out);
+        out << ", ";
+#endif
+        out << SM.partitions_.size() << " seen, " << SM.regular_queue_.size() << " currently in regular queue, "
+            << SM.beam_queue_.size() << " currently in beam queue";
+        return out;
+    }
+
+    void dump(std::ostream &out) const { out << *this << std::endl; }
+    void dump() const { dump(std::cerr); }
+};
+
+template<
+        heuristic_search_state State,
+        bool HasRegularQueue,
+        bool HasBeamQueue,
+        typename Config,
+        typename... Context
+>
+bool BiDirectionStateManager<State, HasRegularQueue, HasBeamQueue, Config, Context...>::comparator::
+operator()(BiDirectionStateManager::pointer_type p_left, BiDirectionStateManager::pointer_type p_right) const
+{
+    auto left  = static_cast<typename map_type::value_type*>(p_left);
+    auto right = static_cast<typename map_type::value_type*>(p_right);
+    /* Compare greater than (`operator >`) to turn max-heap into min-heap. */
+    return left->first.g() + left->second.h > right->first.g() + right->second.h;
+}
+
+template<
+        heuristic_search_state State,
         typename Expand,
         typename Heuristic,
         typename Config,
@@ -1067,7 +1410,7 @@ std::size_t num_##NAME() const { return 0; }
 #undef DEF_COUNTER
 
     // decide the core details in queue
-    StateManager</* State=           */ State,
+    BiDirectionStateManager</* State=           */ State,
             /* HasRegularQueue= */ true,
             /* HasBeamQueue=    */ false,
             /* Config=          */ Config,

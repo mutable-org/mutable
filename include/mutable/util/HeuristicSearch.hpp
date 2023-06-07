@@ -1181,7 +1181,7 @@ template<
         typename Config,
         typename... Context
 >
-using BIDIRECTIONAL = biDirectionalSearch<State, Expand, Heuristic, true, Config, Context...>;
+using BIDIRECTIONAL = biDirectionalSearch<State, Expand, Heuristic, Config, Context...>;
 
 template<
     heuristic_search_state State,

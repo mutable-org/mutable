@@ -2848,7 +2848,7 @@ I32 m::wasm::compare(const Environment &env_left, const Environment &env_right,
                     auto [cmp_val, cmp_is_null] = _cmp_val.split();
                     cmp_is_null.discard();
                     I32 cmp = (cmp_null << 1) + cmp_val; // potentially-null value of comparison is overruled by cmp_null
-                    result <<= 1; // shift result s.t. first difference will determine order
+                    result <<= 2; // shift result s.t. first difference will determine order
                     result += cmp; // add current comparison to result
                 } else {
                     using type = std::conditional_t<std::is_same_v<T, bool>, I32, PrimitiveExpr<T>>;
@@ -2888,7 +2888,7 @@ I32 m::wasm::compare(const Environment &env_left, const Environment &env_right,
                     auto [cmp_val, cmp_is_null] = signum(_delta).split();
                     cmp_is_null.discard();
                     I32 cmp = (cmp_null << 1) + cmp_val; // potentially-null value of comparison is overruled by cmp_null
-                    result <<= 1; // shift result s.t. first difference will determine order
+                    result <<= 2; // shift result s.t. first difference will determine order
                     result += cmp; // add current comparison to result
                 } else {
                     /*----- Compare both with current order expression and update result. -----*/

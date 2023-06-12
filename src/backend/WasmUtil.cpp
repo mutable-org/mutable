@@ -2885,16 +2885,20 @@ I32 m::wasm::compare(const Environment &env_left, const Environment &env_right,
                     /*----- Compare both with current order expression and update result. -----*/
                     I32 cmp_null = right.is_null().to<int32_t>() - left.is_null().to<int32_t>();
                     _I32 _delta = o.second ? strcmp(left, right) : strcmp(right, left);
-                    auto [cmp_val, cmp_is_null] = signum(_delta).split();
-                    cmp_is_null.discard();
-                    I32 cmp = (cmp_null << 1) + cmp_val; // potentially-null value of comparison is overruled by cmp_null
+                    auto [delta_val, delta_is_null] = _delta.split();
+                    Wasm_insist(delta_val.clone() >= -1 and delta_val.clone() <= 1,
+                                "result of strcmp is assumed to be in [-1,1]");
+                    delta_is_null.discard();
+                    I32 cmp = (cmp_null << 1) + delta_val; // potentially-null value of comparison is overruled by cmp_null
                     result <<= 2; // shift result s.t. first difference will determine order
                     result += cmp; // add current comparison to result
                 } else {
                     /*----- Compare both with current order expression and update result. -----*/
                     I32 delta = o.second ? strcmp(left, right).insist_not_null() : strcmp(right, left).insist_not_null();
+                    Wasm_insist(delta.clone() >= -1 and delta.clone() <= 1,
+                                "result of strcmp is assumed to be in [-1,1]");
                     result <<= 1; // shift result s.t. first difference will determine order
-                    result += signum(delta); // add current comparison to result
+                    result += delta; // add current comparison to result
                 }
             },
             [](std::monostate) -> void { M_unreachable("invalid expression"); }

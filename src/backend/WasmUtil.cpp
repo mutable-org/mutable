@@ -2883,7 +2883,7 @@ I32 m::wasm::compare(const Environment &env_left, const Environment &env_right,
                          "either both or none of the value to compare must be nullable");
                 if (val_left.can_be_null()) {
                     /*----- Compare both with current order expression and update result. -----*/
-                    I32 cmp_null = right.is_null().to<int32_t>() - left.is_null().to<int32_t>();
+                    I32 cmp_null = _right.is_null().to<int32_t>() - _left.is_null().to<int32_t>();
                     _I32 _delta = o.second ? strcmp(left, right) : strcmp(right, left);
                     auto [delta_val, delta_is_null] = _delta.split();
                     Wasm_insist(delta_val.clone() >= -1 and delta_val.clone() <= 1,

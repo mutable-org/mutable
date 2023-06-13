@@ -1545,11 +1545,24 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace(std:
         update_high_watermark();
     };
 
-    return emplace_without_rehashing(std::move(key));
+    auto slot = emplace_without_rehashing(std::move(key));
+
+    if constexpr (ValueInPlace) {
+        /*----- Return entry handle containing all values. -----*/
+        return value_entry(slot);
+    } else {
+        /*----- Allocate memory for out-of-place values and set pointer to it. -----*/
+        Ptr<void> ptr =
+            Module::Allocator().allocate(layout_.values_size_in_bytes_, layout_.values_max_alignment_in_bytes_);
+        *(slot + layout_.ptr_offset_in_bytes_).template to<uint32_t*>() = ptr.clone().to<uint32_t>();
+
+        /*----- Return entry handle containing all values. -----*/
+        return value_entry(ptr);
+    }
 }
 
 template<bool IsGlobal, bool ValueInPlace>
-HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace_without_rehashing(std::vector<SQL_t> key)
+Ptr<void> OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace_without_rehashing(std::vector<SQL_t> key)
 {
     M_insist(bool(num_entries_), "must call `setup()` before");
     M_insist(bool(high_watermark_absolute_), "must call `setup()` before");
@@ -1600,25 +1613,7 @@ HashTable::entry_t OpenAddressingHashTable<IsGlobal, ValueInPlace>::emplace_with
     /*----- Insert key. -----*/
     insert_key(slot, std::move(key)); // move key at last use
 
-    if constexpr (ValueInPlace) {
-        /*----- Return entry handle containing all values. -----*/
-        return value_entry(slot);
-    } else {
-        /*----- Allocate memory for out-of-place values and set pointer to it. -----*/
-        Ptr<void> ptr =
-            Module::Allocator().allocate(layout_.values_size_in_bytes_, layout_.values_max_alignment_in_bytes_);
-        *(slot + layout_.ptr_offset_in_bytes_).template to<uint32_t*>() = ptr.clone().to<uint32_t>();
-
-        if (pred) {
-            /*----- Store address and size of dummy predication entry to free them later. -----*/
-            var_t<Ptr<void>> ptr_; // create global variable iff `IsGlobal` to be able to access it later for deallocation
-            ptr_ = ptr.clone();
-            dummy_allocations_.emplace_back(ptr_, layout_.values_size_in_bytes_);
-        }
-
-        /*----- Return entry handle containing all values. -----*/
-        return value_entry(ptr);
-    }
+    return slot;
 }
 
 template<bool IsGlobal, bool ValueInPlace>
@@ -2173,18 +2168,27 @@ void OpenAddressingHashTable<IsGlobal, ValueInPlace>::rehash()
                 }
 
                 /*----- Insert key into new hash table. No rehashing needed since the new hash table is large enough. */
-                auto e_new = emplace_without_rehashing(std::move(key));
+                auto slot = emplace_without_rehashing(std::move(key));
 
-                /*----- Insert values from old entry into new one. -----*/
-                for (auto v : value_indices_) {
-                    auto id = schema_.get()[v].id;
-                    std::visit(overloaded {
-                        [&]<sql_type T>(reference_t<T> &&r) -> void { r = e_old.template extract<T>(id); },
-                        [](std::monostate) -> void { M_unreachable("invalid reference"); },
-                    }, e_new.extract(id));
+                if constexpr (ValueInPlace) {
+                    /*----- Get entry handle containing all values of new entry. -----*/
+                    auto e_new = value_entry(slot);
+
+                    /*----- Insert values from old entry into new one. -----*/
+                    for (auto v : value_indices_) {
+                        auto id = schema_.get()[v].id;
+                        std::visit(overloaded {
+                            [&]<sql_type T>(reference_t<T> &&r) -> void { r = e_old.template extract<T>(id); },
+                            [](std::monostate) -> void { M_unreachable("invalid reference"); },
+                        }, e_new.extract(id));
+                    }
+                    M_insist(e_old.empty());
+                    M_insist(e_new.empty());
+                } else {
+                    /*----- Set pointer to out-of-place values of new entry to the one of old entry. -----*/
+                    *(slot + layout_.ptr_offset_in_bytes_).template to<uint32_t*>() =
+                        *(it + layout_.ptr_offset_in_bytes_).template to<uint32_t*>();
                 }
-                M_insist(e_old.empty());
-                M_insist(e_new.empty());
             };
 
             /*----- Advance to next entry in old hash table. -----*/

@@ -927,10 +927,10 @@ struct OpenAddressingHashTable : OpenAddressingHashTableBase
 
     private:
     /** Inserts an entry into the hash table with key \p key regardless whether it already exists, i.e. duplicates
-     * are allowed.  Returns a handle to the newly inserted entry which may be used to write the values for this
-     * entry.  No rehashing of the hash table must be performed, i.e. the hash table must have at least
+     * are allowed.  Returns a pointer to the newly inserted slot without allocating any space for possible
+     * out-of-place values.  No rehashing of the hash table must be performed, i.e. the hash table must have at least
      * one free entry slot. */
-    entry_t emplace_without_rehashing(std::vector<SQL_t> key);
+    Ptr<void> emplace_without_rehashing(std::vector<SQL_t> key);
 
     /** Compares the key of the slot at address \p slot with \p key and returns `true` iff they are equal. */
     Bool equal_key(Ptr<void> slot, std::vector<SQL_t> key) const;

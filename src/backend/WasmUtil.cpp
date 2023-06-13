@@ -2082,6 +2082,7 @@ void Buffer<IsGlobal>::teardown()
     M_insist(bool(base_address_), "must call `setup()` before");
     M_insist(bool(size_), "must call `setup()` before");
     M_insist(not layout_.is_finite() == bool(capacity_), "must call `setup()` before");
+    M_insist(not layout_.is_finite() == bool(first_iteration_), "must call `setup()` before");
 
     if constexpr (not IsGlobal) { // free memory of local buffer when user calls teardown method
         if (not layout_.is_finite()) {

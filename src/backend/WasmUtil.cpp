@@ -2538,7 +2538,7 @@ _I32 m::wasm::strcmp(NChar left, NChar right)
 {
     /* Delegate to `strncmp` with length set to minimum of both string lengths **plus** 1 since we need to check if
      * one string is a prefix of the other, i.e. all of its characters are equal but it is shorter than the other. */
-    U32 len(std::min<uint32_t>(left.length(), left.length()) + 1U);
+    U32 len(std::min<uint32_t>(left.length(), right.length()) + 1U);
     return strncmp(left, right, len);
 }
 

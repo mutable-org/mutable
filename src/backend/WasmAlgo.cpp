@@ -53,12 +53,25 @@ void m::wasm::quicksort(Buffer<IsGlobal> &buffer, const std::vector<SortingOpera
             /*----- Swap entire begin and last tuples. -----*/
             swap(begin, last, env_begin, env_last);
             /* Note that environments are now also swapped, i.e. `env_begin` contains still the values of the former
-             * begin tuple which is now located at ID `last` and vice versa. Thus, use `env_begin` to access the last
-             * tuple and use `env_last` to use the begin tuple in the following. */
+             * begin tuple which is now located at ID `last` and vice versa, except for `NChar`s since they are only
+             * pointers to the actual values, i.e. `env_begin` contains still the addresses of the former begin tuple
+             * where now the values of the last tuple are stored and vice versa. */
+
+            /*----- Adapt environments to match their previous meanings before swapping tuples. -----*/
+            for (auto &e : buffer.schema()) {
+                M_insist(env_begin.template is<NChar>(e.id) == env_last.template is<NChar>(e.id),
+                        "either both or none of the entries must be `NChar`s");
+                if (not env_begin.template is<NChar>(e.id)) {
+                    /* Swap entry in environments. */
+                    auto tmp = env_begin.extract(e.id);
+                    env_begin.add(e.id, env_last.extract(e.id));
+                    env_last.add(e.id, std::move(tmp));
+                }
+            }
 
             /*----- Compare begin and last tuples to pivot element and advance cursors respectively. -----*/
-            Bool begin_le_pivot = compare(env_last, env_pivot, order) <= 0;
-            Bool last_ge_pivot  = compare(env_begin, env_pivot, order) >= 0;
+            Bool begin_le_pivot = compare(env_begin, env_pivot, order) <= 0;
+            Bool last_ge_pivot  = compare(env_last, env_pivot, order) >= 0;
 
             begin += begin_le_pivot.to<uint32_t>();
             end -= last_ge_pivot.to<uint32_t>();

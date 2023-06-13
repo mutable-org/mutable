@@ -238,8 +238,15 @@ struct Environment
     }
 
     /*----- Access methods -------------------------------------------------------------------------------------------*/
-    /** Returns `true` iff this `Environment` contains `id`. */
+    /** Returns `true` iff this `Environment` contains \p id. */
     bool has(Schema::Identifier id) const { return exprs_.find(id) != exprs_.end(); }
+    /** Returns `true` iff the entry for identifier \p id has `sql_type` \tparam T. */
+    template<sql_type T>
+    bool is(Schema::Identifier id) const {
+        auto it = exprs_.find(id);
+        M_insist(it != exprs_.end(), "identifier not found");
+        return std::holds_alternative<T>(it->second);
+    }
     /** Returns `true` iff this `Environment` is empty. */
     bool empty() const { return exprs_.empty(); }
 
@@ -768,11 +775,16 @@ struct buffer_swap_proxy_t
     void operator()(U32 first, U32 second);
     /** Swaps tuples with IDs \p first and \p second where the first one is already loaded and accessible through
      * \p env_first.  Note that environments are also swapped afterwards, i.e. \p env_first contains still the values
-     * of the former tuple with ID \p first which is located at ID \p second after the call. */
+     * of the former tuple with ID \p first which is located at ID \p second after the call, except for `NChar`s
+     * since they are only pointers to the actual values, i.e. \p env_first contains still the addresses of the
+     * former tuple with ID \p first where the values of tuple with ID \p second are stored after the call. */
     void operator()(U32 first, U32 second, const Environment &env_first);
     /** Swaps tuples with IDs \p first and \p second which are already loaded and accessible through \p env_first and
      * \p env_second.  Note that environments are also swapped afterwards, i.e. \p env_first contains still the values
-     * of the former tuple with ID \p first which is located at ID \p second after the call and vice versa. */
+     * of the former tuple with ID \p first which is located at ID \p second after the call and vice versa, except
+     * for `NChar`s since they are only pointers to the actual values, i.e. \p env_first contains still the addresses
+     * of the former tuple with ID \p first where the values of tuple with ID \p second are stored after the call and
+     * vice versa. */
     void operator()(U32 first, U32 second, const Environment &env_first, const Environment &env_second);
 };
 

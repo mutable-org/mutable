@@ -421,18 +421,22 @@ void Scan::execute(const Match<Scan> &M, setup_t setup, pipeline_t pipeline, tea
     oss << table.name << "_mem";
     Ptr<void> base_address = Module::Get().get_global<void*>(oss.str().c_str());
 
+    /*----- Emit setup code *before* compiling data layout to not overwrite its temporary boolean variables. -----*/
+    setup();
+
     /*----- Compile data layout to generate sequential load from table. -----*/
     auto [inits, loads, jumps] = compile_load_sequential(schema, base_address, table.layout(),
                                                          table.schema(M.scan.alias()), tuple_id);
 
     /*----- Generate the loop for the actual scan, with the pipeline emitted into the loop body. -----*/
-    setup();
     inits.attach_to_current();
     WHILE (tuple_id < num_rows) {
         loads.attach_to_current();
         pipeline();
         jumps.attach_to_current();
     }
+
+    /*----- Emit teardown code. -----*/
     teardown();
 }
 
@@ -1867,6 +1871,9 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pi
         auto S = CodeGenContext::Get().scoped_environment(); // create scoped environment for this function
         auto &env = CodeGenContext::Get().env();
 
+        /*----- Emit setup code *before* possibly introducing temporary boolean variables to not overwrite them. -----*/
+        setup();
+
         /*----- Add computed group tuple to current environment. ----*/
         for (auto &e : M.grouping.schema().deduplicate()) {
             try {
@@ -1913,8 +1920,9 @@ void OrderedGrouping::execute(const Match<OrderedGrouping> &M, setup_t setup, pi
         }
 
         /*----- Resume pipeline. -----*/
-        setup();
         pipeline();
+
+        /*----- Emit teardown code. -----*/
         teardown();
     }
 }
@@ -2427,6 +2435,9 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
     }
     aggregation_child_pipeline(); // call child function
 
+    /*----- Emit setup code *before* possibly introducing temporary boolean variables to not overwrite them. -----*/
+    setup();
+
     /*----- Add computed aggregates tuple to current environment. ----*/
     auto &env = CodeGenContext::Get().env();
     for (auto &e : M.aggregation.schema().deduplicate()) {
@@ -2462,8 +2473,9 @@ void Aggregation::execute(const Match<Aggregation> &M, setup_t setup, pipeline_t
     }
 
     /*----- Resume pipeline. -----*/
-    setup();
     pipeline();
+
+    /*----- Emit teardown code. -----*/
     teardown();
 }
 

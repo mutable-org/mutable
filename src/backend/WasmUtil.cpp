@@ -2136,19 +2136,23 @@ void Buffer<IsGlobal>::resume_pipeline(param_t tuple_schema_)
             Ptr<void> base_address = PARAMETER(0);
             U32 size = PARAMETER(1);
 
+            /*----- Emit setup code *before* compiling data layout to not overwrite its temporary boolean variables. -*/
+            setup_();
+
             /*----- Compile data layout to generate sequential load from buffer. -----*/
             Var<U32> load_tuple_id; // default initialized to 0
             auto [load_inits, loads, load_jumps] =
                 compile_load_sequential(tuple_schema, base_address, layout_, schema_, load_tuple_id);
 
             /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
-            setup_();
             load_inits.attach_to_current();
             WHILE (load_tuple_id < size) {
                 loads.attach_to_current();
                 pipeline_();
                 load_jumps.attach_to_current();
             }
+
+            /*----- Emit teardown code. -----*/
             teardown_();
         }
         resume_pipeline_ = std::move(resume_pipeline);
@@ -2187,19 +2191,23 @@ void Buffer<IsGlobal>::resume_pipeline_inline(param_t tuple_schema_) const
         pred = env.extract_predicate().is_true_and_not_null();
     U32 num_tuples = pred ? Select(*pred, size, 0U) : size;
 
+    /*----- Emit setup code *before* compiling data layout to not overwrite its temporary boolean variables. -----*/
+    setup_();
+
     /*----- Compile data layout to generate sequential load from buffer. -----*/
     Var<U32> load_tuple_id(0); // explicitly (re-)set tuple ID to 0
     auto [load_inits, loads, load_jumps] =
         compile_load_sequential(tuple_schema, base_address, layout_, schema_, load_tuple_id);
 
     /*----- Generate loop for loading entire buffer, with the pipeline emitted into the loop body. -----*/
-    setup_();
     load_inits.attach_to_current();
     WHILE (load_tuple_id < num_tuples) {
         loads.attach_to_current();
         pipeline_();
         load_jumps.attach_to_current();
     }
+
+    /*----- Emit teardown code. -----*/
     teardown_();
 }
 

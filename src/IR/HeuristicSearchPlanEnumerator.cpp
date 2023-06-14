@@ -2578,7 +2578,12 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
                              const char *search_str, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                              const CostFunction &CF, const CardinalityEstimator &CE)
 {
-    if (streq(options::vertex,    vertex_str   ) and
+    ///
+    if(std::strcmp(options::search, "BIDIRECTIONAL")){
+        std::cout<<"I am herer"<<std::endl;
+    }
+    else if
+       (streq(options::vertex,    vertex_str   ) and
         streq(options::expand,    expand_str   ) and
         streq(options::heuristic, heuristic_str) and
         streq(options::search,    search_str   ))

@@ -1419,12 +1419,18 @@ std::size_t num_##NAME() const { return 0; }
             /* HasBeamQueue=    */ false,
             /* Config=          */ Config,
             /* Context...=      */ Context...
-    > state_manager_;
+    > state_manager_bottomup;
 
+    BiDirectionStateManager</* State=           */ State,
+            /* HasRegularQueue= */ true,
+            /* HasBeamQueue=    */ false,
+            /* Config=          */ Config,
+            /* Context...=      */ Context...
+    > state_manager_topdown;
 
 public:
     explicit biDirectionalSearch(Context&... context)
-            : state_manager_(context...)
+            : state_manager_bottomup(context...),state_manager_topdown(context...)
     {}
 
     biDirectionalSearch(const biDirectionalSearch&) = delete;
@@ -1443,7 +1449,8 @@ public:
 
     /** Resets the state of the search. */
     void clear() {
-        state_manager_.clear();
+        state_manager_bottomup.clear();
+        state_manager_topdown.clear();
     }
 
 private:
@@ -1455,24 +1462,24 @@ private:
     using has_mark = decltype(std::declval<T>().mark(Subproblem()));
 
 
-    void bidirectional_for_each_successor(callback_t &&callback, const state_type &state, heuristic_type &heuristic,
-                                   expand_type &expand, Context &... context) {
-        expand(state, [this, callback=std::move(callback), &heuristic, &context...](state_type successor) {
-            if (auto it = state_manager_.find(successor, context...);it == state_manager_.end(successor, context...)) {
-                const double h = heuristic(successor, context...);
-                callback(std::move(successor), h);
-            } else {
-                inc_cached_heuristic_value();
-                callback(std::move(successor), it->second.h);
-            }
-        }, context...);
-    }
-
-    void explore_state(const state_type &state, heuristic_type &heuristic, expand_type &expand, Context&... context) {
-        bidirectional_for_each_successor([this, &context...](state_type successor, double h) {
-            state_manager_.push_regular_queue(std::move(successor), h, context...);
-        }, state, heuristic, expand, context...);
-    }
+//    void bidirectional_for_each_successor(callback_t &&callback, const state_type &state, heuristic_type &heuristic,
+//                                   expand_type &expand, Context &... context) {
+//        expand(state, [this, callback=std::move(callback), &heuristic, &context...](state_type successor) {
+//            if (auto it = state_manager_.find(successor, context...);it == state_manager_.end(successor, context...)) {
+//                const double h = heuristic(successor, context...);
+//                callback(std::move(successor), h);
+//            } else {
+//                inc_cached_heuristic_value();
+//                callback(std::move(successor), it->second.h);
+//            }
+//        }, context...);
+//    }
+//
+//    void explore_state(const state_type &state, heuristic_type &heuristic, expand_type &expand, Context&... context) {
+//        bidirectional_for_each_successor([this, &context...](state_type successor, double h) {
+//            state_manager_.push_regular_queue(std::move(successor), h, context...);
+//        }, state, heuristic, expand, context...);
+//    }
 
 
 public:
@@ -1486,67 +1493,55 @@ public:
     void dump() const { dump(std::cerr); }
 };
 
-        template<
-                heuristic_search_state State,
-                typename Expand,
-                typename Expand2,
-                typename Heuristic,
-                typename Heuristic2,
-                typename Config,
-                typename... Context
-        >
-        requires heuristic_search_heuristic<Heuristic, Context...>
-        const State &biDirectionalSearch<State, Expand, Expand2, Heuristic, Heuristic2, Config, Context...>::search(
-                state_type bottom_state,
-                state_type top_state,
-                expand_type expand,
-                expand_type2 expand2,
-                heuristic_type &heuristic,
-                heuristic_type2 &heuristic2,
-                Context &... context
-        ) {
-            state_manager_.template push<false>(std::move(bottom_state), 0, context...);
-            while (not state_manager_.queues_empty()) {
-                auto top = state_manager_.pop();
-                const state_type &state = top.first;
-
-                if (expand.is_goal(state, context...))
-                    return state;
-                explore_state(state, heuristic, expand, context...);
-            }
-            throw std::logic_error("goal state unreachable from provided initial state");
-
-            /// Core: we will not change any reconstruct logic in the outside
-            /// Current is in BottomUpComplete: So we should return a top states
-            /// TODO: extend to bidirectional extension
-
-
-            /// 1. Init the Bidirectional State Manager
-            /// Including front and back - two direction, init and push element - two operations
-            /// We can ignore the input initial_state
-//    state_manager_front.template push<false>(,0,context...);
-
-            /// 2. while loop
-
-//    while (not state_manager_.left_queues_empty() && not state_manager_.right_queues_empty()) {
-//        auto front = state_manager_.pop_front();
-//        const state_type &front_state = front.first;
-//        auto back = state_manager_.pop_right();
-//        const state_type &back_state = back.first;
+template<
+        heuristic_search_state State,
+        typename Expand,
+        typename Expand2,
+        typename Heuristic,
+        typename Heuristic2,
+        typename Config,
+        typename... Context
+>
+requires heuristic_search_heuristic<Heuristic, Context...>
+const State &biDirectionalSearch<State, Expand, Expand2, Heuristic, Heuristic2, Config, Context...>::search(
+        state_type bottom_state,
+        state_type top_state,
+        expand_type expand,
+        expand_type2 expand2,
+        heuristic_type &heuristic,
+        heuristic_type2 &heuristic2,
+        Context &... context
+) {
+//            state_manager_.template push<false>(std::move(bottom_state), 0, context...);
+//            while (not state_manager_.queues_empty()) {
+//                auto top = state_manager_.pop();
+//                const state_type &state = top.first;
 //
-//        if (state_manager_.left_contains_right()) {
-//            auto state = connectPath(left_state, right_state);
-//            return state;
-//        }
-//
-//        if (state_manager_.right_contains_left) {
-//            auto state = connectPath(right_state, left_state);
-//            return state;
-//        }
-//
-//
-//    }
-//    throw std::logic_error("goal state unreachable from provided initial state");
+//                if (expand.is_goal(state, context...))
+//                    return state;
+//                explore_state(state, heuristic, expand, context...);
+//            }
+//            throw std::logic_error("goal state unreachable from provided initial state");
+
+    /// Core: we will not change any reconstruct logic in the outside
+    /// Current is in BottomUpComplete: So we should return a top states
+    /// 1. Init the Bidirectional State Manager
+    /// Including front and back - two direction, init and push element - two operations
+    /// We can ignore the input initial_state
+    state_manager_bottomup.template push<false>(std::move(bottom_state),0,context...);
+    state_manager_topdown.template push<false>(std::move(top_state),0,context...);
+    /// 2. while loop
+    while(not state_manager_bottomup.queues_empty() && not state_manager_topdown.queues_empty()){
+        auto bottomup_node=state_manager_bottomup.pop_front();
+        const state_type &bottomup_state=bottomup_node.first;
+        auto topdown_node=state_manager_topdown.pop_front();
+        const state_type &topdown_state=topdown_node.first;
+
+        if(bottomup_state.size())
+
+    }
+
+    throw std::logic_error("goal state unreachable from provided initial state");
 }
 /////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////Definition -> Heuristic Algorithm//////////////////////////////////

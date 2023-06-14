@@ -1380,6 +1380,7 @@ operator()(BiDirectionStateManager::pointer_type p_left, BiDirectionStateManager
 template<
         heuristic_search_state State,
         typename Expand,
+        typename Expand2,
         typename Heuristic,
         typename Config,
         typename... Context
@@ -1450,7 +1451,7 @@ private:
 
     void bidirectional_for_each_successor(callback_t &&callback, const state_type &state, heuristic_type &heuristic,
                                    expand_type &expand, Context &... context) {
-        BottomUpComplete(state, [this, callback=std::move(callback), &heuristic, &context...](state_type successor) {
+        expand(state, [this, callback=std::move(callback), &heuristic, &context...](state_type successor) {
             if (auto it = state_manager_.find(successor, context...);it == state_manager_.end(successor, context...)) {
                 const double h = heuristic(successor, context...);
                 callback(std::move(successor), h);
@@ -1481,12 +1482,13 @@ public:
 template<
         heuristic_search_state State,
         typename Expand,
+        typename Expand2,
         typename Heuristic,
         typename Config,
         typename... Context
 >
 requires heuristic_search_heuristic<Heuristic, Context...>
-const State &biDirectionalSearch<State, Expand, Heuristic, Config, Context...>::search(
+const State &biDirectionalSearch<State, Expand, Expand2, Heuristic, Config, Context...>::search(
         state_type initial_state,
         expand_type expand,
         heuristic_type &heuristic,
@@ -1549,11 +1551,12 @@ using cleanAStar = cleanAStarSearch<State, Expand, Heuristic, Config, Context...
 template<
         heuristic_search_state State,
         typename Expand,
+        typename Expand2,
         typename Heuristic,
         typename Config,
         typename... Context
 >
-using BIDIRECTIONAL = biDirectionalSearch<State, Expand, Heuristic, Config, Context...>;
+using BIDIRECTIONAL = biDirectionalSearch<State, Expand, Expand2, Heuristic, Config, Context...>;
 
 template<
     heuristic_search_state State,

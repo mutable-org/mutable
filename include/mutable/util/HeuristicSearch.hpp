@@ -1450,7 +1450,7 @@ private:
 
     void bidirectional_for_each_successor(callback_t &&callback, const state_type &state, heuristic_type &heuristic,
                                    expand_type &expand, Context &... context) {
-        expand(state, [this, callback=std::move(callback), &heuristic, &context...](state_type successor) {
+        BottomUpComplete(state, [this, callback=std::move(callback), &heuristic, &context...](state_type successor) {
             if (auto it = state_manager_.find(successor, context...);it == state_manager_.end(successor, context...)) {
                 const double h = heuristic(successor, context...);
                 callback(std::move(successor), h);
@@ -1476,8 +1476,6 @@ public:
 
     void dump(std::ostream &out) const { out << *this << std::endl; }
     void dump() const { dump(std::cerr); }
-
-
 };
 
 template<
@@ -1504,6 +1502,37 @@ const State &biDirectionalSearch<State, Expand, Heuristic, Config, Context...>::
         explore_state(state, heuristic, expand, context...);
     }
     throw std::logic_error("goal state unreachable from provided initial state");
+
+    /// Core: we will not change any reconstruct logic in the outside
+    /// Current is in BottomUpComplete: So we should return a top states
+    /// TODO: extend to bidirectional extension
+
+
+    /// 1. Init the Bidirectional State Manager
+    /// Including front and back - two direction, init and push element - two operations
+    /// We can ignore the input initial_state
+
+    /// 2. while loop
+
+//    while (not state_manager_.left_queues_empty() && not state_manager_.right_queues_empty()) {
+//        auto front = state_manager_.pop_front();
+//        const state_type &front_state = front.first;
+//        auto back = state_manager_.pop_right();
+//        const state_type &back_state = back.first;
+//
+//        if (state_manager_.left_contains_right()) {
+//            auto state = connectPath(left_state, right_state);
+//            return state;
+//        }
+//
+//        if (state_manager_.right_contains_left) {
+//            auto state = connectPath(right_state, left_state);
+//            return state;
+//        }
+//
+//
+//    }
+//    throw std::logic_error("goal state unreachable from provided initial state");
 }
 /////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////Definition -> Heuristic Algorithm//////////////////////////////////

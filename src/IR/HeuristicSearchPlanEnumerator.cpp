@@ -2478,8 +2478,9 @@ struct checkpoints<PlanTable, SubproblemsArray>
 
 template<typename State, typename Expand, typename Heuristic, typename Config, typename ... Context>
 using cleanAStar = ai::cleanAStar<State, Expand, Heuristic, Config, Context...>;
+/// Originally can run code
 template<typename State, typename Expand, typename Heuristic, typename Config, typename ... Context>
-using BIDIRECTIONAL = ai::BIDIRECTIONAL<State, expansions::BottomUpComplete, expansions::TopDownComplete, Heuristic, Config, Context...>;
+using BIDIRECTIONAL = ai::BIDIRECTIONAL<State, expansions::BottomUpComplete, expansions::TopDownComplete, Heuristic, Heuristic2, Config, Context...>;
 template<typename State, typename Expand, typename Heuristic, typename Config, typename ... Context>
 using IDDFS = ai::IDDFS<State, Expand, Heuristic, Config, Context...>;
 
@@ -2568,41 +2569,84 @@ struct data_structure_config
 
 
 template<
-    typename PlanTable,
-    typename State,
-    typename Expand,
-    template<typename, typename, typename> typename Heuristic,
-    template<typename, typename, typename, typename, typename...> typename Search
+        typename PlanTable,
+        typename State,
+        typename Expand,
+        template<typename, typename, typename> typename Heuristic,
+        template<typename, typename, typename, typename, typename...> typename Search
 >
 bool heuristic_search_helper(const char *vertex_str, const char *expand_str, const char *heuristic_str,
                              const char *search_str, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
-                             const CostFunction &CF, const CardinalityEstimator &CE)
-{
+                             const CostFunction &CF, const CardinalityEstimator &CE) {
     /// Entrance for the BiDirectional
-    if(std::strcmp(options::search, "BIDIRECTIONAL") == 0){
-        std::cout<<"\n\n\n\n\n\nI am herer"<<std::endl;
+    if (std::strcmp(options::search, "BIDIRECTIONAL") == 0) {
+        std::cout << "\n\n\n\n\n\nI am in the entrance for the BiDirectional" << std::endl;
+
+        using H1 = heuristics::sum<PlanTable, State, expansions::BottomUpComplete>;
+        using H2 = heuristics::sum<PlanTable, State, expansions::TopDownComplete>;
+        State::RESET_STATE_COUNTERS();
+        State bottom_state = expansions::BottomUpComplete::template Start<State>(PT, G, M, CF, CE);
+        State top_state = expansions::TopDownComplete::template Start<State>(PT, G, M, CF, CE);
+
+        try {
+
+            H1 h1(PT, G, M, CF, CE);
+            H2 h2(PT, G, M, CF, CE);
+
+            using search_algorithm = m::ai::biDirectionalSearch<
+                    State,
+                    expansions::BottomUpComplete, expansions::TopDownComplete,
+                    H1, H2,
+                    data_structure_config,
+                    /*----- context -----*/
+                    PlanTable &,
+                    const QueryGraph &,
+                    const AdjacencyMatrix &,
+                    const CostFunction &,
+                    const CardinalityEstimator &>;
+
+            search_algorithm S(PT, G, M, CF, CE);
+            const State &goal = S.search(std::move(bottom_state), std::move(top_state),
+                                         expansions::BottomUpComplete{},
+                                         expansions::TopDownComplete{},
+                                         h1, h2,
+                                         PT, G, M, CF, CE);
+
+            /// Ultimate target
+            /// reconstruct_plan_bidirection(goal, PT, G, CE, CF);
+
+            if constexpr (std::is_base_of_v<expansions::TopDown, Expand>) {
+                reconstruct_plan_top_down(goal, PT, G, CE, CF);
+            } else {
+                static_assert(std::is_base_of_v<expansions::BottomUp, Expand>, "unexpected expansion");
+                reconstruct_plan_bottom_up(goal, PT, G, CE, CF);
+            }
+
+        } catch (std::logic_error err) {
+            std::cerr << "search " << search_str << '+' << vertex_str << '+' << expand_str << '+' << heuristic_str
+                      << " did not reach a goal state, fall back to DPccp" << std::endl;
+            DPccp{}(G, CF, PT);
+        }
         return true;
     }
 
-    if
-       (streq(options::vertex,    vertex_str   ) and
-        streq(options::expand,    expand_str   ) and
+    if (streq(options::vertex, vertex_str) and
+        streq(options::expand, expand_str) and
         streq(options::heuristic, heuristic_str) and
-        streq(options::search,    search_str   ))
-    {
+        streq(options::search, search_str)) {
         using H = Heuristic<PlanTable, State, Expand>;
         State::RESET_STATE_COUNTERS();
         State initial_state = Expand::template Start<State>(PT, G, M, CF, CE);
         try {
             H h(PT, G, M, CF, CE);
             using search_algorithm = Search<
-                State, Expand, H, data_structure_config,
-                /*----- context -----*/
-                PlanTable&,
-                const QueryGraph&,
-                const AdjacencyMatrix&,
-                const CostFunction&,
-                const CardinalityEstimator&
+                    State, Expand, H, data_structure_config,
+                    /*----- context -----*/
+                    PlanTable &,
+                    const QueryGraph &,
+                    const AdjacencyMatrix &,
+                    const CostFunction &,
+                    const CardinalityEstimator &
             >;
             search_algorithm S(PT, G, M, CF, CE);
             const State &goal = S.search(std::move(initial_state), Expand{}, h, PT, G, M, CF, CE);

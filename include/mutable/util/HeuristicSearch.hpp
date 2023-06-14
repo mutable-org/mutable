@@ -1382,6 +1382,7 @@ template<
         typename Expand,
         typename Expand2,
         typename Heuristic,
+        typename Heuristic2,
         typename Config,
         typename... Context
 >
@@ -1433,7 +1434,10 @@ public:
      *
      * @return the cost of the computed path from `initial_state` to a goal state
      */
-    const State &search(state_type initial_state, expand_type expand, heuristic_type &heuristic, Context &... context);
+    const State &search(state_type bottom_state, state_type top_state,
+                        expand_type expand, expand_type expand2,
+                        heuristic_type &heuristic, heuristic_type &heuristic2,
+                        Context &... context);
 
     /** Resets the state of the search. */
     void clear() {
@@ -1470,51 +1474,57 @@ private:
 
 
 public:
-    friend std::ostream & operator<<(std::ostream &out, const biDirectionalSearch &AStar) {
+    friend std::ostream &operator<<(std::ostream &out, const biDirectionalSearch &AStar) {
         return out << AStar.state_manager_ << ", used cached heuristic value " << AStar.num_cached_heuristic_value()
                    << " times";
     }
 
     void dump(std::ostream &out) const { out << *this << std::endl; }
+
     void dump() const { dump(std::cerr); }
 };
 
-template<
-        heuristic_search_state State,
-        typename Expand,
-        typename Expand2,
-        typename Heuristic,
-        typename Config,
-        typename... Context
->
-requires heuristic_search_heuristic<Heuristic, Context...>
-const State &biDirectionalSearch<State, Expand, Expand2, Heuristic, Config, Context...>::search(
-        state_type initial_state,
-        expand_type expand,
-        heuristic_type &heuristic,
-        Context &... context
-) {
-    state_manager_.template push<false>(std::move(initial_state), 0, context...);
-    while (not state_manager_.queues_empty()) {
-        auto top = state_manager_.pop();
-        const state_type &state = top.first;
+        template<
+                heuristic_search_state State,
+                typename Expand,
+                typename Expand2,
+                typename Heuristic,
+                typename Heuristic2,
+                typename Config,
+                typename... Context
+        >
+        requires heuristic_search_heuristic<Heuristic, Context...>
+        const State &biDirectionalSearch<State, Expand, Expand2, Heuristic, Heuristic2, Config, Context...>::search(
+                state_type bottom_state,
+                state_type top_state,
+                expand_type expand,
+                expand_type expand2,
+                heuristic_type &heuristic,
+                heuristic_type &heuristic2,
+                Context &... context
+        ) {
+            state_manager_.template push<false>(std::move(bottom_state), 0, context...);
+            while (not state_manager_.queues_empty()) {
+                auto top = state_manager_.pop();
+                const state_type &state = top.first;
 
-        if (expand.is_goal(state, context...))
-            return state;
-        explore_state(state, heuristic, expand, context...);
-    }
-    throw std::logic_error("goal state unreachable from provided initial state");
+                if (expand.is_goal(state, context...))
+                    return state;
+                explore_state(state, heuristic, expand, context...);
+            }
+            throw std::logic_error("goal state unreachable from provided initial state");
 
-    /// Core: we will not change any reconstruct logic in the outside
-    /// Current is in BottomUpComplete: So we should return a top states
-    /// TODO: extend to bidirectional extension
+            /// Core: we will not change any reconstruct logic in the outside
+            /// Current is in BottomUpComplete: So we should return a top states
+            /// TODO: extend to bidirectional extension
 
 
-    /// 1. Init the Bidirectional State Manager
-    /// Including front and back - two direction, init and push element - two operations
-    /// We can ignore the input initial_state
+            /// 1. Init the Bidirectional State Manager
+            /// Including front and back - two direction, init and push element - two operations
+            /// We can ignore the input initial_state
+//    state_manager_front.template push<false>(,0,context...);
 
-    /// 2. while loop
+            /// 2. while loop
 
 //    while (not state_manager_.left_queues_empty() && not state_manager_.right_queues_empty()) {
 //        auto front = state_manager_.pop_front();

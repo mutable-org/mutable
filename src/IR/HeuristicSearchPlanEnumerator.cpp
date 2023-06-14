@@ -2478,9 +2478,10 @@ struct checkpoints<PlanTable, SubproblemsArray>
 
 template<typename State, typename Expand, typename Heuristic, typename Config, typename ... Context>
 using cleanAStar = ai::cleanAStar<State, Expand, Heuristic, Config, Context...>;
-/// Originally can run code
-template<typename State, typename Expand, typename Heuristic, typename Config, typename ... Context>
-using BIDIRECTIONAL = ai::BIDIRECTIONAL<State, expansions::BottomUpComplete, expansions::TopDownComplete, Heuristic, Heuristic2, Config, Context...>;
+///// Originally can run code
+//template<typename State, typename Expand, typename Heuristic, typename Config, typename ... Context>
+//using BIDIRECTIONAL = ai::BIDIRECTIONAL<State, expansions::BottomUpComplete, expansions::TopDownComplete, Heuristic, Heuristic, Config, Context...>;
+
 template<typename State, typename Expand, typename Heuristic, typename Config, typename ... Context>
 using IDDFS = ai::IDDFS<State, Expand, Heuristic, Config, Context...>;
 
@@ -2582,8 +2583,8 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
     if (std::strcmp(options::search, "BIDIRECTIONAL") == 0) {
         std::cout << "\n\n\n\n\n\nI am in the entrance for the BiDirectional" << std::endl;
 
-        using H1 = heuristics::sum<PlanTable, State, expansions::BottomUpComplete>;
-        using H2 = heuristics::sum<PlanTable, State, expansions::TopDownComplete>;
+        using H1 = heuristics::zero<PlanTable, State, expansions::BottomUpComplete>;
+        using H2 = heuristics::zero<PlanTable, State, expansions::TopDownComplete>;
         State::RESET_STATE_COUNTERS();
         State bottom_state = expansions::BottomUpComplete::template Start<State>(PT, G, M, CF, CE);
         State top_state = expansions::TopDownComplete::template Start<State>(PT, G, M, CF, CE);
@@ -2614,13 +2615,9 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
 
             /// Ultimate target
             /// reconstruct_plan_bidirection(goal, PT, G, CE, CF);
+            
+            reconstruct_plan_bottom_up(goal, PT, G, CE, CF);
 
-            if constexpr (std::is_base_of_v<expansions::TopDown, Expand>) {
-                reconstruct_plan_top_down(goal, PT, G, CE, CF);
-            } else {
-                static_assert(std::is_base_of_v<expansions::BottomUp, Expand>, "unexpected expansion");
-                reconstruct_plan_bottom_up(goal, PT, G, CE, CF);
-            }
 
         } catch (std::logic_error err) {
             std::cerr << "search " << search_str << '+' << vertex_str << '+' << expand_str << '+' << heuristic_str
@@ -2708,7 +2705,7 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, cleanAStar)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, cleanAStar)
         // biDirectionalSearch
-        HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, BIDIRECTIONAL)
+        // HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, BIDIRECTIONAL)
         // bottom-up
         // IDDFS
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, IDDFS)

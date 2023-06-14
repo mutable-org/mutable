@@ -51,13 +51,14 @@ declare -A TOPOLOGIES=(
 
 ORDERED_PLANNERS=(
     ###### HANWEN Manuelly Test #####
-    "DPccp"
-    "IKKBZ"
+#    "DPccp"
+#    "IKKBZ"
 #    "TD-cleanAStar-zero"
 #    "BU-cleanAStar-zero"
 
 #    "BU-IDDFS-zero"
     "BU-A*-zero"
+#    "BU-A*-sum"
     "BU-BIDIRECTIONAL-zero"
 
 
@@ -268,7 +269,7 @@ do
                 unset TIME
                 set +m
                 # The following command needs pipefail
-                timeout --signal=TERM --kill-after=3s ${TIMEOUT} taskset -c 2 ${BIN} \
+                timeout --signal=TERM --kill-after=10s ${TIMEOUT} taskset -c 2 ${BIN} \
                     --quiet --dryrun --times \
                     --plan-table-las \
                     ${PLANNER_CONFIG} \
@@ -277,11 +278,11 @@ do
                     --statistics \
                     "${NAME}.schema.sql" \
                     "${NAME}.query.sql" \
-                    | grep -e '^Plan cost:' -e '^Plan enumeration:' \
-                    | cut --delimiter=':' --fields=2 \
-                    | tr -d ' ' \
-                    | paste -sd ' \n' \
-                    | while read -r COST TIME; do echo "${TOPOLOGY},${N},${PLANNER},${COST},${TIME},${SEED}" >> "${CSV}"; done
+#                    | grep -e '^Plan cost:' -e '^Plan enumeration:' \
+#                    | cut --delimiter=':' --fields=2 \
+#                    | tr -d ' ' \
+#                    | paste -sd ' \n' \
+#                    | while read -r COST TIME; do echo "${TOPOLOGY},${N},${PLANNER},${COST},${TIME},${SEED}" >> "${CSV}"; done
                 # Save and aggregate PIPESTATUS
                 SAVED_PIPESTATUS=("${PIPESTATUS[@]}")
                 TIMEOUT_RET=${SAVED_PIPESTATUS[0]}

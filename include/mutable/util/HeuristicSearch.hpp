@@ -1391,7 +1391,9 @@ struct biDirectionalSearch
 {
     using state_type = State;
     using expand_type = Expand;
+    using expand_type2 = Expand2;
     using heuristic_type = Heuristic;
+    using heuristic_type2 = Heuristic2;
 
     using callback_t = std::function<void(state_type, double)>;
 
@@ -1435,8 +1437,8 @@ public:
      * @return the cost of the computed path from `initial_state` to a goal state
      */
     const State &search(state_type bottom_state, state_type top_state,
-                        expand_type expand, expand_type expand2,
-                        heuristic_type &heuristic, heuristic_type &heuristic2,
+                        expand_type expand, expand_type2 expand2,
+                        heuristic_type &heuristic, heuristic_type2 &heuristic2,
                         Context &... context);
 
     /** Resets the state of the search. */
@@ -1498,9 +1500,9 @@ public:
                 state_type bottom_state,
                 state_type top_state,
                 expand_type expand,
-                expand_type expand2,
+                expand_type2 expand2,
                 heuristic_type &heuristic,
-                heuristic_type &heuristic2,
+                heuristic_type2 &heuristic2,
                 Context &... context
         ) {
             state_manager_.template push<false>(std::move(bottom_state), 0, context...);
@@ -1558,15 +1560,16 @@ template<
 >
 using cleanAStar = cleanAStarSearch<State, Expand, Heuristic, Config, Context...>;
 
-template<
-        heuristic_search_state State,
-        typename Expand,
-        typename Expand2,
-        typename Heuristic,
-        typename Config,
-        typename... Context
->
-using BIDIRECTIONAL = biDirectionalSearch<State, Expand, Expand2, Heuristic, Config, Context...>;
+//template<
+//        heuristic_search_state State,
+//        typename Expand,
+//        typename Expand2,
+//        typename Heuristic,
+//        typename Heuristic2,
+//        typename Config,
+//        typename... Context
+//>
+//using BIDIRECTIONAL = biDirectionalSearch<State, Expand, Expand2, Heuristic, Heuristic2, Config, Context...>;
 
 template<
     heuristic_search_state State,

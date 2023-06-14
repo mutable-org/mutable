@@ -2578,11 +2578,13 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
                              const char *search_str, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                              const CostFunction &CF, const CardinalityEstimator &CE)
 {
-    ///
-    if(std::strcmp(options::search, "BIDIRECTIONAL")){
-        std::cout<<"I am herer"<<std::endl;
+    /// Entrance for the BiDirectional
+    if(std::strcmp(options::search, "BIDIRECTIONAL") == 0){
+        std::cout<<"\n\n\n\n\n\nI am herer"<<std::endl;
+        return true;
     }
-    else if
+
+    if
        (streq(options::vertex,    vertex_str   ) and
         streq(options::expand,    expand_str   ) and
         streq(options::heuristic, heuristic_str) and
@@ -2739,7 +2741,6 @@ matched_heuristic_search:;
             DPccp dpccp;
             dpccp(G, CF, PT);
             const double dp_cost = plan_cost();
-
             std::cout << "AI: " << hs_cost << ", DP: " << dp_cost << ", Δ " << hs_cost / dp_cost << 'x' << std::endl;
             if (hs_cost > dp_cost)
                 std::cout << "WARNING: Suboptimal solution!" << std::endl;

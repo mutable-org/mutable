@@ -1491,16 +1491,13 @@ struct PrimitiveExpr<T>
      * - `To` is a pointer to primitive type
      */
     template<dsl_pointer_to_primitive To>
-    PrimitiveExpr<To> to()
-    requires std::same_as<T, uint32_t>
-    { return PrimitiveExpr<To>(*this); }
+    PrimitiveExpr<To> to() requires std::same_as<T, uint32_t> { return PrimitiveExpr<To>(*this); }
 
     /** Conversion of a `PrimitiveExpr<T>` to a `PrimitiveExpr<std::make_signed_t<T>>`. Only applicable if
      *
      * - `T` is an unsigned integral type except `bool`
      */
-    auto make_signed() requires unsigned_integral<T>
-    { return PrimitiveExpr<std::make_signed_t<T>>(move()); }
+    auto make_signed() requires unsigned_integral<T> { return PrimitiveExpr<std::make_signed_t<T>>(move()); }
 
     /** Conversion of a `PrimitiveExpr<T>` to a `PrimitiveExpr<std::make_unsigned_t<T>>`. Only available if
     *
@@ -1555,8 +1552,7 @@ struct PrimitiveExpr<T>
 
     /*----- Comparison operations ------------------------------------------------------------------------------------*/
 
-    PrimitiveExpr<bool> eqz() requires integral<T>
-    { return unary<bool>(UNIOP_(EqZ,)); }
+    PrimitiveExpr<bool> eqz() requires integral<T> { return unary<bool>(UNIOP_(EqZ,)); }
 
     /*----- Logical operations ---------------------------------------------------------------------------------------*/
 

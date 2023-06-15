@@ -10,17 +10,53 @@ using namespace m;
 using namespace m::storage;
 
 
+namespace m {
+
+namespace options {
+
+/** Whether to reorder attributes when creating data layouts. */
+bool no_attribute_reordering = false;
+
+}
+
+}
+
+namespace {
+
+__attribute__((constructor(201)))
+static void add_storage_args()
+{
+    Catalog &C = Catalog::Get();
+
+    /*----- Command-line arguments -----*/
+    C.arg_parser().add<bool>(
+        /* group=       */ "Storage",
+        /* short=       */ nullptr,
+        /* long=        */ "--no-attribute-reordering",
+        /* description= */ "do not reorder attributes when creating data layouts, e.g. to minimize padding",
+        /* callback=    */ [](bool){ options::no_attribute_reordering = true; }
+    );
+}
+
+}
+
+
+/** Computes the order for attributes of types \p types and returns this permutation as array of indices.  Attributes
+ * are reordered by their alignment requirement to minimize padding except the CLI option `--no-attribute-reordering`
+ * is set. */
 std::unique_ptr<std::size_t[]>
-sorted_by_alignment(const std::vector<const Type*> &types)
+compute_attribute_order(const std::vector<const Type*> &types)
 {
     /*----- Collect all indices. -----*/
     auto indices = std::make_unique<std::size_t[]>(types.size());
     std::iota(indices.get(), indices.get() + types.size(), 0);
 
-    /*----- Sort indices by alignment. -----*/
-    std::stable_sort(indices.get(), indices.get() + types.size(), [&](std::size_t left, std::size_t right) {
-        return types[left]->alignment() > types[right]->alignment();
-    });
+    if (not options::no_attribute_reordering) {
+        /*----- Sort indices by alignment. -----*/
+        std::stable_sort(indices.get(), indices.get() + types.size(), [&](std::size_t left, std::size_t right) {
+            return types[left]->alignment() > types[right]->alignment();
+        });
+    }
 
     return indices;
 }
@@ -29,7 +65,7 @@ DataLayout RowLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
 {
     M_insist(not types.empty(), "cannot make layout for zero types");
 
-    auto indices = sorted_by_alignment(types);
+    auto indices = compute_attribute_order(types);
     uint64_t offsets[types.size()]; // in bits
 
     /*----- Compute offsets. -----*/
@@ -37,10 +73,10 @@ DataLayout RowLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
     uint64_t alignment_in_bits = 8;
 
     for (std::size_t idx = 0; idx != types.size(); ++idx) {
-        const auto sorted_idx = indices[idx];
-        offsets[sorted_idx] = offset_in_bits;
-        offset_in_bits += types[sorted_idx]->size();
-        alignment_in_bits = std::max(alignment_in_bits, types[sorted_idx]->alignment());
+        const auto mapped_idx = indices[idx];
+        offsets[mapped_idx] = offset_in_bits;
+        offset_in_bits += types[mapped_idx]->size();
+        alignment_in_bits = std::max(alignment_in_bits, types[mapped_idx]->alignment());
     }
 
     const uint64_t null_bitmap_offset = offset_in_bits;
@@ -70,7 +106,7 @@ DataLayout PAXLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
 {
     M_insist(not types.empty(), "cannot make layout for zero types");
 
-    auto indices = sorted_by_alignment(types);
+    auto indices = compute_attribute_order(types);
     uint64_t offsets[types.size() + 1]; // in bits
 
     /*----- Compute attribute offsets in a virtual row. -----*/
@@ -79,11 +115,11 @@ DataLayout PAXLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
     std::size_t num_not_byte_aligned = 0;
 
     for (std::size_t idx = 0; idx != types.size(); ++idx) {
-        const auto sorted_idx = indices[idx];
-        offsets[sorted_idx] = offset_in_bits;
-        offset_in_bits += types[sorted_idx]->size();
-        alignment_in_bits = std::max(alignment_in_bits, types[sorted_idx]->alignment());
-        if (types[sorted_idx]->size() % 8)
+        const auto mapped_idx = indices[idx];
+        offsets[mapped_idx] = offset_in_bits;
+        offset_in_bits += types[mapped_idx]->size();
+        alignment_in_bits = std::max(alignment_in_bits, types[mapped_idx]->alignment());
+        if (types[mapped_idx]->size() % 8)
             ++num_not_byte_aligned;
     }
 
@@ -109,10 +145,10 @@ DataLayout PAXLayoutFactory::make(std::vector<const Type*> types, std::size_t nu
     /*----- Compute column offsets. -----*/
     uint64_t running_padding = 0;
     for (std::size_t idx = 0; idx != types.size(); ++idx) {
-        const auto sorted_idx = indices[idx];
-        offsets[sorted_idx] = offsets[sorted_idx] * num_rows_per_block + running_padding;
-        M_insist(offsets[sorted_idx] % 8 == 0, "attribute column must be byte aligned");
-        if (uint64_t bit_offset = (types[sorted_idx]->size() * num_rows_per_block) % 8; bit_offset)
+        const auto mapped_idx = indices[idx];
+        offsets[mapped_idx] = offsets[mapped_idx] * num_rows_per_block + running_padding;
+        M_insist(offsets[mapped_idx] % 8 == 0, "attribute column must be byte aligned");
+        if (uint64_t bit_offset = (types[mapped_idx]->size() * num_rows_per_block) % 8; bit_offset)
             running_padding += 8UL - bit_offset;
     }
     offsets[types.size()] = offsets[types.size()] * num_rows_per_block + running_padding;

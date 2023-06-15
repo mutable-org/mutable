@@ -142,21 +142,7 @@ def gen_random_int_values(smallest :int, largest :int, num :int):
     if largest - smallest == num:
         return list(range(smallest, largest))
 
-    taken = set()
-    counter = largest - num
-    values = list()
-
-    for i in range(0, num):
-        val = random.randrange(smallest, largest - num)
-        if val in taken:
-            values.append(counter)
-            counter += 1
-        else:
-            taken.add(val)
-            values.append(val)
-
-    assert len(values) == len(set(values))
-    return values
+    return random.sample(range(smallest, largest), k=num)
 
 
 #=======================================================================================================================

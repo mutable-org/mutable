@@ -33,7 +33,7 @@ HANWEN_MAKE_FOLDER=cmake-build-debug
 BIN=cmake-build-debug/bin/shell
 CSV=planner-benchmark.csv
 CORRELATED=1
-MIN_RELATIONS=10
+
 
 # outside large loop execution time
 REPETITIONS_PER_NUM_RELATIONS=1
@@ -41,12 +41,14 @@ REPETITIONS_PER_NUM_RELATIONS=1
 MIN_CARDINALITY=10
 MAX_CARDINALITY=10000
 
+
+MIN_RELATIONS=5
 # Associative array mapping topologies to their max. number of relations tested
 declare -A TOPOLOGIES=(
-#    [chain]=30
-#    [cycle]=50
-#    [star]=28
-    [clique]=10
+    [chain]=5
+    [cycle]=5
+    [star]=5
+    [clique]=5
 )
 
 ORDERED_PLANNERS=(
@@ -57,7 +59,7 @@ ORDERED_PLANNERS=(
 #    "BU-cleanAStar-zero"
 
 #    "BU-IDDFS-zero"
-    "BU-A*-zero"
+#    "BU-A*-zero"
 #    "BU-A*-sum"
     "BU-BIDIRECTIONAL-zero"
 

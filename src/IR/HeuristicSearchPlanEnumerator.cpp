@@ -206,7 +206,7 @@ struct SubproblemsArray : Base<SubproblemsArray>
     static allocator_type & get_allocator() { return allocator_; }
 
     private:
-    mutable SubproblemsArray *parent_ = nullptr;
+    mutable const SubproblemsArray *parent_ = nullptr;
     ///> the cost to reach this state from the initial state
     mutable double g_;
     ///> number of subproblems in this state
@@ -313,6 +313,8 @@ struct SubproblemsArray : Base<SubproblemsArray>
     /*----- Getters --------------------------------------------------------------------------------------------------*/
 
     const SubproblemsArray * parent() const { return parent_; }
+
+    void set_parent(const SubproblemsArray *new_parent) const { parent_ = new_parent; }
 
     template<typename PlanTable>
     bool is_bottom(const PlanTable&, const QueryGraph &G, const AdjacencyMatrix&, const CostFunction&,
@@ -2581,7 +2583,7 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
                              const CostFunction &CF, const CardinalityEstimator &CE) {
     /// Entrance for the BiDirectional
     if (std::strcmp(options::search, "BIDIRECTIONAL") == 0) {
-        std::cout << "\n\n\n\n\n\nI am in the entrance for the BiDirectional" << std::endl;
+        std::cout << "\n\n\n\n\n\nCurrently in the entrance for the BiDirectional" << std::endl;
 
         using H1 = heuristics::zero<PlanTable, State, expansions::BottomUpComplete>;
         using H2 = heuristics::zero<PlanTable, State, expansions::TopDownComplete>;
@@ -2615,7 +2617,7 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
 
             /// Ultimate target
             /// reconstruct_plan_bidirection(goal, PT, G, CE, CF);
-            
+
             reconstruct_plan_bottom_up(goal, PT, G, CE, CF);
 
 

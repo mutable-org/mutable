@@ -1023,6 +1023,7 @@ const State &cleanAStarSearch<State, Expand, Heuristic, Config, Context...>::sea
     while (not state_manager_.queues_empty()) {
         auto top = state_manager_.pop();
         const state_type &state = top.first;
+        std::cout << "Current state.size()" << state.size() << "\n";
 
         if (expand.is_goal(state, context...))
             return state;
@@ -1479,8 +1480,8 @@ private:
     }
 
     void bidirectional_for_each_successor_topdown(callback_t &&callback,
-                                                  const state_type &state, heuristic_type &heuristic,
-                                                  expand_type &expand,
+                                                  const state_type &state, heuristic_type2 &heuristic,
+                                                  expand_type2 &expand,
                                                   Context &... context) {
         expand(state, [this, callback = std::move(callback), &heuristic, &context...](state_type successor) {
             if (auto it = state_manager_topdown.find(successor, context...);
@@ -1501,13 +1502,27 @@ private:
         }, state, heuristic, expand, context...);
     }
 
-    void explore_state_topdown(const state_type &state, heuristic_type &heuristic, expand_type &expand,
+    void explore_state_topdown(const state_type &state, heuristic_type2 &heuristic, expand_type2 &expand,
                                Context &... context) {
         bidirectional_for_each_successor_topdown([this, &context...](state_type successor, double h) {
             state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
         }, state, heuristic, expand, context...);
     }
 
+    const state_type &
+    reverse_the_topdown(const state_type &topdown_current_state, const state_type &bottomup_state_to_connect) {
+        /// Return the goal -> State Top
+        const state_type *current = &topdown_current_state;
+        const state_type *prev = &bottomup_state_to_connect;
+
+        while (current) {
+            const state_type *parent = current->parent();
+            current->set_parent(prev);
+            prev = current;
+            current = parent;
+        }
+        return *prev;
+    }
 
 public:
     friend std::ostream &operator<<(std::ostream &out, const biDirectionalSearch &AStar) {
@@ -1559,25 +1574,39 @@ const State &biDirectionalSearch<State, Expand, Expand2, Heuristic, Heuristic2, 
     state_manager_topdown.template push<false>(std::move(top_state), 0, context...);
     /// 2. while loop
     while (not state_manager_bottomup.queues_empty() && not state_manager_topdown.queues_empty()) {
-        auto bottomup_node = state_manager_bottomup.pop_front();
+        auto bottomup_node = state_manager_bottomup.pop();
         const state_type &bottomup_state = bottomup_node.first;
-        auto topdown_node = state_manager_topdown.pop_front();
+        auto topdown_node = state_manager_topdown.pop();
         const state_type &topdown_state = topdown_node.first;
 
         /// 2. Exit case
-        size_t diff = (topdown_state.size() - bottomup_state.size()) <= 1;
-        if (diff <= 1) {
-            if (diff == 1) {
-                /// Build connection from bottomup_state to topdown_state
-                topdown_state.
-            } else if (diff == 0) {
-                /// Compare and choose one node if different
+        size_t diff = bottomup_state.size() - topdown_state.size();
+        std::cout << "diff=" << diff
+                  << "\tbottomup_state.size()" << bottomup_state.size()
+                  << "\ttopdown_state.size()" << topdown_state.size() << "\n";
 
-            }
+        assert(diff >= 0 && "Reach minus!");
 
-            /// TODO: Return the state of the top, no matter which case
+        if (diff == 1) {
+            std::cout << "Currently diff==1 Processing...\n";
+            /// Build connection from bottomup_state to topdown_state
+            const state_type &goal = reverse_the_topdown(topdown_state, bottomup_state);
             return goal;
         }
+
+//        if (diff <= 1) {
+//            if (diff == 1) {
+//                std::cout << "Do you enter here?\n";
+//                return bottomup_state;
+//                /// Build connection from bottomup_state to topdown_state
+////                const state_type &goal = reverse_the_topdown(topdown_state, bottomup_state);
+////                return goal;
+//            } else if (diff == 0) {
+//                /// Compare and choose one node if different
+//                std::cout<<"Not here\n";
+//            }
+
+//    }
 
         /// 3. Bidirectionally extend to step forward
         explore_state_bottomup(bottomup_state, heuristic, expand, context...);

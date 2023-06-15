@@ -1503,8 +1503,40 @@ struct PrimitiveExpr<T>
     *
     * - `T` is a signed integral type except `bool`
     */
-    auto make_unsigned() requires signed_integral<T>
-    { return PrimitiveExpr<std::make_unsigned_t<T>>(move()); }
+    auto make_unsigned() requires signed_integral<T> { return PrimitiveExpr<std::make_unsigned_t<T>>(move()); }
+
+    /** Reinterpretation of a `PrimitiveExpr<T>` to a `PrimitiveExpr<To>`.  Only applicable if
+     *
+     * - `T` is integral and `To` is floating point or vice versa
+     * - `T` and `To` have same size
+     */
+    template<dsl_primitive To>
+    requires ((integral<T> and std::floating_point<To>) or      // either T is integral and To is floating point
+              (std::floating_point<T> and integral<To>)) and    //  or vice versa
+             (sizeof(T) == sizeof(To))                          // T and To have same size
+    PrimitiveExpr<To> reinterpret() {
+        using From = T;
+
+        if constexpr (integral<From>) {                                                     // from integer
+            if constexpr (std::floating_point<To>) {                                        //  to floating point
+                if constexpr (sizeof(From) == 4 and sizeof(To) == 4)                        //   i32 -> f32
+                    return unary<To>(::wasm::ReinterpretInt32);
+                if constexpr (sizeof(From) == 8 and sizeof(To) == 8)                        //   i64 -> f64
+                    return unary<To>(::wasm::ReinterpretInt64);
+            }
+        }
+
+        if constexpr (std::floating_point<From>) {                                          // from floating point
+            if constexpr (integral<To>) {                                                   //  to integer
+                if constexpr (sizeof(From) == 4 and sizeof(To) == 4)                        //   f32 -> i32
+                    return unary<int32_t>(::wasm::ReinterpretFloat32);
+                if constexpr (sizeof(From) == 8 and sizeof(To) == 8)                        //   f64 -> i64
+                    return unary<To>(::wasm::ReinterpretFloat64);
+            }
+        }
+
+        M_unreachable("illegal reinterpretation");
+    }
 
 
     /*------------------------------------------------------------------------------------------------------------------
@@ -1562,7 +1594,12 @@ struct PrimitiveExpr<T>
 
     PrimitiveExpr<uint64_t> hash() requires unsigned_integral<T> { return *this; }
     PrimitiveExpr<uint64_t> hash() requires signed_integral<T> { return make_unsigned(); }
-    PrimitiveExpr<uint64_t> hash() requires std::floating_point<T> { return to<int64_t>().make_unsigned(); }
+    PrimitiveExpr<uint64_t> hash() requires std::floating_point<T> and (sizeof(T) == 4) {
+        return reinterpret<int32_t>().make_unsigned();
+    }
+    PrimitiveExpr<uint64_t> hash() requires std::floating_point<T> and (sizeof(T) == 8) {
+        return reinterpret<int64_t>().make_unsigned();
+    }
     PrimitiveExpr<uint64_t> hash() requires std::same_as<T, bool> { return to<uint64_t>(); }
 
 #undef UNFOP_

@@ -208,8 +208,12 @@ requires signed_integral<T>
 U64 reinterpret_to_U64(m::wasm::PrimitiveExpr<T> value) { return value.make_unsigned(); }
 
 template<typename T>
-requires std::floating_point<T>
-U64 reinterpret_to_U64(m::wasm::PrimitiveExpr<T> value) { return value.template to<int64_t>().make_unsigned(); }
+requires std::floating_point<T> and (sizeof(T) == 4)
+U64 reinterpret_to_U64(m::wasm::PrimitiveExpr<T> value) { return value.template reinterpret<int32_t>().make_unsigned(); }
+
+template<typename T>
+requires std::floating_point<T> and (sizeof(T) == 8)
+U64 reinterpret_to_U64(m::wasm::PrimitiveExpr<T> value) { return value.template reinterpret<int64_t>().make_unsigned(); }
 
 template<typename T>
 requires std::same_as<T, bool>

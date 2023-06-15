@@ -1462,24 +1462,51 @@ private:
     using has_mark = decltype(std::declval<T>().mark(Subproblem()));
 
 
-//    void bidirectional_for_each_successor(callback_t &&callback, const state_type &state, heuristic_type &heuristic,
-//                                   expand_type &expand, Context &... context) {
-//        expand(state, [this, callback=std::move(callback), &heuristic, &context...](state_type successor) {
-//            if (auto it = state_manager_.find(successor, context...);it == state_manager_.end(successor, context...)) {
-//                const double h = heuristic(successor, context...);
-//                callback(std::move(successor), h);
-//            } else {
-//                inc_cached_heuristic_value();
-//                callback(std::move(successor), it->second.h);
-//            }
-//        }, context...);
-//    }
-//
-//    void explore_state(const state_type &state, heuristic_type &heuristic, expand_type &expand, Context&... context) {
-//        bidirectional_for_each_successor([this, &context...](state_type successor, double h) {
-//            state_manager_.push_regular_queue(std::move(successor), h, context...);
-//        }, state, heuristic, expand, context...);
-//    }
+    void bidirectional_for_each_successor_bottomup(callback_t &&callback,
+                                                   const state_type &state, heuristic_type &heuristic,
+                                                   expand_type &expand,
+                                                   Context &... context) {
+        expand(state, [this, callback = std::move(callback), &heuristic, &context...](state_type successor) {
+            if (auto it = state_manager_bottomup.find(successor, context...);
+                    it == state_manager_bottomup.end(successor, context...)) {
+                const double h = heuristic(successor, context...);
+                callback(std::move(successor), h);
+            } else {
+                inc_cached_heuristic_value();
+                callback(std::move(successor), it->second.h);
+            }
+        }, context...);
+    }
+
+    void bidirectional_for_each_successor_topdown(callback_t &&callback,
+                                                  const state_type &state, heuristic_type &heuristic,
+                                                  expand_type &expand,
+                                                  Context &... context) {
+        expand(state, [this, callback = std::move(callback), &heuristic, &context...](state_type successor) {
+            if (auto it = state_manager_topdown.find(successor, context...);
+                    it == state_manager_topdown.end(successor, context...)) {
+                const double h = heuristic(successor, context...);
+                callback(std::move(successor), h);
+            } else {
+                inc_cached_heuristic_value();
+                callback(std::move(successor), it->second.h);
+            }
+        }, context...);
+    }
+
+    void explore_state_bottomup(const state_type &state, heuristic_type &heuristic, expand_type &expand,
+                                Context &... context) {
+        bidirectional_for_each_successor_bottomup([this, &context...](state_type successor, double h) {
+            state_manager_bottomup.push_regular_queue(std::move(successor), h, context...);
+        }, state, heuristic, expand, context...);
+    }
+
+    void explore_state_topdown(const state_type &state, heuristic_type &heuristic, expand_type &expand,
+                               Context &... context) {
+        bidirectional_for_each_successor_topdown([this, &context...](state_type successor, double h) {
+            state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
+        }, state, heuristic, expand, context...);
+    }
 
 
 public:
@@ -1528,17 +1555,33 @@ const State &biDirectionalSearch<State, Expand, Expand2, Heuristic, Heuristic2, 
     /// 1. Init the Bidirectional State Manager
     /// Including front and back - two direction, init and push element - two operations
     /// We can ignore the input initial_state
-    state_manager_bottomup.template push<false>(std::move(bottom_state),0,context...);
-    state_manager_topdown.template push<false>(std::move(top_state),0,context...);
+    state_manager_bottomup.template push<false>(std::move(bottom_state), 0, context...);
+    state_manager_topdown.template push<false>(std::move(top_state), 0, context...);
     /// 2. while loop
-    while(not state_manager_bottomup.queues_empty() && not state_manager_topdown.queues_empty()){
-        auto bottomup_node=state_manager_bottomup.pop_front();
-        const state_type &bottomup_state=bottomup_node.first;
-        auto topdown_node=state_manager_topdown.pop_front();
-        const state_type &topdown_state=topdown_node.first;
+    while (not state_manager_bottomup.queues_empty() && not state_manager_topdown.queues_empty()) {
+        auto bottomup_node = state_manager_bottomup.pop_front();
+        const state_type &bottomup_state = bottomup_node.first;
+        auto topdown_node = state_manager_topdown.pop_front();
+        const state_type &topdown_state = topdown_node.first;
 
-        if(bottomup_state.size())
+        /// 2. Exit case
+        size_t diff = (topdown_state.size() - bottomup_state.size()) <= 1;
+        if (diff <= 1) {
+            if (diff == 1) {
+                /// Build connection from bottomup_state to topdown_state
+                topdown_state.
+            } else if (diff == 0) {
+                /// Compare and choose one node if different
 
+            }
+
+            /// TODO: Return the state of the top, no matter which case
+            return goal;
+        }
+
+        /// 3. Bidirectionally extend to step forward
+        explore_state_bottomup(bottomup_state, heuristic, expand, context...);
+        explore_state_topdown(topdown_state, heuristic2, expand2, context...);
     }
 
     throw std::logic_error("goal state unreachable from provided initial state");

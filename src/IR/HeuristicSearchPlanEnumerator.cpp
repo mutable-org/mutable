@@ -206,7 +206,7 @@ struct SubproblemsArray : Base<SubproblemsArray>
     static allocator_type & get_allocator() { return allocator_; }
 
     private:
-    mutable const SubproblemsArray *parent_ = nullptr;
+    mutable SubproblemsArray *parent_ = nullptr;
     ///> the cost to reach this state from the initial state
     mutable double g_;
     ///> number of subproblems in this state

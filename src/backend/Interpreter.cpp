@@ -632,48 +632,59 @@ struct SimpleHashJoinData : JoinData
         , probe_key(op.child(1)->schema())
         , ht(1024)
     {
-        /* Decompose the join predicate of the form `A.x = B.y` into parts `A.x` and `B.y`. */
-        auto &pred = op.predicate();
-        M_insist(pred.size() == 1, "invalid predicate for simple hash join");
-        auto &clause = pred[0];
-        M_insist(clause.size() == 1, "invalid predicate for simple hash join");
-        auto &literal = clause[0];
-        M_insist(not literal.negative(), "invalid predicate for simple hash join");
-        auto &expr = literal.expr();
-        auto binary = as<const ast::BinaryExpr>(&expr);
-        M_insist(binary->tok == TK_EQUAL);
-        auto first = binary->lhs.get();
-        auto second = binary->rhs.get();
-        M_insist(is_comparable(first->type(), second->type()), "the two sides of a comparison should be comparable");
-
-        key_schema.add("key", first->type());
-        key = Tuple(key_schema);
-
-        /* Identify for each part `A.x` and `B.y` to which side of the join they belong. */
-        auto required_first = first->get_required();
         auto &schema_lhs = op.child(0)->schema();
 #ifndef NDEBUG
-        auto required_second = second->get_required();
         auto &schema_rhs = op.child(1)->schema();
 #endif
 
-        if ((required_first & schema_lhs).num_entries() != 0) { // build on first, probe second
+        /* Decompose each join predicate of the form `A.x = B.y` into parts `A.x` and `B.y` and build the schema of the
+         * join key. */
+        unsigned key_idx = 0;
+        auto &pred = op.predicate();
+        for (auto &clause : pred) {
+            M_insist(clause.size() == 1, "invalid predicate for simple hash join");
+            auto &literal = clause[0];
+            M_insist(not literal.negative(), "invalid predicate for simple hash join");
+            auto &expr = literal.expr();
+            auto binary = as<const ast::BinaryExpr>(&expr);
+            M_insist(binary->tok == TK_EQUAL);
+            auto first = binary->lhs.get();
+            auto second = binary->rhs.get();
+            M_insist(is_comparable(first->type(), second->type()), "the two sides of a comparison should be comparable");
+            M_insist(first->type() == second->type(), "operand types must be equal");
+
+            /* Add type to general key schema. */
+            key_schema.add("key", first->type());
+
+            /*----- Decide which side of the join the predicate belongs to. -----*/
+            auto required_by_first = first->get_required();
 #ifndef NDEBUG
-            M_insist((required_first & schema_rhs).num_entries() == 0,
-                   "first expression requires definitions from both sides");
-            M_insist((required_second & schema_lhs).num_entries() == 0,
-                   "second expression requires definition from left-hand side");
+            auto required_by_second = second->get_required();
 #endif
-            build_key.emit(*first, 1);
-            build_key.emit_St_Tup(0, 0, first->type());
-            probe_key.emit(*second, 1);
-            probe_key.emit_St_Tup(0, 0, second->type());
-        } else {                                                // build on second, probe first
-            build_key.emit(*second, 1);
-            build_key.emit_St_Tup(0, 0, second->type());
-            probe_key.emit(*first, 1);
-            probe_key.emit_St_Tup(0, 0, first->type());
+            if ((required_by_first & schema_lhs).num_entries() != 0) {
+#ifndef NDEBUG
+                M_insist((required_by_second & schema_rhs).num_entries() != 0, "second must belong to RHS");
+#endif
+                /* First belongs to LHS, the build relation. */
+                build_key.emit(*first, 1);
+                build_key.emit_St_Tup(0, key_idx, first->type());
+                probe_key.emit(*second, 1);
+                probe_key.emit_St_Tup(0, key_idx, second->type());
+            } else {
+#ifndef NDEBUG
+                M_insist((required_by_first & schema_rhs).num_entries() != 0, "first must belong to RHS");
+                M_insist((required_by_second & schema_lhs).num_entries() != 0, "second must belong to LHS");
+#endif
+                build_key.emit(*second, 1);
+                build_key.emit_St_Tup(0, key_idx, second->type());
+                probe_key.emit(*first, 1);
+                probe_key.emit_St_Tup(0, key_idx, first->type());
+            }
+            ++key_idx;
         }
+
+        /* Create the tuple holding a key. */
+        key = Tuple(key_schema);
     }
 };
 

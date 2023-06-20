@@ -1,4 +1,4 @@
-description: Plan enumeration of star queries.
+description: Plan enumeration of star queries with methods that are agnostic to cardinalities.
 suite: plan-enumerators
 benchmark: star
 name: small

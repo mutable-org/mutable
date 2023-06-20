@@ -1,4 +1,4 @@
-description: Plan enumeration of clique queries.
+description: Plan enumeration of clique queries with methods that are agnostic to cardinalities.
 suite: plan-enumerators
 benchmark: clique
 name: small

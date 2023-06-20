@@ -134,6 +134,7 @@ void m::exec(const char *executable, std::initializer_list<const char*> args)
             *p++ = strdup(arg);
         *p = nullptr;
         execv(executable, c_args);
+        M_unreachable("Invalid executable path or arguments"); // M_LCOV_EXCL_LINE
     }
 #endif
 }

@@ -622,3 +622,65 @@ TEST_CASE("fast_sqrt", "[core][util]")
         CHECK(fast_sqrtd(1000) == Approx(31.62).epsilon(.01));
     }
 }
+
+TEST_CASE("escape/unescape", "[core][util][fn]")
+{
+    SECTION("Empty string")
+    {
+        CHECK(escape("") == "");
+        CHECK(unescape("") == "");
+    }
+
+    SECTION("String with no escape sequence")
+    {
+        auto str = "Nothing to (e/un)scape! ";
+        CHECK(escape(str) == str);
+        CHECK(unescape(str) == str);
+    }
+
+    SECTION("String with valid quote escapes")
+    {
+        auto str = "String with, \"quote escapes!\"";
+        auto escaped_str = "String with, \\\"quote escapes!\\\"";
+        CHECK(escape(str) == escaped_str);
+        CHECK(unescape(escaped_str) == str);
+    }
+
+    SECTION("String with valid backslashe escapes")
+    {
+        auto str = "\\ Back\\slaches \\";
+        auto escaped_str = "\\\\ Back\\\\slaches \\\\";
+        CHECK(escape(str) == escaped_str);
+        CHECK(unescape(escaped_str) == str);
+    }
+
+    SECTION("String with valid newline escapes")
+    {
+        auto str = "\n Newline\nEscapes \n";
+        auto escaped_str = "\\n Newline\\nEscapes \\n";
+        CHECK(escape(str) == escaped_str);
+        CHECK(unescape(escaped_str) == str);
+    }
+
+    SECTION("String with all escape characters")
+    {
+        auto str = "\n\"\\\"\n";
+        auto escaped_str = "\\n\\\"\\\\\\\"\\n";
+        CHECK(escape(str) == escaped_str);
+        CHECK(unescape(escaped_str) == str);
+    }
+
+    SECTION("String with same quote and escape character")
+    {
+        auto str = "quote\"escape";
+        auto escaped_str = "quote\"\"escape";
+        CHECK(escape(str, '\"', '\"') == escaped_str);
+        CHECK(unescape(escaped_str, '\"', '\"') == str);
+    }
+
+    SECTION("String with invalid escape sequence")
+    {
+        auto str = "Invalid\\Escape\\tSequence";
+        CHECK(unescape(str, '\\', '\"') == str);
+    }
+}

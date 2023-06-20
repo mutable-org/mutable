@@ -263,7 +263,7 @@ inline std::string unquote(const std::string &str, char quote = '"')
 inline std::string interpret(const std::string &str, char esc = '\\', char quote = '"')
 {
     return unescape(unquote(str, quote), esc, quote);
-}
+} // M_LCOV_EXCL_LINE
 
 /** Escapes special characters in a string to be printable in HTML documents.  Primarily used for DOT. */
 std::string M_EXPORT html_escape(std::string str);

@@ -235,6 +235,21 @@ TEST_CASE("pattern_to_regex", "[core][util][fn]")
         REQUIRE(std::regex_match(s1, r11) == std::regex_match(s1, r11_));
         REQUIRE(std::regex_match(s9, r11) == std::regex_match(s9, r11_));
     }
+
+    SECTION("Invalid escape character/sequence")
+    {
+        for (char esc : { '_', '%' }) {
+            CHECK_THROWS_AS(pattern_to_regex("", false, esc), m::invalid_argument);
+            CHECK_THROWS_AS(pattern_to_regex("abcd", false, esc), m::invalid_argument);
+            CHECK_THROWS_AS(pattern_to_regex("abcd", true, esc), m::invalid_argument);
+            CHECK_THROWS_AS(pattern_to_regex("_", false, esc), m::invalid_argument);
+            CHECK_THROWS_AS(pattern_to_regex("%", false, esc), m::invalid_argument);
+        }
+
+        CHECK_THROWS_AS(pattern_to_regex("abc\\x"), m::runtime_error);
+        CHECK_THROWS_AS(pattern_to_regex("\\x\\y\\z"), m::runtime_error);
+        CHECK_THROWS_AS(pattern_to_regex("\\\\\\"), m::runtime_error);
+    }
 }
 
 TEST_CASE("like", "[core][util][fn]")

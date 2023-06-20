@@ -1,15 +1,15 @@
 #include "catch2/catch.hpp"
 
-#include <mutable/util/fn.hpp>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
 #include <limits>
+#include <mutable/util/concepts.hpp>
+#include <mutable/util/fn.hpp>
 #include <sstream>
 #include <string>
-
 
 using namespace m;
 
@@ -769,4 +769,50 @@ TEST_CASE("unquote", "[core][util][fn]")
         CHECK(unquote("a\"") == "a\"");
         CHECK(unquote("a bunch_of_chars\"") == "a bunch_of_chars\"");
     }
+}
+
+TEMPLATE_TEST_CASE("is_range_wide_enough", "[core][util][fn]",
+    int16_t, int32_t, int64_t, uint16_t, uint32_t, uint64_t, float, double)
+{
+    std::vector<std::pair<TestType, TestType>> ranges;
+    CHECK(is_range_wide_enough(TestType(0), TestType(0), 0)); // n = 0
+    CHECK(is_range_wide_enough(TestType(0), TestType(0), 1)); // n = 1
+
+#define CHECK_RANGE                                                     \
+    {                                                                   \
+        CAPTURE(r.first, r.second, diff);                               \
+        CHECK(is_range_wide_enough(r.first, r.second, diff - 1));       \
+        CHECK(is_range_wide_enough(r.first, r.second, diff));           \
+        CHECK(is_range_wide_enough(r.first, r.second, diff + 1));       \
+        CHECK_FALSE(is_range_wide_enough(r.first, r.second, diff + 2)); \
+    }
+
+    if constexpr (std::floating_point<TestType>) { // Floating point Range
+        ranges = { { 10., 100. }, { 0., 1. }, { -1., 10. }, { -1., 0. }, { -10., 100. } };
+
+        for (auto r : ranges) {
+            /** Floating point range [a, b] is wide enough if the representable values of b and a has distance
+             *  of at least n. `sequence_number()` is used to get representable value of those endpoints */
+            auto a = sequence_number(r.first);
+            auto b = sequence_number(r.second);
+            auto diff = b - a;
+
+            CHECK_RANGE;
+            std::swap(r.first, r.second);
+            CHECK_RANGE;
+        }
+    } else { // Integral Range
+        ranges = { { 10, 100 }, { 0, 1 }, }; // Unsigned Ranges
+        if constexpr (signed_integral<TestType>) // Signed Integral Range
+            ranges = { { 10, 100 }, { 0, 1 }, { -1, 10 }, { -1, 0 }, { -10, 100 } };
+
+        for (auto r : ranges) {
+            auto diff = r.second - r.first;
+
+            CHECK_RANGE;
+            std::swap(r.first, r.second);
+            CHECK_RANGE;
+        }
+    }
+#undef CHECK_RANGE
 }

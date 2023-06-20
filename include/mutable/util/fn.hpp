@@ -685,22 +685,22 @@ constexpr bool M_EXPORT is_range_wide_enough(T a, T b, std::size_t n)
 
     M_insist(a <= b);
     M_insist(n > 0);
-    if constexpr (std::is_integral_v<T>) {
-        if constexpr (std::is_signed_v<T>) {
+    if constexpr (integral<T>) {
+        if constexpr (signed_integral<T>) {
             using U = std::make_unsigned_t<T>;
 
             if ((a < 0) == (b < 0)) { // equal signs
-                return U(b - a) >= n;
+                return U(b - a) >= n - 1;
             } else { // different signs
                 M_insist(a < 0);
                 M_insist(b >= 0);
                 U a_abs = U(~a) + 1U; // compute absolute without overflow
-                return a_abs >= n or (U(b) >= n - a_abs);
+                return a_abs >= n or (U(b) >= n - a_abs - 1);
             }
         } else { // unsigned
-            return (b - a) >= n;
+            return (b - a) >= n - 1;
         }
-    } else if constexpr (std::is_floating_point_v<T>) {
+    } else if constexpr (std::floating_point<T>) {
         return sequence_number(b) - sequence_number(a) >= n - 1;
     } else {
         static_assert(std::is_same_v<T, T>, "unsupported type");

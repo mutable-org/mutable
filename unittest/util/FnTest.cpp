@@ -723,3 +723,29 @@ TEST_CASE("exec", "[core][util][fn]")
         CHECK_NOTHROW(exec("/bin/sh", { "-c", "rm ls_out.txt" }));
     }
 }
+
+TEST_CASE("unquote", "[core][util][fn]")
+{
+    SECTION("valid input")
+    {
+        CHECK(unquote("\"unquote\"") == "unquote");
+        CHECK(unquote("\"\"") == "");
+        CHECK(unquote("\"\\\"\"") == "\\\"");
+        CHECK(unquote("\"\\\"unquote\\\"\"") == "\\\"unquote\\\"");
+        CHECK(unquote("\"nes\"t\"ed\"") == "nes\"t\"ed");
+    }
+
+    SECTION("invalid input")
+    {
+        CHECK_THROWS_AS(unquote(""), m::invalid_argument);
+        CHECK_THROWS_AS(unquote("a"), m::invalid_argument);
+        CHECK_THROWS_AS(unquote("\""), m::invalid_argument);
+        CHECK_THROWS_AS(unquote("\"a"), m::invalid_argument);
+
+        CHECK(unquote("\\\"") == "\\\"");
+        CHECK(unquote("\\a bunch_of_chars\"") == "\\a bunch_of_chars\"");
+
+        CHECK(unquote("a\"") == "a\"");
+        CHECK(unquote("a bunch_of_chars\"") == "a bunch_of_chars\"");
+    }
+}

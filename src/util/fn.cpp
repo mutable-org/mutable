@@ -63,7 +63,7 @@ std::string m::html_escape(std::string str)
     str = replace_all(str, "<", "&lt;");
     str = replace_all(str, ">", "&gt;");
     return str;
-}
+} // M_LCOV_EXCL_LINE
 
 bool m::like(const std::string &str, const std::string &pattern, const char escape_char)
 {

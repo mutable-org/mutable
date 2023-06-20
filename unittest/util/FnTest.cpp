@@ -684,3 +684,28 @@ TEST_CASE("escape/unescape", "[core][util][fn]")
         CHECK(unescape(str, '\\', '\"') == str);
     }
 }
+
+TEST_CASE("html_escape", "[core][util][fn]")
+{
+    SECTION("Empty String")
+    {
+        CHECK(html_escape("") == "");
+    }
+
+    SECTION("String without special characters")
+    {
+        CHECK(html_escape("No special characters") == "No special characters");
+    }
+
+    SECTION("String with all special characters")
+    {
+        CHECK(html_escape("<&&>") == "&lt;&amp;&amp;&gt;");
+    }
+
+    SECTION("HTML with mixed characters")
+    {
+        std::string input = "<p>Escape &amp; me!</p>";
+        std::string expected = "&lt;p&gt;Escape &amp;amp; me!&lt;/p&gt;";
+        CHECK(html_escape(input) == expected);
+    }
+}

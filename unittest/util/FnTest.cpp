@@ -53,6 +53,7 @@ TEST_CASE("ceil_to_pow_2", "[core][util][fn]")
 
 TEST_CASE("round_up_to_multiple", "[core][util][fn]")
 {
+    CHECK(0 == round_up_to_multiple(0U, 0U));
     CHECK(0 == round_up_to_multiple(0U, 1U));
     CHECK(1 == round_up_to_multiple(1U, 1U));
     CHECK(2 == round_up_to_multiple(2U, 1U));
@@ -60,6 +61,11 @@ TEST_CASE("round_up_to_multiple", "[core][util][fn]")
     CHECK(2 == round_up_to_multiple(1U, 2U));
     CHECK(2 == round_up_to_multiple(2U, 2U));
     CHECK(4 == round_up_to_multiple(3U, 2U));
+
+    // 0 factor (invalid_argument)
+    CHECK_THROWS_AS(round_up_to_multiple(1U, 0U), m::invalid_argument);
+    CHECK_THROWS_AS(round_up_to_multiple(3U, 0U), m::invalid_argument);
+    CHECK_THROWS_AS(round_up_to_multiple(100U, 0U), m::invalid_argument);
 }
 
 TEST_CASE("log2", "[core][util][fn]")

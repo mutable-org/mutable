@@ -1,7 +1,7 @@
 description: Plan enumeration of chain queries with methods that are agnostic to cardinalities.
 suite: plan-enumerators
-benchmark: chain
-name: small
+benchmark: cardinality-agnostic
+name: chain
 readonly: true
 chart:
     x:

@@ -1,7 +1,7 @@
 description: Plan enumeration of cycle queries with methods that are agnostic to cardinalities.
 suite: plan-enumerators
-benchmark: cycle
-name: small
+benchmark: cardinality-agnostic
+name: cycle
 readonly: true
 chart:
     x:

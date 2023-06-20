@@ -1,7 +1,7 @@
 description: Plan enumeration of clique queries with methods that are agnostic to cardinalities.
 suite: plan-enumerators
-benchmark: clique
-name: small
+benchmark: cardinality-agnostic
+name: clique
 readonly: true
 chart:
     x:

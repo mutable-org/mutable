@@ -1,7 +1,7 @@
 description: Plan enumeration of star queries with methods that are agnostic to cardinalities.
 suite: plan-enumerators
-benchmark: star
-name: small
+benchmark: cardinality-agnostic
+name: star
 readonly: true
 chart:
     x:

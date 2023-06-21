@@ -2464,6 +2464,14 @@ struct Expr<T>
     to()
     { return Expr<To>(value_.template to<To>(), is_null_); }
 
+    /** Reinterpret an `Expr<T>` to an `Expr<To>`.  Only applicable if `PrimitiveExpr<T>` can be reinterpreted to
+     * `PrimitiveExpr<To>`. */
+    template<dsl_primitive To>
+    requires requires { value_.template reinterpret<To>(); }
+    Expr<To>
+    reinterpret()
+    { return Expr<To>(value_.template reinterpret<To>(), is_null_); }
+
 
     /*------------------------------------------------------------------------------------------------------------------
      * Unary operations
@@ -3029,6 +3037,10 @@ struct Variable<T, Kind, CanBeNull>
     template<typename U>
     requires requires (dependent_expr_type v) { v.template to<U>(); }
     dependent_expr_t<U> to() const { return dependent_expr_type(*this).template to<U>(); }
+
+    template<typename U>
+    requires requires (dependent_expr_type v) { v.template reinterpret<U>(); }
+    dependent_expr_t<U> reinterpret() const { return dependent_expr_type(*this).template reinterpret<U>(); }
 
     template<typename U>
     requires requires (U init) { storage_.init(init); }

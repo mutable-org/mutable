@@ -1236,7 +1236,7 @@ struct PrimitiveExpr<T>
     public:
     /** Constructs a new `PrimitiveExpr` from a constant \p value. */
     template<dsl_primitive U>
-    requires requires { make_literal<T>(U()); }
+    requires requires (U u) { make_literal<T>(u); }
     explicit PrimitiveExpr(U value)
         : PrimitiveExpr(Module::Builder().makeConst(make_literal<T>(value)))
     { }
@@ -1244,7 +1244,7 @@ struct PrimitiveExpr<T>
     /** Constructs a new `PrimitiveExpr` from a decayable constant \p value. */
     template<decayable U>
     requires dsl_primitive<std::decay_t<U>> and
-    requires (U value) { PrimitiveExpr(std::decay_t<U>(value)); }
+    requires (U u) { PrimitiveExpr(std::decay_t<U>(u)); }
     explicit PrimitiveExpr(U value)
         : PrimitiveExpr(std::decay_t<U>(value))
     { }
@@ -2308,13 +2308,19 @@ struct Expr<T>
         : Expr(value.first, value.second)
     { }
 
-    /** Construct an `Expr<T>` from a primitive `T`. */
-    explicit Expr(T value) : Expr(PrimitiveExpr<T>(value)) { }
-
+    /** Constructs an `Expr` from a constant \p value. */
     template<dsl_primitive U>
-    requires same_signedness<T, U> and equally_floating<T, U>
-    explicit Expr(U &&value)
-        : Expr(T(std::forward<U>(value)))
+    requires requires (U u) { PrimitiveExpr<T>(u); }
+    explicit Expr(U value)
+        : Expr(PrimitiveExpr<T>(value))
+    { }
+
+    /** Constructs an `Expr` from a decayable constant \p value. */
+    template<decayable U>
+    requires dsl_primitive<std::decay_t<U>> and
+    requires (U u) { Expr(std::decay_t<U>(u)); }
+    explicit Expr(U value)
+        : Expr(std::decay_t<U>(value))
     { }
 
     Expr(const Expr&) = delete;

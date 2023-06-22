@@ -425,6 +425,13 @@ operator()(StateManager::pointer_type p_left, StateManager::pointer_type p_right
     return left->first.g() + left->second.h > right->first.g() + right->second.h;
 }
 
+template<typename Config>
+concept SearchConfig = std::is_class_v<Config> and
+                       requires { { Config::Weight } -> std::convertible_to<float>; } and
+                       std::integral<decltype(Config::BeamWidth::num)> and
+                       std::integral<decltype(Config::BeamWidth::den)> and
+                       requires { { Config::Lazy } -> std::convertible_to<bool>; } and
+                       requires { { Config::IsMonotone } -> std::convertible_to<bool>; };
 
 /** Implements a generic A* search algorithm.  Allows for specifying a weighting factor for the heuristic value.  Allows
  * for lazy evaluation of the heuristic. */
@@ -432,32 +439,27 @@ template<
     heuristic_search_state State,
     typename Expand,
     typename Heuristic,
-    typename Weight,
-    unsigned BeamWidth,
-    bool Lazy,
-    bool IsMonotone,
-    typename Config,
+    SearchConfig Config,
     typename... Context
 >
-requires heuristic_search_heuristic<Heuristic, Context...> and
-         std::convertible_to<decltype(Weight::num), double> and std::convertible_to<decltype(Weight::den), double>
+requires heuristic_search_heuristic<Heuristic, Context...>
 struct genericAStar
 {
     using state_type = State;
     using expand_type = Expand;
     using heuristic_type = Heuristic;
-    using weight = Weight;
 
+    static constexpr float weight = Config::Weight;
     ///> The width of a beam used for *beam search*.  Set to 0 to disable beam search.
-    static constexpr unsigned beam_width = BeamWidth;
+    static constexpr float beam_width = Config::BeamWidth::num / Config::BeamWidth::den;
     ///> Whether to perform beam search or regular A*
-    static constexpr bool use_beam_search = beam_width != 0;
+    static constexpr bool use_beam_search = Config::BeamWidth::num != 0;
     ///> Whether to use a dynamic beam width for beam search
-    static constexpr bool use_dynamic_beam_sarch = beam_width == decltype(beam_width)(-1);
+    static constexpr bool use_dynamic_beam_sarch = use_beam_search and beam_width < 1.f;
     ///> Whether to evaluate the heuristic lazily
-    static constexpr bool is_lazy = Lazy;
+    static constexpr bool is_lazy = Config::Lazy;
     ///> Whether the state space is acyclic and without dead ends (useful in combination with beam search)
-    static constexpr bool is_monotone = IsMonotone;
+    static constexpr bool is_monotone = Config::IsMonotone;
     ///> The fraction of a state's successors to add to the beam (if performing beam search)
     static constexpr float BEAM_FACTOR = .2f;
 
@@ -605,7 +607,7 @@ struct genericAStar
         /*----- Evaluate heuristic lazily by using heurisitc value of current state. -----*/
         double h_current_state;
         if (auto it = state_manager_.find(state, context...); it == state_manager_.end(state, context...)) {
-            h_current_state = double(Weight::num) * heuristic(state, context...) / Weight::den;
+            h_current_state = weight * heuristic(state, context...);
         } else {
             inc_cached_heuristic_value();
             h_current_state = it->second.h; // use cached `h`
@@ -622,7 +624,7 @@ struct genericAStar
         /*----- Evaluate heuristic eagerly. -----*/
         expand(state, [this, callback=std::move(callback), &state, &heuristic, &context...](state_type successor) {
             if (auto it = state_manager_.find(successor, context...); it == state_manager_.end(state, context...)) {
-                const double h = double(Weight::num) * heuristic(successor, context...) / Weight::den;
+                const double h = weight * heuristic(successor, context...);
                 callback(std::move(successor), h);
             } else {
                 inc_cached_heuristic_value();
@@ -684,16 +686,11 @@ template<
     heuristic_search_state State,
     typename Expand,
     typename Heuristic,
-    typename Weight,
-    unsigned BeamWidth,
-    bool Lazy,
-    bool IsMonotone,
-    typename Config,
+    SearchConfig Config,
     typename... Context
 >
-requires heuristic_search_heuristic<Heuristic, Context...> and
-         std::convertible_to<decltype(Weight::num), double> and std::convertible_to<decltype(Weight::den), double>
-const State & genericAStar<State, Expand, Heuristic, Weight, BeamWidth, Lazy, IsMonotone, Config, Context...>::search(
+requires heuristic_search_heuristic<Heuristic, Context...>
+const State & genericAStar<State, Expand, Heuristic, Config, Context...>::search(
     state_type initial_state,
     expand_type expand,
     heuristic_type &heuristic,
@@ -717,89 +714,6 @@ const State & genericAStar<State, Expand, Heuristic, Weight, BeamWidth, Lazy, Is
 
     throw std::logic_error("goal state unreachable from provided initial state");
 }
-
-template<
-    heuristic_search_state State,
-    typename Expand,
-    typename Heuristic,
-    typename Config,
-    typename... Context
->
-using AStar = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, 0, false, false, Config, Context...>;
-
-template<
-    heuristic_search_state State,
-    typename Expand,
-    typename Heuristic,
-    typename Config,
-    typename... Context
->
-using lazy_AStar = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, 0, true, false, Config, Context...>;
-
-template<typename Weight>
-struct wAStar
-{
-    template<
-        heuristic_search_state State,
-        typename Expand,
-        typename Heuristic,
-        typename Config,
-        typename... Context
-    >
-    using type = genericAStar<State, Expand, Heuristic, Weight, 0, false, false, Config, Context...>;
-};
-
-template<typename Weight>
-struct lazy_wAStar
-{
-    template<
-        heuristic_search_state State,
-        typename Expand,
-        typename Heuristic,
-        typename Config,
-        typename... Context
-    >
-    using type = genericAStar<State, Expand, Heuristic, Weight, 0, true, false, Config, Context...>;
-};
-
-template<unsigned BeamWidth>
-struct beam_search
-{
-    template<
-        heuristic_search_state State,
-        typename Expand,
-        typename Heuristic,
-        typename Config,
-        typename... Context
-    >
-    using type = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, BeamWidth, false, false, Config, Context...>;
-};
-
-template<unsigned BeamWidth>
-struct lazy_beam_search
-{
-    template<
-        heuristic_search_state State,
-        typename Expand,
-        typename Heuristic,
-        typename Config,
-        typename... Context
-    >
-    using type = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, BeamWidth, true, false, Config, Context...>;
-};
-
-template<unsigned BeamWidth>
-struct monotone_beam_search
-{
-    template<
-        heuristic_search_state State,
-        typename Expand,
-        typename Heuristic,
-        typename Config,
-        typename... Context
-    >
-    using type = genericAStar<State, Expand, Heuristic, std::ratio<1, 1>, BeamWidth, false, true, Config, Context...>;
-};
 
 }
 

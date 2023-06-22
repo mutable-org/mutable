@@ -2425,25 +2425,6 @@ struct checkpoints<PlanTable, SubproblemsArray>
 
 }
 
-template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
-using AStar = ai::AStar<State, Expand, Heuristic, Config, Context...>;
-template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
-using wAStar = ai::wAStar<std::ratio<2, 1>>::type<State, Expand, Heuristic, Config, Context...>;
-template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
-using lazyAStar = ai::lazy_AStar<State, Expand, Heuristic, Config, Context...>;
-template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
-using beam_search = ai::beam_search<2>::type<State, Expand, Heuristic, Config, Context...>;
-template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
-using dynamic_beam_search = ai::beam_search<-1U>::type<State, Expand, Heuristic, Config, Context...>;
-template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
-using lazy_beam_search = ai::lazy_beam_search<2>::type<State, Expand, Heuristic, Config, Context...>;
-template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
-using lazy_dynamic_beam_search = ai::lazy_beam_search<-1U>::type<State, Expand, Heuristic, Config, Context...>;
-template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
-using monotone_beam_search = ai::monotone_beam_search<2>::type<State, Expand, Heuristic, Config, Context...>;
-template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
-using monotone_dynamic_beam_search = ai::monotone_beam_search<-1U>::type<State, Expand, Heuristic, Config, Context...>;
-
 template<typename State>
 std::array<Subproblem, 2> delta(const State &before_join, const State &after_join)
 {
@@ -2496,7 +2477,11 @@ void reconstruct_plan_top_down(const State &goal, PlanTable &PT, const QueryGrap
 }
 
 
-struct data_structure_config
+/*===== Search Configs ===============================================================================================*/
+
+namespace config {
+
+struct Fibonacci_heap
 {
     template<typename Cmp>
     using compare = boost::heap::compare<Cmp>;
@@ -2508,13 +2493,62 @@ struct data_structure_config
     using allocator_type = boost::container::node_allocator<T>;
 };
 
+template<long Num, long Denom = 1>
+struct weight
+{
+    static constexpr float Weight = float(Num) / Denom;
+};
+
+template<long Num, long Denom = 1>
+struct beam
+{
+    using BeamWidth = std::ratio<Num, Denom>;
+};
+
+template<bool B>
+struct lazy
+{
+    static constexpr bool Lazy = B;
+};
+
+template<bool B>
+struct monotone
+{
+    static constexpr bool IsMonotone = B;
+};
+
+/** Combines multiple configuration parameters into a single configuration type. */
+template<typename T, typename... Ts>
+struct combine : T, combine<Ts...> { };
+
+/** Combines multiple configuration parameters into a single configuration type.  This is the base case of the recursive
+ * variadic template. */
+template<typename T>
+struct combine<T> : T { };
+
+
+/*===== Pre-configured Search Strategies =============================================================================*/
+
+#define DEFINE_SEARCH(NAME, ...) \
+    template<typename State, typename Expand, typename Heuristic, typename... Context> \
+    using NAME = ai::genericAStar<State, Expand, Heuristic, combine<__VA_ARGS__>, Context...>
+
+DEFINE_SEARCH(AStar,                monotone<true>, Fibonacci_heap, weight<1>, lazy<false>, beam<0>);
+DEFINE_SEARCH(lazyAStar,            monotone<true>, Fibonacci_heap, weight<1>, lazy<true>,  beam<0>);
+DEFINE_SEARCH(beam_search,          monotone<true>, Fibonacci_heap, weight<1>, lazy<false>, beam<2>);
+DEFINE_SEARCH(dynamic_beam_search,  monotone<true>, Fibonacci_heap, weight<1>, lazy<false>, beam<1, 5>);
+
+#undef DEFINE_SEARCH
+
+}
+
 
 template<
     typename PlanTable,
     typename State,
     typename Expand,
     template<typename, typename, typename> typename Heuristic,
-    template<typename, typename, typename, typename, typename...> typename Search
+    template<typename, typename, typename, typename...> typename Search
 >
 bool heuristic_search_helper(const char *vertex_str, const char *expand_str, const char *heuristic_str,
                              const char *search_str, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
@@ -2531,7 +2565,7 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
         try {
             H h(PT, G, M, CF, CE);
             using search_algorithm = Search<
-                State, Expand, H, data_structure_config,
+                State, Expand, H,
                 /*----- context -----*/
                 PlanTable&,
                 const QueryGraph&,
@@ -2584,13 +2618,13 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         const AdjacencyMatrix &M = G.adjacency_matrix();
 
 
-#define HEURISTIC_SEARCH(STATE, EXPAND, HEURISTIC, SEARCH) \
+#define HEURISTIC_SEARCH(STATE, EXPAND, HEURISTIC, CONFIG) \
         if (heuristic_search_helper<PlanTable, \
                                     search_states::STATE, \
                                     expansions::EXPAND, \
                                     heuristics::HEURISTIC, \
-                                    SEARCH \
-                                   >(#STATE, #EXPAND, #HEURISTIC, #SEARCH, PT, G, M, CF, CE)) \
+                                    config::CONFIG \
+                                   >(#STATE, #EXPAND, #HEURISTIC, #CONFIG, PT, G, M, CF, CE)) \
         { \
             goto matched_heuristic_search; \
         }
@@ -2598,31 +2632,31 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         // bottom-up
         //   zero
         HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,                           AStar                           )
-        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,                           monotone_beam_search            )
-        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,                           monotone_dynamic_beam_search    )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,                           beam_search            )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   zero,                           dynamic_beam_search    )
 
         //   sum
         HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,                            AStar                           )
         HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,                            lazyAStar                       )
-        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,                            monotone_beam_search            )
-        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,                            monotone_dynamic_beam_search    )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,                            beam_search            )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   sum,                            dynamic_beam_search    )
 
         //   scaled_sum
         HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   scaled_sum,                     AStar                           )
-        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   scaled_sum,                     monotone_beam_search            )
-        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   scaled_sum,                     monotone_dynamic_beam_search    )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   scaled_sum,                     beam_search            )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   scaled_sum,                     dynamic_beam_search    )
 
         //   avg_sel
         HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   avg_sel,                        AStar                           )
-        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   avg_sel,                        monotone_beam_search            )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   avg_sel,                        beam_search            )
 
         //   product
         HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   product,                        AStar                           )
 
         //   GOO
         HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,                            AStar                           )
-        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,                            monotone_beam_search            )
-        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,                            monotone_dynamic_beam_search    )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,                            beam_search            )
+        HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   GOO,                            dynamic_beam_search    )
 
         // HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   bottomup_lookahead_cheapest,    AStar                           )
         // HEURISTIC_SEARCH(   SubproblemsArray,   BottomUpComplete,   perfect_oracle,                 AStar                           )
@@ -2639,10 +2673,10 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
 
         //    GOO
         HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,                            AStar                           )
-        HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,                           monotone_beam_search            )
-        HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,                            monotone_beam_search            )
-        HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,                           monotone_dynamic_beam_search    )
-        HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,                            monotone_beam_search            )
+        HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,                           beam_search            )
+        HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    sum,                            beam_search            )
+        HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    zero,                           dynamic_beam_search    )
+        HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,                            beam_search            )
 
         throw std::invalid_argument("illegal search configuration");
 #undef HEURISTIC_SEARCH

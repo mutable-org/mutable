@@ -3343,7 +3343,7 @@ struct LocalBit
 inline void RETURN_UNSAFE() { Module::Get().emit_return(); }
 
 template<primitive_convertible T>
-inline void RETURN_UNSAFE(T &&t) { Module::Get().emit_return(expr_t<T>(std::forward<T>(t))); }
+inline void RETURN_UNSAFE(T &&t) { Module::Get().emit_return(primitive_expr_t<T>(std::forward<T>(t))); }
 
 template<expr_convertible T>
 requires (not primitive_convertible<T>)

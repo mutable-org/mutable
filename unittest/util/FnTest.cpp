@@ -851,3 +851,34 @@ TEMPLATE_TEST_CASE("is_range_wide_enough", "[core][util][fn]",
     }
 #undef CHECK_RANGE
 }
+
+TEST_CASE("FNV1a", "[core][util][fn]")
+{
+    uint64_t hash = 0xcbf29ce484222325UL;
+
+    using pairType = std::pair<const char*, uint64_t>;
+    auto testcase = GENERATE(
+        pairType("",       0xcbf29ce484222325UL),
+        pairType("\"",     0xaf639f4c860184e5UL),
+        pairType("\r",     0xaf63c04c8601bcf8UL),
+        pairType("'",      0xaf639a4c86017c66UL),
+        pairType("\"\"",   0x07cc7607b4949e25UL),
+        pairType("\"\r",   0x07cc9707b494d638UL),
+        pairType("\" \"",  0xd503c617d882b8c7UL),
+        pairType("\"\"\"", 0xd50a9617d88885e5UL),
+        pairType("a",      0xaf63dc4c8601ec8cUL),
+        pairType("ab",     0x089c4407b545986aUL),
+        pairType("a b",    0xe63f991904833892UL),
+        pairType("The quick brown \"fox\"", 0x79fcb92f1a12b238UL));
+
+    const char* c_str = testcase.first;
+    uint64_t c_str_hash = testcase.second;
+
+    CAPTURE(c_str); // Captures c_str in output if the test fails
+
+    CHECK(FNV1a(c_str) == c_str_hash);
+
+    CHECK(FNV1a(c_str, 0) == hash);
+    CHECK(FNV1a(c_str, strlen(c_str)) == c_str_hash);
+    CHECK(FNV1a(c_str, strlen(c_str) + 1) == c_str_hash);
+}

@@ -88,10 +88,10 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Scan", "[core][wasm]")
         auto off = wasm_context.map_table(table); // without faulting guard pages
         std::ostringstream oss;
         oss << table.name << "_mem";
-        Module::Get().emit_global<void*>(oss.str(), off, false);
+        Module::Get().emit_global<void*>(oss.str(), false, off);
         oss.str("");
         oss << table.name << "_num_rows";
-        Module::Get().emit_global<uint32_t>(oss.str(), table.store().num_rows(), false);
+        Module::Get().emit_global<uint32_t>(oss.str(), false, table.store().num_rows());
 
         CodeGenContext::Init(); // create fresh codegen context
         FUNCTION(scan_code, void(void)) {

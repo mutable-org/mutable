@@ -26,21 +26,21 @@ TEST_CASE("Wasm/" BACKEND_NAME "/ModuleInstance create from module", "[core][was
 TEST_CASE("Wasm/" BACKEND_NAME "/make_type", "[core][wasm]")
 {
     /*----- Void -----*/
-    REQUIRE(wasm_type<void>() == ::wasm::Type::none);
+    REQUIRE(wasm_type<void, 1>() == ::wasm::Type::none);
 
     /*----- Integers -----*/
-    REQUIRE(wasm_type<signed char>() == ::wasm::Type::i32);
-    REQUIRE(wasm_type<signed short>() == ::wasm::Type::i32);
-    REQUIRE(wasm_type<signed int>() == ::wasm::Type::i32);
-    REQUIRE(wasm_type<int64_t>() == ::wasm::Type::i64);
-    REQUIRE(wasm_type<unsigned char>() == ::wasm::Type::i32);
-    REQUIRE(wasm_type<unsigned short>() == ::wasm::Type::i32);
-    REQUIRE(wasm_type<unsigned int>() == ::wasm::Type::i32);
-    REQUIRE(wasm_type<uint64_t>() == ::wasm::Type::i64);
+    REQUIRE(wasm_type<signed char, 1>() == ::wasm::Type::i32);
+    REQUIRE(wasm_type<signed short, 1>() == ::wasm::Type::i32);
+    REQUIRE(wasm_type<signed int, 1>() == ::wasm::Type::i32);
+    REQUIRE(wasm_type<int64_t, 1>() == ::wasm::Type::i64);
+    REQUIRE(wasm_type<unsigned char, 1>() == ::wasm::Type::i32);
+    REQUIRE(wasm_type<unsigned short, 1>() == ::wasm::Type::i32);
+    REQUIRE(wasm_type<unsigned int, 1>() == ::wasm::Type::i32);
+    REQUIRE(wasm_type<uint64_t, 1>() == ::wasm::Type::i64);
 
     /*----- Floating points -----*/
-    REQUIRE(wasm_type<float>() == ::wasm::Type::f32);
-    REQUIRE(wasm_type<double>() == ::wasm::Type::f64);
+    REQUIRE(wasm_type<float, 1>() == ::wasm::Type::f32);
+    REQUIRE(wasm_type<double, 1>() == ::wasm::Type::f64);
 }
 
 TEST_CASE("Wasm/" BACKEND_NAME "/Block", "[core][wasm]")
@@ -265,16 +265,19 @@ TEST_CASE("Wasm/" BACKEND_NAME "/GlobalVariable", "[core][wasm]")
     Module::Dispose();
 }
 
-TEST_CASE("Wasm/" BACKEND_NAME "/Expr/operations/unary", "[core][wasm]")
+TEST_CASE("Wasm/" BACKEND_NAME "/Expr/scalar/operations/unary", "[core][wasm]")
 {
     Module::Init();
 
     CHECK_RESULT_INLINE( 42, int(), { _I32 a(42); RETURN(+a); });
     CHECK_RESULT_INLINE(-42, int(), { _I32 a(42); RETURN(-a); });
-    // abs() not supported for integral types
+    // abs() not supported for scalar integral types
     // ceil() not supported for integral types
     // floor() not supported for integral types
+    // trunc() not supported for scalar types
+    // nearest() not supported for scalar types
     // sqrt() not supported for integral types
+    // add_pairwise() not supported for scalar types
     CHECK_RESULT_INLINE(  ~42, int32_t(),  { _I32 a(42); RETURN(~a); });
     CHECK_RESULT_INLINE(   28, uint32_t(), { _U32 a(0b1010);  RETURN(a.clz()); });
     CHECK_RESULT_INLINE(   12, uint16_t(), { _U16 a(0b1010);  RETURN(a.clz()); });
@@ -285,20 +288,21 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/operations/unary", "[core][wasm]")
     CHECK_RESULT_INLINE(    2, uint32_t(), { _U32 a(0b1010);  RETURN(a.popcnt()); });
     CHECK_RESULT_INLINE(    2, uint16_t(), { _U16 a(0b1010);  RETURN(a.popcnt()); });
     CHECK_RESULT_INLINE(    2, uint8_t(),  { _U8  a(0b1010);  RETURN(a.popcnt()); });
+    // bitmask() not supported for scalar types
     CHECK_RESULT_INLINE(false, bool(), { _I32 a(42); RETURN(a.eqz()); });
     CHECK_RESULT_INLINE( true, bool(), { _I32 a(0);  RETURN(a.eqz()); });
     CHECK_RESULT_INLINE(false, bool(), { _Bool a(true);  RETURN(not a); });
     CHECK_RESULT_INLINE( true, bool(), { _Bool a(false); RETURN(not a); });
     CHECK_RESULT_INLINE( true, bool(), { _I32 a(_I32::Null()); RETURN(a.is_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _I32 a(42); RETURN(a.is_null()); });
+    CHECK_RESULT_INLINE(false, bool(), { _I32 a(42);           RETURN(a.is_null()); });
     CHECK_RESULT_INLINE(false, bool(), { _I32 a(_I32::Null()); RETURN(a.not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _I32 a(42); RETURN(a.not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _I32 a(42);           RETURN(a.not_null()); });
     CHECK_RESULT_INLINE(false, bool(), { _Bool a(_Bool::Null()); RETURN(a.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(true); RETURN(a.is_true_and_not_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Bool a(false); RETURN(a.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Bool a(true);          RETURN(a.is_true_and_not_null()); });
+    CHECK_RESULT_INLINE(false, bool(), { _Bool a(false);         RETURN(a.is_true_and_not_null()); });
     CHECK_RESULT_INLINE(false, bool(), { _Bool a(_Bool::Null()); RETURN(a.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Bool a(true); RETURN(a.is_false_and_not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Bool a(false); RETURN(a.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE(false, bool(), { _Bool a(true);          RETURN(a.is_false_and_not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Bool a(false);         RETURN(a.is_false_and_not_null()); });
 
     CHECK_RESULT_INLINE( 3.14, double(), { _Double a( 3.14); RETURN(+a); });
     CHECK_RESULT_INLINE(-3.14, double(), { _Double a( 3.14); RETURN(-a); });
@@ -306,24 +310,30 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/operations/unary", "[core][wasm]")
     CHECK_RESULT_INLINE( 3.14, double(), { _Double a(-3.14); RETURN(a.abs()); });
     CHECK_RESULT_INLINE( 4.0,  double(), { _Double a( 3.14); RETURN(a.ceil()); });
     CHECK_RESULT_INLINE( 3.0,  double(), { _Double a( 3.14); RETURN(a.floor()); });
+    // trunc() not supported for scalar types
+    // nearest() not supported for scalar types
     CHECK_RESULT_INLINE( 3.0,  double(), { _Double a( 9.0);  RETURN(a.sqrt()); });
+    // add_pairwise() not supported for scalar types
     // operator~ not supported for floating-point types
     // clz() not supported for floating-point types
     // ctz() not supported for floating-point types
     // popcnt() not supported for floating-point types
+    // bitmask() not supported for scalar types
     // eqz() not supported for floating-point types
     // operator! not supported for floating-point types
+    // any_true() not supported for floating-point types
+    // all_true() not supported for floating-point types
     CHECK_RESULT_INLINE( true, bool(), { _Double a(_Double::Null()); RETURN(a.is_null()); });
-    CHECK_RESULT_INLINE(false, bool(), { _Double a(3.14);                 RETURN(a.is_null()); });
+    CHECK_RESULT_INLINE(false, bool(), { _Double a(3.14);            RETURN(a.is_null()); });
     CHECK_RESULT_INLINE(false, bool(), { _Double a(_Double::Null()); RETURN(a.not_null()); });
-    CHECK_RESULT_INLINE( true, bool(), { _Double a(3.14);                 RETURN(a.not_null()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Double a(3.14);            RETURN(a.not_null()); });
     // is_true_and_not_null() not supported for floating-point types
     // is_false_and_not_null() not supported for floating-point types
 
     Module::Dispose();
 }
 
-TEST_CASE("Wasm/" BACKEND_NAME "/Expr/operations/binary", "[core][wasm]")
+TEST_CASE("Wasm/" BACKEND_NAME "/Expr/scalar/operations/binary", "[core][wasm]")
 {
     Module::Init();
 
@@ -335,6 +345,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/operations/binary", "[core][wasm]")
     // copy_sign() not supported for integral types
     // min() not supported for integral types
     // max() not supported for integral types
+    // avg() not supported for scalar types
     CHECK_RESULT_INLINE(0b00001000, int(), { _I8 a(0b00101010);  _I8 b(0b00001001); RETURN(a & b); });
     CHECK_RESULT_INLINE(0b00101011, int(), { _I8 a(0b00101010);  _I8 b(0b00001001); RETURN(a | b); });
     CHECK_RESULT_INLINE(0b00100011, int(), { _I8 a(0b00101010);  _I8 b(0b00001001); RETURN(a ^ b); });
@@ -362,6 +373,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/operations/binary", "[core][wasm]")
     CHECK_RESULT_INLINE(false, bool(), { _Bool a(false); _Bool b(true);  RETURN(a and b); });
     CHECK_RESULT_INLINE(false, bool(), { _Bool a(true);  _Bool b(false); RETURN(a and b); });
     CHECK_RESULT_INLINE(false, bool(), { _Bool a(false); _Bool b(false); RETURN(a and b); });
+    // and_not() not supported for scalar types
     CHECK_RESULT_INLINE( true, bool(), { _Bool a(true);  _Bool b(true);  RETURN(a or b); });
     CHECK_RESULT_INLINE( true, bool(), { _Bool a(false); _Bool b(true);  RETURN(a or b); });
     CHECK_RESULT_INLINE( true, bool(), { _Bool a(true);  _Bool b(false); RETURN(a or b); });
@@ -376,6 +388,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/operations/binary", "[core][wasm]")
     CHECK_RESULT_INLINE(-3.14, double(), { _Double a(3.14); _Double b(-1.0);  RETURN(copy_sign(a, b)); });
     CHECK_RESULT_INLINE( 2.71, double(), { _Double a(3.14); _Double b( 2.71); RETURN(min(a, b)); });
     CHECK_RESULT_INLINE( 3.14, double(), { _Double a(3.14); _Double b( 2.71); RETURN(max(a, b)); });
+    // avg() not supported for scalar types
     // operator& not supported for floating-point types
     // operator| not supported for floating-point types
     // operator^ not supported for floating-point types
@@ -400,6 +413,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/operations/binary", "[core][wasm]")
     CHECK_RESULT_INLINE( true, bool(),   { _Double a(3.14); _Double b(2.71); RETURN(a >= b); });
     CHECK_RESULT_INLINE(false, bool(),   { _Double a(2.71); _Double b(3.14); RETURN(a >= b); });
     // operator&& not supported for floating-point types
+    // and_not() not supported for scalar types
     // operator|| not supported for floating-point types
 
     Module::Dispose();

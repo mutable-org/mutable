@@ -23,13 +23,13 @@ struct invoke_v8;
 
 }
 
-/** Extracts the value of type `T` from a `v8::Local<v8::Value>`. */
-template<typename T>
-T local_value(v8::Local<v8::Value> local)
+/** Extracts `L` values of type `T` from a `v8::Local<v8::Value>`. */
+template<typename T, std::size_t L>
+auto local_value(v8::Local<v8::Value> local)
 {
     static_assert(not std::is_same_v<T, void>, "cannot access void value");
 
-    if constexpr (std::is_integral_v<T>) {
+    if constexpr (std::is_integral_v<T> and L == 1) {
         if constexpr (std::is_signed_v<T>) {
             if constexpr (sizeof(T) <= 4)
                 return local.As<v8::Int32>()->Value();
@@ -42,16 +42,24 @@ T local_value(v8::Local<v8::Value> local)
                 return local.As<v8::BigInt>()->Uint64Value();
         }
     }
-    if constexpr (std::is_floating_point_v<T>)
+    if constexpr (std::is_floating_point_v<T> and L == 1)
         return local.As<v8::Number>()->Value();
+    if constexpr (L > 1) {
+        auto vec = **local.As<v8::Uint8Array>()->Buffer();
+        std::array<T, L> res;
+        for (std::size_t idx = 0; idx < L; ++idx)
+            res[idx] = *(reinterpret_cast<T*>(vec.Data()) + idx);
+        return res;
+    }
 
     M_unreachable("unsupported type");
 }
 
-template<typename ReturnType, typename... ParamTypes>
-struct invoke_v8<PrimitiveExpr<ReturnType>(PrimitiveExpr<ParamTypes>...)>
+template<typename ReturnType, typename... ParamTypes, std::size_t ReturnL, std::size_t... ParamLs>
+struct invoke_v8<PrimitiveExpr<ReturnType, ReturnL>(PrimitiveExpr<ParamTypes, ParamLs>...)>
 {
-    using fn_proxy_type = FunctionProxy<PrimitiveExpr<ReturnType>(PrimitiveExpr<ParamTypes>...)>;
+    using fn_proxy_type = FunctionProxy<PrimitiveExpr<ReturnType, ReturnL>(PrimitiveExpr<ParamTypes, ParamLs>...)>;
+    using return_type = std::conditional_t<ReturnL == 1, ReturnType, std::array<ReturnType, ReturnL>>;
 
     private:
     v8::Isolate *isolate_ = nullptr;
@@ -66,9 +74,9 @@ struct invoke_v8<PrimitiveExpr<ReturnType>(PrimitiveExpr<ParamTypes>...)>
         inspector_.reset();
     }
 
-    ReturnType operator()(fn_proxy_type &func, ParamTypes... parameters) {
+    return_type operator()(fn_proxy_type &func, PrimitiveExpr<ParamTypes, ParamLs>... parameters) {
         /* Compile test code into `main` function. */
-        Function<ReturnType(void)> main("main");
+        Function<PrimitiveExpr<ReturnType, ReturnL>(void)> main("main");
         BLOCK_OPEN(main.body())
         {
             if constexpr (std::is_same_v<ReturnType, void>)
@@ -158,14 +166,25 @@ struct invoke_v8<PrimitiveExpr<ReturnType>(PrimitiveExpr<ParamTypes>...)>
         if constexpr (std::is_same_v<ReturnType, void>)
             CHECK(result->IsUndefined());
         else
-            return local_value<ReturnType>(result);
+            return local_value<ReturnType, ReturnL>(result);
+    }
+
+    return_type operator()(fn_proxy_type &func, ParamTypes... parameters) requires (sizeof...(ParamTypes) > 0) {
+        return operator()(func, PrimitiveExpr<ParamTypes, ParamLs>(parameters)...);
     }
 };
 
 template<typename ReturnType, typename... ParamTypes>
-struct invoke_v8<ReturnType(ParamTypes...)> : invoke_v8<PrimitiveExpr<ReturnType>(PrimitiveExpr<ParamTypes>...)>
+struct invoke_v8<ReturnType(ParamTypes...)> : invoke_v8<PrimitiveExpr<ReturnType, 1>(PrimitiveExpr<ParamTypes, 1>...)>
 {
-    using invoke_v8<PrimitiveExpr<ReturnType>(PrimitiveExpr<ParamTypes>...)>::invoke_v8;
+    using invoke_v8<PrimitiveExpr<ReturnType, 1>(PrimitiveExpr<ParamTypes, 1>...)>::invoke_v8;
+};
+
+template<typename... ParamTypes, std::size_t... ParamLs>
+struct invoke_v8<void(PrimitiveExpr<ParamTypes, ParamLs>...)>
+    : invoke_v8<PrimitiveExpr<void, 1>(PrimitiveExpr<ParamTypes, ParamLs>...)>
+{
+    using invoke_v8<PrimitiveExpr<void, 1>(PrimitiveExpr<ParamTypes, ParamLs>...)>::invoke_v8;
 };
 
 #define INVOKE(NAME, ...) [&]{ \

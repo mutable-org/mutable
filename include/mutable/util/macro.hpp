@@ -48,6 +48,9 @@ namespace m {
 #define M_CONSTEXPR_COND(COND, IF_TRUE, IF_FALSE) [&](){ \
     if constexpr (COND) { return (IF_TRUE); } else { return (IF_FALSE); } \
 }()
+#define M_CONSTEXPR_COND_UNCAPTURED(COND, IF_TRUE, IF_FALSE) [](){ \
+    if constexpr (COND) { return (IF_TRUE); } else { return (IF_FALSE); } \
+}()
 
 /*===== Define enum ==================================================================================================*/
 #define M_DECLARE_ENUM(LIST) \

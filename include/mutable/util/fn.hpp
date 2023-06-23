@@ -102,9 +102,9 @@ struct M_EXPORT PairHash
 };
 
 template<typename T>
-typename std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T>, bool>
+requires unsigned_integral<T>
 M_EXPORT
-is_pow_2(T n)
+constexpr bool is_pow_2(T n)
 {
     return n ? (n & (n - T(1))) == T(0) : false;
 }

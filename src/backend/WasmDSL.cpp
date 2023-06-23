@@ -167,41 +167,55 @@ struct MockInterface final : ::wasm::ModuleRunner::ExternalInterface
 
     private:
     template<typename T = void>
-    T load(::wasm::Address addr) {
+    T _load(::wasm::Address addr) {
         M_insist(addr.addr < size_, "invalid address");
         M_insist(addr.addr % alignof(T) == 0, "misaligned address");
         return *reinterpret_cast<T*>(reinterpret_cast<uint8_t*>(memory_) + addr.addr);
     }
+    template<>
+    std::array<uint8_t, 16> _load<std::array<uint8_t, 16>>(::wasm::Address _addr) {
+        M_insist(_addr.addr + 16 <= size_, "invalid address");
+        auto addr = reinterpret_cast<uint8_t*>(memory_) + _addr.addr;
+        return std::to_array<uint8_t, 16>(*reinterpret_cast<uint8_t(*)[16]>(addr));
+    }
     template<typename T = void>
-    void store(::wasm::Address addr, T value) {
+    void _store(::wasm::Address addr, T value) {
         M_insist(addr.addr < size_, "invalid address");
         M_insist(addr.addr % alignof(T) == 0, "misaligned address");
         *reinterpret_cast<T*>(reinterpret_cast<uint8_t*>(memory_) + addr.addr) = value;
     }
+    template<>
+    void _store<const std::array<uint8_t, 16>&>(::wasm::Address addr, const std::array<uint8_t, 16> &value) {
+        M_insist(addr.addr + 16 <= size_, "invalid address");
+        for (uint32_t idx = 0; idx < 16; ++idx)
+            *(reinterpret_cast<uint8_t*>(memory_) + addr.addr + idx) = value[idx];
+    }
 
     public:
-#define DECLARE_LOAD(C_TYPE, BINARYEN_TYPE) \
+#define DECLARE_LOAD(BINARYEN_TYPE, C_TYPE) \
     C_TYPE load##BINARYEN_TYPE(::wasm::Address addr, ::wasm::Name) override { \
-        return load<C_TYPE>(addr); \
+        return _load<C_TYPE>(addr); \
     }
-    DECLARE_LOAD(int8_t, 8s)
-    DECLARE_LOAD(uint8_t, 8u)
-    DECLARE_LOAD(int16_t, 16s)
-    DECLARE_LOAD(uint16_t, 16u)
-    DECLARE_LOAD(int32_t, 32s)
-    DECLARE_LOAD(uint32_t, 32u)
-    DECLARE_LOAD(int64_t, 64s)
-    DECLARE_LOAD(uint64_t, 64u)
+    DECLARE_LOAD(8s,  int8_t)
+    DECLARE_LOAD(8u,  uint8_t)
+    DECLARE_LOAD(16s, int16_t)
+    DECLARE_LOAD(16u, uint16_t)
+    DECLARE_LOAD(32s, int32_t)
+    DECLARE_LOAD(32u, uint32_t)
+    DECLARE_LOAD(64s, int64_t)
+    DECLARE_LOAD(64u, uint64_t)
+    DECLARE_LOAD(128, std::array<M_COMMA(uint8_t) 16>)
 #undef DECLARE_LOAD
 
-#define DECLARE_STORE(SIZE) \
-    void store##SIZE(::wasm::Address addr, int##SIZE##_t value, ::wasm::Name) override { \
-        return store<int##SIZE##_t>(addr, value); \
+#define DECLARE_STORE(BINARYEN_TYPE, C_TYPE) \
+    void store##BINARYEN_TYPE(::wasm::Address addr, C_TYPE value, ::wasm::Name) override { \
+        return _store<C_TYPE>(addr, value); \
     }
-    DECLARE_STORE(8)
-    DECLARE_STORE(16)
-    DECLARE_STORE(32)
-    DECLARE_STORE(64)
+    DECLARE_STORE(8,   int8_t)
+    DECLARE_STORE(16,  int16_t)
+    DECLARE_STORE(32,  int32_t)
+    DECLARE_STORE(64,  int64_t)
+    DECLARE_STORE(128, const std::array<M_COMMA(uint8_t) 16>&)
 #undef DECLARE_STORE
 };
 
@@ -319,6 +333,7 @@ Module::Module()
 
     /*----- Set features. -----*/
     module_.features.setBulkMemory(true);
+    module_.features.setSIMD(true);
 }
 
 ::wasm::ModuleRunner::ExternalInterface * Module::get_mock_interface()
@@ -361,7 +376,21 @@ std::pair<uint8_t*, std::size_t> Module::binary()
     return std::make_pair(reinterpret_cast<uint8_t*>(binary), buffer.size());
 }
 
-void Module::emit_insist(PrimitiveExpr<bool> cond, const char *filename, unsigned line, const char *msg)
+template<std::size_t L>
+void Module::emit_insist(PrimitiveExpr<bool, L> cond, const char *filename, unsigned line, const char *msg)
+{
+    emit_insist(cond.all_true(), filename, line, msg);
+}
+
+// explicit instantiations to prevent linker errors
+template void Module::emit_insist(PrimitiveExpr<bool, 2>,  const char*, unsigned, const char*);
+template void Module::emit_insist(PrimitiveExpr<bool, 4>,  const char*, unsigned, const char*);
+template void Module::emit_insist(PrimitiveExpr<bool, 8>,  const char*, unsigned, const char*);
+template void Module::emit_insist(PrimitiveExpr<bool, 16>, const char*, unsigned, const char*);
+template void Module::emit_insist(PrimitiveExpr<bool, 32>, const char*, unsigned, const char*);
+
+template<>
+void Module::emit_insist(PrimitiveExpr<bool, 1> cond, const char *filename, unsigned line, const char *msg)
 {
     static thread_local struct {} _; // unique caller handle
     struct data_t : GarbageCollectedData
@@ -400,7 +429,7 @@ void Module::emit_throw(exception::exception_t type, const char *filename, unsig
         builder_.makeConst(::wasm::Literal(type)), // type id
         builder_.makeConst(::wasm::Literal(idx))   // message index
     };
-    active_block_->list.push_back(builder_.makeCall("throw", args, wasm_type<void>()));
+    active_block_->list.push_back(builder_.makeCall("throw", args, wasm_type<void, 1>()));
 }
 
 /** Emit an unconditional continue, continuing \p level levels above. */
@@ -410,7 +439,7 @@ void Module::emit_continue(std::size_t level)
     M_insist(branch_target_stack_.size() >= level);
     auto &branch_targets = branch_target_stack_[branch_target_stack_.size() - level];
     if (branch_targets.condition) {
-        PrimitiveExpr<bool> condition(
+        PrimitiveExpr<bool, 1> condition(
             ::wasm::ExpressionManipulator::copy(branch_targets.condition, Module::Get().module_)
         );
         /* Continue if condition is satisfied, break otherwise. */
@@ -427,7 +456,7 @@ void Module::emit_continue(std::size_t level)
 
 /** Emit an *conditional* continue, continuing \p level levels above if \p cond evaluates to `true` *and* the original
  * continue condition evaluates to `true`. */
-void Module::emit_continue(PrimitiveExpr<bool> cond, std::size_t level)
+void Module::emit_continue(PrimitiveExpr<bool, 1> cond, std::size_t level)
 {
     M_insist(level > 0);
     M_insist(branch_target_stack_.size() >= level);

@@ -2530,9 +2530,8 @@ std::array<Subproblem, 2> delta(const State &before_join, const State &after_joi
 }
 
 template<typename PlanTable, typename State>
-void reconstruct_plan_bottom_up(const State &state, PlanTable &PT, const QueryGraph &G,const CardinalityEstimator &CE,
-                                const CostFunction &CF)
-{
+void reconstruct_plan_bottom_up(const State &state, PlanTable &PT, const QueryGraph &G, const CardinalityEstimator &CE,
+                                const CostFunction &CF) {
     static cnf::CNF condition; // TODO use join condition
 
     const State *parent = state.parent();
@@ -2629,6 +2628,9 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
         return true;
     }
 
+    /// Considering previously I already returned the true,
+    /// So only the non-match-bidirectional search can go here
+    /// Will not interfere the normal logics
     if (streq(options::vertex, vertex_str) and
         streq(options::expand, expand_str) and
         streq(options::heuristic, heuristic_str) and
@@ -2691,7 +2693,7 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         auto &CE = C.get_database_in_use().cardinality_estimator();
         const AdjacencyMatrix &M = G.adjacency_matrix();
 
-
+/// macro in C++ is in one line
 #define HEURISTIC_SEARCH(STATE, EXPAND, HEURISTIC, SEARCH) \
         if (heuristic_search_helper<PlanTable, \
                                     search_states::STATE, \
@@ -2703,11 +2705,16 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
             goto matched_heuristic_search; \
         }
 
+        /// biDirectionalSearch
+        /// Add one duplicate search here to make the entrance of bidirectional search not influence the other search method
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, cleanAStar)
 
+        /// Currently we didn't use the main entrance here
+        /// We directly get in the Bidirectional funciton from upstairs
+        /// HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, BIDIRECTIONAL)
         HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, cleanAStar)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, cleanAStar)
-        // biDirectionalSearch
-        // HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, BIDIRECTIONAL)
+
         // bottom-up
         // IDDFS
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, IDDFS)
@@ -2769,6 +2776,7 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         HEURISTIC_SEARCH(   SubproblemsArray,   TopDownComplete,    GOO,                            monotone_beam_search            )
 
         throw std::invalid_argument("illegal search configuration");
+/// Delete the macro from the preprocessor symbol table
 #undef HEURISTIC_SEARCH
 
 matched_heuristic_search:;

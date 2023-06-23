@@ -47,27 +47,29 @@ struct SmallBitset
         std::enable_if_t<not C_, Proxy&>
         operator=(bool val) { setbit(&S_.bits_, val, offset_); return *this; }
 
-        Proxy & operator=(const Proxy &other) {
+        Proxy &operator=(const Proxy &other) {
             static_assert(not Is_Const, "can only assign to proxy of non-const SmallBitset");
             return operator=(bool(other));
         }
     };
 
-    private:
+private:
     uint64_t bits_; ///< the bit vector representing the set
 
-    struct iterator
-    {
-        private:
+    struct iterator {
+    private:
         uint64_t bits_;
 
-        public:
-        iterator(uint64_t bits) : bits_(bits) { }
+    public:
+        iterator(uint64_t bits) : bits_(bits) {}
 
         bool operator==(iterator other) const { return this->bits_ == other.bits_; }
+
         bool operator!=(iterator other) const { return not operator==(other); }
 
-        iterator & operator++() {
+        /// Hanwen: Definition of ++clone
+        /// Clear the lower set bit -> not the smallest bit overall
+        iterator &operator++() {
 #ifdef __BMI__
             bits_ = _blsr_u64(bits_); // BMI1: reset lowest set bit
 #else
@@ -75,9 +77,20 @@ struct SmallBitset
 #endif
             return *this;
         }
-        iterator operator++(int) { auto clone = *this; ++clone; return clone; }
 
-        std::size_t operator*() const { M_insist(bits_ != 0); return __builtin_ctzl(bits_); }
+        /// Hanwen: From previous ++clone, we can define clone++
+        iterator operator++(int) {
+            auto clone = *this;
+            ++clone;
+            return clone;
+        }
+
+        /// Hanwen: Definition of de-reference operator
+        std::size_t operator*() const {
+            M_insist(bits_ != 0);
+            return __builtin_ctzl(bits_);
+        }
+
         SmallBitset as_set() const {
 #ifdef __BMI__
             return SmallBitset(_blsi_u64(bits_)); // BMI1: extract lowest set isolated bit

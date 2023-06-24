@@ -97,7 +97,7 @@ struct M_EXPORT PairHash
     uint64_t operator()(const std::pair<T1, T2> &p) const {
         H1 h1;
         H2 h2;
-        return h1(p.first) ^ h2(p.second);
+        return std::rotl(h1(p.first), 32) ^ h2(p.second);
     }
 };
 

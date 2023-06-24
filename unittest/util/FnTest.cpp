@@ -882,3 +882,53 @@ TEST_CASE("FNV1a", "[core][util][fn]")
     CHECK(FNV1a(c_str, strlen(c_str)) == c_str_hash);
     CHECK(FNV1a(c_str, strlen(c_str) + 1) == c_str_hash);
 }
+
+TEST_CASE("PairHash", "[core][util][fn]")
+{
+    using str = std::string;
+    using std::make_pair;
+
+    SECTION("Symmetric Pair Types")
+    {
+        PairHash<int, int> ph_ii;
+        PairHash<double, double> ph_dd;
+        PairHash<str, str> ph_ss;
+
+        // symmetric pairs should have same hash value
+        CHECK(ph_ii(make_pair(0, 0))       == ph_ii(make_pair(0, 0)));
+        CHECK(ph_dd(make_pair(0.0, 0.0))   == ph_dd(make_pair(0.0, 0.0)));
+        CHECK(ph_ss(make_pair("\"", "\"")) == ph_ss(make_pair("\"", "\"")));
+
+        // checking each pair against its reverse
+        CHECK(ph_ii(make_pair(1, 2))      != ph_ii(make_pair(2, 1)));
+        CHECK(ph_dd(make_pair(-1.0, 2.0)) != ph_dd(make_pair(2.0, -1.0)));
+        CHECK(ph_ss(make_pair("a", "b"))  != ph_ss(make_pair("b", "a")));
+
+        // checking each pair against a different pair of same type
+        CHECK(ph_ii(make_pair(1, 2))      != ph_ii(make_pair(1, 3)));
+        CHECK(ph_dd(make_pair(-1.0, 2.0)) != ph_dd(make_pair(-1.0, 3.0)));
+        CHECK(ph_ss(make_pair("a", "b"))  != ph_ss(make_pair("a", "c")));
+
+        // checking each pair against a different pair of different type
+        CHECK(ph_ii(make_pair(1, 2))      != ph_dd(make_pair(1.0, 2.0)));
+        CHECK(ph_dd(make_pair(-1.0, 2.0)) != ph_ss(make_pair("a", "b")));
+        CHECK(ph_ss(make_pair("a", "b"))  != ph_ii(make_pair(1, 2)));
+    }
+
+    SECTION("Non-Symmetric Pair Types and Validity as Custom Hash Function")
+    {
+        std::hash<str> str_hash;
+        std::hash<int> int_hash;
+
+        auto p1 = PairHash<int, str>()(make_pair(1, "ab"));
+        auto p2 = PairHash<double, str>()(make_pair(1.0, "ab"));
+        CHECK(p2 != p1);
+
+        std::unordered_map<std::pair<int, str>, int, PairHash<int, str>> umap;
+        umap[make_pair(1e6, "ab")] = 1;
+        umap[make_pair(-1e6, "ba")] = 2;
+
+        CHECK(umap[make_pair(1e6, "ab")] == 1);
+        CHECK(umap[make_pair(-1e6, "ba")] == 2);
+    }
+}

@@ -14,25 +14,57 @@
 using namespace m;
 
 
-TEST_CASE("streq", "[core][util][fn]")
+TEST_CASE("streq/StrEqual", "[core][util][fn]")
 {
-    const char *s0 = "Hello, World";
-    const char *s1 = strdup(s0);
-    const char *s2 = "The quick brown fox";
-    const char *s3 = "The quick brown";
+    const char* s0 = "Hello, World";
+    const char* s1 = strdup(s0);
+    const char* s2 = "The quick brown fox";
+    const char* s3 = "The quick brown";
 
-    REQUIRE(streq(s0, s0));
-    REQUIRE(streq(s0, s1));
-    REQUIRE(streq(s1, s0));
-    REQUIRE(not streq(s0, s2));
-    REQUIRE(not streq(s2, s0));
+    SECTION("streq/strneq")
+    {
+        REQUIRE(streq(s0, s0));
+        REQUIRE(streq(s0, s1));
+        REQUIRE(streq(s1, s0));
+        REQUIRE(not streq(s0, s2));
+        REQUIRE(not streq(s2, s0));
 
-    REQUIRE(not streq(s2, s3));
-    REQUIRE(strneq(s2, s3, strlen(s3)));
-    REQUIRE(not strneq(s2, s3, strlen(s2)));
-    REQUIRE(not strneq(s2, s3, strlen(s3) + 42));
+        REQUIRE(not streq(s2, s3));
+        REQUIRE(strneq(s2, s3, strlen(s3)));
+        REQUIRE(not strneq(s2, s3, strlen(s2)));
+        REQUIRE(not strneq(s2, s3, strlen(s3) + 42));
+    }
 
-    free((void*) s1);
+    SECTION("StrEqual/StrEqualWithNull")
+    {
+        StrEqual SE;
+        StrEqualWithNull SEWN;
+
+        CHECK(SE(s0, s0));
+        CHECK(SE(s0, s1));
+        CHECK(SE(s1, s0));
+
+        CHECK_FALSE(SE(s0, s2));
+        CHECK_FALSE(SE(s2, s0));
+        CHECK_FALSE(SE(s2, s3));
+
+        CHECK(SEWN(s0, s0));
+        CHECK(SEWN(s0, s1));
+
+        CHECK_FALSE(SEWN(s2, s3));
+        CHECK_FALSE(SEWN(s0, s2));
+
+        const char *s4 = nullptr;
+        const char *s5 = nullptr;
+
+        CHECK(SEWN(s4, s5));
+
+        CHECK_FALSE(SEWN(s0, s4));
+        CHECK_FALSE(SEWN(s4, s0));
+        CHECK_FALSE(SEWN(s1, s4));
+    }
+
+    free((void*)s1);
 }
 
 TEST_CASE("ceil_to_pow_2", "[core][util][fn]")

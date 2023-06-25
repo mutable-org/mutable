@@ -413,28 +413,36 @@ else()
 endif()
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
+
+    add_custom_target(
+        pipenv-sync
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        VERBATIM USES_TERMINAL
+        COMMAND pipenv sync
+    )
+
     # Unit test target
     add_custom_target(
         check-unit
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-        DEPENDS unittest
+        DEPENDS unittest pipenv-sync
         VERBATIM USES_TERMINAL
         COMMAND echo "##################"
         COMMAND echo "### Unit Tests ###"
         COMMAND echo "##################"
-        COMMAND env ${env} python3 "${CMAKE_CURRENT_SOURCE_DIR}/utils/unittest-parallel.py" $<TARGET_FILE:unittest>
+        COMMAND env ${env} pipenv run "${CMAKE_CURRENT_SOURCE_DIR}/utils/unittest-parallel.py" $<TARGET_FILE:unittest>
     )
 
     # Integration test target
     add_custom_target(
         check-integration
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-        DEPENDS lex-bin parse-bin check-bin shell
+        DEPENDS lex-bin parse-bin check-bin shell pipenv-sync
         VERBATIM USES_TERMINAL
         COMMAND echo "#########################"
         COMMAND echo "### Integration Tests ###"
         COMMAND echo "#########################"
-        COMMAND env ${env} "${CMAKE_CURRENT_SOURCE_DIR}/test/IntegrationTest.py" -r "${PROJECT_BINARY_DIR}"
+        COMMAND env ${env} pipenv run "${CMAKE_CURRENT_SOURCE_DIR}/test/IntegrationTest.py" -r "${PROJECT_BINARY_DIR}"
     )
 
     # Target `check` runs unit and integration tests, in that order

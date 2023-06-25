@@ -1,0 +1,35 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+cffi = "*"
+colorama = "*"
+easygraph = "*"
+formencode = "*"
+gitdb = "*"
+gitpython = "*"
+numpy = "*"
+pandas = "*"
+pip = "*"
+psycopg2 = "*"
+pycparser = "*"
+pydispatcher = "*"
+python-dateutil = "*"
+pytz = "*"
+pyyaml = "*"
+setuptools = "*"
+six = "*"
+smmap = "*"
+sqlobject = "*"
+tableauhyperapi = "*"
+tqdm = "*"
+tzdata = "*"
+wheel = "*"
+yamale = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.11"

@@ -75,7 +75,7 @@ sys.stdout.flush()
         except subprocess.TimeoutExpired:
             tqdm.write(f'Benchmark timed out after {timeout} seconds')
             # Set execution time of every case of every run to timeout
-            times = [TIMEOUT_PER_CASE for _ in range(n_runs)]
+            times = [TIMEOUT_PER_CASE*1000 for _ in range(n_runs)]
             result = {case: times for case in params['cases'].keys()}
             result = {f'HyPer{suffix}': result}
             return result

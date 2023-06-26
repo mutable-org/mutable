@@ -23,7 +23,7 @@ TEST_CASE("Wasm/" BACKEND_NAME "/ModuleInstance create from module", "[core][was
     Module::Dispose();
 }
 
-TEST_CASE("Wasm/" BACKEND_NAME "/make_type", "[core][wasm]")
+TEST_CASE("Wasm/" BACKEND_NAME "/wasm_type", "[core][wasm]")
 {
     /*----- Void -----*/
     REQUIRE(wasm_type<void, 1>() == ::wasm::Type::none);
@@ -41,6 +41,13 @@ TEST_CASE("Wasm/" BACKEND_NAME "/make_type", "[core][wasm]")
     /*----- Floating points -----*/
     REQUIRE(wasm_type<float, 1>() == ::wasm::Type::f32);
     REQUIRE(wasm_type<double, 1>() == ::wasm::Type::f64);
+
+    /*----- Pointers -----*/
+    REQUIRE(wasm_type<void*, 1>() == ::wasm::Type::i32);
+    REQUIRE(wasm_type<float*, 10>() == ::wasm::Type::i32);
+
+    /*----- Functions -----*/
+    REQUIRE(wasm_type<void(signed int), 1>() == ::wasm::Signature({ ::wasm::Type::i32 }, ::wasm::Type::none));
 }
 
 TEST_CASE("Wasm/" BACKEND_NAME "/Block", "[core][wasm]")

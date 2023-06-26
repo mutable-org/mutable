@@ -164,12 +164,31 @@ TEST_CASE("prod_wo_overflow", "[core][util][fn]")
     uint64_t UL_MAX = std::numeric_limits<uint64_t>::max();
     uint64_t U_MAX = std::numeric_limits<uint32_t>::max();
 
-    REQUIRE(prod_wo_overflow(5U, 10U) == 50U);
-    REQUIRE(prod_wo_overflow(UL_MAX, 42U) == UL_MAX);
-    REQUIRE(prod_wo_overflow(UL_MAX, UL_MAX) == UL_MAX);
-    REQUIRE(prod_wo_overflow(U_MAX, U_MAX) == 18446744065119617025UL);
-    REQUIRE(prod_wo_overflow(1UL << 32, U_MAX) == 18446744069414584320UL);
-    REQUIRE(prod_wo_overflow(1UL << 32, 1UL << 32) == UL_MAX);
+    SECTION("multiplication does not overflow")
+    {
+        REQUIRE(prod_wo_overflow(5U, 10U) == 50U);
+        REQUIRE(prod_wo_overflow(5U, 10U, 20U) == 1000U);
+        REQUIRE(prod_wo_overflow(5U, 10U, 20U, 30U) == 30000U);
+
+        REQUIRE(prod_wo_overflow(UL_MAX, UL_MAX, 0U) == 0);
+        REQUIRE(prod_wo_overflow(UL_MAX, 0U, UL_MAX) == 0);
+        REQUIRE(prod_wo_overflow(0U, UL_MAX, UL_MAX) == 0);
+
+        REQUIRE(prod_wo_overflow(U_MAX, U_MAX) == 18446744065119617025UL);
+        REQUIRE(prod_wo_overflow(1UL << 32, U_MAX) == 18446744069414584320UL);
+    }
+
+    SECTION("multiplication overflows")
+    {
+        REQUIRE(prod_wo_overflow(UL_MAX, 1U) == UL_MAX);
+        REQUIRE(prod_wo_overflow(UL_MAX, 42U) == UL_MAX);
+        REQUIRE(prod_wo_overflow(UL_MAX, 1U, 1U) == UL_MAX);
+
+        REQUIRE(prod_wo_overflow(UL_MAX, UL_MAX) == UL_MAX);
+        REQUIRE(prod_wo_overflow(U_MAX, U_MAX, U_MAX) == UL_MAX);
+        REQUIRE(prod_wo_overflow(1U, U_MAX, U_MAX, U_MAX) == UL_MAX);
+        REQUIRE(prod_wo_overflow(1UL << 32, 1UL << 32) == UL_MAX);
+    }
 }
 
 TEST_CASE("pattern_to_regex", "[core][util][fn]")

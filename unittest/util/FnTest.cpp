@@ -1013,3 +1013,11 @@ TEMPLATE_TEST_CASE("is_pow_2", "[core][util][fn]", u_int8_t, u_int16_t, u_int32_
     CHECK_FALSE(is_pow_2<TestType>(max_pow2 - 1));
 }
 
+TEST_CASE("n_choose_k_approx", "[core][util][fn]")
+{
+    CHECK(Approx(499500U)        == n_choose_k_approx(1000, 2));
+    CHECK(Approx(166167000UL)    == n_choose_k_approx(1000U, 3U));
+    CHECK(Approx(166616670000UL) == n_choose_k_approx(10000UL, 3UL));
+    CHECK(Approx(137846528820UL) == n_choose_k_approx(40UL, 20UL));
+}
+

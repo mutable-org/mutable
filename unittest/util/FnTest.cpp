@@ -70,6 +70,7 @@ TEST_CASE("streq/StrEqual", "[core][util][fn]")
 TEST_CASE("ceil_to_pow_2", "[core][util][fn]")
 {
     uint32_t u31 = 1U << 31;
+    uint64_t u32 = 1UL << 32;
     uint64_t u63 = 1UL << 63;
 
     CHECK(1 == ceil_to_pow_2(1U));
@@ -81,6 +82,14 @@ TEST_CASE("ceil_to_pow_2", "[core][util][fn]")
     CHECK(u31 == ceil_to_pow_2(u31));
     CHECK(u63 == ceil_to_pow_2(u63 - 1UL));
     CHECK(u63 == ceil_to_pow_2(u63));
+
+    CHECK(1 == ceil_to_pow_2(0.5));
+    CHECK(4 == ceil_to_pow_2(2.5));
+    CHECK(4 == ceil_to_pow_2(3.7));
+    CHECK(16 == ceil_to_pow_2(16.0));
+    CHECK(u31 == ceil_to_pow_2(u31 - 0.5));
+    CHECK(u32 == ceil_to_pow_2(u31 + 0.5));
+    CHECK(u63 == ceil_to_pow_2(u63 - 0.5));
 }
 
 TEST_CASE("round_up_to_multiple", "[core][util][fn]")

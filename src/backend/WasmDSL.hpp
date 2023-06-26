@@ -857,7 +857,7 @@ struct Block final
     }
 
     public:
-    bool has_name() const { return get().name; }
+    bool has_name() const { return bool(get().name); }
     std::string name() const { M_insist(has_name()); return get().name.toString(); }
 
     /** Returns whether this `Block` is empty, i.e. contains to expressions. */

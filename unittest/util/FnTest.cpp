@@ -992,3 +992,24 @@ TEST_CASE("PairHash", "[core][util][fn]")
         CHECK(umap[make_pair(-1e6, "ba")] == 2);
     }
 }
+
+TEMPLATE_TEST_CASE("is_pow_2", "[core][util][fn]", u_int8_t, u_int16_t, u_int32_t, u_int64_t)
+{
+    CHECK(is_pow_2<TestType>(1));
+    CHECK(is_pow_2<TestType>(2));
+    CHECK(is_pow_2<TestType>(4));
+
+    CHECK_FALSE(is_pow_2<TestType>(0));
+    CHECK_FALSE(is_pow_2<TestType>(3));
+    CHECK_FALSE(is_pow_2<TestType>(5));
+
+    auto num_digits = std::numeric_limits<TestType>::digits;
+    TestType max_pow2 = TestType(1) << (num_digits - 1);
+
+    CHECK(is_pow_2<TestType>(max_pow2));
+    CHECK(is_pow_2<TestType>(max_pow2 >> 1));
+
+    CHECK_FALSE(is_pow_2<TestType>(max_pow2 + 1));
+    CHECK_FALSE(is_pow_2<TestType>(max_pow2 - 1));
+}
+

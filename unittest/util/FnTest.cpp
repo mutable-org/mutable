@@ -1021,3 +1021,15 @@ TEST_CASE("n_choose_k_approx", "[core][util][fn]")
     CHECK(Approx(137846528820UL) == n_choose_k_approx(40UL, 20UL));
 }
 
+TEST_CASE("ceil_to_multiple_of_pow_2", "[core][util][fn]")
+{
+    CHECK(0U  == ceil_to_multiple_of_pow_2(0U, 1U));
+    CHECK(3U  == ceil_to_multiple_of_pow_2(3U, 1U));
+    CHECK(8U  == ceil_to_multiple_of_pow_2(7U, 2U));
+    CHECK(12U == ceil_to_multiple_of_pow_2(10U, 4U));
+    CHECK(16U == ceil_to_multiple_of_pow_2(15U, 8U));
+
+    CHECK(1000000000U      == ceil_to_multiple_of_pow_2(1000000000U, 16U));
+    CHECK((1ULL << 63)     == ceil_to_multiple_of_pow_2((1ULL << 63) - 1, 1024ULL));
+    CHECK((1U << 31) + 256 == ceil_to_multiple_of_pow_2((1U << 31) + 1, 256U));
+}

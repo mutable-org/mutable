@@ -10,6 +10,7 @@ Install the following tools:
 * C/C++ Compiler with C++20 support (preferably Clang 14 or newer)
 * Doxygen (to generate the documentation)
 * Perl (for our git-hooks)
+* Pipenv (to set up a virtual Python environment and manage packages)
 
 Further, if you wish to build mu*t*able with its WebAssembly-based backend (which is the default), you need to install the following Google tools as well:
 * [`depot_tools`](setup-depot_tools.md)
@@ -42,29 +43,11 @@ Doxygen can use Graphviz to render inheritance and collaboration diagrams.
 * On ArchLinux: `pacman -S graphviz`
 * On macOS: `brew install graphviz`.
 
-#### Python Libraries
+#### Python Environment & Packages
 
-We implement our own testing and benchmarking frameworks in Python.  Install the following dependencies.
+We implement our own testing and benchmarking frameworks in Python.  We manage our required packages with Pipenv and package versions are specified in the `Pipfile.lock` file.  Ensure that you have a Python provider installed, e.g. `pyenv` or the currently required version of Python.
 
-##### For testing:
-```
-$ pip install --user --upgrade \
-    colorama \
-    pyyaml \
-    tqdm \
-    yamale
-```
-
-##### For benchmarking:
-```
-$ pip install --user --upgrade \
-    gitpython \
-    pandas \
-    pyyaml \
-    sqlobject \
-    tqdm \
-    yamale
-```
+To install our required packages, run `pipenv sync`.
 
 #### Building with the WebAssembly-based Execution Backend
 

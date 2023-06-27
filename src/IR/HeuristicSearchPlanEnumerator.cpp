@@ -1254,8 +1254,8 @@ struct BottomUp
     }
 
     template<typename State, typename PlanTable>
-    bool is_goal(const State &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
-                 const CostFunction &CF, const CardinalityEstimator &CE) const
+    static bool is_goal(const State &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                        const CostFunction &CF, const CardinalityEstimator &CE)
     {
         return state.is_top(PT, G, M, CF, CE);
     }
@@ -1271,6 +1271,7 @@ struct BottomUp
 struct BottomUpComplete : BottomUp
 {
     using direction = BottomUp;
+    using direction::is_goal;
 
     template<typename Callback, typename PlanTable>
     void operator()(const SubproblemsArray &state, Callback &&callback, PlanTable &PT,
@@ -1594,8 +1595,8 @@ struct TopDown
     }
 
     template<typename State, typename PlanTable>
-    bool is_goal(const State &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
-                 const CostFunction &CF, const CardinalityEstimator &CE) const
+    static bool is_goal(const State &state, const PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
+                        const CostFunction &CF, const CardinalityEstimator &CE)
     {
         return state.is_bottom(PT, G, M, CF, CE);
     }
@@ -1612,6 +1613,7 @@ struct TopDown
 struct TopDownComplete : TopDown
 {
     using direction = TopDown;
+    using direction::is_goal;
 
     template<typename Callback, typename PlanTable>
     void operator()(const SubproblemsArray &state, Callback &&callback, PlanTable &PT,
@@ -2559,6 +2561,15 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
         streq(options::heuristic, heuristic_str) and
         streq(options::search,    search_str   ))
     {
+        /*----- Run GOO to compute upper bound of plan cost. -----*/
+        const double upper_bound = [&]() {
+            GOO Goo;
+            Goo(G, CF, PT);
+            return PT.get_final().cost;
+        }();
+        if (Options::Get().statistics)
+            std::cerr << "initial upper bound is " << upper_bound << std::endl;
+
         using H = Heuristic<PlanTable, State, Expand>;
         State::RESET_STATE_COUNTERS();
         State initial_state = Expand::template Start<State>(PT, G, M, CF, CE);
@@ -2574,7 +2585,7 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
                 const CardinalityEstimator&
             >;
             search_algorithm S(PT, G, M, CF, CE);
-            const State &goal = S.search(std::move(initial_state), Expand{}, h, PT, G, M, CF, CE);
+            const State &goal = S.search(std::move(initial_state), upper_bound, Expand{}, h, PT, G, M, CF, CE);
             if (Options::Get().statistics)
                 S.dump(std::cout);
 

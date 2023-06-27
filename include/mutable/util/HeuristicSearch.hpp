@@ -84,6 +84,7 @@ concept heuristic_search =
 /** Tracks states and their presence in queues. */
 template<
     heuristic_search_state State,
+    typename Expand,
     bool HasRegularQueue,
     bool HasBeamQueue,
     typename Config,
@@ -94,10 +95,12 @@ struct StateManager
     static_assert(HasRegularQueue or HasBeamQueue, "must have at least one kind of queue");
 
     using state_type = State;
+    using expand_type = Expand;
     static constexpr bool has_regular_queue = HasRegularQueue;
     static constexpr bool has_beam_queue = HasBeamQueue;
 
     static constexpr bool detect_duplicates = true;
+    static constexpr bool enable_cost_based_pruning = true;
 
     private:
     ///> type for a pointer to an entry in the map of states
@@ -126,6 +129,7 @@ struct StateManager
     DEF_COUNTER(discarded)
     DEF_COUNTER(cheaper)
     DEF_COUNTER(decrease_key)
+    DEF_COUNTER(pruned_by_cost)
 
 #undef DEF_COUNTER
 
@@ -225,16 +229,38 @@ struct StateManager
     heap_type regular_queue_;
     heap_type beam_queue_;
 
+    ///> the cost of the cheapest, complete path found yet; can be used for additional pruning
+    double least_path_cost = std::numeric_limits<double>::infinity();
+
     public:
     StateManager(Context&... context) : partitions_(context...) { }
     StateManager(const StateManager&) = delete;
     StateManager(StateManager&&) = default;
     StateManager & operator=(StateManager&&) = default;
 
+    /** Update the `least_path_cost` to `cost`.  Requires that `cost < least_path_cost`. */
+    void update_least_path_cost(double cost) {
+        M_insist(cost < least_path_cost, "cost must be strictly less than least_path_cost for updating");
+        if (Options::Get().statistics)
+            std::cerr << "found cheaper path with least_path_cost = " << cost << std::endl;
+        least_path_cost = cost;
+    }
+
     template<bool ToBeamQueue>
     void push(state_type state, double h, Context&... context) {
         static_assert(not ToBeamQueue or HasBeamQueue, "ToBeamQueue implies HasBeamQueue");
         static_assert(ToBeamQueue or HasRegularQueue, "not ToBeamQueue implies HasRegularQueue");
+
+        if constexpr (enable_cost_based_pruning) {
+            /*----- Fast path: if the current state is already more costly than the cheapest complete path found so far,
+             * we can safely ignore that state. -----*/
+            if (state.g() >= least_path_cost) [[unlikely]] { // initially unlikely, as we first have to find *a* path
+                inc_pruned_by_cost();
+                return;
+            } else if (expand_type::is_goal(state, context...)) [[unlikely]] {
+                update_least_path_cost(state.g());
+            }
+        }
 
         auto &Q = ToBeamQueue ? beam_queue_ : regular_queue_;
         auto &P = partition(state, context...);
@@ -303,6 +329,17 @@ struct StateManager
             if constexpr (HasRegularQueue) {
                 push<false>(std::move(state), h, context...);
             } else {
+                if constexpr (enable_cost_based_pruning) {
+                    /*----- Fast path: if the current state is already more costly than the cheapest complete path found
+                     * so far, we can safely ignore that state. -----*/
+                    if (state.g() >= least_path_cost) [[unlikely]] {
+                        inc_pruned_by_cost();
+                        return;
+                    } else if (expand_type::is_goal(state, context...)) [[unlikely]] {
+                        update_least_path_cost(state.g());
+                    }
+                }
+
                 auto &P = partition(state, context...);
                 /*----- There is no regular queue.  Only update the state's mapping. -----*/
                 if (auto it = P.find(state); it == P.end()) {
@@ -371,6 +408,7 @@ struct StateManager
     }
 
     void clear() {
+        least_path_cost = std::numeric_limits<double>::infinity();
         if constexpr (HasRegularQueue)
             regular_queue_.clear();
         if constexpr (HasBeamQueue)
@@ -386,7 +424,7 @@ struct StateManager
             out << X(regular_to_beam) ", ";
         if (HasBeamQueue)
             out << X(none_to_beam) ", ";
-        out << X(discarded) ", " << X(cheaper) ", " << X(decrease_key);
+        out << X(discarded) ", " << X(cheaper) ", " << X(decrease_key) ", " << X(pruned_by_cost);
 #undef X
     }
 
@@ -411,12 +449,13 @@ struct StateManager
 
 template<
     heuristic_search_state State,
+    typename Expand,
     bool HasRegularQueue,
     bool HasBeamQueue,
     typename Config,
     typename... Context
 >
-bool StateManager<State, HasRegularQueue, HasBeamQueue, Config, Context...>::comparator::
+bool StateManager<State, Expand, HasRegularQueue, HasBeamQueue, Config, Context...>::comparator::
 operator()(StateManager::pointer_type p_left, StateManager::pointer_type p_right) const
 {
     auto left  = static_cast<typename map_type::value_type*>(p_left);
@@ -503,6 +542,7 @@ struct genericAStar
     };
 
     StateManager</* State=           */ State,
+                 /* Expand=          */ Expand,
                  /* HasRegularQueue= */ not (use_beam_search and is_monotone),
                  /* HasBeamQueue=    */ use_beam_search,
                  /* Config=          */ Config,
@@ -528,10 +568,20 @@ struct genericAStar
     genericAStar & operator=(genericAStar&&) = default;
 
     /** Search for a path from the given `initial_state` to a goal state.  Uses the given heuristic to guide the search.
+     * Provides an upper bound for the cost of the shortest path.
      *
      * @return the cost of the computed path from `initial_state` to a goal state
      */
-    const State & search(state_type initial_state, expand_type expand, heuristic_type &heuristic, Context&... context);
+    const State & search(state_type initial_state, double upper_bound, expand_type expand, heuristic_type &heuristic,
+                         Context&... context);
+
+    /** Search for a path from the given `initial_state` to a goal state.  Uses the given heuristic to guide the search.
+     *
+     * @return the cost of the computed path from `initial_state` to a goal state
+     */
+    const State & search(state_type initial_state, expand_type expand, heuristic_type &heuristic, Context&... context) {
+        return search(std::move(initial_state), std::numeric_limits<double>::infinity(), expand, heuristic, context...);
+    }
 
     /** Resets the state of the search. */
     void clear() {
@@ -692,10 +742,16 @@ template<
 requires heuristic_search_heuristic<Heuristic, Context...>
 const State & genericAStar<State, Expand, Heuristic, Config, Context...>::search(
     state_type initial_state,
+    double upper_bound,
     expand_type expand,
     heuristic_type &heuristic,
     Context&... context
 ) {
+    /* Initialize the least path cost.  Note, that the given upper bound could be *exactly* the weight of the shortest
+     * path.  To not prune the goal reached on that shortest path, we increase the upper bound *slightly*.  More
+     * precisely, we increase the upper bound to the next representable value in `double`. */
+    state_manager_.update_least_path_cost(std::nextafter(upper_bound, std::numeric_limits<double>::infinity()));
+
     /* Initialize queue with initial state. */
     state_manager_.template push<use_beam_search and is_monotone>(std::move(initial_state), 0, context...);
 
@@ -706,7 +762,7 @@ const State & genericAStar<State, Expand, Heuristic, Config, Context...>::search
         auto top = state_manager_.pop();
         const state_type &state = top.first;
 
-        if (expand.is_goal(state, context...))
+        if (expand_type::is_goal(state, context...))
             return state;
 
         explore_state(state, heuristic, expand, context...);

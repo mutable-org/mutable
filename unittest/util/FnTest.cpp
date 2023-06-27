@@ -536,40 +536,8 @@ TEST_CASE("replace_all", "[core][util][fn]")
     }
 }
 
-TEST_CASE("TimePoint to human readable", "[core][util][fn]")
+TEST_CASE("put_timepoint", "[core][util][fn]")
 {
-    auto check_human_readable = [](const std::string &str) -> void {
-        auto it = str.begin();
-        REQUIRE(it != str.end());
-
-        /* Sign */
-        if (*it == '-') ++it;
-
-#define CHECK_DECIMAL \
-        REQUIRE(it != str.end()); \
-        CHECK(is_dec(*it++))
-#define CHECK_CHAR(chr)  \
-        REQUIRE(it != str.end()); \
-        CHECK(chr == *it++)
-
-        CHECK_DECIMAL; CHECK_DECIMAL; CHECK_DECIMAL; CHECK_DECIMAL;     // year
-        CHECK_CHAR('-');
-        CHECK_DECIMAL; CHECK_DECIMAL;                                   // month
-        CHECK_CHAR('-');
-        CHECK_DECIMAL; CHECK_DECIMAL;                                   // day of month
-        CHECK_CHAR(' ');
-        CHECK_DECIMAL; CHECK_DECIMAL;                                   // hour
-        CHECK_CHAR(':');
-        CHECK_DECIMAL; CHECK_DECIMAL;                                   // minute
-        CHECK_CHAR(':');
-        CHECK_DECIMAL; CHECK_DECIMAL;                                   // second
-
-#undef CHECK_CHAR
-#undef CHECK_DECIMAL
-
-        CHECK(it == str.end());
-    };
-
     using Clock = std::chrono::high_resolution_clock;
     using TimePoint = std::chrono::time_point<Clock>;
 
@@ -584,8 +552,14 @@ TEST_CASE("TimePoint to human readable", "[core][util][fn]")
     }
 
     std::ostringstream oss;
-    oss << put_timepoint(tp);
-    check_human_readable(oss.str());
+    auto ecma_regex(R"(^-?\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$)"); // (-)YYYY-MM-DD HH:MM:SS
+
+    oss << put_timepoint(tp, false);
+    CHECK_THAT(oss.str(), Catch::Matches(ecma_regex));
+    oss.str("");
+
+    oss << put_timepoint(tp, true);
+    CHECK_THAT(oss.str(), Catch::Matches(ecma_regex));
 }
 
 TEST_CASE("sequence_number/double", "[core][util]")

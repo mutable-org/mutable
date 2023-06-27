@@ -86,8 +86,10 @@ void usage(std::ostream &out, const char *name)
 
 int main(int argc, const char **argv)
 {
+    m::Catalog &C = m::Catalog::Get();
+
     /*----- Parse command line arguments. ----------------------------------------------------------------------------*/
-    m::ArgParser AP;
+    m::ArgParser &AP = C.arg_parser();
 #define ADD(TYPE, VAR, INIT, SHORT, LONG, DESCR, CALLBACK)\
     VAR = INIT;\
     {\
@@ -151,7 +153,6 @@ int main(int argc, const char **argv)
     m::Diagnostic diag(false, std::cout, std::cerr);
     std::filesystem::path path_to_schema(AP.args()[0]);
     m::execute_file(diag, path_to_schema);
-    m::Catalog &C = m::Catalog::Get();
     if (not C.has_database_in_use()) {
         std::cerr << "No database selected.\n";
         std::exit(EXIT_FAILURE);
@@ -210,6 +211,8 @@ int main(int argc, const char **argv)
 
     /*----- Emit the table. ------------------------------------------------------------------------------------------*/
     emit_cardinalities(std::cout, *G, table);
+
+    m::Catalog::Destroy();
 }
 
 template<typename Generator>

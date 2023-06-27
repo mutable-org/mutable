@@ -162,7 +162,7 @@ target_link_libraries(allocator_benchmark $<TARGET_OBJECTS:util> dl Threads::Thr
 set_target_properties(allocator_benchmark PROPERTIES EXCLUDE_FROM_ALL ON)
 
 add_executable(cardinality_gen cardinality_gen.cpp)
-target_link_libraries(cardinality_gen ${PROJECT_NAME})
+target_link_libraries(cardinality_gen PUBLIC ${PROJECT_NAME}_complete)
 set_target_properties(cardinality_gen PROPERTIES EXCLUDE_FROM_ALL ON)
 
 add_executable(query_slicer query_slicer.cpp)

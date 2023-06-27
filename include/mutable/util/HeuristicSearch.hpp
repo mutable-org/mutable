@@ -242,7 +242,7 @@ struct StateManager
     void update_least_path_cost(double cost) {
         M_insist(cost < least_path_cost, "cost must be strictly less than least_path_cost for updating");
         if (Options::Get().statistics)
-            std::cerr << "found cheaper path with least_path_cost = " << cost << std::endl;
+            std::cout << "found cheaper path with least_path_cost = " << cost << std::endl;
         least_path_cost = cost;
     }
 

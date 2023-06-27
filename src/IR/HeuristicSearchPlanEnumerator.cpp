@@ -2568,7 +2568,7 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
             return PT.get_final().cost;
         }();
         if (Options::Get().statistics)
-            std::cerr << "initial upper bound is " << upper_bound << std::endl;
+            std::cout << "initial upper bound is " << upper_bound << std::endl;
 
         using H = Heuristic<PlanTable, State, Expand>;
         State::RESET_STATE_COUNTERS();
@@ -2597,7 +2597,7 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
                 reconstruct_plan_bottom_up(goal, PT, G, CE, CF);
             }
         } catch (std::logic_error err) {
-            std::cerr << "search " << search_str << '+' << vertex_str << '+' << expand_str << '+' << heuristic_str
+            std::cout << "search " << search_str << '+' << vertex_str << '+' << expand_str << '+' << heuristic_str
                       << " did not reach a goal state, fall back to DPccp" << std::endl;
             DPccp{}(G, CF, PT);
         }

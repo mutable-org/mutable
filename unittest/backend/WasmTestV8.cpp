@@ -3,6 +3,7 @@
 
 #include "backend/V8Engine.hpp"
 #include "backend/WebAssembly.hpp"
+#include <mutable/util/concepts.hpp>
 #include <string>
 #include <v8.h>
 
@@ -45,10 +46,15 @@ auto local_value(v8::Local<v8::Value> local)
     if constexpr (std::is_floating_point_v<T> and L == 1)
         return local.As<v8::Number>()->Value();
     if constexpr (L > 1) {
-        auto vec = **local.As<v8::Uint8Array>()->Buffer();
+        const ptrdiff_t vec_offset = local.As<v8::Uint32>()->Value();
+        auto vec = m::WasmEngine::Get_Wasm_Context_By_ID(Module::ID()).vm.as<uint8_t*>() + vec_offset;
         std::array<T, L> res;
-        for (std::size_t idx = 0; idx < L; ++idx)
-            res[idx] = *(reinterpret_cast<T*>(vec.Data()) + idx);
+        for (std::size_t idx = 0; idx < L; ++idx) {
+            if constexpr (m::boolean<T>)
+                res[idx] = bool(*(vec + idx));
+            else
+                res[idx] = *(reinterpret_cast<T*>(vec) + idx);
+        }
         return res;
     }
 
@@ -64,9 +70,16 @@ struct invoke_v8<PrimitiveExpr<ReturnType, ReturnL>(PrimitiveExpr<ParamTypes, Pa
     private:
     v8::Isolate *isolate_ = nullptr;
     v8::ArrayBuffer::Allocator *allocator_ = nullptr;
+    bool context_created_ = false;
     std::unique_ptr<V8InspectorClientImpl> inspector_;
 
     public:
+    invoke_v8() {
+        /* Ensure context for SIMD result vector in memory. */
+        if (not std::same_as<ReturnType, void> and ReturnL > 1)
+            context_created_ = m::WasmEngine::Ensure_Wasm_Context_For_ID(Module::ID()).second;
+    }
+
     ~invoke_v8() {
         isolate_->Exit();
         isolate_->Dispose();
@@ -76,13 +89,23 @@ struct invoke_v8<PrimitiveExpr<ReturnType, ReturnL>(PrimitiveExpr<ParamTypes, Pa
 
     return_type operator()(fn_proxy_type &func, PrimitiveExpr<ParamTypes, ParamLs>... parameters) {
         /* Compile test code into `main` function. */
-        Function<PrimitiveExpr<ReturnType, ReturnL>(void)> main("main");
+        using return_type_main =
+            std::conditional_t<ReturnL == 1, PrimitiveExpr<ReturnType, ReturnL>, Ptr<PrimitiveExpr<ReturnType, ReturnL>>>;
+        Function<return_type_main(void)> main("main");
         BLOCK_OPEN(main.body())
         {
-            if constexpr (std::is_same_v<ReturnType, void>)
+            if constexpr (std::same_as<ReturnType, void>) {
                 func(parameters...);
-            else
-                main.emit_return(func(parameters...));
+            } else {
+                if constexpr (ReturnL == 1) {
+                    main.emit_return(func(parameters...));
+                } else {
+                    /* Store SIMD vector in memory and return its address. */
+                    auto ptr = Module::Allocator().pre_malloc<ReturnType, ReturnL>();
+                    *ptr.clone() = func(parameters...);
+                    main.emit_return(ptr);
+                }
+            }
         }
         Module::Get().emit_function_export("main");
         Module::Allocator().perform_pre_allocations();
@@ -128,11 +151,12 @@ struct invoke_v8<PrimitiveExpr<ReturnType, ReturnL>(PrimitiveExpr<ParamTypes, Pa
         auto instance = instantiate(*isolate_, imports);
 
         /* If a wasm context was given by the caller, map its memory. */
+        Memory mem; // memory object must not be destroyed during the execution
         if (m::WasmEngine::Has_Wasm_Context(Module::ID())) {
             /* Map the remaining address space to the output buffer. */
             auto &wasm_context = m::WasmEngine::Get_Wasm_Context_By_ID(Module::ID());
             const auto bytes_remaining = wasm_context.vm.size() - wasm_context.heap;
-            Memory mem = Catalog::Get().allocator().allocate(bytes_remaining);
+            mem = Catalog::Get().allocator().allocate(bytes_remaining);
             mem.map(bytes_remaining, 0, wasm_context.vm, wasm_context.heap);
 
             /* If wasm context exists, set the underlying memory for the instance. */
@@ -163,10 +187,16 @@ struct invoke_v8<PrimitiveExpr<ReturnType, ReturnL>(PrimitiveExpr<ParamTypes, Pa
         auto result = main_handle->Call(context, context->Global(), 0, nullptr).ToLocalChecked();
         REQUIRE(not result.IsEmpty());
 
-        if constexpr (std::is_same_v<ReturnType, void>)
+        if constexpr (std::is_same_v<ReturnType, void>) {
             CHECK(result->IsUndefined());
-        else
-            return local_value<ReturnType, ReturnL>(result);
+            if (context_created_)
+                m::WasmEngine::Dispose_Wasm_Context(Module::ID());
+        } else {
+            auto res = local_value<ReturnType, ReturnL>(result);
+            if (context_created_)
+                m::WasmEngine::Dispose_Wasm_Context(Module::ID());
+            return res;
+        }
     }
 
     return_type operator()(fn_proxy_type &func, ParamTypes... parameters) requires (sizeof...(ParamTypes) > 0) {

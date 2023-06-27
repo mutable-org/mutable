@@ -56,16 +56,29 @@ struct WasmEngine
     static inline std::unordered_map<unsigned, std::unique_ptr<WasmContext>> contexts_;
 
     public:
-    /** Creates a new `WasmContext` with `size` bytes of virtual address space. */
+    /** Creates a new `WasmContext` for ID `id` with `size` bytes of virtual address space. */
     static WasmContext & Create_Wasm_Context_For_ID(unsigned id,
                                                     WasmContext::config_t configuration = WasmContext::config_t(0x0),
                                                     const Operator &plan = NoOpOperator(std::cout),
                                                     std::size_t size = WASM_MAX_MEMORY)
     {
         auto wasm_context = std::make_unique<WasmContext>(id, configuration, plan, size);
-        auto res = contexts_.emplace(id, std::move(wasm_context));
-        M_insist(res.second, "WasmContext with that ID already exists");
-        return *res.first->second;
+        auto [it, inserted] = contexts_.emplace(id, std::move(wasm_context));
+        M_insist(inserted, "WasmContext with that ID already exists");
+        return *it->second;
+    }
+
+    /** If none exists, creates a new `WasmContext` for ID `id` with `size` bytes of virtual address space. */
+    static std::pair<std::reference_wrapper<WasmContext>, bool>
+    Ensure_Wasm_Context_For_ID(unsigned id,
+                               WasmContext::config_t configuration = WasmContext::config_t(0x0),
+                               const Operator &plan = NoOpOperator(std::cout),
+                               std::size_t size = WASM_MAX_MEMORY)
+    {
+        auto [it, inserted] = contexts_.try_emplace(id, lazy_construct(
+            [&](){ return std::make_unique<WasmContext>(id, configuration, plan, size); }
+        ));
+        return { std::ref(*it->second), inserted };
     }
 
     /** Disposes the `WasmContext` with ID `id`. */

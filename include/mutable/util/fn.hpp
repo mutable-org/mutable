@@ -805,4 +805,18 @@ inline uint64_t pext_u64(uint64_t source, uint64_t mask) {
 
 #endif
 
+template<class Factory>
+struct lazy_construct
+{
+    using result_type = std::invoke_result_t<const Factory&>;
+
+    private:
+    Factory factory_;
+
+    public:
+    lazy_construct(Factory&& factory) : factory_(std::move(factory)) { }
+
+    operator result_type() const { return factory_(); }
+};
+
 }

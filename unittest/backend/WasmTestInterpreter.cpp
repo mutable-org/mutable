@@ -1,6 +1,8 @@
 #include "catch2/catch.hpp"
 #include "backend/WasmTest.hpp"
 
+#include <mutable/util/concepts.hpp>
+
 
 using namespace m::wasm;
 
@@ -37,8 +39,12 @@ auto literal_value(::wasm::Literal literal)
     if constexpr (L > 1) {
         auto vec = literal.getv128();
         std::array<T, L> res;
-        for (std::size_t idx = 0; idx < L; ++idx)
-            res[idx] = *(reinterpret_cast<T*>(vec.data()) + idx);
+        for (std::size_t idx = 0; idx < L; ++idx) {
+            if constexpr (m::boolean<T>)
+                res[idx] = bool(*(reinterpret_cast<uint8_t*>(vec.data()) + idx));
+            else
+                res[idx] = *(reinterpret_cast<T*>(vec.data()) + idx);
+        }
         return res;
     }
 

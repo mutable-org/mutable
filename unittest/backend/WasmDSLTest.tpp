@@ -1,6 +1,7 @@
 /* vim: set filetype=cpp: */
 #include "backend/WasmDSL.hpp"
 #include "backend/WasmMacro.hpp"
+#include "testutil.hpp"
 
 #ifndef BACKEND_NAME
 #error "must define BACKEND_NAME before including this file"
@@ -48,6 +49,12 @@ TEST_CASE("Wasm/" BACKEND_NAME "/wasm_type", "[core][wasm]")
 
     /*----- Functions -----*/
     REQUIRE(wasm_type<void(signed int), 1>() == ::wasm::Signature({ ::wasm::Type::i32 }, ::wasm::Type::none));
+
+    /*----- Vectorial types -----*/
+    REQUIRE(wasm_type<unsigned int, 2>() == ::wasm::Type::v128);
+
+    /*----- PrimitiveExprs -----*/
+    REQUIRE(wasm_type<I8, 1>() == ::wasm::Type::i32);
 }
 
 TEST_CASE("Wasm/" BACKEND_NAME "/Block", "[core][wasm]")
@@ -83,9 +90,13 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Function", "[core][wasm]")
     INVOKE_INLINE(void(float), { }, 42);
     INVOKE_INLINE(void(double), { }, 42);
 
+    INVOKE_INLINE(void(I32x4), { }, 42);
+    INVOKE_INLINE(void(I32x4), { }, I32x4(42, 17, 314, -1234));
+
     /*----- Ts... -> void -----*/
     INVOKE_INLINE(void(int, float), { }, 42, 3.14f);
     INVOKE_INLINE(void(char, unsigned, double, float, int), { }, 42, 2U, 2.72, 3.14f, 1337);
+    INVOKE_INLINE(void(I32x4, Doublex2), { }, 42, 3.14);
 
     /*----- void -> T -----*/
     CHECK_RESULT_INLINE(-12, signed char(), {
@@ -117,6 +128,12 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Function", "[core][wasm]")
     });
     CHECK_RESULT_INLINE(3.14, double(), {
         RETURN(_Double(3.14));
+    });
+    CHECK_RESULT_INLINE(std::to_array({ 42, 42, 42, 42 }), I32x4(), {
+        RETURN(I32x4(42));
+    });
+    CHECK_RESULT_INLINE(std::to_array({ 42, 17, 314, -1234 }), I32x4(), {
+        RETURN(I32x4(42, 17, 314, -1234));
     });
 
     /*----- T -> T -----*/
@@ -150,6 +167,9 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Function", "[core][wasm]")
     CHECK_RESULT_INLINE(3.14, double(double), {
         RETURN(PARAMETER(0));
     }, 3.14);
+    CHECK_RESULT_INLINE(std::to_array({ 42, 17, 314, -1234 }), I32x4(I32x4), {
+        RETURN(PARAMETER(0));
+    }, I32x4(42, 17, 314, -1234));
 
     /*----- Ts -> T -----*/
     CHECK_RESULT_INLINE(42, int(int, float), {
@@ -158,6 +178,9 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Function", "[core][wasm]")
     CHECK_RESULT_INLINE(2.72, double(char, unsigned, double, float, int), {
         RETURN(PARAMETER(2));
     }, 42, 2U, 2.72, 3.14f, 1337);
+    CHECK_RESULT_INLINE(std::to_array({ 3.14, 3.14 }), Doublex2(I32x4, Doublex2), {
+        RETURN(PARAMETER(1));
+    }, 42, 3.14);
 
     // TODO cover all types as parameter and return types
     // TODO hypothetically, Wasm allows for functions returning multiple values.  We do not yet have a simple interface
@@ -185,6 +208,13 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Function/call", "[core][wasm]")
         }
         RETURN(f());
     });
+    CHECK_RESULT_INLINE(std::to_array({ 17, -4321, 1, 42 }), I32x4(void), {
+        FUNCTION(f, I32x4(void))
+        {
+            RETURN(I32x4(17, -4321, 1, 42));
+        }
+        RETURN(f());
+    });
 
     /*----- T -> T -----*/
     CHECK_RESULT_INLINE(17, int(void), {
@@ -201,6 +231,13 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Function/call", "[core][wasm]")
         }
         RETURN(f(3.14));
     });
+    CHECK_RESULT_INLINE(std::to_array({ 17, -4321, 1, 42 }), I32x4(void), {
+        FUNCTION(f, I32x4(I32x4))
+        {
+            RETURN(PARAMETER(0));
+        }
+        RETURN(f(I32x4(17, -4321, 1, 42)));
+    });
 
     /*----- Ts -> T -----*/
     CHECK_RESULT_INLINE(0x2a, char(void), {
@@ -216,6 +253,13 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Function/call", "[core][wasm]")
             RETURN(PARAMETER(0));
         }
         RETURN(f(1.234f, 17, 3.14, '\x2a'));
+    });
+    CHECK_RESULT_INLINE(std::to_array({ 3.14, -1.23 }), Doublex2(void), {
+        FUNCTION(f, Doublex2(I32x4, Doublex2))
+        {
+            RETURN(PARAMETER(1));
+        }
+        RETURN(f(I32x4(17, -4321, 1, 42), Doublex2(3.14, -1.23)));
     });
 
     /* implicit parameter conversion */
@@ -268,6 +312,18 @@ TEST_CASE("Wasm/" BACKEND_NAME "/GlobalVariable", "[core][wasm]")
         f();
         RETURN(global);
     });
+
+    Module::Dispose();
+}
+
+TEST_CASE("Wasm/" BACKEND_NAME "/Expr/vectorial/c'tor", "[core][wasm]")
+{
+    Module::Init();
+
+    CHECK_RESULT_INLINE(std::to_array({ 42,  42 }),           I32x2(), { _I32x2 a(42);                RETURN(a); });
+    CHECK_RESULT_INLINE(std::to_array({ 42,  42,  42,  42 }), I32x4(), { _I32x4 a(42);                RETURN(a); });
+    CHECK_RESULT_INLINE(std::to_array({ 42, -17 }),           I32x2(), { _I32x2 a(42, -17);           RETURN(a); });
+    CHECK_RESULT_INLINE(std::to_array({ 42, -17, 123, 321 }), I32x4(), { _I32x4 a(42, -17, 123, 321); RETURN(a); });
 
     Module::Dispose();
 }
@@ -340,6 +396,78 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/scalar/operations/unary", "[core][wasm]")
     Module::Dispose();
 }
 
+TEST_CASE("Wasm/" BACKEND_NAME "/Expr/vectorial/operations/unary", "[core][wasm]")
+{
+    Module::Init();
+
+    CHECK_RESULT_INLINE(std::to_array({  42, -17 }), I32x2(), { _I32x2 a(42, -17); RETURN(+a); });
+    CHECK_RESULT_INLINE(std::to_array({ -42,  17 }), I32x2(), { _I32x2 a(42, -17); RETURN(-a); });
+    CHECK_RESULT_INLINE(std::to_array({  42,  17 }), I32x2(), { _I32x2 a(42, -17); RETURN(a.abs()); });
+    // ceil() not supported for integral types
+    // floor() not supported for integral types
+    // trunc() not supported for integral types
+    // nearest() not supported for integral types
+    // sqrt() not supported for integral types
+    CHECK_RESULT_INLINE(25, I16(), { _I8x2  a(42, -17); RETURN(a.add_pairwise()); });
+    CHECK_RESULT_INLINE(25, I32(), { _I16x2 a(42, -17); RETURN(a.add_pairwise()); });
+    CHECK_RESULT_INLINE(std::to_array<int16_t>({ 25, 154 }), I16x2(), { _I8x4  a(42, -17, 123, 31); RETURN(a.add_pairwise()); });
+    CHECK_RESULT_INLINE(std::to_array<int32_t>({ 25, 154 }), I32x2(), { _I16x4 a(42, -17, 123, 31); RETURN(a.add_pairwise()); });
+    CHECK_RESULT_INLINE(std::to_array({ ~42, ~(-17) }), I32x2(), { _I32x2 a(42, -17); RETURN(~a); });
+    // clz() not supported for vectorial types
+    // ctz() not supported for vectorial types
+    CHECK_RESULT_INLINE(std::to_array({ 2U, 13U }),        U32x2(), { _U32x2 a(0b1010, 0x12345678);  RETURN(a.popcnt()); });
+    CHECK_RESULT_INLINE(std::to_array<uint16_t>({ 2, 5 }), U16x2(), { _U16x2 a(0b1010, 0x1234);      RETURN(a.popcnt()); });
+    CHECK_RESULT_INLINE(std::to_array<uint8_t>({ 2, 3 }),  U8x2(),  { _U8x2  a(0b1010, 0x34);        RETURN(a.popcnt()); });
+    CHECK_RESULT_INLINE(0b1101U, uint32_t(), { _U8x4 a(0x80, 0x70, 0xff, 0xa1); RETURN(a.bitmask()); });
+    // eqz() not supported for vectorial types
+    CHECK_RESULT_INLINE(std::to_array({ false, true }), Boolx2(), { _Boolx2 a(true, false); RETURN(not a); });
+    CHECK_RESULT_INLINE(false, bool(), { _Boolx2 a(false, false); RETURN(a.any_true()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx2 a(true,  false); RETURN(a.any_true()); });
+    CHECK_RESULT_INLINE(false, bool(), { _Boolx2 a(true,  false); RETURN(a.all_true()); });
+    CHECK_RESULT_INLINE( true, bool(), { _Boolx2 a(true,  true);  RETURN(a.all_true()); });
+    CHECK_RESULT_INLINE(std::to_array({ false, true }), Boolx2(), {
+        _I32x2  a(I32x2(42, 0), Boolx2(false, true)); RETURN(a.is_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, false }), Boolx2(), {
+        _I32x2  a(I32x2(0, 42), Boolx2(true, false)); RETURN(a.is_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ false, true, false, false }), Boolx4(), {
+        _Boolx4 a(Boolx4(false, true, false, true), Boolx4(false, false, true, true)); RETURN(a.is_true_and_not_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, false, false, false }), Boolx4(), {
+        _Boolx4 a(Boolx4(false, true, false, true), Boolx4(false, false, true, true)); RETURN(a.is_false_and_not_null());
+    });
+
+    CHECK_RESULT_INLINE(std::to_array({  3.14, -1.23 }), Doublex2(), { _Doublex2 a(3.14, -1.23); RETURN(+a); });
+    CHECK_RESULT_INLINE(std::to_array({ -3.14,  1.23 }), Doublex2(), { _Doublex2 a(3.14, -1.23); RETURN(-a); });
+    CHECK_RESULT_INLINE(std::to_array({  3.14,  1.23 }), Doublex2(), { _Doublex2 a(3.14, -1.23); RETURN(a.abs()); });
+    CHECK_RESULT_INLINE(std::to_array({  4.0,  -1.0  }), Doublex2(), { _Doublex2 a(3.14, -1.23); RETURN(a.ceil()); });
+    CHECK_RESULT_INLINE(std::to_array({  3.0,  -2.0  }), Doublex2(), { _Doublex2 a(3.14, -1.23); RETURN(a.floor()); });
+    CHECK_RESULT_INLINE(std::to_array({  3.0,  -1.0  }), Doublex2(), { _Doublex2 a(3.14, -1.23); RETURN(a.trunc()); });
+    CHECK_RESULT_INLINE(std::to_array({  3.0,  -2.0  }), Doublex2(), { _Doublex2 a(3.14, -1.5);  RETURN(a.nearest()); });
+    CHECK_RESULT_INLINE(std::to_array({  3.0,   0.0  }), Doublex2(), { _Doublex2 a(9.0, 0.0);    RETURN(a.sqrt()); });
+    // add_pairwise() not supported for floating-point types
+    // operator~ not supported for floating-point types
+    // clz() not supported for floating-point types
+    // ctz() not supported for floating-point types
+    // popcnt() not supported for floating-point types
+    // bitmask() not supported for floating-point types
+    // eqz() not supported for vectorial types
+    // operator! not supported for floating-point types
+    // any_true() not supported for floating-point types
+    // all_true() not supported for floating-point types
+    CHECK_RESULT_INLINE(std::to_array({ false, true }), Boolx2(), {
+        _Doublex2  a(Doublex2(3.14, 0.0), Boolx2(false, true)); RETURN(a.is_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, false }), Boolx2(), {
+        _Doublex2  a(Doublex2(0.0, 3.14), Boolx2(true, false)); RETURN(a.is_null());
+    });
+    // is_true_and_not_null() not supported for floating-point types
+    // is_false_and_not_null() not supported for floating-point types
+
+    Module::Dispose();
+}
+
 TEST_CASE("Wasm/" BACKEND_NAME "/Expr/scalar/operations/binary", "[core][wasm]")
 {
     Module::Init();
@@ -353,9 +481,9 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/scalar/operations/binary", "[core][wasm]")
     // min() not supported for integral types
     // max() not supported for integral types
     // avg() not supported for scalar types
-    CHECK_RESULT_INLINE(0b00001000, int(), { _I8 a(0b00101010);  _I8 b(0b00001001); RETURN(a & b); });
-    CHECK_RESULT_INLINE(0b00101011, int(), { _I8 a(0b00101010);  _I8 b(0b00001001); RETURN(a | b); });
-    CHECK_RESULT_INLINE(0b00100011, int(), { _I8 a(0b00101010);  _I8 b(0b00001001); RETURN(a ^ b); });
+    CHECK_RESULT_INLINE(0b00001000, int(), { _I8 a(0b00101010);  _I8 b(0b00001001); RETURN(a bitand b); });
+    CHECK_RESULT_INLINE(0b00101011, int(), { _I8 a(0b00101010);  _I8 b(0b00001001); RETURN(a bitor b); });
+    CHECK_RESULT_INLINE(0b00100011, int(), { _I8 a(0b00101010);  _I8 b(0b00001001); RETURN(a xor b); });
     CHECK_RESULT_INLINE(0b01000000, int8_t(), { _I8 a(0b00101010);  _I8 b(5);  RETURN(a << b); });
     CHECK_RESULT_INLINE(0b00001010, int8_t(), { _I8 a(0b00101010);  _I8 b(2);  RETURN(a >> b); });
     CHECK_RESULT_INLINE(0x01010001, int(), { _I32 a(0x00101010); _I32 b(12); RETURN(rotl(a, b)); });
@@ -426,21 +554,230 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/scalar/operations/binary", "[core][wasm]")
     Module::Dispose();
 }
 
+TEST_CASE("Wasm/" BACKEND_NAME "/Expr/vectorial/operations/binary", "[core][wasm]")
+{
+    Module::Init();
+
+    CHECK_RESULT_INLINE(std::to_array({  25,  34 }), I32x2(), { _I32x2 a(42, 31); _I32x2 b(-17, 3); RETURN(a + b); });
+    CHECK_RESULT_INLINE(std::to_array({  59,  28 }), I32x2(), { _I32x2 a(42, 31); _I32x2 b(-17, 3); RETURN(a - b); });
+    CHECK_RESULT_INLINE(std::to_array({ -714, 93 }), I32x2(), { _I32x2 a(42, 31); _I32x2 b(-17, 3); RETURN(a * b); });
+    // operator/() not supported for vectorial integral types
+    // operator%() not supported for vectorial types
+    // copy_sign() not supported for vectorial types
+    CHECK_RESULT_INLINE(std::to_array({ -17,  3 }), I32x2(), { _I32x2 a(42, 3); _I32x2 b(-17, 31); RETURN(min(a, b)); });
+    CHECK_RESULT_INLINE(std::to_array({  42, 31 }), I32x2(), { _I32x2 a(42, 3); _I32x2 b(-17, 31); RETURN(max(a, b)); });
+    CHECK_RESULT_INLINE(std::to_array<uint16_t>({ 30, 17 }), U16x2(), { _U16x2 a(42, 31); _U16x2 b(17, 3); RETURN(avg(a, b)); });
+    CHECK_RESULT_INLINE(std::to_array<int8_t>({ 0b00001000, 0b00000001 }), I8x2(), {
+        _I8x2 a(0b00101010, 0b11001001); _I8x2 b(0b00001001, 0b00000101); RETURN(a bitand b);
+    });
+    CHECK_RESULT_INLINE(std::to_array<int8_t>({ 0b00101011, int8_t(0b11001101) }), I8x2(), {
+        _I8x2 a(0b00101010, 0b11001001); _I8x2 b(0b00001001, 0b00000101); RETURN(a bitor b);
+    });
+    CHECK_RESULT_INLINE(std::to_array<int8_t>({ 0b00100011, int8_t(0b11001100) }), I8x2(), {
+        _I8x2 a(0b00101010, 0b11001001); _I8x2 b(0b00001001, 0b00000101); RETURN(a xor b);
+    });
+    CHECK_RESULT_INLINE(std::to_array<int8_t>({ 0b01000000, 0b00100000 }), I8x2(), {
+        _I8x2 a(0b00101010, 0b11001001); _I8 b(5); RETURN(a << b);
+    });
+    CHECK_RESULT_INLINE(std::to_array<int8_t>({ 0b00001010, int8_t(0b11110010) }), I8x2(), {
+        _I8x2 a(0b00101010, 0b11001001); _I8 b(2); RETURN(a >> b);
+    });
+    // rotl() not supported for vectorial types
+    // rotr() not supported for vectorial types
+    CHECK_RESULT_INLINE(std::to_array({ true, false }), Boolx2(), {
+        _I32x2 a(42, 42); _I32x2 b(42, 17); RETURN(a == b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ false, true }), Boolx2(), {
+        _I32x2 a(42, 42); _I32x2 b(42, 17); RETURN(a != b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ false, false, true, false }), Boolx4(), {
+        _I32x4 a(42, 42, 42, 42); _I32x4 b(42, 17, 81, -42); RETURN(a < b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ false, true }),  Boolx2(), {
+        _U64x2 a(42, 42); _U64x2 b(42, -1UL); RETURN(a < b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, false, true, false }),  Boolx4(), {
+        _I32x4 a(42, 42, 42, 42); _I32x4 b(42, 17, 81, -42); RETURN(a <= b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }),   Boolx2(), {
+        _U64x2 a(42, 42); _U64x2 b(42, -1UL); RETURN(a <= b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ false, true, false, true }),  Boolx4(), {
+        _I32x4 a(42, 42, 42, 42); _I32x4 b(42, 17, 81, -42); RETURN(a > b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ false, false }), Boolx2(), {
+        _U64x2 a(42, 42); _U64x2 b(42, -1UL); RETURN(a > b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true, false, true }),   Boolx4(), {
+        _I32x4 a(42, 42, 42, 42); _I32x4 b(42, 17, 81, -42); RETURN(a >= b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, false }),  Boolx2(), {
+        _U64x2 a(42, 42); _U64x2 b(42, -1UL); RETURN(a >= b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ false, false, false, true }), Boolx4(), {
+        _Boolx4 a(false, true, false, true); _Boolx4 b(false, false, true, true); RETURN(a and b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ false, true, false, false }), Boolx4(), {
+        _Boolx4 a(false, true, false, true); _Boolx4 b(false, false, true, true); RETURN(and_not(a, b));
+    });
+    CHECK_RESULT_INLINE(std::to_array({ false, true, true, true }),   Boolx4(), {
+        _Boolx4 a(false, true, false, true); _Boolx4 b(false, false, true, true); RETURN(a or b);
+    });
+
+    CHECK_RESULT_INLINE(m::testutil::Approx(std::to_array({ 0.43, 4.44 })),    Doublex2(), {
+        _Doublex2 a(3.14, 1.23); _Doublex2 b(-2.71, 3.21); RETURN(a + b);
+    });
+    CHECK_RESULT_INLINE(m::testutil::Approx(std::to_array({ 5.85, -1.98 })),   Doublex2(), {
+        _Doublex2 a(3.14, 1.23); _Doublex2 b(-2.71, 3.21); RETURN(a - b);
+    });
+    CHECK_RESULT_INLINE(m::testutil::Approx(std::to_array({ -1.57, 4.92 })),   Doublex2(), {
+        _Doublex2 a(3.14, 1.23); _Doublex2 b(-0.5,  4.0);  RETURN(a * b);
+    });
+    CHECK_RESULT_INLINE(m::testutil::Approx(std::to_array({ -6.28, 0.3075 })), Doublex2(), {
+        _Doublex2 a(3.14, 1.23); _Doublex2 b(-0.5,  4.0);  RETURN(a / b);
+    });
+    // operator% not supported for vectorial types
+    // copy_sign() not supported for vectorial types
+    CHECK_RESULT_INLINE(std::to_array({ -2.71, 1.23 }),   Doublex2(), {
+        _Doublex2 a(3.14, 1.23); _Doublex2 b(-2.71, 3.21); RETURN(min(a, b));
+    });
+    CHECK_RESULT_INLINE(std::to_array({ 3.14, 3.21 }),    Doublex2(), {
+        _Doublex2 a(3.14, 1.23); _Doublex2 b(-2.71, 3.21); RETURN(max(a, b));
+    });
+    // avg() not supported for floating-point types
+    // operator& not supported for floating-point types
+    // operator| not supported for floating-point types
+    // operator^ not supported for floating-point types
+    // operator<< not supported for floating-point types
+    // operator>> not supported for floating-point types
+    // rotl() not supported for vectorial types
+    // rotr() not supported for vectorial types
+    CHECK_RESULT_INLINE(std::to_array({ true, false }), Boolx2(), {
+        _Doublex2 a(3.14, 3.14); _Doublex2 b(3.14, 2.71); RETURN(a == b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ false, true }), Boolx2(), {
+        _Doublex2 a(3.14, 3.14); _Doublex2 b(3.14, 2.71); RETURN(a != b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ false, false, true, false }), Boolx4(), {
+        _Floatx4 a(3.14f, 3.14f, 3.14f, 3.14f); _Floatx4 b(3.14f, 2.71f, 9.87f, -3.14f); RETURN(a < b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, false, true, false }),  Boolx4(), {
+        _Floatx4 a(3.14f, 3.14f, 3.14f, 3.14f); _Floatx4 b(3.14f, 2.71f, 9.87f, -3.14f); RETURN(a <= b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ false, true, false, true }),  Boolx4(), {
+        _Floatx4 a(3.14f, 3.14f, 3.14f, 3.14f); _Floatx4 b(3.14f, 2.71f, 9.87f, -3.14f); RETURN(a > b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true, false, true }),   Boolx4(), {
+        _Floatx4 a(3.14f, 3.14f, 3.14f, 3.14f); _Floatx4 b(3.14f, 2.71f, 9.87f, -3.14f); RETURN(a >= b);
+    });
+    // operator&& not supported for floating-point types
+    // and_not() not supported for scalar types
+    // operator|| not supported for floating-point types
+
+    Module::Dispose();
+}
+
+TEST_CASE("Wasm/" BACKEND_NAME "/Expr/vectorial/double pumping", "[core][wasm]")
+{
+    Module::Init();
+
+    CHECK_RESULT_INLINE(std::to_array({ true,  false, false, false, false, false, false, false,
+                                        false, false, false, false, false, false, false, false }), Boolx16(), {
+        _I32x16 a(42); _I32x16 b(42, -42, 17, 81, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0); RETURN(a == b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ false, true,  true,  true,  true,  true,  true,  true,
+                                        true,  true,  true,  true,  true,  true,  true,  true  }), Boolx16(), {
+        _I32x16 a(42); _I32x16 b(42, -42, 17, 81, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0); RETURN(a != b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ false, false, false, true,  false, false, false, false,
+                                        false, false, false, false, false, false, false, false }), Boolx16(), {
+        _I32x16 a(42); _I32x16 b(42, -42, 17, 81, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0); RETURN(a < b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true,  false, false, true,  false, false, false, false,
+                                        false, false, false, false, false, false, false, false }), Boolx16(), {
+        _I32x16 a(42); _I32x16 b(42, -42, 17, 81, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0); RETURN(a <= b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ false, true,  true,  false, true,  true,  true,  true,
+                                        true,  true,  true,  true,  true,  true,  true,  true  }), Boolx16(), {
+        _I32x16 a(42); _I32x16 b(42, -42, 17, 81, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0); RETURN(a > b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true,  true,  true,  false, true,  true,  true,  true,
+                                        true,  true,  true,  true,  true,  true,  true,  true  }), Boolx16(), {
+        _I32x16 a(42); _I32x16 b(42, -42, 17, 81, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0); RETURN(a >= b);
+    });
+
+    Module::Dispose();
+}
+
+TEST_CASE("Wasm/" BACKEND_NAME "/Expr/vectorial/modifications", "[core][wasm]")
+{
+    Module::Init();
+
+    CHECK_RESULT_INLINE(-17, int32_t(), { _I32x2 a(42, -17); RETURN(a.extract<1>()); });
+    CHECK_RESULT_INLINE(std::to_array({ 42, 123 }), I32x2(), { _I32x2 a(42, -17); _I32x2 b(a.replace<1>(123)); RETURN(b); });
+
+    CHECK_RESULT_INLINE(int16_t(0x0100), int16_t(), {
+        I16x2 a(0x0123, 0xff12); auto i = std::to_array<uint8_t>({ 4, 1 }); RETURN(a.swizzle_bytes(i));
+    });
+    CHECK_RESULT_INLINE(std::to_array<int16_t>({ 0x1200, 0x2301, int16_t(0xff00), 0x0001 }), I16x4(), {
+        I16x2 a(0x0123, 0xff12); auto i = std::to_array<uint8_t>({ 4, 2, 1, 0, 4, 3, 1, 4 }); RETURN(a.swizzle_bytes(i));
+    });
+    CHECK_RESULT_INLINE(std::to_array<int16_t>({ 0, -17 }), I16x2(), {
+        _I16x4 a(42, -17, 123, -1); auto i = std::to_array<uint8_t>({ 4, 1 }); RETURN(a.swizzle_lanes(i));
+    });
+    CHECK_RESULT_INLINE(std::to_array<int16_t>({ 0, 123, -17, 42, 0, -1, -17, 0 }), I16x8(), {
+        _I16x4 a(42, -17, 123, -1); auto i = std::to_array<uint8_t>({ 4, 2, 1, 0, 4, 3, 1, 4 }); RETURN(a.swizzle_lanes(i));
+    });
+
+    CHECK_RESULT_INLINE(int16_t(0x0112), int16_t(), {
+        I16x2 a(0x0123, 0xff12); I16x2 b(0x4567, 0xee34); auto i = std::to_array<uint8_t>({ 2, 1 });
+        RETURN(ShuffleBytes(a, b, i));
+    });
+    CHECK_RESULT_INLINE(std::to_array<int16_t>({ 0x1245, 0x2301, int16_t(0xffee), 0x6701 }), I16x4(), {
+        I16x2 a(0x0123, 0xff12); I16x2 b(0x4567, 0xee34); auto i = std::to_array<uint8_t>({ 5, 2, 1, 0, 7, 3, 1, 4 });
+        RETURN(ShuffleBytes(a, b, i));
+    });
+    CHECK_RESULT_INLINE(std::to_array<int16_t>({ 123, -17 }), I16x2(), {
+        _I16x2 a(42, -17); _I16x2 b(123, -1); auto i = std::to_array<uint8_t>({ 2, 1 }); RETURN(ShuffleLanes(a, b, i));
+    });
+    CHECK_RESULT_INLINE(std::to_array<int16_t>({ 123, -17, 42, -1 }), I16x4(), {
+        _I16x2 a(42, -17); _I16x2 b(123, -1); auto i = std::to_array<uint8_t>({ 2, 1, 0, 3 }); RETURN(ShuffleLanes(a, b, i));
+    });
+
+    Module::Dispose();
+}
+
 TEST_CASE("Wasm/" BACKEND_NAME "/Expr/conversions", "[core][wasm]")
 {
     Module::Init();
 
     /* 8bit -> 32bit */
-    CHECK_RESULT_INLINE( 42, uint32_t(), { _U8 a(42); RETURN(a); });
-    CHECK_RESULT_INLINE( 42, uint32_t(), { _U8 a(42); RETURN(a.to<uint32_t>()); });
+    CHECK_RESULT_INLINE( 42, uint32_t(), { _U8 a(42);  RETURN(a); });
+    CHECK_RESULT_INLINE( 42, uint32_t(), { _U8 a(42);  RETURN(a.to<uint32_t>()); });
     CHECK_RESULT_INLINE(-17, int32_t(),  { _I8 a(-17); RETURN(a); });
     CHECK_RESULT_INLINE(-17, int32_t(),  { _I8 a(-17); RETURN(a.to<int32_t>()); });
+
+    CHECK_RESULT_INLINE(std::to_array({ 42U, 17U }), U32x2(), { _U8x2 a(42,  17); RETURN(a); });
+    CHECK_RESULT_INLINE(std::to_array({ 42U, 17U }), U32x2(), { _U8x2 a(42,  17); RETURN(a.to<uint32_t>()); });
+    CHECK_RESULT_INLINE(std::to_array({ 42, -17 }),  I32x2(), { _I8x2 a(42, -17); RETURN(a); });
+    CHECK_RESULT_INLINE(std::to_array({ 42, -17 }),  I32x2(), { _I8x2 a(42, -17); RETURN(a.to<int32_t>()); });
 
     /* 32bit -> 8bit */
     // implicit conversion from uint32_t to uint8_t not allowed
     CHECK_RESULT_INLINE(0x78, uint8_t(), { _U32 a(0x12345678); RETURN(a.to<uint8_t>()); });
     // implicit conversion from int32_t to int8_t not allowed
-    CHECK_RESULT_INLINE(0x21, int8_t(),  { _I32 a(0x87654321);  RETURN(a.to<int8_t>()); });
+    CHECK_RESULT_INLINE(0x21, int8_t(),  { _I32 a(0x87654321); RETURN(a.to<int8_t>()); });
+
+    // implicit conversion from uint32_t to uint8_t not allowed
+    CHECK_RESULT_INLINE(        42,  uint8_t(), { _U32x16 a(42);  RETURN(a.to<uint8_t>().template extract<0>()); });
+    CHECK_RESULT_INLINE(uint8_t(-1), uint8_t(), { _U32x16 a(-1U); RETURN(a.to<uint8_t>().template extract<0>()); });
+    // implicit conversion from int32_t to int8_t not allowed
+    CHECK_RESULT_INLINE(        42, int8_t(), { _I32x16 a(42);  RETURN(a.to<int8_t>().template extract<0>()); });
+    CHECK_RESULT_INLINE(       -17, int8_t(), { _I32x16 a(-17); RETURN(a.to<int8_t>().template extract<0>()); });
+    CHECK_RESULT_INLINE(int8_t(-1), int8_t(), { _I32x16 a(-1);  RETURN(a.to<int8_t>().template extract<0>()); });
+
+    CHECK_RESULT_INLINE( 42, int32_t(), { _I64x4 a(42);  RETURN(a.to<int32_t>().template extract<0>()); });
+    CHECK_RESULT_INLINE(-17, int32_t(), { _I64x4 a(-17); RETURN(a.to<int32_t>().template extract<0>()); });
 
     /* float -> double */
     CHECK_RESULT_INLINE(Approx( 3.14), double(), { _Float a(3.14f);  RETURN(a); });
@@ -503,7 +840,27 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/null_semantics", "[core][wasm]")
     CHECK_RESULT_INLINE( true, bool(), { _I32 a(42); _I32 b(_I32::Null()); _I32 c(a + b); RETURN(c.is_null()); });
     CHECK_RESULT_INLINE(false, bool(), { _I32 a(42); _I32 b(17); _I32 c(a + b); RETURN(c.is_null()); });
 
-    /* special cases with logical `or` and `and` */
+    /* special cases with `add_pairwise` */
+    CHECK_RESULT_INLINE(std::to_array({ false, true, true, true }), Boolx4(), {
+        _I8x8 a(I8x8(42, -17, 123, 31, -7, 21, 99, 1), Boolx8(false, false, false, true, true, false, true, true));
+        RETURN(a.add_pairwise().is_null());
+    });
+
+    /* special cases with `bitmask`, `any_true`, and `all_true` */
+    CHECK_RESULT_INLINE(false, bool(), { _I8x2 a(I8x2(42, -17), Boolx2(false, false)); RETURN(a.bitmask().is_null()); })
+    CHECK_RESULT_INLINE( true, bool(), { _I8x2 a(I8x2(42, -17), Boolx2(false,  true)); RETURN(a.bitmask().is_null()); })
+    CHECK_RESULT_INLINE( true, bool(), { _I8x2 a(I8x2(42, -17), Boolx2( true, false)); RETURN(a.bitmask().is_null()); })
+    CHECK_RESULT_INLINE( true, bool(), { _I8x2 a(I8x2(42, -17), Boolx2( true,  true)); RETURN(a.bitmask().is_null()); })
+    CHECK_RESULT_INLINE(false, bool(), { _I8x2 a(I8x2(42, -17), Boolx2(false, false)); RETURN(a.any_true().is_null()); })
+    CHECK_RESULT_INLINE( true, bool(), { _I8x2 a(I8x2(42, -17), Boolx2(false,  true)); RETURN(a.any_true().is_null()); })
+    CHECK_RESULT_INLINE( true, bool(), { _I8x2 a(I8x2(42, -17), Boolx2( true, false)); RETURN(a.any_true().is_null()); })
+    CHECK_RESULT_INLINE( true, bool(), { _I8x2 a(I8x2(42, -17), Boolx2( true,  true)); RETURN(a.any_true().is_null()); })
+    CHECK_RESULT_INLINE(false, bool(), { _I8x2 a(I8x2(42, -17), Boolx2(false, false)); RETURN(a.all_true().is_null()); })
+    CHECK_RESULT_INLINE( true, bool(), { _I8x2 a(I8x2(42, -17), Boolx2(false,  true)); RETURN(a.all_true().is_null()); })
+    CHECK_RESULT_INLINE( true, bool(), { _I8x2 a(I8x2(42, -17), Boolx2( true, false)); RETURN(a.all_true().is_null()); })
+    CHECK_RESULT_INLINE( true, bool(), { _I8x2 a(I8x2(42, -17), Boolx2( true,  true)); RETURN(a.all_true().is_null()); })
+
+    /* special cases with logical `or`, `and_not`, and `and` */
     CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); _Bool b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_null()); });
     CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); _Bool b(false); _Bool c(a or b); RETURN(c.is_null()); });
     CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); _Bool b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
@@ -525,6 +882,70 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Expr/null_semantics", "[core][wasm]")
     CHECK_RESULT_INLINE( true, bool(), { Bool a(true);  _Bool b(_Bool::Null()); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
     CHECK_RESULT_INLINE( true, bool(), { Bool a(true);  _Bool b(false); _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
     CHECK_RESULT_INLINE( true, bool(), { Bool a(true);  _Bool b(true);  _Bool c(a or b); RETURN(c.is_true_and_not_null()); });
+
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        _Boolx2 a(_Boolx2::Null()); _Boolx2 b(_Boolx2::Null()); _Boolx2 c(and_not(a, b)); RETURN(c.is_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        _Boolx2 a(_Boolx2::Null()); _Boolx2 b(false); _Boolx2 c(and_not(a, b)); RETURN(c.is_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        _Boolx2 a(_Boolx2::Null()); _Boolx2 b(true);  _Boolx2 c(and_not(a, b)); RETURN(c.is_false_and_not_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        _Boolx2 a(false); _Boolx2 b(_Boolx2::Null()); _Boolx2 c(and_not(a, b)); RETURN(c.is_false_and_not_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        _Boolx2 a(false); _Boolx2 b(false); _Boolx2 c(and_not(a, b)); RETURN(c.is_false_and_not_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        _Boolx2 a(false); _Boolx2 b(true);  _Boolx2 c(and_not(a, b)); RETURN(c.is_false_and_not_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        _Boolx2 a(true);  _Boolx2 b(_Boolx2::Null()); _Boolx2 c(and_not(a, b)); RETURN(c.is_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        _Boolx2 a(true);  _Boolx2 b(false); _Boolx2 c(and_not(a, b)); RETURN(c.is_true_and_not_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        _Boolx2 a(true);  _Boolx2 b(true);  _Boolx2 c(and_not(a, b)); RETURN(c.is_false_and_not_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        _Boolx2 a(_Boolx2::Null()); Boolx2 b(false); _Boolx2 c(and_not(a, b)); RETURN(c.is_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        _Boolx2 a(_Boolx2::Null()); Boolx2 b(true);  _Boolx2 c(and_not(a, b)); RETURN(c.is_false_and_not_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        _Boolx2 a(false); Boolx2 b(false); _Boolx2 c(and_not(a, b)); RETURN(c.is_false_and_not_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        _Boolx2 a(false); Boolx2 b(true);  _Boolx2 c(and_not(a, b)); RETURN(c.is_false_and_not_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        _Boolx2 a(true);  Boolx2 b(false); _Boolx2 c(and_not(a, b)); RETURN(c.is_true_and_not_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        _Boolx2 a(true);  Boolx2 b(true);  _Boolx2 c(and_not(a, b)); RETURN(c.is_false_and_not_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        Boolx2 a(false); _Boolx2 b(_Boolx2::Null()); _Boolx2 c(and_not(a, b)); RETURN(c.is_false_and_not_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        Boolx2 a(false); _Boolx2 b(false); _Boolx2 c(and_not(a, b)); RETURN(c.is_false_and_not_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        Boolx2 a(false); _Boolx2 b(true);  _Boolx2 c(and_not(a, b)); RETURN(c.is_false_and_not_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        Boolx2 a(true);  _Boolx2 b(_Boolx2::Null()); _Boolx2 c(and_not(a, b)); RETURN(c.is_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        Boolx2 a(true);  _Boolx2 b(false); _Boolx2 c(and_not(a, b)); RETURN(c.is_true_and_not_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, true }), Boolx2(), {
+        Boolx2 a(true);  _Boolx2 b(true);  _Boolx2 c(and_not(a, b)); RETURN(c.is_false_and_not_null());
+    });
 
     CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); _Bool b(_Bool::Null()); _Bool c(a and b); RETURN(c.is_null()); });
     CHECK_RESULT_INLINE( true, bool(), { _Bool a(_Bool::Null()); _Bool b(false); _Bool c(a and b); RETURN(c.is_false_and_not_null()); });
@@ -766,6 +1187,39 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Variable/operations/binary", "[core][wasm]")
     Module::Dispose();
 }
 
+TEST_CASE("Wasm/" BACKEND_NAME "/Variable/vectorial", "[core][wasm]")
+{
+    Module::Init();
+
+    CHECK_RESULT_INLINE(std::to_array({ false, true }), Boolx2(), {
+        Var<Boolx2> a(false, true); RETURN(a);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, false, false, true }), Boolx4(), {
+        Var<Boolx2> a(false, true); Var<Boolx4> b(true, false, false, true); a.val().discard(); RETURN(b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, false, false, true }), Boolx4(), {
+        Var<Boolx16> a(true); Var<Boolx4> b(true, false, false, true); a.val().discard(); RETURN(b);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, false, false, true }), Boolx4(), {
+        Var<Boolx32> a(true); Var<Boolx4> b(true, false, false, true); a.val().discard(); RETURN(b);
+    });
+
+    CHECK_RESULT_INLINE(std::to_array({ true, false }), Boolx2(), {
+        _Var<I32x2> a(I32x2(42, -17), Boolx2(true, false)); RETURN(a.is_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, false }), Boolx2(), {
+        Var<Boolx2> a(false, true); _Var<I32x2> b(I32x2(42, -17), Boolx2(true, false)); a.val().discard(); RETURN(b.is_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, false }), Boolx2(), {
+        Var<Boolx16> a(true); _Var<I32x2> b(I32x2(42, -17), Boolx2(true, false)); a.val().discard(); RETURN(b.is_null());
+    });
+    CHECK_RESULT_INLINE(std::to_array({ true, false }), Boolx2(), {
+        Var<Boolx32> a(true); _Var<I32x2> b(I32x2(42, -17), Boolx2(true, false)); a.val().discard(); RETURN(b.is_null());
+    });
+
+    Module::Dispose();
+}
+
 TEST_CASE("Wasm/" BACKEND_NAME "/Variable/null_semantics", "[core][wasm]")
 {
     Module::Init();
@@ -951,6 +1405,28 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Select", "[core][wasm]")
     CHECK_RESULT_INLINE(1, int(), { Bool cond(false); I32 a(0); RETURN(Select(cond, a, 1)); });
     CHECK_RESULT_INLINE(0, int(), { Bool cond(true);  I32 b(1); RETURN(Select(cond, 0, b)); });
     CHECK_RESULT_INLINE(1, int(), { Bool cond(false); I32 b(1); RETURN(Select(cond, 0, b)); });
+
+    CHECK_RESULT_INLINE(std::to_array({ 0, 1 }), I32x2(), {
+        Bool cond(true);  I32x2 a(0, 1); I32x2 b(2, 3); RETURN(Select(cond, a, b));
+    });
+    CHECK_RESULT_INLINE(std::to_array({ 2, 3 }), I32x2(), {
+        Bool cond(false); I32x2 a(0, 1); I32x2 b(2, 3); RETURN(Select(cond, a, b));
+    });
+    CHECK_RESULT_INLINE(std::to_array<int32_t>({ 0x01234567, int32_t(0x9abcdef0) }), I32x2(), {
+        Boolx2 cond(true, false); I32x2 a(0x01234567, 0x89abcdef); I32x2 b(0x12345678, 0x9abcdef0); RETURN(Select(cond, a, b));
+    });
+    CHECK_RESULT_INLINE(std::to_array<int64_t>({ 0x01234567, int64_t(0x9abcdef0) }), I64x2(), {
+        Boolx4 cond(true, false, false, true);
+        I64x4 a(0x01234567, 0x89abcdef, 0x76543210, 0xfedcba98);
+        I64x4 b(0x12345678, 0x9abcdef0, 0x87654321, 0x0fedcba9);
+        RETURN(Select(cond, a, b).swizzle_lanes(std::to_array<uint8_t>({ 0, 1 }))); // lower part
+    });
+    CHECK_RESULT_INLINE(std::to_array<int64_t>({ int64_t(0x87654321), int64_t(0xfedcba98) }), I64x2(), {
+        Boolx4 cond(true, false, false, true);
+        I64x4 a(0x01234567, 0x89abcdef, 0x76543210, 0xfedcba98);
+        I64x4 b(0x12345678, 0x9abcdef0, 0x87654321, 0x0fedcba9);
+        RETURN(Select(cond, a, b).swizzle_lanes(std::to_array<uint8_t>({ 2, 3 }))); // higher part
+    });
 
     Module::Dispose();
 }
@@ -1640,6 +2116,11 @@ TEST_CASE("Wasm/" BACKEND_NAME "/Memory", "[core][wasm]")
     CHECK_RESULT_INLINE(3.14, double(void), {
         Var<Ptr<Double>> ptr(Module::Allocator().malloc<double>());
         *ptr = 3.14;
+        RETURN(*ptr);
+    });
+    CHECK_RESULT_INLINE(std::to_array({ 42, 17, -123, 314 }), I32x4(void), {
+        Var<Ptr<I32x4>> ptr(Module::Allocator().malloc<int, 4>());
+        *ptr = I32x4(42, 17, -123, 314);
         RETURN(*ptr);
     });
 

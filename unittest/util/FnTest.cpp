@@ -440,48 +440,56 @@ TEST_CASE("isspace", "[core][util][fn]")
     {
         auto string = "     ";
         REQUIRE(isspace(string, 5));
+        REQUIRE(isspace(string));
     }
 
     SECTION("10 spaces with length 5")
     {
         auto string = "          ";
         REQUIRE(isspace(string, 5));
+        REQUIRE(isspace(string));
     }
 
     SECTION("4 spaces, 1 nonspace, length 5")
     {
         auto string = "  x  ";
         REQUIRE(not isspace(string, 5));
+        REQUIRE_FALSE(isspace(string));
     }
 
     SECTION("String containing nonspace, but length is shorter")
     {
         auto string = "  x";
         REQUIRE(isspace(string, 2));
+        REQUIRE_FALSE(isspace(string));
     }
 
     SECTION("Empty string")
     {
         auto string = "";
         REQUIRE(isspace(string, 0));
+        REQUIRE(isspace(string));
     }
 
     SECTION("Trailing spaces")
     {
         auto string = "test     ";
         REQUIRE(not isspace(string, 9));
+        REQUIRE_FALSE(isspace(string));
     }
 
     SECTION("Spaces in the middle")
     {
         auto string = "a    b";
         REQUIRE(not isspace(string, 5));
+        REQUIRE_FALSE(isspace(string));
     }
 
     SECTION("Given length is longer than string length")
     {
         auto string = "     ";
         REQUIRE(not isspace(string, 10));
+        REQUIRE(isspace(string));
     }
 }
 

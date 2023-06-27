@@ -28,6 +28,8 @@ tqdm = "*"
 tzdata = "*"
 wheel = "*"
 yamale = "*"
+python-easygraph = "*"
+graphviz = "*"
 
 [dev-packages]
 

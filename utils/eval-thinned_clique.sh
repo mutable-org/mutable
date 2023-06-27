@@ -60,7 +60,7 @@ function run_experiment()
     SKEWNESS=$3
     SEED=$4
 
-    OUT=$(python querygen.py --quiet --seed ${SEED} -t clique -n ${SIZE} --thinning=${THINNING} --skew=${SKEWNESS})
+    OUT=$(python utils/querygen.py --quiet --seed ${SEED} -t clique -n ${SIZE} --thinning=${THINNING} --skew=${SKEWNESS})
     RES=$?
     # echo "${OUT}"
     if [ ${RES} -ne 0 ];

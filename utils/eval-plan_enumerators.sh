@@ -5,8 +5,7 @@ trap "exit 1" SIGINT
 
 set -o pipefail -o nounset
 
-source planner-configs.sh
-
+source utils/eval-plan_enumerator-configs.sh
 
 ########################################################################################################################
 # Globals
@@ -207,7 +206,7 @@ do
             # Generate problem
             SEED=${RANDOM}
             echo -n '` '
-            python3 querygen.py -t "${TOPOLOGY}" -n ${N} --count=${QUERY_REPEAT_COUNT} | tr -d '\n'
+            python3 utils/querygen.py -t "${TOPOLOGY}" -n ${N} --count=${QUERY_REPEAT_COUNT} | tr -d '\n'
             (time build/release/bin/cardinality_gen \
                 ${FLAGS} \
                 --seed "${SEED}" \

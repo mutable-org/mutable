@@ -1,5 +1,9 @@
 #!env python3
 
+import os
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # silence TnesorFlow INFO and WARNING messages
+
 import argparse
 import easygraph as eg
 import enum
@@ -9,7 +13,6 @@ import io
 import itertools
 import math
 import numpy
-import os
 import platform
 import random
 import scipy

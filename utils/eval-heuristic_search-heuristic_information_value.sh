@@ -5,7 +5,7 @@ trap "exit 1" SIGINT
 
 set -o pipefail -o nounset
 
-source planner-configs.sh
+source utils/eval-plan_enumerator-configs.sh
 
 BINDIR=build/debug_shared/bin
 BIN=${BINDIR}/shell
@@ -34,7 +34,7 @@ do
         for N in 15; do
             NAME="$T-${N}"
 
-            python3 querygen.py -t $T -n ${N} > /dev/null
+            python3 utils/querygen.py -t $T -n ${N} > /dev/null
             build/release/bin/cardinality_gen \
                 --seed ${RANDOM} \
                 "${NAME}.schema.sql" \

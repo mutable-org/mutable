@@ -16,13 +16,15 @@ BIN=build/debug_shared/bin/shell
 MIN_CARDINALITY=10
 MAX_CARDINALITY=10000
 
+echo "planner,topology,relations,states"
+
 for T in {chain,cycle,star,clique};
 do
     for N in {5,10,15};
     do
         NAME="$T-$N"
 
-        python3 querygen.py -t $T -n $N > /dev/null
+        python3 utils/querygen.py -t $T -n $N > /dev/null
         build/release/bin/cardinality_gen \
             --min ${MIN_CARDINALITY} \
             --max ${MAX_CARDINALITY} \

@@ -398,7 +398,7 @@ report:coverage:
         - nginx
     needs: [ "build:debug:linux-amd64" ]
     script:
-        - ./coverage.sh
+        - utils/coverage.sh
         - rm -rf /srv/http/mutable/coverage
         - mv build/${BUILD_TYPE}/html /srv/http/mutable/coverage
     coverage: '/lines\.+: \d+\.\d+/'

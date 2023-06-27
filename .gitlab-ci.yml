@@ -191,7 +191,9 @@ unittest:linux-amd64:
     needs:
         - job: "build:debug:linux-amd64"
           artifacts: true
-    script: env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 python3 utils/unittest-parallel.py -r --out unittest-results.xml build/debug/bin/unittest
+    script:
+        - pipenv sync
+        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 pipenv run utils/unittest-parallel.py -r --out unittest-results.xml build/debug/bin/unittest
     artifacts:
         when: always
         paths:
@@ -207,7 +209,9 @@ unittest:macos-amd64:
     needs:
         - job: "build:debug:macos-amd64"
           artifacts: true
-    script: env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 python3 utils/unittest-parallel.py -r --out unittest-results.xml build/debug/bin/unittest
+    script:
+        - pipenv sync
+        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 pipenv run utils/unittest-parallel.py -r --out unittest-results.xml build/debug/bin/unittest
     artifacts:
         when: always
         paths:
@@ -224,8 +228,8 @@ integrationtest:linux-amd64:
         - job: "build:debug:linux-amd64"
           artifacts: true
     script:
-        - pip3 install --user --upgrade colorama pyyaml yamale tqdm
-        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 --unset=TERM python3 test/IntegrationTest.py --required-only --debug build/debug
+        - pipenv sync
+        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 --unset=TERM pipenv run test/IntegrationTest.py --required-only --debug build/debug
 
 integrationtest:macos-amd64:
     stage: test:debug
@@ -236,8 +240,8 @@ integrationtest:macos-amd64:
         - job: "build:debug:macos-amd64"
           artifacts: true
     script:
-        - pip3 install --user --upgrade colorama pyyaml yamale tqdm
-        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 --unset=TERM python3 test/IntegrationTest.py --required-only --debug build/debug
+        - pipenv sync
+        - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 --unset=TERM pipenv run test/IntegrationTest.py --required-only --debug build/debug
 
 ensure-exported-symbols:debug:linux:
     stage: test:debug

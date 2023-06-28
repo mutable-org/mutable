@@ -2494,6 +2494,8 @@ using wAStar = ai::wAStar<std::ratio<2, 1>>::type<State, Expand, Heuristic, Conf
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using lazyAStar = ai::lazy_AStar<State, Expand, Heuristic, Config, Context...>;
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using beam_search_hanwen = ai::beam_search<1>::type<State, Expand, Heuristic, Config, Context...>;
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using beam_search = ai::beam_search<2>::type<State, Expand, Heuristic, Config, Context...>;
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using dynamic_beam_search = ai::beam_search<-1U>::type<State, Expand, Heuristic, Config, Context...>;
@@ -2582,7 +2584,7 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
                              const CostFunction &CF, const CardinalityEstimator &CE) {
     /// Entrance for the BiDirectional
     if (std::strcmp(options::search, "BIDIRECTIONAL") == 0) {
-        std::cout << "\n\n\n\n\n\nCurrently in the entrance for the BiDirectional" << std::endl;
+        std::cout << "\nCurrently in the entrance for the BiDirectional" << std::endl;
 
         using H1 = heuristics::zero<PlanTable, State, expansions::BottomUpComplete>;
         using H2 = heuristics::zero<PlanTable, State, expansions::TopDownComplete>;
@@ -2705,15 +2707,19 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
             goto matched_heuristic_search; \
         }
 
-        /// biDirectionalSearch
+        /// biDirectionalSearch Entrance
         /// Add one duplicate search here to make the entrance of bidirectional search not influence the other search method
         HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, cleanAStar)
 
-        /// Currently we didn't use the main entrance here
+        /// Currently we didn't use the direct entrance for bidirectional search
         /// We directly get in the Bidirectional funciton from upstairs
         /// HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, BIDIRECTIONAL)
         HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, cleanAStar)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, cleanAStar)
+
+        /// Hanwen Beam Search
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, beam_search_hanwen)
+        HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, beam_search_hanwen)
 
         // bottom-up
         // IDDFS

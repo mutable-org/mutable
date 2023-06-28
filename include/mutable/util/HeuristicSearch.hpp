@@ -1172,13 +1172,14 @@ std::size_t num_##NAME() const { return 0; }
     ///> map of all states ever explored, mapping state to its info; partitioned by state partition id
     Partitions<supports_partitioning<State, Context...>> partitions_;
 
+
+
+public:
     ///> map of all states ever explored, mapping state to its info
     // map_type states_;
-
     heap_type regular_queue_;
     heap_type beam_queue_;
 
-public:
     BiDirectionStateManager(Context&... context) : partitions_(context...) { }
     BiDirectionStateManager(const BiDirectionStateManager&) = delete;
     BiDirectionStateManager(BiDirectionStateManager&&) = default;
@@ -1480,13 +1481,12 @@ private:
     }
 
     void bidirectional_for_each_successor_topdown(callback_t &&callback,
-                                                  const state_type &state, heuristic_type2 &heuristic,
-                                                  expand_type2 &expand,
+                                                  const state_type &state, heuristic_type2 &heuristic2,
+                                                  expand_type2 &expand2,
                                                   Context &... context) {
-        expand(state, [this, callback = std::move(callback), &heuristic, &context...](state_type successor) {
-            if (auto it = state_manager_topdown.find(successor, context...);
-                    it == state_manager_topdown.end(successor, context...)) {
-                const double h = heuristic(successor, context...);
+        expand2(state, [this, callback = std::move(callback), &heuristic2, &context...](state_type successor) {
+            if (auto it = state_manager_topdown.find(successor, context...); it == state_manager_topdown.end(successor, context...)) {
+                const double h = heuristic2(successor, context...);
                 callback(std::move(successor), h);
             } else {
                 inc_cached_heuristic_value();
@@ -1502,11 +1502,11 @@ private:
         }, state, heuristic, expand, context...);
     }
 
-    void explore_state_topdown(const state_type &state, heuristic_type2 &heuristic, expand_type2 &expand,
+    void explore_state_topdown(const state_type &state, heuristic_type2 &heuristic, expand_type2 &expand2,
                                Context &... context) {
         bidirectional_for_each_successor_topdown([this, &context...](state_type successor, double h) {
             state_manager_topdown.push_regular_queue(std::move(successor), h, context...);
-        }, state, heuristic, expand, context...);
+        }, state, heuristic, expand2, context...);
     }
 
     const state_type &
@@ -1523,6 +1523,25 @@ private:
         }
         return *prev;
     }
+
+    const state_type &
+    reverse_the_middle_case(const state_type &topdown_current_state, const state_type &bottomup_state_to_connect) {
+        /// Return the goal -> State Top
+        /// Currently in the same layer
+        /// TODO: Add comparation to better utilized the code
+        const state_type *tmp = &topdown_current_state;
+        const state_type *current = tmp->parent();
+        const state_type *prev = &bottomup_state_to_connect;
+
+        while (current) {
+            const state_type *parent = current->parent();
+            current->set_parent(prev);
+            prev = current;
+            current = parent;
+        }
+        return *prev;
+    }
+
 
 public:
     friend std::ostream &operator<<(std::ostream &out, const biDirectionalSearch &AStar) {
@@ -1554,17 +1573,6 @@ const State &biDirectionalSearch<State, Expand, Expand2, Heuristic, Heuristic2, 
         heuristic_type2 &heuristic2,
         Context &... context
 ) {
-//            state_manager_.template push<false>(std::move(bottom_state), 0, context...);
-//            while (not state_manager_.queues_empty()) {
-//                auto top = state_manager_.pop();
-//                const state_type &state = top.first;
-//
-//                if (expand.is_goal(state, context...))
-//                    return state;
-//                explore_state(state, heuristic, expand, context...);
-//            }
-//            throw std::logic_error("goal state unreachable from provided initial state");
-
     /// Core: we will not change any reconstruct logic in the outside
     /// Current is in BottomUpComplete: So we should return a top states
     /// 1. Init the Bidirectional State Manager
@@ -1592,21 +1600,12 @@ const State &biDirectionalSearch<State, Expand, Expand2, Heuristic, Heuristic2, 
             /// Build connection from bottomup_state to topdown_state
             const state_type &goal = reverse_the_topdown(topdown_state, bottomup_state);
             return goal;
+        } else if (diff == 0) {
+            std::cout << "!! diff==0 Processing... \n";
+            /// Naive version of logic
+            const state_type &goal = reverse_the_middle_case(topdown_state, bottomup_state);
+            return goal;
         }
-
-//        if (diff <= 1) {
-//            if (diff == 1) {
-//                std::cout << "Do you enter here?\n";
-//                return bottomup_state;
-//                /// Build connection from bottomup_state to topdown_state
-////                const state_type &goal = reverse_the_topdown(topdown_state, bottomup_state);
-////                return goal;
-//            } else if (diff == 0) {
-//                /// Compare and choose one node if different
-//                std::cout<<"Not here\n";
-//            }
-
-//    }
 
         /// 3. Bidirectionally extend to step forward
         explore_state_bottomup(bottomup_state, heuristic, expand, context...);

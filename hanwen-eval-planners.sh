@@ -19,10 +19,10 @@ SECONDS=0
 RANDOM=42
 
 # Timeout for single invocations
-TIMEOUT=180s
+TIMEOUT=1800s
 
 # Maximum number of timeouts allowed per planner configuration.  If this value is reached, the configuration is skipped.
-MAX_TIMEOUTS_PER_CONFIG=1
+MAX_TIMEOUTS_PER_CONFIG=3
 
 # Number of repetitions per query
 # Used in the querygen, need more investigation
@@ -42,19 +42,33 @@ MIN_CARDINALITY=10
 MAX_CARDINALITY=10000
 
 
-MIN_RELATIONS=5
+MIN_RELATIONS=2
 # Associative array mapping topologies to their max. number of relations tested
 declare -A TOPOLOGIES=(
-    [chain]=5
-    [cycle]=5
-    [star]=5
-    [clique]=5
+#    [chain]=30
+#    [cycle]=30
+    [star]=15
+#    [clique]=25
+)
+#declare -A TOPOLOGIES=(
+#    [chain]=50
+#    [cycle]=100
+#    [star]=100
+#    [clique]=100
+#)
+
+declare -A TOPOLOGY_STEPS=(
+    [chain]=1
+    [cycle]=1
+    [star]=1
+    [clique]=1
 )
 
 ORDERED_PLANNERS=(
     ###### HANWEN Manuelly Test #####
 #    "DPccp"
 #    "IKKBZ"
+
 #    "TD-cleanAStar-zero"
 #    "BU-cleanAStar-zero"
 
@@ -66,6 +80,9 @@ ORDERED_PLANNERS=(
 
 #    "BU-A*-sum"
 #    "BU-beam-zero"
+#    "TD-beam-zero"
+#    "BU-beam-hanwen-zero"
+#    "TD-beam-hanwen-zero"
 #    "BU-beam-sum"
 #    "BU-A*-sqrt_sum"
 #    "BU-A*-scaled_sum"
@@ -110,12 +127,7 @@ ORDERED_PLANNERS=(
 #    "TD-rel_beam-zero"
 )
 
-declare -A TOPOLOGY_STEPS=(
-    [chain]=3
-    [cycle]=3
-    [star]=2
-    [clique]=1
-)
+
 
 
 ########################################################################################################################
@@ -227,7 +239,7 @@ do
     for ((N=${MIN_RELATIONS}; N <= ${MAX_RELATIONS}; N = N + ${STEP}));
     do
         NAME="${TOPOLOGY}-${N}"
-        echo "Evaluate ${NAME}"
+        echo -e "\n\nEvaluate ${NAME}"
 
         for ((R=0; R < ${REPETITIONS_PER_NUM_RELATIONS}; ++R));
         do
@@ -267,11 +279,13 @@ do
                 fi
                 PLANNER_CONFIG=${PLANNER_CONFIGS[$PLANNER]}
 
+                echo "${BIN} --quiet --dryrun --times --plan-table-las ${PLANNER_CONFIG} --cardinality-estimator Injected --use-cardinality-file " ${NAME}.cardinalities.json" --statistics "${NAME}.schema.sql" "${NAME}.query.sql" "
+
                 unset COST
                 unset TIME
                 set +m
                 # The following command needs pipefail
-                timeout --signal=TERM --kill-after=10s ${TIMEOUT} taskset -c 2 ${BIN} \
+                timeout --signal=TERM --kill-after=3s ${TIMEOUT} taskset -c 2 ${BIN} \
                     --quiet --dryrun --times \
                     --plan-table-las \
                     ${PLANNER_CONFIG} \
@@ -285,6 +299,8 @@ do
 #                    | tr -d ' ' \
 #                    | paste -sd ' \n' \
 #                    | while read -r COST TIME; do echo "${TOPOLOGY},${N},${PLANNER},${COST},${TIME},${SEED}" >> "${CSV}"; done
+
+
                 # Save and aggregate PIPESTATUS
                 SAVED_PIPESTATUS=("${PIPESTATUS[@]}")
                 TIMEOUT_RET=${SAVED_PIPESTATUS[0]}
@@ -323,9 +339,9 @@ EOF
         done
 
         echo '` Cleanup files.'
-        rm -f "${NAME}.schema.sql"
-        rm -f "${NAME}.query.sql"
-        rm -f "${NAME}.cardinalities.json"
+#        rm -f "${NAME}.schema.sql"
+#        rm -f "${NAME}.query.sql"
+#        rm -f "${NAME}.cardinalities.json"
     done
 done
 

@@ -1043,3 +1043,18 @@ TEST_CASE("Ceil_To_Next_Page", "[core][util][fn]")
     CHECK(2 * PS == Ceil_To_Next_Page(2 * PS));
     CHECK(3 * PS == Ceil_To_Next_Page(2 * PS + 1));
 }
+
+TEST_CASE("Is_Page_Aligned", "[core][util][fn]")
+{
+    size_t PS = get_pagesize();
+
+    CHECK(Is_Page_Aligned(0));
+    CHECK(Is_Page_Aligned(PS));
+    CHECK(Is_Page_Aligned(2 * PS));
+
+    CHECK_FALSE(Is_Page_Aligned(1));
+    CHECK_FALSE(Is_Page_Aligned(PS - 1));
+    CHECK_FALSE(Is_Page_Aligned(PS + 1));
+    CHECK_FALSE(Is_Page_Aligned(2 * PS - 1));
+    CHECK_FALSE(Is_Page_Aligned(2 * PS + 1));
+}

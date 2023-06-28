@@ -1058,3 +1058,46 @@ TEST_CASE("Is_Page_Aligned", "[core][util][fn]")
     CHECK_FALSE(Is_Page_Aligned(2 * PS - 1));
     CHECK_FALSE(Is_Page_Aligned(2 * PS + 1));
 }
+
+TEST_CASE("get_tm/put_tm", "[core][util][fn]")
+{
+    std::tm tm;
+    std::string tm_str;
+    std::stringstream ss;
+    get_tm gt(tm);
+
+    // INPUT FORMAT: YYYY-MM-DD HH:MM:SS
+    SECTION("2023-06-28 9:21:13")
+    {
+        tm_str = "2023-06-28 9:21:13";
+        ss.str(tm_str);
+        ss >> gt;
+
+        CHECK(tm.tm_year == 123); // year - 1900
+        CHECK(tm.tm_mon == 5); // month - 1
+        CHECK(tm.tm_mday == 28);
+        CHECK(tm.tm_hour == 9);
+        CHECK(tm.tm_min == 21);
+        CHECK(tm.tm_sec == 13);
+    }
+
+    SECTION("-1023-06-05 09:08:07")
+    {
+        tm_str = "-1023-06-05 09:08:07";
+        ss.str(tm_str);
+        ss >> gt;
+
+        CHECK(tm.tm_year == -2923); // year - 1900
+        CHECK(tm.tm_mon == 5); // month - 1
+        CHECK(tm.tm_mday == 5);
+        CHECK(tm.tm_hour == 9);
+        CHECK(tm.tm_min == 8);
+        CHECK(tm.tm_sec == 7);
+    }
+
+    put_tm pt(tm);
+    ss << pt;
+
+    CHECK(ss.str() == tm_str);
+    CHECK_FALSE(ss.fail());
+}

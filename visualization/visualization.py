@@ -8,8 +8,8 @@ topology_list = ['cycle', 'chain', 'star', 'clique']
 target_list = ['cost', 'time']
 
 # current option
-topology_list = ['star']
-target_list = ['time'] # Time is what we concered most
+# topology_list = ['star', 'clique']
+# target_list = ['time'] # Time is what we concered most
 
 focus_method = ["DPccp",
                 # 'BU-A*-zero', "TD-A*-sum",
@@ -20,8 +20,8 @@ focus_method = ["DPccp",
                 "BU-BIDIRECTIONAL-zero"
                 ]
 
-for target in target_list:
-    for topology in topology_list:
+for topology in topology_list:
+    for target in target_list:
         fig, ax = plt.subplots(figsize=(30, 12))
         data = global_data[global_data['topology'] == topology]
 
@@ -44,3 +44,6 @@ for target in target_list:
 
         # 显示图
         plt.savefig('comparison_{}_{}.png'.format(target, topology))
+    valid_rate = len(data[(data['planner'] == method) & (data['cost'].notnull())]) / \
+                 len(data[(data['planner'] == method)])
+    print("{} valid_rate is {}%".format(topology, valid_rate))

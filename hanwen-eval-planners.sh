@@ -42,13 +42,13 @@ MIN_CARDINALITY=10
 MAX_CARDINALITY=10000
 
 
-MIN_RELATIONS=2
+MIN_RELATIONS=3
 # Associative array mapping topologies to their max. number of relations tested
 declare -A TOPOLOGIES=(
-#    [chain]=30
-#    [cycle]=30
-    [star]=15
-#    [clique]=25
+    [chain]=20
+    [cycle]=20
+#    [star]=15
+#    [clique]=15
 )
 #declare -A TOPOLOGIES=(
 #    [chain]=50
@@ -66,7 +66,7 @@ declare -A TOPOLOGY_STEPS=(
 
 ORDERED_PLANNERS=(
     ###### HANWEN Manuelly Test #####
-#    "DPccp"
+    "DPccp"
 #    "IKKBZ"
 
 #    "TD-cleanAStar-zero"
@@ -294,11 +294,11 @@ do
                     --statistics \
                     "${NAME}.schema.sql" \
                     "${NAME}.query.sql" \
-#                    | grep -e '^Plan cost:' -e '^Plan enumeration:' \
-#                    | cut --delimiter=':' --fields=2 \
-#                    | tr -d ' ' \
-#                    | paste -sd ' \n' \
-#                    | while read -r COST TIME; do echo "${TOPOLOGY},${N},${PLANNER},${COST},${TIME},${SEED}" >> "${CSV}"; done
+                    | grep -e '^Plan cost:' -e '^Plan enumeration:' \
+                    | cut --delimiter=':' --fields=2 \
+                    | tr -d ' ' \
+                    | paste -sd ' \n' \
+                    | while read -r COST TIME; do echo "${TOPOLOGY},${N},${PLANNER},${COST},${TIME},${SEED}" >> "${CSV}"; done
 
 
                 # Save and aggregate PIPESTATUS

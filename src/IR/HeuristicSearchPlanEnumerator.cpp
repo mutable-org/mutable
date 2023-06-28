@@ -1306,10 +1306,13 @@ struct BottomUpComplete : BottomUp
                     /* Compute new subproblems after join */
                     Subproblem *subproblems = state.get_allocator().allocate(state.size() - 1);
                     Subproblem *ptr = subproblems;
+                    int hanwen_counter = 0;
                     for (auto it = state.cbegin(); it != state.cend(); ++it) {
+                        hanwen_counter += 1;
                         if (it == outer_it) continue; // skip outer
-                        else if (it == inner_it) new (ptr++) Subproblem(joined); // replace inner
-                        else new (ptr++) Subproblem(*it);
+                        else if (it == inner_it) new(ptr++) Subproblem(joined); // replace inner
+                        else new(ptr++) Subproblem(*it);
+
                     }
                     M_insist(std::is_sorted(subproblems, subproblems + state.size() - 1, subproblem_lt));
 
@@ -1665,7 +1668,8 @@ struct TopDownComplete : TopDown
 
             cnf::CNF condition; // TODO use join condition
             double action_cost = 0;
-            if ((S1|S2) != All) {
+            if ((S1|S2) != All)
+            {
                 if (not PT[S1|S2].model)
                     PT[S1|S2].model = CE.estimate_join_all(G, PT, S1|S2, condition);
                 action_cost = CE.predict_cardinality(*PT[S1|S2].model);
@@ -2534,11 +2538,14 @@ std::array<Subproblem, 2> delta(const State &before_join, const State &after_joi
 template<typename PlanTable, typename State>
 void reconstruct_plan_bottom_up(const State &state, PlanTable &PT, const QueryGraph &G, const CardinalityEstimator &CE,
                                 const CostFunction &CF) {
+    std::cout << "Recursive: Reconstruction ..." << std::endl;
     static cnf::CNF condition; // TODO use join condition
 
     const State *parent = state.parent();
     if (not parent) return;
     reconstruct_plan_bottom_up(*parent, PT, G, CE, CF); // solve recursively
+    std::cout<<"After recursive function, state_size: " << state.size()
+                << ", parent_size:"<< parent->size()<< std::endl;
     const auto D = delta(*parent, state); // find joined subproblems
     PT.update(G, CE, CF, D[0], D[1], condition); // update plan table
 }
@@ -2583,8 +2590,9 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
                              const char *search_str, PlanTable &PT, const QueryGraph &G, const AdjacencyMatrix &M,
                              const CostFunction &CF, const CardinalityEstimator &CE) {
     /// Entrance for the BiDirectional
+    /// For now changing to the LayeredBidirectionalSearch using same entrance
     if (std::strcmp(options::search, "BIDIRECTIONAL") == 0) {
-        std::cout << "\nCurrently in the entrance for the BiDirectional" << std::endl;
+//        std::cout << "\nCurrently in the entrance for the BiDirectional" << std::endl;
 
         using H1 = heuristics::zero<PlanTable, State, expansions::BottomUpComplete>;
         using H2 = heuristics::zero<PlanTable, State, expansions::TopDownComplete>;
@@ -2597,7 +2605,7 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
             H1 h1(PT, G, M, CF, CE);
             H2 h2(PT, G, M, CF, CE);
 
-            using search_algorithm = m::ai::biDirectionalSearch<
+            using search_algorithm = m::ai::layeredBiDirectionSearch<
                     State,
                     expansions::BottomUpComplete, expansions::TopDownComplete,
                     H1, H2,
@@ -2618,7 +2626,6 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
 
             /// Ultimate target
             /// reconstruct_plan_bidirection(goal, PT, G, CE, CF);
-
             reconstruct_plan_bottom_up(goal, PT, G, CE, CF);
 
 

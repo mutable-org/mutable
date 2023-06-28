@@ -1028,3 +1028,18 @@ TEST_CASE("ceil_to_multiple_of_pow_2", "[core][util][fn]")
     CHECK((1ULL << 63)     == ceil_to_multiple_of_pow_2((1ULL << 63) - 1, 1024ULL));
     CHECK((1U << 31) + 256 == ceil_to_multiple_of_pow_2((1U << 31) + 1, 256U));
 }
+
+TEST_CASE("Ceil_To_Next_Page", "[core][util][fn]")
+{
+    size_t PS = get_pagesize();
+
+    CHECK(0  == Ceil_To_Next_Page(0));
+    CHECK(PS == Ceil_To_Next_Page(1));
+    CHECK(PS == Ceil_To_Next_Page(PS - 1));
+    CHECK(PS == Ceil_To_Next_Page(PS));
+
+    CHECK(2 * PS == Ceil_To_Next_Page(PS + 1));
+    CHECK(2 * PS == Ceil_To_Next_Page(2 * PS - 1));
+    CHECK(2 * PS == Ceil_To_Next_Page(2 * PS));
+    CHECK(3 * PS == Ceil_To_Next_Page(2 * PS + 1));
+}

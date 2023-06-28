@@ -9,6 +9,11 @@ declare -A PLANNER_CONFIGS=(
     ##### Heuristic Search #####
     [BU-cleanAStar-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search cleanAStar"
     [TD-cleanAStar-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic zero --hs-search cleanAStar"
+    ##### Hanwen Beam Search , Beamwidth = 1 #####
+    [BU-beam-hanwen-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search beam_search_hanwen"
+    [TD-beam-hanwen-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand TopDownComplete --hs-heuristic zero --hs-search beam_search_hanwen"
+
+
     # BottomUp
     [BU-BIDIRECTIONAL-zero]="--plan-enumerator HeuristicSearch --hs-vertex SubproblemsArray --hs-expand BottomUpComplete --hs-heuristic zero --hs-search BIDIRECTIONAL"
     ## IDDFS

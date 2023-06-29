@@ -2605,6 +2605,7 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
             H1 h1(PT, G, M, CF, CE);
             H2 h2(PT, G, M, CF, CE);
 
+            ///using search_algorithm = m::ai::biDirectionalSearch<
             using search_algorithm = m::ai::layeredBiDirectionSearch<
                     State,
                     expansions::BottomUpComplete, expansions::TopDownComplete,

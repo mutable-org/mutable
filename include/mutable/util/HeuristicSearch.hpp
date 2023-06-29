@@ -1595,12 +1595,14 @@ const State &biDirectionalSearch<State, Expand, Expand2, Heuristic, Heuristic2, 
 
         assert(diff >= 0 && "Reach minus!");
 
-        if (diff == 1) {
-            std::cout << "Currently diff==1 Processing...\n";
-            /// Build connection from bottomup_state to topdown_state
-            const state_type &goal = reverse_the_topdown(topdown_state, bottomup_state);
-            return goal;
-        } else if (diff == 0) {
+        // Currently not using diff==1, we have found diff==0 method has better connection
+        //        if (diff == 1) {
+        //            std::cout << "Currently diff==1 Processing...\n";
+        //            /// Build connection from bottomup_state to topdown_state
+        //            const state_type &goal = reverse_the_topdown(topdown_state, bottomup_state);
+        //            return goal;
+        //        }
+            if (diff == 0) {
             std::cout << "!! diff==0 Processing... \n";
             /// Naive version of logic
             const state_type &goal = reverse_the_middle_case(topdown_state, bottomup_state);
@@ -2108,14 +2110,25 @@ private:
         return *prev;
     }
 
+    /*
+     * Return the goal -> State Top
+     * Currently topdown state & bottomup state are in the same layer
+     *      topdown state
+     *          - marked/joined = 23, S1 = 2, S2 = 21, subproblems_ = [2, 8, 21], layer/size = 3
+     *          - subproblems_ -> How to build the graph from current state to the top
+     *      bottomup state
+     *          - marked/joined = 21, subproblems_ = [2, 16, 21], layer/size = 3
+     *          - subproblems_ -> Current graph structure
+     */
     const state_type &
     reverse_the_middle_case(const state_type &topdown_current_state, const state_type &bottomup_state_to_connect) {
-        /// Return the goal -> State Top
-        /// Currently in the same layer
         /// TODO: Add comparation to better utilized the code
+
         const state_type *tmp = &topdown_current_state;
         const state_type *current = tmp->parent();
         const state_type *prev = &bottomup_state_to_connect;
+
+        /// TODO: Validate the connection
 
         while (current) {
             const state_type *parent = current->parent();

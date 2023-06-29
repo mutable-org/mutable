@@ -8,6 +8,7 @@ topology_list = ['cycle', 'chain', 'star', 'clique']
 target_list = ['cost', 'time']
 
 # current option
+# topology_list = ['cycle', 'chain']
 # topology_list = ['star', 'clique']
 # target_list = ['time'] # Time is what we concered most
 
@@ -44,6 +45,7 @@ for topology in topology_list:
 
         # 显示图
         plt.savefig('comparison_{}_{}.png'.format(target, topology))
+
     valid_rate = len(data[(data['planner'] == method) & (data['cost'].notnull())]) / \
                  len(data[(data['planner'] == method)])
     print("{} valid_rate is {}%".format(topology, valid_rate))

@@ -47,8 +47,8 @@ MIN_RELATIONS=3
 declare -A TOPOLOGIES=(
     [chain]=20
     [cycle]=20
-#    [star]=15
-#    [clique]=15
+    [star]=15
+    [clique]=15
 )
 #declare -A TOPOLOGIES=(
 #    [chain]=50

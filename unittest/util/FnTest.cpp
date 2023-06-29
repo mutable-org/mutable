@@ -1101,3 +1101,97 @@ TEST_CASE("get_tm/put_tm", "[core][util][fn]")
     CHECK(ss.str() == tm_str);
     CHECK_FALSE(ss.fail());
 }
+
+TEST_CASE("cast/is/as", "[core][util][fn]")
+{
+    struct Base { virtual ~Base() = default; } base;
+    struct Derived : Base {} derived;
+    struct Parent { virtual ~Parent() = default; } parent;
+    struct Boy : Parent {} boy;
+    struct Girl : Parent {} girl;
+
+    /*    Base           Parent
+     *     |             /   \
+     *   Derived       Boy   Girl
+     */
+
+#define CHECK_CAST(BaseType, DerivedType, ParentType, BoyType, GirlType) \
+    CHECK(cast<Base>(BaseType));                                         \
+    CHECK(cast<Base>(DerivedType));                                      \
+    CHECK(not cast<Derived>(BaseType));                                  \
+    CHECK(not cast<Base>(BoyType));                                      \
+    CHECK(not cast<Derived>(GirlType));                                  \
+    CHECK(not cast<Base>(ParentType));                                   \
+    CHECK(not cast<Girl>(BaseType));
+
+#define CHECK_IS(BaseType, DerivedType, ParentType, BoyType, GirlType) \
+    CHECK(is<Base>(BaseType));                                         \
+    CHECK(is<Base>(DerivedType));                                      \
+    CHECK(not is<Derived>(BaseType));                                  \
+    CHECK(not is<Base>(BoyType));                                      \
+    CHECK(not is<Derived>(GirlType));                                  \
+    CHECK(not is<Base>(ParentType));                                   \
+    CHECK(not is<Girl>(BaseType));
+
+#define CHECK_AS(BaseType, DerivedType) \
+    CHECK_NOTHROW(as<Base>(BaseType));  \
+    CHECK_NOTHROW(as<Base>(DerivedType));
+
+    SECTION("raw pointer")
+    {
+        auto base_ptr = new Base();
+        auto derived_ptr = new Derived();
+        auto parent_ptr = new Parent();
+        auto boy_ptr = new Boy();
+        auto girl_ptr = new Girl();
+
+        CHECK_IS(base_ptr, derived_ptr, parent_ptr, boy_ptr, girl_ptr);
+        CHECK_CAST(base_ptr, derived_ptr, parent_ptr, boy_ptr, girl_ptr);
+        CHECK_AS(base_ptr, derived_ptr);
+
+        delete base_ptr;
+        delete derived_ptr;
+        delete parent_ptr;
+        delete boy_ptr;
+        delete girl_ptr;
+    }
+
+    SECTION("smart [unique] pointer")
+    {
+        auto base_ptr = std::make_unique<Base>();
+        auto derived_ptr = std::make_unique<Derived>();
+        auto parent_ptr = std::make_unique<Parent>();
+        auto boy_ptr = std::make_unique<Boy>();
+        auto girl_ptr = std::make_unique<Girl>();
+
+        SECTION("is")
+        { CHECK_IS(base_ptr, derived_ptr, parent_ptr, boy_ptr, girl_ptr); }
+        SECTION("cast")
+        { CHECK_CAST(base_ptr, derived_ptr, parent_ptr, boy_ptr, girl_ptr); }
+        SECTION("as")
+        { CHECK_AS(std::move(base_ptr), std::move(derived_ptr)); }
+    }
+
+    SECTION("regular reference")
+    {
+        CHECK_IS(base, derived, parent, boy, girl);
+        CHECK_AS(base, derived);
+    }
+
+    SECTION("reference wrapper")
+    {
+        auto base_ref = std::ref(base);
+        auto derived_ref = std::ref(derived);
+
+        auto parent_ref = std::ref(parent);
+        auto boy_ref = std::ref(boy);
+        auto girl_ref = std::ref(girl);
+
+        CHECK_IS(base_ref, derived_ref, parent_ref, boy_ref, girl_ref);
+        CHECK_CAST(base_ref, derived_ref, parent_ref, boy_ref, girl_ref);
+        CHECK_AS(base_ref, derived_ref);
+    }
+#undef CHECK_CAST
+#undef CHECK_IS
+#undef CHECK_AS
+}

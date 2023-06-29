@@ -2561,30 +2561,39 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
         streq(options::heuristic, heuristic_str) and
         streq(options::search,    search_str   ))
     {
-        /*----- Run GOO to compute upper bound of plan cost. -----*/
+        using H = Heuristic<PlanTable, State, Expand>;
+        State::RESET_STATE_COUNTERS();
+
+        using search_algorithm = Search<
+            State, Expand, H,
+            /*----- context -----*/
+            PlanTable&,
+            const QueryGraph&,
+            const AdjacencyMatrix&,
+            const CostFunction&,
+            const CardinalityEstimator&
+        >;
+
+        search_algorithm S(PT, G, M, CF, CE);
+
         const double upper_bound = [&]() {
-            GOO Goo;
-            Goo(G, CF, PT);
-            return PT.get_final().cost;
+            if constexpr (not search_algorithm::use_beam_search) {
+                /*----- Run GOO to compute upper bound of plan cost. -----*/
+                GOO Goo;
+                Goo(G, CF, PT);
+                return PT.get_final().cost;
+            } else {
+                /* Beam search becomes incomplete if an upper bound derived from an actual plan is provided.  Beam
+                 * search may never find that plan or any better plan, and hence return without finding a path. */
+                return std::numeric_limits<double>::quiet_NaN();
+            }
         }();
         if (Options::Get().statistics)
             std::cout << "initial upper bound is " << upper_bound << std::endl;
 
-        using H = Heuristic<PlanTable, State, Expand>;
-        State::RESET_STATE_COUNTERS();
-        State initial_state = Expand::template Start<State>(PT, G, M, CF, CE);
         try {
+            State initial_state = Expand::template Start<State>(PT, G, M, CF, CE);
             H h(PT, G, M, CF, CE);
-            using search_algorithm = Search<
-                State, Expand, H,
-                /*----- context -----*/
-                PlanTable&,
-                const QueryGraph&,
-                const AdjacencyMatrix&,
-                const CostFunction&,
-                const CardinalityEstimator&
-            >;
-            search_algorithm S(PT, G, M, CF, CE);
             const State &goal = S.search(std::move(initial_state), upper_bound, Expand{}, h, PT, G, M, CF, CE);
             if (Options::Get().statistics)
                 S.dump(std::cout);

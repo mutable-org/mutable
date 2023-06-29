@@ -1,9 +1,9 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <concepts>
 #include <exception>
-#include <experimental/type_traits> // std::is_detected
 #include <iosfwd>
 #include <map>
 #include <mutable/Options.hpp>
@@ -472,6 +472,10 @@ concept SearchConfig = std::is_class_v<Config> and
                        requires { { Config::Lazy } -> std::convertible_to<bool>; } and
                        requires { { Config::IsMonotone } -> std::convertible_to<bool>; };
 
+
+template<typename state_type>
+concept has_mark = requires (state_type state, Subproblem sub) { { state.mark(sub) } -> std::same_as<Subproblem>; };
+
 /** Implements a generic A* search algorithm.  Allows for specifying a weighting factor for the heuristic value.  Allows
  * for lazy evaluation of the heuristic. */
 template<
@@ -594,9 +598,6 @@ struct genericAStar
      * Helper methods
      *----------------------------------------------------------------------------------------------------------------*/
 
-    template<typename T>
-    using has_mark = decltype(std::declval<T>().mark(Subproblem()));
-
     /* Try to add the successor state `s` to the beam.  If the weight of `s` is already higher than the highest weight
      * in the beam, immediately bypass the beam. */
     void beam(state_type state, double h, Context&... context) {
@@ -641,7 +642,7 @@ struct genericAStar
         auto it = candidates.begin();
         /*----- Add states in the beam to the beam queue. -----*/
         for (auto end = it + num_beamed; it != end; ++it) {
-            if constexpr (std::experimental::is_detected_v<has_mark, state_type>)
+            if constexpr (has_mark<state_type>)
                 expand.reset_marked(it->state, context...);
             state_manager_.push_beam_queue(std::move(it->state), it->h, context...);
         }
@@ -710,7 +711,7 @@ struct genericAStar
             }, state, heuristic, expand, context...);
             /*----- The states remaining in `candidates` are within the beam. -----*/
             for (auto &s : candidates) {
-                if constexpr (std::experimental::is_detected_v<has_mark, state_type>)
+                if constexpr (has_mark<state_type>)
                     expand.reset_marked(s.state, context...);
                 state_manager_.push_beam_queue(std::move(s.state), s.h, context...);
             }
@@ -747,10 +748,12 @@ const State & genericAStar<State, Expand, Heuristic, Config, Context...>::search
     heuristic_type &heuristic,
     Context&... context
 ) {
-    /* Initialize the least path cost.  Note, that the given upper bound could be *exactly* the weight of the shortest
-     * path.  To not prune the goal reached on that shortest path, we increase the upper bound *slightly*.  More
-     * precisely, we increase the upper bound to the next representable value in `double`. */
-    state_manager_.update_least_path_cost(std::nextafter(upper_bound, std::numeric_limits<double>::infinity()));
+    if (not std::isnan(upper_bound)) {
+        /* Initialize the least path cost.  Note, that the given upper bound could be *exactly* the weight of the
+         * shortest path.  To not prune the goal reached on that shortest path, we increase the upper bound *slightly*.
+         * More precisely, we increase the upper bound to the next representable value in `double`. */
+        state_manager_.update_least_path_cost(std::nextafter(upper_bound, std::numeric_limits<double>::infinity()));
+    }
 
     /* Initialize queue with initial state. */
     state_manager_.template push<use_beam_search and is_monotone>(std::move(initial_state), 0, context...);

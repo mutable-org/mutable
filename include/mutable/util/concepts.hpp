@@ -110,4 +110,20 @@ concept is_unique_ptr = std::same_as<std::decay_t<T>, std::unique_ptr<typename T
 template<typename T>
 concept is_reference_wrapper = std::same_as<std::decay_t<T>, std::reference_wrapper<typename T::type>>;
 
+template<template<typename...> class Template, typename... Args>
+concept is_template_instance = requires { typename Template<Args...>; };
+
+namespace detail {
+
+template<typename T, template<typename...> class Template>
+struct is_specialization : std::false_type {};
+
+template<template<typename...> class Template, typename... Args>
+struct is_specialization<Template<Args...>, Template> : std::true_type {};
+
+}
+
+template<typename T, template <typename...> class Template>
+concept is_specialization = detail::is_specialization<T, Template>::value;
+
 }

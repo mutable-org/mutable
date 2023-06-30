@@ -30,8 +30,12 @@ wheel = "*"
 yamale = "*"
 python-easygraph = "*"
 graphviz = "*"
+pygraphviz = "*"
+torch = "*"
+torchvision = "*"
+torchaudio = "*"
 
 [dev-packages]
 
 [requires]
-python_version = "3.11"
+python_version = "3.10"

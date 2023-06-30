@@ -3,6 +3,9 @@
 # GENERAL
 #-----------------------------------------------------------------------------------------------------------------------
 
+variables:
+    PYTHON_VERSION: "3.10"
+
 default:
     before_script:
         - >
@@ -192,7 +195,7 @@ unittest:linux-amd64:
         - job: "build:debug:linux-amd64"
           artifacts: true
     script:
-        - pipenv sync
+        - pipenv --python $PYTHON_VERSION sync
         - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 pipenv run utils/unittest-parallel.py -r --out unittest-results.xml build/debug/bin/unittest
     artifacts:
         when: always
@@ -210,7 +213,7 @@ unittest:macos-amd64:
         - job: "build:debug:macos-amd64"
           artifacts: true
     script:
-        - pipenv sync
+        - pipenv --python $PYTHON_VERSION sync
         - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 pipenv run utils/unittest-parallel.py -r --out unittest-results.xml build/debug/bin/unittest
     artifacts:
         when: always
@@ -228,7 +231,7 @@ integrationtest:linux-amd64:
         - job: "build:debug:linux-amd64"
           artifacts: true
     script:
-        - pipenv sync
+        - pipenv --python $PYTHON_VERSION sync
         - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1 --unset=TERM pipenv run test/IntegrationTest.py --required-only --debug build/debug
 
 integrationtest:macos-amd64:
@@ -240,7 +243,7 @@ integrationtest:macos-amd64:
         - job: "build:debug:macos-amd64"
           artifacts: true
     script:
-        - pipenv sync
+        - pipenv --python $PYTHON_VERSION sync
         - env UBSAN_OPTIONS=print_stacktrace=1 ASAN_OPTIONS=detect_stack_use_after_return=1:detect_container_overflow=0 MallocNanoZone=0 --unset=TERM pipenv run test/IntegrationTest.py --required-only --debug build/debug
 
 ensure-exported-symbols:debug:linux:

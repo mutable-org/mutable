@@ -2389,12 +2389,43 @@ std::size_t num_##NAME() const { return 0; }
 
     heap_type regular_queue_;
     heap_type beam_queue_;
+    heap_type layer_candidates_;
 
 public:
     LayeredStateManager(Context&... context) : partitions_(context...) { }
     LayeredStateManager(const LayeredStateManager&) = delete;
     LayeredStateManager(LayeredStateManager&&) = default;
     LayeredStateManager & operator=(LayeredStateManager&&) = default;
+
+            typename map_type::iterator find(const state_type &state, Context&... context) {
+                return partition(state, context...).find(state);
+            }
+            typename map_type::iterator end(const state_type &state, Context&... context) {
+                return partition(state, context...).end();
+            }
+            typename map_type::const_iterator find(const state_type &state, Context&... context) const {
+                return partition(state, context...).find(state);
+            }
+            typename map_type::const_iterator end(const state_type &state, Context&... context) const  {
+                return partition(state, context...).end();
+            }
+
+            bool layer_candidates_empty() const { return layer_candidates_.empty(); }
+
+            std::pair<const state_type &, double> layer_candidates_pop() {
+                M_insist(not layer_candidates_empty());
+                pointer_type ptr = layer_candidates_.top();
+                layer_candidates_.pop();
+                M_insist(ptr, "ptr must have been set, the queues must not have been empty");
+
+                auto &entry = *static_cast<typename map_type::value_type *>(ptr);
+                entry.second.queue = nullptr; // remove from queue
+                return {entry.first, entry.second.h};
+            }
+
+            size_t layer_candidates_size(){
+                return layer_candidates_.size();
+            }
 
     template<bool ToBeamQueue>
     void push(state_type state, double h, Context&... context) {
@@ -2505,6 +2536,7 @@ public:
     bool is_beam_queue_empty() const { return not HasBeamQueue or beam_queue_.empty(); }
     bool queues_empty() const { return is_regular_queue_empty() and is_beam_queue_empty(); }
 
+
     std::pair<const state_type&, double> pop() {
         M_insist(not queues_empty());
         pointer_type ptr = nullptr;
@@ -2522,18 +2554,7 @@ public:
         return { entry.first, entry.second.h };
     }
 
-    typename map_type::iterator find(const state_type &state, Context&... context) {
-        return partition(state, context...).find(state);
-    }
-    typename map_type::iterator end(const state_type &state, Context&... context) {
-        return partition(state, context...).end();
-    }
-    typename map_type::const_iterator find(const state_type &state, Context&... context) const {
-        return partition(state, context...).find(state);
-    }
-    typename map_type::const_iterator end(const state_type &state, Context&... context) const {
-        return partition(state, context...).end();
-    }
+
 
     void clear() {
         if constexpr (HasRegularQueue)
@@ -2679,7 +2700,7 @@ private:
 
     void explore_state(const state_type &state, heuristic_type &heuristic, expand_type &expand, Context&... context) {
         for_each_successor([this, &context...](state_type successor, double h) {
-            state_manager_.push_regular_queue(std::move(successor), h, context...);
+            state_manager_.push_candidates(std::move(successor), h, context...);
         }, state, heuristic, expand, context...);
     }
 
@@ -2711,35 +2732,19 @@ const State &layeredSearch<State, Expand, Heuristic, BeamWidth, Config, Context.
         Context &... context
 ) {
     state_manager_.template push<false>(std::move(initial_state), 0, context...);
-    while (not state_manager_.queues_empty()) {
-        auto top = state_manager_.pop();
-        const state_type &state = top.first;
-        std::cout << "Current state.size()" << state.size() << "\n";
 
-        if (expand.is_goal(state, context...))
-            return state;
-        explore_state(state, heuristic, expand, context...);
+    while (not state_manager_.layer_candidates_empty()) {
+        size_t layer_candidates_size = state_manager_.layer_candidates_size();
+        for (size_t i{0};i<layer_candidates_size;i++){
+            auto top = state_manager_.layer_candidates_pop();
+            const state_type &state = top.first;
+            std::cout << "Current state.size()" << state.size() << "\n"; // For while loop, they are in the same size
+
+            if (expand.is_goal(state, context...))return state;
+            explore_state(state, heuristic, expand, context...);
+        }
     }
     throw std::logic_error("goal state unreachable from provided initial state");
-
-//    /// Below change to my code
-//    /* Initialize queue with initial state. */
-//    state_manager_.template push<true>(std::move(initial_state),0,context...);
-//
-//    /* Run work list algorithm. */
-//    while (not state_manager_.queues_empty()) {
-//        M_insist(not (is_monotone and use_beam_search) or not state_manager_.is_beam_queue_empty(),
-//                 "the beam queue must not run empty with beam search on a monotone search space");
-//        auto top = state_manager_.pop();
-//        const state_type &state = top.first;
-//
-//        if (expand.is_goal(state, context...))
-//            return state;
-//
-//        explore_state(state, heuristic, expand, context...);
-//    }
-//
-//    throw std::logic_error("goal state unreachable from provided initial state");
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////

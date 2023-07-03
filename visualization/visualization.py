@@ -18,7 +18,8 @@ focus_method = ["DPccp",
                 # "TD-beam-zero",
                 # "BU-beam-hanwen-zero",
                 # "TD-beam-hanwen-zero",
-                "BU-BIDIRECTIONAL-zero"
+                "BU-BIDIRECTIONAL-zero",
+                "BU-LAYEREDBIDIRECTIONAL-zero"
                 ]
 
 for topology in topology_list:
@@ -46,6 +47,15 @@ for topology in topology_list:
         # 显示图
         plt.savefig('comparison_{}_{}.png'.format(target, topology))
 
-    valid_rate = len(data[(data['planner'] == method) & (data['cost'].notnull())]) / \
-                 len(data[(data['planner'] == method)])
-    print("{} valid_rate is {}%".format(topology, valid_rate))
+valids = ["BU-LAYEREDBIDIRECTIONAL-zero", "BU-BIDIRECTIONAL-zero"]
+
+for topology in topology_list:
+    for valid_method in valids:
+        valid_num = len(global_data[(global_data['topology'] == topology) & (global_data['planner'] == valid_method) &
+                                    global_data['cost'] != 0])
+        valid_total_num = len(
+            global_data[(global_data['topology'] == topology) & (global_data['planner'] == valid_method)])
+        valid_rate = valid_num / valid_total_num if valid_total_num != 0 else 0
+        print(
+            "{} {} valid_rate is {}% = {} / {}".format(valid_method, topology, valid_rate*100, valid_num, valid_total_num))
+    print()

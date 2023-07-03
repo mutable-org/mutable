@@ -70,13 +70,16 @@ ORDERED_PLANNERS=(
 #    "IKKBZ"
 
 #    "TD-cleanAStar-zero"
-#    "BU-cleanAStar-zero"
+    "BU-cleanAStar-zero"
 
 #    "BU-IDDFS-zero"
 #    "BU-A*-zero"
 #    "BU-A*-sum"
-    "BU-BIDIRECTIONAL-zero"
+  "BU-hanwen-layered-zero"
+  "TD-hanwen-layered-zero"
 
+#    "BU-BIDIRECTIONAL-zero"
+#    "BU-LAYEREDBIDIRECTIONAL-zero"
 
 #    "BU-A*-sum"
 #    "BU-beam-zero"
@@ -338,7 +341,7 @@ EOF
             echo "">>"${CSV}";
         done
 
-        echo '` Cleanup files.'
+#        echo '` Cleanup files.'
 #        rm -f "${NAME}.schema.sql"
 #        rm -f "${NAME}.query.sql"
 #        rm -f "${NAME}.cardinalities.json"

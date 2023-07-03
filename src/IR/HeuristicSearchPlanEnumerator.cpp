@@ -340,7 +340,11 @@ struct SubproblemsArray : Base<SubproblemsArray>
         parent_ = new_parent;
         g_ = new_g;
     }
+
     size_type size() const { return size_; }
+
+    Subproblem get_marked() const { return marked_; }
+    Subproblem* get_subproblems() const {return subproblems_;}
     Subproblem operator[](std::size_t idx) const { M_insist(idx < size_); return subproblems_[idx]; }
 
     template<typename PlanTable>
@@ -2484,12 +2488,16 @@ struct checkpoints<PlanTable, SubproblemsArray>
 
 template<typename State, typename Expand, typename Heuristic, typename Config, typename ... Context>
 using cleanAStar = ai::cleanAStar<State, Expand, Heuristic, Config, Context...>;
-///// Originally can run code
+// Originally can run code
 //template<typename State, typename Expand, typename Heuristic, typename Config, typename ... Context>
 //using BIDIRECTIONAL = ai::BIDIRECTIONAL<State, expansions::BottomUpComplete, expansions::TopDownComplete, Heuristic, Heuristic, Config, Context...>;
 
 template<typename State, typename Expand, typename Heuristic, typename Config, typename ... Context>
 using IDDFS = ai::IDDFS<State, Expand, Heuristic, Config, Context...>;
+
+/// Change the beam width here
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using hanwen_layered_search = ai::hanwen_layeredSearch<2>::type<State, Expand, Heuristic, Config, Context...>;
 
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using AStar = ai::AStar<State, Expand, Heuristic, Config, Context...>;
@@ -2605,7 +2613,52 @@ bool heuristic_search_helper(const char *vertex_str, const char *expand_str, con
             H1 h1(PT, G, M, CF, CE);
             H2 h2(PT, G, M, CF, CE);
 
-            ///using search_algorithm = m::ai::biDirectionalSearch<
+            using search_algorithm = m::ai::biDirectionalSearch<
+                    State,
+                    expansions::BottomUpComplete, expansions::TopDownComplete,
+                    H1, H2,
+                    data_structure_config,
+                    /*----- context -----*/
+                    PlanTable &,
+                    const QueryGraph &,
+                    const AdjacencyMatrix &,
+                    const CostFunction &,
+                    const CardinalityEstimator &>;
+
+            search_algorithm S(PT, G, M, CF, CE);
+            const State &goal = S.search(std::move(bottom_state), std::move(top_state),
+                                         expansions::BottomUpComplete{},
+                                         expansions::TopDownComplete{},
+                                         h1, h2,
+                                         PT, G, M, CF, CE);
+
+            /// Ultimate target
+            /// reconstruct_plan_bidirection(goal, PT, G, CE, CF);
+            reconstruct_plan_bottom_up(goal, PT, G, CE, CF);
+
+
+        } catch (std::logic_error err) {
+            std::cerr << "search " << search_str << '+' << vertex_str << '+' << expand_str << '+' << heuristic_str
+                      << " did not reach a goal state, fall back to DPccp" << std::endl;
+            DPccp{}(G, CF, PT);
+        }
+        return true;
+    }
+
+    if (std::strcmp(options::search, "LAYEREDBIDIRECTIONAL") == 0) {
+//        std::cout << "\nCurrently in the entrance for the BiDirectional" << std::endl;
+
+        using H1 = heuristics::zero<PlanTable, State, expansions::BottomUpComplete>;
+        using H2 = heuristics::zero<PlanTable, State, expansions::TopDownComplete>;
+        State::RESET_STATE_COUNTERS();
+        State bottom_state = expansions::BottomUpComplete::template Start<State>(PT, G, M, CF, CE);
+        State top_state = expansions::TopDownComplete::template Start<State>(PT, G, M, CF, CE);
+
+        try {
+
+            H1 h1(PT, G, M, CF, CE);
+            H2 h2(PT, G, M, CF, CE);
+
             using search_algorithm = m::ai::layeredBiDirectionSearch<
                     State,
                     expansions::BottomUpComplete, expansions::TopDownComplete,
@@ -2718,6 +2771,10 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         /// biDirectionalSearch Entrance
         /// Add one duplicate search here to make the entrance of bidirectional search not influence the other search method
         HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, cleanAStar)
+
+        /// layeredSearch Entrance
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search)
+        HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search)
 
         /// Currently we didn't use the direct entrance for bidirectional search
         /// We directly get in the Bidirectional funciton from upstairs

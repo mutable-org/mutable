@@ -158,6 +158,8 @@ private:
     constexpr std::size_t capacity() { return CAPACITY; }
     /** Returns the number of elements in this `SmallBitset`. */
     std::size_t size() const { return __builtin_popcountl(bits_); }
+
+    uint64_t get_bits() const { return bits_; }
     /** Returns `true` if there are no elements in this `SmallBitset`. */
     bool empty() const { return bits_ == 0; }
     /* Returns `true` if this set is a singleton set, i.e. the set contains exactly one element. */

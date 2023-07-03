@@ -13,6 +13,8 @@
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
+#include <thread>
+
 
 
 namespace m {
@@ -1528,7 +1530,7 @@ private:
     reverse_the_middle_case(const state_type &topdown_current_state, const state_type &bottomup_state_to_connect) {
         /// Return the goal -> State Top
         /// Currently in the same layer
-        /// TODO: Add comparation to better utilized the code
+
         const state_type *tmp = &topdown_current_state;
         const state_type *current = tmp->parent();
         const state_type *prev = &bottomup_state_to_connect;
@@ -1602,7 +1604,7 @@ const State &biDirectionalSearch<State, Expand, Expand2, Heuristic, Heuristic2, 
         //            const state_type &goal = reverse_the_topdown(topdown_state, bottomup_state);
         //            return goal;
         //        }
-            if (diff == 0) {
+        if (diff == 0) {
             std::cout << "!! diff==0 Processing... \n";
             /// Naive version of logic
             const state_type &goal = reverse_the_middle_case(topdown_state, bottomup_state);
@@ -1613,7 +1615,6 @@ const State &biDirectionalSearch<State, Expand, Expand2, Heuristic, Heuristic2, 
         explore_state_bottomup(bottomup_state, heuristic, expand, context...);
         explore_state_topdown(topdown_state, heuristic2, expand2, context...);
     }
-
     throw std::logic_error("goal state unreachable from provided initial state");
 }
 
@@ -1757,8 +1758,6 @@ std::size_t num_##NAME() const { return 0; }
 
     ///> map of all states ever explored, mapping state to its info; partitioned by state partition id
     Partitions<supports_partitioning<State, Context...>> partitions_;
-
-
 
 public:
     ///> map of all states ever explored, mapping state to its info
@@ -2095,21 +2094,6 @@ private:
         }, state, heuristic, expand2, context...);
     }
 
-    const state_type &
-    reverse_the_topdown(const state_type &topdown_current_state, const state_type &bottomup_state_to_connect) {
-        /// Return the goal -> State Top
-        const state_type *current = &topdown_current_state;
-        const state_type *prev = &bottomup_state_to_connect;
-
-        while (current) {
-            const state_type *parent = current->parent();
-            current->set_parent(prev);
-            prev = current;
-            current = parent;
-        }
-        return *prev;
-    }
-
     /*
      * Return the goal -> State Top
      * Currently topdown state & bottomup state are in the same layer
@@ -2123,12 +2107,54 @@ private:
     const state_type &
     reverse_the_middle_case(const state_type &topdown_current_state, const state_type &bottomup_state_to_connect) {
         /// TODO: Add comparation to better utilized the code
+//        bool canConnect = [&topdown_current_state, &bottomup_state_to_connect] {
+//            if (topdown_current_state.size() != bottomup_state_to_connect.size()) {
+//                return false;
+//            }
+//
+//            bool found = [&topdown_current_state,&bottomup_state_to_connect]() {
+//                auto & parent = *topdown_current_state.parent();
+//                size_t times = parent.size();
+//
+//                std::array<Subproblem, 2> D = [&bottomup_state_to_connect,&parent]() {
+//                    std::array<Subproblem, 2> delta;
+//                    M_insist(bottomup_state_to_connect.size() == parent.size() + 1);
+//                    auto after_it = parent.cbegin();
+//                    auto before_it = bottomup_state_to_connect.cbegin();
+//                    auto out_it = delta.begin();
+//
+//                    while (out_it != delta.end()) {
+//                        M_insist(before_it != bottomup_state_to_connect.cend());
+//                        if (after_it == parent.cend()) {
+//                            *out_it++ = *before_it++;
+//                        } else if (*before_it == *after_it) {
+//                            ++before_it;
+//                            ++after_it;
+//                        } else {
+//                            *out_it++ = *before_it++;
+//                        }
+//                    }
+//                    return delta;
+//                }();
+//
+//                auto target = D[0].get_bits() | D[1].get_bits();
+//
+//                for (size_t i{0}; i < times; i++) {
+//                    if (parent.get_subproblems()[i].get_bits() == target) {
+//                        return true;
+//                    }
+//                }
+//                return false;
+//            }();
+//            if (not found) { return false; }
+//            return true;
+//        }();
+//
+//        assert(canConnect == true && "\n\n\nYou can not connect them\n\n\n");
 
         const state_type *tmp = &topdown_current_state;
         const state_type *current = tmp->parent();
         const state_type *prev = &bottomup_state_to_connect;
-
-        /// TODO: Validate the connection
 
         while (current) {
             const state_type *parent = current->parent();
@@ -2169,7 +2195,8 @@ const State &layeredBiDirectionSearch<State, Expand, Expand2, Heuristic, Heurist
         heuristic_type &heuristic,
         heuristic_type2 &heuristic2,
         Context &... context
-) {
+)
+{
     std::cout << "\nCurrently in the entrance for the LayeredBiDirectional" << std::endl;
     /// Core: we will not change any reconstruct logic in the outside
     /// Current is in BottomUpComplete: So we should return a top states
@@ -2203,10 +2230,518 @@ const State &layeredBiDirectionSearch<State, Expand, Expand2, Heuristic, Heurist
         /// 3. Bidirectionally extend to step forward
         explore_state_bottomup(bottomup_state, heuristic, expand, context...);
         explore_state_topdown(topdown_state, heuristic2, expand2, context...);
+//        std::thread thread1(&layeredBiDirectionSearch::explore_state_bottomup, bottomup_state, heuristic, expand,
+//                            context...);
+//        std::thread thread2(&layeredBiDirectionSearch::explore_state_topdown, topdown_state, heuristic2, expand2,
+//                            context...);
+//
+//        thread1.join();
+//        thread2.join();
+
     }
 
     throw std::logic_error("goal state unreachable from provided initial state");
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////Layered Search -> For Reuse////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////
+/** Tracks states and their presence in queues. */
+template<
+        heuristic_search_state State,
+        bool HasRegularQueue,
+        bool HasBeamQueue,
+        typename Config,
+        typename... Context
+>
+struct LayeredStateManager
+{
+    static_assert(HasRegularQueue or HasBeamQueue, "must have at least one kind of queue");
+
+    using state_type = State;
+    static constexpr bool has_regular_queue = HasRegularQueue;
+    static constexpr bool has_beam_queue = HasBeamQueue;
+
+    static constexpr bool detect_duplicates = true;
+
+private:
+    ///> type for a pointer to an entry in the map of states
+    using pointer_type = void*;
+    ///> comparator for map entries based on states' *g + h* value
+    struct comparator { bool operator()(pointer_type p_left, pointer_type p_right) const; };
+    ///> the type of heap to implement the priority queues
+    using heap_type = typename Config::template heap_type<pointer_type, typename Config::template compare<comparator>>;
+
+    /*----- Counters -------------------------------------------------------------------------------------------------*/
+#ifndef NDEBUG
+#define DEF_COUNTER(NAME) \
+std::size_t num_##NAME##_ = 0; \
+void inc_##NAME() { ++num_##NAME##_; } \
+std::size_t num_##NAME() const { return num_##NAME##_; }
+#else
+    #define DEF_COUNTER(NAME) \
+void inc_##NAME() { } \
+std::size_t num_##NAME() const { return 0; }
+#endif
+
+    DEF_COUNTER(new)
+    DEF_COUNTER(duplicates)
+    DEF_COUNTER(regular_to_beam)
+    DEF_COUNTER(none_to_beam)
+    DEF_COUNTER(discarded)
+    DEF_COUNTER(cheaper)
+    DEF_COUNTER(decrease_key)
+
+#undef DEF_COUNTER
+
+    ///> information attached to each state
+    struct StateInfo
+    {
+        ///> heuristic value of the state
+        double h;
+        ///> the heap in which the state is currently present; may be `nullptr`
+        heap_type *queue;
+        ///> handle to the state's node in a heap
+        typename heap_type::handle_type handle;
+
+        StateInfo() = delete;
+        StateInfo(double h, heap_type *queue) : h(h), queue(queue) { }
+        StateInfo(const StateInfo&) = delete;
+        StateInfo(StateInfo&&) = default;
+        StateInfo & operator=(StateInfo&&) = default;
+    };
+
+    using map_value_type = std::pair<const state_type, StateInfo>;
+    using map_type = std::unordered_map<
+            /* Key=       */ state_type,
+            /* Mapped=    */ StateInfo,
+            /* Hash=      */ std::hash<state_type>,
+            /* KeyEqual=  */ std::equal_to<state_type>,
+            /* Allocator= */ typename Config::template allocator_type<map_value_type>
+    >;
+
+    /*----- Helper type to manage potentially partitioned states. ----------------------------------------------------*/
+    template<bool Partition>
+    struct Partitions;
+
+    template<>
+    struct Partitions<true>
+    {
+        std::vector<map_type> partitions_;
+
+        Partitions(Context&... context) : partitions_(state_type::num_partitions(context...)) { }
+        Partitions(const Partitions&) = delete;
+        Partitions(Partitions&&) = default;
+
+        ~Partitions() {
+            if (Options::Get().statistics) {
+                std::cout << partitions_.size() << " partitions:";
+                for (auto &P : partitions_)
+                    std::cout << "\n  " << P.size();
+                std::cout << std::endl;
+            }
+        }
+
+        map_type & operator()(const state_type &state, Context&... context) {
+            M_insist(state.partition_id(context...) < partitions_.size(), "index out of bounds");
+            return partitions_[state.partition_id(context...)];
+        }
+        const map_type & operator()(const state_type &state, Context&... context) const {
+            M_insist(state.partition_id(context...) < partitions_.size(), "index out of bounds");
+            return partitions_[state.partition_id(context...)];
+        }
+
+        std::size_t size() const {
+            std::size_t n = 0;
+            for (auto &P : partitions_)
+                n += P.size();
+            return n;
+        }
+
+        void clear() {
+            for (auto &P : partitions_)
+                P.clear();
+        }
+    };
+
+    template<>
+    struct Partitions<false>
+    {
+        map_type states_;
+
+        Partitions(Context&...) { }
+        Partitions(const Partitions&) = delete;
+        Partitions(Partitions&&) = default;
+
+        map_type & operator()(const state_type&, Context&...) { return states_; }
+        const map_type & operator()(const state_type&, Context&...) const { return states_; }
+
+        std::size_t size() const { return states_.size(); }
+
+        void clear() { states_.clear(); }
+    };
+
+    ///> map of all states ever explored, mapping state to its info; partitioned by state partition id
+    Partitions<supports_partitioning<State, Context...>> partitions_;
+
+    ///> map of all states ever explored, mapping state to its info
+    // map_type states_;
+
+    heap_type regular_queue_;
+    heap_type beam_queue_;
+
+public:
+    LayeredStateManager(Context&... context) : partitions_(context...) { }
+    LayeredStateManager(const LayeredStateManager&) = delete;
+    LayeredStateManager(LayeredStateManager&&) = default;
+    LayeredStateManager & operator=(LayeredStateManager&&) = default;
+
+    template<bool ToBeamQueue>
+    void push(state_type state, double h, Context&... context) {
+        static_assert(not ToBeamQueue or HasBeamQueue, "ToBeamQueue implies HasBeamQueue");
+        static_assert(ToBeamQueue or HasRegularQueue, "not ToBeamQueue implies HasRegularQueue");
+
+        auto &Q = ToBeamQueue ? beam_queue_ : regular_queue_;
+        auto &P = partition(state, context...);
+
+        if constexpr (detect_duplicates) {
+            if (auto it = P.find(state); it == P.end()) [[likely]] {
+                /*----- Entirely new state, never seen before. -----*/
+                it = P.emplace_hint(it, std::move(state), StateInfo(h, &Q));
+                /*----- Enqueue state, obtain handle, and add to `StateInfo`. -----*/
+                it->second.handle = Q.push(&*it);
+                inc_new();
+            } else {
+                /*----- Duplicate, seen before. -----*/
+                M_insist(it->second.h == h, "must not have a different heuristic value for the same state");
+                inc_duplicates();
+
+                if (ToBeamQueue and it->second.queue == &regular_queue_) {
+                    /*----- The state is in the regular queue and needs to be moved to the beam queue. -----*/
+                    if constexpr (HasRegularQueue)
+                        it->second.queue->erase(it->second.handle); // erase from regular queue
+                    if (state.g() < it->first.g())
+                        it->first.decrease_g(state.parent(), state.g()); // update *g* value
+                    it->second.handle = beam_queue_.push(&*it); // add to beam queue and update handle
+                    it->second.queue = &beam_queue_; // update queue
+                    if constexpr (HasRegularQueue)
+                        inc_regular_to_beam();
+                    else
+                        inc_none_to_beam();
+                } else if (state.g() >= it->first.g()) [[likely]] {
+                    /*----- The state wasn't reached on a cheaper path and hence cannot produce better solutions. -----*/
+                    inc_discarded();
+                    return; // XXX is it safe to not add the state to any queue?
+                } else {
+                    /*----- The state was reached on a cheaper path.  We must reconsider the state. -----*/
+                    M_insist(state.g() < it->first.g(), "the state was reached on a cheaper path");
+                    inc_cheaper();
+                    it->first.decrease_g(state.parent(), state.g()); // decrease value of *g*
+                    if (it->second.queue == nullptr) {
+                        /*----- The state is currently not present in a queue. -----*/
+                        it->second.handle = Q.push(&*it); // add to dedicated queue and update handle
+                        it->second.queue = &Q; // update queue
+                    } else {
+                        /*----- Update the state's entry in the queue. -----*/
+                        M_insist(it->second.queue == &Q, "the state must already be in its destinated queue");
+                        Q.increase(it->second.handle); // we need to *increase* because the heap is a max-heap
+                        inc_decrease_key();
+                    }
+                }
+            }
+        } else {
+            const auto new_g = state.g();
+            auto [it, res] = P.try_emplace(std::move(state), StateInfo(h, &Q));
+            Q.push(&*it);
+            if (res) {
+                inc_new();
+            } else {
+                inc_duplicates();
+                if (new_g < it->first.g())
+                    inc_cheaper();
+            }
+        }
+    }
+
+    void push_regular_queue(state_type state, double h, Context&... context) {
+        if constexpr (detect_duplicates) {
+            if constexpr (HasRegularQueue) {
+                push<false>(std::move(state), h, context...);
+            } else {
+                auto &P = partition(state, context...);
+                /*----- There is no regular queue.  Only update the state's mapping. -----*/
+                if (auto it = P.find(state); it == P.end()) {
+                    /*----- This is a new state.  Simply create a new entry. -----*/
+                    it = P.emplace_hint(it, std::move(state), StateInfo(h, &regular_queue_));
+                    inc_new();
+                    /* We must not add the state to the regular queue, but we must remember that the state can still be
+                     * "moved" to the beam queue. */
+                } else {
+                    /*----- This is a duplicate state.  Check whether it has lower cost *g*. -----*/
+                    M_insist(it->second.h == h, "must not have a different heuristic value for the same state");
+                    inc_duplicates();
+                    if (state.g() < it->first.g()) {
+                        inc_cheaper();
+                        it->first.decrease_g(state.parent(), state.g());
+                        if (it->second.queue == &beam_queue_) { // if state is currently in a queue
+                            it->second.queue->increase(it->second.handle); // *increase* because max-heap
+                            inc_decrease_key();
+                        }
+                    } else {
+                        inc_discarded();
+                    }
+                }
+            }
+        } else {
+            push<not HasRegularQueue>(std::move(state), h, context...);
+        }
+    }
+
+    void push_beam_queue(state_type state, double h, Context&... context) {
+        push<true>(std::move(state), h, context...);
+    }
+
+    bool is_regular_queue_empty() const { return not HasRegularQueue or regular_queue_.empty(); }
+    bool is_beam_queue_empty() const { return not HasBeamQueue or beam_queue_.empty(); }
+    bool queues_empty() const { return is_regular_queue_empty() and is_beam_queue_empty(); }
+
+    std::pair<const state_type&, double> pop() {
+        M_insist(not queues_empty());
+        pointer_type ptr = nullptr;
+        if (HasBeamQueue and not beam_queue_.empty()) {
+            ptr = beam_queue_.top();
+            beam_queue_.pop();
+        } else if (HasRegularQueue and not regular_queue_.empty()) {
+            ptr = regular_queue_.top();
+            regular_queue_.pop();
+        }
+        M_insist(ptr, "ptr must have been set, the queues must not have been empty");
+
+        auto &entry = *static_cast<typename map_type::value_type*>(ptr);
+        entry.second.queue = nullptr; // remove from queue
+        return { entry.first, entry.second.h };
+    }
+
+    typename map_type::iterator find(const state_type &state, Context&... context) {
+        return partition(state, context...).find(state);
+    }
+    typename map_type::iterator end(const state_type &state, Context&... context) {
+        return partition(state, context...).end();
+    }
+    typename map_type::const_iterator find(const state_type &state, Context&... context) const {
+        return partition(state, context...).find(state);
+    }
+    typename map_type::const_iterator end(const state_type &state, Context&... context) const {
+        return partition(state, context...).end();
+    }
+
+    void clear() {
+        if constexpr (HasRegularQueue)
+            regular_queue_.clear();
+        if constexpr (HasBeamQueue)
+            beam_queue_.clear();
+        // states_.clear();
+        partitions_.clear();
+    }
+
+    void print_counters(std::ostream &out) const {
+#define X(NAME) num_##NAME() << " " #NAME
+        out << X(new) ", " << X(duplicates) ", ";
+        if (HasRegularQueue and HasBeamQueue)
+            out << X(regular_to_beam) ", ";
+        if (HasBeamQueue)
+            out << X(none_to_beam) ", ";
+        out << X(discarded) ", " << X(cheaper) ", " << X(decrease_key);
+#undef X
+    }
+
+    map_type & partition(const state_type &state, Context&... context) { return partitions_(state, context...); }
+    const map_type & partition(const state_type &state, Context&... context) const {
+        return partitions_(state, context...);
+    }
+
+    friend std::ostream & operator<<(std::ostream &out, const LayeredStateManager &SM) {
+#ifndef NDEBUG
+        SM.print_counters(out);
+        out << ", ";
+#endif
+        out << SM.partitions_.size() << " seen, " << SM.regular_queue_.size() << " currently in regular queue, "
+            << SM.beam_queue_.size() << " currently in beam queue";
+        return out;
+    }
+
+    void dump(std::ostream &out) const { out << *this << std::endl; }
+    void dump() const { dump(std::cerr); }
+};
+
+template<
+        heuristic_search_state State,
+        bool HasRegularQueue,
+        bool HasBeamQueue,
+        typename Config,
+        typename... Context
+>
+bool LayeredStateManager<State, HasRegularQueue, HasBeamQueue, Config, Context...>::comparator::
+operator()(LayeredStateManager::pointer_type p_left, LayeredStateManager::pointer_type p_right) const
+{
+    auto left  = static_cast<typename map_type::value_type*>(p_left);
+    auto right = static_cast<typename map_type::value_type*>(p_right);
+    /* Compare greater than (`operator >`) to turn max-heap into min-heap. */
+    return left->first.g() + left->second.h > right->first.g() + right->second.h;
+}
+
+
+template<
+        heuristic_search_state State,
+        typename Expand,
+        typename Heuristic,
+        unsigned BeamWidth,
+        typename Config,
+        typename... Context
+>
+requires heuristic_search_heuristic<Heuristic, Context...>
+struct layeredSearch
+{
+    using state_type = State;
+    using expand_type = Expand;
+    using heuristic_type = Heuristic;
+
+    using callback_t = std::function<void(state_type, double)>;
+
+private:
+#if 1
+#define DEF_COUNTER(NAME) \
+std::size_t num_##NAME##_ = 0; \
+void inc_##NAME() { ++num_##NAME##_; } \
+std::size_t num_##NAME() const { return num_##NAME##_; }
+#else
+    #define DEF_COUNTER(NAME) \
+void inc_##NAME() { } \
+std::size_t num_##NAME() const { return 0; }
+#endif
+
+    DEF_COUNTER(cached_heuristic_value)
+
+#undef DEF_COUNTER
+
+    // decide the core details in queue
+    LayeredStateManager
+            </* State=           */ State,
+            /* HasRegularQueue= */ true,
+            /* HasBeamQueue=    */ false,
+            /* Config=          */ Config,
+            /* Context...=      */ Context...
+    > state_manager_;
+
+
+public:
+    explicit layeredSearch(Context&... context)
+            : state_manager_(context...)
+    {}
+
+    layeredSearch(const layeredSearch&) = delete;
+    layeredSearch(layeredSearch&&) = default;
+
+    layeredSearch & operator=(layeredSearch&&) = default;
+
+    /** Search for a path from the given `initial_state` to a goal state.  Uses the given heuristic to guide the search.
+     *
+     * @return the cost of the computed path from `initial_state` to a goal state
+     */
+    const State &search(state_type initial_state, expand_type expand, heuristic_type &heuristic, Context &... context);
+
+    /** Resets the state of the search. */
+    void clear() {
+        state_manager_.clear();
+    }
+
+private:
+    /*------------------------------------------------------------------------------------------------------------------
+     * Helper methods
+     *----------------------------------------------------------------------------------------------------------------*/
+
+    template<typename T>
+    using has_mark = decltype(std::declval<T>().mark(Subproblem()));
+
+
+    void for_each_successor(callback_t &&callback, const state_type &state, heuristic_type &heuristic,
+                            expand_type &expand, Context &... context) {
+        expand(state, [this, callback=std::move(callback), &heuristic, &context...](state_type successor) {
+            if (auto it = state_manager_.find(successor, context...);it == state_manager_.end(successor, context...)) {
+                const double h = heuristic(successor, context...);
+                callback(std::move(successor), h);
+            } else {
+                inc_cached_heuristic_value();
+                callback(std::move(successor), it->second.h);
+            }
+        }, context...);
+    }
+
+    void explore_state(const state_type &state, heuristic_type &heuristic, expand_type &expand, Context&... context) {
+        for_each_successor([this, &context...](state_type successor, double h) {
+            state_manager_.push_regular_queue(std::move(successor), h, context...);
+        }, state, heuristic, expand, context...);
+    }
+
+public:
+    friend std::ostream & operator<<(std::ostream &out, const layeredSearch &AStar) {
+        return out << AStar.state_manager_ << ", used cached heuristic value " << AStar.num_cached_heuristic_value()
+                   << " times";
+    }
+
+    void dump(std::ostream &out) const { out << *this << std::endl; }
+    void dump() const { dump(std::cerr); }
+
+
+};
+
+template<
+        heuristic_search_state State,
+        typename Expand,
+        typename Heuristic,
+        unsigned BeamWidth,
+        typename Config,
+        typename... Context
+>
+requires heuristic_search_heuristic<Heuristic, Context...>
+const State &layeredSearch<State, Expand, Heuristic, BeamWidth, Config, Context...>::search(
+        state_type initial_state,
+        expand_type expand,
+        heuristic_type &heuristic,
+        Context &... context
+) {
+    state_manager_.template push<false>(std::move(initial_state), 0, context...);
+    while (not state_manager_.queues_empty()) {
+        auto top = state_manager_.pop();
+        const state_type &state = top.first;
+        std::cout << "Current state.size()" << state.size() << "\n";
+
+        if (expand.is_goal(state, context...))
+            return state;
+        explore_state(state, heuristic, expand, context...);
+    }
+    throw std::logic_error("goal state unreachable from provided initial state");
+
+//    /// Below change to my code
+//    /* Initialize queue with initial state. */
+//    state_manager_.template push<true>(std::move(initial_state),0,context...);
+//
+//    /* Run work list algorithm. */
+//    while (not state_manager_.queues_empty()) {
+//        M_insist(not (is_monotone and use_beam_search) or not state_manager_.is_beam_queue_empty(),
+//                 "the beam queue must not run empty with beam search on a monotone search space");
+//        auto top = state_manager_.pop();
+//        const state_type &state = top.first;
+//
+//        if (expand.is_goal(state, context...))
+//            return state;
+//
+//        explore_state(state, heuristic, expand, context...);
+//    }
+//
+//    throw std::logic_error("goal state unreachable from provided initial state");
+}
+
 /////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////Definition -> Heuristic Algorithm//////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -2229,6 +2764,20 @@ using cleanAStar = cleanAStarSearch<State, Expand, Heuristic, Config, Context...
 //        typename... Context
 //>
 //using BIDIRECTIONAL = biDirectionalSearch<State, Expand, Expand2, Heuristic, Heuristic2, Config, Context...>;
+
+template<unsigned BeamWidth>
+struct hanwen_layeredSearch
+{
+    template<
+            heuristic_search_state State,
+            typename Expand,
+            typename Heuristic,
+            typename Config,
+            typename... Context
+    >
+    using type = layeredSearch<State, Expand, Heuristic, BeamWidth, Config, Context...>;
+};
+
 
 template<
     heuristic_search_state State,

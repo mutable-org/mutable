@@ -3,6 +3,7 @@ from .connector import *
 from tqdm import tqdm
 import os
 import pandas
+import random
 import re
 import subprocess
 import sys
@@ -79,10 +80,14 @@ class Mutable(Connector):
         benchmark = yml['benchmark']
         is_readonly = yml['readonly']
         assert type(is_readonly) == bool
+        path_to_file = yml['path_to_file']
+        path_to_data = os.path.join('benchmark', suite, 'data')
         cases = yml['cases']
+        if 'script' in cases:
+            return self.run_repeated_case(cases, config, path_to_file)
+
         supplementary_args = yml.get('args', None)
         binargs = yml.get('binargs', None)
-        path_to_file = yml['path_to_file']
 
         # Assemble command
         command = [ self.mutable_binary, '--benchmark', '--times']
@@ -92,7 +97,6 @@ class Mutable(Connector):
             command.extend(supplementary_args.split(' '))
         if config:
             command.extend(config['args'].split(' '))
-
 
         if is_readonly:
             tables = yml.get('data')
@@ -105,7 +109,6 @@ class Mutable(Connector):
         try:
             if is_readonly:
                 # Produce code to load data into tables
-                path_to_data = os.path.join('benchmark', suite, 'data')
                 imports = get_setup_statements(suite, path_to_data, yml['data'], None)
 
                 import_str = '\n'.join(imports)
@@ -118,7 +121,7 @@ class Mutable(Connector):
                     combined_query.extend([case])
                 query = '\n'.join(combined_query)
                 try:
-                    durations = self.benchmark_query(command, query, config['pattern'], timeout, path_to_file)
+                    durations = self.benchmark_query(command, query, config['pattern'], timeout, path_to_file, False)
                 except BenchmarkTimeoutException as ex:
                     tqdm.write(str(ex))
                     sys.stdout.flush()
@@ -126,7 +129,7 @@ class Mutable(Connector):
                     for case in cases.keys():
                         execution_times[case] = TIMEOUT_PER_CASE * 1000
                 else:
-                    if len(durations) < len(cases):
+                    if len(durations) != len(cases):
                         raise ConnectorException(f"Expected {len(cases)} measurements but got {len(durations)}.")
                     # Add measured times
                     for case, dur in zip(list(cases.keys()), durations):
@@ -135,7 +138,6 @@ class Mutable(Connector):
                 timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
                 for case, query in cases.items():
                     # Produce code to load data into tables with scale factor
-                    path_to_data = os.path.join('benchmark', suite, 'data')
                     case_imports = get_setup_statements(suite, path_to_data, yml['data'], case)
                     import_str = '\n'.join(case_imports)
 
@@ -143,13 +145,13 @@ class Mutable(Connector):
                     if self.verbose:
                         print_command(command, query_str, '    ')
                     try:
-                        durations = self.benchmark_query(command, query_str, config['pattern'], timeout, path_to_file)
+                        durations = self.benchmark_query(command, query_str, config['pattern'], timeout, path_to_file, False)
                     except BenchmarkTimeoutException as ex:
                         tqdm.write(str(ex))
                         sys.stdout.flush()
                         execution_times[case] = timeout * 1000
                     else:
-                        if len(durations) == 0:
+                        if len(durations) != 1:
                             raise ConnectorException("Expected 1 measurement but got 0.")
                         execution_times[case] = durations[0]
         except BenchmarkError as ex:
@@ -159,14 +161,68 @@ class Mutable(Connector):
         return execution_times
 
 
+    # =======================================================================================================================
+    # Run the repeated case with the parameters specified in 'repeat'
+    #
+    # @param repeat             the repeated case
+    # @param config             the configuration to use for execution
+    # @param path_to_file       the path to the YAML file of the current experiment
+    # @return                   a map from case name to measurement
+    # =======================================================================================================================
+    def run_repeated_case(self, repeat, config, path_to_file):
+        random.seed(42)
+        seed_low, seed_high = 0, 2 ** 32 - 1
+        pattern = config['pattern']
+        script = repeat['script']
+
+        execution_times = dict()  # Collect results in dict
+        timeout = DEFAULT_TIMEOUT + TIMEOUT_PER_CASE
+
+        parse_n_error = BenchmarkError(f"{path_to_file} : 'n' must be either an integer or a list with 1-3 integers.")
+        if type(repeat['n']) is int:
+            generator = range(repeat['n'])
+        elif type(repeat['n']) is list:
+            if len(repeat['n']) == 0 or len(repeat['n']) > 3:
+                raise parse_n_error
+
+            for x in repeat['n']:
+                if type(x) != int:
+                    raise parse_n_error
+
+            generator = range(*repeat['n'])
+        else:
+            raise parse_n_error
+
+        for N in generator:
+            # Perform case
+            case_seed = random.randint(seed_low, seed_high)
+
+            variables = [f'{key}={value}' for key, value in config['variables'].items()]
+
+            cmd = ['env', f'N={N}', f'RANDOM={case_seed}'] + variables + ['/bin/bash']
+            try:
+                durations = self.benchmark_query(cmd, script, pattern, timeout, path_to_file, True)
+            except BenchmarkTimeoutException as ex:
+                tqdm.write(str(ex))
+                sys.stdout.flush()
+                execution_times[str(N)] = timeout * 1000
+            else:
+                if len(durations) != 1:
+                    raise ConnectorException(f"Expected 1 measurement but got {len(durations)}.")
+                execution_times[str(N)] = durations[0]
+
+        return execution_times
+
+
 
     #=======================================================================================================================
     # Start the shell with `command` and pass `query` to its stdin.  Search the stdout for timings using the given regex
     # `pattern` and return them as a list.
     #=======================================================================================================================
-    def benchmark_query(self, command, query, pattern, timeout, path_to_file):
-        cmd = command + [ '--quiet', '-' ]
-        query = query.strip().replace('\n', ' ') + '\n' # transform to a one-liner and append new line to submit query
+    def benchmark_query(self, cmd, query, pattern, timeout, path_to_file, is_script: bool):
+        if not is_script:
+            cmd = cmd + [ '--quiet', '-' ]
+            query = query.strip().replace('\n', ' ') + '\n' # transform to a one-liner and append new line to submit query
 
         process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    cwd=os.getcwd())
@@ -190,7 +246,11 @@ class Mutable(Connector):
             outstr = '\n'.join(out.split('\n')[-20:])
             tqdm.write(f'''\
     Unexpected failure during execution of benchmark "{path_to_file}" with return code {process.returncode}:''')
-            print_command(cmd, query)
+            if is_script:
+                tqdm.write(' '.join(cmd))
+                tqdm.write(query)
+            else:
+                print_command(cmd, query)
             tqdm.write(f'''\
     ===== stdout =====
     {outstr}

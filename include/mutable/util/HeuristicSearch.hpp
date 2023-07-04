@@ -2249,20 +2249,16 @@ const State &layeredBiDirectionSearch<State, Expand, Expand2, Heuristic, Heurist
 /** Tracks states and their presence in queues. */
 template<
         heuristic_search_state State,
-        bool HasRegularQueue,
-        bool HasBeamQueue,
+        unsigned BeamWidth,
         typename Config,
         typename... Context
 >
 struct LayeredStateManager
 {
-    static_assert(HasRegularQueue or HasBeamQueue, "must have at least one kind of queue");
 
     using state_type = State;
-    static constexpr bool has_regular_queue = HasRegularQueue;
-    static constexpr bool has_beam_queue = HasBeamQueue;
-
     static constexpr bool detect_duplicates = true;
+    static constexpr unsigned beam_width = BeamWidth;
 
 private:
     ///> type for a pointer to an entry in the map of states
@@ -2387,8 +2383,6 @@ std::size_t num_##NAME() const { return 0; }
     ///> map of all states ever explored, mapping state to its info
     // map_type states_;
 
-    heap_type regular_queue_;
-    heap_type beam_queue_;
     heap_type layer_candidates_;
 
 public:
@@ -2412,169 +2406,171 @@ public:
 
             bool layer_candidates_empty() const { return layer_candidates_.empty(); }
 
-            std::pair<const state_type &, double> layer_candidates_pop() {
-                M_insist(not layer_candidates_empty());
-                pointer_type ptr = layer_candidates_.top();
-                layer_candidates_.pop();
-                M_insist(ptr, "ptr must have been set, the queues must not have been empty");
+// Considering we use candidates in the main function, rather in the stateManager
 
-                auto &entry = *static_cast<typename map_type::value_type *>(ptr);
-                entry.second.queue = nullptr; // remove from queue
-                return {entry.first, entry.second.h};
-            }
-
-            size_t layer_candidates_size(){
-                return layer_candidates_.size();
-            }
-
-    template<bool ToBeamQueue>
-    void push(state_type state, double h, Context&... context) {
-        static_assert(not ToBeamQueue or HasBeamQueue, "ToBeamQueue implies HasBeamQueue");
-        static_assert(ToBeamQueue or HasRegularQueue, "not ToBeamQueue implies HasRegularQueue");
-
-        auto &Q = ToBeamQueue ? beam_queue_ : regular_queue_;
-        auto &P = partition(state, context...);
-
-        if constexpr (detect_duplicates) {
-            if (auto it = P.find(state); it == P.end()) [[likely]] {
-                /*----- Entirely new state, never seen before. -----*/
-                it = P.emplace_hint(it, std::move(state), StateInfo(h, &Q));
-                /*----- Enqueue state, obtain handle, and add to `StateInfo`. -----*/
-                it->second.handle = Q.push(&*it);
-                inc_new();
-            } else {
-                /*----- Duplicate, seen before. -----*/
-                M_insist(it->second.h == h, "must not have a different heuristic value for the same state");
-                inc_duplicates();
-
-                if (ToBeamQueue and it->second.queue == &regular_queue_) {
-                    /*----- The state is in the regular queue and needs to be moved to the beam queue. -----*/
-                    if constexpr (HasRegularQueue)
-                        it->second.queue->erase(it->second.handle); // erase from regular queue
-                    if (state.g() < it->first.g())
-                        it->first.decrease_g(state.parent(), state.g()); // update *g* value
-                    it->second.handle = beam_queue_.push(&*it); // add to beam queue and update handle
-                    it->second.queue = &beam_queue_; // update queue
-                    if constexpr (HasRegularQueue)
-                        inc_regular_to_beam();
-                    else
-                        inc_none_to_beam();
-                } else if (state.g() >= it->first.g()) [[likely]] {
-                    /*----- The state wasn't reached on a cheaper path and hence cannot produce better solutions. -----*/
-                    inc_discarded();
-                    return; // XXX is it safe to not add the state to any queue?
-                } else {
-                    /*----- The state was reached on a cheaper path.  We must reconsider the state. -----*/
-                    M_insist(state.g() < it->first.g(), "the state was reached on a cheaper path");
-                    inc_cheaper();
-                    it->first.decrease_g(state.parent(), state.g()); // decrease value of *g*
-                    if (it->second.queue == nullptr) {
-                        /*----- The state is currently not present in a queue. -----*/
-                        it->second.handle = Q.push(&*it); // add to dedicated queue and update handle
-                        it->second.queue = &Q; // update queue
-                    } else {
-                        /*----- Update the state's entry in the queue. -----*/
-                        M_insist(it->second.queue == &Q, "the state must already be in its destinated queue");
-                        Q.increase(it->second.handle); // we need to *increase* because the heap is a max-heap
-                        inc_decrease_key();
-                    }
-                }
-            }
-        } else {
-            const auto new_g = state.g();
-            auto [it, res] = P.try_emplace(std::move(state), StateInfo(h, &Q));
-            Q.push(&*it);
-            if (res) {
-                inc_new();
-            } else {
-                inc_duplicates();
-                if (new_g < it->first.g())
-                    inc_cheaper();
-            }
-        }
-    }
-
-    void push_regular_queue(state_type state, double h, Context&... context) {
-        if constexpr (detect_duplicates) {
-            if constexpr (HasRegularQueue) {
-                push<false>(std::move(state), h, context...);
-            } else {
-                auto &P = partition(state, context...);
-                /*----- There is no regular queue.  Only update the state's mapping. -----*/
-                if (auto it = P.find(state); it == P.end()) {
-                    /*----- This is a new state.  Simply create a new entry. -----*/
-                    it = P.emplace_hint(it, std::move(state), StateInfo(h, &regular_queue_));
-                    inc_new();
-                    /* We must not add the state to the regular queue, but we must remember that the state can still be
-                     * "moved" to the beam queue. */
-                } else {
-                    /*----- This is a duplicate state.  Check whether it has lower cost *g*. -----*/
-                    M_insist(it->second.h == h, "must not have a different heuristic value for the same state");
-                    inc_duplicates();
-                    if (state.g() < it->first.g()) {
-                        inc_cheaper();
-                        it->first.decrease_g(state.parent(), state.g());
-                        if (it->second.queue == &beam_queue_) { // if state is currently in a queue
-                            it->second.queue->increase(it->second.handle); // *increase* because max-heap
-                            inc_decrease_key();
-                        }
-                    } else {
-                        inc_discarded();
-                    }
-                }
-            }
-        } else {
-            push<not HasRegularQueue>(std::move(state), h, context...);
-        }
-    }
-
-    void push_beam_queue(state_type state, double h, Context&... context) {
-        push<true>(std::move(state), h, context...);
-    }
-
-    bool is_regular_queue_empty() const { return not HasRegularQueue or regular_queue_.empty(); }
-    bool is_beam_queue_empty() const { return not HasBeamQueue or beam_queue_.empty(); }
-    bool queues_empty() const { return is_regular_queue_empty() and is_beam_queue_empty(); }
-
-
-    std::pair<const state_type&, double> pop() {
-        M_insist(not queues_empty());
-        pointer_type ptr = nullptr;
-        if (HasBeamQueue and not beam_queue_.empty()) {
-            ptr = beam_queue_.top();
-            beam_queue_.pop();
-        } else if (HasRegularQueue and not regular_queue_.empty()) {
-            ptr = regular_queue_.top();
-            regular_queue_.pop();
-        }
-        M_insist(ptr, "ptr must have been set, the queues must not have been empty");
-
-        auto &entry = *static_cast<typename map_type::value_type*>(ptr);
-        entry.second.queue = nullptr; // remove from queue
-        return { entry.first, entry.second.h };
-    }
+//            std::pair<const state_type &, double> layer_candidates_pop() {
+//                M_insist(not layer_candidates_empty());
+//                pointer_type ptr = layer_candidates_.top();
+//                layer_candidates_.pop();
+//                M_insist(ptr, "ptr must have been set, the queues must not have been empty");
+//
+//                auto &entry = *static_cast<typename map_type::value_type *>(ptr);
+//                entry.second.queue = nullptr; // remove from queue
+//                return {entry.first, entry.second.h};
+//            }
+//
+//            size_t layer_candidates_size(){
+//                return layer_candidates_.size();
+//            }
 
 
 
-    void clear() {
-        if constexpr (HasRegularQueue)
-            regular_queue_.clear();
-        if constexpr (HasBeamQueue)
-            beam_queue_.clear();
-        // states_.clear();
-        partitions_.clear();
-    }
+//    template<bool ToBeamQueue>
+//    void push(state_type state, double h, Context&... context) {
+//        static_assert(not ToBeamQueue or HasBeamQueue, "ToBeamQueue implies HasBeamQueue");
+//        static_assert(ToBeamQueue or HasRegularQueue, "not ToBeamQueue implies HasRegularQueue");
+//
+//        auto &Q = ToBeamQueue ? beam_queue_ : regular_queue_;
+//        auto &P = partition(state, context...);
+//
+//        if constexpr (detect_duplicates) {
+//            if (auto it = P.find(state); it == P.end()) [[likely]] {
+//                /*----- Entirely new state, never seen before. -----*/
+//                it = P.emplace_hint(it, std::move(state), StateInfo(h, &Q));
+//                /*----- Enqueue state, obtain handle, and add to `StateInfo`. -----*/
+//                it->second.handle = Q.push(&*it);
+//                inc_new();
+//            } else {
+//                /*----- Duplicate, seen before. -----*/
+//                M_insist(it->second.h == h, "must not have a different heuristic value for the same state");
+//                inc_duplicates();
+//
+//                if (ToBeamQueue and it->second.queue == &regular_queue_) {
+//                    /*----- The state is in the regular queue and needs to be moved to the beam queue. -----*/
+//                    if constexpr (HasRegularQueue)
+//                        it->second.queue->erase(it->second.handle); // erase from regular queue
+//                    if (state.g() < it->first.g())
+//                        it->first.decrease_g(state.parent(), state.g()); // update *g* value
+//                    it->second.handle = beam_queue_.push(&*it); // add to beam queue and update handle
+//                    it->second.queue = &beam_queue_; // update queue
+//                    if constexpr (HasRegularQueue)
+//                        inc_regular_to_beam();
+//                    else
+//                        inc_none_to_beam();
+//                } else if (state.g() >= it->first.g()) [[likely]] {
+//                    /*----- The state wasn't reached on a cheaper path and hence cannot produce better solutions. -----*/
+//                    inc_discarded();
+//                    return; // XXX is it safe to not add the state to any queue?
+//                } else {
+//                    /*----- The state was reached on a cheaper path.  We must reconsider the state. -----*/
+//                    M_insist(state.g() < it->first.g(), "the state was reached on a cheaper path");
+//                    inc_cheaper();
+//                    it->first.decrease_g(state.parent(), state.g()); // decrease value of *g*
+//                    if (it->second.queue == nullptr) {
+//                        /*----- The state is currently not present in a queue. -----*/
+//                        it->second.handle = Q.push(&*it); // add to dedicated queue and update handle
+//                        it->second.queue = &Q; // update queue
+//                    } else {
+//                        /*----- Update the state's entry in the queue. -----*/
+//                        M_insist(it->second.queue == &Q, "the state must already be in its destinated queue");
+//                        Q.increase(it->second.handle); // we need to *increase* because the heap is a max-heap
+//                        inc_decrease_key();
+//                    }
+//                }
+//            }
+//        } else {
+//            const auto new_g = state.g();
+//            auto [it, res] = P.try_emplace(std::move(state), StateInfo(h, &Q));
+//            Q.push(&*it);
+//            if (res) {
+//                inc_new();
+//            } else {
+//                inc_duplicates();
+//                if (new_g < it->first.g())
+//                    inc_cheaper();
+//            }
+//        }
+//    }
 
-    void print_counters(std::ostream &out) const {
-#define X(NAME) num_##NAME() << " " #NAME
-        out << X(new) ", " << X(duplicates) ", ";
-        if (HasRegularQueue and HasBeamQueue)
-            out << X(regular_to_beam) ", ";
-        if (HasBeamQueue)
-            out << X(none_to_beam) ", ";
-        out << X(discarded) ", " << X(cheaper) ", " << X(decrease_key);
-#undef X
-    }
+//    void push_regular_queue(state_type state, double h, Context&... context) {
+//        if constexpr (detect_duplicates) {
+//            {
+//                auto &P = partition(state, context...);
+//                /*----- There is no regular queue.  Only update the state's mapping. -----*/
+//                if (auto it = P.find(state); it == P.end()) {
+//                    /*----- This is a new state.  Simply create a new entry. -----*/
+//                    it = P.emplace_hint(it, std::move(state), StateInfo(h, &regular_queue_));
+//                    inc_new();
+//                    /* We must not add the state to the regular queue, but we must remember that the state can still be
+//                     * "moved" to the beam queue. */
+//                } else {
+//                    /*----- This is a duplicate state.  Check whether it has lower cost *g*. -----*/
+//                    M_insist(it->second.h == h, "must not have a different heuristic value for the same state");
+//                    inc_duplicates();
+//                    if (state.g() < it->first.g()) {
+//                        inc_cheaper();
+//                        it->first.decrease_g(state.parent(), state.g());
+//                        if (it->second.queue == &beam_queue_) { // if state is currently in a queue
+//                            it->second.queue->increase(it->second.handle); // *increase* because max-heap
+//                            inc_decrease_key();
+//                        }
+//                    } else {
+//                        inc_discarded();
+//                    }
+//                }
+//            }
+//        } else {
+//            push<not HasRegularQueue>(std::move(state), h, context...);
+//        }
+//    }
+
+//    void push_beam_queue(state_type state, double h, Context&... context) {
+//        push<true>(std::move(state), h, context...);
+//    }
+//
+//    bool is_regular_queue_empty() const { return not HasRegularQueue or regular_queue_.empty(); }
+//    bool is_beam_queue_empty() const { return not HasBeamQueue or beam_queue_.empty(); }
+//    bool queues_empty() const { return is_regular_queue_empty() and is_beam_queue_empty(); }
+
+//
+//    std::pair<const state_type&, double> pop() {
+//        M_insist(not queues_empty());
+//        pointer_type ptr = nullptr;
+//        if (HasBeamQueue and not beam_queue_.empty()) {
+//            ptr = beam_queue_.top();
+//            beam_queue_.pop();
+//        } else if (HasRegularQueue and not regular_queue_.empty()) {
+//            ptr = regular_queue_.top();
+//            regular_queue_.pop();
+//        }
+//        M_insist(ptr, "ptr must have been set, the queues must not have been empty");
+//
+//        auto &entry = *static_cast<typename map_type::value_type*>(ptr);
+//        entry.second.queue = nullptr; // remove from queue
+//        return { entry.first, entry.second.h };
+//    }
+
+
+
+//    void clear() {
+//        if constexpr (HasRegularQueue)
+//            regular_queue_.clear();
+//        if constexpr (HasBeamQueue)
+//            beam_queue_.clear();
+//        // states_.clear();
+//        partitions_.clear();
+//    }
+
+//    void print_counters(std::ostream &out) const {
+//#define X(NAME) num_##NAME() << " " #NAME
+//        out << X(new) ", " << X(duplicates) ", ";
+//        if (HasRegularQueue and HasBeamQueue)
+//            out << X(regular_to_beam) ", ";
+//        if (HasBeamQueue)
+//            out << X(none_to_beam) ", ";
+//        out << X(discarded) ", " << X(cheaper) ", " << X(decrease_key);
+//#undef X
+//    }
 
     map_type & partition(const state_type &state, Context&... context) { return partitions_(state, context...); }
     const map_type & partition(const state_type &state, Context&... context) const {
@@ -2597,12 +2593,11 @@ public:
 
 template<
         heuristic_search_state State,
-        bool HasRegularQueue,
-        bool HasBeamQueue,
+        unsigned BeamWidth,
         typename Config,
         typename... Context
 >
-bool LayeredStateManager<State, HasRegularQueue, HasBeamQueue, Config, Context...>::comparator::
+bool LayeredStateManager<State, BeamWidth, Config, Context...>::comparator::
 operator()(LayeredStateManager::pointer_type p_left, LayeredStateManager::pointer_type p_right) const
 {
     auto left  = static_cast<typename map_type::value_type*>(p_left);
@@ -2627,7 +2622,10 @@ struct layeredSearch
     using expand_type = Expand;
     using heuristic_type = Heuristic;
 
+    static constexpr unsigned beam_width = BeamWidth;
+
     using callback_t = std::function<void(state_type, double)>;
+
 
 private:
 #if 1
@@ -2645,20 +2643,44 @@ std::size_t num_##NAME() const { return 0; }
 
 #undef DEF_COUNTER
 
+    struct weighted_state
+    {
+        state_type state;
+        double h;
+
+        weighted_state(state_type state, double h) : state(std::move(state)), h(h) { }
+        weighted_state(const weighted_state&) = delete;
+        weighted_state(weighted_state&&) = default;
+        weighted_state & operator=(weighted_state&&) = default;
+
+        bool operator<(const weighted_state &other) const { return this->weight() < other.weight(); }
+        bool operator>(const weighted_state &other) const { return this->weight() > other.weight(); }
+        bool operator<=(const weighted_state &other) const { return this->weight() <= other.weight(); }
+        bool operator>=(const weighted_state &other) const { return this->weight() >= other.weight(); }
+
+    private:
+        double weight() const { return state.g() + h; }
+
+    };
+
     // decide the core details in queue
     LayeredStateManager
             </* State=           */ State,
-            /* HasRegularQueue= */ true,
-            /* HasBeamQueue=    */ false,
+            BeamWidth,
             /* Config=          */ Config,
             /* Context...=      */ Context...
     > state_manager_;
+
+    std::vector<weighted_state>layer_candidates;
 
 
 public:
     explicit layeredSearch(Context&... context)
             : state_manager_(context...)
-    {}
+    {
+        /// Adding 1 is used for extra space in ordering
+        layer_candidates.reserve(beam_width+1);
+    }
 
     layeredSearch(const layeredSearch&) = delete;
     layeredSearch(layeredSearch&&) = default;
@@ -2684,6 +2706,41 @@ private:
     template<typename T>
     using has_mark = decltype(std::declval<T>().mark(Subproblem()));
 
+    void push_candidates(state_type state, double h, Context &... context) {
+        /// Still maintain the original structure - Using a max heap, easy to deal with the replicates
+        auto &top = layer_candidates.front();
+#ifndef NDEBUG
+        M_insist(std::is_heap(layer_candidates.begin(), layer_candidates.end()), "candidates must always be a max-heap");
+        for (auto &elem : layer_candidates)
+            M_insist(top >= elem, "the top candidate at the front must be no less than any other candidate");
+#endif
+        if (layer_candidates.size() < beam_width) {
+            /* There is still space in the candidates, so simply add the state to the heap. */
+            layer_candidates.emplace_back(std::move(state), h);
+            if (layer_candidates.size() == beam_width) // heapify when filled
+                std::make_heap(layer_candidates.begin(), layer_candidates.end());
+        } else if (state.g() + h >= top.state.g() + top.h) {
+            /* The state has higher g+h than the top of the candidates heap, so bypass the candidates immediately. */
+//            state_manager_.push_regular_queue(std::move(state), h, context...);
+        } else {
+            /* The state has less g+h than the top of candidates heap.  Pop the current top and insert the state into
+             * the candidates heap. */
+            M_insist(layer_candidates.size() == beam_width);
+            M_insist(std::is_heap(layer_candidates.begin(), layer_candidates.end()));
+            layer_candidates.emplace_back(std::move(state), h);
+            std::pop_heap(layer_candidates.begin(), layer_candidates.end());
+            weighted_state worst_candidate = std::move(layer_candidates.back()); // extract worst candidate
+            layer_candidates.pop_back();
+            M_insist(std::is_heap(layer_candidates.begin(), layer_candidates.end()));
+            M_insist(layer_candidates.size() == beam_width);
+#ifndef NDEBUG
+            for (auto &elem : layer_candidates)
+                M_insist(worst_candidate >= elem, "worst candidate must be no less than any other candidate");
+#endif
+//            state_manager_.push_regular_queue(std::move(worst_candidate.state), worst_candidate.h, context...); // move to regular
+        }
+    }
+
 
     void for_each_successor(callback_t &&callback, const state_type &state, heuristic_type &heuristic,
                             expand_type &expand, Context &... context) {
@@ -2700,7 +2757,8 @@ private:
 
     void explore_state(const state_type &state, heuristic_type &heuristic, expand_type &expand, Context&... context) {
         for_each_successor([this, &context...](state_type successor, double h) {
-            state_manager_.push_candidates(std::move(successor), h, context...);
+            /// Similar the previous beam() functions
+            push_candidates(std::move(successor), h, context...);
         }, state, heuristic, expand, context...);
     }
 
@@ -2733,10 +2791,10 @@ const State &layeredSearch<State, Expand, Heuristic, BeamWidth, Config, Context.
 ) {
     state_manager_.template push<false>(std::move(initial_state), 0, context...);
 
-    while (not state_manager_.layer_candidates_empty()) {
-        size_t layer_candidates_size = state_manager_.layer_candidates_size();
+    while (not layer_candidates.empty()) {
+        size_t layer_candidates_size = layer_candidates.size();
         for (size_t i{0};i<layer_candidates_size;i++){
-            auto top = state_manager_.layer_candidates_pop();
+            auto top = layer_candidates.top();
             const state_type &state = top.first;
             std::cout << "Current state.size()" << state.size() << "\n"; // For while loop, they are in the same size
 

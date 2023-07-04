@@ -2497,7 +2497,7 @@ using IDDFS = ai::IDDFS<State, Expand, Heuristic, Config, Context...>;
 
 /// Change the beam width here
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
-using hanwen_layered_search = ai::hanwen_layeredSearch<2>::type<State, Expand, Heuristic, Config, Context...>;
+using hanwen_layered_search = ai::hanwen_layeredSearch<5>::type<State, Expand, Heuristic, Config, Context...>;
 
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using AStar = ai::AStar<State, Expand, Heuristic, Config, Context...>;

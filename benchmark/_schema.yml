@@ -39,11 +39,12 @@ table:
     lines_in_file: int(required=False)                      # Number of lines in the file. Is counted and added by the benchmark script
 ---
 config:
-    args: str(required=True)
+    args: str(required=False)
     pattern: str(required=True)
+    variables: map(any(), key=str(), required=False)
 ---
 mutable:
-    cases: include('cases')
+    cases: any(include('cases'), include('repeat'), required=True)
     args: str(required=False)
     configurations: map(include('config'), key=str(), required=True)
 PostgreSQL:
@@ -51,8 +52,9 @@ PostgreSQL:
 DuckDB:
     cases: include('cases')
 HyPer:
-    single_core: bool(required=False)
-    all_cores: bool(required=False)
     cases: include('cases')
 ---
 cases: map(str(), key=any())
+repeat:
+    n: any(int(), list(), required=True)    # either integer or list of integers to define a range
+    script: str(required=True)              # script to be executed n times using different seed

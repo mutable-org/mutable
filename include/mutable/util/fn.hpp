@@ -42,29 +42,36 @@ inline std::string replace_all(std::string str, const std::string &from, const s
     return str;
 }
 
+
+inline uint64_t FNV1a(const char *c_str)
+{
+    /* FNV-1a 64 bit */
+    uint64_t hash = 0xcbf29ce484222325UL;
+    char c;
+    while ((c = *c_str++)) {
+        hash = hash ^ c;
+        hash = hash * 0x100000001b3UL;
+    }
+    return hash;
+}
+
+inline uint64_t FNV1a(const char *c_str, std::size_t len)
+{
+    /* FNV-1a 64 bit */
+    uint64_t hash = 0xcbf29ce484222325;
+    for (auto end = c_str + len; c_str != end and *c_str; ++c_str) {
+        hash = hash ^ *c_str;
+        hash = hash * 0x100000001b3UL;
+    }
+    return hash;
+}
+
 /** Computes the FNV-1a 64-bit hash of a cstring. */
 struct M_EXPORT StrHash
 {
-    uint64_t operator()(const char *c_str) const {
-        /* FNV-1a 64 bit */
-        uint64_t hash = 0xcbf29ce484222325UL;
-        char c;
-        while ((c = *c_str++)) {
-            hash = hash ^ c;
-            hash = hash * 0x100000001b3UL;
-        }
-        return hash;
-    }
+    uint64_t operator()(const char *c_str) const { return FNV1a(c_str); }
 
-    uint64_t operator()(const char *c_str, std::size_t len) const {
-        /* FNV-1a 64 bit */
-        uint64_t hash = 0xcbf29ce484222325;
-        for (auto end = c_str + len; c_str != end and *c_str; ++c_str) {
-            hash = hash ^ *c_str;
-            hash = hash * 0x100000001b3UL;
-        }
-        return hash;
-    }
+    uint64_t operator()(const char *c_str, std::size_t len) const { return FNV1a(c_str, len); }
 
     uint64_t operator()(const std::string &s) const { return operator()(s.c_str()); }
 };

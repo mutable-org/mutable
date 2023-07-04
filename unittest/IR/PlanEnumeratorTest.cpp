@@ -9,10 +9,10 @@
 #include <mutable/IR/PlanTable.hpp>
 #include <mutable/mutable.hpp>
 #include <mutable/storage/Store.hpp>
+#include <mutable/util/ADT.hpp>
 #include <parse/Parser.hpp>
 #include <parse/Sema.hpp>
 #include <testutil.hpp>
-#include <util/ADT.hpp>
 
 
 using namespace m;

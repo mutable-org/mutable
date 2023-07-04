@@ -1,6 +1,5 @@
 #include <mutable/IR/PlanEnumerator.hpp>
 
-#include "util/ADT.hpp"
 #include <algorithm>
 #include <cstring>
 #include <execution>
@@ -10,6 +9,7 @@
 #include <memory>
 #include <mutable/catalog/Catalog.hpp>
 #include <mutable/catalog/CostFunction.hpp>
+#include <mutable/util/ADT.hpp>
 #include <mutable/util/fn.hpp>
 #include <mutable/util/list_allocator.hpp>
 #include <mutable/util/malloc_allocator.hpp>

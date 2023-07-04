@@ -1,6 +1,5 @@
 #include <mutable/IR/PlanEnumerator.hpp>
 
-#include "util/ADT.hpp"
 #include <algorithm>
 #include <boost/container/allocator.hpp>
 #include <boost/container/node_allocator.hpp>
@@ -18,6 +17,7 @@
 #include <mutable/IR/PlanTable.hpp>
 #include <mutable/IR/QueryGraph.hpp>
 #include <mutable/Options.hpp>
+#include <mutable/util/ADT.hpp>
 #include <mutable/util/crtp.hpp>
 #include <mutable/util/fn.hpp>
 #include <mutable/util/HeuristicSearch.hpp>

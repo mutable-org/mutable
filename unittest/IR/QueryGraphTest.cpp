@@ -4,11 +4,11 @@
 #include "parse/Parser.hpp"
 #include "parse/Sema.hpp"
 #include "testutil.hpp"
-#include "util/ADT.hpp"
 #include <mutable/catalog/Catalog.hpp>
 #include <mutable/catalog/Type.hpp>
 #include <mutable/mutable.hpp>
 #include <mutable/mutable.hpp>
+#include <mutable/util/ADT.hpp>
 #include <mutable/util/fn.hpp>
 #include <set>
 #include <unordered_set>

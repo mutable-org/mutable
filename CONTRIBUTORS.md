@@ -9,4 +9,5 @@ Below is a list of all contributors to the project, in the chronological order o
 - Jonas Lauermann <<s8jolaue@stud.uni-saarland.de>>
 - Felix Brinkmann <<s8febrin@stud.uni-saarland.de>>
 - Til Roth <<s8tiroth@stud.uni-saarland.de>>
+- Alireza Kheradmand <<alkh00002@stud.uni-saarland.de>>
 - Sven Hartz

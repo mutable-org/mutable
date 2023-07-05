@@ -2561,29 +2561,29 @@ public:
 //        partitions_.clear();
 //    }
 
-//    void print_counters(std::ostream &out) const {
-//#define X(NAME) num_##NAME() << " " #NAME
-//        out << X(new) ", " << X(duplicates) ", ";
-//        if (HasRegularQueue and HasBeamQueue)
-//            out << X(regular_to_beam) ", ";
-//        if (HasBeamQueue)
-//            out << X(none_to_beam) ", ";
-//        out << X(discarded) ", " << X(cheaper) ", " << X(decrease_key);
-//#undef X
-//    }
+    void print_counters(std::ostream &out) const {
+#define X(NAME) num_##NAME() << " " #NAME
+        out << X(new) ", " << X(duplicates) ", ";
+
+        out << X(discarded) ", " << X(cheaper) ", " << X(decrease_key);
+#undef X
+    }
+
 
     map_type & partition(const state_type &state, Context&... context) { return partitions_(state, context...); }
     const map_type & partition(const state_type &state, Context&... context) const {
         return partitions_(state, context...);
     }
 
+
     friend std::ostream & operator<<(std::ostream &out, const LayeredStateManager &SM) {
 #ifndef NDEBUG
         SM.print_counters(out);
         out << ", ";
 #endif
-        out << SM.partitions_.size() << " seen, " << SM.regular_queue_.size() << " currently in regular queue, "
-            << SM.beam_queue_.size() << " currently in beam queue";
+        out<<" Layered Search";
+//        out << SM.partitions_.size() << " seen, " << SM.regular_queue_.size() << " currently in regular queue, "
+//            << SM.beam_queue_.size() << " currently in beam queue";
         return out;
     }
 
@@ -2664,6 +2664,7 @@ std::size_t num_##NAME() const { return 0; }
     };
 
     // decide the core details in queue
+    // TODO: don't need Hasxxx
     LayeredStateManager
             </* State=           */ State,
             BeamWidth,
@@ -2691,7 +2692,7 @@ public:
      *
      * @return the cost of the computed path from `initial_state` to a goal state
      */
-    const State &search(state_type initial_state, expand_type expand, heuristic_type &heuristic, Context &... context);
+    const State& search(state_type initial_state, expand_type expand, heuristic_type &heuristic, Context &... context);
 
     /** Resets the state of the search. */
     void clear() {
@@ -2709,11 +2710,11 @@ private:
     void push_candidates(state_type state, double h, Context &... context) {
         /// Still maintain the original structure - Using a max heap, easy to deal with the replicates
         auto &top = layer_candidates.front();
-#ifndef NDEBUG
-        M_insist(std::is_heap(layer_candidates.begin(), layer_candidates.end()), "candidates must always be a max-heap");
-        for (auto &elem : layer_candidates)
-            M_insist(top >= elem, "the top candidate at the front must be no less than any other candidate");
-#endif
+//#ifndef NDEBUG
+//        M_insist(std::is_heap(layer_candidates.begin(), layer_candidates.end()), "candidates must always be a max-heap");
+//        for (auto &elem : layer_candidates)
+//            M_insist(top >= elem, "the top candidate at the front must be no less than any other candidate");
+//#endif
         if (layer_candidates.size() < beam_width) {
             /* There is still space in the candidates, so simply add the state to the heap. */
             layer_candidates.emplace_back(std::move(state), h);
@@ -2721,7 +2722,7 @@ private:
                 std::make_heap(layer_candidates.begin(), layer_candidates.end());
         } else if (state.g() + h >= top.state.g() + top.h) {
             /* The state has higher g+h than the top of the candidates heap, so bypass the candidates immediately. */
-//            state_manager_.push_regular_queue(std::move(state), h, context...);
+            //            state_manager_.push_regular_queue(std::move(state), h, context...);
         } else {
             /* The state has less g+h than the top of candidates heap.  Pop the current top and insert the state into
              * the candidates heap. */
@@ -2737,7 +2738,7 @@ private:
             for (auto &elem : layer_candidates)
                 M_insist(worst_candidate >= elem, "worst candidate must be no less than any other candidate");
 #endif
-//            state_manager_.push_regular_queue(std::move(worst_candidate.state), worst_candidate.h, context...); // move to regular
+            // state_manager_.push_regular_queue(std::move(worst_candidate.state), worst_candidate.h, context...); // move to regular
         }
     }
 
@@ -2763,16 +2764,16 @@ private:
     }
 
 public:
-    friend std::ostream & operator<<(std::ostream &out, const layeredSearch &AStar) {
+    friend std::ostream &operator<<(std::ostream &out, const layeredSearch &AStar) {
         return out << AStar.state_manager_ << ", used cached heuristic value " << AStar.num_cached_heuristic_value()
                    << " times";
     }
 
     void dump(std::ostream &out) const { out << *this << std::endl; }
+
     void dump() const { dump(std::cerr); }
-
-
 };
+
 
 template<
         heuristic_search_state State,
@@ -2783,22 +2784,31 @@ template<
         typename... Context
 >
 requires heuristic_search_heuristic<Heuristic, Context...>
-const State &layeredSearch<State, Expand, Heuristic, BeamWidth, Config, Context...>::search(
+const State& layeredSearch<State, Expand, Heuristic, BeamWidth, Config, Context...>::search(
         state_type initial_state,
         expand_type expand,
         heuristic_type &heuristic,
         Context &... context
 ) {
-    state_manager_.template push<false>(std::move(initial_state), 0, context...);
+    /// Init the beginner states
+    layer_candidates.template emplace_back(std::move(initial_state),0);
 
     while (not layer_candidates.empty()) {
         size_t layer_candidates_size = layer_candidates.size();
-        for (size_t i{0};i<layer_candidates_size;i++){
-            auto top = layer_candidates.top();
-            const state_type &state = top.first;
+        std::vector<weighted_state> curr_layer_candidates;
+        curr_layer_candidates.reserve(layer_candidates_size);
+        for (size_t i{0}; i < layer_candidates_size; i++) {
+            curr_layer_candidates.emplace_back(std::move(layer_candidates[i].state),layer_candidates[i].h);
+        }
+
+        layer_candidates.clear();
+
+        for (size_t i{0}; i < layer_candidates_size; i++) {
+            auto& curr = curr_layer_candidates[i];
+            const state_type &state = curr.state;
             std::cout << "Current state.size()" << state.size() << "\n"; // For while loop, they are in the same size
 
-            if (expand.is_goal(state, context...))return state;
+            if (expand.is_goal(state, context...))return &state;
             explore_state(state, heuristic, expand, context...);
         }
     }

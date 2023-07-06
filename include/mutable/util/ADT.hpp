@@ -77,7 +77,7 @@ struct SmallBitset
         }
         iterator operator++(int) { auto clone = *this; operator++(); return clone; }
 
-        std::size_t operator*() const { M_insist(bits_ != 0); return __builtin_ctzl(bits_); }
+        std::size_t operator*() const { M_insist(bits_ != 0); return std::countr_zero(bits_); }
         SmallBitset as_set() const {
 #ifdef __BMI__
             return SmallBitset(_blsi_u64(bits_)); // BMI1: extract lowest set isolated bit
@@ -103,7 +103,7 @@ struct SmallBitset
 
         std::size_t operator*() const {
             M_insist(bits_ != 0);
-            const unsigned lz = __builtin_clzl(bits_);
+            const unsigned lz = std::countl_zero(bits_);
             return CHAR_BIT * sizeof(bits_) - 1UL - lz;
         }
         SmallBitset as_set() const { return SmallBitset(1UL << operator*()); }
@@ -144,7 +144,7 @@ struct SmallBitset
     /** Returns the maximum capacity. */
     constexpr std::size_t capacity() { return CAPACITY; }
     /** Returns the number of elements in this `SmallBitset`. */
-    std::size_t size() const { return __builtin_popcountl(bits_); }
+    std::size_t size() const { return std::popcount(bits_); }
     /** Returns `true` if there are no elements in this `SmallBitset`. */
     bool empty() const { return bits_ == 0; }
     /* Returns `true` if this set is a singleton set, i.e. the set contains exactly one element. */
@@ -152,7 +152,7 @@ struct SmallBitset
 
     /** Returns the highest set bit as a `SmallBitset`. */
     SmallBitset hi() const {
-        unsigned lz = __builtin_clzl(bits_);
+        unsigned lz = std::countl_zero(bits_);
         return SmallBitset(1UL << (CHAR_BIT * sizeof(bits_) - lz - 1U));
     }
 

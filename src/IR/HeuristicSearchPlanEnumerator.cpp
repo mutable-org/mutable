@@ -1320,6 +1320,9 @@ struct BottomUpComplete : BottomUp
                         PT[joined].model = CE.estimate_join(G, model_left, model_right, condition);
                         PT[joined].cost = 0;
                     }
+                    /* The cost of the final join is always the size of the result set, and hence the same for all
+                     * plans.  We therefore omit this cost, as otherwise goal states might be artificially postponed in
+                     * the priority queue.   */
                     const double action_cost = joined == All ? 0 : CE.predict_cardinality(*PT[joined].model);
 
                     /* Create new search state. */
@@ -1664,6 +1667,9 @@ struct TopDownComplete : TopDown
             M_insist(std::is_sorted(subproblems, subproblems + state.size() + 1, subproblem_lt));
 
             cnf::CNF condition; // TODO use join condition
+            /* The cost of the final join is always the size of the result set, and hence the same for all plans.  We
+             * therefore omit this cost, as otherwise goal states might be artificially postponed in the priority queue.
+             * */
             double action_cost = 0;
             if ((S1|S2) != All) {
                 if (not PT[S1|S2].model)

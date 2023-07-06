@@ -17,9 +17,6 @@
 #include <tuple>
 #include <type_traits>
 #include <utility>
-#ifdef __BMI2__
-#include <x86intrin.h>
-#endif
 
 // Binaryen
 #include <wasm-binary.h>
@@ -2122,7 +2119,7 @@ struct PrimitiveExpr<T>
         if constexpr (std::is_void_v<pointed_type>) {
             return PrimitiveExpr(addr_ + delta.make_unsigned(), offset_);
         } else {
-            const uint32_t log_size = __builtin_ctzl(sizeof(pointed_type));
+            const uint32_t log_size = std::countr_zero(sizeof(pointed_type));
             return PrimitiveExpr(addr_ + (delta.make_unsigned() << log_size), offset_);
         }
     }
@@ -2132,7 +2129,7 @@ struct PrimitiveExpr<T>
         if constexpr (std::is_void_v<pointed_type>) {
             offset_ += delta; // in bytes
         } else {
-            const uint32_t log_size = __builtin_ctzl(sizeof(pointed_type));
+            const uint32_t log_size = std::countr_zero(sizeof(pointed_type));
             offset_ += delta << log_size; // in elements
         }
         return *this;
@@ -2143,7 +2140,7 @@ struct PrimitiveExpr<T>
         if constexpr (std::is_void_v<pointed_type>) {
             return PrimitiveExpr(addr_ - delta.make_unsigned(), offset_);
         } else {
-            const uint32_t log_size = __builtin_ctzl(sizeof(pointed_type));
+            const uint32_t log_size = std::countr_zero(sizeof(pointed_type));
             return PrimitiveExpr(addr_ - (delta.make_unsigned() << log_size), offset_);
         }
     }
@@ -2153,7 +2150,7 @@ struct PrimitiveExpr<T>
         if constexpr (std::is_void_v<pointed_type>) {
             offset_ -= delta; // in bytes
         } else {
-            const uint32_t log_size = __builtin_ctzl(sizeof(pointed_type));
+            const uint32_t log_size = std::countr_zero(sizeof(pointed_type));
             offset_ -= delta << log_size; // in elements
         }
         return *this;
@@ -2166,7 +2163,7 @@ struct PrimitiveExpr<T>
             offset_t delta_offset = this->offset_ - other.offset_;
             return (delta_offset ? (delta_addr + delta_offset) : delta_addr);
         } else {
-            const int32_t log_size = __builtin_ctzl(sizeof(pointed_type));
+            const int32_t log_size = std::countr_zero(sizeof(pointed_type));
             PrimitiveExpr<offset_t> delta_addr = (this->addr_ - other.addr_).make_signed() >> log_size;
             offset_t delta_offset = (this->offset_ - other.offset_) >> log_size;
             return (delta_offset ? (delta_addr + delta_offset) : delta_addr);
@@ -3652,7 +3649,7 @@ inline LocalBit Module::allocate_bit()
     LocalBitmap &bitmap = *local_bitmaps.back();
     M_insist(bitmap.bitmask, "bitmap must have at least one bit unoccupied");
 
-    uint8_t bit_offset = __builtin_ctzl(bitmap.bitmask);
+    uint8_t bit_offset = std::countr_zero(bitmap.bitmask);
     bitmap.bitmask ^= 1UL << bit_offset; // clear allocated bit
 
     LocalBit bit(bitmap, bit_offset);

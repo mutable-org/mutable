@@ -314,6 +314,7 @@ struct SubproblemsArray : Base<SubproblemsArray>
 
     const SubproblemsArray * parent() const { return parent_; }
 
+
     void set_parent(const SubproblemsArray *new_parent) const { parent_ = new_parent; }
 
     template<typename PlanTable>

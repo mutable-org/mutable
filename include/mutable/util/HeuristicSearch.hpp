@@ -58,6 +58,9 @@ concept heuristic_search_heuristic =
         { H.operator()(S, ctx...) } -> std::convertible_to<double>;
     };
 
+template<typename Heurisitc>
+concept is_admissible = (Heurisitc::is_admissible);
+
 
 /*===== Search Algorithm =============================================================================================*/
 
@@ -85,6 +88,7 @@ concept heuristic_search =
 template<
     heuristic_search_state State,
     typename Expand,
+    typename Heurisitc,
     bool HasRegularQueue,
     bool HasBeamQueue,
     typename Config,
@@ -252,9 +256,12 @@ struct StateManager
         static_assert(ToBeamQueue or HasRegularQueue, "not ToBeamQueue implies HasRegularQueue");
 
         if constexpr (enable_cost_based_pruning) {
-            /*----- Fast path: if the current state is already more costly than the cheapest complete path found so far,
-             * we can safely ignore that state. -----*/
-            if (state.g() >= least_path_cost) [[unlikely]] { // initially unlikely, as we first have to find *a* path
+            /* Early pruning: if the current state is already more costly than the cheapest complete path found so far,
+             * we can safely ignore that state.  Additionally, if the heuristic is admissible, we know that the
+             * remaining cost from the current state to the goal is *at least* `h`.  Therefore, any complete path from
+             * start to goal that contains this state has cost at least `g + h`.  */
+            const auto min_path_cost = M_CONSTEXPR_COND(is_admissible<Heurisitc>, state.g() + h, state.g());
+            if (min_path_cost >= least_path_cost) [[unlikely]] {
                 inc_pruned_by_cost();
                 return;
             } else if (expand_type::is_goal(state, context...)) [[unlikely]] {
@@ -330,9 +337,12 @@ struct StateManager
                 push<false>(std::move(state), h, context...);
             } else {
                 if constexpr (enable_cost_based_pruning) {
-                    /*----- Fast path: if the current state is already more costly than the cheapest complete path found
-                     * so far, we can safely ignore that state. -----*/
-                    if (state.g() >= least_path_cost) [[unlikely]] {
+                    /* Early pruning: if the current state is already more costly than the cheapest complete path found
+                     * so far, we can safely ignore that state.  Additionally, if the heuristic is admissible, we know
+                     * that the remaining cost from the current state to the goal is *at least* `h`.  Therefore, any
+                     * complete path from start to goal that contains this state has cost at least `g + h`.  */
+                    const auto min_path_cost = M_CONSTEXPR_COND(is_admissible<Heurisitc>, state.g() + h, state.g());
+                    if (min_path_cost >= least_path_cost) [[unlikely]] {
                         inc_pruned_by_cost();
                         return;
                     } else if (expand_type::is_goal(state, context...)) [[unlikely]] {
@@ -450,12 +460,13 @@ struct StateManager
 template<
     heuristic_search_state State,
     typename Expand,
+    typename Heurisitc,
     bool HasRegularQueue,
     bool HasBeamQueue,
     typename Config,
     typename... Context
 >
-bool StateManager<State, Expand, HasRegularQueue, HasBeamQueue, Config, Context...>::comparator::
+bool StateManager<State, Expand, Heurisitc, HasRegularQueue, HasBeamQueue, Config, Context...>::comparator::
 operator()(StateManager::pointer_type p_left, StateManager::pointer_type p_right) const
 {
     auto left  = static_cast<typename map_type::value_type*>(p_left);
@@ -547,6 +558,7 @@ struct genericAStar
 
     StateManager</* State=           */ State,
                  /* Expand=          */ Expand,
+                 /* Heurisitc=       */ Heuristic,
                  /* HasRegularQueue= */ not (use_beam_search and is_monotone),
                  /* HasBeamQueue=    */ use_beam_search,
                  /* Config=          */ Config,

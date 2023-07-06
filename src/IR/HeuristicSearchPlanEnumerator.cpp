@@ -1726,6 +1726,8 @@ struct zero
 {
     using state_type = State;
 
+    static constexpr bool is_admissible = true;
+
     zero(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&, const CardinalityEstimator&)
     { }
 
@@ -1750,6 +1752,10 @@ struct sum<PlanTable, State, BottomUp>
 {
     using state_type = State;
 
+    /** For bottom up, the sum heuristic is actually not admissible.  The sizes of the subproblems in the current state
+     * can be significantly larger than the sizes of the join results, hence over-estimating the remaining cost. */
+    static constexpr bool is_admissible = false;
+
     sum(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&, const CardinalityEstimator&)
     { }
 
@@ -1770,6 +1776,8 @@ template<typename PlanTable, typename State>
 struct sum<PlanTable, State, TopDown>
 {
     using state_type = State;
+
+    static constexpr bool is_admissible = true;
 
     sum(const PlanTable&, const QueryGraph&, const AdjacencyMatrix&, const CostFunction&, const CardinalityEstimator&)
     { }

@@ -30,7 +30,7 @@ QUERY_REPEAT_COUNT=1
 
 
 HANWEN_MAKE_FOLDER=cmake-build-debug
-BIN=cmake-build-debug/bin/shell
+BIN=cmake-build-release/bin/shell
 CSV=planner-benchmark.csv
 CORRELATED=1
 
@@ -297,11 +297,11 @@ do
                     --statistics \
                     "${NAME}.schema.sql" \
                     "${NAME}.query.sql" \
-                    | grep -e '^Plan cost:' -e '^Plan enumeration:' \
-                    | cut --delimiter=':' --fields=2 \
-                    | tr -d ' ' \
-                    | paste -sd ' \n' \
-                    | while read -r COST TIME; do echo "${TOPOLOGY},${N},${PLANNER},${COST},${TIME},${SEED}" >> "${CSV}"; done
+#                    | grep -e '^Plan cost:' -e '^Plan enumeration:' \
+#                    | cut --delimiter=':' --fields=2 \
+#                    | tr -d ' ' \
+#                    | paste -sd ' \n' \
+#                    | while read -r COST TIME; do echo "${TOPOLOGY},${N},${PLANNER},${COST},${TIME},${SEED}" >> "${CSV}"; done
 
 
                 # Save and aggregate PIPESTATUS

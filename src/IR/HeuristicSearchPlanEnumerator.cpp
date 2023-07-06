@@ -2861,12 +2861,13 @@ matched_heuristic_search:;
             };
 
             const double hs_cost = plan_cost();
-            DPccp dpccp;
-            dpccp(G, CF, PT);
-            const double dp_cost = plan_cost();
-            std::cout << "AI: " << hs_cost << ", DP: " << dp_cost << ", Δ " << hs_cost / dp_cost << 'x' << std::endl;
-            if (hs_cost > dp_cost)
-                std::cout << "WARNING: Suboptimal solution!" << std::endl;
+            std::cout << "AI: " << hs_cost << std::endl;
+//            DPccp dpccp;
+//            dpccp(G, CF, PT);
+//            const double dp_cost = plan_cost();
+//            std::cout << "AI: " << hs_cost << ", DP: " << dp_cost << ", Δ " << hs_cost / dp_cost << 'x' << std::endl;
+//            if (hs_cost > dp_cost)
+//                std::cout << "WARNING: Suboptimal solution!" << std::endl;
         }
 #endif
     }

@@ -2808,7 +2808,7 @@ const State& layeredSearch<State, Expand, Heuristic, BeamWidth, Config, Context.
             const state_type &state = curr.state;
             std::cout << "Current state.size()" << state.size() << "\n"; // For while loop, they are in the same size
 
-            if (expand.is_goal(state, context...))return &state;
+            if (expand.is_goal(state, context...))return state;
             explore_state(state, heuristic, expand, context...);
         }
     }

@@ -2947,7 +2947,7 @@ std::size_t num_##NAME() const { return 0; }
                 for (size_t i{0}; i < layer_candidates_size; i++) {
                     auto curr = state_manager_.pop();
                     const state_type &state = curr.first;
-                    std::cout << "Current state.size()" << state.size() << std::endl; // Same size in same for-loop
+                    //   std::cout << "Current state.size()" << state.size() << std::endl; // Same size in same for-loop
 
                     if (expand.is_goal(state, context...)) return state;
                     explore_state(state, heuristic, expand, context...);

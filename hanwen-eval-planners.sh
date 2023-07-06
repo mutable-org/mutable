@@ -45,10 +45,10 @@ MAX_CARDINALITY=10000
 MIN_RELATIONS=3
 # Associative array mapping topologies to their max. number of relations tested
 declare -A TOPOLOGIES=(
-    [chain]=20
-    [cycle]=20
-    [star]=15
-    [clique]=15
+    [chain]=30
+    [cycle]=30
+    [star]=25
+    [clique]=25
 )
 #declare -A TOPOLOGIES=(
 #    [chain]=50
@@ -297,11 +297,11 @@ do
                     --statistics \
                     "${NAME}.schema.sql" \
                     "${NAME}.query.sql" \
-                    | grep -e '^Plan cost:' -e '^Plan enumeration:' \
-                    | cut --delimiter=':' --fields=2 \
-                    | tr -d ' ' \
-                    | paste -sd ' \n' \
-                    | while read -r COST TIME; do echo "${TOPOLOGY},${N},${PLANNER},${COST},${TIME},${SEED}" >> "${CSV}"; done
+#                    | grep -e '^Plan cost:' -e '^Plan enumeration:' \
+#                    | cut --delimiter=':' --fields=2 \
+#                    | tr -d ' ' \
+#                    | paste -sd ' \n' \
+#                    | while read -r COST TIME; do echo "${TOPOLOGY},${N},${PLANNER},${COST},${TIME},${SEED}" >> "${CSV}"; done
 
 
                 # Save and aggregate PIPESTATUS

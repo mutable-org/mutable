@@ -2547,14 +2547,14 @@ std::array<Subproblem, 2> delta(const State &before_join, const State &after_joi
 template<typename PlanTable, typename State>
 void reconstruct_plan_bottom_up(const State &state, PlanTable &PT, const QueryGraph &G, const CardinalityEstimator &CE,
                                 const CostFunction &CF) {
-    std::cout << "Recursive: Reconstruction ..." << std::endl;
+//    std::cout << "Recursive: Reconstruction ..." << std::endl;
     static cnf::CNF condition; // TODO use join condition
 
     const State *parent = state.parent();
     if (not parent) return;
     reconstruct_plan_bottom_up(*parent, PT, G, CE, CF); // solve recursively
-    std::cout<<"After recursive function, state_size: " << state.size()
-                << ", parent_size:"<< parent->size()<< std::endl;
+//    std::cout<<"After recursive function, state_size: " << state.size()
+//                << ", parent_size:"<< parent->size()<< std::endl;
     const auto D = delta(*parent, state); // find joined subproblems
     PT.update(G, CE, CF, D[0], D[1], condition); // update plan table
 }

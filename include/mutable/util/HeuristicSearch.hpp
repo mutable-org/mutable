@@ -2471,7 +2471,7 @@ std::size_t num_##NAME() const { return 0; }
             ///> map of all states ever explored, mapping state to its info
             // map_type states_;
             heap_type regular_queue_;
-            heap_type layer_candidates_;
+            heap_type beam_queue_;
 
         public:
             LayeredStateManager(Context &... context) : partitions_(context...) {}
@@ -2495,7 +2495,6 @@ std::size_t num_##NAME() const { return 0; }
                 return partition(state, context...).end();
             }
 
-            bool layer_candidates_empty() const { return layer_candidates_.empty(); }
 
             void persist_state(state_type state, double h, Context &... context) {
                 if constexpr(detect_duplicates) {
@@ -2515,6 +2514,30 @@ std::size_t num_##NAME() const { return 0; }
                     }
                 }
             }
+
+            void push(state_type state, double h, Context &... context) {
+                auto &Q = beam_queue_;
+                auto &P = partition(state, context...);
+                // if constexpr (detect_duplicates){}
+                if (auto it = P.find(state);it == P.end())[[likely]] {
+                    it = P.emplace_hint(it, std::move(state), StateInfo(h, &Q));
+                    it->second.handle = Q.push(&*it);
+                    inc_new();
+                } else {
+                    std::cout << "Duplicate happenes???" << std::endl;
+                }
+            }
+
+            std::pair<const state_type& ,double>pop(){
+                pointer_type ptr= nullptr;
+                ptr=beam_queue_.top();
+                beam_queue_.pop();
+                auto &entry = *static_cast<typename map_type::value_type *>(ptr);
+                entry.second.queue = nullptr; // remove from queue
+                return {entry.first, entry.second.h};
+            }
+
+            bool queues_empty() const{return beam_queue_.empty();}
 
 
 
@@ -2912,23 +2935,28 @@ std::size_t num_##NAME() const { return 0; }
                 Context &... context
         ) {
             /// 1. Initial all the states inside
-            layer_candidates.template emplace_back(std::move(initial_state),0);
+            /// Push the value directly in beam search queue
+            state_manager_.push(std::move(initial_state), 0, context...);
 
-            while (not layer_candidates.empty()) {
+            while (!state_manager_.queues_empty()) {
                 /// 2.1. Init the current_layer_candidates for further usage
-                size_t layer_candidates_size = layer_candidates.size();
+                size_t layer_candidates_size = beam_width;
+                layer_candidates.clear();
 
                 /// 2.2. foreach state in layer candidates -> explore_state()
                 for (size_t i{0}; i < layer_candidates_size; i++) {
-                    auto &curr = layer_candidates.front();
-                    layer_candidates.pop_front();
-                    state_type &state = curr.state;
+                    auto curr = state_manager_.pop();
+                    const state_type &state = curr.first;
                     std::cout << "Current state.size()" << state.size() << std::endl; // Same size in same for-loop
 
                     if (expand.is_goal(state, context...)) return state;
                     explore_state(state, heuristic, expand, context...);
                     /// 2.3. Important!!! Or we will lose it!!!
-                    state_manager_.persist_state(std::move(state), curr.h, context...);
+                    //state_manager_.persist_state(std::move(state), curr.h, context...);
+                }
+
+                for (auto &s: layer_candidates) {
+                    state_manager_.push(std::move(s.state), s.h, context...);
                 }
 
             }

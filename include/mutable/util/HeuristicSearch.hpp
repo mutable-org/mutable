@@ -2497,7 +2497,7 @@ std::size_t num_##NAME() const { return 0; }
 
             bool layer_candidates_empty() const { return layer_candidates_.empty(); }
 
-            void persist_state(state_type &&state, double h, Context &... context) {
+            void persist_state(state_type state, double h, Context &... context) {
                 if constexpr(detect_duplicates) {
                     auto &P = partition(state, context...);
                     if (auto it = P.find(state);it == P.end()) {
@@ -2761,19 +2761,13 @@ std::size_t num_##NAME() const { return 0; }
                 double h;
 
                 weighted_state(state_type state, double h) : state(std::move(state)), h(h) {}
-
                 weighted_state(const weighted_state &) = delete;
-
                 weighted_state(weighted_state &&) = default;
 
                 weighted_state &operator=(weighted_state &&) = default;
-
                 bool operator<(const weighted_state &other) const { return this->weight() < other.weight(); }
-
                 bool operator>(const weighted_state &other) const { return this->weight() > other.weight(); }
-
                 bool operator<=(const weighted_state &other) const { return this->weight() <= other.weight(); }
-
                 bool operator>=(const weighted_state &other) const { return this->weight() >= other.weight(); }
 
             private:
@@ -2790,7 +2784,7 @@ std::size_t num_##NAME() const { return 0; }
                             /* Context...=      */ Context...
                     > state_manager_;
 
-            std::vector<weighted_state> layer_candidates;
+            std::deque<weighted_state> layer_candidates;
             std::vector<weighted_state> curr_layer_candidates;
 
 
@@ -2798,7 +2792,6 @@ std::size_t num_##NAME() const { return 0; }
             explicit layeredSearch(Context &... context)
                     : state_manager_(context...) {
                 /// Adding 1 is used for extra space in ordering
-                layer_candidates.reserve(beam_width + 1);
             }
 
             layeredSearch(const layeredSearch &) = delete;
@@ -2827,33 +2820,43 @@ std::size_t num_##NAME() const { return 0; }
             template<typename T>
             using has_mark = decltype(std::declval<T>().mark(Subproblem()));
 
+//            void push_candidates(state_type state, double h, Context &... context) {
+//                /// Still maintain the original structure - Using a max heap, easy to deal with the replicates
+//                auto &top = layer_candidates.front();
+//                if (layer_candidates.size() < beam_width) {
+//                    /* There is still space in the candidates, so simply add the state to the heap. */
+//                    layer_candidates.emplace_back(std::move(state), h);
+//                    if (layer_candidates.size() == beam_width) // heapify when filled
+//                        std::make_heap(layer_candidates.begin(), layer_candidates.end());
+//                } else if (state.g() + h >= top.state.g() + top.h) {
+//                    /* The state has higher g+h than the top of the candidates heap, so bypass the candidates immediately. */
+//                    //            state_manager_.push_regular_queue(std::move(state), h, context...);
+//                } else {
+//                    /* The state has less g+h than the top of candidates heap.  Pop the current top and insert the state into
+//                     * the candidates heap. */
+//                    M_insist(layer_candidates.size() == beam_width);
+//                    M_insist(std::is_heap(layer_candidates.begin(), layer_candidates.end()));
+//                    layer_candidates.emplace_back(std::move(state), h);
+//                    std::pop_heap(layer_candidates.begin(), layer_candidates.end());
+//                    weighted_state worst_candidate = std::move(layer_candidates.back()); // extract worst candidate
+//                    layer_candidates.pop_back();
+//                    M_insist(std::is_heap(layer_candidates.begin(), layer_candidates.end()));
+//                    M_insist(layer_candidates.size() == beam_width);
+//#ifndef NDEBUG
+//                    for (auto &elem: layer_candidates)
+//                        M_insist(worst_candidate >= elem, "worst candidate must be no less than any other candidate");
+//#endif
+//                    // state_manager_.push_regular_queue(std::move(worst_candidate.state), worst_candidate.h, context...); // move to regular
+//                }
+//            }
+
             void push_candidates(state_type state, double h, Context &... context) {
-                /// Still maintain the original structure - Using a max heap, easy to deal with the replicates
-                auto &top = layer_candidates.front();
+                /// We can not keep the states safely, so not in the heap shape
                 if (layer_candidates.size() < beam_width) {
                     /* There is still space in the candidates, so simply add the state to the heap. */
                     layer_candidates.emplace_back(std::move(state), h);
-                    if (layer_candidates.size() == beam_width) // heapify when filled
-                        std::make_heap(layer_candidates.begin(), layer_candidates.end());
-                } else if (state.g() + h >= top.state.g() + top.h) {
-                    /* The state has higher g+h than the top of the candidates heap, so bypass the candidates immediately. */
-                    //            state_manager_.push_regular_queue(std::move(state), h, context...);
                 } else {
-                    /* The state has less g+h than the top of candidates heap.  Pop the current top and insert the state into
-                     * the candidates heap. */
-                    M_insist(layer_candidates.size() == beam_width);
-                    M_insist(std::is_heap(layer_candidates.begin(), layer_candidates.end()));
-                    layer_candidates.emplace_back(std::move(state), h);
-                    std::pop_heap(layer_candidates.begin(), layer_candidates.end());
-                    weighted_state worst_candidate = std::move(layer_candidates.back()); // extract worst candidate
-                    layer_candidates.pop_back();
-                    M_insist(std::is_heap(layer_candidates.begin(), layer_candidates.end()));
-                    M_insist(layer_candidates.size() == beam_width);
-#ifndef NDEBUG
-                    for (auto &elem: layer_candidates)
-                        M_insist(worst_candidate >= elem, "worst candidate must be no less than any other candidate");
-#endif
-                    // state_manager_.push_regular_queue(std::move(worst_candidate.state), worst_candidate.h, context...); // move to regular
+                    return;
                 }
             }
 
@@ -2914,12 +2917,11 @@ std::size_t num_##NAME() const { return 0; }
             while (not layer_candidates.empty()) {
                 /// 2.1. Init the current_layer_candidates for further usage
                 size_t layer_candidates_size = layer_candidates.size();
-                curr_layer_candidates = std::move(layer_candidates);
-                layer_candidates.clear();
 
                 /// 2.2. foreach state in layer candidates -> explore_state()
                 for (size_t i{0}; i < layer_candidates_size; i++) {
-                    auto &curr = curr_layer_candidates[i];
+                    auto &curr = layer_candidates.front();
+                    layer_candidates.pop_front();
                     state_type &state = curr.state;
                     std::cout << "Current state.size()" << state.size() << std::endl; // Same size in same for-loop
 
@@ -2928,7 +2930,7 @@ std::size_t num_##NAME() const { return 0; }
                     /// 2.3. Important!!! Or we will lose it!!!
                     state_manager_.persist_state(std::move(state), curr.h, context...);
                 }
-                curr_layer_candidates.clear();
+
             }
             throw std::logic_error("goal state unreachable from provided initial state");
         }

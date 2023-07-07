@@ -43,9 +43,9 @@ struct SmallBitset
 
         operator bool() const { return (S_.bits_ >> offset_) & 0b1; }
 
-        template<bool C_ = Is_Const>
-        std::enable_if_t<not C_, Proxy&>
-        operator=(bool val) { setbit(&S_.bits_, val, offset_); return *this; }
+        template <bool C_ = Is_Const>
+        requires (not C_)
+        Proxy& operator=(bool val) { setbit(&S_.bits_, val, offset_); return *this; }
 
         Proxy & operator=(const Proxy &other) {
             static_assert(not Is_Const, "can only assign to proxy of non-const SmallBitset");
@@ -75,7 +75,7 @@ struct SmallBitset
 #endif
             return *this;
         }
-        iterator operator++(int) { auto clone = *this; ++clone; return clone; }
+        iterator operator++(int) { auto clone = *this; operator++(); return clone; }
 
         std::size_t operator*() const { M_insist(bits_ != 0); return __builtin_ctzl(bits_); }
         SmallBitset as_set() const {
@@ -98,15 +98,15 @@ struct SmallBitset
         bool operator==(reverse_iterator other) const { return this->bits_ == other.bits_; }
         bool operator!=(reverse_iterator other) const { return not operator==(other); }
 
-        reverse_iterator & operator++();
-        reverse_iterator operator++(int) { auto clone = *this; ++clone; return clone; }
+        reverse_iterator & operator++() { bits_ = bits_ & ~(1UL << operator*()); return *this; }
+        reverse_iterator operator++(int) { auto clone = *this; operator++(); return clone; }
 
         std::size_t operator*() const {
             M_insist(bits_ != 0);
             const unsigned lz = __builtin_clzl(bits_);
             return CHAR_BIT * sizeof(bits_) - 1UL - lz;
         }
-        SmallBitset as_set() const;
+        SmallBitset as_set() const { return SmallBitset(1UL << operator*()); }
     };
 
     public:
@@ -230,6 +230,7 @@ struct SmallBitset
      * if no bits are set. */
     SmallBitset operator--(int) { SmallBitset clone(*this); operator--(); return clone; }
 
+    M_LCOV_EXCL_START
     /** Write a textual representation of `s` to `out`. */
     friend std::ostream & operator<<(std::ostream &out, SmallBitset s) {
         for (uint64_t i = CAPACITY; i --> 0;)
@@ -245,19 +246,8 @@ struct SmallBitset
 
     void dump(std::ostream &out) const;
     void dump() const;
+    M_LCOV_EXCL_STOP
 };
-
-inline SmallBitset SmallBitset::reverse_iterator::as_set() const
-{
-    return SmallBitset(1UL << operator*());
-}
-
-inline SmallBitset::reverse_iterator & SmallBitset::reverse_iterator::operator++()
-{
-    bits_ = bits_ & ~(1UL << operator*());
-    return *this;
-}
-
 
 /** Returns the least subset of a given `set`, i.e.\ the set represented by the lowest 1 bit. */
 inline SmallBitset least_subset(SmallBitset S) { return SmallBitset(uint64_t(S) & -uint64_t(S)); }

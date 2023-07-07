@@ -38,6 +38,18 @@ TEST_CASE("SmallBitset", "[core][util]")
         REQUIRE((S1 & S2) == S2);
         REQUIRE((S1 - S2) == SmallBitset(4UL));
         REQUIRE((S - S2) == S);
+
+        S2 &= S;
+        REQUIRE(S2.empty());
+
+        S2 |= S1;
+        REQUIRE(S2 == S1);
+
+        S2 -= SmallBitset(4UL);
+        REQUIRE(S2 == SmallBitset(10UL));
+
+        S2++; S1--;
+        REQUIRE(--S1 == ++S2);
     }
 
     SECTION("is_subset")
@@ -53,6 +65,50 @@ TEST_CASE("SmallBitset", "[core][util]")
     {
         SmallBitset S;
         REQUIRE_THROWS_AS(S.at(64), m::out_of_range);
+
+        const SmallBitset CS;
+        REQUIRE_THROWS_AS(CS.at(64), m::out_of_range);
+    }
+
+    SECTION("singleton")
+    {
+        size_t num_shifts[] = { 0, 1, 62, 63 };
+        for (auto ns : num_shifts) {
+            SmallBitset SB(1UL << ns);
+            REQUIRE(SB.singleton());
+            REQUIRE(SB.singleton_to_lo_mask().size() == ns);
+        }
+    }
+
+    SECTION("Forward Iterator")
+    {
+        SECTION("Empty Bitset")
+        {
+            SmallBitset SB;
+            CHECK(SB.begin() == SB.end());
+        }
+
+        SECTION("Singleton Bitset")
+        {
+            SmallBitset SB(0b1);
+            CHECK(SB.begin() != SB.end());
+            CHECK(*(SB.begin()) == *(SB.rbegin()));
+        }
+
+        SECTION("Non-Singleton Bitset")
+        {
+            SmallBitset SB(0b1001011101);
+            auto it = SB.begin();
+            CHECK(it++ == SB.begin());
+            CHECK(it != SB.begin());
+
+            for (auto it = SB.cbegin(); it != SB.cend(); it++) {
+                SmallBitset sub_SB = it.as_set();
+                CHECK(sub_SB == SmallBitset(1ULL << (*it)));
+                CHECK(sub_SB.is_subset(SB));
+                CHECK(SB.at(*it));
+            }
+        }
     }
 
     SECTION("reverse_iterator")
@@ -67,6 +123,18 @@ TEST_CASE("SmallBitset", "[core][util]")
         CHECK(*it == 0);
         ++it;
         CHECK(it == S.rend());
+
+        const SmallBitset SB(0b1001011101);
+        auto rit = SB.rbegin();
+        CHECK(rit++ == SB.rbegin());
+        CHECK(rit != SB.rbegin());
+
+        for (auto rit = SB.crbegin(); rit != SB.crend(); rit++) {
+            SmallBitset sub_SB = rit.as_set();
+            CHECK(sub_SB == SmallBitset(1ULL << (*rit)));
+            CHECK(sub_SB.is_subset(SB));
+            CHECK(SB.at(*rit));
+        }
     }
 }
 

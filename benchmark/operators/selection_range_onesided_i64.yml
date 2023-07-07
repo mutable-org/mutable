@@ -40,40 +40,40 @@ systems:
             1.0: SELECT 1 FROM Attribute_i64 WHERE val <  9223372036854775807;
     PostgreSQL:
         cases:
-            0.0: SELECT COUNT(*) FROM Attribute_i64 WHERE val < -9223372036854775807;
-            0.1: SELECT COUNT(*) FROM Attribute_i64 WHERE val < -7378697629483821056;
-            0.2: SELECT COUNT(*) FROM Attribute_i64 WHERE val < -5534023222112865280;
-            0.3: SELECT COUNT(*) FROM Attribute_i64 WHERE val < -3689348814741910528;
-            0.4: SELECT COUNT(*) FROM Attribute_i64 WHERE val < -1844674407370954752;
-            0.5: SELECT COUNT(*) FROM Attribute_i64 WHERE val <                    0;
-            0.6: SELECT COUNT(*) FROM Attribute_i64 WHERE val <  1844674407370954752;
-            0.7: SELECT COUNT(*) FROM Attribute_i64 WHERE val <  3689348814741909504;
-            0.8: SELECT COUNT(*) FROM Attribute_i64 WHERE val <  5534023222112866304;
-            0.9: SELECT COUNT(*) FROM Attribute_i64 WHERE val <  7378697629483821056;
-            1.0: SELECT COUNT(*) FROM Attribute_i64 WHERE val <  9223372036854775807;
+            0.0: SELECT COUNT(*) FROM "Attribute_i64" WHERE val < -9223372036854775807;
+            0.1: SELECT COUNT(*) FROM "Attribute_i64" WHERE val < -7378697629483821056;
+            0.2: SELECT COUNT(*) FROM "Attribute_i64" WHERE val < -5534023222112865280;
+            0.3: SELECT COUNT(*) FROM "Attribute_i64" WHERE val < -3689348814741910528;
+            0.4: SELECT COUNT(*) FROM "Attribute_i64" WHERE val < -1844674407370954752;
+            0.5: SELECT COUNT(*) FROM "Attribute_i64" WHERE val <                    0;
+            0.6: SELECT COUNT(*) FROM "Attribute_i64" WHERE val <  1844674407370954752;
+            0.7: SELECT COUNT(*) FROM "Attribute_i64" WHERE val <  3689348814741909504;
+            0.8: SELECT COUNT(*) FROM "Attribute_i64" WHERE val <  5534023222112866304;
+            0.9: SELECT COUNT(*) FROM "Attribute_i64" WHERE val <  7378697629483821056;
+            1.0: SELECT COUNT(*) FROM "Attribute_i64" WHERE val <  9223372036854775807;
     DuckDB:
         cases:
-            0.0: SELECT COUNT(*) FROM Attribute_i64 WHERE val < -9223372036854775807;
-            0.1: SELECT COUNT(*) FROM Attribute_i64 WHERE val < -7378697629483821056;
-            0.2: SELECT COUNT(*) FROM Attribute_i64 WHERE val < -5534023222112865280;
-            0.3: SELECT COUNT(*) FROM Attribute_i64 WHERE val < -3689348814741910528;
-            0.4: SELECT COUNT(*) FROM Attribute_i64 WHERE val < -1844674407370954752;
-            0.5: SELECT COUNT(*) FROM Attribute_i64 WHERE val <                    0;
-            0.6: SELECT COUNT(*) FROM Attribute_i64 WHERE val <  1844674407370954752;
-            0.7: SELECT COUNT(*) FROM Attribute_i64 WHERE val <  3689348814741909504;
-            0.8: SELECT COUNT(*) FROM Attribute_i64 WHERE val <  5534023222112866304;
-            0.9: SELECT COUNT(*) FROM Attribute_i64 WHERE val <  7378697629483821056;
-            1.0: SELECT COUNT(*) FROM Attribute_i64 WHERE val <  9223372036854775807;
+            0.0: SELECT COUNT(*) FROM "Attribute_i64" WHERE val < -9223372036854775807;
+            0.1: SELECT COUNT(*) FROM "Attribute_i64" WHERE val < -7378697629483821056;
+            0.2: SELECT COUNT(*) FROM "Attribute_i64" WHERE val < -5534023222112865280;
+            0.3: SELECT COUNT(*) FROM "Attribute_i64" WHERE val < -3689348814741910528;
+            0.4: SELECT COUNT(*) FROM "Attribute_i64" WHERE val < -1844674407370954752;
+            0.5: SELECT COUNT(*) FROM "Attribute_i64" WHERE val <                    0;
+            0.6: SELECT COUNT(*) FROM "Attribute_i64" WHERE val <  1844674407370954752;
+            0.7: SELECT COUNT(*) FROM "Attribute_i64" WHERE val <  3689348814741909504;
+            0.8: SELECT COUNT(*) FROM "Attribute_i64" WHERE val <  5534023222112866304;
+            0.9: SELECT COUNT(*) FROM "Attribute_i64" WHERE val <  7378697629483821056;
+            1.0: SELECT COUNT(*) FROM "Attribute_i64" WHERE val <  9223372036854775807;
     HyPer:
         cases:
-            0.0: SELECT COUNT(*) FROM Attribute_i64 WHERE val < -9223372036854775807;
-            0.1: SELECT COUNT(*) FROM Attribute_i64 WHERE val < -7378697629483821056;
-            0.2: SELECT COUNT(*) FROM Attribute_i64 WHERE val < -5534023222112865280;
-            0.3: SELECT COUNT(*) FROM Attribute_i64 WHERE val < -3689348814741910528;
-            0.4: SELECT COUNT(*) FROM Attribute_i64 WHERE val < -1844674407370954752;
-            0.5: SELECT COUNT(*) FROM Attribute_i64 WHERE val <                    0;
-            0.6: SELECT COUNT(*) FROM Attribute_i64 WHERE val <  1844674407370954752;
-            0.7: SELECT COUNT(*) FROM Attribute_i64 WHERE val <  3689348814741909504;
-            0.8: SELECT COUNT(*) FROM Attribute_i64 WHERE val <  5534023222112866304;
-            0.9: SELECT COUNT(*) FROM Attribute_i64 WHERE val <  7378697629483821056;
-            1.0: SELECT COUNT(*) FROM Attribute_i64 WHERE val <  9223372036854775807;
+            0.0: SELECT COUNT(*) FROM "Attribute_i64" WHERE val < -9223372036854775807;
+            0.1: SELECT COUNT(*) FROM "Attribute_i64" WHERE val < -7378697629483821056;
+            0.2: SELECT COUNT(*) FROM "Attribute_i64" WHERE val < -5534023222112865280;
+            0.3: SELECT COUNT(*) FROM "Attribute_i64" WHERE val < -3689348814741910528;
+            0.4: SELECT COUNT(*) FROM "Attribute_i64" WHERE val < -1844674407370954752;
+            0.5: SELECT COUNT(*) FROM "Attribute_i64" WHERE val <                    0;
+            0.6: SELECT COUNT(*) FROM "Attribute_i64" WHERE val <  1844674407370954752;
+            0.7: SELECT COUNT(*) FROM "Attribute_i64" WHERE val <  3689348814741909504;
+            0.8: SELECT COUNT(*) FROM "Attribute_i64" WHERE val <  5534023222112866304;
+            0.9: SELECT COUNT(*) FROM "Attribute_i64" WHERE val <  7378697629483821056;
+            1.0: SELECT COUNT(*) FROM "Attribute_i64" WHERE val <  9223372036854775807;

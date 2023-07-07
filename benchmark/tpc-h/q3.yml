@@ -95,9 +95,9 @@ systems:
                         o_orderdate,
                         o_shippriority
                 FROM
-                        Customer,
-                        Orders,
-                        Lineitem
+                        "Customer",
+                        "Orders",
+                        "Lineitem"
                 WHERE
                         c_mktsegment = 'BUILDING'
                         AND c_custkey = o_custkey
@@ -121,9 +121,9 @@ systems:
                         o_orderdate,
                         o_shippriority
                 FROM
-                        Customer,
-                        Orders,
-                        Lineitem
+                        "Customer",
+                        "Orders",
+                        "Lineitem"
                 WHERE
                         c_mktsegment = 'BUILDING'
                         AND c_custkey = o_custkey

@@ -40,22 +40,22 @@ systems:
             100000: SELECT id FROM Distinct_i32 ORDER BY n100000;
     PostgreSQL:
         cases:
-            10:     SELECT id FROM Distinct_i32 ORDER BY     n10;
-            100:    SELECT id FROM Distinct_i32 ORDER BY    n100;
-            1000:   SELECT id FROM Distinct_i32 ORDER BY   n1000;
-            10000:  SELECT id FROM Distinct_i32 ORDER BY  n10000;
-            100000: SELECT id FROM Distinct_i32 ORDER BY n100000;
+            10:     SELECT id FROM "Distinct_i32" ORDER BY     n10;
+            100:    SELECT id FROM "Distinct_i32" ORDER BY    n100;
+            1000:   SELECT id FROM "Distinct_i32" ORDER BY   n1000;
+            10000:  SELECT id FROM "Distinct_i32" ORDER BY  n10000;
+            100000: SELECT id FROM "Distinct_i32" ORDER BY n100000;
     DuckDB:
         cases:
-            10:     SELECT id FROM Distinct_i32 ORDER BY     n10;
-            100:    SELECT id FROM Distinct_i32 ORDER BY    n100;
-            1000:   SELECT id FROM Distinct_i32 ORDER BY   n1000;
-            10000:  SELECT id FROM Distinct_i32 ORDER BY  n10000;
-            100000: SELECT id FROM Distinct_i32 ORDER BY n100000;
+            10:     SELECT id FROM "Distinct_i32" ORDER BY     n10;
+            100:    SELECT id FROM "Distinct_i32" ORDER BY    n100;
+            1000:   SELECT id FROM "Distinct_i32" ORDER BY   n1000;
+            10000:  SELECT id FROM "Distinct_i32" ORDER BY  n10000;
+            100000: SELECT id FROM "Distinct_i32" ORDER BY n100000;
     HyPer:
         cases:
-            10:     SELECT id FROM Distinct_i32 ORDER BY     n10;
-            100:    SELECT id FROM Distinct_i32 ORDER BY    n100;
-            1000:   SELECT id FROM Distinct_i32 ORDER BY   n1000;
-            10000:  SELECT id FROM Distinct_i32 ORDER BY  n10000;
-            100000: SELECT id FROM Distinct_i32 ORDER BY n100000;
+            10:     SELECT id FROM "Distinct_i32" ORDER BY     n10;
+            100:    SELECT id FROM "Distinct_i32" ORDER BY    n100;
+            1000:   SELECT id FROM "Distinct_i32" ORDER BY   n1000;
+            10000:  SELECT id FROM "Distinct_i32" ORDER BY  n10000;
+            100000: SELECT id FROM "Distinct_i32" ORDER BY n100000;

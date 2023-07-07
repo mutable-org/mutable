@@ -58,14 +58,14 @@ class DuckDB(Connector):
 
                         # Create tables from tmp tables with scale factor
                         for table_name, table in params['data'].items():
-                            statements.append(f"DELETE FROM {table_name};")     # empty existing table
+                            statements.append(f'DELETE FROM "{table_name}";')     # empty existing table
                             if table.get('scale_factors'):
                                 sf = table['scale_factors'][case]
                             else:
                                 sf = 1
                             header = int(table.get('header', 0))
                             num_rows = round((table['lines_in_file'] - header) * sf)
-                            statements.append(f"INSERT INTO {table_name} SELECT * FROM {table_name}_tmp LIMIT {num_rows};")
+                            statements.append(f'INSERT INTO "{table_name}" SELECT * FROM "{table_name}_tmp" LIMIT {num_rows};')
 
                         statements.append(".timer on")
                         statements.append(query_stmt)   # Actual query from this case
@@ -158,7 +158,7 @@ class DuckDB(Connector):
                     typ = 'BIGINT'
                 case _:
                     raise AttributeTypeUnknown(f"Unknown type given for '{column_name}'")
-            columns += f"{column_name} {typ} {not_null}, "
+            columns += f'"{column_name}" {typ} {not_null}, '
         columns = columns[:-2] + ')'
         return columns
 
@@ -179,8 +179,8 @@ class DuckDB(Connector):
             if with_scale_factors:
                 table_name += "_tmp"
 
-            create = f"CREATE TABLE {table_name} {columns};"
-            copy = f"COPY {table_name} FROM '{table['file']}' ( "
+            create = f'CREATE TABLE "{table_name}" {columns};'
+            copy = f'COPY "{table_name}" FROM \'{table["file"]}\' ( '
             if delimiter:
                 delim = delimiter.replace("'", "")
                 copy += f" DELIMITER \'{delim}\',"
@@ -196,7 +196,7 @@ class DuckDB(Connector):
 
             if with_scale_factors:
                 # Create actual table that will be used for experiment
-                statements.append(f"CREATE TABLE {table_name[:-4]} {columns};")
+                statements.append(f'CREATE TABLE "{table_name[:-4]}" {columns};')
 
         return statements
 

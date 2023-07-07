@@ -46,7 +46,7 @@ systems:
                 SELECT
                         SUM(l_extendedprice * l_discount) AS revenue
                 FROM
-                        Lineitem
+                        "Lineitem"
                 WHERE
                         l_shipdate >= DATE '1994-01-01'
                         AND l_shipdate < DATE '1995-01-01'
@@ -58,7 +58,7 @@ systems:
                 SELECT
                         SUM(l_extendedprice * l_discount) AS revenue
                 FROM
-                        Lineitem
+                        "Lineitem"
                 WHERE
                         l_shipdate >= DATE '1994-01-01'
                         AND l_shipdate < DATE '1995-01-01'
@@ -70,7 +70,7 @@ systems:
                 SELECT
                         SUM(l_extendedprice * l_discount) AS revenue
                 FROM
-                        {lineitem.table_name}
+                        "Lineitem"
                 WHERE
                         l_shipdate >= date '1994-01-01'
                         AND l_shipdate < date '1995-01-01'

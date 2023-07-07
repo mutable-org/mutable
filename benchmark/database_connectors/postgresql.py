@@ -74,8 +74,8 @@ class PostgreSQL(Connector):
                                 sf = 1
                             header = int(table.get('header', 0))
                             num_rows = round((table['lines_in_file'] - header) * sf)
-                            cursor.execute(f"DELETE FROM {table_name};")     # empty existing table
-                            cursor.execute(f"INSERT INTO {table_name} SELECT * FROM {table_name}{COMPLETE_TABLE_SUFFIX} LIMIT {num_rows};")    # copy data with scale factor
+                            cursor.execute(f'DELETE FROM "{table_name}";')     # empty existing table
+                            cursor.execute(f'INSERT INTO "{table_name}" SELECT * FROM "{table_name}{COMPLETE_TABLE_SUFFIX}" LIMIT {num_rows};')    # copy data with scale factor
                     finally:
                         connection.close()
                         del connection
@@ -184,30 +184,29 @@ class PostgreSQL(Connector):
 
     # Parse attributes of one table, return as string ready for a CREATE TABLE query
     def parse_attributes(self, attributes: dict):
-        columns = '('
+        columns = list()
         for column_name, ty in attributes.items():
             not_null = 'NOT NULL' if 'NOT NULL' in ty else ''
             ty = ty.split(' ')
             match (ty[0]):
                 case 'INT':
-                    typ = 'INT'
+                    type = 'INT'
                 case 'CHAR':
-                    typ = f'CHAR({ty[1]})'
+                    type = f'CHAR({ty[1]})'
                 case 'DECIMAL':
-                    typ = f'DECIMAL({ty[1]},{ty[2]})'
+                    type = f'DECIMAL({ty[1]},{ty[2]})'
                 case 'DATE':
-                    typ = 'DATE'
+                    type = 'DATE'
                 case 'DOUBLE':
-                    typ = 'DOUBLE PRECISION'
+                    type = 'DOUBLE PRECISION'
                 case 'FLOAT':
-                    typ = 'REAL'
+                    type = 'REAL'
                 case 'BIGINT':
-                    typ = 'BIGINT'
+                    type = 'BIGINT'
                 case _:
                     raise Exception(f"Unknown type given for '{column_name}'")
-            columns += f"{column_name} {typ} {not_null}, "
-        columns = columns[:-2] + ')'
-        return columns
+            columns.append(f'"{column_name}" {type} {not_null}')
+        return '(' + ',\n'.join(columns) + ')'
 
 
     # Creates tables in the database and copies contents of given files into them
@@ -225,9 +224,10 @@ class PostgreSQL(Connector):
             # Use an additional table with the *complete* data set to quickly recreate the table with the benchmark
             # data, in case of varying scale factor.
             complete_table_name = table_name + COMPLETE_TABLE_SUFFIX if with_scale_factors else table_name
+            quoted_table_name = f'"{complete_table_name}"'
 
-            create = f"CREATE UNLOGGED TABLE {complete_table_name} {columns};"
-            copy = f"COPY {complete_table_name} FROM STDIN"
+            create = f"CREATE UNLOGGED TABLE {quoted_table_name} {columns};"
+            copy = f"COPY {quoted_table_name} FROM STDIN"
             if delimiter:
                 delim = delimiter.replace("'", "")
                 copy += f" WITH DELIMITER \'{delim}\'"
@@ -246,7 +246,7 @@ class PostgreSQL(Connector):
                     raise ConnectorException(str(ex))
 
             if with_scale_factors:
-                cursor.execute(f"CREATE UNLOGGED TABLE {table_name} {columns};")     # Create actual table that will be used for experiment
+                cursor.execute(f'CREATE UNLOGGED TABLE "{table_name}" {columns};')     # Create actual table that will be used for experiment
 
 
     def run_command(self, command, timeout, benchmark_info):

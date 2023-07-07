@@ -40,19 +40,19 @@ systems:
             4: SELECT id FROM Distinct_i32 ORDER BY n10000, n1000, n100, n10;
     PostgreSQL:
         cases:
-            1: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            2: SELECT id FROM Distinct_i32 ORDER BY n10000, n1000;
-            3: SELECT id FROM Distinct_i32 ORDER BY n10000, n1000, n100;
-            4: SELECT id FROM Distinct_i32 ORDER BY n10000, n1000, n100, n10;
+            1: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            2: SELECT id FROM "Distinct_i32" ORDER BY n10000, n1000;
+            3: SELECT id FROM "Distinct_i32" ORDER BY n10000, n1000, n100;
+            4: SELECT id FROM "Distinct_i32" ORDER BY n10000, n1000, n100, n10;
     DuckDB:
         cases:
-            1: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            2: SELECT id FROM Distinct_i32 ORDER BY n10000, n1000;
-            3: SELECT id FROM Distinct_i32 ORDER BY n10000, n1000, n100;
-            4: SELECT id FROM Distinct_i32 ORDER BY n10000, n1000, n100, n10;
+            1: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            2: SELECT id FROM "Distinct_i32" ORDER BY n10000, n1000;
+            3: SELECT id FROM "Distinct_i32" ORDER BY n10000, n1000, n100;
+            4: SELECT id FROM "Distinct_i32" ORDER BY n10000, n1000, n100, n10;
     HyPer:
         cases:
-            1: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            2: SELECT id FROM Distinct_i32 ORDER BY n10000, n1000;
-            3: SELECT id FROM Distinct_i32 ORDER BY n10000, n1000, n100;
-            4: SELECT id FROM Distinct_i32 ORDER BY n10000, n1000, n100, n10;
+            1: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            2: SELECT id FROM "Distinct_i32" ORDER BY n10000, n1000;
+            3: SELECT id FROM "Distinct_i32" ORDER BY n10000, n1000, n100;
+            4: SELECT id FROM "Distinct_i32" ORDER BY n10000, n1000, n100, n10;

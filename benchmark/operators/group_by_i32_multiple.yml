@@ -39,19 +39,19 @@ systems:
             4: SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000, n100, n10;
     PostgreSQL:
         cases:
-            1: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000) AS T;
-            2: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000) AS T;
-            3: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000, n100) AS T;
-            4: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000, n100, n10) AS T;
+            1: SELECT COUNT(*) FROM (SELECT 1 FROM "Distinct_i32" GROUP BY n10000) AS T;
+            2: SELECT COUNT(*) FROM (SELECT 1 FROM "Distinct_i32" GROUP BY n10000, n1000) AS T;
+            3: SELECT COUNT(*) FROM (SELECT 1 FROM "Distinct_i32" GROUP BY n10000, n1000, n100) AS T;
+            4: SELECT COUNT(*) FROM (SELECT 1 FROM "Distinct_i32" GROUP BY n10000, n1000, n100, n10) AS T;
     DuckDB:
         cases:
-            1: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000) AS T;
-            2: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000) AS T;
-            3: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000, n100) AS T;
-            4: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000, n100, n10) AS T;
+            1: SELECT COUNT(*) FROM (SELECT 1 FROM "Distinct_i32" GROUP BY n10000) AS T;
+            2: SELECT COUNT(*) FROM (SELECT 1 FROM "Distinct_i32" GROUP BY n10000, n1000) AS T;
+            3: SELECT COUNT(*) FROM (SELECT 1 FROM "Distinct_i32" GROUP BY n10000, n1000, n100) AS T;
+            4: SELECT COUNT(*) FROM (SELECT 1 FROM "Distinct_i32" GROUP BY n10000, n1000, n100, n10) AS T;
     HyPer:
         cases:
-            1: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000) AS T;
-            2: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000) AS T;
-            3: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000, n100) AS T;
-            4: SELECT COUNT(*) FROM (SELECT 1 FROM Distinct_i32 GROUP BY n10000, n1000, n100, n10) AS T;
+            1: SELECT COUNT(*) FROM (SELECT 1 FROM "Distinct_i32" GROUP BY n10000) AS T;
+            2: SELECT COUNT(*) FROM (SELECT 1 FROM "Distinct_i32" GROUP BY n10000, n1000) AS T;
+            3: SELECT COUNT(*) FROM (SELECT 1 FROM "Distinct_i32" GROUP BY n10000, n1000, n100) AS T;
+            4: SELECT COUNT(*) FROM (SELECT 1 FROM "Distinct_i32" GROUP BY n10000, n1000, n100, n10) AS T;

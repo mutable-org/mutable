@@ -65,8 +65,8 @@ systems:
                 SELECT
                         SUM(l_extendedprice * (1 - l_discount)) AS promo_revenue
                 FROM
-                        Lineitem,
-                        Part
+                        "Lineitem",
+                        "Part"
                 WHERE
                         l_partkey = p_partkey
                         AND l_shipdate >= date '1995-09-01'
@@ -77,8 +77,8 @@ systems:
                 SELECT
                         SUM(l_extendedprice * (1 - l_discount)) AS promo_revenue
                 FROM
-                        Lineitem,
-                        Part
+                        "Lineitem",
+                        "Part"
                 WHERE
                         l_partkey = p_partkey
                         AND l_shipdate >= date '1995-09-01'
@@ -89,8 +89,8 @@ systems:
                 SELECT
                         SUM(l_extendedprice * (1 - l_discount)) AS promo_revenue
                 FROM
-                        {lineitem.table_name},
-                        {part.table_name}
+                        "Lineitem",
+                        "Part"
                 WHERE
                         l_partkey = p_partkey
                         AND l_shipdate >= date '1995-09-01'

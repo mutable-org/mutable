@@ -47,19 +47,19 @@ systems:
             4: SELECT MIN(n100), MIN(n1000), MIN(n10000), MIN(n100000) FROM Distinct_i32 GROUP BY n10;
     PostgreSQL:
         cases:
-            1: SELECT MIN(n100) FROM Distinct_i32 GROUP BY n10;
-            2: SELECT MIN(n100), MIN(n1000) FROM Distinct_i32 GROUP BY n10;
-            3: SELECT MIN(n100), MIN(n1000), MIN(n10000) FROM Distinct_i32 GROUP BY n10;
-            4: SELECT MIN(n100), MIN(n1000), MIN(n10000), MIN(n100000) FROM Distinct_i32 GROUP BY n10;
+            1: SELECT MIN(n100) FROM "Distinct_i32" GROUP BY n10;
+            2: SELECT MIN(n100), MIN(n1000) FROM "Distinct_i32" GROUP BY n10;
+            3: SELECT MIN(n100), MIN(n1000), MIN(n10000) FROM "Distinct_i32" GROUP BY n10;
+            4: SELECT MIN(n100), MIN(n1000), MIN(n10000), MIN(n100000) FROM "Distinct_i32" GROUP BY n10;
     DuckDB:
         cases:
-            1: SELECT MIN(n100) FROM Distinct_i32 GROUP BY n10;
-            2: SELECT MIN(n100), MIN(n1000) FROM Distinct_i32 GROUP BY n10;
-            3: SELECT MIN(n100), MIN(n1000), MIN(n10000) FROM Distinct_i32 GROUP BY n10;
-            4: SELECT MIN(n100), MIN(n1000), MIN(n10000), MIN(n100000) FROM Distinct_i32 GROUP BY n10;
+            1: SELECT MIN(n100) FROM "Distinct_i32" GROUP BY n10;
+            2: SELECT MIN(n100), MIN(n1000) FROM "Distinct_i32" GROUP BY n10;
+            3: SELECT MIN(n100), MIN(n1000), MIN(n10000) FROM "Distinct_i32" GROUP BY n10;
+            4: SELECT MIN(n100), MIN(n1000), MIN(n10000), MIN(n100000) FROM "Distinct_i32" GROUP BY n10;
     HyPer:
         cases:
-            1: SELECT MIN(n100) FROM Distinct_i32 GROUP BY n10;
-            2: SELECT MIN(n100), MIN(n1000) FROM Distinct_i32 GROUP BY n10;
-            3: SELECT MIN(n100), MIN(n1000), MIN(n10000) FROM Distinct_i32 GROUP BY n10;
-            4: SELECT MIN(n100), MIN(n1000), MIN(n10000), MIN(n100000) FROM Distinct_i32 GROUP BY n10;
+            1: SELECT MIN(n100) FROM "Distinct_i32" GROUP BY n10;
+            2: SELECT MIN(n100), MIN(n1000) FROM "Distinct_i32" GROUP BY n10;
+            3: SELECT MIN(n100), MIN(n1000), MIN(n10000) FROM "Distinct_i32" GROUP BY n10;
+            4: SELECT MIN(n100), MIN(n1000), MIN(n10000), MIN(n100000) FROM "Distinct_i32" GROUP BY n10;

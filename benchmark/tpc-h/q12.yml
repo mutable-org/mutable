@@ -73,8 +73,8 @@ systems:
                 SELECT
                     l_shipmode, COUNT(*)
                 FROM
-                    Orders,
-                    Lineitem
+                    "Orders",
+                    "Lineitem"
                 WHERE
                     o_orderkey = l_orderkey
                     AND (l_shipmode = 'MAIL' OR l_shipmode = 'SHIP')
@@ -93,8 +93,8 @@ systems:
                 SELECT
                     l_shipmode, COUNT(*)
                 FROM
-                    Orders,
-                    Lineitem
+                    "Orders",
+                    "Lineitem"
                 WHERE
                     o_orderkey = l_orderkey
                     AND (l_shipmode = 'MAIL' OR l_shipmode = 'SHIP')
@@ -113,8 +113,8 @@ systems:
                 SELECT
                     l_shipmode, COUNT(*)
                 FROM
-                    {lineitem.table_name},
-                    {orders.table_name}
+                    "Lineitem",
+                    "Orders"
                 WHERE
                     o_orderkey = l_orderkey
                     AND (l_shipmode = 'MAIL' OR l_shipmode = 'SHIP')

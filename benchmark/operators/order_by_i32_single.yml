@@ -59,40 +59,40 @@ systems:
             1.0: SELECT id FROM Distinct_i32 ORDER BY n100000;
     PostgreSQL:
         cases:
-            0.0: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.1: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.2: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.3: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.4: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.5: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.6: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.7: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.8: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.9: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            1.0: SELECT id FROM Distinct_i32 ORDER BY n100000;
+            0.0: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.1: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.2: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.3: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.4: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.5: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.6: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.7: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.8: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.9: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            1.0: SELECT id FROM "Distinct_i32" ORDER BY n100000;
     DuckDB:
         cases:
-            0.0: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.1: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.2: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.3: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.4: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.5: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.6: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.7: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.8: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.9: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            1.0: SELECT id FROM Distinct_i32 ORDER BY n100000;
+            0.0: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.1: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.2: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.3: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.4: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.5: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.6: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.7: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.8: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.9: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            1.0: SELECT id FROM "Distinct_i32" ORDER BY n100000;
     HyPer:
         cases:
-            0.0: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.1: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.2: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.3: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.4: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.5: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.6: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.7: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.8: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            0.9: SELECT id FROM Distinct_i32 ORDER BY n100000;
-            1.0: SELECT id FROM Distinct_i32 ORDER BY n100000;
+            0.0: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.1: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.2: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.3: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.4: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.5: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.6: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.7: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.8: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            0.9: SELECT id FROM "Distinct_i32" ORDER BY n100000;
+            1.0: SELECT id FROM "Distinct_i32" ORDER BY n100000;

@@ -73,7 +73,7 @@ systems:
                         AVG(l_discount) AS avg_disc,
                         COUNT(*) AS count_order
                 FROM
-                        Lineitem
+                        "Lineitem"
                 WHERE
                         l_shipdate <= DATE '1998-09-02'
                 GROUP BY
@@ -97,7 +97,7 @@ systems:
                         AVG(l_discount) AS avg_disc,
                         COUNT(*) AS count_order
                 FROM
-                        Lineitem
+                        "Lineitem"
                 WHERE
                         l_shipdate <= DATE '1998-09-02'
                 GROUP BY
@@ -121,7 +121,7 @@ systems:
                         AVG(l_discount) AS avg_disc,
                         COUNT(*) AS count_order
                 FROM
-                        Lineitem
+                        "Lineitem"
                 WHERE
                         l_shipdate <= date '1998-09-02'
                 GROUP BY

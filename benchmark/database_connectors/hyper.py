@@ -11,13 +11,6 @@ import sys
 import time
 
 
-# Converting table names to lower case is needed because then
-# the table name can be directly used in queries instead
-# of using 'table_def.table_name'
-def table_name_to_lower_case(name: str):
-    return name.lower()
-
-
 # Used as function for new process to track time / timeout
 def run_multiple_queries(connection, queries, data, queue):
     times = hyperconf.benchmark_execution_times(connection, queries, data)
@@ -121,13 +114,13 @@ sys.stdout.flush()
                         for table_name, table in params['data'].items():
                             columns = HyPer.parse_attributes(table['attributes'])
                             table_tmp = TableDefinition(
-                                table_name=f"{table_name_to_lower_case(table_name)}_tmp",
+                                table_name=f"{table_name}_tmp",
                                 columns=columns
                             )
                             hyperconf.load_table(connection, table_tmp, table['file'], FORMAT=table['format'], DELIMITER=f"\'{table['delimiter']}\'", HEADER=table['header'])
 
                             table_def = TableDefinition(
-                                table_name=table_name_to_lower_case(table_name),
+                                table_name=table_name,
                                 columns=columns
                             )
                             connection.catalog.create_table(table_def)
@@ -136,8 +129,7 @@ sys.stdout.flush()
                         for case, query in params['cases'].items():
                             # Set up tables
                             for table_name, table in params['data'].items():
-                                table_name = table_name_to_lower_case(table_name)
-                                connection.execute_command(f'DELETE FROM {table_name};')  # Empty table first
+                                connection.execute_command(f'DELETE FROM "{table_name}";')  # Empty table first
 
                                 if table.get('scale_factors'):
                                     sf = table['scale_factors'][case]
@@ -145,7 +137,7 @@ sys.stdout.flush()
                                     sf = 1
                                 header = int(table.get('header', 0))
                                 num_rows = round((table['lines_in_file'] - header) * sf)
-                                connection.execute_command(f'INSERT INTO {table_name} SELECT * FROM {table_name}_tmp LIMIT {num_rows};')
+                                connection.execute_command(f'INSERT INTO "{table_name}" SELECT * FROM "{table_name}_tmp" LIMIT {num_rows};')
 
                             # Execute query
                             with connection.execute_query(query) as result:
@@ -172,7 +164,7 @@ sys.stdout.flush()
                 # Otherwise, tables have to be created just once before the measurements
                 with HyperProcess(telemetry=Telemetry.DO_NOT_SEND_USAGE_DATA_TO_TABLEAU) as hyper:
                     with Connection(endpoint=hyper.endpoint, database='benchmark.hyper', create_mode=CreateMode.CREATE_AND_REPLACE) as connection:
-                        table_defs = HyPer.get_all_table_defs(params)
+                        table_defs = HyPer.get_tables(params)
                         queries = HyPer.get_cases_queries(params, table_defs)
                         data = HyPer.get_data(params, table_defs)
 
@@ -193,24 +185,23 @@ sys.stdout.flush()
 
     # returns dict of {table_name: table_def} for each table_def
     @staticmethod
-    def get_all_table_defs(params: dict):
+    def get_tables(params: dict):
         table_defs = dict()
         for table_name, table in params['data'].items():
-            table_defs[table_name] = HyPer.get_single_table_def(table_name, table)
+            table_defs[table_name] = HyPer.get_table(table_name, table)
         return table_defs
 
 
     @staticmethod
-    def get_single_table_def(table_name, table: dict):
+    def get_table(table_name :str, table: dict):
         # If table exists, return it
         table_def = hyperconf.table_defs.get(table_name)
-        if (table_def):
-            table_def.table_name = table_name_to_lower_case(table_def.table_name)
+        if table_def:
             return table_def
 
         # Otherwise create a new table_def
         columns = HyPer.parse_attributes(table['attributes'])
-        return TableDefinition(table_name=table_name_to_lower_case(table_name), columns=columns)
+        return TableDefinition(table_name=table_name, columns=columns)
 
 
     # Parse attributes of one table
@@ -241,7 +232,7 @@ sys.stdout.flush()
         return columns
 
 
-    # Returns cases/queries but with table names converted to lower case matching the table_def
+    # Returns cases/queries
     @staticmethod
     def get_cases_queries(params: dict, table_defs: dict):
         cases_queries = dict()
@@ -261,7 +252,7 @@ sys.stdout.flush()
             delimiter = table.get('delimiter', ',')
             if delimiter:
                 delimiter = delimiter.replace("'", "")
-            form = table.get('format')
+            form = table.get('format', 'csv')
             header = int(table.get('header', 0))
             par = {
                 'delimiter': "'" + delimiter + "'",

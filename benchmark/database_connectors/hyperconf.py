@@ -88,26 +88,16 @@ def init():
     if os.path.isfile(HYPER_LOG_FILE):
         os.remove(HYPER_LOG_FILE)
 
-def load_table(connection :Connection, table, filename :str, **kwargs):
-    if isinstance(table, str):
-        table_def = table_defs[table_name]
-    elif isinstance(table, TableDefinition):
-        table_def = table
-    else:
-        raise TypeError(f'table type {str(type(table))} not supported')
+def load_table(connection :Connection, table_def, filename :str, **kwargs):
+    assert isinstance(table_def, TableDefinition)
     connection.catalog.create_table(table_def)
     command = f'COPY {table_def.table_name} FROM \'{filename}\''
     if kwargs:
         command += ' WITH (' + ', '.join(map(lambda e: f'{e[0]} {e[1]}', kwargs.items())) + ')'
     connection.execute_command(command)
 
-def dispose_table(connection :Connection, table):
-    if isinstance(table, str):
-        table_def = table_defs[table_name]
-    elif isinstance(table, TableDefinition):
-        table_def = table
-    else:
-        raise TypeError(f'table type {str(type(table))} not supported')
+def dispose_table(connection :Connection, table_def):
+    assert isinstance(table_def, TableDefinition)
     connection.execute_command(f'DELETE FROM {table_def.table_name}')
     connection.execute_command(f'DROP TABLE {table_def.table_name}')
 

@@ -9,7 +9,7 @@ import random
 import string
 
 
-NUM_TUPLES = 10_000_000
+NUM_TUPLES = 10_000
 STRLEN = 10
 OUTPUT_DIR = os.path.join('benchmark', 'operators', 'data')
 NUM_DISTINCT_VALUES = NUM_TUPLES // 10

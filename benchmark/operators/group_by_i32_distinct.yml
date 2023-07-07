@@ -48,22 +48,22 @@ systems:
             100000: SELECT 1 FROM Distinct_i32 GROUP BY n100000;
     PostgreSQL:
         cases:
-            10:     SELECT COUNT(DISTINCT     n10) FROM Distinct_i32 AS T;
-            100:    SELECT COUNT(DISTINCT    n100) FROM Distinct_i32 AS T;
-            1000:   SELECT COUNT(DISTINCT   n1000) FROM Distinct_i32 AS T;
-            10000:  SELECT COUNT(DISTINCT  n10000) FROM Distinct_i32 AS T;
-            100000: SELECT COUNT(DISTINCT n100000) FROM Distinct_i32 AS T;
+            10:     SELECT COUNT(DISTINCT     n10) FROM "Distinct_i32" AS T;
+            100:    SELECT COUNT(DISTINCT    n100) FROM "Distinct_i32" AS T;
+            1000:   SELECT COUNT(DISTINCT   n1000) FROM "Distinct_i32" AS T;
+            10000:  SELECT COUNT(DISTINCT  n10000) FROM "Distinct_i32" AS T;
+            100000: SELECT COUNT(DISTINCT n100000) FROM "Distinct_i32" AS T;
     DuckDB:
         cases:
-            10:     SELECT COUNT(DISTINCT     n10) FROM Distinct_i32 AS T;
-            100:    SELECT COUNT(DISTINCT    n100) FROM Distinct_i32 AS T;
-            1000:   SELECT COUNT(DISTINCT   n1000) FROM Distinct_i32 AS T;
-            10000:  SELECT COUNT(DISTINCT  n10000) FROM Distinct_i32 AS T;
-            100000: SELECT COUNT(DISTINCT n100000) FROM Distinct_i32 AS T;
+            10:     SELECT COUNT(DISTINCT     n10) FROM "Distinct_i32" AS T;
+            100:    SELECT COUNT(DISTINCT    n100) FROM "Distinct_i32" AS T;
+            1000:   SELECT COUNT(DISTINCT   n1000) FROM "Distinct_i32" AS T;
+            10000:  SELECT COUNT(DISTINCT  n10000) FROM "Distinct_i32" AS T;
+            100000: SELECT COUNT(DISTINCT n100000) FROM "Distinct_i32" AS T;
     HyPer:
         cases:
-            10:     SELECT COUNT(DISTINCT     n10) FROM Distinct_i32 AS T;
-            100:    SELECT COUNT(DISTINCT    n100) FROM Distinct_i32 AS T;
-            1000:   SELECT COUNT(DISTINCT   n1000) FROM Distinct_i32 AS T;
-            10000:  SELECT COUNT(DISTINCT  n10000) FROM Distinct_i32 AS T;
-            100000: SELECT COUNT(DISTINCT n100000) FROM Distinct_i32 AS T;
+            10:     SELECT COUNT(DISTINCT     n10) FROM "Distinct_i32" AS T;
+            100:    SELECT COUNT(DISTINCT    n100) FROM "Distinct_i32" AS T;
+            1000:   SELECT COUNT(DISTINCT   n1000) FROM "Distinct_i32" AS T;
+            10000:  SELECT COUNT(DISTINCT  n10000) FROM "Distinct_i32" AS T;
+            100000: SELECT COUNT(DISTINCT n100000) FROM "Distinct_i32" AS T;

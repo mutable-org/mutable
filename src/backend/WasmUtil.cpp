@@ -716,8 +716,10 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                             if constexpr (IsStore) {
                                 /*----- Check that value is also not NULL. -----*/
                                 auto check = [&]<typename T>() {
-                                    Wasm_insist(env.get<T>(layout_entry.id).not_null(),
-                                                "value of non-nullable entry must not be nullable");
+                                    BLOCK_OPEN(stores) {
+                                        Wasm_insist(env.get<T>(layout_entry.id).not_null(),
+                                                    "value of non-nullable entry must not be nullable");
+                                    }
                                 };
                                 visit(overloaded{
                                     [&](const Boolean&) { check.template operator()<_Boolx1>(); },
@@ -882,8 +884,10 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                             if constexpr (IsStore) {
                                 /*----- Check that value is also not NULL. -----*/
                                 auto check = [&]<typename T>() {
-                                    Wasm_insist(env.get<T>(tuple_entry.id).not_null(),
-                                                "value of non-nullable entry must not be nullable");
+                                    BLOCK_OPEN(stores) {
+                                        Wasm_insist(env.get<T>(tuple_entry.id).not_null(),
+                                                    "value of non-nullable entry must not be nullable");
+                                    }
                                 };
                                 visit(overloaded{
                                     [&](const Boolean&) { check.template operator()<_Boolx1>(); },

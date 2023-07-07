@@ -66,7 +66,7 @@ declare -A TOPOLOGY_STEPS=(
 
 ORDERED_PLANNERS=(
     ###### HANWEN Manuelly Test #####
-    "DPccp"
+#    "DPccp"
 #    "IKKBZ"
 
 #    "TD-cleanAStar-zero"
@@ -76,6 +76,8 @@ ORDERED_PLANNERS=(
 #    "BU-A*-zero"
 #    "BU-A*-sum"
   "BU-hanwen-layered-zero"
+  "BU-hanwen-layered2-zero"
+  "BU-hanwen-layered3-zero"
 #  "TD-hanwen-layered-zero"
 
 #    "BU-BIDIRECTIONAL-zero"
@@ -297,11 +299,11 @@ do
                     --statistics \
                     "${NAME}.schema.sql" \
                     "${NAME}.query.sql" \
-#                    | grep -e '^Plan cost:' -e '^Plan enumeration:' \
-#                    | cut --delimiter=':' --fields=2 \
-#                    | tr -d ' ' \
-#                    | paste -sd ' \n' \
-#                    | while read -r COST TIME; do echo "${TOPOLOGY},${N},${PLANNER},${COST},${TIME},${SEED}" >> "${CSV}"; done
+                    | grep -e '^Plan cost:' -e '^Plan enumeration:' \
+                    | cut --delimiter=':' --fields=2 \
+                    | tr -d ' ' \
+                    | paste -sd ' \n' \
+                    | while read -r COST TIME; do echo "${TOPOLOGY},${N},${PLANNER},${COST},${TIME},${SEED}" >> "${CSV}"; done
 
 
                 # Save and aggregate PIPESTATUS

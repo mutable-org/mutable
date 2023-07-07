@@ -2501,6 +2501,12 @@ template<typename State, typename Expand, typename Heuristic, typename Config, t
 using hanwen_layered_search = ai::hanwen_layeredSearch<1>::type<State, Expand, Heuristic, Config, Context...>;
 
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using hanwen_layered_search_2 = ai::hanwen_layeredSearch<2>::type<State, Expand, Heuristic, Config, Context...>;
+
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
+using hanwen_layered_search_3 = ai::hanwen_layeredSearch<3>::type<State, Expand, Heuristic, Config, Context...>;
+
+template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using AStar = ai::AStar<State, Expand, Heuristic, Config, Context...>;
 template<typename State, typename Expand, typename Heuristic, typename Config, typename... Context>
 using wAStar = ai::wAStar<std::ratio<2, 1>>::type<State, Expand, Heuristic, Config, Context...>;
@@ -2776,6 +2782,10 @@ struct HeuristicSearch final : PlanEnumeratorCRTP<HeuristicSearch>
         /// layeredSearch Entrance
         HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search)
         HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search)
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_2)
+        HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_2)
+        HEURISTIC_SEARCH(SubproblemsArray, TopDownComplete, zero, hanwen_layered_search_3)
+        HEURISTIC_SEARCH(SubproblemsArray, BottomUpComplete, zero, hanwen_layered_search_3)
 
         /// Currently we didn't use the direct entrance for bidirectional search
         /// We directly get in the Bidirectional funciton from upstairs

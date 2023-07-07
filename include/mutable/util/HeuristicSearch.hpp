@@ -2538,6 +2538,7 @@ std::size_t num_##NAME() const { return 0; }
             }
 
             bool queues_empty() const{return beam_queue_.empty();}
+            unsigned queues_size() const{return beam_queue_.size();}
 
 
 
@@ -2940,7 +2941,8 @@ std::size_t num_##NAME() const { return 0; }
 
             while (!state_manager_.queues_empty()) {
                 /// 2.1. Init the current_layer_candidates for further usage
-                size_t layer_candidates_size = beam_width;
+
+                size_t layer_candidates_size = std::min(beam_width,state_manager_.queues_size());
                 layer_candidates.clear();
 
                 /// 2.2. foreach state in layer candidates -> explore_state()

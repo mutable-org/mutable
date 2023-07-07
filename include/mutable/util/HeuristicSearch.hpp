@@ -2751,6 +2751,7 @@ std::size_t num_##NAME() const { return 0; }
                 typename Expand,
                 typename Heuristic,
                 unsigned BeamWidth,
+                bool SortedCandidates,
                 typename Config,
                 typename... Context
         > requires heuristic_search_heuristic<Heuristic, Context...>
@@ -2760,6 +2761,7 @@ std::size_t num_##NAME() const { return 0; }
             using heuristic_type = Heuristic;
 
             static constexpr unsigned beam_width = BeamWidth;
+            static constexpr bool sorted_candidates = SortedCandidates;
 
             using callback_t = std::function<void(state_type, double)>;
 
@@ -2878,13 +2880,14 @@ std::size_t num_##NAME() const { return 0; }
                 if (layer_candidates.size() < beam_width) {
                     /* There is still space in the candidates, so simply add the state to the heap. */
                     layer_candidates.emplace_back(std::move(state), h);
-                    if(layer_candidates.size()==beam_width){
-                        std::make_heap(layer_candidates.begin(),layer_candidates.end());
+                    if (layer_candidates.size() == beam_width) {
+                        std::make_heap(layer_candidates.begin(), layer_candidates.end());
                     }
                 } else {
+                    if constexpr (!sorted_candidates) { return; }
                     M_insist(layer_candidates.size() == beam_width);
                     auto &top = layer_candidates.front();
-                    if(state.g()+h>=top.state.g()+top.h){
+                    if (state.g() + h >= top.state.g() + top.h) {
                         /// Larger than largest value
                         return;
                     }
@@ -2935,11 +2938,12 @@ std::size_t num_##NAME() const { return 0; }
                 typename Expand,
                 typename Heuristic,
                 unsigned BeamWidth,
+                bool SortedCandidates,
                 typename Config,
                 typename... Context
         >
         requires heuristic_search_heuristic<Heuristic, Context...>
-        const State &layeredSearch<State, Expand, Heuristic, BeamWidth, Config, Context...>::search(
+        const State &layeredSearch<State, Expand, Heuristic, BeamWidth, SortedCandidates, Config, Context...>::search(
                 state_type initial_state,
                 expand_type expand,
                 heuristic_type &heuristic,
@@ -3007,7 +3011,19 @@ std::size_t num_##NAME() const { return 0; }
                     typename Config,
                     typename... Context
             >
-            using type = layeredSearch<State, Expand, Heuristic, BeamWidth, Config, Context...>;
+            using type = layeredSearch<State, Expand, Heuristic, BeamWidth, false, Config, Context...>;
+        };
+
+        template<unsigned BeamWidth>
+        struct hanwen_layeredSearch_sorted {
+            template<
+                    heuristic_search_state State,
+                    typename Expand,
+                    typename Heuristic,
+                    typename Config,
+                    typename... Context
+            >
+            using type = layeredSearch<State, Expand, Heuristic, BeamWidth, true, Config, Context...>;
         };
 
 

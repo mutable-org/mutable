@@ -47,8 +47,8 @@ MIN_RELATIONS=3
 declare -A TOPOLOGIES=(
     [chain]=30
     [cycle]=30
-    [star]=25
-    [clique]=25
+    [star]=15
+    [clique]=15
 )
 #declare -A TOPOLOGIES=(
 #    [chain]=50
@@ -66,8 +66,8 @@ declare -A TOPOLOGY_STEPS=(
 
 ORDERED_PLANNERS=(
     ###### HANWEN Manuelly Test #####
-#    "DPccp"
-#    "IKKBZ"
+    "DPccp"
+    "IKKBZ"
 
 #    "TD-cleanAStar-zero"
 #    "BU-cleanAStar-zero"
@@ -78,6 +78,10 @@ ORDERED_PLANNERS=(
   "BU-hanwen-layered-zero"
   "BU-hanwen-layered2-zero"
   "BU-hanwen-layered3-zero"
+
+  "BU-hanwen-layered-sorted-zero"
+  "BU-hanwen-layered-sorted2-zero"
+  "BU-hanwen-layered-sorted3-zero"
 #  "TD-hanwen-layered-zero"
 
 #    "BU-BIDIRECTIONAL-zero"

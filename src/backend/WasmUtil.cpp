@@ -810,6 +810,9 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                     }
                     const auto &ptr = it->second.ptr;
 
+                    ///> maps static byte offsets to already loaded bytes to reuse them
+                    std::unordered_map<int32_t, Var<U8x1>> loaded_bytes;
+
                     /*----- For each tuple entry that can be NULL, create a store/load with static offset and mask. --*/
                     for (std::size_t tuple_idx = 0; tuple_idx != tuple_schema.num_entries(); ++tuple_idx) {
                         auto &tuple_entry = tuple_schema[tuple_idx];
@@ -865,7 +868,10 @@ compile_data_layout_sequential(const Schema &tuple_schema, Ptr<void> base_addres
                             } else {
                                 /*----- Load NULL bit. -----*/
                                 BLOCK_OPEN(loads) {
-                                    U8 byte = *(ptr + static_byte_offset).template to<uint8_t*>(); // load the byte
+                                    auto [it, inserted] = loaded_bytes.try_emplace(static_byte_offset);
+                                    if (inserted)
+                                        it->second = *(ptr + static_byte_offset).template to<uint8_t*>(); // load the byte
+                                    const auto &byte = it->second;
                                     const uint8_t static_mask = 1U << static_bit_offset;
                                     Var<Boolx1> value((byte bitand static_mask).to<bool>()); // mask bit with static mask
                                     new (&null_bits[tuple_idx]) Boolx1(value);

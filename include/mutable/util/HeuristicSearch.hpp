@@ -2800,7 +2800,6 @@ std::size_t num_##NAME() const { return 0; }
             };
 
             // decide the core details in queue
-            // TODO: don't need Hasxxx
             LayeredStateManager
                     </* State=           */ State,
                             BeamWidth,
@@ -2879,8 +2878,19 @@ std::size_t num_##NAME() const { return 0; }
                 if (layer_candidates.size() < beam_width) {
                     /* There is still space in the candidates, so simply add the state to the heap. */
                     layer_candidates.emplace_back(std::move(state), h);
+                    if(layer_candidates.size()==beam_width){
+                        std::make_heap(layer_candidates.begin(),layer_candidates.end());
+                    }
                 } else {
-                    return;
+                    M_insist(layer_candidates.size() == beam_width);
+                    auto &top = layer_candidates.front();
+                    if(state.g()+h>=top.state.g()+top.h){
+                        /// Larger than largest value
+                        return;
+                    }
+                    layer_candidates.emplace_back(std::move(state), h);
+                    std::pop_heap(layer_candidates.begin(), layer_candidates.end());
+                    layer_candidates.pop_back();
                 }
             }
 

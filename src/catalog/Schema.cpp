@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 #include <iterator>
 #include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/Catalog.hpp>

@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstring>
 #include <functional>
-#include <iostream>
+#include <iosfwd>
 #include <memory>
 #include <mutable/catalog/CardinalityEstimator.hpp>
 #include <mutable/catalog/Type.hpp>
@@ -11,12 +11,13 @@
 #include <mutable/storage/DataLayout.hpp>
 #include <mutable/storage/Store.hpp>
 #include <mutable/util/ADT.hpp>
-#include <mutable/util/exception.hpp>
 #include <mutable/util/enum_ops.hpp>
+#include <mutable/util/exception.hpp>
 #include <mutable/util/fn.hpp>
 #include <mutable/util/macro.hpp>
 #include <type_traits>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 
@@ -403,6 +404,7 @@ struct M_EXPORT Table
     const Attribute & at(std::size_t id) const { return const_cast<Table*>(this)->at(id); }
     /** Returns the attribute with the given `id`. */
     Attribute & operator[](std::size_t id) {
+        M_insist(id < attrs_.size());
         auto &attr = attrs_[id];
         M_insist(attr.id == id, "attribute ID mismatch");
         return attr;
@@ -412,8 +414,10 @@ struct M_EXPORT Table
     /** Returns the attribute with the given `name`.  Throws `std::out_of_range` if no attribute with the given `name`
      * exists. */
     Attribute & at(const char *name) {
-        if (auto it = name_to_attr_.find(name); it != name_to_attr_.end())
-            return at(it->second);
+        if (auto it = name_to_attr_.find(name); it != name_to_attr_.end()) {
+            M_insist(it->second < attrs_.size());
+            return operator[](it->second);
+        }
         throw std::out_of_range("name does not exists");
     }
     const Attribute & at(const char *name) const { return const_cast<Table*>(this)->at(name_to_attr_.at(name)); }

@@ -420,7 +420,7 @@ struct M_EXPORT Table
         }
         throw std::out_of_range("name does not exists");
     }
-    const Attribute & at(const char *name) const { return const_cast<Table*>(this)->at(name_to_attr_.at(name)); }
+    const Attribute & at(const char *name) const { return const_cast<Table*>(this)->at(name); }
     /** Returns the attribute with the given `name`. */
     Attribute & operator[](const char *name) { return operator[](name_to_attr_.find(name)->second); }
     const Attribute & operator[](const char *name) const { return const_cast<Table*>(this)->operator[](name); }

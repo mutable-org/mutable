@@ -405,9 +405,16 @@ if __name__ == '__main__':
             # Count the lines in each table file and add it to the table entry
             info.experiment_data = yml.get('data')
             if info.experiment_data:
+                table_access_error = False
                 for table_name, table in info.experiment_data.items():
                     p = os.path.join(table['file'])
-                    info.experiment_data[table_name]['lines_in_file'] = int(os.popen(f"wc -l < {p}").read())
+                    if not os.path.isfile(p):
+                        tqdm.write(f'Table file \'{p}\' not found.  Skipping benchmark.\n', file=sys.stderr)
+                        table_access_error = True
+                    else:
+                        info.experiment_data[table_name]['lines_in_file'] = int(os.popen(f"wc -l < {p}").read())
+                if table_access_error:
+                    continue # At least one table file could not be opened.  Skip benchmark.
 
 
             tqdm.write('\n\n==========================================================')

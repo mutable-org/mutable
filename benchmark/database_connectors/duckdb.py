@@ -137,30 +137,29 @@ class DuckDB(Connector):
 
     # Parse attributes of one table, return as string
     def parse_attributes(self, attributes: dict):
-        columns = '('
+        columns = list()
         for column_name, ty in attributes.items():
             not_null = 'NOT NULL' if 'NOT NULL' in ty else ''
             ty = ty.split(' ')
             match (ty[0]):
                 case 'INT':
-                    typ = 'INT'
+                    type = 'INT'
                 case 'CHAR':
-                    typ = f'CHAR({ty[1]})'
+                    type = f'CHAR({ty[1]})'
                 case 'DECIMAL':
-                    typ = f'DECIMAL({ty[1]},{ty[2]})'
+                    type = f'DECIMAL({ty[1]},{ty[2]})'
                 case 'DATE':
-                    typ = 'DATE'
+                    type = 'DATE'
                 case 'DOUBLE':
-                    typ = 'DOUBLE'
+                    type = 'DOUBLE'
                 case 'FLOAT':
-                    typ = 'REAL'
+                    type = 'REAL'
                 case 'BIGINT':
-                    typ = 'BIGINT'
+                    type = 'BIGINT'
                 case _:
                     raise AttributeTypeUnknown(f"Unknown type given for '{column_name}'")
-            columns += f'"{column_name}" {typ} {not_null}, '
-        columns = columns[:-2] + ')'
-        return columns
+            columns.append(f'"{column_name}" {type} {not_null}')
+        return '(' + ',\n'.join(columns) + ')'
 
 
     # Creates tables in the database and copies contents of given files into them

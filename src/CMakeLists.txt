@@ -144,7 +144,7 @@ target_link_libraries(parse-bin PRIVATE ${PROJECT_NAME})
 set_target_properties(parse-bin PROPERTIES OUTPUT_NAME parse)
 
 add_executable(check-bin check.cpp)
-target_link_libraries(check-bin PRIVATE ${PROJECT_NAME})
+target_link_libraries(check-bin PRIVATE ${PROJECT_NAME}_complete)
 set_target_properties(check-bin PROPERTIES OUTPUT_NAME check)
 
 add_executable(shell shell.cpp)
